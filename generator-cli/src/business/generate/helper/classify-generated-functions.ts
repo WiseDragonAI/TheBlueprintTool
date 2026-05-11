@@ -1,13 +1,13 @@
 /**
- * WHAT: Generated helper function classify-generated-functions.
- * WHY: This file is generated from the MasterLedger and contains exactly one generated function with automatically resolved imports.
+ * WHAT: GeneratedFunction classifier.
+ * WHY: tests and reports distinguish pure behavior, IO effects, components, and controllers.
  */
-import { telemetry } from '../../../telemetry/harness.js';
+import type { GeneratedFunction } from '../../../lib/types.js';
 
-
-export function classifyGeneratedFunctions(input: unknown = {}, ...args: unknown[]): any {
-  telemetry('helper:classify-generated-functions -> return stubbed success value', { functionName: 'classify-generated-functions', arguments: input, phase: 'event' });
-  void args;
-  const record = input && typeof input === 'object' ? input as Record<string, unknown> : {};
-  return { ok: true, value: input, ...record, mode: record.mode ?? 'dry-run', ledger_command: record.ledger_command ?? 'mutate', ...{ functionName: 'classify-generated-functions', input } };
+export function classifyGeneratedFunctions(functions: GeneratedFunction[]): GeneratedFunction[] {
+  return functions.map((generatedFunction) => ({
+    ...generatedFunction,
+    pure: generatedFunction.kind === 'helper',
+    componentOutput: generatedFunction.kind === 'component',
+  }));
 }

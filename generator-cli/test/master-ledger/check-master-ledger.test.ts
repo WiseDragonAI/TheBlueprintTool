@@ -1,28 +1,54 @@
 /**
- * WHAT: Integration test for spec 205fdb23.
- * WHY: each suite proves the generated path with telemetry evidence.
+ * WHAT: MasterLedger checker command tests.
+ * WHY: agents need counts and blocking problems before trusting generation output.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { traces } from '../../src/telemetry/harness.js';
-import { dispatchCliCommandController } from '../../src/business/command/controller/dispatch-cli-command.js';
+import { checkMasterLedgerController, readMasterLedger, parseFunctionBatch, validateFunctionMetadataHeader } from '../../src/index.js';
+import { masterLedgerPath, specsLedgerPath } from '../fixture/scenario.js';
 
-test('Check-ledger mode reads MasterLedger and SpecsLedger reports counts selected groups spec coverage and problems without generating files', async () => {
-  const expectedTelemetry = ["parse-cli-argv","read-master-ledger","read-specs-ledger","analyze-master-ledger","emit-check-ledger-report"];
-  assert.ok(expectedTelemetry.length > 0);
-  assert.equal('205fdb23'.length, 8);
-  traces.length = 0;
-  await dispatchCliCommandController({ action_payload: {"apply_command":true,"check_ledger_command":true,"ledger_command":"mutate","ledger_group_name":[],"ledger_json_file":"ledger.json","master_ledger_file":"master-ledger.md","mode":"check-ledger","node_test_run":"node --test","patch_batch_file":"patch.json","report_command":true,"specs_ledger_file":"specs.json","argv":{"mode":"check-ledger","apply_command":true,"check_ledger_command":true,"ledger_command":"mutate","ledger_group_name":[],"ledger_json_file":"ledger.json","master_ledger_file":"master-ledger.md","node_test_run":"node --test","patch_batch_file":"patch.json","report_command":true,"specs_ledger_file":"specs.json"},"cli_command_argv":{"mode":"check-ledger","apply_command":true,"check_ledger_command":true,"ledger_command":"mutate","ledger_group_name":[],"ledger_json_file":"ledger.json","master_ledger_file":"master-ledger.md","node_test_run":"node --test","patch_batch_file":"patch.json","report_command":true,"specs_ledger_file":"specs.json"}} } as never);
-  const actualTelemetry = traces.map((trace) => trace.name);
-  console.log(JSON.stringify({
-    specId: '205fdb23',
-    suiteName: 'Check-ledger mode reads MasterLedger and SpecsLedger reports counts selected groups spec coverage and problems without generating files',
-    controllerName: "dispatch-cli-command",
-    executionEntry: "controller:dispatch-cli-command",
-    expectedTelemetry,
-    actualTelemetry,
-  }));
-  for (const expected of expectedTelemetry) {
-    assert.ok(actualTelemetry.some((event) => event.includes(expected)), expected);
-  }
+test('check-ledger reports root blocks domains functions tests specs and problems', async () => {
+  const checked = await checkMasterLedgerController({ masterLedgerFile: masterLedgerPath, specsLedgerFile: specsLedgerPath });
+  assert.equal(checked.ok, true);
+  assert.equal(checked.ok && checked.value.ok, true);
+  assert.equal(checked.ok && checked.value.counts.rootBlocks, 1);
+  assert.equal(checked.ok && checked.value.counts.controllers, 12);
+  assert.equal(checked.ok && checked.value.counts.helpers, 30);
+  assert.equal(checked.ok && checked.value.counts.effects, 20);
+  assert.equal(checked.ok && checked.value.counts.generatedFunctions, 62);
+  assert.equal(checked.ok && checked.value.counts.sourceFiles, 62);
+  assert.equal(checked.ok && checked.value.counts.unitTestFiles, 62);
+  assert.equal(checked.ok && checked.value.counts.integrationTestFiles, 38);
+  assert.equal(checked.ok && checked.value.counts.testSuites, 38);
+  assert.equal(checked.ok && checked.value.counts.uniqueSpecIds, 38);
+  assert.equal(checked.ok && checked.value.counts.specsLedgerCards > 38, true);
+  assert.deepEqual(checked.ok && checked.value.problems, []);
+});
+
+test('check-ledger supports multiple targeted SpecsLedger groups', async () => {
+  const checked = await checkMasterLedgerController({
+    masterLedgerFile: masterLedgerPath,
+    specsLedgerFile: specsLedgerPath,
+    groups: ['CLI Tool', 'CLI'],
+  });
+  assert.equal(checked.ok, true);
+  assert.equal(checked.ok && checked.value.selectedGroups.includes('CLI Tool'), true);
+  assert.equal(checked.ok && checked.value.selectedGroups.includes('CLI'), true);
+  assert.equal(checked.ok && checked.value.ok, false);
+  assert.equal(checked.ok && checked.value.problems.some((problem) => problem.code === 'test-suite-outside-selected-groups'), true);
+  assert.equal(checked.ok && checked.value.counts.selectedSpecCards >= checked.value.counts.matchedSpecCards, true);
+});
+
+test('duplicate generated function names are forbidden', async () => {
+  const document = await readMasterLedger(masterLedgerPath);
+  assert.ok(document.ok);
+
+  const duplicateDocument = {
+    ...document.value,
+    text: document.value.text.replace("name: 'emit-dispatch-cli-command-started'", "name: 'dispatch-cli-command'"),
+  };
+  const batch = parseFunctionBatch(duplicateDocument);
+  const validated = validateFunctionMetadataHeader(batch);
+  assert.equal(validated.ok, false);
+  assert.equal(validated.ok ? '' : validated.error, 'Duplicate generated function name: dispatch-cli-command');
 });

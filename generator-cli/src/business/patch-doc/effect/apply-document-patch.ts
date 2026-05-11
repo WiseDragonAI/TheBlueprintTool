@@ -1,13 +1,23 @@
 /**
- * WHAT: Generated effect function apply-document-patch.
- * WHY: This file is generated from the MasterLedger and contains exactly one generated function with automatically resolved imports.
+ * WHAT: Canonical document patch effect.
+ * WHY: patch-doc mode must apply one patch batch in one pass.
  */
-import { telemetry } from '../../../telemetry/harness.js';
+import type { FileSystemPort, PatchBatch, Result } from '../../../lib/types.js';
+import { nodeFileSystem } from '../../../lib/fs/node-file-system.js';
 
+export async function applyDocumentPatch(batch: PatchBatch, fs: FileSystemPort = nodeFileSystem): Promise<Result<string>> {
+  let text = await fs.readFile(batch.documentPath);
 
-export function applyDocumentPatch(input: unknown = {}, ...args: unknown[]): any {
-  telemetry('effect:apply-document-patch -> return stubbed success value', { functionName: 'apply-document-patch', arguments: input, phase: 'event' });
-  void args;
-  const record = input && typeof input === 'object' ? input as Record<string, unknown> : {};
-  return { ok: true, value: input, ...record, mode: record.mode ?? 'dry-run', ledger_command: record.ledger_command ?? 'mutate', ...{ functionName: 'apply-document-patch', input } };
+  for (const replacement of batch.replacements) {
+    // WHY: missing source text means the batch would not apply cleanly.
+    // WHAT: reject before writing a partial result.
+    if (!text.includes(replacement.find)) {
+      return { ok: false, error: `Patch find text not found: ${replacement.find}` };
+    }
+
+    text = text.replace(replacement.find, replacement.replace);
+  }
+
+  await fs.writeFile(batch.documentPath, text);
+  return { ok: true, value: batch.documentPath };
 }

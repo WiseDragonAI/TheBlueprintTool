@@ -1,68 +1,120 @@
 /**
- * WHAT: Generated controller function apply-generated-worktree.
- * WHY: This file is generated from the MasterLedger and contains exactly one generated function with automatically resolved imports.
+ * WHAT: generated worktree apply controller.
+ * WHY: apply mode materializes source, tests, telemetry harness, graph, report configuration, and run results.
  */
-import { telemetry } from '../../../telemetry/harness.js';
-import { buildTestStateContracts } from '../helper/build-test-state-contracts.js';
-import { classifyGeneratedFunctions } from '../helper/classify-generated-functions.js';
-import { createGitWorktree } from '../effect/create-git-worktree.js';
-import { createWorktreePlan } from '../helper/create-worktree-plan.js';
-import { enumerateGeneratedFunctions } from '../helper/enumerate-generated-functions.js';
-import { injectTelemetryCalls } from '../helper/inject-telemetry-calls.js';
+import { join, resolve } from 'node:path';
+import type { FileSystemPort, ProcessPort, Result, WorktreePlan } from '../../../lib/types.js';
+import { nodeFileSystem } from '../../../lib/fs/node-file-system.js';
+import { nodeProcess } from '../../../lib/node-test/node-process.js';
+import { stringifyJson } from '../../../lib/json/json.js';
+import { telemetry } from '../../../lib/telemetry/telemetry.js';
+import { buildTestStateContracts } from '../../test/helper/build-test-state-contracts.js';
+import { injectTelemetryCalls } from '../../telemetry/helper/inject-telemetry-calls.js';
+import { checkMasterLedgerController } from '../../master-ledger/controller/check-master-ledger.js';
+import { analyzeGeneratedSuiteTelemetry } from '../../report/helper/analyze-generated-suite-telemetry.js';
 import { planGeneratedWorktreeController } from './plan-generated-worktree.js';
-import { writeIntegrationTestFile } from '../effect/write-integration-test-file.js';
-import { writeSourceFile } from '../effect/write-source-file.js';
-import { writeTelemetryHarness } from '../effect/write-telemetry-harness.js';
-import { writeUnitTestFile } from '../effect/write-unit-test-file.js';
+import { createGitWorktree } from '../effect/create-git-worktree.js';
+import { writePlanFiles } from '../effect/write-generated-files.js';
 
+export async function applyGeneratedWorktreeController(
+  input: {
+    masterLedgerFile: string;
+    specsLedgerFile: string;
+    output: string;
+  },
+  ports: { fs?: FileSystemPort; process?: ProcessPort; cwd?: string } = {},
+): Promise<Result<WorktreePlan>> {
+  const fs = ports.fs ?? nodeFileSystem;
+  const processPort = ports.process ?? nodeProcess;
+  const rootDir = ports.cwd ?? process.cwd();
+  const checked = await checkMasterLedgerController({
+    masterLedgerFile: input.masterLedgerFile,
+    specsLedgerFile: input.specsLedgerFile,
+  }, fs);
 
-export async function applyGeneratedWorktreeController({
-  action_payload,
-}: {
-  action_payload: {
-    apply_command: true
-    master_ledger_file: string
+  // WHY: generation must stop before writing when the MasterLedger and SpecsLedger do not match.
+  // WHAT: return the checker failure or its blocking report.
+  if (!checked.ok) {
+    return checked;
   }
-}) {
-  telemetry('controller:apply-generated-worktree -> start', { functionName: 'apply-generated-worktree', arguments: { action_payload }, phase: 'started' });
-  // WHAT: write complete generated worktree output.
-  // WHY: apply mode materializes source, tests, telemetry, graph, and report setup.
-  // HOW: plan first, create fresh worktree, then write each generated artifact.
-  await planGeneratedWorktreeController({
-    action_payload: {
-      mode: 'apply',
-      master_ledger_file: action_payload.master_ledger_file,
+
+  if (!checked.value.ok) {
+    return { ok: false, error: stringifyJson(checked.value) };
+  }
+
+  const planned = await planGeneratedWorktreeController({ mode: 'apply', masterLedgerFile: input.masterLedgerFile, specsLedgerFile: input.specsLedgerFile, output: input.output }, fs);
+
+  // WHY: apply cannot continue without a valid generation plan.
+  // WHAT: return the planning failure.
+  if (!planned.ok) {
+    return planned;
+  }
+
+  const worktree = await createGitWorktree(planned.value.worktreePath, ports);
+  telemetry('create-git-worktree', worktree);
+
+  // WHY: generated files must be written inside a real git worktree.
+  // WHAT: stop when worktree creation fails.
+  if (!worktree.ok) {
+    return { ok: false, error: worktree.error };
+  }
+
+  buildTestStateContracts(planned.value.functions);
+  telemetry('build-test-state-contracts');
+  const injected = injectTelemetryCalls(planned.value.sourceFiles);
+  telemetry('inject-telemetry-calls');
+
+  // WHY: generated source files without telemetry cannot prove execution.
+  // WHAT: stop before writing invalid generated files.
+  if (!injected.ok) {
+    return injected;
+  }
+
+  await writePlanFiles(planned.value, fs);
+  telemetry('write-source-file', { count: planned.value.sourceFiles.length });
+  telemetry('write-unit-test-file', { count: planned.value.unitTestFiles.length });
+  telemetry('write-integration-test-file', { count: planned.value.integrationTestFiles.length });
+  telemetry('write-telemetry-harness');
+  telemetry('write-dependency-graph-output');
+
+  const generatedRoot = join(planned.value.worktreePath, planned.value.rootBlockPath);
+  const tscBinary = resolve(rootDir, 'generator-cli/node_modules/.bin/tsc');
+  const typeRoots = resolve(rootDir, 'generator-cli/node_modules/@types');
+  const importCheckCommand = `"${tscBinary}" -p "${planned.value.rootBlockPath}/tsconfig.json" --noEmit --typeRoots "${typeRoots}"`;
+  const importCheck = await processPort.exec(importCheckCommand, planned.value.worktreePath);
+  const integrationFiles = planned.value.integrationTestFiles.map((file) => `"${file.path.replace(`${planned.value.rootBlockPath}/`, '')}"`).join(' ');
+  const tsxLoader = resolve(rootDir, 'generator-cli/node_modules/tsx/dist/esm/index.mjs');
+  const testCommand = `node --test --import "${tsxLoader}" ${integrationFiles}`;
+  const testRun = importCheck.exitCode === 0
+    ? await processPort.exec(testCommand, generatedRoot)
+    : { exitCode: 1, stdout: '', stderr: 'Skipped because generated import check failed.' };
+  const suiteTelemetryAnalysis = analyzeGeneratedSuiteTelemetry(testRun.stdout, planned.value.suites);
+
+  await fs.writeFile(join(planned.value.worktreePath, planned.value.testResults.path), stringifyJson({
+    generatedRoot,
+    importCheck: {
+      command: importCheckCommand,
+      exitCode: importCheck.exitCode,
+      stdout: importCheck.stdout,
+      stderr: importCheck.stderr,
     },
-  })
+    testRun: {
+      command: testCommand,
+      exitCode: testRun.exitCode,
+      stdout: testRun.stdout,
+      stderr: testRun.stderr,
+    },
+    integrationTestFiles: planned.value.integrationTestFiles.map((file) => file.path),
+    suiteTelemetryAnalysis,
+  }));
 
-  const plan = createWorktreePlan(action_payload)
-  telemetry('controller:apply-generated-worktree -> create-worktree-plan', { functionName: 'create-worktree-plan', arguments: { action_payload }, phase: 'event' })
+  if (importCheck.exitCode !== 0) {
+    return { ok: false, error: `Generated import check failed. See ${planned.value.testResults.path}.` };
+  }
 
-  createGitWorktree(plan)
-  telemetry('controller:apply-generated-worktree -> create-git-worktree', { functionName: 'create-git-worktree', arguments: { action_payload }, phase: 'event' })
+  if (testRun.exitCode !== 0) {
+    return { ok: false, error: `Generated integration suites failed. See ${planned.value.testResults.path}.` };
+  }
 
-  const functions = enumerateGeneratedFunctions(action_payload.master_ledger_file)
-  telemetry('controller:apply-generated-worktree -> enumerate-generated-functions', { functionName: 'enumerate-generated-functions', arguments: { action_payload }, phase: 'event' })
-
-  classifyGeneratedFunctions(functions)
-  telemetry('controller:apply-generated-worktree -> classify-generated-functions', { functionName: 'classify-generated-functions', arguments: { action_payload }, phase: 'event' })
-
-  buildTestStateContracts(functions)
-  telemetry('controller:apply-generated-worktree -> build-test-state-contracts', { functionName: 'build-test-state-contracts', arguments: { action_payload }, phase: 'event' })
-
-  injectTelemetryCalls(functions)
-  telemetry('controller:apply-generated-worktree -> inject-telemetry-calls', { functionName: 'inject-telemetry-calls', arguments: { action_payload }, phase: 'event' })
-
-  writeSourceFile(functions)
-  telemetry('controller:apply-generated-worktree -> write-source-file', { functionName: 'write-source-file', arguments: { action_payload }, phase: 'event' })
-
-  writeUnitTestFile(functions)
-  telemetry('controller:apply-generated-worktree -> write-unit-test-file', { functionName: 'write-unit-test-file', arguments: { action_payload }, phase: 'event' })
-
-  writeIntegrationTestFile(functions)
-  telemetry('controller:apply-generated-worktree -> write-integration-test-file', { functionName: 'write-integration-test-file', arguments: { action_payload }, phase: 'event' })
-
-  writeTelemetryHarness(functions)
-  telemetry('controller:apply-generated-worktree -> write-telemetry-harness', { functionName: 'write-telemetry-harness', arguments: { action_payload }, phase: 'event' })
-  telemetry('controller:apply-generated-worktree -> complete', { functionName: 'apply-generated-worktree', arguments: { action_payload }, phase: 'completed' });
+  return planned;
 }

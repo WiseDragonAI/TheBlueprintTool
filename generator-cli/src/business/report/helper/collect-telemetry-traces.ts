@@ -1,13 +1,17 @@
 /**
- * WHAT: Generated helper function collect-telemetry-traces.
- * WHY: This file is generated from the MasterLedger and contains exactly one generated function with automatically resolved imports.
+ * WHAT: TelemetryTrace collector.
+ * WHY: report mode infers function usage from integration-test telemetry evidence.
  */
-import { telemetry } from '../../../telemetry/harness.js';
+import type { FileSystemPort, TelemetryTrace, TestRun } from '../../../lib/types.js';
+import { parseJson } from '../../../lib/json/json.js';
 
+export async function collectTelemetryTraces(testRun: TestRun, telemetryFile?: string, fs?: FileSystemPort): Promise<TelemetryTrace[]> {
+  // WHY: explicit telemetry files are the durable source when provided.
+  // WHAT: parse the file as JSON array evidence.
+  if (telemetryFile && fs) {
+    const parsed = parseJson<TelemetryTrace[]>(await fs.readFile(telemetryFile));
+    return parsed.ok ? parsed.value : [];
+  }
 
-export function collectTelemetryTraces(input: unknown = {}, ...args: unknown[]): any {
-  telemetry('helper:collect-telemetry-traces -> return stubbed success value', { functionName: 'collect-telemetry-traces', arguments: input, phase: 'event' });
-  void args;
-  const record = input && typeof input === 'object' ? input as Record<string, unknown> : {};
-  return { ok: true, value: input, ...record, mode: record.mode ?? 'dry-run', ledger_command: record.ledger_command ?? 'mutate', ...{ functionName: 'collect-telemetry-traces', input } };
+  return testRun.traces;
 }

@@ -1,13 +1,15 @@
 /**
- * WHAT: Generated helper function read-typescript-project-config.
- * WHY: This file is generated from the MasterLedger and contains exactly one generated function with automatically resolved imports.
+ * WHAT: TypeScript project config reader.
+ * WHY: generator-cli must prove it has TypeScript project configuration.
  */
-import { telemetry } from '../../../telemetry/harness.js';
+import type { FileSystemPort, Result } from '../../../lib/types.js';
+import { parseJson } from '../../../lib/json/json.js';
+import { nodeFileSystem } from '../../../lib/fs/node-file-system.js';
 
-
-export function readTypescriptProjectConfig(input: unknown = {}, ...args: unknown[]): any {
-  telemetry('helper:read-typescript-project-config -> return stubbed success value', { functionName: 'read-typescript-project-config', arguments: input, phase: 'event' });
-  void args;
-  const record = input && typeof input === 'object' ? input as Record<string, unknown> : {};
-  return { ok: true, value: input, ...record, mode: record.mode ?? 'dry-run', ledger_command: record.ledger_command ?? 'mutate', ...{ functionName: 'read-typescript-project-config', input } };
+export async function readTypescriptProjectConfig(path = 'tsconfig.json', fs: FileSystemPort = nodeFileSystem): Promise<Result<unknown>> {
+  try {
+    return parseJson(await fs.readFile(path));
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : `Unable to read ${path}` };
+  }
 }

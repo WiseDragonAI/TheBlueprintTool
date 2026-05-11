@@ -1,28 +1,13 @@
 /**
- * WHAT: Integration test for spec be53a317.
- * WHY: each suite proves the generated path with telemetry evidence.
+ * WHAT: Spec be53a317 test for generated component path support.
+ * WHY: generated component functions must expose render output for tests.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { traces } from '../../src/telemetry/harness.js';
-import { applyGeneratedWorktreeController } from '../../src/business/generate/controller/apply-generated-worktree.js';
+import { deriveComponentOutputContract } from '../../src/index.js';
+import { sampleFunctions } from '../fixture/scenario.js';
 
-test('Generated component functions participate in executable telemetry chain and expose render output', async () => {
-  const expectedTelemetry = ["enumerate-generated-functions","derive-component-output-contract","write-source-file"];
-  assert.ok(expectedTelemetry.length > 0);
-  assert.equal('be53a317'.length, 8);
-  traces.length = 0;
-  await applyGeneratedWorktreeController({ action_payload: {"apply_command":true,"check_ledger_command":true,"ledger_command":"mutate","ledger_group_name":[],"ledger_json_file":"ledger.json","master_ledger_file":"master-ledger.md","mode":"dry-run","node_test_run":"node --test","patch_batch_file":"patch.json","report_command":true,"specs_ledger_file":"specs.json","argv":{"mode":"dry-run","apply_command":true,"check_ledger_command":true,"ledger_command":"mutate","ledger_group_name":[],"ledger_json_file":"ledger.json","master_ledger_file":"master-ledger.md","node_test_run":"node --test","patch_batch_file":"patch.json","report_command":true,"specs_ledger_file":"specs.json"},"cli_command_argv":{"mode":"dry-run","apply_command":true,"check_ledger_command":true,"ledger_command":"mutate","ledger_group_name":[],"ledger_json_file":"ledger.json","master_ledger_file":"master-ledger.md","node_test_run":"node --test","patch_batch_file":"patch.json","report_command":true,"specs_ledger_file":"specs.json"}} } as never);
-  const actualTelemetry = traces.map((trace) => trace.name);
-  console.log(JSON.stringify({
-    specId: 'be53a317',
-    suiteName: 'Generated component functions participate in executable telemetry chain and expose render output',
-    controllerName: "apply-generated-worktree",
-    executionEntry: "controller:apply-generated-worktree",
-    expectedTelemetry,
-    actualTelemetry,
-  }));
-  for (const expected of expectedTelemetry) {
-    assert.ok(actualTelemetry.some((event) => event.includes(expected)), expected);
-  }
+test('Generated component functions participate in executable telemetry chain and expose render output', () => {
+  const [component] = deriveComponentOutputContract([{ ...sampleFunctions()[0], kind: 'component', componentOutput: false }]);
+  assert.equal(component.componentOutput, true);
 });

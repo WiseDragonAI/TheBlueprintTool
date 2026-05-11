@@ -1,13 +1,31 @@
 /**
- * WHAT: Generated helper function build-generated-report.
- * WHY: This file is generated from the MasterLedger and contains exactly one generated function with automatically resolved imports.
+ * WHAT: GeneratedReport builder.
+ * WHY: report mode must write one report containing tests, telemetry, stack traces, graph, and unused functions.
  */
-import { telemetry } from '../../../telemetry/harness.js';
+import type { DependencyGraph, GeneratedReport, GeneratedFunction, TelemetryTrace, TestRun } from '../../../lib/types.js';
+import { captureExecutionStackTrace } from './capture-execution-stack-trace.js';
+import { detectUnusedFunctions } from './detect-unused-functions.js';
+import { inferFunctionUsage } from './infer-function-usage.js';
 
-
-export function buildGeneratedReport(input: unknown = {}, ...args: unknown[]): any {
-  telemetry('helper:build-generated-report -> return stubbed success value', { functionName: 'build-generated-report', arguments: input, phase: 'event' });
-  void args;
-  const record = input && typeof input === 'object' ? input as Record<string, unknown> : {};
-  return { ok: true, value: input, ...record, mode: record.mode ?? 'dry-run', ledger_command: record.ledger_command ?? 'mutate', ...{ functionName: 'build-generated-report', input } };
+export function buildGeneratedReport(input: {
+  testRun: TestRun;
+  telemetry: TelemetryTrace[];
+  graph: DependencyGraph;
+  functions: GeneratedFunction[];
+}): GeneratedReport {
+  const usedFunctions = inferFunctionUsage(input.telemetry);
+  const unusedFunctions = detectUnusedFunctions(input.functions, usedFunctions);
+  return {
+    testRun: {
+      command: input.testRun.command,
+      exitCode: input.testRun.exitCode,
+      stdout: input.testRun.stdout,
+      stderr: input.testRun.stderr,
+    },
+    telemetry: input.telemetry,
+    stackTrace: captureExecutionStackTrace(input.testRun),
+    graph: input.graph,
+    usedFunctions,
+    unusedFunctions,
+  };
 }

@@ -1,13 +1,25 @@
 /**
- * WHAT: Generated effect function emit-dry-run-output.
- * WHY: This file is generated from the MasterLedger and contains exactly one generated function with automatically resolved imports.
+ * WHAT: Dry-run output effect.
+ * WHY: dry-run mode must print planned files, imports, graph, and generation output without writes.
  */
-import { telemetry } from '../../../telemetry/harness.js';
+import type { WorktreePlan } from '../../../lib/types.js';
 
-
-export function emitDryRunOutput(input: unknown = {}, ...args: unknown[]): any {
-  telemetry('effect:emit-dry-run-output -> return stubbed success value', { functionName: 'emit-dry-run-output', arguments: input, phase: 'event' });
-  void args;
-  const record = input && typeof input === 'object' ? input as Record<string, unknown> : {};
-  return { ok: true, value: input, ...record, mode: record.mode ?? 'dry-run', ledger_command: record.ledger_command ?? 'mutate', ...{ functionName: 'emit-dry-run-output', input } };
+export function emitDryRunOutput(plan: WorktreePlan, write: (message: string) => void = console.log): void {
+  write(
+    JSON.stringify(
+      {
+        worktreePath: plan.worktreePath,
+        files: [
+          ...plan.sourceFiles.map((file) => file.path),
+          ...plan.unitTestFiles.map((file) => file.path),
+          ...plan.integrationTestFiles.map((file) => file.path),
+          plan.telemetryHarness.path,
+          plan.graphOutput.path,
+          plan.reportConfig.path,
+        ],
+      },
+      null,
+      2,
+    ),
+  );
 }

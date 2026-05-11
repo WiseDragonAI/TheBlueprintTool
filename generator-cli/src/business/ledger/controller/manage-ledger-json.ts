@@ -1,38 +1,37 @@
 /**
- * WHAT: Generated controller function manage-ledger-json.
- * WHY: This file is generated from the MasterLedger and contains exactly one generated function with automatically resolved imports.
+ * WHAT: Ledger JSON command controller.
+ * WHY: CLI architecture edits must use committed ledger files as the work surface.
  */
-import { telemetry } from '../../../telemetry/harness.js';
+import type { FileSystemPort, Result } from '../../../lib/types.js';
+import { telemetry } from '../../../lib/telemetry/telemetry.js';
 import { readLedgerJson } from '../helper/read-ledger-json.js';
 import { writeLedgerJson } from '../effect/write-ledger-json.js';
 
+export async function manageLedgerJsonController(
+  actionPayload: {
+    ledgerCommand: 'inspect' | 'mutate';
+    ledgerJsonFile: string;
+    mutation?: unknown;
+  },
+  fs?: FileSystemPort,
+): Promise<Result<unknown>> {
+  telemetry('read-ledger-json', { path: actionPayload.ledgerJsonFile });
+  const ledger = await readLedgerJson(actionPayload.ledgerJsonFile, fs);
 
-export async function manageLedgerJsonController({
-  action_payload,
-}: {
-  action_payload: {
-    ledger_command: 'inspect' | 'mutate'
-    ledger_json_file: string
-  }
-}) {
-  telemetry('controller:manage-ledger-json -> start', { functionName: 'manage-ledger-json', arguments: { action_payload }, phase: 'started' });
-  telemetry('controller:manage-ledger-json -> read-ledger-json', { functionName: 'read-ledger-json', arguments: { action_payload }, phase: 'event' })
-
-  // WHAT: operate on committed ledger JSON.
-  // WHY: architecture edits must not use shadow state.
-  // HOW: read the JSON, validate it, then write only for controlled mutations.
-  const ledger = await readLedgerJson(action_payload.ledger_json_file)
-
+  // WHY: invalid JSON cannot be used as committed architecture truth.
+  // WHAT: stop before any mutation write.
   if (!ledger.ok) {
-    telemetry('controller:manage-ledger-json -> manage-ledger-json-rejected', { functionName: 'manage-ledger-json-rejected', arguments: { action_payload }, phase: 'event' })
-    return
+    telemetry('manage-ledger-json-rejected', { error: ledger.error });
+    return ledger;
   }
 
-  if (action_payload.ledger_command === 'mutate') {
-    await writeLedgerJson(ledger.value)
-    telemetry('controller:manage-ledger-json -> write-ledger-json', { functionName: 'write-ledger-json', arguments: { action_payload }, phase: 'event' })
+  // WHY: mutate mode is the only ledger command allowed to write.
+  // WHAT: persist either the provided mutation object or the current validated ledger.
+  if (actionPayload.ledgerCommand === 'mutate') {
+    await writeLedgerJson(actionPayload.ledgerJsonFile, actionPayload.mutation ?? ledger.value, fs);
+    telemetry('write-ledger-json', { path: actionPayload.ledgerJsonFile });
   }
 
-  telemetry('controller:manage-ledger-json -> manage-ledger-json-completed', { functionName: 'manage-ledger-json-completed', arguments: { action_payload }, phase: 'event' })
-  telemetry('controller:manage-ledger-json -> complete', { functionName: 'manage-ledger-json', arguments: { action_payload }, phase: 'completed' });
+  telemetry('manage-ledger-json-completed');
+  return ledger;
 }

@@ -1,28 +1,22 @@
 /**
- * WHAT: Integration test for spec 69109a76.
- * WHY: each suite proves the generated path with telemetry evidence.
+ * WHAT: Spec 69109a76 test for one generated report file.
+ * WHY: each report run must persist exactly one GeneratedReport file.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { traces } from '../../src/telemetry/harness.js';
-import { runReportModeController } from '../../src/business/report/controller/run-report-mode.js';
+import { join } from 'node:path';
+import { writeGeneratedReportFile } from '../../src/index.js';
+import { sampleGraph, tempDir, readText } from '../fixture/scenario.js';
 
 test('CLI writes one generated report file for a run', async () => {
-  const expectedTelemetry = ["build-generated-report","write-generated-report-file"];
-  assert.ok(expectedTelemetry.length > 0);
-  assert.equal('69109a76'.length, 8);
-  traces.length = 0;
-  await runReportModeController({ action_payload: {"apply_command":true,"check_ledger_command":true,"ledger_command":"mutate","ledger_group_name":[],"ledger_json_file":"ledger.json","master_ledger_file":"master-ledger.md","mode":"report","node_test_run":"node --test","patch_batch_file":"patch.json","report_command":true,"specs_ledger_file":"specs.json","argv":{"mode":"report","apply_command":true,"check_ledger_command":true,"ledger_command":"mutate","ledger_group_name":[],"ledger_json_file":"ledger.json","master_ledger_file":"master-ledger.md","node_test_run":"node --test","patch_batch_file":"patch.json","report_command":true,"specs_ledger_file":"specs.json"},"cli_command_argv":{"mode":"report","apply_command":true,"check_ledger_command":true,"ledger_command":"mutate","ledger_group_name":[],"ledger_json_file":"ledger.json","master_ledger_file":"master-ledger.md","node_test_run":"node --test","patch_batch_file":"patch.json","report_command":true,"specs_ledger_file":"specs.json"}} } as never);
-  const actualTelemetry = traces.map((trace) => trace.name);
-  console.log(JSON.stringify({
-    specId: '69109a76',
-    suiteName: 'CLI writes one generated report file for a run',
-    controllerName: "run-report-mode",
-    executionEntry: "controller:run-report-mode",
-    expectedTelemetry,
-    actualTelemetry,
-  }));
-  for (const expected of expectedTelemetry) {
-    assert.ok(actualTelemetry.some((event) => event.includes(expected)), expected);
-  }
+  const file = join(await tempDir(), 'report.json');
+  await writeGeneratedReportFile(file, {
+    testRun: { command: 'x', exitCode: 0, stdout: '', stderr: '' },
+    telemetry: [],
+    stackTrace: { status: 'success', frames: ['ok'] },
+    graph: sampleGraph(),
+    usedFunctions: [],
+    unusedFunctions: [],
+  });
+  assert.equal(JSON.parse(await readText(file)).stackTrace.status, 'success');
 });

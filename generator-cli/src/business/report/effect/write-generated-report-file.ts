@@ -1,13 +1,11 @@
 /**
- * WHAT: Generated effect function write-generated-report-file.
- * WHY: This file is generated from the MasterLedger and contains exactly one generated function with automatically resolved imports.
+ * WHAT: GeneratedReport file writer.
+ * WHY: report mode must persist exactly one generated report file.
  */
-import { telemetry } from '../../../telemetry/harness.js';
+import type { FileSystemPort, GeneratedReport } from '../../../lib/types.js';
+import { nodeFileSystem } from '../../../lib/fs/node-file-system.js';
+import { stringifyJson } from '../../../lib/json/json.js';
 
-
-export function writeGeneratedReportFile(input: unknown = {}, ...args: unknown[]): any {
-  telemetry('effect:write-generated-report-file -> return stubbed success value', { functionName: 'write-generated-report-file', arguments: input, phase: 'event' });
-  void args;
-  const record = input && typeof input === 'object' ? input as Record<string, unknown> : {};
-  return { ok: true, value: input, ...record, mode: record.mode ?? 'dry-run', ledger_command: record.ledger_command ?? 'mutate', ...{ functionName: 'write-generated-report-file', input } };
+export async function writeGeneratedReportFile(path: string, report: GeneratedReport, fs: FileSystemPort = nodeFileSystem): Promise<void> {
+  await fs.writeFile(path, stringifyJson(report));
 }

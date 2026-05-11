@@ -1,13 +1,12 @@
 /**
- * WHAT: Generated helper function derive-component-output-contract.
- * WHY: This file is generated from the MasterLedger and contains exactly one generated function with automatically resolved imports.
+ * WHAT: Component output contract derivation.
+ * WHY: generated component functions must expose render output for tests.
  */
-import { telemetry } from '../../../telemetry/harness.js';
+import type { GeneratedFunction } from '../../../lib/types.js';
 
-
-export function deriveComponentOutputContract(input: unknown = {}, ...args: unknown[]): any {
-  telemetry('helper:derive-component-output-contract -> return stubbed success value', { functionName: 'derive-component-output-contract', arguments: input, phase: 'event' });
-  void args;
-  const record = input && typeof input === 'object' ? input as Record<string, unknown> : {};
-  return { ok: true, value: input, ...record, mode: record.mode ?? 'dry-run', ledger_command: record.ledger_command ?? 'mutate', ...{ functionName: 'derive-component-output-contract', input } };
+export function deriveComponentOutputContract(functions: GeneratedFunction[]): GeneratedFunction[] {
+  return functions.map((generatedFunction) => ({
+    ...generatedFunction,
+    componentOutput: generatedFunction.kind === 'component' || generatedFunction.componentOutput === true,
+  }));
 }

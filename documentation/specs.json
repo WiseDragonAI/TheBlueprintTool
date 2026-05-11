@@ -3517,6 +3517,104 @@
       },
       "facts": [],
       "fields": []
+    },
+    {
+      "id": "b0f3a2d1",
+      "title": "Helper and effect return contracts are explicit",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -7650,
+      "y": 4140,
+      "w": 320,
+      "comment": {
+        "what": "Every helper and effect generated from the MasterLedger declares an explicit `return_type`; `any` is illegal and generation must report it as a ledger problem."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "d8e7c3a4",
+      "title": "Generated helper and effect stubs are telemetry-only",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -7298,
+      "y": 4140,
+      "w": 320,
+      "comment": {
+        "what": "Generated helper and effect scaffold files emit telemetry and do not invent behavior, branch data, ok/value objects, mode defaults, or fake return payloads."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "e1a9b6c2",
+      "title": "Generated integration suites record telemetry facts only",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -6946,
+      "y": 4140,
+      "w": 320,
+      "comment": {
+        "what": "Generated integration test suites only trigger controller entries and record telemetry facts; they do not assert expected telemetry or decide scaffold quality."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "f4c2d8e9",
+      "title": "Apply mode runs generated integration suites only",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -7650,
+      "y": 4314,
+      "w": 320,
+      "comment": {
+        "what": "After generation, apply mode runs generated integration suites for telemetry evidence and does not run generated unit tests, because scaffold unit tests are intentionally red."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "a7d3e5f1",
+      "title": "Generated unit tests are red until implementation",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -7298,
+      "y": 4314,
+      "w": 320,
+      "comment": {
+        "what": "Every generated unit test is an intentional failing placeholder so a scaffold cannot be validated as implemented before real function behavior exists."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "c6b4a8e2",
+      "title": "Generated imports use ledger-derived @ aliases",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -6946,
+      "y": 4314,
+      "w": 320,
+      "comment": {
+        "what": "Generated source and test files use root-block aliases derived from the ledger such as `@generator-cli/*`, not long relative imports or `#` aliases."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "de19f4a6",
+      "title": "Generation cleans inherited root block before writing scaffold",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -7650,
+      "y": 4488,
+      "w": 320,
+      "comment": {
+        "what": "Apply mode creates the git worktree, removes the inherited root block directory inside it, then writes the generated scaffold so implementation files cannot survive generation."
+      },
+      "facts": [],
+      "fields": []
     }
   ],
   "relationships": [],
@@ -3664,7 +3762,7 @@
       "x": -7691,
       "y": 3098,
       "width": 1533,
-      "height": 1196,
+      "height": 1540,
       "color": "#8b5cf6",
       "label": "Generator",
       "variant": "zone",
@@ -3755,6 +3853,6 @@
     "zoneId": "",
     "zoneIds": []
   },
-  "updatedAt": "2026-05-11T07:43:26.613Z",
+  "updatedAt": "2026-05-11T12:30:17.820Z",
   "cardEdits": {}
 }

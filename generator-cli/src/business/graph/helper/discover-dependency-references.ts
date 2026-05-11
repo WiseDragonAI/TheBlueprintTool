@@ -1,13 +1,28 @@
 /**
- * WHAT: Generated helper function discover-dependency-references.
- * WHY: This file is generated from the MasterLedger and contains exactly one generated function with automatically resolved imports.
+ * WHAT: Generated function dependency discovery.
+ * WHY: imports and dependency graph output must be derived automatically from function bodies.
  */
-import { telemetry } from '../../../telemetry/harness.js';
+import type { DependencyReference, GeneratedFunction } from '../../../lib/types.js';
 
+export function discoverDependencyReferences(functions: GeneratedFunction[]): DependencyReference[] {
+  const byExportName = new Map(functions.map((generatedFunction) => [generatedFunction.exportName, generatedFunction]));
+  const references: DependencyReference[] = [];
 
-export function discoverDependencyReferences(input: unknown = {}, ...args: unknown[]): any {
-  telemetry('helper:discover-dependency-references -> return stubbed success value', { functionName: 'discover-dependency-references', arguments: input, phase: 'event' });
-  void args;
-  const record = input && typeof input === 'object' ? input as Record<string, unknown> : {};
-  return { ok: true, value: input, ...record, mode: record.mode ?? 'dry-run', ledger_command: record.ledger_command ?? 'mutate', ...{ functionName: 'discover-dependency-references', input } };
+  for (const generatedFunction of functions) {
+    for (const [exportName, target] of byExportName) {
+      // WHY: a function should not import itself as a dependency.
+      // WHAT: skip self references before scanning body text.
+      if (target.name === generatedFunction.name) {
+        continue;
+      }
+
+      // WHY: call references in pseudocode/source define executable dependencies.
+      // WHAT: add an edge when a known export is invoked.
+      if (generatedFunction.body.includes(`${exportName}(`)) {
+        references.push({ from: generatedFunction.name, to: target.name, importPath: target.path });
+      }
+    }
+  }
+
+  return references;
 }
