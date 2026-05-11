@@ -1,10 +1,23 @@
-// @ts-nocheck
 /**
- * WHAT: Generated helper function read-blueprinttool-state.
- * WHY: This file is generated from the MasterLedger and contains exactly one generated function.
+ * WHAT: Implements the read-blueprinttool-state helper from the front/back master ledger.
+ * WHY: The generated scaffold needs executable behavior while preserving one function per file.
  */
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { telemetry } from '@backend/telemetry/harness.js';
 
-export function readBlueprinttoolState(input: unknown = {}, ...args: unknown[]): unknown {
-  telemetry('helper:read-blueprinttool-state -> stubbed scaffold return', { functionName: 'read-blueprinttool-state', phase: 'event', arguments: input });
+type AnyRecord = Record<string, unknown>;
+
+export function readBlueprinttoolState(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): Record<string, unknown> {
+  telemetry('read-blueprinttool-state', { role: 'helper', action: 'read-blueprinttool-state' });
+  const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord };
+  const payload = (envelope.action_payload ?? input) as AnyRecord;
+  const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
+  const data = (envelope.data_model ?? {}) as AnyRecord;
+  const file = resolve(String(payload.blueprinttoolFile ?? '.blueprinttool/state.json'));
+  if (payload.mode === 'dry-run' || !existsSync(file)) {
+    return { ok: true, file, tabs: [{ id: 'default', title: 'Default', ledgerFile: String(payload.master_ledger_file ?? 'generated-master-ledger.md') }] };
+  }
+  return { ok: true, file, ...JSON.parse(readFileSync(file, 'utf8')) };
 }
+

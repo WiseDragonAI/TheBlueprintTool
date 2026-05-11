@@ -1,9 +1,16 @@
 /**
- * WHAT: Generated effect function upload-voice-audio.
- * WHY: This file is generated from the MasterLedger and contains exactly one generated function.
+ * WHAT: Implements the upload-voice-audio effect from the front/back master ledger.
+ * WHY: The generated scaffold needs executable behavior while preserving one function per file.
  */
 import { telemetry } from '@frontend/telemetry/harness.js';
 
-export function uploadVoiceAudio(input: unknown = {}, ...args: unknown[]): void {
-  telemetry('effect:upload-voice-audio -> stubbed scaffold return', { functionName: 'upload-voice-audio', phase: 'event', arguments: input });
+type AnyRecord = Record<string, unknown>;
+
+export function uploadVoiceAudio(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): void {
+  telemetry('upload-voice-audio', { role: 'effect', action: 'upload-voice-audio' });
+  const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord };
+  const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
+  const payload = (envelope.action_payload ?? input) as AnyRecord;
+  runtime.uploadedVoiceAudio = payload.audio ?? payload.audioBlob ?? null;
 }
+

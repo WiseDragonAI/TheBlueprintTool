@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "test": "node --test --import tsx \"test/**/*.test.ts\"",
-    "test:integration": "node --test --import tsx \"test/**/*.test.ts\" --test-skip-pattern \"unit/\"",
+    "test:integration": "find test -path \"*/unit/*\" -prune -o -name \"*.test.ts\" -print | xargs node --test --import tsx",
+    "test:unit": "find test/unit -name \"*.test.ts\" -print | xargs node --test --import tsx",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

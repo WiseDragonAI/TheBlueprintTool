@@ -1,72 +1,27 @@
-// @ts-nocheck
 /**
- * WHAT: Generated controller function handle-canvas-gesture-controller.
- * WHY: This file is generated from the MasterLedger and contains exactly one generated function.
+ * WHAT: Implements the handle-canvas-gesture-controller controller from the front/back master ledger.
+ * WHY: The generated scaffold needs executable behavior while preserving one function per file.
  */
-import { telemetry } from '@frontend/telemetry/harness.js';
-import { calculateDragDelta } from '@frontend/business/gesture/helper/calculate-drag-delta.js';
+import { deriveGestureIntent } from '@frontend/business/gesture/helper/derive-gesture-intent.js';
 import { calculateMarqueeSelection } from '@frontend/business/selection/helper/calculate-marquee-selection.js';
 import { calculateViewportTransform } from '@frontend/business/canvas/helper/calculate-viewport-transform.js';
-import { commitLedgerEdit } from '@frontend/business/persistence/effect/commit-ledger-edit.js';
+import { clearTransientSelection } from '@frontend/business/selection/helper/clear-transient-selection.js';
 import { copySelectionPayload } from '@frontend/business/selection/helper/copy-selection-payload.js';
-import { deriveGestureIntent } from '@frontend/business/gesture/helper/derive-gesture-intent.js';
 import { renderCanvasSurface } from '@frontend/business/canvas/effect/render-canvas-surface.js';
-import { resolveSelectionTarget } from '@frontend/business/selection/helper/resolve-selection-target.js';
 
-export async function handleCanvasGestureController(input: { action_payload?: Record<string, unknown> } = {}): Promise<void> {
-  const action_payload = input.action_payload ?? input;
-  telemetry('controller:handle-canvas-gesture-controller -> start', { functionName: 'handle-canvas-gesture-controller', phase: 'started', arguments: input });
+type AnyRecord = Record<string, unknown>;
 
-  try {
-    telemetry('controller:handle-canvas-gesture-controller -> handle-canvas-gesture-controller-started', { functionName: 'handle-canvas-gesture-controller', phase: 'event' });
-    try {
-      await deriveGestureIntent({ action_payload });
-    } catch (error) {
-      console.log(JSON.stringify({ controllerName: 'handle-canvas-gesture-controller', dependencyName: 'derive-gesture-intent', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
-    }
-    telemetry('controller:handle-canvas-gesture-controller -> handle-canvas-gesture-invalid', { functionName: 'handle-canvas-gesture-controller', phase: 'event' });
-    try {
-      await renderCanvasSurface({ action_payload });
-    } catch (error) {
-      console.log(JSON.stringify({ controllerName: 'handle-canvas-gesture-controller', dependencyName: 'render-canvas-surface', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
-    }
-    try {
-      await resolveSelectionTarget({ action_payload });
-    } catch (error) {
-      console.log(JSON.stringify({ controllerName: 'handle-canvas-gesture-controller', dependencyName: 'resolve-selection-target', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
-    }
-    try {
-      await calculateMarqueeSelection({ action_payload });
-    } catch (error) {
-      console.log(JSON.stringify({ controllerName: 'handle-canvas-gesture-controller', dependencyName: 'calculate-marquee-selection', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
-    }
-    try {
-      await calculateViewportTransform({ action_payload });
-    } catch (error) {
-      console.log(JSON.stringify({ controllerName: 'handle-canvas-gesture-controller', dependencyName: 'calculate-viewport-transform', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
-    }
-    try {
-      await calculateDragDelta({ action_payload });
-    } catch (error) {
-      console.log(JSON.stringify({ controllerName: 'handle-canvas-gesture-controller', dependencyName: 'calculate-drag-delta', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
-    }
-    try {
-      await commitLedgerEdit({ action_payload });
-    } catch (error) {
-      console.log(JSON.stringify({ controllerName: 'handle-canvas-gesture-controller', dependencyName: 'commit-ledger-edit', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
-    }
-    try {
-      await copySelectionPayload({ action_payload });
-    } catch (error) {
-      console.log(JSON.stringify({ controllerName: 'handle-canvas-gesture-controller', dependencyName: 'copy-selection-payload', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
-    }
-    try {
-      await renderCanvasSurface({ action_payload });
-    } catch (error) {
-      console.log(JSON.stringify({ controllerName: 'handle-canvas-gesture-controller', dependencyName: 'render-canvas-surface', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
-    }
-    telemetry('controller:handle-canvas-gesture-controller -> handle-canvas-gesture-controller-completed', { functionName: 'handle-canvas-gesture-controller', phase: 'event' });
-  } finally {
-    telemetry('controller:handle-canvas-gesture-controller -> complete', { functionName: 'handle-canvas-gesture-controller', phase: 'completed', arguments: input });
-  }
+export async function handleCanvasGestureController(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): Promise<AnyRecord> {
+  const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord };
+  const payload = (envelope.action_payload ?? input) as AnyRecord;
+  const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
+  const data = (envelope.data_model ?? {}) as AnyRecord;
+  const intent = deriveGestureIntent({ action_payload: payload, runtime_state: runtime, data_model: data });
+  const selection = calculateMarqueeSelection({ action_payload: payload, runtime_state: runtime, data_model: data });
+  const transform = calculateViewportTransform({ action_payload: payload, runtime_state: runtime, data_model: data });
+  clearTransientSelection({ action_payload: payload, runtime_state: runtime, data_model: data });
+  const clipboard = copySelectionPayload({ action_payload: payload, runtime_state: runtime, data_model: data });
+  renderCanvasSurface({ action_payload: { ...payload, intent, selection, transform, clipboard }, runtime_state: runtime, data_model: data });
+  return { ok: intent.ok !== false, intent, selection, transform, clipboard };
 }
+

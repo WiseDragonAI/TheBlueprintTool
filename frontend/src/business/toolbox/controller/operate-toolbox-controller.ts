@@ -1,36 +1,23 @@
-// @ts-nocheck
 /**
- * WHAT: Generated controller function operate-toolbox-controller.
- * WHY: This file is generated from the MasterLedger and contains exactly one generated function.
+ * WHAT: Implements the operate-toolbox-controller controller from the front/back master ledger.
+ * WHY: The generated scaffold needs executable behavior while preserving one function per file.
  */
-import { telemetry } from '@frontend/telemetry/harness.js';
-import { renderCanvasSurface } from '@frontend/business/canvas/effect/render-canvas-surface.js';
-import { renderToolbox } from '@frontend/business/toolbox/effect/render-toolbox.js';
+import { resolveSelectionTarget } from '@frontend/business/selection/helper/resolve-selection-target.js';
 import { resolveToolMode } from '@frontend/business/toolbox/helper/resolve-tool-mode.js';
+import { renderToolbox } from '@frontend/business/toolbox/effect/render-toolbox.js';
+import { renderCanvasSurface } from '@frontend/business/canvas/effect/render-canvas-surface.js';
 
-export async function operateToolboxController(input: { action_payload?: Record<string, unknown> } = {}): Promise<void> {
-  const action_payload = input.action_payload ?? input;
-  telemetry('controller:operate-toolbox-controller -> start', { functionName: 'operate-toolbox-controller', phase: 'started', arguments: input });
+type AnyRecord = Record<string, unknown>;
 
-  try {
-    telemetry('controller:operate-toolbox-controller -> operate-toolbox-controller-started', { functionName: 'operate-toolbox-controller', phase: 'event' });
-    try {
-      await resolveToolMode({ action_payload });
-    } catch (error) {
-      console.log(JSON.stringify({ controllerName: 'operate-toolbox-controller', dependencyName: 'resolve-tool-mode', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
-    }
-    try {
-      await renderToolbox({ action_payload });
-    } catch (error) {
-      console.log(JSON.stringify({ controllerName: 'operate-toolbox-controller', dependencyName: 'render-toolbox', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
-    }
-    try {
-      await renderCanvasSurface({ action_payload });
-    } catch (error) {
-      console.log(JSON.stringify({ controllerName: 'operate-toolbox-controller', dependencyName: 'render-canvas-surface', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
-    }
-    telemetry('controller:operate-toolbox-controller -> operate-toolbox-controller-completed', { functionName: 'operate-toolbox-controller', phase: 'event' });
-  } finally {
-    telemetry('controller:operate-toolbox-controller -> complete', { functionName: 'operate-toolbox-controller', phase: 'completed', arguments: input });
-  }
+export async function operateToolboxController(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): Promise<AnyRecord> {
+  const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord };
+  const payload = (envelope.action_payload ?? input) as AnyRecord;
+  const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
+  const data = (envelope.data_model ?? {}) as AnyRecord;
+  const target = resolveSelectionTarget({ action_payload: payload, runtime_state: runtime, data_model: data });
+  const tool = resolveToolMode({ action_payload: payload, runtime_state: runtime, data_model: data });
+  renderToolbox({ action_payload: { ...payload, target, tool }, runtime_state: runtime, data_model: data });
+  renderCanvasSurface({ action_payload: { ...payload, target, tool }, runtime_state: runtime, data_model: data });
+  return { ok: target.ok !== false && tool.ok !== false, target, tool };
 }
+

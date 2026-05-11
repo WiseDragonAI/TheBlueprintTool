@@ -1,48 +1,23 @@
-// @ts-nocheck
 /**
- * WHAT: Generated controller function dispatch-route-controller.
- * WHY: This file is generated from the MasterLedger and contains exactly one generated function.
+ * WHAT: Implements the dispatch-route-controller controller from the front/back master ledger.
+ * WHY: The generated scaffold needs executable behavior while preserving one function per file.
  */
-import { telemetry } from '@backend/telemetry/harness.js';
 import { parseHttpRequest } from '@backend/business/routing/helper/parse-http-request.js';
-import { readLedgerJsonFile } from '@backend/business/ledger/helper/read-ledger-json-file.js';
 import { resolveLedgerRoute } from '@backend/business/routing/helper/resolve-ledger-route.js';
+import { readLedgerJsonFile } from '@backend/business/ledger/helper/read-ledger-json-file.js';
 import { sendJsonResponse } from '@backend/business/routing/effect/send-json-response.js';
 
-export async function dispatchRouteController(input: { action_payload?: Record<string, unknown> } = {}): Promise<void> {
-  const action_payload = input.action_payload ?? input;
-  telemetry('controller:dispatch-route-controller -> start', { functionName: 'dispatch-route-controller', phase: 'started', arguments: input });
+type AnyRecord = Record<string, unknown>;
 
-  try {
-    telemetry('controller:dispatch-route-controller -> dispatch-route-controller-started', { functionName: 'dispatch-route-controller', phase: 'event' });
-    try {
-      await parseHttpRequest({ action_payload });
-    } catch (error) {
-      console.log(JSON.stringify({ controllerName: 'dispatch-route-controller', dependencyName: 'parse-http-request', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
-    }
-    try {
-      await resolveLedgerRoute({ action_payload });
-    } catch (error) {
-      console.log(JSON.stringify({ controllerName: 'dispatch-route-controller', dependencyName: 'resolve-ledger-route', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
-    }
-    telemetry('controller:dispatch-route-controller -> dispatch-route-not-found', { functionName: 'dispatch-route-controller', phase: 'event' });
-    try {
-      await sendJsonResponse({ action_payload });
-    } catch (error) {
-      console.log(JSON.stringify({ controllerName: 'dispatch-route-controller', dependencyName: 'send-json-response', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
-    }
-    try {
-      await readLedgerJsonFile({ action_payload });
-    } catch (error) {
-      console.log(JSON.stringify({ controllerName: 'dispatch-route-controller', dependencyName: 'read-ledger-json-file', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
-    }
-    try {
-      await sendJsonResponse({ action_payload });
-    } catch (error) {
-      console.log(JSON.stringify({ controllerName: 'dispatch-route-controller', dependencyName: 'send-json-response', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
-    }
-    telemetry('controller:dispatch-route-controller -> dispatch-route-controller-completed', { functionName: 'dispatch-route-controller', phase: 'event' });
-  } finally {
-    telemetry('controller:dispatch-route-controller -> complete', { functionName: 'dispatch-route-controller', phase: 'completed', arguments: input });
-  }
+export async function dispatchRouteController(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): Promise<AnyRecord> {
+  const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord };
+  const payload = (envelope.action_payload ?? input) as AnyRecord;
+  const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
+  const data = (envelope.data_model ?? {}) as AnyRecord;
+  const request = parseHttpRequest({ action_payload: payload, runtime_state: runtime, data_model: data });
+  const route = resolveLedgerRoute({ action_payload: { ...payload, ...request }, runtime_state: runtime, data_model: data });
+  const ledger = route.ok === false ? { ok: false, document: null } : readLedgerJsonFile({ action_payload: { ...payload, ...route }, runtime_state: runtime, data_model: data });
+  sendJsonResponse({ action_payload: { ...payload, status: route.ok === false ? 404 : 200, body: ledger }, runtime_state: runtime, data_model: data });
+  return { ok: route.ok !== false, request, route, ledger };
 }
+

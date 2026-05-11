@@ -1,48 +1,26 @@
-// @ts-nocheck
 /**
- * WHAT: Generated controller function commit-ledger-edit-controller.
- * WHY: This file is generated from the MasterLedger and contains exactly one generated function.
+ * WHAT: Implements the commit-ledger-edit-controller controller from the front/back master ledger.
+ * WHY: The generated scaffold needs executable behavior while preserving one function per file.
  */
-import { telemetry } from '@backend/telemetry/harness.js';
-import { parseHttpRequest } from '@backend/business/routing/helper/parse-http-request.js';
-import { sendJsonResponse } from '@backend/business/routing/effect/send-json-response.js';
 import { validateLedgerEditPayload } from '@backend/business/persistence/helper/validate-ledger-edit-payload.js';
 import { writeLedgerJsonFile } from '@backend/business/persistence/effect/write-ledger-json-file.js';
+import { writeBlueprinttoolState } from '@backend/business/ledger/effect/write-blueprinttool-state.js';
+import { sendJsonResponse } from '@backend/business/routing/effect/send-json-response.js';
+import { parseHttpRequest } from '@backend/business/routing/helper/parse-http-request.js';
 
-export async function commitLedgerEditController(input: { action_payload?: Record<string, unknown> } = {}): Promise<void> {
-  const action_payload = input.action_payload ?? input;
-  telemetry('controller:commit-ledger-edit-controller -> start', { functionName: 'commit-ledger-edit-controller', phase: 'started', arguments: input });
+type AnyRecord = Record<string, unknown>;
 
-  try {
-    telemetry('controller:commit-ledger-edit-controller -> commit-ledger-edit-controller-started', { functionName: 'commit-ledger-edit-controller', phase: 'event' });
-    try {
-      await parseHttpRequest({ action_payload });
-    } catch (error) {
-      console.log(JSON.stringify({ controllerName: 'commit-ledger-edit-controller', dependencyName: 'parse-http-request', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
-    }
-    try {
-      await validateLedgerEditPayload({ action_payload });
-    } catch (error) {
-      console.log(JSON.stringify({ controllerName: 'commit-ledger-edit-controller', dependencyName: 'validate-ledger-edit-payload', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
-    }
-    telemetry('controller:commit-ledger-edit-controller -> commit-ledger-edit-rejected', { functionName: 'commit-ledger-edit-controller', phase: 'event' });
-    try {
-      await sendJsonResponse({ action_payload });
-    } catch (error) {
-      console.log(JSON.stringify({ controllerName: 'commit-ledger-edit-controller', dependencyName: 'send-json-response', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
-    }
-    try {
-      await writeLedgerJsonFile({ action_payload });
-    } catch (error) {
-      console.log(JSON.stringify({ controllerName: 'commit-ledger-edit-controller', dependencyName: 'write-ledger-json-file', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
-    }
-    try {
-      await sendJsonResponse({ action_payload });
-    } catch (error) {
-      console.log(JSON.stringify({ controllerName: 'commit-ledger-edit-controller', dependencyName: 'send-json-response', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
-    }
-    telemetry('controller:commit-ledger-edit-controller -> commit-ledger-edit-controller-completed', { functionName: 'commit-ledger-edit-controller', phase: 'event' });
-  } finally {
-    telemetry('controller:commit-ledger-edit-controller -> complete', { functionName: 'commit-ledger-edit-controller', phase: 'completed', arguments: input });
+export async function commitLedgerEditController(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): Promise<AnyRecord> {
+  const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord };
+  const payload = (envelope.action_payload ?? input) as AnyRecord;
+  const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
+  const data = (envelope.data_model ?? {}) as AnyRecord;
+  const request = parseHttpRequest({ action_payload: payload, runtime_state: runtime, data_model: data });
+  const validation = validateLedgerEditPayload({ action_payload: { ...payload, request }, runtime_state: runtime, data_model: data });
+  if (validation.ok !== false) {
+    writeLedgerJsonFile({ action_payload: { ...payload, document: validation.document }, runtime_state: runtime, data_model: data });
+    writeBlueprinttoolState({ action_payload: { ...payload, state: { lastEdit: validation.document } }, runtime_state: runtime, data_model: data });
   }
+  sendJsonResponse({ action_payload: { ...payload, status: validation.ok === false ? 400 : 200, body: validation }, runtime_state: runtime, data_model: data });
+  return { ok: validation.ok !== false, request, validation };
 }

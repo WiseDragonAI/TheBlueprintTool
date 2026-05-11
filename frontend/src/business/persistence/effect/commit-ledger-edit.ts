@@ -1,9 +1,18 @@
 /**
- * WHAT: Generated effect function commit-ledger-edit.
- * WHY: This file is generated from the MasterLedger and contains exactly one generated function.
+ * WHAT: Implements the commit-ledger-edit effect from the front/back master ledger.
+ * WHY: The generated scaffold needs executable behavior while preserving one function per file.
  */
 import { telemetry } from '@frontend/telemetry/harness.js';
 
-export function commitLedgerEdit(input: unknown = {}, ...args: unknown[]): void {
-  telemetry('effect:commit-ledger-edit -> stubbed scaffold return', { functionName: 'commit-ledger-edit', phase: 'event', arguments: input });
+type AnyRecord = Record<string, unknown>;
+
+export function commitLedgerEdit(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): void {
+  telemetry('commit-ledger-edit', { role: 'effect', action: 'commit-ledger-edit' });
+  const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord };
+  const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
+  const payload = (envelope.action_payload ?? input) as AnyRecord;
+  const edits = Array.isArray(runtime.ledgerEdits) ? runtime.ledgerEdits : [];
+  edits.push({ payload, committedAt: new Date(0).toISOString() });
+  runtime.ledgerEdits = edits;
 }
+

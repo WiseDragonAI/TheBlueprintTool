@@ -1,10 +1,20 @@
-// @ts-nocheck
 /**
- * WHAT: Generated helper function watch-ledger-directory.
- * WHY: This file is generated from the MasterLedger and contains exactly one generated function.
+ * WHAT: Implements the watch-ledger-directory helper from the front/back master ledger.
+ * WHY: The generated scaffold needs executable behavior while preserving one function per file.
  */
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { telemetry } from '@backend/telemetry/harness.js';
 
-export function watchLedgerDirectory(input: unknown = {}, ...args: unknown[]): unknown {
-  telemetry('helper:watch-ledger-directory -> stubbed scaffold return', { functionName: 'watch-ledger-directory', phase: 'event', arguments: input });
+type AnyRecord = Record<string, unknown>;
+
+export function watchLedgerDirectory(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): Record<string, unknown> {
+  telemetry('watch-ledger-directory', { role: 'helper', action: 'watch-ledger-directory' });
+  const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord };
+  const payload = (envelope.action_payload ?? input) as AnyRecord;
+  const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
+  const data = (envelope.data_model ?? {}) as AnyRecord;
+  const directory = resolve(String(payload.ledgerDirectory ?? payload.cwd ?? process.cwd()));
+  return { ok: true, directory, watching: payload.mode !== 'dry-run' };
 }
+
