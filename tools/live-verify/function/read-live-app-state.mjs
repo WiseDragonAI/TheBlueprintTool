@@ -129,8 +129,30 @@ export async function readLiveAppState(send, url) {
       const sourceInteriorHit = points.slice(0, -1).some((point, index) => segmentHits(point, points[index + 1], sourceRect));
       const targetInteriorHit = points.slice(0, -1).some((point, index) => segmentHits(point, points[index + 1], targetRect));
       const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
-      const sourceBorderStandoff = points.length >= 4 && distance(points[0], points[1]) >= 12 && !inside(points[1], sourceRect);
-      const targetBorderStandoff = points.length >= 4 && distance(points[points.length - 2], points[points.length - 1]) >= 12 && !inside(points[points.length - 2], targetRect);
+      const distanceToRect = (point, box) => {
+        const dx = Math.max(box.left - point.x, 0, point.x - box.right);
+        const dy = Math.max(box.top - point.y, 0, point.y - box.bottom);
+        return Math.hypot(dx, dy);
+      };
+      const sourceEndpointDistance = distanceToRect(points[0], sourceRect);
+      const targetEndpointDistance = distanceToRect(points[points.length - 1], targetRect);
+      const sourceBorderStandoff = sourceEndpointDistance >= 4 && sourceEndpointDistance <= 16 && !inside(points[0], sourceRect);
+      const targetBorderStandoff = targetEndpointDistance >= 4 && targetEndpointDistance <= 16 && !inside(points[points.length - 1], targetRect);
+      const relationshipEndpointChecks = [...document.querySelectorAll('[data-relationship-id]')].map((relationship) => {
+        const relationshipPoints = parsePath(relationship.getAttribute('d'));
+        const relationshipSourceRect = rect(document.querySelector(\`[data-card-id="\${relationship.dataset.source}"]\`));
+        const relationshipTargetRect = rect(document.querySelector(\`[data-card-id="\${relationship.dataset.target}"]\`));
+        const relationshipSourceDistance = distanceToRect(relationshipPoints[0], relationshipSourceRect);
+        const relationshipTargetDistance = distanceToRect(relationshipPoints[relationshipPoints.length - 1], relationshipTargetRect);
+        return {
+          id: relationship.dataset.relationshipId,
+          sourceDistance: relationshipSourceDistance,
+          targetDistance: relationshipTargetDistance,
+          sourceOutside: !inside(relationshipPoints[0], relationshipSourceRect),
+          targetOutside: !inside(relationshipPoints[relationshipPoints.length - 1], relationshipTargetRect),
+          ok: relationshipSourceDistance >= 4 && relationshipSourceDistance <= 16 && relationshipTargetDistance >= 4 && relationshipTargetDistance <= 16
+        };
+      });
       const canvasScreen = document.querySelector('.canvas').getBoundingClientRect();
       const clippedCards = [...document.querySelectorAll('[data-card-id]')]
         .map((element) => ({ id: element.dataset.cardId, rect: screenRect(element) }))
@@ -162,8 +184,11 @@ export async function readLiveAppState(send, url) {
         relationshipPath: path.getAttribute('d'),
         sourceInteriorHit,
         targetInteriorHit,
+        sourceEndpointDistance,
+        targetEndpointDistance,
         sourceBorderStandoff,
         targetBorderStandoff,
+        relationshipEndpointChecks,
         clippedCards,
         telemetry: window.__coreTelemetry.slice(telemetryStart).map((entry) => ({ name: entry.name, args: entry.args }))
       };
