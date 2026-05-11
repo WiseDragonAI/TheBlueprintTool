@@ -1,0 +1,491 @@
+{
+  "nodes": [
+    "boot-surface-controller",
+    "calculate-drag-delta",
+    "calculate-marquee-selection",
+    "calculate-relationship-ports",
+    "calculate-viewport-transform",
+    "calculate-zone-geometry",
+    "call-openai-transcription",
+    "capture-voice-audio",
+    "clear-transient-selection",
+    "commit-ledger-edit",
+    "commit-ledger-edit-controller",
+    "confirm-zone-deletion",
+    "copy-selection-payload",
+    "create-http-server",
+    "debounce-refresh-event",
+    "derive-gesture-intent",
+    "derive-route-state",
+    "dispatch-route-controller",
+    "edit-card-controller",
+    "edit-group-controller",
+    "edit-thread-controller",
+    "edit-zone-controller",
+    "fill-thread-draft",
+    "handle-canvas-gesture-controller",
+    "handle-client-refresh-controller",
+    "load-ledger-state",
+    "load-tab-ledgers-controller",
+    "merge-refresh-state",
+    "navigate-tab-controller",
+    "operate-toolbox-controller",
+    "parse-card-markdown",
+    "parse-http-request",
+    "persist-transcribed-text",
+    "publish-refresh-event",
+    "publish-server-refresh-controller",
+    "read-blueprinttool-state",
+    "read-ledger-json-file",
+    "record-voice-controller",
+    "render-canvas-surface",
+    "render-card-layer",
+    "render-group-layer",
+    "render-relationship-controller",
+    "render-relationship-overlay",
+    "render-tab-registry",
+    "render-thread-panel",
+    "render-toolbox",
+    "render-voice-status",
+    "render-zone-layer",
+    "request-transcription",
+    "resolve-click-precedence",
+    "resolve-group-membership",
+    "resolve-ledger-route",
+    "resolve-selection-target",
+    "resolve-thread-target",
+    "resolve-tool-mode",
+    "resolve-transcription-config",
+    "resolve-voice-session",
+    "resolve-zone-selection-membership",
+    "route-relationship-path",
+    "send-json-response",
+    "start-http-server-controller",
+    "subscribe-server-refresh",
+    "transcribe-voice-controller",
+    "upload-voice-audio",
+    "validate-ledger-document",
+    "validate-ledger-edit-payload",
+    "validate-zone-draft",
+    "watch-ledger-directory",
+    "write-blueprinttool-state",
+    "write-ledger-json-file"
+  ],
+  "edges": [
+    {
+      "from": "boot-surface-controller",
+      "to": "clear-transient-selection",
+      "importPath": "../../selection/helper/clear-transient-selection.js"
+    },
+    {
+      "from": "boot-surface-controller",
+      "to": "derive-route-state",
+      "importPath": "../../navigation/helper/derive-route-state.js"
+    },
+    {
+      "from": "boot-surface-controller",
+      "to": "load-ledger-state",
+      "importPath": "../helper/load-ledger-state.js"
+    },
+    {
+      "from": "boot-surface-controller",
+      "to": "render-canvas-surface",
+      "importPath": "../../canvas/effect/render-canvas-surface.js"
+    },
+    {
+      "from": "boot-surface-controller",
+      "to": "render-tab-registry",
+      "importPath": "../../navigation/effect/render-tab-registry.js"
+    },
+    {
+      "from": "commit-ledger-edit-controller",
+      "to": "parse-http-request",
+      "importPath": "../../routing/helper/parse-http-request.js"
+    },
+    {
+      "from": "commit-ledger-edit-controller",
+      "to": "send-json-response",
+      "importPath": "../../routing/effect/send-json-response.js"
+    },
+    {
+      "from": "commit-ledger-edit-controller",
+      "to": "validate-ledger-edit-payload",
+      "importPath": "../helper/validate-ledger-edit-payload.js"
+    },
+    {
+      "from": "commit-ledger-edit-controller",
+      "to": "write-ledger-json-file",
+      "importPath": "../effect/write-ledger-json-file.js"
+    },
+    {
+      "from": "dispatch-route-controller",
+      "to": "parse-http-request",
+      "importPath": "../helper/parse-http-request.js"
+    },
+    {
+      "from": "dispatch-route-controller",
+      "to": "read-ledger-json-file",
+      "importPath": "../../ledger/helper/read-ledger-json-file.js"
+    },
+    {
+      "from": "dispatch-route-controller",
+      "to": "resolve-ledger-route",
+      "importPath": "../helper/resolve-ledger-route.js"
+    },
+    {
+      "from": "dispatch-route-controller",
+      "to": "send-json-response",
+      "importPath": "../effect/send-json-response.js"
+    },
+    {
+      "from": "edit-card-controller",
+      "to": "calculate-drag-delta",
+      "importPath": "../../gesture/helper/calculate-drag-delta.js"
+    },
+    {
+      "from": "edit-card-controller",
+      "to": "commit-ledger-edit",
+      "importPath": "../../persistence/effect/commit-ledger-edit.js"
+    },
+    {
+      "from": "edit-card-controller",
+      "to": "parse-card-markdown",
+      "importPath": "../helper/parse-card-markdown.js"
+    },
+    {
+      "from": "edit-card-controller",
+      "to": "render-canvas-surface",
+      "importPath": "../../canvas/effect/render-canvas-surface.js"
+    },
+    {
+      "from": "edit-card-controller",
+      "to": "render-card-layer",
+      "importPath": "../effect/render-card-layer.js"
+    },
+    {
+      "from": "edit-card-controller",
+      "to": "resolve-selection-target",
+      "importPath": "../../selection/helper/resolve-selection-target.js"
+    },
+    {
+      "from": "edit-group-controller",
+      "to": "calculate-drag-delta",
+      "importPath": "../../gesture/helper/calculate-drag-delta.js"
+    },
+    {
+      "from": "edit-group-controller",
+      "to": "commit-ledger-edit",
+      "importPath": "../../persistence/effect/commit-ledger-edit.js"
+    },
+    {
+      "from": "edit-group-controller",
+      "to": "render-canvas-surface",
+      "importPath": "../../canvas/effect/render-canvas-surface.js"
+    },
+    {
+      "from": "edit-group-controller",
+      "to": "render-group-layer",
+      "importPath": "../effect/render-group-layer.js"
+    },
+    {
+      "from": "edit-group-controller",
+      "to": "resolve-click-precedence",
+      "importPath": "../helper/resolve-click-precedence.js"
+    },
+    {
+      "from": "edit-group-controller",
+      "to": "resolve-group-membership",
+      "importPath": "../helper/resolve-group-membership.js"
+    },
+    {
+      "from": "edit-group-controller",
+      "to": "resolve-tool-mode",
+      "importPath": "../../toolbox/helper/resolve-tool-mode.js"
+    },
+    {
+      "from": "edit-thread-controller",
+      "to": "commit-ledger-edit",
+      "importPath": "../../persistence/effect/commit-ledger-edit.js"
+    },
+    {
+      "from": "edit-thread-controller",
+      "to": "render-thread-panel",
+      "importPath": "../effect/render-thread-panel.js"
+    },
+    {
+      "from": "edit-thread-controller",
+      "to": "resolve-thread-target",
+      "importPath": "../helper/resolve-thread-target.js"
+    },
+    {
+      "from": "edit-zone-controller",
+      "to": "calculate-zone-geometry",
+      "importPath": "../helper/calculate-zone-geometry.js"
+    },
+    {
+      "from": "edit-zone-controller",
+      "to": "commit-ledger-edit",
+      "importPath": "../../persistence/effect/commit-ledger-edit.js"
+    },
+    {
+      "from": "edit-zone-controller",
+      "to": "confirm-zone-deletion",
+      "importPath": "../helper/confirm-zone-deletion.js"
+    },
+    {
+      "from": "edit-zone-controller",
+      "to": "render-canvas-surface",
+      "importPath": "../../canvas/effect/render-canvas-surface.js"
+    },
+    {
+      "from": "edit-zone-controller",
+      "to": "render-zone-layer",
+      "importPath": "../effect/render-zone-layer.js"
+    },
+    {
+      "from": "edit-zone-controller",
+      "to": "resolve-tool-mode",
+      "importPath": "../../toolbox/helper/resolve-tool-mode.js"
+    },
+    {
+      "from": "edit-zone-controller",
+      "to": "resolve-zone-selection-membership",
+      "importPath": "../helper/resolve-zone-selection-membership.js"
+    },
+    {
+      "from": "edit-zone-controller",
+      "to": "validate-zone-draft",
+      "importPath": "../helper/validate-zone-draft.js"
+    },
+    {
+      "from": "handle-canvas-gesture-controller",
+      "to": "calculate-drag-delta",
+      "importPath": "../helper/calculate-drag-delta.js"
+    },
+    {
+      "from": "handle-canvas-gesture-controller",
+      "to": "calculate-marquee-selection",
+      "importPath": "../../selection/helper/calculate-marquee-selection.js"
+    },
+    {
+      "from": "handle-canvas-gesture-controller",
+      "to": "calculate-viewport-transform",
+      "importPath": "../../canvas/helper/calculate-viewport-transform.js"
+    },
+    {
+      "from": "handle-canvas-gesture-controller",
+      "to": "commit-ledger-edit",
+      "importPath": "../../persistence/effect/commit-ledger-edit.js"
+    },
+    {
+      "from": "handle-canvas-gesture-controller",
+      "to": "copy-selection-payload",
+      "importPath": "../../selection/helper/copy-selection-payload.js"
+    },
+    {
+      "from": "handle-canvas-gesture-controller",
+      "to": "derive-gesture-intent",
+      "importPath": "../helper/derive-gesture-intent.js"
+    },
+    {
+      "from": "handle-canvas-gesture-controller",
+      "to": "render-canvas-surface",
+      "importPath": "../../canvas/effect/render-canvas-surface.js"
+    },
+    {
+      "from": "handle-canvas-gesture-controller",
+      "to": "resolve-selection-target",
+      "importPath": "../../selection/helper/resolve-selection-target.js"
+    },
+    {
+      "from": "handle-client-refresh-controller",
+      "to": "load-ledger-state",
+      "importPath": "../../boot/helper/load-ledger-state.js"
+    },
+    {
+      "from": "handle-client-refresh-controller",
+      "to": "merge-refresh-state",
+      "importPath": "../helper/merge-refresh-state.js"
+    },
+    {
+      "from": "handle-client-refresh-controller",
+      "to": "render-canvas-surface",
+      "importPath": "../../canvas/effect/render-canvas-surface.js"
+    },
+    {
+      "from": "handle-client-refresh-controller",
+      "to": "subscribe-server-refresh",
+      "importPath": "../effect/subscribe-server-refresh.js"
+    },
+    {
+      "from": "load-tab-ledgers-controller",
+      "to": "read-blueprinttool-state",
+      "importPath": "../helper/read-blueprinttool-state.js"
+    },
+    {
+      "from": "load-tab-ledgers-controller",
+      "to": "read-ledger-json-file",
+      "importPath": "../helper/read-ledger-json-file.js"
+    },
+    {
+      "from": "load-tab-ledgers-controller",
+      "to": "send-json-response",
+      "importPath": "../../routing/effect/send-json-response.js"
+    },
+    {
+      "from": "load-tab-ledgers-controller",
+      "to": "validate-ledger-document",
+      "importPath": "../helper/validate-ledger-document.js"
+    },
+    {
+      "from": "load-tab-ledgers-controller",
+      "to": "write-blueprinttool-state",
+      "importPath": "../effect/write-blueprinttool-state.js"
+    },
+    {
+      "from": "navigate-tab-controller",
+      "to": "derive-route-state",
+      "importPath": "../helper/derive-route-state.js"
+    },
+    {
+      "from": "navigate-tab-controller",
+      "to": "load-ledger-state",
+      "importPath": "../../boot/helper/load-ledger-state.js"
+    },
+    {
+      "from": "navigate-tab-controller",
+      "to": "render-canvas-surface",
+      "importPath": "../../canvas/effect/render-canvas-surface.js"
+    },
+    {
+      "from": "navigate-tab-controller",
+      "to": "render-tab-registry",
+      "importPath": "../effect/render-tab-registry.js"
+    },
+    {
+      "from": "operate-toolbox-controller",
+      "to": "render-canvas-surface",
+      "importPath": "../../canvas/effect/render-canvas-surface.js"
+    },
+    {
+      "from": "operate-toolbox-controller",
+      "to": "render-toolbox",
+      "importPath": "../effect/render-toolbox.js"
+    },
+    {
+      "from": "operate-toolbox-controller",
+      "to": "resolve-tool-mode",
+      "importPath": "../helper/resolve-tool-mode.js"
+    },
+    {
+      "from": "publish-server-refresh-controller",
+      "to": "debounce-refresh-event",
+      "importPath": "../helper/debounce-refresh-event.js"
+    },
+    {
+      "from": "publish-server-refresh-controller",
+      "to": "publish-refresh-event",
+      "importPath": "../effect/publish-refresh-event.js"
+    },
+    {
+      "from": "publish-server-refresh-controller",
+      "to": "read-ledger-json-file",
+      "importPath": "../../ledger/helper/read-ledger-json-file.js"
+    },
+    {
+      "from": "publish-server-refresh-controller",
+      "to": "validate-ledger-document",
+      "importPath": "../../ledger/helper/validate-ledger-document.js"
+    },
+    {
+      "from": "publish-server-refresh-controller",
+      "to": "watch-ledger-directory",
+      "importPath": "../helper/watch-ledger-directory.js"
+    },
+    {
+      "from": "record-voice-controller",
+      "to": "capture-voice-audio",
+      "importPath": "../helper/capture-voice-audio.js"
+    },
+    {
+      "from": "record-voice-controller",
+      "to": "fill-thread-draft",
+      "importPath": "../effect/fill-thread-draft.js"
+    },
+    {
+      "from": "record-voice-controller",
+      "to": "render-voice-status",
+      "importPath": "../effect/render-voice-status.js"
+    },
+    {
+      "from": "record-voice-controller",
+      "to": "request-transcription",
+      "importPath": "../effect/request-transcription.js"
+    },
+    {
+      "from": "record-voice-controller",
+      "to": "resolve-voice-session",
+      "importPath": "../helper/resolve-voice-session.js"
+    },
+    {
+      "from": "record-voice-controller",
+      "to": "upload-voice-audio",
+      "importPath": "../effect/upload-voice-audio.js"
+    },
+    {
+      "from": "render-relationship-controller",
+      "to": "calculate-relationship-ports",
+      "importPath": "../helper/calculate-relationship-ports.js"
+    },
+    {
+      "from": "render-relationship-controller",
+      "to": "render-relationship-overlay",
+      "importPath": "../effect/render-relationship-overlay.js"
+    },
+    {
+      "from": "render-relationship-controller",
+      "to": "route-relationship-path",
+      "importPath": "../helper/route-relationship-path.js"
+    },
+    {
+      "from": "start-http-server-controller",
+      "to": "create-http-server",
+      "importPath": "../helper/create-http-server.js"
+    },
+    {
+      "from": "start-http-server-controller",
+      "to": "read-blueprinttool-state",
+      "importPath": "../../ledger/helper/read-blueprinttool-state.js"
+    },
+    {
+      "from": "start-http-server-controller",
+      "to": "watch-ledger-directory",
+      "importPath": "../../refresh/helper/watch-ledger-directory.js"
+    },
+    {
+      "from": "transcribe-voice-controller",
+      "to": "call-openai-transcription",
+      "importPath": "../effect/call-openai-transcription.js"
+    },
+    {
+      "from": "transcribe-voice-controller",
+      "to": "parse-http-request",
+      "importPath": "../../routing/helper/parse-http-request.js"
+    },
+    {
+      "from": "transcribe-voice-controller",
+      "to": "persist-transcribed-text",
+      "importPath": "../effect/persist-transcribed-text.js"
+    },
+    {
+      "from": "transcribe-voice-controller",
+      "to": "resolve-transcription-config",
+      "importPath": "../helper/resolve-transcription-config.js"
+    },
+    {
+      "from": "transcribe-voice-controller",
+      "to": "send-json-response",
+      "importPath": "../../routing/effect/send-json-response.js"
+    }
+  ]
+}

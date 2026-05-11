@@ -1,0 +1,16 @@
+{
+  "name": "backend",
+  "version": "0.0.0-generated",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test --import tsx \"test/**/*.test.ts\"",
+    "test:integration": "node --test --import tsx \"test/**/*.test.ts\" --test-skip-pattern \"unit/\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.0"
+  }
+}
