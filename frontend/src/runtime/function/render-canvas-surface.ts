@@ -10,8 +10,6 @@ import { telemetry } from './telemetry.js';
 export function renderCanvasSurface(): void {
   renderLedgerSurface();
   canvas.style.setProperty('--viewport-scale', String(state.viewport.scale));
-  canvas.style.setProperty('--canvas-bg-x', `${state.viewport.x}px`);
-  canvas.style.setProperty('--canvas-bg-y', `${state.viewport.y}px`);
   (document.querySelector('.canvas-content') as HTMLElement).style.transform = `translate(${state.viewport.x}px, ${state.viewport.y}px) scale(${state.viewport.scale})`;
   const connectedIds = connectedCardIds(state.selection.cardIds);
   document.querySelectorAll('[data-card-id]').forEach((node) => {

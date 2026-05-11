@@ -14,8 +14,6 @@
   --honeycomb-b: conic-gradient(from 180deg at 43.75% calc(425% / 6), var(--honeycomb-edge));
   --honeycomb-c: conic-gradient(from -60deg at 50% calc(175% / 12), var(--honeycomb-edge));
   --canvas-scale: 1;
-  --canvas-bg-x: 0px;
-  --canvas-bg-y: 0px;
   --canvas-honeycomb-width: 76px;
   --canvas-honeycomb-height: 131.48px;
   --canvas-honeycomb-step-x: 38px;
@@ -185,7 +183,12 @@ h2 { font-size: 18px; }
 
 .grid {
   position: absolute;
-  inset: 0;
+  left: -12000px;
+  top: -1200px;
+  width: 24000px;
+  height: 12000px;
+  pointer-events: none;
+  z-index: 0;
   background:
     var(--honeycomb-a),
     var(--honeycomb-a),
@@ -203,12 +206,12 @@ h2 { font-size: 18px; }
     var(--canvas-honeycomb-width) var(--canvas-honeycomb-height),
     auto;
   background-position:
-    var(--canvas-bg-x) var(--canvas-bg-y),
-    calc(var(--canvas-bg-x) + var(--canvas-honeycomb-step-x)) calc(var(--canvas-bg-y) + var(--canvas-honeycomb-step-y)),
-    var(--canvas-bg-x) var(--canvas-bg-y),
-    calc(var(--canvas-bg-x) + var(--canvas-honeycomb-step-x)) calc(var(--canvas-bg-y) + var(--canvas-honeycomb-step-y)),
-    calc(var(--canvas-bg-x) + var(--canvas-honeycomb-step-x)) var(--canvas-bg-y),
-    var(--canvas-bg-x) calc(var(--canvas-bg-y) + var(--canvas-honeycomb-step-y)),
+    0 0,
+    var(--canvas-honeycomb-step-x) var(--canvas-honeycomb-step-y),
+    0 0,
+    var(--canvas-honeycomb-step-x) var(--canvas-honeycomb-step-y),
+    var(--canvas-honeycomb-step-x) 0,
+    0 var(--canvas-honeycomb-step-y),
     0 0;
 }
 
@@ -368,6 +371,7 @@ h2 { font-size: 18px; }
   inset: 0;
   width: 5200px;
   height: 2600px;
+  overflow: visible;
   pointer-events: none;
   z-index: 20;
 }

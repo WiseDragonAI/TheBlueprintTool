@@ -3,7 +3,6 @@ import { SVG_NS } from '../dom.js';
 export function createLedgerRelationshipOverlay(relationships: Array<Record<string, unknown>>): SVGSVGElement {
   const overlay = document.createElementNS(SVG_NS, 'svg');
   overlay.classList.add('relationships', 'ledger-relationships');
-  overlay.setAttribute('viewBox', '-12000 -1200 18000 11000');
   overlay.setAttribute('role', 'img');
   overlay.setAttribute('aria-label', 'Ledger relationships');
   const defs = document.createElementNS(SVG_NS, 'defs');

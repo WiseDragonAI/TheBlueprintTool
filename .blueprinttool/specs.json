@@ -1392,7 +1392,7 @@
       "y": 5155,
       "w": 420,
       "comment": {
-        "what": ""
+        "what": "Scrolling the mouse wheel zooms the canvas around the cursor. The zoom range must support wide ledger overviews down to 0.08 scale and detailed work up to 2.5 scale."
       },
       "facts": [],
       "fields": []
@@ -1441,14 +1441,14 @@
     },
     {
       "id": "bf394c62",
-      "title": "Honeycomb background tiling scale stays screen stable during canvas zoom",
+      "title": "Honeycomb background tiling scales with canvas zoom",
       "cardType": "spec-brief",
       "domainId": "",
       "x": 2146,
       "y": 5351,
       "w": 640,
       "comment": {
-        "what": "The dark honeycomb grid is a canvas viewport background. Wheel zoom must not multiply the honeycomb tile size; only canvas content should scale, while the background tiling keeps the same screen-space size."
+        "what": "The dark honeycomb grid is canvas-world material. It must live inside the transformed canvas content layer so wheel zoom changes the visible tile scale and panning/zooming moves it with cards, zones, groups, and relationship overlays without a second viewport-locked coordinate system."
       },
       "facts": [],
       "fields": []
@@ -3310,7 +3310,7 @@
       "y": 6566,
       "w": 320,
       "comment": {
-        "what": ""
+        "what": "Relationship arrows must share the same canvas-world pixel coordinate system as cards. SVG overlays must not introduce an independent viewBox scale that can detach arrows from their source or target card borders."
       },
       "facts": [],
       "fields": []
@@ -4140,6 +4140,6 @@
     "zoneId": "",
     "zoneIds": []
   },
-  "updatedAt": "2026-05-11T18:16:32.532Z",
+  "updatedAt": "2026-05-11T18:22:06.045Z",
   "cardEdits": {}
 }

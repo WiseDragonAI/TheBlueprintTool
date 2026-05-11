@@ -10,12 +10,21 @@ export async function readLiveAppState(send, url) {
   await wait(900);
   const honeycomb = await send('Runtime.evaluate', {
     returnByValue: true,
+    awaitPromise: true,
     expression: `(() => {
       const grid = document.querySelector('.grid');
       const canvas = document.querySelector('.canvas');
-      const before = getComputedStyle(grid).backgroundSize;
+      const beforeStyle = getComputedStyle(grid);
+      const before = beforeStyle.backgroundSize;
+      const beforePosition = beforeStyle.backgroundPosition;
+      const beforeRect = grid.getBoundingClientRect();
+      const beforeViewportScale = window.__coreState.viewport.scale;
       canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, clientX: 700, clientY: 320, deltaY: -120 }));
-      const after = getComputedStyle(grid).backgroundSize;
+      const afterStyle = getComputedStyle(grid);
+      const after = afterStyle.backgroundSize;
+      const afterPosition = afterStyle.backgroundPosition;
+      const afterRect = grid.getBoundingClientRect();
+      const afterViewportScale = window.__coreState.viewport.scale;
       return Promise.all([
         fetch('/specs').then((response) => response.text()),
         fetch('/data').then((response) => response.text()),
@@ -24,8 +33,16 @@ export async function readLiveAppState(send, url) {
         fetch('/blueprinttool/state').then((response) => response.json())
       ]).then(([specsRoute, dataRoute, specsLedger, dataLedger, blueprintState]) => ({
         honeycombScaleStable: before === after,
+        honeycombPositionStable: beforePosition === afterPosition,
+        honeycombWorldScaleFollowsZoom: afterRect.width > beforeRect.width && afterRect.height > beforeRect.height,
+        honeycombViewportScaleBefore: beforeViewportScale,
+        honeycombViewportScaleAfter: afterViewportScale,
+        honeycombRenderedWidthBefore: beforeRect.width,
+        honeycombRenderedWidthAfter: afterRect.width,
         honeycombBackgroundSizeBefore: before,
         honeycombBackgroundSizeAfter: after,
+        honeycombBackgroundPositionBefore: beforePosition,
+        honeycombBackgroundPositionAfter: afterPosition,
         specsUrlLoadsApp: specsRoute.includes('Core Canvas') && specsRoute.includes('data-tab="specs"'),
         dataUrlLoadsApp: dataRoute.includes('Core Canvas') && dataRoute.includes('data-tab="data"'),
         blueprintSpecsAvailable: Array.isArray(specsLedger.cards) && specsLedger.cards.length > 0,
@@ -54,6 +71,29 @@ export async function readLiveAppState(send, url) {
         }
         return false;
       };
+      const distanceToRect = (point, box) => {
+        const dx = Math.max(box.left - point.x, 0, point.x - box.right);
+        const dy = Math.max(box.top - point.y, 0, point.y - box.bottom);
+        return Math.hypot(dx, dy);
+      };
+      const endpointChecks = (selector) => [...document.querySelectorAll(selector)].map((relationship) => {
+        const source = document.querySelector(\`[data-card-id="\${relationship.dataset.source}"]\`);
+        const target = document.querySelector(\`[data-card-id="\${relationship.dataset.target}"]\`);
+        if (!source || !target) return { id: relationship.dataset.relationshipId, ok: false, missingEndpoint: true };
+        const relationshipPoints = parsePath(relationship.getAttribute('d'));
+        const relationshipSourceRect = rect(source);
+        const relationshipTargetRect = rect(target);
+        const relationshipSourceDistance = distanceToRect(relationshipPoints[0], relationshipSourceRect);
+        const relationshipTargetDistance = distanceToRect(relationshipPoints[relationshipPoints.length - 1], relationshipTargetRect);
+        return {
+          id: relationship.dataset.relationshipId,
+          sourceDistance: relationshipSourceDistance,
+          targetDistance: relationshipTargetDistance,
+          sourceOutside: !inside(relationshipPoints[0], relationshipSourceRect),
+          targetOutside: !inside(relationshipPoints[relationshipPoints.length - 1], relationshipTargetRect),
+          ok: relationshipSourceDistance >= 4 && relationshipSourceDistance <= 16 && relationshipTargetDistance >= 4 && relationshipTargetDistance <= 16
+        };
+      });
       const waitFrame = () => new Promise((resolve) => setTimeout(resolve, 260));
       const loadTab = async (tabId) => {
         document.querySelector('[data-tab="' + tabId + '"]').click();
@@ -66,7 +106,8 @@ export async function readLiveAppState(send, url) {
           ledgerCardCount: cards.length,
           firstTitle: cards[0]?.querySelector('strong')?.textContent ?? '',
           staticSurfaceHidden: document.querySelector('[data-card-id="card-boot"]')?.hidden === true,
-          telemetryHit: window.__coreTelemetry.some((entry) => entry.name === 'render-ledger-surface' && entry.args.activeTab === tabId)
+          telemetryHit: window.__coreTelemetry.some((entry) => entry.name === 'render-ledger-surface' && entry.args.activeTab === tabId),
+          relationshipEndpointChecks: endpointChecks('.ledger-relationships [data-relationship-id]')
         };
       };
       const specsTabLoad = await loadTab('specs');
@@ -162,30 +203,11 @@ export async function readLiveAppState(send, url) {
       const sourceInteriorHit = points.slice(0, -1).some((point, index) => segmentHits(point, points[index + 1], sourceRect));
       const targetInteriorHit = points.slice(0, -1).some((point, index) => segmentHits(point, points[index + 1], targetRect));
       const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
-      const distanceToRect = (point, box) => {
-        const dx = Math.max(box.left - point.x, 0, point.x - box.right);
-        const dy = Math.max(box.top - point.y, 0, point.y - box.bottom);
-        return Math.hypot(dx, dy);
-      };
       const sourceEndpointDistance = distanceToRect(points[0], sourceRect);
       const targetEndpointDistance = distanceToRect(points[points.length - 1], targetRect);
       const sourceBorderStandoff = sourceEndpointDistance >= 4 && sourceEndpointDistance <= 16 && !inside(points[0], sourceRect);
       const targetBorderStandoff = targetEndpointDistance >= 4 && targetEndpointDistance <= 16 && !inside(points[points.length - 1], targetRect);
-      const relationshipEndpointChecks = [...document.querySelectorAll('[data-relationship-id]')].map((relationship) => {
-        const relationshipPoints = parsePath(relationship.getAttribute('d'));
-        const relationshipSourceRect = rect(document.querySelector(\`[data-card-id="\${relationship.dataset.source}"]\`));
-        const relationshipTargetRect = rect(document.querySelector(\`[data-card-id="\${relationship.dataset.target}"]\`));
-        const relationshipSourceDistance = distanceToRect(relationshipPoints[0], relationshipSourceRect);
-        const relationshipTargetDistance = distanceToRect(relationshipPoints[relationshipPoints.length - 1], relationshipTargetRect);
-        return {
-          id: relationship.dataset.relationshipId,
-          sourceDistance: relationshipSourceDistance,
-          targetDistance: relationshipTargetDistance,
-          sourceOutside: !inside(relationshipPoints[0], relationshipSourceRect),
-          targetOutside: !inside(relationshipPoints[relationshipPoints.length - 1], relationshipTargetRect),
-          ok: relationshipSourceDistance >= 4 && relationshipSourceDistance <= 16 && relationshipTargetDistance >= 4 && relationshipTargetDistance <= 16
-        };
-      });
+      const relationshipEndpointChecks = endpointChecks('[data-relationship-id]');
       const canvasScreen = document.querySelector('.canvas').getBoundingClientRect();
       const clippedCards = [...document.querySelectorAll('[data-card-id]')]
         .map((element) => ({ id: element.dataset.cardId, rect: screenRect(element) }))
