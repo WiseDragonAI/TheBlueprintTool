@@ -5,7 +5,9 @@
 import type { DependencyGraph, GeneratedFunction, OutputFile, TestSuitePlan } from '../../../lib/types.js';
 
 function sourceAlias(path: string): string {
-  return `@generator-cli/${path.replace(/^(?:generator-cli\/)?src\//, '').replace(/\.ts$/, '.js')}`;
+  const [rootBlock, ...rest] = path.split('/');
+  const sourcePath = rest.join('/').replace(/^src\//, '').replace(/\.ts$/, '.js');
+  return `@${rootBlock || 'generator-cli'}/${sourcePath}`;
 }
 
 function literal(value: string): string {
@@ -30,7 +32,8 @@ function transitiveTelemetryNames(generatedFunction: GeneratedFunction, function
       return dependency ? transitiveTelemetryNames(dependency, functions, graph, seen) : [];
     });
 
-  return [...directTelemetryNames(generatedFunction), ...dependencies];
+  const ownTelemetry = generatedFunction.kind === 'controller' ? directTelemetryNames(generatedFunction) : [generatedFunction.name, ...directTelemetryNames(generatedFunction)];
+  return [...ownTelemetry, ...dependencies];
 }
 
 function modeForSuite(expectedTelemetry: string[]): string {
@@ -58,7 +61,7 @@ function modeForSuite(expectedTelemetry: string[]): string {
 }
 
 function selectControllers(suite: TestSuitePlan, functions: GeneratedFunction[], graph?: DependencyGraph): GeneratedFunction[] {
-  const controllers = functions.filter((generatedFunction) => generatedFunction.kind === 'controller');
+  const controllers = functions.filter((generatedFunction) => generatedFunction.kind === 'controller' && (!suite.rootBlock || generatedFunction.rootBlock === suite.rootBlock));
   const dispatchIsExpected = suite.expectedTelemetry.some((eventName) => ['parse-cli-argv', 'emit-dispatch-cli-command-started', 'dispatch-cli-command-rejected'].includes(eventName));
   const coverageControllers = controllers.filter((controller) => dispatchIsExpected || controller.name !== 'dispatch-cli-command');
   const coverage = new Map(coverageControllers.map((controller) => [
@@ -99,11 +102,17 @@ function selectControllers(suite: TestSuitePlan, functions: GeneratedFunction[],
   return selected.length > 0 ? selected : dispatchController ? [dispatchController] : controllers.slice(0, 1);
 }
 
+function normalizedSuitePath(suite: TestSuitePlan): string {
+  const rawPath = suite.path.replace(/^\.\//, '');
+  const rootBlock = suite.rootBlock ?? rawPath.split('/')[0] ?? 'generator-cli';
+  return rawPath.replace(new RegExp(`^${rootBlock}/src/test/`), `${rootBlock}/test/`);
+}
+
 export function deriveIntegrationTestSuitePath(suites: TestSuitePlan[], functions: GeneratedFunction[] = [], graph?: DependencyGraph): OutputFile[] {
   return suites.map((suite) => {
     const selectedControllers = selectControllers(suite, functions, graph);
     const mode = modeForSuite(suite.expectedTelemetry);
-    const testPath = suite.path.replace(/^\.\//, '');
+    const testPath = normalizedSuitePath(suite);
     const imports = selectedControllers
       .map((controller) => `import { ${controller.exportName} } from '${sourceAlias(controller.path)}';`)
       .join('\n');
@@ -124,7 +133,7 @@ export function deriveIntegrationTestSuitePath(suites: TestSuitePlan[], function
  * WHY: each suite dispatches through generated controllers and records telemetry evidence.
  */
 import test from 'node:test';
-import { traces } from '${sourceAlias('generator-cli/src/telemetry/harness.ts')}';
+import { traces } from '${sourceAlias(`${suite.rootBlock ?? testPath.split('/')[0]}/src/telemetry/harness.ts`)}';
 ${imports}
 
 test('${literal(suite.suiteName)}', async () => {

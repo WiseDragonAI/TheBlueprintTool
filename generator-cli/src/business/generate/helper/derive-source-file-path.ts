@@ -5,7 +5,9 @@
 import type { DependencyReference, GeneratedFunction, OutputFile } from '../../../lib/types.js';
 
 function sourceAlias(path: string): string {
-  return `@generator-cli/${path.replace(/^(?:generator-cli\/)?src\//, '').replace(/\.ts$/, '.js')}`;
+  const [rootBlock, ...rest] = path.split('/');
+  const sourcePath = rest.join('/').replace(/^src\//, '').replace(/\.ts$/, '.js');
+  return `@${rootBlock || 'generator-cli'}/${sourcePath}`;
 }
 
 function dependencyImports(generatedFunction: GeneratedFunction, functions: GeneratedFunction[], edges: DependencyReference[]): string {
@@ -94,6 +96,7 @@ function stubFunctionBody(generatedFunction: GeneratedFunction): string {
 function generatedFunctionSource(generatedFunction: GeneratedFunction, functions: GeneratedFunction[], edges: DependencyReference[]): string {
   const imports = dependencyImports(generatedFunction, functions, edges);
   const body = generatedFunction.kind === 'controller' ? controllerFunctionBody(generatedFunction, functions) : stubFunctionBody(generatedFunction);
+  const rootBlock = generatedFunction.rootBlock ?? generatedFunction.path.split('/')[0] ?? 'generator-cli';
 
   const tsNoCheck = generatedFunction.kind === 'controller' || generatedFunction.returnType !== 'void' ? '// @ts-nocheck\n' : '';
 
@@ -101,7 +104,7 @@ function generatedFunctionSource(generatedFunction: GeneratedFunction, functions
  * WHAT: Generated ${generatedFunction.kind} function ${generatedFunction.name}.
  * WHY: This file is generated from the MasterLedger and contains exactly one generated function.
  */
-import { telemetry } from '${sourceAlias('generator-cli/src/telemetry/harness.ts')}';
+import { telemetry } from '${sourceAlias(`${rootBlock}/src/telemetry/harness.ts`)}';
 ${imports ? `${imports}\n` : ''}
 ${body}
 `;

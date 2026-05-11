@@ -26,6 +26,16 @@ async function writeOutputFiles(worktreePath: string, files: OutputFile[], fs: F
   }
 }
 
+function rootBlockPathsFor(plan: WorktreePlan): string[] {
+  return plan.rootBlockPaths && plan.rootBlockPaths.length > 0
+    ? plan.rootBlockPaths
+    : [plan.rootBlockPath];
+}
+
+function filesForRoot(files: OutputFile[], rootBlockPath: string): OutputFile[] {
+  return files.filter((file) => file.path.startsWith(`${rootBlockPath}/`));
+}
+
 export async function applyGeneratedWorktreeController(
   input: {
     masterLedgerFile: string;
@@ -80,7 +90,12 @@ export async function applyGeneratedWorktreeController(
     return injected;
   }
 
-  await fs.rm(join(planned.value.worktreePath, planned.value.rootBlockPath));
+  const rootBlockPaths = rootBlockPathsFor(planned.value);
+
+  for (const rootBlockPath of rootBlockPaths) {
+    await fs.rm(join(planned.value.worktreePath, rootBlockPath));
+  }
+
   await writeOutputFiles(planned.value.worktreePath, planned.value.supportFiles, fs);
   await writeSourceFile(planned.value.worktreePath, planned.value.sourceFiles, fs);
   await writeUnitTestFile(planned.value.worktreePath, planned.value.unitTestFiles, fs);
@@ -94,33 +109,58 @@ export async function applyGeneratedWorktreeController(
   telemetry('write-telemetry-harness');
   telemetry('write-dependency-graph-output');
 
-  const generatedRoot = join(planned.value.worktreePath, planned.value.rootBlockPath);
   const tscBinary = resolve(rootDir, 'generator-cli/node_modules/.bin/tsc');
   const typeRoots = resolve(rootDir, 'generator-cli/node_modules/@types');
-  const importCheckCommand = `"${tscBinary}" -p "${planned.value.rootBlockPath}/tsconfig.json" --noEmit --typeRoots "${typeRoots}"`;
-  const importCheck = await processPort.exec(importCheckCommand, planned.value.worktreePath);
-  const integrationFiles = planned.value.integrationTestFiles.map((file) => `"${file.path.replace(`${planned.value.rootBlockPath}/`, '')}"`).join(' ');
+  const importChecks = [];
   const tsxLoader = resolve(rootDir, 'generator-cli/node_modules/tsx/dist/esm/index.mjs');
-  const testCommand = `node --test --import "${tsxLoader}" ${integrationFiles}`;
-  const testRun = importCheck.exitCode === 0
-    ? await processPort.exec(testCommand, generatedRoot)
-    : { exitCode: 1, stdout: '', stderr: 'Skipped because generated import check failed.' };
+  const testRuns = [];
+
+  for (const rootBlockPath of rootBlockPaths) {
+    const importCheckCommand = `"${tscBinary}" -p "${rootBlockPath}/tsconfig.json" --noEmit --typeRoots "${typeRoots}"`;
+    const importCheck = await processPort.exec(importCheckCommand, planned.value.worktreePath);
+    importChecks.push({ rootBlockPath, command: importCheckCommand, ...importCheck });
+
+    const integrationFiles = filesForRoot(planned.value.integrationTestFiles, rootBlockPath)
+      .map((file) => `"${file.path.replace(`${rootBlockPath}/`, '')}"`)
+      .join(' ');
+    const generatedRoot = join(planned.value.worktreePath, rootBlockPath);
+    const testCommand = `node --test --import "${tsxLoader}" ${integrationFiles}`;
+    const testRun = importCheck.exitCode === 0 && integrationFiles.length > 0
+      ? await processPort.exec(testCommand, generatedRoot)
+      : { exitCode: importCheck.exitCode === 0 ? 0 : 1, stdout: '', stderr: importCheck.exitCode === 0 ? '' : 'Skipped because generated import check failed.' };
+    testRuns.push({ rootBlockPath, command: testCommand, ...testRun });
+  }
+
+  const importCheck = {
+    command: importChecks.map((check) => check.command).join(' && '),
+    exitCode: importChecks.some((check) => check.exitCode !== 0) ? 1 : 0,
+    stdout: importChecks.map((check) => check.stdout).join('\n'),
+    stderr: importChecks.map((check) => check.stderr).join('\n'),
+  };
+  const testRun = {
+    command: testRuns.map((run) => run.command).join(' && '),
+    exitCode: testRuns.some((run) => run.exitCode !== 0) ? 1 : 0,
+    stdout: testRuns.map((run) => run.stdout).join('\n'),
+    stderr: testRuns.map((run) => run.stderr).join('\n'),
+  };
   const suiteTelemetryAnalysis = analyzeGeneratedSuiteTelemetry(testRun.stdout, planned.value.suites);
 
   await fs.writeFile(join(planned.value.worktreePath, planned.value.testResults.path), stringifyJson({
-    generatedRoot,
+    generatedRoot: rootBlockPaths.map((rootBlockPath) => join(planned.value.worktreePath, rootBlockPath)),
     importCheck: {
-      command: importCheckCommand,
+      command: importCheck.command,
       exitCode: importCheck.exitCode,
       stdout: importCheck.stdout,
       stderr: importCheck.stderr,
     },
+    importChecks,
     testRun: {
-      command: testCommand,
+      command: testRun.command,
       exitCode: testRun.exitCode,
       stdout: testRun.stdout,
       stderr: testRun.stderr,
     },
+    testRuns,
     integrationTestFiles: planned.value.integrationTestFiles.map((file) => file.path),
     suiteTelemetryAnalysis,
   }));

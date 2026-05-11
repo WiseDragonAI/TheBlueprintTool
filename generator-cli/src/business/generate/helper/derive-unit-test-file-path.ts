@@ -5,7 +5,8 @@
 import type { GeneratedFunction, OutputFile } from '../../../lib/types.js';
 
 function testPathFor(generatedFunction: GeneratedFunction): string {
-  return `generator-cli/test/unit/${generatedFunction.domain}/${generatedFunction.kind}/${generatedFunction.name}.test.ts`;
+  const rootBlock = generatedFunction.rootBlock ?? generatedFunction.path.split('/')[0] ?? 'generator-cli';
+  return `${rootBlock}/test/unit/${generatedFunction.domain}/${generatedFunction.kind}/${generatedFunction.name}.test.ts`;
 }
 
 export function deriveUnitTestFilePath(functions: GeneratedFunction[]): OutputFile[] {

@@ -71,20 +71,58 @@ function duplicateValues(values: string[]): string[] {
   return [...counts].filter(([, count]) => count > 1).map(([value]) => value).sort();
 }
 
+function expandedSpecIds(specId: string, allSpecIds: Set<string>): string[] {
+  if (allSpecIds.has(specId)) {
+    return [specId];
+  }
+
+  const range = specId.match(/^(\d{8})-(\d{8})$/);
+
+  if (range) {
+    const start = Number(range[1]);
+    const end = Number(range[2]);
+    const width = range[1].length;
+    const ids: string[] = [];
+
+    for (let value = start; value <= end; value += 1) {
+      const id = String(value).padStart(width, '0');
+
+      if (allSpecIds.has(id)) {
+        ids.push(id);
+      }
+    }
+
+    return ids.length > 0 ? ids : [specId];
+  }
+
+  const splitIds = specId.split('-').filter((id) => allSpecIds.has(id));
+  return splitIds.length > 0 ? splitIds : [specId];
+}
+
+function rootBlockForPath(path: string): string {
+  return path.replace(/^\.\//, '').split('/')[0] || 'generator-cli';
+}
+
+function suiteIsInRootTestDirectory(suite: { rootBlock?: string; path: string }): boolean {
+  const path = suite.path.replace(/^\.\//, '');
+  const rootBlock = suite.rootBlock ?? rootBlockForPath(path);
+  return path.startsWith(`${rootBlock}/test/`);
+}
+
 export function analyzeMasterLedger(document: MasterLedgerDocument, batch: FunctionBatch, specsLedger: SpecsLedger, groupNames: string[] = []): MasterLedgerCheckReport {
   const rootBlocks = [...new Set([...document.text.matchAll(/root_block: '([^']+)'/g)].map((match) => match[1]))].sort();
   const domains = [...new Set([...document.text.matchAll(/domain_name: '([^']+)'/g)].map((match) => match[1]))].sort();
   const controllers = batch.functions.filter((generatedFunction) => generatedFunction.kind === 'controller');
   const helpers = batch.functions.filter((generatedFunction) => generatedFunction.kind === 'helper');
   const effects = batch.functions.filter((generatedFunction) => generatedFunction.kind === 'effect');
-  const specIds = batch.suites.map((suite) => suite.specId);
+  const specs = selectedSpecCards(specsLedger, groupNames);
+  const allSpecIds = new Set(specs.allSpecCards.map((card) => card.id));
+  const specIds = batch.suites.flatMap((suite) => expandedSpecIds(suite.specId, allSpecIds));
   const uniqueSpecIds = [...new Set(specIds)];
   const scopedSpecCountMatch = document.text.match(/scoped_spec_count:\s*(\d+)/);
   const declaredScopedSpecCount = scopedSpecCountMatch ? Number(scopedSpecCountMatch[1]) : null;
   const problems: MasterLedgerCheckReport['problems'] = [];
-  const specs = selectedSpecCards(specsLedger, groupNames);
   const selectedSpecIds = new Set(specs.selectedSpecCards.map((card) => card.id));
-  const allSpecIds = new Set(specs.allSpecCards.map((card) => card.id));
   const suiteSpecIds = new Set(uniqueSpecIds);
   const missingSpecTests = groupNames.length > 0 ? specs.selectedSpecCards.filter((card) => !suiteSpecIds.has(card.id)).map((card) => card.id).sort() : [];
   const testSuitesOutsideSelectedSpecs = uniqueSpecIds.filter((specId) => !(groupNames.length > 0 ? selectedSpecIds : allSpecIds).has(specId)).sort();
@@ -138,8 +176,8 @@ export function analyzeMasterLedger(document: MasterLedgerDocument, batch: Funct
 
   const specCounts = new Map<string, number>();
 
-  for (const specId of specIds) {
-    specCounts.set(specId, (specCounts.get(specId) ?? 0) + 1);
+  for (const suite of batch.suites) {
+    specCounts.set(suite.specId, (specCounts.get(suite.specId) ?? 0) + 1);
   }
 
   const duplicateSpecIds = [...specCounts].filter(([, count]) => count > 1).map(([specId, count]) => ({ specId, count }));
@@ -233,7 +271,10 @@ export function analyzeMasterLedger(document: MasterLedgerDocument, batch: Funct
     });
   }
 
-  const generatedTestsOutsideRootTestDirectory = generatedTestFiles.filter((file) => !file.path.startsWith('generator-cli/test/')).map((file) => file.path);
+  const generatedTestsOutsideRootTestDirectory = generatedTestFiles.filter((file) => {
+    const rootBlock = rootBlockForPath(file.path);
+    return !file.path.startsWith(`${rootBlock}/test/`);
+  }).map((file) => file.path);
 
   // WHY: generated tests must live under the root block test directory, never under src.
   // WHAT: report generated unit or integration tests outside generator-cli/test/.
@@ -246,7 +287,7 @@ export function analyzeMasterLedger(document: MasterLedgerDocument, batch: Funct
     });
   }
 
-  const testsOutsideTestDirectory = batch.suites.filter((suite) => !suite.path.startsWith('./generator-cli/test/')).map((suite) => suite.path);
+  const testsOutsideTestDirectory = batch.suites.filter((suite) => !suiteIsInRootTestDirectory(suite)).map((suite) => suite.path);
 
   // WHY: tests must be written under the test directory.
   // WHAT: report suite paths outside generator-cli/test.

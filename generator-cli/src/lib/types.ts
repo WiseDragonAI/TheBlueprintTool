@@ -56,6 +56,7 @@ export type FunctionKind = 'input' | 'controller' | 'helper' | 'effect' | 'test'
 
 export type GeneratedFunction = {
   functionId: string;
+  rootBlock?: string;
   kind: FunctionKind;
   domain: string;
   name: string;
@@ -73,6 +74,7 @@ export type GeneratedFunction = {
 export type TestSuitePlan = {
   suiteName: string;
   specId: string;
+  rootBlock?: string;
   path: string;
   expectedTelemetry: string[];
 };
@@ -88,6 +90,7 @@ export type WorktreePlan = {
   rootDir: string;
   worktreePath: string;
   rootBlockPath: string;
+  rootBlockPaths?: string[];
   functions: GeneratedFunction[];
   suites: TestSuitePlan[];
   supportFiles: OutputFile[];
