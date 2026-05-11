@@ -8,6 +8,19 @@ export async function readLiveAppState(send, url) {
   await wait(900);
   await send('Runtime.evaluate', { expression: 'localStorage.clear(); location.reload();' });
   await wait(900);
+  const honeycomb = await send('Runtime.evaluate', {
+    returnByValue: true,
+    expression: `(() => {
+      const grid = document.querySelector('.grid');
+      const canvas = document.querySelector('.canvas');
+      const before = getComputedStyle(grid).backgroundSize;
+      canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, clientX: 700, clientY: 320, deltaY: -120 }));
+      const after = getComputedStyle(grid).backgroundSize;
+      return { honeycombScaleStable: before === after, honeycombBackgroundSizeBefore: before, honeycombBackgroundSizeAfter: after };
+    })()`
+  });
+  await send('Runtime.evaluate', { expression: 'localStorage.clear(); location.reload();' });
+  await wait(900);
   const result = await send('Runtime.evaluate', {
     returnByValue: true,
     expression: `(() => {
@@ -26,9 +39,16 @@ export async function readLiveAppState(send, url) {
         return false;
       };
       const card = document.querySelector('[data-card-id="card-zone"]');
+      const bootCard = document.querySelector('[data-card-id="card-boot"]');
       const zone = document.querySelector('[data-zone-id="zone-frontend"]');
       const resizeHandle = zone.querySelector('.resize-handle.nw');
       const telemetryStart = window.__coreTelemetry.length;
+      const beforeCardMove = rect(bootCard);
+      bootCard.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: bootCard.getBoundingClientRect().left + 32, clientY: bootCard.getBoundingClientRect().top + 32, pointerId: 10 }));
+      document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: bootCard.getBoundingClientRect().left + 92, clientY: bootCard.getBoundingClientRect().top + 77, pointerId: 10 }));
+      document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: bootCard.getBoundingClientRect().left + 92, clientY: bootCard.getBoundingClientRect().top + 77, pointerId: 10 }));
+      const afterCardMove = rect(bootCard);
+      const persistedCard = JSON.parse(localStorage.getItem('corev2.canvas.state')).geometry.cards['card-boot'];
       card.querySelector('[data-action="open-card-thread"]').click();
       const cardThreadText = document.querySelector('.thread-target').textContent;
       zone.querySelector('[data-action="edit-zone"]').click();
@@ -69,6 +89,9 @@ export async function readLiveAppState(send, url) {
       return {
         cardThreadText,
         inlineEditActive,
+        beforeCardMove,
+        afterCardMove,
+        persistedCard,
         zoneSelected,
         beforeResize,
         afterResize,
@@ -85,5 +108,14 @@ export async function readLiveAppState(send, url) {
       };
     })()`
   });
-  return result.result.result.value;
+  await send('Runtime.evaluate', { expression: 'location.reload();' });
+  await wait(900);
+  const restored = await send('Runtime.evaluate', {
+    returnByValue: true,
+    expression: `(() => {
+      const element = document.querySelector('[data-card-id="card-boot"]');
+      return { restoredCard: { left: element.offsetLeft, top: element.offsetTop, width: element.offsetWidth, height: element.offsetHeight } };
+    })()`
+  });
+  return { ...honeycomb.result.result.value, ...result.result.result.value, ...restored.result.result.value };
 }

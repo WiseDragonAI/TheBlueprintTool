@@ -33,6 +33,7 @@
   --accent: var(--primary-bright);
   --blue: var(--primary-bright);
   --red: var(--secondary);
+  --zone-label-min-brightness-mix: 34%;
   --glow: 0 0 0 2px #f9fbff, 0 0 22px rgba(45,143,232,0.9);
 }
 
@@ -225,6 +226,7 @@ h2 { font-size: 18px; }
 
 .regular-zone {
   --zone-color: var(--primary-bright);
+  --zone-label-color: color-mix(in srgb, var(--zone-color), white var(--zone-label-min-brightness-mix));
   min-height: 140px;
   padding: 18px;
   border-color: color-mix(in srgb, var(--zone-color), transparent 35%);
@@ -266,11 +268,12 @@ h2 { font-size: 18px; }
 }
 
 .zone-title {
-  color: var(--accent);
+  color: var(--zone-label-color, var(--accent));
   margin-bottom: 10px;
   font-size: 14px;
   transform: scale(calc(1 / var(--viewport-scale, 1)));
   transform-origin: left top;
+  text-shadow: 0 0 10px color-mix(in srgb, var(--zone-label-color, var(--accent)), transparent 54%);
 }
 
 .zone-title.editing {

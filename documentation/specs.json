@@ -1420,6 +1420,20 @@
       "fields": []
     },
     {
+      "id": "bf394c62",
+      "title": "Honeycomb background tiling scale stays screen stable during canvas zoom",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": 2146,
+      "y": 5351,
+      "w": 640,
+      "comment": {
+        "what": "The dark honeycomb grid is a canvas viewport background. Wheel zoom must not multiply the honeycomb tile size; only canvas content should scale, while the background tiling keeps the same screen-space size."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
       "id": "30000007",
       "title": "the canvas has a dark honeycomb background",
       "cardType": "spec-brief",
@@ -1652,7 +1666,7 @@
       "y": 4916,
       "w": 320,
       "comment": {
-        "what": ""
+        "what": "Card geometry changes must be committed into durable canvas state rather than only mutating DOM position. A persisted card record must include the stable card id and x/y geometry."
       },
       "facts": [],
       "fields": []
@@ -1666,7 +1680,7 @@
       "y": 4926,
       "w": 320,
       "comment": {
-        "what": ""
+        "what": "Dragging a card must persist the moved x/y position at pointer release so a reload restores the same canvas-space geometry."
       },
       "facts": [],
       "fields": []
@@ -1680,7 +1694,7 @@
       "y": 3182,
       "w": 320,
       "comment": {
-        "what": ""
+        "what": "On boot, persisted card geometry must be hydrated before relationship routing is rendered so cards and arrows use the restored position."
       },
       "facts": [],
       "fields": []
@@ -3291,6 +3305,20 @@
       "w": 520,
       "comment": {
         "what": "Regular zones must use their primary color for border/identity and a darker, slightly transparent fill so zones read as canvas regions instead of opaque cards."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "5ac8d0f1",
+      "title": "Zone labels keep zone color with minimum brightness",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1360,
+      "y": 5610,
+      "w": 520,
+      "comment": {
+        "what": "Zone labels must inherit the zone identity color family while mixing toward white enough to keep a minimum readable brightness on dark or saturated zone fills."
       },
       "facts": [],
       "fields": []

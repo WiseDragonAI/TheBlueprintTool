@@ -47,6 +47,7 @@ function expectedTokens(title, domain, specId) {
   if (text.includes('marquee') || text.includes('selection box')) tokens.push('marquee', 'calculate-marquee-selection');
   if (text.includes('persist')) tokens.push('localStorage', 'commit-ledger-edit');
   if (text.includes('honeycomb')) tokens.push('--honeycomb-a', 'conic-gradient');
+  if (text.includes('tiling scale')) tokens.push('background-size', '--canvas-honeycomb-width');
   if (text.includes('glow')) tokens.push('--glow');
   if (text.includes('notes') || text.includes('conversation')) tokens.push('open-card-thread', 'open-zone-thread');
   if (text.includes('transcription')) tokens.push('request-transcription', 'transcriptionStatus');
@@ -57,6 +58,7 @@ function expectedTokens(title, domain, specId) {
   if (text.includes('stylesheet') || text.includes('css')) tokens.push('canvas.css');
   if (text.includes('arrow')) tokens.push('marker', 'path');
   if (text.includes('label')) tokens.push('text');
+  if (text.includes('brightness')) tokens.push('--zone-label-min-brightness-mix', '--zone-label-color');
   return Array.from(new Set(tokens));
 }
 
