@@ -26,7 +26,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       ? resolve(process.cwd(), 'frontend')
       : resolve(process.cwd(), '..', 'frontend');
     if (url === '/blueprinttool/specs' || url === '/blueprinttool/data') {
-      const ledgerPath = resolve(process.cwd(), '.blueprinttool', url.endsWith('/specs') ? 'specs.json' : 'data.json');
+      const blueprinttoolRoot = existsSync(resolve(process.cwd(), '.blueprinttool'))
+        ? resolve(process.cwd(), '.blueprinttool')
+        : resolve(process.cwd(), '..', '.blueprinttool');
+      const ledgerPath = resolve(blueprinttoolRoot, url.endsWith('/specs') ? 'specs.json' : 'data.json');
       response.setHeader('content-type', 'application/json');
       response.end(existsSync(ledgerPath) ? readFileSync(ledgerPath, 'utf8') : JSON.stringify({ ok: false, missing: ledgerPath }));
       return;
