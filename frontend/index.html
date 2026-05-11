@@ -9,10 +9,17 @@
   <body>
     <main class="shell" aria-label="Core canvas workspace">
       <aside class="rail" aria-label="Toolbox">
-        <button class="tool active" type="button" title="Select">↖</button>
-        <button class="tool" type="button" title="Zone">▣</button>
-        <button class="tool" type="button" title="Card">✎</button>
-        <button class="tool" type="button" title="Relationship">↗</button>
+        <button class="tool active" type="button" data-tool="select" title="Select" data-spec="40000007"><span>↖</span><span>Select</span></button>
+        <button class="tool" type="button" data-tool="zone" title="Zone" data-spec="e0b4d11a 20000014"><span>▣</span><span>Zone</span></button>
+        <button class="tool" type="button" data-tool="group" title="Group" data-spec="53d49146 90d84349"><span>◎</span><span>Group</span></button>
+        <button class="tool" type="button" data-tool="relationship" title="Relationship" data-spec="61bea65c 9bd42e71"><span>↗</span><span>Link</span></button>
+        <button class="tool" type="button" data-action="refresh" title="Refresh" data-spec="cfed85d3 50000006"><span>⟳</span><span>Refresh</span></button>
+        <button class="tool" type="button" data-action="conversation" title="Conversation ledger" data-spec="7abd939e 667ae9a9"><span>☰</span><span>Threads</span></button>
+        <button class="tool" type="button" data-action="shortcut-help" title="Shortcut help" data-spec="33c20993"><span>⌘</span><span>Keys</span></button>
+        <button class="tool" type="button" data-action="runbook" title="Runbook" data-spec="676c6a7a"><span>?</span><span>Runbook</span></button>
+        <label class="color-picker" hidden>
+          <input type="color" value="#55b8ff" data-action="zone-color" aria-label="Zone color">
+        </label>
       </aside>
       <section class="workspace">
         <header class="topbar">
@@ -20,58 +27,100 @@
             <p class="kicker">Blueprint canvas</p>
             <h1>CoreV2</h1>
           </div>
-          <nav class="tabs" aria-label="Open ledgers">
-            <button class="tab active" type="button">Surface</button>
-            <button class="tab" type="button">Specs</button>
-            <button class="tab" type="button">Runtime</button>
+          <nav class="tabs" aria-label="Open ledgers" data-spec="12749dcd ac137fe2 51a6af83">
+            <button class="tab active" type="button" data-tab="surface">Surface</button>
+            <button class="tab" type="button" data-tab="specs">Specs</button>
+            <button class="tab" type="button" data-tab="runtime">Runtime</button>
           </nav>
         </header>
-        <section class="canvas" aria-label="Canvas">
-          <div class="grid"></div>
-          <article class="zone zone-a">
-            <div class="zone-title">Frontend surface</div>
-            <p>Canvas, selection, gestures, cards, zones, groups, threads and voice controls.</p>
-          </article>
-          <article class="zone zone-b">
-            <div class="zone-title">Backend ledger</div>
-            <p>Routes, persistence, refresh events, transcription and Blueprinttool tab state.</p>
-          </article>
-          <article class="card card-a">
-            <span class="hash">#10000001</span>
-            <strong>Boot surface</strong>
-            <p>Load ledger, derive route, clear transient selection, render canvas.</p>
-          </article>
-          <article class="card card-b">
-            <span class="hash">#20000001</span>
-            <strong>Zone model</strong>
-            <p>Persistent ID, name, color, geometry and notes.</p>
-          </article>
-          <article class="card card-c">
-            <span class="hash">#70000001</span>
-            <strong>Ledger routing</strong>
-            <p>Serve ledgers, accept edits and publish refresh.</p>
-          </article>
-          <svg class="relationships" viewBox="0 0 1200 720" role="img" aria-label="Relationships">
-            <defs>
-              <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 0 L 10 5 L 0 10 z"></path>
-              </marker>
-            </defs>
-            <path d="M 375 250 C 500 210, 600 210, 725 250"></path>
-            <path d="M 360 455 C 520 570, 680 570, 840 455"></path>
-          </svg>
+        <section class="canvas" aria-label="Canvas" tabindex="0" data-spec="30000002 30000003 30000005 30000006 30000007 a25db692 74567497">
+          <div class="grid" aria-hidden="true" data-spec="30000007"></div>
+          <div class="canvas-content">
+            <article class="zone regular-zone" data-zone-id="zone-frontend" data-thread-id="thread-zone-frontend" data-spec="20000001 20000003 20000004 20000008 20000013 2000000a 2000000b 2000000c 2000000d 2000000e 2000000f 20000010 20000011 20000017 86e67c0e d5c8ece7 ce0c5d80 30000004 8f43d21c">
+              <div class="resize-handle nw"></div>
+              <div class="resize-handle ne"></div>
+              <div class="resize-handle sw"></div>
+              <div class="resize-handle se"></div>
+              <div class="zone-title">Frontend surface</div>
+              <p>Canvas, selection, gestures, cards, zones, groups, threads and voice controls.</p>
+              <div class="zone-actions">
+                <button type="button" data-action="edit-zone">Edit</button>
+                <button type="button" data-action="open-zone-thread">Notes</button>
+              </div>
+            </article>
+            <article class="zone group-zone" data-group-id="group-core" data-spec="1d444573 796827d0 4801e6c7 85c81d67 0421d906 dff19657 d9d57c2c 2476bfa1 d2fbfa28 612afeda 8a05ef46 5b918cd3 d4f90f42 abad6dcb">
+              <div class="zone-title">Core group</div>
+            </article>
+            <article class="zone regular-zone" data-zone-id="zone-backend" data-thread-id="thread-zone-backend" data-spec="20000007 20000009 20000017 20000018 8f43d21c">
+              <div class="resize-handle nw"></div>
+              <div class="resize-handle ne"></div>
+              <div class="resize-handle sw"></div>
+              <div class="resize-handle se"></div>
+              <div class="zone-title">Backend ledger</div>
+              <p>Routes, persistence, refresh events, transcription and Blueprinttool tab state.</p>
+              <div class="zone-actions">
+                <button type="button" data-action="edit-zone">Edit</button>
+                <button type="button" data-action="open-zone-thread">Notes</button>
+              </div>
+            </article>
+            <article class="card" data-card-id="card-boot" data-thread-id="thread-card-boot" data-card-class="base-card" data-spec="60000001 60000002 60000003 60000004 60000005 60000009 60000010 a946fbe0 aa42ff94 4dfbf38c d0936729 30000008 30000009">
+              <span class="hash">#10000001</span>
+              <strong>Boot surface</strong>
+              <p data-markdown-source="# Boot surface">Load ledger, derive route, clear transient selection, render canvas.</p>
+              <div class="card-tabs"><button type="button" class="active" data-action="open-card-thread">Notes</button><button type="button" data-action="open-card-data">Data</button></div>
+            </article>
+            <article class="card" data-card-id="card-zone" data-thread-id="thread-card-zone" data-card-class="zone-card" data-spec="6000000a 6000000b 6000000c 6000000d 6000000e 6000000f cd58fd49">
+              <span class="hash">#20000001</span>
+              <strong>Zone model</strong>
+              <p>Persistent ID, name, color, geometry and notes.</p>
+              <div class="card-tabs"><button type="button" class="active" data-action="open-card-thread">Notes</button><button type="button" data-action="open-card-data">Data</button></div>
+            </article>
+            <article class="card" data-card-id="card-ledger" data-thread-id="thread-card-ledger" data-spec="70000001 70000002 70000003 70000004 70000005 70000006 70000007">
+              <span class="hash">#70000001</span>
+              <strong>Ledger routing</strong>
+              <p>Serve ledgers, accept edits and publish refresh.</p>
+              <div class="card-tabs"><button type="button" class="active" data-action="open-card-thread">Notes</button><button type="button" data-action="open-card-data">Data</button></div>
+            </article>
+            <div class="marquee" hidden></div>
+            <svg class="relationships" viewBox="0 0 2400 1800" role="img" aria-label="Relationships" data-spec="61bea65c 81557a54 708a7bfc 53dc0295 6f01b700 47237c02 5027f419 b200b57e ba1544b0 f93e1bb7 1d6f456a 9bd42e71">
+              <defs>
+                <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M 0 0 L 10 5 L 0 10 z"></path>
+                </marker>
+              </defs>
+              <path data-relationship-id="rel-boot-zone" data-source="card-boot" data-target="card-zone" d="M 375 250 C 500 210, 600 210, 725 250"></path>
+              <text data-relationship-label="rel-boot-zone" x="540" y="210">hydrates</text>
+              <path data-relationship-id="rel-zone-ledger" data-source="card-zone" data-target="card-ledger" d="M 360 455 C 520 570, 680 570, 840 455"></path>
+              <text data-relationship-label="rel-zone-ledger" x="612" y="558">persists</text>
+            </svg>
+          </div>
         </section>
       </section>
       <aside class="panel" aria-label="Inspector">
-        <p class="kicker">Telemetry</p>
+        <p class="kicker" data-spec="c90ad7e1 72af9d0b">Telemetry</p>
         <h2>Controller path</h2>
-        <ol>
-          <li>derive-route-state</li>
-          <li>load-ledger-state</li>
-          <li>clear-transient-selection</li>
-          <li>render-canvas-surface</li>
-        </ol>
+        <ol class="telemetry-list" aria-live="polite"></ol>
+        <section class="thread-panel" data-spec="eaced0c9 667ae9a9 5f8c7152 cc7ed3b4 7984a4f3 50000013 50000014 50000015 50000016 6583c446">
+          <h2>Thread</h2>
+          <p class="thread-target">No thread open</p>
+          <textarea class="thread-draft" rows="4" aria-label="Thread draft"></textarea>
+          <button type="button" data-action="create-note">Create note</button>
+          <button type="button" data-action="delete-note">Delete note</button>
+          <button type="button" data-action="voice-start" data-spec="d38927c1 747b461e 3d074416 040cef84">Record</button>
+          <button type="button" data-action="voice-stop" data-spec="8b1ff788 6cc37b58 828e6225 c0c42d20 5c4e5c22 21b2b050 b5a783cd">Stop</button>
+          <p class="voice-status">idle</p>
+        </section>
       </aside>
+      <dialog class="confirm-modal" data-spec="20000012 20000015 20000016">
+        <p>Delete selected zone?</p>
+        <button type="button" data-action="confirm-delete">Delete</button>
+        <button type="button" data-action="cancel-delete">Cancel</button>
+      </dialog>
+      <dialog class="shortcut-modal" data-spec="33c20993">
+        <p>Esc clears selection. Del confirms zone deletion. Ctrl+C copies. Ctrl+V pastes.</p>
+        <button type="button" data-action="close-shortcut-help">Close</button>
+      </dialog>
     </main>
+    <script type="module" src="/src/runtime/canvas-runtime.ts"></script>
   </body>
 </html>

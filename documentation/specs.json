@@ -141,6 +141,16 @@
       "y": 5155,
       "w": 560
     },
+    "a25db692": {
+      "x": 1546,
+      "y": 5155,
+      "w": 520
+    },
+    "74567497": {
+      "x": 1546,
+      "y": 5351,
+      "w": 560
+    },
     "30000007": {
       "x": -114,
       "y": 5351,
@@ -826,6 +836,11 @@
       "y": 6566,
       "w": 320
     },
+    "1d6f456a": {
+      "x": -4152,
+      "y": 6566,
+      "w": 420
+    },
     "10e09767": {
       "x": -10397,
       "y": 3158,
@@ -965,7 +980,7 @@
       "y": 5022,
       "w": 320,
       "comment": {
-        "what": ""
+        "what": "Zone edit controls must remain clickable inside the canvas. Pointer gesture handling must not capture these button events as pan, drag, resize, or selection gestures."
       },
       "facts": [],
       "fields": []
@@ -1077,7 +1092,7 @@
       "y": 5414,
       "w": 420,
       "comment": {
-        "what": ""
+        "what": "Zone notes controls must remain clickable inside the canvas and must open the thread for the zone that owns the button. Pointer gesture handling must not capture the button event as a canvas gesture."
       },
       "facts": [],
       "fields": []
@@ -1091,7 +1106,7 @@
       "y": 5414,
       "w": 500,
       "comment": {
-        "what": ""
+        "what": "Card notes controls must remain clickable inside the canvas and must open the thread for the card that owns the button. Pointer gesture handling must not capture the button event as a canvas gesture."
       },
       "facts": [],
       "fields": []
@@ -1119,7 +1134,7 @@
       "y": 5610,
       "w": 320,
       "comment": {
-        "what": ""
+        "what": "Relationship paths must route from card border ports with enough clearance to avoid visually crossing through the source or target card interiors."
       },
       "facts": [],
       "fields": []
@@ -1372,6 +1387,34 @@
       "w": 560,
       "comment": {
         "what": ""
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "a25db692",
+      "title": "Mouse wheel zoom preserves cursor anchored canvas point",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": 1546,
+      "y": 5155,
+      "w": 520,
+      "comment": {
+        "what": "Wheel zoom must keep the canvas-space point under the cursor at the same screen position by adjusting viewport translation when scale changes."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "74567497",
+      "title": "Dragging elements at non-default zoom uses canvas-space deltas",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": 1546,
+      "y": 5351,
+      "w": 560,
+      "comment": {
+        "what": "When the viewport scale is not 1, card, zone, resize, marquee, and zone-draw geometry must convert screen pointer deltas into canvas-space deltas before mutating element geometry."
       },
       "facts": [],
       "fields": []
@@ -3206,6 +3249,76 @@
       "w": 320,
       "comment": {
         "what": ""
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "1d6f456a",
+      "title": "Relationship arrows redraw when connected cards move",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -4152,
+      "y": 6566,
+      "w": 420,
+      "comment": {
+        "what": "When a connected card is moved, relationship routing must recompute ports and patch the SVG path and label positions from the current card geometry."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "9bd42e71",
+      "title": "Relationship arrows use orthogonal square routing with card clearance",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3700,
+      "y": 6566,
+      "w": 520,
+      "comment": {
+        "what": "Relationship arrows must use square SVG routing with explicit source and target clearance points so paths remain readable and avoid crossing through connected card interiors. Multiple visible routes must use deterministic lanes instead of merging on the same segment. If source and target have a clean direct horizontal or vertical gap, the route must not add a decorative detour."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "8f43d21c",
+      "title": "Zones use darker transparent fill than their primary border color",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1930,
+      "y": 5610,
+      "w": 520,
+      "comment": {
+        "what": "Regular zones must use their primary color for border/identity and a darker, slightly transparent fill so zones read as canvas regions instead of opaque cards."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "c90ad7e1",
+      "title": "Canvas UI uses Ubuntu font",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3760,
+      "y": 6120,
+      "w": 360,
+      "comment": {
+        "what": "The browser canvas UI must use Ubuntu, matching the Core canvas typography convention, with system sans-serif fallback."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "72af9d0b",
+      "title": "Clicking canvas background clears focus and selection",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3360,
+      "y": 6120,
+      "w": 520,
+      "comment": {
+        "what": "A click on empty canvas background with no meaningful pointer movement must blur the active element, clear transient selection, and return the operator to neutral canvas focus."
       },
       "facts": [],
       "fields": []

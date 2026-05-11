@@ -4,8 +4,10 @@
  */
 import { createServer } from 'node:http';
 import { existsSync, readFileSync } from 'node:fs';
-import { extname, resolve } from 'node:path';
+import { resolve } from 'node:path';
+import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 import { telemetry } from '@backend/telemetry/harness.js';
+import { contentTypeFor } from './content-type-for.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -23,10 +25,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const frontendRoot = existsSync(resolve(process.cwd(), 'frontend'))
       ? resolve(process.cwd(), 'frontend')
       : resolve(process.cwd(), '..', 'frontend');
-    const assetPath = url.startsWith('/assets/') ? resolve(frontendRoot, url.slice(1)) : resolve(frontendRoot, 'index.html');
-    if ((url === '/' || url.startsWith('/assets/')) && existsSync(assetPath)) {
+    const requestedPath = url.startsWith('/assets/') || url.startsWith('/src/') ? resolve(frontendRoot, url.slice(1)) : resolve(frontendRoot, 'index.html');
+    const assetPath = existsSync(requestedPath) ? requestedPath : requestedPath.replace(/\.js$/, '.ts');
+    if ((url === '/' || url.startsWith('/assets/') || url.startsWith('/src/')) && existsSync(assetPath)) {
       response.setHeader('content-type', contentTypeFor(assetPath));
-      response.end(readFileSync(assetPath));
+      const source = readFileSync(assetPath, 'utf8');
+      response.end(assetPath.endsWith('.ts') ? transpileModule(source, { compilerOptions: { target: ScriptTarget.ES2022, module: ModuleKind.ES2022 } }).outputText : source);
       return;
     }
     response.setHeader('content-type', 'application/json');
@@ -35,12 +39,4 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   server.listen(port, String(payload.host ?? '127.0.0.1'));
   runtime.server = server;
   return { ok: true, port, server };
-}
-
-function contentTypeFor(filePath: string): string {
-  const extension = extname(filePath);
-  if (extension === '.css') return 'text/css; charset=utf-8';
-  if (extension === '.js') return 'text/javascript; charset=utf-8';
-  if (extension === '.svg') return 'image/svg+xml';
-  return 'text/html; charset=utf-8';
 }

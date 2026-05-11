@@ -4,9 +4,11 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "typecheck:frontend": "archi-generator/node_modules/.bin/tsc -p frontend/tsconfig.json --noEmit",
-    "typecheck:backend": "archi-generator/node_modules/.bin/tsc -p backend/tsconfig.json --noEmit",
-    "test:front-back": "node --test --import ./archi-generator/node_modules/tsx/dist/esm/index.mjs \"frontend/src/test/**/*.test.ts\" \"backend/src/test/**/*.test.ts\" \"tests/browser/**/*.spec.ts\""
+    "typecheck:frontend": "frontend/node_modules/.bin/tsc -p frontend/tsconfig.json --noEmit",
+    "typecheck:backend": "backend/node_modules/.bin/tsc -p backend/tsconfig.json --noEmit",
+    "test:browser": "node --test --import ./frontend/node_modules/tsx/dist/esm/index.mjs \"tests/browser/**/*.spec.ts\"",
+    "verify:live": "node tools/live-verify/cli.mjs",
+    "test:front-back": "npm run typecheck:frontend && npm run typecheck:backend && npm test --prefix frontend && npm test --prefix backend && npm run test:browser"
   },
   "devDependencies": {}
 }
