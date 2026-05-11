@@ -1,4 +1,13 @@
 import { wait } from './wait.mjs';
+import { browserDistanceToRect } from './browser-distance-to-rect.mjs';
+import { browserEndpointChecks } from './browser-endpoint-checks.mjs';
+import { browserInside } from './browser-inside.mjs';
+import { browserLoadTab } from './browser-load-tab.mjs';
+import { browserParsePath } from './browser-parse-path.mjs';
+import { browserRect } from './browser-rect.mjs';
+import { browserScreenRect } from './browser-screen-rect.mjs';
+import { browserSegmentHits } from './browser-segment-hits.mjs';
+import { browserWaitFrame } from './browser-wait-frame.mjs';
 
 export async function readLiveAppState(send, url) {
   await send('Page.enable');
@@ -11,7 +20,7 @@ export async function readLiveAppState(send, url) {
   const honeycomb = await send('Runtime.evaluate', {
     returnByValue: true,
     awaitPromise: true,
-    expression: `(() => {
+    expression: `(function readHoneycombAndLedgerUrls() {
       const grid = document.querySelector('.grid');
       const canvas = document.querySelector('.canvas');
       const beforeStyle = getComputedStyle(grid);
@@ -26,12 +35,18 @@ export async function readLiveAppState(send, url) {
       const afterRect = grid.getBoundingClientRect();
       const afterViewportScale = window.__coreState.viewport.scale;
       return Promise.all([
-        fetch('/specs').then((response) => response.text()),
-        fetch('/data').then((response) => response.text()),
-        fetch('/blueprinttool/specs').then((response) => response.json()),
-        fetch('/blueprinttool/data').then((response) => response.json()),
-        fetch('/blueprinttool/state').then((response) => response.json())
-      ]).then(([specsRoute, dataRoute, specsLedger, dataLedger, blueprintState]) => ({
+        fetch('/specs').then(function specsText(response) { return response.text(); }),
+        fetch('/data').then(function dataText(response) { return response.text(); }),
+        fetch('/blueprinttool/specs').then(function specsJson(response) { return response.json(); }),
+        fetch('/blueprinttool/data').then(function dataJson(response) { return response.json(); }),
+        fetch('/blueprinttool/state').then(function stateJson(response) { return response.json(); })
+      ]).then(function honeycombReport(values) {
+        const specsRoute = values[0];
+        const dataRoute = values[1];
+        const specsLedger = values[2];
+        const dataLedger = values[3];
+        const blueprintState = values[4];
+        return {
         honeycombScaleStable: before === after,
         honeycombPositionStable: beforePosition === afterPosition,
         honeycombWorldScaleFollowsZoom: afterRect.width > beforeRect.width && afterRect.height > beforeRect.height,
@@ -47,8 +62,9 @@ export async function readLiveAppState(send, url) {
         dataUrlLoadsApp: dataRoute.includes('Core Canvas') && dataRoute.includes('data-tab="data"'),
         blueprintSpecsAvailable: Array.isArray(specsLedger.cards) && specsLedger.cards.length > 0,
         blueprintDataAvailable: Boolean(dataLedger.modelName || dataLedger.cards || dataLedger.positions),
-        blueprintStateTabs: (blueprintState.tabs ?? []).map((tab) => tab.id)
-      }));
+        blueprintStateTabs: (blueprintState.tabs ?? []).map(function blueprintTabId(tab) { return tab.id; })
+      };
+      });
     })()`
   });
   await send('Runtime.evaluate', { expression: 'localStorage.clear(); location.reload();' });
@@ -56,64 +72,20 @@ export async function readLiveAppState(send, url) {
   const result = await send('Runtime.evaluate', {
     returnByValue: true,
     awaitPromise: true,
-    expression: `(async () => {
-      const parsePath = (d) => d.match(/-?\\d+(?:\\.\\d+)?/g).map(Number).reduce((points, value, index, values) => {
-        if (index % 2 === 0) points.push({ x: value, y: values[index + 1] });
-        return points;
-      }, []);
-      const rect = (element) => ({ left: element.offsetLeft, top: element.offsetTop, right: element.offsetLeft + element.offsetWidth, bottom: element.offsetTop + element.offsetHeight, width: element.offsetWidth, height: element.offsetHeight });
-      const screenRect = (element) => element.getBoundingClientRect().toJSON();
-      const inside = (point, box) => point.x > box.left + 1 && point.x < box.right - 1 && point.y > box.top + 1 && point.y < box.bottom - 1;
-      const segmentHits = (a, b, box) => {
-        for (let step = 1; step < 20; step += 1) {
-          const t = step / 20;
-          if (inside({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }, box)) return true;
-        }
-        return false;
-      };
-      const distanceToRect = (point, box) => {
-        const dx = Math.max(box.left - point.x, 0, point.x - box.right);
-        const dy = Math.max(box.top - point.y, 0, point.y - box.bottom);
-        return Math.hypot(dx, dy);
-      };
-      const endpointChecks = (selector) => [...document.querySelectorAll(selector)].map((relationship) => {
-        const source = document.querySelector(\`[data-card-id="\${relationship.dataset.source}"]\`);
-        const target = document.querySelector(\`[data-card-id="\${relationship.dataset.target}"]\`);
-        if (!source || !target) return { id: relationship.dataset.relationshipId, ok: false, missingEndpoint: true };
-        const relationshipPoints = parsePath(relationship.getAttribute('d'));
-        const relationshipSourceRect = rect(source);
-        const relationshipTargetRect = rect(target);
-        const relationshipSourceDistance = distanceToRect(relationshipPoints[0], relationshipSourceRect);
-        const relationshipTargetDistance = distanceToRect(relationshipPoints[relationshipPoints.length - 1], relationshipTargetRect);
-        return {
-          id: relationship.dataset.relationshipId,
-          sourceDistance: relationshipSourceDistance,
-          targetDistance: relationshipTargetDistance,
-          sourceOutside: !inside(relationshipPoints[0], relationshipSourceRect),
-          targetOutside: !inside(relationshipPoints[relationshipPoints.length - 1], relationshipTargetRect),
-          ok: relationshipSourceDistance >= 4 && relationshipSourceDistance <= 16 && relationshipTargetDistance >= 4 && relationshipTargetDistance <= 16
-        };
-      });
-      const waitFrame = () => new Promise((resolve) => setTimeout(resolve, 260));
-      const loadTab = async (tabId) => {
-        document.querySelector('[data-tab="' + tabId + '"]').click();
-        await waitFrame();
-        const cards = [...document.querySelectorAll('.ledger-node[data-card-id]')];
-        return {
-          tabId,
-          route: location.pathname,
-          activeTab: window.__coreState.activeTab,
-          ledgerCardCount: cards.length,
-          firstTitle: cards[0]?.querySelector('strong')?.textContent ?? '',
-          staticSurfaceHidden: document.querySelector('[data-card-id="card-boot"]')?.hidden === true,
-          telemetryHit: window.__coreTelemetry.some((entry) => entry.name === 'render-ledger-surface' && entry.args.activeTab === tabId),
-          relationshipEndpointChecks: endpointChecks('.ledger-relationships [data-relationship-id]')
-        };
-      };
-      const specsTabLoad = await loadTab('specs');
-      const dataTabLoad = await loadTab('data');
+    expression: `(async function readInteractiveCanvasState() {
+      ${browserParsePath}
+      ${browserRect}
+      ${browserScreenRect}
+      ${browserInside}
+      ${browserDistanceToRect}
+      ${browserSegmentHits}
+      ${browserEndpointChecks}
+      ${browserWaitFrame}
+      ${browserLoadTab}
+      const specsTabLoad = await browserLoadTab('specs');
+      const dataTabLoad = await browserLoadTab('data');
       document.querySelector('[data-tab="surface"]').click();
-      await waitFrame();
+      await browserWaitFrame();
       const surfaceRestoredAfterLedgerTabs = document.querySelector('[data-card-id="card-boot"]')?.hidden === false && document.querySelectorAll('.ledger-node').length === 0;
       const card = document.querySelector('[data-card-id="card-zone"]');
       const bootCard = document.querySelector('[data-card-id="card-boot"]');
@@ -124,17 +96,17 @@ export async function readLiveAppState(send, url) {
       const telemetryStart = window.__coreTelemetry.length;
       const telemetryPanelHidden = document.querySelector('.telemetry-panel').hidden;
       const threadInitiallyHidden = document.querySelector('.thread-panel').hidden;
-      const beforeCardMove = rect(bootCard);
+      const beforeCardMove = browserRect(bootCard);
       bootCard.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: bootCard.getBoundingClientRect().left + 32, clientY: bootCard.getBoundingClientRect().top + 32, pointerId: 10 }));
       document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: bootCard.getBoundingClientRect().left + 92, clientY: bootCard.getBoundingClientRect().top + 77, pointerId: 10 }));
       document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: bootCard.getBoundingClientRect().left + 92, clientY: bootCard.getBoundingClientRect().top + 77, pointerId: 10 }));
-      const afterCardMove = rect(bootCard);
+      const afterCardMove = browserRect(bootCard);
       const persistedCard = JSON.parse(localStorage.getItem('corev2.canvas.state')).geometry.cards['card-boot'];
       bootCard.style.left = '33px';
       bootCard.style.top = '44px';
       document.querySelector('[data-action="refresh"]').click();
-      await new Promise((resolve) => setTimeout(resolve, 180));
-      const afterRefresh = rect(bootCard);
+      await new Promise(function resolveRefreshWait(resolve) { setTimeout(resolve, 180); });
+      const afterRefresh = browserRect(bootCard);
       const refreshRestoredCard = afterRefresh.left === persistedCard.x && afterRefresh.top === persistedCard.y;
       card.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: card.getBoundingClientRect().left + 32, clientY: card.getBoundingClientRect().top + 32, pointerId: 19 }));
       card.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: card.getBoundingClientRect().left + 32, clientY: card.getBoundingClientRect().top + 32, pointerId: 19 }));
@@ -153,11 +125,11 @@ export async function readLiveAppState(send, url) {
       zone.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: zone.getBoundingClientRect().left + 24, clientY: zone.getBoundingClientRect().top + 24, pointerId: 11 }));
       zone.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: zone.getBoundingClientRect().left + 24, clientY: zone.getBoundingClientRect().top + 24, pointerId: 11 }));
       const zoneSelected = zone.classList.contains('selected');
-      const beforeResize = rect(zone);
+      const beforeResize = browserRect(zone);
       resizeHandle.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: zone.getBoundingClientRect().left, clientY: zone.getBoundingClientRect().top, pointerId: 12 }));
       document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: zone.getBoundingClientRect().left + 400, clientY: zone.getBoundingClientRect().top + 400, pointerId: 12 }));
       document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: zone.getBoundingClientRect().left + 400, clientY: zone.getBoundingClientRect().top + 400, pointerId: 12 }));
-      const afterResize = rect(zone);
+      const afterResize = browserRect(zone);
       document.querySelector('[data-tool="group"]').click();
       const grid = document.querySelector('.grid');
       const canvasScreenForGroupDraft = document.querySelector('.canvas').getBoundingClientRect();
@@ -166,7 +138,7 @@ export async function readLiveAppState(send, url) {
       document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 950, clientY: 360, pointerId: 13 }));
       document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 950, clientY: 360, pointerId: 13 }));
       const createdGroup = document.querySelector('[data-group-id^="group-draft-"]');
-      const createdGroupRect = createdGroup ? rect(createdGroup) : null;
+      const createdGroupRect = createdGroup ? browserRect(createdGroup) : null;
       const createdGroupOriginAnchored = createdGroupRect
         ? Math.abs(createdGroupRect.left - expectedGroupDraftOrigin.x) <= 2 && Math.abs(createdGroupRect.top - expectedGroupDraftOrigin.y) <= 2
         : false;
@@ -182,36 +154,35 @@ export async function readLiveAppState(send, url) {
       group.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: group.getBoundingClientRect().left + 24, clientY: group.getBoundingClientRect().top + 24, pointerId: 16 }));
       const groupSelected = group.classList.contains('selected');
       const computedGroupMembership = { cardIds: [...window.__coreState.selection.cardIds], zoneIds: [...window.__coreState.selection.zoneIds], groupIds: [...window.__coreState.selection.groupIds] };
-      const beforeGroupMove = rect(group);
+      const beforeGroupMove = browserRect(group);
       group.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: group.getBoundingClientRect().left + 24, clientY: group.getBoundingClientRect().top + 24, pointerId: 17 }));
       document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: group.getBoundingClientRect().left + 64, clientY: group.getBoundingClientRect().top + 54, pointerId: 17 }));
       document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: group.getBoundingClientRect().left + 64, clientY: group.getBoundingClientRect().top + 54, pointerId: 17 }));
-      const afterGroupMove = rect(group);
+      const afterGroupMove = browserRect(group);
       groupResizeHandle.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: group.getBoundingClientRect().right, clientY: group.getBoundingClientRect().bottom, pointerId: 18 }));
       document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: group.getBoundingClientRect().right + 60, clientY: group.getBoundingClientRect().bottom + 40, pointerId: 18 }));
       document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: group.getBoundingClientRect().right + 60, clientY: group.getBoundingClientRect().bottom + 40, pointerId: 18 }));
-      const afterGroupResize = rect(group);
+      const afterGroupResize = browserRect(group);
       document.querySelector('[data-tool="select"]').click();
       grid.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 980, clientY: 120, pointerId: 14 }));
       grid.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 980, clientY: 120, pointerId: 14 }));
       const backgroundClearedSelection = window.__coreState.selection.cardIds.length === 0 && window.__coreState.selection.zoneIds.length === 0 && window.__coreState.selection.groupIds.length === 0;
       const backgroundClearedFocus = document.activeElement === document.body;
       const path = document.querySelector('[data-relationship-id="rel-zone-ledger"]');
-      const points = parsePath(path.getAttribute('d'));
-      const sourceRect = rect(document.querySelector('[data-card-id="card-zone"]'));
-      const targetRect = rect(document.querySelector('[data-card-id="card-ledger"]'));
-      const sourceInteriorHit = points.slice(0, -1).some((point, index) => segmentHits(point, points[index + 1], sourceRect));
-      const targetInteriorHit = points.slice(0, -1).some((point, index) => segmentHits(point, points[index + 1], targetRect));
-      const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
-      const sourceEndpointDistance = distanceToRect(points[0], sourceRect);
-      const targetEndpointDistance = distanceToRect(points[points.length - 1], targetRect);
-      const sourceBorderStandoff = sourceEndpointDistance >= 4 && sourceEndpointDistance <= 16 && !inside(points[0], sourceRect);
-      const targetBorderStandoff = targetEndpointDistance >= 4 && targetEndpointDistance <= 16 && !inside(points[points.length - 1], targetRect);
-      const relationshipEndpointChecks = endpointChecks('[data-relationship-id]');
+      const points = browserParsePath(path.getAttribute('d'));
+      const sourceRect = browserRect(document.querySelector('[data-card-id="card-zone"]'));
+      const targetRect = browserRect(document.querySelector('[data-card-id="card-ledger"]'));
+      const sourceInteriorHit = points.slice(0, -1).some(function sourceSegmentHits(point, index) { return browserSegmentHits(point, points[index + 1], sourceRect); });
+      const targetInteriorHit = points.slice(0, -1).some(function targetSegmentHits(point, index) { return browserSegmentHits(point, points[index + 1], targetRect); });
+      const sourceEndpointDistance = browserDistanceToRect(points[0], sourceRect);
+      const targetEndpointDistance = browserDistanceToRect(points[points.length - 1], targetRect);
+      const sourceBorderStandoff = sourceEndpointDistance >= 4 && sourceEndpointDistance <= 16 && !browserInside(points[0], sourceRect);
+      const targetBorderStandoff = targetEndpointDistance >= 4 && targetEndpointDistance <= 16 && !browserInside(points[points.length - 1], targetRect);
+      const relationshipEndpointChecks = browserEndpointChecks('[data-relationship-id]');
       const canvasScreen = document.querySelector('.canvas').getBoundingClientRect();
       const clippedCards = [...document.querySelectorAll('[data-card-id]')]
-        .map((element) => ({ id: element.dataset.cardId, rect: screenRect(element) }))
-        .filter((item) => item.rect.left < canvasScreen.left || item.rect.right > canvasScreen.right || item.rect.top < canvasScreen.top || item.rect.bottom > canvasScreen.bottom);
+        .map(function cardScreenRect(element) { return { id: element.dataset.cardId, rect: browserScreenRect(element) }; })
+        .filter(function clippedCard(item) { return item.rect.left < canvasScreen.left || item.rect.right > canvasScreen.right || item.rect.top < canvasScreen.top || item.rect.bottom > canvasScreen.bottom; });
       return {
         cardThreadText,
         specsTabLoad,
@@ -251,7 +222,7 @@ export async function readLiveAppState(send, url) {
         targetBorderStandoff,
         relationshipEndpointChecks,
         clippedCards,
-        telemetry: window.__coreTelemetry.slice(telemetryStart).map((entry) => ({ name: entry.name, args: entry.args }))
+        telemetry: window.__coreTelemetry.slice(telemetryStart).map(function telemetryEntry(entry) { return { name: entry.name, args: entry.args }; })
       };
     })()`
   });
@@ -259,7 +230,7 @@ export async function readLiveAppState(send, url) {
   await wait(900);
   const restored = await send('Runtime.evaluate', {
     returnByValue: true,
-    expression: `(() => {
+    expression: `(function readRestoredCardState() {
       const element = document.querySelector('[data-card-id="card-boot"]');
       return { restoredCard: { left: element.offsetLeft, top: element.offsetTop, width: element.offsetWidth, height: element.offsetHeight } };
     })()`

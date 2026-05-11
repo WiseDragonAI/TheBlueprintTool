@@ -1476,7 +1476,7 @@
       "y": 5351,
       "w": 520,
       "comment": {
-        "what": ""
+        "what": "Canvas rendering must keep pointer interaction responsive at wide zoom-out levels by switching the canvas into low-detail mode below 0.35 scale and overview-detail mode below 0.18 scale. Low-detail mode removes expensive shadows, text blocks, buttons, and relationship labels while preserving geometry and selection affordances."
       },
       "facts": [],
       "fields": []
@@ -1490,7 +1490,7 @@
       "y": 5351,
       "w": 560,
       "comment": {
-        "what": ""
+        "what": "Cards, zones, and relationship overlays must not render high-detail text, controls, shadows, or labels when the viewport is zoomed far enough that those details are not legible. The low-detail state must be derived from viewport scale, not from a separate persisted mode."
       },
       "facts": [],
       "fields": []
@@ -2302,7 +2302,7 @@
       "y": 5508,
       "w": 320,
       "comment": {
-        "what": ""
+        "what": "Voice recording must request real microphone input through browser media APIs and must surface permission failures to the operator instead of pretending that recording started."
       },
       "facts": [],
       "fields": []
@@ -2344,7 +2344,7 @@
       "y": 5664,
       "w": 320,
       "comment": {
-        "what": ""
+        "what": "Stopping voice recording must stop media tracks and release audio resources. It must request transcription only when transcription is actually configured."
       },
       "facts": [],
       "fields": []
@@ -2358,7 +2358,7 @@
       "y": 5664,
       "w": 320,
       "comment": {
-        "what": ""
+        "what": "The thread draft may only be filled from an actual transcript result. The UI must not insert fabricated transcript text."
       },
       "facts": [],
       "fields": []
@@ -2372,7 +2372,7 @@
       "y": 5664,
       "w": 320,
       "comment": {
-        "what": ""
+        "what": "While recording, the thread panel must show live elapsed duration and a level meter updated from microphone analyser samples on animation frames."
       },
       "facts": [],
       "fields": []
@@ -2386,7 +2386,7 @@
       "y": 5820,
       "w": 320,
       "comment": {
-        "what": ""
+        "what": "Voice permission, device, and capture failures must be shown in the voice status area and recorded in telemetry."
       },
       "facts": [],
       "fields": []
@@ -2400,7 +2400,7 @@
       "y": 5820,
       "w": 320,
       "comment": {
-        "what": ""
+        "what": "Voice transcription is optional and configuration-gated. When transcription is unavailable, the UI must explicitly say transcription is unavailable instead of showing a fake transcript."
       },
       "facts": [],
       "fields": []
@@ -3380,7 +3380,7 @@
       "y": 6566,
       "w": 520,
       "comment": {
-        "what": "Relationship arrows must use square SVG routing with explicit source and target clearance points so paths remain readable and avoid crossing through connected card interiors. The visible SVG path must start and end outside the connected card borders using outward normals derived from each card border side; no visible endpoint, marker, or endpoint segment may depend on being drawn underneath a card. Multiple visible routes must use deterministic lanes instead of merging on the same segment. If source and target have a clean direct horizontal or vertical gap, the route must not add a decorative detour."
+        "what": "Relationship arrows must use square SVG routing with explicit source and target clearance points so paths remain readable and avoid crossing through connected card interiors. The visible SVG path must start and end outside connected card borders using outward normals derived from each card border side. For non-direct routes, the route must leave the card through a clearance lane and use a short final connector near the middle of the target side; long route segments must not run on the standoff line next to a card border. Multiple visible routes must use deterministic lanes instead of merging on the same segment. If source and target have a clean direct horizontal or vertical gap, the route must not add a decorative detour."
       },
       "facts": [],
       "fields": []

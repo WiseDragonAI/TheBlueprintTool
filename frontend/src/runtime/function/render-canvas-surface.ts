@@ -6,10 +6,12 @@ import { renderRelationshipOverlay } from './render-relationship-overlay.js';
 import { renderTelemetry } from './render-telemetry.js';
 import { renderThreadPanel } from './render-thread-panel.js';
 import { telemetry } from './telemetry.js';
+import { updateDetailMode } from './update-detail-mode.js';
 
 export function renderCanvasSurface(): void {
   renderLedgerSurface();
   canvas.style.setProperty('--viewport-scale', String(state.viewport.scale));
+  updateDetailMode();
   (document.querySelector('.canvas-content') as HTMLElement).style.transform = `translate(${state.viewport.x}px, ${state.viewport.y}px) scale(${state.viewport.scale})`;
   const connectedIds = connectedCardIds(state.selection.cardIds);
   document.querySelectorAll('[data-card-id]').forEach((node) => {

@@ -108,14 +108,27 @@
           <ol class="telemetry-list" aria-live="polite"></ol>
         </section>
         <section class="thread-panel" hidden data-spec="eaced0c9 667ae9a9 5f8c7152 cc7ed3b4 7984a4f3 50000013 50000014 50000015 50000016 6583c446 2b67c924">
-          <h2>Thread</h2>
+          <div class="thread-heading">
+            <p class="kicker">Thread</p>
+            <h2>Notes</h2>
+          </div>
           <p class="thread-target">No thread selected</p>
-          <textarea class="thread-draft" rows="4" aria-label="Thread draft"></textarea>
-          <button type="button" data-action="create-note">Create note</button>
-          <button type="button" data-action="delete-note">Delete note</button>
-          <button type="button" data-action="voice-start" data-spec="d38927c1 747b461e 3d074416 040cef84">Record</button>
-          <button type="button" data-action="voice-stop" data-spec="8b1ff788 6cc37b58 828e6225 c0c42d20 5c4e5c22 21b2b050 b5a783cd">Stop</button>
-          <p class="voice-status">idle</p>
+          <textarea class="thread-draft" rows="5" aria-label="Thread draft" placeholder="Write an operator note..."></textarea>
+          <div class="thread-actions">
+            <button type="button" data-action="create-note">Create note</button>
+            <button type="button" data-action="delete-note">Delete note</button>
+          </div>
+          <div class="voice-panel" data-spec="d38927c1 747b461e 3d074416 040cef84 8b1ff788 6cc37b58 828e6225 c0c42d20 5c4e5c22 21b2b050 b5a783cd">
+            <div class="voice-panel-top">
+              <span>Voice input</span>
+              <span class="voice-status">idle</span>
+            </div>
+            <div class="voice-meter" aria-hidden="true"><span class="voice-meter-value"></span></div>
+            <div class="thread-actions voice-actions">
+              <button type="button" data-action="voice-start">Record</button>
+              <button type="button" data-action="voice-stop">Stop</button>
+            </div>
+          </div>
         </section>
       </aside>
       <dialog class="confirm-modal" data-spec="20000012 20000015 20000016">

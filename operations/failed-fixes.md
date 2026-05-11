@@ -44,3 +44,22 @@ Current corrective attempt:
 - Make ledger relationship SVG overlays use the same canvas-world pixel coordinate system as cards by removing the independent `viewBox`.
 - Set relationship SVG overflow visible so routes outside the nominal 5200x2600 viewport are still rendered in canvas-world coordinates.
 - Extend live verification to check relationship endpoints on ledger tabs, not only the static surface.
+
+## 2026-05-12: Relationship Dent Merges With Card Border
+
+Problem:
+- Relationship arrows are attached again, but the clearance dent can still sit too close to the card border.
+- The route can draw a long segment on the standoff line next to the card, making the arrow visually merge with the card border before the marker.
+
+Failed assumption:
+- Endpoint distance checks were not enough; they proved the marker was outside the card, but not that the previous route segment had enough clearance from the card side.
+- The route helper still allowed simple elbow routes that skip the source/target clearance lane.
+
+Previous work:
+- Relationship arrows were moved to the same canvas-world coordinate system as cards.
+- Static and ledger endpoint checks were added to live verification.
+
+Current corrective attempt:
+- Remove the simple elbow shortcut for non-direct routes.
+- Force non-direct routes through clearance points before the final short connector into the card side.
+- Extend live verification endpoint checks so the point before a non-direct target endpoint also has clearance from the target card.

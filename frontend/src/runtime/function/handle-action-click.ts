@@ -3,9 +3,10 @@ import { state } from '../state.js';
 import { deleteSelectedZones } from './delete-selected-zones.js';
 import { beginZoneLabelEdit } from './begin-zone-label-edit.js';
 import { renderThreadPanel } from './render-thread-panel.js';
-import { renderVoiceStatus } from './render-voice-status.js';
 import { refreshRuntimeState } from './refresh-runtime-state.js';
 import { selectTarget } from './select-target.js';
+import { startVoiceRecording } from './start-voice-recording.js';
+import { stopVoiceRecording } from './stop-voice-recording.js';
 import { telemetry } from './telemetry.js';
 
 export function handleActionClick(event: MouseEvent): void {
@@ -45,21 +46,10 @@ export function handleActionClick(event: MouseEvent): void {
     renderThreadPanel();
   }
   if (action === 'voice-start') {
-    state.voice = { recording: true, startedAt: Date.now(), durationMs: 0, level: 0.5, transcriptionStatus: 'recording' };
-    telemetry('resolve-voice-session', { threadId: state.threadId });
-    telemetry('capture-voice-audio', { status: 'recording' });
-    renderVoiceStatus();
+    void startVoiceRecording();
   }
   if (action === 'voice-stop') {
-    state.voice.recording = false;
-    state.voice.durationMs = Date.now() - state.voice.startedAt;
-    state.voice.transcriptionStatus = 'transcribed';
-    (document.querySelector('.thread-draft') as HTMLTextAreaElement).value = 'Transcribed voice note';
-    telemetry('upload-voice-audio', { optimistic: true, transient: true });
-    telemetry('request-transcription', { configured: true });
-    telemetry('fill-thread-draft', { text: 'Transcribed voice note' });
-    telemetry('render-voice-status', { status: state.voice.transcriptionStatus });
-    renderVoiceStatus();
+    stopVoiceRecording();
   }
   if (action === 'confirm-delete') deleteSelectedZones();
   if (action === 'cancel-delete') modal.close?.();

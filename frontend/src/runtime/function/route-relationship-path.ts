@@ -23,15 +23,9 @@ export function routeRelationshipPath({ sourcePort, targetPort, horizontal, sour
   const sameColumn = Math.abs(sourcePort.x - targetPort.x) < 1;
   const sameRow = Math.abs(sourcePort.y - targetPort.y) < 1;
   const directRoute = compactRoutePoints([sourceStandoff, targetStandoff]);
-  const horizontalElbowRoute = compactRoutePoints([sourceStandoff, { x: targetStandoff.x, y: sourceStandoff.y }, targetStandoff]);
-  const verticalElbowRoute = compactRoutePoints([sourceStandoff, { x: sourceStandoff.x, y: targetStandoff.y }, targetStandoff]);
   let routedPoints = [];
   if ((sameRow || sameColumn) && !relationshipRouteCrossesCard(directRoute, sourceRect) && !relationshipRouteCrossesCard(directRoute, targetRect)) {
     routedPoints = directRoute;
-  } else if (!relationshipRouteCrossesCard(horizontalElbowRoute, sourceRect) && !relationshipRouteCrossesCard(horizontalElbowRoute, targetRect)) {
-    routedPoints = horizontalElbowRoute;
-  } else if (!relationshipRouteCrossesCard(verticalElbowRoute, sourceRect) && !relationshipRouteCrossesCard(verticalElbowRoute, targetRect)) {
-    routedPoints = verticalElbowRoute;
   } else if (horizontal && clearHorizontal) {
     const routeX = (sourceExit.x + targetEntry.x) / 2 + laneOffset;
     routedPoints = compactRoutePoints([sourceStandoff, sourceExit, { x: routeX, y: sourceExit.y }, { x: routeX, y: targetEntry.y }, targetEntry, targetStandoff]);
