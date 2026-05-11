@@ -22,7 +22,7 @@ export function handlePointerDown(event: PointerEvent): void {
   telemetry('canvas-pointer-down', { intent, targetKind, targetId, ctrlKey: event.ctrlKey });
   telemetry('derive-gesture-intent', { kind: intent });
   if (intent === 'drag' || intent === 'group') selectTarget(targetKind, targetId, event.ctrlKey);
-  if (intent === 'resize') selectTarget('zone', targetId, false);
+  if (intent === 'resize') selectTarget(targetKind, targetId, false);
   if (intent === 'marquee' || intent === 'draw-zone' || intent === 'draw-group') {
     const marquee = document.querySelector('.marquee') as HTMLElement;
     marquee.hidden = false;

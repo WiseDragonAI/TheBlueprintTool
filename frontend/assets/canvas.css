@@ -51,8 +51,12 @@ button, textarea { font: inherit; }
 
 .shell {
   display: grid;
-  grid-template-columns: 152px minmax(0, 1fr) 320px;
+  grid-template-columns: 152px minmax(0, 1fr) 0;
   min-height: 100vh;
+}
+
+.shell.has-inspector {
+  grid-template-columns: 152px minmax(0, 1fr) 320px;
 }
 
 .rail, .panel {
@@ -211,8 +215,8 @@ h2 { font-size: 18px; }
 .canvas-content {
   position: absolute;
   inset: 0;
-  min-width: max(2400px, 100%);
-  min-height: max(1800px, 100%);
+  min-width: max(5200px, 100%);
+  min-height: max(2600px, 100%);
   transform-origin: 0 0;
   will-change: transform;
 }
@@ -262,7 +266,7 @@ h2 { font-size: 18px; }
   --zone-color: var(--red);
 }
 
-.zone.selected, .card.selected, .selected-card {
+.zone.selected, .card.selected, .group-zone.selected, .selected-card {
   box-shadow: var(--glow);
   border-color: #f9fbff;
 }
@@ -359,10 +363,15 @@ h2 { font-size: 18px; }
 .relationships {
   position: absolute;
   inset: 0;
-  width: 2400px;
-  height: 1800px;
+  width: 5200px;
+  height: 2600px;
   pointer-events: none;
   z-index: 20;
+}
+
+.telemetry-panel[hidden],
+.thread-panel[hidden] {
+  display: none;
 }
 
 .relationships path {
@@ -391,6 +400,10 @@ h2 { font-size: 18px; }
   padding: 24px;
   border-left: 1px solid var(--line);
   overflow: auto;
+}
+
+.panel[hidden] {
+  display: none;
 }
 
 .telemetry-list {

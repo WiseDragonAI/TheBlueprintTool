@@ -10,11 +10,11 @@
     <main class="shell" aria-label="Core canvas workspace">
       <aside class="rail" aria-label="Toolbox">
         <button class="tool active" type="button" data-tool="select" title="Select" data-spec="40000007"><span>↖</span><span>Select</span></button>
-        <button class="tool" type="button" data-tool="zone" title="Zone" data-spec="e0b4d11a 20000014"><span>▣</span><span>Zone</span></button>
+        <button class="tool" type="button" data-tool="zone" title="Zone" data-spec="e0b4d11a 20000014 bd0651aa"><span>▣</span><span>Zone</span></button>
         <button class="tool" type="button" data-tool="group" title="Group" data-spec="53d49146 90d84349"><span>◎</span><span>Group</span></button>
         <button class="tool" type="button" data-tool="relationship" title="Relationship" data-spec="61bea65c 9bd42e71"><span>↗</span><span>Link</span></button>
         <button class="tool" type="button" data-action="refresh" title="Refresh" data-spec="cfed85d3 50000006"><span>⟳</span><span>Refresh</span></button>
-        <button class="tool" type="button" data-action="conversation" title="Conversation ledger" data-spec="7abd939e 667ae9a9"><span>☰</span><span>Threads</span></button>
+        <button class="tool" type="button" data-tool="thread" data-action="conversation" title="Conversation ledger" data-spec="7abd939e 667ae9a9 2b67c924"><span>☰</span><span>Threads</span></button>
         <button class="tool" type="button" data-action="shortcut-help" title="Shortcut help" data-spec="33c20993"><span>⌘</span><span>Keys</span></button>
         <button class="tool" type="button" data-action="runbook" title="Runbook" data-spec="676c6a7a"><span>?</span><span>Runbook</span></button>
         <label class="color-picker" hidden>
@@ -48,7 +48,11 @@
                 <button type="button" data-action="open-zone-thread">Notes</button>
               </div>
             </article>
-            <article class="zone group-zone" data-group-id="group-core" data-spec="1d444573 796827d0 4801e6c7 85c81d67 0421d906 dff19657 d9d57c2c 2476bfa1 d2fbfa28 612afeda 8a05ef46 5b918cd3 d4f90f42 abad6dcb">
+            <article class="zone group-zone" data-group-id="group-core" data-thread-id="thread-group-core" data-spec="1d444573 796827d0 4801e6c7 85c81d67 0421d906 dff19657 d9d57c2c 2476bfa1 d2fbfa28 612afeda 8a05ef46 5b918cd3 d4f90f42 abad6dcb f18da923 c271a0df">
+              <div class="resize-handle nw"></div>
+              <div class="resize-handle ne"></div>
+              <div class="resize-handle sw"></div>
+              <div class="resize-handle se"></div>
               <div class="zone-title">Core group</div>
             </article>
             <article class="zone regular-zone" data-zone-id="zone-backend" data-thread-id="thread-zone-backend" data-spec="20000007 20000009 20000017 20000018 8f43d21c 5ac8d0f1">
@@ -82,7 +86,7 @@
               <div class="card-tabs"><button type="button" class="active" data-action="open-card-thread">Notes</button><button type="button" data-action="open-card-data">Data</button></div>
             </article>
             <div class="marquee" hidden></div>
-            <svg class="relationships" viewBox="0 0 2400 1800" role="img" aria-label="Relationships" data-spec="61bea65c 81557a54 708a7bfc 53dc0295 6f01b700 47237c02 5027f419 b200b57e ba1544b0 f93e1bb7 1d6f456a 9bd42e71">
+            <svg class="relationships" viewBox="0 0 5200 2600" role="img" aria-label="Relationships" data-spec="61bea65c 81557a54 708a7bfc 53dc0295 6f01b700 47237c02 5027f419 b200b57e ba1544b0 f93e1bb7 1d6f456a 9bd42e71">
               <defs>
                 <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                   <path d="M 0 0 L 10 5 L 0 10 z"></path>
@@ -96,13 +100,15 @@
           </div>
         </section>
       </section>
-      <aside class="panel" aria-label="Inspector">
-        <p class="kicker" data-spec="c90ad7e1 72af9d0b">Telemetry</p>
-        <h2>Controller path</h2>
-        <ol class="telemetry-list" aria-live="polite"></ol>
-        <section class="thread-panel" data-spec="eaced0c9 667ae9a9 5f8c7152 cc7ed3b4 7984a4f3 50000013 50000014 50000015 50000016 6583c446">
+      <aside class="panel" aria-label="Inspector" hidden>
+        <section class="telemetry-panel" hidden>
+          <p class="kicker" data-spec="c90ad7e1 72af9d0b">Telemetry</p>
+          <h2>Controller path</h2>
+          <ol class="telemetry-list" aria-live="polite"></ol>
+        </section>
+        <section class="thread-panel" hidden data-spec="eaced0c9 667ae9a9 5f8c7152 cc7ed3b4 7984a4f3 50000013 50000014 50000015 50000016 6583c446 2b67c924">
           <h2>Thread</h2>
-          <p class="thread-target">No thread open</p>
+          <p class="thread-target">No thread selected</p>
           <textarea class="thread-draft" rows="4" aria-label="Thread draft"></textarea>
           <button type="button" data-action="create-note">Create note</button>
           <button type="button" data-action="delete-note">Delete note</button>

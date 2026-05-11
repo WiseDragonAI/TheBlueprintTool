@@ -25,9 +25,17 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const frontendRoot = existsSync(resolve(process.cwd(), 'frontend'))
       ? resolve(process.cwd(), 'frontend')
       : resolve(process.cwd(), '..', 'frontend');
-    const requestedPath = url.startsWith('/assets/') || url.startsWith('/src/') ? resolve(frontendRoot, url.slice(1)) : resolve(frontendRoot, 'index.html');
+    if (url === '/blueprinttool/specs' || url === '/blueprinttool/data') {
+      const ledgerPath = resolve(process.cwd(), '.blueprinttool', url.endsWith('/specs') ? 'specs.json' : 'data.json');
+      response.setHeader('content-type', 'application/json');
+      response.end(existsSync(ledgerPath) ? readFileSync(ledgerPath, 'utf8') : JSON.stringify({ ok: false, missing: ledgerPath }));
+      return;
+    }
+    const isAssetRoute = url.startsWith('/assets/') || url.startsWith('/src/');
+    const isAppRoute = url === '/' || url === '/surface' || url === '/specs' || url === '/runtime';
+    const requestedPath = isAssetRoute ? resolve(frontendRoot, url.slice(1)) : resolve(frontendRoot, 'index.html');
     const assetPath = existsSync(requestedPath) ? requestedPath : requestedPath.replace(/\.js$/, '.ts');
-    if ((url === '/' || url.startsWith('/assets/') || url.startsWith('/src/')) && existsSync(assetPath)) {
+    if ((isAppRoute || isAssetRoute) && existsSync(assetPath)) {
       response.setHeader('content-type', contentTypeFor(assetPath));
       const source = readFileSync(assetPath, 'utf8');
       response.end(assetPath.endsWith('.ts') ? transpileModule(source, { compilerOptions: { target: ScriptTarget.ES2022, module: ModuleKind.ES2022 } }).outputText : source);

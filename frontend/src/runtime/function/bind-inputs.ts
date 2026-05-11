@@ -19,6 +19,7 @@ export function bindInputs(): void {
     button.addEventListener('click', () => {
       state.activeTool = (button as HTMLElement).dataset.tool;
       if (state.activeTool === 'zone') state.zoneColor = '#55b8ff';
+      if (state.activeTool === 'thread' && !state.threadId) state.threadId = 'conversation-ledger';
       telemetry('tool-button-click', { tool: state.activeTool });
       telemetry('resolve-tool-mode', { activeTool: state.activeTool });
       renderToolbox();
@@ -38,6 +39,7 @@ export function bindInputs(): void {
       telemetry('browser-route-change', { activeTab: state.activeTab });
       telemetry('derive-route-state', { activeTab: state.activeTab });
       renderTabRegistry();
+      renderCanvasSurface();
     });
   });
 

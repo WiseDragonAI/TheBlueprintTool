@@ -1,5 +1,6 @@
 import { state } from '../state.js';
 import { cardsIntersectingZone } from './cards-intersecting-zone.js';
+import { elementsIntersectingBox } from './elements-intersecting-box.js';
 import { renderCanvasSurface } from './render-canvas-surface.js';
 import { telemetry } from './telemetry.js';
 
@@ -21,8 +22,9 @@ export function selectTarget(kind: string, id: string, additive: boolean): void 
     telemetry('resolve-zone-intersections', { zoneId: id, cardIds: intersectingCards });
   }
   if (kind === 'group') {
-    state.selection.cardIds = ['card-boot', 'card-zone'];
-    state.selection.zoneIds = ['zone-frontend'];
+    const group = document.querySelector(`[data-group-id="${id}"]`) as HTMLElement | null;
+    state.selection.cardIds = group ? elementsIntersectingBox(group, '[data-card-id]', 'cardId') : [];
+    state.selection.zoneIds = group ? elementsIntersectingBox(group, '[data-zone-id]', 'zoneId') : [];
     telemetry('resolve-group-membership', { groupId: id, selection: state.selection });
   }
   renderCanvasSurface();

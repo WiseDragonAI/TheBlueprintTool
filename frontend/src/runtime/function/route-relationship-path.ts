@@ -35,10 +35,10 @@ export function routeRelationshipPath({ sourcePort, targetPort, horizontal, sour
     const routeY = (sourceExit.y + targetEntry.y) / 2 + laneOffset;
     routedPoints = compactRoutePoints([sourcePort, sourceStandoff, sourceExit, { x: sourceExit.x, y: routeY }, { x: targetEntry.x, y: routeY }, targetEntry, targetStandoff, targetPort]);
   } else if (horizontal) {
-    const routeY = Math.min(sourceRect.top, targetRect.top) - clearance - laneOffset;
+    const routeY = Math.max(32, Math.min(sourceRect.top, targetRect.top) - clearance - laneOffset);
     routedPoints = compactRoutePoints([sourcePort, sourceStandoff, sourceExit, { x: sourceExit.x, y: routeY }, { x: targetEntry.x, y: routeY }, targetEntry, targetStandoff, targetPort]);
   } else {
-    const routeX = Math.max(sourceRect.right, targetRect.right) + clearance + laneOffset;
+    const routeX = Math.min(5168, Math.max(sourceRect.right, targetRect.right) + clearance + laneOffset);
     routedPoints = compactRoutePoints([sourcePort, sourceStandoff, sourceExit, { x: routeX, y: sourceExit.y }, { x: routeX, y: targetEntry.y }, targetEntry, targetStandoff, targetPort]);
   }
   const labelPoint = routedPoints[Math.floor(routedPoints.length / 2)];

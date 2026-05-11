@@ -15,7 +15,8 @@ export function handleActionClick(event: MouseEvent): void {
   if (!action) return;
   telemetry('tool-button-click', { action });
   if (action === 'open-card-thread' || action === 'open-zone-thread' || action === 'conversation') {
-    const target = targetElement.closest('[data-card-id],[data-zone-id]') as HTMLElement | null;
+    const target = targetElement.closest('[data-card-id],[data-zone-id],[data-group-id]') as HTMLElement | null;
+    if (action === 'conversation') state.activeTool = 'thread';
     state.threadId = target?.dataset.threadId ?? 'conversation-ledger';
     target?.querySelectorAll('.card-tabs button').forEach((button) => button.classList.toggle('active', button === actionTarget));
     telemetry('resolve-thread-target', { threadId: state.threadId });

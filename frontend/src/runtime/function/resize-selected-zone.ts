@@ -32,5 +32,5 @@ export function resizeSelectedZone(dx: number, dy: number): void {
   zone.style.top = `${nextTop}px`;
   zone.style.width = `${nextWidth}px`;
   zone.style.height = `${nextHeight}px`;
-  telemetry('render-zone-layer', { resized: zone.dataset.zoneId, geometry: zone.getBoundingClientRect().toJSON?.() });
+  telemetry(zone.dataset.groupId ? 'render-group-layer' : 'render-zone-layer', { resized: zone.dataset.zoneId ?? zone.dataset.groupId, geometry: zone.getBoundingClientRect().toJSON?.() });
 }

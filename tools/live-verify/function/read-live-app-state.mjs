@@ -16,7 +16,18 @@ export async function readLiveAppState(send, url) {
       const before = getComputedStyle(grid).backgroundSize;
       canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, clientX: 700, clientY: 320, deltaY: -120 }));
       const after = getComputedStyle(grid).backgroundSize;
-      return { honeycombScaleStable: before === after, honeycombBackgroundSizeBefore: before, honeycombBackgroundSizeAfter: after };
+      return Promise.all([
+        fetch('/specs').then((response) => response.text()),
+        fetch('/blueprinttool/specs').then((response) => response.json()),
+        fetch('/blueprinttool/data').then((response) => response.json())
+      ]).then(([specsRoute, specsLedger, dataLedger]) => ({
+        honeycombScaleStable: before === after,
+        honeycombBackgroundSizeBefore: before,
+        honeycombBackgroundSizeAfter: after,
+        specsUrlLoadsApp: specsRoute.includes('Core Canvas') && specsRoute.includes('data-tab="specs"'),
+        blueprintSpecsAvailable: Array.isArray(specsLedger.cards) && specsLedger.cards.length > 0,
+        blueprintDataAvailable: Boolean(dataLedger.modelName || dataLedger.cards || dataLedger.positions)
+      }));
     })()`
   });
   await send('Runtime.evaluate', { expression: 'localStorage.clear(); location.reload();' });
@@ -40,9 +51,13 @@ export async function readLiveAppState(send, url) {
       };
       const card = document.querySelector('[data-card-id="card-zone"]');
       const bootCard = document.querySelector('[data-card-id="card-boot"]');
+      const group = document.querySelector('[data-group-id="group-core"]');
       const zone = document.querySelector('[data-zone-id="zone-frontend"]');
       const resizeHandle = zone.querySelector('.resize-handle.nw');
+      const groupResizeHandle = group.querySelector('.resize-handle.se');
       const telemetryStart = window.__coreTelemetry.length;
+      const telemetryPanelHidden = document.querySelector('.telemetry-panel').hidden;
+      const threadInitiallyHidden = document.querySelector('.thread-panel').hidden;
       const beforeCardMove = rect(bootCard);
       bootCard.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: bootCard.getBoundingClientRect().left + 32, clientY: bootCard.getBoundingClientRect().top + 32, pointerId: 10 }));
       document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: bootCard.getBoundingClientRect().left + 92, clientY: bootCard.getBoundingClientRect().top + 77, pointerId: 10 }));
@@ -68,6 +83,27 @@ export async function readLiveAppState(send, url) {
       document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 950, clientY: 360, pointerId: 13 }));
       document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 950, clientY: 360, pointerId: 13 }));
       const createdGroup = document.querySelector('[data-group-id^="group-draft-"]');
+      const groupToolResetAfterPlacement = window.__coreState.activeTool === 'select';
+      const beforeGroupPanViewport = { ...window.__coreState.viewport };
+      window.__coreState.selection = { cardIds: [], zoneIds: [], groupIds: [] };
+      group.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: group.getBoundingClientRect().left + 24, clientY: group.getBoundingClientRect().top + 24, pointerId: 15 }));
+      document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: group.getBoundingClientRect().left + 84, clientY: group.getBoundingClientRect().top + 24, pointerId: 15 }));
+      document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: group.getBoundingClientRect().left + 84, clientY: group.getBoundingClientRect().top + 24, pointerId: 15 }));
+      const unselectedGroupPanMovedViewport = window.__coreState.viewport.x !== beforeGroupPanViewport.x || window.__coreState.viewport.y !== beforeGroupPanViewport.y;
+      const unselectedGroupPanDidNotSelect = window.__coreState.selection.groupIds.length === 0;
+      group.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: group.getBoundingClientRect().left + 24, clientY: group.getBoundingClientRect().top + 24, pointerId: 16 }));
+      group.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: group.getBoundingClientRect().left + 24, clientY: group.getBoundingClientRect().top + 24, pointerId: 16 }));
+      const groupSelected = group.classList.contains('selected');
+      const computedGroupMembership = { cardIds: [...window.__coreState.selection.cardIds], zoneIds: [...window.__coreState.selection.zoneIds], groupIds: [...window.__coreState.selection.groupIds] };
+      const beforeGroupMove = rect(group);
+      group.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: group.getBoundingClientRect().left + 24, clientY: group.getBoundingClientRect().top + 24, pointerId: 17 }));
+      document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: group.getBoundingClientRect().left + 64, clientY: group.getBoundingClientRect().top + 54, pointerId: 17 }));
+      document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: group.getBoundingClientRect().left + 64, clientY: group.getBoundingClientRect().top + 54, pointerId: 17 }));
+      const afterGroupMove = rect(group);
+      groupResizeHandle.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: group.getBoundingClientRect().right, clientY: group.getBoundingClientRect().bottom, pointerId: 18 }));
+      document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: group.getBoundingClientRect().right + 60, clientY: group.getBoundingClientRect().bottom + 40, pointerId: 18 }));
+      document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: group.getBoundingClientRect().right + 60, clientY: group.getBoundingClientRect().bottom + 40, pointerId: 18 }));
+      const afterGroupResize = rect(group);
       document.querySelector('[data-tool="select"]').click();
       grid.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 980, clientY: 120, pointerId: 14 }));
       grid.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 980, clientY: 120, pointerId: 14 }));
@@ -89,6 +125,8 @@ export async function readLiveAppState(send, url) {
       return {
         cardThreadText,
         inlineEditActive,
+        telemetryPanelHidden,
+        threadInitiallyHidden,
         beforeCardMove,
         afterCardMove,
         persistedCard,
@@ -96,6 +134,14 @@ export async function readLiveAppState(send, url) {
         beforeResize,
         afterResize,
         createdGroup: createdGroup ? rect(createdGroup) : null,
+        groupToolResetAfterPlacement,
+        unselectedGroupPanMovedViewport,
+        unselectedGroupPanDidNotSelect,
+        groupSelected,
+        computedGroupMembership,
+        beforeGroupMove,
+        afterGroupMove,
+        afterGroupResize,
         backgroundClearedSelection,
         backgroundClearedFocus,
         relationshipPath: path.getAttribute('d'),

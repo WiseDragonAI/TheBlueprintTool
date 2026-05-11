@@ -2,6 +2,7 @@ import { modal } from '../dom.js';
 import { state } from '../state.js';
 import { deleteSelectedZones } from './delete-selected-zones.js';
 import { renderCanvasSurface } from './render-canvas-surface.js';
+import { resetActiveTool } from './reset-active-tool.js';
 import { telemetry } from './telemetry.js';
 
 export function handleKeyboard(event: KeyboardEvent): void {
@@ -9,6 +10,7 @@ export function handleKeyboard(event: KeyboardEvent): void {
   telemetry('keyboard-shortcut', { key, ctrlKey: event.ctrlKey });
   if (key === 'escape') {
     state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
+    resetActiveTool('escape');
     telemetry('clear-transient-selection', { reason: 'escape' });
     renderCanvasSurface();
   }

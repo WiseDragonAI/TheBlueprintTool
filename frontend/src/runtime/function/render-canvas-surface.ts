@@ -2,6 +2,7 @@ import { canvas } from '../dom.js';
 import { state } from '../state.js';
 import { renderRelationshipOverlay } from './render-relationship-overlay.js';
 import { renderTelemetry } from './render-telemetry.js';
+import { renderThreadPanel } from './render-thread-panel.js';
 import { telemetry } from './telemetry.js';
 
 export function renderCanvasSurface(): void {
@@ -18,8 +19,13 @@ export function renderCanvasSurface(): void {
     const element = node as HTMLElement;
     element.classList.toggle('selected', state.selection.zoneIds.includes(element.dataset.zoneId));
   });
+  document.querySelectorAll('[data-group-id]').forEach((node) => {
+    const element = node as HTMLElement;
+    element.classList.toggle('selected', state.selection.groupIds.includes(element.dataset.groupId));
+  });
   renderRelationshipOverlay();
   document.querySelector('.relationships')?.classList.toggle('hide-labels', state.activeTab === 'runtime');
   telemetry('render-canvas-surface', { viewport: state.viewport, selection: state.selection });
   renderTelemetry();
+  renderThreadPanel();
 }

@@ -7,7 +7,9 @@ import { persistState } from './persist-state.js';
 import { point } from './point.js';
 import { rectFromPoints } from './rect-from-points.js';
 import { renderCanvasSurface } from './render-canvas-surface.js';
+import { resetActiveTool } from './reset-active-tool.js';
 import { selectAllVisible } from './select-all-visible.js';
+import { selectTarget } from './select-target.js';
 import { telemetry } from './telemetry.js';
 
 export function handlePointerUp(event: PointerEvent): void {
@@ -19,6 +21,10 @@ export function handlePointerUp(event: PointerEvent): void {
   if (state.pointer.intent === 'pan' && state.pointer.targetKind === 'zone' && moved < 4) {
     state.selection = { cardIds: [], zoneIds: [state.pointer.targetId], groupIds: [] };
     telemetry('resolve-selection-target', { kind: 'zone', id: state.pointer.targetId, clickSelect: true });
+  }
+  if (state.pointer.intent === 'pan' && state.pointer.targetKind === 'group' && moved < 4) {
+    selectTarget('group', state.pointer.targetId, false);
+    telemetry('resolve-selection-target', { kind: 'group', id: state.pointer.targetId, clickSelect: true });
   }
   if (state.pointer.intent === 'pan' && state.pointer.targetKind === 'canvas' && moved < 4) {
     state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
@@ -34,11 +40,13 @@ export function handlePointerUp(event: PointerEvent): void {
     const rect = rectFromPoints(state.pointer.startCanvas, canvasPoint(releasePoint));
     (document.querySelector('.marquee') as HTMLElement).hidden = true;
     createZoneFromRect(rect);
+    resetActiveTool('placed-zone');
   }
   if (state.pointer.intent === 'draw-group') {
     const rect = rectFromPoints(state.pointer.startCanvas, canvasPoint(releasePoint));
     (document.querySelector('.marquee') as HTMLElement).hidden = true;
     createGroupFromRect(rect);
+    resetActiveTool('placed-group');
   }
   persistState();
   finishPointer(event);
