@@ -34,7 +34,7 @@
   --blue: var(--primary-bright);
   --red: var(--secondary);
   --zone-label-min-brightness-mix: 34%;
-  --glow: 0 0 0 2px #f9fbff, 0 0 22px rgba(45,143,232,0.9);
+  --glow: 0 0 0 1px rgba(226, 238, 255, 0.82), 0 0 14px rgba(45,143,232,0.58);
 }
 
 * { box-sizing: border-box; }
@@ -268,7 +268,7 @@ h2 { font-size: 18px; }
 
 .zone.selected, .card.selected, .group-zone.selected, .selected-card {
   box-shadow: var(--glow);
-  border-color: #f9fbff;
+  border-color: rgba(226, 238, 255, 0.88);
 }
 
 .zone-title {
@@ -348,7 +348,10 @@ h2 { font-size: 18px; }
 .card[data-card-id="card-zone"] { left: 420px; top: 190px; }
 .card[data-card-id="card-ledger"] { left: 420px; top: 555px; }
 .card.open { z-index: 9999; }
-.card.connected { outline: 2px solid var(--accent); }
+.card.connected {
+  outline: 2px solid rgba(45, 143, 232, 0.72);
+  outline-offset: 3px;
+}
 
 .hash {
   display: block;

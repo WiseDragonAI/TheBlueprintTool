@@ -2,9 +2,9 @@ import { modal, shortcutModal } from '../dom.js';
 import { state } from '../state.js';
 import { deleteSelectedZones } from './delete-selected-zones.js';
 import { beginZoneLabelEdit } from './begin-zone-label-edit.js';
-import { renderCanvasSurface } from './render-canvas-surface.js';
 import { renderThreadPanel } from './render-thread-panel.js';
 import { renderVoiceStatus } from './render-voice-status.js';
+import { refreshRuntimeState } from './refresh-runtime-state.js';
 import { selectTarget } from './select-target.js';
 import { telemetry } from './telemetry.js';
 
@@ -66,7 +66,6 @@ export function handleActionClick(event: MouseEvent): void {
   }
   if (action === 'close-shortcut-help') shortcutModal.close?.();
   if (action === 'refresh') {
-    telemetry('subscribe-server-refresh', { source: 'refresh-button' });
-    fetch('/ledgers/default').then(() => telemetry('merge-refresh-state', { source: 'server' })).finally(renderCanvasSurface);
+    void refreshRuntimeState();
   }
 }

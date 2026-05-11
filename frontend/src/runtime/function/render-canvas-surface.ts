@@ -1,5 +1,6 @@
 import { canvas } from '../dom.js';
 import { state } from '../state.js';
+import { connectedCardIds } from './connected-card-ids.js';
 import { renderRelationshipOverlay } from './render-relationship-overlay.js';
 import { renderTelemetry } from './render-telemetry.js';
 import { renderThreadPanel } from './render-thread-panel.js';
@@ -10,10 +11,11 @@ export function renderCanvasSurface(): void {
   canvas.style.setProperty('--canvas-bg-x', `${state.viewport.x}px`);
   canvas.style.setProperty('--canvas-bg-y', `${state.viewport.y}px`);
   (document.querySelector('.canvas-content') as HTMLElement).style.transform = `translate(${state.viewport.x}px, ${state.viewport.y}px) scale(${state.viewport.scale})`;
+  const connectedIds = connectedCardIds(state.selection.cardIds);
   document.querySelectorAll('[data-card-id]').forEach((node) => {
     const element = node as HTMLElement;
     element.classList.toggle('selected', state.selection.cardIds.includes(element.dataset.cardId));
-    element.classList.toggle('connected', state.selection.cardIds.includes('card-boot') && element.dataset.cardId === 'card-zone');
+    element.classList.toggle('connected', connectedIds.includes(element.dataset.cardId ?? ''));
   });
   document.querySelectorAll('[data-zone-id]').forEach((node) => {
     const element = node as HTMLElement;

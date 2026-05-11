@@ -23,8 +23,15 @@ export function selectTarget(kind: string, id: string, additive: boolean): void 
   }
   if (kind === 'group') {
     const group = document.querySelector(`[data-group-id="${id}"]`) as HTMLElement | null;
-    state.selection.cardIds = group ? elementsIntersectingBox(group, '[data-card-id]', 'cardId') : [];
+    const groupCardIds = group ? elementsIntersectingBox(group, '[data-card-id]', 'cardId') : [];
     state.selection.zoneIds = group ? elementsIntersectingBox(group, '[data-zone-id]', 'zoneId') : [];
+    state.selection.cardIds = [...groupCardIds];
+    for (const zoneId of state.selection.zoneIds) {
+      const zoneCardIds = cardsIntersectingZone(zoneId);
+      for (const cardId of zoneCardIds) {
+        if (!state.selection.cardIds.includes(cardId)) state.selection.cardIds.push(cardId);
+      }
+    }
     telemetry('resolve-group-membership', { groupId: id, selection: state.selection });
   }
   renderCanvasSurface();

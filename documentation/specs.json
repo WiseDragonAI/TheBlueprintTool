@@ -1568,7 +1568,7 @@
       "y": 3166,
       "w": 266,
       "comment": {
-        "what": "Reload the runtime and hydrate persisted surface state back into view."
+        "what": "Refresh reloads the runtime tab route and hydrates persisted viewport and canvas geometry back into view from the current persisted ledger state."
       },
       "facts": [],
       "fields": []
@@ -1792,7 +1792,7 @@
       "y": 5154,
       "w": 420,
       "comment": {
-        "what": ""
+        "what": "Selecting a card highlights every directly connected card in both relationship directions by deriving adjacency from relationship source and target metadata, without adding those connected cards to the selection."
       },
       "facts": [],
       "fields": []
@@ -1904,7 +1904,7 @@
       "y": 3698,
       "w": 320,
       "comment": {
-        "what": ""
+        "what": "Selecting a group must visibly select the intersecting regular zones, then include every card intersecting those selected zones as part of the expanded grouped selection scope."
       },
       "facts": [],
       "fields": []

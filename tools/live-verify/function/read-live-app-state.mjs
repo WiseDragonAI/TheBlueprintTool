@@ -34,7 +34,8 @@ export async function readLiveAppState(send, url) {
   await wait(900);
   const result = await send('Runtime.evaluate', {
     returnByValue: true,
-    expression: `(() => {
+    awaitPromise: true,
+    expression: `(async () => {
       const parsePath = (d) => d.match(/-?\\d+(?:\\.\\d+)?/g).map(Number).reduce((points, value, index, values) => {
         if (index % 2 === 0) points.push({ x: value, y: values[index + 1] });
         return points;
@@ -64,6 +65,18 @@ export async function readLiveAppState(send, url) {
       document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: bootCard.getBoundingClientRect().left + 92, clientY: bootCard.getBoundingClientRect().top + 77, pointerId: 10 }));
       const afterCardMove = rect(bootCard);
       const persistedCard = JSON.parse(localStorage.getItem('corev2.canvas.state')).geometry.cards['card-boot'];
+      bootCard.style.left = '33px';
+      bootCard.style.top = '44px';
+      document.querySelector('[data-action="refresh"]').click();
+      await new Promise((resolve) => setTimeout(resolve, 180));
+      const afterRefresh = rect(bootCard);
+      const refreshRestoredCard = afterRefresh.left === persistedCard.x && afterRefresh.top === persistedCard.y;
+      card.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: card.getBoundingClientRect().left + 32, clientY: card.getBoundingClientRect().top + 32, pointerId: 19 }));
+      card.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: card.getBoundingClientRect().left + 32, clientY: card.getBoundingClientRect().top + 32, pointerId: 19 }));
+      const bidirectionalConnectedCards = {
+        bootConnected: bootCard.classList.contains('connected'),
+        ledgerConnected: document.querySelector('[data-card-id="card-ledger"]').classList.contains('connected')
+      };
       card.querySelector('[data-action="open-card-thread"]').click();
       const cardThreadText = document.querySelector('.thread-target').textContent;
       zone.querySelector('[data-action="edit-zone"]').click();
@@ -130,6 +143,8 @@ export async function readLiveAppState(send, url) {
         beforeCardMove,
         afterCardMove,
         persistedCard,
+        refreshRestoredCard,
+        bidirectionalConnectedCards,
         zoneSelected,
         beforeResize,
         afterResize,
