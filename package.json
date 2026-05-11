@@ -1,0 +1,12 @@
+{
+  "name": "corev2",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "typecheck:frontend": "archi-generator/node_modules/.bin/tsc -p frontend/tsconfig.json --noEmit",
+    "typecheck:backend": "archi-generator/node_modules/.bin/tsc -p backend/tsconfig.json --noEmit",
+    "test:front-back": "node --test --import ./archi-generator/node_modules/tsx/dist/esm/index.mjs \"frontend/src/test/**/*.test.ts\" \"backend/src/test/**/*.test.ts\" \"tests/browser/**/*.spec.ts\""
+  },
+  "devDependencies": {}
+}

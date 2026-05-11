@@ -1,0 +1,7 @@
+tmp/
+.worktrees/
+generator-cli/.worktrees/
+generator-cli/dist/
+generator-cli/node_modules/
+frontend/dist/
+backend/dist/
