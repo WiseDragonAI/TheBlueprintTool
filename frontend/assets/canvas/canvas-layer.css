@@ -1,0 +1,106 @@
+/**
+ * WHAT: Canvas viewport, transformed world layer, and zoom-dependent detail modes.
+ * WHY: Viewport mechanics must stay separate from rendered model object styles.
+ */
+.canvas {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 100vh;
+  min-height: 100vh;
+  touch-action: none;
+  cursor: grab;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.canvas:active { cursor: grabbing; }
+
+.canvas * {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+}
+
+.canvas-content {
+  position: absolute;
+  inset: 0;
+  min-width: max(5200px, 100%);
+  min-height: max(2600px, 100%);
+  transform-origin: 0 0;
+  will-change: transform;
+  contain: layout paint style;
+}
+
+.grid {
+  position: absolute;
+  left: -12000px;
+  top: -1200px;
+  width: 24000px;
+  height: 12000px;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    var(--honeycomb-a),
+    var(--honeycomb-a),
+    var(--honeycomb-b),
+    var(--honeycomb-b),
+    var(--honeycomb-c),
+    var(--honeycomb-c),
+    var(--canvas-bg);
+  background-size:
+    var(--canvas-honeycomb-width) var(--canvas-honeycomb-height),
+    var(--canvas-honeycomb-width) var(--canvas-honeycomb-height),
+    var(--canvas-honeycomb-width) var(--canvas-honeycomb-height),
+    var(--canvas-honeycomb-width) var(--canvas-honeycomb-height),
+    var(--canvas-honeycomb-width) var(--canvas-honeycomb-height),
+    var(--canvas-honeycomb-width) var(--canvas-honeycomb-height),
+    auto;
+  background-position:
+    0 0,
+    var(--canvas-honeycomb-step-x) var(--canvas-honeycomb-step-y),
+    0 0,
+    var(--canvas-honeycomb-step-x) var(--canvas-honeycomb-step-y),
+    var(--canvas-honeycomb-step-x) 0,
+    0 var(--canvas-honeycomb-step-y),
+    0 0;
+}
+
+.canvas.low-detail .card,
+.canvas.low-detail .zone {
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.canvas.low-detail .card p,
+.canvas.low-detail .card-tabs,
+.canvas.low-detail .zone p,
+.canvas.low-detail .zone-actions,
+.canvas.low-detail .hash,
+.canvas.low-detail .relationships text {
+  display: none;
+}
+
+.canvas.low-detail .relationships path {
+  stroke-width: 2;
+}
+
+.canvas.overview-detail .card {
+  min-height: 34px;
+  padding: 8px;
+}
+
+.canvas.overview-detail .card strong {
+  display: block;
+  font-size: 13px;
+  line-height: 1.1;
+}
+
+.canvas.overview-detail .regular-zone {
+  background: color-mix(in srgb, var(--zone-color), transparent 88%);
+}
+
+.canvas.overview-detail .grid {
+  opacity: 0.34;
+}

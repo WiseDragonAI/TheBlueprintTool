@@ -13,8 +13,8 @@ export function handlePointerDown(event: PointerEvent): void {
   event.preventDefault();
   const resizeHandle = rawTarget.closest('.resize-handle') as HTMLElement | null;
   const target = rawTarget.closest('[data-card-id],[data-zone-id],[data-group-id]') as HTMLElement | null;
-  const targetKind = target?.dataset.cardId ? 'card' : target?.dataset.zoneId ? 'zone' : target?.dataset.groupId ? 'group' : 'canvas';
-  const targetId = target?.dataset.cardId ?? target?.dataset.zoneId ?? target?.dataset.groupId ?? '';
+  const targetKind = target?.dataset.cardId ? 'card' : target?.dataset.groupId ? 'group' : target?.dataset.zoneId ? 'zone' : 'canvas';
+  const targetId = target?.dataset.cardId ?? target?.dataset.groupId ?? target?.dataset.zoneId ?? '';
   const pointer = point(event);
   const canvasPointer = canvasPoint(pointer);
   const intent = derivePointerIntent(event, targetKind, resizeHandle);

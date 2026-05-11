@@ -7,6 +7,7 @@ import { browserParsePath } from './browser-parse-path.mjs';
 import { browserRect } from './browser-rect.mjs';
 import { browserScreenRect } from './browser-screen-rect.mjs';
 import { browserSegmentHits } from './browser-segment-hits.mjs';
+import { browserSelectFirstLedgerGroup } from './browser-select-first-ledger-group.mjs';
 import { browserWaitFrame } from './browser-wait-frame.mjs';
 
 export async function readLiveAppState(send, url) {
@@ -82,8 +83,10 @@ export async function readLiveAppState(send, url) {
       ${browserEndpointChecks}
       ${browserWaitFrame}
       ${browserLoadTab}
+      ${browserSelectFirstLedgerGroup}
       const specsTabLoad = await browserLoadTab('specs');
       const dataTabLoad = await browserLoadTab('data');
+      const ledgerGroupSelection = await browserSelectFirstLedgerGroup();
       document.querySelector('[data-tab="surface"]').click();
       await browserWaitFrame();
       const surfaceRestoredAfterLedgerTabs = document.querySelector('[data-card-id="card-boot"]')?.hidden === false && document.querySelectorAll('.ledger-node').length === 0;
@@ -187,6 +190,7 @@ export async function readLiveAppState(send, url) {
         cardThreadText,
         specsTabLoad,
         dataTabLoad,
+        ledgerGroupSelection,
         surfaceRestoredAfterLedgerTabs,
         cardNotesOpenedThreadFromUnselected,
         inlineEditActive,

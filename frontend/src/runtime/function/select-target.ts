@@ -1,7 +1,7 @@
 import { state } from '../state.js';
 import { cardsIntersectingZone } from './cards-intersecting-zone.js';
-import { elementsIntersectingBox } from './elements-intersecting-box.js';
 import { renderCanvasSurface } from './render-canvas-surface.js';
+import { resolveGroupMembership } from './resolve-group-membership.js';
 import { telemetry } from './telemetry.js';
 
 export function selectTarget(kind: string, id: string, additive: boolean): void {
@@ -22,16 +22,10 @@ export function selectTarget(kind: string, id: string, additive: boolean): void 
     telemetry('resolve-zone-intersections', { zoneId: id, cardIds: intersectingCards });
   }
   if (kind === 'group') {
-    const group = document.querySelector(`[data-group-id="${id}"]`) as HTMLElement | null;
-    const groupCardIds = group ? elementsIntersectingBox(group, '[data-card-id]', 'cardId') : [];
-    state.selection.zoneIds = group ? elementsIntersectingBox(group, '[data-zone-id]', 'zoneId') : [];
-    state.selection.cardIds = [...groupCardIds];
-    for (const zoneId of state.selection.zoneIds) {
-      const zoneCardIds = cardsIntersectingZone(zoneId);
-      for (const cardId of zoneCardIds) {
-        if (!state.selection.cardIds.includes(cardId)) state.selection.cardIds.push(cardId);
-      }
-    }
+    const membership = resolveGroupMembership(id);
+    state.selection.groupIds = membership.groupIds;
+    state.selection.zoneIds = membership.zoneIds;
+    state.selection.cardIds = membership.cardIds;
     telemetry('resolve-group-membership', { groupId: id, selection: state.selection });
   }
   renderCanvasSurface();

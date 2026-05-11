@@ -1,9 +1,11 @@
 export function patchLedgerZone(zone: Record<string, unknown>): HTMLElement {
   const element = document.createElement('article');
   const id = String(zone.id ?? '');
-  const variant = zone.variant === 'group' ? 'group-zone' : 'regular-zone';
+  const isGroup = zone.variant === 'group';
+  const variant = isGroup ? 'group-zone' : 'regular-zone';
   element.className = `zone ${variant} ledger-node`;
-  element.dataset.zoneId = id;
+  if (isGroup) element.dataset.groupId = id;
+  else element.dataset.zoneId = id;
   element.dataset.threadId = `thread-${id}`;
   element.dataset.ledgerNode = 'zone';
   element.style.left = `${Number(zone.x ?? 0)}px`;

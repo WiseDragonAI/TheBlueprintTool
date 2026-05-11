@@ -1496,6 +1496,34 @@
       "fields": []
     },
     {
+      "id": "6b4a0ed8",
+      "title": "Canvas styles are split into focused stylesheet modules",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": 1546,
+      "y": 5547,
+      "w": 560,
+      "comment": {
+        "what": "The public canvas stylesheet is an import entrypoint. Tokens, shell chrome, canvas layer mechanics, canvas objects, thread inspector, dialogs, and responsive overrides live in separate CSS modules so style ownership stays decoupled and inspectable."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "9f96ad8c",
+      "title": "Live verification has reusable CLI summaries",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": 2146,
+      "y": 5547,
+      "w": 560,
+      "comment": {
+        "what": "Repeated live browser inspection must be implemented as reusable tooling, not ad hoc terminal scripts. The summary command reports route loading, honeycomb scale behavior, relationship endpoint failures, group expansion, and thread/voice plumbing."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
       "id": "40000002",
       "title": "invalid action safety",
       "cardType": "spec-brief",

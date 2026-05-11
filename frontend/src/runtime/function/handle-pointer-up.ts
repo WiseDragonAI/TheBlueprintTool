@@ -19,7 +19,7 @@ export function handlePointerUp(event: PointerEvent): void {
   const releasePoint = point(event);
   const moved = Math.hypot(releasePoint.x - state.pointer.start.x, releasePoint.y - state.pointer.start.y);
   if (state.pointer.intent === 'pan' && state.pointer.targetKind === 'zone' && moved < 4) {
-    state.selection = { cardIds: [], zoneIds: [state.pointer.targetId], groupIds: [] };
+    selectTarget('zone', state.pointer.targetId, false);
     telemetry('resolve-selection-target', { kind: 'zone', id: state.pointer.targetId, clickSelect: true });
   }
   if (state.pointer.intent === 'pan' && state.pointer.targetKind === 'group' && moved < 4) {

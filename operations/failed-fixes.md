@@ -63,3 +63,23 @@ Current corrective attempt:
 - Remove the simple elbow shortcut for non-direct routes.
 - Force non-direct routes through clearance points before the final short connector into the card side.
 - Extend live verification endpoint checks so the point before a non-direct target endpoint also has clearance from the target card.
+
+## 2026-05-12: Ledger Group Selection Does Not Expand To Zones
+
+Problem:
+- Selecting a group in a ledger tab still does not visibly select intersecting zones and cards.
+- The user reported this after previous work only verified static surface groups.
+
+Failed assumption:
+- I assumed the group selection controller path covered ledger-rendered groups.
+- Ledger annotations with `variant: "group"` were rendered with `group-zone` styling but still received `data-zone-id`, so pointer targeting entered the zone branch instead of the group branch.
+- The live verifier only checked `group-core` on the static surface.
+
+Previous work:
+- `select-target` computed group membership for elements addressed by `data-group-id`.
+- Static group tests verified unselected group pan and selected group movement.
+
+Current corrective attempt:
+- Render ledger group annotations with `data-group-id` and regular ledger zones with `data-zone-id`.
+- Move group membership calculation into a dedicated one-function file.
+- Extend live verification with a reusable summary command that selects a ledger-tab group and reports selected groups, zones, and cards.

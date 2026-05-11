@@ -1,0 +1,138 @@
+/**
+ * WHAT: Application shell, rail, topbar, tabs, and inspector panel structure.
+ * WHY: Chrome layout should be decoupled from canvas-world object styling.
+ */
+.shell {
+  display: grid;
+  grid-template-columns: 152px minmax(0, 1fr) 0;
+  min-height: 100vh;
+}
+
+.shell.has-inspector {
+  grid-template-columns: 152px minmax(0, 1fr) 320px;
+}
+
+.rail, .panel {
+  background: var(--panel);
+  border-color: var(--line);
+}
+
+.rail {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 14px 12px;
+  border-right: 1px solid var(--line);
+}
+
+.tool {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  align-items: center;
+  gap: 8px;
+  width: 128px;
+  height: 44px;
+  border: 1px solid var(--line);
+  background: rgba(22, 37, 56, 0.72);
+  color: var(--text);
+  cursor: pointer;
+  padding: 0 10px;
+  text-align: left;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.tool.active, .tool:hover, .tool:focus-visible {
+  border-color: var(--accent);
+  background: rgba(10, 92, 168, 0.38);
+  color: var(--accent);
+  outline: none;
+  transform: translateX(2px);
+}
+
+.color-picker input {
+  width: 44px;
+  height: 44px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  background: transparent;
+}
+
+.workspace {
+  position: relative;
+  min-height: 100vh;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.topbar {
+  position: absolute;
+  z-index: 120;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: end;
+  padding: 22px 28px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(7, 17, 29, 0.88);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+.topbar button,
+.topbar a,
+.topbar input,
+.topbar [data-tab] {
+  pointer-events: auto;
+}
+
+.kicker {
+  margin: 0 0 8px;
+  color: var(--accent);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+h1, h2, p { margin-top: 0; }
+h1 { margin-bottom: 0; font-size: 28px; letter-spacing: 0; }
+h2 { font-size: 18px; }
+
+.tabs { display: flex; gap: 8px; }
+
+.tab {
+  border: 1px solid var(--line);
+  background: rgba(22, 37, 56, 0.62);
+  color: var(--muted);
+  padding: 9px 12px;
+  cursor: pointer;
+}
+
+.tab.active, .tab:hover, .tab:focus-visible {
+  color: var(--text);
+  border-color: var(--accent);
+  outline: none;
+}
+
+.panel {
+  padding: 26px;
+  border-left: 1px solid var(--line);
+  overflow: auto;
+  background:
+    linear-gradient(180deg, rgba(10, 92, 168, 0.16), transparent 240px),
+    var(--panel);
+}
+
+.panel[hidden],
+.telemetry-panel[hidden],
+.thread-panel[hidden] {
+  display: none;
+}
+
+.telemetry-list {
+  padding-left: 20px;
+  color: var(--muted);
+  line-height: 1.7;
+  min-height: 120px;
+}

@@ -1,0 +1,16 @@
+/**
+ * WHAT: Dialog and responsive shell overrides.
+ * WHY: Modal and viewport-specific behavior should not be hidden in feature modules.
+ */
+.confirm-modal {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--accent);
+}
+
+@media (max-width: 900px) {
+  .shell { grid-template-columns: 52px minmax(0, 1fr); }
+  .panel { display: none; }
+  .topbar { display: block; }
+  .tabs { margin-top: 16px; overflow-x: auto; }
+}

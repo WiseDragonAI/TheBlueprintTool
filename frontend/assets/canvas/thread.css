@@ -1,0 +1,104 @@
+/**
+ * WHAT: Thread inspector and voice note controls.
+ * WHY: Inspector presentation is independent from canvas object rendering.
+ */
+.thread-panel {
+  margin-top: 22px;
+  display: grid;
+  gap: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--line), transparent 20%);
+  padding-top: 22px;
+}
+
+.thread-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 16px;
+}
+
+.thread-heading .kicker {
+  margin: 0;
+}
+
+.thread-heading h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.thread-target {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.thread-draft {
+  width: 100%;
+  resize: vertical;
+  min-height: 132px;
+  background:
+    linear-gradient(180deg, rgba(45, 143, 232, 0.08), transparent),
+    #101f31;
+  color: var(--text);
+  border: 1px solid var(--line);
+  padding: 13px;
+  outline: none;
+  line-height: 1.45;
+}
+
+.thread-draft:focus {
+  border-color: var(--primary-bright);
+  box-shadow: 0 0 0 1px rgba(45, 143, 232, 0.28);
+}
+
+.thread-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.voice-panel {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid color-mix(in srgb, var(--line), transparent 10%);
+  background:
+    linear-gradient(135deg, rgba(239, 89, 52, 0.10), transparent 54%),
+    rgba(8, 19, 31, 0.72);
+}
+
+.voice-panel-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.voice-status {
+  color: var(--accent);
+  text-align: right;
+}
+
+.voice-meter {
+  height: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(45, 143, 232, 0.32);
+  background: rgba(4, 9, 15, 0.72);
+}
+
+.voice-meter-value {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: scaleX(0);
+  transform-origin: left center;
+  background: linear-gradient(90deg, var(--primary-bright), var(--secondary-bright));
+  transition: transform 44ms linear;
+}
+
+.voice-panel.recording {
+  border-color: var(--secondary-bright);
+  box-shadow: 0 0 22px rgba(239, 89, 52, 0.18);
+}
