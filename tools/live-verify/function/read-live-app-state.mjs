@@ -59,6 +59,9 @@ export async function readLiveAppState(send, url) {
       const targetRect = rect(document.querySelector('[data-card-id="card-ledger"]'));
       const sourceInteriorHit = points.slice(0, -1).some((point, index) => segmentHits(point, points[index + 1], sourceRect));
       const targetInteriorHit = points.slice(0, -1).some((point, index) => segmentHits(point, points[index + 1], targetRect));
+      const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+      const sourceBorderStandoff = points.length >= 4 && distance(points[0], points[1]) >= 12 && !inside(points[1], sourceRect);
+      const targetBorderStandoff = points.length >= 4 && distance(points[points.length - 2], points[points.length - 1]) >= 12 && !inside(points[points.length - 2], targetRect);
       const canvasScreen = document.querySelector('.canvas').getBoundingClientRect();
       const clippedCards = [...document.querySelectorAll('[data-card-id]')]
         .map((element) => ({ id: element.dataset.cardId, rect: screenRect(element) }))
@@ -75,6 +78,8 @@ export async function readLiveAppState(send, url) {
         relationshipPath: path.getAttribute('d'),
         sourceInteriorHit,
         targetInteriorHit,
+        sourceBorderStandoff,
+        targetBorderStandoff,
         clippedCards,
         telemetry: window.__coreTelemetry.slice(telemetryStart).map((entry) => ({ name: entry.name, args: entry.args }))
       };
