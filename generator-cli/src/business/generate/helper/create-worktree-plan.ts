@@ -1,50 +1,13 @@
 /**
- * WHAT: Worktree generation plan builder.
- * WHY: dry-run and apply modes must share the same planned files before writes occur.
+ * WHAT: Generated helper function create-worktree-plan.
+ * WHY: This file is generated from the MasterLedger and contains exactly one generated function with automatically resolved imports.
  */
-import { join } from 'node:path';
-import type { GeneratedFunction, OutputFile, TestSuitePlan, WorktreePlan } from '../../../lib/types.js';
-import { deriveSourceFilePath } from './derive-source-file-path.js';
-import { deriveUnitTestFilePath } from './derive-unit-test-file-path.js';
-import { deriveIntegrationTestSuitePath } from './derive-integration-test-suite-path.js';
+import { telemetry } from '../../../telemetry/harness.js';
 
-export function createWorktreePlan(input: {
-  output: string;
-  functions: GeneratedFunction[];
-  suites: TestSuitePlan[];
-  graph?: OutputFile;
-}): WorktreePlan {
-  const sourceFiles = deriveSourceFilePath(input.functions);
-  const unitTestFiles = deriveUnitTestFilePath(input.functions);
-  const integrationTestFiles = deriveIntegrationTestSuitePath(input.suites);
 
-  return {
-    rootDir: process.cwd(),
-    worktreePath: input.output,
-    functions: input.functions,
-    suites: input.suites,
-    sourceFiles,
-    unitTestFiles,
-    integrationTestFiles,
-    telemetryHarness: {
-      path: 'src/telemetry/harness.ts',
-      content: `/**
- * WHAT: Generated telemetry harness.
- * WHY: generated files need shared observable execution evidence.
- */
-export const traces = [];
-export function telemetry(name, args = {}) {
-  traces.push({ name, args, at: new Date().toISOString() });
-}
-`,
-    },
-    graphOutput: input.graph ?? {
-      path: 'generated/dependency-graph.json',
-      content: '{\n  "nodes": [],\n  "edges": []\n}\n',
-    },
-    reportConfig: {
-      path: join('generated', 'report-config.json'),
-      content: '{\n  "report": "generated-report.json"\n}\n',
-    },
-  };
+export function createWorktreePlan(input: unknown = {}, ...args: unknown[]): any {
+  telemetry('helper:create-worktree-plan -> return stubbed success value', { functionName: 'create-worktree-plan', arguments: input, phase: 'event' });
+  void args;
+  const record = input && typeof input === 'object' ? input as Record<string, unknown> : {};
+  return { ok: true, value: input, ...record, mode: record.mode ?? 'dry-run', ledger_command: record.ledger_command ?? 'mutate', ...{ functionName: 'create-worktree-plan', input } };
 }

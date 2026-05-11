@@ -1,26 +1,33 @@
 /**
- * WHAT: patch-doc mode controller.
- * WHY: canonical document edits must apply from one patch batch file.
+ * WHAT: Generated controller function apply-patch-doc.
+ * WHY: This file is generated from the MasterLedger and contains exactly one generated function with automatically resolved imports.
  */
-import type { FileSystemPort, Result } from '../../../lib/types.js';
-import { telemetry } from '../../../lib/telemetry/telemetry.js';
-import { nodeFileSystem } from '../../../lib/fs/node-file-system.js';
-import { parsePatchBatch } from '../helper/parse-patch-batch.js';
+import { telemetry } from '../../../telemetry/harness.js';
 import { applyDocumentPatch } from '../effect/apply-document-patch.js';
+import { parsePatchBatch } from '../helper/parse-patch-batch.js';
 
-export async function applyPatchDocController(patchBatchFile: string, fs: FileSystemPort = nodeFileSystem): Promise<Result<string>> {
-  const batchText = await fs.readFile(patchBatchFile);
-  const patchBatch = parsePatchBatch(batchText);
-  telemetry('parse-patch-batch', { path: patchBatchFile });
 
-  // WHY: invalid patch batches cannot safely edit canonical documents.
-  // WHAT: reject without writing.
-  if (!patchBatch.ok) {
-    telemetry('apply-patch-doc-rejected', { error: patchBatch.error });
-    return patchBatch;
+export async function applyPatchDocController({
+  action_payload,
+}: {
+  action_payload: {
+    patch_doc_command: true
+    patch_batch_file: string
+  }
+}) {
+  telemetry('controller:apply-patch-doc -> start', { functionName: 'apply-patch-doc', arguments: { action_payload }, phase: 'started' });
+  // WHAT: apply patch-doc mode.
+  // WHY: canonical document edits must apply in one batch.
+  // HOW: parse patch batch, reject invalid batches, then apply document patch.
+  const patch_batch = parsePatchBatch(action_payload.patch_batch_file)
+  telemetry('controller:apply-patch-doc -> parse-patch-batch', { functionName: 'parse-patch-batch', arguments: { action_payload }, phase: 'event' })
+
+  if (!patch_batch.ok) {
+    telemetry('controller:apply-patch-doc -> apply-patch-doc-rejected', { functionName: 'apply-patch-doc-rejected', arguments: { action_payload }, phase: 'event' })
+    return
   }
 
-  const result = await applyDocumentPatch(patchBatch.value, fs);
-  telemetry('apply-document-patch', { path: patchBatch.value.documentPath });
-  return result;
+  applyDocumentPatch(patch_batch.value)
+  telemetry('controller:apply-patch-doc -> apply-document-patch', { functionName: 'apply-document-patch', arguments: { action_payload }, phase: 'event' })
+  telemetry('controller:apply-patch-doc -> complete', { functionName: 'apply-patch-doc', arguments: { action_payload }, phase: 'completed' });
 }

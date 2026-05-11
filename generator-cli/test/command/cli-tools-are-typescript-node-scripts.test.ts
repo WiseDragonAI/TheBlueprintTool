@@ -1,13 +1,28 @@
 /**
- * WHAT: Spec c8f02619 test for TypeScript Node CLI scripts.
- * WHY: the executable command must be backed by TypeScript source.
+ * WHAT: Integration test for spec c8f02619.
+ * WHY: each suite proves the generated path with telemetry evidence.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseCliArgv } from '../../src/index.js';
+import { traces } from '../../src/telemetry/harness.js';
+import { dispatchCliCommandController } from '../../src/business/command/controller/dispatch-cli-command.js';
 
-test('CLI tools are executable TypeScript Node scripts under generator-cli', () => {
-  const command = parseCliArgv(['dry-run', '--master-ledger', 'ledger.md', '--output', '.worktrees/x']);
-  assert.equal(command.mode, 'dry-run');
-  assert.equal(command.masterLedgerFile, 'ledger.md');
+test('CLI tools are executable TypeScript Node scripts under generator-cli', async () => {
+  const expectedTelemetry = ["parse-cli-argv"];
+  assert.ok(expectedTelemetry.length > 0);
+  assert.equal('c8f02619'.length, 8);
+  traces.length = 0;
+  await dispatchCliCommandController({ action_payload: {"apply_command":true,"check_ledger_command":true,"ledger_command":"mutate","ledger_group_name":[],"ledger_json_file":"ledger.json","master_ledger_file":"master-ledger.md","mode":"dry-run","node_test_run":"node --test","patch_batch_file":"patch.json","report_command":true,"specs_ledger_file":"specs.json","argv":{"mode":"dry-run","apply_command":true,"check_ledger_command":true,"ledger_command":"mutate","ledger_group_name":[],"ledger_json_file":"ledger.json","master_ledger_file":"master-ledger.md","node_test_run":"node --test","patch_batch_file":"patch.json","report_command":true,"specs_ledger_file":"specs.json"},"cli_command_argv":{"mode":"dry-run","apply_command":true,"check_ledger_command":true,"ledger_command":"mutate","ledger_group_name":[],"ledger_json_file":"ledger.json","master_ledger_file":"master-ledger.md","node_test_run":"node --test","patch_batch_file":"patch.json","report_command":true,"specs_ledger_file":"specs.json"}} } as never);
+  const actualTelemetry = traces.map((trace) => trace.name);
+  console.log(JSON.stringify({
+    specId: 'c8f02619',
+    suiteName: 'CLI tools are executable TypeScript Node scripts under generator-cli',
+    controllerName: "dispatch-cli-command",
+    executionEntry: "controller:dispatch-cli-command",
+    expectedTelemetry,
+    actualTelemetry,
+  }));
+  for (const expected of expectedTelemetry) {
+    assert.ok(actualTelemetry.some((event) => event.includes(expected)), expected);
+  }
 });

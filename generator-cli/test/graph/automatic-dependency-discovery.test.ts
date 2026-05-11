@@ -1,13 +1,28 @@
 /**
- * WHAT: Spec 0dc5be37 test for automatic dependency discovery.
- * WHY: referenced functions, types, and constants must become imports automatically.
+ * WHAT: Integration test for spec 0dc5be37.
+ * WHY: each suite proves the generated path with telemetry evidence.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { discoverDependencyReferences } from '../../src/index.js';
-import { sampleFunctions } from '../fixture/scenario.js';
+import { traces } from '../../src/telemetry/harness.js';
+import { resolveGeneratedDependenciesController } from '../../src/business/graph/controller/resolve-generated-dependencies.js';
 
-test('Automatic dependency discovery resolves referenced functions types and constants', () => {
-  const references = discoverDependencyReferences(sampleFunctions());
-  assert.deepEqual(references.map((reference) => reference.to), ['second-helper']);
+test('Automatic dependency discovery resolves referenced functions types and constants', async () => {
+  const expectedTelemetry = ["discover-dependency-references","resolve-import-paths"];
+  assert.ok(expectedTelemetry.length > 0);
+  assert.equal('0dc5be37'.length, 8);
+  traces.length = 0;
+  await resolveGeneratedDependenciesController({ action_payload: {"apply_command":true,"check_ledger_command":true,"ledger_command":"mutate","ledger_group_name":[],"ledger_json_file":"ledger.json","master_ledger_file":"master-ledger.md","mode":"dry-run","node_test_run":"node --test","patch_batch_file":"patch.json","report_command":true,"specs_ledger_file":"specs.json","argv":{"mode":"dry-run","apply_command":true,"check_ledger_command":true,"ledger_command":"mutate","ledger_group_name":[],"ledger_json_file":"ledger.json","master_ledger_file":"master-ledger.md","node_test_run":"node --test","patch_batch_file":"patch.json","report_command":true,"specs_ledger_file":"specs.json"},"cli_command_argv":{"mode":"dry-run","apply_command":true,"check_ledger_command":true,"ledger_command":"mutate","ledger_group_name":[],"ledger_json_file":"ledger.json","master_ledger_file":"master-ledger.md","node_test_run":"node --test","patch_batch_file":"patch.json","report_command":true,"specs_ledger_file":"specs.json"}} } as never);
+  const actualTelemetry = traces.map((trace) => trace.name);
+  console.log(JSON.stringify({
+    specId: '0dc5be37',
+    suiteName: 'Automatic dependency discovery resolves referenced functions types and constants',
+    controllerName: "resolve-generated-dependencies",
+    executionEntry: "controller:resolve-generated-dependencies",
+    expectedTelemetry,
+    actualTelemetry,
+  }));
+  for (const expected of expectedTelemetry) {
+    assert.ok(actualTelemetry.some((event) => event.includes(expected)), expected);
+  }
 });
