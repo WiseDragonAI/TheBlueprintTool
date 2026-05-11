@@ -8,6 +8,8 @@ import { handlePointerMove } from './handle-pointer-move.js';
 import { handlePointerUp } from './handle-pointer-up.js';
 import { handleNativeDragStart } from './handle-native-drag-start.js';
 import { handleWheel } from './handle-wheel.js';
+import { ledgerEndpointForTab } from './ledger-endpoint-for-tab.js';
+import { loadActiveLedgerState } from './load-active-ledger-state.js';
 import { renderCanvasSurface } from './render-canvas-surface.js';
 import { renderTabRegistry } from './render-tab-registry.js';
 import { renderToolbox } from './render-toolbox.js';
@@ -32,13 +34,15 @@ export function bindInputs(): void {
     telemetry('resolve-tool-mode', { activeTool: 'zone', zoneColor: state.zoneColor });
   });
 
-  document.querySelector('.tabs')?.addEventListener('click', (event) => {
+  document.querySelector('.tabs')?.addEventListener('click', async (event) => {
     const button = (event.target as HTMLElement).closest('[data-tab]') as HTMLElement | null;
     if (!button?.dataset.tab) return;
+    if (!ledgerEndpointForTab(state.activeTab)) state.surfaceViewport = { ...state.viewport };
     state.activeTab = button.dataset.tab;
     history.pushState({}, '', `/${state.activeTab}`);
     telemetry('browser-route-change', { activeTab: state.activeTab });
     telemetry('derive-route-state', { activeTab: state.activeTab });
+    await loadActiveLedgerState();
     renderTabRegistry();
     renderCanvasSurface();
   });
@@ -54,6 +58,7 @@ export function bindInputs(): void {
   window.addEventListener('popstate', () => {
     state.activeTab = routeTab(window.location.pathname);
     telemetry('browser-route-change', { activeTab: state.activeTab });
+    void loadActiveLedgerState().then(renderCanvasSurface);
     renderTabRegistry();
   });
 }

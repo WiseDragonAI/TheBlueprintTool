@@ -3,6 +3,7 @@ import { SPEC_IMPLEMENTATION_SURFACE } from '../spec-implementation-surface.js';
 import { bindInputs } from './bind-inputs.js';
 import { hydratePersistedGeometry } from './hydrate-persisted-geometry.js';
 import { loadBlueprinttoolState } from './load-blueprinttool-state.js';
+import { loadActiveLedgerState } from './load-active-ledger-state.js';
 import { readPersistedState } from './read-persisted-state.js';
 import { renderCanvasSurface } from './render-canvas-surface.js';
 import { renderTabRegistry } from './render-tab-registry.js';
@@ -23,7 +24,7 @@ export function bootSurface(): void {
   telemetry('clear-transient-selection', { reason: 'boot' });
   bindInputs();
   renderTabRegistry();
-  void loadBlueprinttoolState();
+  void loadBlueprinttoolState().then(loadActiveLedgerState).then(renderCanvasSurface);
   renderCanvasSurface();
   renderThreadPanel();
 }

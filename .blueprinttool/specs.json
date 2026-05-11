@@ -955,6 +955,11 @@
       "x": -4540,
       "y": 6200,
       "w": 520
+    },
+    "f2d6c8b1": {
+      "x": -3480,
+      "y": 4688,
+      "w": 560
     }
   },
   "cards": [
@@ -3883,6 +3888,20 @@
       },
       "facts": [],
       "fields": []
+    },
+    {
+      "id": "f2d6c8b1",
+      "title": "Tab click loads the active ledger graph into the canvas",
+      "cardType": "spec-brief",
+      "domainId": "specs",
+      "x": -3480,
+      "y": 4688,
+      "w": 560,
+      "comment": {
+        "what": "When an operator clicks a route-addressable ledger tab, navigate-tab-controller derives the route, fetches that tab ledger, replaces the canvas graph with the ledger cards, zones, and relationships, and records load-ledger-state/render-ledger-surface telemetry."
+      },
+      "facts": [],
+      "fields": []
     }
   ],
   "relationships": [],
@@ -4121,6 +4140,6 @@
     "zoneId": "",
     "zoneIds": []
   },
-  "updatedAt": "2026-05-11T18:07:52.336Z",
+  "updatedAt": "2026-05-11T18:16:32.532Z",
   "cardEdits": {}
 }

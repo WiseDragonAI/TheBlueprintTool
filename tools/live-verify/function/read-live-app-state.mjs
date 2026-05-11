@@ -54,6 +54,26 @@ export async function readLiveAppState(send, url) {
         }
         return false;
       };
+      const waitFrame = () => new Promise((resolve) => setTimeout(resolve, 260));
+      const loadTab = async (tabId) => {
+        document.querySelector('[data-tab="' + tabId + '"]').click();
+        await waitFrame();
+        const cards = [...document.querySelectorAll('.ledger-node[data-card-id]')];
+        return {
+          tabId,
+          route: location.pathname,
+          activeTab: window.__coreState.activeTab,
+          ledgerCardCount: cards.length,
+          firstTitle: cards[0]?.querySelector('strong')?.textContent ?? '',
+          staticSurfaceHidden: document.querySelector('[data-card-id="card-boot"]')?.hidden === true,
+          telemetryHit: window.__coreTelemetry.some((entry) => entry.name === 'render-ledger-surface' && entry.args.activeTab === tabId)
+        };
+      };
+      const specsTabLoad = await loadTab('specs');
+      const dataTabLoad = await loadTab('data');
+      document.querySelector('[data-tab="surface"]').click();
+      await waitFrame();
+      const surfaceRestoredAfterLedgerTabs = document.querySelector('[data-card-id="card-boot"]')?.hidden === false && document.querySelectorAll('.ledger-node').length === 0;
       const card = document.querySelector('[data-card-id="card-zone"]');
       const bootCard = document.querySelector('[data-card-id="card-boot"]');
       const group = document.querySelector('[data-group-id="group-core"]');
@@ -172,6 +192,9 @@ export async function readLiveAppState(send, url) {
         .filter((item) => item.rect.left < canvasScreen.left || item.rect.right > canvasScreen.right || item.rect.top < canvasScreen.top || item.rect.bottom > canvasScreen.bottom);
       return {
         cardThreadText,
+        specsTabLoad,
+        dataTabLoad,
+        surfaceRestoredAfterLedgerTabs,
         cardNotesOpenedThreadFromUnselected,
         inlineEditActive,
         telemetryPanelHidden,

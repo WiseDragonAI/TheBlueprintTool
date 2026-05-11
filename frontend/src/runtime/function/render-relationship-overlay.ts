@@ -4,7 +4,7 @@ import { routeRelationshipPath } from './route-relationship-path.js';
 import { telemetry } from './telemetry.js';
 
 export function renderRelationshipOverlay(): void {
-  const overlay = document.querySelector('.relationships') as SVGSVGElement | null;
+  const overlay = document.querySelector('.relationships:not([hidden])') as SVGSVGElement | null;
   if (!overlay) return;
   const relationships = Array.from(overlay.querySelectorAll('[data-relationship-id]')) as SVGPathElement[];
   for (const [routeIndex, path] of relationships.entries()) {
