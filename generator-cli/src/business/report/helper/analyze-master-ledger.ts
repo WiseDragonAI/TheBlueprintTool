@@ -4,7 +4,7 @@
  */
 import type { MasterLedgerCheckReport, MasterLedgerDocument, SpecsLedger, SpecsLedgerCard, SpecsLedgerGroup } from '../../../lib/types.js';
 import { createWorktreePlan } from '../../generate/helper/create-worktree-plan.js';
-import type { FunctionBatch } from './parse-function-batch.js';
+import type { FunctionBatch } from '../../master-ledger/helper/parse-function-batch.js';
 
 function normalized(value: string): string {
   return value.trim().toLowerCase();

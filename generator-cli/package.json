@@ -9,6 +9,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "node --test --import tsx \"test/**/*.test.ts\"",
+    "test:integration": "node --test --import tsx \"test/**/*.test.ts\" --test-skip-pattern \"unit/\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "cli": "tsx bin/generator-cli.ts"
   },

@@ -7,8 +7,19 @@
     "declaration": true,
     "outDir": "dist",
     "rootDir": ".",
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
+    "paths": {
+      "@generator-cli/*": [
+        "./src/*"
+      ]
+    },
     "skipLibCheck": true
   },
-  "include": ["bin/**/*.ts", "src/**/*.ts", "test/**/*.ts"]
+  "include": [
+    "bin/**/*.ts",
+    "src/**/*.ts",
+    "test/**/*.ts"
+  ]
 }

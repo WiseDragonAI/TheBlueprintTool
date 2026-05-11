@@ -6,7 +6,7 @@ import type { DependencyGraph, FileSystemPort, GeneratedFunction, ProcessPort } 
 import { telemetry } from '../../../lib/telemetry/telemetry.js';
 import { runNodeTest } from '../helper/run-node-test.js';
 import { collectTelemetryTraces } from '../helper/collect-telemetry-traces.js';
-import { captureExecutionStackTrace } from '../helper/capture-execution-stack-trace.js';
+import { captureExecutionStackTrace } from '../../telemetry/helper/capture-execution-stack-trace.js';
 import { inferFunctionUsage } from '../helper/infer-function-usage.js';
 import { detectUnusedFunctions } from '../helper/detect-unused-functions.js';
 import { buildGeneratedReport } from '../helper/build-generated-report.js';

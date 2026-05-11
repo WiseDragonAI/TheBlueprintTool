@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorktreePlan } from '../../src/index.js';
-import { injectTelemetryCalls } from '../../src/business/telemetry/helper/inject-telemetry-calls.js';
+import { injectTelemetryCalls } from '../../src/business/generate/helper/inject-telemetry-calls.js';
 import { sampleFunctions } from '../fixture/scenario.js';
 
 test('Generated files include default telemetry for function name and arguments', () => {

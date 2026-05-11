@@ -3,7 +3,7 @@
  * WHY: report mode must write one report containing tests, telemetry, stack traces, graph, and unused functions.
  */
 import type { DependencyGraph, GeneratedReport, GeneratedFunction, TelemetryTrace, TestRun } from '../../../lib/types.js';
-import { captureExecutionStackTrace } from './capture-execution-stack-trace.js';
+import { captureExecutionStackTrace } from '../../telemetry/helper/capture-execution-stack-trace.js';
 import { detectUnusedFunctions } from './detect-unused-functions.js';
 import { inferFunctionUsage } from './infer-function-usage.js';
 

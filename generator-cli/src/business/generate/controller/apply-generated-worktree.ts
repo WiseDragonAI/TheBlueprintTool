@@ -3,18 +3,28 @@
  * WHY: apply mode materializes source, tests, telemetry harness, graph, report configuration, and run results.
  */
 import { join, resolve } from 'node:path';
-import type { FileSystemPort, ProcessPort, Result, WorktreePlan } from '../../../lib/types.js';
+import type { FileSystemPort, OutputFile, ProcessPort, Result, WorktreePlan } from '../../../lib/types.js';
 import { nodeFileSystem } from '../../../lib/fs/node-file-system.js';
 import { nodeProcess } from '../../../lib/node-test/node-process.js';
 import { stringifyJson } from '../../../lib/json/json.js';
 import { telemetry } from '../../../lib/telemetry/telemetry.js';
-import { buildTestStateContracts } from '../../test/helper/build-test-state-contracts.js';
-import { injectTelemetryCalls } from '../../telemetry/helper/inject-telemetry-calls.js';
-import { checkMasterLedgerController } from '../../master-ledger/controller/check-master-ledger.js';
+import { buildTestStateContracts } from '../helper/build-test-state-contracts.js';
+import { injectTelemetryCalls } from '../helper/inject-telemetry-calls.js';
+import { checkMasterLedgerController } from '../../report/controller/check-master-ledger.js';
 import { analyzeGeneratedSuiteTelemetry } from '../../report/helper/analyze-generated-suite-telemetry.js';
 import { planGeneratedWorktreeController } from './plan-generated-worktree.js';
 import { createGitWorktree } from '../effect/create-git-worktree.js';
-import { writePlanFiles } from '../effect/write-generated-files.js';
+import { writeSourceFile } from '../effect/write-source-file.js';
+import { writeUnitTestFile } from '../effect/write-unit-test-file.js';
+import { writeIntegrationTestFile } from '../effect/write-integration-test-file.js';
+import { writeTelemetryHarness } from '../effect/write-telemetry-harness.js';
+import { writeDependencyGraphOutput } from '../effect/write-dependency-graph-output.js';
+
+async function writeOutputFiles(worktreePath: string, files: OutputFile[], fs: FileSystemPort): Promise<void> {
+  for (const file of files) {
+    await fs.writeFile(join(worktreePath, file.path), file.content);
+  }
+}
 
 export async function applyGeneratedWorktreeController(
   input: {
@@ -70,7 +80,14 @@ export async function applyGeneratedWorktreeController(
     return injected;
   }
 
-  await writePlanFiles(planned.value, fs);
+  await fs.rm(join(planned.value.worktreePath, planned.value.rootBlockPath));
+  await writeOutputFiles(planned.value.worktreePath, planned.value.supportFiles, fs);
+  await writeSourceFile(planned.value.worktreePath, planned.value.sourceFiles, fs);
+  await writeUnitTestFile(planned.value.worktreePath, planned.value.unitTestFiles, fs);
+  await writeIntegrationTestFile(planned.value.worktreePath, planned.value.integrationTestFiles, fs);
+  await writeTelemetryHarness(planned.value.worktreePath, planned.value.telemetryHarness, fs);
+  await writeDependencyGraphOutput(planned.value.worktreePath, planned.value.graphOutput, fs);
+  await writeOutputFiles(planned.value.worktreePath, [planned.value.reportConfig, planned.value.testResults], fs);
   telemetry('write-source-file', { count: planned.value.sourceFiles.length });
   telemetry('write-unit-test-file', { count: planned.value.unitTestFiles.length });
   telemetry('write-integration-test-file', { count: planned.value.integrationTestFiles.length });

@@ -32,19 +32,50 @@ function pseudocodeBody(body: string): string {
   return firstBrace === -1 || lastBrace === -1 ? body.trim() : body.slice(firstBrace + 1, lastBrace).trim();
 }
 
-function explicitTelemetryBody(generatedFunction: GeneratedFunction): string {
-  return pseudocodeBody(generatedFunction.body).replaceAll(/telemetry\('([^']+)'\)/g, (_match, eventName: string) => {
-    return `telemetry('controller:${generatedFunction.name} -> ${eventName}', { functionName: '${generatedFunction.name}', phase: 'event' })`;
-  });
+function literal(value: string): string {
+  return value.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
 }
 
-function controllerFunctionBody(generatedFunction: GeneratedFunction): string {
+function controllerScaffoldStatements(generatedFunction: GeneratedFunction, functions: GeneratedFunction[]): string[] {
+  const byExportName = new Map(functions.map((candidate) => [candidate.exportName, candidate]));
+  const statements: string[] = [];
+
+  for (const rawLine of pseudocodeBody(generatedFunction.body).split('\n')) {
+    const line = rawLine.trim();
+    const telemetryMatch = line.match(/telemetry\('([^']+)'\)/);
+
+    if (telemetryMatch) {
+      statements.push(`telemetry('controller:${generatedFunction.name} -> ${literal(telemetryMatch[1])}', { functionName: '${generatedFunction.name}', phase: 'event' });`);
+      continue;
+    }
+
+    for (const [exportName, target] of byExportName) {
+      if (!line.includes(`${exportName}(`)) {
+        continue;
+      }
+
+      statements.push(`try {
+      await ${exportName}({ action_payload });
+    } catch (error) {
+      console.log(JSON.stringify({ controllerName: '${generatedFunction.name}', dependencyName: '${target.name}', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
+    }`);
+      break;
+    }
+  }
+
+  return statements;
+}
+
+function controllerFunctionBody(generatedFunction: GeneratedFunction, functions: GeneratedFunction[]): string {
+  const statements = controllerScaffoldStatements(generatedFunction, functions);
+  const body = statements.length > 0 ? statements.map((statement) => `    ${statement}`).join('\n') : '    void action_payload;';
+
   return `export async function ${generatedFunction.exportName}(input: { action_payload?: Record<string, unknown> } = {}): Promise<void> {
   const action_payload = input.action_payload ?? input;
   telemetry('controller:${generatedFunction.name} -> start', { functionName: '${generatedFunction.name}', phase: 'started', arguments: input });
 
   try {
-${explicitTelemetryBody(generatedFunction).split('\n').map((line) => `    ${line}`).join('\n')}
+${body}
   } finally {
     telemetry('controller:${generatedFunction.name} -> complete', { functionName: '${generatedFunction.name}', phase: 'completed', arguments: input });
   }
@@ -62,7 +93,7 @@ function stubFunctionBody(generatedFunction: GeneratedFunction): string {
 
 function generatedFunctionSource(generatedFunction: GeneratedFunction, functions: GeneratedFunction[], edges: DependencyReference[]): string {
   const imports = dependencyImports(generatedFunction, functions, edges);
-  const body = generatedFunction.kind === 'controller' ? controllerFunctionBody(generatedFunction) : stubFunctionBody(generatedFunction);
+  const body = generatedFunction.kind === 'controller' ? controllerFunctionBody(generatedFunction, functions) : stubFunctionBody(generatedFunction);
 
   const tsNoCheck = generatedFunction.kind === 'controller' || generatedFunction.returnType !== 'void' ? '// @ts-nocheck\n' : '';
 

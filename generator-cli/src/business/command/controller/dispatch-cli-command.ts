@@ -12,7 +12,7 @@ import { applyPatchDocController } from '../../patch-doc/controller/apply-patch-
 import { manageLedgerJsonController } from '../../ledger/controller/manage-ledger-json.js';
 import { resolveGeneratedDependenciesController } from '../../graph/controller/resolve-generated-dependencies.js';
 import { loadAndValidateMasterLedgerController } from '../../master-ledger/controller/load-and-validate-master-ledger.js';
-import { checkMasterLedgerController } from '../../master-ledger/controller/check-master-ledger.js';
+import { checkMasterLedgerController } from '../../report/controller/check-master-ledger.js';
 
 export async function dispatchCliCommandController(
   argv: string[],
