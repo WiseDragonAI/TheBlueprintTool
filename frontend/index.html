@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Core Canvas</title>
+    <link rel="stylesheet" href="/assets/canvas.css">
+  </head>
+  <body>
+    <main class="shell" aria-label="Core canvas workspace">
+      <aside class="rail" aria-label="Toolbox">
+        <button class="tool active" type="button" title="Select">↖</button>
+        <button class="tool" type="button" title="Zone">▣</button>
+        <button class="tool" type="button" title="Card">✎</button>
+        <button class="tool" type="button" title="Relationship">↗</button>
+      </aside>
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="kicker">Blueprint canvas</p>
+            <h1>CoreV2</h1>
+          </div>
+          <nav class="tabs" aria-label="Open ledgers">
+            <button class="tab active" type="button">Surface</button>
+            <button class="tab" type="button">Specs</button>
+            <button class="tab" type="button">Runtime</button>
+          </nav>
+        </header>
+        <section class="canvas" aria-label="Canvas">
+          <div class="grid"></div>
+          <article class="zone zone-a">
+            <div class="zone-title">Frontend surface</div>
+            <p>Canvas, selection, gestures, cards, zones, groups, threads and voice controls.</p>
+          </article>
+          <article class="zone zone-b">
+            <div class="zone-title">Backend ledger</div>
+            <p>Routes, persistence, refresh events, transcription and Blueprinttool tab state.</p>
+          </article>
+          <article class="card card-a">
+            <span class="hash">#10000001</span>
+            <strong>Boot surface</strong>
+            <p>Load ledger, derive route, clear transient selection, render canvas.</p>
+          </article>
+          <article class="card card-b">
+            <span class="hash">#20000001</span>
+            <strong>Zone model</strong>
+            <p>Persistent ID, name, color, geometry and notes.</p>
+          </article>
+          <article class="card card-c">
+            <span class="hash">#70000001</span>
+            <strong>Ledger routing</strong>
+            <p>Serve ledgers, accept edits and publish refresh.</p>
+          </article>
+          <svg class="relationships" viewBox="0 0 1200 720" role="img" aria-label="Relationships">
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z"></path>
+              </marker>
+            </defs>
+            <path d="M 375 250 C 500 210, 600 210, 725 250"></path>
+            <path d="M 360 455 C 520 570, 680 570, 840 455"></path>
+          </svg>
+        </section>
+      </section>
+      <aside class="panel" aria-label="Inspector">
+        <p class="kicker">Telemetry</p>
+        <h2>Controller path</h2>
+        <ol>
+          <li>derive-route-state</li>
+          <li>load-ledger-state</li>
+          <li>clear-transient-selection</li>
+          <li>render-canvas-surface</li>
+        </ol>
+      </aside>
+    </main>
+  </body>
+</html>
