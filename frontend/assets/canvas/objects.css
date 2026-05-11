@@ -55,6 +55,10 @@
 .zone-title {
   color: var(--zone-label-color, var(--accent));
   margin-bottom: 10px;
+  max-width: calc(100% * var(--viewport-scale, 1));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 14px;
   transform: scale(calc(1 / var(--viewport-scale, 1)));
   transform-origin: left top;

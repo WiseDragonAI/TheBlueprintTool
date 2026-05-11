@@ -1182,7 +1182,7 @@
       "y": 5610,
       "w": 640,
       "comment": {
-        "what": ""
+        "what": "Zone labels stay readable at a stable screen size while the zone remains large enough to inspect. In overview-detail zoom, labels are suppressed instead of inverse-scaling across neighboring cards or zones."
       },
       "facts": [],
       "fields": []
@@ -1476,7 +1476,7 @@
       "y": 5351,
       "w": 520,
       "comment": {
-        "what": "Canvas rendering must keep pointer interaction responsive at wide zoom-out levels by switching the canvas into low-detail mode below 0.35 scale and overview-detail mode below 0.18 scale. Low-detail mode removes expensive shadows, text blocks, buttons, and relationship labels while preserving geometry and selection affordances."
+        "what": "Canvas rendering must keep pointer interaction responsive at wide zoom-out levels by switching the canvas into low-detail mode below 0.35 scale and overview-detail mode below 0.18 scale. Low-detail mode removes expensive shadows, text blocks, buttons, and relationship labels while preserving geometry and selection affordances. Overview-detail mode also removes card titles and inverse-scaled zone labels so tiny boxes never become unreadable overlapping text columns."
       },
       "facts": [],
       "fields": []

@@ -2,8 +2,9 @@ export function formatLiveSummary(report) {
   const failedRelationships = (report.relationshipEndpointChecks ?? []).filter(function failedRelationship(check) {
     return !check.ok;
   });
+  const overviewOk = report.overviewDetail?.overviewDetail === true && report.overviewDetail?.zoneTitleHidden === true && report.overviewDetail?.cardTitleHidden === true;
   const lines = [
-    `ok=${failedRelationships.length === 0 && report.ledgerGroupSelection?.ok === true}`,
+    `ok=${failedRelationships.length === 0 && report.ledgerGroupSelection?.ok === true && overviewOk}`,
     `specsUrlLoadsApp=${report.specsUrlLoadsApp}`,
     `dataUrlLoadsApp=${report.dataUrlLoadsApp}`,
     `tabs=${(report.blueprintStateTabs ?? []).join(',')}`,
@@ -20,6 +21,11 @@ export function formatLiveSummary(report) {
     `ledgerGroupSelectedZones=${report.ledgerGroupSelection?.selectedZones?.length ?? 0}`,
     `ledgerGroupSelectedCards=${report.ledgerGroupSelection?.selectedCards?.length ?? 0}`,
     `ledgerGroupHasZoneId=${report.ledgerGroupSelection?.groupHasZoneId}`,
+    `overviewOk=${overviewOk}`,
+    `overviewScale=${report.overviewDetail?.viewportScale}`,
+    `overviewZoneTitleHidden=${report.overviewDetail?.zoneTitleHidden}`,
+    `overviewCardTitleHidden=${report.overviewDetail?.cardTitleHidden}`,
+    `overviewCardBodyHidden=${report.overviewDetail?.cardBodyHidden}`,
     `threadVisibleAfterNotes=${report.cardNotesOpenedThreadFromUnselected}`
   ];
   return lines.join('\n');

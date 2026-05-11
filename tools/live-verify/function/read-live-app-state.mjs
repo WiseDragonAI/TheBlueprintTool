@@ -5,6 +5,7 @@ import { browserInside } from './browser-inside.mjs';
 import { browserLoadTab } from './browser-load-tab.mjs';
 import { browserParsePath } from './browser-parse-path.mjs';
 import { browserRect } from './browser-rect.mjs';
+import { browserReadOverviewDetail } from './browser-read-overview-detail.mjs';
 import { browserScreenRect } from './browser-screen-rect.mjs';
 import { browserSegmentHits } from './browser-segment-hits.mjs';
 import { browserSelectFirstLedgerGroup } from './browser-select-first-ledger-group.mjs';
@@ -84,6 +85,7 @@ export async function readLiveAppState(send, url) {
       ${browserWaitFrame}
       ${browserLoadTab}
       ${browserSelectFirstLedgerGroup}
+      ${browserReadOverviewDetail}
       const specsTabLoad = await browserLoadTab('specs');
       const dataTabLoad = await browserLoadTab('data');
       const ledgerGroupSelection = await browserSelectFirstLedgerGroup();
@@ -186,6 +188,7 @@ export async function readLiveAppState(send, url) {
       const clippedCards = [...document.querySelectorAll('[data-card-id]')]
         .map(function cardScreenRect(element) { return { id: element.dataset.cardId, rect: browserScreenRect(element) }; })
         .filter(function clippedCard(item) { return item.rect.left < canvasScreen.left || item.rect.right > canvasScreen.right || item.rect.top < canvasScreen.top || item.rect.bottom > canvasScreen.bottom; });
+      const overviewDetail = await browserReadOverviewDetail();
       return {
         cardThreadText,
         specsTabLoad,
@@ -226,6 +229,7 @@ export async function readLiveAppState(send, url) {
         targetBorderStandoff,
         relationshipEndpointChecks,
         clippedCards,
+        overviewDetail,
         telemetry: window.__coreTelemetry.slice(telemetryStart).map(function telemetryEntry(entry) { return { name: entry.name, args: entry.args }; })
       };
     })()`

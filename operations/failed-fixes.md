@@ -83,3 +83,21 @@ Current corrective attempt:
 - Render ledger group annotations with `data-group-id` and regular ledger zones with `data-zone-id`.
 - Move group membership calculation into a dedicated one-function file.
 - Extend live verification with a reusable summary command that selects a ledger-tab group and reports selected groups, zones, and cards.
+
+## 2026-05-12: Deep Zoom Overview Collapses Into Overlapping Text
+
+Problem:
+- After the zoom/background fixes, deep zoom-out can destroy the canvas visually: cards and zones shrink while labels and titles remain readable-size and overlap into dense columns.
+
+Failed assumption:
+- I treated constant-size zone labels as absolute at every zoom level.
+- That conflicts with overview-detail mode, where the canvas is too compressed for readable labels to remain spatially meaningful.
+
+Previous work:
+- Low-detail and overview-detail classes were added based on viewport scale.
+- Low-detail hid card bodies, controls, and relationship labels, but left card titles and inverse-scaled zone labels visible.
+
+Current corrective attempt:
+- Clamp inverse-scaled zone label width to the visible zone width.
+- Hide card titles and zone labels in overview-detail mode.
+- Extend live verification to report overview text suppression explicitly.

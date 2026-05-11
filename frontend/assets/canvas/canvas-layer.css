@@ -97,6 +97,11 @@
   line-height: 1.1;
 }
 
+.canvas.overview-detail .card strong,
+.canvas.overview-detail .zone-title {
+  display: none;
+}
+
 .canvas.overview-detail .regular-zone {
   background: color-mix(in srgb, var(--zone-color), transparent 88%);
 }
