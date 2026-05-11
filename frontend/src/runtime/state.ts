@@ -1,6 +1,10 @@
 export const state: any = {
   routePath: window.location.pathname,
   activeTab: 'surface',
+  ledgerTabs: [
+    { id: 'specs', title: 'Specs', ledgerFile: '.blueprinttool/specs.json' },
+    { id: 'data', title: 'Data', ledgerFile: '.blueprinttool/data.json' }
+  ],
   activeTool: 'select',
   zoneColor: '#55b8ff',
   zoneCounter: 3,

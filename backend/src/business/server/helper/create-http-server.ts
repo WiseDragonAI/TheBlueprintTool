@@ -25,17 +25,18 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const frontendRoot = existsSync(resolve(process.cwd(), 'frontend'))
       ? resolve(process.cwd(), 'frontend')
       : resolve(process.cwd(), '..', 'frontend');
-    if (url === '/blueprinttool/specs' || url === '/blueprinttool/data') {
+    if (url === '/blueprinttool/specs' || url === '/blueprinttool/data' || url === '/blueprinttool/state') {
       const blueprinttoolRoot = existsSync(resolve(process.cwd(), '.blueprinttool'))
         ? resolve(process.cwd(), '.blueprinttool')
         : resolve(process.cwd(), '..', '.blueprinttool');
-      const ledgerPath = resolve(blueprinttoolRoot, url.endsWith('/specs') ? 'specs.json' : 'data.json');
+      const ledgerFile = url.endsWith('/specs') ? 'specs.json' : url.endsWith('/data') ? 'data.json' : 'state.json';
+      const ledgerPath = resolve(blueprinttoolRoot, ledgerFile);
       response.setHeader('content-type', 'application/json');
       response.end(existsSync(ledgerPath) ? readFileSync(ledgerPath, 'utf8') : JSON.stringify({ ok: false, missing: ledgerPath }));
       return;
     }
     const isAssetRoute = url.startsWith('/assets/') || url.startsWith('/src/');
-    const isAppRoute = url === '/' || url === '/surface' || url === '/specs' || url === '/runtime';
+    const isAppRoute = url === '/' || url === '/surface' || url === '/specs' || url === '/data' || url === '/runtime';
     const requestedPath = isAssetRoute ? resolve(frontendRoot, url.slice(1)) : resolve(frontendRoot, 'index.html');
     const assetPath = existsSync(requestedPath) ? requestedPath : requestedPath.replace(/\.js$/, '.ts');
     if ((isAppRoute || isAssetRoute) && existsSync(assetPath)) {

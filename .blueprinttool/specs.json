@@ -141,16 +141,6 @@
       "y": 5155,
       "w": 560
     },
-    "a25db692": {
-      "x": 1546,
-      "y": 5155,
-      "w": 520
-    },
-    "74567497": {
-      "x": 1546,
-      "y": 5351,
-      "w": 560
-    },
     "30000007": {
       "x": -114,
       "y": 5351,
@@ -300,6 +290,16 @@
       "x": -2941,
       "y": 3542,
       "w": 360
+    },
+    "74567497": {
+      "x": 1546,
+      "y": 5351,
+      "w": 560
+    },
+    "a25db692": {
+      "x": 1546,
+      "y": 5155,
+      "w": 520
     },
     "9c31f0a4": {
       "x": -2401,
@@ -940,6 +940,21 @@
       "x": -7310,
       "y": 4452,
       "w": 320
+    },
+    "b7c2e91f": {
+      "x": -3030,
+      "y": 7400,
+      "w": 520
+    },
+    "e6a91d34": {
+      "x": -3480,
+      "y": 4620,
+      "w": 520
+    },
+    "a4f8d2c9": {
+      "x": -4540,
+      "y": 6200,
+      "w": 520
     }
   },
   "cards": [
@@ -3826,6 +3841,48 @@
       },
       "facts": [],
       "fields": []
+    },
+    {
+      "id": "b7c2e91f",
+      "title": "Group draft geometry uses the canvas-local pointer origin",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3030,
+      "y": 7400,
+      "w": 520,
+      "comment": {
+        "what": "When the group tool is used, pointerdown and pointerup coordinates are converted through the canvas bounding box and viewport transform, so the created group starts at the visible cursor origin regardless of shell offsets or zoom."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "e6a91d34",
+      "title": "Blueprinttool state drives ledger tabs and routes",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3480,
+      "y": 4620,
+      "w": 520,
+      "comment": {
+        "what": "The frontend tab registry is built from CoreV2 .blueprinttool state, and /specs plus /data must load the app while /blueprinttool/specs and /blueprinttool/data serve the live JSON ledgers."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "a4f8d2c9",
+      "title": "Notes clicked from an unselected card opens its thread inspector",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -4540,
+      "y": 6200,
+      "w": 520,
+      "comment": {
+        "what": "A Notes button on a card is a direct thread action: clicking it selects that card context, sets the card thread id, and opens the right thread panel even when the card was not previously selected."
+      },
+      "facts": [],
+      "fields": []
     }
   ],
   "relationships": [],
@@ -4064,6 +4121,6 @@
     "zoneId": "",
     "zoneIds": []
   },
-  "updatedAt": "2026-05-11T12:30:17.820Z",
+  "updatedAt": "2026-05-11T18:07:52.336Z",
   "cardEdits": {}
 }

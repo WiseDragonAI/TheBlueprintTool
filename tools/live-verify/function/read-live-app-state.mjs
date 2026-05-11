@@ -18,15 +18,19 @@ export async function readLiveAppState(send, url) {
       const after = getComputedStyle(grid).backgroundSize;
       return Promise.all([
         fetch('/specs').then((response) => response.text()),
+        fetch('/data').then((response) => response.text()),
         fetch('/blueprinttool/specs').then((response) => response.json()),
-        fetch('/blueprinttool/data').then((response) => response.json())
-      ]).then(([specsRoute, specsLedger, dataLedger]) => ({
+        fetch('/blueprinttool/data').then((response) => response.json()),
+        fetch('/blueprinttool/state').then((response) => response.json())
+      ]).then(([specsRoute, dataRoute, specsLedger, dataLedger, blueprintState]) => ({
         honeycombScaleStable: before === after,
         honeycombBackgroundSizeBefore: before,
         honeycombBackgroundSizeAfter: after,
         specsUrlLoadsApp: specsRoute.includes('Core Canvas') && specsRoute.includes('data-tab="specs"'),
+        dataUrlLoadsApp: dataRoute.includes('Core Canvas') && dataRoute.includes('data-tab="data"'),
         blueprintSpecsAvailable: Array.isArray(specsLedger.cards) && specsLedger.cards.length > 0,
-        blueprintDataAvailable: Boolean(dataLedger.modelName || dataLedger.cards || dataLedger.positions)
+        blueprintDataAvailable: Boolean(dataLedger.modelName || dataLedger.cards || dataLedger.positions),
+        blueprintStateTabs: (blueprintState.tabs ?? []).map((tab) => tab.id)
       }));
     })()`
   });
@@ -77,8 +81,11 @@ export async function readLiveAppState(send, url) {
         bootConnected: bootCard.classList.contains('connected'),
         ledgerConnected: document.querySelector('[data-card-id="card-ledger"]').classList.contains('connected')
       };
+      window.__coreState.selection = { cardIds: [], zoneIds: [], groupIds: [] };
+      document.querySelector('.thread-panel').hidden = true;
       card.querySelector('[data-action="open-card-thread"]').click();
       const cardThreadText = document.querySelector('.thread-target').textContent;
+      const cardNotesOpenedThreadFromUnselected = !document.querySelector('.thread-panel').hidden && window.__coreState.selection.cardIds.includes('card-zone');
       zone.querySelector('[data-action="edit-zone"]').click();
       const inlineEditActive = document.activeElement === zone.querySelector('.zone-title') && zone.querySelector('.zone-title').isContentEditable;
       zone.querySelector('.zone-title').blur();
@@ -92,10 +99,16 @@ export async function readLiveAppState(send, url) {
       const afterResize = rect(zone);
       document.querySelector('[data-tool="group"]').click();
       const grid = document.querySelector('.grid');
+      const canvasScreenForGroupDraft = document.querySelector('.canvas').getBoundingClientRect();
+      const expectedGroupDraftOrigin = { x: 760 - canvasScreenForGroupDraft.left, y: 190 - canvasScreenForGroupDraft.top };
       grid.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 760, clientY: 190, pointerId: 13 }));
       document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 950, clientY: 360, pointerId: 13 }));
       document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 950, clientY: 360, pointerId: 13 }));
       const createdGroup = document.querySelector('[data-group-id^="group-draft-"]');
+      const createdGroupRect = createdGroup ? rect(createdGroup) : null;
+      const createdGroupOriginAnchored = createdGroupRect
+        ? Math.abs(createdGroupRect.left - expectedGroupDraftOrigin.x) <= 2 && Math.abs(createdGroupRect.top - expectedGroupDraftOrigin.y) <= 2
+        : false;
       const groupToolResetAfterPlacement = window.__coreState.activeTool === 'select';
       const beforeGroupPanViewport = { ...window.__coreState.viewport };
       window.__coreState.selection = { cardIds: [], zoneIds: [], groupIds: [] };
@@ -159,6 +172,7 @@ export async function readLiveAppState(send, url) {
         .filter((item) => item.rect.left < canvasScreen.left || item.rect.right > canvasScreen.right || item.rect.top < canvasScreen.top || item.rect.bottom > canvasScreen.bottom);
       return {
         cardThreadText,
+        cardNotesOpenedThreadFromUnselected,
         inlineEditActive,
         telemetryPanelHidden,
         threadInitiallyHidden,
@@ -170,7 +184,9 @@ export async function readLiveAppState(send, url) {
         zoneSelected,
         beforeResize,
         afterResize,
-        createdGroup: createdGroup ? rect(createdGroup) : null,
+        createdGroup: createdGroupRect,
+        expectedGroupDraftOrigin,
+        createdGroupOriginAnchored,
         groupToolResetAfterPlacement,
         unselectedGroupPanMovedViewport,
         unselectedGroupPanDidNotSelect,

@@ -32,15 +32,15 @@ export function bindInputs(): void {
     telemetry('resolve-tool-mode', { activeTool: 'zone', zoneColor: state.zoneColor });
   });
 
-  document.querySelectorAll('[data-tab]').forEach((button) => {
-    button.addEventListener('click', () => {
-      state.activeTab = (button as HTMLElement).dataset.tab;
-      history.pushState({}, '', `/${state.activeTab}`);
-      telemetry('browser-route-change', { activeTab: state.activeTab });
-      telemetry('derive-route-state', { activeTab: state.activeTab });
-      renderTabRegistry();
-      renderCanvasSurface();
-    });
+  document.querySelector('.tabs')?.addEventListener('click', (event) => {
+    const button = (event.target as HTMLElement).closest('[data-tab]') as HTMLElement | null;
+    if (!button?.dataset.tab) return;
+    state.activeTab = button.dataset.tab;
+    history.pushState({}, '', `/${state.activeTab}`);
+    telemetry('browser-route-change', { activeTab: state.activeTab });
+    telemetry('derive-route-state', { activeTab: state.activeTab });
+    renderTabRegistry();
+    renderCanvasSurface();
   });
 
   canvas.addEventListener('wheel', handleWheel, { passive: false, capture: true });
