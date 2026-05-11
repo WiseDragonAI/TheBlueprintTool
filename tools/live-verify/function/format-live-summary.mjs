@@ -1,16 +1,40 @@
 export function formatLiveSummary(report) {
-  const failedRelationships = (report.relationshipEndpointChecks ?? []).filter(function failedRelationship(check) {
-    return !check.ok;
-  });
+  const relationshipChecks = [
+    ...(report.relationshipEndpointChecks ?? []),
+    ...(report.specsTabLoad?.relationshipEndpointChecks ?? []),
+    ...(report.dataTabLoad?.relationshipEndpointChecks ?? [])
+  ];
+  const failedRelationships = [];
+  for (const check of relationshipChecks) {
+    if (!check.ok) failedRelationships.push(check);
+  }
+  const endpointEntries = [];
+  for (const check of relationshipChecks) {
+    endpointEntries.push({ key: `${check.sourceId}:${check.sourceSide}`, axis: check.sourceAxis, id: `${check.id}:source` });
+    endpointEntries.push({ key: `${check.targetId}:${check.targetSide}`, axis: check.targetAxis, id: `${check.id}:target` });
+  }
+  let portSpreadWorstGap = Infinity;
+  let portSpreadOk = true;
+  for (const entry of endpointEntries) {
+    for (const candidate of endpointEntries) {
+      if (entry.id >= candidate.id || entry.key !== candidate.key) continue;
+      const gap = Math.abs(entry.axis - candidate.axis);
+      if (gap < portSpreadWorstGap) portSpreadWorstGap = gap;
+      if (gap < 18) portSpreadOk = false;
+    }
+  }
+  if (portSpreadWorstGap === Infinity) portSpreadWorstGap = 0;
   const overviewOk = report.overviewDetail?.overviewDetail === true && report.overviewDetail?.zoneTitleHidden === true && report.overviewDetail?.cardTitleHidden === true;
   const lines = [
-    `ok=${failedRelationships.length === 0 && report.ledgerGroupSelection?.ok === true && overviewOk}`,
+    `ok=${failedRelationships.length === 0 && report.ledgerGroupSelection?.ok === true && overviewOk && portSpreadOk}`,
     `specsUrlLoadsApp=${report.specsUrlLoadsApp}`,
     `dataUrlLoadsApp=${report.dataUrlLoadsApp}`,
     `tabs=${(report.blueprintStateTabs ?? []).join(',')}`,
     `honeycombWorldScaleFollowsZoom=${report.honeycombWorldScaleFollowsZoom}`,
-    `relationshipsChecked=${report.relationshipEndpointChecks?.length ?? 0}`,
+    `relationshipsChecked=${relationshipChecks.length}`,
     `relationshipsFailed=${failedRelationships.length}`,
+    `portSpreadOk=${portSpreadOk}`,
+    `portSpreadWorstGap=${portSpreadWorstGap}`,
     `staticGroupSelected=${report.groupSelected}`,
     `staticGroupZoneIds=${(report.computedGroupMembership?.zoneIds ?? []).join(',')}`,
     `staticGroupCardIds=${(report.computedGroupMembership?.cardIds ?? []).join(',')}`,

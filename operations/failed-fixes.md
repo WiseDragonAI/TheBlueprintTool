@@ -101,3 +101,23 @@ Current corrective attempt:
 - Clamp inverse-scaled zone label width to the visible zone width.
 - Hide card titles and zone labels in overview-detail mode.
 - Extend live verification to report overview text suppression explicitly.
+
+## 2026-05-12: Relationship Ports Merge On Card Borders
+
+Problem:
+- Multiple relationship lines targeting the same card side can visually merge before reaching the marker.
+- The user reported this after previous arrow fixes focused on detached endpoints and clearance dents.
+
+Failed assumption:
+- I routed each relationship independently and used the target card center for horizontal target ports.
+- That violates the spread-port spec because two or more routes on the same card side can choose the same border coordinate.
+
+Previous work:
+- Relationship arrows were moved into the same canvas-world coordinate system as cards.
+- Non-direct routes were forced through clearance lanes to avoid border dents merging with card outlines.
+
+Current corrective attempt:
+- Resolve all visible relationship endpoints as one overlay-level batch.
+- Group endpoints by card id and border side.
+- Assign deterministic evenly spaced slots before routing each path.
+- Extend live verification to report port spread failures, not only endpoint attachment.
