@@ -171,3 +171,18 @@ Current corrective attempt:
 - Do not restore persisted card height, because cards are not resizable and fixed stale heights can clip their own content.
 - Restore card position and safe width only; leave card height content-driven.
 - Extend live verification to seed intentionally corrupt card geometry and require cards to recover to minimum usable dimensions with no clipped content.
+
+## 2026-05-12: Close Relationship Arrows Still Glitch At Card Borders
+
+Problem:
+- Relationship arrows still show small glitches when connected cards are close together.
+- Arrowheads can visually merge into or appear cropped by the target card border.
+
+Failed assumption:
+- Endpoint attachment and spread-port checks proved the path reached a card side, but did not prove enough marker clearance.
+- The side scorer still preferred a facing side pair even when there was not enough corridor space between two nearby cards.
+
+Current corrective attempt:
+- Penalize tight facing corridors during relationship side scoring so close cards route from a better side pair.
+- Increase visible endpoint standoff while shrinking SVG markers, keeping arrowheads outside the target card border.
+- Extend live verification with a close-card routing scenario and a minimum-segment check.

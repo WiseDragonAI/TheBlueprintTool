@@ -1,6 +1,8 @@
 import { canvas } from '../dom.js';
 import { state } from '../state.js';
 import { connectedCardIds } from './connected-card-ids.js';
+import { elementCanvasRect } from './element-canvas-rect.js';
+import { rectanglesIntersect } from './rectangles-intersect.js';
 import { renderLedgerSurface } from './render-ledger-surface.js';
 import { renderRelationshipOverlay } from './render-relationship-overlay.js';
 import { renderTelemetry } from './render-telemetry.js';
@@ -27,6 +29,16 @@ export function renderCanvasSurface(): void {
     const element = node as HTMLElement;
     element.classList.toggle('selected', state.selection.groupIds.includes(element.dataset.groupId));
   });
+  const zones = Array.from(document.querySelectorAll('.regular-zone[data-zone-id]')) as HTMLElement[];
+  for (const card of Array.from(document.querySelectorAll('[data-card-id]')) as HTMLElement[]) {
+    card.style.removeProperty('--card-zone-color');
+    const cardRect = elementCanvasRect(card);
+    for (const zone of zones) {
+      if (!rectanglesIntersect(cardRect, elementCanvasRect(zone))) continue;
+      card.style.setProperty('--card-zone-color', getComputedStyle(zone).getPropertyValue('--zone-color').trim());
+      break;
+    }
+  }
   renderRelationshipOverlay();
   document.querySelectorAll('.relationships').forEach((overlay) => overlay.classList.toggle('hide-labels', state.activeTab === 'runtime'));
   telemetry('render-canvas-surface', { viewport: state.viewport, selection: state.selection });

@@ -16,3 +16,10 @@ test('score-relationship-port-sides prefers outward opposite horizontal sides fo
   assert.ok(outward < backward);
   assert.ok(outward < mixedAxis);
 });
+
+test('score-relationship-port-sides penalizes tight facing corridors', () => {
+  const tightTarget = { left: 116, top: 0, right: 216, bottom: 80, width: 100, height: 80 };
+  const tightFacing = scoreRelationshipPortSides(source, tightTarget, 'right', 'left');
+  const alternateTop = scoreRelationshipPortSides(source, tightTarget, 'top', 'top');
+  assert.ok(alternateTop < tightFacing);
+});

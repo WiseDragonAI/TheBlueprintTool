@@ -11,8 +11,8 @@ export function createLedgerRelationshipOverlay(relationships: Array<Record<stri
   marker.setAttribute('viewBox', '0 0 10 10');
   marker.setAttribute('refX', '9');
   marker.setAttribute('refY', '5');
-  marker.setAttribute('markerWidth', '7');
-  marker.setAttribute('markerHeight', '7');
+  marker.setAttribute('markerWidth', '4.5');
+  marker.setAttribute('markerHeight', '4.5');
   marker.setAttribute('orient', 'auto');
   const markerPath = document.createElementNS(SVG_NS, 'path');
   markerPath.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z');

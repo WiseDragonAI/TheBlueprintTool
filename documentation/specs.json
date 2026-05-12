@@ -960,6 +960,21 @@
       "x": -3480,
       "y": 4688,
       "w": 560
+    },
+    "3f9c2a11": {
+      "x": -3140,
+      "y": 6566,
+      "w": 560
+    },
+    "7b2e4c90": {
+      "x": -4780,
+      "y": 5112,
+      "w": 520
+    },
+    "6e18b4d2": {
+      "x": -4780,
+      "y": 5308,
+      "w": 520
     }
   },
   "cards": [
@@ -3930,6 +3945,48 @@
       },
       "facts": [],
       "fields": []
+    },
+    {
+      "id": "3f9c2a11",
+      "title": "Relationship arrows reserve marker clearance when connected cards are close",
+      "cardType": "spec-brief",
+      "domainId": "relationship",
+      "x": -3140,
+      "y": 6566,
+      "w": 560,
+      "comment": {
+        "what": "When two connected cards are close together, relationship routing must avoid choosing a facing border pair without enough corridor space. The route must choose a better source/target side pair, keep every visible segment long enough to read, and keep the marker outside the target card border instead of cropped under the card."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "7b2e4c90",
+      "title": "Cards visually inherit the color of the regular zone they intersect",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 5112,
+      "w": 520,
+      "comment": {
+        "what": "A card that intersects a regular zone must use that zone color for its card accent, border tint, and background tint. Group zones must not project their visual theme onto cards."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "6e18b4d2",
+      "title": "Connected card highlights use the inherited card color glow",
+      "cardType": "spec-brief",
+      "domainId": "selection",
+      "x": -4780,
+      "y": 5308,
+      "w": 520,
+      "comment": {
+        "what": "When selecting a card highlights its directly connected cards, the connected-card outline and glow must be visible and must use the highlighted card inherited zone color rather than a generic low-contrast border."
+      },
+      "facts": [],
+      "fields": []
     }
   ],
   "relationships": [],
@@ -4168,6 +4225,6 @@
     "zoneId": "",
     "zoneIds": []
   },
-  "updatedAt": "2026-05-11T18:22:06.043Z",
+  "updatedAt": "2026-05-12T00:00:00.000Z",
   "cardEdits": {}
 }

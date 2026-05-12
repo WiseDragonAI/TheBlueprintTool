@@ -145,8 +145,15 @@ export async function readLiveAppState(send, url) {
       const bootCard = document.querySelector('[data-card-id="card-boot"]');
       const group = document.querySelector('[data-group-id="group-core"]');
       const zone = document.querySelector('[data-zone-id="zone-frontend"]');
+      const backendZone = document.querySelector('[data-zone-id="zone-backend"]');
+      const ledgerCard = document.querySelector('[data-card-id="card-ledger"]');
       const resizeHandle = zone.querySelector('.resize-handle.nw');
       const groupResizeHandle = group.querySelector('.resize-handle.se');
+      const frontendZoneColor = getComputedStyle(zone).getPropertyValue('--zone-color').trim();
+      const backendZoneColor = getComputedStyle(backendZone).getPropertyValue('--zone-color').trim();
+      const bootCardZoneColor = getComputedStyle(bootCard).getPropertyValue('--card-zone-color').trim();
+      const ledgerCardZoneColor = getComputedStyle(ledgerCard).getPropertyValue('--card-zone-color').trim();
+      const zoneColorCardsOk = bootCardZoneColor === frontendZoneColor && ledgerCardZoneColor === backendZoneColor;
       const telemetryStart = window.__coreTelemetry.length;
       const telemetryPanelHidden = document.querySelector('.telemetry-panel').hidden;
       const threadInitiallyHidden = document.querySelector('.thread-panel').hidden;
@@ -168,6 +175,7 @@ export async function readLiveAppState(send, url) {
         bootConnected: bootCard.classList.contains('connected'),
         ledgerConnected: document.querySelector('[data-card-id="card-ledger"]').classList.contains('connected')
       };
+      const connectedCardGlowOk = getComputedStyle(bootCard).boxShadow !== 'none' && getComputedStyle(document.querySelector('[data-card-id="card-ledger"]')).boxShadow !== 'none';
       window.__coreState.selection = { cardIds: [], zoneIds: [], groupIds: [] };
       document.querySelector('.thread-panel').hidden = true;
       card.querySelector('[data-action="open-card-thread"]').click();
@@ -233,6 +241,31 @@ export async function readLiveAppState(send, url) {
       const sourceBorderStandoff = sourceEndpointDistance >= 4 && sourceEndpointDistance <= 16 && !browserInside(points[0], sourceRect);
       const targetBorderStandoff = targetEndpointDistance >= 4 && targetEndpointDistance <= 16 && !browserInside(points[points.length - 1], targetRect);
       const relationshipEndpointChecks = browserEndpointChecks('[data-relationship-id]');
+      const beforeCloseRouteStyles = {
+        zoneLeft: card.style.left,
+        zoneTop: card.style.top,
+        ledgerLeft: ledgerCard.style.left,
+        ledgerTop: ledgerCard.style.top
+      };
+      card.style.left = '420px';
+      card.style.top = '430px';
+      ledgerCard.style.left = String(card.offsetLeft + card.offsetWidth + 20) + 'px';
+      ledgerCard.style.top = '430px';
+      await import('/src/runtime/function/render-relationship-overlay.ts').then(function renderCloseRelationship(module) { module.renderRelationshipOverlay(); });
+      const closePath = document.querySelector('[data-relationship-id="rel-zone-ledger"]');
+      const closePoints = browserParsePath(closePath.getAttribute('d'));
+      let closeMinimumSegment = Number.POSITIVE_INFINITY;
+      for (let pointIndex = 0; pointIndex < closePoints.length - 1; pointIndex += 1) {
+        const segment = Math.abs(closePoints[pointIndex].x - closePoints[pointIndex + 1].x) + Math.abs(closePoints[pointIndex].y - closePoints[pointIndex + 1].y);
+        if (segment < closeMinimumSegment) closeMinimumSegment = segment;
+      }
+      const closeRelationshipCheck = browserEndpointChecks('[data-relationship-id="rel-zone-ledger"]')[0];
+      const closeRelationshipOk = closeRelationshipCheck.ok && closeMinimumSegment >= 24;
+      card.style.left = beforeCloseRouteStyles.zoneLeft;
+      card.style.top = beforeCloseRouteStyles.zoneTop;
+      ledgerCard.style.left = beforeCloseRouteStyles.ledgerLeft;
+      ledgerCard.style.top = beforeCloseRouteStyles.ledgerTop;
+      await import('/src/runtime/function/render-relationship-overlay.ts').then(function restoreRelationship(module) { module.renderRelationshipOverlay(); });
       const canvasScreen = document.querySelector('.canvas').getBoundingClientRect();
       const clippedCards = [...document.querySelectorAll('[data-card-id]')]
         .map(function cardScreenRect(element) { return { id: element.dataset.cardId, rect: browserScreenRect(element) }; })
@@ -253,6 +286,12 @@ export async function readLiveAppState(send, url) {
         persistedCard,
         refreshRestoredCard,
         bidirectionalConnectedCards,
+        connectedCardGlowOk,
+        zoneColorCardsOk,
+        bootCardZoneColor,
+        frontendZoneColor,
+        ledgerCardZoneColor,
+        backendZoneColor,
         zoneSelected,
         beforeResize,
         afterResize,
@@ -277,6 +316,9 @@ export async function readLiveAppState(send, url) {
         sourceBorderStandoff,
         targetBorderStandoff,
         relationshipEndpointChecks,
+        closeRelationshipOk,
+        closeMinimumSegment,
+        closeRelationshipCheck,
         clippedCards,
         overviewDetail,
         telemetry: window.__coreTelemetry.slice(telemetryStart).map(function telemetryEntry(entry) { return { name: entry.name, args: entry.args }; })

@@ -31,15 +31,26 @@ export function formatLiveSummary(report) {
   const routeLoadingOk = report.specsUrlLoadsApp === true && report.dataUrlLoadsApp === true;
   const honeycombOk = report.honeycombWorldScaleFollowsZoom === true;
   const geometryRecoveryOk = report.corruptGeometryRecovered === true;
+  const closeRelationshipOk = report.closeRelationshipOk === true;
+  const zoneColorCardsOk = report.zoneColorCardsOk === true;
+  const connectedCardGlowOk = report.connectedCardGlowOk === true;
   const overviewOk = report.overviewDetail?.overviewDetail === true && report.overviewDetail?.zoneTitleHidden === true && report.overviewDetail?.cardTitleHidden === true && report.overviewDetail?.worldCoversCanvas === true;
   const lowDetailOk = report.overviewDetail?.lowDetailState?.lowDetail === true && report.overviewDetail?.lowDetailState?.zoneTitleHidden === true && report.overviewDetail?.lowDetailState?.cardTitleHidden === true;
   const lines = [
-    `ok=${routeLoadingOk && honeycombOk && geometryRecoveryOk && failedRelationships.length === 0 && report.ledgerGroupSelection?.ok === true && overviewOk && lowDetailOk && portSpreadOk}`,
+    `ok=${routeLoadingOk && honeycombOk && geometryRecoveryOk && closeRelationshipOk && zoneColorCardsOk && connectedCardGlowOk && failedRelationships.length === 0 && report.ledgerGroupSelection?.ok === true && overviewOk && lowDetailOk && portSpreadOk}`,
     `specsUrlLoadsApp=${report.specsUrlLoadsApp}`,
     `dataUrlLoadsApp=${report.dataUrlLoadsApp}`,
     `tabs=${(report.blueprintStateTabs ?? []).join(',')}`,
     `honeycombWorldScaleFollowsZoom=${report.honeycombWorldScaleFollowsZoom}`,
     `corruptGeometryRecovered=${report.corruptGeometryRecovered}`,
+    `closeRelationshipOk=${report.closeRelationshipOk}`,
+    `closeRelationshipMinimumSegment=${report.closeMinimumSegment}`,
+    `zoneColorCardsOk=${report.zoneColorCardsOk}`,
+    `bootCardZoneColor=${report.bootCardZoneColor}`,
+    `frontendZoneColor=${report.frontendZoneColor}`,
+    `ledgerCardZoneColor=${report.ledgerCardZoneColor}`,
+    `backendZoneColor=${report.backendZoneColor}`,
+    `connectedCardGlowOk=${report.connectedCardGlowOk}`,
     `relationshipsChecked=${relationshipChecks.length}`,
     `relationshipsFailed=${failedRelationships.length}`,
     `failedRelationshipIds=${failedRelationships.map(function failedRelationshipId(check) { return check.id; }).join(',')}`,

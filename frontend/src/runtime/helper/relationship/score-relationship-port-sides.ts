@@ -10,6 +10,7 @@ type CanvasRect = { left: number; top: number; right: number; bottom: number; wi
 
 export function scoreRelationshipPortSides(sourceRect: CanvasRect, targetRect: CanvasRect, sourceSide: string, targetSide: string): number {
   const clearance = 48;
+  const minimumCorridor = clearance * 2;
   const sourcePort = relationshipPortForSide(sourceRect, sourceSide);
   const targetPort = relationshipPortForSide(targetRect, targetSide);
   const sourceNormal = relationshipPortNormalForSide(sourceSide);
@@ -31,5 +32,10 @@ export function scoreRelationshipPortSides(sourceRect: CanvasRect, targetRect: C
   const sameSidePenalty = sourceSide === targetSide ? 900 : 0;
   const mixedAxisPenalty = sourceHorizontal === targetHorizontal ? 0 : 1200;
   const oppositeBonus = sourceNormal.x + targetNormal.x === 0 && sourceNormal.y + targetNormal.y === 0 ? -120 : 0;
-  return routeDistance + awayPenalty + sameSidePenalty + mixedAxisPenalty + oppositeBonus;
+  let tightCorridorPenalty = 0;
+  if (sourceSide === 'right' && targetSide === 'left') tightCorridorPenalty = Math.max(0, minimumCorridor - (targetRect.left - sourceRect.right)) * 80;
+  if (sourceSide === 'left' && targetSide === 'right') tightCorridorPenalty = Math.max(0, minimumCorridor - (sourceRect.left - targetRect.right)) * 80;
+  if (sourceSide === 'bottom' && targetSide === 'top') tightCorridorPenalty = Math.max(0, minimumCorridor - (targetRect.top - sourceRect.bottom)) * 80;
+  if (sourceSide === 'top' && targetSide === 'bottom') tightCorridorPenalty = Math.max(0, minimumCorridor - (sourceRect.top - targetRect.bottom)) * 80;
+  return routeDistance + awayPenalty + sameSidePenalty + mixedAxisPenalty + oppositeBonus + tightCorridorPenalty;
 }
