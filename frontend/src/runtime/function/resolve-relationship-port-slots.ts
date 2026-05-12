@@ -1,6 +1,6 @@
 import { center } from './center.js';
+import { chooseRelationshipPortSides } from './choose-relationship-port-sides.js';
 import { elementCanvasRect } from './element-canvas-rect.js';
-import { relationshipPortSide } from './relationship-port-side.js';
 
 export function resolveRelationshipPortSlots(relationships: SVGPathElement[]): Record<string, { source: { side: string; slotIndex: number; slotCount: number }; target: { side: string; slotIndex: number; slotCount: number } }> {
   const entries: Array<{ relationshipId: string; endpoint: 'source' | 'target'; cardId: string; side: string; sortValue: number; order: number }> = [];
@@ -13,8 +13,9 @@ export function resolveRelationshipPortSlots(relationships: SVGPathElement[]): R
     if (!relationshipId || !source || !target) continue;
     const sourceRect = elementCanvasRect(source);
     const targetRect = elementCanvasRect(target);
-    const sourceSide = relationshipPortSide(sourceRect, targetRect);
-    const targetSide = relationshipPortSide(targetRect, sourceRect);
+    const sides = chooseRelationshipPortSides(sourceRect, targetRect);
+    const sourceSide = sides.sourceSide;
+    const targetSide = sides.targetSide;
     const sourceOtherCenter = center(targetRect);
     const targetOtherCenter = center(sourceRect);
     entries.push({ relationshipId, endpoint: 'source', cardId: sourceId, side: sourceSide, sortValue: sourceSide === 'left' || sourceSide === 'right' ? sourceOtherCenter.y : sourceOtherCenter.x, order });

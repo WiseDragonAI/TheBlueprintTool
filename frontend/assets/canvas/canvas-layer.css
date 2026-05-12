@@ -30,15 +30,15 @@
   min-height: max(2600px, 100%);
   transform-origin: 0 0;
   will-change: transform;
-  contain: layout paint style;
+  contain: layout style;
 }
 
 .grid {
   position: absolute;
-  left: -12000px;
-  top: -1200px;
-  width: 24000px;
-  height: 12000px;
+  left: -100000px;
+  top: -100000px;
+  width: 200000px;
+  height: 200000px;
   pointer-events: none;
   z-index: 0;
   background:

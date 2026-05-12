@@ -28,16 +28,19 @@ export function formatLiveSummary(report) {
     }
   }
   if (portSpreadWorstGap === Infinity) portSpreadWorstGap = 0;
-  const overviewOk = report.overviewDetail?.overviewDetail === true && report.overviewDetail?.zoneTitleHidden === true && report.overviewDetail?.cardTitleHidden === true;
+  const routeLoadingOk = report.specsUrlLoadsApp === true && report.dataUrlLoadsApp === true;
+  const honeycombOk = report.honeycombWorldScaleFollowsZoom === true;
+  const overviewOk = report.overviewDetail?.overviewDetail === true && report.overviewDetail?.zoneTitleHidden === true && report.overviewDetail?.cardTitleHidden === true && report.overviewDetail?.worldCoversCanvas === true;
   const lowDetailOk = report.overviewDetail?.lowDetailState?.lowDetail === true && report.overviewDetail?.lowDetailState?.zoneTitleHidden === true && report.overviewDetail?.lowDetailState?.cardTitleHidden === true;
   const lines = [
-    `ok=${failedRelationships.length === 0 && report.ledgerGroupSelection?.ok === true && overviewOk && lowDetailOk && portSpreadOk}`,
+    `ok=${routeLoadingOk && honeycombOk && failedRelationships.length === 0 && report.ledgerGroupSelection?.ok === true && overviewOk && lowDetailOk && portSpreadOk}`,
     `specsUrlLoadsApp=${report.specsUrlLoadsApp}`,
     `dataUrlLoadsApp=${report.dataUrlLoadsApp}`,
     `tabs=${(report.blueprintStateTabs ?? []).join(',')}`,
     `honeycombWorldScaleFollowsZoom=${report.honeycombWorldScaleFollowsZoom}`,
     `relationshipsChecked=${relationshipChecks.length}`,
     `relationshipsFailed=${failedRelationships.length}`,
+    `failedRelationshipIds=${failedRelationships.map(function failedRelationshipId(check) { return check.id; }).join(',')}`,
     `routeOverflowMax=${routeOverflowMax}`,
     `portSpreadOk=${portSpreadOk}`,
     `portSpreadWorstGap=${portSpreadWorstGap}`,
@@ -52,6 +55,7 @@ export function formatLiveSummary(report) {
     `ledgerGroupSelectedCards=${report.ledgerGroupSelection?.selectedCards?.length ?? 0}`,
     `ledgerGroupHasZoneId=${report.ledgerGroupSelection?.groupHasZoneId}`,
     `overviewOk=${overviewOk}`,
+    `overviewWorldCoversCanvas=${report.overviewDetail?.worldCoversCanvas}`,
     `lowDetailOk=${lowDetailOk}`,
     `lowDetailScale=${report.overviewDetail?.lowDetailState?.viewportScale}`,
     `lowDetailZoneTitleHidden=${report.overviewDetail?.lowDetailState?.zoneTitleHidden}`,

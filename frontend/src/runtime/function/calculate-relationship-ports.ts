@@ -1,7 +1,7 @@
 import { center } from './center.js';
+import { chooseRelationshipPortSides } from './choose-relationship-port-sides.js';
 import { elementCanvasRect } from './element-canvas-rect.js';
 import { relationshipPortForSide } from './relationship-port-for-side.js';
-import { relationshipPortSide } from './relationship-port-side.js';
 import { telemetry } from './telemetry.js';
 
 export function calculateRelationshipPorts(source: HTMLElement, target: HTMLElement, slots?: { source: { side: string; slotIndex: number; slotCount: number }; target: { side: string; slotIndex: number; slotCount: number } }): { sourcePort: { x: number; y: number }; targetPort: { x: number; y: number }; horizontal: boolean; sourceRect: { left: number; top: number; right: number; bottom: number; width: number; height: number }; targetRect: { left: number; top: number; right: number; bottom: number; width: number; height: number } } {
@@ -9,8 +9,9 @@ export function calculateRelationshipPorts(source: HTMLElement, target: HTMLElem
   const targetRect = elementCanvasRect(target);
   const sourceCenter = center(sourceRect);
   const targetCenter = center(targetRect);
-  const sourceSlot = slots?.source ?? { side: relationshipPortSide(sourceRect, targetRect), slotIndex: 0, slotCount: 1 };
-  const targetSlot = slots?.target ?? { side: relationshipPortSide(targetRect, sourceRect), slotIndex: 0, slotCount: 1 };
+  const fallbackSides = chooseRelationshipPortSides(sourceRect, targetRect);
+  const sourceSlot = slots?.source ?? { side: fallbackSides.sourceSide, slotIndex: 0, slotCount: 1 };
+  const targetSlot = slots?.target ?? { side: fallbackSides.targetSide, slotIndex: 0, slotCount: 1 };
   const horizontal = sourceSlot.side === 'left' || sourceSlot.side === 'right' || Math.abs(targetCenter.x - sourceCenter.x) >= Math.abs(targetCenter.y - sourceCenter.y);
   const sourcePort = relationshipPortForSide(sourceRect, sourceSlot.side, sourceSlot.slotIndex, sourceSlot.slotCount);
   const targetPort = relationshipPortForSide(targetRect, targetSlot.side, targetSlot.slotIndex, targetSlot.slotCount);

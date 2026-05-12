@@ -10,6 +10,7 @@ import { browserScreenRect } from './browser-screen-rect.mjs';
 import { browserSegmentHits } from './browser-segment-hits.mjs';
 import { browserSelectFirstLedgerGroup } from './browser-select-first-ledger-group.mjs';
 import { browserWaitFrame } from './browser-wait-frame.mjs';
+import { waitLiveCanvasReady } from './wait-live-canvas-ready.mjs';
 
 export async function readLiveAppState(send, url) {
   await send('Page.enable');
@@ -17,8 +18,10 @@ export async function readLiveAppState(send, url) {
   await send('Emulation.setDeviceMetricsOverride', { width: 1200, height: 820, deviceScaleFactor: 1, mobile: false });
   await send('Page.navigate', { url });
   await wait(900);
+  await waitLiveCanvasReady(send);
   await send('Runtime.evaluate', { expression: 'localStorage.clear(); location.reload();' });
   await wait(900);
+  await waitLiveCanvasReady(send);
   const honeycomb = await send('Runtime.evaluate', {
     returnByValue: true,
     awaitPromise: true,
@@ -71,6 +74,7 @@ export async function readLiveAppState(send, url) {
   });
   await send('Runtime.evaluate', { expression: 'localStorage.clear(); location.reload();' });
   await wait(900);
+  await waitLiveCanvasReady(send);
   const result = await send('Runtime.evaluate', {
     returnByValue: true,
     awaitPromise: true,
@@ -236,6 +240,7 @@ export async function readLiveAppState(send, url) {
   });
   await send('Runtime.evaluate', { expression: 'location.reload();' });
   await wait(900);
+  await waitLiveCanvasReady(send);
   const restored = await send('Runtime.evaluate', {
     returnByValue: true,
     expression: `(function readRestoredCardState() {

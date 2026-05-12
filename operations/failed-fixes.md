@@ -140,3 +140,18 @@ Previous work:
 Current corrective attempt:
 - Hide card titles and zone labels in low-detail mode, not only overview mode.
 - Bound relationship lane offsets to a small deterministic lane band instead of using the global relationship index as distance.
+
+## 2026-05-12: Canvas Crop And Wrong Relationship Start Side
+
+Problem:
+- At low zoom the canvas still appears cropped instead of behaving like an infinite surface.
+- Some relationship routes still loop because the source side is chosen from a center-vector heuristic instead of the shortest outward-facing border pair.
+
+Failed assumption:
+- I treated a larger grid and bounded lanes as enough, but `.canvas-content` still had paint containment, which clips descendants at the content box.
+- I kept the old side heuristic and only fixed endpoint spacing, so spacing could be correct while the selected side was still wrong.
+
+Current corrective attempt:
+- Remove paint containment from the transformed canvas content layer and expand the world grid.
+- Choose relationship source/target sides by scoring every border-side pair before endpoint slotting.
+- Extend live verification so overview mode fails when the transformed world no longer covers the visible canvas viewport.

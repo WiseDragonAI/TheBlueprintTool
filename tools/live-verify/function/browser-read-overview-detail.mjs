@@ -23,12 +23,15 @@ async function browserReadOverviewDetail() {
   await browserWaitFrame();
   const zoneTitle = document.querySelector('.zone-title');
   const cardTitle = document.querySelector('.card strong');
+  const gridRect = document.querySelector('.grid').getBoundingClientRect();
+  const canvasRect = canvas.getBoundingClientRect();
   const zoneTitleStyle = zoneTitle ? getComputedStyle(zoneTitle) : null;
   const cardTitleStyle = cardTitle ? getComputedStyle(cardTitle) : null;
   return {
     viewportScale: window.__coreState.viewport.scale,
     lowDetail: canvas.classList.contains('low-detail'),
     overviewDetail: canvas.classList.contains('overview-detail'),
+    worldCoversCanvas: gridRect.left <= canvasRect.left && gridRect.right >= canvasRect.right && gridRect.top <= canvasRect.top && gridRect.bottom >= canvasRect.bottom,
     zoneTitleHidden: zoneTitleStyle?.display === 'none',
     cardTitleHidden: cardTitleStyle?.display === 'none',
     lowDetailState,
