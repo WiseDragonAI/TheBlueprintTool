@@ -11,8 +11,10 @@ export async function refreshRuntimeState(): Promise<void> {
   telemetry('subscribe-server-refresh', { specId: '50000006', source: 'refresh-button' });
   await fetch('/blueprinttool/data').catch(() => undefined);
   const persisted = readPersistedState();
-  Object.assign(state.viewport, persisted.viewport ?? { x: 0, y: 0, scale: 1 });
   state.activeTab = routeTab(window.location.pathname);
+  state.viewports = persisted.viewports && typeof persisted.viewports === 'object' ? persisted.viewports : state.viewports;
+  Object.assign(state.viewport, state.viewports?.[state.activeTab] ?? persisted.viewport ?? { x: 0, y: 0, scale: 1 });
+  if (state.activeTab === 'surface') state.surfaceViewport = { ...state.viewport };
   state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
   hydratePersistedGeometry(persisted.geometry);
   await loadActiveLedgerState();

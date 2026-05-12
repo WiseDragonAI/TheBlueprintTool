@@ -6,7 +6,8 @@ export async function loadActiveLedgerState(): Promise<void> {
   const endpoint = ledgerEndpointForTab(state.activeTab);
   if (!endpoint) {
     state.activeLedger = null;
-    Object.assign(state.viewport, state.surfaceViewport ?? { x: 0, y: 0, scale: 1 });
+    Object.assign(state.viewport, state.viewports?.surface ?? state.surfaceViewport ?? state.viewport);
+    state.surfaceViewport = { ...state.viewport };
     telemetry('load-ledger-state', { activeTab: state.activeTab, source: 'static-surface' });
     return;
   }
@@ -18,7 +19,7 @@ export async function loadActiveLedgerState(): Promise<void> {
   }
   const ledger = await response.json().catch(() => null);
   state.activeLedger = ledger;
-  if (ledger?.viewport) Object.assign(state.viewport, ledger.viewport);
+  Object.assign(state.viewport, state.viewports?.[state.activeTab] ?? ledger?.viewport ?? state.viewport);
   state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
   telemetry('load-ledger-state', { activeTab: state.activeTab, ok: Boolean(ledger), cards: ledger?.cards?.length ?? 0, relationships: ledger?.relationships?.length ?? 0 });
 }

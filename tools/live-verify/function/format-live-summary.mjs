@@ -34,10 +34,11 @@ export function formatLiveSummary(report) {
   const closeRelationshipOk = report.closeRelationshipOk === true;
   const zoneColorCardsOk = report.zoneColorCardsOk === true;
   const connectedCardGlowOk = report.connectedCardGlowOk === true;
+  const viewportRefreshOk = report.viewportRefreshPreserved === true;
   const overviewOk = report.overviewDetail?.overviewDetail === true && report.overviewDetail?.zoneTitleHidden === true && report.overviewDetail?.cardTitleHidden === true && report.overviewDetail?.worldCoversCanvas === true;
   const lowDetailOk = report.overviewDetail?.lowDetailState?.lowDetail === true && report.overviewDetail?.lowDetailState?.zoneTitleHidden === true && report.overviewDetail?.lowDetailState?.cardTitleHidden === true;
   const lines = [
-    `ok=${routeLoadingOk && honeycombOk && geometryRecoveryOk && closeRelationshipOk && zoneColorCardsOk && connectedCardGlowOk && failedRelationships.length === 0 && report.ledgerGroupSelection?.ok === true && overviewOk && lowDetailOk && portSpreadOk}`,
+    `ok=${routeLoadingOk && honeycombOk && geometryRecoveryOk && closeRelationshipOk && zoneColorCardsOk && connectedCardGlowOk && viewportRefreshOk && failedRelationships.length === 0 && report.ledgerGroupSelection?.ok === true && overviewOk && lowDetailOk && portSpreadOk}`,
     `specsUrlLoadsApp=${report.specsUrlLoadsApp}`,
     `dataUrlLoadsApp=${report.dataUrlLoadsApp}`,
     `tabs=${(report.blueprintStateTabs ?? []).join(',')}`,
@@ -51,6 +52,8 @@ export function formatLiveSummary(report) {
     `ledgerCardZoneColor=${report.ledgerCardZoneColor}`,
     `backendZoneColor=${report.backendZoneColor}`,
     `connectedCardGlowOk=${report.connectedCardGlowOk}`,
+    `viewportRefreshPreserved=${report.viewportRefreshPreserved}`,
+    `restoredViewport=${JSON.stringify(report.restoredViewport ?? {})}`,
     `relationshipsChecked=${relationshipChecks.length}`,
     `relationshipsFailed=${failedRelationships.length}`,
     `failedRelationshipIds=${failedRelationships.map(function failedRelationshipId(check) { return check.id; }).join(',')}`,

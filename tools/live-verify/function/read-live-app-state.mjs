@@ -328,11 +328,27 @@ export async function readLiveAppState(send, url) {
   await send('Runtime.evaluate', { expression: 'location.reload();' });
   await wait(900);
   await waitLiveCanvasReady(send);
+  await send('Runtime.evaluate', {
+    expression: `(function seedViewportPersistence() {
+      const record = JSON.parse(localStorage.getItem('corev2.canvas.state') ?? '{}');
+      record.viewport = { x: -438, y: 217, scale: 0.63 };
+      record.viewports = { ...(record.viewports ?? {}), surface: record.viewport };
+      record.activeTab = 'surface';
+      localStorage.setItem('corev2.canvas.state', JSON.stringify(record));
+      location.reload();
+    })()`
+  });
+  await wait(900);
+  await waitLiveCanvasReady(send);
   const restored = await send('Runtime.evaluate', {
     returnByValue: true,
     expression: `(function readRestoredCardState() {
       const element = document.querySelector('[data-card-id="card-boot"]');
-      return { restoredCard: { left: element.offsetLeft, top: element.offsetTop, width: element.offsetWidth, height: element.offsetHeight } };
+      return {
+        restoredCard: { left: element.offsetLeft, top: element.offsetTop, width: element.offsetWidth, height: element.offsetHeight },
+        viewportRefreshPreserved: window.__coreState.viewport.x === -438 && window.__coreState.viewport.y === 217 && window.__coreState.viewport.scale === 0.63,
+        restoredViewport: { ...window.__coreState.viewport }
+      };
     })()`
   });
   return { ...corruptedGeometryReport.result.result.value, ...honeycomb.result.result.value, ...result.result.result.value, ...restored.result.result.value };

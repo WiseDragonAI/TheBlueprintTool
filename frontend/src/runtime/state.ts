@@ -12,6 +12,7 @@ export const state: any = {
   groupCounter: 2,
   viewport: { x: 0, y: 0, scale: 1 },
   surfaceViewport: { x: 0, y: 0, scale: 1 },
+  viewports: { surface: { x: 0, y: 0, scale: 1 } },
   selection: { cardIds: [], zoneIds: [], groupIds: [] },
   pointer: null,
   clipboard: null,

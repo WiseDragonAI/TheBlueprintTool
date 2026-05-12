@@ -10,6 +10,7 @@ import { handleNativeDragStart } from './handle-native-drag-start.js';
 import { handleWheel } from './handle-wheel.js';
 import { ledgerEndpointForTab } from './ledger-endpoint-for-tab.js';
 import { loadActiveLedgerState } from './load-active-ledger-state.js';
+import { persistState } from './persist-state.js';
 import { renderCanvasSurface } from './render-canvas-surface.js';
 import { renderTabRegistry } from './render-tab-registry.js';
 import { renderToolbox } from './render-toolbox.js';
@@ -37,7 +38,9 @@ export function bindInputs(): void {
   document.querySelector('.tabs')?.addEventListener('click', async (event) => {
     const button = (event.target as HTMLElement).closest('[data-tab]') as HTMLElement | null;
     if (!button?.dataset.tab) return;
+    state.viewports = { ...(state.viewports ?? {}), [state.activeTab]: { ...state.viewport } };
     if (!ledgerEndpointForTab(state.activeTab)) state.surfaceViewport = { ...state.viewport };
+    persistState();
     state.activeTab = button.dataset.tab;
     history.pushState({}, '', `/${state.activeTab}`);
     telemetry('browser-route-change', { activeTab: state.activeTab });
@@ -56,6 +59,9 @@ export function bindInputs(): void {
   document.addEventListener('keydown', handleKeyboard);
   document.addEventListener('click', handleActionClick);
   window.addEventListener('popstate', () => {
+    state.viewports = { ...(state.viewports ?? {}), [state.activeTab]: { ...state.viewport } };
+    if (!ledgerEndpointForTab(state.activeTab)) state.surfaceViewport = { ...state.viewport };
+    persistState();
     state.activeTab = routeTab(window.location.pathname);
     telemetry('browser-route-change', { activeTab: state.activeTab });
     void loadActiveLedgerState().then(renderCanvasSurface);
