@@ -121,3 +121,22 @@ Current corrective attempt:
 - Group endpoints by card id and border side.
 - Assign deterministic evenly spaced slots before routing each path.
 - Extend live verification to report port spread failures, not only endpoint attachment.
+
+## 2026-05-12: Dense Relationship Lanes Explode Across Ledger Canvas
+
+Problem:
+- Dense ledger tabs show very large rectangular arrow paths that visually dominate and crop the canvas.
+- Low zoom still shows oversized labels and titles over tiny cards.
+
+Failed assumption:
+- I treated endpoint spacing as enough to validate the arrow fix.
+- The route helper still multiplied the global relationship index by lane spacing, so dense ledgers created huge deterministic detours.
+- Low-detail mode hid descriptions and controls but not card titles or inverse-scaled zone labels.
+
+Previous work:
+- Relationship endpoints were spread by card side.
+- Overview mode hid labels at the deepest zoom level only.
+
+Current corrective attempt:
+- Hide card titles and zone labels in low-detail mode, not only overview mode.
+- Bound relationship lane offsets to a small deterministic lane band instead of using the global relationship index as distance.

@@ -15,6 +15,10 @@ export function formatLiveSummary(report) {
   }
   let portSpreadWorstGap = Infinity;
   let portSpreadOk = true;
+  let routeOverflowMax = 0;
+  for (const check of relationshipChecks) {
+    if ((check.routeOverflow ?? 0) > routeOverflowMax) routeOverflowMax = check.routeOverflow;
+  }
   for (const entry of endpointEntries) {
     for (const candidate of endpointEntries) {
       if (entry.id >= candidate.id || entry.key !== candidate.key) continue;
@@ -25,14 +29,16 @@ export function formatLiveSummary(report) {
   }
   if (portSpreadWorstGap === Infinity) portSpreadWorstGap = 0;
   const overviewOk = report.overviewDetail?.overviewDetail === true && report.overviewDetail?.zoneTitleHidden === true && report.overviewDetail?.cardTitleHidden === true;
+  const lowDetailOk = report.overviewDetail?.lowDetailState?.lowDetail === true && report.overviewDetail?.lowDetailState?.zoneTitleHidden === true && report.overviewDetail?.lowDetailState?.cardTitleHidden === true;
   const lines = [
-    `ok=${failedRelationships.length === 0 && report.ledgerGroupSelection?.ok === true && overviewOk && portSpreadOk}`,
+    `ok=${failedRelationships.length === 0 && report.ledgerGroupSelection?.ok === true && overviewOk && lowDetailOk && portSpreadOk}`,
     `specsUrlLoadsApp=${report.specsUrlLoadsApp}`,
     `dataUrlLoadsApp=${report.dataUrlLoadsApp}`,
     `tabs=${(report.blueprintStateTabs ?? []).join(',')}`,
     `honeycombWorldScaleFollowsZoom=${report.honeycombWorldScaleFollowsZoom}`,
     `relationshipsChecked=${relationshipChecks.length}`,
     `relationshipsFailed=${failedRelationships.length}`,
+    `routeOverflowMax=${routeOverflowMax}`,
     `portSpreadOk=${portSpreadOk}`,
     `portSpreadWorstGap=${portSpreadWorstGap}`,
     `staticGroupSelected=${report.groupSelected}`,
@@ -46,6 +52,10 @@ export function formatLiveSummary(report) {
     `ledgerGroupSelectedCards=${report.ledgerGroupSelection?.selectedCards?.length ?? 0}`,
     `ledgerGroupHasZoneId=${report.ledgerGroupSelection?.groupHasZoneId}`,
     `overviewOk=${overviewOk}`,
+    `lowDetailOk=${lowDetailOk}`,
+    `lowDetailScale=${report.overviewDetail?.lowDetailState?.viewportScale}`,
+    `lowDetailZoneTitleHidden=${report.overviewDetail?.lowDetailState?.zoneTitleHidden}`,
+    `lowDetailCardTitleHidden=${report.overviewDetail?.lowDetailState?.cardTitleHidden}`,
     `overviewScale=${report.overviewDetail?.viewportScale}`,
     `overviewZoneTitleHidden=${report.overviewDetail?.zoneTitleHidden}`,
     `overviewCardTitleHidden=${report.overviewDetail?.cardTitleHidden}`,

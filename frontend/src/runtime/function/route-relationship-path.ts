@@ -17,7 +17,8 @@ export function routeRelationshipPath({ sourcePort, targetPort, horizontal, sour
   const targetEntry = horizontal
     ? { x: targetPort.x + targetNormal.x * clearance, y: targetPort.y }
     : { x: targetPort.x, y: targetPort.y + targetNormal.y * clearance };
-  const laneOffset = routeIndex * laneSpacing;
+  const laneOffset = ((routeIndex % 3) - 1) * laneSpacing;
+  const laneBand = Math.abs(laneOffset);
   const clearHorizontal = sourceNormal.x > 0 ? sourceExit.x <= targetEntry.x : sourceExit.x >= targetEntry.x;
   const clearVertical = sourceNormal.y > 0 ? sourceExit.y <= targetEntry.y : sourceExit.y >= targetEntry.y;
   const sameColumn = Math.abs(sourcePort.x - targetPort.x) < 1;
@@ -33,15 +34,15 @@ export function routeRelationshipPath({ sourcePort, targetPort, horizontal, sour
     const routeY = (sourceExit.y + targetEntry.y) / 2 + laneOffset;
     routedPoints = compactRoutePoints([sourceStandoff, sourceExit, { x: sourceExit.x, y: routeY }, { x: targetEntry.x, y: routeY }, targetEntry, targetStandoff]);
   } else if (horizontal) {
-    const routeY = Math.max(32, Math.min(sourceRect.top, targetRect.top) - clearance - laneOffset);
+    const routeY = Math.max(32, Math.min(sourceRect.top, targetRect.top) - clearance - laneBand);
     routedPoints = compactRoutePoints([sourceStandoff, sourceExit, { x: sourceExit.x, y: routeY }, { x: targetEntry.x, y: routeY }, targetEntry, targetStandoff]);
   } else {
-    const routeX = Math.min(5168, Math.max(sourceRect.right, targetRect.right) + clearance + laneOffset);
+    const routeX = Math.max(sourceRect.right, targetRect.right) + clearance + laneBand;
     routedPoints = compactRoutePoints([sourceStandoff, sourceExit, { x: routeX, y: sourceExit.y }, { x: routeX, y: targetEntry.y }, targetEntry, targetStandoff]);
   }
   const labelPoint = routedPoints[Math.floor(routedPoints.length / 2)];
   const label = { x: labelPoint.x + 10, y: labelPoint.y - 10 };
   const path = `M ${routedPoints.map((point) => `${point.x} ${point.y}`).join(' L ')}`;
-  telemetry('route-relationship-path', { path, label, routedPoints, routeIndex, sourceNormal, targetNormal, visibleEndpointGap, collisionAvoidance: 'orthogonal-card-clearance' });
+  telemetry('route-relationship-path', { path, label, routedPoints, routeIndex, laneOffset, sourceNormal, targetNormal, visibleEndpointGap, collisionAvoidance: 'orthogonal-card-clearance' });
   return { path, label };
 }

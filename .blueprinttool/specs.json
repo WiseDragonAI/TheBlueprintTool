@@ -3408,7 +3408,7 @@
       "y": 6566,
       "w": 520,
       "comment": {
-        "what": "Relationship arrows must use square SVG routing with explicit source and target clearance points so paths remain readable and avoid crossing through connected card interiors. The visible SVG path must start and end outside connected card borders using outward normals derived from each card border side. For non-direct routes, the route must leave the card through a clearance lane and use a short final connector near the middle of the target side; long route segments must not run on the standoff line next to a card border. Multiple visible routes must use deterministic lanes instead of merging on the same segment. If source and target have a clean direct horizontal or vertical gap, the route must not add a decorative detour."
+        "what": "Relationship arrows must use square SVG routing with explicit source and target clearance points so paths remain readable and avoid crossing through connected card interiors. The visible SVG path must start and end outside connected card borders using outward normals derived from each card border side. For non-direct routes, the route must leave the card through a clearance lane and use a short final connector near the middle of the target side; long route segments must not run on the standoff line next to a card border. Multiple visible routes must use deterministic bounded lanes instead of merging on the same segment; lane offsets must not grow from the global relationship index. If source and target have a clean direct horizontal or vertical gap, the route must not add a decorative detour."
       },
       "facts": [],
       "fields": []

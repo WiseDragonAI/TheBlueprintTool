@@ -6,6 +6,15 @@ export function browserEndpointChecks(selector) {
     const relationshipPoints = browserParsePath(relationship.getAttribute('d'));
     const relationshipSourceRect = browserRect(source);
     const relationshipTargetRect = browserRect(target);
+    const pathMinX = Math.min(...relationshipPoints.map(function relationshipPointX(point) { return point.x; }));
+    const pathMaxX = Math.max(...relationshipPoints.map(function relationshipPointX(point) { return point.x; }));
+    const pathMinY = Math.min(...relationshipPoints.map(function relationshipPointY(point) { return point.y; }));
+    const pathMaxY = Math.max(...relationshipPoints.map(function relationshipPointY(point) { return point.y; }));
+    const unionMinX = Math.min(relationshipSourceRect.left, relationshipTargetRect.left);
+    const unionMaxX = Math.max(relationshipSourceRect.right, relationshipTargetRect.right);
+    const unionMinY = Math.min(relationshipSourceRect.top, relationshipTargetRect.top);
+    const unionMaxY = Math.max(relationshipSourceRect.bottom, relationshipTargetRect.bottom);
+    const routeOverflow = Math.max(unionMinX - pathMinX, pathMaxX - unionMaxX, unionMinY - pathMinY, pathMaxY - unionMaxY, 0);
     const relationshipSourceDistance = browserDistanceToRect(relationshipPoints[0], relationshipSourceRect);
     const relationshipTargetDistance = browserDistanceToRect(relationshipPoints[relationshipPoints.length - 1], relationshipTargetRect);
     const relationshipSourcePoint = relationshipPoints[0];
@@ -54,13 +63,14 @@ export function browserEndpointChecks(selector) {
       targetAxis,
       sourcePoint: relationshipSourcePoint,
       targetPoint: relationshipTargetPoint,
+      routeOverflow,
       sourceDistance: relationshipSourceDistance,
       targetDistance: relationshipTargetDistance,
       sourceOutside: !browserInside(relationshipPoints[0], relationshipSourceRect),
       targetOutside: !browserInside(relationshipPoints[relationshipPoints.length - 1], relationshipTargetRect),
       sourceConnectorClearance,
       targetConnectorClearance,
-      ok: relationshipSourceDistance >= 4 && relationshipSourceDistance <= 16 && relationshipTargetDistance >= 4 && relationshipTargetDistance <= 16 && sourceConnectorClearance && targetConnectorClearance
+      ok: relationshipSourceDistance >= 4 && relationshipSourceDistance <= 16 && relationshipTargetDistance >= 4 && relationshipTargetDistance <= 16 && sourceConnectorClearance && targetConnectorClearance && routeOverflow <= 140
     };
   });
 }

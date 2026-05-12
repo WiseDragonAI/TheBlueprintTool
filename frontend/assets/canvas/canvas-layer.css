@@ -74,8 +74,10 @@
 }
 
 .canvas.low-detail .card p,
+.canvas.low-detail .card strong,
 .canvas.low-detail .card-tabs,
 .canvas.low-detail .zone p,
+.canvas.low-detail .zone-title,
 .canvas.low-detail .zone-actions,
 .canvas.low-detail .hash,
 .canvas.low-detail .relationships text {
@@ -89,12 +91,6 @@
 .canvas.overview-detail .card {
   min-height: 34px;
   padding: 8px;
-}
-
-.canvas.overview-detail .card strong {
-  display: block;
-  font-size: 13px;
-  line-height: 1.1;
 }
 
 .canvas.overview-detail .card strong,
