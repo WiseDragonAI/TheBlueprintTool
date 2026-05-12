@@ -1,5 +1,9 @@
+/**
+ * WHAT: Runtime helper that assigns deterministic endpoint slots for visible relationships.
+ * WHY: Multiple arrows sharing one card side must stay separated before path routing.
+ */
 import { center } from './center.js';
-import { chooseRelationshipPortSides } from './choose-relationship-port-sides.js';
+import { chooseRelationshipPortSides } from '../helper/relationship/choose-relationship-port-sides.js';
 import { elementCanvasRect } from './element-canvas-rect.js';
 
 export function resolveRelationshipPortSlots(relationships: SVGPathElement[]): Record<string, { source: { side: string; slotIndex: number; slotCount: number }; target: { side: string; slotIndex: number; slotCount: number } }> {

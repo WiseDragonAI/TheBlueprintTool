@@ -1,5 +1,9 @@
-import { center } from './center.js';
-import { relationshipPortForSide } from './relationship-port-for-side.js';
+/**
+ * WHAT: Runtime relationship helper that scores one source/target border-side pair.
+ * WHY: Routing should choose the shortest outward-facing path before assigning endpoint slots.
+ */
+import { center } from '../../function/center.js';
+import { relationshipPortForSide } from '../../function/relationship-port-for-side.js';
 import { relationshipPortNormalForSide } from './relationship-port-normal-for-side.js';
 
 type CanvasRect = { left: number; top: number; right: number; bottom: number; width: number; height: number };

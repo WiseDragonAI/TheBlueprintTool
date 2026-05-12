@@ -1,5 +1,9 @@
+/**
+ * WHAT: Runtime helper that resolves source and target relationship ports from DOM card geometry.
+ * WHY: SVG relationship routes must attach to chosen card borders in canvas-world coordinates.
+ */
 import { center } from './center.js';
-import { chooseRelationshipPortSides } from './choose-relationship-port-sides.js';
+import { chooseRelationshipPortSides } from '../helper/relationship/choose-relationship-port-sides.js';
 import { elementCanvasRect } from './element-canvas-rect.js';
 import { relationshipPortForSide } from './relationship-port-for-side.js';
 import { telemetry } from './telemetry.js';

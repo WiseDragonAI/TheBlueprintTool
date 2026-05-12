@@ -1,3 +1,7 @@
+/**
+ * WHAT: Runtime relationship helper that chooses source and target border sides.
+ * WHY: Relationship arrows should leave from the shortest outward-facing side pair, not a center-vector guess.
+ */
 import { relationshipPortSideOptions } from './relationship-port-side-options.js';
 import { scoreRelationshipPortSides } from './score-relationship-port-sides.js';
 
