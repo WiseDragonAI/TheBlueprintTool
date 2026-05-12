@@ -3,6 +3,7 @@ import { state } from '../state.js';
 import { createLedgerRelationshipOverlay } from './create-ledger-relationship-overlay.js';
 import { patchLedgerCard } from './patch-ledger-card.js';
 import { patchLedgerZone } from './patch-ledger-zone.js';
+import { setCanvasLayerHidden } from './set-canvas-layer-hidden.js';
 import { telemetry } from './telemetry.js';
 
 export function renderLedgerSurface(): void {
@@ -10,7 +11,7 @@ export function renderLedgerSurface(): void {
   const isLedgerTab = Boolean(ledger);
   content.querySelectorAll('.ledger-node, .ledger-relationships').forEach((node) => node.remove());
   content.querySelectorAll(':scope > .card:not(.ledger-node), :scope > .zone:not(.ledger-node), :scope > .relationships:not(.ledger-relationships)').forEach((node) => {
-    (node as HTMLElement).hidden = isLedgerTab;
+    setCanvasLayerHidden(node, isLedgerTab);
   });
   if (!ledger) {
     telemetry('render-ledger-surface', { activeTab: state.activeTab, mode: 'static' });

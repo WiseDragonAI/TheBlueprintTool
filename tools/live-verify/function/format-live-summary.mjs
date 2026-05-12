@@ -33,12 +33,17 @@ export function formatLiveSummary(report) {
   const geometryRecoveryOk = report.corruptGeometryRecovered === true;
   const closeRelationshipOk = report.closeRelationshipOk === true;
   const zoneColorCardsOk = report.zoneColorCardsOk === true;
+  const zoneFillTransparentOk = report.zoneFillReport?.ok === true;
   const connectedCardGlowOk = report.connectedCardGlowOk === true;
   const viewportRefreshOk = report.viewportRefreshPreserved === true;
+  const ledgerStaticOverlayOk = report.specsTabLoad?.staticRelationshipsHidden === true
+    && report.dataTabLoad?.staticRelationshipsHidden === true
+    && report.specsTabLoad?.staticRelationshipVisibleCount === 0
+    && report.dataTabLoad?.staticRelationshipVisibleCount === 0;
   const overviewOk = report.overviewDetail?.overviewDetail === true && report.overviewDetail?.zoneTitleHidden === true && report.overviewDetail?.cardTitleHidden === true && report.overviewDetail?.worldCoversCanvas === true;
   const lowDetailOk = report.overviewDetail?.lowDetailState?.lowDetail === true && report.overviewDetail?.lowDetailState?.zoneTitleHidden === true && report.overviewDetail?.lowDetailState?.cardTitleHidden === true;
   const lines = [
-    `ok=${routeLoadingOk && honeycombOk && geometryRecoveryOk && closeRelationshipOk && zoneColorCardsOk && connectedCardGlowOk && viewportRefreshOk && failedRelationships.length === 0 && report.ledgerGroupSelection?.ok === true && overviewOk && lowDetailOk && portSpreadOk}`,
+    `ok=${routeLoadingOk && honeycombOk && geometryRecoveryOk && closeRelationshipOk && zoneColorCardsOk && zoneFillTransparentOk && connectedCardGlowOk && viewportRefreshOk && ledgerStaticOverlayOk && failedRelationships.length === 0 && report.ledgerGroupSelection?.ok === true && overviewOk && lowDetailOk && portSpreadOk}`,
     `specsUrlLoadsApp=${report.specsUrlLoadsApp}`,
     `dataUrlLoadsApp=${report.dataUrlLoadsApp}`,
     `tabs=${(report.blueprintStateTabs ?? []).join(',')}`,
@@ -47,6 +52,8 @@ export function formatLiveSummary(report) {
     `closeRelationshipOk=${report.closeRelationshipOk}`,
     `closeRelationshipMinimumSegment=${report.closeMinimumSegment}`,
     `zoneColorCardsOk=${report.zoneColorCardsOk}`,
+    `zoneFillTransparentOk=${zoneFillTransparentOk}`,
+    `zoneFillBackgroundUsesAlpha=${report.zoneFillReport?.backgroundUsesAlpha}`,
     `bootCardZoneColor=${report.bootCardZoneColor}`,
     `frontendZoneColor=${report.frontendZoneColor}`,
     `ledgerCardZoneColor=${report.ledgerCardZoneColor}`,
@@ -54,6 +61,9 @@ export function formatLiveSummary(report) {
     `connectedCardGlowOk=${report.connectedCardGlowOk}`,
     `viewportRefreshPreserved=${report.viewportRefreshPreserved}`,
     `restoredViewport=${JSON.stringify(report.restoredViewport ?? {})}`,
+    `ledgerStaticOverlayOk=${ledgerStaticOverlayOk}`,
+    `specsStaticRelationshipVisibleCount=${report.specsTabLoad?.staticRelationshipVisibleCount}`,
+    `dataStaticRelationshipVisibleCount=${report.dataTabLoad?.staticRelationshipVisibleCount}`,
     `relationshipsChecked=${relationshipChecks.length}`,
     `relationshipsFailed=${failedRelationships.length}`,
     `failedRelationshipIds=${failedRelationships.map(function failedRelationshipId(check) { return check.id; }).join(',')}`,

@@ -3941,7 +3941,7 @@
       "y": 4688,
       "w": 560,
       "comment": {
-        "what": "When an operator clicks a route-addressable ledger tab, navigate-tab-controller derives the route, fetches that tab ledger, replaces the canvas graph with the ledger cards, zones, and relationships, and records load-ledger-state/render-ledger-surface telemetry."
+        "what": "When an operator clicks a route-addressable ledger tab, navigate-tab-controller derives the route, fetches that tab ledger, replaces the canvas graph with the ledger cards, zones, and relationships, hides every static surface card, zone, group, and relationship SVG layer, and records load-ledger-state/render-ledger-surface telemetry."
       },
       "facts": [],
       "fields": []

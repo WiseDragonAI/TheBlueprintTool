@@ -10,6 +10,7 @@ import { browserScreenRect } from './browser-screen-rect.mjs';
 import { browserSegmentHits } from './browser-segment-hits.mjs';
 import { browserSelectFirstLedgerGroup } from './browser-select-first-ledger-group.mjs';
 import { browserWaitFrame } from './browser-wait-frame.mjs';
+import { browserZoneFillReport } from './browser-zone-fill-report.mjs';
 import { waitLiveCanvasReady } from './wait-live-canvas-ready.mjs';
 
 export async function readLiveAppState(send, url) {
@@ -132,6 +133,7 @@ export async function readLiveAppState(send, url) {
       ${browserSegmentHits}
       ${browserEndpointChecks}
       ${browserWaitFrame}
+      ${browserZoneFillReport}
       ${browserLoadTab}
       ${browserSelectFirstLedgerGroup}
       ${browserReadOverviewDetail}
@@ -154,6 +156,7 @@ export async function readLiveAppState(send, url) {
       const bootCardZoneColor = getComputedStyle(bootCard).getPropertyValue('--card-zone-color').trim();
       const ledgerCardZoneColor = getComputedStyle(ledgerCard).getPropertyValue('--card-zone-color').trim();
       const zoneColorCardsOk = bootCardZoneColor === frontendZoneColor && ledgerCardZoneColor === backendZoneColor;
+      const zoneFillReport = browserZoneFillReport('[data-zone-id="zone-frontend"]');
       const telemetryStart = window.__coreTelemetry.length;
       const telemetryPanelHidden = document.querySelector('.telemetry-panel').hidden;
       const threadInitiallyHidden = document.querySelector('.thread-panel').hidden;
@@ -288,6 +291,7 @@ export async function readLiveAppState(send, url) {
         bidirectionalConnectedCards,
         connectedCardGlowOk,
         zoneColorCardsOk,
+        zoneFillReport,
         bootCardZoneColor,
         frontendZoneColor,
         ledgerCardZoneColor,
