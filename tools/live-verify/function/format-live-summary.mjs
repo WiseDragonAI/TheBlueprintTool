@@ -34,6 +34,7 @@ export function formatLiveSummary(report) {
   const closeRelationshipOk = report.closeRelationshipOk === true;
   const zoneColorCardsOk = report.zoneColorCardsOk === true;
   const zoneFillTransparentOk = report.zoneFillReport?.ok === true;
+  const zoneStackOk = report.staticZoneStackReport?.ok === true && report.ledgerZoneStackReport?.ok === true;
   const connectedCardGlowOk = report.connectedCardGlowOk === true;
   const viewportRefreshOk = report.viewportRefreshPreserved === true;
   const ledgerStaticOverlayOk = report.specsTabLoad?.staticRelationshipsHidden === true
@@ -43,7 +44,7 @@ export function formatLiveSummary(report) {
   const overviewOk = report.overviewDetail?.overviewDetail === true && report.overviewDetail?.zoneTitleHidden === true && report.overviewDetail?.cardTitleHidden === true && report.overviewDetail?.worldCoversCanvas === true;
   const lowDetailOk = report.overviewDetail?.lowDetailState?.lowDetail === true && report.overviewDetail?.lowDetailState?.zoneTitleHidden === true && report.overviewDetail?.lowDetailState?.cardTitleHidden === true;
   const lines = [
-    `ok=${routeLoadingOk && honeycombOk && geometryRecoveryOk && closeRelationshipOk && zoneColorCardsOk && zoneFillTransparentOk && connectedCardGlowOk && viewportRefreshOk && ledgerStaticOverlayOk && failedRelationships.length === 0 && report.ledgerGroupSelection?.ok === true && overviewOk && lowDetailOk && portSpreadOk}`,
+    `ok=${routeLoadingOk && honeycombOk && geometryRecoveryOk && closeRelationshipOk && zoneColorCardsOk && zoneFillTransparentOk && zoneStackOk && connectedCardGlowOk && viewportRefreshOk && ledgerStaticOverlayOk && failedRelationships.length === 0 && report.ledgerGroupSelection?.ok === true && overviewOk && lowDetailOk && portSpreadOk}`,
     `specsUrlLoadsApp=${report.specsUrlLoadsApp}`,
     `dataUrlLoadsApp=${report.dataUrlLoadsApp}`,
     `tabs=${(report.blueprintStateTabs ?? []).join(',')}`,
@@ -54,6 +55,10 @@ export function formatLiveSummary(report) {
     `zoneColorCardsOk=${report.zoneColorCardsOk}`,
     `zoneFillTransparentOk=${zoneFillTransparentOk}`,
     `zoneFillBackgroundUsesAlpha=${report.zoneFillReport?.backgroundUsesAlpha}`,
+    `zoneFillBackgroundAlpha=${report.zoneFillReport?.backgroundAlpha}`,
+    `zoneStackOk=${zoneStackOk}`,
+    `staticZoneStack=${JSON.stringify(report.staticZoneStackReport ?? {})}`,
+    `ledgerZoneStack=${JSON.stringify(report.ledgerZoneStackReport ?? {})}`,
     `bootCardZoneColor=${report.bootCardZoneColor}`,
     `frontendZoneColor=${report.frontendZoneColor}`,
     `ledgerCardZoneColor=${report.ledgerCardZoneColor}`,

@@ -1981,7 +1981,7 @@
       "y": 3346,
       "w": 320,
       "comment": {
-        "what": ""
+        "what": "Group regions must remain below regular zones in the canvas stacking order. A regular zone that intersects a group must visually occlude group fill and borders enough that group geometry does not read as being drawn over the zone."
       },
       "facts": [],
       "fields": []

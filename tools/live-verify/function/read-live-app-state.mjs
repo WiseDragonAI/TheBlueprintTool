@@ -11,6 +11,7 @@ import { browserSegmentHits } from './browser-segment-hits.mjs';
 import { browserSelectFirstLedgerGroup } from './browser-select-first-ledger-group.mjs';
 import { browserWaitFrame } from './browser-wait-frame.mjs';
 import { browserZoneFillReport } from './browser-zone-fill-report.mjs';
+import { browserZoneStackReport } from './browser-zone-stack-report.mjs';
 import { waitLiveCanvasReady } from './wait-live-canvas-ready.mjs';
 
 export async function readLiveAppState(send, url) {
@@ -134,12 +135,14 @@ export async function readLiveAppState(send, url) {
       ${browserEndpointChecks}
       ${browserWaitFrame}
       ${browserZoneFillReport}
+      ${browserZoneStackReport}
       ${browserLoadTab}
       ${browserSelectFirstLedgerGroup}
       ${browserReadOverviewDetail}
       const specsTabLoad = await browserLoadTab('specs');
       const dataTabLoad = await browserLoadTab('data');
       const ledgerGroupSelection = await browserSelectFirstLedgerGroup();
+      const ledgerZoneStackReport = browserZoneStackReport('.ledger-node[data-group-id]', '.ledger-node[data-zone-id]');
       document.querySelector('[data-tab="surface"]').click();
       await browserWaitFrame();
       const surfaceRestoredAfterLedgerTabs = document.querySelector('[data-card-id="card-boot"]')?.hidden === false && document.querySelectorAll('.ledger-node').length === 0;
@@ -157,6 +160,7 @@ export async function readLiveAppState(send, url) {
       const ledgerCardZoneColor = getComputedStyle(ledgerCard).getPropertyValue('--card-zone-color').trim();
       const zoneColorCardsOk = bootCardZoneColor === frontendZoneColor && ledgerCardZoneColor === backendZoneColor;
       const zoneFillReport = browserZoneFillReport('[data-zone-id="zone-frontend"]');
+      const staticZoneStackReport = browserZoneStackReport('[data-group-id="group-core"]', '[data-zone-id]');
       const telemetryStart = window.__coreTelemetry.length;
       const telemetryPanelHidden = document.querySelector('.telemetry-panel').hidden;
       const threadInitiallyHidden = document.querySelector('.thread-panel').hidden;
@@ -279,6 +283,7 @@ export async function readLiveAppState(send, url) {
         specsTabLoad,
         dataTabLoad,
         ledgerGroupSelection,
+        ledgerZoneStackReport,
         surfaceRestoredAfterLedgerTabs,
         cardNotesOpenedThreadFromUnselected,
         inlineEditActive,
@@ -292,6 +297,7 @@ export async function readLiveAppState(send, url) {
         connectedCardGlowOk,
         zoneColorCardsOk,
         zoneFillReport,
+        staticZoneStackReport,
         bootCardZoneColor,
         frontendZoneColor,
         ledgerCardZoneColor,
