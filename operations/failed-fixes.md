@@ -155,3 +155,19 @@ Current corrective attempt:
 - Remove paint containment from the transformed canvas content layer and expand the world grid.
 - Choose relationship source/target sides by scoring every border-side pair before endpoint slotting.
 - Extend live verification so overview mode fails when the transformed world no longer covers the visible canvas viewport.
+
+## 2026-05-12: Persisted Card Geometry Collapses Surface Cards
+
+Problem:
+- Surface cards can reload as extremely narrow boxes, making text overlap and relationship arrows route from bad card rectangles.
+- The arrows appear glitchy because routing is computed from the corrupted card dimensions.
+
+Failed assumption:
+- I assumed persisted geometry only contained valid dimensions produced by current drag behavior.
+- The restore path blindly applied card width and height from localStorage, so any stale or corrupt stored geometry could collapse cards before relationship routing.
+
+Current corrective attempt:
+- Clamp restored card, zone, and group dimensions during geometry hydration.
+- Do not restore persisted card height, because cards are not resizable and fixed stale heights can clip their own content.
+- Restore card position and safe width only; leave card height content-driven.
+- Extend live verification to seed intentionally corrupt card geometry and require cards to recover to minimum usable dimensions with no clipped content.

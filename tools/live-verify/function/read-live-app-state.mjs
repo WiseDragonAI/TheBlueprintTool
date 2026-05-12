@@ -22,6 +22,51 @@ export async function readLiveAppState(send, url) {
   await send('Runtime.evaluate', { expression: 'localStorage.clear(); location.reload();' });
   await wait(900);
   await waitLiveCanvasReady(send);
+  const corruptedGeometryRecovery = await send('Runtime.evaluate', {
+    returnByValue: true,
+    expression: `(function seedCorruptGeometry() {
+      localStorage.setItem('corev2.canvas.state', JSON.stringify({
+        viewport: { x: 0, y: 0, scale: 1 },
+        selection: { cardIds: [], zoneIds: [], groupIds: [] },
+        activeTab: 'surface',
+        geometry: {
+          cards: {
+            'card-boot': { x: 120, y: 300, width: 42, height: 38 },
+            'card-zone': { x: 420, y: 190, width: 39, height: 35 },
+            'card-ledger': { x: 420, y: 555, width: 44, height: 36 }
+          }
+        }
+      }));
+      location.reload();
+      return true;
+    })()`
+  });
+  await wait(900);
+  await waitLiveCanvasReady(send);
+  const corruptedGeometryReport = await send('Runtime.evaluate', {
+    returnByValue: true,
+    expression: `(function readCorruptGeometryRecovery() {
+      const cards = [...document.querySelectorAll('[data-card-id]')].map(function cardSize(card) {
+        return {
+          id: card.dataset.cardId,
+          width: card.offsetWidth,
+          height: card.offsetHeight,
+          scrollHeight: card.scrollHeight,
+          contentFits: card.scrollHeight <= card.offsetHeight + 1
+        };
+      });
+      return {
+        corruptGeometrySeeded: ${Boolean(corruptedGeometryRecovery.result.result.value)},
+        corruptGeometryRecovered: cards.every(function cardRecovered(card) {
+          return card.width >= 250 && card.height >= 126 && card.contentFits;
+        }),
+        recoveredCardSizes: cards
+      };
+    })()`
+  });
+  await send('Runtime.evaluate', { expression: 'localStorage.clear(); location.reload();' });
+  await wait(900);
+  await waitLiveCanvasReady(send);
   const honeycomb = await send('Runtime.evaluate', {
     returnByValue: true,
     awaitPromise: true,
@@ -248,5 +293,5 @@ export async function readLiveAppState(send, url) {
       return { restoredCard: { left: element.offsetLeft, top: element.offsetTop, width: element.offsetWidth, height: element.offsetHeight } };
     })()`
   });
-  return { ...honeycomb.result.result.value, ...result.result.result.value, ...restored.result.result.value };
+  return { ...corruptedGeometryReport.result.result.value, ...honeycomb.result.result.value, ...result.result.result.value, ...restored.result.result.value };
 }
