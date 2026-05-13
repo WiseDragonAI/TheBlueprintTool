@@ -1,7 +1,7 @@
 import { state } from '../../state.js';
-import { persistState } from '../../persistence/effect/persist-state.js';
+import { applyViewportTransform } from '../../canvas/effect/apply-viewport-transform.js';
+import { scheduleViewportPersistence } from '../../persistence/effect/schedule-viewport-persistence.js';
 import { point } from '../helper/point.js';
-import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export function handleWheel(event: WheelEvent): void {
@@ -25,6 +25,6 @@ export function handleWheel(event: WheelEvent): void {
     state.viewport.y = pointer.y - anchoredCanvasPoint.y * state.viewport.scale;
     telemetry('calculate-viewport-transform', { kind: 'zoom', pointer, anchoredCanvasPoint, viewport: state.viewport });
   }
-  persistState();
-  renderCanvasSurface();
+  scheduleViewportPersistence();
+  applyViewportTransform();
 }

@@ -1,7 +1,7 @@
 import { ledgerCardBody } from '../helper/ledger-card-body.js';
 
-export function patchLedgerCard(card: Record<string, unknown>): HTMLElement {
-  const element = document.createElement('article');
+export function patchLedgerCard(card: Record<string, unknown>, existing?: HTMLElement | null): HTMLElement {
+  const element = existing ?? document.createElement('article');
   const id = String(card.id ?? '');
   element.className = 'card ledger-node';
   element.dataset.cardId = id;
@@ -17,6 +17,6 @@ export function patchLedgerCard(card: Record<string, unknown>): HTMLElement {
   title.textContent = String(card.title ?? id);
   const body = document.createElement('p');
   body.textContent = ledgerCardBody(card);
-  element.append(hash, title, body);
+  element.replaceChildren(hash, title, body);
   return element;
 }

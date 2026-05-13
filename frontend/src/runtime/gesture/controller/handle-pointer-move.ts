@@ -1,10 +1,10 @@
 import { state } from '../../state.js';
+import { applyViewportTransform } from '../../canvas/effect/apply-viewport-transform.js';
 import { canvasPoint } from '../../canvas/helper/canvas-point.js';
 import { moveSelected } from '../../selection/effect/move-selected.js';
 import { patchBox } from '../../canvas/effect/patch-box.js';
 import { point } from '../helper/point.js';
 import { rectFromPoints } from '../../canvas/helper/rect-from-points.js';
-import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
 import { resizeSelectedZone } from '../../zone/effect/resize-selected-zone.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
@@ -24,7 +24,7 @@ export function handlePointerMove(event: PointerEvent): void {
     state.viewport.x += dx;
     state.viewport.y += dy;
     telemetry('calculate-viewport-transform', { kind: 'pan', viewport: state.viewport });
-    renderCanvasSurface();
+    applyViewportTransform();
   }
   if (state.pointer.intent === 'drag' || state.pointer.intent === 'group') {
     moveSelected(canvasDx, canvasDy);
