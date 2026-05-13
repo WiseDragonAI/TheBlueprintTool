@@ -1,5 +1,6 @@
 import { state } from '../../state.js';
 import { syncActiveLedgerGeometry } from '../../ledger/effect/sync-active-ledger-geometry.js';
+import { renderZoneLabelOverlay } from './render-zone-label-overlay.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export function resizeSelectedZone(dx: number, dy: number): void {
@@ -34,5 +35,6 @@ export function resizeSelectedZone(dx: number, dy: number): void {
   zone.style.width = `${nextWidth}px`;
   zone.style.height = `${nextHeight}px`;
   syncActiveLedgerGeometry([zone]);
+  renderZoneLabelOverlay();
   telemetry(zone.dataset.groupId ? 'render-group-layer' : 'render-zone-layer', { resized: zone.dataset.zoneId ?? zone.dataset.groupId, geometry: zone.getBoundingClientRect().toJSON?.() });
 }
