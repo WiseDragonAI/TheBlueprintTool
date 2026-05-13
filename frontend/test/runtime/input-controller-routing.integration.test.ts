@@ -15,6 +15,10 @@ test('zone and group browser inputs route commands through runtime controllers b
   assert.doesNotMatch(pointerUp, /createZoneFromRect/);
   assert.doesNotMatch(pointerUp, /createGroupFromRect/);
 
+  const createZone = source('frontend/src/runtime/zone/effect/create-zone-from-rect.ts');
+  assert.match(createZone, /addActiveLedgerZone/);
+  assert.match(createZone, /createLedgerZoneAnnotation/);
+
   const keyboard = source('frontend/src/runtime/input/controller/handle-keyboard.ts');
   assert.match(keyboard, /confirmZoneDeletionController/);
   assert.match(keyboard, /deleteZoneController/);
@@ -26,6 +30,9 @@ test('zone and group browser inputs route commands through runtime controllers b
   assert.match(actionClick, /deleteZoneController/);
   assert.doesNotMatch(actionClick, /beginZoneLabelEdit/);
   assert.doesNotMatch(actionClick, /deleteSelectedZones/);
+
+  const deleteZone = source('frontend/src/runtime/zone/effect/delete-selected-zones.ts');
+  assert.match(deleteZone, /removeActiveLedgerZones/);
 
   const colorInput = source('frontend/src/runtime/input/controller/handle-region-color-input.ts');
   assert.match(colorInput, /editRegionColorController/);

@@ -1,9 +1,18 @@
 import { content } from '../../dom.js';
+import { addActiveLedgerZone } from '../../ledger/effect/add-active-ledger-zone.js';
+import { createLedgerZoneAnnotation } from '../../ledger/helper/create-ledger-zone-annotation.js';
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export function createZoneFromRect(rect: { x: number; y: number; width: number; height: number }): void {
   const zoneId = `zone-draft-${state.zoneCounter++}`;
+  if (state.activeLedger) {
+    addActiveLedgerZone(createLedgerZoneAnnotation({ id: zoneId, rect, color: state.zoneColor }));
+    state.selection = { cardIds: [], zoneIds: [zoneId], groupIds: [] };
+    telemetry('commit-ledger-edit', { createZone: zoneId, activeTab: state.activeTab, geometry: rect, color: state.zoneColor });
+    telemetry('render-zone-layer', { created: zoneId, activeTab: state.activeTab });
+    return;
+  }
   const zone = document.createElement('article');
   zone.className = 'zone regular-zone selected';
   zone.dataset.zoneId = zoneId;

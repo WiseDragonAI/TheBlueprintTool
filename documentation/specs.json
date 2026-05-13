@@ -1029,7 +1029,7 @@
       "y": 5022,
       "w": 320,
       "comment": {
-        "what": "Relationship routing must group every visible source and target endpoint by card id and border side before routing. Endpoints in the same card-side group receive deterministic evenly spaced slots along that side instead of all using the card center."
+        "what": "Zone creation must be routed through create-zone-controller. When a route-addressable ledger tab such as /specs or /data is active, the new zone must be added to the active ledger annotations before canvas reconciliation so render-ledger-surface keeps it visible."
       },
       "facts": [],
       "fields": []
@@ -1211,7 +1211,7 @@
       "y": 5806,
       "w": 420,
       "comment": {
-        "what": ""
+        "what": "Zone deletion must be routed through delete-zone-controller. When a route-addressable ledger tab such as /specs or /data is active, the selected regular zones must be removed from the active ledger annotations before canvas reconciliation."
       },
       "facts": [],
       "fields": []
@@ -1225,7 +1225,7 @@
       "y": 5806,
       "w": 420,
       "comment": {
-        "what": ""
+        "what": "The Delete key must open the controller-backed confirmation path, and confirmation must remove selected regular zones from both DOM state and the active ledger annotations for /specs and /data."
       },
       "facts": [],
       "fields": []
@@ -1239,7 +1239,7 @@
       "y": 5806,
       "w": 540,
       "comment": {
-        "what": ""
+        "what": "Deleting a regular zone must not remove intersecting cards or group annotations from the active ledger."
       },
       "facts": [],
       "fields": []
