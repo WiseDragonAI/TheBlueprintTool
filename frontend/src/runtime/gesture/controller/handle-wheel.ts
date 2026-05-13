@@ -19,8 +19,8 @@ export function handleWheel(event: WheelEvent): void {
       x: (pointer.x - state.viewport.x) / oldScale,
       y: (pointer.y - state.viewport.y) / oldScale
     };
-    const nextScale = state.viewport.scale * (event.deltaY > 0 ? 0.92 : 1.08);
-    state.viewport.scale = Math.min(2.5, Math.max(0.08, nextScale));
+    const nextScale = state.viewport.scale * Math.exp(-event.deltaY * 0.0015);
+    state.viewport.scale = Math.min(2.2, Math.max(0.08, nextScale));
     state.viewport.x = pointer.x - anchoredCanvasPoint.x * state.viewport.scale;
     state.viewport.y = pointer.y - anchoredCanvasPoint.y * state.viewport.scale;
     telemetry('calculate-viewport-transform', { kind: 'zoom', pointer, anchoredCanvasPoint, viewport: state.viewport });
