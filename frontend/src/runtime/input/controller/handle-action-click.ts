@@ -22,14 +22,8 @@ export function handleActionClick(event: MouseEvent): void {
     if (action === 'open-card-thread' && target?.dataset.cardId) selectTarget('card', target.dataset.cardId, false);
     if (action === 'open-zone-thread' && target?.dataset.zoneId) selectTarget('zone', target.dataset.zoneId, false);
     if (target?.dataset.groupId) selectTarget('group', target.dataset.groupId, false);
-    target?.querySelectorAll('.card-tabs button').forEach((button) => button.classList.toggle('active', button === actionTarget));
     telemetry('resolve-thread-target', { threadId: state.threadId });
     renderThreadPanel();
-  }
-  if (action === 'open-card-data') {
-    const target = targetElement.closest('[data-card-id]') as HTMLElement | null;
-    target?.querySelectorAll('.card-tabs button').forEach((button) => button.classList.toggle('active', button === actionTarget));
-    telemetry('open-card-data-panel', { cardId: target?.dataset.cardId });
   }
   if (action === 'edit-zone') {
     const zone = targetElement.closest('[data-zone-id]') as HTMLElement | null;

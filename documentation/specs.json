@@ -1862,7 +1862,7 @@
     },
     {
       "id": "6000000c",
-      "title": "cards have a tab system",
+      "title": "cards expose a notes action",
       "cardType": "spec-brief",
       "domainId": "",
       "x": -5137,
@@ -1876,7 +1876,7 @@
     },
     {
       "id": "6000000d",
-      "title": "the default tab for the base card class is notes",
+      "title": "the base card class opens notes canonically",
       "cardType": "spec-brief",
       "domainId": "",
       "x": -4436,
