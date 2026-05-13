@@ -16,9 +16,14 @@ export function patchLedgerZone(zone: Record<string, unknown>, existing?: HTMLEl
   element.style.height = `${Math.max(120, Number(zone.height ?? 180))}px`;
   if (typeof zone.color === 'string') element.style.setProperty('--zone-color', zone.color);
   else element.style.removeProperty('--zone-color');
+  const handles = ['nw', 'ne', 'sw', 'se'].map((position) => {
+    const handle = document.createElement('div');
+    handle.className = `resize-handle ${position}`;
+    return handle;
+  });
   const title = document.createElement('div');
   title.className = 'zone-title';
   title.textContent = String(zone.label ?? id);
-  element.replaceChildren(title);
+  element.replaceChildren(...handles, title);
   return element;
 }
