@@ -3,11 +3,11 @@
  * WHY: Inspector presentation is independent from canvas object rendering.
  */
 .thread-panel {
-  margin-top: 22px;
+  margin-top: 18px;
   display: grid;
-  gap: 14px;
+  gap: 12px;
   border-top: 1px solid color-mix(in srgb, var(--line), transparent 20%);
-  padding-top: 22px;
+  padding-top: 18px;
 }
 
 .thread-heading {
@@ -23,7 +23,7 @@
 
 .thread-heading h2 {
   margin: 0;
-  font-size: 22px;
+  font-size: 18px;
 }
 
 .thread-target {
@@ -37,11 +37,10 @@
   width: 100%;
   resize: vertical;
   min-height: 132px;
-  background:
-    linear-gradient(180deg, rgba(45, 143, 232, 0.08), transparent),
-    #101f31;
+  background: rgba(255, 255, 255, 0.06);
   color: var(--text);
   border: 1px solid var(--line);
+  border-radius: var(--button-radius);
   padding: 13px;
   outline: none;
   line-height: 1.45;
@@ -49,7 +48,7 @@
 
 .thread-draft:focus {
   border-color: var(--primary-bright);
-  box-shadow: 0 0 0 1px rgba(45, 143, 232, 0.28);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent), transparent 72%);
 }
 
 .thread-actions {
@@ -63,9 +62,10 @@
   gap: 10px;
   padding: 13px;
   border: 1px solid color-mix(in srgb, var(--line), transparent 10%);
+  border-radius: 2px;
   background:
-    linear-gradient(135deg, rgba(239, 89, 52, 0.10), transparent 54%),
-    rgba(8, 19, 31, 0.72);
+    linear-gradient(135deg, color-mix(in srgb, var(--secondary), transparent 90%), transparent 54%),
+    rgba(10, 10, 10, 0.48);
 }
 
 .voice-panel-top {
@@ -82,10 +82,10 @@
 }
 
 .voice-meter {
-  height: 12px;
+  height: 10px;
   overflow: hidden;
-  border: 1px solid rgba(45, 143, 232, 0.32);
-  background: rgba(4, 9, 15, 0.72);
+  border: 1px solid color-mix(in srgb, var(--accent), transparent 68%);
+  background: rgba(0, 0, 0, 0.32);
 }
 
 .voice-meter-value {
@@ -94,11 +94,11 @@
   height: 100%;
   transform: scaleX(0);
   transform-origin: left center;
-  background: linear-gradient(90deg, var(--primary-bright), var(--secondary-bright));
+  background: linear-gradient(90deg, var(--primary-bright), var(--secondary));
   transition: transform 44ms linear;
 }
 
 .voice-panel.recording {
   border-color: var(--secondary-bright);
-  box-shadow: 0 0 22px rgba(239, 89, 52, 0.18);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--secondary-bright), transparent 82%);
 }

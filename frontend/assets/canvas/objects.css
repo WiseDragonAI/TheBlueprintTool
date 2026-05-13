@@ -5,7 +5,8 @@
 .zone, .card {
   position: absolute;
   border: 1px solid var(--line);
-  background: rgba(13, 28, 43, 0.72);
+  border-radius: 2px;
+  background: rgba(15, 17, 22, 0.86);
   user-select: none;
 }
 
@@ -13,14 +14,14 @@
   --zone-color: var(--primary-bright);
   --zone-label-color: color-mix(in srgb, var(--zone-color), white var(--zone-label-min-brightness-mix));
   min-height: 140px;
-  padding: 18px;
-  border-color: color-mix(in srgb, var(--zone-color), transparent 22%);
-  background-color: rgba(7, 17, 29, 0.84);
+  padding: 10px;
+  border-color: color-mix(in srgb, var(--zone-color), transparent 35%);
+  background-color: color-mix(in srgb, var(--zone-color), rgba(8, 8, 8, 0.94) 90%);
   background-image:
-    linear-gradient(135deg, color-mix(in srgb, var(--zone-color), transparent 76%), transparent 68%);
+    linear-gradient(135deg, color-mix(in srgb, var(--zone-color), transparent 78%), transparent 64%);
   box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--zone-color), transparent 82%),
-    0 24px 80px rgba(0, 0, 0, 0.18);
+    inset 0 0 0 1px color-mix(in srgb, var(--zone-color), transparent 88%),
+    0 18px 46px rgba(0, 0, 0, 0.18);
   z-index: 12;
 }
 
@@ -29,8 +30,9 @@
   top: 150px;
   width: 560px;
   height: 380px;
-  background: rgba(239, 89, 52, 0.025);
-  border: 3px solid rgba(239, 89, 52, 0.66);
+  background: transparent;
+  border: 4px solid color-mix(in srgb, var(--secondary-bright), transparent 36%);
+  box-shadow: none;
   z-index: 2;
 }
 
@@ -57,15 +59,26 @@
 
 .zone-title {
   color: var(--zone-label-color, var(--accent));
-  margin-bottom: 10px;
+  display: block;
+  width: max-content;
   max-width: calc(100% * var(--viewport-scale, 1));
+  margin-bottom: 8px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 700;
   transform: scale(calc(1 / var(--viewport-scale, 1)));
   transform-origin: left top;
-  text-shadow: 0 0 10px color-mix(in srgb, var(--zone-label-color, var(--accent)), transparent 54%);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--zone-label-color, var(--accent)), transparent 66%);
+}
+
+.zone p {
+  max-width: 34ch;
+  margin: 0;
+  color: color-mix(in srgb, var(--muted), transparent 10%);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .zone-title.editing {
@@ -73,26 +86,33 @@
   min-width: 80px;
   padding: 2px 4px;
   color: var(--text);
-  background: rgba(45, 143, 232, 0.18);
+  background: color-mix(in srgb, var(--accent), transparent 84%);
   outline: 1px solid var(--accent);
 }
 
-.zone-actions, .card-tabs {
+.zone-actions, .card-actions {
   display: flex;
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 12px;
 }
 
 .zone-actions button, .card button, .thread-panel button {
   position: relative;
   z-index: 2;
   border: 1px solid var(--line);
-  background: var(--panel-2);
+  border-radius: var(--button-radius);
+  background: var(--button-bg);
   color: var(--text);
-  padding: 6px 9px;
+  min-height: 28px;
+  padding: 4px 8px;
   pointer-events: auto;
   cursor: pointer;
-  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
 }
 
 .zone-actions button:hover,
@@ -101,20 +121,27 @@
 .card button:focus-visible,
 .thread-panel button:hover,
 .thread-panel button:focus-visible,
-.card button.active {
-  border-color: var(--secondary-bright);
-  background: rgba(239, 89, 52, 0.22);
-  color: #fff7f3;
+.card-actions button:focus-visible {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent), transparent 90%);
+  color: var(--text);
   outline: none;
+}
+
+.zone-actions button:hover,
+.card button:hover,
+.thread-panel button:hover {
+  transform: translateY(-1px);
 }
 
 .resize-handle {
   display: none;
   position: absolute;
-  width: 12px;
-  height: 12px;
-  border: 1px solid white;
-  background: var(--panel);
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--text);
+  background: var(--zone-color, var(--accent));
+  box-shadow: 0 0 0 2px rgba(8, 8, 8, 0.86);
 }
 
 .zone.selected .resize-handle { display: block; }
@@ -127,17 +154,17 @@
 .card {
   --card-zone-color: var(--primary-bright);
   width: 250px;
-  min-height: 126px;
-  padding: 16px;
-  border-color: color-mix(in srgb, var(--card-zone-color), transparent 44%);
+  min-height: 132px;
+  padding: 14px;
+  border-color: color-mix(in srgb, var(--card-zone-color), rgba(255, 255, 255, 0.18) 12%);
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--card-zone-color), transparent 88%), transparent 64%),
-    rgba(13, 28, 43, 0.95);
+    linear-gradient(180deg, rgba(44, 46, 52, 0.98) 0%, rgba(28, 30, 35, 0.98) 100%),
+    var(--panel-2);
   box-shadow:
-    0 18px 50px rgba(0, 0, 0, 0.35),
-    0 0 20px color-mix(in srgb, var(--card-zone-color), transparent 88%);
+    0 0 0 1px color-mix(in srgb, var(--card-zone-color), transparent 34%),
+    var(--shadow-card);
   z-index: 30;
-  contain: layout paint style;
+  contain: layout style;
 }
 
 .card[data-card-id="card-boot"] { left: 120px; top: 300px; }
@@ -146,23 +173,36 @@
 .card.open { z-index: 9999; }
 
 .card.connected {
-  outline: 2px solid color-mix(in srgb, var(--card-zone-color), white 24%);
-  outline-offset: 3px;
+  outline: none;
+  border-color: color-mix(in srgb, var(--card-zone-color), white 18%);
   box-shadow:
-    0 20px 58px rgba(0, 0, 0, 0.38),
-    0 0 28px color-mix(in srgb, var(--card-zone-color), transparent 56%),
-    0 0 52px color-mix(in srgb, var(--card-zone-color), transparent 76%);
+    0 0 0 1px color-mix(in srgb, var(--card-zone-color), transparent 16%),
+    0 16px 44px color-mix(in srgb, var(--card-zone-color), transparent 82%),
+    0 20px 48px rgba(0, 0, 0, 0.48);
 }
 
 .hash {
   display: block;
   color: var(--muted);
-  font-size: 12px;
-  margin-bottom: 10px;
+  font-size: 11px;
+  margin-bottom: 6px;
+  text-transform: uppercase;
 }
 
 .card:not(:hover):not(.selected) .hash { opacity: 0; }
 .card:hover .hash, .card.selected .hash { opacity: 1; }
+
+.card strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.card p {
+  margin: 0 0 8px;
+  color: var(--muted);
+  line-height: 1.42;
+}
 
 .relationships {
   position: absolute;
@@ -176,22 +216,38 @@
 
 .relationships path {
   fill: none;
-  stroke: var(--secondary-bright);
-  stroke-width: 3;
+  stroke: rgba(168, 173, 169, 0.52);
+  stroke-width: 1.35;
+  stroke-linecap: round;
   marker-end: url(#arrow);
 }
 
 .relationships text {
-  fill: var(--muted);
-  font-size: 13px;
+  fill: rgba(243, 240, 231, 0.72);
+  font-size: 11px;
+  paint-order: stroke;
+  stroke: rgba(8, 8, 8, 0.85);
+  stroke-width: 4px;
+  text-anchor: middle;
 }
 
-.relationships marker path { fill: var(--secondary-bright); }
+.relationships marker path { fill: rgba(168, 173, 169, 0.72); }
+.relationships path.selected,
+.relationships path.is-selected {
+  stroke: var(--secondary-bright);
+  stroke-width: 2.4;
+}
+
+.relationships text.selected,
+.relationships text.is-selected {
+  fill: var(--secondary-bright);
+}
+
 .relationships.hide-labels text { display: none; }
 
 .marquee {
   position: absolute;
-  border: 1px dashed white;
-  background: rgba(85,184,255,0.16);
+  border: 1px solid var(--accent);
+  background: rgba(56, 217, 232, 0.12);
   z-index: 80;
 }

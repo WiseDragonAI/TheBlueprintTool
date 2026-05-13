@@ -3,14 +3,71 @@
  * WHY: Modal and viewport-specific behavior should not be hidden in feature modules.
  */
 .confirm-modal {
-  background: var(--panel);
+  background: rgba(15, 17, 22, 0.98);
   color: var(--text);
-  border: 1px solid var(--accent);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  box-shadow: var(--shadow-panel);
+  padding: 16px;
+}
+
+.confirm-modal button,
+.shortcut-modal button {
+  border: 1px solid var(--line);
+  border-radius: var(--button-radius);
+  background: var(--button-bg);
+  color: var(--text);
+  min-height: 32px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.confirm-modal button:hover,
+.confirm-modal button:focus-visible,
+.shortcut-modal button:hover,
+.shortcut-modal button:focus-visible {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent), transparent 90%);
+  outline: none;
+}
+
+.shortcut-modal {
+  background: rgba(15, 17, 22, 0.98);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  box-shadow: var(--shadow-panel);
+  padding: 16px;
 }
 
 @media (max-width: 900px) {
-  .shell { grid-template-columns: 52px minmax(0, 1fr); }
+  .shell,
+  .shell.has-inspector {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+  .rail {
+    padding: 8px;
+  }
+  .tool {
+    grid-template-columns: 1fr;
+    width: 40px;
+    justify-items: center;
+    padding: 7px;
+  }
+  .tool span:last-child {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
   .panel { display: none; }
-  .topbar { display: block; }
-  .tabs { margin-top: 16px; overflow-x: auto; }
+  .topbar {
+    display: grid;
+    gap: 10px;
+  }
+  .tabs {
+    overflow-x: auto;
+  }
 }

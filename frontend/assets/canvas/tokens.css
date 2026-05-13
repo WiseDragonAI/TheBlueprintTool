@@ -18,21 +18,29 @@
   --canvas-honeycomb-height: 131.48px;
   --canvas-honeycomb-step-x: 38px;
   --canvas-honeycomb-step-y: 65.74px;
-  --bg: #07111d;
-  --panel: #0f1a27;
-  --panel-2: #162538;
-  --line: #31506f;
-  --text: #f2f7ff;
-  --muted: #9db2c8;
-  --primary: #0a5ca8;
-  --primary-bright: #2d8fe8;
-  --secondary: #ef5934;
-  --secondary-bright: #ff7a4f;
+  --bg: #090a0c;
+  --panel: #15181d;
+  --panel-2: #1b1f26;
+  --panel-3: #101217;
+  --line: rgba(255, 255, 255, 0.16);
+  --line-strong: rgba(255, 255, 255, 0.28);
+  --text: #f5f0e8;
+  --muted: #9ba3ad;
+  --primary: #1aa8b8;
+  --primary-bright: #38d9e8;
+  --secondary: #f59e0b;
+  --secondary-bright: #ff7668;
   --accent: var(--primary-bright);
   --blue: var(--primary-bright);
   --red: var(--secondary);
-  --zone-label-min-brightness-mix: 34%;
-  --glow: 0 0 0 1px rgba(226, 238, 255, 0.82), 0 0 14px rgba(45,143,232,0.58);
+  --zone-label-min-brightness-mix: 22%;
+  --button-radius: 2px;
+  --button-bg: rgba(255, 255, 255, 0.05);
+  --button-bg-hover: rgba(255, 255, 255, 0.085);
+  --button-bg-active: rgba(255, 255, 255, 0.11);
+  --shadow-panel: 0 20px 60px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 18px 40px rgba(0, 0, 0, 0.38);
+  --glow: 0 0 0 1px rgba(245, 240, 232, 0.86), 0 0 0 3px rgba(56, 217, 232, 0.22), 0 20px 48px rgba(0, 0, 0, 0.48);
 }
 
 * { box-sizing: border-box; }
@@ -43,6 +51,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: Ubuntu, system-ui, sans-serif;
+  overflow: hidden;
 }
 
 button, textarea { font: inherit; }
