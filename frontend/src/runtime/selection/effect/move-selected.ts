@@ -1,4 +1,5 @@
 import { state } from '../../state.js';
+import { syncActiveLedgerGeometry } from '../../ledger/effect/sync-active-ledger-geometry.js';
 import { renderRelationshipOverlay } from '../../relationship/effect/render-relationship-overlay.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
@@ -12,6 +13,7 @@ export function moveSelected(dx: number, dy: number): void {
     node.style.left = `${node.offsetLeft + dx}px`;
     node.style.top = `${node.offsetTop + dy}px`;
   });
+  syncActiveLedgerGeometry(selected);
   telemetry('render-card-layer', { moved: state.selection.cardIds });
   telemetry('render-zone-layer', { moved: state.selection.zoneIds });
   telemetry('render-group-layer', { moved: state.selection.groupIds });
