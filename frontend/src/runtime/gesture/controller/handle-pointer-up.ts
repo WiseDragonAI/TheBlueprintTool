@@ -8,7 +8,7 @@ import { point } from '../helper/point.js';
 import { rectFromPoints } from '../../canvas/helper/rect-from-points.js';
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
 import { resetActiveTool } from '../../toolbox/controller/reset-active-tool.js';
-import { selectAllVisible } from '../../selection/effect/select-all-visible.js';
+import { selectIntersecting } from '../../selection/effect/select-intersecting.js';
 import { selectTarget } from '../../selection/controller/select-target.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
@@ -32,7 +32,8 @@ export function handlePointerUp(event: PointerEvent): void {
     telemetry('clear-transient-selection', { reason: 'canvas-background-click' });
   }
   if (state.pointer.intent === 'marquee') {
-    selectAllVisible();
+    const rect = rectFromPoints(state.pointer.startCanvas, canvasPoint(releasePoint));
+    selectIntersecting(rect);
     (document.querySelector('.marquee') as HTMLElement).hidden = true;
     telemetry('resolve-selection-target', { selection: state.selection });
   }
