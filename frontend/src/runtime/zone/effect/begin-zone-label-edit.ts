@@ -1,8 +1,12 @@
+import { syncActiveLedgerRegionEdit } from '../../ledger/effect/sync-active-ledger-region-edit.js';
+import { persistState } from '../../persistence/effect/persist-state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export function beginZoneLabelEdit(zone: HTMLElement): void {
   const title = zone.querySelector('.zone-title') as HTMLElement | null;
   if (!title) return;
+  const regionId = zone.dataset.zoneId ?? zone.dataset.groupId;
+  const regionKind = zone.dataset.groupId ? 'group' : 'zone';
   title.contentEditable = 'true';
   title.classList.add('editing');
   title.focus();
@@ -13,9 +17,12 @@ export function beginZoneLabelEdit(zone: HTMLElement): void {
     title.blur();
   }, { once: true });
   title.addEventListener('blur', () => {
+    const label = title.textContent?.trim() ?? '';
     title.contentEditable = 'false';
     title.classList.remove('editing');
-    telemetry('commit-ledger-edit', { zoneId: zone.dataset.zoneId, label: title.textContent?.trim() });
+    syncActiveLedgerRegionEdit(zone, { label });
+    persistState();
+    telemetry('commit-ledger-edit', { regionKind, regionId, label });
   }, { once: true });
-  telemetry('open-zone-inline-label-edit', { zoneId: zone.dataset.zoneId });
+  telemetry('open-zone-inline-label-edit', { regionKind, regionId });
 }

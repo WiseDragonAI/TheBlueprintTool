@@ -2939,6 +2939,20 @@
       "fields": []
     },
     {
+      "id": "3fd7a96a",
+      "title": "Zones and groups always expose an edit icon for name and zone color changes",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1200,
+      "y": 7434,
+      "w": 560,
+      "comment": {
+        "what": "Every regular zone and group, including static surface regions, newly drawn regions, and ledger-rendered regions, must expose a persistent edit icon button. Activating it edits the visible zone or group label inline; regular zones must also expose a color edit control that updates the zone color without requiring toolbox mode changes."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
       "id": "c41d5c52",
       "title": "Master function batch file",
       "cardType": "spec-brief",

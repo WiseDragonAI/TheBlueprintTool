@@ -78,7 +78,6 @@
 .canvas.low-detail .card strong,
 .canvas.low-detail .card-actions,
 .canvas.low-detail .zone p,
-.canvas.low-detail .zone-actions,
 .canvas.low-detail .hash,
 .canvas.low-detail .relationships text {
   display: none;

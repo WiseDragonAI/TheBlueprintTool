@@ -1,5 +1,6 @@
 import { state } from '../../state.js';
 import { applyPersistedGeometryToLedger } from '../../persistence/effect/apply-persisted-geometry-to-ledger.js';
+import { applyPersistedRegionEditsToLedger } from '../../persistence/effect/apply-persisted-region-edits-to-ledger.js';
 import { readPersistedState } from '../../persistence/helper/read-persisted-state.js';
 import { ledgerEndpointForTab } from '../helper/ledger-endpoint-for-tab.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
@@ -20,7 +21,9 @@ export async function loadActiveLedgerState(): Promise<void> {
     return;
   }
   const ledger = await response.json().catch(() => null);
-  applyPersistedGeometryToLedger(ledger, readPersistedState().geometry);
+  const persistedState = readPersistedState();
+  applyPersistedGeometryToLedger(ledger, persistedState.geometry);
+  applyPersistedRegionEditsToLedger(ledger, persistedState.regionEdits);
   state.activeLedger = ledger;
   Object.assign(state.viewport, state.viewports?.[state.activeTab] ?? ledger?.viewport ?? state.viewport);
   state.selection = { cardIds: [], zoneIds: [], groupIds: [] };

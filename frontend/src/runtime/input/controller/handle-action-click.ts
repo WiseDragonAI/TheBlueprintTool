@@ -26,9 +26,10 @@ export function handleActionClick(event: MouseEvent): void {
     renderThreadPanel();
   }
   if (action === 'edit-zone') {
-    const zone = targetElement.closest('[data-zone-id]') as HTMLElement | null;
+    const zone = targetElement.closest('[data-zone-id],[data-group-id]') as HTMLElement | null;
     if (zone?.dataset.zoneId) selectTarget('zone', zone.dataset.zoneId, false);
-    telemetry('open-zone-edit-panel', { zoneId: zone?.dataset.zoneId });
+    if (zone?.dataset.groupId) selectTarget('group', zone.dataset.groupId, false);
+    telemetry('open-zone-edit-panel', { regionId: zone?.dataset.zoneId ?? zone?.dataset.groupId });
     if (zone) beginZoneLabelEdit(zone);
   }
   if (action === 'create-note') {

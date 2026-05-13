@@ -92,11 +92,12 @@
 
 .zone-actions, .card-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
   margin-top: 12px;
 }
 
-.zone-actions button, .card button, .thread-panel button {
+.zone-actions button, .zone-color-edit, .card button, .thread-panel button {
   position: relative;
   z-index: 2;
   border: 1px solid var(--line);
@@ -112,11 +113,28 @@
     border-color 140ms ease,
     box-shadow 140ms ease,
     color 140ms ease,
-    transform 140ms ease;
+  transform 140ms ease;
+}
+
+.zone-actions .icon-button {
+  width: 28px;
+  min-width: 28px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.zone-color-edit {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 2px;
 }
 
 .zone-actions button:hover,
 .zone-actions button:focus-visible,
+.zone-color-edit:hover,
+.zone-color-edit:focus-visible,
 .card button:hover,
 .card button:focus-visible,
 .thread-panel button:hover,
@@ -129,6 +147,7 @@
 }
 
 .zone-actions button:hover,
+.zone-color-edit:hover,
 .card button:hover,
 .thread-panel button:hover {
   transform: translateY(-1px);

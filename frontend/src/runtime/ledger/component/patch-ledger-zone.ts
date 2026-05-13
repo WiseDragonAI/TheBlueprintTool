@@ -24,6 +24,27 @@ export function patchLedgerZone(zone: Record<string, unknown>, existing?: HTMLEl
   const title = document.createElement('div');
   title.className = 'zone-title';
   title.textContent = String(zone.label ?? id);
-  element.replaceChildren(...handles, title);
+  const actions = document.createElement('div');
+  actions.className = 'zone-actions';
+  const edit = document.createElement('button');
+  edit.type = 'button';
+  edit.className = 'icon-button';
+  edit.dataset.action = 'edit-zone';
+  edit.dataset.spec = '3fd7a96a';
+  edit.title = isGroup ? 'Edit group name' : 'Edit zone name';
+  edit.ariaLabel = edit.title;
+  edit.textContent = '✎';
+  actions.append(edit);
+  if (!isGroup) {
+    const color = document.createElement('input');
+    color.type = 'color';
+    color.className = 'zone-color-edit';
+    color.dataset.action = 'edit-zone-color';
+    color.dataset.spec = '3fd7a96a';
+    color.ariaLabel = 'Edit zone color';
+    color.value = typeof zone.color === 'string' ? zone.color : '#55b8ff';
+    actions.append(color);
+  }
+  element.replaceChildren(...handles, title, actions);
   return element;
 }
