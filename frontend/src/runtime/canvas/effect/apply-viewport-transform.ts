@@ -5,5 +5,8 @@ import { updateDetailMode } from './update-detail-mode.js';
 export function applyViewportTransform(): void {
   canvas.style.setProperty('--viewport-scale', String(state.viewport.scale));
   updateDetailMode();
-  content.style.transform = `translate(${state.viewport.x}px, ${state.viewport.y}px) scale(${state.viewport.scale})`;
+  const devicePixelRatio = window.devicePixelRatio || 1;
+  const x = Math.round(state.viewport.x * devicePixelRatio) / devicePixelRatio;
+  const y = Math.round(state.viewport.y * devicePixelRatio) / devicePixelRatio;
+  content.style.transform = `translate(${x}px, ${y}px) scale(${state.viewport.scale})`;
 }
