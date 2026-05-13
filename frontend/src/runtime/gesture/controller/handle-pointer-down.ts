@@ -4,6 +4,7 @@ import { derivePointerIntent } from '../helper/derive-pointer-intent.js';
 import { canvasPoint } from '../../canvas/helper/canvas-point.js';
 import { patchBox } from '../../canvas/effect/patch-box.js';
 import { point } from '../helper/point.js';
+import { selectionIncludesTarget } from '../../selection/helper/selection-includes-target.js';
 import { selectTarget } from '../../selection/controller/select-target.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
@@ -21,7 +22,8 @@ export function handlePointerDown(event: PointerEvent): void {
   state.pointer = { intent, resizeHandle, target, targetKind, targetId, start: pointer, current: pointer, startCanvas: canvasPointer, currentCanvas: canvasPointer };
   telemetry('canvas-pointer-down', { intent, targetKind, targetId, ctrlKey: event.ctrlKey });
   telemetry('derive-gesture-intent', { kind: intent });
-  if (intent === 'drag' || intent === 'group') selectTarget(targetKind, targetId, event.ctrlKey);
+  const preserveSelection = !event.ctrlKey && selectionIncludesTarget(state.selection, targetKind, targetId);
+  if ((intent === 'drag' || intent === 'group') && !preserveSelection) selectTarget(targetKind, targetId, event.ctrlKey);
   if (intent === 'resize') selectTarget(targetKind, targetId, false);
   if (intent === 'marquee' || intent === 'draw-zone' || intent === 'draw-group') {
     const marquee = document.querySelector('.marquee') as HTMLElement;
