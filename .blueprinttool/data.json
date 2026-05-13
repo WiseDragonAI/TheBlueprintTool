@@ -1185,7 +1185,7 @@
       "y": 215,
       "w": 320,
       "comment": {
-        "what": "Generated function file.\n\n- `input`: normalizes boundary data into actions.\n- `controller`: orchestrates action execution.\n- `helper`: performs pure policy or computation.\n- `effect`: crosses IO boundaries.\n- `test`: proves behavior with state contracts.\n- `component`: renders runtime output and emits actions."
+        "what": "Generated function file.\n\n- `input`: normalizes boundary data into typed actions only and must not call helpers or effects directly.\n- `controller`: orchestrates action execution, resolves active runtime document context, calls helpers/effects, and owns domain branching.\n- `helper`: performs pure policy or computation and returns data.\n- `effect`: crosses IO or DOM boundaries and does not decide domain behavior.\n- `test`: proves behavior with state contracts and proves browser input paths route through controllers before effects.\n- `component`: renders runtime output and emits actions."
       },
       "facts": [],
       "fields": [
@@ -1327,7 +1327,7 @@
       "y": 791,
       "w": 320,
       "comment": {
-        "what": "Runtime data used by generated functions.\n\n- `State`: previous and next application data observed by reducers, controllers, components, and tests.\n- `Action`: typed command created from input and consumed by controllers."
+        "what": "Runtime data used by generated functions.\n\n- `State`: previous and next application data observed by reducers, controllers, components, and tests.\n- `Action`: typed command created from input and consumed by controllers. Browser events never target DOM effects directly; they resolve an active document context and dispatch a controller-owned action."
       },
       "facts": [],
       "fields": [

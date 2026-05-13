@@ -1,13 +1,12 @@
 import { state } from '../../state.js';
 import { canvasPoint } from '../../canvas/helper/canvas-point.js';
-import { createZoneFromRect } from '../../zone/effect/create-zone-from-rect.js';
-import { createGroupFromRect } from '../../group/effect/create-group-from-rect.js';
+import { createZoneController } from '../../zone/controller/create-zone-controller.js';
+import { createGroupController } from '../../group/controller/create-group-controller.js';
 import { finishPointer } from '../effect/finish-pointer.js';
 import { persistState } from '../../persistence/effect/persist-state.js';
 import { point } from '../helper/point.js';
 import { rectFromPoints } from '../../canvas/helper/rect-from-points.js';
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
-import { resetActiveTool } from '../../toolbox/controller/reset-active-tool.js';
 import { selectIntersecting } from '../../selection/effect/select-intersecting.js';
 import { selectTarget } from '../../selection/controller/select-target.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
@@ -40,14 +39,12 @@ export function handlePointerUp(event: PointerEvent): void {
   if (state.pointer.intent === 'draw-zone') {
     const rect = rectFromPoints(state.pointer.startCanvas, canvasPoint(releasePoint));
     (document.querySelector('.marquee') as HTMLElement).hidden = true;
-    createZoneFromRect(rect);
-    resetActiveTool('placed-zone');
+    createZoneController(rect);
   }
   if (state.pointer.intent === 'draw-group') {
     const rect = rectFromPoints(state.pointer.startCanvas, canvasPoint(releasePoint));
     (document.querySelector('.marquee') as HTMLElement).hidden = true;
-    createGroupFromRect(rect);
-    resetActiveTool('placed-group');
+    createGroupController(rect);
   }
   persistState();
   finishPointer(event);

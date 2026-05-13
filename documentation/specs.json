@@ -3045,7 +3045,7 @@
       "y": 3319,
       "w": 320,
       "comment": {
-        "what": "Each suite includes one integration test running the full path through input, action, controller, helper, reducer, component, and effect plumbing."
+        "what": "Each suite includes one integration test running the full path through input, action, controller, helper, reducer, component, and effect plumbing. Runtime browser-input suites must assert that inputs dispatch controller-owned actions before any helper/effect is invoked; implementation evidence that only mentions a controller name is not sufficient."
       },
       "facts": [],
       "fields": []

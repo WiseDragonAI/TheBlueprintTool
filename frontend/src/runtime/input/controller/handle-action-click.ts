@@ -1,7 +1,7 @@
 import { modal, shortcutModal } from '../../dom.js';
 import { state } from '../../state.js';
-import { deleteSelectedZones } from '../../zone/effect/delete-selected-zones.js';
-import { beginZoneLabelEdit } from '../../zone/effect/begin-zone-label-edit.js';
+import { deleteZoneController } from '../../zone/controller/delete-zone-controller.js';
+import { editRegionController } from '../../zone/controller/edit-region-controller.js';
 import { renderThreadPanel } from '../../thread/effect/render-thread-panel.js';
 import { refreshRuntimeState } from '../../refresh/controller/refresh-runtime-state.js';
 import { selectTarget } from '../../selection/controller/select-target.js';
@@ -27,10 +27,7 @@ export function handleActionClick(event: MouseEvent): void {
   }
   if (action === 'edit-zone') {
     const zone = targetElement.closest('[data-zone-id],[data-group-id]') as HTMLElement | null;
-    if (zone?.dataset.zoneId) selectTarget('zone', zone.dataset.zoneId, false);
-    if (zone?.dataset.groupId) selectTarget('group', zone.dataset.groupId, false);
-    telemetry('open-zone-edit-panel', { regionId: zone?.dataset.zoneId ?? zone?.dataset.groupId });
-    if (zone) beginZoneLabelEdit(zone);
+    editRegionController(zone);
   }
   if (action === 'create-note') {
     telemetry('commit-ledger-edit', { threadId: state.threadId, note: (document.querySelector('.thread-draft') as HTMLTextAreaElement).value });
@@ -46,7 +43,7 @@ export function handleActionClick(event: MouseEvent): void {
   if (action === 'voice-stop') {
     stopVoiceRecording();
   }
-  if (action === 'confirm-delete') deleteSelectedZones();
+  if (action === 'confirm-delete') deleteZoneController();
   if (action === 'cancel-delete') modal.close?.();
   if (action === 'shortcut-help') {
     telemetry('open-shortcut-help', { shortcuts: ['Escape', 'Delete', 'Ctrl+C', 'Ctrl+V'] });

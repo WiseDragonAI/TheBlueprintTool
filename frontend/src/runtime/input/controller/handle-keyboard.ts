@@ -1,6 +1,7 @@
 import { modal } from '../../dom.js';
 import { state } from '../../state.js';
-import { deleteSelectedZones } from '../../zone/effect/delete-selected-zones.js';
+import { confirmZoneDeletionController } from '../../zone/controller/confirm-zone-deletion-controller.js';
+import { deleteZoneController } from '../../zone/controller/delete-zone-controller.js';
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
 import { resetActiveTool } from '../../toolbox/controller/reset-active-tool.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
@@ -15,8 +16,7 @@ export function handleKeyboard(event: KeyboardEvent): void {
     renderCanvasSurface();
   }
   if (key === 'delete' && state.selection.zoneIds.length > 0) {
-    telemetry('confirm-zone-deletion', { zoneIds: state.selection.zoneIds });
-    modal.showModal?.();
+    confirmZoneDeletionController();
   }
   if (event.ctrlKey && key === 'c') {
     state.clipboard = structuredClone(state.selection);
@@ -26,6 +26,6 @@ export function handleKeyboard(event: KeyboardEvent): void {
     telemetry('commit-ledger-edit', { paste: state.clipboard });
     telemetry('render-canvas-surface', { reason: 'paste' });
   }
-  if (modal.open && key === 'enter') deleteSelectedZones();
+  if (modal.open && key === 'enter') deleteZoneController();
   if (modal.open && key === 'escape') modal.close?.();
 }
