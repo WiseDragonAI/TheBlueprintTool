@@ -16,7 +16,7 @@ test('zone and group browser inputs route commands through runtime controllers b
   assert.doesNotMatch(pointerUp, /createGroupFromRect/);
 
   const createZone = source('frontend/src/runtime/zone/effect/create-zone-from-rect.ts');
-  assert.match(createZone, /addActiveLedgerZone/);
+  assert.match(createZone, /commitActiveLedgerZoneMutation/);
   assert.match(createZone, /createLedgerZoneAnnotation/);
 
   const keyboard = source('frontend/src/runtime/input/controller/handle-keyboard.ts');
@@ -32,7 +32,12 @@ test('zone and group browser inputs route commands through runtime controllers b
   assert.doesNotMatch(actionClick, /deleteSelectedZones/);
 
   const deleteZone = source('frontend/src/runtime/zone/effect/delete-selected-zones.ts');
-  assert.match(deleteZone, /removeActiveLedgerZones/);
+  assert.match(deleteZone, /commitActiveLedgerZoneMutation/);
+
+  const serverMutation = source('frontend/src/runtime/ledger/effect/commit-active-ledger-zone-mutation.ts');
+  assert.match(serverMutation, /fetch\(endpoint/);
+  assert.match(serverMutation, /method: 'PATCH'/);
+  assert.match(serverMutation, /state\.activeLedger = ledger/);
 
   const colorInput = source('frontend/src/runtime/input/controller/handle-region-color-input.ts');
   assert.match(colorInput, /editRegionColorController/);

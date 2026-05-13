@@ -1,6 +1,6 @@
 export const state: any = {
   routePath: window.location.pathname,
-  activeTab: 'surface',
+  activeTab: 'specs',
   ledgerTabs: [
     { id: 'specs', title: 'Specs', ledgerFile: '.blueprinttool/specs.json' },
     { id: 'data', title: 'Data', ledgerFile: '.blueprinttool/data.json' }
@@ -12,7 +12,7 @@ export const state: any = {
   groupCounter: 2,
   viewport: { x: 0, y: 0, scale: 1 },
   surfaceViewport: { x: 0, y: 0, scale: 1 },
-  viewports: { surface: { x: 0, y: 0, scale: 1 } },
+  viewports: { specs: { x: 0, y: 0, scale: 1 }, data: { x: 0, y: 0, scale: 1 } },
   selection: { cardIds: [], zoneIds: [], groupIds: [] },
   pointer: null,
   clipboard: null,

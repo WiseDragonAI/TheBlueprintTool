@@ -9,9 +9,7 @@ export async function loadActiveLedgerState(): Promise<void> {
   const endpoint = ledgerEndpointForTab(state.activeTab);
   if (!endpoint) {
     state.activeLedger = null;
-    Object.assign(state.viewport, state.viewports?.surface ?? state.surfaceViewport ?? state.viewport);
-    state.surfaceViewport = { ...state.viewport };
-    telemetry('load-ledger-state', { activeTab: state.activeTab, source: 'static-surface' });
+    telemetry('load-ledger-state', { activeTab: state.activeTab, ok: false, source: 'missing-ledger-tab' });
     return;
   }
   const response = await fetch(endpoint).catch(() => undefined);

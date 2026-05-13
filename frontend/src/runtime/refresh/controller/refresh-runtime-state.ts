@@ -14,7 +14,6 @@ export async function refreshRuntimeState(): Promise<void> {
   state.activeTab = routeTab(window.location.pathname);
   state.viewports = persisted.viewports && typeof persisted.viewports === 'object' ? persisted.viewports : state.viewports;
   Object.assign(state.viewport, state.viewports?.[state.activeTab] ?? persisted.viewport ?? { x: 0, y: 0, scale: 1 });
-  if (state.activeTab === 'surface') state.surfaceViewport = { ...state.viewport };
   state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
   hydratePersistedGeometry(persisted.geometry);
   await loadActiveLedgerState();

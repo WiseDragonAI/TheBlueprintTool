@@ -40,7 +40,6 @@ export function bindInputs(): void {
     const button = (event.target as HTMLElement).closest('[data-tab]') as HTMLElement | null;
     if (!button?.dataset.tab) return;
     state.viewports = { ...(state.viewports ?? {}), [state.activeTab]: { ...state.viewport } };
-    if (!ledgerEndpointForTab(state.activeTab)) state.surfaceViewport = { ...state.viewport };
     persistState();
     state.activeTab = button.dataset.tab;
     history.pushState({}, '', `/${state.activeTab}`);
@@ -62,7 +61,6 @@ export function bindInputs(): void {
   document.addEventListener('input', handleRegionColorInput);
   window.addEventListener('popstate', () => {
     state.viewports = { ...(state.viewports ?? {}), [state.activeTab]: { ...state.viewport } };
-    if (!ledgerEndpointForTab(state.activeTab)) state.surfaceViewport = { ...state.viewport };
     persistState();
     state.activeTab = routeTab(window.location.pathname);
     telemetry('browser-route-change', { activeTab: state.activeTab });

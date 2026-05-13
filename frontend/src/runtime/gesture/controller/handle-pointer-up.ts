@@ -11,7 +11,7 @@ import { selectIntersecting } from '../../selection/effect/select-intersecting.j
 import { selectTarget } from '../../selection/controller/select-target.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
-export function handlePointerUp(event: PointerEvent): void {
+export async function handlePointerUp(event: PointerEvent): Promise<void> {
   if (!state.pointer) return;
   event.preventDefault();
   telemetry('canvas-pointer-up', { intent: state.pointer.intent });
@@ -39,7 +39,7 @@ export function handlePointerUp(event: PointerEvent): void {
   if (state.pointer.intent === 'draw-zone') {
     const rect = rectFromPoints(state.pointer.startCanvas, canvasPoint(releasePoint));
     (document.querySelector('.marquee') as HTMLElement).hidden = true;
-    createZoneController(rect);
+    await createZoneController(rect);
   }
   if (state.pointer.intent === 'draw-group') {
     const rect = rectFromPoints(state.pointer.startCanvas, canvasPoint(releasePoint));

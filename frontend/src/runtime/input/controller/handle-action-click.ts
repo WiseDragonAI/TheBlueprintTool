@@ -9,7 +9,7 @@ import { startVoiceRecording } from '../../voice/controller/start-voice-recordin
 import { stopVoiceRecording } from '../../voice/controller/stop-voice-recording.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
-export function handleActionClick(event: MouseEvent): void {
+export async function handleActionClick(event: MouseEvent): Promise<void> {
   const targetElement = event.target as HTMLElement;
   const actionTarget = targetElement.closest('[data-action]') as HTMLElement | null;
   const action = actionTarget?.dataset.action;
@@ -43,7 +43,7 @@ export function handleActionClick(event: MouseEvent): void {
   if (action === 'voice-stop') {
     stopVoiceRecording();
   }
-  if (action === 'confirm-delete') deleteZoneController();
+  if (action === 'confirm-delete') await deleteZoneController();
   if (action === 'cancel-delete') modal.close?.();
   if (action === 'shortcut-help') {
     telemetry('open-shortcut-help', { shortcuts: ['Escape', 'Delete', 'Ctrl+C', 'Ctrl+V'] });

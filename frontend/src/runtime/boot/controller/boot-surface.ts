@@ -17,7 +17,6 @@ export function bootSurface(): void {
   state.viewports = persisted.viewports && typeof persisted.viewports === 'object' ? persisted.viewports : state.viewports;
   const restoredViewport = state.viewports?.[state.activeTab] ?? persisted.viewport ?? {};
   Object.assign(state.viewport, restoredViewport);
-  if (state.activeTab === 'surface') state.surfaceViewport = { ...state.viewport };
   telemetry('browser-load', { routePath: state.routePath });
   telemetry('derive-route-state', { activeTab: state.activeTab });
   telemetry('load-ledger-state', { restored: Boolean(persisted.viewport) });

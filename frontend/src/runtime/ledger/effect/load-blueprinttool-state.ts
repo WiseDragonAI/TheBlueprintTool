@@ -11,6 +11,10 @@ export async function loadBlueprinttoolState(): Promise<void> {
   const blueprintState = await response.json().catch(() => undefined) as { tabs?: Array<{ id?: string; title?: string; ledgerFile?: string }> } | undefined;
   const tabs = blueprintState?.tabs?.filter((tab) => tab.id && tab.title) ?? [];
   if (tabs.length > 0) state.ledgerTabs = tabs;
+  if (!state.ledgerTabs.some((tab: { id: string }) => tab.id === state.activeTab)) {
+    state.activeTab = state.ledgerTabs[0]?.id ?? state.activeTab;
+    history.replaceState?.({}, '', `/${state.activeTab}`);
+  }
   telemetry('load-blueprinttool-state', { ok: true, tabs: state.ledgerTabs.map((tab: { id: string }) => tab.id) });
   renderTabRegistry();
 }

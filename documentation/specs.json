@@ -1029,7 +1029,7 @@
       "y": 5022,
       "w": 320,
       "comment": {
-        "what": "Zone creation must be routed through create-zone-controller. When a route-addressable ledger tab such as /specs or /data is active, the new zone must be added to the active ledger annotations before canvas reconciliation so render-ledger-surface keeps it visible."
+        "what": "Zone creation must be routed through create-zone-controller. When a route-addressable ledger tab such as /specs or /data is active, the controller must commit the mutation to the server ledger endpoint first; the server response is authoritative and becomes the active ledger before canvas reconciliation."
       },
       "facts": [],
       "fields": []
@@ -1211,7 +1211,7 @@
       "y": 5806,
       "w": 420,
       "comment": {
-        "what": "Zone deletion must be routed through delete-zone-controller. When a route-addressable ledger tab such as /specs or /data is active, the selected regular zones must be removed from the active ledger annotations before canvas reconciliation."
+        "what": "Zone deletion must be routed through delete-zone-controller. When a route-addressable ledger tab such as /specs or /data is active, the controller must commit selected regular zone deletion to the server ledger endpoint first; the server response is authoritative and becomes the active ledger before canvas reconciliation."
       },
       "facts": [],
       "fields": []
@@ -1225,7 +1225,7 @@
       "y": 5806,
       "w": 420,
       "comment": {
-        "what": "The Delete key must open the controller-backed confirmation path, and confirmation must remove selected regular zones from both DOM state and the active ledger annotations for /specs and /data."
+        "what": "The Delete key must open the controller-backed confirmation path, and confirmation must route selected regular zone deletion through the server ledger endpoint for /specs and /data."
       },
       "facts": [],
       "fields": []
@@ -1799,7 +1799,7 @@
       "y": 5607,
       "w": 320,
       "comment": {
-        "what": "Route-addressable tab paths such as /surface, /specs, and /runtime must load the browser application directly from the URL and tab buttons must push the matching URL."
+        "what": "Route-addressable real ledger tab paths such as /specs and /data must load the browser application directly from the URL, and tab buttons must push the matching URL. Surface and runtime are not default tabs because they are not real ledger files."
       },
       "facts": [],
       "fields": []
@@ -1827,7 +1827,7 @@
       "y": 5160,
       "w": 360,
       "comment": {
-        "what": ""
+        "what": "Navigation tabs must be derived from the server Blueprinttool state only. Static Surface and Runtime tabs must not be injected as defaults because the canvas operates on real ledger files."
       },
       "facts": [],
       "fields": []
@@ -3927,7 +3927,7 @@
       "y": 4620,
       "w": 520,
       "comment": {
-        "what": "The frontend tab registry is built from CoreV2 .blueprinttool state, and /specs plus /data must load the app while /blueprinttool/specs and /blueprinttool/data serve the live JSON ledgers."
+        "what": "The frontend tab registry is built only from CoreV2 .blueprinttool state. /specs plus /data load the app, /blueprinttool/specs and /blueprinttool/data serve and mutate the live JSON ledgers, and Surface/Runtime mock tabs are not rendered."
       },
       "facts": [],
       "fields": []
@@ -3955,7 +3955,7 @@
       "y": 4688,
       "w": 560,
       "comment": {
-        "what": "When an operator clicks a route-addressable ledger tab, navigate-tab-controller derives the route, fetches that tab ledger, replaces the canvas graph with the ledger cards, zones, and relationships, hides every static surface card, zone, group, and relationship SVG layer, and records load-ledger-state/render-ledger-surface telemetry."
+        "what": "When an operator clicks a route-addressable ledger tab, navigate-tab-controller derives the route, fetches that server ledger, replaces the canvas graph with the ledger cards, zones, and relationships, hides every static surface card, zone, group, and relationship SVG layer, and records load-ledger-state/render-ledger-surface telemetry."
       },
       "facts": [],
       "fields": []

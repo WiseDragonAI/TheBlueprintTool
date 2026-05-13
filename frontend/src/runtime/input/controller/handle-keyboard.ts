@@ -6,7 +6,7 @@ import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.j
 import { resetActiveTool } from '../../toolbox/controller/reset-active-tool.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
-export function handleKeyboard(event: KeyboardEvent): void {
+export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
   const key = event.key.toLowerCase();
   telemetry('keyboard-shortcut', { key, ctrlKey: event.ctrlKey });
   if (key === 'escape') {
@@ -26,6 +26,6 @@ export function handleKeyboard(event: KeyboardEvent): void {
     telemetry('commit-ledger-edit', { paste: state.clipboard });
     telemetry('render-canvas-surface', { reason: 'paste' });
   }
-  if (modal.open && key === 'enter') deleteZoneController();
+  if (modal.open && key === 'enter') await deleteZoneController();
   if (modal.open && key === 'escape') modal.close?.();
 }
