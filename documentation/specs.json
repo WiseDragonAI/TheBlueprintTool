@@ -1379,7 +1379,7 @@
       "y": 4959,
       "w": 500,
       "comment": {
-        "what": ""
+        "what": "Ledger card descriptions must render common Markdown syntax instead of displaying raw markers. `**bold**` must render as strong text, inline backticks as code, headings as paragraphs without heading markers, and `-`/`*` lines as list items."
       },
       "facts": [],
       "fields": []

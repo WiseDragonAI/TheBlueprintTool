@@ -39,6 +39,9 @@ test('zone and group browser inputs route commands through runtime controllers b
   assert.match(serverMutation, /method: 'PATCH'/);
   assert.match(serverMutation, /state\.activeLedger = ledger/);
 
+  const ledgerCard = source('frontend/src/runtime/ledger/component/patch-ledger-card.ts');
+  assert.match(ledgerCard, /parseLedgerCardMarkdown/);
+
   const colorInput = source('frontend/src/runtime/input/controller/handle-region-color-input.ts');
   assert.match(colorInput, /editRegionColorController/);
   assert.doesNotMatch(colorInput, /applyZoneColorEdit/);
