@@ -178,3 +178,68 @@ test('specs and data ledger tabs commit canvas mutations through the server ledg
     ]);
   }
 });
+
+test('active ledger load keeps server geometry authoritative over stale browser persistence', async () => {
+  (globalThis as any).CustomEvent = class CustomEvent {
+    detail: unknown;
+    constructor(_type: string, init: { detail?: unknown } = {}) {
+      this.detail = init.detail;
+    }
+  };
+  (globalThis as any).window = {
+    location: { pathname: '/specs' },
+    dispatchEvent() {},
+    __coreTelemetry: []
+  };
+  const { state } = await import('../../src/runtime/state.js');
+  const { loadActiveLedgerState } = await import('../../src/runtime/ledger/effect/load-active-ledger-state.js');
+
+  state.activeTab = 'specs';
+  state.ledgerTabs = [
+    { id: 'specs', title: 'Specs', ledgerFile: '.blueprinttool/specs.json' },
+    { id: 'data', title: 'Data', ledgerFile: '.blueprinttool/data.json' }
+  ];
+  state.viewports = { specs: { x: 0, y: 0, scale: 1 } };
+
+  (globalThis as any).localStorage = {
+    getItem() {
+      return JSON.stringify({
+        geometry: {
+          cards: { 'spec-card': { x: 999, y: 999, width: 999, height: 99 } },
+          zones: { 'spec-zone': { x: 888, y: 888, width: 888, height: 888 } },
+          groups: {}
+        },
+        regionEdits: {
+          'spec-zone': { label: 'stale local label', color: '#000000' }
+        }
+      });
+    }
+  };
+
+  (globalThis as any).fetch = async (url: string) => {
+    assert.equal(url, '/blueprinttool/specs');
+    return {
+      ok: true,
+      async json() {
+        return {
+          cards: [{ id: 'spec-card', x: 10, y: 20, w: 240 }],
+          annotations: [{ id: 'spec-zone', variant: 'zone', label: 'server label', color: '#55b8ff', x: 30, y: 40, width: 180, height: 140 }]
+        };
+      }
+    };
+  };
+
+  await loadActiveLedgerState();
+
+  assert.deepEqual(state.activeLedger.cards[0], { id: 'spec-card', x: 10, y: 20, w: 240 });
+  assert.deepEqual(state.activeLedger.annotations[0], {
+    id: 'spec-zone',
+    variant: 'zone',
+    label: 'server label',
+    color: '#55b8ff',
+    x: 30,
+    y: 40,
+    width: 180,
+    height: 140
+  });
+});
