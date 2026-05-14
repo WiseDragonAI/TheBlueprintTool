@@ -1,5 +1,6 @@
 import { modal } from '../../dom.js';
 import { state } from '../../state.js';
+import { pasteSelectionController } from '../../clipboard/controller/paste-selection-controller.js';
 import { confirmZoneDeletionController } from '../../zone/controller/confirm-zone-deletion-controller.js';
 import { deleteZoneController } from '../../zone/controller/delete-zone-controller.js';
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
@@ -23,8 +24,7 @@ export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
     telemetry('copy-selection-payload', state.clipboard);
   }
   if (event.ctrlKey && key === 'v' && state.clipboard) {
-    telemetry('commit-ledger-edit', { paste: state.clipboard });
-    telemetry('render-canvas-surface', { reason: 'paste' });
+    await pasteSelectionController();
   }
   if (modal.open && key === 'enter') await deleteZoneController();
   if (modal.open && key === 'escape') modal.close?.();

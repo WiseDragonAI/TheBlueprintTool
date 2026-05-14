@@ -29,12 +29,10 @@ export function handlePointerMove(event: PointerEvent): void {
   if (state.pointer.intent === 'drag' || state.pointer.intent === 'group') {
     moveSelected(canvasDx, canvasDy);
     telemetry('calculate-drag-delta', { dx, dy, canvasDx, canvasDy });
-    telemetry('commit-ledger-edit', { targetId: state.pointer.targetId });
   }
   if (state.pointer.intent === 'resize') {
     resizeSelectedZone(canvasDx, canvasDy);
     telemetry('calculate-drag-delta', { dx, dy, canvasDx, canvasDy, resizeHandle: state.pointer.resizeHandle?.className });
-    telemetry('commit-ledger-edit', { resizeZone: state.pointer.targetId });
   }
   if (state.pointer.intent === 'marquee' || state.pointer.intent === 'draw-zone' || state.pointer.intent === 'draw-group') {
     const rect = rectFromPoints(state.pointer.startCanvas, canvasPointer);

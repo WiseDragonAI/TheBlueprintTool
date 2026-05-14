@@ -2,6 +2,7 @@ import { state } from '../../state.js';
 import { canvasPoint } from '../../canvas/helper/canvas-point.js';
 import { createZoneController } from '../../zone/controller/create-zone-controller.js';
 import { createGroupController } from '../../group/controller/create-group-controller.js';
+import { commitSelectedLedgerGeometry } from '../../ledger/effect/commit-selected-ledger-geometry.js';
 import { finishPointer } from '../effect/finish-pointer.js';
 import { persistState } from '../../persistence/effect/persist-state.js';
 import { point } from '../helper/point.js';
@@ -44,7 +45,10 @@ export async function handlePointerUp(event: PointerEvent): Promise<void> {
   if (state.pointer.intent === 'draw-group') {
     const rect = rectFromPoints(state.pointer.startCanvas, canvasPoint(releasePoint));
     (document.querySelector('.marquee') as HTMLElement).hidden = true;
-    createGroupController(rect);
+    await createGroupController(rect);
+  }
+  if (state.pointer.intent === 'drag' || state.pointer.intent === 'group' || state.pointer.intent === 'resize') {
+    await commitSelectedLedgerGeometry();
   }
   persistState();
   finishPointer(event);

@@ -1,6 +1,7 @@
-import { syncActiveLedgerRegionEdit } from '../../ledger/effect/sync-active-ledger-region-edit.js';
+import { commitActiveLedgerMutation } from '../../ledger/effect/commit-active-ledger-mutation.js';
 import { persistState } from '../../persistence/effect/persist-state.js';
 import { renderZoneLabelOverlay } from './render-zone-label-overlay.js';
+import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export function beginZoneLabelEdit(zone: HTMLElement): void {
@@ -22,10 +23,13 @@ export function beginZoneLabelEdit(zone: HTMLElement): void {
     const label = title.textContent?.trim() ?? '';
     title.contentEditable = 'false';
     title.classList.remove('editing');
-    syncActiveLedgerRegionEdit(zone, { label });
+    if (state.activeLedger && regionId) {
+      void commitActiveLedgerMutation({ action: 'patch-region', region: { id: regionId, kind: regionKind, label } }, { render: true });
+      return;
+    }
     persistState();
     renderZoneLabelOverlay();
-    telemetry('commit-ledger-edit', { regionKind, regionId, label });
+    telemetry('commit-static-surface-edit', { regionKind, regionId, label });
   }, { once: true });
   telemetry('open-zone-inline-label-edit', { regionKind, regionId });
 }

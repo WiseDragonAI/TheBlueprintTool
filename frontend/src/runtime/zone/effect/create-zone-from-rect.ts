@@ -1,5 +1,5 @@
 import { content } from '../../dom.js';
-import { commitActiveLedgerZoneMutation } from '../../ledger/effect/commit-active-ledger-zone-mutation.js';
+import { commitActiveLedgerMutation } from '../../ledger/effect/commit-active-ledger-mutation.js';
 import { createLedgerZoneAnnotation } from '../../ledger/helper/create-ledger-zone-annotation.js';
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
@@ -8,7 +8,7 @@ export async function createZoneFromRect(rect: { x: number; y: number; width: nu
   const zoneId = `zone-draft-${state.zoneCounter++}`;
   if (state.activeLedger) {
     const annotation = createLedgerZoneAnnotation({ id: zoneId, rect, color: state.zoneColor });
-    const committed = await commitActiveLedgerZoneMutation({ action: 'create-zone', annotation });
+    const committed = await commitActiveLedgerMutation({ action: 'create-zone', annotation });
     if (committed) {
       state.selection = { cardIds: [], zoneIds: [zoneId], groupIds: [] };
       telemetry('render-zone-layer', { created: zoneId, activeTab: state.activeTab, authority: 'server' });
@@ -39,6 +39,6 @@ export async function createZoneFromRect(rect: { x: number; y: number; width: nu
     </div>`;
   content.insertBefore(zone, content.querySelector('.marquee'));
   state.selection = { cardIds: [], zoneIds: [zoneId], groupIds: [] };
-  telemetry('commit-ledger-edit', { createZone: zoneId, geometry: rect, color: state.zoneColor });
+  telemetry('commit-static-surface-edit', { createZone: zoneId, geometry: rect, color: state.zoneColor });
   telemetry('render-zone-layer', { created: zoneId });
 }

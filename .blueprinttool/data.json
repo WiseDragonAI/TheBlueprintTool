@@ -1327,7 +1327,7 @@
       "y": 791,
       "w": 320,
       "comment": {
-        "what": "Runtime data used by generated functions.\n\n- `State`: previous and next application data observed by reducers, controllers, components, and tests.\n- `Action`: typed command created from input and consumed by controllers. Browser events never target DOM effects directly; they resolve an active document context and dispatch a controller-owned action."
+        "what": "Runtime data used by generated functions.\n\n- `State`: previous and next application data observed by reducers, controllers, components, and tests.\n- `Action`: typed command created from input and consumed by controllers. Browser events never target DOM effects directly; they resolve an active document context and dispatch a controller-owned action.\n- Route-addressable ledger tabs treat the server response as authoritative persisted state. Client actions may stage transient DOM feedback during gestures, but every persisted ledger mutation is committed through the active tab server route before replacing `activeLedger`."
       },
       "facts": [],
       "fields": [

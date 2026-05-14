@@ -1,14 +1,35 @@
 import { state } from '../../state.js';
+import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { ledgerEndpointForTab } from '../helper/ledger-endpoint-for-tab.js';
 
-type ZoneMutation = {
-  action: 'create-zone' | 'delete-zones';
+export type ActiveLedgerMutation = {
+  action: 'create-zone' | 'create-group' | 'delete-zones' | 'patch-geometry' | 'patch-region' | 'append-note' | 'delete-note' | 'paste-selection';
   annotation?: Record<string, unknown>;
   zoneIds?: string[];
+  geometry?: {
+    cards?: Record<string, { x: number; y: number; width: number; height: number }>;
+    zones?: Record<string, { x: number; y: number; width: number; height: number }>;
+    groups?: Record<string, { x: number; y: number; width: number; height: number }>;
+  };
+  region?: {
+    id: string;
+    kind: 'zone' | 'group';
+    label?: string;
+    color?: string;
+  };
+  note?: {
+    threadId: string;
+    body?: string;
+  };
+  selection?: {
+    cardIds: string[];
+    zoneIds: string[];
+    groupIds: string[];
+  };
 };
 
-export async function commitActiveLedgerZoneMutation(mutation: ZoneMutation): Promise<boolean> {
+export async function commitActiveLedgerMutation(mutation: ActiveLedgerMutation, options: { render?: boolean } = {}): Promise<boolean> {
   const endpoint = ledgerEndpointForTab(state.activeTab);
   if (!endpoint) return false;
   telemetry('commit-ledger-edit', { activeTab: state.activeTab, action: mutation.action, authority: 'server' });
@@ -25,5 +46,6 @@ export async function commitActiveLedgerZoneMutation(mutation: ZoneMutation): Pr
   if (!ledger || typeof ledger !== 'object') return false;
   state.activeLedger = ledger;
   telemetry('load-ledger-state', { activeTab: state.activeTab, source: 'server-ledger-mutation', action: mutation.action });
+  if (options.render) renderCanvasSurface();
   return true;
 }

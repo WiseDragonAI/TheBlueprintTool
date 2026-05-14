@@ -2,6 +2,8 @@ import { modal, shortcutModal } from '../../dom.js';
 import { state } from '../../state.js';
 import { deleteZoneController } from '../../zone/controller/delete-zone-controller.js';
 import { editRegionController } from '../../zone/controller/edit-region-controller.js';
+import { createNoteController } from '../../thread/controller/create-note-controller.js';
+import { deleteNoteController } from '../../thread/controller/delete-note-controller.js';
 import { renderThreadPanel } from '../../thread/effect/render-thread-panel.js';
 import { refreshRuntimeState } from '../../refresh/controller/refresh-runtime-state.js';
 import { selectTarget } from '../../selection/controller/select-target.js';
@@ -30,11 +32,11 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     editRegionController(zone);
   }
   if (action === 'create-note') {
-    telemetry('commit-ledger-edit', { threadId: state.threadId, note: (document.querySelector('.thread-draft') as HTMLTextAreaElement).value });
+    await createNoteController({ threadId: state.threadId, body: (document.querySelector('.thread-draft') as HTMLTextAreaElement).value });
     renderThreadPanel();
   }
   if (action === 'delete-note') {
-    telemetry('commit-ledger-edit', { threadId: state.threadId, deleteMarker: true });
+    await deleteNoteController(state.threadId);
     renderThreadPanel();
   }
   if (action === 'voice-start') {

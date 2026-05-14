@@ -3773,7 +3773,7 @@
       "y": 3788,
       "w": 320,
       "comment": {
-        "what": "**Implementation direction**\n\n- Server reads ledger JSON as the backing store for route-addressable tabs.\n- Server writes ledger JSON when client tab edits are committed through API routes.\n- Server keeps tab registry and active ledger routing aligned with the available ledger files.\n- Server refresh flows reload clients from persisted ledger state when external file edits are detected."
+        "what": "**Implementation direction**\n\n- Server reads ledger JSON as the backing store for route-addressable tabs.\n- Server is authoritative for every persisted ledger mutation on route-addressable tabs: create zone, create group, delete zone, geometry move/resize, label edit, color edit, note create/delete, and paste.\n- Browser inputs resolve the active tab context and dispatch controller-owned actions; they must not write active ledger state directly.\n- Server writes ledger JSON when client tab edits are committed through API routes, then returns the persisted ledger for the frontend to replace active state.\n- Server keeps tab registry and active ledger routing aligned with the available ledger files.\n- Server refresh flows reload clients from persisted ledger state when external file edits are detected."
       },
       "facts": [],
       "fields": []
