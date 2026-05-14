@@ -1,6 +1,7 @@
 import { state } from '../../state.js';
 import { applyViewportTransform } from '../../canvas/effect/apply-viewport-transform.js';
 import { scheduleViewportPersistence } from '../../persistence/effect/schedule-viewport-persistence.js';
+import { renderRelationshipOverlay } from '../../relationship/effect/render-relationship-overlay.js';
 import { point } from '../helper/point.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
@@ -27,4 +28,5 @@ export function handleWheel(event: WheelEvent): void {
   }
   scheduleViewportPersistence();
   applyViewportTransform();
+  renderRelationshipOverlay();
 }

@@ -17,6 +17,10 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.doesNotMatch(pointerUp, /createGroupFromRect/);
   assert.doesNotMatch(pointerUp, /commitActiveLedgerMutation/);
 
+  const wheel = source('frontend/src/runtime/gesture/controller/handle-wheel.ts');
+  assert.match(wheel, /applyViewportTransform/);
+  assert.match(wheel, /renderRelationshipOverlay/);
+
   const createZone = source('frontend/src/runtime/zone/effect/create-zone-from-rect.ts');
   assert.match(createZone, /commitActiveLedgerMutation/);
   assert.match(createZone, /createLedgerZoneAnnotation/);
