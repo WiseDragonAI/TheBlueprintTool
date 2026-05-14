@@ -277,11 +277,9 @@
 .relationships {
   position: absolute;
   inset: 0;
-  width: 5200px;
-  height: 2600px;
   overflow: visible;
   pointer-events: none;
-  z-index: 20;
+  z-index: 34;
 }
 
 .relationships path {
@@ -289,7 +287,6 @@
   stroke: rgba(168, 173, 169, 0.52);
   stroke-width: 1.35;
   stroke-linecap: round;
-  marker-end: url(#arrow);
 }
 
 .relationships text {
@@ -302,6 +299,16 @@
 }
 
 .relationships marker path { fill: rgba(168, 173, 169, 0.72); }
+
+.relationships text.is-source {
+  fill: var(--accent);
+  font-size: 10px;
+}
+
+.relationships text.is-target {
+  fill: rgba(243, 240, 231, 0.72);
+}
+
 .relationships path.selected,
 .relationships path.is-selected {
   stroke: var(--secondary-bright);

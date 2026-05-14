@@ -17,8 +17,8 @@ export function calculateRelationshipPorts(source: HTMLElement, target: HTMLElem
   const sourceSlot = slots?.source ?? { side: fallbackSides.sourceSide, slotIndex: 0, slotCount: 1 };
   const targetSlot = slots?.target ?? { side: fallbackSides.targetSide, slotIndex: 0, slotCount: 1 };
   const horizontal = sourceSlot.side === 'left' || sourceSlot.side === 'right' || Math.abs(targetCenter.x - sourceCenter.x) >= Math.abs(targetCenter.y - sourceCenter.y);
-  const sourcePort = relationshipPortForSide(sourceRect, sourceSlot.side, sourceSlot.slotIndex, sourceSlot.slotCount);
-  const targetPort = relationshipPortForSide(targetRect, targetSlot.side, targetSlot.slotIndex, targetSlot.slotCount);
+  const sourcePort = relationshipPortForSide(sourceRect, sourceSlot.side, sourceSlot.slotIndex, sourceSlot.slotCount, targetCenter);
+  const targetPort = relationshipPortForSide(targetRect, targetSlot.side, targetSlot.slotIndex, targetSlot.slotCount, sourceCenter);
   telemetry('calculate-relationship-ports', { sourceId: source.dataset.cardId, targetId: target.dataset.cardId, sourcePort, targetPort, sourceRect, targetRect, sourceSlot, targetSlot });
   return { sourcePort, targetPort, horizontal, sourceRect, targetRect };
 }

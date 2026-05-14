@@ -42,7 +42,23 @@ export function renderLedgerSurface(): void {
   content.querySelectorAll('.ledger-node[data-card-id]').forEach((node) => {
     if (!activeCardIds.has((node as HTMLElement).dataset.cardId ?? '')) node.remove();
   });
-  const overlay = createLedgerRelationshipOverlay(ledger.relationships ?? [], content.querySelector('.ledger-relationships') as SVGSVGElement | null);
+  const overlay = createLedgerRelationshipOverlay(ledger.relationships ?? [], content.querySelector('.ledger-relationships') as SVGSVGElement | null, ledgerRelationshipBounds(ledger));
   if (!overlay.parentElement) content.insertBefore(overlay, marquee);
   telemetry('render-ledger-surface', { activeTab: state.activeTab, cards: ledger.cards?.length ?? 0, zones: ledger.annotations?.length ?? 0, relationships: ledger.relationships?.length ?? 0 });
+}
+
+function ledgerRelationshipBounds(ledger: { cards?: Array<Record<string, unknown>>; annotations?: Array<Record<string, unknown>> }): { width: number; height: number } {
+  const padX = 420;
+  const padY = 320;
+  let width = 1200;
+  let height = 760;
+  for (const card of ledger.cards ?? []) {
+    width = Math.max(width, Number(card.x ?? 0) + Number(card.w ?? 280) + padX);
+    height = Math.max(height, Number(card.y ?? 0) + Number(card.h ?? 180) + padY);
+  }
+  for (const annotation of ledger.annotations ?? []) {
+    width = Math.max(width, Number(annotation.x ?? 0) + Number(annotation.width ?? 0) + padX);
+    height = Math.max(height, Number(annotation.y ?? 0) + Number(annotation.height ?? 0) + padY);
+  }
+  return { width, height };
 }
