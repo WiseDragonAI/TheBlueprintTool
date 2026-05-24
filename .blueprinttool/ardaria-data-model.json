@@ -125,7 +125,7 @@
   "cards": [
     {
       "id": "db_character",
-      "title": "SQLite table: character",
+      "title": "TABLE: character",
       "cardType": "table",
       "domainId": "ardaria-data-model",
       "x": -320,
@@ -412,7 +412,7 @@
     },
     {
       "id": "db_inventory",
-      "title": "SQLite table: inventory",
+      "title": "TABLE: inventory",
       "cardType": "table",
       "domainId": "ardaria-data-model",
       "x": -257,
@@ -440,8 +440,8 @@
       "title": "FInventoryItem",
       "cardType": "serialized-struct",
       "domainId": "ardaria-data-model",
-      "x": 751,
-      "y": 1538,
+      "x": 745,
+      "y": 1549,
       "w": 390,
       "comment": {
         "what": "Item occurrence stored inside inventory JSON and also used in FBuildComponentSer.Inventory."
@@ -507,11 +507,11 @@
     },
     {
       "id": "db_build",
-      "title": "SQLite table: build",
+      "title": "TABLE: build",
       "cardType": "table",
       "domainId": "ardaria-data-model",
-      "x": -298,
-      "y": 1940,
+      "x": -270,
+      "y": 1945,
       "w": 380,
       "comment": {
         "what": "Created by FCreateBuildTables::CreateBuildTable. This is a column projection, not full FBuildComponentSer."
@@ -565,11 +565,11 @@
     },
     {
       "id": "db_character_build_claim",
-      "title": "Table: character_build_claim",
+      "title": "TABLE: character_build_claim",
       "cardType": "table",
       "domainId": "ardaria-data-model",
-      "x": -803,
-      "y": 1534,
+      "x": -859,
+      "y": 1589,
       "w": 390,
       "comment": {
         "what": "Operator-oriented association between persisted characters and persisted build elements."
@@ -655,7 +655,7 @@
     },
     {
       "id": "db_history",
-      "title": "SQLite table: history",
+      "title": "TABLE: history",
       "cardType": "table",
       "domainId": "ardaria-data-model",
       "x": -779,
@@ -704,7 +704,7 @@
     },
     {
       "id": "db_world",
-      "title": "SQLite table: world",
+      "title": "TABLE: world",
       "cardType": "table",
       "domainId": "ardaria-data-model",
       "x": -318,
@@ -833,7 +833,7 @@
       "title": "UIndustryStationComponent",
       "cardType": "runtime-cache",
       "domainId": "ardaria-data-model",
-      "x": 2084,
+      "x": 2085,
       "y": 1963,
       "w": 360,
       "comment": {
@@ -979,6 +979,18 @@
       "comment": {
         "what": "`FBuildComponentSer` has `Inventory`, but the `build` SQL table does not persist it. Stations/campfires cannot save contained or cooking items until we add build inventory persistence."
       }
+    },
+    {
+      "id": "card-draft-1",
+      "title": "TODO",
+      "cardType": "note",
+      "domainId": "ardaria-data-model",
+      "x": 698,
+      "y": 2574,
+      "w": 260,
+      "comment": {
+        "what": "- Store inventory per build comp so we can persist inventory for stations"
+      }
     }
   ],
   "relationships": [
@@ -1121,10 +1133,10 @@
       "label": "DataBase",
       "variant": "zone",
       "color": "#6a57ff",
-      "x": -840,
+      "x": -981,
       "y": -187,
-      "width": 1031,
-      "height": 2443
+      "width": 1172,
+      "height": 2451
     },
     {
       "id": "zone-draft-4",

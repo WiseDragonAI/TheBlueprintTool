@@ -20,6 +20,8 @@ test('parse-cli-argv parses targeted ledger mutations', () => {
     'note_spawnable_vs_inventory_item',
     '--card-comment-file',
     'tmp/comment.md',
+    '--card-title',
+    'TABLE: character',
     '--add-card-file',
     'tmp/card.json',
     '--remove-relationship',
@@ -35,6 +37,7 @@ test('parse-cli-argv parses targeted ledger mutations', () => {
   assert.equal(command.ledgerJsonFile, '.blueprinttool/ardaria-data-model.json');
   assert.equal(command.mutationOperation.cardId, 'note_spawnable_vs_inventory_item');
   assert.equal(command.mutationOperation.cardCommentFile, 'tmp/comment.md');
+  assert.equal(command.mutationOperation.cardTitle, 'TABLE: character');
   assert.equal(command.mutationOperation.addCardFile, 'tmp/card.json');
   assert.deepEqual(command.mutationOperation.removeRelationshipIds, ['rel-a', 'rel-b']);
   assert.deepEqual(command.mutationOperation.addRelationships, [{ id: 'rel-c', from: 'from-card', to: 'to-card', label: 'label text' }]);

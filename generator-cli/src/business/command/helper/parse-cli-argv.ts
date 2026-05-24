@@ -104,6 +104,7 @@ export function parseCliArgv(argv: string[]): CliCommand {
         addRelationships: relationshipValues(argv),
         cardId: flagValue(argv, '--card-id'),
         cardCommentFile: flagValue(argv, '--card-comment-file'),
+        cardTitle: flagValue(argv, '--card-title'),
         removeRelationshipIds: trailingValues(argv, '--remove-relationship'),
       },
     };

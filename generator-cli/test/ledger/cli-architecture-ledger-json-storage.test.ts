@@ -42,15 +42,17 @@ test('CLI architecture ledger JSON storage applies targeted card and relationshi
       ],
       cardId: 'note-a',
       cardCommentFile: commentFile,
+      cardTitle: 'Renamed note',
       removeRelationshipIds: ['rel-remove'],
     },
   });
 
   assert.equal(result.ok, true);
   const ledger = JSON.parse(await readFile(file, 'utf8')) as {
-    cards: Array<{ id: string; comment?: { what?: string } }>;
+    cards: Array<{ id: string; title?: string; comment?: { what?: string } }>;
     relationships: Array<{ id: string }>;
   };
+  assert.equal(ledger.cards.find((card) => card.id === 'note-a')?.title, 'Renamed note');
   assert.equal(ledger.cards.find((card) => card.id === 'note-a')?.comment?.what, 'new comment');
   assert.equal(ledger.cards.some((card) => card.id === 'card-added'), true);
   assert.deepEqual(ledger.relationships.map((relationship) => relationship.id), ['rel-keep', 'rel-added']);

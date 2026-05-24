@@ -25,11 +25,12 @@ async function applyLedgerMutationOperation(
     }>;
     cardCommentFile?: string;
     cardId?: string;
+    cardTitle?: string;
     removeRelationshipIds?: string[];
   } | undefined,
   fs?: FileSystemPort,
 ): Promise<Result<unknown>> {
-  if (!operation || (!operation.addCardFile && !operation.cardCommentFile && !operation.cardId && (operation.removeRelationshipIds ?? []).length === 0 && (operation.addRelationships ?? []).length === 0)) {
+  if (!operation || (!operation.addCardFile && !operation.cardCommentFile && !operation.cardId && !operation.cardTitle && (operation.removeRelationshipIds ?? []).length === 0 && (operation.addRelationships ?? []).length === 0)) {
     return { ok: true, value: ledger };
   }
 
@@ -60,9 +61,9 @@ async function applyLedgerMutationOperation(
     nextLedger.cards = cards.filter((entry) => !isRecord(entry) || entry.id !== card.id).concat(card);
   }
 
-  if (operation.cardCommentFile || operation.cardId) {
-    if (!operation.cardId || !operation.cardCommentFile) {
-      return { ok: false, error: 'Card comment mutation requires --card-id and --card-comment-file.' };
+  if (operation.cardCommentFile || operation.cardTitle || operation.cardId) {
+    if (!operation.cardId) {
+      return { ok: false, error: 'Card mutation requires --card-id.' };
     }
 
     const cards = nextLedger.cards as unknown[];
@@ -71,10 +72,16 @@ async function applyLedgerMutationOperation(
       return { ok: false, error: `Card not found: ${operation.cardId}` };
     }
 
-    const commentText = await (fs ? fs.readFile(operation.cardCommentFile) : readFileWithNode(operation.cardCommentFile));
-    const comment = isRecord(card.comment) ? { ...card.comment } : {};
-    comment.what = commentText.trimEnd();
-    card.comment = comment;
+    if (operation.cardTitle) {
+      card.title = operation.cardTitle;
+    }
+
+    if (operation.cardCommentFile) {
+      const commentText = await (fs ? fs.readFile(operation.cardCommentFile) : readFileWithNode(operation.cardCommentFile));
+      const comment = isRecord(card.comment) ? { ...card.comment } : {};
+      comment.what = commentText.trimEnd();
+      card.comment = comment;
+    }
   }
 
   const removeRelationshipIds = new Set(operation.removeRelationshipIds ?? []);
@@ -124,6 +131,7 @@ export async function manageLedgerJsonController(
       }>;
       cardCommentFile?: string;
       cardId?: string;
+      cardTitle?: string;
       removeRelationshipIds?: string[];
     };
   },

@@ -18,6 +18,7 @@ export type LedgerMutationOperation = {
   }>;
   cardCommentFile?: string;
   cardId?: string;
+  cardTitle?: string;
   removeRelationshipIds: string[];
 };
 
