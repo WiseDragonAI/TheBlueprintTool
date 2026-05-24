@@ -8,6 +8,19 @@ export type CliMode = 'dry-run' | 'apply' | 'report' | 'patch-doc' | 'ledger' | 
 
 export type LedgerCommand = 'inspect' | 'mutate';
 
+export type LedgerMutationOperation = {
+  addCardFile?: string;
+  addRelationships: Array<{
+    from: string;
+    id: string;
+    label?: string;
+    to: string;
+  }>;
+  cardCommentFile?: string;
+  cardId?: string;
+  removeRelationshipIds: string[];
+};
+
 export type CliCommand =
   | {
       mode: 'dry-run' | 'apply';
@@ -31,6 +44,7 @@ export type CliCommand =
       ledgerCommand: LedgerCommand;
       ledgerJsonFile: string;
       mutationFile?: string;
+      mutationOperation: LedgerMutationOperation;
     }
   | {
       mode: 'check-ledger';

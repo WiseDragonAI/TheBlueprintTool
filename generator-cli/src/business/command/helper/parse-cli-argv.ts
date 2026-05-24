@@ -28,6 +28,23 @@ function flagValues(args: string[], flag: string): string[] {
   });
 }
 
+function trailingValues(args: string[], flag: string): string[] {
+  return args.flatMap((arg, index) => {
+    if (arg !== flag || index === args.length - 1) {
+      return [];
+    }
+
+    return [args[index + 1]];
+  });
+}
+
+function relationshipValues(args: string[]): Array<{ from: string; id: string; label?: string; to: string }> {
+  return trailingValues(args, '--add-relationship').map((value) => {
+    const [id = '', from = '', to = '', label] = value.split(':');
+    return { id, from, to, label };
+  });
+}
+
 export function parseCliArgv(argv: string[]): CliCommand {
   const [mode, subcommand] = argv;
   const masterLedgerFile = flagValue(argv, '--master-ledger') ?? '../tmp/master-ledger-generator-cli-26-05-11-1.md';
@@ -82,6 +99,13 @@ export function parseCliArgv(argv: string[]): CliCommand {
       ledgerCommand,
       ledgerJsonFile: flagValue(argv, '--ledger') ?? argv[2] ?? '../documentation/specs.json',
       mutationFile: flagValue(argv, '--mutation'),
+      mutationOperation: {
+        addCardFile: flagValue(argv, '--add-card-file'),
+        addRelationships: relationshipValues(argv),
+        cardId: flagValue(argv, '--card-id'),
+        cardCommentFile: flagValue(argv, '--card-comment-file'),
+        removeRelationshipIds: trailingValues(argv, '--remove-relationship'),
+      },
     };
   }
 

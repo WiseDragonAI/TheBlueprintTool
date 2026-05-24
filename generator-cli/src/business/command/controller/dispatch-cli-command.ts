@@ -73,7 +73,12 @@ export async function dispatchCliCommandController(
   // WHY: ledger mode reads or mutates committed JSON ledgers.
   // WHAT: call ledger controller.
   if (command.mode === 'ledger') {
-    return manageLedgerJsonController({ ledgerCommand: command.ledgerCommand, ledgerJsonFile: command.ledgerJsonFile }, ports.fs);
+    return manageLedgerJsonController({
+      ledgerCommand: command.ledgerCommand,
+      ledgerJsonFile: command.ledgerJsonFile,
+      mutationFile: command.mutationFile,
+      mutationOperation: command.mutationOperation,
+    }, ports.fs);
   }
 
   telemetry('dispatch-cli-command-rejected');

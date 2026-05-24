@@ -1,5 +1,6 @@
 import { state } from '../../state.js';
 import { renderTabRegistry } from '../../navigation/effect/render-tab-registry.js';
+import { routeTab } from '../../navigation/helper/route-tab.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export async function loadBlueprinttoolState(): Promise<void> {
@@ -11,6 +12,7 @@ export async function loadBlueprinttoolState(): Promise<void> {
   const blueprintState = await response.json().catch(() => undefined) as { tabs?: Array<{ id?: string; title?: string; ledgerFile?: string }> } | undefined;
   const tabs = blueprintState?.tabs?.filter((tab) => tab.id && tab.title) ?? [];
   if (tabs.length > 0) state.ledgerTabs = tabs;
+  state.activeTab = routeTab(window.location.pathname);
   if (!state.ledgerTabs.some((tab: { id: string }) => tab.id === state.activeTab)) {
     state.activeTab = state.ledgerTabs[0]?.id ?? state.activeTab;
     history.replaceState?.({}, '', `/${state.activeTab}`);
