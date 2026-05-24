@@ -128,8 +128,8 @@
       "title": "TABLE: character",
       "cardType": "table",
       "domainId": "ardaria-data-model",
-      "x": -320,
-      "y": 864,
+      "x": -333,
+      "y": 839,
       "w": 360,
       "comment": {
         "what": "Created by `FCharacterDataInteraction::CreateCharacterTable`.\n\nColumns are `CharacterId`, position, and `CharacterData` JSON. `CharacterData` serializes `FCharacterDataInterface`, including `InventoryId`; that id is the virtual link to `inventory.InventoryId`."
@@ -228,11 +228,11 @@
       "title": "FPlanetCreatureSurvival",
       "cardType": "serialized-struct",
       "domainId": "ardaria-data-model",
-      "x": 775,
-      "y": 582,
+      "x": 771,
+      "y": 592,
       "w": 340,
       "comment": {
-        "what": "Current gauge container persisted in character.CharacterData."
+        "what": "Persisted survival gauge container inside `character.CharacterData`. Concrete gauges: Health, Stamina, Energy, Food, MentalHealth, Hygiene. Each gauge is an `FCreatureState` current/max pair."
       },
       "facts": [],
       "fields": [
@@ -267,11 +267,11 @@
       "title": "FCreatureState",
       "cardType": "serialized-struct",
       "domainId": "ardaria-data-model",
-      "x": 807,
-      "y": 360,
+      "x": 799,
+      "y": 275,
       "w": 280,
       "comment": {
-        "what": "Current/max pair used by survival gauges."
+        "what": "Reusable value type for one gauge only. Fields: Current and Max. It does not define which survival gauges exist."
       },
       "facts": [],
       "fields": [
@@ -290,11 +290,11 @@
       "title": "FPlanetCreatureIdentity",
       "cardType": "serialized-struct",
       "domainId": "ardaria-data-model",
-      "x": 1184,
-      "y": 577,
+      "x": 1227,
+      "y": 580,
       "w": 300,
       "comment": {
-        "what": "Identity payload persisted in character.CharacterData."
+        "what": "Persisted identity payload inside `character.CharacterData`. Holds player/NPC display identity and procedural identity seed, not relationship or quest state."
       },
       "facts": [],
       "fields": [
@@ -321,11 +321,11 @@
       "title": "FPlanetCreatureStats",
       "cardType": "serialized-struct",
       "domainId": "ardaria-data-model",
-      "x": 397,
-      "y": 583,
+      "x": 283,
+      "y": 590,
       "w": 300,
       "comment": {
-        "what": "Base creature stats persisted in character.CharacterData."
+        "what": "Persisted base creature stats inside `character.CharacterData`. These are long-term improvable stats, separate from current survival gauge state."
       },
       "facts": [],
       "fields": [
@@ -415,8 +415,8 @@
       "title": "TABLE: inventory",
       "cardType": "table",
       "domainId": "ardaria-data-model",
-      "x": -257,
-      "y": 1480,
+      "x": -274,
+      "y": 1506,
       "w": 360,
       "comment": {
         "what": "Created by `FInventoryDataInteraction::CreateInventoryTable`.\n\nColumns are `InventoryId` and `InventoryData` JSON. `InventoryData` serializes `InventoryByItemId` plus 2D item transforms. Character rows point here through `CharacterData.InventoryId`, which is a virtual FK stored inside the character JSON."
@@ -510,11 +510,11 @@
       "title": "TABLE: build",
       "cardType": "table",
       "domainId": "ardaria-data-model",
-      "x": -270,
-      "y": 1945,
+      "x": -277,
+      "y": 1969,
       "w": 380,
       "comment": {
-        "what": "Created by FCreateBuildTables::CreateBuildTable. This is a column projection, not full FBuildComponentSer."
+        "what": "Persistent table for placed build components in the world. Stores the SQL projection needed to reload placement identity, hierarchy, type, transform, material, vertices, and destination."
       },
       "facts": [
         "Source/demo_level/Private/Data/DbQueries/Build/CreateBuildTables.cpp",
@@ -568,11 +568,11 @@
       "title": "TABLE: character_build_claim",
       "cardType": "table",
       "domainId": "ardaria-data-model",
-      "x": -859,
-      "y": 1589,
+      "x": -877,
+      "y": 1567,
       "w": 390,
       "comment": {
-        "what": "Operator-oriented association between persisted characters and persisted build elements."
+        "what": "Operator-oriented association between persisted characters and persisted build elements.\nJoin table with an array of `tags` to express the relationship between character and build"
       },
       "facts": [
         "Design table for character/build association.",
@@ -658,8 +658,8 @@
       "title": "TABLE: history",
       "cardType": "table",
       "domainId": "ardaria-data-model",
-      "x": -779,
-      "y": 1965,
+      "x": -275,
+      "y": 2267,
       "w": 380,
       "comment": {
         "what": "Undo/redo history table. It mirrors the persisted build projection plus history metadata."
@@ -707,8 +707,8 @@
       "title": "TABLE: world",
       "cardType": "table",
       "domainId": "ardaria-data-model",
-      "x": -318,
-      "y": -30,
+      "x": -320,
+      "y": -154,
       "w": 380,
       "comment": {
         "what": "Created by FWorldDataInteraction::CreateWorldTable. CellData is serialized JSON."
@@ -744,8 +744,8 @@
       "title": "FWorldCellDataInterface",
       "cardType": "serialized-struct",
       "domainId": "ardaria-data-model",
-      "x": 281,
-      "y": -22,
+      "x": 359,
+      "y": -134,
       "w": 390,
       "comment": {
         "what": "Persisted inside world.CellData."
@@ -775,8 +775,8 @@
       "title": "FWorldPcgPointDataInterface",
       "cardType": "serialized-struct",
       "domainId": "ardaria-data-model",
-      "x": 774,
-      "y": 77,
+      "x": 852,
+      "y": -36,
       "w": 360,
       "comment": {
         "what": "Altered generated PCG point payload."
@@ -806,8 +806,8 @@
       "title": "FWorldAddedPointDataInterface",
       "cardType": "serialized-struct",
       "domainId": "ardaria-data-model",
-      "x": 775,
-      "y": -136,
+      "x": 853,
+      "y": -248,
       "w": 360,
       "comment": {
         "what": "Player-added/generated point payload inside world.CellData."
@@ -989,8 +989,186 @@
       "y": 2574,
       "w": 260,
       "comment": {
-        "what": "- Store inventory per build comp so we can persist inventory for stations"
+        "what": "- Store inventory per build comp so we can persist inventory for stations\n- Create a join table for character <-> build with 2 FK + tags. like `owner` or `job.boss`\n- need a sql table for persisted quests and states"
       }
+    },
+    {
+      "id": "struct_quest",
+      "title": "FQuest",
+      "cardType": "authored-quest-definition",
+      "domainId": "ardaria-data-model",
+      "x": 2584,
+      "y": 555,
+      "w": 390,
+      "comment": {
+        "what": "Authored quest definition stored in editor data. Describes the quest identity, owner, rewards, and ordered steps; runtime progress is stored separately in `FQuestState`."
+      },
+      "facts": [
+        "Definitions are editor-authored data, not runtime SQL rows.",
+        "Steps are ordered by FQuestStep.StepOrder."
+      ],
+      "fields": [
+        {
+          "name": "QuestId",
+          "type": "FGuid"
+        },
+        {
+          "name": "Name",
+          "type": "FName"
+        },
+        {
+          "name": "Description",
+          "type": "FString"
+        },
+        {
+          "name": "Owner",
+          "type": "FGuid"
+        },
+        {
+          "name": "RewardXp",
+          "type": "int32"
+        },
+        {
+          "name": "RewardMoney",
+          "type": "int32"
+        },
+        {
+          "name": "RewardItemId",
+          "type": "int32 / placeholder legacy"
+        },
+        {
+          "name": "RewardItemQuantity",
+          "type": "int32"
+        },
+        {
+          "name": "Steps",
+          "type": "TArray<FQuestStep>"
+        }
+      ]
+    },
+    {
+      "id": "struct_quest_step",
+      "title": "FQuestStep",
+      "cardType": "authored-quest-step-definition",
+      "domainId": "ardaria-data-model",
+      "x": 2291,
+      "y": 213,
+      "w": 450,
+      "comment": {
+        "what": "Authored objective step inside a quest. Defines the expected action/tag predicate, player-facing text, rewards, and dependency rules. Runtime dependencies can bind exact IDs created by previous steps."
+      },
+      "facts": [
+        "Runtime dependency bindings can be produced by one step and consumed by later steps.",
+        "Tags can carry action/identity predicates when that keeps the step model generic."
+      ],
+      "fields": [
+        {
+          "name": "QuestId",
+          "type": "FGuid"
+        },
+        {
+          "name": "QuestStepId",
+          "type": "FGuid"
+        },
+        {
+          "name": "DependencyGuids",
+          "type": "TArray<FGuid>"
+        },
+        {
+          "name": "DependencyIntIds",
+          "type": "TArray<int32> legacy/shared ids"
+        },
+        {
+          "name": "StepOrder",
+          "type": "int32"
+        },
+        {
+          "name": "Name",
+          "type": "FName"
+        },
+        {
+          "name": "InternalDescription",
+          "type": "FString"
+        },
+        {
+          "name": "Content",
+          "type": "FText"
+        },
+        {
+          "name": "EventName",
+          "type": "FName / action tag source"
+        },
+        {
+          "name": "DependentSteps",
+          "type": "TArray<FName>"
+        },
+        {
+          "name": "RewardMoney",
+          "type": "int32"
+        },
+        {
+          "name": "RewardXp",
+          "type": "int32"
+        },
+        {
+          "name": "ExpectedItemId",
+          "type": "int32 legacy"
+        },
+        {
+          "name": "ExpectedItemQuantity",
+          "type": "int32"
+        },
+        {
+          "name": "Video",
+          "type": "UMediaSource*"
+        }
+      ]
+    },
+    {
+      "id": "struct_quest_state",
+      "title": "FQuestState",
+      "cardType": "persisted-runtime-state",
+      "domainId": "ardaria-data-model",
+      "x": 2008,
+      "y": 554,
+      "w": 430,
+      "comment": {
+        "what": "Persisted runtime progress for a quest. Tracks current/completed steps, claimed rewards, consumed predicates, and runtime-bound dependency IDs across save/load."
+      },
+      "facts": [
+        "Stores progression, not authored content.",
+        "Runtime bindings preserve exact objects created during previous steps."
+      ],
+      "fields": [
+        {
+          "name": "QuestId",
+          "type": "FGuid"
+        },
+        {
+          "name": "OwnerCharacterId",
+          "type": "FGuid / scope decision"
+        },
+        {
+          "name": "CurrentStepId",
+          "type": "FGuid"
+        },
+        {
+          "name": "CompletedStepIds",
+          "type": "TSet<FGuid>"
+        },
+        {
+          "name": "ClaimedRewardStepIds",
+          "type": "TSet<FGuid>"
+        },
+        {
+          "name": "RuntimeDependencyGuids",
+          "type": "TMap<FName, FGuid>"
+        },
+        {
+          "name": "ConsumedActionTags",
+          "type": "TSet<FName or FGameplayTag>"
+        }
+      ]
     }
   ],
   "relationships": [
@@ -1005,12 +1183,6 @@
       "from": "struct_character",
       "to": "struct_survival",
       "label": "has"
-    },
-    {
-      "id": "rel_survival_state",
-      "from": "struct_survival",
-      "to": "struct_creature_state",
-      "label": "gauge type"
     },
     {
       "id": "rel_character_identity",
@@ -1130,33 +1302,33 @@
   "annotations": [
     {
       "id": "zone-draft-3",
-      "label": "DataBase",
+      "label": "Quest",
       "variant": "zone",
-      "color": "#6a57ff",
-      "x": -981,
-      "y": -187,
-      "width": 1172,
-      "height": 2451
+      "color": "#55b8ff",
+      "x": 1912,
+      "y": 154,
+      "width": 1166,
+      "height": 639
     },
     {
       "id": "zone-draft-4",
-      "label": "RuntimeState",
+      "label": "New zone",
       "variant": "zone",
-      "color": "#ffb057",
-      "x": 210,
-      "y": -183,
-      "width": 1416,
-      "height": 1587
+      "color": "#4e31e3",
+      "x": -1918,
+      "y": 6,
+      "width": 954,
+      "height": 1312
     },
     {
       "id": "zone-draft-5",
-      "label": "Items and Build",
+      "label": "New zone",
       "variant": "zone",
-      "color": "#6aff57",
-      "x": 209,
-      "y": 1424,
-      "width": 1490,
-      "height": 1118
+      "color": "#55b8ff",
+      "x": 3551.5741860023463,
+      "y": 1029.15697364815,
+      "width": 1303.6937373289911,
+      "height": 694.6448953949928
     }
   ],
   "notes": {},

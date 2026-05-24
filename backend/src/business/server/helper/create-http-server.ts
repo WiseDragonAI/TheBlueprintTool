@@ -57,6 +57,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           cardPatch?: { id?: string; title?: string; description?: string };
           annotation?: Record<string, unknown>;
           zoneIds?: string[];
+          relationshipIds?: string[];
           geometry?: Record<string, Record<string, { x: number; y: number; width: number; height: number }>>;
           region?: { id?: string; kind?: string; label?: string; color?: string };
           note?: { threadId?: string; body?: string };
@@ -65,6 +66,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as {
           cards?: Array<Record<string, unknown>>;
           annotations?: Array<Record<string, unknown>>;
+          relationships?: Array<Record<string, unknown>>;
           notes?: Record<string, Array<Record<string, unknown>>>;
         };
         if ((mutation.action === 'create-zone' || mutation.action === 'create-group') && mutation.annotation?.id) {
@@ -87,6 +89,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         if (mutation.action === 'delete-zones') {
           const ids = new Set(mutation.zoneIds ?? []);
           ledger.annotations = (ledger.annotations ?? []).filter((entry) => entry.variant === 'group' || !ids.has(String(entry.id ?? '')));
+        }
+        if (mutation.action === 'delete-relationships') {
+          const ids = new Set(mutation.relationshipIds ?? []);
+          ledger.relationships = (ledger.relationships ?? []).filter((entry) => !ids.has(String((entry as Record<string, unknown>).id ?? '')));
         }
         if (mutation.action === 'patch-geometry') {
           const cardGeometry = mutation.geometry?.cards ?? {};
