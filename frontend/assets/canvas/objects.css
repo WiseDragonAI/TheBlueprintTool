@@ -238,6 +238,13 @@
   color: var(--text);
 }
 
+.card strong.editing {
+  min-width: 140px;
+  padding: 2px 4px;
+  background: color-mix(in srgb, var(--accent), transparent 84%);
+  outline: 1px solid var(--accent);
+}
+
 .card p {
   margin: 0 0 8px;
   color: var(--muted);
@@ -256,6 +263,23 @@
 .ledger-card-body ul {
   margin: 0;
   padding-left: 17px;
+}
+
+.ledger-card-description-editor {
+  display: block;
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  background: rgba(8, 10, 12, 0.92);
+  color: var(--text);
+  padding: 8px;
+  font: inherit;
+  line-height: 1.42;
+  pointer-events: auto;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .ledger-card-body li {

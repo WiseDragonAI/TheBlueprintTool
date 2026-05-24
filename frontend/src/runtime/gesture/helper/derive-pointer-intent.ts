@@ -2,6 +2,7 @@ import { state } from '../../state.js';
 
 export function derivePointerIntent(event: PointerEvent, targetKind: string, resizeHandle: HTMLElement | null): string {
   if (resizeHandle) return 'resize';
+  if (state.activeTool === 'card' && targetKind === 'canvas') return 'draw-card';
   if (state.activeTool === 'zone' && targetKind === 'canvas') return 'draw-zone';
   if (state.activeTool === 'group' && targetKind === 'canvas') return 'draw-group';
   if (event.ctrlKey && targetKind === 'canvas') return 'marquee';

@@ -1,0 +1,17 @@
+import { beginLedgerCardDescriptionEdit, beginLedgerCardTitleEdit } from '../../card/effect/begin-ledger-card-edit.js';
+
+export function handleCardDoubleClick(event: MouseEvent): void {
+  const target = event.target as HTMLElement;
+  const card = target.closest('[data-card-id]') as HTMLElement | null;
+  if (!card) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  if (target.closest('.ledger-card-title, strong')) {
+    beginLedgerCardTitleEdit(card);
+    return;
+  }
+  if (target.closest('.ledger-card-body')) {
+    beginLedgerCardDescriptionEdit(card);
+  }
+}

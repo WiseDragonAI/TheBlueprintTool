@@ -53,6 +53,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         });
         const mutation = body ? JSON.parse(body) as {
           action?: string;
+          card?: Record<string, unknown>;
+          cardPatch?: { id?: string; title?: string; description?: string };
           annotation?: Record<string, unknown>;
           zoneIds?: string[];
           geometry?: Record<string, Record<string, { x: number; y: number; width: number; height: number }>>;
@@ -68,6 +70,19 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         if ((mutation.action === 'create-zone' || mutation.action === 'create-group') && mutation.annotation?.id) {
           const id = String(mutation.annotation.id);
           ledger.annotations = (ledger.annotations ?? []).filter((entry) => String(entry.id ?? '') !== id).concat(mutation.annotation);
+        }
+        if (mutation.action === 'create-card' && mutation.card?.id) {
+          const id = String(mutation.card.id);
+          ledger.cards = (ledger.cards ?? []).filter((entry) => String(entry.id ?? '') !== id).concat(mutation.card);
+        }
+        if (mutation.action === 'patch-card' && mutation.cardPatch?.id) {
+          const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === mutation.cardPatch?.id);
+          if (card && typeof mutation.cardPatch.title === 'string') card.title = mutation.cardPatch.title;
+          if (card && typeof mutation.cardPatch.description === 'string') {
+            const comment = card.comment && typeof card.comment === 'object' && !Array.isArray(card.comment) ? card.comment as Record<string, unknown> : {};
+            comment.what = mutation.cardPatch.description;
+            card.comment = comment;
+          }
         }
         if (mutation.action === 'delete-zones') {
           const ids = new Set(mutation.zoneIds ?? []);

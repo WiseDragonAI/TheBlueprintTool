@@ -8,6 +8,7 @@ export const state: any = {
   activeLedger: null,
   activeTool: 'select',
   zoneColor: '#55b8ff',
+  cardCounter: 1,
   zoneCounter: 3,
   groupCounter: 2,
   viewport: { x: 0, y: 0, scale: 1 },

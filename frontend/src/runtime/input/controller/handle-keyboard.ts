@@ -8,6 +8,8 @@ import { resetActiveTool } from '../../toolbox/controller/reset-active-tool.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
+  const target = event.target as HTMLElement | null;
+  if (target?.closest('input,textarea,select,[contenteditable="true"]')) return;
   const key = event.key.toLowerCase();
   telemetry('keyboard-shortcut', { key, ctrlKey: event.ctrlKey });
   if (key === 'escape') {

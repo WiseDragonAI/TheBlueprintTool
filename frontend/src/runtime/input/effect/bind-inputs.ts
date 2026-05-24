@@ -2,6 +2,7 @@ import { canvas } from '../../dom.js';
 import { state } from '../../state.js';
 import { finishPointer } from '../../gesture/effect/finish-pointer.js';
 import { handleActionClick } from '../controller/handle-action-click.js';
+import { handleCardDoubleClick } from '../controller/handle-card-double-click.js';
 import { handleRegionColorInput } from '../controller/handle-region-color-input.js';
 import { handleKeyboard } from '../controller/handle-keyboard.js';
 import { handlePointerDown } from '../../gesture/controller/handle-pointer-down.js';
@@ -58,6 +59,7 @@ export function bindInputs(): void {
   canvas.addEventListener('dragstart', handleNativeDragStart);
   document.addEventListener('keydown', handleKeyboard);
   document.addEventListener('click', handleActionClick);
+  document.addEventListener('dblclick', handleCardDoubleClick);
   document.addEventListener('input', handleRegionColorInput);
   window.addEventListener('popstate', () => {
     state.viewports = { ...(state.viewports ?? {}), [state.activeTab]: { ...state.viewport } };

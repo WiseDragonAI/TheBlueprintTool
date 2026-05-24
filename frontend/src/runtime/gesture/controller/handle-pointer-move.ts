@@ -34,9 +34,9 @@ export function handlePointerMove(event: PointerEvent): void {
     resizeSelectedZone(canvasDx, canvasDy);
     telemetry('calculate-drag-delta', { dx, dy, canvasDx, canvasDy, resizeHandle: state.pointer.resizeHandle?.className });
   }
-  if (state.pointer.intent === 'marquee' || state.pointer.intent === 'draw-zone' || state.pointer.intent === 'draw-group') {
+  if (state.pointer.intent === 'marquee' || state.pointer.intent === 'draw-card' || state.pointer.intent === 'draw-zone' || state.pointer.intent === 'draw-group') {
     const rect = rectFromPoints(state.pointer.startCanvas, canvasPointer);
     patchBox(document.querySelector('.marquee') as HTMLElement, rect.x, rect.y, rect.width, rect.height);
-    telemetry(state.pointer.intent === 'marquee' ? 'calculate-marquee-selection' : 'calculate-zone-draft-geometry', rect);
+    telemetry(state.pointer.intent === 'marquee' ? 'calculate-marquee-selection' : 'calculate-draft-geometry', { intent: state.pointer.intent, rect });
   }
 }

@@ -50,6 +50,7 @@ export function patchLedgerCard(card: Record<string, unknown>, existing?: HTMLEl
   hash.className = 'hash';
   hash.textContent = `#${id}`;
   const title = document.createElement('strong');
+  title.className = 'ledger-card-title';
   title.textContent = String(card.title ?? id);
   const body = renderLedgerCardMarkdown(ledgerCardBody(card));
   element.replaceChildren(hash, title, body);

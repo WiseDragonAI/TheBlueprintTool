@@ -1,5 +1,6 @@
 import { state } from '../../state.js';
 import { canvasPoint } from '../../canvas/helper/canvas-point.js';
+import { createCardController } from '../../card/controller/create-card-controller.js';
 import { createZoneController } from '../../zone/controller/create-zone-controller.js';
 import { createGroupController } from '../../group/controller/create-group-controller.js';
 import { commitSelectedLedgerGeometry } from '../../ledger/effect/commit-selected-ledger-geometry.js';
@@ -36,6 +37,11 @@ export async function handlePointerUp(event: PointerEvent): Promise<void> {
     selectIntersecting(rect);
     (document.querySelector('.marquee') as HTMLElement).hidden = true;
     telemetry('resolve-selection-target', { selection: state.selection });
+  }
+  if (state.pointer.intent === 'draw-card') {
+    const rect = rectFromPoints(state.pointer.startCanvas, canvasPoint(releasePoint));
+    (document.querySelector('.marquee') as HTMLElement).hidden = true;
+    await createCardController(rect);
   }
   if (state.pointer.intent === 'draw-zone') {
     const rect = rectFromPoints(state.pointer.startCanvas, canvasPoint(releasePoint));
