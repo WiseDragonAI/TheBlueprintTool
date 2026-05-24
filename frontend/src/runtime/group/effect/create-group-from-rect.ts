@@ -1,11 +1,12 @@
 import { content } from '../../dom.js';
 import { commitActiveLedgerMutation } from '../../ledger/effect/commit-active-ledger-mutation.js';
 import { createLedgerGroupAnnotation } from '../../ledger/helper/create-ledger-group-annotation.js';
+import { createLedgerObjectId } from '../../ledger/helper/create-ledger-object-id.js';
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export async function createGroupFromRect(rect: { x: number; y: number; width: number; height: number }): Promise<void> {
-  const groupId = `group-draft-${state.groupCounter++}`;
+  const groupId = createLedgerObjectId('group');
   if (state.activeLedger) {
     const committed = await commitActiveLedgerMutation({ action: 'create-group', annotation: createLedgerGroupAnnotation({ id: groupId, rect }) });
     if (committed) {

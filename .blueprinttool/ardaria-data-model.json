@@ -1301,34 +1301,44 @@
   ],
   "annotations": [
     {
-      "id": "zone-draft-3",
+      "id": "zone-quest",
       "label": "Quest",
       "variant": "zone",
       "color": "#55b8ff",
-      "x": 1912,
-      "y": 154,
+      "x": 2986,
+      "y": 247,
       "width": 1166,
       "height": 639
     },
     {
-      "id": "zone-draft-4",
-      "label": "New zone",
+      "id": "zone-draft-3",
+      "label": "DataBase",
       "variant": "zone",
-      "color": "#4e31e3",
-      "x": -1918,
-      "y": 6,
-      "width": 954,
-      "height": 1312
+      "color": "#6a57ff",
+      "x": -840,
+      "y": -187,
+      "width": 1031,
+      "height": 2443
+    },
+    {
+      "id": "zone-draft-4",
+      "label": "RuntimeState",
+      "variant": "zone",
+      "color": "#12b85f",
+      "x": 210,
+      "y": -372,
+      "width": 1420,
+      "height": 1777
     },
     {
       "id": "zone-draft-5",
-      "label": "New zone",
+      "label": "Items and Build",
       "variant": "zone",
-      "color": "#55b8ff",
-      "x": 3551.5741860023463,
-      "y": 1029.15697364815,
-      "width": 1303.6937373289911,
-      "height": 694.6448953949928
+      "color": "#12b8b8",
+      "x": 209,
+      "y": 1424,
+      "width": 1490,
+      "height": 1118
     }
   ],
   "notes": {},

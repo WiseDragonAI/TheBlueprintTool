@@ -1,11 +1,12 @@
 import { content } from '../../dom.js';
 import { commitActiveLedgerMutation } from '../../ledger/effect/commit-active-ledger-mutation.js';
+import { createLedgerObjectId } from '../../ledger/helper/create-ledger-object-id.js';
 import { createLedgerZoneAnnotation } from '../../ledger/helper/create-ledger-zone-annotation.js';
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export async function createZoneFromRect(rect: { x: number; y: number; width: number; height: number }): Promise<void> {
-  const zoneId = `zone-draft-${state.zoneCounter++}`;
+  const zoneId = createLedgerObjectId('zone');
   if (state.activeLedger) {
     const annotation = createLedgerZoneAnnotation({ id: zoneId, rect, color: state.zoneColor });
     const committed = await commitActiveLedgerMutation({ action: 'create-zone', annotation });

@@ -1,10 +1,11 @@
 import { content } from '../../dom.js';
 import { commitActiveLedgerMutation } from '../../ledger/effect/commit-active-ledger-mutation.js';
+import { createLedgerObjectId } from '../../ledger/helper/create-ledger-object-id.js';
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export async function createCardFromRect(rect: { x: number; y: number; width: number; height: number }): Promise<void> {
-  const cardId = `card-draft-${state.cardCounter++}`;
+  const cardId = createLedgerObjectId('card');
   const card = {
     id: cardId,
     title: 'New card',
