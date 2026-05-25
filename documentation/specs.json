@@ -1000,6 +1000,11 @@
       "x": -1682,
       "y": 6170,
       "w": 560
+    },
+    "9f2c8a91": {
+      "x": -10380,
+      "y": 4088,
+      "w": 560
     }
   },
   "cards": [
@@ -3859,6 +3864,20 @@
       "w": 320,
       "comment": {
         "what": "**Implementation direction**\n\n- Server reads ledger JSON as the backing store for route-addressable tabs.\n- Server writes ledger JSON when client tab edits are committed through API routes.\n- Server keeps tab registry and active ledger routing aligned with the available ledger files.\n- Server refresh flows reload clients from persisted ledger state when external file edits are detected."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "9f2c8a91",
+      "title": "Backend reads workspace .blueprinttool settings",
+      "cardType": "spec-brief",
+      "domainId": "server",
+      "x": -10380,
+      "y": 4088,
+      "w": 560,
+      "comment": {
+        "what": "Backend startup resolves the active `.blueprinttool` directory from the launch cwd or `BLUEPRINTTOOL_ROOT`, reads optional `.blueprinttool/.settings.json`, and applies workspace settings for frontend root, host, port, and transcription configuration. This lets Ardaria launch CoreV2 from the Ardaria project cwd while keeping OpenAI and frontend settings with the workspace."
       },
       "facts": [],
       "fields": []

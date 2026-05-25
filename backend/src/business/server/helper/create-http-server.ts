@@ -8,6 +8,7 @@ import { resolve } from 'node:path';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 import { telemetry } from '@backend/telemetry/harness.js';
 import { transcribeVoiceController } from '@backend/business/transcription/controller/transcribe-voice-controller.js';
+import { resolveBlueprinttoolRoot } from './resolve-blueprinttool-root.js';
 import { readRequestBuffer } from './read-request-buffer.js';
 import { contentTypeFor } from './content-type-for.js';
 
@@ -19,17 +20,14 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const payload = (envelope.action_payload ?? input) as AnyRecord;
   const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
   const port = Number(payload.port ?? runtime.port ?? 0);
-  const configuredFrontendRoot = process.env.COREV2_FRONTEND_ROOT;
+  const configuredFrontendRoot = payload.corev2FrontendRoot ?? payload.frontendRoot ?? process.env.COREV2_FRONTEND_ROOT ?? runtime.corev2FrontendRoot;
   const frontendRoot = configuredFrontendRoot
-    ? resolve(configuredFrontendRoot)
+    ? resolve(String(configuredFrontendRoot))
     : existsSync(resolve(process.cwd(), 'frontend'))
       ? resolve(process.cwd(), 'frontend')
       : resolve(process.cwd(), '..', 'frontend');
-  const blueprinttoolRoot = process.env.BLUEPRINTTOOL_ROOT
-    ? resolve(process.env.BLUEPRINTTOOL_ROOT)
-    : existsSync(resolve(process.cwd(), '.blueprinttool'))
-      ? resolve(process.cwd(), '.blueprinttool')
-      : resolve(process.cwd(), '..', '.blueprinttool');
+  const blueprinttoolRoot = resolveBlueprinttoolRoot({ action_payload: payload, runtime_state: runtime });
+  runtime.blueprinttoolRoot = blueprinttoolRoot;
   if (payload.mode === 'dry-run') {
     return { ok: true, port, server: { listening: false, port } };
   }

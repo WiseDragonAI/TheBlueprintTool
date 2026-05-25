@@ -2,10 +2,11 @@
  * WHAT: Stores uploaded voice audio in a transient local cache and returns its file ref.
  * WHY: Optimistic voice upload must succeed before provider transcription is configured.
  */
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { telemetry } from '@backend/telemetry/harness.js';
+import { resolveBlueprinttoolRoot } from '@backend/business/server/helper/resolve-blueprinttool-root.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -16,7 +17,7 @@ export function persistUploadedVoiceAudio(input: { action_payload?: AnyRecord; r
   const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
   const audioBuffer = payload.audioBuffer as Buffer | undefined;
   if (!audioBuffer?.byteLength) return { ok: false, error: 'No audio was uploaded' };
-  const blueprintRoot = existsSync(resolve(process.cwd(), '.blueprinttool')) ? resolve(process.cwd(), '.blueprinttool') : resolve(process.cwd(), '..', '.blueprinttool');
+  const blueprintRoot = resolveBlueprinttoolRoot({ action_payload: payload, runtime_state: runtime });
   const uploadRoot = resolve(String(payload.voiceUploadRoot ?? process.env.COREV2_VOICE_UPLOAD_ROOT ?? resolve(blueprintRoot, 'voice-uploads')));
   mkdirSync(uploadRoot, { recursive: true });
   const mimeType = String(payload.mimeType ?? 'audio/webm');
