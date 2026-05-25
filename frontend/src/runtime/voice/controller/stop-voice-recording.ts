@@ -1,3 +1,7 @@
+/**
+ * WHAT: Stops microphone capture and forwards the captured audio to transcription.
+ * WHY: Voice stop is the handoff between local recording state and draft insertion.
+ */
 import { state } from '../../state.js';
 import { renderVoiceStatus } from '../effect/render-voice-status.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';

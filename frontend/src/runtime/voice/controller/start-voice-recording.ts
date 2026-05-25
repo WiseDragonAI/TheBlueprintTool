@@ -1,3 +1,7 @@
+/**
+ * WHAT: Starts microphone capture and stores MediaRecorder chunks for transcription.
+ * WHY: Voice input needs the raw browser audio available when recording stops.
+ */
 import { state } from '../../state.js';
 import { renderVoiceStatus } from '../effect/render-voice-status.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
