@@ -1,4 +1,5 @@
 import { content } from '../../dom.js';
+import { createCardResizeHandles } from '../component/create-card-resize-handles.js';
 import { commitActiveLedgerMutation } from '../../ledger/effect/commit-active-ledger-mutation.js';
 import { createLedgerObjectId } from '../../ledger/helper/create-ledger-object-id.js';
 import { state } from '../../state.js';
@@ -14,6 +15,7 @@ export async function createCardFromRect(rect: { x: number; y: number; width: nu
     x: Math.max(0, rect.x),
     y: Math.max(0, rect.y),
     w: Math.max(260, rect.width),
+    h: Math.max(132, rect.height),
     comment: { what: 'New description' },
   };
 
@@ -33,7 +35,13 @@ export async function createCardFromRect(rect: { x: number; y: number; width: nu
   element.style.left = `${card.x}px`;
   element.style.top = `${card.y}px`;
   element.style.width = `${card.w}px`;
-  element.innerHTML = '<span class="hash"></span><strong class="ledger-card-title">New card</strong><div class="ledger-card-body"><p>New description</p></div>';
+  element.style.height = `${card.h}px`;
+  element.replaceChildren(
+    ...createCardResizeHandles(),
+    Object.assign(document.createElement('span'), { className: 'hash' }),
+    Object.assign(document.createElement('strong'), { className: 'ledger-card-title', textContent: 'New card' }),
+    Object.assign(document.createElement('div'), { className: 'ledger-card-body', innerHTML: '<p>New description</p>' })
+  );
   content.insertBefore(element, content.querySelector('.marquee'));
   state.selection = { cardIds: [cardId], zoneIds: [], groupIds: [] };
   telemetry('commit-static-surface-edit', { createCard: cardId, geometry: rect });

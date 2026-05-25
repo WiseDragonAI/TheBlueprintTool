@@ -8,6 +8,7 @@ export function applyPersistedGeometryToLedger(ledger: unknown, geometry: unknow
     card.x = Number(record.x);
     card.y = Number(record.y);
     card.w = Math.max(220, Number(record.width));
+    card.h = Math.max(132, Number(record.height));
   }
   for (const annotation of document.annotations ?? []) {
     const id = String(annotation.id ?? '');

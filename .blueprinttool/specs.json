@@ -241,6 +241,11 @@
       "y": 3178,
       "w": 320
     },
+    "60000006": {
+      "x": -4316,
+      "y": 4979,
+      "w": 320
+    },
     "60000009": {
       "x": -5147,
       "y": 5160,
@@ -975,6 +980,16 @@
       "x": -4780,
       "y": 5308,
       "w": 520
+    },
+    "5f3a9d2e": {
+      "x": -4780,
+      "y": 10796,
+      "w": 640
+    },
+    "8c4e2b71": {
+      "x": -4780,
+      "y": 10992,
+      "w": 640
     }
   },
   "cards": [
@@ -1491,7 +1506,7 @@
       "y": 7227,
       "w": 520,
       "comment": {
-        "what": "Canvas rendering must keep pointer interaction responsive at wide zoom-out levels by switching the canvas into low-detail mode below 0.35 scale and overview-detail mode below 0.18 scale. Low-detail mode removes expensive shadows, text blocks, buttons, and relationship labels while preserving geometry and selection affordances. Overview-detail mode also removes card titles and inverse-scaled zone labels so tiny boxes never become unreadable overlapping text columns."
+        "what": "Canvas rendering must keep pointer interaction responsive at wide zoom-out levels by switching the canvas into low-detail mode below 0.35 scale and overview-detail mode below 0.18 scale. Low-detail mode removes expensive shadows, description blocks, buttons, hashes, visual chips, and relationship labels while preserving geometry, selection affordances, and readable card titles. Overview-detail mode keeps card titles readable with the viewport counter-scale rule instead of rendering unreadable description columns."
       },
       "facts": [],
       "fields": []
@@ -1814,6 +1829,20 @@
       "w": 320,
       "comment": {
         "what": "The browser route path determines the active tab on direct load and browser history navigation."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "60000006",
+      "title": "cards can be resized",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4316,
+      "y": 4979,
+      "w": 320,
+      "comment": {
+        "what": "Selected cards expose the same corner resize handles as zones. Dragging a card resize handle mutates canvas-space x/y/w/h geometry, reroutes connected relationships live, and persists width and height to the ledger on pointer release."
       },
       "facts": [],
       "fields": []
@@ -2513,10 +2542,14 @@
       "y": 5435,
       "w": 320,
       "comment": {
-        "what": ""
+        "what": "Ledger cards can declare visual tags using a `labels` or `tags` string array. Non-empty labels render as compact chips in the card's top-right corner. The chip background uses the card's own `--card-zone-color`, so labels stay visually tied to the card color/zone context. Labels are decorative metadata on the card, not relationships, identities, or runtime state."
       },
       "facts": [],
-      "fields": []
+      "fields": [],
+      "labels": [
+        "visual",
+        "validated"
+      ]
     },
     {
       "id": "4dfbf38c",
@@ -4015,6 +4048,412 @@
       },
       "facts": [],
       "fields": []
+    },
+    {
+      "id": "84cf2a6b",
+      "title": "Low-detail zoom keeps card titles readable",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 5504,
+      "w": 560,
+      "comment": {
+        "what": "When the canvas enters low-detail or overview-detail zoom, card descriptions, labels, buttons, and hashes must stay hidden, but each card title remains visible. The title uses the same viewport counter-scale rule as zone labels so it stays readable while remaining anchored to the card geometry."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "2aa4f070",
+      "title": "Zone edit and color controls reveal on hover",
+      "cardType": "spec-brief",
+      "domainId": "zone",
+      "x": -4780,
+      "y": 5700,
+      "w": 560,
+      "comment": {
+        "what": "Regular zone color controls and zone or group edit icon controls are hidden during normal canvas inspection and become visible only while the owning zone is hovered or has focus within. Notes controls remain governed by their thread action specs."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "f1c7a9d4",
+      "title": "Inline code uses bright card hue",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 5896,
+      "w": 560,
+      "comment": {
+        "what": "Inline markdown code spans rendered inside a card description use the card inherited zone hue by defaulting to cyan when no zone is inherited. Runtime rendering clamps the color brightness upward so dark zone colors remain readable while preserving the original hue and saturation."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "8b6e4d2a",
+      "title": "Markdown bold renders white bold",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 6092,
+      "w": 560,
+      "comment": {
+        "what": "Markdown strong spans rendered inside card descriptions display as inline white bold text. This styling is separate from the block-level card title strong element."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "c4e8b2f9",
+      "title": "Low-detail zoom preserves measured card size",
+      "cardType": "spec-brief",
+      "domainId": "canvas",
+      "x": -4780,
+      "y": 6288,
+      "w": 560,
+      "comment": {
+        "what": "Before low-detail or overview-detail zoom hides card descriptions, runtime measures each rendered card in full-detail mode and stores its width and height as a transient size cache on the card element. While zoomed out, the card keeps that cached footprint even though description content is hidden."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "9a7d3c5e",
+      "title": "Description editor preserves body size and captures scroll",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 6484,
+      "w": 560,
+      "comment": {
+        "what": "Opening a card description editor measures the existing rendered description area before replacing it and applies that size to the textarea. Wheel input over the textarea scrolls the textarea instead of zooming or panning the canvas."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "5d8f2a1b",
+      "title": "Zone edit controls animate hover reveal",
+      "cardType": "spec-brief",
+      "domainId": "zone",
+      "x": -4780,
+      "y": 6680,
+      "w": 560,
+      "comment": {
+        "what": "Zone edit and color controls must fade and ease into place when the owning zone is hovered or focused. Hidden controls remain non-interactive until visible, but the reveal and hide transitions should feel smooth rather than abruptly popping."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "1e9b7c4f",
+      "title": "Inline code HSV value clamp stays bright",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 6876,
+      "w": 560,
+      "comment": {
+        "what": "Inline code color clamping uses the inherited card hue and saturation while forcing HSV value to full brightness for dark or mid-value zone colors. Purple, blue, red, and green zones must produce readable bright code text instead of dim saturated text."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "0f6a3e91",
+      "title": "Relationship labels inherit endpoint zone color",
+      "cardType": "spec-brief",
+      "domainId": "relationship",
+      "x": -4780,
+      "y": 7072,
+      "w": 560,
+      "comment": {
+        "what": "Relationship arrow labels must use the color inherited from the nearby endpoint card or zone. Source or target label classes must not override that inherited color with a global accent."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "6c2d8e0a",
+      "title": "Relationship labels avoid card boxes with safety margin",
+      "cardType": "spec-brief",
+      "domainId": "relationship",
+      "x": -4780,
+      "y": 7268,
+      "w": 560,
+      "comment": {
+        "what": "Relationship endpoint labels are placed outside the source or target card box with a fixed safety margin. Label routing must account for the endpoint rectangle so text does not intersect the card edge or arrow port."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "4b7c1d9e",
+      "title": "Low-detail card titles wrap instead of ellipsizing",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 7464,
+      "w": 560,
+      "comment": {
+        "what": "When low-detail or overview-detail zoom keeps card titles visible, long card titles wrap across lines instead of truncating with ellipsis. The readable counter-scaled title remains anchored to the card."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "2f9a6c8d",
+      "title": "Readable colors use HSV rebuild plus luminance floor",
+      "cardType": "spec-brief",
+      "domainId": "canvas",
+      "x": -4780,
+      "y": 7660,
+      "w": 560,
+      "comment": {
+        "what": "Readable colors for inline code, zone labels, card-derived labels, and relationship labels are produced by decomposing the source RGB color into HSV, raising value to full brightness, rebuilding RGB, then lowering saturation only as needed to satisfy a perceptual luminance floor. Saturated purple and blue colors must not remain visually dim."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "7e4b0a2c",
+      "title": "PascalCase titles expose wrap opportunities",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 7856,
+      "w": 560,
+      "comment": {
+        "what": "Card title rendering inserts non-destructive word break opportunities at PascalCase and acronym-to-word boundaries so long Unreal-style identifiers can wrap cleanly when zoomed out while preserving editable title text."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "3c1d8f6b",
+      "title": "Local app routes serve uncached current assets",
+      "cardType": "spec-brief",
+      "domainId": "server",
+      "x": -4780,
+      "y": 8052,
+      "w": 560,
+      "comment": {
+        "what": "The local development server serves app HTML and frontend asset routes with no-store cache headers so iterative canvas styling and runtime changes are visible after reload without stale browser module cache ambiguity."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "9d5e0b7a",
+      "title": "Counter-scaled low-detail titles fit card width",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 8248,
+      "w": 560,
+      "comment": {
+        "what": "Low-detail card titles that use viewport counter-scaling must lay out in a pre-transform width equal to the card width multiplied by the current viewport scale. After the inverse transform is applied, the visible title wraps within the card instead of overflowing its card box."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "a6f4c2e1",
+      "title": "Cards expose description and fields tabs",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 8444,
+      "w": 560,
+      "comment": {
+        "what": "Cards with structured `fields` expose an in-card tab strip with Description and Fields tabs. The description tab shows the existing comment or markdown body, and the fields tab visualizes each field name and type without replacing the card title or labels."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "d0b7e3a9",
+      "title": "Fields tab preserves description height and owns scroll",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 8640,
+      "w": 560,
+      "comment": {
+        "what": "Switching a card to its Fields tab keeps the tab frame height measured from the Description tab. Field content scrolls inside the card frame and wheel events over the tab frame are captured by the card content instead of zooming or panning the canvas."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "e4c1b8f5",
+      "title": "Card tab switches fade between panels",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 8836,
+      "w": 560,
+      "comment": {
+        "what": "Card tab switches animate between Description and Fields with a short fade out and fade in. The inactive panel remains mounted for measurement but is non-interactive."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "91f0c6a2",
+      "title": "Runtime card render functions stay split by file",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 9032,
+      "w": 560,
+      "comment": {
+        "what": "Runtime card rendering follows the CoreV2 one-file-per-function canon. `patchLedgerCard` composes imported component/helper functions instead of declaring tab, field, label, markdown, or title helper functions inside the same source file."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "b0f6a1c3",
+      "title": "Card tab hover color uses zone hue",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 9228,
+      "w": 560,
+      "comment": {
+        "what": "Card tab hover and focus states use the card's readable zone color and zone hue for border, background, and glow. Generic accent hover styling must not override card tabs."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "c6e3b7d1",
+      "title": "Description tab never scrolls",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 9424,
+      "w": 560,
+      "comment": {
+        "what": "The Description panel expands to its measured content height and must not show horizontal or vertical scrollbars. Only the Fields panel may scroll inside the preserved description-height frame."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "f8d2c4a7",
+      "title": "Card tabs are hover-revealed floating controls",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 9620,
+      "w": 560,
+      "comment": {
+        "what": "Card Description and Fields controls are absolutely positioned floating controls. They fade and slide in on card hover, focus-within, or selection, and they do not consume layout space or push description content down."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "6a2d9f0e",
+      "title": "Loaded ledger cards resync tab frame height after layout",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 9816,
+      "w": 560,
+      "comment": {
+        "what": "When a ledger first loads, card tab frames resync after browser layout, after font readiness, and when the description panel resizes. The card border must grow to contain the full Description panel so description text never overflows below the card."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "0d4c8b2f",
+      "title": "Floating card tabs use opaque contrast surfaces",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 10012,
+      "w": 560,
+      "comment": {
+        "what": "Floating Description and Fields buttons use opaque dark surfaces with strong backdrop shadows and card-zone-colored hover/focus glows. Base, hover, active, and active-hover states are visually distinct, and each state uses opaque gradient stops mixed from the card zone color so labels remain readable while layered above description text."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "7b0f2e6c",
+      "title": "Activated card tabs hide after pointer leaves",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 10208,
+      "w": 560,
+      "comment": {
+        "what": "Activating a card Description or Fields tab must not pin the floating tab controls open. The tab strip reveals on card hover and keyboard-visible tab focus, then fades out again when the pointer leaves and no keyboard-visible tab focus is present."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "1a8d5f7b",
+      "title": "Field tab height is measured from description content",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 10404,
+      "w": 560,
+      "comment": {
+        "what": "Card tab frame height is derived from the rendered Description content children, not from the stretched absolute panel box. Switching to Fields must not feed field content or a previous frame height back into the card's outer height; Fields stays inside the preserved description-height scroll frame."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "2e7c9a1d",
+      "title": "Card tab active and hover states are visibly zone colored",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 10600,
+      "w": 560,
+      "comment": {
+        "what": "Floating card tab controls must show visibly different base, hover, active, and active-hover states at card scale. Hover and active states use direct card zone hue for button borders, fills, and glows instead of pale readable-color mixes. The floating tab group backdrop shadow is dark only, never zone colored, so controls remain legible over card text."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "5f3a9d2e",
+      "title": "Card tabs resolve color from deterministic zone ownership",
+      "cardType": "spec-brief",
+      "domainId": "specs",
+      "x": -4780,
+      "y": 10796,
+      "w": 640,
+      "comment": {
+        "what": "Floating card tab base, hover, active, and active-hover colors must be driven by the card owning zone color resolved from ledger coordinates before DOM measurement. CSS using `--card-zone-color` is not sufficient unless the card receives a deterministic zone id and zone-color value before tab controls paint; the DOM overlap pass may refresh the current color of that owning zone and remains only a fallback for non-ledger cards."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "8c4e2b71",
+      "title": "Card tab button fallback surface is raw zone color",
+      "cardType": "spec-brief",
+      "domainId": "specs",
+      "x": -4780,
+      "y": 10992,
+      "w": 640,
+      "comment": {
+        "what": "Floating card tab buttons must not visually fall back to the generic grey button surface. Each tab state sets raw `--card-zone-color` as `background-color` and only uses gradients as `background-image` enhancement, so active and hover states remain visibly zone colored even if advanced color mixing is ignored or partially overridden."
+      },
+      "facts": [],
+      "fields": []
     }
   ],
   "relationships": [],
@@ -4253,6 +4692,6 @@
     "zoneId": "",
     "zoneIds": []
   },
-  "updatedAt": "2026-05-12T00:00:00.000Z",
+  "updatedAt": "2026-05-25T00:00:00.000Z",
   "cardEdits": {}
 }

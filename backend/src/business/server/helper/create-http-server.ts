@@ -114,6 +114,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             card.x = record.x;
             card.y = record.y;
             card.w = record.width;
+            card.h = record.height;
           }
           for (const annotation of ledger.annotations ?? []) {
             const id = String(annotation.id ?? '');
@@ -177,6 +178,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const assetPath = existsSync(requestedPath) ? requestedPath : requestedPath.replace(/\.js$/, '.ts');
     if ((isAppRoute || isAssetRoute) && existsSync(assetPath)) {
       response.setHeader('content-type', contentTypeFor(assetPath));
+      response.setHeader('cache-control', 'no-store');
       const source = readFileSync(assetPath, 'utf8');
       response.end(assetPath.endsWith('.ts') ? transpileModule(source, { compilerOptions: { target: ScriptTarget.ES2022, module: ModuleKind.ES2022 } }).outputText : source);
       return;

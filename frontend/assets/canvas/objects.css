@@ -12,7 +12,7 @@
 
 .regular-zone {
   --zone-color: var(--primary-bright);
-  --zone-label-color: color-mix(in srgb, var(--zone-color), white var(--zone-label-min-brightness-mix));
+  --zone-label-color: var(--zone-readable-color, color-mix(in srgb, var(--zone-color), white var(--zone-label-min-brightness-mix)));
   min-height: 140px;
   padding: 10px;
   border-color: color-mix(in srgb, var(--zone-color), transparent 35%);
@@ -69,7 +69,7 @@
   white-space: nowrap;
   font-size: 13px;
   font-weight: 700;
-  transform: scale(calc(1 / var(--viewport-scale, 1)));
+  transform: scale(var(--inverse-viewport-scale, 1));
   transform-origin: left top;
   text-shadow: 0 0 10px color-mix(in srgb, var(--zone-label-color, var(--accent)), transparent 66%);
 }
@@ -89,7 +89,7 @@
   white-space: nowrap;
   font-size: 13px;
   font-weight: 700;
-  transform: scale(calc(1 / var(--viewport-scale, 1)));
+  transform: scale(var(--inverse-viewport-scale, 1));
   transform-origin: left top;
 }
 
@@ -116,6 +116,25 @@
   align-items: center;
   gap: 8px;
   margin-top: 12px;
+}
+
+.zone .zone-actions .icon-button,
+.zone .zone-color-edit {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px) scale(0.96);
+  transition:
+    opacity 150ms ease,
+    transform 170ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.zone:hover .zone-actions .icon-button,
+.zone:focus-within .zone-actions .icon-button,
+.zone:hover .zone-color-edit,
+.zone:focus-within .zone-color-edit {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
 }
 
 .zone-actions button, .zone-color-edit, .card button, .thread-panel button {
@@ -184,7 +203,12 @@
   box-shadow: 0 0 0 2px rgba(8, 8, 8, 0.86);
 }
 
-.zone.selected .resize-handle { display: block; }
+.zone.selected .resize-handle,
+.card.selected .resize-handle { display: block; }
+
+.card .resize-handle {
+  background: var(--card-zone-color, var(--accent));
+}
 
 .resize-handle.nw { left: -7px; top: -7px; cursor: nwse-resize; }
 .resize-handle.ne { right: -7px; top: -7px; cursor: nesw-resize; }
@@ -193,6 +217,8 @@
 
 .card {
   --card-zone-color: var(--primary-bright);
+  --card-readable-color: color-mix(in srgb, var(--card-zone-color), white 52%);
+  --card-code-color: var(--card-readable-color);
   width: 250px;
   min-height: 132px;
   padding: 14px;
@@ -221,6 +247,36 @@
     0 20px 48px rgba(0, 0, 0, 0.48);
 }
 
+.ledger-card-labels {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  max-width: calc(100% - 72px);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.ledger-card-label {
+  min-width: 0;
+  max-width: 120px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--card-zone-color), white 26%);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--card-zone-color), rgba(9, 10, 12, 0.94) 42%);
+  color: var(--text);
+  padding: 2px 5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-transform: uppercase;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--card-zone-color), transparent 78%);
+}
+
 .hash {
   display: block;
   color: var(--muted);
@@ -236,6 +292,140 @@
   display: block;
   margin-bottom: 8px;
   color: var(--text);
+}
+
+.ledger-card-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ledger-card-tabs {
+  position: absolute;
+  left: 14px;
+  top: 48px;
+  z-index: 4;
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  filter:
+    drop-shadow(0 16px 18px rgba(0, 0, 0, 0.94))
+    drop-shadow(0 4px 8px rgba(0, 0, 0, 0.9));
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px) scale(0.98);
+  transition:
+    opacity 150ms ease,
+    transform 170ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.card:hover .ledger-card-tabs,
+.card:has(.ledger-card-tab:focus-visible) .ledger-card-tabs {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.card .ledger-card-tabs .ledger-card-tab {
+  min-height: 24px;
+  padding: 3px 7px;
+  border: 1px solid var(--card-zone-color);
+  border-radius: 2px;
+  background-color: var(--card-zone-color);
+  background-image:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--card-zone-color), #171a20 58%),
+      color-mix(in srgb, var(--card-zone-color), #05070a 70%)
+    );
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  box-shadow:
+    0 10px 18px rgba(0, 0, 0, 0.92),
+    0 0 0 1px rgba(0, 0, 0, 0.82),
+    0 0 20px color-mix(in srgb, var(--card-zone-color), transparent 58%);
+}
+
+.card .ledger-card-tabs .ledger-card-tab:hover,
+.card .ledger-card-tabs .ledger-card-tab:focus-visible {
+  border-color: color-mix(in srgb, var(--card-zone-color), #ffffff 14%);
+  background-color: var(--card-zone-color);
+  background-image:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--card-zone-color), #ffffff 8%),
+      color-mix(in srgb, var(--card-zone-color), #05070a 20%)
+    );
+  color: #05070a;
+  box-shadow:
+    0 14px 24px rgba(0, 0, 0, 0.94),
+    0 0 0 1px rgba(0, 0, 0, 0.86),
+    0 0 26px color-mix(in srgb, var(--card-zone-color), transparent 34%);
+}
+
+.card .ledger-card-tabs .ledger-card-tab.is-active {
+  border-color: color-mix(in srgb, var(--card-zone-color), #ffffff 22%);
+  background-color: var(--card-zone-color);
+  background-image:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--card-zone-color), #ffffff 16%),
+      var(--card-zone-color)
+    );
+  color: #05070a;
+  box-shadow:
+    0 14px 26px rgba(0, 0, 0, 0.94),
+    0 0 0 1px rgba(0, 0, 0, 0.88),
+    0 0 30px color-mix(in srgb, var(--card-zone-color), transparent 28%);
+}
+
+.card .ledger-card-tabs .ledger-card-tab.is-active:hover,
+.card .ledger-card-tabs .ledger-card-tab.is-active:focus-visible {
+  border-color: color-mix(in srgb, var(--card-zone-color), #ffffff 32%);
+  background-color: var(--card-zone-color);
+  background-image:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--card-zone-color), #ffffff 24%),
+      color-mix(in srgb, var(--card-zone-color), #ffffff 6%)
+    );
+  color: #05070a;
+  box-shadow:
+    0 16px 28px rgba(0, 0, 0, 0.96),
+    0 0 0 1px rgba(0, 0, 0, 0.9),
+    0 0 34px color-mix(in srgb, var(--card-zone-color), transparent 18%);
+}
+
+.ledger-card-tab-frame {
+  position: relative;
+  height: var(--ledger-card-tab-height, 120px);
+  min-height: var(--ledger-card-tab-height, 120px);
+  overflow: hidden;
+}
+
+.ledger-card-tab-frame[data-active-card-tab="description"] {
+  overflow: visible;
+}
+
+.ledger-card-panel {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  opacity: 0;
+  overscroll-behavior: contain;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+}
+
+.ledger-card-fields-panel {
+  overflow: auto;
+}
+
+.ledger-card-panel.is-active {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .card strong.editing {
@@ -265,10 +455,78 @@
   padding-left: 17px;
 }
 
-.ledger-card-description-editor {
+.ledger-card-table-scroll {
   display: block;
   width: 100%;
+  margin: 6px 0 10px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.ledger-card-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.ledger-card-table th,
+.ledger-card-table td {
+  border: 1px solid color-mix(in srgb, var(--card-zone-color), rgba(255, 255, 255, 0.16) 30%);
+  padding: 5px 7px;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  min-width: 9ch;
+  max-width: 42ch;
+}
+
+.ledger-card-table th {
+  color: var(--text);
+  background: color-mix(in srgb, var(--card-zone-color), rgba(8, 10, 12, 0.92) 64%);
+  font-weight: 800;
+}
+
+.ledger-card-table td {
+  background: rgba(8, 10, 12, 0.24);
+}
+
+.ledger-card-code-block {
+  margin: 6px 0 10px;
+  border: 1px solid color-mix(in srgb, var(--card-zone-color), rgba(255, 255, 255, 0.18) 28%);
+  border-radius: 2px;
+  background: rgba(4, 7, 10, 0.72);
+  color: #d7e4f2;
+  padding: 9px 10px;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+.ledger-card-code-block code {
+  color: inherit;
+  font: inherit;
+  white-space: pre;
+}
+
+.ledger-card-code-block .syntax-comment { color: #6f8795; }
+.ledger-card-code-block .syntax-string { color: #a7e08f; }
+.ledger-card-code-block .syntax-number { color: #f2c36b; }
+.ledger-card-code-block .syntax-keyword { color: #69d7ff; }
+.ledger-card-code-block .syntax-macro { color: #ffb86b; }
+.ledger-card-code-block .syntax-type { color: #67e8f9; }
+.ledger-card-code-block .syntax-identifier { color: #d7e4f2; }
+
+.ledger-card-description-editor {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
   min-height: 120px;
+  max-height: min(52vh, 520px);
   resize: vertical;
   border: 1px solid var(--accent);
   border-radius: 2px;
@@ -277,6 +535,8 @@
   padding: 8px;
   font: inherit;
   line-height: 1.42;
+  overflow: auto;
+  overscroll-behavior: contain;
   pointer-events: auto;
   user-select: text;
   -webkit-user-select: text;
@@ -287,7 +547,7 @@
 }
 
 .ledger-card-body code {
-  color: var(--text);
+  color: var(--card-code-color);
   font-family: var(--mono);
   font-size: 0.92em;
 }
@@ -296,6 +556,33 @@
   display: inline;
   margin: 0;
   color: var(--text);
+  font-weight: 800;
+}
+
+.ledger-card-fields {
+  display: grid;
+  grid-template-columns: minmax(80px, 1fr) minmax(72px, auto);
+  gap: 6px 10px;
+  margin: 0;
+}
+
+.ledger-card-fields dt,
+.ledger-card-fields dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.ledger-card-fields dt {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.ledger-card-fields dd {
+  color: var(--card-code-color);
+  font-family: var(--mono);
+  font-size: 0.92em;
+  text-align: right;
 }
 
 .relationships {
@@ -314,7 +601,7 @@
 }
 
 .relationships text {
-  fill: rgba(243, 240, 231, 0.72);
+  fill: var(--relationship-label-color, rgba(243, 240, 231, 0.72));
   font-size: 11px;
   paint-order: stroke;
   stroke: rgba(8, 8, 8, 0.85);
@@ -325,12 +612,11 @@
 .relationships marker path { fill: rgba(168, 173, 169, 0.72); }
 
 .relationships text.is-source {
-  fill: var(--accent);
   font-size: 10px;
 }
 
 .relationships text.is-target {
-  fill: rgba(243, 240, 231, 0.72);
+  fill: var(--relationship-label-color, rgba(243, 240, 231, 0.72));
 }
 
 .relationships path.selected,

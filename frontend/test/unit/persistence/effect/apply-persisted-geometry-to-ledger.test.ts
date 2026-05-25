@@ -15,7 +15,7 @@ test('apply-persisted-geometry-to-ledger overlays local ledger node geometry bef
     zones: { 'zone-a': { x: 30, y: 40, width: 360, height: 190 } },
     groups: { 'group-a': { x: 50, y: 60, width: 420, height: 240 } }
   });
-  assert.deepEqual(ledger.cards[0], { id: 'card-a', x: 10, y: 20, w: 310 });
+  assert.deepEqual(ledger.cards[0], { id: 'card-a', x: 10, y: 20, w: 310, h: 132 });
   assert.deepEqual(ledger.annotations[0], { id: 'zone-a', x: 30, y: 40, width: 360, height: 190 });
   assert.deepEqual(ledger.annotations[1], { id: 'group-a', variant: 'group', x: 50, y: 60, width: 420, height: 240 });
 });

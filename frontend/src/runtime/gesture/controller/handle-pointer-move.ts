@@ -5,6 +5,7 @@ import { moveSelected } from '../../selection/effect/move-selected.js';
 import { patchBox } from '../../canvas/effect/patch-box.js';
 import { point } from '../helper/point.js';
 import { rectFromPoints } from '../../canvas/helper/rect-from-points.js';
+import { resizeSelectedCard } from '../../card/effect/resize-selected-card.js';
 import { resizeSelectedZone } from '../../zone/effect/resize-selected-zone.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
@@ -31,7 +32,8 @@ export function handlePointerMove(event: PointerEvent): void {
     telemetry('calculate-drag-delta', { dx, dy, canvasDx, canvasDy });
   }
   if (state.pointer.intent === 'resize') {
-    resizeSelectedZone(canvasDx, canvasDy);
+    if (state.pointer.targetKind === 'card') resizeSelectedCard(canvasDx, canvasDy);
+    else resizeSelectedZone(canvasDx, canvasDy);
     telemetry('calculate-drag-delta', { dx, dy, canvasDx, canvasDy, resizeHandle: state.pointer.resizeHandle?.className });
   }
   if (state.pointer.intent === 'marquee' || state.pointer.intent === 'draw-card' || state.pointer.intent === 'draw-zone' || state.pointer.intent === 'draw-group') {

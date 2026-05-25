@@ -72,13 +72,14 @@ test('browser inputs route ledger commands through runtime controllers before se
   const runtimeSources = [
     'frontend/src/runtime/gesture/controller/handle-pointer-move.ts',
     'frontend/src/runtime/selection/effect/move-selected.ts',
+    'frontend/src/runtime/card/effect/resize-selected-card.ts',
     'frontend/src/runtime/zone/effect/resize-selected-zone.ts'
   ].map(source).join('\n');
   assert.doesNotMatch(runtimeSources, /syncActiveLedger/);
   assert.doesNotMatch(runtimeSources, /commit-ledger-edit/);
 
-  const ledgerCard = source('frontend/src/runtime/ledger/component/patch-ledger-card.ts');
-  assert.match(ledgerCard, /parseLedgerCardMarkdown/);
+  const ledgerCardMarkdown = source('frontend/src/runtime/ledger/component/render-ledger-card-markdown.ts');
+  assert.match(ledgerCardMarkdown, /parseLedgerCardMarkdown/);
 
   const colorInput = source('frontend/src/runtime/input/controller/handle-region-color-input.ts');
   assert.match(colorInput, /editRegionColorController/);

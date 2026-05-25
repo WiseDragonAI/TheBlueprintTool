@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { parseLedgerCardMarkdown } from '../../../../src/runtime/ledger/helper/parse-ledger-card-markdown.js';
 
 test('parse-ledger-card-markdown parses common card description markdown', () => {
-  assert.deepEqual(parseLedgerCardMarkdown('## Heading\n**Props**: `mode`\n- first\n* second'), [
+  assert.deepEqual(parseLedgerCardMarkdown('## Heading\n**Props**: `mode`\n- first\n* second\n\n| Name | Use |\n|---|---|\n| `Health` | **Current** value |\n\n```cpp\nUSTRUCT(BlueprintType)\nstruct FCreatureState\n{\n  GENERATED_BODY()\n};\n```'), [
     { kind: 'paragraph', children: [{ kind: 'text', text: 'Heading' }] },
     {
       kind: 'paragraph',
@@ -19,6 +19,27 @@ test('parse-ledger-card-markdown parses common card description markdown', () =>
         [{ kind: 'text', text: 'first' }],
         [{ kind: 'text', text: 'second' }]
       ]
+    },
+    {
+      kind: 'table',
+      headers: [
+        [{ kind: 'text', text: 'Name' }],
+        [{ kind: 'text', text: 'Use' }]
+      ],
+      rows: [
+        [
+          [{ kind: 'code', text: 'Health' }],
+          [
+            { kind: 'strong', text: 'Current' },
+            { kind: 'text', text: ' value' }
+          ]
+        ]
+      ]
+    },
+    {
+      kind: 'code',
+      language: 'cpp',
+      text: 'USTRUCT(BlueprintType)\nstruct FCreatureState\n{\n  GENERATED_BODY()\n};'
     }
   ]);
 });
