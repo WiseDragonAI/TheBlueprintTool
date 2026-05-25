@@ -13,8 +13,12 @@ export async function startVoiceRecording(): Promise<void> {
     analyser.fftSize = 256;
     source.connect(analyser);
     const recorder = new MediaRecorder(stream);
+    const chunks: BlobPart[] = [];
+    recorder.addEventListener('dataavailable', (event) => {
+      if (event.data?.size) chunks.push(event.data);
+    });
     recorder.start();
-    state.voice = { recording: true, startedAt: Date.now(), durationMs: 0, level: 0, transcriptionStatus: 'recording', stream, audioContext, analyser, recorder, error: '' };
+    state.voice = { recording: true, startedAt: Date.now(), durationMs: 0, level: 0, transcriptionStatus: 'recording', stream, audioContext, analyser, recorder, chunks, mimeType: recorder.mimeType || 'audio/webm', error: '' };
     telemetry('resolve-voice-session', { threadId: state.threadId });
     telemetry('capture-voice-audio', { status: 'recording', source: 'microphone' });
     updateVoiceRecordingFrame();

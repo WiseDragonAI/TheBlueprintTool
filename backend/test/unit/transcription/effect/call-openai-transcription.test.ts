@@ -18,3 +18,15 @@ test('call-openai-transcription executes implemented behavior and records teleme
   assert.ok(traces.length > 0);
   assert.ok(result === undefined || typeof result === 'object');
 });
+
+test('call-openai-transcription accepts injected transcript text without external IO', async () => {
+  traces.length = 0;
+  const runtime_state: Record<string, unknown> = {};
+  const result = await callOpenaiTranscription({
+    action_payload: { transcriptionText: 'already transcribed' },
+    runtime_state,
+    data_model: {}
+  });
+  assert.deepEqual(result, { ok: true, text: 'already transcribed' });
+  assert.equal(runtime_state.transcriptionText, 'already transcribed');
+});

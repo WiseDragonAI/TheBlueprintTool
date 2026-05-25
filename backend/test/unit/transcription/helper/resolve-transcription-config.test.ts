@@ -18,3 +18,15 @@ test('resolve-transcription-config executes implemented behavior and records tel
   assert.ok(traces.length > 0);
   assert.ok(result === undefined || typeof result === 'object');
 });
+
+test('resolve-transcription-config defaults to gpt-4o-mini-transcribe when OpenAI is configured', () => {
+  traces.length = 0;
+  const result = resolveTranscriptionConfig({
+    action_payload: { openaiApiKey: 'test-key' },
+    runtime_state: {},
+    data_model: {}
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.model, 'gpt-4o-mini-transcribe');
+  assert.equal(result.provider, 'openai');
+});

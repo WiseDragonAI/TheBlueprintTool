@@ -43,7 +43,7 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     void startVoiceRecording();
   }
   if (action === 'voice-stop') {
-    stopVoiceRecording();
+    await stopVoiceRecording();
   }
   if (action === 'confirm-delete') await deleteZoneController();
   if (action === 'cancel-delete') modal.close?.();

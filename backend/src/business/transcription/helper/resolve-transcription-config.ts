@@ -2,8 +2,6 @@
  * WHAT: Implements the resolve-transcription-config helper from the front/back master ledger.
  * WHY: The generated scaffold needs executable behavior while preserving one function per file.
  */
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { telemetry } from '@backend/telemetry/harness.js';
 
 type AnyRecord = Record<string, unknown>;
@@ -13,8 +11,8 @@ export function resolveTranscriptionConfig(input: { action_payload?: AnyRecord; 
   const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord };
   const payload = (envelope.action_payload ?? input) as AnyRecord;
   const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
-  const data = (envelope.data_model ?? {}) as AnyRecord;
-  const enabled = payload.transcriptionEnabled !== false;
-  return { ok: enabled, enabled, model: String(payload.transcriptionModel ?? 'whisper-1') };
+  const apiKey = String(payload.openaiApiKey ?? runtime.openaiApiKey ?? process.env.OPENAI_API_KEY ?? '');
+  const model = String(payload.transcriptionModel ?? runtime.transcriptionModel ?? process.env.OPENAI_TRANSCRIPTION_MODEL ?? 'gpt-4o-mini-transcribe');
+  const enabled = payload.transcriptionEnabled !== false && (Boolean(apiKey) || Boolean(payload.transcriptionText) || payload.mode === 'dry-run');
+  return { ok: enabled, enabled, apiKey, model, provider: 'openai' };
 }
-

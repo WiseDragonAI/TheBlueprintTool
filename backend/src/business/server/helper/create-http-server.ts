@@ -7,6 +7,8 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 import { telemetry } from '@backend/telemetry/harness.js';
+import { transcribeVoiceController } from '@backend/business/transcription/controller/transcribe-voice-controller.js';
+import { readRequestBuffer } from './read-request-buffer.js';
 import { contentTypeFor } from './content-type-for.js';
 
 type AnyRecord = Record<string, unknown>;
@@ -33,6 +35,21 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   }
   const server = createServer(async (request, response) => {
     const url = (request.url ?? '/').split('?')[0];
+    if (url === '/api/transcribe' && request.method === 'POST') {
+      const audioBuffer = await readRequestBuffer(request);
+      await transcribeVoiceController({
+        action_payload: {
+          method: request.method,
+          url,
+          response,
+          audioBuffer,
+          mimeType: request.headers['content-type'] ?? 'audio/webm',
+          threadId: request.headers['x-thread-id'] ?? ''
+        },
+        runtime_state: runtime
+      });
+      return;
+    }
     if (url.startsWith('/blueprinttool/')) {
       const tabId = url.split('/').filter(Boolean)[1] ?? 'state';
       const statePath = resolve(blueprinttoolRoot, 'state.json');

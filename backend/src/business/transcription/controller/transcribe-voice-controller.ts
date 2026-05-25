@@ -17,11 +17,12 @@ export async function transcribeVoiceController(input: { action_payload?: AnyRec
   const data = (envelope.data_model ?? {}) as AnyRecord;
   const request = parseHttpRequest({ action_payload: payload, runtime_state: runtime, data_model: data });
   const config = resolveTranscriptionConfig({ action_payload: payload, runtime_state: runtime, data_model: data });
+  let transcription: Record<string, unknown> = { ok: false, error: 'transcription not configured' };
   if (config.ok !== false) {
-    callOpenaiTranscription({ action_payload: { ...payload, request, config }, runtime_state: runtime, data_model: data });
-    persistTranscribedText({ action_payload: { ...payload, request, config }, runtime_state: runtime, data_model: data });
+    transcription = await callOpenaiTranscription({ action_payload: { ...payload, request, config }, runtime_state: runtime, data_model: data });
+    if (transcription.ok !== false) persistTranscribedText({ action_payload: { ...payload, request, config }, runtime_state: runtime, data_model: data });
   }
-  sendJsonResponse({ action_payload: { ...payload, status: config.ok === false ? 503 : 200, body: { ok: config.ok !== false, text: runtime.transcriptionText ?? '' } }, runtime_state: runtime, data_model: data });
-  return { ok: config.ok !== false, request, config, text: runtime.transcriptionText ?? '' };
+  const ok = config.ok !== false && transcription.ok !== false;
+  sendJsonResponse({ action_payload: { ...payload, status: config.ok === false ? 503 : ok ? 200 : 502, body: { ok, text: runtime.transcriptionText ?? '', error: transcription.error } }, runtime_state: runtime, data_model: data });
+  return { ok, request, config, text: runtime.transcriptionText ?? '', error: transcription.error };
 }
-

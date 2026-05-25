@@ -995,6 +995,11 @@
       "x": -4316,
       "y": 5175,
       "w": 560
+    },
+    "4f7a2c9d": {
+      "x": -1682,
+      "y": 6170,
+      "w": 560
     }
   },
   "cards": [
@@ -3826,6 +3831,20 @@
       "w": 320,
       "comment": {
         "what": "**Implementation direction**\n\n- Use OpenAI audio transcription only for voice note transcription.\n- Keep transcription behind the server `transcription` module.\n- Treat transcription as optional external HTTP IO.\n- Keep voice upload, local save, status, and thread state independent from the provider."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "4f7a2c9d",
+      "title": "Voice transcription defaults to gpt-4o-mini-transcribe",
+      "cardType": "spec-brief",
+      "domainId": "voice",
+      "x": -1682,
+      "y": 6170,
+      "w": 560,
+      "comment": {
+        "what": "The server transcription module uses `gpt-4o-mini-transcribe` as the default OpenAI transcription model when `OPENAI_API_KEY` is configured. Frontend voice code posts captured audio to the backend and never calls OpenAI directly."
       },
       "facts": [],
       "fields": []

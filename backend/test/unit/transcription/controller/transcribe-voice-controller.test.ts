@@ -18,3 +18,17 @@ test('transcribe-voice-controller executes implemented behavior and records tele
   assert.ok(traces.length > 0);
   assert.ok(result === undefined || typeof result === 'object');
 });
+
+test('transcribe-voice-controller reports optional transcription as unconfigured without an API key', async () => {
+  traces.length = 0;
+  const runtime_state: Record<string, unknown> = {};
+  const result = await transcribeVoiceController({
+    action_payload: { audioBuffer: Buffer.from('audio'), mimeType: 'audio/webm' },
+    runtime_state,
+    data_model: {}
+  });
+  assert.equal(result.ok, false);
+  const lastResponse = runtime_state.lastResponse as { status: number; body: { ok: boolean } };
+  assert.equal(lastResponse.status, 503);
+  assert.equal(lastResponse.body.ok, false);
+});
