@@ -61,6 +61,8 @@ test('render-thread-notes shows active thread conversation entries', () => {
       return {
         className: '',
         textContent: '',
+        type: '',
+        dataset: {} as Record<string, string>,
         children: [] as unknown[],
         append(...children: unknown[]) {
           this.children.push(...children);
@@ -78,6 +80,56 @@ test('render-thread-notes shows active thread conversation entries', () => {
     renderThreadNotes();
     assert.equal(rendered.length, 1);
     assert.equal(rendered[0].className, 'thread-note voice-note');
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+    state.threadId = '';
+    state.activeLedger = null;
+  }
+});
+
+test('render-thread-notes keeps failed voice audio retryable', () => {
+  const previousDocument = globalThis.document;
+  const rendered: Array<{ className: string; children: Array<{ className?: string; dataset?: Record<string, string>; textContent?: string }> }> = [];
+  const list = {
+    className: '',
+    replaceChildren() {
+      rendered.length = 0;
+    },
+    append(item: { className: string; children: Array<{ className?: string; dataset?: Record<string, string>; textContent?: string }> }) {
+      rendered.push(item);
+    }
+  };
+  (globalThis as unknown as { document: unknown }).document = {
+    querySelector(selector: string) {
+      if (selector === '.thread-note-list') return list;
+      return null;
+    },
+    createElement() {
+      return {
+        className: '',
+        textContent: '',
+        type: '',
+        dataset: {} as Record<string, string>,
+        children: [] as Array<{ className?: string; dataset?: Record<string, string>; textContent?: string }>,
+        append(...children: Array<{ className?: string; dataset?: Record<string, string>; textContent?: string }>) {
+          this.children.push(...children);
+        }
+      };
+    }
+  };
+  try {
+    state.threadId = 'thread-card-a';
+    state.activeLedger = {
+      notes: {
+        'thread-card-a': [{ id: 'note-1', role: 'voice', message: 'Voice uploaded; transcription failed.', voiceFileRef: '/tmp/voice.webm', status: 'transcription failed' }]
+      }
+    };
+    renderThreadNotes();
+    assert.equal(rendered[0].className, 'thread-note voice-note is-retryable');
+    const retry = rendered[0].children.find((child) => child.className?.includes('thread-note-retry'));
+    assert.equal(retry?.dataset?.action, 'voice-retry');
+    assert.equal(retry?.dataset?.noteId, 'note-1');
+    assert.equal(retry?.dataset?.voiceFileRef, '/tmp/voice.webm');
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
     state.threadId = '';

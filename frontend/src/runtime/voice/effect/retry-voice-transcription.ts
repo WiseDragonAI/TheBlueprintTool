@@ -1,0 +1,31 @@
+/**
+ * WHAT: Retries transcription for a preserved voice upload attached to a ledger note.
+ * WHY: Failed provider work must be recoverable without discarding the recorded audio.
+ */
+import { state } from '../../state.js';
+import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { renderVoiceStatus } from './render-voice-status.js';
+import { updateVoiceNote } from './update-voice-note.js';
+import { transcribeUploadedVoiceAudio } from './transcribe-uploaded-voice-audio.js';
+
+export async function retryVoiceTranscription(input: { noteId: string; voiceFileRef: string }): Promise<void> {
+  if (!input.noteId || !input.voiceFileRef) return;
+  state.voice.transcriptionStatus = 'retrying transcription';
+  renderVoiceStatus();
+  await updateVoiceNote({ noteId: input.noteId, voiceFileRef: input.voiceFileRef, status: 'transcribing', body: 'Retrying transcription...' });
+  telemetry('retry-voice-transcription', { threadId: state.threadId, noteId: input.noteId });
+  const result = await transcribeUploadedVoiceAudio(input.voiceFileRef);
+  const voiceFileRef = result.voiceFileRef || input.voiceFileRef;
+  if (result.ok && result.text.trim()) {
+    await updateVoiceNote({ noteId: input.noteId, voiceFileRef, status: 'transcribed', body: result.text.trim(), error: '' });
+    state.voice.voiceFileRef = voiceFileRef;
+    state.voice.transcriptionStatus = 'transcribed';
+  } else {
+    const status = result.configured === false ? 'transcription not configured' : 'transcription failed';
+    const error = result.error ?? status;
+    await updateVoiceNote({ noteId: input.noteId, voiceFileRef, status, body: `Voice uploaded; ${status}.`, error });
+    state.voice.voiceFileRef = voiceFileRef;
+    state.voice.transcriptionStatus = `${status}${error && error !== status ? `: ${error}` : ''}`;
+  }
+  renderVoiceStatus();
+}

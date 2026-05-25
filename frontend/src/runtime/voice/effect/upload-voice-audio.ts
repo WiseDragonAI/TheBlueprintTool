@@ -1,6 +1,6 @@
 /**
- * WHAT: Uploads a transient voice audio blob to the backend transcription route.
- * WHY: Browser runtime must keep provider credentials behind the server boundary.
+ * WHAT: Uploads a voice audio blob to the backend local upload cache.
+ * WHY: Audio must be preserved before provider transcription can succeed or fail.
  */
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
@@ -16,8 +16,8 @@ export type VoiceTranscriptionResult = {
 };
 
 export async function uploadVoiceAudio(audio: Blob): Promise<VoiceTranscriptionResult> {
-  telemetry('upload-voice-audio', { optimistic: true, transient: true, size: audio.size, type: audio.type });
-  const response = await fetch('/api/transcribe', {
+  telemetry('upload-voice-audio', { optimistic: true, preserved: true, size: audio.size, type: audio.type });
+  const response = await fetch('/api/voice-upload', {
     method: 'POST',
     headers: {
       'content-type': audio.type || 'audio/webm',

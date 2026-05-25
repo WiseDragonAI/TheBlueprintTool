@@ -2478,28 +2478,28 @@
     },
     {
       "id": "8b1ff788",
-      "title": "Stopping a voice recording routes the captured audio to transcription.",
+      "title": "Stopping a voice recording uploads captured audio before transcription.",
       "cardType": "spec-brief",
       "domainId": "",
       "x": -1588,
       "y": 5999,
       "w": 320,
       "comment": {
-        "what": "Stopping voice recording must stop media tracks and release audio resources. It must request transcription only when transcription is actually configured."
+        "what": "Stopping voice recording must stop media tracks, release audio resources, create an optimistic voice ledger entry, upload the captured audio, then request provider transcription from the preserved `voiceFileRef`."
       },
       "facts": [],
       "fields": []
     },
     {
       "id": "6cc37b58",
-      "title": "Transcribed voice text fills the active thread draft.",
+      "title": "Transcribed voice text updates the optimistic voice note.",
       "cardType": "spec-brief",
       "domainId": "",
       "x": -1236,
       "y": 5999,
       "w": 320,
       "comment": {
-        "what": "The thread draft may only be filled from an actual transcript result. The UI must not insert fabricated transcript text."
+        "what": "A transcript may only replace the optimistic voice note body when it comes from an actual provider transcript result. The UI must not insert fabricated transcript text or leave the transcript only in the draft."
       },
       "facts": [],
       "fields": []
@@ -2555,21 +2555,21 @@
       "y": 6194,
       "w": 320,
       "comment": {
-        "what": "Voice audio can be uploaded for transcription before final transcript confirmation. The backend accepts and records a transient `voiceFileRef` before checking provider configuration, so missing transcription credentials do not turn the upload itself into a failure. The audio file is transient and is not a durable artifact once transcription has completed."
+        "what": "Voice audio is uploaded before final transcript confirmation. The active conversation ledger receives a voice note immediately, then the backend accepts and records a `voiceFileRef` before provider transcription, so missing or failing transcription credentials do not make the upload or note disappear."
       },
       "facts": [],
       "fields": []
     },
     {
       "id": "21b2b050",
-      "title": "Voice audio is transient until transcription completes.",
+      "title": "Voice audio is preserved for retry.",
       "cardType": "spec-brief",
       "domainId": "",
       "x": -1588,
       "y": 6311,
       "w": 320,
       "comment": {
-        "what": "Captured voice audio may be held locally while transcription is pending or while transcription credentials are unavailable. Once the voice note has been transcribed, Core clears the transient upload and persists thread text instead of durable voice audio."
+        "what": "Captured voice audio is held in the workspace upload cache after upload and remains attached to the ledger note through success, failure, or unconfigured transcription. Failed and unconfigured voice notes must expose retry without losing the recorded audio."
       },
       "facts": [],
       "fields": []
@@ -2583,7 +2583,7 @@
       "y": 6311,
       "w": 320,
       "comment": {
-        "what": "The UI shows voice capture, upload, and transcription lifecycle status. If upload succeeds but transcription is unconfigured, status must say the voice was uploaded and transcription is not configured, not that upload failed. Completed transcription persists as thread text, not as durable voice audio."
+        "what": "The UI shows voice capture, uploading, transcribing, retrying, success, and failed/unconfigured lifecycle status. If upload succeeds but transcription fails or is unconfigured, status must say the voice was uploaded, keep the ledger note visible, and expose retry from the preserved `voiceFileRef`."
       },
       "facts": [],
       "fields": []
@@ -2611,7 +2611,7 @@
       "y": 6455,
       "w": 560,
       "comment": {
-        "what": "When a voice upload is accepted, the active thread ledger receives a voice note entry. If transcription succeeds the note contains transcript text; if transcription is unavailable the note records the accepted upload, transient `voiceFileRef`, and pending/unconfigured status."
+        "what": "Starting the stop/send flow immediately creates an optimistic voice note in the active thread ledger. Upload, transcription, success, failure, and retry patch that same note in place, preserving `voiceFileRef` whenever audio was accepted."
       },
       "facts": [],
       "fields": []
@@ -2625,7 +2625,7 @@
       "y": 6455,
       "w": 560,
       "comment": {
-        "what": "CoreV2 imports the DroidFleet voice composer control dock class contract for voice notes: `.agent-chat.phone`, `.control-dock`, terminal STOP/SEND buttons, waveform SVG, vertical meter, and attachment strip. The dock stays in the right-side terminal panel and spans the panel width."
+        "what": "CoreV2 imports the DroidFleet voice composer control dock class contract for voice notes: `.agent-chat.phone`, `.control-dock`, terminal STOP/SEND buttons, waveform SVG, and vertical meter. The dock is wired to real voice state, renders no fake attachment chips, stays in the right-side terminal panel, and spans the panel width."
       },
       "facts": [],
       "fields": []
@@ -2681,7 +2681,7 @@
       "y": 7045,
       "w": 560,
       "comment": {
-        "what": "The right terminal removes standalone Create note and Delete note buttons. Text notes are written in the dock composer and committed by keyboard so the input zone occupies the same terminal footprint as voice capture."
+        "what": "The right terminal removes standalone Create note and Delete note buttons. Text notes are written in the dock composer and committed by keyboard so the input zone occupies the same terminal footprint as voice capture. The draft only clears after the server confirms the note exists in the ledger."
       },
       "facts": [],
       "fields": []
@@ -2695,7 +2695,7 @@
       "y": 7045,
       "w": 560,
       "comment": {
-        "what": "When a card, zone, or group thread is active, the side terminal derives its accent variables from that canvas target color, preferring `--card-zone-color` and `--zone-color` over transient selection borders. The thread panel border, voice widget border, waveform, and meter all use the inherited target color."
+        "what": "When a card, zone, or group thread is active, the side terminal derives its accent variables from that canvas target color, preferring `--card-zone-color` and `--zone-color` over transient selection borders. The panel border, outside backdrop shadow, waveform, meter, and single-layer terminal input all use the inherited target color."
       },
       "facts": [],
       "fields": []

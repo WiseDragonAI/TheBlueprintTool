@@ -9,12 +9,15 @@
 }
 
 .thread-panel.agent-chat.phone {
-  height: calc(100vh - 36px);
+  height: 100vh;
   --thread-accent: rgb(var(--workspace-secondary-rgb));
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--thread-accent), transparent 94%), transparent 32%),
-    #050607;
+    #030405;
   border-left: 1px solid color-mix(in srgb, var(--thread-accent), transparent 68%);
+  box-shadow:
+    inset 18px 0 42px rgba(0, 0, 0, 0.62),
+    inset 1px 0 0 color-mix(in srgb, var(--thread-accent), white 8%);
 }
 
 .thread-panel .chat {
@@ -22,7 +25,7 @@
   flex-direction: column;
   gap: 10px;
   min-height: 0;
-  padding: 16px 18px 10px;
+  padding: 18px 20px 0;
 }
 
 .thread-heading {
@@ -90,22 +93,59 @@
   border-color: color-mix(in srgb, var(--thread-accent), white 12%);
 }
 
+.thread-note.is-busy p {
+  color: color-mix(in srgb, var(--thread-accent), white 58%);
+}
+
+.thread-note-spinner {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  padding-left: 26px !important;
+  color: color-mix(in srgb, var(--thread-accent), white 34%) !important;
+  font-style: normal !important;
+  text-transform: uppercase;
+}
+
+.thread-note-spinner::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  width: 8px;
+  height: 8px;
+  border: 1px solid color-mix(in srgb, var(--thread-accent), transparent 22%);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: thread-note-spin 760ms linear infinite;
+}
+
+@keyframes thread-note-spin {
+  to { transform: rotate(360deg); }
+}
+
+.thread-note-retry {
+  justify-self: start;
+  margin-left: 10px;
+}
+
 .thread-draft {
   width: 100%;
   min-height: 126px;
   resize: none;
-  border: 1px solid color-mix(in srgb, var(--thread-accent), transparent 62%);
-  border-radius: 3px;
+  border: 1px solid color-mix(in srgb, var(--thread-accent), transparent 50%);
+  border-radius: 2px;
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--thread-accent), transparent 94%), rgba(4, 6, 8, 0.98)),
-    #050607;
+    linear-gradient(180deg, color-mix(in srgb, var(--thread-accent), transparent 96%), rgba(3, 6, 8, 0.98)),
+    #06090b;
   color: #f3f6fb;
   padding: 12px 13px;
   outline: none;
   line-height: 1.45;
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
-    inset 0 0 18px color-mix(in srgb, var(--thread-accent), transparent 90%);
+    inset 0 2px 22px rgba(0, 0, 0, 0.88),
+    inset 0 0 24px color-mix(in srgb, var(--thread-accent), transparent 90%);
 }
 
 .thread-draft:focus {
@@ -124,25 +164,30 @@
 
 .voice-panel {
   min-width: 0;
+  padding: 0;
+  border-top: 1px solid color-mix(in srgb, var(--thread-accent), transparent 72%);
+  background: #030405;
+  box-shadow:
+    0 -26px 56px color-mix(in srgb, var(--thread-accent), transparent 82%),
+    0 -10px 28px rgba(0, 0, 0, 0.86);
   --fx-shell-wave:
     inset 0 0 0 1px color-mix(in srgb, var(--thread-accent), transparent 42%),
     inset 0 0 12px color-mix(in srgb, var(--thread-accent), transparent 72%),
     inset 0 0 24px rgba(255, 255, 255, 0.08);
 }
 
+.thread-panel .voice-panel {
+  padding: 0;
+}
+
 .voice-style-surface {
   display: grid;
   gap: 8px;
   min-width: 0;
-  padding: 7px;
-  border: 1px solid color-mix(in srgb, var(--thread-accent), transparent 48%);
-  border-radius: 4px;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--thread-accent), transparent 94%), rgba(6, 7, 9, 0.96)),
-    #060708;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
-    0 0 24px color-mix(in srgb, var(--thread-accent), transparent 88%);
+  padding: 9px 10px 8px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .voice-status {
@@ -154,7 +199,7 @@
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  margin: 0 10px 8px;
+  margin: 0 0 8px;
   color: #9aa4b2;
   font-size: 11px;
   line-height: 1.2;

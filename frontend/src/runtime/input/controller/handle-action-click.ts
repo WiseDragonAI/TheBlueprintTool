@@ -16,6 +16,7 @@ import { openThreadPanel } from '../../thread/effect/open-thread-panel.js';
 import { startVoiceRecording } from '../../voice/controller/start-voice-recording.js';
 import { stopVoiceRecording } from '../../voice/controller/stop-voice-recording.js';
 import { cancelVoiceRecording } from '../../voice/controller/cancel-voice-recording.js';
+import { retryVoiceTranscription } from '../../voice/effect/retry-voice-transcription.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export async function handleActionClick(event: MouseEvent): Promise<void> {
@@ -39,6 +40,10 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     else void startVoiceRecording();
   }
   if (action === 'voice-cancel') cancelVoiceRecording();
+  if (action === 'voice-retry') {
+    await retryVoiceTranscription({ noteId: actionTarget.dataset.noteId ?? '', voiceFileRef: actionTarget.dataset.voiceFileRef ?? '' });
+    return;
+  }
   if (action === 'edit-zone') {
     const zone = targetElement.closest('[data-zone-id],[data-group-id]') as HTMLElement | null;
     editRegionController(zone);

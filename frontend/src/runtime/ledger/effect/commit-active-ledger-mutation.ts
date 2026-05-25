@@ -4,7 +4,7 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { ledgerEndpointForTab } from '../helper/ledger-endpoint-for-tab.js';
 
 export type ActiveLedgerMutation = {
-  action: 'create-card' | 'patch-card' | 'create-zone' | 'create-group' | 'create-relationship' | 'delete-zones' | 'delete-relationships' | 'patch-geometry' | 'patch-region' | 'append-note' | 'delete-note' | 'paste-selection';
+  action: 'create-card' | 'patch-card' | 'create-zone' | 'create-group' | 'create-relationship' | 'delete-zones' | 'delete-relationships' | 'patch-geometry' | 'patch-region' | 'append-note' | 'update-note' | 'delete-note' | 'paste-selection';
   card?: Record<string, unknown>;
   cardPatch?: {
     id: string;
@@ -27,11 +27,13 @@ export type ActiveLedgerMutation = {
     color?: string;
   };
   note?: {
+    id?: string;
     threadId: string;
     body?: string;
     voiceFileRef?: string;
     status?: string;
     source?: string;
+    error?: string;
   };
   selection?: {
     cardIds: string[];

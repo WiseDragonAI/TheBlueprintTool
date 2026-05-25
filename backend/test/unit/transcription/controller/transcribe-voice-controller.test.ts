@@ -41,7 +41,7 @@ test('transcribe-voice-controller accepts voice upload even when transcription i
   assert.equal(lastResponse.body.configured, false);
 });
 
-test('transcribe-voice-controller clears transient upload after successful transcription', async () => {
+test('transcribe-voice-controller preserves upload after successful transcription for retry', async () => {
   traces.length = 0;
   const voiceUploadRoot = mkdtempSync(join(tmpdir(), 'corev2-transcribe-clear-'));
   const runtime_state: Record<string, unknown> = {};
@@ -53,10 +53,34 @@ test('transcribe-voice-controller clears transient upload after successful trans
     });
     assert.equal(result.ok, true);
     assert.equal(result.uploaded, true);
-    assert.equal(result.voiceFileRef, '');
-    assert.equal(runtime_state.voiceUploadStatus, 'cleared');
-    assert.equal(existsSync(String(runtime_state.voiceFileRef)), false);
+    assert.equal(typeof result.voiceFileRef, 'string');
+    assert.equal(runtime_state.voiceUploadStatus, 'uploaded');
+    assert.equal(existsSync(String(result.voiceFileRef)), true);
     assert.equal(runtime_state.persistedTranscription, 'done');
+  } finally {
+    rmSync(voiceUploadRoot, { recursive: true, force: true });
+  }
+});
+
+test('transcribe-voice-controller retries a preserved voice upload', async () => {
+  traces.length = 0;
+  const voiceUploadRoot = mkdtempSync(join(tmpdir(), 'corev2-transcribe-retry-'));
+  const runtime_state: Record<string, unknown> = {};
+  try {
+    const first = await transcribeVoiceController({
+      action_payload: { audioBuffer: Buffer.from('audio'), mimeType: 'audio/webm', voiceUploadRoot },
+      runtime_state,
+      data_model: {}
+    });
+    const retry = await transcribeVoiceController({
+      action_payload: { voiceFileRef: first.voiceFileRef, transcriptionText: 'retry done', voiceUploadRoot },
+      runtime_state,
+      data_model: {}
+    });
+    assert.equal(retry.ok, true);
+    assert.equal(retry.uploaded, true);
+    assert.equal(retry.voiceFileRef, first.voiceFileRef);
+    assert.equal(runtime_state.persistedTranscription, 'retry done');
   } finally {
     rmSync(voiceUploadRoot, { recursive: true, force: true });
   }

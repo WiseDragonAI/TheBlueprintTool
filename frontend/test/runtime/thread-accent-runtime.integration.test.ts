@@ -26,11 +26,15 @@ test('thread accent resolves card zone color before selected border color', () =
 
 test('thread accent colors feed the voice widget graph and frame', () => {
   assert.equal(colorToRgbChannels('#123abc'), '18, 58, 188');
+  const shellCss = readFileSync(new URL('frontend/assets/canvas/shell.css', root), 'utf8');
   const threadCss = readFileSync(new URL('frontend/assets/canvas/thread.css', root), 'utf8');
   const controlsCss = readFileSync(new URL('frontend/assets/canvas/terminal-chat-controls.css', root), 'utf8');
   const accentEffect = readFileSync(new URL('frontend/src/runtime/thread/effect/apply-thread-accent.ts', root), 'utf8');
-  assert.match(threadCss, /voice-style-surface[\s\S]*--thread-accent/);
+  assert.match(shellCss, /shell\.has-inspector \.panel[\s\S]*--thread-accent/);
+  assert.match(threadCss, /voice-panel[\s\S]*--thread-accent/);
+  assert.match(threadCss, /thread-draft[\s\S]*--thread-accent/);
   assert.match(controlsCss, /meter-fill[\s\S]*--thread-accent/);
   assert.match(controlsCss, /wave-panel[\s\S]*--thread-accent/);
   assert.match(accentEffect, /--voice-graph-secondary/);
+  assert.match(accentEffect, /inspector\?\.style\.setProperty\('--thread-accent'/);
 });

@@ -14,13 +14,34 @@ export function renderThreadNotes(): void {
   const notes = state.threadId ? (state.activeLedger?.notes?.[state.threadId] ?? []) : [];
   list.replaceChildren();
   for (const note of notes) {
+    const status = String(note.status ?? '');
+    const normalizedStatus = status.toLowerCase();
+    const busy = /uploading|transcribing/.test(normalizedStatus);
+    const retryable = Boolean(note.voiceFileRef) && /failed|not configured|unavailable/.test(normalizedStatus);
     const item = document.createElement('li');
-    item.className = note.voiceFileRef ? 'thread-note voice-note' : 'thread-note';
+    item.className = ['thread-note', note.voiceFileRef ? 'voice-note' : '', busy ? 'is-busy' : '', retryable ? 'is-retryable' : ''].filter(Boolean).join(' ');
     const body = document.createElement('p');
     body.textContent = String(note.message ?? note.body ?? '');
     const meta = document.createElement('span');
-    meta.textContent = [note.role ?? 'operator', note.status, note.timestamp].filter(Boolean).join(' · ');
+    meta.className = 'thread-note-meta';
+    meta.textContent = [note.role ?? 'operator', status, note.timestamp].filter(Boolean).join(' · ');
     item.append(body, meta);
+    if (busy) {
+      const spinner = document.createElement('span');
+      spinner.className = 'thread-note-spinner';
+      spinner.textContent = 'processing';
+      item.append(spinner);
+    }
+    if (retryable) {
+      const retry = document.createElement('button');
+      retry.className = 'thread-note-retry terminal-button terminal-button--compact';
+      retry.type = 'button';
+      retry.dataset.action = 'voice-retry';
+      retry.dataset.noteId = String(note.id ?? '');
+      retry.dataset.voiceFileRef = String(note.voiceFileRef ?? '');
+      retry.textContent = 'Retry';
+      item.append(retry);
+    }
     list.append(item);
   }
 }

@@ -1,6 +1,6 @@
 /**
- * WHAT: Stores uploaded voice audio in a transient local cache and returns its file ref.
- * WHY: Optimistic voice upload must succeed before provider transcription is configured.
+ * WHAT: Stores uploaded voice audio in the local workspace cache and returns its file ref.
+ * WHY: Optimistic voice notes must keep recorded audio available for transcription retry.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';

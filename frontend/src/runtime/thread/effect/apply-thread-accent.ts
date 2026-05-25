@@ -9,6 +9,7 @@ import { resolveThreadTargetAccent } from '../helper/resolve-thread-target-accen
 export function applyThreadAccent(): void {
   const panel = document.querySelector('.thread-panel') as HTMLElement | null;
   if (!panel?.style) return;
+  const inspector = document.querySelector('.panel') as HTMLElement | null;
   const threadId = String(state.threadId ?? '');
   const escapedThreadId = globalThis.CSS?.escape ? CSS.escape(threadId) : threadId.replace(/["\\]/g, '\\$&');
   const target = threadId ? document.querySelector(`[data-thread-id="${escapedThreadId}"]`) as HTMLElement | null : null;
@@ -20,4 +21,5 @@ export function applyThreadAccent(): void {
   panel.style.setProperty('--voice-workspace-secondary', color);
   panel.style.setProperty('--voice-workspace-primary', color);
   panel.style.setProperty('--voice-graph-secondary', `color-mix(in srgb, ${color}, #05070d 76%)`);
+  inspector?.style.setProperty('--thread-accent', color);
 }

@@ -39,7 +39,7 @@ test('fill-thread-draft appends transcribed text to the active draft', () => {
   }
 });
 
-test('upload-voice-audio posts transient audio to backend transcription route', async () => {
+test('upload-voice-audio posts captured audio to backend upload route', async () => {
   const previousFetch = globalThis.fetch;
   const previousWindow = globalThis.window;
   const previousCustomEvent = globalThis.CustomEvent;
@@ -51,13 +51,13 @@ test('upload-voice-audio posts transient audio to backend transcription route', 
   };
   (globalThis as unknown as { fetch: unknown }).fetch = async (url: string, init: RequestInit) => {
     requested = { url, init };
-    return { ok: true, status: 200, json: async () => ({ body: { ok: true, uploaded: true, configured: true, voiceFileRef: '', text: 'hello transcript' } }) };
+    return { ok: true, status: 202, json: async () => ({ body: { ok: true, uploaded: true, configured: true, voiceFileRef: '/tmp/voice.webm', text: '' } }) };
   };
 
   try {
     const result = await uploadVoiceAudio(new Blob(['abc'], { type: 'audio/webm' }));
-    assert.deepEqual(result, { ok: true, uploaded: true, configured: true, voiceFileRef: '', text: 'hello transcript', error: undefined, status: 200 });
-    assert.equal(requested.url, '/api/transcribe');
+    assert.deepEqual(result, { ok: true, uploaded: true, configured: true, voiceFileRef: '/tmp/voice.webm', text: '', error: undefined, status: 202 });
+    assert.equal(requested.url, '/api/voice-upload');
     assert.equal(requested.init?.method, 'POST');
     assert.equal((requested.init?.headers as Record<string, string>)['x-thread-id'], 'thread-card-a');
     assert.equal(requested.init?.body instanceof Blob, true);
@@ -69,7 +69,7 @@ test('upload-voice-audio posts transient audio to backend transcription route', 
   }
 });
 
-test('upload-voice-audio reports accepted upload when transcription is unconfigured', async () => {
+test('upload-voice-audio reports accepted upload before transcription provider runs', async () => {
   const previousFetch = globalThis.fetch;
   const previousWindow = globalThis.window;
   const previousCustomEvent = globalThis.CustomEvent;
@@ -80,14 +80,14 @@ test('upload-voice-audio reports accepted upload when transcription is unconfigu
   (globalThis as unknown as { fetch: unknown }).fetch = async () => ({
     ok: true,
     status: 202,
-    json: async () => ({ body: { ok: false, uploaded: true, configured: false, voiceFileRef: '/tmp/voice.webm', text: '', error: 'transcription not configured' } })
+    json: async () => ({ body: { ok: true, uploaded: true, configured: true, voiceFileRef: '/tmp/voice.webm', text: '' } })
   });
 
   try {
     const result = await uploadVoiceAudio(new Blob(['abc'], { type: 'audio/webm' }));
-    assert.equal(result.ok, false);
+    assert.equal(result.ok, true);
     assert.equal(result.uploaded, true);
-    assert.equal(result.configured, false);
+    assert.equal(result.configured, true);
     assert.equal(result.voiceFileRef, '/tmp/voice.webm');
     assert.equal(result.status, 202);
   } finally {
@@ -125,24 +125,37 @@ test('request-transcription keeps optimistic upload status separate from provide
       return null;
     },
     createElement() {
-      return { className: '', textContent: '', append() {}, replaceChildren() {} };
+      return { className: '', textContent: '', type: '', dataset: {}, append() {}, replaceChildren() {} };
     }
   };
   (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
   (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
     constructor(_name: string, public options: Record<string, unknown> = {}) {}
   };
-  (globalThis as unknown as { fetch: unknown }).fetch = async (url: string) => url === '/api/transcribe'
-    ? {
+  (globalThis as unknown as { fetch: unknown }).fetch = async (url: string, init?: RequestInit) => {
+    if (url === '/api/voice-upload') {
+      return {
+        ok: true,
+        status: 202,
+        json: async () => ({ body: { ok: true, uploaded: true, configured: true, voiceFileRef: '/tmp/voice.webm', text: '' } })
+      };
+    }
+    if (url === '/api/transcribe/retry') {
+      return {
         ok: true,
         status: 202,
         json: async () => ({ body: { ok: false, uploaded: true, configured: false, voiceFileRef: '/tmp/voice.webm', text: '', error: 'transcription not configured' } })
-      }
-    : {
-        ok: true,
-        status: 200,
-        json: async () => ({ notes: { [state.threadId]: [{ role: 'voice', message: 'Voice uploaded; transcription not configured.', voiceFileRef: '/tmp/voice.webm', status: 'transcription not configured' }] } })
       };
+    }
+    const mutation = JSON.parse(String(init?.body ?? '{}'));
+    const statusValue = mutation.action === 'append-note' ? 'uploading' : mutation.note.status;
+    const message = mutation.action === 'append-note' ? mutation.note.body : mutation.note.body;
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ notes: { [state.threadId]: [{ id: 'note-1', role: 'voice', message, voiceFileRef: mutation.note.voiceFileRef ?? '', status: statusValue, error: mutation.note.error ?? '' }] } })
+    };
+  };
 
   try {
     state.threadId = 'thread-card-a';
@@ -192,7 +205,7 @@ test('append-voice-note persists voice metadata to the active thread ledger', as
       return null;
     },
     createElement() {
-      return { className: '', textContent: '', append() {}, replaceChildren() {} };
+      return { className: '', textContent: '', type: '', dataset: {}, append() {}, replaceChildren() {} };
     }
   };
   (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
@@ -203,13 +216,14 @@ test('append-voice-note persists voice metadata to the active thread ledger', as
     mutation = JSON.parse(String(init.body ?? '{}'));
     return {
       ok: true,
-      json: async () => ({ notes: { 'thread-card-a': [{ role: 'voice', message: mutation.note.body, voiceFileRef: mutation.note.voiceFileRef, status: mutation.note.status }] } })
+      json: async () => ({ notes: { 'thread-card-a': [{ id: 'note-voice-1', role: 'voice', message: mutation.note.body, voiceFileRef: mutation.note.voiceFileRef, status: mutation.note.status }] } })
     };
   };
 
   try {
-    const ok = await appendVoiceNote({ body: 'Voice uploaded.', voiceFileRef: '/tmp/voice.webm', status: 'pending' });
-    assert.equal(ok, true);
+    const result = await appendVoiceNote({ body: 'Voice uploaded.', voiceFileRef: '/tmp/voice.webm', status: 'pending' });
+    assert.equal(result.ok, true);
+    assert.equal(result.noteId, 'note-voice-1');
     assert.equal(mutation.action, 'append-note');
     assert.equal(mutation.note.threadId, 'thread-card-a');
     assert.equal(mutation.note.source, 'voice');

@@ -8,6 +8,7 @@ import { resolve } from 'node:path';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 import { telemetry } from '@backend/telemetry/harness.js';
 import { transcribeVoiceController } from '@backend/business/transcription/controller/transcribe-voice-controller.js';
+import { persistUploadedVoiceAudio } from '@backend/business/transcription/effect/persist-uploaded-voice-audio.js';
 import { resolveBlueprinttoolRoot } from './resolve-blueprinttool-root.js';
 import { readRequestBuffer } from './read-request-buffer.js';
 import { contentTypeFor } from './content-type-for.js';
@@ -48,6 +49,42 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       });
       return;
     }
+    if (url === '/api/voice-upload' && request.method === 'POST') {
+      const audioBuffer = await readRequestBuffer(request);
+      const upload = persistUploadedVoiceAudio({
+        action_payload: {
+          audioBuffer,
+          mimeType: request.headers['content-type'] ?? 'audio/webm',
+          threadId: request.headers['x-thread-id'] ?? ''
+        },
+        runtime_state: runtime
+      });
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = upload.ok === false ? 400 : 202;
+      response.end(JSON.stringify({ body: { ok: upload.ok !== false, uploaded: upload.ok !== false, configured: true, voiceFileRef: upload.voiceFileRef ?? '', text: '', error: upload.error } }));
+      return;
+    }
+    if (url === '/api/transcribe/retry' && request.method === 'POST') {
+      const bodyBuffer = await readRequestBuffer(request);
+      const retryPayload = (() => {
+        try {
+          return JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
+        } catch {
+          return {};
+        }
+      })();
+      await transcribeVoiceController({
+        action_payload: {
+          ...retryPayload,
+          method: request.method,
+          url,
+          response,
+          threadId: request.headers['x-thread-id'] ?? retryPayload.threadId ?? ''
+        },
+        runtime_state: runtime
+      });
+      return;
+    }
     if (url.startsWith('/blueprinttool/')) {
       const tabId = url.split('/').filter(Boolean)[1] ?? 'state';
       const statePath = resolve(blueprinttoolRoot, 'state.json');
@@ -81,7 +118,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           relationshipIds?: string[];
           geometry?: Record<string, Record<string, { x: number; y: number; width: number; height: number }>>;
           region?: { id?: string; kind?: string; label?: string; color?: string };
-          note?: { threadId?: string; body?: string; voiceFileRef?: string; status?: string; source?: string };
+          note?: { id?: string; threadId?: string; body?: string; voiceFileRef?: string; status?: string; source?: string; error?: string };
           selection?: { cardIds?: string[]; zoneIds?: string[]; groupIds?: string[] };
         } : {};
         const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as {
@@ -149,7 +186,20 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         if (mutation.action === 'append-note' && mutation.note?.threadId) {
           ledger.notes ??= {};
           const notes = ledger.notes[mutation.note.threadId] ?? [];
-          notes.push({ id: `note-${Date.now()}`, role: mutation.note.source === 'voice' ? 'voice' : 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), voiceFileRef: mutation.note.voiceFileRef ?? '', status: mutation.note.status ?? '' });
+          notes.push({ id: `note-${Date.now()}`, role: mutation.note.source === 'voice' ? 'voice' : 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), voiceFileRef: mutation.note.voiceFileRef ?? '', status: mutation.note.status ?? '', error: mutation.note.error ?? '' });
+          ledger.notes[mutation.note.threadId] = notes;
+        }
+        if (mutation.action === 'update-note' && mutation.note?.threadId) {
+          ledger.notes ??= {};
+          const notes = ledger.notes[mutation.note.threadId] ?? [];
+          const note = notes.find((entry) => String(entry.id ?? '') === mutation.note?.id || String(entry.voiceFileRef ?? '') === mutation.note?.voiceFileRef);
+          if (note) {
+            if (typeof mutation.note.body === 'string') note.message = mutation.note.body;
+            if (typeof mutation.note.voiceFileRef === 'string') note.voiceFileRef = mutation.note.voiceFileRef;
+            if (typeof mutation.note.status === 'string') note.status = mutation.note.status;
+            if (typeof mutation.note.error === 'string') note.error = mutation.note.error;
+            note.updatedAt = new Date().toISOString();
+          }
           ledger.notes[mutation.note.threadId] = notes;
         }
         if (mutation.action === 'delete-note' && mutation.note?.threadId) {

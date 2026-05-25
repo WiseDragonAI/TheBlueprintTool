@@ -173,14 +173,15 @@ h2 { font-size: 18px; }
   top: 0;
   right: 0;
   z-index: 260;
+  --thread-accent: var(--accent);
   width: clamp(420px, 33vw, 620px);
   height: 100vh;
-  padding: 18px;
-  border-left: 1px solid var(--line);
+  padding: 0;
+  border-left: 0;
   min-width: 0;
   overflow: hidden;
-  background: rgba(15, 17, 22, 0.98);
-  box-shadow: var(--shadow-panel);
+  background: transparent;
+  box-shadow: none;
   opacity: 0;
   transform: translateX(100%);
   pointer-events: none;
@@ -193,6 +194,9 @@ h2 { font-size: 18px; }
   opacity: 1;
   transform: translateX(0);
   pointer-events: auto;
+  box-shadow:
+    -30px 0 64px color-mix(in srgb, var(--thread-accent), transparent 70%),
+    -8px 0 24px rgba(0, 0, 0, 0.72);
 }
 
 .telemetry-panel[hidden],

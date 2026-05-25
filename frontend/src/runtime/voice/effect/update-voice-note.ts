@@ -1,15 +1,16 @@
 /**
- * WHAT: Persists a voice upload or transcript as an active thread note.
- * WHY: Voice input must appear in the conversation ledger even before transcription completes.
+ * WHAT: Patches an existing voice note row in the active conversation ledger.
+ * WHY: Optimistic voice entries must move through upload, transcription, failure, and retry states without losing audio.
  */
 import { state } from '../../state.js';
 
-export async function appendVoiceNote(input: { body: string; voiceFileRef?: string; status?: string; error?: string }): Promise<{ ok: boolean; noteId: string }> {
-  if (!state.threadId) return { ok: false, noteId: '' };
+export async function updateVoiceNote(input: { noteId: string; body?: string; voiceFileRef?: string; status?: string; error?: string }): Promise<boolean> {
+  if (!state.threadId || !input.noteId) return false;
   const { commitActiveLedgerMutation } = await import('../../ledger/effect/commit-active-ledger-mutation.js');
   const ok = await commitActiveLedgerMutation({
-    action: 'append-note',
+    action: 'update-note',
     note: {
+      id: input.noteId,
       threadId: state.threadId,
       body: input.body,
       voiceFileRef: input.voiceFileRef,
@@ -18,11 +19,9 @@ export async function appendVoiceNote(input: { body: string; voiceFileRef?: stri
       source: 'voice'
     }
   }, { render: false });
-  const notes = state.activeLedger?.notes?.[state.threadId] ?? [];
-  const noteId = String(notes.at(-1)?.id ?? '');
   if (ok) {
     const { renderThreadPanel } = await import('../../thread/effect/render-thread-panel.js');
     renderThreadPanel();
   }
-  return { ok, noteId };
+  return ok;
 }

@@ -117,6 +117,17 @@ test('blueprinttool canvas mutations are applied by the authoritative server led
     assert.equal(voiceNoteLedger.notes['thread-card-a'].at(-1)?.role, 'voice');
     assert.equal(voiceNoteLedger.notes['thread-card-a'].at(-1)?.voiceFileRef, '/tmp/voice.webm');
     assert.equal(voiceNoteLedger.notes['thread-card-a'].at(-1)?.status, 'pending');
+    const voiceNoteId = String(voiceNoteLedger.notes['thread-card-a'].at(-1)?.id ?? '');
+
+    const updateVoiceNoteResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'update-note', note: { id: voiceNoteId, threadId: 'thread-card-a', body: 'transcribed text', source: 'voice', voiceFileRef: '/tmp/voice.webm', status: 'transcribed' } })
+    });
+    assert.equal(updateVoiceNoteResponse.ok, true);
+    const updatedVoiceNoteLedger = await updateVoiceNoteResponse.json() as { notes: Record<string, Array<Record<string, unknown>>> };
+    assert.equal(updatedVoiceNoteLedger.notes['thread-card-a'].at(-1)?.message, 'transcribed text');
+    assert.equal(updatedVoiceNoteLedger.notes['thread-card-a'].at(-1)?.status, 'transcribed');
 
     const deleteNoteResponse = await fetch(endpoint, {
       method: 'PATCH',

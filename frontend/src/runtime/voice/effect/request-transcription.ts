@@ -1,35 +1,60 @@
 /**
- * WHAT: Drives the voice transcription lifecycle from captured audio to draft text.
- * WHY: Stop-recording needs one controller-side path for upload, status, and draft fill.
+ * WHAT: Drives the voice transcription lifecycle from captured audio to an optimistic ledger note.
+ * WHY: Stop-recording needs one controller-side path for upload, transcription, failure, and retry state.
  */
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { renderVoiceStatus } from './render-voice-status.js';
-import { fillThreadDraft } from './fill-thread-draft.js';
 import { uploadVoiceAudio } from './upload-voice-audio.js';
 import { appendVoiceNote } from './append-voice-note.js';
+import { updateVoiceNote } from './update-voice-note.js';
+import { transcribeUploadedVoiceAudio } from './transcribe-uploaded-voice-audio.js';
 
 export async function requestTranscription(audio: Blob | null): Promise<void> {
+  if (!state.threadId) state.threadId = 'conversation-ledger';
   if (!audio || audio.size <= 0) {
     state.voice.transcriptionStatus = 'no audio captured';
+    await appendVoiceNote({ body: 'Voice recording produced no audio.', status: 'capture failed', error: 'No audio captured' });
     telemetry('request-transcription', { configured: false, reason: 'empty-audio' });
     renderVoiceStatus();
     return;
   }
-  state.voice.transcriptionStatus = 'transcribing';
+  state.voice.transcriptionStatus = 'uploading voice';
   telemetry('request-transcription', { configured: true, model: 'gpt-4o-mini-transcribe' });
   renderVoiceStatus();
-  const result = await uploadVoiceAudio(audio);
+  const note = await appendVoiceNote({ body: 'Voice note captured. Uploading audio...', status: 'uploading' });
+  if (!note.ok) {
+    state.voice.transcriptionStatus = 'voice note commit failed';
+    renderVoiceStatus();
+    return;
+  }
+  const upload = await uploadVoiceAudio(audio);
+  if (!upload.ok || !upload.voiceFileRef) {
+    await updateVoiceNote({ noteId: note.noteId, body: 'Voice upload failed before transcription.', status: 'upload failed', error: upload.error ?? '' });
+    state.voice.transcriptionStatus = `voice upload failed${upload.error ? `: ${upload.error}` : ''}`;
+    renderVoiceStatus();
+    return;
+  }
+  state.voice.voiceFileRef = upload.voiceFileRef;
+  state.voice.transcriptionStatus = 'transcribing';
+  await updateVoiceNote({ noteId: note.noteId, body: 'Voice uploaded. Transcribing...', voiceFileRef: upload.voiceFileRef, status: 'transcribing', error: '' });
+  renderVoiceStatus();
+  const result = await transcribeUploadedVoiceAudio(upload.voiceFileRef);
   if (result.ok && result.text.trim()) {
-    fillThreadDraft(result.text);
-    await appendVoiceNote({ body: result.text.trim(), status: 'transcribed' });
+    state.voice.voiceFileRef = result.voiceFileRef;
+    await updateVoiceNote({ noteId: note.noteId, body: result.text.trim(), voiceFileRef: result.voiceFileRef, status: 'transcribed', error: '' });
     state.voice.transcriptionStatus = 'transcribed';
   } else if (result.uploaded && !result.configured) {
     state.voice.voiceFileRef = result.voiceFileRef;
-    await appendVoiceNote({ body: 'Voice uploaded; transcription not configured.', voiceFileRef: result.voiceFileRef, status: 'transcription not configured' });
+    await updateVoiceNote({ noteId: note.noteId, body: 'Voice uploaded; transcription not configured.', voiceFileRef: result.voiceFileRef, status: 'transcription not configured', error: result.error ?? '' });
     state.voice.transcriptionStatus = 'voice uploaded; transcription not configured';
+  } else if (result.uploaded) {
+    state.voice.voiceFileRef = result.voiceFileRef;
+    await updateVoiceNote({ noteId: note.noteId, body: 'Voice uploaded; transcription failed.', voiceFileRef: result.voiceFileRef, status: 'transcription failed', error: result.error ?? '' });
+    state.voice.transcriptionStatus = `transcription failed${result.error ? `: ${result.error}` : ''}`;
   } else {
-    state.voice.transcriptionStatus = result.status === 503 ? 'transcription not configured' : `transcription failed${result.error ? `: ${result.error}` : ''}`;
+    await updateVoiceNote({ noteId: note.noteId, body: 'Voice uploaded; transcription failed.', voiceFileRef: upload.voiceFileRef, status: 'transcription failed', error: result.error ?? '' });
+    state.voice.transcriptionStatus = `transcription failed${result.error ? `: ${result.error}` : ''}`;
   }
   telemetry('render-voice-status', { status: state.voice.transcriptionStatus, durationMs: state.voice.durationMs });
   renderVoiceStatus();

@@ -13,7 +13,7 @@ export function renderVoiceStatus(): void {
   const wholeSeconds = Math.max(0, Math.floor(Number(state.voice.durationMs ?? 0) / 1000));
   const level = Math.max(0, Math.min(1, Number(state.voice.level ?? 0)));
   const waveSamples = Array.isArray(state.voice.waveSamples) ? state.voice.waveSamples : [];
-  const busy = /transcribing|uploading/.test(String(state.voice.transcriptionStatus ?? ''));
+  const busy = /transcribing|uploading|retrying/.test(String(state.voice.transcriptionStatus ?? ''));
   panel.classList.toggle('recording', Boolean(state.voice.recording));
   panel.classList.toggle('busy', busy);
   if (recorder) recorder.hidden = !state.voice.recording && !busy;
