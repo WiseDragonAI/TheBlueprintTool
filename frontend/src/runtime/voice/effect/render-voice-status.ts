@@ -12,12 +12,13 @@ export function renderVoiceStatus(): void {
   const seconds = (Number(state.voice.durationMs ?? 0) / 1000).toFixed(1);
   const wholeSeconds = Math.max(0, Math.floor(Number(state.voice.durationMs ?? 0) / 1000));
   const level = Math.max(0, Math.min(1, Number(state.voice.level ?? 0)));
+  const waveSamples = Array.isArray(state.voice.waveSamples) ? state.voice.waveSamples : [];
   const busy = /transcribing|uploading/.test(String(state.voice.transcriptionStatus ?? ''));
   panel.classList.toggle('recording', Boolean(state.voice.recording));
   panel.classList.toggle('busy', busy);
   if (recorder) recorder.hidden = !state.voice.recording && !busy;
   meter.style.height = `${Math.round(18 + level * 74)}%`;
-  paintVoiceWaveLevel(panel, level, Boolean(state.voice.recording || busy));
+  paintVoiceWaveLevel(panel, level, Boolean(state.voice.recording || busy), waveSamples);
   if (timer) timer.textContent = `00:${String(wholeSeconds).padStart(2, '0')}`;
   status.textContent = state.voice.recording
     ? `Recording ${seconds}s  level ${level.toFixed(2)}`

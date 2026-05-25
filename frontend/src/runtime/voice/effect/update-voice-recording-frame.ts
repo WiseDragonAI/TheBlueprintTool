@@ -15,6 +15,9 @@ export function updateVoiceRecordingFrame(): void {
     state.voice.level = Math.min(1, Math.sqrt(sum / samples.length) * 4);
   }
   state.voice.durationMs = Date.now() - state.voice.startedAt;
+  const waveSamples = Array.isArray(state.voice.waveSamples) ? state.voice.waveSamples : [];
+  waveSamples.push(Number(state.voice.level ?? 0));
+  state.voice.waveSamples = waveSamples;
   renderVoiceStatus();
   state.voice.animationFrameId = requestAnimationFrame(updateVoiceRecordingFrame);
 }

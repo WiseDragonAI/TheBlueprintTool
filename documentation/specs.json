@@ -2667,7 +2667,7 @@
       "y": 7045,
       "w": 560,
       "comment": {
-        "what": "The terminal voice dock must be driven by the real microphone session. The waveform and vertical meter use `state.voice.level`, idle text input replaces the recorder when not recording, and no fake attachment chips are rendered."
+        "what": "The terminal voice dock must be driven by the real microphone session. The waveform and vertical meter use `state.voice.level`; the waveform accumulates the full current recording envelope and compresses it into visible points instead of showing only the last milliseconds or seconds. Idle text input replaces the recorder when not recording, and no fake attachment chips are rendered."
       },
       "facts": [],
       "fields": []
