@@ -1,5 +1,10 @@
+/**
+ * WHAT: Loads the active route ledger from the backend.
+ * WHY: Server ledgers are authoritative, while optimistic thread notes must survive stale refreshes.
+ */
 import { state } from '../../state.js';
 import { ledgerEndpointForTab } from '../helper/ledger-endpoint-for-tab.js';
+import { mergeLocalThreadNotes } from '../helper/merge-local-thread-notes.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export async function loadActiveLedgerState(): Promise<void> {
@@ -16,7 +21,7 @@ export async function loadActiveLedgerState(): Promise<void> {
     return;
   }
   const ledger = await response.json().catch(() => null);
-  state.activeLedger = ledger;
+  state.activeLedger = mergeLocalThreadNotes(ledger);
   Object.assign(state.viewport, state.viewports?.[state.activeTab] ?? ledger?.viewport ?? state.viewport);
   state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
   telemetry('load-ledger-state', { activeTab: state.activeTab, ok: Boolean(ledger), cards: ledger?.cards?.length ?? 0, relationships: ledger?.relationships?.length ?? 0 });

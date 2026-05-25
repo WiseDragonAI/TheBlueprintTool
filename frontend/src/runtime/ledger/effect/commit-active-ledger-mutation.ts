@@ -1,7 +1,12 @@
+/**
+ * WHAT: Commits a ledger mutation and replaces active state with the reconciled server ledger.
+ * WHY: Canvas edits are server-authoritative, but optimistic thread notes must be merged through ledger ownership.
+ */
 import { state } from '../../state.js';
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { ledgerEndpointForTab } from '../helper/ledger-endpoint-for-tab.js';
+import { mergeLocalThreadNotes } from '../helper/merge-local-thread-notes.js';
 
 export type ActiveLedgerMutation = {
   action: 'create-card' | 'patch-card' | 'create-zone' | 'create-group' | 'create-relationship' | 'delete-zones' | 'delete-relationships' | 'patch-geometry' | 'patch-region' | 'append-note' | 'update-note' | 'delete-note' | 'paste-selection';
@@ -57,7 +62,7 @@ export async function commitActiveLedgerMutation(mutation: ActiveLedgerMutation,
   }
   const ledger = await response.json().catch(() => null);
   if (!ledger || typeof ledger !== 'object') return false;
-  state.activeLedger = ledger;
+  state.activeLedger = mergeLocalThreadNotes(ledger);
   telemetry('load-ledger-state', { activeTab: state.activeTab, source: 'server-ledger-mutation', action: mutation.action });
   if (options.render) renderCanvasSurface();
   return true;

@@ -9,6 +9,7 @@ import { uploadVoiceAudio } from '../../src/runtime/voice/effect/upload-voice-au
 import { requestTranscription } from '../../src/runtime/voice/effect/request-transcription.js';
 import { appendVoiceNote } from '../../src/runtime/voice/effect/append-voice-note.js';
 import { createNoteController } from '../../src/runtime/thread/controller/create-note-controller.js';
+import { loadActiveLedgerState } from '../../src/runtime/ledger/effect/load-active-ledger-state.js';
 import { state } from '../../src/runtime/state.js';
 
 test('fill-thread-draft appends transcribed text to the active draft', () => {
@@ -280,5 +281,46 @@ test('create-note-controller renders a text note before backend reconciliation',
     (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
     state.threadId = '';
     state.activeLedger = null;
+  }
+});
+
+test('active ledger reload keeps optimistic thread notes missing from stale server state', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousWindow = globalThis.window;
+  const previousCustomEvent = globalThis.CustomEvent;
+  state.activeTab = 'specs';
+  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.blueprinttool/specs.json' }];
+  state.activeLedger = {
+    notes: {
+      'thread-card-a': [{
+        id: 'note-local-voice',
+        role: 'voice',
+        message: 'Voice uploaded; transcription failed.',
+        voiceFileRef: '/tmp/voice.webm',
+        status: 'transcription failed',
+        optimistic: true
+      }]
+    }
+  };
+  (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
+  (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
+    constructor(_name: string, public options: Record<string, unknown> = {}) {}
+  };
+  (globalThis as unknown as { fetch: unknown }).fetch = async () => ({
+    ok: true,
+    json: async () => ({ cards: [], annotations: [], notes: { 'thread-card-a': [{ id: 'note-local-voice', role: 'voice', message: 'Voice note captured. Uploading audio...', status: 'uploading' }] } })
+  });
+
+  try {
+    await loadActiveLedgerState();
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].message, 'Voice uploaded; transcription failed.');
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].status, 'transcription failed');
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].voiceFileRef, '/tmp/voice.webm');
+  } finally {
+    (globalThis as unknown as { fetch: unknown }).fetch = previousFetch;
+    (globalThis as unknown as { window: unknown }).window = previousWindow;
+    (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
+    state.activeLedger = null;
+    state.activeTab = 'specs';
   }
 });
