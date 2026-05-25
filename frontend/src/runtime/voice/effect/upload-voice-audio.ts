@@ -7,6 +7,9 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export type VoiceTranscriptionResult = {
   ok: boolean;
+  uploaded: boolean;
+  configured: boolean;
+  voiceFileRef: string;
   text: string;
   error?: string;
   status?: number;
@@ -26,6 +29,9 @@ export async function uploadVoiceAudio(audio: Blob): Promise<VoiceTranscriptionR
   const body = payload.body && typeof payload.body === 'object' ? payload.body : payload;
   return {
     ok: Boolean(response.ok && body.ok !== false),
+    uploaded: Boolean(body.uploaded),
+    configured: body.configured !== false,
+    voiceFileRef: String(body.voiceFileRef ?? ''),
     text: String(body.text ?? ''),
     error: body.error ? String(body.error) : undefined,
     status: response.status

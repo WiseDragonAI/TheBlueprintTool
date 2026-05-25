@@ -22,6 +22,9 @@ export async function requestTranscription(audio: Blob | null): Promise<void> {
   if (result.ok && result.text.trim()) {
     fillThreadDraft(result.text);
     state.voice.transcriptionStatus = 'transcribed';
+  } else if (result.uploaded && !result.configured) {
+    state.voice.voiceFileRef = result.voiceFileRef;
+    state.voice.transcriptionStatus = 'voice uploaded; transcription not configured';
   } else {
     state.voice.transcriptionStatus = result.status === 503 ? 'transcription not configured' : `transcription failed${result.error ? `: ${result.error}` : ''}`;
   }

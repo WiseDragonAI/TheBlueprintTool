@@ -5,6 +5,8 @@
 import { parseHttpRequest } from '@backend/business/routing/helper/parse-http-request.js';
 import { resolveTranscriptionConfig } from '@backend/business/transcription/helper/resolve-transcription-config.js';
 import { callOpenaiTranscription } from '@backend/business/transcription/effect/call-openai-transcription.js';
+import { persistUploadedVoiceAudio } from '@backend/business/transcription/effect/persist-uploaded-voice-audio.js';
+import { clearUploadedVoiceAudio } from '@backend/business/transcription/effect/clear-uploaded-voice-audio.js';
 import { persistTranscribedText } from '@backend/business/transcription/effect/persist-transcribed-text.js';
 import { sendJsonResponse } from '@backend/business/routing/effect/send-json-response.js';
 
@@ -16,13 +18,20 @@ export async function transcribeVoiceController(input: { action_payload?: AnyRec
   const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
   const data = (envelope.data_model ?? {}) as AnyRecord;
   const request = parseHttpRequest({ action_payload: payload, runtime_state: runtime, data_model: data });
+  const upload = persistUploadedVoiceAudio({ action_payload: payload, runtime_state: runtime, data_model: data });
   const config = resolveTranscriptionConfig({ action_payload: payload, runtime_state: runtime, data_model: data });
   let transcription: Record<string, unknown> = { ok: false, error: 'transcription not configured' };
-  if (config.ok !== false) {
+  if (upload.ok !== false && config.ok !== false) {
     transcription = await callOpenaiTranscription({ action_payload: { ...payload, request, config }, runtime_state: runtime, data_model: data });
-    if (transcription.ok !== false) persistTranscribedText({ action_payload: { ...payload, request, config }, runtime_state: runtime, data_model: data });
+    if (transcription.ok !== false) {
+      persistTranscribedText({ action_payload: { ...payload, request, config }, runtime_state: runtime, data_model: data });
+      clearUploadedVoiceAudio({ action_payload: { voiceFileRef: upload.voiceFileRef }, runtime_state: runtime, data_model: data });
+    }
   }
-  const ok = config.ok !== false && transcription.ok !== false;
-  sendJsonResponse({ action_payload: { ...payload, status: config.ok === false ? 503 : ok ? 200 : 502, body: { ok, text: runtime.transcriptionText ?? '', error: transcription.error } }, runtime_state: runtime, data_model: data });
-  return { ok, request, config, text: runtime.transcriptionText ?? '', error: transcription.error };
+  const transcribed = config.ok !== false && transcription.ok !== false;
+  const accepted = upload.ok !== false;
+  const status = !accepted ? 400 : transcribed ? 200 : config.ok === false ? 202 : 502;
+  const body = { ok: transcribed, uploaded: accepted, configured: config.ok !== false, voiceFileRef: transcribed ? '' : upload.voiceFileRef ?? '', text: runtime.transcriptionText ?? '', error: transcription.error };
+  sendJsonResponse({ action_payload: { ...payload, status, body }, runtime_state: runtime, data_model: data });
+  return { ...body, request, config };
 }

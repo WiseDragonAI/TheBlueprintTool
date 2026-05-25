@@ -1,4 +1,5 @@
 tmp/
+.blueprinttool/voice-uploads/
 .worktrees/
 generator-cli/.worktrees/
 generator-cli/dist/

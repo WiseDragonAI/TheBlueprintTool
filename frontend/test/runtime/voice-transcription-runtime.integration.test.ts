@@ -6,6 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fillThreadDraft } from '../../src/runtime/voice/effect/fill-thread-draft.js';
 import { uploadVoiceAudio } from '../../src/runtime/voice/effect/upload-voice-audio.js';
+import { requestTranscription } from '../../src/runtime/voice/effect/request-transcription.js';
 import { state } from '../../src/runtime/state.js';
 
 test('fill-thread-draft appends transcribed text to the active draft', () => {
@@ -49,12 +50,12 @@ test('upload-voice-audio posts transient audio to backend transcription route', 
   };
   (globalThis as unknown as { fetch: unknown }).fetch = async (url: string, init: RequestInit) => {
     requested = { url, init };
-    return { ok: true, status: 200, json: async () => ({ body: { ok: true, text: 'hello transcript' } }) };
+    return { ok: true, status: 200, json: async () => ({ body: { ok: true, uploaded: true, configured: true, voiceFileRef: '', text: 'hello transcript' } }) };
   };
 
   try {
     const result = await uploadVoiceAudio(new Blob(['abc'], { type: 'audio/webm' }));
-    assert.deepEqual(result, { ok: true, text: 'hello transcript', error: undefined, status: 200 });
+    assert.deepEqual(result, { ok: true, uploaded: true, configured: true, voiceFileRef: '', text: 'hello transcript', error: undefined, status: 200 });
     assert.equal(requested.url, '/api/transcribe');
     assert.equal(requested.init?.method, 'POST');
     assert.equal((requested.init?.headers as Record<string, string>)['x-thread-id'], 'thread-card-a');
@@ -64,5 +65,73 @@ test('upload-voice-audio posts transient audio to backend transcription route', 
     (globalThis as unknown as { window: unknown }).window = previousWindow;
     (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
     state.threadId = '';
+  }
+});
+
+test('upload-voice-audio reports accepted upload when transcription is unconfigured', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousWindow = globalThis.window;
+  const previousCustomEvent = globalThis.CustomEvent;
+  (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
+  (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
+    constructor(_name: string, public options: Record<string, unknown> = {}) {}
+  };
+  (globalThis as unknown as { fetch: unknown }).fetch = async () => ({
+    ok: true,
+    status: 202,
+    json: async () => ({ body: { ok: false, uploaded: true, configured: false, voiceFileRef: '/tmp/voice.webm', text: '', error: 'transcription not configured' } })
+  });
+
+  try {
+    const result = await uploadVoiceAudio(new Blob(['abc'], { type: 'audio/webm' }));
+    assert.equal(result.ok, false);
+    assert.equal(result.uploaded, true);
+    assert.equal(result.configured, false);
+    assert.equal(result.voiceFileRef, '/tmp/voice.webm');
+    assert.equal(result.status, 202);
+  } finally {
+    (globalThis as unknown as { fetch: unknown }).fetch = previousFetch;
+    (globalThis as unknown as { window: unknown }).window = previousWindow;
+    (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
+  }
+});
+
+test('request-transcription keeps optimistic upload status separate from provider config', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousDocument = globalThis.document;
+  const previousWindow = globalThis.window;
+  const previousCustomEvent = globalThis.CustomEvent;
+  const status = { textContent: '' };
+  const meter = { style: { transform: '' } };
+  const panel = { classList: { toggle() {} } };
+  (globalThis as unknown as { document: unknown }).document = {
+    querySelector(selector: string) {
+      if (selector === '.voice-status') return status;
+      if (selector === '.voice-meter-value') return meter;
+      if (selector === '.voice-panel') return panel;
+      return null;
+    }
+  };
+  (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
+  (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
+    constructor(_name: string, public options: Record<string, unknown> = {}) {}
+  };
+  (globalThis as unknown as { fetch: unknown }).fetch = async () => ({
+    ok: true,
+    status: 202,
+    json: async () => ({ body: { ok: false, uploaded: true, configured: false, voiceFileRef: '/tmp/voice.webm', text: '', error: 'transcription not configured' } })
+  });
+
+  try {
+    await requestTranscription(new Blob(['abc'], { type: 'audio/webm' }));
+    assert.equal(state.voice.transcriptionStatus, 'voice uploaded; transcription not configured');
+    assert.equal(state.voice.voiceFileRef, '/tmp/voice.webm');
+    assert.equal(status.textContent, 'voice uploaded; transcription not configured');
+  } finally {
+    (globalThis as unknown as { fetch: unknown }).fetch = previousFetch;
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+    (globalThis as unknown as { window: unknown }).window = previousWindow;
+    (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
+    state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
   }
 });

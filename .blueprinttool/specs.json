@@ -2510,7 +2510,7 @@
       "y": 6194,
       "w": 320,
       "comment": {
-        "what": "Voice audio can be uploaded for transcription before final transcript confirmation. The audio file is transient and is not a durable artifact once transcription has completed."
+        "what": "Voice audio can be uploaded for transcription before final transcript confirmation. The backend accepts and records a transient `voiceFileRef` before checking provider configuration, so missing transcription credentials do not turn the upload itself into a failure. The audio file is transient and is not a durable artifact once transcription has completed."
       },
       "facts": [],
       "fields": []
@@ -2524,7 +2524,7 @@
       "y": 6311,
       "w": 320,
       "comment": {
-        "what": "Captured voice audio may be held locally while transcription is pending. Once the voice note has been transcribed, Core does not need to store the audio file."
+        "what": "Captured voice audio may be held locally while transcription is pending or while transcription credentials are unavailable. Once the voice note has been transcribed, Core clears the transient upload and persists thread text instead of durable voice audio."
       },
       "facts": [],
       "fields": []
@@ -2538,7 +2538,7 @@
       "y": 6311,
       "w": 320,
       "comment": {
-        "what": "The UI shows voice capture, upload, and transcription lifecycle status. Completed transcription persists as thread text, not as durable voice audio."
+        "what": "The UI shows voice capture, upload, and transcription lifecycle status. If upload succeeds but transcription is unconfigured, status must say the voice was uploaded and transcription is not configured, not that upload failed. Completed transcription persists as thread text, not as durable voice audio."
       },
       "facts": [],
       "fields": []
