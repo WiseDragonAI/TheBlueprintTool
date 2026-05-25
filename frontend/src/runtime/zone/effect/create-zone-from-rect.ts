@@ -21,8 +21,8 @@ export async function createZoneFromRect(rect: { x: number; y: number; width: nu
   zone.dataset.zoneId = zoneId;
   zone.dataset.threadId = `thread-${zoneId}`;
   zone.dataset.spec = '20000002 20000003 20000004 20000006 20000014 20000017';
-  zone.style.left = `${Math.max(0, rect.x)}px`;
-  zone.style.top = `${Math.max(0, rect.y)}px`;
+  zone.style.left = `${rect.x}px`;
+  zone.style.top = `${rect.y}px`;
   zone.style.width = `${Math.max(180, rect.width)}px`;
   zone.style.height = `${Math.max(140, rect.height)}px`;
   zone.style.setProperty('--zone-color', state.zoneColor);

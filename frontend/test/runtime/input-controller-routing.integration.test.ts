@@ -26,6 +26,16 @@ test('browser inputs route ledger commands through runtime controllers before se
   const createZone = source('frontend/src/runtime/zone/effect/create-zone-from-rect.ts');
   assert.match(createZone, /commitActiveLedgerMutation/);
   assert.match(createZone, /createLedgerZoneAnnotation/);
+  assert.doesNotMatch(createZone, /Math\.max\(0,\s*rect\.(x|y)\)/);
+
+  const zoneAnnotation = source('frontend/src/runtime/ledger/helper/create-ledger-zone-annotation.ts');
+  assert.doesNotMatch(zoneAnnotation, /Math\.max\(0,\s*input\.rect\.(x|y)\)/);
+
+  const bindInputs = source('frontend/src/runtime/input/effect/bind-inputs.ts');
+  assert.doesNotMatch(bindInputs, /state\.zoneColor\s*=\s*['"]#55b8ff['"]/);
+
+  const renderToolbox = source('frontend/src/runtime/toolbox/effect/render-toolbox.ts');
+  assert.match(renderToolbox, /input\.value\s*=\s*state\.zoneColor/);
 
   const createGroup = source('frontend/src/runtime/group/effect/create-group-from-rect.ts');
   assert.match(createGroup, /commitActiveLedgerMutation/);
@@ -64,7 +74,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(colorEdit, /commitActiveLedgerMutation/);
 
   const noteCreate = source('frontend/src/runtime/thread/controller/create-note-controller.ts');
-  assert.match(noteCreate, /commitActiveLedgerMutation/);
+  assert.match(noteCreate, /sendActiveLedgerMutation/);
 
   const noteDelete = source('frontend/src/runtime/thread/controller/delete-note-controller.ts');
   assert.match(noteDelete, /commitActiveLedgerMutation/);

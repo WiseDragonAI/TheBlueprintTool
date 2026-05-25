@@ -113,8 +113,8 @@ test('specs and data ledger tabs commit canvas mutations through the server ledg
 
     const annotation = createLedgerZoneAnnotation({
       id: `${activeTab}-created-zone`,
-      rect: { x: 40, y: 50, width: 260, height: 170 },
-      color: '#55b8ff'
+      rect: { x: -40, y: -50, width: 260, height: 170 },
+      color: '#d946ef'
     });
     await commitActiveLedgerMutation({ action: 'create-zone', annotation });
 
@@ -125,9 +125,9 @@ test('specs and data ledger tabs commit canvas mutations through the server ledg
       id: `${activeTab}-created-zone`,
       label: 'New zone',
       variant: 'zone',
-      color: '#55b8ff',
-      x: 40,
-      y: 50,
+      color: '#d946ef',
+      x: -40,
+      y: -50,
       width: 260,
       height: 170
     });

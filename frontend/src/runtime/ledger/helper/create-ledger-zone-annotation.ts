@@ -8,8 +8,8 @@ export function createLedgerZoneAnnotation(input: {
     label: 'New zone',
     variant: 'zone',
     color: input.color,
-    x: Math.max(0, input.rect.x),
-    y: Math.max(0, input.rect.y),
+    x: input.rect.x,
+    y: input.rect.y,
     width: Math.max(180, input.rect.width),
     height: Math.max(140, input.rect.height)
   };

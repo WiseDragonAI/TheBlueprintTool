@@ -25,7 +25,6 @@ export function bindInputs(): void {
   document.querySelectorAll('[data-tool]').forEach((button) => {
     button.addEventListener('click', () => {
       state.activeTool = (button as HTMLElement).dataset.tool;
-      if (state.activeTool === 'zone') state.zoneColor = '#55b8ff';
       if (state.activeTool === 'thread' && !state.threadId) selectThread('conversation-ledger');
       telemetry('tool-button-click', { tool: state.activeTool });
       telemetry('resolve-tool-mode', { activeTool: state.activeTool });

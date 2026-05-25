@@ -1356,7 +1356,7 @@
       "y": 6229,
       "w": 520,
       "comment": {
-        "what": ""
+        "what": "The zone tool creates a zone at the exact canvas rectangle drawn by the operator, including negative canvas coordinates after panning or zooming. New zone geometry must not clamp x or y to zero, and the created zone must use the current selected zone color."
       },
       "facts": [],
       "fields": []
@@ -2294,7 +2294,7 @@
       "y": 3362,
       "w": 320,
       "comment": {
-        "what": ""
+        "what": "Selecting the zone tool opens the zone color picker without resetting the selected color. The picker value mirrors `state.zoneColor`, and newly drawn zones use that value until the operator chooses another color."
       },
       "facts": [],
       "fields": []
