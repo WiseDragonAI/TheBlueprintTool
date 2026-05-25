@@ -6,6 +6,7 @@ import type { FileSystemPort, Result } from '../../../lib/types.js';
 import { telemetry } from '../../../lib/telemetry/telemetry.js';
 import { readLedgerJson } from '../helper/read-ledger-json.js';
 import { writeLedgerJson } from '../effect/write-ledger-json.js';
+import { formatLedgerOverview } from '../helper/format-ledger-overview.js';
 
 type JsonObject = Record<string, unknown>;
 
@@ -117,7 +118,7 @@ async function readFileWithNode(path: string): Promise<string> {
 
 export async function manageLedgerJsonController(
   actionPayload: {
-    ledgerCommand: 'inspect' | 'mutate';
+    ledgerCommand: 'inspect' | 'mutate' | 'overview';
     ledgerJsonFile: string;
     mutation?: unknown;
     mutationFile?: string;
@@ -145,6 +146,11 @@ export async function manageLedgerJsonController(
   if (!ledger.ok) {
     telemetry('manage-ledger-json-rejected', { error: ledger.error });
     return ledger;
+  }
+
+  if (actionPayload.ledgerCommand === 'overview') {
+    telemetry('manage-ledger-json-completed');
+    return { ok: true, value: formatLedgerOverview(ledger.value) };
   }
 
   // WHY: mutate mode is the only ledger command allowed to write.

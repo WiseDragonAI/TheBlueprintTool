@@ -13,3 +13,10 @@ test('choose-relationship-port-sides selects the shortest outward-facing side pa
   assert.deepEqual(chooseRelationshipPortSides(source, rightTarget), { sourceSide: 'right', targetSide: 'left' });
   assert.deepEqual(chooseRelationshipPortSides(source, lowerTarget), { sourceSide: 'bottom', targetSide: 'top' });
 });
+
+test('choose-relationship-port-sides evaluates every target border instead of only the center vector', () => {
+  const source = { left: 1120, top: -60, right: 1320, bottom: 140, width: 200, height: 200 };
+  const target = { left: 1000, top: 0, right: 1400, bottom: 700, width: 400, height: 700 };
+
+  assert.deepEqual(chooseRelationshipPortSides(source, target), { sourceSide: 'right', targetSide: 'right' });
+});

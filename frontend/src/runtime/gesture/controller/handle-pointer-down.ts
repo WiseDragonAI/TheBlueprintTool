@@ -4,6 +4,7 @@ import { derivePointerIntent } from '../helper/derive-pointer-intent.js';
 import { canvasPoint } from '../../canvas/helper/canvas-point.js';
 import { patchBox } from '../../canvas/effect/patch-box.js';
 import { beginLedgerCardDescriptionEdit, beginLedgerCardTitleEdit } from '../../card/effect/begin-ledger-card-edit.js';
+import { isGestureControlTarget } from '../helper/is-gesture-control-target.js';
 import { point } from '../helper/point.js';
 import { selectionIncludesTarget } from '../../selection/helper/selection-includes-target.js';
 import { selectTarget } from '../../selection/controller/select-target.js';
@@ -13,7 +14,7 @@ let lastCardEditClick: { area: 'body' | 'title'; cardId: string; at: number } | 
 
 export function handlePointerDown(event: PointerEvent): void {
   const rawTarget = event.target as HTMLElement;
-  if (rawTarget.closest('button,input,textarea,select,[data-action],[contenteditable="true"]')) return;
+  if (isGestureControlTarget(rawTarget)) return;
   const editedCard = rawTarget.closest('[data-card-id]') as HTMLElement | null;
   const editArea = rawTarget.closest('.ledger-card-title, strong') ? 'title' : rawTarget.closest('.ledger-card-body') ? 'body' : '';
   const editedCardId = editedCard?.dataset.cardId ?? '';

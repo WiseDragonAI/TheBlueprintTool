@@ -128,8 +128,8 @@
       "title": "TABLE: character",
       "cardType": "table",
       "domainId": "ardaria-data-model",
-      "x": -333,
-      "y": 839,
+      "x": -327,
+      "y": 877,
       "w": 360,
       "comment": {
         "what": "Created by `FCharacterDataInteraction::CreateCharacterTable`.\n\nColumns are `CharacterId`, position, and `CharacterData` JSON. `CharacterData` serializes `FCharacterDataInterface`, including `InventoryId`; that id is the virtual link to `inventory.InventoryId`."
@@ -166,8 +166,8 @@
       "title": "APlanetCharacter",
       "cardType": "actor-persisted-state",
       "domainId": "ardaria-data-model",
-      "x": 745,
-      "y": 905,
+      "x": 814,
+      "y": 946,
       "w": 390,
       "comment": {
         "what": "Character actor state persisted through character.CharacterData."
@@ -228,8 +228,8 @@
       "title": "FPlanetCreatureSurvival",
       "cardType": "serialized-struct",
       "domainId": "ardaria-data-model",
-      "x": 771,
-      "y": 592,
+      "x": 838,
+      "y": 589,
       "w": 340,
       "comment": {
         "what": "Persisted survival gauge container inside `character.CharacterData`. Concrete gauges: Health, Stamina, Energy, Food, MentalHealth, Hygiene. Each gauge is an `FCreatureState` current/max pair."
@@ -267,8 +267,8 @@
       "title": "FCreatureState",
       "cardType": "serialized-struct",
       "domainId": "ardaria-data-model",
-      "x": 799,
-      "y": 275,
+      "x": 877,
+      "y": 270,
       "w": 280,
       "comment": {
         "what": "Reusable value type for one gauge only. Fields: Current and Max. It does not define which survival gauges exist."
@@ -290,8 +290,8 @@
       "title": "FPlanetCreatureIdentity",
       "cardType": "serialized-struct",
       "domainId": "ardaria-data-model",
-      "x": 1227,
-      "y": 580,
+      "x": 1338,
+      "y": 585,
       "w": 300,
       "comment": {
         "what": "Persisted identity payload inside `character.CharacterData`. Holds player/NPC display identity and procedural identity seed, not relationship or quest state."
@@ -322,7 +322,7 @@
       "cardType": "serialized-struct",
       "domainId": "ardaria-data-model",
       "x": 283,
-      "y": 590,
+      "y": 591,
       "w": 300,
       "comment": {
         "what": "Persisted base creature stats inside `character.CharacterData`. These are long-term improvable stats, separate from current survival gauge state."
@@ -356,8 +356,8 @@
       "title": "FGameBuff",
       "cardType": "serialized-struct",
       "domainId": "ardaria-data-model",
-      "x": 1131,
-      "y": 1196,
+      "x": 293,
+      "y": 1188,
       "w": 340,
       "comment": {
         "what": "Serialized both on character buffs and item buffs."
@@ -415,8 +415,8 @@
       "title": "TABLE: inventory",
       "cardType": "table",
       "domainId": "ardaria-data-model",
-      "x": -274,
-      "y": 1506,
+      "x": -270,
+      "y": 1450,
       "w": 360,
       "comment": {
         "what": "Created by `FInventoryDataInteraction::CreateInventoryTable`.\n\nColumns are `InventoryId` and `InventoryData` JSON. `InventoryData` serializes `InventoryByItemId` plus 2D item transforms. Character rows point here through `CharacterData.InventoryId`, which is a virtual FK stored inside the character JSON."
@@ -440,8 +440,8 @@
       "title": "FInventoryItem",
       "cardType": "serialized-struct",
       "domainId": "ardaria-data-model",
-      "x": 745,
-      "y": 1549,
+      "x": 558,
+      "y": 1516,
       "w": 390,
       "comment": {
         "what": "Item occurrence stored inside inventory JSON and also used in FBuildComponentSer.Inventory."
@@ -510,8 +510,8 @@
       "title": "TABLE: build",
       "cardType": "table",
       "domainId": "ardaria-data-model",
-      "x": -277,
-      "y": 1969,
+      "x": -352,
+      "y": 1963,
       "w": 380,
       "comment": {
         "what": "Persistent table for placed build components in the world. Stores the SQL projection needed to reload placement identity, hierarchy, type, transform, material, vertices, and destination."
@@ -603,8 +603,8 @@
       "title": "FBuildComponentSer",
       "cardType": "runtime-struct",
       "domainId": "ardaria-data-model",
-      "x": 746,
-      "y": 1966,
+      "x": 881,
+      "y": 1984,
       "w": 390,
       "comment": {
         "what": "Runtime/build DTO. Current SQLite build table persists only a subset of these fields."
@@ -658,8 +658,8 @@
       "title": "TABLE: history",
       "cardType": "table",
       "domainId": "ardaria-data-model",
-      "x": -275,
-      "y": 2267,
+      "x": -350,
+      "y": 2269,
       "w": 380,
       "comment": {
         "what": "Undo/redo history table. It mirrors the persisted build projection plus history metadata."
@@ -745,7 +745,7 @@
       "cardType": "serialized-struct",
       "domainId": "ardaria-data-model",
       "x": 359,
-      "y": -134,
+      "y": -133,
       "w": 390,
       "comment": {
         "what": "Persisted inside world.CellData."
@@ -776,7 +776,7 @@
       "cardType": "serialized-struct",
       "domainId": "ardaria-data-model",
       "x": 852,
-      "y": -36,
+      "y": -35,
       "w": 360,
       "comment": {
         "what": "Altered generated PCG point payload."
@@ -807,7 +807,7 @@
       "cardType": "serialized-struct",
       "domainId": "ardaria-data-model",
       "x": 853,
-      "y": -248,
+      "y": -247,
       "w": 360,
       "comment": {
         "what": "Player-added/generated point payload inside world.CellData."
@@ -833,8 +833,8 @@
       "title": "UIndustryStationComponent",
       "cardType": "runtime-cache",
       "domainId": "ardaria-data-model",
-      "x": 2085,
-      "y": 1963,
+      "x": 2055,
+      "y": 1991,
       "w": 360,
       "comment": {
         "what": "Station component owns per-station runtime state keyed by station id."
@@ -989,7 +989,7 @@
       "y": 2574,
       "w": 260,
       "comment": {
-        "what": "- Store inventory per build comp so we can persist inventory for stations\n- Create a join table for character <-> build with 2 FK + tags. like `owner` or `job.boss`\n- need a sql table for persisted quests and states"
+        "what": "- Store inventory per build comp so we can persist inventory for stations\n- Create a join table for character <-> build with 2 FK + tags. like `owner` or `job.boss`\n- need a sql table for persisted quests and states + cpp structs\n- background async check for quest completion"
       }
     },
     {
@@ -997,8 +997,8 @@
       "title": "FQuest",
       "cardType": "authored-quest-definition",
       "domainId": "ardaria-data-model",
-      "x": 2584,
-      "y": 555,
+      "x": 2082,
+      "y": 1278,
       "w": 390,
       "comment": {
         "what": "Authored quest definition stored in editor data. Describes the quest identity, owner, rewards, and ordered steps; runtime progress is stored separately in `FQuestState`."
@@ -1051,8 +1051,8 @@
       "title": "FQuestStep",
       "cardType": "authored-quest-step-definition",
       "domainId": "ardaria-data-model",
-      "x": 2291,
-      "y": 213,
+      "x": 2326,
+      "y": 930,
       "w": 450,
       "comment": {
         "what": "Authored objective step inside a quest. Defines the expected action/tag predicate, player-facing text, rewards, and dependency rules. Runtime dependencies can bind exact IDs created by previous steps."
@@ -1129,8 +1129,8 @@
       "title": "FQuestState",
       "cardType": "persisted-runtime-state",
       "domainId": "ardaria-data-model",
-      "x": 2008,
-      "y": 554,
+      "x": 1787,
+      "y": 928,
       "w": 430,
       "comment": {
         "what": "Persisted runtime progress for a quest. Tracks current/completed steps, claimed rewards, consumed predicates, and runtime-bound dependency IDs across save/load."
@@ -1167,6 +1167,109 @@
         {
           "name": "ConsumedActionTags",
           "type": "TSet<FName or FGameplayTag>"
+        }
+      ]
+    },
+    {
+      "id": "db_quest",
+      "title": "TABLE: quest",
+      "cardType": "table",
+      "domainId": "ardaria-data-model",
+      "x": -347,
+      "y": 481,
+      "w": 390,
+      "comment": {
+        "what": "Persistent table for character quest progress. Stores the character link and serialized `FQuestState` payload for active/completed quest state."
+      },
+      "facts": [
+        "Design table for persisted quest runtime state."
+      ],
+      "fields": [
+        {
+          "name": "QuestId",
+          "type": "FGuid"
+        },
+        {
+          "name": "CharacterId",
+          "type": "FGuid / persisted character id"
+        },
+        {
+          "name": "QuestState",
+          "type": "FQuestState JSON"
+        }
+      ]
+    },
+    {
+      "id": "card-dd0282d5-7521-4548-a7ad-965fb97d4e89",
+      "title": "Quest System",
+      "cardType": "note",
+      "domainId": "ardaria-data-model",
+      "x": 3358,
+      "y": 1212,
+      "w": 260,
+      "comment": {
+        "what": "Quest/event evaluation runtime.\n\nAfter each meaningful game event, the game emits a compact event payload for the quest system to evaluate in the background. The event should describe the action with generic tags and ids, for example dialog line activated, item bought, character killed, build placed, item delivered, or station interaction completed.\n\nThe quest system checks active quest states for the character and decides whether any current step predicate is satisfied. This lookup must not block the main interaction flow. The result can advance a quest step, complete a quest, grant rewards, unlock dependent dialog, or trigger UI/highlight feedback.\n\nThis card is the runtime mechanism, separate from `FQuest` authored data, `FQuestStep` authored predicates, and `FQuestState` persisted progress."
+      }
+    },
+    {
+      "id": "struct_dialog_step",
+      "title": "FDialogStep",
+      "cardType": "authored-dialog-step-definition",
+      "domainId": "ardaria-data-model",
+      "x": 2871,
+      "y": 1566,
+      "w": 430,
+      "comment": {
+        "what": "Authored dialog node/line step. Carries player-facing text, speaker/listener context, conditions, emitted action tags, and optional links to next steps."
+      },
+      "facts": [
+        "Dialog steps can emit quest-matching action tags such as dialogue line activation."
+      ],
+      "fields": [
+        {
+          "name": "DialogStepId",
+          "type": "FGuid"
+        },
+        {
+          "name": "DialogId",
+          "type": "FGuid"
+        },
+        {
+          "name": "Content",
+          "type": "FText"
+        },
+        {
+          "name": "EventTags",
+          "type": "TArray<FGameplayTag>"
+        }
+      ]
+    },
+    {
+      "id": "struct_dialog",
+      "title": "FDialog",
+      "cardType": "authored-dialog-definition",
+      "domainId": "ardaria-data-model",
+      "x": 2892,
+      "y": 1281,
+      "w": 390,
+      "comment": {
+        "what": "Authored dialog definition. Holds dialog identity, owner/source context, and ordered dialog steps; runtime activation can be driven by quest, relationship, NPC, or world interaction state."
+      },
+      "facts": [
+        "Dialog definitions are authored data, not runtime progress state."
+      ],
+      "fields": [
+        {
+          "name": "DialogId",
+          "type": "FGuid"
+        },
+        {
+          "name": "OwnerId",
+          "type": "FGuid"
+        },
+        {
+          "name": "Steps",
+          "type": "TArray<FDialogStep>"
         }
       ]
     }
@@ -1297,6 +1400,66 @@
       "from": "db_character",
       "to": "db_inventory",
       "label": "CharacterData.InventoryId virtual FK"
+    },
+    {
+      "id": "rel_quest_table_character",
+      "from": "db_quest",
+      "to": "db_character",
+      "label": "CharacterId"
+    },
+    {
+      "id": "rel_quest_state_fquest",
+      "from": "struct_quest_state",
+      "to": "struct_quest",
+      "label": "progress for"
+    },
+    {
+      "id": "rel_quest_step_quest",
+      "from": "struct_quest_step",
+      "to": "struct_quest",
+      "label": "belongs to"
+    },
+    {
+      "id": "rel_quest_state_character",
+      "from": "struct_quest_state",
+      "to": "struct_character",
+      "label": "character progress"
+    },
+    {
+      "id": "rel_build_component_character",
+      "from": "struct_build",
+      "to": "struct_character",
+      "label": "character association"
+    },
+    {
+      "id": "rel_quest_build_component",
+      "from": "struct_quest",
+      "to": "struct_build",
+      "label": "build dependency"
+    },
+    {
+      "id": "rel_build_inventory_table",
+      "from": "db_build",
+      "to": "db_inventory",
+      "label": "inventory"
+    },
+    {
+      "id": "rel_survival_creature_state_type",
+      "from": "struct_survival",
+      "to": "struct_creature_state",
+      "label": "gauge_type"
+    },
+    {
+      "id": "rel_dialog_step_dialog",
+      "from": "struct_dialog_step",
+      "to": "struct_dialog",
+      "label": "belongs_to"
+    },
+    {
+      "id": "rel_dialog_quest",
+      "from": "struct_dialog",
+      "to": "struct_quest",
+      "label": "quest_link"
     }
   ],
   "annotations": [
@@ -1304,41 +1467,51 @@
       "id": "zone-quest",
       "label": "Quest",
       "variant": "zone",
-      "color": "#55b8ff",
-      "x": 2986,
-      "y": 247,
-      "width": 1166,
-      "height": 639
+      "color": "#57cdff",
+      "x": 1722,
+      "y": 796,
+      "width": 1081,
+      "height": 837
     },
     {
       "id": "zone-draft-3",
       "label": "DataBase",
       "variant": "zone",
       "color": "#6a57ff",
-      "x": -840,
-      "y": -187,
-      "width": 1031,
-      "height": 2443
+      "x": -955,
+      "y": -372,
+      "width": 1149,
+      "height": 2839
     },
     {
       "id": "zone-draft-4",
       "label": "RuntimeState",
       "variant": "zone",
-      "color": "#12b85f",
+      "color": "#f5c000",
       "x": 210,
-      "y": -372,
-      "width": 1420,
-      "height": 1777
+      "y": -371,
+      "width": 1484,
+      "height": 1779
     },
     {
       "id": "zone-draft-5",
       "label": "Items and Build",
       "variant": "zone",
-      "color": "#12b8b8",
+      "color": "#07c804",
       "x": 209,
       "y": 1424,
       "width": 1490,
       "height": 1118
+    },
+    {
+      "id": "zone-a292f3c6-9c8a-4c6c-9aae-9b50064c6739",
+      "label": "Dialog",
+      "variant": "zone",
+      "color": "#ffe357",
+      "x": 2830,
+      "y": 1137,
+      "width": 812,
+      "height": 903
     }
   ],
   "notes": {},

@@ -35,7 +35,7 @@ export async function createZoneFromRect(rect: { x: number; y: number; width: nu
     <p>Created from the zone drawing tool.</p>
     <div class="zone-actions">
       <button class="icon-button" type="button" data-action="edit-zone" data-spec="3fd7a96a" title="Edit zone name" aria-label="Edit zone name">✎</button>
-      <input class="zone-color-edit" type="color" value="${state.zoneColor}" data-action="edit-zone-color" data-spec="3fd7a96a" aria-label="Edit zone color">
+      <input class="zone-color-edit" type="color" value="${state.zoneColor}" data-action="edit-zone-color" data-spec="3fd7a96a a2f9c013" aria-label="Edit zone color">
       <button type="button" data-action="open-zone-thread">Notes</button>
     </div>`;
   content.insertBefore(zone, content.querySelector('.marquee'));

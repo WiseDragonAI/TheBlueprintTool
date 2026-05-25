@@ -42,3 +42,16 @@ test('parse-cli-argv parses targeted ledger mutations', () => {
   assert.deepEqual(command.mutationOperation.removeRelationshipIds, ['rel-a', 'rel-b']);
   assert.deepEqual(command.mutationOperation.addRelationships, [{ id: 'rel-c', from: 'from-card', to: 'to-card', label: 'label text' }]);
 });
+
+test('parse-cli-argv parses ledger overview command', () => {
+  const command = parseCliArgv([
+    'ledger',
+    'overview',
+    '--ledger',
+    '.blueprinttool/ardaria-data-model.json',
+  ]);
+
+  assert.equal(command.mode, 'ledger');
+  assert.equal(command.ledgerCommand, 'overview');
+  assert.equal(command.ledgerJsonFile, '.blueprinttool/ardaria-data-model.json');
+});

@@ -93,7 +93,7 @@ export function parseCliArgv(argv: string[]): CliCommand {
   // WHY: ledger mode needs a subcommand and committed ledger JSON path.
   // WHAT: normalize inspect and mutate subcommands.
   if (mode === 'ledger') {
-    const ledgerCommand = subcommand === 'mutate' ? 'mutate' : ('inspect' satisfies LedgerCommand);
+    const ledgerCommand: LedgerCommand = subcommand === 'mutate' || subcommand === 'overview' ? subcommand : 'inspect';
     return {
       mode,
       ledgerCommand,

@@ -57,3 +57,25 @@ test('CLI architecture ledger JSON storage applies targeted card and relationshi
   assert.equal(ledger.cards.some((card) => card.id === 'card-added'), true);
   assert.deepEqual(ledger.relationships.map((relationship) => relationship.id), ['rel-keep', 'rel-added']);
 });
+
+test('CLI architecture ledger overview prints cards and relationships without layout noise', async () => {
+  const file = await createJsonFile({
+    cards: [
+      { id: 'card-a', title: 'Card A', cardType: 'table', x: 10, y: 20, comment: { what: 'hidden' } },
+      { id: 'card-b', title: 'Card B' }
+    ],
+    relationships: [
+      { id: 'rel-a-b', from: 'card-a', to: 'card-b', label: 'owns' }
+    ],
+    annotations: [{ id: 'zone-a', label: 'Hidden zone' }]
+  });
+
+  const result = await manageLedgerJsonController({ ledgerCommand: 'overview', ledgerJsonFile: file });
+
+  assert.equal(result.ok, true);
+  assert.match(String(result.ok ? result.value : ''), /Cards \(2\)/);
+  assert.match(String(result.ok ? result.value : ''), /card-a :: Card A \[table\]/);
+  assert.match(String(result.ok ? result.value : ''), /rel-a-b: Card A \(card-a\) --owns--> Card B \(card-b\)/);
+  assert.equal(String(result.ok ? result.value : '').includes('Hidden zone'), false);
+  assert.equal(String(result.ok ? result.value : '').includes('x'), false);
+});

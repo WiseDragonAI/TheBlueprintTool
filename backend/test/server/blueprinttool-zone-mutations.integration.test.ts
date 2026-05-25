@@ -58,6 +58,18 @@ test('blueprinttool canvas mutations are applied by the authoritative server led
     const groupLedger = await createGroupResponse.json() as { annotations: Array<Record<string, unknown>> };
     assert.equal(groupLedger.annotations.some((entry) => entry.id === 'group-created'), true);
 
+    const createRelationshipResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'create-relationship',
+        relationship: { id: 'rel-created', from: 'card-a', to: 'zone-keep', label: 'targets' }
+      })
+    });
+    assert.equal(createRelationshipResponse.ok, true);
+    const relationshipLedger = await createRelationshipResponse.json() as { relationships: Array<Record<string, unknown>> };
+    assert.deepEqual(relationshipLedger.relationships.find((entry) => entry.id === 'rel-created'), { id: 'rel-created', from: 'card-a', to: 'zone-keep', label: 'targets' });
+
     const geometryResponse = await fetch(endpoint, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },

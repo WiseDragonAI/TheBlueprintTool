@@ -6,7 +6,7 @@ export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
 export type CliMode = 'dry-run' | 'apply' | 'report' | 'patch-doc' | 'ledger' | 'check-ledger';
 
-export type LedgerCommand = 'inspect' | 'mutate';
+export type LedgerCommand = 'inspect' | 'mutate' | 'overview';
 
 export type LedgerMutationOperation = {
   addCardFile?: string;

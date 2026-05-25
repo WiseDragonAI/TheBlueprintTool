@@ -17,18 +17,23 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const payload = (envelope.action_payload ?? input) as AnyRecord;
   const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
   const port = Number(payload.port ?? runtime.port ?? 0);
+  const configuredFrontendRoot = process.env.COREV2_FRONTEND_ROOT;
+  const frontendRoot = configuredFrontendRoot
+    ? resolve(configuredFrontendRoot)
+    : existsSync(resolve(process.cwd(), 'frontend'))
+      ? resolve(process.cwd(), 'frontend')
+      : resolve(process.cwd(), '..', 'frontend');
+  const blueprinttoolRoot = process.env.BLUEPRINTTOOL_ROOT
+    ? resolve(process.env.BLUEPRINTTOOL_ROOT)
+    : existsSync(resolve(process.cwd(), '.blueprinttool'))
+      ? resolve(process.cwd(), '.blueprinttool')
+      : resolve(process.cwd(), '..', '.blueprinttool');
   if (payload.mode === 'dry-run') {
     return { ok: true, port, server: { listening: false, port } };
   }
   const server = createServer(async (request, response) => {
     const url = (request.url ?? '/').split('?')[0];
-    const frontendRoot = existsSync(resolve(process.cwd(), 'frontend'))
-      ? resolve(process.cwd(), 'frontend')
-      : resolve(process.cwd(), '..', 'frontend');
     if (url.startsWith('/blueprinttool/')) {
-      const blueprinttoolRoot = existsSync(resolve(process.cwd(), '.blueprinttool'))
-        ? resolve(process.cwd(), '.blueprinttool')
-        : resolve(process.cwd(), '..', '.blueprinttool');
       const tabId = url.split('/').filter(Boolean)[1] ?? 'state';
       const statePath = resolve(blueprinttoolRoot, 'state.json');
       const blueprintState = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) as { tabs?: Array<{ id?: string; ledgerFile?: string }> } : { tabs: [] };
@@ -56,6 +61,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           card?: Record<string, unknown>;
           cardPatch?: { id?: string; title?: string; description?: string };
           annotation?: Record<string, unknown>;
+          relationship?: Record<string, unknown>;
           zoneIds?: string[];
           relationshipIds?: string[];
           geometry?: Record<string, Record<string, { x: number; y: number; width: number; height: number }>>;
@@ -76,6 +82,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         if (mutation.action === 'create-card' && mutation.card?.id) {
           const id = String(mutation.card.id);
           ledger.cards = (ledger.cards ?? []).filter((entry) => String(entry.id ?? '') !== id).concat(mutation.card);
+        }
+        if (mutation.action === 'create-relationship' && mutation.relationship?.id) {
+          const id = String(mutation.relationship.id);
+          ledger.relationships = (ledger.relationships ?? []).filter((entry) => String(entry.id ?? '') !== id).concat(mutation.relationship);
         }
         if (mutation.action === 'patch-card' && mutation.cardPatch?.id) {
           const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === mutation.cardPatch?.id);
@@ -158,9 +168,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       return;
     }
     const isAssetRoute = url.startsWith('/assets/') || url.startsWith('/src/');
-    const blueprinttoolRoot = existsSync(resolve(process.cwd(), '.blueprinttool'))
-      ? resolve(process.cwd(), '.blueprinttool')
-      : resolve(process.cwd(), '..', '.blueprinttool');
     const statePath = resolve(blueprinttoolRoot, 'state.json');
     const blueprintState = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) as { tabs?: Array<{ id?: string }> } : { tabs: [] };
     const routeTabId = url.split('/').filter(Boolean)[0] ?? '';

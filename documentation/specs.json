@@ -2953,6 +2953,20 @@
       "fields": []
     },
     {
+      "id": "a2f9c013",
+      "title": "Zone color dragging previews without replacing the color input",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -600,
+      "y": 7434,
+      "w": 620,
+      "comment": {
+        "what": "Dragging inside a regular zone color input must update the visible zone color continuously without committing or re-rendering the ledger DOM on each input event. The final change event commits one persisted color update."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
       "id": "c41d5c52",
       "title": "Master function batch file",
       "cardType": "spec-brief",

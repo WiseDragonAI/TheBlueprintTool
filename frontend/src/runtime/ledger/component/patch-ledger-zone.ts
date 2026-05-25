@@ -40,7 +40,7 @@ export function patchLedgerZone(zone: Record<string, unknown>, existing?: HTMLEl
     color.type = 'color';
     color.className = 'zone-color-edit';
     color.dataset.action = 'edit-zone-color';
-    color.dataset.spec = '3fd7a96a';
+    color.dataset.spec = '3fd7a96a a2f9c013';
     color.ariaLabel = 'Edit zone color';
     color.value = typeof zone.color === 'string' ? zone.color : '#55b8ff';
     actions.append(color);

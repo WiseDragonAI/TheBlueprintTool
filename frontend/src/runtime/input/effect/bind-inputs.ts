@@ -3,7 +3,7 @@ import { state } from '../../state.js';
 import { finishPointer } from '../../gesture/effect/finish-pointer.js';
 import { handleActionClick } from '../controller/handle-action-click.js';
 import { handleCardDoubleClick } from '../controller/handle-card-double-click.js';
-import { handleRegionColorInput } from '../controller/handle-region-color-input.js';
+import { handleRegionColorChange, handleRegionColorInput } from '../controller/handle-region-color-input.js';
 import { handleKeyboard } from '../controller/handle-keyboard.js';
 import { handlePointerDown } from '../../gesture/controller/handle-pointer-down.js';
 import { handlePointerMove } from '../../gesture/controller/handle-pointer-move.js';
@@ -61,6 +61,7 @@ export function bindInputs(): void {
   document.addEventListener('click', handleActionClick);
   document.addEventListener('dblclick', handleCardDoubleClick);
   document.addEventListener('input', handleRegionColorInput);
+  document.addEventListener('change', handleRegionColorChange);
   window.addEventListener('popstate', () => {
     state.viewports = { ...(state.viewports ?? {}), [state.activeTab]: { ...state.viewport } };
     persistState();

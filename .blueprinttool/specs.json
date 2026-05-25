@@ -983,8 +983,8 @@
       "title": "boot",
       "cardType": "spec-brief",
       "domainId": "specs",
-      "x": -3113,
-      "y": 3150,
+      "x": -3024,
+      "y": 3203,
       "w": 266,
       "comment": {
         "what": "Core opens the correct surface, restores durable truth, clears transient selection by default, and renders a usable canvas. The canvas world must behave as an effectively infinite surface for panning, zooming, grid rendering, and relationship overlays; internal content layers must not crop visible world material or routes at nominal SVG/content bounds."
@@ -997,8 +997,8 @@
       "title": "navigation",
       "cardType": "spec-brief",
       "domainId": "specs",
-      "x": -4217,
-      "y": 3992,
+      "x": -4128,
+      "y": 4045,
       "w": 266,
       "comment": {
         "what": "Switching tabs changes the active surface without corrupting any other surface-local truth."
@@ -1011,8 +1011,8 @@
       "title": "zones are first-class canvas objects",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3453,
-      "y": 5022,
+      "x": -3403,
+      "y": 5053,
       "w": 320,
       "comment": {
         "what": "Zone edit controls must remain clickable inside the canvas. Pointer gesture handling must not capture these button events as pan, drag, resize, or selection gestures."
@@ -1025,8 +1025,8 @@
       "title": "zones can be created on the canvas",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3093,
-      "y": 5022,
+      "x": -3043,
+      "y": 5053,
       "w": 320,
       "comment": {
         "what": "Relationship routing must group every visible source and target endpoint by card id and border side before routing. Endpoints in the same card-side group receive deterministic evenly spaced slots along that side instead of all using the card center."
@@ -1039,8 +1039,8 @@
       "title": "zones can be named",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2733,
-      "y": 5022,
+      "x": -2683,
+      "y": 5053,
       "w": 280,
       "comment": {
         "what": ""
@@ -1053,8 +1053,8 @@
       "title": "zones have a color",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2413,
-      "y": 5022,
+      "x": -2363,
+      "y": 5053,
       "w": 260,
       "comment": {
         "what": ""
@@ -1067,8 +1067,8 @@
       "title": "zone resizing uses drag n drop from zone corners when the zone is selected",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3057,
-      "y": 4868,
+      "x": -3007,
+      "y": 4899,
       "w": 620,
       "comment": {
         "what": ""
@@ -1081,8 +1081,8 @@
       "title": "zones can be resized",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2453,
-      "y": 5218,
+      "x": -2403,
+      "y": 5249,
       "w": 300,
       "comment": {
         "what": ""
@@ -1095,8 +1095,8 @@
       "title": "zones can be moved",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3093,
-      "y": 5218,
+      "x": -3043,
+      "y": 5249,
       "w": 280,
       "comment": {
         "what": ""
@@ -1109,8 +1109,8 @@
       "title": "zones can contain cards",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2773,
-      "y": 5218,
+      "x": -2723,
+      "y": 5249,
       "w": 280,
       "comment": {
         "what": ""
@@ -1123,8 +1123,8 @@
       "title": "zones are rendered behind the cards",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3453,
-      "y": 5414,
+      "x": -3403,
+      "y": 5445,
       "w": 420,
       "comment": {
         "what": "Zone notes controls must remain clickable inside the canvas and must open the thread for the zone that owns the button. Pointer gesture handling must not capture the button event as a canvas gesture."
@@ -1137,8 +1137,8 @@
       "title": "selecting a zone selects all the cards intersecting with the zone",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2993,
-      "y": 5414,
+      "x": -2943,
+      "y": 5445,
       "w": 500,
       "comment": {
         "what": "Card notes controls must remain clickable inside the canvas and must open the thread for the card that owns the button. Pointer gesture handling must not capture the button event as a canvas gesture."
@@ -1151,8 +1151,8 @@
       "title": "moving a zone moves the zone and the intersecting cards",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2453,
-      "y": 5414,
+      "x": -2403,
+      "y": 5445,
       "w": 460,
       "comment": {
         "what": ""
@@ -1165,8 +1165,8 @@
       "title": "a zone has an edit button",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3453,
-      "y": 5610,
+      "x": -3403,
+      "y": 5641,
       "w": 320,
       "comment": {
         "what": "Relationship paths must route from card border ports with enough clearance to avoid visually crossing through the source or target card interiors."
@@ -1179,8 +1179,8 @@
       "title": "a zone has a notes button linked to a thread",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3093,
-      "y": 5610,
+      "x": -3043,
+      "y": 5641,
       "w": 420,
       "comment": {
         "what": ""
@@ -1193,8 +1193,8 @@
       "title": "zone labels are always visible at the same size for any zoom level",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2633,
-      "y": 5610,
+      "x": -2583,
+      "y": 5641,
       "w": 640,
       "comment": {
         "what": "Zone labels stay readable at a stable screen size while the zone remains large enough to inspect. In overview-detail zoom, labels are suppressed instead of inverse-scaling across neighboring cards or zones."
@@ -1207,8 +1207,8 @@
       "title": "a zone can be deleted from the edit panel",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3453,
-      "y": 5806,
+      "x": -3403,
+      "y": 5837,
       "w": 420,
       "comment": {
         "what": ""
@@ -1221,8 +1221,8 @@
       "title": "a zone can be deleted by pressing Del while selected",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2993,
-      "y": 5806,
+      "x": -2943,
+      "y": 5837,
       "w": 420,
       "comment": {
         "what": ""
@@ -1235,8 +1235,8 @@
       "title": "deleting a zone does not delete the intersecting cards",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2533,
-      "y": 5806,
+      "x": -2483,
+      "y": 5837,
       "w": 540,
       "comment": {
         "what": ""
@@ -1249,8 +1249,8 @@
       "title": "zone deletion by pressing Del requires a confirmation modal",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3453,
-      "y": 6002,
+      "x": -3403,
+      "y": 6033,
       "w": 620,
       "comment": {
         "what": ""
@@ -1263,8 +1263,8 @@
       "title": "a selected zone has its border rendered in white glow and the resize icon at corners",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3453,
-      "y": 6198,
+      "x": -3403,
+      "y": 6229,
       "w": 760,
       "comment": {
         "what": ""
@@ -1277,8 +1277,8 @@
       "title": "zones can be drawn from the tool box zone tool",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2653,
-      "y": 6198,
+      "x": -2603,
+      "y": 6229,
       "w": 520,
       "comment": {
         "what": ""
@@ -1291,8 +1291,8 @@
       "title": "zone confirmation modal can process keyboard shortcuts",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3453,
-      "y": 6394,
+      "x": -3403,
+      "y": 6425,
       "w": 760,
       "comment": {
         "what": ""
@@ -1305,8 +1305,8 @@
       "title": "suppression confirmation modal uses escape and enter keyboard to cancel or validate",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2653,
-      "y": 6394,
+      "x": -2603,
+      "y": 6425,
       "w": 700,
       "comment": {
         "what": ""
@@ -1319,8 +1319,8 @@
       "title": "zone position and geometry is persisted",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3453,
-      "y": 6590,
+      "x": -3403,
+      "y": 6621,
       "w": 620,
       "comment": {
         "what": ""
@@ -1333,8 +1333,8 @@
       "title": "Zone is a primary model and has a persistent ID",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2773,
-      "y": 6590,
+      "x": -2723,
+      "y": 6621,
       "w": 620,
       "comment": {
         "what": ""
@@ -1347,8 +1347,8 @@
       "title": "Ctrl-click can select multiple zones and cards",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -114,
-      "y": 4959,
+      "x": -41,
+      "y": 6835,
       "w": 520,
       "comment": {
         "what": ""
@@ -1361,8 +1361,8 @@
       "title": "holding Ctrl + left-click and dragging draws a selection box",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": 440,
-      "y": 4955,
+      "x": 513,
+      "y": 6831,
       "w": 560,
       "comment": {
         "what": ""
@@ -1375,8 +1375,8 @@
       "title": "left-clicking naked canvas and dragging pans the canvas",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": 1046,
-      "y": 4959,
+      "x": 1119,
+      "y": 6835,
       "w": 500,
       "comment": {
         "what": ""
@@ -1389,8 +1389,8 @@
       "title": "left-clicking an unselected zone and dragging pans the canvas",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -114,
-      "y": 5155,
+      "x": -41,
+      "y": 7031,
       "w": 560,
       "comment": {
         "what": ""
@@ -1403,8 +1403,8 @@
       "title": "scrolling the mouse wheel zooms the canvas",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": 486,
-      "y": 5155,
+      "x": 559,
+      "y": 7031,
       "w": 420,
       "comment": {
         "what": "Scrolling the mouse wheel zooms the canvas around the cursor. The zoom range must support wide ledger overviews down to 0.08 scale and detailed work up to 2.5 scale."
@@ -1417,8 +1417,8 @@
       "title": "holding Ctrl and scrolling the mouse wheel moves the canvas viewport",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": 946,
-      "y": 5155,
+      "x": 1019,
+      "y": 7031,
       "w": 560,
       "comment": {
         "what": ""
@@ -1431,8 +1431,8 @@
       "title": "Mouse wheel zoom preserves cursor anchored canvas point",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": 1546,
-      "y": 5155,
+      "x": 599,
+      "y": 7431,
       "w": 520,
       "comment": {
         "what": "Wheel zoom must keep the canvas-space point under the cursor at the same screen position by adjusting viewport translation when scale changes."
@@ -1445,8 +1445,8 @@
       "title": "Dragging elements at non-default zoom uses canvas-space deltas",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": 1546,
-      "y": 5351,
+      "x": 605,
+      "y": 7624,
       "w": 560,
       "comment": {
         "what": "When the viewport scale is not 1, card, zone, resize, marquee, and zone-draw geometry must convert screen pointer deltas into canvas-space deltas before mutating element geometry."
@@ -1459,8 +1459,8 @@
       "title": "Honeycomb background tiling scales with canvas zoom",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": 2146,
-      "y": 5351,
+      "x": -77,
+      "y": 7449,
       "w": 640,
       "comment": {
         "what": "The dark honeycomb grid is canvas-world material. It must live inside the transformed canvas content layer so wheel zoom changes the visible tile scale and panning/zooming moves it with cards, zones, groups, and relationship overlays without a second viewport-locked coordinate system."
@@ -1473,8 +1473,8 @@
       "title": "the canvas has a dark honeycomb background",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -114,
-      "y": 5351,
+      "x": -41,
+      "y": 7227,
       "w": 480,
       "comment": {
         "what": ""
@@ -1487,8 +1487,8 @@
       "title": "canvas card rendering is optimized for high performance",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": 406,
-      "y": 5351,
+      "x": 479,
+      "y": 7227,
       "w": 520,
       "comment": {
         "what": "Canvas rendering must keep pointer interaction responsive at wide zoom-out levels by switching the canvas into low-detail mode below 0.35 scale and overview-detail mode below 0.18 scale. Low-detail mode removes expensive shadows, text blocks, buttons, and relationship labels while preserving geometry and selection affordances. Overview-detail mode also removes card titles and inverse-scaled zone labels so tiny boxes never become unreadable overlapping text columns."
@@ -1501,8 +1501,8 @@
       "title": "canvas cards do not render high definition when it is not needed",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": 966,
-      "y": 5351,
+      "x": 1039,
+      "y": 7227,
       "w": 560,
       "comment": {
         "what": "Cards, zones, and relationship overlays must not render high-detail text, controls, shadows, or labels when the viewport is zoomed far enough that those details are not legible. The low-detail state must be derived from viewport scale, not from a separate persisted mode."
@@ -1515,8 +1515,8 @@
       "title": "Canvas styles are split into focused stylesheet modules",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": 1546,
-      "y": 5547,
+      "x": 605,
+      "y": 7820,
       "w": 560,
       "comment": {
         "what": "The public canvas stylesheet is an import entrypoint. Tokens, shell chrome, canvas layer mechanics, canvas objects, thread inspector, dialogs, and responsive overrides live in separate CSS modules so style ownership stays decoupled and inspectable."
@@ -1529,8 +1529,8 @@
       "title": "Live verification has reusable CLI summaries",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": 2146,
-      "y": 5547,
+      "x": -77,
+      "y": 7645,
       "w": 560,
       "comment": {
         "what": "Repeated live browser inspection must be implemented as reusable tooling, not ad hoc terminal scripts. The summary command reports route loading, honeycomb scale behavior, relationship endpoint failures, group expansion, and thread/voice plumbing."
@@ -1543,8 +1543,8 @@
       "title": "invalid action safety",
       "cardType": "spec-brief",
       "domainId": "specs",
-      "x": -812,
-      "y": 3185,
+      "x": -723,
+      "y": 3238,
       "w": 286,
       "comment": {
         "what": "Invalid, partial, or out-of-bounds gestures do not create broken cards, zones, notes, or persisted state."
@@ -1557,8 +1557,8 @@
       "title": "mixed selection",
       "cardType": "spec-brief",
       "domainId": "specs",
-      "x": -851,
-      "y": 3687,
+      "x": -762,
+      "y": 3740,
       "w": 266,
       "comment": {
         "what": "If cards and zones are selected together, Core preserves one coherent mixed selection."
@@ -1571,8 +1571,8 @@
       "title": "selection clear",
       "cardType": "spec-brief",
       "domainId": "specs",
-      "x": -1602,
-      "y": 3799,
+      "x": -1513,
+      "y": 3852,
       "w": 266,
       "comment": {
         "what": "Clear selection removes transient selection and temporary UI state without damaging durable truth."
@@ -1585,8 +1585,8 @@
       "title": "tool mode switch",
       "cardType": "spec-brief",
       "domainId": "specs",
-      "x": -154,
-      "y": 3408,
+      "x": -65,
+      "y": 3461,
       "w": 286,
       "comment": {
         "what": "Entering or exiting tool modes is explicit and normal selection behavior resumes correctly afterward. Pressing Escape must always reset the active tool back to Select."
@@ -1599,8 +1599,8 @@
       "title": "navigation persistence",
       "cardType": "spec-brief",
       "domainId": "specs",
-      "x": -4229,
-      "y": 4198,
+      "x": -4140,
+      "y": 4251,
       "w": 286,
       "comment": {
         "what": "The active tab or surface persists and restores correctly."
@@ -1613,8 +1613,8 @@
       "title": "tab switch",
       "cardType": "spec-brief",
       "domainId": "interactions",
-      "x": -3811,
-      "y": 3998,
+      "x": -3722,
+      "y": 4051,
       "w": 266,
       "comment": {
         "what": "Switch from one tab surface to another while preserving each surface state."
@@ -1627,8 +1627,8 @@
       "title": "refresh",
       "cardType": "spec-brief",
       "domainId": "interactions",
-      "x": -163,
-      "y": 3166,
+      "x": -74,
+      "y": 3219,
       "w": 266,
       "comment": {
         "what": "Refresh reloads the runtime tab route and hydrates persisted viewport and canvas geometry back into view from the current persisted ledger state."
@@ -1641,8 +1641,8 @@
       "title": "Placing a zone returns to Select tool",
       "cardType": "spec-brief",
       "domainId": "interactions",
-      "x": 180,
-      "y": 3166,
+      "x": 269,
+      "y": 3219,
       "w": 360,
       "comment": {
         "what": "After the zone drawing gesture creates a zone, the active tool must reset to Select so repeated drags do not create unintended zones."
@@ -1655,8 +1655,8 @@
       "title": "marquee select",
       "cardType": "spec-brief",
       "domainId": "interactions",
-      "x": -1168,
-      "y": 3422,
+      "x": -1079,
+      "y": 3475,
       "w": 266,
       "comment": {
         "what": "Draw a selection rectangle and collect cards and zones inside the region."
@@ -1669,8 +1669,8 @@
       "title": "escape clear",
       "cardType": "spec-brief",
       "domainId": "interactions",
-      "x": -747,
-      "y": 3441,
+      "x": -658,
+      "y": 3494,
       "w": 266,
       "comment": {
         "what": "Clear transient selection and temporary tool state, including any active drawing, group, relationship, or thread tool."
@@ -1683,8 +1683,8 @@
       "title": "open conversation drawer",
       "cardType": "spec-brief",
       "domainId": "interactions",
-      "x": -1696,
-      "y": 4901,
+      "x": -1594,
+      "y": 5236,
       "w": 266,
       "comment": {
         "what": "Open the drawer on the selected card or zone thread."
@@ -1697,8 +1697,8 @@
       "title": "Thread panel opens only for selection or thread tool",
       "cardType": "spec-brief",
       "domainId": "interactions",
-      "x": -1320,
-      "y": 4901,
+      "x": -1218,
+      "y": 5236,
       "w": 520,
       "comment": {
         "what": "The production inspector must not show telemetry as the thread tab. The inspector column and thread panel are hidden unless a card, zone, or group is selected, or the Thread tool is active from the toolbox."
@@ -1711,8 +1711,8 @@
       "title": "create note",
       "cardType": "spec-brief",
       "domainId": "interactions",
-      "x": -1360,
-      "y": 4901,
+      "x": -1258,
+      "y": 5236,
       "w": 266,
       "comment": {
         "what": "Append a new note to the selected model thread."
@@ -1725,8 +1725,8 @@
       "title": "delete note",
       "cardType": "spec-brief",
       "domainId": "interactions",
-      "x": -1024,
-      "y": 4901,
+      "x": -922,
+      "y": 5236,
       "w": 266,
       "comment": {
         "what": "Append a note deletion marker and hide the deleted message from the active thread."
@@ -1739,8 +1739,8 @@
       "title": "copy selection",
       "cardType": "spec-brief",
       "domainId": "interactions",
-      "x": -1159,
-      "y": 3168,
+      "x": -1070,
+      "y": 3221,
       "w": 266,
       "comment": {
         "what": "Export the current card/zone selection as structured JSON."
@@ -1753,8 +1753,8 @@
       "title": "a selected card has a white glowy border",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -5160,
-      "y": 4916,
+      "x": -5071,
+      "y": 4969,
       "w": 320,
       "comment": {
         "what": "Card geometry changes must be committed into durable canvas state rather than only mutating DOM position. A persisted card record must include the stable card id and x/y geometry."
@@ -1767,8 +1767,8 @@
       "title": "a card is drag-and-drop enabled",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -4785,
-      "y": 4926,
+      "x": -4696,
+      "y": 4979,
       "w": 320,
       "comment": {
         "what": "Dragging a card must persist the moved x/y position at pointer release so a reload restores the same canvas-space geometry."
@@ -1781,8 +1781,8 @@
       "title": "card positions are persisted in a JSON ledger",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2792,
-      "y": 3182,
+      "x": -2703,
+      "y": 3235,
       "w": 320,
       "comment": {
         "what": "On boot, persisted card geometry must be hydrated before relationship routing is rendered so cards and arrows use the restored position."
@@ -1795,8 +1795,8 @@
       "title": "card position is persisted",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -4727,
-      "y": 5607,
+      "x": -4638,
+      "y": 5660,
       "w": 320,
       "comment": {
         "what": "Route-addressable tab paths such as /surface, /specs, and /runtime must load the browser application directly from the URL and tab buttons must push the matching URL."
@@ -1809,8 +1809,8 @@
       "title": "persisted card positions are restored on reload",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2401,
-      "y": 3178,
+      "x": -2312,
+      "y": 3231,
       "w": 320,
       "comment": {
         "what": "The browser route path determines the active tab on direct load and browser history navigation."
@@ -1823,8 +1823,8 @@
       "title": "cards from the base card class can be extended for sub-modules",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -5147,
-      "y": 5160,
+      "x": -5058,
+      "y": 5213,
       "w": 360,
       "comment": {
         "what": ""
@@ -1837,8 +1837,8 @@
       "title": "an open card is shown on top of everything with max z-index",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -4710,
-      "y": 5159,
+      "x": -4621,
+      "y": 5212,
       "w": 360,
       "comment": {
         "what": ""
@@ -1851,8 +1851,8 @@
       "title": "selecting a card highlights its directly connected cards",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -4271,
-      "y": 5154,
+      "x": -4182,
+      "y": 5207,
       "w": 420,
       "comment": {
         "what": "Selecting a card highlights every directly connected card in both relationship directions by deriving adjacency from relationship source and target metadata, without adding those connected cards to the selection."
@@ -1865,8 +1865,8 @@
       "title": "cards have a tab system",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -5137,
-      "y": 5383,
+      "x": -5048,
+      "y": 5436,
       "w": 320,
       "comment": {
         "what": "An unselected group background follows the same drag precedence as an unselected zone: dragging over it pans the canvas instead of selecting or moving the group."
@@ -1879,8 +1879,8 @@
       "title": "the default tab for the base card class is notes",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -4436,
-      "y": 5340,
+      "x": -4347,
+      "y": 5393,
       "w": 360,
       "comment": {
         "what": ""
@@ -1893,8 +1893,8 @@
       "title": "clicking on card notes opens the card thread in the right panel",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -5112,
-      "y": 5977,
+      "x": -5023,
+      "y": 6030,
       "w": 500,
       "comment": {
         "what": ""
@@ -1907,8 +1907,8 @@
       "title": "cards have a discussion thread",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -5134,
-      "y": 5589,
+      "x": -5045,
+      "y": 5642,
       "w": 340,
       "comment": {
         "what": ""
@@ -1921,8 +1921,8 @@
       "title": "Card is a primary model and has a persistent ID",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -4727,
-      "y": 5793,
+      "x": -4638,
+      "y": 5846,
       "w": 620,
       "comment": {
         "what": ""
@@ -1935,8 +1935,8 @@
       "title": "server routes are reachable by direct URL slug",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3147,
-      "y": 3698,
+      "x": -3058,
+      "y": 3751,
       "w": 320,
       "comment": {
         "what": "Selecting a group must compute contained cards and regular zones from the current group geometry, not from hard-coded membership."
@@ -1949,8 +1949,8 @@
       "title": "the server serves the committed JSON ledger for each tab",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2787,
-      "y": 3698,
+      "x": -2698,
+      "y": 3751,
       "w": 320,
       "comment": {
         "what": "Dragging a selected group must move the group boundary and its computed contained selection together."
@@ -1963,8 +1963,8 @@
       "title": "the server exposes an API for ledger edits",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2427,
-      "y": 3698,
+      "x": -2338,
+      "y": 3751,
       "w": 320,
       "comment": {
         "what": "Selecting a group must visibly select the intersecting regular zones, then include every card intersecting those selected zones as part of the expanded grouped selection scope."
@@ -1977,8 +1977,8 @@
       "title": "ledger edits are persisted to JSON files",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3121,
-      "y": 3346,
+      "x": -3032,
+      "y": 3399,
       "w": 320,
       "comment": {
         "what": ""
@@ -1991,8 +1991,8 @@
       "title": "the server exposes a route to create a new persisted ledger",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2761,
-      "y": 3346,
+      "x": -2672,
+      "y": 3399,
       "w": 320,
       "comment": {
         "what": ""
@@ -2005,8 +2005,8 @@
       "title": "navigation tabs represent all the available ledgers in server state",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2401,
-      "y": 3346,
+      "x": -2312,
+      "y": 3399,
       "w": 320,
       "comment": {
         "what": ""
@@ -2019,8 +2019,8 @@
       "title": "server state is saved in ./.blueprinttool",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2941,
-      "y": 3542,
+      "x": -2852,
+      "y": 3595,
       "w": 360,
       "comment": {
         "what": ""
@@ -2033,8 +2033,8 @@
       "title": "ledgers in ./.blueprinttool load as default tabs",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2401,
-      "y": 3542,
+      "x": -2312,
+      "y": 3595,
       "w": 320,
       "comment": {
         "what": "On server boot, every ledger file present in `./.blueprinttool` is loaded into server state and represented as a default navigation tab unless the ledger is invalid."
@@ -2047,8 +2047,8 @@
       "title": "Specs and data ledgers are available from CoreV2 .blueprinttool",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2020,
-      "y": 3542,
+      "x": -1931,
+      "y": 3595,
       "w": 560,
       "comment": {
         "what": "CoreV2 must keep live-editable specs and data ledger JSON files in `./.blueprinttool` so the browser/server workbench can visualize current spec and data edits without reading application source files."
@@ -2061,8 +2061,8 @@
       "title": "Normal zone click replaces selection with intersecting cards",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -1660,
-      "y": 3396,
+      "x": -1571,
+      "y": 3449,
       "w": 320,
       "comment": {
         "what": ""
@@ -2075,8 +2075,8 @@
       "title": "Ctrl-click zone adds intersecting cards to the existing selection",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -1242,
-      "y": 3875,
+      "x": -1153,
+      "y": 3928,
       "w": 320,
       "comment": {
         "what": ""
@@ -2089,8 +2089,8 @@
       "title": "Dragging an unselected card selects the card and drags it",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -1621,
-      "y": 3611,
+      "x": -1532,
+      "y": 3664,
       "w": 320,
       "comment": {
         "what": ""
@@ -2103,8 +2103,8 @@
       "title": "A zone must be selected before being draggable",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -1631,
-      "y": 3199,
+      "x": -1542,
+      "y": 3252,
       "w": 320,
       "comment": {
         "what": ""
@@ -2117,8 +2117,8 @@
       "title": "Zone Drawing Button",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": 532,
-      "y": 3153,
+      "x": 621,
+      "y": 3206,
       "w": 320,
       "comment": {
         "what": ""
@@ -2131,8 +2131,8 @@
       "title": "Shortcut Help Button",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": 884,
-      "y": 3153,
+      "x": 973,
+      "y": 3206,
       "w": 320,
       "comment": {
         "what": ""
@@ -2145,8 +2145,8 @@
       "title": "Runbook Button",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": 160,
-      "y": 3149,
+      "x": 249,
+      "y": 3202,
       "w": 320,
       "comment": {
         "what": ""
@@ -2159,8 +2159,8 @@
       "title": "Conversation Ledger Button",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": 622,
-      "y": 3459,
+      "x": 711,
+      "y": 3512,
       "w": 320,
       "comment": {
         "what": ""
@@ -2173,8 +2173,8 @@
       "title": "Refresh Button",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": 532,
-      "y": 3309,
+      "x": 621,
+      "y": 3362,
       "w": 320,
       "comment": {
         "what": ""
@@ -2187,8 +2187,8 @@
       "title": "Selecting the zone tool opens the color picker.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": 884,
-      "y": 3309,
+      "x": 973,
+      "y": 3362,
       "w": 320,
       "comment": {
         "what": ""
@@ -2201,8 +2201,8 @@
       "title": "The toolbox background is transparent.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": 245,
-      "y": 3551,
+      "x": 334,
+      "y": 3604,
       "w": 320,
       "comment": {
         "what": ""
@@ -2215,8 +2215,8 @@
       "title": "Hovering the toolbox animates the background to dark grey.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": 732,
-      "y": 3617,
+      "x": 821,
+      "y": 3670,
       "w": 320,
       "comment": {
         "what": ""
@@ -2229,8 +2229,8 @@
       "title": "Tabs are route-addressable.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3781,
-      "y": 4206,
+      "x": -3692,
+      "y": 4259,
       "w": 320,
       "comment": {
         "what": ""
@@ -2243,8 +2243,8 @@
       "title": "The active tab is derived from the browser path.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -4244,
-      "y": 4377,
+      "x": -4155,
+      "y": 4430,
       "w": 320,
       "comment": {
         "what": ""
@@ -2257,8 +2257,8 @@
       "title": "The navbar renders the tab registry.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3848,
-      "y": 4365,
+      "x": -3759,
+      "y": 4418,
       "w": 320,
       "comment": {
         "what": ""
@@ -2271,8 +2271,8 @@
       "title": "Threads are a primary model.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -1686,
-      "y": 5156,
+      "x": -1584,
+      "y": 5491,
       "w": 320,
       "comment": {
         "what": ""
@@ -2285,8 +2285,8 @@
       "title": "The conversation ledger aggregates card and zone threads.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -1334,
-      "y": 5156,
+      "x": -1232,
+      "y": 5491,
       "w": 320,
       "comment": {
         "what": ""
@@ -2299,8 +2299,8 @@
       "title": "Threads preserve operator and assistant history.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -1686,
-      "y": 5312,
+      "x": -1584,
+      "y": 5647,
       "w": 320,
       "comment": {
         "what": ""
@@ -2313,8 +2313,8 @@
       "title": "Notes opened from a card target that card thread.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -1333,
-      "y": 5312,
+      "x": -1231,
+      "y": 5647,
       "w": 320,
       "comment": {
         "what": ""
@@ -2327,8 +2327,8 @@
       "title": "Notes opened from a zone target that zone thread.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -982,
-      "y": 5312,
+      "x": -880,
+      "y": 5647,
       "w": 320,
       "comment": {
         "what": ""
@@ -2341,8 +2341,8 @@
       "title": "Threads support voice recording.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -1689,
-      "y": 5508,
+      "x": -1587,
+      "y": 5843,
       "w": 320,
       "comment": {
         "what": "Voice recording must request real microphone input through browser media APIs and must surface permission failures to the operator instead of pretending that recording started."
@@ -2355,8 +2355,8 @@
       "title": "Voice recording is thread-scoped.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -1338,
-      "y": 5508,
+      "x": -1236,
+      "y": 5843,
       "w": 320,
       "comment": {
         "what": ""
@@ -2369,8 +2369,8 @@
       "title": "Only one voice recording is active at a time.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -986,
-      "y": 5508,
+      "x": -884,
+      "y": 5843,
       "w": 320,
       "comment": {
         "what": ""
@@ -2383,8 +2383,8 @@
       "title": "Stopping a voice recording routes the captured audio to transcription.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -1690,
-      "y": 5664,
+      "x": -1588,
+      "y": 5999,
       "w": 320,
       "comment": {
         "what": "Stopping voice recording must stop media tracks and release audio resources. It must request transcription only when transcription is actually configured."
@@ -2397,8 +2397,8 @@
       "title": "Transcribed voice text fills the active thread draft.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -1338,
-      "y": 5664,
+      "x": -1236,
+      "y": 5999,
       "w": 320,
       "comment": {
         "what": "The thread draft may only be filled from an actual transcript result. The UI must not insert fabricated transcript text."
@@ -2411,8 +2411,8 @@
       "title": "Voice recording shows live duration and level telemetry.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -986,
-      "y": 5664,
+      "x": -884,
+      "y": 5999,
       "w": 320,
       "comment": {
         "what": "While recording, the thread panel must show live elapsed duration and a level meter updated from microphone analyser samples on animation frames."
@@ -2425,8 +2425,8 @@
       "title": "Voice recording failures are surfaced to the operator.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -1690,
-      "y": 5820,
+      "x": -1588,
+      "y": 6155,
       "w": 320,
       "comment": {
         "what": "Voice permission, device, and capture failures must be shown in the voice status area and recorded in telemetry."
@@ -2439,8 +2439,8 @@
       "title": "Voice transcription is optional and configuration-gated.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -1338,
-      "y": 5820,
+      "x": -1236,
+      "y": 6155,
       "w": 320,
       "comment": {
         "what": "Voice transcription is optional and configuration-gated. When transcription is unavailable, the UI must explicitly say transcription is unavailable instead of showing a fake transcript."
@@ -2453,8 +2453,8 @@
       "title": "Voice transcription upload is optimistic.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -983,
-      "y": 5859,
+      "x": -881,
+      "y": 6194,
       "w": 320,
       "comment": {
         "what": "Voice audio can be uploaded for transcription before final transcript confirmation. The audio file is transient and is not a durable artifact once transcription has completed."
@@ -2467,8 +2467,8 @@
       "title": "Voice audio is transient until transcription completes.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -1690,
-      "y": 5976,
+      "x": -1588,
+      "y": 6311,
       "w": 320,
       "comment": {
         "what": "Captured voice audio may be held locally while transcription is pending. Once the voice note has been transcribed, Core does not need to store the audio file."
@@ -2481,8 +2481,8 @@
       "title": "Voice transcription status is visible in the UI.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -1337,
-      "y": 5976,
+      "x": -1235,
+      "y": 6311,
       "w": 320,
       "comment": {
         "what": "The UI shows voice capture, upload, and transcription lifecycle status. Completed transcription persists as thread text, not as durable voice audio."
@@ -2495,8 +2495,8 @@
       "title": "hovering a card shows its hash id",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -4041,
-      "y": 5327,
+      "x": -3952,
+      "y": 5380,
       "w": 320,
       "comment": {
         "what": ""
@@ -2509,8 +2509,8 @@
       "title": "cards have labels show top right",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -5155,
-      "y": 5382,
+      "x": -5066,
+      "y": 5435,
       "w": 320,
       "comment": {
         "what": ""
@@ -2523,8 +2523,8 @@
       "title": "selected cards show their hash id top right",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -4803,
-      "y": 5382,
+      "x": -4714,
+      "y": 5435,
       "w": 320,
       "comment": {
         "what": ""
@@ -2537,8 +2537,8 @@
       "title": "hash id is displayed top right in a smaller font grey",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -4277,
-      "y": 5550,
+      "x": -4188,
+      "y": 5603,
       "w": 320,
       "comment": {
         "what": ""
@@ -2551,8 +2551,8 @@
       "title": "External ledger updates trigger a server refresh flow.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -5085,
-      "y": 3168,
+      "x": -4996,
+      "y": 3221,
       "w": 320,
       "comment": {
         "what": ""
@@ -2565,8 +2565,8 @@
       "title": "Client-originated ledger updates do not trigger a client refresh.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -4733,
-      "y": 3168,
+      "x": -4644,
+      "y": 3221,
       "w": 320,
       "comment": {
         "what": ""
@@ -2579,8 +2579,8 @@
       "title": "Client refresh is triggered by server-side refresh events.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -4381,
-      "y": 3168,
+      "x": -4292,
+      "y": 3221,
       "w": 320,
       "comment": {
         "what": ""
@@ -2593,8 +2593,8 @@
       "title": "External ledger updates preserve the live client interaction state when possible.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -4029,
-      "y": 3168,
+      "x": -3940,
+      "y": 3221,
       "w": 320,
       "comment": {
         "what": ""
@@ -2607,8 +2607,8 @@
       "title": "Server-side refresh can target one surface.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3677,
-      "y": 3168,
+      "x": -3588,
+      "y": 3221,
       "w": 320,
       "comment": {
         "what": ""
@@ -2621,8 +2621,8 @@
       "title": "Server-side refresh can target all surfaces.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -5085,
-      "y": 3324,
+      "x": -4996,
+      "y": 3377,
       "w": 320,
       "comment": {
         "what": ""
@@ -2635,8 +2635,8 @@
       "title": "The refresh system preserves canvas continuity during operator work.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -4733,
-      "y": 3324,
+      "x": -4644,
+      "y": 3377,
       "w": 320,
       "comment": {
         "what": ""
@@ -2649,8 +2649,8 @@
       "title": "Live ledger editing from outside the client is first-class.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -4381,
-      "y": 3324,
+      "x": -4292,
+      "y": 3377,
       "w": 320,
       "comment": {
         "what": ""
@@ -2663,8 +2663,8 @@
       "title": "Server refresh can force a full client state reload when required.",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -4029,
-      "y": 3324,
+      "x": -3940,
+      "y": 3377,
       "w": 320,
       "comment": {
         "what": ""
@@ -2677,8 +2677,8 @@
       "title": "Selected zones and card can be copied with ctrl C and pasted with ctrl V",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -1245,
-      "y": 3669,
+      "x": -1156,
+      "y": 3722,
       "w": 320,
       "comment": {
         "what": ""
@@ -2691,8 +2691,8 @@
       "title": "Group tool is present next to Zone in the Core toolbar",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3419,
-      "y": 6966,
+      "x": -2389,
+      "y": 7226,
       "w": 320,
       "comment": {
         "what": ""
@@ -2705,8 +2705,8 @@
       "title": "Clicking Group arms the tool",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3067,
-      "y": 6966,
+      "x": -2037,
+      "y": 7226,
       "w": 320,
       "comment": {
         "what": ""
@@ -2719,8 +2719,8 @@
       "title": "Group background is transparent",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2715,
-      "y": 6966,
+      "x": -1685,
+      "y": 7226,
       "w": 320,
       "comment": {
         "what": ""
@@ -2733,8 +2733,8 @@
       "title": "Group border is thicker than a normal zone border",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2363,
-      "y": 6966,
+      "x": -1333,
+      "y": 7226,
       "w": 320,
       "comment": {
         "what": ""
@@ -2747,8 +2747,8 @@
       "title": "Group uses the same title structure and title sizing rules as zones",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3419,
-      "y": 7122,
+      "x": -2389,
+      "y": 7382,
       "w": 320,
       "comment": {
         "what": ""
@@ -2761,8 +2761,8 @@
       "title": "Group renders behind regular zones",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3067,
-      "y": 7122,
+      "x": -2037,
+      "y": 7382,
       "w": 320,
       "comment": {
         "what": ""
@@ -2775,8 +2775,8 @@
       "title": "Group renders behind cards",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2715,
-      "y": 7122,
+      "x": -1685,
+      "y": 7382,
       "w": 320,
       "comment": {
         "what": ""
@@ -2789,8 +2789,8 @@
       "title": "Click precedence is currently: card -> regular zone -> group background",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2363,
-      "y": 7122,
+      "x": -1333,
+      "y": 7382,
       "w": 320,
       "comment": {
         "what": ""
@@ -2803,8 +2803,8 @@
       "title": "Clicking a card inside a group targets the card",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3419,
-      "y": 7278,
+      "x": -2389,
+      "y": 7538,
       "w": 320,
       "comment": {
         "what": ""
@@ -2817,8 +2817,8 @@
       "title": "Clicking a regular zone inside a group targets the zone",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3067,
-      "y": 7278,
+      "x": -2037,
+      "y": 7538,
       "w": 320,
       "comment": {
         "what": ""
@@ -2831,8 +2831,8 @@
       "title": "Clicking exposed group background targets the group",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2715,
-      "y": 7278,
+      "x": -1685,
+      "y": 7538,
       "w": 320,
       "comment": {
         "what": ""
@@ -2845,8 +2845,8 @@
       "title": "Selecting a group expands selection to cards and zones in the grouped selection scope",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2363,
-      "y": 7278,
+      "x": -1333,
+      "y": 7538,
       "w": 320,
       "comment": {
         "what": ""
@@ -2859,8 +2859,8 @@
       "title": "Ctrl+click on a group toggles that expanded membership as one unit",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3419,
-      "y": 7434,
+      "x": -2389,
+      "y": 7694,
       "w": 320,
       "comment": {
         "what": ""
@@ -2873,8 +2873,8 @@
       "title": "After group selection, dragging a selected inner zone moves the full grouped selection together",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3067,
-      "y": 7434,
+      "x": -2037,
+      "y": 7694,
       "w": 320,
       "comment": {
         "what": ""
@@ -2887,8 +2887,8 @@
       "title": "Group selection participates in the existing mixed-selection drag system",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2715,
-      "y": 7434,
+      "x": -1685,
+      "y": 7694,
       "w": 320,
       "comment": {
         "what": ""
@@ -2901,8 +2901,8 @@
       "title": "Groups do not project zone visual theming onto cards",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2363,
-      "y": 7434,
+      "x": -1333,
+      "y": 7694,
       "w": 320,
       "comment": {
         "what": ""
@@ -2915,8 +2915,8 @@
       "title": "Groups can be resized with resize handles",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -2000,
-      "y": 7434,
+      "x": -1366,
+      "y": 8082,
       "w": 360,
       "comment": {
         "what": "Selected groups expose resize handles and resize using the same canvas-space geometry rules as zones while preserving group identity."
@@ -2929,8 +2929,8 @@
       "title": "Placing a group returns to Select tool",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -1600,
-      "y": 7434,
+      "x": -2379,
+      "y": 7856,
       "w": 360,
       "comment": {
         "what": "After the group drawing gesture creates a group, the active tool must reset to Select so the next drag pans or selects normally."
@@ -2943,8 +2943,8 @@
       "title": "Zones and groups always expose an edit icon for name and zone color changes",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -1200,
-      "y": 7434,
+      "x": -1979,
+      "y": 7856,
       "w": 560,
       "comment": {
         "what": "Every regular zone and group, including static surface regions, newly drawn regions, and ledger-rendered regions, must expose a persistent edit icon button. Activating it edits the visible zone or group label inline; regular zones must also expose a color edit control that updates the zone color without requiring toolbox mode changes."
@@ -3279,8 +3279,8 @@
       "title": "Relationships render as SVG bezier arrows between card borders",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -5560,
-      "y": 6410,
+      "x": -5471,
+      "y": 6463,
       "w": 320,
       "comment": {
         "what": ""
@@ -3293,8 +3293,8 @@
       "title": "Arrow markers render in an overlay",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -5208,
-      "y": 6410,
+      "x": -5119,
+      "y": 6463,
       "w": 320,
       "comment": {
         "what": ""
@@ -3307,8 +3307,8 @@
       "title": "Arrows attach to the nearest card border side based on source and target geometry",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -4856,
-      "y": 6410,
+      "x": -4767,
+      "y": 6463,
       "w": 320,
       "comment": {
         "what": ""
@@ -3321,8 +3321,8 @@
       "title": "Multiple arrows sharing the same card side use deterministic spread ports instead of stacking",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -4504,
-      "y": 6410,
+      "x": -4415,
+      "y": 6463,
       "w": 320,
       "comment": {
         "what": ""
@@ -3335,8 +3335,8 @@
       "title": "Bidirectional links between the same cards use separated ports",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -4152,
-      "y": 6410,
+      "x": -4063,
+      "y": 6463,
       "w": 320,
       "comment": {
         "what": ""
@@ -3349,8 +3349,8 @@
       "title": "Relationship labels render near arrow ports and preserve relationship source context",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -5560,
-      "y": 6566,
+      "x": -5471,
+      "y": 6619,
       "w": 320,
       "comment": {
         "what": ""
@@ -3363,8 +3363,8 @@
       "title": "Arrows adapt and attach to the better suited card border",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -5208,
-      "y": 6566,
+      "x": -5119,
+      "y": 6619,
       "w": 320,
       "comment": {
         "what": "Relationship arrows must share the same canvas-world pixel coordinate system as cards. SVG overlays must not introduce an independent viewBox scale that can detach arrows from their source or target card borders."
@@ -3377,8 +3377,8 @@
       "title": "Arrow labels can be hidden per arrow with their own display state",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -4856,
-      "y": 6566,
+      "x": -4767,
+      "y": 6619,
       "w": 320,
       "comment": {
         "what": ""
@@ -3391,8 +3391,8 @@
       "title": "card descriptions are parsed and rendered as markdown",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -4070,
-      "y": 5793,
+      "x": -3981,
+      "y": 5846,
       "w": 500,
       "comment": {
         "what": ""
@@ -3405,8 +3405,8 @@
       "title": "Arrows should try to avoid colliding with cards",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -4504,
-      "y": 6566,
+      "x": -4415,
+      "y": 6619,
       "w": 320,
       "comment": {
         "what": ""
@@ -3419,8 +3419,8 @@
       "title": "Relationship arrows redraw when connected cards move",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -4152,
-      "y": 6566,
+      "x": -4063,
+      "y": 6619,
       "w": 420,
       "comment": {
         "what": "When a connected card is moved, relationship routing must recompute ports and patch the SVG path and label positions from the current card geometry."
@@ -3433,8 +3433,8 @@
       "title": "Relationship arrows use orthogonal square routing with card clearance",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3700,
-      "y": 6566,
+      "x": -3375,
+      "y": 6796,
       "w": 520,
       "comment": {
         "what": "Relationship arrows must use square SVG routing with explicit source and target clearance points so paths remain readable and avoid crossing through connected card interiors. The visible SVG path must start and end outside connected card borders using outward normals derived from each card border side. For each relationship, routing must evaluate candidate source and target border sides and choose the shortest outward-facing side pair before assigning per-side slots. For non-direct routes, the route must leave the card through a clearance lane and use a short final connector near the middle of the target side; long route segments must not run on the standoff line next to a card border. Multiple visible routes must use deterministic bounded lanes instead of merging on the same segment; lane offsets must not grow from the global relationship index. If source and target have a clean direct horizontal or vertical gap, the route must not add a decorative detour."
@@ -3447,8 +3447,8 @@
       "title": "Zones use darker transparent fill than their primary border color",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -1930,
-      "y": 5610,
+      "x": -2652,
+      "y": 6014,
       "w": 520,
       "comment": {
         "what": "Regular zones must use their primary color for border/identity and a darker, slightly transparent fill so zones read as canvas regions instead of opaque cards."
@@ -3461,8 +3461,8 @@
       "title": "Zone labels keep zone color with minimum brightness",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -1360,
-      "y": 5610,
+      "x": -894,
+      "y": 6493,
       "w": 520,
       "comment": {
         "what": "Zone labels must inherit the zone identity color family while mixing toward white enough to keep a minimum readable brightness on dark or saturated zone fills."
@@ -3475,8 +3475,8 @@
       "title": "Canvas UI uses Ubuntu font",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3760,
-      "y": 6120,
+      "x": -3710,
+      "y": 6151,
       "w": 360,
       "comment": {
         "what": "The browser canvas UI must use Ubuntu, matching the Core canvas typography convention, with system sans-serif fallback."
@@ -3489,8 +3489,8 @@
       "title": "Clicking canvas background clears focus and selection",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3360,
-      "y": 6120,
+      "x": -2837,
+      "y": 6800,
       "w": 520,
       "comment": {
         "what": "A click on empty canvas background with no meaningful pointer movement must blur the active element, clear transient selection, and return the operator to neutral canvas focus."
@@ -3909,8 +3909,8 @@
       "title": "Group draft geometry uses the canvas-local pointer origin",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3030,
-      "y": 7400,
+      "x": -1324,
+      "y": 7883,
       "w": 520,
       "comment": {
         "what": "When the group tool is used, pointerdown and pointerup coordinates are converted through the canvas bounding box and viewport transform, so the created group starts at the visible cursor origin regardless of shell offsets or zoom."
@@ -3923,8 +3923,8 @@
       "title": "Blueprinttool state drives ledger tabs and routes",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -3480,
-      "y": 4620,
+      "x": -3391,
+      "y": 4673,
       "w": 520,
       "comment": {
         "what": "The frontend tab registry is built from CoreV2 .blueprinttool state, and /specs plus /data must load the app while /blueprinttool/specs and /blueprinttool/data serve the live JSON ledgers."
@@ -3937,8 +3937,8 @@
       "title": "Notes clicked from an unselected card opens its thread inspector",
       "cardType": "spec-brief",
       "domainId": "",
-      "x": -4540,
-      "y": 6200,
+      "x": -4451,
+      "y": 6253,
       "w": 520,
       "comment": {
         "what": "A Notes button on a card is a direct thread action: clicking it selects that card context, sets the card thread id, and opens the right thread panel even when the card was not previously selected."
@@ -3951,8 +3951,8 @@
       "title": "Tab click loads the active ledger graph into the canvas",
       "cardType": "spec-brief",
       "domainId": "specs",
-      "x": -3480,
-      "y": 4688,
+      "x": -3430,
+      "y": 4719,
       "w": 560,
       "comment": {
         "what": "When an operator clicks a route-addressable ledger tab, navigate-tab-controller derives the route, fetches that tab ledger, replaces the canvas graph with the ledger cards, zones, and relationships, and records load-ledger-state/render-ledger-surface telemetry."
@@ -3965,8 +3965,8 @@
       "title": "Relationship arrows reserve marker clearance when connected cards are close",
       "cardType": "spec-brief",
       "domainId": "relationship",
-      "x": -3140,
-      "y": 6566,
+      "x": -2202,
+      "y": 6781,
       "w": 560,
       "comment": {
         "what": "When two connected cards are close together, relationship routing must avoid choosing a facing border pair without enough corridor space. The route must choose a better source/target side pair, keep every visible segment long enough to read, and keep the marker outside the target card border instead of cropped under the card."
@@ -3979,8 +3979,8 @@
       "title": "Cards visually inherit the color of the regular zone they intersect",
       "cardType": "spec-brief",
       "domainId": "card",
-      "x": -4780,
-      "y": 5112,
+      "x": -4691,
+      "y": 5165,
       "w": 520,
       "comment": {
         "what": "A card that intersects a regular zone must use that zone color for its card accent, border tint, and background tint. Group zones must not project their visual theme onto cards."
@@ -3993,11 +3993,25 @@
       "title": "Connected card highlights use the inherited card color glow",
       "cardType": "spec-brief",
       "domainId": "selection",
-      "x": -4780,
-      "y": 5308,
+      "x": -4691,
+      "y": 5361,
       "w": 520,
       "comment": {
         "what": "When selecting a card highlights its directly connected cards, the connected-card outline and glow must be visible and must use the highlighted card inherited zone color rather than a generic low-contrast border."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "a2f9c013",
+      "title": "Zone color dragging previews without replacing the color input",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1379,
+      "y": 7856,
+      "w": 620,
+      "comment": {
+        "what": "Dragging inside a regular zone color input must update the visible zone color continuously without committing or re-rendering the ledger DOM on each input event. The final change event commits one persisted color update."
       },
       "facts": [],
       "fields": []
@@ -4007,10 +4021,10 @@
   "annotations": [
     {
       "id": "zone-int-zone",
-      "x": -3459,
-      "y": 4845,
-      "width": 1645,
-      "height": 1973,
+      "x": -3409,
+      "y": 4876,
+      "width": 1653,
+      "height": 2250,
       "color": "#84cc16",
       "label": "Zone",
       "comments": [
@@ -4024,8 +4038,8 @@
     },
     {
       "id": "zone-int-selection",
-      "x": -1707,
-      "y": 3070,
+      "x": -1618,
+      "y": 3123,
       "width": 1332,
       "height": 1027,
       "color": "#eab308",
@@ -4041,8 +4055,8 @@
     },
     {
       "id": "zone-int-notes",
-      "x": -1736,
-      "y": 4853,
+      "x": -1634,
+      "y": 5188,
       "width": 1350,
       "height": 1548,
       "color": "#a855f7",
@@ -4058,8 +4072,8 @@
     },
     {
       "id": "zone-spec-card-literal",
-      "x": -5195,
-      "y": 4858,
+      "x": -5106,
+      "y": 4911,
       "width": 1593,
       "height": 1278,
       "color": "#8b5cf6",
@@ -4075,8 +4089,8 @@
     },
     {
       "id": "zone-1778084304236",
-      "x": -3173,
-      "y": 3102,
+      "x": -3084,
+      "y": 3155,
       "width": 1182,
       "height": 1277,
       "color": "#22c55e",
@@ -4085,18 +4099,18 @@
     },
     {
       "id": "zone-1778087413019",
-      "x": -301,
-      "y": 4832,
-      "width": 2035,
-      "height": 885,
-      "color": "#38d9e8",
+      "x": -228,
+      "y": 6708,
+      "width": 2190,
+      "height": 1319,
+      "color": "#36c4e7",
       "label": "Canvas",
       "comments": []
     },
     {
       "id": "zone-1778087455524",
-      "x": -212,
-      "y": 3097,
+      "x": -123,
+      "y": 3150,
       "width": 1740,
       "height": 657,
       "color": "#38d9e8",
@@ -4105,8 +4119,8 @@
     },
     {
       "id": "zone-1778087467848",
-      "x": -4289,
-      "y": 3926,
+      "x": -4200,
+      "y": 3979,
       "width": 927,
       "height": 626,
       "color": "#8b5cf6",
@@ -4115,8 +4129,8 @@
     },
     {
       "id": "zone_5c52e25307",
-      "x": -5172,
-      "y": 3122,
+      "x": -5083,
+      "y": 3175,
       "width": 1828,
       "height": 539,
       "color": "#22c55e",
@@ -4125,18 +4139,18 @@
     },
     {
       "id": "75e21cd7",
-      "x": -3459,
-      "y": 6910,
-      "width": 1750,
-      "height": 1100,
+      "x": -2429,
+      "y": 7170,
+      "width": 1766,
+      "height": 1158,
       "color": "#22c55e",
       "label": "Group",
       "comments": []
     },
     {
       "id": "b77baae9",
-      "x": -5600,
-      "y": 6350,
+      "x": -5511,
+      "y": 6403,
       "width": 1900,
       "height": 620,
       "color": "#38bdf8",
@@ -4156,8 +4170,8 @@
     },
     {
       "id": "zone_689b6abb5f",
-      "x": -5737,
-      "y": 2947,
+      "x": -5648,
+      "y": 3000,
       "width": 7913,
       "height": 5616,
       "color": "#8b5cf6",
