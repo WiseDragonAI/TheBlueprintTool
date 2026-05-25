@@ -1,3 +1,7 @@
+/**
+ * WHAT: Integration tests for voice transcription upload and draft-fill behavior.
+ * WHY: Voice input must prove captured text reaches the active thread draft.
+ */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fillThreadDraft } from '../../src/runtime/voice/effect/fill-thread-draft.js';

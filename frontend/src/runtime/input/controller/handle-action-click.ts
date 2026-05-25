@@ -1,3 +1,7 @@
+/**
+ * WHAT: Routes toolbar and inline action clicks into runtime controllers.
+ * WHY: Input action dispatch is the canonical control flow for UI command buttons.
+ */
 import { modal, shortcutModal } from '../../dom.js';
 import { state } from '../../state.js';
 import { deleteZoneController } from '../../zone/controller/delete-zone-controller.js';
