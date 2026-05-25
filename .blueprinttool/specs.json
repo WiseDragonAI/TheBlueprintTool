@@ -1015,6 +1015,21 @@
       "x": -1170,
       "y": 6455,
       "w": 560
+    },
+    "b8d4f0a2": {
+      "x": -580,
+      "y": 6455,
+      "w": 560
+    },
+    "e3a71d5c": {
+      "x": 10,
+      "y": 6455,
+      "w": 560
+    },
+    "c6f91a24": {
+      "x": 600,
+      "y": 6455,
+      "w": 560
     }
   },
   "cards": [
@@ -1734,14 +1749,14 @@
     },
     {
       "id": "2b67c924",
-      "title": "Thread panel opens only for selection or thread tool",
+      "title": "Thread panel opens only by command.",
       "cardType": "spec-brief",
       "domainId": "interactions",
       "x": -1218,
       "y": 5236,
       "w": 520,
       "comment": {
-        "what": "The production inspector must not show telemetry as the thread tab. The inspector column and thread panel are hidden unless a card, zone, or group is selected, or the Thread tool is active from the toolbox."
+        "what": "The production inspector must not show telemetry as the thread tab. Selecting a card, zone, or group prepares that object's thread, but it must not open the right panel. The operator opens the animated terminal panel with `A`, the Thread tool, or the Notes button."
       },
       "facts": [],
       "fields": []
@@ -2560,14 +2575,14 @@
     },
     {
       "id": "74c3e1b8",
-      "title": "Selecting a card opens its thread by default.",
+      "title": "Selecting an object prepares its thread by default.",
       "cardType": "spec-brief",
       "domainId": "thread",
       "x": -1760,
       "y": 6455,
       "w": 560,
       "comment": {
-        "what": "Selecting a card, zone, or group sets the active thread to that object thread without requiring the operator to click the Notes button. Changing thread context clears stale idle voice upload status so a previous card's voice state does not follow the next selection."
+        "what": "Selecting a card, zone, or group sets the active thread to that object thread without opening the right panel. Changing thread context clears stale idle voice upload status so a previous card's voice state does not follow the next selection."
       },
       "facts": [],
       "fields": []
@@ -2582,6 +2597,48 @@
       "w": 560,
       "comment": {
         "what": "When a voice upload is accepted, the active thread ledger receives a voice note entry. If transcription succeeds the note contains transcript text; if transcription is unavailable the note records the accepted upload, transient `voiceFileRef`, and pending/unconfigured status."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "b8d4f0a2",
+      "title": "Voice composer uses the DroidFleet terminal dock.",
+      "cardType": "spec-brief",
+      "domainId": "voice",
+      "x": -580,
+      "y": 6455,
+      "w": 560,
+      "comment": {
+        "what": "CoreV2 imports the DroidFleet voice composer control dock class contract for voice notes: `.agent-chat.phone`, `.control-dock`, terminal STOP/SEND buttons, waveform SVG, vertical meter, and attachment strip. The dock stays in the right-side terminal panel and spans the panel width."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "e3a71d5c",
+      "title": "Right thread terminal is animated and one third width.",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": 10,
+      "y": 6455,
+      "w": 560,
+      "comment": {
+        "what": "The right-side notes terminal opens and closes with an animation and uses roughly one third of the viewport width, clamped for usability. Pressing `A` opens the terminal for the prepared thread and focuses the textarea so the operator can start typing."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "c6f91a24",
+      "title": "Voice terminal shortcuts use X and Esc.",
+      "cardType": "spec-brief",
+      "domainId": "voice",
+      "x": 600,
+      "y": 6455,
+      "w": 560,
+      "comment": {
+        "what": "`X` starts voice recording from the terminal panel and pressing `X` again stops and sends the recording for transcription. `Esc` cancels an ongoing recording without upload; pressing `Esc` again closes the terminal panel."
       },
       "facts": [],
       "fields": []

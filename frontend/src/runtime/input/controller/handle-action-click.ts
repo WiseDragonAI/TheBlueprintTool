@@ -12,8 +12,10 @@ import { renderThreadPanel } from '../../thread/effect/render-thread-panel.js';
 import { refreshRuntimeState } from '../../refresh/controller/refresh-runtime-state.js';
 import { selectTarget } from '../../selection/controller/select-target.js';
 import { selectThread } from '../../thread/effect/select-thread.js';
+import { openThreadPanel } from '../../thread/effect/open-thread-panel.js';
 import { startVoiceRecording } from '../../voice/controller/start-voice-recording.js';
 import { stopVoiceRecording } from '../../voice/controller/stop-voice-recording.js';
+import { cancelVoiceRecording } from '../../voice/controller/cancel-voice-recording.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export async function handleActionClick(event: MouseEvent): Promise<void> {
@@ -30,8 +32,13 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     if (action === 'open-zone-thread' && target?.dataset.zoneId) selectTarget('zone', target.dataset.zoneId, false);
     if (target?.dataset.groupId) selectTarget('group', target.dataset.groupId, false);
     telemetry('resolve-thread-target', { threadId: state.threadId });
-    renderThreadPanel();
+    openThreadPanel();
   }
+  if (action === 'voice-toggle') {
+    if (state.voice.recording) await stopVoiceRecording();
+    else void startVoiceRecording();
+  }
+  if (action === 'voice-cancel') cancelVoiceRecording();
   if (action === 'edit-zone') {
     const zone = targetElement.closest('[data-zone-id],[data-group-id]') as HTMLElement | null;
     editRegionController(zone);

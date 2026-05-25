@@ -1,0 +1,176 @@
+/*
+ * WHAT: Provides the copied control dock, waveform, meter, and attachment strip styling.
+ * WHY: Terminal footer controls are their own surface and must stay below file-size limits.
+ */
+
+.agent-chat .io { flex: 0 0 auto; padding: 0 10px 10px; }
+.agent-chat .control-dock {
+  height: 66px;
+  display: grid;
+  grid-template-columns: 66px minmax(0, 1fr) 14px 66px;
+  gap: 8px;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.agent-chat .wave-panel,
+.agent-chat .meter-track {
+  border: 0;
+  border-radius: 3px !important;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  box-shadow: none !important;
+}
+.agent-chat .wave-panel {
+  background:
+    radial-gradient(circle at 28% 112%, rgba(var(--workspace-primary-rgb, 255, 112, 67), 0.16), transparent 54%),
+    linear-gradient(180deg, rgba(var(--workspace-primary-rgb, 255, 112, 67), 0.14) 0%, #11161c 54%, #07090c 100%),
+    linear-gradient(180deg, #11161c 0%, #07090c 100%);
+}
+.agent-chat .wave-panel::after,
+.agent-chat .meter-track::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 6;
+  box-shadow: var(--fx-shell-wave);
+}
+.agent-chat .wave-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; z-index: 1; }
+.agent-chat .wave-area-path,
+.agent-chat .wave-core-path {
+  transition: d 82ms linear;
+}
+.agent-chat .wave-panel[data-front-wave-enabled="false"] .wave-core-path {
+  display: none;
+}
+.agent-chat .wave-head-glow {
+  fill: rgba(255, 215, 170, .18);
+  filter: blur(10px);
+}
+.agent-chat .wave-head-line {
+  stroke: rgba(247,249,255,0.78);
+  stroke-width: 1.6;
+}
+.agent-chat .wave-timer {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  z-index: 8;
+  padding: 1px 5px;
+  border-radius: 2px;
+  font-size: 9px;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  color: #dbe7f6;
+  background: rgba(10, 14, 20, 0.58);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08), 0 0 6px rgba(var(--workspace-secondary-rgb), 0.22);
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+.agent-chat .meter-panel { border: 0; background: transparent; padding: 0; display: flex; align-items: stretch; justify-content: center; height: 100%; }
+.agent-chat .meter-track { width: 100%; height: 100%; background: linear-gradient(180deg, #1a232c 0%, #11171d 100%); display: flex; align-items: end; }
+.agent-chat .meter-fill { position: relative; z-index: 1; width: 100%; height: 44%; background: linear-gradient(180deg, #5ed39a 0%, #6aa3ff 100%); border-radius: 2px; transition: height 33ms linear; }
+
+.agent-chat .voice-style-panel {
+  margin-top: 7px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+.agent-chat .voice-style-field {
+  height: 22px;
+  display: grid;
+  grid-template-columns: 31px minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 0 5px;
+  border: 1px solid #242424;
+  border-radius: 3px;
+  background: linear-gradient(180deg, rgba(35, 40, 50, 0.9), rgba(12, 14, 18, 0.96));
+  box-shadow:
+    inset 0 0 var(--voice-inset-blur) color-mix(in srgb, var(--voice-workspace-secondary) var(--voice-inset-strength), transparent);
+}
+.agent-chat .voice-style-field span,
+.agent-chat .voice-font-cycle span {
+  color: #9aa4b2;
+  font-size: 7px;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.agent-chat .voice-style-field input[type="range"] {
+  width: 100%;
+  min-width: 0;
+  accent-color: var(--voice-workspace-secondary);
+}
+.agent-chat .voice-style-field--color {
+  grid-template-columns: 31px 44px;
+  justify-content: start;
+}
+.agent-chat .voice-style-field input[type="color"] {
+  width: 100%;
+  height: 100%;
+  padding: 2px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.agent-chat .voice-font-cycle {
+  height: 22px;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 5px;
+  align-items: center;
+  padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--voice-workspace-secondary) 34%, #242424);
+  border-radius: 3px;
+  color: #e6edf5;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--voice-workspace-secondary) 20%, #1b2029), #0b0e13);
+  box-shadow:
+    inset 0 0 var(--voice-inset-blur) color-mix(in srgb, var(--voice-workspace-secondary) var(--voice-inset-strength), transparent);
+  cursor: pointer;
+}
+.agent-chat .voice-font-cycle strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #f4f8ff;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.agent-chat .attach-zone { margin-top: 8px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; align-items: end; min-width: 0; }
+.agent-chat .attach-strip-wrap { display: grid; grid-template-rows: 25px 25px 2px; gap: 1px; height: 54px; min-width: 0; }
+.agent-chat .attach-strip { display: flex; flex-wrap: nowrap; gap: 6px; align-items: center; height: 25px; overflow: hidden; }
+.agent-chat .attach-chip {
+  border: 1px solid #242424;
+  border-radius: 2px;
+  background: linear-gradient(135deg, #3a3f57 0%, #30364f 34%, #292f45 67%, #24283c 100%);
+  color: #e6edf5;
+  height: 20px;
+  padding: 0 4px 0 5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 7px;
+  letter-spacing: 0.01em;
+  max-width: 140px;
+  flex: 0 0 auto;
+}
+.agent-chat .type-icon { width: 11px; height: 11px; border-radius: 2px; display: inline-flex; align-items: center; justify-content: center; font-size: 6px; color: #e6edf5; border: 1px solid transparent; flex: 0 0 auto; }
+.agent-chat .type-txt { background: #1f2330; border-color: #3b455a; color: #b8c1d4; }
+.agent-chat .type-log { background: #1b2a23; border-color: #345845; color: #9fd8b8; }
+.agent-chat .chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-chat .chip-remove { width: 10px; height: 10px; border: 1px solid #3f4f66; border-radius: 2px; color: #9aa4b2; display: inline-flex; align-items: center; justify-content: center; line-height: 1; font-size: 7px; }
+.agent-chat .attach-rail { height: 1px; background: #242424; position: relative; }
+.agent-chat .attach-thumb { position: absolute; left: 8%; width: 40%; height: 1px; background: #6aa3ff; display: block; }

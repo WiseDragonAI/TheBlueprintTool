@@ -5,14 +5,39 @@ import { confirmZoneDeletionController } from '../../zone/controller/confirm-zon
 import { deleteZoneController } from '../../zone/controller/delete-zone-controller.js';
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
 import { resetActiveTool } from '../../toolbox/controller/reset-active-tool.js';
+import { openThreadPanel } from '../../thread/effect/open-thread-panel.js';
+import { closeThreadPanel } from '../../thread/effect/close-thread-panel.js';
+import { startVoiceRecording } from '../../voice/controller/start-voice-recording.js';
+import { stopVoiceRecording } from '../../voice/controller/stop-voice-recording.js';
+import { cancelVoiceRecording } from '../../voice/controller/cancel-voice-recording.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
   const target = event.target as HTMLElement | null;
-  if (target?.closest('input,textarea,select,[contenteditable="true"]')) return;
   const key = event.key.toLowerCase();
+  if (target?.closest('input,textarea,select,[contenteditable="true"]') && key !== 'escape') return;
   telemetry('keyboard-shortcut', { key, ctrlKey: event.ctrlKey });
+  if (key === 'a') {
+    event.preventDefault();
+    openThreadPanel();
+    return;
+  }
+  if (key === 'x') {
+    event.preventDefault();
+    if (!state.threadPanelOpen) openThreadPanel();
+    if (state.voice.recording) await stopVoiceRecording();
+    else void startVoiceRecording();
+    return;
+  }
   if (key === 'escape') {
+    if (state.voice.recording) {
+      cancelVoiceRecording();
+      return;
+    }
+    if (state.threadPanelOpen || state.activeTool === 'thread') {
+      closeThreadPanel();
+      return;
+    }
     state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
     resetActiveTool('escape');
     telemetry('clear-transient-selection', { reason: 'escape' });

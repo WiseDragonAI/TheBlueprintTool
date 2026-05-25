@@ -1,0 +1,276 @@
+/*
+ * WHAT: Scoped DroidFleet terminal shell styles copied from `feat/mockup-terminal-chatlog`.
+ * WHY: The right-side agent chat must match the terminal mock branch, not a generic chat panel.
+ */
+
+.agent-chat.phone {
+  --workspace-secondary-active: #ff7043;
+  --workspace-secondary-rgb: 255, 112, 67;
+  --hdr-grid-rgb-a: 56, 25, 15;
+  --hdr-grid-rgb-b: 36, 16, 9;
+  --hdr-btn-rgb-a: 46, 20, 12;
+  --hdr-btn-rgb-b: 31, 13, 8;
+  --hdr-btn-rgb-c: 20, 9, 5;
+  --hdr-btn-muted-rgb-a: 31, 13, 8;
+  --hdr-btn-muted-rgb-b: 20, 9, 5;
+  --hdr-btn-muted-rgb-c: 13, 6, 3;
+  --hdr-btn-empty-rgb-a: 23, 10, 6;
+  --hdr-btn-empty-rgb-b: 15, 7, 4;
+  --hdr-btn-empty-rgb-c: 10, 4, 3;
+  --fx-shell-control:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.14),
+    inset 0 0 12px rgba(255, 255, 255, 0.216),
+    inset 0 0 24px rgba(255, 255, 255, 0.126);
+  --fx-shell-container: var(--fx-shell-control);
+  --fx-shell-wave:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.14),
+    inset 0 0 12px rgba(255, 255, 255, 0.22),
+    inset 0 0 20px rgba(255, 255, 255, 0.10);
+  --chat-card-shadow:
+    inset 0 0 0 1px rgba(8, 10, 12, 0.96),
+    inset 0 0 12.6px rgba(8, 10, 12, 0.644),
+    inset 0 0 19.6px rgba(8, 10, 12, 0.518);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: 0;
+  background: #0f0f0f;
+  box-shadow: none;
+  color: #e6edf5;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: Ubuntu, ui-sans-serif, system-ui, sans-serif;
+}
+
+.agent-chat .topbar {
+  flex: 0 0 auto;
+  position: relative;
+  min-height: 52px;
+  border-bottom: 1px solid #242424;
+  color: #9aa4b2;
+  background: linear-gradient(180deg, #101010 0%, #0f0f0f 52%, #0d0d0d 100%);
+  padding: 4px 2px;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  overflow: hidden;
+  display: flex;
+}
+
+.agent-chat .topbar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: #242424;
+}
+
+.agent-chat .hdr-left { min-width: 0; display: flex; align-items: center; gap: 6px; }
+.agent-chat .droid-icon-img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  flex: 0 0 auto;
+  filter: saturate(0.92) brightness(0.95);
+}
+.agent-chat .hdr-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+}
+.agent-chat .hdr-row-1 { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
+.agent-chat .hdr-title {
+  color: #e6edf5;
+  font-size: 11px;
+  line-height: 1.15;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 8px rgba(var(--workspace-secondary-rgb), 0.12);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-chat .hdr-title.is-selected {
+  color: #f4f8ff;
+  text-shadow:
+    0 0 8px rgba(var(--workspace-secondary-rgb), 0.64),
+    0 0 14px rgba(var(--workspace-secondary-rgb), 0.44);
+}
+.agent-chat .hdr-context { color: #9aa4b2; font-size: 9px; line-height: 1.15; flex: 0 0 auto; }
+.agent-chat .hdr-cwd {
+  color: #9aa4b2;
+  font-size: 10px;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.agent-chat .hdr-model { color: #9aa4b2; font-size: 9px; line-height: 1.05; white-space: nowrap; }
+
+.agent-chat .hdr-grid {
+  flex: 0 0 auto;
+  width: 118px;
+  height: 46px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  border-radius: 2px !important;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgb(var(--hdr-grid-rgb-a)) 0%, rgb(var(--hdr-grid-rgb-b)) 28%, #171717 72%, #151515 100%);
+  position: relative;
+  isolation: isolate;
+}
+.agent-chat .hdr-grid::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 6;
+  box-shadow: var(--fx-shell-container);
+}
+.agent-chat .hdr-btn {
+  width: 100%;
+  height: 100%;
+  border: 0 !important;
+  border-radius: 0;
+  background:
+    linear-gradient(165deg, rgb(var(--hdr-btn-rgb-a)) 0%, rgb(var(--hdr-btn-rgb-b)) 56%, rgb(var(--hdr-btn-rgb-c)) 100%);
+  color: #e6edf5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-shadow: none !important;
+  position: relative;
+  z-index: 1;
+}
+.agent-chat .hdr-icon {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.35;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: rgba(136, 156, 186, 0.64);
+}
+.agent-chat .hdr-btn.active {
+  background:
+    linear-gradient(165deg, rgba(var(--workspace-secondary-rgb), 0.92) 0%, rgba(var(--workspace-secondary-rgb), 0.76) 54%, rgba(var(--workspace-secondary-rgb), 0.58) 100%);
+}
+.agent-chat .hdr-btn.active .hdr-icon { color: #f4f8ff; }
+.agent-chat .hdr-btn.muted {
+  background:
+    linear-gradient(160deg, rgb(var(--hdr-btn-muted-rgb-a)) 0%, rgb(var(--hdr-btn-muted-rgb-b)) 52%, rgb(var(--hdr-btn-muted-rgb-c)) 100%);
+  opacity: 0.72;
+}
+.agent-chat .hdr-btn.muted .hdr-icon { color: rgba(var(--workspace-secondary-rgb), 0.42); }
+.agent-chat .hdr-btn.hdr-btn-empty {
+  background:
+    linear-gradient(165deg, rgb(var(--hdr-btn-empty-rgb-a)) 0%, rgb(var(--hdr-btn-empty-rgb-b)) 56%, rgb(var(--hdr-btn-empty-rgb-c)) 100%);
+  opacity: 0.56;
+}
+.agent-chat .hdr-btn.hdr-btn-empty .hdr-icon { opacity: 0; }
+
+.agent-chat .chat,
+.agent-chat .io { background: #0a0a0a; }
+.agent-chat .chat {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 14px 8px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.agent-chat .assistant-output { margin: 0 0 8px; color: #f2f3f5; font-size: 11px; line-height: 1.4; }
+.agent-chat .assistant-progress {
+  margin: 0 0 8px;
+  color: #9aa4b2;
+  font-size: 11px;
+  line-height: 1.4;
+  font-style: italic;
+}
+.agent-chat .user-msg { margin: 0 0 8px; display: flex; justify-content: flex-end; }
+.agent-chat .user-bubble {
+  max-width: 78%;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: rgba(6, 8, 10, 0.98);
+  color: #f2f3f5;
+  font-size: 11px;
+  line-height: 1.4;
+  box-shadow: var(--chat-card-shadow);
+}
+.agent-chat .thinking-line { margin: 0 0 8px; }
+.agent-chat .thinking-label,
+.agent-chat .thinking-preview {
+  margin: 0;
+  color: #9aa4b2;
+  font-size: 11px;
+  line-height: 1.4;
+  font-style: italic;
+}
+.agent-chat .thinking-label { font-weight: 600; }
+.agent-chat .thinking-preview { margin-top: 4px; font-weight: 400; }
+.agent-chat .transcript-card,
+.agent-chat .tool-card {
+  margin: 0 0 8px;
+  background: rgba(6, 8, 10, 0.98);
+  border-radius: 4px;
+  box-shadow: var(--chat-card-shadow);
+}
+.agent-chat .tool-card { padding: 6px 8px; }
+.agent-chat .voice-head,
+.agent-chat .tool-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; }
+.agent-chat .voice-primary {
+  color: #bbc0c8;
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 auto;
+  padding: 5px 8px 5px 9px;
+}
+.agent-chat .voice-head-right { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; padding: 0 8px; background: rgba(6, 8, 10, 0.98); }
+.agent-chat .voice-spinner,
+.agent-chat .tool-spinner {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 154, 162, 0.48);
+  border-top-color: #d9dee5;
+  animation: terminal-spin 1s linear infinite;
+}
+.agent-chat .voice-mic-icon {
+  width: 14px;
+  height: 14px;
+  stroke: #d5dae0;
+  fill: none;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+@keyframes terminal-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.agent-chat .tool-title { color: #9aa4b2; font-size: 11px; font-weight: 600; }
+.agent-chat .tool-count { color: #9aa4b2; font-size: 10px; font-weight: 700; margin-left: auto; margin-right: 5px; }
+.agent-chat .tool-state { color: #9aa4b2; font-size: 9px; margin-right: 5px; }
+.agent-chat .tool-summary {
+  margin: 2px 0 0;
+  color: #9aa4b2;
+  font-size: 10px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

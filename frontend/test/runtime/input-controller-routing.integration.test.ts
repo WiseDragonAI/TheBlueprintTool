@@ -35,6 +35,11 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(keyboard, /confirmZoneDeletionController/);
   assert.match(keyboard, /deleteZoneController/);
   assert.match(keyboard, /pasteSelectionController/);
+  assert.match(keyboard, /openThreadPanel/);
+  assert.match(keyboard, /closeThreadPanel/);
+  assert.match(keyboard, /cancelVoiceRecording/);
+  assert.match(keyboard, /key === 'a'/);
+  assert.match(keyboard, /key === 'x'/);
   assert.doesNotMatch(keyboard, /deleteSelectedZones/);
   assert.doesNotMatch(keyboard, /commitActiveLedgerMutation/);
   assert.doesNotMatch(keyboard, /showModal\?\.\(/);

@@ -18,6 +18,7 @@ export const state: any = {
   pointer: null,
   clipboard: null,
   threadId: '',
+  threadPanelOpen: false,
   voice: { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'idle' },
   telemetry: []
 };

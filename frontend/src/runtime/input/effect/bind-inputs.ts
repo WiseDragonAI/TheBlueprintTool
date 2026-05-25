@@ -16,6 +16,8 @@ import { persistState } from '../../persistence/effect/persist-state.js';
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
 import { renderTabRegistry } from '../../navigation/effect/render-tab-registry.js';
 import { renderToolbox } from '../../toolbox/effect/render-toolbox.js';
+import { openThreadPanel } from '../../thread/effect/open-thread-panel.js';
+import { selectThread } from '../../thread/effect/select-thread.js';
 import { routeTab } from '../../navigation/helper/route-tab.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
@@ -24,10 +26,11 @@ export function bindInputs(): void {
     button.addEventListener('click', () => {
       state.activeTool = (button as HTMLElement).dataset.tool;
       if (state.activeTool === 'zone') state.zoneColor = '#55b8ff';
-      if (state.activeTool === 'thread' && !state.threadId) state.threadId = 'conversation-ledger';
+      if (state.activeTool === 'thread' && !state.threadId) selectThread('conversation-ledger');
       telemetry('tool-button-click', { tool: state.activeTool });
       telemetry('resolve-tool-mode', { activeTool: state.activeTool });
       renderToolbox();
+      if (state.activeTool === 'thread') openThreadPanel();
       renderCanvasSurface();
     });
   });

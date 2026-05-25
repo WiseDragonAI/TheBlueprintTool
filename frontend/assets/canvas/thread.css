@@ -3,11 +3,19 @@
  * WHY: Inspector presentation is independent from canvas object rendering.
  */
 .thread-panel {
-  margin-top: 18px;
+  margin: 0;
+  border-top: 0;
+  padding: 0;
+}
+
+.thread-panel.agent-chat.phone {
+  height: calc(100vh - 36px);
+}
+
+.thread-panel .chat {
   display: grid;
   gap: 12px;
-  border-top: 1px solid color-mix(in srgb, var(--line), transparent 20%);
-  padding-top: 18px;
+  align-content: start;
 }
 
 .thread-heading {
@@ -90,22 +98,7 @@
 }
 
 .voice-panel {
-  display: grid;
-  gap: 10px;
-  padding: 13px;
-  border: 1px solid color-mix(in srgb, var(--line), transparent 10%);
-  border-radius: 2px;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--secondary), transparent 90%), transparent 54%),
-    rgba(10, 10, 10, 0.48);
-}
-
-.voice-panel-top {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  color: var(--muted);
-  font-size: 13px;
+  min-width: 0;
 }
 
 .voice-status {
@@ -113,24 +106,16 @@
   text-align: right;
 }
 
-.voice-meter {
-  height: 10px;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--accent), transparent 68%);
-  background: rgba(0, 0, 0, 0.32);
-}
-
-.voice-meter-value {
-  display: block;
-  width: 100%;
-  height: 100%;
-  transform: scaleX(0);
-  transform-origin: left center;
-  background: linear-gradient(90deg, var(--primary-bright), var(--secondary));
-  transition: transform 44ms linear;
+.voice-terminal-status {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 10px 8px;
+  color: #9aa4b2;
+  font-size: 11px;
+  line-height: 1.2;
 }
 
 .voice-panel.recording {
-  border-color: var(--secondary-bright);
-  box-shadow: 0 0 22px color-mix(in srgb, var(--secondary-bright), transparent 82%);
+  filter: saturate(1.08) brightness(1.04);
 }
