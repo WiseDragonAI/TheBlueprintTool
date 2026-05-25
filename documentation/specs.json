@@ -1030,6 +1030,21 @@
       "x": 600,
       "y": 6455,
       "w": 560
+    },
+    "9c44b0a1": {
+      "x": -580,
+      "y": 7045,
+      "w": 560
+    },
+    "d8d1f4a2": {
+      "x": 10,
+      "y": 7045,
+      "w": 560
+    },
+    "3f0c9e77": {
+      "x": 600,
+      "y": 7045,
+      "w": 560
     }
   },
   "cards": [
@@ -2639,6 +2654,48 @@
       "w": 560,
       "comment": {
         "what": "`X` starts voice recording from the terminal panel and pressing `X` again stops and sends the recording for transcription. `Esc` cancels an ongoing recording without upload; pressing `Esc` again closes the terminal panel."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "9c44b0a1",
+      "title": "Voice dock renders live capture state, not mock content.",
+      "cardType": "spec-brief",
+      "domainId": "voice",
+      "x": -580,
+      "y": 7045,
+      "w": 560,
+      "comment": {
+        "what": "The terminal voice dock must be driven by the real microphone session. The waveform and vertical meter use `state.voice.level`, idle text input replaces the recorder when not recording, and no fake attachment chips are rendered."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "d8d1f4a2",
+      "title": "Thread notes are composed in the terminal input dock.",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": 10,
+      "y": 7045,
+      "w": 560,
+      "comment": {
+        "what": "The right terminal removes standalone Create note and Delete note buttons. Text notes are written in the dock composer and committed by keyboard so the input zone occupies the same terminal footprint as voice capture."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "3f0c9e77",
+      "title": "Thread terminal inherits the active target color.",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": 600,
+      "y": 7045,
+      "w": 560,
+      "comment": {
+        "what": "When a card, zone, or group thread is active, the side terminal derives its accent variables from that canvas target so the conversation keeps the target color identity."
       },
       "facts": [],
       "fields": []

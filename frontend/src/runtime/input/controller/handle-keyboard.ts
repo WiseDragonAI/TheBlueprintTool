@@ -7,6 +7,7 @@ import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.j
 import { resetActiveTool } from '../../toolbox/controller/reset-active-tool.js';
 import { openThreadPanel } from '../../thread/effect/open-thread-panel.js';
 import { closeThreadPanel } from '../../thread/effect/close-thread-panel.js';
+import { submitThreadDraft } from '../../thread/effect/submit-thread-draft.js';
 import { startVoiceRecording } from '../../voice/controller/start-voice-recording.js';
 import { stopVoiceRecording } from '../../voice/controller/stop-voice-recording.js';
 import { cancelVoiceRecording } from '../../voice/controller/cancel-voice-recording.js';
@@ -15,6 +16,11 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
   const target = event.target as HTMLElement | null;
   const key = event.key.toLowerCase();
+  if (target?.closest('.thread-draft') && event.ctrlKey && key === 'enter') {
+    event.preventDefault();
+    await submitThreadDraft();
+    return;
+  }
   if (target?.closest('input,textarea,select,[contenteditable="true"]') && key !== 'escape') return;
   telemetry('keyboard-shortcut', { key, ctrlKey: event.ctrlKey });
   if (key === 'a') {

@@ -147,30 +147,3 @@
   font-size: 8px;
   font-weight: 700;
 }
-
-.agent-chat .attach-zone { margin-top: 8px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; align-items: end; min-width: 0; }
-.agent-chat .attach-strip-wrap { display: grid; grid-template-rows: 25px 25px 2px; gap: 1px; height: 54px; min-width: 0; }
-.agent-chat .attach-strip { display: flex; flex-wrap: nowrap; gap: 6px; align-items: center; height: 25px; overflow: hidden; }
-.agent-chat .attach-chip {
-  border: 1px solid #242424;
-  border-radius: 2px;
-  background: linear-gradient(135deg, #3a3f57 0%, #30364f 34%, #292f45 67%, #24283c 100%);
-  color: #e6edf5;
-  height: 20px;
-  padding: 0 4px 0 5px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font: inherit;
-  font-size: 7px;
-  letter-spacing: 0.01em;
-  max-width: 140px;
-  flex: 0 0 auto;
-}
-.agent-chat .type-icon { width: 11px; height: 11px; border-radius: 2px; display: inline-flex; align-items: center; justify-content: center; font-size: 6px; color: #e6edf5; border: 1px solid transparent; flex: 0 0 auto; }
-.agent-chat .type-txt { background: #1f2330; border-color: #3b455a; color: #b8c1d4; }
-.agent-chat .type-log { background: #1b2a23; border-color: #345845; color: #9fd8b8; }
-.agent-chat .chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.agent-chat .chip-remove { width: 10px; height: 10px; border: 1px solid #3f4f66; border-radius: 2px; color: #9aa4b2; display: inline-flex; align-items: center; justify-content: center; line-height: 1; font-size: 7px; }
-.agent-chat .attach-rail { height: 1px; background: #242424; position: relative; }
-.agent-chat .attach-thumb { position: absolute; left: 8%; width: 40%; height: 1px; background: #6aa3ff; display: block; }

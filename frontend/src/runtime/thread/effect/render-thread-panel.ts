@@ -3,6 +3,7 @@ import { renderTelemetry } from '../../telemetry/effect/render-telemetry.js';
 import { renderVoiceStatus } from '../../voice/effect/render-voice-status.js';
 import { renderVoiceDock } from '../../voice/effect/render-voice-dock.js';
 import { renderThreadNotes } from './render-thread-notes.js';
+import { applyThreadAccent } from './apply-thread-accent.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export function renderThreadPanel(): void {
@@ -14,6 +15,7 @@ export function renderThreadPanel(): void {
   panel.hidden = !shouldOpenThread;
   shell.classList.toggle('has-inspector', shouldOpenThread);
   (document.querySelector('.thread-target') as HTMLElement).textContent = state.threadId ? `Open: ${state.threadId}` : 'No thread selected';
+  applyThreadAccent();
   telemetry('render-thread-panel', { threadId: state.threadId });
   renderThreadNotes();
   renderVoiceDock();
