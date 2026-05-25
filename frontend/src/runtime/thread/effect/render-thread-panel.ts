@@ -4,6 +4,7 @@ import { renderVoiceStatus } from '../../voice/effect/render-voice-status.js';
 import { renderVoiceDock } from '../../voice/effect/render-voice-dock.js';
 import { renderThreadNotes } from './render-thread-notes.js';
 import { applyThreadAccent } from './apply-thread-accent.js';
+import { resolveThreadTargetTitle } from '../helper/resolve-thread-target-title.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export function renderThreadPanel(): void {
@@ -14,7 +15,19 @@ export function renderThreadPanel(): void {
   inspector.hidden = false;
   panel.hidden = !shouldOpenThread;
   shell.classList.toggle('has-inspector', shouldOpenThread);
-  (document.querySelector('.thread-target') as HTMLElement).textContent = state.threadId ? `Open: ${state.threadId}` : 'No thread selected';
+  const target = document.querySelector('.thread-target') as HTMLElement;
+  target.replaceChildren();
+  if (state.threadId) {
+    const title = document.createElement('span');
+    title.className = 'thread-target-title';
+    title.textContent = resolveThreadTargetTitle(state.threadId);
+    const id = document.createElement('span');
+    id.className = 'thread-target-id';
+    id.textContent = `Open: ${state.threadId}`;
+    target.append(title, id);
+  } else {
+    target.textContent = 'No thread selected';
+  }
   applyThreadAccent();
   telemetry('render-thread-panel', { threadId: state.threadId });
   renderThreadNotes();

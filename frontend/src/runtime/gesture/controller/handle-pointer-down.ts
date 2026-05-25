@@ -6,7 +6,7 @@ import { patchBox } from '../../canvas/effect/patch-box.js';
 import { beginLedgerCardDescriptionEdit, beginLedgerCardTitleEdit } from '../../card/effect/begin-ledger-card-edit.js';
 import { isGestureControlTarget } from '../helper/is-gesture-control-target.js';
 import { point } from '../helper/point.js';
-import { selectionIncludesTarget } from '../../selection/helper/selection-includes-target.js';
+import { shouldPreservePointerSelection } from '../../selection/helper/should-preserve-pointer-selection.js';
 import { selectTarget } from '../../selection/controller/select-target.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
@@ -54,7 +54,7 @@ export function handlePointerDown(event: PointerEvent): void {
   state.pointer = { intent, resizeHandle, target, targetKind, targetId, start: pointer, current: pointer, startCanvas: canvasPointer, currentCanvas: canvasPointer };
   telemetry('canvas-pointer-down', { intent, targetKind, targetId, ctrlKey: event.ctrlKey });
   telemetry('derive-gesture-intent', { kind: intent });
-  const preserveSelection = !event.ctrlKey && selectionIncludesTarget(state.selection, targetKind, targetId);
+  const preserveSelection = shouldPreservePointerSelection(state.selection, targetKind, targetId, event.ctrlKey);
   if ((intent === 'drag' || intent === 'group') && !preserveSelection) selectTarget(targetKind, targetId, event.ctrlKey);
   if (intent === 'resize') selectTarget(targetKind, targetId, false);
   if (intent === 'marquee' || intent === 'draw-card' || intent === 'draw-zone' || intent === 'draw-group') {

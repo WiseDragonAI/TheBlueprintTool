@@ -239,6 +239,32 @@
 .card[data-card-id="card-ledger"] { left: 420px; top: 555px; }
 .card.open { z-index: 9999; }
 
+.card-agent-indicator {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 18px;
+  border: 1px solid color-mix(in srgb, var(--card-zone-color), white 24%);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--card-zone-color), rgba(3, 4, 5, 0.94) 44%);
+  color: #f3f6fb;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow:
+    inset 0 0 10px rgba(0, 0, 0, 0.54),
+    0 0 14px rgba(0, 0, 0, 0.42);
+  pointer-events: none;
+}
+
+.card[data-agent-last-answer="true"] .hash {
+  min-height: 18px;
+  padding-left: 28px;
+}
+
 .card.connected {
   outline: none;
   border-color: color-mix(in srgb, var(--card-zone-color), white 18%);

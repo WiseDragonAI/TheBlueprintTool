@@ -195,8 +195,8 @@ h2 { font-size: 18px; }
   transform: translateX(0);
   pointer-events: auto;
   box-shadow:
-    -30px 0 64px color-mix(in srgb, var(--thread-accent), transparent 70%),
-    -8px 0 24px rgba(0, 0, 0, 0.72);
+    -34px 0 68px rgba(0, 0, 0, 0.86),
+    -8px 0 24px rgba(0, 0, 0, 0.74);
 }
 
 .telemetry-panel[hidden],

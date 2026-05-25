@@ -11,9 +11,7 @@
 .thread-panel.agent-chat.phone {
   height: 100vh;
   --thread-accent: rgb(var(--workspace-secondary-rgb));
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--thread-accent), transparent 94%), transparent 32%),
-    #030405;
+  background: #030405;
   border-left: 1px solid color-mix(in srgb, var(--thread-accent), transparent 68%);
   box-shadow:
     inset 18px 0 42px rgba(0, 0, 0, 0.62),
@@ -45,10 +43,24 @@
 }
 
 .thread-target {
+  display: grid;
+  gap: 3px;
   margin: 0;
   color: var(--muted);
   font-size: 11px;
   word-break: break-word;
+}
+
+.thread-target-title {
+  color: #f3f6fb;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.thread-target-id {
+  color: #8f9aa8;
+  font-size: 11px;
 }
 
 .thread-feed {
@@ -136,24 +148,21 @@
   resize: none;
   border: 1px solid color-mix(in srgb, var(--thread-accent), transparent 50%);
   border-radius: 2px;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--thread-accent), transparent 96%), rgba(3, 6, 8, 0.98)),
-    #06090b;
+  background: #071014;
   color: #f3f6fb;
   padding: 12px 13px;
   outline: none;
   line-height: 1.45;
   box-shadow:
-    inset 0 2px 22px rgba(0, 0, 0, 0.88),
-    inset 0 0 24px color-mix(in srgb, var(--thread-accent), transparent 90%);
+    inset 0 0 0 1px rgba(255, 255, 255, 0.035),
+    inset 0 2px 22px rgba(0, 0, 0, 0.92);
 }
 
 .thread-draft:focus {
   border-color: color-mix(in srgb, var(--thread-accent), white 18%);
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.07),
-    inset 0 0 22px color-mix(in srgb, var(--thread-accent), transparent 84%),
-    0 0 20px color-mix(in srgb, var(--thread-accent), transparent 86%);
+    inset 0 2px 24px rgba(0, 0, 0, 0.92);
 }
 
 .thread-actions {
@@ -168,8 +177,8 @@
   border-top: 1px solid color-mix(in srgb, var(--thread-accent), transparent 72%);
   background: #030405;
   box-shadow:
-    0 -26px 56px color-mix(in srgb, var(--thread-accent), transparent 82%),
-    0 -10px 28px rgba(0, 0, 0, 0.86);
+    0 -26px 56px rgba(0, 0, 0, 0.92),
+    0 -10px 28px rgba(0, 0, 0, 0.88);
   --fx-shell-wave:
     inset 0 0 0 1px color-mix(in srgb, var(--thread-accent), transparent 42%),
     inset 0 0 12px color-mix(in srgb, var(--thread-accent), transparent 72%),

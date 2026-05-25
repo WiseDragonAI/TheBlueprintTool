@@ -2695,7 +2695,63 @@
       "y": 7045,
       "w": 560,
       "comment": {
-        "what": "When a card, zone, or group thread is active, the side terminal derives its accent variables from that canvas target color, preferring `--card-zone-color` and `--zone-color` over transient selection borders. The panel border, outside backdrop shadow, waveform, meter, and single-layer terminal input all use the inherited target color."
+        "what": "When a card, zone, or group thread is active, the side terminal derives its accent variables from that canvas target color, preferring `--card-zone-color` and `--zone-color` over transient selection borders. Accent color is used for identity surfaces such as borders, waveform, meter, and input border; the outside overlay shadow remains black."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "f72a6d31",
+      "title": "Thread header shows the active target title.",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": -580,
+      "y": 7635,
+      "w": 560,
+      "comment": {
+        "what": "The right notes terminal header must show the active card, zone, or group title as the primary target label, with the thread id only as secondary metadata."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "a6c2f0d4",
+      "title": "Direct card clicks replace active zone selection.",
+      "cardType": "spec-brief",
+      "domainId": "selection",
+      "x": 10,
+      "y": 7635,
+      "w": 560,
+      "comment": {
+        "what": "When a zone is selected and its intersecting cards are included in the expanded selection, a direct non-additive click on a card must clear the zone selection and select that card as the active target."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "c4e8b91a",
+      "title": "Cards indicate when the latest thread answer is from the agent.",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": 600,
+      "y": 7635,
+      "w": 560,
+      "comment": {
+        "what": "A card whose conversation thread's latest note has role `agent` or `assistant` must show a compact non-interactive pictogram on the card chrome."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "5e6a9b23",
+      "title": "Thread terminal uses black outer shadow and input-only inset frame.",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": 1190,
+      "y": 7635,
+      "w": 560,
+      "comment": {
+        "what": "The floating notes terminal uses black backdrop shadow outside the panel. The composer textarea is the only lighter inset surface; the rest of the terminal body stays visually quiet and dark."
       },
       "facts": [],
       "fields": []
