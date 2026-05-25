@@ -188,3 +188,60 @@ test('blueprinttool canvas mutations are applied by the authoritative server led
     rmSync(workspace, { recursive: true, force: true });
   }
 });
+
+test('blueprinttool note mutations normalize legacy notes arrays and persist from nested cwd', async () => {
+  const originalCwd = process.cwd();
+  const workspace = mkdtempSync(join(tmpdir(), 'corev2-notes-'));
+  const nested = join(workspace, 'Project', 'Subdir');
+  mkdirSync(join(workspace, '.blueprinttool'), { recursive: true });
+  mkdirSync(nested, { recursive: true });
+  writeFileSync(join(workspace, '.blueprinttool', 'state.json'), JSON.stringify({
+    tabs: [{ id: 'game-design', title: 'Game Design', ledgerFile: '.blueprinttool/game-design.json' }]
+  }));
+  writeFileSync(join(workspace, '.blueprinttool', 'game-design.json'), JSON.stringify({
+    cards: [],
+    annotations: [],
+    relationships: [],
+    notes: []
+  }));
+
+  process.chdir(nested);
+  const runtime: Record<string, unknown> = {};
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const address = server.address() as AddressInfo;
+  const endpoint = `http://127.0.0.1:${address.port}/blueprinttool/game-design`;
+
+  try {
+    const appendResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'append-note', note: { id: 'note-client-1', threadId: 'thread-card-a', body: 'voice uploaded', source: 'voice', voiceFileRef: '/tmp/voice.webm', status: 'uploading' } })
+    });
+    assert.equal(appendResponse.ok, true);
+    const appendLedger = await appendResponse.json() as { notes: Record<string, Array<Record<string, unknown>>> };
+    assert.equal(Array.isArray(appendLedger.notes), false);
+    assert.equal(appendLedger.notes['thread-card-a'][0].id, 'note-client-1');
+
+    const updateResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'update-note', note: { id: 'note-client-1', threadId: 'thread-card-a', body: 'transcription failed', source: 'voice', voiceFileRef: '/tmp/voice.webm', status: 'transcription failed', error: 'provider failed' } })
+    });
+    assert.equal(updateResponse.ok, true);
+    const persisted = JSON.parse(readFileSync(join(workspace, '.blueprinttool', 'game-design.json'), 'utf8')) as { notes: Record<string, Array<Record<string, unknown>>> };
+    assert.equal(Array.isArray(persisted.notes), false);
+    assert.equal(persisted.notes['thread-card-a'][0].message, 'transcription failed');
+    assert.equal(persisted.notes['thread-card-a'][0].status, 'transcription failed');
+    assert.equal(persisted.notes['thread-card-a'][0].voiceFileRef, '/tmp/voice.webm');
+
+    const reloadResponse = await fetch(endpoint);
+    const reloaded = await reloadResponse.json() as { notes: Record<string, Array<Record<string, unknown>>> };
+    assert.equal(reloaded.notes['thread-card-a'][0].message, 'transcription failed');
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    process.chdir(originalCwd);
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});

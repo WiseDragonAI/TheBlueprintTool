@@ -3,6 +3,7 @@
  * WHY: Upload, transcription, retry, and server-sync states must never remove the visible note.
  */
 import { state } from '../../state.js';
+import { normalizeLedgerNotes } from '../../ledger/helper/normalize-ledger-notes.js';
 
 export type OptimisticThreadNotePatch = {
   threadId: string;
@@ -15,7 +16,8 @@ export type OptimisticThreadNotePatch = {
 };
 
 export function patchOptimisticThreadNote(input: OptimisticThreadNotePatch): boolean {
-  const notes = state.activeLedger?.notes?.[input.threadId] ?? [];
+  if (!state.activeLedger) return false;
+  const notes = normalizeLedgerNotes(state.activeLedger)[input.threadId] ?? [];
   const note = notes.find((entry) => String(entry.id ?? '') === input.noteId);
   if (!note) return false;
   if (typeof input.body === 'string') note.message = input.body;

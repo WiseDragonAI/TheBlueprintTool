@@ -3,6 +3,7 @@
  * WHY: Text and voice notes must be visible immediately and survive failed reconciliation.
  */
 import { state } from '../../state.js';
+import { normalizeLedgerNotes } from '../../ledger/helper/normalize-ledger-notes.js';
 
 export type OptimisticThreadNoteInput = {
   threadId: string;
@@ -15,7 +16,7 @@ export type OptimisticThreadNoteInput = {
 
 export function appendOptimisticThreadNote(input: OptimisticThreadNoteInput): string {
   const ledger = state.activeLedger ?? { notes: {} };
-  const notesByThread = ledger.notes ?? {};
+  const notesByThread = normalizeLedgerNotes(ledger);
   const notes = notesByThread[input.threadId] ?? [];
   const noteId = `note-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   notes.push({
@@ -29,7 +30,6 @@ export function appendOptimisticThreadNote(input: OptimisticThreadNoteInput): st
     optimistic: true
   });
   notesByThread[input.threadId] = notes;
-  ledger.notes = notesByThread;
   state.activeLedger = ledger;
   void import('./render-thread-panel.js').then(({ renderThreadPanel }) => {
     if (globalThis.document) renderThreadPanel();

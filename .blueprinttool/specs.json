@@ -2630,7 +2630,7 @@
       "y": 6605,
       "w": 560,
       "comment": {
-        "what": "Text and voice thread notes are inserted into the local conversation ledger immediately with a client-generated note id. Backend append/update calls reconcile that same id without replacing local state; failed reconciliation patches note status instead of deleting the note or returning the draft to the void. Server reloads and mutation responses must merge locally optimistic thread notes before replacing active ledger state. If a later append arrives after an update for the same id, it must not overwrite newer note body or lifecycle status."
+        "what": "Text and voice thread notes are inserted into the local conversation ledger immediately with a client-generated note id. Backend append/update calls reconcile that same id without replacing local state and must persist to the active .blueprinttool ledger file resolved from the launch cwd. Legacy `notes: []` ledgers are normalized into thread-id keyed note maps before any local or server note write, because string keys on arrays are dropped by JSON persistence. Failed reconciliation patches note status instead of deleting the note or returning the draft to the void. Server reloads and mutation responses must merge locally optimistic thread notes before replacing active ledger state. If a later append arrives after an update for the same id, it must not overwrite newer note body or lifecycle status."
       },
       "facts": [],
       "fields": []

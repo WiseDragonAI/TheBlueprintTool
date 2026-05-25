@@ -324,3 +324,36 @@ test('active ledger reload keeps optimistic thread notes missing from stale serv
     state.activeTab = 'specs';
   }
 });
+
+test('append-voice-note converts legacy notes array into durable thread map', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousWindow = globalThis.window;
+  const previousCustomEvent = globalThis.CustomEvent;
+  let mutation: Record<string, any> = {};
+  state.activeTab = 'specs';
+  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.blueprinttool/specs.json' }];
+  state.threadId = 'thread-card-a';
+  state.activeLedger = { notes: [] };
+  (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
+  (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
+    constructor(_name: string, public options: Record<string, unknown> = {}) {}
+  };
+  (globalThis as unknown as { fetch: unknown }).fetch = async (_url: string, init: RequestInit) => {
+    mutation = JSON.parse(String(init.body ?? '{}'));
+    return { ok: true };
+  };
+
+  try {
+    const result = appendVoiceNote({ body: 'Voice uploaded.', voiceFileRef: '/tmp/voice.webm', status: 'uploading' });
+    assert.equal(Array.isArray(state.activeLedger.notes), false);
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].id, result.noteId);
+    assert.equal(mutation.note.id, result.noteId);
+    assert.equal(await result.committed, true);
+  } finally {
+    (globalThis as unknown as { fetch: unknown }).fetch = previousFetch;
+    (globalThis as unknown as { window: unknown }).window = previousWindow;
+    (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
+    state.threadId = '';
+    state.activeLedger = null;
+  }
+});

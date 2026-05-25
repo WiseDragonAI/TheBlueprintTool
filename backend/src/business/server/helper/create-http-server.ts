@@ -12,6 +12,7 @@ import { persistUploadedVoiceAudio } from '@backend/business/transcription/effec
 import { resolveBlueprinttoolRoot } from './resolve-blueprinttool-root.js';
 import { readRequestBuffer } from './read-request-buffer.js';
 import { contentTypeFor } from './content-type-for.js';
+import { normalizeLedgerNotes } from './normalize-ledger-notes.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -184,8 +185,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           if (annotation && mutation.region.kind === 'zone' && typeof mutation.region.color === 'string') annotation.color = mutation.region.color;
         }
         if (mutation.action === 'append-note' && mutation.note?.threadId) {
-          ledger.notes ??= {};
-          const notes = ledger.notes[mutation.note.threadId] ?? [];
+          const notesByThread = normalizeLedgerNotes(ledger);
+          const notes = notesByThread[mutation.note.threadId] ?? [];
           const noteId = String(mutation.note.id ?? `note-${Date.now()}`);
           const existing = notes.find((entry) => String(entry.id ?? '') === noteId);
           const nextNote = { id: noteId, role: mutation.note.source === 'voice' ? 'voice' : 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), voiceFileRef: mutation.note.voiceFileRef ?? '', status: mutation.note.status ?? '', error: mutation.note.error ?? '' };
@@ -196,11 +197,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             if (!existing.error && nextNote.error) existing.error = nextNote.error;
             existing.updatedAt = new Date().toISOString();
           } else notes.push(nextNote);
-          ledger.notes[mutation.note.threadId] = notes;
+          notesByThread[mutation.note.threadId] = notes;
         }
         if (mutation.action === 'update-note' && mutation.note?.threadId) {
-          ledger.notes ??= {};
-          const notes = ledger.notes[mutation.note.threadId] ?? [];
+          const notesByThread = normalizeLedgerNotes(ledger);
+          const notes = notesByThread[mutation.note.threadId] ?? [];
           const noteId = String(mutation.note.id ?? '');
           let note = notes.find((entry) => String(entry.id ?? '') === noteId || String(entry.voiceFileRef ?? '') === mutation.note?.voiceFileRef);
           if (!note && noteId) {
@@ -214,11 +215,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             if (typeof mutation.note.error === 'string') note.error = mutation.note.error;
             note.updatedAt = new Date().toISOString();
           }
-          ledger.notes[mutation.note.threadId] = notes;
+          notesByThread[mutation.note.threadId] = notes;
         }
         if (mutation.action === 'delete-note' && mutation.note?.threadId) {
-          ledger.notes ??= {};
-          ledger.notes[mutation.note.threadId] = (ledger.notes[mutation.note.threadId] ?? []).slice(0, -1);
+          const notesByThread = normalizeLedgerNotes(ledger);
+          notesByThread[mutation.note.threadId] = (notesByThread[mutation.note.threadId] ?? []).slice(0, -1);
         }
         if (mutation.action === 'paste-selection' && mutation.selection) {
           const suffix = `copy-${Date.now()}`;
