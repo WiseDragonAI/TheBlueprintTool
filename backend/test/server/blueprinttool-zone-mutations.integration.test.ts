@@ -138,6 +138,26 @@ test('blueprinttool canvas mutations are applied by the authoritative server led
     const deletedNoteLedger = await deleteNoteResponse.json() as { notes: Record<string, Array<Record<string, unknown>>> };
     assert.equal(deletedNoteLedger.notes['thread-card-a'].length, 1);
 
+    const upsertVoiceNoteResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'update-note', note: { id: 'note-client-voice', threadId: 'thread-card-a', body: 'late voice update', source: 'voice', voiceFileRef: '/tmp/late.webm', status: 'transcribing' } })
+    });
+    assert.equal(upsertVoiceNoteResponse.ok, true);
+    const upsertVoiceLedger = await upsertVoiceNoteResponse.json() as { notes: Record<string, Array<Record<string, unknown>>> };
+    assert.equal(upsertVoiceLedger.notes['thread-card-a'].at(-1)?.id, 'note-client-voice');
+    assert.equal(upsertVoiceLedger.notes['thread-card-a'].at(-1)?.message, 'late voice update');
+
+    const appendSameVoiceNoteResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'append-note', note: { id: 'note-client-voice', threadId: 'thread-card-a', body: 'late voice append', source: 'voice', voiceFileRef: '/tmp/late.webm', status: 'uploading' } })
+    });
+    assert.equal(appendSameVoiceNoteResponse.ok, true);
+    const appendSameVoiceLedger = await appendSameVoiceNoteResponse.json() as { notes: Record<string, Array<Record<string, unknown>>> };
+    assert.equal(appendSameVoiceLedger.notes['thread-card-a'].filter((note) => note.id === 'note-client-voice').length, 1);
+    assert.equal(appendSameVoiceLedger.notes['thread-card-a'].at(-1)?.status, 'transcribing');
+
     const pasteResponse = await fetch(endpoint, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },

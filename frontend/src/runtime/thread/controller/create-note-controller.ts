@@ -1,11 +1,26 @@
 /**
  * WHAT: Appends a text note to the active thread ledger.
- * WHY: The composer should only clear once the server confirms the note exists.
+ * WHY: Text notes must appear immediately and then reconcile with the backend.
  */
-import { commitActiveLedgerMutation } from '../../ledger/effect/commit-active-ledger-mutation.js';
+import { sendActiveLedgerMutation } from '../../ledger/effect/send-active-ledger-mutation.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { appendOptimisticThreadNote } from '../effect/append-optimistic-thread-note.js';
+import { patchOptimisticThreadNote } from '../effect/patch-optimistic-thread-note.js';
 
-export async function createNoteController(input: { threadId: string; body: string }): Promise<boolean> {
+export type CreateNoteResult = {
+  noteId: string;
+  committed: Promise<boolean>;
+};
+
+export function createNoteController(input: { threadId: string; body: string }): CreateNoteResult {
   telemetry('create-note-controller', { threadId: input.threadId });
-  return commitActiveLedgerMutation({ action: 'append-note', note: input }, { render: true });
+  const noteId = appendOptimisticThreadNote({ threadId: input.threadId, body: input.body, status: 'committing' });
+  const committed = sendActiveLedgerMutation({
+    action: 'append-note',
+    note: { id: noteId, threadId: input.threadId, body: input.body }
+  }).then((ok) => {
+    patchOptimisticThreadNote({ threadId: input.threadId, noteId, status: ok ? '' : 'commit failed', error: ok ? '' : 'Backend did not confirm the note.', optimistic: !ok });
+    return ok;
+  });
+  return { noteId, committed };
 }

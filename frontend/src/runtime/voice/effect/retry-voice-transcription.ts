@@ -12,18 +12,18 @@ export async function retryVoiceTranscription(input: { noteId: string; voiceFile
   if (!input.noteId || !input.voiceFileRef) return;
   state.voice.transcriptionStatus = 'retrying transcription';
   renderVoiceStatus();
-  await updateVoiceNote({ noteId: input.noteId, voiceFileRef: input.voiceFileRef, status: 'transcribing', body: 'Retrying transcription...' });
+  void updateVoiceNote({ noteId: input.noteId, voiceFileRef: input.voiceFileRef, status: 'transcribing', body: 'Retrying transcription...' });
   telemetry('retry-voice-transcription', { threadId: state.threadId, noteId: input.noteId });
   const result = await transcribeUploadedVoiceAudio(input.voiceFileRef);
   const voiceFileRef = result.voiceFileRef || input.voiceFileRef;
   if (result.ok && result.text.trim()) {
-    await updateVoiceNote({ noteId: input.noteId, voiceFileRef, status: 'transcribed', body: result.text.trim(), error: '' });
+    void updateVoiceNote({ noteId: input.noteId, voiceFileRef, status: 'transcribed', body: result.text.trim(), error: '' });
     state.voice.voiceFileRef = voiceFileRef;
     state.voice.transcriptionStatus = 'transcribed';
   } else {
     const status = result.configured === false ? 'transcription not configured' : 'transcription failed';
     const error = result.error ?? status;
-    await updateVoiceNote({ noteId: input.noteId, voiceFileRef, status, body: `Voice uploaded; ${status}.`, error });
+    void updateVoiceNote({ noteId: input.noteId, voiceFileRef, status, body: `Voice uploaded; ${status}.`, error });
     state.voice.voiceFileRef = voiceFileRef;
     state.voice.transcriptionStatus = `${status}${error && error !== status ? `: ${error}` : ''}`;
   }

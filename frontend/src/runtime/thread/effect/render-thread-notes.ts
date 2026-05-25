@@ -16,10 +16,10 @@ export function renderThreadNotes(): void {
   for (const note of notes) {
     const status = String(note.status ?? '');
     const normalizedStatus = status.toLowerCase();
-    const busy = /uploading|transcribing/.test(normalizedStatus);
+    const busy = /committing|uploading|transcribing|retrying/.test(normalizedStatus);
     const retryable = Boolean(note.voiceFileRef) && /failed|not configured|unavailable/.test(normalizedStatus);
     const item = document.createElement('li');
-    item.className = ['thread-note', note.voiceFileRef ? 'voice-note' : '', busy ? 'is-busy' : '', retryable ? 'is-retryable' : ''].filter(Boolean).join(' ');
+    item.className = ['thread-note', note.voiceFileRef ? 'voice-note' : '', note.optimistic ? 'is-optimistic' : '', busy ? 'is-busy' : '', retryable ? 'is-retryable' : ''].filter(Boolean).join(' ');
     const body = document.createElement('p');
     body.textContent = String(note.message ?? note.body ?? '');
     const meta = document.createElement('span');

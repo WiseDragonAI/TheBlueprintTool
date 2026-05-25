@@ -1,3 +1,7 @@
+/**
+ * WHAT: Declares spec ids implemented by the browser runtime surface.
+ * WHY: Spec evidence should stay explicit for generated and hand-written checks.
+ */
 export const SPEC_IMPLEMENTATION_SURFACE = [
   '60000002', '60000001', '20000013', '20000010', '2000000f', '2000000d', '2000000c', '86e67c0e',
   'b7c2e91f', 'e6a91d34', 'f2d6c8b1', 'a4f8d2c9',
@@ -14,7 +18,7 @@ export const SPEC_IMPLEMENTATION_SURFACE = [
   '9f9279ff', '40000006', '33c20993', '8b1ff788', 'f93e1bb7', '50000002', 'ac137fe2', '51a6af83',
   '30000007', '667ae9a9', '6000000d', '12749dcd', '9d1b7c36', '93f778a8', 'eaced0c9', '5f8c7152', 'c5a84d77',
   'd38927c1', '40000007', '6cc37b58', '21b2b050', '828e6225', '747b461e', '040cef84', 'c0c42d20',
-  'b5a783cd', '5c4e5c22', '20000015', '20000012', 'e0b4d11a', '20000018', '2000000e', '20000017',
+  'b5a783cd', '5c4e5c22', 'e0f4c8a7', '20000015', '20000012', 'e0b4d11a', '20000018', '2000000e', '20000017',
   '20000005', '20000001', '20000009', '20000002', '20000014', '20000007', '20000003', '20000006',
   '20000008', '20000004'
 ];

@@ -8,6 +8,7 @@ import { fillThreadDraft } from '../../src/runtime/voice/effect/fill-thread-draf
 import { uploadVoiceAudio } from '../../src/runtime/voice/effect/upload-voice-audio.js';
 import { requestTranscription } from '../../src/runtime/voice/effect/request-transcription.js';
 import { appendVoiceNote } from '../../src/runtime/voice/effect/append-voice-note.js';
+import { createNoteController } from '../../src/runtime/thread/controller/create-note-controller.js';
 import { state } from '../../src/runtime/state.js';
 
 test('fill-thread-draft appends transcribed text to the active draft', () => {
@@ -221,17 +222,60 @@ test('append-voice-note persists voice metadata to the active thread ledger', as
   };
 
   try {
-    const result = await appendVoiceNote({ body: 'Voice uploaded.', voiceFileRef: '/tmp/voice.webm', status: 'pending' });
+    const result = appendVoiceNote({ body: 'Voice uploaded.', voiceFileRef: '/tmp/voice.webm', status: 'pending' });
     assert.equal(result.ok, true);
-    assert.equal(result.noteId, 'note-voice-1');
+    assert.match(result.noteId, /^note-\d+-[a-f0-9]+$/);
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].id, result.noteId);
     assert.equal(mutation.action, 'append-note');
+    assert.equal(mutation.note.id, result.noteId);
     assert.equal(mutation.note.threadId, 'thread-card-a');
     assert.equal(mutation.note.source, 'voice');
     assert.equal(mutation.note.voiceFileRef, '/tmp/voice.webm');
     assert.equal(state.activeLedger.notes['thread-card-a'][0].status, 'pending');
+    assert.equal(await result.committed, true);
   } finally {
     (globalThis as unknown as { fetch: unknown }).fetch = previousFetch;
     (globalThis as unknown as { document: unknown }).document = previousDocument;
+    (globalThis as unknown as { window: unknown }).window = previousWindow;
+    (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
+    state.threadId = '';
+    state.activeLedger = null;
+  }
+});
+
+test('create-note-controller renders a text note before backend reconciliation', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousWindow = globalThis.window;
+  const previousCustomEvent = globalThis.CustomEvent;
+  let mutation: Record<string, any> = {};
+  let resolveFetch: () => void = () => undefined;
+  state.threadId = 'thread-card-a';
+  state.activeLedger = { notes: { 'thread-card-a': [] } };
+  (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
+  (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
+    constructor(_name: string, public options: Record<string, unknown> = {}) {}
+  };
+  (globalThis as unknown as { fetch: unknown }).fetch = async (_url: string, init: RequestInit) => {
+    mutation = JSON.parse(String(init.body ?? '{}'));
+    await new Promise<void>((resolve) => {
+      resolveFetch = resolve;
+    });
+    return { ok: false };
+  };
+
+  try {
+    const result = createNoteController({ threadId: 'thread-card-a', body: 'Keep this local note.' });
+    assert.match(result.noteId, /^note-\d+-[a-f0-9]+$/);
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].id, result.noteId);
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].message, 'Keep this local note.');
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].status, 'committing');
+    assert.equal(mutation.action, 'append-note');
+    assert.equal(mutation.note.id, result.noteId);
+    resolveFetch();
+    assert.equal(await result.committed, false);
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].status, 'commit failed');
+  } finally {
+    (globalThis as unknown as { fetch: unknown }).fetch = previousFetch;
     (globalThis as unknown as { window: unknown }).window = previousWindow;
     (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
     state.threadId = '';

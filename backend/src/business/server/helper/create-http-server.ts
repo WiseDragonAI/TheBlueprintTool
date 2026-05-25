@@ -186,13 +186,27 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         if (mutation.action === 'append-note' && mutation.note?.threadId) {
           ledger.notes ??= {};
           const notes = ledger.notes[mutation.note.threadId] ?? [];
-          notes.push({ id: `note-${Date.now()}`, role: mutation.note.source === 'voice' ? 'voice' : 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), voiceFileRef: mutation.note.voiceFileRef ?? '', status: mutation.note.status ?? '', error: mutation.note.error ?? '' });
+          const noteId = String(mutation.note.id ?? `note-${Date.now()}`);
+          const existing = notes.find((entry) => String(entry.id ?? '') === noteId);
+          const nextNote = { id: noteId, role: mutation.note.source === 'voice' ? 'voice' : 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), voiceFileRef: mutation.note.voiceFileRef ?? '', status: mutation.note.status ?? '', error: mutation.note.error ?? '' };
+          if (existing) {
+            if (!existing.message && nextNote.message) existing.message = nextNote.message;
+            if (!existing.voiceFileRef && nextNote.voiceFileRef) existing.voiceFileRef = nextNote.voiceFileRef;
+            if (!existing.status && nextNote.status) existing.status = nextNote.status;
+            if (!existing.error && nextNote.error) existing.error = nextNote.error;
+            existing.updatedAt = new Date().toISOString();
+          } else notes.push(nextNote);
           ledger.notes[mutation.note.threadId] = notes;
         }
         if (mutation.action === 'update-note' && mutation.note?.threadId) {
           ledger.notes ??= {};
           const notes = ledger.notes[mutation.note.threadId] ?? [];
-          const note = notes.find((entry) => String(entry.id ?? '') === mutation.note?.id || String(entry.voiceFileRef ?? '') === mutation.note?.voiceFileRef);
+          const noteId = String(mutation.note.id ?? '');
+          let note = notes.find((entry) => String(entry.id ?? '') === noteId || String(entry.voiceFileRef ?? '') === mutation.note?.voiceFileRef);
+          if (!note && noteId) {
+            note = { id: noteId, role: mutation.note.source === 'voice' ? 'voice' : 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), voiceFileRef: mutation.note.voiceFileRef ?? '', status: mutation.note.status ?? '', error: mutation.note.error ?? '' };
+            notes.push(note);
+          }
           if (note) {
             if (typeof mutation.note.body === 'string') note.message = mutation.note.body;
             if (typeof mutation.note.voiceFileRef === 'string') note.voiceFileRef = mutation.note.voiceFileRef;

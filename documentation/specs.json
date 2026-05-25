@@ -1016,6 +1016,11 @@
       "y": 6455,
       "w": 560
     },
+    "e0f4c8a7": {
+      "x": -1760,
+      "y": 6605,
+      "w": 560
+    },
     "b8d4f0a2": {
       "x": -580,
       "y": 6455,
@@ -2555,7 +2560,7 @@
       "y": 5859,
       "w": 320,
       "comment": {
-        "what": "Voice audio is uploaded before final transcript confirmation. The active conversation ledger receives a voice note immediately, then the backend accepts and records a `voiceFileRef` before provider transcription, so missing or failing transcription credentials do not make the upload or note disappear."
+        "what": "Voice audio is uploaded before final transcript confirmation. The active conversation ledger receives a local voice note before any backend response, then backend append/update calls reconcile the same client note id and record `voiceFileRef` before provider transcription, so missing or failing transcription credentials do not make the upload or note disappear."
       },
       "facts": [],
       "fields": []
@@ -2569,7 +2574,7 @@
       "y": 5976,
       "w": 320,
       "comment": {
-        "what": "Captured voice audio is held in the workspace upload cache after upload and remains attached to the ledger note through success, failure, or unconfigured transcription. Failed and unconfigured voice notes must expose retry without losing the recorded audio."
+        "what": "Captured voice audio is held in the workspace upload cache after upload and remains attached to the visible ledger note through success, failure, unconfigured transcription, or backend reconciliation failure. Failed and unconfigured voice notes must expose retry without losing the recorded audio."
       },
       "facts": [],
       "fields": []
@@ -2583,7 +2588,7 @@
       "y": 5976,
       "w": 320,
       "comment": {
-        "what": "The UI shows voice capture, uploading, transcribing, retrying, success, and failed/unconfigured lifecycle status. If upload succeeds but transcription fails or is unconfigured, status must say the voice was uploaded, keep the ledger note visible, and expose retry from the preserved `voiceFileRef`."
+        "what": "The UI shows voice capture, uploading, transcribing, retrying, success, and failed/unconfigured lifecycle status by patching the already-rendered note immediately. If upload succeeds but transcription fails or is unconfigured, status must say the voice was uploaded, keep the ledger note visible, and expose retry from the preserved `voiceFileRef`."
       },
       "facts": [],
       "fields": []
@@ -2611,7 +2616,21 @@
       "y": 6455,
       "w": 560,
       "comment": {
-        "what": "Starting the stop/send flow immediately creates an optimistic voice note in the active thread ledger. Upload, transcription, success, failure, and retry patch that same note in place, preserving `voiceFileRef` whenever audio was accepted."
+        "what": "Starting the stop/send flow synchronously creates an optimistic voice note in the active thread ledger before upload or transcription work runs. Upload, transcription, success, failure, and retry patch that same note in place, preserving `voiceFileRef` whenever audio was accepted."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "e0f4c8a7",
+      "title": "Thread notes render before server commit.",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": -1760,
+      "y": 6605,
+      "w": 560,
+      "comment": {
+        "what": "Text and voice thread notes are inserted into the local conversation ledger immediately with a client-generated note id. Backend append/update calls reconcile that same id without replacing local state; failed reconciliation patches note status instead of deleting the note or returning the draft to the void. If a later append arrives after an update for the same id, it must not overwrite newer note body or lifecycle status."
       },
       "facts": [],
       "fields": []
