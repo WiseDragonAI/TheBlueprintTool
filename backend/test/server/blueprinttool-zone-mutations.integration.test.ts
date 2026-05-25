@@ -84,7 +84,7 @@ test('blueprinttool canvas mutations are applied by the authoritative server led
     });
     assert.equal(geometryResponse.ok, true);
     const geometryLedger = await geometryResponse.json() as { cards: Array<Record<string, unknown>>; annotations: Array<Record<string, unknown>> };
-    assert.deepEqual(geometryLedger.cards[0], { id: 'card-a', x: 111, y: 122, w: 333 });
+    assert.deepEqual(geometryLedger.cards[0], { id: 'card-a', x: 111, y: 122, w: 333, h: 99 });
     assert.deepEqual(geometryLedger.annotations.find((entry) => entry.id === 'zone-keep'), { id: 'zone-keep', label: 'Keep', variant: 'zone', x: 11, y: 22, width: 188, height: 144 });
     assert.deepEqual(geometryLedger.annotations.find((entry) => entry.id === 'group-keep'), { id: 'group-keep', label: 'Group', variant: 'group', x: 33, y: 44, width: 288, height: 188 });
 
@@ -107,6 +107,17 @@ test('blueprinttool canvas mutations are applied by the authoritative server led
     assert.equal(noteLedger.notes['thread-card-a'].length, 1);
     assert.equal(noteLedger.notes['thread-card-a'][0].message, 'server note');
 
+    const appendVoiceNoteResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'append-note', note: { threadId: 'thread-card-a', body: 'voice note', source: 'voice', voiceFileRef: '/tmp/voice.webm', status: 'pending' } })
+    });
+    assert.equal(appendVoiceNoteResponse.ok, true);
+    const voiceNoteLedger = await appendVoiceNoteResponse.json() as { notes: Record<string, Array<Record<string, unknown>>> };
+    assert.equal(voiceNoteLedger.notes['thread-card-a'].at(-1)?.role, 'voice');
+    assert.equal(voiceNoteLedger.notes['thread-card-a'].at(-1)?.voiceFileRef, '/tmp/voice.webm');
+    assert.equal(voiceNoteLedger.notes['thread-card-a'].at(-1)?.status, 'pending');
+
     const deleteNoteResponse = await fetch(endpoint, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
@@ -114,7 +125,7 @@ test('blueprinttool canvas mutations are applied by the authoritative server led
     });
     assert.equal(deleteNoteResponse.ok, true);
     const deletedNoteLedger = await deleteNoteResponse.json() as { notes: Record<string, Array<Record<string, unknown>>> };
-    assert.equal(deletedNoteLedger.notes['thread-card-a'].length, 0);
+    assert.equal(deletedNoteLedger.notes['thread-card-a'].length, 1);
 
     const pasteResponse = await fetch(endpoint, {
       method: 'PATCH',

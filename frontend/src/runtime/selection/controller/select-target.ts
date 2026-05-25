@@ -3,10 +3,13 @@ import { cardsIntersectingZone } from '../../zone/helper/cards-intersecting-zone
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
 import { resolveGroupMembership } from '../../group/helper/resolve-group-membership.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { selectThread } from '../../thread/effect/select-thread.js';
+import { threadIdForTarget } from '../../thread/helper/thread-id-for-target.js';
 
 export function selectTarget(kind: string, id: string, additive: boolean): void {
   if (!id) return;
   telemetry('resolve-selection-target', { kind, id, additive });
+  if (!additive) selectThread(threadIdForTarget(kind, id));
   if (!additive) state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
   const key = kind === 'card' ? 'cardIds' : kind === 'zone' ? 'zoneIds' : 'groupIds';
   if (additive && state.selection[key].includes(id)) {

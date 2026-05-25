@@ -7,6 +7,7 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { renderVoiceStatus } from './render-voice-status.js';
 import { fillThreadDraft } from './fill-thread-draft.js';
 import { uploadVoiceAudio } from './upload-voice-audio.js';
+import { appendVoiceNote } from './append-voice-note.js';
 
 export async function requestTranscription(audio: Blob | null): Promise<void> {
   if (!audio || audio.size <= 0) {
@@ -21,9 +22,11 @@ export async function requestTranscription(audio: Blob | null): Promise<void> {
   const result = await uploadVoiceAudio(audio);
   if (result.ok && result.text.trim()) {
     fillThreadDraft(result.text);
+    await appendVoiceNote({ body: result.text.trim(), status: 'transcribed' });
     state.voice.transcriptionStatus = 'transcribed';
   } else if (result.uploaded && !result.configured) {
     state.voice.voiceFileRef = result.voiceFileRef;
+    await appendVoiceNote({ body: 'Voice uploaded; transcription not configured.', voiceFileRef: result.voiceFileRef, status: 'transcription not configured' });
     state.voice.transcriptionStatus = 'voice uploaded; transcription not configured';
   } else {
     state.voice.transcriptionStatus = result.status === 503 ? 'transcription not configured' : `transcription failed${result.error ? `: ${result.error}` : ''}`;

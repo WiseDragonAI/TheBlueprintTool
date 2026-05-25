@@ -81,7 +81,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           relationshipIds?: string[];
           geometry?: Record<string, Record<string, { x: number; y: number; width: number; height: number }>>;
           region?: { id?: string; kind?: string; label?: string; color?: string };
-          note?: { threadId?: string; body?: string };
+          note?: { threadId?: string; body?: string; voiceFileRef?: string; status?: string; source?: string };
           selection?: { cardIds?: string[]; zoneIds?: string[]; groupIds?: string[] };
         } : {};
         const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as {
@@ -149,7 +149,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         if (mutation.action === 'append-note' && mutation.note?.threadId) {
           ledger.notes ??= {};
           const notes = ledger.notes[mutation.note.threadId] ?? [];
-          notes.push({ id: `note-${Date.now()}`, role: 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString() });
+          notes.push({ id: `note-${Date.now()}`, role: mutation.note.source === 'voice' ? 'voice' : 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), voiceFileRef: mutation.note.voiceFileRef ?? '', status: mutation.note.status ?? '' });
           ledger.notes[mutation.note.threadId] = notes;
         }
         if (mutation.action === 'delete-note' && mutation.note?.threadId) {

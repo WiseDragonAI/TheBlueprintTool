@@ -1,6 +1,7 @@
 import { state } from '../../state.js';
 import { renderTelemetry } from '../../telemetry/effect/render-telemetry.js';
 import { renderVoiceStatus } from '../../voice/effect/render-voice-status.js';
+import { renderThreadNotes } from './render-thread-notes.js';
 import { selectionHasTarget } from '../../selection/helper/selection-has-target.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
@@ -14,6 +15,7 @@ export function renderThreadPanel(): void {
   shell.classList.toggle('has-inspector', shouldOpenThread);
   (document.querySelector('.thread-target') as HTMLElement).textContent = state.threadId ? `Open: ${state.threadId}` : 'No thread selected';
   telemetry('render-thread-panel', { threadId: state.threadId });
+  renderThreadNotes();
   renderVoiceStatus();
   renderTelemetry();
 }

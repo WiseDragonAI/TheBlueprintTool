@@ -11,6 +11,7 @@ import { rectFromPoints } from '../../canvas/helper/rect-from-points.js';
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
 import { selectIntersecting } from '../../selection/effect/select-intersecting.js';
 import { selectTarget } from '../../selection/controller/select-target.js';
+import { selectThread } from '../../thread/effect/select-thread.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export async function handlePointerUp(event: PointerEvent): Promise<void> {
@@ -29,6 +30,7 @@ export async function handlePointerUp(event: PointerEvent): Promise<void> {
   }
   if (state.pointer.intent === 'pan' && state.pointer.targetKind === 'canvas' && moved < 4) {
     state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
+    selectThread('');
     (document.activeElement as HTMLElement | null)?.blur?.();
     telemetry('clear-transient-selection', { reason: 'canvas-background-click' });
   }

@@ -29,6 +29,9 @@ export type ActiveLedgerMutation = {
   note?: {
     threadId: string;
     body?: string;
+    voiceFileRef?: string;
+    status?: string;
+    source?: string;
   };
   selection?: {
     cardIds: string[];

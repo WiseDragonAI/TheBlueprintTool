@@ -33,6 +33,38 @@
   word-break: break-word;
 }
 
+.thread-note-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.thread-note {
+  display: grid;
+  gap: 5px;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--line), transparent 15%);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.thread-note p {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.thread-note span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.thread-note.voice-note {
+  border-color: color-mix(in srgb, var(--accent), transparent 55%);
+}
+
 .thread-draft {
   width: 100%;
   resize: vertical;

@@ -1005,6 +1005,16 @@
       "x": -10380,
       "y": 4088,
       "w": 560
+    },
+    "74c3e1b8": {
+      "x": -1760,
+      "y": 6455,
+      "w": 560
+    },
+    "2a9d6f41": {
+      "x": -1170,
+      "y": 6455,
+      "w": 560
     }
   },
   "cards": [
@@ -2544,6 +2554,34 @@
       "w": 320,
       "comment": {
         "what": "The UI shows voice capture, upload, and transcription lifecycle status. If upload succeeds but transcription is unconfigured, status must say the voice was uploaded and transcription is not configured, not that upload failed. Completed transcription persists as thread text, not as durable voice audio."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "74c3e1b8",
+      "title": "Selecting a card opens its thread by default.",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": -1760,
+      "y": 6455,
+      "w": 560,
+      "comment": {
+        "what": "Selecting a card, zone, or group sets the active thread to that object thread without requiring the operator to click the Notes button. Changing thread context clears stale idle voice upload status so a previous card's voice state does not follow the next selection."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "2a9d6f41",
+      "title": "Voice uploads create conversation ledger entries.",
+      "cardType": "spec-brief",
+      "domainId": "voice",
+      "x": -1170,
+      "y": 6455,
+      "w": 560,
+      "comment": {
+        "what": "When a voice upload is accepted, the active thread ledger receives a voice note entry. If transcription succeeds the note contains transcript text; if transcription is unavailable the note records the accepted upload, transient `voiceFileRef`, and pending/unconfigured status."
       },
       "facts": [],
       "fields": []
