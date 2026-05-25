@@ -62,7 +62,7 @@
     clip: rect(0 0 0 0);
     white-space: nowrap;
   }
-  .panel { display: none; }
+  .panel { width: min(100vw, 420px); }
   .topbar {
     display: grid;
     gap: 10px;

@@ -8,5 +8,7 @@ import { renderThreadPanel } from './render-thread-panel.js';
 export function closeThreadPanel(): void {
   state.threadPanelOpen = false;
   if (state.activeTool === 'thread') state.activeTool = 'select';
+  const draft = document.querySelector('.thread-draft') as HTMLTextAreaElement | null;
+  draft?.blur();
   renderThreadPanel();
 }

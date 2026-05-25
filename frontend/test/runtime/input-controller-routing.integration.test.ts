@@ -91,4 +91,10 @@ test('browser inputs route ledger commands through runtime controllers before se
   const colorInput = source('frontend/src/runtime/input/controller/handle-region-color-input.ts');
   assert.match(colorInput, /editRegionColorController/);
   assert.doesNotMatch(colorInput, /applyZoneColorEdit/);
+
+  const shellCss = source('frontend/assets/canvas/shell.css');
+  assert.match(shellCss, /grid-template-columns:\s*132px minmax\(0, 1fr\)/);
+  assert.match(shellCss, /\.panel\s*{[\s\S]*position:\s*fixed/);
+  assert.match(shellCss, /transform:\s*translateX\(100%\)/);
+  assert.doesNotMatch(shellCss, /clamp\(420px,\s*33vw,\s*620px\);[\s\S]*grid-template-columns/);
 });

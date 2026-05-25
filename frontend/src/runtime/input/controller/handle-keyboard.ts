@@ -16,12 +16,13 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
   const target = event.target as HTMLElement | null;
   const key = event.key.toLowerCase();
+  const editableTarget = target?.closest('input,textarea,select,[contenteditable="true"]');
   if (target?.closest('.thread-draft') && event.ctrlKey && key === 'enter') {
     event.preventDefault();
     await submitThreadDraft();
     return;
   }
-  if (target?.closest('input,textarea,select,[contenteditable="true"]') && key !== 'escape') return;
+  if (editableTarget && key !== 'escape' && !(key === 'a' && !state.threadPanelOpen)) return;
   telemetry('keyboard-shortcut', { key, ctrlKey: event.ctrlKey });
   if (key === 'a') {
     event.preventDefault();
