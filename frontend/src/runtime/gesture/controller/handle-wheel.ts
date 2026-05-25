@@ -10,7 +10,6 @@ export function handleWheel(event: WheelEvent): void {
   telemetry('canvas-wheel', { deltaX: event.deltaX, deltaY: event.deltaY, ctrlKey: event.ctrlKey });
   telemetry('derive-gesture-intent', { kind: event.ctrlKey ? 'pan' : 'zoom' });
   if (event.ctrlKey) {
-    state.viewport.x -= event.deltaX || event.deltaY;
     state.viewport.y -= event.deltaY;
     telemetry('calculate-viewport-transform', { kind: 'pan', viewport: state.viewport });
   } else {

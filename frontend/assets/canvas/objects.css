@@ -219,12 +219,13 @@
   --card-zone-color: var(--primary-bright);
   --card-readable-color: color-mix(in srgb, var(--card-zone-color), white 52%);
   --card-code-color: var(--card-readable-color);
+  --card-muted-text: #b8c2cc;
   width: 250px;
   min-height: 132px;
   padding: 14px;
   border-color: color-mix(in srgb, var(--card-zone-color), rgba(255, 255, 255, 0.18) 12%);
   background:
-    linear-gradient(180deg, rgba(44, 46, 52, 0.98) 0%, rgba(28, 30, 35, 0.98) 100%),
+    linear-gradient(180deg, rgba(16, 18, 23, 0.99) 0%, rgba(9, 11, 15, 0.99) 100%),
     var(--panel-2);
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--card-zone-color), transparent 34%),
@@ -437,12 +438,12 @@
 
 .card p {
   margin: 0 0 8px;
-  color: var(--muted);
+  color: var(--card-muted-text);
   line-height: 1.42;
 }
 
 .ledger-card-body {
-  color: var(--muted);
+  color: var(--card-muted-text);
   line-height: 1.42;
 }
 

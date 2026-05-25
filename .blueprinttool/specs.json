@@ -990,6 +990,11 @@
       "x": -4780,
       "y": 10992,
       "w": 640
+    },
+    "6d3e8a4b": {
+      "x": -4316,
+      "y": 5175,
+      "w": 560
     }
   },
   "cards": [
@@ -1436,7 +1441,7 @@
       "y": 7031,
       "w": 560,
       "comment": {
-        "what": ""
+        "what": "Holding Ctrl while scrolling the mouse wheel pans the canvas viewport on the Y axis only. Vertical wheel delta must update viewport.y, must not mutate viewport.x, and must not trigger zoom."
       },
       "facts": [],
       "fields": []
@@ -1843,6 +1848,20 @@
       "w": 320,
       "comment": {
         "what": "Selected cards expose the same corner resize handles as zones. Dragging a card resize handle mutates canvas-space x/y/w/h geometry, reroutes connected relationships live, and persists width and height to the ledger on pointer release."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "6d3e8a4b",
+      "title": "Default cards use darker surface and lighter body text",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4316,
+      "y": 5175,
+      "w": 560,
+      "comment": {
+        "what": "Default card surfaces must use a near-black charcoal background while card paragraph and markdown body text use a slightly lighter muted text color than the global muted token. Zone-derived accent colors remain reserved for borders, code, labels, and highlights."
       },
       "facts": [],
       "fields": []
