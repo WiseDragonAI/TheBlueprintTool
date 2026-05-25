@@ -2695,7 +2695,7 @@
       "y": 7045,
       "w": 560,
       "comment": {
-        "what": "When a card, zone, or group thread is active, the side terminal derives its accent variables from that canvas target so the conversation keeps the target color identity."
+        "what": "When a card, zone, or group thread is active, the side terminal derives its accent variables from that canvas target color, preferring `--card-zone-color` and `--zone-color` over transient selection borders. The thread panel border, voice widget border, waveform, and meter all use the inherited target color."
       },
       "facts": [],
       "fields": []
