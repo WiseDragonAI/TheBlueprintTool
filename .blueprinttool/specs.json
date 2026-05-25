@@ -2639,7 +2639,7 @@
       "y": 6455,
       "w": 560,
       "comment": {
-        "what": "The right-side notes terminal opens and closes as a fixed floating overlay and uses roughly one third of the viewport width, clamped for usability. It must never change the shell grid, canvas viewport, or ledger layout offset. Pressing `A` opens or reopens the terminal for the prepared thread and focuses the textarea so the operator can start typing."
+        "what": "The right-side notes terminal opens and closes as a fixed floating overlay and uses roughly one third of the viewport width, clamped for usability. It must never change the shell grid, canvas viewport, or ledger layout offset. The first `A` press opens the terminal without taking focus so voice shortcuts still work; pressing `A` again focuses the textarea for typing."
       },
       "facts": [],
       "fields": []

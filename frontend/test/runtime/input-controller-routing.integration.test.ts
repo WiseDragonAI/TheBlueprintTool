@@ -37,6 +37,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(keyboard, /pasteSelectionController/);
   assert.match(keyboard, /openThreadPanel/);
   assert.match(keyboard, /closeThreadPanel/);
+  assert.match(keyboard, /focusThreadDraft/);
   assert.match(keyboard, /cancelVoiceRecording/);
   assert.match(keyboard, /key === 'a'/);
   assert.match(keyboard, /key === 'x'/);
@@ -97,4 +98,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(shellCss, /\.panel\s*{[\s\S]*position:\s*fixed/);
   assert.match(shellCss, /transform:\s*translateX\(100%\)/);
   assert.doesNotMatch(shellCss, /clamp\(420px,\s*33vw,\s*620px\);[\s\S]*grid-template-columns/);
+
+  const openThreadPanel = source('frontend/src/runtime/thread/effect/open-thread-panel.ts');
+  assert.doesNotMatch(openThreadPanel, /focusThreadDraft/);
 });
