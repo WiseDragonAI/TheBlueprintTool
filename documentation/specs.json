@@ -4440,7 +4440,7 @@
       "y": 6876,
       "w": 560,
       "comment": {
-        "what": "Inline code color clamping uses the inherited card hue and saturation while forcing HSV value to full brightness for dark or mid-value zone colors. Purple, blue, red, and green zones must produce readable bright code text instead of dim saturated text."
+        "what": "Inline code color clamping uses the inherited card hue and saturation while targeting HSV value 0.85 for dark or mid-value zone colors. Purple, blue, red, and green zones must produce readable bright code text without forcing neon full-value color."
       },
       "facts": [],
       "fields": []
@@ -4496,7 +4496,7 @@
       "y": 7660,
       "w": 560,
       "comment": {
-        "what": "Readable colors for inline code, zone labels, card-derived labels, and relationship labels are produced by decomposing the source RGB color into HSV, raising value to full brightness, rebuilding RGB, then lowering saturation only as needed to satisfy a perceptual luminance floor. Saturated purple and blue colors must not remain visually dim."
+        "what": "Readable colors for inline code, zone labels, card-derived labels, and relationship labels are produced by decomposing the source RGB color into HSV, targeting value 0.85, rebuilding RGB, then lowering saturation only as needed to satisfy a perceptual luminance floor. Saturated purple and blue colors must not remain visually dim or become neon full-value highlights."
       },
       "facts": [],
       "fields": []
@@ -4833,6 +4833,20 @@
       "w": 680,
       "comment": {
         "what": "When the operator scrolls to the bottom of a thread, the final conversation entry must keep a safe bottom margin above the input/voice footer. A note delete affordance must remain a small floating square in the top-right corner of the note on hover or focus; it must never render as a full-width bottom action row."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "f6a2d7c4",
+      "title": "Thread markdown uses card code color and larger readable type",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": -7707,
+      "y": 6344,
+      "w": 680,
+      "comment": {
+        "what": "Thread conversation text must render one pixel larger than the prior terminal note size. The scrollable conversation must keep bottom padding inside the chat surface and inside the note list so the last agent reply never touches the input footer border. Inline markdown code in thread notes must use the same hue-preserving readable color algorithm as card body code, with HSV value targeting 0.85 instead of neon 1.0."
       },
       "facts": [],
       "fields": []

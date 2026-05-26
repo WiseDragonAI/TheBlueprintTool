@@ -23,7 +23,7 @@
   flex-direction: column;
   gap: 10px;
   min-height: 0;
-  padding: 18px 20px 0;
+  padding: 18px 20px 28px;
 }
 
 .thread-heading {
@@ -66,7 +66,6 @@
 .thread-feed {
   display: grid;
   min-height: 0;
-  padding-bottom: 36px;
 }
 
 .thread-note-list {
@@ -75,7 +74,7 @@
   align-items: stretch;
   gap: 10px;
   margin: 0;
-  padding: 0;
+  padding: 0 0 42px;
   list-style: none;
 }
 
@@ -88,21 +87,21 @@
   border: 0;
   background: transparent;
   --card-muted-text: #d7e1ea;
-  --card-code-color: color-mix(in srgb, var(--thread-accent), white 58%);
+  --card-code-color: var(--thread-code-color, color-mix(in srgb, var(--thread-accent), white 58%));
 }
 
 .thread-note p,
 .thread-note .ledger-card-body {
   margin: 0;
   color: #f3f6fb;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 400;
   line-height: 1.45;
 }
 
 .thread-note span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-style: italic;
 }
 
@@ -137,7 +136,7 @@
 .thread-note.is-agent .thread-note-message,
 .thread-note.is-agent .thread-note-message p {
   color: #dfe7ee;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 400;
 }
 
