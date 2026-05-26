@@ -19,6 +19,6 @@ test('card label chips are positioned top right and inherit the card color', () 
   assert.match(objectsCss, /\.ledger-card-labels\s*{[^}]*position:\s*absolute;[^}]*top:\s*8px;[^}]*right:\s*8px;/s);
   assert.match(objectsCss, /\.ledger-card-label\s*{[^}]*background:\s*color-mix\(in srgb,\s*var\(--card-zone-color\)/s);
   assert.match(objectsCss, /\.ledger-card-label\s*{[^}]*border:\s*1px solid color-mix\(in srgb,\s*var\(--card-zone-color\)/s);
-  assert.match(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-labels,[\s\S]*transform:\s*scale\(var\(--inverse-viewport-scale, 1\)\);/);
+  assert.match(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-labels,[\s\S]*top:\s*50%;[^}]*left:\s*50%;[^}]*justify-content:\s*center;[^}]*transform:\s*translate\(-50%, -50%\) scale\(var\(--inverse-viewport-scale, 1\)\);/);
   assert.match(canvasLayerCss, /\.canvas\.low-detail \.hash,[\s\S]{0,160}display:\s*none;/);
 });

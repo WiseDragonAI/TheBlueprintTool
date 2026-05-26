@@ -95,6 +95,8 @@
   width: calc(100% * var(--viewport-scale, 1));
   max-width: calc(100% * var(--viewport-scale, 1));
   margin: 0;
+  box-sizing: border-box;
+  padding: calc(4px * var(--viewport-scale, 1)) calc(6px * var(--viewport-scale, 1)) 0;
   overflow: visible;
   color: var(--text);
   text-overflow: clip;
@@ -112,14 +114,15 @@
 .canvas.low-detail .ledger-card-labels,
 .canvas.low-detail .card:has(.ledger-card-delete) .ledger-card-labels {
   display: flex;
-  top: 8px;
-  right: 8px;
+  top: 50%;
+  left: 50%;
+  right: auto;
   width: calc(100% * var(--viewport-scale, 1));
   max-width: calc(100% * var(--viewport-scale, 1));
-  justify-content: flex-end;
+  justify-content: center;
   opacity: 1;
-  transform: scale(var(--inverse-viewport-scale, 1));
-  transform-origin: right top;
+  transform: translate(-50%, -50%) scale(var(--inverse-viewport-scale, 1));
+  transform-origin: center;
 }
 
 .canvas.low-detail .ledger-card-label {

@@ -129,7 +129,8 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(objectsCss, /\.card \.ledger-card-delete\.terminal-button\s*{[^}]*position:\s*absolute;[^}]*right:\s*6px;/s);
 
   const canvasLayerCss = source('frontend/assets/canvas/canvas-layer.css');
-  assert.match(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-labels,[\s\S]*transform:\s*scale\(var\(--inverse-viewport-scale, 1\)\);/);
+  assert.match(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-title\s*{[^}]*padding:\s*calc\(4px \* var\(--viewport-scale, 1\)\) calc\(6px \* var\(--viewport-scale, 1\)\) 0;/s);
+  assert.match(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-labels,[\s\S]*top:\s*50%;[^}]*left:\s*50%;[^}]*justify-content:\s*center;[^}]*transform:\s*translate\(-50%, -50%\) scale\(var\(--inverse-viewport-scale, 1\)\);/);
   assert.doesNotMatch(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-labels,[\s\S]{0,220}display:\s*none;/);
   assert.match(canvasLayerCss, /\.canvas\.low-detail \.hash,[\s\S]{0,160}display:\s*none;/);
 });

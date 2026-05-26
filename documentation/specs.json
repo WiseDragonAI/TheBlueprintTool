@@ -2798,7 +2798,7 @@
       "y": 5382,
       "w": 320,
       "comment": {
-        "what": "Ledger cards can declare visual tags using a `labels` or `tags` string array. Non-empty labels render as compact chips in the card's top-right corner. The chip background uses the card's own `--card-zone-color`, so labels stay visually tied to the card color/zone context. Labels are decorative metadata on the card, not relationships, identities, or runtime state. In low-detail zoom, labels remain visible with viewport counter-scaling while internal hash ids stay hidden."
+        "what": "Ledger cards can declare visual tags using a `labels` or `tags` string array. Non-empty labels render as compact chips in the card's top-right corner at normal detail. The chip background uses the card's own `--card-zone-color`, so labels stay visually tied to the card color/zone context. Labels are decorative metadata on the card, not relationships, identities, or runtime state. In low-detail zoom, labels remain visible with viewport counter-scaling, centered horizontally and vertically inside the card, while internal hash ids stay hidden."
       },
       "facts": [],
       "fields": [],
@@ -4342,7 +4342,7 @@
       "y": 5504,
       "w": 560,
       "comment": {
-        "what": "When the canvas enters low-detail or overview-detail zoom, card descriptions, buttons, and hashes must stay hidden, but each card title and non-empty label chip remains visible. Titles and labels use the same viewport counter-scale rule as zone labels so they stay readable while remaining anchored to the card geometry."
+        "what": "When the canvas enters low-detail or overview-detail zoom, card descriptions, buttons, and hashes must stay hidden, but each card title and non-empty label chip remains visible. Titles and labels use the same viewport counter-scale rule as zone labels so they stay readable while remaining anchored to the card geometry. Low-detail titles keep a small card-relative inset so the text does not touch the card border."
       },
       "facts": [],
       "fields": []
@@ -4538,7 +4538,7 @@
       "y": 8248,
       "w": 560,
       "comment": {
-        "what": "Low-detail card titles that use viewport counter-scaling must lay out in a pre-transform width equal to the card width multiplied by the current viewport scale. After the inverse transform is applied, the visible title wraps within the card instead of overflowing its card box."
+        "what": "Low-detail card titles that use viewport counter-scaling must lay out in a pre-transform width equal to the card width multiplied by the current viewport scale. After the inverse transform is applied, the visible title wraps within the card instead of overflowing its card box. The title box uses border-box sizing and a small viewport-scaled inset so the visible title has stable padding at zoom-out."
       },
       "facts": [],
       "fields": []
