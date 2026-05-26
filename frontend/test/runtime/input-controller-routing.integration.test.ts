@@ -54,6 +54,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(keyboard, /deleteCardController/);
   assert.match(keyboard, /deleteNoteController/);
   assert.match(keyboard, /isCardEditingKeyboardTarget/);
+  assert.match(keyboard, /if \(editableTarget && key !== 'escape'\) return;/);
   assert.match(keyboard, /pasteSelectionController/);
   assert.match(keyboard, /openThreadPanel/);
   assert.match(keyboard, /closeThreadPanel/);

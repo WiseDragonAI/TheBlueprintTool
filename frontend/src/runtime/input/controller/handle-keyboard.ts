@@ -50,7 +50,7 @@ export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
     return;
   }
   if (isCardEditingKeyboardTarget(target)) return;
-  if (editableTarget && key !== 'escape' && !(key === 'a' && !state.threadPanelOpen)) return;
+  if (editableTarget && key !== 'escape') return;
   telemetry('keyboard-shortcut', { key, ctrlKey: event.ctrlKey });
   if (key === 'a') {
     event.preventDefault();

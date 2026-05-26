@@ -3,5 +3,5 @@
  * WHY: Global shortcuts must not fire while the operator is typing card content.
  */
 export function isCardEditingKeyboardTarget(target: HTMLElement | null): boolean {
-  return Boolean(target?.closest('.ledger-card-title.editing,.ledger-card-description-editor'));
+  return Boolean(target?.closest('.card .editing,.card [contenteditable],.ledger-card-description-editor'));
 }
