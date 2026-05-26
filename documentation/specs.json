@@ -2602,7 +2602,7 @@
       "y": 6455,
       "w": 560,
       "comment": {
-        "what": "Selecting a card, zone, or group sets the active thread to that object thread without opening the right panel. Changing thread context clears stale idle voice upload status so a previous card's voice state does not follow the next selection."
+        "what": "Selecting a card, zone, or group sets the active thread to that object thread without opening the right panel. Changing thread context clears stale idle voice upload status so a previous card's voice state does not follow the next selection. Clearing the last selected card, zone, or group clears the active thread and closes the right notes panel through the canonical animated close flow instead of leaving a visible No thread selected terminal."
       },
       "facts": [],
       "fields": []
@@ -4902,7 +4902,7 @@
       "y": 7128,
       "w": 680,
       "comment": {
-        "what": "Voice recording captures its thread id at session start and every upload, transcription retry, and note update must use that captured thread id instead of the current selected card when async work finishes. Card bodies and thread notes use the same markdown parser and renderer, including `---`, `***`, and `___` horizontal rules plus `##` and `###` heading blocks. Thread inline code must not shrink below normal note text size, and operator note cards use the neutral input-grey surface with only a left accent border."
+        "what": "Voice recording captures its thread id at session start and every upload, transcription retry, and note update must use that captured thread id instead of the current selected card when async work finishes. Card bodies and thread notes use the same markdown parser and renderer, including `---`, `***`, and `___` horizontal rules plus `##` and `###` heading blocks. Escaped newline sequences from CLI or agent answers are normalized into real markdown line breaks before block parsing. Thread inline code must not shrink below normal note text size, and operator note cards use the neutral input-grey surface with only a left accent border."
       },
       "facts": [],
       "fields": []

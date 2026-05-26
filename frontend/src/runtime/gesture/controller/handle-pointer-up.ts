@@ -1,3 +1,7 @@
+/**
+ * WHAT: Finalizes pointer gestures and routes completed canvas actions through controllers.
+ * WHY: Pointer release is the canonical boundary for selection, creation, geometry commits, and thread context.
+ */
 import { state } from '../../state.js';
 import { canvasPoint } from '../../canvas/helper/canvas-point.js';
 import { createCardController } from '../../card/controller/create-card-controller.js';
@@ -12,6 +16,7 @@ import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.j
 import { selectIntersecting } from '../../selection/effect/select-intersecting.js';
 import { selectTarget } from '../../selection/controller/select-target.js';
 import { selectThread } from '../../thread/effect/select-thread.js';
+import { closeThreadPanel } from '../../thread/effect/close-thread-panel.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export async function handlePointerUp(event: PointerEvent): Promise<void> {
@@ -31,6 +36,7 @@ export async function handlePointerUp(event: PointerEvent): Promise<void> {
   if (state.pointer.intent === 'pan' && state.pointer.targetKind === 'canvas' && moved < 4) {
     state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
     selectThread('');
+    if (state.threadPanelOpen || state.activeTool === 'thread') closeThreadPanel();
     (document.activeElement as HTMLElement | null)?.blur?.();
     telemetry('clear-transient-selection', { reason: 'canvas-background-click' });
   }

@@ -48,3 +48,11 @@ test('parse-ledger-card-markdown parses common card description markdown', () =>
     }
   ]);
 });
+
+test('parse-ledger-card-markdown treats escaped newlines as markdown line breaks', () => {
+  assert.deepEqual(parseLedgerCardMarkdown('Intro\\n\\n1. Numbered text stays paragraph.\\n- `Item` detail'), [
+    { kind: 'paragraph', children: [{ kind: 'text', text: 'Intro' }] },
+    { kind: 'paragraph', children: [{ kind: 'text', text: '1. Numbered text stays paragraph.' }] },
+    { kind: 'list', items: [[{ kind: 'code', text: 'Item' }, { kind: 'text', text: ' detail' }]] }
+  ]);
+});

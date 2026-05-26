@@ -3,6 +3,7 @@
  * WHY: Card bodies and thread notes must share one block model so markdown behavior cannot drift.
  */
 import { isLedgerMarkdownTableDivider } from './is-ledger-markdown-table-divider.js';
+import { normalizeLedgerMarkdown } from './normalize-ledger-markdown.js';
 import { parseLedgerMarkdownInline } from './parse-ledger-markdown-inline.js';
 import { parseLedgerMarkdownTableRow } from './parse-ledger-markdown-table-row.js';
 
@@ -22,7 +23,7 @@ export type LedgerMarkdownBlock =
 export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[] {
   const blocks: LedgerMarkdownBlock[] = [];
   let list: Extract<LedgerMarkdownBlock, { kind: 'list' }> | null = null;
-  const lines = markdown.split('\n');
+  const lines = normalizeLedgerMarkdown(markdown).split('\n');
 
   for (let index = 0; index < lines.length; index += 1) {
     const rawLine = lines[index];

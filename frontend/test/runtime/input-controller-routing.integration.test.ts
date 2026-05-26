@@ -17,6 +17,8 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(pointerUp, /createZoneController/);
   assert.match(pointerUp, /createGroupController/);
   assert.match(pointerUp, /commitSelectedLedgerGeometry/);
+  assert.match(pointerUp, /selectThread\(''\)/);
+  assert.match(pointerUp, /closeThreadPanel\(\)/);
   assert.doesNotMatch(pointerUp, /createZoneFromRect/);
   assert.doesNotMatch(pointerUp, /createGroupFromRect/);
   assert.doesNotMatch(pointerUp, /commitActiveLedgerMutation/);

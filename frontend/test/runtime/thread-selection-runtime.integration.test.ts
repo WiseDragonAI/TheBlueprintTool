@@ -309,3 +309,52 @@ test('render-thread-notes separates operator and agent speaker ownership', () =>
     state.activeLedger = null;
   }
 });
+
+test('render-thread-notes renders escaped newline agent answers as markdown blocks', () => {
+  const previousDocument = globalThis.document;
+  const rendered: TestElement[] = [];
+  const list = {
+    className: '',
+    replaceChildren() {
+      rendered.length = 0;
+    },
+    append(item: TestElement) {
+      rendered.push(item);
+    }
+  };
+  (globalThis as unknown as { document: unknown }).document = {
+    querySelector(selector: string) {
+      if (selector === '.thread-note-list') return list;
+      return null;
+    },
+    createElement(tagName: string) {
+      return createTestElement('', tagName);
+    },
+    createTextNode(text: string) {
+      return createTestElement(text);
+    }
+  };
+  try {
+    state.threadId = 'thread-card-a';
+    state.activeLedger = {
+      notes: {
+        'thread-card-a': [
+          { id: 'note-agent', role: 'assistant', message: 'Treated.\\n\\nSave research report:\\n- `UDatabaseController::CreateTables`\\n- `FWorldCellDataInterface`' }
+        ]
+      }
+    };
+    renderThreadNotes();
+    const body = rendered[0].children[0];
+    assert.equal(rendered[0].className, 'thread-note is-agent');
+    assert.equal(body.children.length, 3);
+    assert.equal(body.children[0].tagName, 'p');
+    assert.equal(body.children[0].children[0].textContent, 'Treated.');
+    assert.equal(body.children[1].children[0].textContent, 'Save research report:');
+    assert.equal(body.children[2].tagName, 'ul');
+    assert.equal(body.children[2].children.length, 2);
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+    state.threadId = '';
+    state.activeLedger = null;
+  }
+});
