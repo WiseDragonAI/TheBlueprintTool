@@ -4,10 +4,10 @@
   "type": "module",
   "private": true,
   "bin": {
-    "corev2-server": "./bin/corev2-server.mjs"
+    "blueprinttool-server": "./bin/blueprinttool-server.mjs"
   },
   "scripts": {
-    "start:workspace": "node ./bin/corev2-server.mjs",
+    "start:workspace": "node ./bin/blueprinttool-server.mjs",
     "typecheck:frontend": "frontend/node_modules/.bin/tsc -p frontend/tsconfig.json --noEmit",
     "typecheck:backend": "backend/node_modules/.bin/tsc -p backend/tsconfig.json --noEmit",
     "test:browser": "node --test --import ./frontend/node_modules/tsx/dist/esm/index.mjs \"tests/browser/**/*.spec.ts\"",

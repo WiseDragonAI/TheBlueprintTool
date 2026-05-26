@@ -9,10 +9,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-test('corev2-server launcher resolves loader, server, frontend root, and tsconfig from any cwd', () => {
+test('blueprinttool-server launcher resolves loader, server, frontend root, and tsconfig from any cwd', () => {
   const workspace = mkdtempSync(join(tmpdir(), 'corev2-launcher-'));
   try {
-    const output = execFileSync(process.execPath, [resolve('bin/corev2-server.mjs'), '--print-command'], { cwd: workspace, encoding: 'utf8' });
+    const output = execFileSync(process.execPath, [resolve('bin/blueprinttool-server.mjs'), '--print-command'], { cwd: workspace, encoding: 'utf8' });
     const command = JSON.parse(output);
     assert.equal(command.cwd, workspace);
     assert.deepEqual(command.args, ['--import', resolve('backend/node_modules/tsx/dist/loader.mjs'), resolve('backend/src/server.ts')]);

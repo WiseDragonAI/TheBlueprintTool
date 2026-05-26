@@ -10,7 +10,7 @@ From a project workspace such as Ardaria:
 
 ```bash
 cd /media/jbb/57af6506-cd41-47dd-bcb1-5280ec4da1e7/Ardaria_57
-/home/jbb/dev/EditorBP/CoreV2/bin/corev2-server.mjs
+/home/jbb/dev/EditorBP/CoreV2/bin/blueprinttool-server.mjs
 ```
 
 Then open the ledger route:
@@ -36,7 +36,7 @@ node --import /home/jbb/dev/EditorBP/CoreV2/backend/node_modules/tsx/dist/loader
 To inspect what would run without starting the server:
 
 ```bash
-/home/jbb/dev/EditorBP/CoreV2/bin/corev2-server.mjs --print-command
+/home/jbb/dev/EditorBP/CoreV2/bin/blueprinttool-server.mjs --print-command
 ```
 
 From the CoreV2 repo itself, this is equivalent:
@@ -144,5 +144,5 @@ npm run typecheck:frontend
 Launcher test:
 
 ```bash
-node --test tests/launcher/corev2-server-launcher.spec.mjs
+node --test tests/launcher/blueprinttool-server-launcher.spec.mjs
 ```
