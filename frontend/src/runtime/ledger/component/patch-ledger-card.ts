@@ -1,3 +1,7 @@
+/**
+ * WHAT: Patches one ledger-authored card into the canvas DOM.
+ * WHY: Ledger cards own geometry, thread identity, tabs, labels, and markdown body rendering.
+ */
 import { state } from '../../state.js';
 import { createCardResizeHandles } from '../../card/component/create-card-resize-handles.js';
 import { appendTitleText } from './append-title-text.js';
@@ -41,8 +45,16 @@ export function patchLedgerCard(card: Record<string, unknown>, existing?: HTMLEl
   element.style.top = `${Number(card.y ?? 0)}px`;
   element.style.width = `${Math.max(220, Number(card.w ?? 280))}px`;
   const cardHeight = Number(card.h ?? card.height);
-  if (Number.isFinite(cardHeight)) element.style.height = `${Math.max(132, cardHeight)}px`;
-  else element.style.removeProperty('height');
+  if (Number.isFinite(cardHeight) && hasFieldTabs) {
+    element.style.minHeight = `${Math.max(132, cardHeight)}px`;
+    element.style.removeProperty('height');
+  } else if (Number.isFinite(cardHeight)) {
+    element.style.height = `${Math.max(132, cardHeight)}px`;
+    element.style.removeProperty('min-height');
+  } else {
+    element.style.removeProperty('height');
+    element.style.removeProperty('min-height');
+  }
   const hash = document.createElement('span');
   hash.className = 'hash';
   hash.textContent = `#${id}`;

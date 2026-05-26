@@ -1,11 +1,17 @@
+/**
+ * WHAT: Handles canvas wheel zoom and Ctrl-wheel pan.
+ * WHY: Wheel events should control canvas navigation unless an interactive child can consume them.
+ */
 import { state } from '../../state.js';
 import { applyViewportTransform } from '../../canvas/effect/apply-viewport-transform.js';
 import { scheduleViewportPersistence } from '../../persistence/effect/schedule-viewport-persistence.js';
 import { renderRelationshipOverlay } from '../../relationship/effect/render-relationship-overlay.js';
 import { point } from '../helper/point.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { shouldCaptureWheelTarget } from '../helper/should-capture-wheel-target.js';
 
 export function handleWheel(event: WheelEvent): void {
+  if (shouldCaptureWheelTarget(event)) return;
   event.preventDefault();
   telemetry('canvas-wheel', { deltaX: event.deltaX, deltaY: event.deltaY, ctrlKey: event.ctrlKey });
   telemetry('derive-gesture-intent', { kind: event.ctrlKey ? 'pan' : 'zoom' });

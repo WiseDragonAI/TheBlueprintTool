@@ -433,7 +433,14 @@
 }
 
 .ledger-card-tab-frame[data-active-card-tab="description"] {
+  /* f0c2d8a9: Description tab content grows the card instead of clipping at the frame. */
+  height: auto;
   overflow: visible;
+}
+
+.ledger-card-tab-frame[data-active-card-tab="description"] .ledger-card-description-panel.is-active {
+  position: relative;
+  inset: auto;
 }
 
 .ledger-card-panel {

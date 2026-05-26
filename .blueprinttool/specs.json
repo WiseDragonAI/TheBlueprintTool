@@ -4878,6 +4878,20 @@
       },
       "facts": [],
       "fields": []
+    },
+    {
+      "id": "f0c2d8a9",
+      "title": "Description tab sizes naturally and wheel falls through",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -7707,
+      "y": 6932,
+      "w": 680,
+      "comment": {
+        "what": "For cards with Description and Fields tabs, the active Description panel participates in normal layout and the card uses persisted height only as a minimum so comment text never crosses the card border on first paint. Wheel events over non-scrollable tab content must fall through to canvas zoom; only interactive controls or an active Fields panel with real scrollable overflow may consume wheel input."
+      },
+      "facts": [],
+      "fields": []
     }
   ],
   "relationships": [],
