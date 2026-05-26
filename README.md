@@ -57,7 +57,6 @@ Ardaria_57/
     state.json
     .settings.json
     ardaria-game-design.json
-    ardaria-data-model.json
 ```
 
 `state.json` defines available tabs and ledger files:
