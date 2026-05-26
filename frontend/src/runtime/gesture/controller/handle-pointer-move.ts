@@ -1,5 +1,10 @@
+/**
+ * WHAT: Applies active pointer gesture movement to the canvas runtime.
+ * WHY: Pan must stay transform-only while drag, resize, and draw paths update their owned geometry.
+ */
 import { state } from '../../state.js';
 import { applyViewportTransform } from '../../canvas/effect/apply-viewport-transform.js';
+import { applyPanViewportTransform } from '../../canvas/effect/apply-pan-viewport-transform.js';
 import { canvasPoint } from '../../canvas/helper/canvas-point.js';
 import { moveSelected } from '../../selection/effect/move-selected.js';
 import { patchBox } from '../../canvas/effect/patch-box.js';
@@ -7,26 +12,30 @@ import { point } from '../helper/point.js';
 import { rectFromPoints } from '../../canvas/helper/rect-from-points.js';
 import { resizeSelectedCard } from '../../card/effect/resize-selected-card.js';
 import { resizeSelectedZone } from '../../zone/effect/resize-selected-zone.js';
+import { emitPanPerformanceTelemetry } from '../effect/emit-pan-performance-telemetry.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export function handlePointerMove(event: PointerEvent): void {
   if (!state.pointer) return;
   event.preventDefault();
   const pointer = point(event);
-  const canvasPointer = canvasPoint(pointer);
   const dx = pointer.x - state.pointer.current.x;
   const dy = pointer.y - state.pointer.current.y;
-  const canvasDx = canvasPointer.x - state.pointer.currentCanvas.x;
-  const canvasDy = canvasPointer.y - state.pointer.currentCanvas.y;
+  const isPan = state.pointer.intent === 'pan';
+  const canvasPointer = isPan ? state.pointer.currentCanvas : canvasPoint(pointer);
+  const canvasDx = isPan ? 0 : canvasPointer.x - state.pointer.currentCanvas.x;
+  const canvasDy = isPan ? 0 : canvasPointer.y - state.pointer.currentCanvas.y;
   state.pointer.current = pointer;
   state.pointer.currentCanvas = canvasPointer;
-  telemetry('canvas-pointer-move', { intent: state.pointer.intent, dx, dy, canvasDx, canvasDy });
-  if (state.pointer.intent === 'pan') {
+  if (isPan) {
+    const frameStartedAt = performance.now();
     state.viewport.x += dx;
     state.viewport.y += dy;
-    telemetry('calculate-viewport-transform', { kind: 'pan', viewport: state.viewport });
-    applyViewportTransform();
+    applyPanViewportTransform();
+    emitPanPerformanceTelemetry({ dx, dy, durationMs: performance.now() - frameStartedAt, frameStartedAt });
+    return;
   }
+  telemetry('canvas-pointer-move', { intent: state.pointer.intent, dx, dy, canvasDx, canvasDy });
   if (state.pointer.intent === 'drag' || state.pointer.intent === 'group') {
     moveSelected(canvasDx, canvasDy);
     telemetry('calculate-drag-delta', { dx, dy, canvasDx, canvasDy });

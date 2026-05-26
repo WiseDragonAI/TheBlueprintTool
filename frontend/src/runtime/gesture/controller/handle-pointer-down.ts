@@ -1,3 +1,7 @@
+/**
+ * WHAT: Starts canvas pointer gestures and resolves their target intent.
+ * WHY: Drag, pan, resize, draw, and edit control flow must share one canonical pointer entrypoint.
+ */
 import { canvas } from '../../dom.js';
 import { state } from '../../state.js';
 import { derivePointerIntent } from '../helper/derive-pointer-intent.js';
@@ -51,7 +55,7 @@ export function handlePointerDown(event: PointerEvent): void {
   const pointer = point(event);
   const canvasPointer = canvasPoint(pointer);
   const intent = derivePointerIntent(event, targetKind, resizeHandle);
-  state.pointer = { intent, resizeHandle, target, targetKind, targetId, start: pointer, current: pointer, startCanvas: canvasPointer, currentCanvas: canvasPointer };
+  state.pointer = { intent, resizeHandle, target, targetKind, targetId, start: pointer, current: pointer, startCanvas: canvasPointer, currentCanvas: canvasPointer, startedAt: now };
   telemetry('canvas-pointer-down', { intent, targetKind, targetId, ctrlKey: event.ctrlKey });
   telemetry('derive-gesture-intent', { kind: intent });
   const preserveSelection = shouldPreservePointerSelection(state.selection, targetKind, targetId, event.ctrlKey);

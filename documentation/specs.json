@@ -4864,6 +4864,20 @@
       },
       "facts": [],
       "fields": []
+    },
+    {
+      "id": "b3d8a5e1",
+      "title": "Canvas pan uses transform-only sampled performance telemetry",
+      "cardType": "spec-brief",
+      "domainId": "canvas",
+      "x": -7707,
+      "y": 6736,
+      "w": 680,
+      "comment": {
+        "what": "Dragging the naked canvas to pan must update only viewport x/y and the content transform on pointermove. Pan must not rerun scale-driven detail-mode work, card measuring, relationship routing, or full canvas rendering while the pointer is moving. Performance telemetry for pan records the first frame, slow frames, and periodic samples so diagnostics are available without logging every move."
+      },
+      "facts": [],
+      "fields": []
     }
   ],
   "relationships": [],
