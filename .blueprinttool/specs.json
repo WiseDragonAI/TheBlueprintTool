@@ -4850,6 +4850,20 @@
       },
       "facts": [],
       "fields": []
+    },
+    {
+      "id": "a4d9e2b6",
+      "title": "Opening a thread pins to the latest message",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": -7707,
+      "y": 6540,
+      "w": 680,
+      "comment": {
+        "what": "Opening the right terminal for a card, zone, group, or conversation thread must scroll the conversation viewport to the newest rendered note after the notes and footer are mounted. Switching thread context while the panel is already open must also pin to the newest note. Ordinary note re-renders must not force-scroll unless the open or thread-switch control flow requested the pin."
+      },
+      "facts": [],
+      "fields": []
     }
   ],
   "relationships": [],

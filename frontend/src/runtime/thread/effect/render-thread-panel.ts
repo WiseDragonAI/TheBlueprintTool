@@ -4,6 +4,7 @@ import { renderVoiceStatus } from '../../voice/effect/render-voice-status.js';
 import { renderVoiceDock } from '../../voice/effect/render-voice-dock.js';
 import { renderThreadNotes } from './render-thread-notes.js';
 import { applyThreadAccent } from './apply-thread-accent.js';
+import { pinThreadFeedToLastMessage } from './pin-thread-feed-to-last-message.js';
 import { resolveThreadTargetTitle } from '../helper/resolve-thread-target-title.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
@@ -34,4 +35,8 @@ export function renderThreadPanel(): void {
   renderVoiceDock();
   renderVoiceStatus();
   renderTelemetry();
+  if (shouldOpenThread && state.threadPinOnRender) {
+    state.threadPinOnRender = false;
+    pinThreadFeedToLastMessage();
+  }
 }

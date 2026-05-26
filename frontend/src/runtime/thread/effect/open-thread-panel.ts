@@ -8,5 +8,6 @@ import { renderThreadPanel } from './render-thread-panel.js';
 export function openThreadPanel(): void {
   state.threadPanelOpen = true;
   if (!state.threadId) state.threadId = 'conversation-ledger';
+  state.threadPinOnRender = true;
   renderThreadPanel();
 }

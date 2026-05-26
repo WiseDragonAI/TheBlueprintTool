@@ -9,6 +9,7 @@ export function selectThread(threadId: string): void {
   const previousThreadId = String(state.threadId ?? '');
   if (previousThreadId === threadId) return;
   state.threadId = threadId;
+  state.threadPinOnRender = true;
   if (!state.voice.recording) {
     state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
   }

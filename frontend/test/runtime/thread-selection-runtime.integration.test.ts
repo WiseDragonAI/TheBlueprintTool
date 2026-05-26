@@ -6,6 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { threadIdForTarget } from '../../src/runtime/thread/helper/thread-id-for-target.js';
 import { selectThread } from '../../src/runtime/thread/effect/select-thread.js';
+import { pinThreadFeedToLastMessage } from '../../src/runtime/thread/effect/pin-thread-feed-to-last-message.js';
 import { renderThreadNotes } from '../../src/runtime/thread/effect/render-thread-notes.js';
 import { state } from '../../src/runtime/state.js';
 
@@ -71,13 +72,51 @@ test('select-thread clears stale idle voice status when card context changes', (
     state.voice = { recording: false, startedAt: 0, durationMs: 12, level: 0, transcriptionStatus: 'voice uploaded; transcription not configured', voiceFileRef: '/tmp/voice.webm' };
     selectThread('thread-card-b');
     assert.equal(state.threadId, 'thread-card-b');
+    assert.equal(state.threadPinOnRender, true);
     assert.equal(state.voice.transcriptionStatus, 'idle');
     assert.equal(state.voice.voiceFileRef, undefined);
   } finally {
     (globalThis as unknown as { window: unknown }).window = previousWindow;
     (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
     state.threadId = '';
+    delete state.threadPinOnRender;
     state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
+  }
+});
+
+test('pin-thread-feed-to-last-message scrolls the thread viewport to the newest note', () => {
+  const previousDocument = globalThis.document;
+  const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
+  let deferredFrame: FrameRequestCallback | null = null;
+  const chat = { scrollTop: 0, scrollHeight: 640 };
+  const lastNote = {
+    scrollIntoViewOptions: null as ScrollIntoViewOptions | null,
+    scrollIntoView(options: ScrollIntoViewOptions) {
+      this.scrollIntoViewOptions = options;
+    }
+  };
+  const list = { lastElementChild: lastNote };
+  (globalThis as unknown as { document: unknown }).document = {
+    querySelector(selector: string) {
+      if (selector === '.thread-panel .chat') return chat;
+      if (selector === '.thread-note-list') return list;
+      return null;
+    }
+  };
+  (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = (callback: FrameRequestCallback) => {
+    deferredFrame = callback;
+    return 1;
+  };
+  try {
+    pinThreadFeedToLastMessage();
+    assert.equal(chat.scrollTop, 640);
+    assert.deepEqual(lastNote.scrollIntoViewOptions, { block: 'end', inline: 'nearest' });
+    chat.scrollTop = 0;
+    deferredFrame?.(0);
+    assert.equal(chat.scrollTop, 640);
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+    (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = previousRequestAnimationFrame;
   }
 });
 
