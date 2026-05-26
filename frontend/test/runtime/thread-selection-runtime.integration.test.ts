@@ -241,7 +241,7 @@ test('render-thread-notes separates operator and agent speaker ownership', () =>
       notes: {
         'thread-card-a': [
           { id: 'note-operator', role: 'operator', message: 'Operator question.', status: 'transcribed' },
-          { id: 'note-agent', role: 'assistant', message: '**Agent** answer.' }
+          { id: 'note-agent', role: 'assistant', message: '**Agent** answer.\n\n---\n\n`Tail` line.' }
         ]
       }
     };
@@ -254,6 +254,12 @@ test('render-thread-notes separates operator and agent speaker ownership', () =>
     assert.equal(agentParagraph.children[0].tagName, 'strong');
     assert.equal(agentParagraph.children[0].textContent, 'Agent');
     assert.equal(agentParagraph.children[1].textContent, ' answer.');
+    const sharedRule = rendered[1].children[0].children[1];
+    assert.equal(sharedRule.tagName, 'hr');
+    assert.equal(sharedRule.className, 'ledger-card-hr');
+    const tailParagraph = rendered[1].children[0].children[2];
+    assert.equal(tailParagraph.children[0].tagName, 'code');
+    assert.equal(tailParagraph.children[0].textContent, 'Tail');
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
     state.threadId = '';

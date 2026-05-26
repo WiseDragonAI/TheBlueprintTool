@@ -203,6 +203,107 @@ test('request-transcription keeps optimistic upload status separate from provide
   }
 });
 
+test('request-transcription updates the captured thread after selection changes', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousDocument = globalThis.document;
+  const previousWindow = globalThis.window;
+  const previousCustomEvent = globalThis.CustomEvent;
+  const status = { textContent: '' };
+  const meter = { style: { transform: '' } };
+  const panel = { hidden: false, classList: { toggle() {} }, style: { setProperty() {} } };
+  const shell = { classList: { toggle() {} } };
+  const threadTarget = { textContent: '', replaceChildren() {}, append() {} };
+  const noteList = { className: '', replaceChildren() {}, append() {} };
+  const draft = { before() {} };
+  const telemetryList = { replaceChildren() {}, append() {} };
+  const patchThreadIds: string[] = [];
+  let uploadThreadId = '';
+  let transcribeThreadId = '';
+  (globalThis as unknown as { document: unknown }).document = {
+    querySelector(selector: string) {
+      if (selector === '.thread-panel') return panel;
+      if (selector === '.panel') return panel;
+      if (selector === '.shell') return shell;
+      if (selector === '.thread-target') return threadTarget;
+      if (selector === '.thread-note-list') return noteList;
+      if (selector === '.thread-draft') return draft;
+      if (selector === '.voice-status') return status;
+      if (selector === '.voice-meter-value') return meter;
+      if (selector === '.voice-panel') return panel;
+      if (selector === '.telemetry-list') return telemetryList;
+      return null;
+    },
+    querySelectorAll() {
+      return [];
+    },
+    createElement(tagName: string) {
+      return {
+        tagName,
+        className: '',
+        textContent: '',
+        type: '',
+        dataset: {},
+        style: { setProperty() {} },
+        classList: { add() {}, toggle() {} },
+        append() {},
+        appendChild() {},
+        replaceChildren() {},
+        setAttribute() {}
+      };
+    },
+    createTextNode(text: string) {
+      return { textContent: text };
+    }
+  };
+  (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
+  (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
+    constructor(_name: string, public options: Record<string, unknown> = {}) {}
+  };
+  (globalThis as unknown as { fetch: unknown }).fetch = async (url: string, init?: RequestInit) => {
+    if (url === '/api/voice-upload') {
+      uploadThreadId = (init?.headers as Record<string, string>)['x-thread-id'];
+      state.threadId = 'thread-card-b';
+      return {
+        ok: true,
+        status: 202,
+        json: async () => ({ body: { ok: true, uploaded: true, configured: true, voiceFileRef: '/tmp/voice-owned.webm', text: '' } })
+      };
+    }
+    if (url === '/api/transcribe/retry') {
+      transcribeThreadId = JSON.parse(String(init?.body ?? '{}')).threadId;
+      return {
+        ok: true,
+        status: 202,
+        json: async () => ({ body: { ok: true, uploaded: true, configured: true, voiceFileRef: '/tmp/voice-owned.webm', text: 'Captured-thread transcript.' } })
+      };
+    }
+    const mutation = JSON.parse(String(init?.body ?? '{}'));
+    patchThreadIds.push(mutation.note.threadId);
+    return { ok: true, status: 200, json: async () => ({}) };
+  };
+
+  try {
+    state.threadId = 'thread-card-a';
+    state.activeLedger = { notes: { 'thread-card-a': [], 'thread-card-b': [] } };
+    await requestTranscription(new Blob(['abc'], { type: 'audio/webm' }));
+    assert.equal(uploadThreadId, 'thread-card-a');
+    assert.equal(transcribeThreadId, 'thread-card-a');
+    assert.deepEqual([...new Set(patchThreadIds)], ['thread-card-a']);
+    assert.equal(state.threadId, 'thread-card-b');
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].message, 'Captured-thread transcript.');
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].voiceFileRef, '/tmp/voice-owned.webm');
+    assert.equal(state.activeLedger.notes['thread-card-b'].length, 0);
+  } finally {
+    (globalThis as unknown as { fetch: unknown }).fetch = previousFetch;
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+    (globalThis as unknown as { window: unknown }).window = previousWindow;
+    (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
+    state.threadId = '';
+    state.activeLedger = null;
+    state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
+  }
+});
+
 test('append-voice-note persists voice metadata to the active thread ledger', async () => {
   const previousFetch = globalThis.fetch;
   const previousDocument = globalThis.document;

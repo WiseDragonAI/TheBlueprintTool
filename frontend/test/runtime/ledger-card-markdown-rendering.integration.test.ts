@@ -128,6 +128,29 @@ test('ledger cards render markdown tables as table elements', () => {
   }
 });
 
+test('ledger cards render horizontal rules through the shared markdown renderer', () => {
+  const previousDocument = globalThis.document;
+  (globalThis as unknown as { document: unknown }).document = {
+    createElement: (tagName: string) => new FakeElement(tagName),
+    createTextNode: (text: string) => new FakeText(text)
+  };
+
+  try {
+    const card = patchLedgerCard({
+      id: 'card-rule',
+      title: 'Rule card',
+      comment: { what: 'Before\n\n---\n\nAfter' }
+    }) as unknown as FakeElement;
+    const body = card.children.find((child) => child instanceof FakeElement && child.className === 'ledger-card-body') as FakeElement;
+    const rule = body.children[1] as FakeElement;
+
+    assert.equal(rule.tagName, 'hr');
+    assert.equal(rule.className, 'ledger-card-hr');
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+  }
+});
+
 test('ledger cards render fenced code blocks with syntax spans', () => {
   const previousDocument = globalThis.document;
   (globalThis as unknown as { document: unknown }).document = {

@@ -4776,7 +4776,7 @@
       "y": 5364,
       "w": 680,
       "comment": {
-        "what": "Thread notes must classify message ownership in the renderer. Operator-origin notes, including voice notes, align right inside a compact card whose frame and surface use the active card or zone accent color. Agent and assistant replies align left and render as plain terminal conversation text without a surrounding card."
+        "what": "Thread notes must classify message ownership in the renderer. Operator-origin notes, including voice notes, align right inside a compact neutral grey card matching the input surface with only the left border colored by the active card or zone accent. Agent and assistant replies align left and render as plain terminal conversation text without a surrounding card."
       },
       "facts": [],
       "fields": []
@@ -4804,7 +4804,7 @@
       "y": 5756,
       "w": 680,
       "comment": {
-        "what": "Thread note bodies use the same markdown parser and DOM renderer as card bodies so agent replies can contain paragraphs, lists, tables, code blocks, inline code, and bold spans. Default note text is regular weight Ubuntu text, agent replies stay left as unframed conversation text, operator notes stay right in a lightly tinted grey card using the target accent, metadata is reduced to status only, and the thread input has no CSS border, only a lighter neutral inset surface."
+        "what": "Thread note bodies use the same markdown parser and DOM renderer as card bodies so agent replies can contain paragraphs, lists, tables, code blocks, inline code, horizontal rules, and bold spans. Default note text is regular weight Ubuntu text, agent replies stay left as unframed conversation text, operator notes stay right in a neutral grey card with only a left target-accent border, metadata is reduced to status only, and the thread input has no CSS border, only a lighter neutral inset surface."
       },
       "facts": [],
       "fields": []
@@ -4889,6 +4889,20 @@
       "w": 680,
       "comment": {
         "what": "For cards with Description and Fields tabs, the active Description panel participates in normal layout and the card uses persisted height only as a minimum so comment text never crosses the card border on first paint. Wheel events over non-scrollable tab content must fall through to canvas zoom; only interactive controls or an active Fields panel with real scrollable overflow may consume wheel input."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "c1f7a9e3",
+      "title": "Thread markdown and voice updates keep captured ownership",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": -7707,
+      "y": 7128,
+      "w": 680,
+      "comment": {
+        "what": "Voice recording captures its thread id at session start and every upload, transcription retry, and note update must use that captured thread id instead of the current selected card when async work finishes. Card bodies and thread notes use the same markdown parser and renderer, including `---`, `***`, and `___` horizontal rules. Thread inline code must not shrink below normal note text size, and operator note cards use the neutral input-grey surface with only a left accent border."
       },
       "facts": [],
       "fields": []

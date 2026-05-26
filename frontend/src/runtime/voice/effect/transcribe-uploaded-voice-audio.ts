@@ -5,14 +5,14 @@
 import { state } from '../../state.js';
 import type { VoiceTranscriptionResult } from './upload-voice-audio.js';
 
-export async function transcribeUploadedVoiceAudio(voiceFileRef: string): Promise<VoiceTranscriptionResult> {
+export async function transcribeUploadedVoiceAudio(voiceFileRef: string, threadId = state.threadId || ''): Promise<VoiceTranscriptionResult> {
   const response = await fetch('/api/transcribe/retry', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-thread-id': state.threadId || ''
+      'x-thread-id': threadId
     },
-    body: JSON.stringify({ voiceFileRef, threadId: state.threadId || '' })
+    body: JSON.stringify({ voiceFileRef, threadId })
   }).catch((error) => ({ ok: false, status: 0, json: async () => ({ body: { ok: false, uploaded: true, voiceFileRef, error: error instanceof Error ? error.message : String(error) } }) }));
   const payload = await response.json().catch(() => ({}));
   const body = payload.body && typeof payload.body === 'object' ? payload.body : payload;

@@ -1,5 +1,5 @@
 /**
- * WHAT: Persists a voice upload or transcript as an active thread note.
+ * WHAT: Persists a voice upload or transcript as a target thread note.
  * WHY: Voice input must appear in the conversation ledger even before transcription completes.
  */
 import { sendActiveLedgerMutation } from '../../ledger/effect/send-active-ledger-mutation.js';
@@ -12,10 +12,11 @@ export type AppendVoiceNoteResult = {
   committed: Promise<boolean>;
 };
 
-export function appendVoiceNote(input: { body: string; voiceFileRef?: string; status?: string; error?: string }): AppendVoiceNoteResult {
-  if (!state.threadId) return { ok: false, noteId: '', committed: Promise.resolve(false) };
+export function appendVoiceNote(input: { body: string; threadId?: string; voiceFileRef?: string; status?: string; error?: string }): AppendVoiceNoteResult {
+  const threadId = input.threadId ?? state.threadId;
+  if (!threadId) return { ok: false, noteId: '', committed: Promise.resolve(false) };
   const noteId = appendOptimisticThreadNote({
-    threadId: state.threadId,
+    threadId,
     body: input.body,
     voiceFileRef: input.voiceFileRef,
     status: input.status,
@@ -26,7 +27,7 @@ export function appendVoiceNote(input: { body: string; voiceFileRef?: string; st
     action: 'append-note',
     note: {
       id: noteId,
-      threadId: state.threadId,
+      threadId,
       body: input.body,
       voiceFileRef: input.voiceFileRef,
       status: input.status,

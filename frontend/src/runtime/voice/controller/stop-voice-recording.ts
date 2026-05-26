@@ -11,6 +11,7 @@ import { encodeWavBlob } from '../helper/encode-wav-blob.js';
 
 export async function stopVoiceRecording(): Promise<void> {
   if (state.voice.animationFrameId) cancelAnimationFrame(state.voice.animationFrameId);
+  const threadId = String(state.voice.threadId || state.threadId || 'conversation-ledger');
   const recorder = state.voice.recorder as MediaRecorder | undefined;
   const chunks = state.voice.chunks as BlobPart[] | undefined;
   const recorderMimeType = String(state.voice.recorderMimeType ?? 'audio/webm');
@@ -32,5 +33,5 @@ export async function stopVoiceRecording(): Promise<void> {
   state.voice.transcriptionStatus = 'uploading voice';
   telemetry('render-voice-status', { status: state.voice.transcriptionStatus, durationMs: state.voice.durationMs });
   renderVoiceStatus();
-  await requestTranscription(audio);
+  await requestTranscription(audio, threadId);
 }

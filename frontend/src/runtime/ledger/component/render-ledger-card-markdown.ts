@@ -1,3 +1,7 @@
+/**
+ * WHAT: Renders the shared markdown body used by cards and thread notes.
+ * WHY: Markdown display must stay canonical across the canvas and the conversation ledger.
+ */
 import { appendInlineNodes } from './append-inline-nodes.js';
 import { parseLedgerCardMarkdown } from '../helper/parse-ledger-card-markdown.js';
 import { renderLedgerCardCodeBlock } from './render-ledger-card-code-block.js';
@@ -24,6 +28,12 @@ export function renderLedgerCardMarkdown(markdown: string): HTMLElement {
     }
     if (block.kind === 'code') {
       body.appendChild(renderLedgerCardCodeBlock(block));
+      continue;
+    }
+    if (block.kind === 'hr') {
+      const rule = document.createElement('hr');
+      rule.className = 'ledger-card-hr';
+      body.appendChild(rule);
       continue;
     }
     const paragraph = document.createElement('p');

@@ -52,6 +52,7 @@ export function renderThreadNotes(): void {
       retry.className = 'thread-note-retry terminal-button terminal-button--compact';
       retry.type = 'button';
       retry.dataset.action = 'voice-retry';
+      retry.dataset.threadId = state.threadId;
       retry.dataset.noteId = String(note.id ?? '');
       retry.dataset.voiceFileRef = String(note.voiceFileRef ?? '');
       retry.textContent = 'Retry';

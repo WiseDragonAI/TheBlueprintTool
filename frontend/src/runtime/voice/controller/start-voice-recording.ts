@@ -10,6 +10,8 @@ import { updateVoiceRecordingFrame } from '../effect/update-voice-recording-fram
 export async function startVoiceRecording(): Promise<void> {
   if (state.voice.recording) return;
   try {
+    const threadId = state.threadId || 'conversation-ledger';
+    if (!state.threadId) state.threadId = threadId;
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const audioContext = new AudioContext();
     const source = audioContext.createMediaStreamSource(stream);
@@ -32,8 +34,8 @@ export async function startVoiceRecording(): Promise<void> {
       if (event.data?.size) chunks.push(event.data);
     });
     recorder.start();
-    state.voice = { recording: true, startedAt: Date.now(), durationMs: 0, level: 0, waveSamples: [], transcriptionStatus: 'recording', stream, audioContext, analyser, recorder, chunks, mimeType: 'audio/wav', recorderMimeType: recorder.mimeType || 'audio/webm', pcmChunks, sampleRate: audioContext.sampleRate, processor, silentGain, error: '' };
-    telemetry('resolve-voice-session', { threadId: state.threadId });
+    state.voice = { recording: true, startedAt: Date.now(), durationMs: 0, level: 0, waveSamples: [], transcriptionStatus: 'recording', threadId, stream, audioContext, analyser, recorder, chunks, mimeType: 'audio/wav', recorderMimeType: recorder.mimeType || 'audio/webm', pcmChunks, sampleRate: audioContext.sampleRate, processor, silentGain, error: '' };
+    telemetry('resolve-voice-session', { threadId });
     telemetry('capture-voice-audio', { status: 'recording', source: 'microphone' });
     updateVoiceRecordingFrame();
   } catch (error) {

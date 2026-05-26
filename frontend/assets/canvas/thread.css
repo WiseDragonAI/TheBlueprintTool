@@ -94,7 +94,7 @@
 .thread-note .ledger-card-body {
   margin: 0;
   color: #f3f6fb;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 400;
   line-height: 1.45;
 }
@@ -108,16 +108,13 @@
 .thread-note.is-operator {
   align-self: flex-end;
   padding: 10px 12px 9px;
-  border: 1px solid color-mix(in srgb, var(--thread-accent), white 16%);
+  border: 0;
+  border-left: 2px solid color-mix(in srgb, var(--thread-accent), white 12%);
   border-radius: 2px;
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, #15181c, var(--thread-accent) 13%),
-      color-mix(in srgb, #0f1215, var(--thread-accent) 8%)
-    );
+  background: #111315;
   box-shadow:
-    inset 0 0 18px rgba(0, 0, 0, 0.74),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.045),
+    inset 0 2px 24px rgba(0, 0, 0, 0.88),
     0 0 18px rgba(0, 0, 0, 0.54);
 }
 
@@ -136,7 +133,7 @@
 .thread-note.is-agent .thread-note-message,
 .thread-note.is-agent .thread-note-message p {
   color: #dfe7ee;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 400;
 }
 
@@ -154,9 +151,18 @@
 
 .thread-note-message p:last-child,
 .thread-note-message ul:last-child,
+.thread-note-message .ledger-card-hr:last-child,
 .thread-note-message .ledger-card-table-scroll:last-child,
 .thread-note-message .ledger-card-code-block:last-child {
   margin-bottom: 0;
+}
+
+.thread-note-message code {
+  font-size: 1em;
+}
+
+.thread-note-message .ledger-card-hr {
+  border-top-color: rgba(255, 255, 255, 0.18);
 }
 
 .thread-note .thread-note-delete.terminal-button {

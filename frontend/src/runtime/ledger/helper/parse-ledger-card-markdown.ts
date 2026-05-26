@@ -1,3 +1,7 @@
+/**
+ * WHAT: Parses markdown blocks for ledger cards and thread conversation notes.
+ * WHY: Card bodies and thread notes must share one block model so markdown behavior cannot drift.
+ */
 import { isLedgerMarkdownTableDivider } from './is-ledger-markdown-table-divider.js';
 import { parseLedgerMarkdownInline } from './parse-ledger-markdown-inline.js';
 import { parseLedgerMarkdownTableRow } from './parse-ledger-markdown-table-row.js';
@@ -11,6 +15,7 @@ export type LedgerMarkdownBlock =
   | { kind: 'paragraph'; children: LedgerMarkdownInline[] }
   | { kind: 'list'; items: LedgerMarkdownInline[][] }
   | { kind: 'table'; headers: LedgerMarkdownInline[][]; rows: LedgerMarkdownInline[][][] }
+  | { kind: 'hr' }
   | { kind: 'code'; language: string; text: string };
 
 export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[] {
@@ -35,6 +40,11 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
     const line = rawLine.trim();
     if (!line) {
       list = null;
+      continue;
+    }
+    if (/^(?:-{3,}|\*{3,}|_{3,})$/.test(line)) {
+      list = null;
+      blocks.push({ kind: 'hr' });
       continue;
     }
     const headerCells = parseLedgerMarkdownTableRow(line);

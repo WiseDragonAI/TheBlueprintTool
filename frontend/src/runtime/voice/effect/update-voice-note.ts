@@ -6,9 +6,9 @@ import { sendActiveLedgerMutation } from '../../ledger/effect/send-active-ledger
 import { state } from '../../state.js';
 import { patchOptimisticThreadNote } from '../../thread/effect/patch-optimistic-thread-note.js';
 
-export async function updateVoiceNote(input: { noteId: string; body?: string; voiceFileRef?: string; status?: string; error?: string }): Promise<boolean> {
-  if (!state.threadId || !input.noteId) return false;
-  const threadId = state.threadId;
+export async function updateVoiceNote(input: { threadId?: string; noteId: string; body?: string; voiceFileRef?: string; status?: string; error?: string }): Promise<boolean> {
+  const threadId = String(input.threadId ?? state.threadId);
+  if (!threadId || !input.noteId) return false;
   patchOptimisticThreadNote({
     threadId,
     noteId: input.noteId,
