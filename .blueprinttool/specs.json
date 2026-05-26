@@ -4766,6 +4766,20 @@
       },
       "facts": [],
       "fields": []
+    },
+    {
+      "id": "c3a8d4f1",
+      "title": "Thread notes split operator cards from agent terminal replies",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": -7707,
+      "y": 5364,
+      "w": 680,
+      "comment": {
+        "what": "Thread notes must classify message ownership in the renderer. Operator-origin notes, including voice notes, align right inside a compact card whose frame and surface use the active card or zone accent color. Agent and assistant replies align left and render as plain terminal conversation text without a surrounding card."
+      },
+      "facts": [],
+      "fields": []
     }
   ],
   "relationships": [],

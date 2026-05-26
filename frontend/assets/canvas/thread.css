@@ -69,7 +69,9 @@
 }
 
 .thread-note-list {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   gap: 10px;
   margin: 0;
   padding: 0;
@@ -79,15 +81,14 @@
 .thread-note {
   display: grid;
   gap: 6px;
-  padding: 0 0 2px;
+  max-width: min(86%, 520px);
+  padding: 0;
   border: 0;
-  border-left: 2px solid color-mix(in srgb, var(--thread-accent), transparent 55%);
   background: transparent;
 }
 
 .thread-note p {
   margin: 0;
-  padding-left: 10px;
   color: #f3f6fb;
   font-size: 12px;
   font-weight: 600;
@@ -95,14 +96,48 @@
 }
 
 .thread-note span {
-  padding-left: 10px;
   color: var(--muted);
   font-size: 11px;
   font-style: italic;
 }
 
-.thread-note.voice-note {
-  border-color: color-mix(in srgb, var(--thread-accent), white 12%);
+.thread-note.is-operator {
+  align-self: flex-end;
+  padding: 10px 12px 9px;
+  border: 1px solid color-mix(in srgb, var(--thread-accent), white 16%);
+  border-radius: 2px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--thread-accent), #050607 74%),
+      color-mix(in srgb, var(--thread-accent), #050607 86%)
+    );
+  box-shadow:
+    inset 0 0 18px rgba(0, 0, 0, 0.74),
+    0 0 18px rgba(0, 0, 0, 0.54);
+}
+
+.thread-note.is-operator .thread-note-meta {
+  color: color-mix(in srgb, var(--thread-accent), white 44%);
+}
+
+.thread-note.is-agent {
+  align-self: flex-start;
+  max-width: min(92%, 640px);
+  background: transparent;
+  color: #dfe7ee;
+  font-family: var(--terminal-font, ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace);
+}
+
+.thread-note.is-agent .thread-note-message {
+  color: #dfe7ee;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: pre-wrap;
+}
+
+.thread-note.is-agent .thread-note-meta {
+  display: none;
 }
 
 .thread-note.is-busy p {
@@ -139,7 +174,7 @@
 
 .thread-note-retry {
   justify-self: start;
-  margin-left: 10px;
+  margin-left: 0;
 }
 
 .thread-draft {

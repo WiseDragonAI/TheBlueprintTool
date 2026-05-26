@@ -15,16 +15,19 @@ export function renderThreadNotes(): void {
   list.replaceChildren();
   for (const note of notes) {
     const status = String(note.status ?? '');
+    const role = String(note.role ?? 'operator').toLowerCase();
+    const agentOwned = role === 'agent' || role === 'assistant';
     const normalizedStatus = status.toLowerCase();
     const busy = /committing|uploading|transcribing|retrying/.test(normalizedStatus);
     const retryable = Boolean(note.voiceFileRef) && /failed|not configured|unavailable/.test(normalizedStatus);
     const item = document.createElement('li');
-    item.className = ['thread-note', note.voiceFileRef ? 'voice-note' : '', note.optimistic ? 'is-optimistic' : '', busy ? 'is-busy' : '', retryable ? 'is-retryable' : ''].filter(Boolean).join(' ');
+    item.className = ['thread-note', note.voiceFileRef ? 'voice-note' : '', note.optimistic ? 'is-optimistic' : '', busy ? 'is-busy' : '', retryable ? 'is-retryable' : '', agentOwned ? 'is-agent' : 'is-operator'].filter(Boolean).join(' ');
     const body = document.createElement('p');
+    body.className = 'thread-note-message';
     body.textContent = String(note.message ?? note.body ?? '');
     const meta = document.createElement('span');
     meta.className = 'thread-note-meta';
-    meta.textContent = [note.role ?? 'operator', status, note.timestamp].filter(Boolean).join(' · ');
+    meta.textContent = [agentOwned ? 'agent' : 'operator', status, note.timestamp].filter(Boolean).join(' · ');
     item.append(body, meta);
     if (busy) {
       const spinner = document.createElement('span');
