@@ -164,6 +164,7 @@ test('render-thread-notes keeps failed voice audio retryable', () => {
     const deleteButton = rendered[0].children.find((child) => child.className?.includes('thread-note-delete'));
     assert.equal(deleteButton?.dataset?.action, 'confirm-delete-note');
     assert.equal(deleteButton?.dataset?.noteId, 'note-1');
+    assert.equal(deleteButton?.textContent, 'X');
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
     state.threadId = '';

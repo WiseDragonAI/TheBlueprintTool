@@ -37,7 +37,7 @@ export function renderThreadNotes(): void {
     deleteButton.dataset.noteId = noteId;
     deleteButton.title = 'Delete note';
     deleteButton.setAttribute('aria-label', 'Delete note');
-    deleteButton.textContent = 'Delete';
+    deleteButton.textContent = 'X';
     item.append(body);
     if (status) item.append(meta);
     if (noteId) item.append(deleteButton);
