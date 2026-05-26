@@ -71,6 +71,33 @@ test('upload-voice-audio posts captured audio to backend upload route', async ()
   }
 });
 
+test('upload-voice-audio preserves wav content type for provider-safe transcription', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousWindow = globalThis.window;
+  const previousCustomEvent = globalThis.CustomEvent;
+  let requested: { url?: string; init?: RequestInit } = {};
+  state.threadId = 'thread-card-a';
+  (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
+  (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
+    constructor(_name: string, public options: Record<string, unknown> = {}) {}
+  };
+  (globalThis as unknown as { fetch: unknown }).fetch = async (url: string, init: RequestInit) => {
+    requested = { url, init };
+    return { ok: true, status: 202, json: async () => ({ body: { ok: true, uploaded: true, configured: true, voiceFileRef: '/tmp/voice.wav', text: '' } }) };
+  };
+
+  try {
+    const result = await uploadVoiceAudio(new Blob(['abc'], { type: 'audio/wav' }));
+    assert.equal(result.voiceFileRef, '/tmp/voice.wav');
+    assert.equal((requested.init?.headers as Record<string, string>)['content-type'], 'audio/wav');
+  } finally {
+    (globalThis as unknown as { fetch: unknown }).fetch = previousFetch;
+    (globalThis as unknown as { window: unknown }).window = previousWindow;
+    (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
+    state.threadId = '';
+  }
+});
+
 test('upload-voice-audio reports accepted upload before transcription provider runs', async () => {
   const previousFetch = globalThis.fetch;
   const previousWindow = globalThis.window;

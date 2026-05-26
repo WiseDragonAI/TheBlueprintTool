@@ -2560,7 +2560,7 @@
       "y": 6194,
       "w": 320,
       "comment": {
-        "what": "Voice audio is uploaded before final transcript confirmation. The active conversation ledger receives a local voice note before any backend response, then backend append/update calls reconcile the same client note id and record `voiceFileRef` before provider transcription, so missing or failing transcription credentials do not make the upload or note disappear."
+        "what": "Voice audio is uploaded before final transcript confirmation. Browser capture is encoded as mono PCM WAV before upload so provider transcription receives a conservative supported container instead of fragile MediaRecorder WebM. The active conversation ledger receives a local voice note before any backend response, then backend append/update calls reconcile the same client note id and record `voiceFileRef` before provider transcription, so missing or failing transcription credentials do not make the upload or note disappear."
       },
       "facts": [],
       "fields": []

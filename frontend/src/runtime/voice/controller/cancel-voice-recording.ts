@@ -10,6 +10,10 @@ export function cancelVoiceRecording(): void {
   if (state.voice.animationFrameId) cancelAnimationFrame(state.voice.animationFrameId);
   const recorder = state.voice.recorder as MediaRecorder | undefined;
   if (recorder && recorder.state !== 'inactive') recorder.stop();
+  const processor = state.voice.processor as ScriptProcessorNode | undefined;
+  processor?.disconnect();
+  const silentGain = state.voice.silentGain as GainNode | undefined;
+  silentGain?.disconnect();
   const stream = state.voice.stream as MediaStream | undefined;
   stream?.getTracks().forEach((track) => track.stop());
   const audioContext = state.voice.audioContext as AudioContext | undefined;

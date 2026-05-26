@@ -16,13 +16,23 @@ export async function startVoiceRecording(): Promise<void> {
     const analyser = audioContext.createAnalyser();
     analyser.fftSize = 256;
     source.connect(analyser);
+    const pcmChunks: Float32Array[] = [];
+    const processor = audioContext.createScriptProcessor(4096, 1, 1);
+    const silentGain = audioContext.createGain();
+    silentGain.gain.value = 0;
+    processor.onaudioprocess = (event) => {
+      pcmChunks.push(new Float32Array(event.inputBuffer.getChannelData(0)));
+    };
+    source.connect(processor);
+    processor.connect(silentGain);
+    silentGain.connect(audioContext.destination);
     const recorder = new MediaRecorder(stream);
     const chunks: BlobPart[] = [];
     recorder.addEventListener('dataavailable', (event) => {
       if (event.data?.size) chunks.push(event.data);
     });
     recorder.start();
-    state.voice = { recording: true, startedAt: Date.now(), durationMs: 0, level: 0, waveSamples: [], transcriptionStatus: 'recording', stream, audioContext, analyser, recorder, chunks, mimeType: recorder.mimeType || 'audio/webm', error: '' };
+    state.voice = { recording: true, startedAt: Date.now(), durationMs: 0, level: 0, waveSamples: [], transcriptionStatus: 'recording', stream, audioContext, analyser, recorder, chunks, mimeType: 'audio/wav', recorderMimeType: recorder.mimeType || 'audio/webm', pcmChunks, sampleRate: audioContext.sampleRate, processor, silentGain, error: '' };
     telemetry('resolve-voice-session', { threadId: state.threadId });
     telemetry('capture-voice-audio', { status: 'recording', source: 'microphone' });
     updateVoiceRecordingFrame();
