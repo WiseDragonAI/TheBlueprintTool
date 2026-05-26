@@ -1,0 +1,4 @@
+interface:
+  display_name: "Executor Implement"
+  short_description: "Implement Master Ledger architecture into code."
+  default_prompt: "Use executor-implement to turn the Master Ledger into working code while preserving Root Blocks, domains, actions, controllers, helpers, effects, state, screens/pages, components, and tests."

@@ -98,7 +98,9 @@ test('specs and data ledger tabs commit canvas mutations through the server ledg
         serverLedger.notes[body.note.threadId].push({ id: 'note-1', role: 'operator', message: body.note.body, timestamp: 'now' });
       }
       if (body.action === 'delete-note') {
-        serverLedger.notes[body.note.threadId] = serverLedger.notes[body.note.threadId].slice(0, -1);
+        serverLedger.notes[body.note.threadId] = body.note.id
+          ? serverLedger.notes[body.note.threadId].filter((entry: Record<string, unknown>) => entry.id !== body.note.id)
+          : serverLedger.notes[body.note.threadId].slice(0, -1);
       }
       if (body.action === 'paste-selection') {
         serverLedger.cards.push({ id: `${activeTab}-card-copy`, x: 58, y: 68, w: 240 });
@@ -159,7 +161,7 @@ test('specs and data ledger tabs commit canvas mutations through the server ledg
     await commitActiveLedgerMutation({ action: 'append-note', note: { threadId: `thread-${activeTab}-card`, body: 'Server note' } });
     assert.equal(state.activeLedger.notes[`thread-${activeTab}-card`].length, 1);
 
-    await commitActiveLedgerMutation({ action: 'delete-note', note: { threadId: `thread-${activeTab}-card` } });
+    await commitActiveLedgerMutation({ action: 'delete-note', note: { threadId: `thread-${activeTab}-card`, id: 'note-1' } });
     assert.equal(state.activeLedger.notes[`thread-${activeTab}-card`].length, 0);
 
     await commitActiveLedgerMutation({ action: 'paste-selection', selection: { cardIds: [`${activeTab}-card`], zoneIds: [], groupIds: [] } });

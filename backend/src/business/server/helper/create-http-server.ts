@@ -219,7 +219,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         }
         if (mutation.action === 'delete-note' && mutation.note?.threadId) {
           const notesByThread = normalizeLedgerNotes(ledger);
-          notesByThread[mutation.note.threadId] = (notesByThread[mutation.note.threadId] ?? []).slice(0, -1);
+          const notes = notesByThread[mutation.note.threadId] ?? [];
+          const noteId = String(mutation.note.id ?? '');
+          notesByThread[mutation.note.threadId] = noteId ? notes.filter((entry) => String(entry.id ?? '') !== noteId) : notes.slice(0, -1);
         }
         if (mutation.action === 'paste-selection' && mutation.selection) {
           const suffix = `copy-${Date.now()}`;

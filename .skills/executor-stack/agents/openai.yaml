@@ -1,0 +1,4 @@
+interface:
+  display_name: "Executor"
+  short_description: "Generate Core master ledgers from stack/capacity architecture."
+  default_prompt: "Use the executor-stack skill to classify Root Blocks, stack topology, and technical choices from specs and data."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Executor Precheck"
+  short_description: "Verify ledger inputs and scope before executor-stack."
+  default_prompt: "Use executor-precheck to verify operator intent, Specs, Data Model, Runtime State, repo facts, scope boundary, and blockers before running executor-stack."

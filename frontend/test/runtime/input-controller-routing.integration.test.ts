@@ -44,6 +44,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   const keyboard = source('frontend/src/runtime/input/controller/handle-keyboard.ts');
   assert.match(keyboard, /confirmZoneDeletionController/);
   assert.match(keyboard, /deleteZoneController/);
+  assert.match(keyboard, /deleteNoteController/);
   assert.match(keyboard, /pasteSelectionController/);
   assert.match(keyboard, /openThreadPanel/);
   assert.match(keyboard, /closeThreadPanel/);
@@ -60,6 +61,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(actionClick, /deleteZoneController/);
   assert.match(actionClick, /createNoteController/);
   assert.match(actionClick, /deleteNoteController/);
+  assert.match(actionClick, /confirmNoteDeletionController/);
   assert.doesNotMatch(actionClick, /beginZoneLabelEdit/);
   assert.doesNotMatch(actionClick, /deleteSelectedZones/);
   assert.doesNotMatch(actionClick, /commitActiveLedgerMutation/);

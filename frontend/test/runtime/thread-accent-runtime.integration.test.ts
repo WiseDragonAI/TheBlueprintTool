@@ -34,8 +34,8 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   assert.match(threadCss, /voice-panel[\s\S]*--thread-accent/);
   assert.match(threadCss, /thread-note\.is-operator[\s\S]*var\(--thread-accent\)/);
   assert.match(threadCss, /thread-note\.is-agent[\s\S]*background: transparent/);
-  assert.match(threadCss, /thread-draft[\s\S]*border: 1px solid rgba\(255, 255, 255, 0\.08\)/);
-  assert.match(threadCss, /thread-draft[\s\S]*background: #0b0b0b/);
+  assert.match(threadCss, /thread-draft[\s\S]*border: 0/);
+  assert.match(threadCss, /thread-draft[\s\S]*background: #111315/);
   assert.doesNotMatch(threadCss, /thread-draft[\s\S]*border: 1px solid color-mix\(in srgb, var\(--thread-accent\)/);
   assert.match(controlsCss, /meter-fill[\s\S]*--thread-accent/);
   assert.match(controlsCss, /wave-panel[\s\S]*--thread-accent/);

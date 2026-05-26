@@ -3,6 +3,7 @@
  * WHY: Voice and text notes must appear as conversation ledger entries, not only draft text.
  */
 import { state } from '../../state.js';
+import { renderLedgerCardMarkdown } from '../../ledger/component/render-ledger-card-markdown.js';
 
 export function renderThreadNotes(): void {
   const existing = document.querySelector('.thread-note-list') as HTMLElement | null;
@@ -17,18 +18,29 @@ export function renderThreadNotes(): void {
     const status = String(note.status ?? '');
     const role = String(note.role ?? 'operator').toLowerCase();
     const agentOwned = role === 'agent' || role === 'assistant';
+    const noteId = String(note.id ?? '');
     const normalizedStatus = status.toLowerCase();
     const busy = /committing|uploading|transcribing|retrying/.test(normalizedStatus);
     const retryable = Boolean(note.voiceFileRef) && /failed|not configured|unavailable/.test(normalizedStatus);
     const item = document.createElement('li');
     item.className = ['thread-note', note.voiceFileRef ? 'voice-note' : '', note.optimistic ? 'is-optimistic' : '', busy ? 'is-busy' : '', retryable ? 'is-retryable' : '', agentOwned ? 'is-agent' : 'is-operator'].filter(Boolean).join(' ');
-    const body = document.createElement('p');
-    body.className = 'thread-note-message';
-    body.textContent = String(note.message ?? note.body ?? '');
+    const body = renderLedgerCardMarkdown(String(note.message ?? note.body ?? ''));
+    body.classList.add('thread-note-message');
     const meta = document.createElement('span');
     meta.className = 'thread-note-meta';
-    meta.textContent = [agentOwned ? 'agent' : 'operator', status, note.timestamp].filter(Boolean).join(' · ');
-    item.append(body, meta);
+    meta.textContent = status;
+    const deleteButton = document.createElement('button');
+    deleteButton.className = 'thread-note-delete terminal-button terminal-button--compact';
+    deleteButton.type = 'button';
+    deleteButton.dataset.action = 'confirm-delete-note';
+    deleteButton.dataset.threadId = state.threadId;
+    deleteButton.dataset.noteId = noteId;
+    deleteButton.title = 'Delete note';
+    deleteButton.setAttribute('aria-label', 'Delete note');
+    deleteButton.textContent = 'Delete';
+    item.append(body);
+    if (status) item.append(meta);
+    if (noteId) item.append(deleteButton);
     if (busy) {
       const spinner = document.createElement('span');
       spinner.className = 'thread-note-spinner';

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Executor Spec"
+  short_description: "Clarify specs before Master Ledger generation."
+  default_prompt: "Use executor-spec to read the stack analysis, Specs, Data Model, and Runtime State, then produce operator questions that clarify applicability before creating a Master Ledger."

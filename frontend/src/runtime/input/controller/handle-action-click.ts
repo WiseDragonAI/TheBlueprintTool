@@ -8,6 +8,7 @@ import { deleteZoneController } from '../../zone/controller/delete-zone-controll
 import { editRegionController } from '../../zone/controller/edit-region-controller.js';
 import { createNoteController } from '../../thread/controller/create-note-controller.js';
 import { deleteNoteController } from '../../thread/controller/delete-note-controller.js';
+import { confirmNoteDeletionController } from '../../thread/controller/confirm-note-deletion-controller.js';
 import { renderThreadPanel } from '../../thread/effect/render-thread-panel.js';
 import { refreshRuntimeState } from '../../refresh/controller/refresh-runtime-state.js';
 import { selectTarget } from '../../selection/controller/select-target.js';
@@ -53,8 +54,19 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     renderThreadPanel();
   }
   if (action === 'delete-note') {
-    await deleteNoteController(state.threadId);
+    await deleteNoteController({
+      threadId: actionTarget.dataset.threadId ?? modal.dataset.threadId ?? state.threadId,
+      noteId: actionTarget.dataset.noteId ?? modal.dataset.noteId ?? ''
+    });
     renderThreadPanel();
+    return;
+  }
+  if (action === 'confirm-delete-note') {
+    confirmNoteDeletionController({
+      threadId: actionTarget.dataset.threadId ?? state.threadId,
+      noteId: actionTarget.dataset.noteId ?? ''
+    });
+    return;
   }
   if (action === 'voice-start') {
     void startVoiceRecording();

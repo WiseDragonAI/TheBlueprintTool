@@ -132,7 +132,7 @@ test('blueprinttool canvas mutations are applied by the authoritative server led
     const deleteNoteResponse = await fetch(endpoint, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'delete-note', note: { threadId: 'thread-card-a' } })
+      body: JSON.stringify({ action: 'delete-note', note: { threadId: 'thread-card-a', id: voiceNoteId } })
     });
     assert.equal(deleteNoteResponse.ok, true);
     const deletedNoteLedger = await deleteNoteResponse.json() as { notes: Record<string, Array<Record<string, unknown>>> };

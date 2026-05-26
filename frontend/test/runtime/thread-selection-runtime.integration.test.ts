@@ -9,6 +9,49 @@ import { selectThread } from '../../src/runtime/thread/effect/select-thread.js';
 import { renderThreadNotes } from '../../src/runtime/thread/effect/render-thread-notes.js';
 import { state } from '../../src/runtime/state.js';
 
+type TestElement = {
+  tagName: string;
+  className: string;
+  textContent: string;
+  type: string;
+  title: string;
+  dataset: Record<string, string>;
+  attributes: Record<string, string>;
+  children: TestElement[];
+  classList: { add: (...names: string[]) => void };
+  append: (...children: TestElement[]) => void;
+  appendChild: (child: TestElement) => TestElement;
+  setAttribute: (name: string, value: string) => void;
+};
+
+function createTestElement(textContent = '', tagName = ''): TestElement {
+  const element = {} as TestElement;
+  element.tagName = tagName;
+  element.className = '';
+  element.textContent = textContent;
+  element.type = '';
+  element.title = '';
+  element.dataset = {};
+  element.attributes = {};
+  element.children = [];
+  element.classList = {
+    add: (...names: string[]) => {
+      element.className = [element.className, ...names].filter(Boolean).join(' ');
+    }
+  };
+  element.append = (...children: TestElement[]) => {
+    element.children.push(...children);
+  };
+  element.appendChild = (child: TestElement) => {
+    element.children.push(child);
+    return child;
+  };
+  element.setAttribute = (name: string, value: string) => {
+    element.attributes[name] = value;
+  };
+  return element;
+}
+
 test('thread-id-for-target maps selected canvas objects to canonical thread ids', () => {
   assert.equal(threadIdForTarget('card', 'abc123'), 'thread-abc123');
   assert.equal(threadIdForTarget('zone', 'zone-a'), 'thread-zone-a');
@@ -40,13 +83,13 @@ test('select-thread clears stale idle voice status when card context changes', (
 
 test('render-thread-notes shows active thread conversation entries', () => {
   const previousDocument = globalThis.document;
-  const rendered: Array<{ className: string; children: unknown[] }> = [];
+  const rendered: TestElement[] = [];
   const list = {
     className: '',
     replaceChildren() {
       rendered.length = 0;
     },
-    append(item: { className: string; children: unknown[] }) {
+    append(item: TestElement) {
       rendered.push(item);
     }
   };
@@ -57,17 +100,11 @@ test('render-thread-notes shows active thread conversation entries', () => {
       if (selector === '.thread-draft') return draft;
       return null;
     },
-    createElement() {
-      return {
-        className: '',
-        textContent: '',
-        type: '',
-        dataset: {} as Record<string, string>,
-        children: [] as unknown[],
-        append(...children: unknown[]) {
-          this.children.push(...children);
-        }
-      };
+    createElement(tagName: string) {
+      return createTestElement('', tagName);
+    },
+    createTextNode(text: string) {
+      return createTestElement(text);
     }
   };
   try {
@@ -89,13 +126,13 @@ test('render-thread-notes shows active thread conversation entries', () => {
 
 test('render-thread-notes keeps failed voice audio retryable', () => {
   const previousDocument = globalThis.document;
-  const rendered: Array<{ className: string; children: Array<{ className?: string; dataset?: Record<string, string>; textContent?: string }> }> = [];
+  const rendered: TestElement[] = [];
   const list = {
     className: '',
     replaceChildren() {
       rendered.length = 0;
     },
-    append(item: { className: string; children: Array<{ className?: string; dataset?: Record<string, string>; textContent?: string }> }) {
+    append(item: TestElement) {
       rendered.push(item);
     }
   };
@@ -104,17 +141,11 @@ test('render-thread-notes keeps failed voice audio retryable', () => {
       if (selector === '.thread-note-list') return list;
       return null;
     },
-    createElement() {
-      return {
-        className: '',
-        textContent: '',
-        type: '',
-        dataset: {} as Record<string, string>,
-        children: [] as Array<{ className?: string; dataset?: Record<string, string>; textContent?: string }>,
-        append(...children: Array<{ className?: string; dataset?: Record<string, string>; textContent?: string }>) {
-          this.children.push(...children);
-        }
-      };
+    createElement(tagName: string) {
+      return createTestElement('', tagName);
+    },
+    createTextNode(text: string) {
+      return createTestElement(text);
     }
   };
   try {
@@ -130,6 +161,9 @@ test('render-thread-notes keeps failed voice audio retryable', () => {
     assert.equal(retry?.dataset?.action, 'voice-retry');
     assert.equal(retry?.dataset?.noteId, 'note-1');
     assert.equal(retry?.dataset?.voiceFileRef, '/tmp/voice.webm');
+    const deleteButton = rendered[0].children.find((child) => child.className?.includes('thread-note-delete'));
+    assert.equal(deleteButton?.dataset?.action, 'confirm-delete-note');
+    assert.equal(deleteButton?.dataset?.noteId, 'note-1');
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
     state.threadId = '';
@@ -139,13 +173,13 @@ test('render-thread-notes keeps failed voice audio retryable', () => {
 
 test('render-thread-notes separates operator and agent speaker ownership', () => {
   const previousDocument = globalThis.document;
-  const rendered: Array<{ className: string; children: Array<{ className?: string; textContent?: string }> }> = [];
+  const rendered: TestElement[] = [];
   const list = {
     className: '',
     replaceChildren() {
       rendered.length = 0;
     },
-    append(item: { className: string; children: Array<{ className?: string; textContent?: string }> }) {
+    append(item: TestElement) {
       rendered.push(item);
     }
   };
@@ -154,17 +188,11 @@ test('render-thread-notes separates operator and agent speaker ownership', () =>
       if (selector === '.thread-note-list') return list;
       return null;
     },
-    createElement() {
-      return {
-        className: '',
-        textContent: '',
-        type: '',
-        dataset: {} as Record<string, string>,
-        children: [] as Array<{ className?: string; textContent?: string }>,
-        append(...children: Array<{ className?: string; textContent?: string }>) {
-          this.children.push(...children);
-        }
-      };
+    createElement(tagName: string) {
+      return createTestElement('', tagName);
+    },
+    createTextNode(text: string) {
+      return createTestElement(text);
     }
   };
   try {
@@ -172,16 +200,20 @@ test('render-thread-notes separates operator and agent speaker ownership', () =>
     state.activeLedger = {
       notes: {
         'thread-card-a': [
-          { role: 'operator', message: 'Operator question.' },
-          { role: 'assistant', message: 'Agent answer.' }
+          { id: 'note-operator', role: 'operator', message: 'Operator question.', status: 'transcribed' },
+          { id: 'note-agent', role: 'assistant', message: '**Agent** answer.' }
         ]
       }
     };
     renderThreadNotes();
     assert.equal(rendered[0].className, 'thread-note is-operator');
     assert.equal(rendered[1].className, 'thread-note is-agent');
-    assert.equal(rendered[0].children[1].textContent, 'operator');
-    assert.equal(rendered[1].children[1].textContent, 'agent');
+    assert.equal(rendered[0].children[0].className, 'ledger-card-body thread-note-message');
+    assert.equal(rendered[0].children[1].textContent, 'transcribed');
+    const agentParagraph = rendered[1].children[0].children[0];
+    assert.equal(agentParagraph.children[0].tagName, 'strong');
+    assert.equal(agentParagraph.children[0].textContent, 'Agent');
+    assert.equal(agentParagraph.children[1].textContent, ' answer.');
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
     state.threadId = '';

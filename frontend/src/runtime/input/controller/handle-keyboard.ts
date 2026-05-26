@@ -1,8 +1,13 @@
+/**
+ * WHAT: Routes global keyboard shortcuts to runtime controllers.
+ * WHY: Keyboard input must preserve canonical UI command flow, including modal confirmations.
+ */
 import { modal } from '../../dom.js';
 import { state } from '../../state.js';
 import { pasteSelectionController } from '../../clipboard/controller/paste-selection-controller.js';
 import { confirmZoneDeletionController } from '../../zone/controller/confirm-zone-deletion-controller.js';
 import { deleteZoneController } from '../../zone/controller/delete-zone-controller.js';
+import { deleteNoteController } from '../../thread/controller/delete-note-controller.js';
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
 import { resetActiveTool } from '../../toolbox/controller/reset-active-tool.js';
 import { openThreadPanel } from '../../thread/effect/open-thread-panel.js';
@@ -18,6 +23,22 @@ export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
   const target = event.target as HTMLElement | null;
   const key = event.key.toLowerCase();
   const editableTarget = target?.closest('input,textarea,select,[contenteditable="true"]');
+  if (modal.open) {
+    if (key === 'enter') {
+      event.preventDefault();
+      if (modal.dataset.confirmKind === 'note') {
+        await deleteNoteController({ threadId: modal.dataset.threadId ?? state.threadId, noteId: modal.dataset.noteId ?? '' });
+      } else {
+        await deleteZoneController();
+      }
+      return;
+    }
+    if (key === 'escape') {
+      event.preventDefault();
+      modal.close?.();
+      return;
+    }
+  }
   if (target?.closest('.thread-draft') && event.ctrlKey && key === 'enter') {
     event.preventDefault();
     await submitThreadDraft();
@@ -62,6 +83,4 @@ export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
   if (event.ctrlKey && key === 'v' && state.clipboard) {
     await pasteSelectionController();
   }
-  if (modal.open && key === 'enter') await deleteZoneController();
-  if (modal.open && key === 'escape') modal.close?.();
 }

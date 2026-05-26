@@ -4780,6 +4780,48 @@
       },
       "facts": [],
       "fields": []
+    },
+    {
+      "id": "a7d5c3e2",
+      "title": "Thread notes delete through a confirmed note-specific action",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": -7707,
+      "y": 5560,
+      "w": 680,
+      "comment": {
+        "what": "Each rendered thread note with a durable note id exposes a delete action only on hover or focus. Clicking it opens the shared confirmation modal for that exact thread id and note id. Enter confirms the deletion, Escape cancels it, and the backend must delete the matching note id instead of blindly removing the latest note."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "e4f1a9b6",
+      "title": "Thread conversation renders markdown without forced bold chrome",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": -7707,
+      "y": 5756,
+      "w": 680,
+      "comment": {
+        "what": "Thread note bodies use the same markdown parser and DOM renderer as card bodies so agent replies can contain paragraphs, lists, tables, code blocks, inline code, and bold spans. Default note text is regular weight Ubuntu text, agent replies stay left as unframed conversation text, operator notes stay right in a lightly tinted grey card using the target accent, metadata is reduced to status only, and the thread input has no CSS border, only a lighter neutral inset surface."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "b2e7c5d9",
+      "title": "Master ledger executor skills are repo-local",
+      "cardType": "spec-brief",
+      "domainId": "generator",
+      "x": -7707,
+      "y": 5952,
+      "w": 680,
+      "comment": {
+        "what": "The executor skills used to precheck, analyze stack, write the master ledger, and implement generated scaffold must be carried inside the repository under `.skills/` with their SKILL.md files, agent metadata, and references. The repo must not depend only on operator-local Codex skill storage to regenerate or audit the master ledger workflow."
+      },
+      "facts": [],
+      "fields": []
     }
   ],
   "relationships": [],
