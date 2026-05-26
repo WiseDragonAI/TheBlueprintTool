@@ -32,7 +32,9 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   const accentEffect = readFileSync(new URL('frontend/src/runtime/thread/effect/apply-thread-accent.ts', root), 'utf8');
   assert.match(shellCss, /-34px 0 68px rgba\(0, 0, 0, 0\.86\)/);
   assert.match(threadCss, /voice-panel[\s\S]*--thread-accent/);
-  assert.match(threadCss, /thread-draft[\s\S]*background: #071014/);
+  assert.match(threadCss, /thread-draft[\s\S]*border: 1px solid rgba\(255, 255, 255, 0\.08\)/);
+  assert.match(threadCss, /thread-draft[\s\S]*background: #0b0b0b/);
+  assert.doesNotMatch(threadCss, /thread-draft[\s\S]*border: 1px solid color-mix\(in srgb, var\(--thread-accent\)/);
   assert.match(controlsCss, /meter-fill[\s\S]*--thread-accent/);
   assert.match(controlsCss, /wave-panel[\s\S]*--thread-accent/);
   assert.match(accentEffect, /--voice-graph-secondary/);

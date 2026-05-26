@@ -4752,6 +4752,20 @@
       },
       "facts": [],
       "fields": []
+    },
+    {
+      "id": "6a1f0d8c",
+      "title": "Voice processing returns footer to text composer",
+      "cardType": "spec-brief",
+      "domainId": "voice",
+      "x": -7707,
+      "y": 5168,
+      "w": 680,
+      "comment": {
+        "what": "After recording stops and upload/transcription processing is represented by the optimistic voice note, the bottom waveform recorder dock must be hidden and the thread text composer must remain visible. The thread draft input uses a neutral zero-saturation grey surface roughly 3% lighter than the footer container and must not use the thread accent color for its border or focus border."
+      },
+      "facts": [],
+      "fields": []
     }
   ],
   "relationships": [],

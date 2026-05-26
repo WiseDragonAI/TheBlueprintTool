@@ -1,3 +1,7 @@
+/**
+ * WHAT: Reflects the current voice recording status into the thread footer.
+ * WHY: Recording owns the waveform dock, while upload/transcription progress belongs to the optimistic note state.
+ */
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { paintVoiceWaveLevel } from './paint-voice-wave-level.js';
@@ -16,9 +20,9 @@ export function renderVoiceStatus(): void {
   const busy = /transcribing|uploading|retrying/.test(String(state.voice.transcriptionStatus ?? ''));
   panel.classList.toggle('recording', Boolean(state.voice.recording));
   panel.classList.toggle('busy', busy);
-  if (recorder) recorder.hidden = !state.voice.recording && !busy;
+  if (recorder) recorder.hidden = !state.voice.recording;
   meter.style.height = `${Math.round(18 + level * 74)}%`;
-  paintVoiceWaveLevel(panel, level, Boolean(state.voice.recording || busy), waveSamples);
+  paintVoiceWaveLevel(panel, level, Boolean(state.voice.recording), waveSamples);
   if (timer) timer.textContent = `00:${String(wholeSeconds).padStart(2, '0')}`;
   status.textContent = state.voice.recording
     ? `Recording ${seconds}s  level ${level.toFixed(2)}`

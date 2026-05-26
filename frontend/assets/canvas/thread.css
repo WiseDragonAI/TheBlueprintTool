@@ -146,9 +146,9 @@
   width: 100%;
   min-height: 126px;
   resize: none;
-  border: 1px solid color-mix(in srgb, var(--thread-accent), transparent 50%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 2px;
-  background: #071014;
+  background: #0b0b0b;
   color: #f3f6fb;
   padding: 12px 13px;
   outline: none;
@@ -159,7 +159,7 @@
 }
 
 .thread-draft:focus {
-  border-color: color-mix(in srgb, var(--thread-accent), white 18%);
+  border-color: rgba(255, 255, 255, 0.16);
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.07),
     inset 0 2px 24px rgba(0, 0, 0, 0.92);
@@ -220,8 +220,7 @@
   min-width: 0;
 }
 
-.voice-panel.recording .terminal-composer,
-.voice-panel.busy .terminal-composer {
+.voice-panel.recording .terminal-composer {
   display: none;
 }
 
