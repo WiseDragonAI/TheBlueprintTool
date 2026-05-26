@@ -6,6 +6,8 @@ import { modal, shortcutModal } from '../../dom.js';
 import { state } from '../../state.js';
 import { deleteZoneController } from '../../zone/controller/delete-zone-controller.js';
 import { editRegionController } from '../../zone/controller/edit-region-controller.js';
+import { confirmCardDeletionController } from '../../card/controller/confirm-card-deletion-controller.js';
+import { deleteCardController } from '../../card/controller/delete-card-controller.js';
 import { createNoteController } from '../../thread/controller/create-note-controller.js';
 import { deleteNoteController } from '../../thread/controller/delete-note-controller.js';
 import { confirmNoteDeletionController } from '../../thread/controller/confirm-note-deletion-controller.js';
@@ -43,6 +45,15 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
   if (action === 'voice-cancel') cancelVoiceRecording();
   if (action === 'voice-retry') {
     await retryVoiceTranscription({ threadId: actionTarget.dataset.threadId ?? state.threadId, noteId: actionTarget.dataset.noteId ?? '', voiceFileRef: actionTarget.dataset.voiceFileRef ?? '' });
+    return;
+  }
+  if (action === 'confirm-delete-card') {
+    confirmCardDeletionController({ cardId: actionTarget.dataset.cardId ?? '' });
+    return;
+  }
+  if (action === 'delete-card') {
+    await deleteCardController({ cardId: actionTarget.dataset.cardId ?? modal.dataset.cardId ?? '' });
+    renderThreadPanel();
     return;
   }
   if (action === 'edit-zone') {

@@ -9,8 +9,9 @@ import { ledgerEndpointForTab } from '../helper/ledger-endpoint-for-tab.js';
 import { mergeLocalThreadNotes } from '../helper/merge-local-thread-notes.js';
 
 export type ActiveLedgerMutation = {
-  action: 'create-card' | 'patch-card' | 'create-zone' | 'create-group' | 'create-relationship' | 'delete-zones' | 'delete-relationships' | 'patch-geometry' | 'patch-region' | 'append-note' | 'update-note' | 'delete-note' | 'paste-selection';
+  action: 'create-card' | 'patch-card' | 'delete-card' | 'create-zone' | 'create-group' | 'create-relationship' | 'delete-zones' | 'delete-relationships' | 'patch-geometry' | 'patch-region' | 'append-note' | 'update-note' | 'delete-note' | 'paste-selection';
   card?: Record<string, unknown>;
+  cardId?: string;
   cardPatch?: {
     id: string;
     title?: string;

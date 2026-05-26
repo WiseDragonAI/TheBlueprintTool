@@ -20,7 +20,7 @@ export function handlePointerDown(event: PointerEvent): void {
   const rawTarget = event.target as HTMLElement;
   if (isGestureControlTarget(rawTarget)) return;
   const editedCard = rawTarget.closest('[data-card-id]') as HTMLElement | null;
-  const editArea = rawTarget.closest('.ledger-card-title, strong') ? 'title' : rawTarget.closest('.ledger-card-body') ? 'body' : '';
+  const editArea = rawTarget.closest('.ledger-card-title') ? 'title' : rawTarget.closest('.ledger-card-body') ? 'body' : '';
   const editedCardId = editedCard?.dataset.cardId ?? '';
   const now = performance.now();
   const isCardEditDoubleClick = Boolean(

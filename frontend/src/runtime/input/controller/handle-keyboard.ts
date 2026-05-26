@@ -7,6 +7,7 @@ import { state } from '../../state.js';
 import { pasteSelectionController } from '../../clipboard/controller/paste-selection-controller.js';
 import { confirmZoneDeletionController } from '../../zone/controller/confirm-zone-deletion-controller.js';
 import { deleteZoneController } from '../../zone/controller/delete-zone-controller.js';
+import { deleteCardController } from '../../card/controller/delete-card-controller.js';
 import { deleteNoteController } from '../../thread/controller/delete-note-controller.js';
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
 import { resetActiveTool } from '../../toolbox/controller/reset-active-tool.js';
@@ -18,6 +19,7 @@ import { startVoiceRecording } from '../../voice/controller/start-voice-recordin
 import { stopVoiceRecording } from '../../voice/controller/stop-voice-recording.js';
 import { cancelVoiceRecording } from '../../voice/controller/cancel-voice-recording.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { isCardEditingKeyboardTarget } from '../helper/is-card-editing-keyboard-target.js';
 
 export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
   const target = event.target as HTMLElement | null;
@@ -28,6 +30,8 @@ export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
       event.preventDefault();
       if (modal.dataset.confirmKind === 'note') {
         await deleteNoteController({ threadId: modal.dataset.threadId ?? state.threadId, noteId: modal.dataset.noteId ?? '' });
+      } else if (modal.dataset.confirmKind === 'card') {
+        await deleteCardController({ cardId: modal.dataset.cardId ?? '' });
       } else {
         await deleteZoneController();
       }
@@ -44,6 +48,7 @@ export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
     await submitThreadDraft();
     return;
   }
+  if (isCardEditingKeyboardTarget(target)) return;
   if (editableTarget && key !== 'escape' && !(key === 'a' && !state.threadPanelOpen)) return;
   telemetry('keyboard-shortcut', { key, ctrlKey: event.ctrlKey });
   if (key === 'a') {

@@ -21,7 +21,7 @@ export function mergeLocalThreadNotes(ledger: Record<string, any> | null): Recor
       if (existingIndex >= 0) merged[existingIndex] = { ...merged[existingIndex], ...localNote };
       else merged.push(localNote);
     }
-    nextNotes[threadId] = merged;
+    if (merged.length > 0 || Object.prototype.hasOwnProperty.call(nextNotes, threadId)) nextNotes[threadId] = merged;
   }
   ledger.notes = nextNotes;
   return ledger;

@@ -256,6 +256,53 @@ test('ledger card titles include PascalCase word break opportunities without cha
   }
 });
 
+test('ledger card titles render inline markdown without dropping title wrapping', () => {
+  const previousDocument = globalThis.document;
+  (globalThis as unknown as { document: unknown }).document = {
+    createElement: (tagName: string) => new FakeElement(tagName),
+    createTextNode: (text: string) => new FakeText(text)
+  };
+
+  try {
+    const card = patchLedgerCard({
+      id: 'card-title-markdown',
+      title: 'RuneItem `FInventoryItem::Buffs` **Model**',
+      comment: { what: 'Title markdown target.' }
+    }) as unknown as FakeElement;
+    const title = card.children.find((child) => child instanceof FakeElement && child.className === 'ledger-card-title') as FakeElement;
+
+    assert.equal(title.children.some((child) => child instanceof FakeElement && child.tagName === 'code' && child.textContent === 'FInventoryItem::Buffs'), true);
+    assert.equal(title.children.some((child) => child instanceof FakeElement && child.tagName === 'strong' && child.textContent === 'Model'), true);
+    assert.equal(title.children.some((child) => child instanceof FakeElement && child.tagName === 'wbr'), true);
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+  }
+});
+
+test('ledger cards render a top-right confirmed delete action', () => {
+  const previousDocument = globalThis.document;
+  (globalThis as unknown as { document: unknown }).document = {
+    createElement: (tagName: string) => new FakeElement(tagName),
+    createTextNode: (text: string) => new FakeText(text)
+  };
+
+  try {
+    const card = patchLedgerCard({
+      id: 'card-delete',
+      title: 'Delete target',
+      comment: { what: 'Delete control target.' }
+    }) as unknown as FakeElement;
+    const button = card.children.find((child) => child instanceof FakeElement && child.className.includes('ledger-card-delete')) as FakeElement;
+
+    assert.equal(button.tagName, 'button');
+    assert.equal(button.dataset.action, 'confirm-delete-card');
+    assert.equal(button.dataset.cardId, 'card-delete');
+    assert.equal(button.textContent, 'X');
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+  }
+});
+
 test('ledger cards with fields render description and fields tab panels', () => {
   const previousDocument = globalThis.document;
   const previousCardUi = state.cardUi;

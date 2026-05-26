@@ -13,6 +13,7 @@ import { resolveBlueprinttoolRoot } from './resolve-blueprinttool-root.js';
 import { readRequestBuffer } from './read-request-buffer.js';
 import { contentTypeFor } from './content-type-for.js';
 import { normalizeLedgerNotes } from './normalize-ledger-notes.js';
+import { relationshipReferencesCard } from '../../ledger/helper/relationship-references-card.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -112,6 +113,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         const mutation = body ? JSON.parse(body) as {
           action?: string;
           card?: Record<string, unknown>;
+          cardId?: string;
           cardPatch?: { id?: string; title?: string; description?: string };
           annotation?: Record<string, unknown>;
           relationship?: Record<string, unknown>;
@@ -148,6 +150,14 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             comment.what = mutation.cardPatch.description;
             card.comment = comment;
           }
+        }
+        if (mutation.action === 'delete-card' && mutation.cardId) {
+          const cardId = String(mutation.cardId);
+          ledger.cards = (ledger.cards ?? []).filter((entry) => String(entry.id ?? '') !== cardId);
+          ledger.relationships = (ledger.relationships ?? []).filter((entry) => !relationshipReferencesCard(entry, cardId));
+          const notesByThread = normalizeLedgerNotes(ledger);
+          delete notesByThread[`thread-${cardId}`];
+          ledger.notes = notesByThread;
         }
         if (mutation.action === 'delete-zones') {
           const ids = new Set(mutation.zoneIds ?? []);

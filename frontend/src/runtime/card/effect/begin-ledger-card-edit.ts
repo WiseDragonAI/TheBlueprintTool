@@ -1,3 +1,7 @@
+/**
+ * WHAT: Opens inline card title and description editors.
+ * WHY: Card editing should preserve markdown source while routing persistence through ledger mutations.
+ */
 import { commitActiveLedgerMutation } from '../../ledger/effect/commit-active-ledger-mutation.js';
 import { ledgerCardBody } from '../../ledger/helper/ledger-card-body.js';
 import { state } from '../../state.js';
@@ -13,8 +17,10 @@ export function beginLedgerCardTitleEdit(cardElement: HTMLElement): void {
   const title = cardElement.querySelector('.ledger-card-title, strong') as HTMLElement | null;
   if (!cardId || !title) return;
 
+  const card = activeLedgerCard(cardId);
   title.contentEditable = 'true';
   title.classList.add('editing');
+  title.textContent = String(card?.title ?? title.textContent ?? '');
   title.focus();
   document.getSelection()?.selectAllChildren(title);
   title.addEventListener('keydown', (event) => {

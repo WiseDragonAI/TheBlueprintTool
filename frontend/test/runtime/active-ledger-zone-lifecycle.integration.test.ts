@@ -69,6 +69,7 @@ test('specs and data ledger tabs commit canvas mutations through the server ledg
         { id: `${activeTab}-keep-zone`, label: 'Keep zone', variant: 'zone', x: 1, y: 2, width: 180, height: 140 },
         { id: `${activeTab}-group`, label: 'Keep group', variant: 'group', x: 3, y: 4, width: 280, height: 180 }
       ],
+      relationships: [{ id: `${activeTab}-relationship`, source: `${activeTab}-card`, target: `${activeTab}-other-card` }],
       notes: { [`thread-${activeTab}-card`]: [] }
     };
     const serverLedger = structuredClone(state.activeLedger);
@@ -79,6 +80,11 @@ test('specs and data ledger tabs commit canvas mutations through the server ledg
       if (body.action === 'delete-zones') {
         const ids = new Set(body.zoneIds);
         serverLedger.annotations = serverLedger.annotations.filter((entry: Record<string, unknown>) => entry.variant === 'group' || !ids.has(entry.id));
+      }
+      if (body.action === 'delete-card') {
+        serverLedger.cards = serverLedger.cards.filter((entry: Record<string, unknown>) => entry.id !== body.cardId);
+        serverLedger.relationships = serverLedger.relationships.filter((entry: Record<string, unknown>) => entry.source !== body.cardId && entry.target !== body.cardId);
+        delete serverLedger.notes[`thread-${body.cardId}`];
       }
       if (body.action === 'patch-geometry') {
         const card = serverLedger.cards.find((entry: Record<string, unknown>) => entry.id === `${activeTab}-card`) as Record<string, unknown>;
@@ -167,6 +173,11 @@ test('specs and data ledger tabs commit canvas mutations through the server ledg
     await commitActiveLedgerMutation({ action: 'paste-selection', selection: { cardIds: [`${activeTab}-card`], zoneIds: [], groupIds: [] } });
     assert.equal(state.activeLedger.cards.at(-1).id, `${activeTab}-card-copy`);
 
+    await commitActiveLedgerMutation({ action: 'delete-card', cardId: `${activeTab}-card` });
+    assert.deepEqual(state.activeLedger.cards.map((card: Record<string, unknown>) => card.id), [`${activeTab}-card-copy`]);
+    assert.equal(state.activeLedger.relationships.length, 0);
+    assert.equal(state.activeLedger.notes[`thread-${activeTab}-card`], undefined);
+
     await commitActiveLedgerMutation({ action: 'delete-zones', zoneIds: [`${activeTab}-created-zone`, `${activeTab}-created-group`, `${activeTab}-group`] });
 
     assert.deepEqual(state.activeLedger.annotations, [
@@ -175,7 +186,6 @@ test('specs and data ledger tabs commit canvas mutations through the server ledg
       { id: `${activeTab}-created-group`, label: 'New group', variant: 'group', x: 60, y: 70, width: 320, height: 190 }
     ]);
     assert.deepEqual(state.activeLedger.cards, [
-      { id: `${activeTab}-card`, x: 111, y: 122, w: 333 },
       { id: `${activeTab}-card-copy`, x: 58, y: 68, w: 240 }
     ]);
   }

@@ -326,6 +326,47 @@
   text-overflow: ellipsis;
 }
 
+.ledger-card-title strong {
+  display: inline;
+  margin: 0;
+  color: inherit;
+}
+
+.ledger-card-title code {
+  color: var(--card-code-color);
+  font-family: var(--mono);
+  font-size: 1em;
+}
+
+.ledger-card-delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 7;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 0;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.card:hover .ledger-card-delete,
+.card:focus-within .ledger-card-delete,
+.card.selected .ledger-card-delete {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.card:has(.ledger-card-delete) .ledger-card-labels {
+  right: 38px;
+  max-width: calc(100% - 102px);
+}
+
 .ledger-card-tabs {
   position: absolute;
   left: 14px;

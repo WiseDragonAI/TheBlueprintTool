@@ -13,6 +13,7 @@ import { renderLedgerCardLabels } from './render-ledger-card-labels.js';
 import { renderLedgerCardMarkdown } from './render-ledger-card-markdown.js';
 import { renderLedgerCardTabFrame } from './render-ledger-card-tab-frame.js';
 import { renderLedgerCardTabs } from './render-ledger-card-tabs.js';
+import { renderLedgerCardDeleteButton } from './render-ledger-card-delete-button.js';
 
 export function patchLedgerCard(card: Record<string, unknown>, existing?: HTMLElement | null, zone?: Record<string, unknown> | null): HTMLElement {
   const element = existing ?? document.createElement('article');
@@ -69,9 +70,10 @@ export function patchLedgerCard(card: Record<string, unknown>, existing?: HTMLEl
   appendTitleText(title, String(card.title ?? id));
   const body = hasFieldTabs ? renderLedgerCardTabFrame(card, fields, activeTab) : renderLedgerCardMarkdown(ledgerCardBody(card));
   const handles = createCardResizeHandles();
+  const deleteButton = renderLedgerCardDeleteButton(id);
   const labelNodes = labels.length > 0 ? [renderLedgerCardLabels(labels)] : [];
   const tabs = hasFieldTabs ? [renderLedgerCardTabs(id, activeTab)] : [];
   const indicatorNodes = hasAgentLastAnswer ? [agentIndicator] : [];
-  element.replaceChildren(...handles, ...indicatorNodes, hash, ...labelNodes, title, ...tabs, body);
+  element.replaceChildren(...handles, deleteButton, ...indicatorNodes, hash, ...labelNodes, title, ...tabs, body);
   return element;
 }

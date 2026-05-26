@@ -1,3 +1,7 @@
+/**
+ * WHAT: Routes card double-clicks to title or description edit modes.
+ * WHY: Editing should depend on the clicked card region, not generic bold markdown inside the body.
+ */
 import { beginLedgerCardDescriptionEdit, beginLedgerCardTitleEdit } from '../../card/effect/begin-ledger-card-edit.js';
 
 export function handleCardDoubleClick(event: MouseEvent): void {
@@ -7,7 +11,7 @@ export function handleCardDoubleClick(event: MouseEvent): void {
 
   event.preventDefault();
   event.stopPropagation();
-  if (target.closest('.ledger-card-title, strong')) {
+  if (target.closest('.ledger-card-title')) {
     beginLedgerCardTitleEdit(card);
     return;
   }
