@@ -1,6 +1,6 @@
 /**
  * WHAT: Unit test for resolving the active .blueprinttool root from arbitrary cwd.
- * WHY: Ardaria launches CoreV2 backend from workspace directories outside the CoreV2 repo.
+ * WHY: External workspaces launch CoreV2 backend from directories outside the CoreV2 repo.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';

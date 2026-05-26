@@ -1,6 +1,6 @@
 /**
  * WHAT: Reads optional .blueprinttool/.settings.json into backend runtime state.
- * WHY: Workspace-specific server settings must follow the Ardaria cwd, not shell env only.
+ * WHY: Workspace-specific server settings must follow the launch cwd, not shell env only.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';

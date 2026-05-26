@@ -1,6 +1,6 @@
 /**
  * WHAT: Verifies the workspace server launcher emits the canonical backend command.
- * WHY: Running CoreV2 from Ardaria must not depend on copy-pasted env and loader flags.
+ * WHY: Running CoreV2 from external workspaces must not depend on copy-pasted env and loader flags.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';

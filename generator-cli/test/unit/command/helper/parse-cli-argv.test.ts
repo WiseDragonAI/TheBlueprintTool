@@ -15,7 +15,7 @@ test('parse-cli-argv parses targeted ledger mutations', () => {
     'ledger',
     'mutate',
     '--ledger',
-    '.blueprinttool/ardaria-data-model.json',
+    '.blueprinttool/example-ledger.json',
     '--card-id',
     'note_spawnable_vs_inventory_item',
     '--card-comment-file',
@@ -34,7 +34,7 @@ test('parse-cli-argv parses targeted ledger mutations', () => {
 
   assert.equal(command.mode, 'ledger');
   assert.equal(command.ledgerCommand, 'mutate');
-  assert.equal(command.ledgerJsonFile, '.blueprinttool/ardaria-data-model.json');
+  assert.equal(command.ledgerJsonFile, '.blueprinttool/example-ledger.json');
   assert.equal(command.mutationOperation.cardId, 'note_spawnable_vs_inventory_item');
   assert.equal(command.mutationOperation.cardCommentFile, 'tmp/comment.md');
   assert.equal(command.mutationOperation.cardTitle, 'TABLE: character');
@@ -48,10 +48,10 @@ test('parse-cli-argv parses ledger overview command', () => {
     'ledger',
     'overview',
     '--ledger',
-    '.blueprinttool/ardaria-data-model.json',
+    '.blueprinttool/example-ledger.json',
   ]);
 
   assert.equal(command.mode, 'ledger');
   assert.equal(command.ledgerCommand, 'overview');
-  assert.equal(command.ledgerJsonFile, '.blueprinttool/ardaria-data-model.json');
+  assert.equal(command.ledgerJsonFile, '.blueprinttool/example-ledger.json');
 });

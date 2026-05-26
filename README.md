@@ -6,17 +6,17 @@ CoreV2 is the Blueprint Tool runtime: a browser canvas, a backend ledger server,
 
 Use the repo launcher instead of spelling out the Node loader and environment variables by hand.
 
-From a project workspace such as Ardaria:
+From any project workspace:
 
 ```bash
-cd /media/jbb/57af6506-cd41-47dd-bcb1-5280ec4da1e7/Ardaria_57
+cd /path/to/project-workspace
 /home/jbb/dev/EditorBP/CoreV2/bin/blueprinttool-server.mjs
 ```
 
 Then open the ledger route:
 
 ```text
-http://127.0.0.1:4173/ardaria-game-design
+http://127.0.0.1:4173/example-ledger
 ```
 
 The launcher derives CoreV2 paths from its own location and automatically sets:
@@ -52,11 +52,11 @@ The backend resolves the active `.blueprinttool` directory by walking upward fro
 Expected workspace shape:
 
 ```text
-Ardaria_57/
+ExampleWorkspace/
   .blueprinttool/
     state.json
     .settings.json
-    ardaria-game-design.json
+    example-ledger.json
 ```
 
 `state.json` defines available tabs and ledger files:
@@ -65,9 +65,9 @@ Ardaria_57/
 {
   "tabs": [
     {
-      "id": "ardaria-game-design",
-      "title": "Ardaria Game Design",
-      "ledgerFile": ".blueprinttool/ardaria-game-design.json"
+      "id": "example-ledger",
+      "title": "Example Ledger",
+      "ledgerFile": ".blueprinttool/example-ledger.json"
     }
   ]
 }

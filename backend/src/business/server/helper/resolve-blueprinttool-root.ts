@@ -1,6 +1,6 @@
 /**
  * WHAT: Resolves the active .blueprinttool directory from any backend launch cwd.
- * WHY: Ardaria workspaces start CoreV2 from project roots outside the CoreV2 repo.
+ * WHY: External workspaces start CoreV2 from project roots outside the CoreV2 repo.
  */
 import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';

@@ -4104,7 +4104,7 @@
       "y": 4088,
       "w": 560,
       "comment": {
-        "what": "Backend startup resolves the active `.blueprinttool` directory from the launch cwd or `BLUEPRINTTOOL_ROOT`, reads optional `.blueprinttool/.settings.json`, and applies workspace settings for frontend root, host, port, and transcription configuration. This lets Ardaria launch CoreV2 from the Ardaria project cwd while keeping OpenAI and frontend settings with the workspace."
+        "what": "Backend startup resolves the active `.blueprinttool` directory from the launch cwd or `BLUEPRINTTOOL_ROOT`, reads optional `.blueprinttool/.settings.json`, and applies workspace settings for frontend root, host, port, and transcription configuration. External project workspaces are separate repos; Blueprint Tool must support launching from their cwd without embedding project-specific names or settings."
       },
       "facts": [],
       "fields": []
