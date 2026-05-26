@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * WHAT: generator-cli executable entrypoint.
- * WHY: operators need a TypeScript Node script for generator dry-run, apply, report, patch-doc, and ledger commands.
+ * WHY: operators need a TypeScript Node script for scaffold generation, reports, patch docs, and ledger checks.
  */
 import { dispatchCliCommandController } from '../src/business/command/controller/dispatch-cli-command.js';
 

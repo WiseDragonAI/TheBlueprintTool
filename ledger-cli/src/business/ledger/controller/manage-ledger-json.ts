@@ -1,6 +1,6 @@
 /**
  * WHAT: Ledger JSON command controller.
- * WHY: CLI architecture edits must use committed ledger files as the work surface.
+ * WHY: ledger edits must use committed ledger files as the work surface.
  */
 import type { FileSystemPort, Result } from '../../../lib/types.js';
 import { telemetry } from '../../../lib/telemetry/telemetry.js';
@@ -26,12 +26,15 @@ async function applyLedgerMutationOperation(
     }>;
     cardCommentFile?: string;
     cardId?: string;
+    cardLabels?: string[];
     cardTitle?: string;
+    removeCardIds?: string[];
     removeRelationshipIds?: string[];
   } | undefined,
   fs?: FileSystemPort,
 ): Promise<Result<unknown>> {
-  if (!operation || (!operation.addCardFile && !operation.cardCommentFile && !operation.cardId && !operation.cardTitle && (operation.removeRelationshipIds ?? []).length === 0 && (operation.addRelationships ?? []).length === 0)) {
+  const hasCardLabels = (operation?.cardLabels ?? []).length > 0;
+  if (!operation || (!operation.addCardFile && !operation.cardCommentFile && !operation.cardId && !operation.cardTitle && !hasCardLabels && (operation.removeCardIds ?? []).length === 0 && (operation.removeRelationshipIds ?? []).length === 0 && (operation.addRelationships ?? []).length === 0)) {
     return { ok: true, value: ledger };
   }
 
@@ -62,7 +65,20 @@ async function applyLedgerMutationOperation(
     nextLedger.cards = cards.filter((entry) => !isRecord(entry) || entry.id !== card.id).concat(card);
   }
 
-  if (operation.cardCommentFile || operation.cardTitle || operation.cardId) {
+  const removeCardIds = new Set(operation.removeCardIds ?? []);
+  if (removeCardIds.size > 0) {
+    nextLedger.cards = (nextLedger.cards as unknown[]).filter((card) => {
+      return !isRecord(card) || !removeCardIds.has(String(card.id ?? ''));
+    });
+    nextLedger.relationships = (nextLedger.relationships as unknown[]).filter((relationship) => {
+      if (!isRecord(relationship)) return true;
+      const from = String(relationship.from ?? '');
+      const to = String(relationship.to ?? '');
+      return !removeCardIds.has(from) && !removeCardIds.has(to);
+    });
+  }
+
+  if (operation.cardCommentFile || operation.cardTitle || hasCardLabels || operation.cardId) {
     if (!operation.cardId) {
       return { ok: false, error: 'Card mutation requires --card-id.' };
     }
@@ -75,6 +91,12 @@ async function applyLedgerMutationOperation(
 
     if (operation.cardTitle) {
       card.title = operation.cardTitle;
+    }
+
+    if (hasCardLabels) {
+      const labels = (operation.cardLabels ?? []).map((label) => String(label).trim()).filter(Boolean);
+      if (labels.length > 0) card.labels = labels;
+      else delete card.labels;
     }
 
     if (operation.cardCommentFile) {
@@ -132,7 +154,9 @@ export async function manageLedgerJsonController(
       }>;
       cardCommentFile?: string;
       cardId?: string;
+      cardLabels?: string[];
       cardTitle?: string;
+      removeCardIds?: string[];
       removeRelationshipIds?: string[];
     };
   },
@@ -141,7 +165,7 @@ export async function manageLedgerJsonController(
   telemetry('read-ledger-json', { path: actionPayload.ledgerJsonFile });
   const ledger = await readLedgerJson(actionPayload.ledgerJsonFile, fs);
 
-  // WHY: invalid JSON cannot be used as committed architecture truth.
+  // WHY: invalid JSON cannot be used as committed ledger truth.
   // WHAT: stop before any mutation write.
   if (!ledger.ok) {
     telemetry('manage-ledger-json-rejected', { error: ledger.error });

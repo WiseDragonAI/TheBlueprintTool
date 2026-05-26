@@ -4,23 +4,7 @@
  */
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
-export type CliMode = 'dry-run' | 'apply' | 'report' | 'patch-doc' | 'ledger' | 'check-ledger';
-
-export type LedgerCommand = 'inspect' | 'mutate' | 'overview';
-
-export type LedgerMutationOperation = {
-  addCardFile?: string;
-  addRelationships: Array<{
-    from: string;
-    id: string;
-    label?: string;
-    to: string;
-  }>;
-  cardCommentFile?: string;
-  cardId?: string;
-  cardTitle?: string;
-  removeRelationshipIds: string[];
-};
+export type CliMode = 'dry-run' | 'apply' | 'report' | 'patch-doc' | 'check-ledger';
 
 export type CliCommand =
   | {
@@ -39,13 +23,6 @@ export type CliCommand =
   | {
       mode: 'patch-doc';
       patchBatchFile: string;
-    }
-  | {
-      mode: 'ledger';
-      ledgerCommand: LedgerCommand;
-      ledgerJsonFile: string;
-      mutationFile?: string;
-      mutationOperation: LedgerMutationOperation;
     }
   | {
       mode: 'check-ledger';

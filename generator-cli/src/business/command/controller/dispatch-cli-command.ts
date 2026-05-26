@@ -1,6 +1,6 @@
 /**
  * WHAT: generator-cli command dispatcher.
- * WHY: one executable entrypoint must branch to dry-run, apply, report, patch-doc, and ledger controllers.
+ * WHY: one executable entrypoint must branch to generation, report, patch-doc, and check-ledger controllers.
  */
 import type { FileSystemPort, ProcessPort, Result } from '../../../lib/types.js';
 import { telemetry } from '../../../lib/telemetry/telemetry.js';
@@ -9,7 +9,6 @@ import { planGeneratedWorktreeController } from '../../generate/controller/plan-
 import { applyGeneratedWorktreeController } from '../../generate/controller/apply-generated-worktree.js';
 import { runReportModeController } from '../../report/controller/run-report-mode.js';
 import { applyPatchDocController } from '../../patch-doc/controller/apply-patch-doc.js';
-import { manageLedgerJsonController } from '../../ledger/controller/manage-ledger-json.js';
 import { resolveGeneratedDependenciesController } from '../../graph/controller/resolve-generated-dependencies.js';
 import { loadAndValidateMasterLedgerController } from '../../master-ledger/controller/load-and-validate-master-ledger.js';
 import { checkMasterLedgerController } from '../../report/controller/check-master-ledger.js';
@@ -68,21 +67,6 @@ export async function dispatchCliCommandController(
   // WHAT: call patch-doc controller.
   if (command.mode === 'patch-doc') {
     return applyPatchDocController(command.patchBatchFile, ports.fs);
-  }
-
-  // WHY: ledger mode reads or mutates committed JSON ledgers.
-  // WHAT: call ledger controller.
-  if (command.mode === 'ledger') {
-    const result = await manageLedgerJsonController({
-      ledgerCommand: command.ledgerCommand,
-      ledgerJsonFile: command.ledgerJsonFile,
-      mutationFile: command.mutationFile,
-      mutationOperation: command.mutationOperation,
-    }, ports.fs);
-    if (result.ok && command.ledgerCommand === 'overview' && typeof result.value === 'string') {
-      ports.emit ? ports.emit(result.value) : console.log(result.value);
-    }
-    return result;
   }
 
   telemetry('dispatch-cli-command-rejected');

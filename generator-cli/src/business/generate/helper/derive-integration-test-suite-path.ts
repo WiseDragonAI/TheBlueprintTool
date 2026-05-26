@@ -53,10 +53,6 @@ function modeForSuite(expectedTelemetry: string[]): string {
     return 'check-ledger';
   }
 
-  if (expectedTelemetry.some((name) => ['write-ledger-json', 'read-ledger-json'].includes(name))) {
-    return 'ledger';
-  }
-
   return 'dry-run';
 }
 
@@ -146,7 +142,6 @@ test('${literal(suite.suiteName)}', async () => {
     check_ledger_command: true,
     report_command: true,
     patch_doc_command: true,
-    ledger_command: 'mutate',
     master_ledger_file: 'generated-master-ledger.md',
     specs_ledger_file: 'generated-specs-ledger.json',
     patch_batch_file: 'generated-patch-batch.json',

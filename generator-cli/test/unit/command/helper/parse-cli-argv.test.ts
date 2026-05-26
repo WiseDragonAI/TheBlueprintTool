@@ -10,48 +10,9 @@ test('parse-cli-argv exports an implemented function', () => {
   assert.equal(typeof parseCliArgv, 'function');
 });
 
-test('parse-cli-argv parses targeted ledger mutations', () => {
-  const command = parseCliArgv([
-    'ledger',
-    'mutate',
-    '--ledger',
-    '.blueprinttool/example-ledger.json',
-    '--card-id',
-    'note_spawnable_vs_inventory_item',
-    '--card-comment-file',
-    'tmp/comment.md',
-    '--card-title',
-    'TABLE: character',
-    '--add-card-file',
-    'tmp/card.json',
-    '--remove-relationship',
-    'rel-a',
-    '--remove-relationship',
-    'rel-b',
-    '--add-relationship',
-    'rel-c:from-card:to-card:label text',
-  ]);
-
-  assert.equal(command.mode, 'ledger');
-  assert.equal(command.ledgerCommand, 'mutate');
-  assert.equal(command.ledgerJsonFile, '.blueprinttool/example-ledger.json');
-  assert.equal(command.mutationOperation.cardId, 'note_spawnable_vs_inventory_item');
-  assert.equal(command.mutationOperation.cardCommentFile, 'tmp/comment.md');
-  assert.equal(command.mutationOperation.cardTitle, 'TABLE: character');
-  assert.equal(command.mutationOperation.addCardFile, 'tmp/card.json');
-  assert.deepEqual(command.mutationOperation.removeRelationshipIds, ['rel-a', 'rel-b']);
-  assert.deepEqual(command.mutationOperation.addRelationships, [{ id: 'rel-c', from: 'from-card', to: 'to-card', label: 'label text' }]);
-});
-
-test('parse-cli-argv parses ledger overview command', () => {
-  const command = parseCliArgv([
-    'ledger',
-    'overview',
-    '--ledger',
-    '.blueprinttool/example-ledger.json',
-  ]);
-
-  assert.equal(command.mode, 'ledger');
-  assert.equal(command.ledgerCommand, 'overview');
-  assert.equal(command.ledgerJsonFile, '.blueprinttool/example-ledger.json');
+test('parse-cli-argv rejects ledger mutation commands', () => {
+  assert.throws(
+    () => parseCliArgv(['ledger', 'mutate', '--ledger', '.blueprinttool/specs.json']),
+    /Unsupported generator-cli mode: ledger/,
+  );
 });

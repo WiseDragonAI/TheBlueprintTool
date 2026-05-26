@@ -4738,6 +4738,20 @@
       },
       "facts": [],
       "fields": []
+    },
+    {
+      "id": "4f7c2a91",
+      "title": "Ledger editing is separate from scaffold generation",
+      "cardType": "spec-brief",
+      "domainId": "cli",
+      "x": -7707,
+      "y": 4776,
+      "w": 640,
+      "comment": {
+        "what": "`generator-cli` is reserved for scaffold generation from the MasterLedger and related non-mutating ledger checks. Committed ledger JSON inspection and mutation must be owned by the separate `ledger-cli` package and executable, so editing specs/data ledgers cannot be coupled to scaffold generation control flow."
+      },
+      "facts": [],
+      "fields": []
     }
   ],
   "relationships": [],

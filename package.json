@@ -4,7 +4,8 @@
   "type": "module",
   "private": true,
   "bin": {
-    "blueprinttool-server": "./bin/blueprinttool-server.mjs"
+    "blueprinttool-server": "./bin/blueprinttool-server.mjs",
+    "ledger-cli": "./bin/ledger-cli.mjs"
   },
   "scripts": {
     "start:workspace": "node ./bin/blueprinttool-server.mjs",

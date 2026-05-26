@@ -6,17 +6,18 @@ CoreV2 is the Blueprint Tool runtime: a browser canvas, a backend ledger server,
 
 Use the repo launcher instead of spelling out the Node loader and environment variables by hand.
 
-From any project workspace:
+From the Blueprint Tool repo:
 
 ```bash
-cd /path/to/project-workspace
+cd /home/jbb/dev/EditorBP/CoreV2
 /home/jbb/dev/EditorBP/CoreV2/bin/blueprinttool-server.mjs
 ```
 
 Then open the ledger route:
 
 ```text
-http://127.0.0.1:4173/example-ledger
+http://127.0.0.1:4173/specs
+http://127.0.0.1:4173/data
 ```
 
 The launcher derives CoreV2 paths from its own location and automatically sets:
@@ -49,14 +50,15 @@ npm run start:workspace
 
 The backend resolves the active `.blueprinttool` directory by walking upward from the process cwd. That means the launcher should be run from the target workspace or a child directory of that workspace.
 
-Expected workspace shape:
+CoreV2's own workspace shape:
 
 ```text
-ExampleWorkspace/
+CoreV2/
   .blueprinttool/
     state.json
     .settings.json
-    example-ledger.json
+    specs.json
+    data.json
 ```
 
 `state.json` defines available tabs and ledger files:
@@ -65,13 +67,30 @@ ExampleWorkspace/
 {
   "tabs": [
     {
-      "id": "example-ledger",
-      "title": "Example Ledger",
-      "ledgerFile": ".blueprinttool/example-ledger.json"
+      "id": "specs",
+      "title": "Specs",
+      "ledgerFile": ".blueprinttool/specs.json"
+    },
+    {
+      "id": "data",
+      "title": "Data",
+      "ledgerFile": ".blueprinttool/data.json"
     }
   ]
 }
 ```
+
+## Ledger CLI
+
+Ledger JSON editing is owned by the separate `ledger-cli` package, not by `generator-cli`.
+
+```bash
+cd /home/jbb/dev/EditorBP/CoreV2/ledger-cli
+npm run cli -- overview --ledger ../.blueprinttool/specs.json
+npm run cli -- mutate --ledger ../.blueprinttool/specs.json --card-id 60000006 --card-title "Cards can resize"
+```
+
+`generator-cli` is reserved for scaffold generation from the MasterLedger and related generation checks.
 
 ## Transcription Setup
 

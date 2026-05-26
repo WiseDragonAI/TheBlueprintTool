@@ -1,6 +1,6 @@
 /**
  * WHAT: Committed ledger JSON reader.
- * WHY: architecture ledger storage must operate on durable JSON files, not shadow state.
+ * WHY: ledger storage must operate on durable JSON files, not shadow state.
  */
 import type { FileSystemPort, Result } from '../../../lib/types.js';
 import { parseJson } from '../../../lib/json/json.js';

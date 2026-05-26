@@ -2,7 +2,7 @@
  * WHAT: CLI argv parser for generator-cli modes and file arguments.
  * WHY: command controllers need one normalized action payload from terminal input.
  */
-import type { CliCommand, LedgerCommand } from '../../../lib/types.js';
+import type { CliCommand } from '../../../lib/types.js';
 
 function flagValue(args: string[], flag: string): string | undefined {
   const index = args.indexOf(flag);
@@ -25,23 +25,6 @@ function flagValues(args: string[], flag: string): string[] {
     }
 
     return args[index + 1].split(',').map((value) => value.trim()).filter(Boolean);
-  });
-}
-
-function trailingValues(args: string[], flag: string): string[] {
-  return args.flatMap((arg, index) => {
-    if (arg !== flag || index === args.length - 1) {
-      return [];
-    }
-
-    return [args[index + 1]];
-  });
-}
-
-function relationshipValues(args: string[]): Array<{ from: string; id: string; label?: string; to: string }> {
-  return trailingValues(args, '--add-relationship').map((value) => {
-    const [id = '', from = '', to = '', label] = value.split(':');
-    return { id, from, to, label };
   });
 }
 
@@ -87,26 +70,6 @@ export function parseCliArgv(argv: string[]): CliCommand {
     return {
       mode,
       patchBatchFile: flagValue(argv, '--patch-batch') ?? subcommand ?? 'patch-batch.json',
-    };
-  }
-
-  // WHY: ledger mode needs a subcommand and committed ledger JSON path.
-  // WHAT: normalize inspect and mutate subcommands.
-  if (mode === 'ledger') {
-    const ledgerCommand: LedgerCommand = subcommand === 'mutate' || subcommand === 'overview' ? subcommand : 'inspect';
-    return {
-      mode,
-      ledgerCommand,
-      ledgerJsonFile: flagValue(argv, '--ledger') ?? argv[2] ?? '../documentation/specs.json',
-      mutationFile: flagValue(argv, '--mutation'),
-      mutationOperation: {
-        addCardFile: flagValue(argv, '--add-card-file'),
-        addRelationships: relationshipValues(argv),
-        cardId: flagValue(argv, '--card-id'),
-        cardCommentFile: flagValue(argv, '--card-comment-file'),
-        cardTitle: flagValue(argv, '--card-title'),
-        removeRelationshipIds: trailingValues(argv, '--remove-relationship'),
-      },
     };
   }
 
