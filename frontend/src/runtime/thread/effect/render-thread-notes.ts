@@ -39,12 +39,12 @@ export function renderThreadNotes(): void {
     deleteButton.setAttribute('aria-label', 'Delete note');
     deleteButton.textContent = 'X';
     item.append(body);
-    if (status) item.append(meta);
+    if (status && !busy) item.append(meta);
     if (noteId) item.append(deleteButton);
     if (busy) {
       const spinner = document.createElement('span');
       spinner.className = 'thread-note-spinner';
-      spinner.textContent = 'processing';
+      spinner.textContent = normalizedStatus || 'processing';
       item.append(spinner);
     }
     if (retryable) {

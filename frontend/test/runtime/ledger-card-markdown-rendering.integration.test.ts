@@ -1,3 +1,7 @@
+/**
+ * WHAT: Runtime DOM tests for card markdown, title markdown, labels, and zone color rendering.
+ * WHY: The canvas renderer must preserve shared markdown semantics without a browser dependency.
+ */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { patchLedgerCard } from '../../src/runtime/ledger/component/patch-ledger-card.js';
@@ -123,6 +127,32 @@ test('ledger cards render markdown tables as table elements', () => {
     assert.equal((firstRow.children[0] as FakeElement).tagName, 'td');
     assert.equal(((firstRow.children[0] as FakeElement).children[0] as FakeElement).tagName, 'code');
     assert.equal(((firstRow.children[1] as FakeElement).children[0] as FakeElement).tagName, 'code');
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+  }
+});
+
+test('ledger cards render markdown headings through the shared markdown renderer', () => {
+  const previousDocument = globalThis.document;
+  (globalThis as unknown as { document: unknown }).document = {
+    createElement: (tagName: string) => new FakeElement(tagName),
+    createTextNode: (text: string) => new FakeText(text)
+  };
+
+  try {
+    const card = patchLedgerCard({
+      id: 'card-heading',
+      title: 'Heading card',
+      comment: { what: '### Quest tags\n- `mine.quarry.started`' }
+    }) as unknown as FakeElement;
+    const body = card.children.find((child) => child instanceof FakeElement && child.className === 'ledger-card-body') as FakeElement;
+    const heading = body.children[0] as FakeElement;
+    const list = body.children[1] as FakeElement;
+
+    assert.equal(heading.tagName, 'h3');
+    assert.equal(heading.className, 'ledger-card-heading ledger-card-heading-3');
+    assert.equal(heading.children.map((child) => child.textContent).join(''), 'Quest tags');
+    assert.equal(list.tagName, 'ul');
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
   }
@@ -266,14 +296,16 @@ test('ledger card titles render inline markdown without dropping title wrapping'
   try {
     const card = patchLedgerCard({
       id: 'card-title-markdown',
-      title: 'RuneItem `FInventoryItem::Buffs` **Model**',
+      title: '### RuneItem `FInventoryItem::Buffs` **Model**',
       comment: { what: 'Title markdown target.' }
     }) as unknown as FakeElement;
     const title = card.children.find((child) => child instanceof FakeElement && child.className === 'ledger-card-title') as FakeElement;
 
+    assert.equal(title.dataset.titleHeading, '3');
     assert.equal(title.children.some((child) => child instanceof FakeElement && child.tagName === 'code' && child.textContent === 'FInventoryItem::Buffs'), true);
     assert.equal(title.children.some((child) => child instanceof FakeElement && child.tagName === 'strong' && child.textContent === 'Model'), true);
     assert.equal(title.children.some((child) => child instanceof FakeElement && child.tagName === 'wbr'), true);
+    assert.equal(title.children.map((child) => child.textContent).join(''), 'RuneItem FInventoryItem::Buffs Model');
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
   }

@@ -12,6 +12,7 @@ export type LedgerMarkdownInline = {
 };
 
 export type LedgerMarkdownBlock =
+  | { kind: 'heading'; level: number; children: LedgerMarkdownInline[] }
   | { kind: 'paragraph'; children: LedgerMarkdownInline[] }
   | { kind: 'list'; items: LedgerMarkdownInline[][] }
   | { kind: 'table'; headers: LedgerMarkdownInline[][]; rows: LedgerMarkdownInline[][][] }
@@ -47,6 +48,16 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
       blocks.push({ kind: 'hr' });
       continue;
     }
+    const heading = line.match(/^(#{1,6})\s+(.*)$/);
+    if (heading) {
+      list = null;
+      blocks.push({
+        kind: 'heading',
+        level: heading[1].length,
+        children: parseLedgerMarkdownInline(heading[2])
+      });
+      continue;
+    }
     const headerCells = parseLedgerMarkdownTableRow(line);
     if (headerCells.length >= 2 && isLedgerMarkdownTableDivider(lines[index + 1] ?? '', headerCells.length)) {
       const table: Extract<LedgerMarkdownBlock, { kind: 'table' }> = {
@@ -77,7 +88,7 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
       continue;
     }
     list = null;
-    blocks.push({ kind: 'paragraph', children: parseLedgerMarkdownInline(line.replace(/^#{1,6}\s+/, '')) });
+    blocks.push({ kind: 'paragraph', children: parseLedgerMarkdownInline(line) });
   }
 
   return blocks;

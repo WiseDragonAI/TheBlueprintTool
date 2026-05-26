@@ -1,3 +1,7 @@
+/**
+ * WHAT: Static integration checks for browser command routing and canvas-control CSS.
+ * WHY: Input and rendering affordances must keep using runtime controllers instead of ad hoc effects.
+ */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -43,6 +47,7 @@ test('browser inputs route ledger commands through runtime controllers before se
 
   const keyboard = source('frontend/src/runtime/input/controller/handle-keyboard.ts');
   assert.match(keyboard, /confirmZoneDeletionController/);
+  assert.match(keyboard, /confirmCardDeletionController/);
   assert.match(keyboard, /deleteZoneController/);
   assert.match(keyboard, /deleteCardController/);
   assert.match(keyboard, /deleteNoteController/);
@@ -117,4 +122,12 @@ test('browser inputs route ledger commands through runtime controllers before se
 
   const openThreadPanel = source('frontend/src/runtime/thread/effect/open-thread-panel.ts');
   assert.doesNotMatch(openThreadPanel, /focusThreadDraft/);
+
+  const objectsCss = source('frontend/assets/canvas/objects.css');
+  assert.match(objectsCss, /\.card \.ledger-card-delete\.terminal-button\s*{[^}]*position:\s*absolute;[^}]*right:\s*6px;/s);
+
+  const canvasLayerCss = source('frontend/assets/canvas/canvas-layer.css');
+  assert.match(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-labels,[\s\S]*transform:\s*scale\(var\(--inverse-viewport-scale, 1\)\);/);
+  assert.doesNotMatch(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-labels,[\s\S]{0,220}display:\s*none;/);
+  assert.match(canvasLayerCss, /\.canvas\.low-detail \.hash,[\s\S]{0,160}display:\s*none;/);
 });

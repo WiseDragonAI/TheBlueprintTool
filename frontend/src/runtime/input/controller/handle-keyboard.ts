@@ -5,6 +5,7 @@
 import { modal } from '../../dom.js';
 import { state } from '../../state.js';
 import { pasteSelectionController } from '../../clipboard/controller/paste-selection-controller.js';
+import { confirmCardDeletionController } from '../../card/controller/confirm-card-deletion-controller.js';
 import { confirmZoneDeletionController } from '../../zone/controller/confirm-zone-deletion-controller.js';
 import { deleteZoneController } from '../../zone/controller/delete-zone-controller.js';
 import { deleteCardController } from '../../card/controller/delete-card-controller.js';
@@ -77,6 +78,10 @@ export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
     resetActiveTool('escape');
     telemetry('clear-transient-selection', { reason: 'escape' });
     renderCanvasSurface();
+  }
+  if (key === 'delete' && state.selection.cardIds.length > 0) {
+    confirmCardDeletionController({ cardId: state.selection.cardIds.at(-1) ?? '' });
+    return;
   }
   if (key === 'delete' && state.selection.zoneIds.length > 0) {
     confirmZoneDeletionController();

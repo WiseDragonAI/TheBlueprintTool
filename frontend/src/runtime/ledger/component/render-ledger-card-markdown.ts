@@ -12,6 +12,13 @@ export function renderLedgerCardMarkdown(markdown: string): HTMLElement {
   body.className = 'ledger-card-body';
 
   for (const block of parseLedgerCardMarkdown(markdown)) {
+    if (block.kind === 'heading') {
+      const heading = document.createElement(`h${Math.min(6, Math.max(1, block.level))}`);
+      heading.className = `ledger-card-heading ledger-card-heading-${block.level}`;
+      appendInlineNodes(heading, block.children);
+      body.appendChild(heading);
+      continue;
+    }
     if (block.kind === 'list') {
       const list = document.createElement('ul');
       for (const item of block.items) {

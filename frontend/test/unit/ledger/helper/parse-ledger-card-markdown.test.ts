@@ -8,7 +8,7 @@ import { parseLedgerCardMarkdown } from '../../../../src/runtime/ledger/helper/p
 
 test('parse-ledger-card-markdown parses common card description markdown', () => {
   assert.deepEqual(parseLedgerCardMarkdown('## Heading\n**Props**: `mode`\n- first\n* second\n\n---\n\n| Name | Use |\n|---|---|\n| `Health` | **Current** value |\n\n```cpp\nUSTRUCT(BlueprintType)\nstruct FCreatureState\n{\n  GENERATED_BODY()\n};\n```'), [
-    { kind: 'paragraph', children: [{ kind: 'text', text: 'Heading' }] },
+    { kind: 'heading', level: 2, children: [{ kind: 'text', text: 'Heading' }] },
     {
       kind: 'paragraph',
       children: [

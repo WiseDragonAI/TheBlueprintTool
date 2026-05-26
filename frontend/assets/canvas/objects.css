@@ -326,6 +326,24 @@
   text-overflow: ellipsis;
 }
 
+.ledger-card-title[data-title-heading="1"] {
+  font-size: 1.16em;
+}
+
+.ledger-card-title[data-title-heading="2"] {
+  font-size: 1.1em;
+}
+
+.ledger-card-title[data-title-heading="3"] {
+  font-size: 1.04em;
+}
+
+.ledger-card-title[data-title-heading="4"],
+.ledger-card-title[data-title-heading="5"],
+.ledger-card-title[data-title-heading="6"] {
+  color: color-mix(in srgb, var(--text), var(--card-code-color) 24%);
+}
+
 .ledger-card-title strong {
   display: inline;
   margin: 0;
@@ -338,7 +356,7 @@
   font-size: 1em;
 }
 
-.ledger-card-delete {
+.card .ledger-card-delete.terminal-button {
   position: absolute;
   top: 6px;
   right: 6px;
@@ -525,6 +543,36 @@
   margin: 0 0 8px;
 }
 
+.ledger-card-heading {
+  margin: 10px 0 6px;
+  color: var(--text);
+  font-weight: 800;
+  line-height: 1.22;
+}
+
+.ledger-card-heading:first-child {
+  margin-top: 0;
+}
+
+.ledger-card-heading-1 {
+  font-size: 1.2em;
+}
+
+.ledger-card-heading-2 {
+  font-size: 1.13em;
+}
+
+.ledger-card-heading-3 {
+  font-size: 1.06em;
+}
+
+.ledger-card-heading-4,
+.ledger-card-heading-5,
+.ledger-card-heading-6 {
+  color: color-mix(in srgb, var(--text), var(--card-code-color) 20%);
+  font-size: 1em;
+}
+
 .ledger-card-body ul {
   margin: 0;
   padding-left: 17px;
@@ -632,7 +680,7 @@
 .ledger-card-body code {
   color: var(--card-code-color);
   font-family: var(--mono);
-  font-size: 0.92em;
+  font-size: 1em;
 }
 
 .ledger-card-body strong {

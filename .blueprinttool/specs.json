@@ -1566,7 +1566,7 @@
       "y": 7227,
       "w": 520,
       "comment": {
-        "what": "Canvas rendering must keep pointer interaction responsive at wide zoom-out levels by switching the canvas into low-detail mode below 0.35 scale and overview-detail mode below 0.18 scale. Low-detail mode removes expensive shadows, description blocks, buttons, hashes, visual chips, and relationship labels while preserving geometry, selection affordances, and readable card titles. Overview-detail mode keeps card titles readable with the viewport counter-scale rule instead of rendering unreadable description columns."
+        "what": "Canvas rendering must keep pointer interaction responsive at wide zoom-out levels by switching the canvas into low-detail mode below 0.35 scale and overview-detail mode below 0.18 scale. Low-detail mode removes expensive shadows, description blocks, buttons, hashes, and relationship labels while preserving geometry, selection affordances, readable card titles, and card label chips. Overview-detail mode keeps card titles readable with the viewport counter-scale rule instead of rendering unreadable description columns."
       },
       "facts": [],
       "fields": []
@@ -2798,7 +2798,7 @@
       "y": 5435,
       "w": 320,
       "comment": {
-        "what": "Ledger cards can declare visual tags using a `labels` or `tags` string array. Non-empty labels render as compact chips in the card's top-right corner. The chip background uses the card's own `--card-zone-color`, so labels stay visually tied to the card color/zone context. Labels are decorative metadata on the card, not relationships, identities, or runtime state."
+        "what": "Ledger cards can declare visual tags using a `labels` or `tags` string array. Non-empty labels render as compact chips in the card's top-right corner. The chip background uses the card's own `--card-zone-color`, so labels stay visually tied to the card color/zone context. Labels are decorative metadata on the card, not relationships, identities, or runtime state. In low-detail zoom, labels remain visible with viewport counter-scaling while internal hash ids stay hidden."
       },
       "facts": [],
       "fields": [],
@@ -3684,7 +3684,7 @@
       "y": 5846,
       "w": 500,
       "comment": {
-        "what": ""
+        "what": "Card descriptions use the shared markdown parser and renderer for paragraphs, lists, tables, fenced code, horizontal rules, strong spans, inline code, and heading blocks. `##` and `###` headings must render with visible hierarchy instead of raw hash-prefixed text or flat paragraphs."
       },
       "facts": [],
       "fields": []
@@ -4342,7 +4342,7 @@
       "y": 5504,
       "w": 560,
       "comment": {
-        "what": "When the canvas enters low-detail or overview-detail zoom, card descriptions, labels, buttons, and hashes must stay hidden, but each card title remains visible. The title uses the same viewport counter-scale rule as zone labels so it stays readable while remaining anchored to the card geometry."
+        "what": "When the canvas enters low-detail or overview-detail zoom, card descriptions, buttons, and hashes must stay hidden, but each card title and non-empty label chip remains visible. Titles and labels use the same viewport counter-scale rule as zone labels so they stay readable while remaining anchored to the card geometry."
       },
       "facts": [],
       "fields": []
@@ -4804,7 +4804,7 @@
       "y": 5756,
       "w": 680,
       "comment": {
-        "what": "Thread note bodies use the same markdown parser and DOM renderer as card bodies so agent replies can contain paragraphs, lists, tables, code blocks, inline code, horizontal rules, and bold spans. Default note text is regular weight Ubuntu text, agent replies stay left as unframed conversation text, operator notes stay right in a neutral grey card with only a left target-accent border, metadata is reduced to status only, and the thread input has no CSS border, only a lighter neutral inset surface."
+        "what": "Thread note bodies use the same markdown parser and DOM renderer as card bodies so agent replies can contain paragraphs, lists, tables, code blocks, inline code, horizontal rules, markdown headings, and bold spans. Default note text is regular weight Ubuntu text, agent replies stay left as unframed conversation text, operator notes stay right in a neutral grey card with only a left target-accent border, metadata is reduced to status only, and the thread input has no CSS border, only a lighter neutral inset surface."
       },
       "facts": [],
       "fields": []
@@ -4902,7 +4902,7 @@
       "y": 7128,
       "w": 680,
       "comment": {
-        "what": "Voice recording captures its thread id at session start and every upload, transcription retry, and note update must use that captured thread id instead of the current selected card when async work finishes. Card bodies and thread notes use the same markdown parser and renderer, including `---`, `***`, and `___` horizontal rules. Thread inline code must not shrink below normal note text size, and operator note cards use the neutral input-grey surface with only a left accent border."
+        "what": "Voice recording captures its thread id at session start and every upload, transcription retry, and note update must use that captured thread id instead of the current selected card when async work finishes. Card bodies and thread notes use the same markdown parser and renderer, including `---`, `***`, and `___` horizontal rules plus `##` and `###` heading blocks. Thread inline code must not shrink below normal note text size, and operator note cards use the neutral input-grey surface with only a left accent border."
       },
       "facts": [],
       "fields": []
@@ -4916,7 +4916,7 @@
       "y": 7324,
       "w": 680,
       "comment": {
-        "what": "Card titles render inline markdown through the shared inline parser while preserving PascalCase wrap opportunities. Entering title edit restores the raw ledger title source so backticks and bold markers are not lost. Each card exposes a small hover/focus delete button in the top-right corner that opens the shared confirmation modal; confirming deletes the card, its connected relationships, and its card thread. Global shortcuts are ignored while card title or description editors own the keyboard event."
+        "what": "Card titles render inline markdown through the shared inline parser while preserving PascalCase wrap opportunities. Leading heading markers such as `##` and `###` are stripped from the displayed title text but stored as title heading level so the title renders with differentiated scale. Entering title edit restores the raw ledger title source so backticks, bold markers, and heading markers are not lost. Each card exposes a small hover/focus delete button in the top-right corner that opens the shared confirmation modal; confirming deletes the card, its connected relationships, and its card thread. Global shortcuts are ignored while card title or description editors own the keyboard event."
       },
       "facts": [],
       "fields": []

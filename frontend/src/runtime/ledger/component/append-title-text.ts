@@ -5,7 +5,10 @@
 import { parseLedgerMarkdownInline } from '../helper/parse-ledger-markdown-inline.js';
 
 export function appendTitleText(parent: HTMLElement, text: string): void {
-  const inlineNodes = parseLedgerMarkdownInline(text.replace(/^#{1,6}\s+/, ''));
+  const heading = text.match(/^(#{1,6})\s+(.*)$/);
+  delete parent.dataset.titleHeading;
+  if (heading) parent.dataset.titleHeading = String(heading[1].length);
+  const inlineNodes = parseLedgerMarkdownInline(heading ? heading[2] : text);
   for (const node of inlineNodes) {
     if (node.kind !== 'text') {
       const child = document.createElement(node.kind);

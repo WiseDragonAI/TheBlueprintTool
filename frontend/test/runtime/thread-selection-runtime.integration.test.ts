@@ -211,6 +211,49 @@ test('render-thread-notes keeps failed voice audio retryable', () => {
   }
 });
 
+test('render-thread-notes keeps busy voice progress concise', () => {
+  const previousDocument = globalThis.document;
+  const rendered: TestElement[] = [];
+  const list = {
+    className: '',
+    replaceChildren() {
+      rendered.length = 0;
+    },
+    append(item: TestElement) {
+      rendered.push(item);
+    }
+  };
+  (globalThis as unknown as { document: unknown }).document = {
+    querySelector(selector: string) {
+      if (selector === '.thread-note-list') return list;
+      return null;
+    },
+    createElement(tagName: string) {
+      return createTestElement('', tagName);
+    },
+    createTextNode(text: string) {
+      return createTestElement(text);
+    }
+  };
+  try {
+    state.threadId = 'thread-card-a';
+    state.activeLedger = {
+      notes: {
+        'thread-card-a': [{ id: 'note-busy', role: 'voice', message: 'Voice uploaded.', voiceFileRef: '/tmp/voice.webm', status: 'transcribing' }]
+      }
+    };
+    renderThreadNotes();
+    assert.equal(rendered[0].className, 'thread-note voice-note is-busy is-operator');
+    assert.equal(rendered[0].children.some((child) => child.className === 'thread-note-meta'), false);
+    const spinner = rendered[0].children.find((child) => child.className === 'thread-note-spinner');
+    assert.equal(spinner?.textContent, 'transcribing');
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+    state.threadId = '';
+    state.activeLedger = null;
+  }
+});
+
 test('render-thread-notes separates operator and agent speaker ownership', () => {
   const previousDocument = globalThis.document;
   const rendered: TestElement[] = [];

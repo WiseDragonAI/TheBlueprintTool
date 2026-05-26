@@ -74,8 +74,14 @@
   backdrop-filter: none;
 }
 
+.canvas.low-detail .card {
+  min-height: var(--card-size-cache-height, 132px);
+}
+
 .canvas.low-detail .card p,
-.canvas.low-detail .card strong,
+.canvas.low-detail .ledger-card-body,
+.canvas.low-detail .ledger-card-tabs,
+.canvas.low-detail .ledger-card-tab-frame,
 .canvas.low-detail .card-actions,
 .canvas.low-detail .zone p,
 .canvas.low-detail .hash,
@@ -83,17 +89,51 @@
   display: none;
 }
 
+.canvas.low-detail .card > strong,
+.canvas.low-detail .ledger-card-title {
+  display: block;
+  width: calc(100% * var(--viewport-scale, 1));
+  max-width: calc(100% * var(--viewport-scale, 1));
+  margin: 0;
+  overflow: visible;
+  color: var(--text);
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  word-break: break-word;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.15;
+  transform: scale(var(--inverse-viewport-scale, 1));
+  transform-origin: left top;
+  text-shadow: 0 0 10px color-mix(in srgb, var(--card-zone-color), transparent 64%);
+}
+
+.canvas.low-detail .ledger-card-labels,
+.canvas.low-detail .card:has(.ledger-card-delete) .ledger-card-labels {
+  display: flex;
+  top: 8px;
+  right: 8px;
+  width: calc(100% * var(--viewport-scale, 1));
+  max-width: calc(100% * var(--viewport-scale, 1));
+  justify-content: flex-end;
+  opacity: 1;
+  transform: scale(var(--inverse-viewport-scale, 1));
+  transform-origin: right top;
+}
+
+.canvas.low-detail .ledger-card-label {
+  max-width: 140px;
+  font-size: 9px;
+}
+
 .canvas.low-detail .relationships path {
   stroke-width: 2;
 }
 
 .canvas.overview-detail .card {
-  min-height: 34px;
+  min-height: var(--card-size-cache-height, 34px);
   padding: 8px;
-}
-
-.canvas.overview-detail .card strong {
-  display: none;
 }
 
 .canvas.overview-detail .regular-zone {
