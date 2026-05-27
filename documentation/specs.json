@@ -1474,6 +1474,20 @@
       "fields": []
     },
     {
+      "id": "9f04b1c2",
+      "title": "holding Shift and dragging pans from any target",
+      "cardType": "spec-brief",
+      "domainId": "canvas",
+      "x": 486,
+      "y": 5155,
+      "w": 600,
+      "comment": {
+        "what": "Holding Shift while dragging must force pan-only canvas movement from any non-control target, including cards, zones, groups, resize handles, and empty canvas. Shift-pan must not select, clear selection, start marquee selection, resize, move selected objects, or enter draw-card, draw-zone, or draw-group behavior."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
       "id": "30000005",
       "title": "scrolling the mouse wheel zooms the canvas",
       "cardType": "spec-brief",

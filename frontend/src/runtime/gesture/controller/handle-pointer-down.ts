@@ -55,8 +55,8 @@ export function handlePointerDown(event: PointerEvent): void {
   const pointer = point(event);
   const canvasPointer = canvasPoint(pointer);
   const intent = derivePointerIntent(event, targetKind, resizeHandle);
-  state.pointer = { intent, resizeHandle, target, targetKind, targetId, start: pointer, current: pointer, startCanvas: canvasPointer, currentCanvas: canvasPointer, startedAt: now };
-  telemetry('canvas-pointer-down', { intent, targetKind, targetId, ctrlKey: event.ctrlKey });
+  state.pointer = { intent, resizeHandle, target, targetKind, targetId, start: pointer, current: pointer, startCanvas: canvasPointer, currentCanvas: canvasPointer, startedAt: now, shiftPan: event.shiftKey };
+  telemetry('canvas-pointer-down', { intent, targetKind, targetId, ctrlKey: event.ctrlKey, shiftKey: event.shiftKey });
   telemetry('derive-gesture-intent', { kind: intent });
   const preserveSelection = shouldPreservePointerSelection(state.selection, targetKind, targetId, event.ctrlKey);
   if ((intent === 'drag' || intent === 'group') && !preserveSelection) selectTarget(targetKind, targetId, event.ctrlKey);

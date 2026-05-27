@@ -5,6 +5,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { derivePointerIntent, shiftPanOnlySpec } from '../../src/runtime/gesture/helper/derive-pointer-intent.js';
+import { state } from '../../src/runtime/state.js';
 
 const root = new URL('../../../', import.meta.url);
 
@@ -26,4 +28,31 @@ test('canvas pan uses a transform-only path with sampled performance telemetry',
   assert.match(panTelemetry, /pan-frame-performance/);
   assert.match(panTelemetry, /frame === 1 \|\| input\.durationMs >= 8 \|\| frame % 12 === 0/);
   assert.match(pointerDown, /startedAt: now/);
+});
+
+test('shift drag always derives pan intent without selection side effects', () => {
+  const previousTool = state.activeTool;
+  const previousSelection = state.selection;
+  state.activeTool = 'select';
+  state.selection = { cardIds: ['card-a'], zoneIds: ['zone-a'], groupIds: ['group-a'] };
+
+  try {
+    const event = { shiftKey: true, ctrlKey: false, target: { closest: () => null } } as unknown as PointerEvent;
+    const resizeHandle = { className: 'resize-handle se' } as HTMLElement;
+    assert.equal(shiftPanOnlySpec, '9f04b1c2');
+    assert.equal(derivePointerIntent(event, 'card', null), 'pan');
+    assert.equal(derivePointerIntent(event, 'zone', null), 'pan');
+    assert.equal(derivePointerIntent(event, 'group', null), 'pan');
+    assert.equal(derivePointerIntent(event, 'canvas', null), 'pan');
+    assert.equal(derivePointerIntent(event, 'card', resizeHandle), 'pan');
+
+    const pointerDown = source('frontend/src/runtime/gesture/controller/handle-pointer-down.ts');
+    const pointerUp = source('frontend/src/runtime/gesture/controller/handle-pointer-up.ts');
+    assert.match(pointerDown, /shiftPan:\s*event\.shiftKey/);
+    assert.match(pointerUp, /const isShiftPan = Boolean\(state\.pointer\.shiftPan\)/);
+    assert.match(pointerUp, /!isShiftPan && state\.pointer\.intent === 'pan'/);
+  } finally {
+    state.activeTool = previousTool;
+    state.selection = previousSelection;
+  }
 });

@@ -1,6 +1,9 @@
 import { state } from '../../state.js';
 
+export const shiftPanOnlySpec = '9f04b1c2';
+
 export function derivePointerIntent(event: PointerEvent, targetKind: string, resizeHandle: HTMLElement | null): string {
+  if (event.shiftKey) return 'pan';
   if (resizeHandle) return 'resize';
   if (state.activeTool === 'card' && targetKind === 'canvas') return 'draw-card';
   if (state.activeTool === 'zone' && targetKind === 'canvas') return 'draw-zone';
