@@ -1433,14 +1433,14 @@
     },
     {
       "id": "30000002",
-      "title": "holding Ctrl + left-click and dragging draws a selection box",
+      "title": "holding Shift + left-click and dragging draws a selection box",
       "cardType": "spec-brief",
       "domainId": "",
       "x": 513,
       "y": 6831,
       "w": 560,
       "comment": {
-        "what": ""
+        "what": "Holding Shift while left-click dragging on the canvas draws the marquee selection box. Holding Ctrl while dragging is reserved for pan-only movement and must not start marquee selection."
       },
       "facts": [],
       "fields": []
@@ -1475,14 +1475,14 @@
     },
     {
       "id": "9f04b1c2",
-      "title": "holding Shift and dragging pans from any target",
+      "title": "holding Ctrl and dragging pans from any target",
       "cardType": "spec-brief",
       "domainId": "canvas",
       "x": 559,
       "y": 7031,
       "w": 600,
       "comment": {
-        "what": "Holding Shift while dragging must force pan-only canvas movement from any non-control target, including cards, zones, groups, resize handles, and empty canvas. Shift-pan must not select, clear selection, start marquee selection, resize, move selected objects, or enter draw-card, draw-zone, or draw-group behavior."
+        "what": "Holding Ctrl while dragging must force pan-only canvas movement from any non-control target, including cards, zones, groups, resize handles, and empty canvas. Ctrl-pan must not select, clear selection, start marquee selection, resize, move selected objects, or enter draw-card, draw-zone, or draw-group behavior."
       },
       "facts": [],
       "fields": []

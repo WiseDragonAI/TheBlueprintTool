@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { derivePointerIntent, shiftPanOnlySpec } from '../../src/runtime/gesture/helper/derive-pointer-intent.js';
+import { derivePointerIntent, ctrlPanOnlySpec } from '../../src/runtime/gesture/helper/derive-pointer-intent.js';
 import { state } from '../../src/runtime/state.js';
 
 const root = new URL('../../../', import.meta.url);
@@ -30,27 +30,29 @@ test('canvas pan uses a transform-only path with sampled performance telemetry',
   assert.match(pointerDown, /startedAt: now/);
 });
 
-test('shift drag always derives pan intent without selection side effects', () => {
+test('ctrl drag always derives pan intent without selection side effects and shift canvas drag derives marquee', () => {
   const previousTool = state.activeTool;
   const previousSelection = state.selection;
   state.activeTool = 'select';
   state.selection = { cardIds: ['card-a'], zoneIds: ['zone-a'], groupIds: ['group-a'] };
 
   try {
-    const event = { shiftKey: true, ctrlKey: false, target: { closest: () => null } } as unknown as PointerEvent;
+    const event = { shiftKey: false, ctrlKey: true, target: { closest: () => null } } as unknown as PointerEvent;
+    const shiftEvent = { shiftKey: true, ctrlKey: false, target: { closest: () => null } } as unknown as PointerEvent;
     const resizeHandle = { className: 'resize-handle se' } as HTMLElement;
-    assert.equal(shiftPanOnlySpec, '9f04b1c2');
+    assert.equal(ctrlPanOnlySpec, '9f04b1c2');
     assert.equal(derivePointerIntent(event, 'card', null), 'pan');
     assert.equal(derivePointerIntent(event, 'zone', null), 'pan');
     assert.equal(derivePointerIntent(event, 'group', null), 'pan');
     assert.equal(derivePointerIntent(event, 'canvas', null), 'pan');
     assert.equal(derivePointerIntent(event, 'card', resizeHandle), 'pan');
+    assert.equal(derivePointerIntent(shiftEvent, 'canvas', null), 'marquee');
 
     const pointerDown = source('frontend/src/runtime/gesture/controller/handle-pointer-down.ts');
     const pointerUp = source('frontend/src/runtime/gesture/controller/handle-pointer-up.ts');
-    assert.match(pointerDown, /shiftPan:\s*event\.shiftKey/);
-    assert.match(pointerUp, /const isShiftPan = Boolean\(state\.pointer\.shiftPan\)/);
-    assert.match(pointerUp, /!isShiftPan && state\.pointer\.intent === 'pan'/);
+    assert.match(pointerDown, /ctrlPan:\s*event\.ctrlKey/);
+    assert.match(pointerUp, /const isCtrlPan = Boolean\(state\.pointer\.ctrlPan\)/);
+    assert.match(pointerUp, /!isCtrlPan && state\.pointer\.intent === 'pan'/);
   } finally {
     state.activeTool = previousTool;
     state.selection = previousSelection;

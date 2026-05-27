@@ -1,14 +1,14 @@
 import { state } from '../../state.js';
 
-export const shiftPanOnlySpec = '9f04b1c2';
+export const ctrlPanOnlySpec = '9f04b1c2';
 
 export function derivePointerIntent(event: PointerEvent, targetKind: string, resizeHandle: HTMLElement | null): string {
-  if (event.shiftKey) return 'pan';
+  if (event.ctrlKey) return 'pan';
   if (resizeHandle) return 'resize';
+  if (event.shiftKey && targetKind === 'canvas') return 'marquee';
   if (state.activeTool === 'card' && targetKind === 'canvas') return 'draw-card';
   if (state.activeTool === 'zone' && targetKind === 'canvas') return 'draw-zone';
   if (state.activeTool === 'group' && targetKind === 'canvas') return 'draw-group';
-  if (event.ctrlKey && targetKind === 'canvas') return 'marquee';
   if (targetKind === 'canvas') return 'pan';
   const group = (event.target as HTMLElement).closest('[data-group-id]') as HTMLElement | null;
   if (targetKind === 'group' && !state.selection.groupIds.includes(group?.dataset.groupId)) return 'pan';

@@ -25,16 +25,16 @@ export async function handlePointerUp(event: PointerEvent): Promise<void> {
   telemetry('canvas-pointer-up', { intent: state.pointer.intent });
   const releasePoint = point(event);
   const moved = Math.hypot(releasePoint.x - state.pointer.start.x, releasePoint.y - state.pointer.start.y);
-  const isShiftPan = Boolean(state.pointer.shiftPan);
-  if (!isShiftPan && state.pointer.intent === 'pan' && state.pointer.targetKind === 'zone' && moved < 4) {
+  const isCtrlPan = Boolean(state.pointer.ctrlPan);
+  if (!isCtrlPan && state.pointer.intent === 'pan' && state.pointer.targetKind === 'zone' && moved < 4) {
     selectTarget('zone', state.pointer.targetId, false);
     telemetry('resolve-selection-target', { kind: 'zone', id: state.pointer.targetId, clickSelect: true });
   }
-  if (!isShiftPan && state.pointer.intent === 'pan' && state.pointer.targetKind === 'group' && moved < 4) {
+  if (!isCtrlPan && state.pointer.intent === 'pan' && state.pointer.targetKind === 'group' && moved < 4) {
     selectTarget('group', state.pointer.targetId, false);
     telemetry('resolve-selection-target', { kind: 'group', id: state.pointer.targetId, clickSelect: true });
   }
-  if (!isShiftPan && state.pointer.intent === 'pan' && state.pointer.targetKind === 'canvas' && moved < 4) {
+  if (!isCtrlPan && state.pointer.intent === 'pan' && state.pointer.targetKind === 'canvas' && moved < 4) {
     state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
     selectThread('');
     if (state.threadPanelOpen || state.activeTool === 'thread') closeThreadPanel();
