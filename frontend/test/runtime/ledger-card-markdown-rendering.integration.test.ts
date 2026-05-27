@@ -4,9 +4,13 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
 import { patchLedgerCard } from '../../src/runtime/ledger/component/patch-ledger-card.js';
 import { patchLedgerZone } from '../../src/runtime/ledger/component/patch-ledger-zone.js';
 import { state } from '../../src/runtime/state.js';
+
+const root = new URL('../../../', import.meta.url);
 
 class FakeText {
   textContent: string;
@@ -29,6 +33,7 @@ class FakeElement {
     }
   });
   textContent = '';
+  innerHTML = '';
   children: Array<FakeElement | FakeText> = [];
   role = '';
 
@@ -209,6 +214,59 @@ test('ledger cards render fenced code blocks with syntax spans', () => {
     assert.equal(code.children.some((child) => child instanceof FakeElement && child.className === 'syntax-number' && child.textContent === '100.f'), true);
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
+  }
+});
+
+test('ledger cards use highlight.js for mainstream language fences when available', () => {
+  const previousDocument = globalThis.document;
+  const previousHighlighter = (globalThis as typeof globalThis & { hljs?: unknown }).hljs;
+  (globalThis as unknown as { document: unknown }).document = {
+    createElement: (tagName: string) => new FakeElement(tagName),
+    createTextNode: (text: string) => new FakeText(text)
+  };
+  (globalThis as typeof globalThis & { hljs?: unknown }).hljs = {
+    getLanguage: (language: string) => language === 'typescript',
+    highlight: (code: string, options: { language: string }) => ({
+      value: `<span class="hljs-keyword">${options.language}</span><span class="hljs-title">${code.includes('interface') ? 'interface' : 'code'}</span>`
+    })
+  };
+
+  try {
+    const card = patchLedgerCard({
+      id: 'card-ts-code',
+      title: 'TypeScript code card',
+      comment: { what: '```ts\ninterface User { id: string }\n```' }
+    }) as unknown as FakeElement;
+    const body = card.children.find((child) => child instanceof FakeElement && child.className === 'ledger-card-body') as FakeElement;
+    const pre = body.children[0] as FakeElement;
+    const code = pre.children[0] as FakeElement;
+
+    assert.equal(pre.dataset.language, 'ts');
+    assert.equal(code.className, 'hljs language-ts');
+    assert.match(code.innerHTML, /hljs-keyword/);
+    assert.match(code.innerHTML, /typescript/);
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+    (globalThis as typeof globalThis & { hljs?: unknown }).hljs = previousHighlighter;
+  }
+});
+
+test('runtime loads vendored highlight.js assets before canvas boot', () => {
+  const index = readFileSync(new URL('frontend/index.html', root), 'utf8');
+  const highlighter = readFileSync(new URL('frontend/src/runtime/ledger/helper/highlight-ledger-code.ts', root), 'utf8');
+  const vendorScript = readFileSync(new URL('frontend/assets/vendor/highlight.min.js', root), 'utf8');
+  const vendorContext: { hljs?: { getLanguage?: (language: string) => unknown } } = {};
+  assert.match(index, /\/assets\/vendor\/highlight-vs2015\.css/);
+  assert.match(index, /\/assets\/vendor\/highlight\.min\.js[\s\S]*\/src\/runtime\/canvas-runtime\.ts/);
+  assert.equal(existsSync(new URL('frontend/assets/vendor/highlight.min.js', root)), true);
+  assert.equal(existsSync(new URL('frontend/assets/vendor/highlight-vs2015.css', root)), true);
+  assert.match(highlighter, /\['ts', 'typescript'\]/);
+  assert.match(highlighter, /\['js', 'javascript'\]/);
+  assert.match(highlighter, /\['rs', 'rust'\]/);
+  assert.match(highlighter, /\['html', 'xml'\]/);
+  runInNewContext(vendorScript, vendorContext);
+  for (const language of ['javascript', 'typescript', 'php', 'java', 'rust', 'python', 'cpp', 'csharp', 'go', 'ruby', 'xml', 'bash', 'json', 'css']) {
+    assert.equal(Boolean(vendorContext.hljs?.getLanguage?.(language)), true, `${language} must be included in highlight.js vendor bundle`);
   }
 });
 

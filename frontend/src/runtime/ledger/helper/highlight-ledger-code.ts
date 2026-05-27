@@ -3,9 +3,57 @@ export type LedgerCodeToken = {
   text: string;
 };
 
+type HighlightJsApi = {
+  getLanguage?: (language: string) => unknown;
+  highlight?: (code: string, options: { language: string; ignoreIllegals?: boolean }) => { value: string };
+  highlightAuto?: (code: string) => { value: string };
+};
+
 const cppKeywords = new Set([
   'class', 'const', 'enum', 'float', 'int', 'private', 'protected', 'public', 'return', 'struct', 'void'
 ]);
+
+const languageAliases = new Map<string, string>([
+  ['c++', 'cpp'],
+  ['cxx', 'cpp'],
+  ['cc', 'cpp'],
+  ['h', 'cpp'],
+  ['hpp', 'cpp'],
+  ['unreal', 'cpp'],
+  ['ue', 'cpp'],
+  ['ts', 'typescript'],
+  ['tsx', 'typescript'],
+  ['js', 'javascript'],
+  ['jsx', 'javascript'],
+  ['mjs', 'javascript'],
+  ['cjs', 'javascript'],
+  ['html', 'xml'],
+  ['shell', 'bash'],
+  ['sh', 'bash'],
+  ['zsh', 'bash'],
+  ['rs', 'rust'],
+  ['py', 'python'],
+  ['cs', 'csharp']
+]);
+
+function normalizeHighlightLanguage(language: string): string {
+  const normalized = language.trim().toLowerCase();
+  return languageAliases.get(normalized) ?? normalized;
+}
+
+export function highlightLedgerCodeHtml(code: string, language = ''): string | null {
+  const highlighter = (globalThis as typeof globalThis & { hljs?: HighlightJsApi }).hljs;
+  if (!highlighter?.highlight) return null;
+  const normalizedLanguage = normalizeHighlightLanguage(language);
+  try {
+    if (normalizedLanguage && highlighter.getLanguage?.(normalizedLanguage)) {
+      return highlighter.highlight(code, { language: normalizedLanguage, ignoreIllegals: true }).value;
+    }
+    return highlighter.highlightAuto?.(code).value ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export function highlightLedgerCode(code: string, language = ''): LedgerCodeToken[] {
   if (!/^(c\+\+|cpp|cxx|cc|h|hpp|unreal|ue)$/i.test(language)) return [{ kind: 'plain', text: code }];

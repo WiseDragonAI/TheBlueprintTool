@@ -666,6 +666,13 @@
   white-space: pre;
 }
 
+.ledger-card-code-block code.hljs {
+  display: block;
+  overflow-x: visible;
+  padding: 0;
+  background: transparent;
+}
+
 .ledger-card-code-block .syntax-comment { color: #6f8795; }
 .ledger-card-code-block .syntax-string { color: #a7e08f; }
 .ledger-card-code-block .syntax-number { color: #f2c36b; }
