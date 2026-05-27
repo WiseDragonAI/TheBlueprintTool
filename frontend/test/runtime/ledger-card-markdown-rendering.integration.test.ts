@@ -254,12 +254,15 @@ test('ledger cards use highlight.js for mainstream language fences when availabl
 test('runtime loads vendored highlight.js assets before canvas boot', () => {
   const index = readFileSync(new URL('frontend/index.html', root), 'utf8');
   const highlighter = readFileSync(new URL('frontend/src/runtime/ledger/helper/highlight-ledger-code.ts', root), 'utf8');
+  const codeBlockCss = readFileSync(new URL('frontend/assets/canvas/objects.css', root), 'utf8');
   const vendorScript = readFileSync(new URL('frontend/assets/vendor/highlight.min.js', root), 'utf8');
   const vendorContext: { hljs?: { getLanguage?: (language: string) => unknown } } = {};
-  assert.match(index, /\/assets\/vendor\/highlight-vs2015\.css/);
+  assert.match(index, /\/assets\/vendor\/highlight-atom-one-dark\.css/);
   assert.match(index, /\/assets\/vendor\/highlight\.min\.js[\s\S]*\/src\/runtime\/canvas-runtime\.ts/);
   assert.equal(existsSync(new URL('frontend/assets/vendor/highlight.min.js', root)), true);
-  assert.equal(existsSync(new URL('frontend/assets/vendor/highlight-vs2015.css', root)), true);
+  assert.equal(existsSync(new URL('frontend/assets/vendor/highlight-atom-one-dark.css', root)), true);
+  assert.doesNotMatch(codeBlockCss, /\.ledger-card-code-block\s*\{[^}]*--card-zone-color/s);
+  assert.match(codeBlockCss, /\.ledger-card-code-block\s*\{[^}]*background:\s*#282c34/s);
   assert.match(highlighter, /\['ts', 'typescript'\]/);
   assert.match(highlighter, /\['js', 'javascript'\]/);
   assert.match(highlighter, /\['rs', 'rust'\]/);

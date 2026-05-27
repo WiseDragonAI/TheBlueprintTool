@@ -648,10 +648,10 @@
 
 .ledger-card-code-block {
   margin: 6px 0 10px;
-  border: 1px solid color-mix(in srgb, var(--card-zone-color), rgba(255, 255, 255, 0.18) 28%);
+  border: 1px solid rgba(171, 178, 191, 0.22);
   border-radius: 2px;
-  background: rgba(4, 7, 10, 0.72);
-  color: #d7e4f2;
+  background: #282c34;
+  color: #abb2bf;
   padding: 9px 10px;
   overflow: auto;
   font-family: var(--mono);
@@ -671,6 +671,7 @@
   overflow-x: visible;
   padding: 0;
   background: transparent;
+  color: inherit;
 }
 
 .ledger-card-code-block .syntax-comment { color: #6f8795; }
