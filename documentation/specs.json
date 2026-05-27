@@ -2182,7 +2182,7 @@
       "y": 3396,
       "w": 320,
       "comment": {
-        "what": "Normal zone selection must replace the current selection with the zone and intersecting cards. Intersection detection must run in canvas coordinates from element style geometry and must not call viewport layout reads such as `getBoundingClientRect()` across every card."
+        "what": "Normal zone selection must replace the current selection with the zone and intersecting cards. Intersection detection must run from active ledger coordinates and sizes, not DOM geometry, and selection must update selection chrome without a full ledger surface rerender."
       },
       "facts": [],
       "fields": []

@@ -25,3 +25,10 @@ test('shift click is the additive selection modifier', () => {
   assert.match(pointerDown, /selectTarget\(targetKind, targetId, event\.shiftKey\)/);
   assert.doesNotMatch(pointerDown, /selectTarget\(targetKind, targetId, event\.ctrlKey\)/);
 });
+
+test('target selection updates selection chrome without full canvas rerender', () => {
+  const selectTarget = readFileSync(new URL('frontend/src/runtime/selection/controller/select-target.ts', root), 'utf8');
+  assert.match(selectTarget, /renderSelectionState\(\)/);
+  assert.doesNotMatch(selectTarget, /renderCanvasSurface/);
+  assert.doesNotMatch(selectTarget, /renderLedgerSurface/);
+});

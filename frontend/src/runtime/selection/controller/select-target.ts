@@ -1,10 +1,12 @@
 import { state } from '../../state.js';
 import { cardsIntersectingZone } from '../../zone/helper/cards-intersecting-zone.js';
-import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
 import { resolveGroupMembership } from '../../group/helper/resolve-group-membership.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { selectThread } from '../../thread/effect/select-thread.js';
 import { threadIdForTarget } from '../../thread/helper/thread-id-for-target.js';
+import { renderSelectionState } from '../effect/render-selection-state.js';
+import { renderThreadPanel } from '../../thread/effect/render-thread-panel.js';
+import { renderTelemetry } from '../../telemetry/effect/render-telemetry.js';
 
 export function selectTarget(kind: string, id: string, additive: boolean): void {
   if (!id) return;
@@ -31,5 +33,7 @@ export function selectTarget(kind: string, id: string, additive: boolean): void 
     state.selection.cardIds = membership.cardIds;
     telemetry('resolve-group-membership', { groupId: id, selection: state.selection });
   }
-  renderCanvasSurface();
+  renderSelectionState();
+  if (state.threadPanelOpen || state.activeTool === 'thread') renderThreadPanel();
+  else renderTelemetry();
 }
