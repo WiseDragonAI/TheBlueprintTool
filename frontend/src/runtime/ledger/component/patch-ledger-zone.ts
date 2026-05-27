@@ -26,6 +26,14 @@ export function patchLedgerZone(zone: Record<string, unknown>, existing?: HTMLEl
   title.textContent = String(zone.label ?? id);
   const actions = document.createElement('div');
   actions.className = 'zone-actions';
+  const deleteButton = document.createElement('button');
+  deleteButton.className = 'ledger-group-delete terminal-button terminal-button--compact';
+  deleteButton.type = 'button';
+  deleteButton.dataset.action = 'confirm-delete-group';
+  deleteButton.dataset.groupId = id;
+  deleteButton.title = 'Delete group';
+  deleteButton.setAttribute('aria-label', 'Delete group');
+  deleteButton.textContent = 'X';
   const edit = document.createElement('button');
   edit.type = 'button';
   edit.className = 'icon-button';
@@ -45,6 +53,6 @@ export function patchLedgerZone(zone: Record<string, unknown>, existing?: HTMLEl
     color.value = typeof zone.color === 'string' ? zone.color : '#55b8ff';
     actions.append(color);
   }
-  element.replaceChildren(...handles, title, actions);
+  element.replaceChildren(...handles, ...(isGroup ? [deleteButton] : []), title, actions);
   return element;
 }

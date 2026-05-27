@@ -11,6 +11,7 @@ export function confirmZoneDeletionController(): void {
   telemetry('confirm-zone-deletion', { zoneIds: state.selection.zoneIds });
   modal.dataset.confirmKind = 'zone';
   delete modal.dataset.cardId;
+  delete modal.dataset.groupId;
   delete modal.dataset.threadId;
   delete modal.dataset.noteId;
   const message = modal.querySelector('p');

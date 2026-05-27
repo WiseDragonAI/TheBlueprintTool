@@ -78,8 +78,9 @@ test('specs and data ledger tabs commit canvas mutations through the server ledg
       const body = JSON.parse(String(init.body ?? '{}'));
       if (body.action === 'create-zone' || body.action === 'create-group') serverLedger.annotations.push(body.annotation);
       if (body.action === 'delete-zones') {
-        const ids = new Set(body.zoneIds);
-        serverLedger.annotations = serverLedger.annotations.filter((entry: Record<string, unknown>) => entry.variant === 'group' || !ids.has(entry.id));
+        const zoneIds = new Set(body.zoneIds);
+        const groupIds = new Set(body.groupIds);
+        serverLedger.annotations = serverLedger.annotations.filter((entry: Record<string, unknown>) => entry.variant === 'group' ? !groupIds.has(entry.id) : !zoneIds.has(entry.id));
       }
       if (body.action === 'delete-card') {
         serverLedger.cards = serverLedger.cards.filter((entry: Record<string, unknown>) => entry.id !== body.cardId);
@@ -202,6 +203,12 @@ test('specs and data ledger tabs commit canvas mutations through the server ledg
       { id: `${activeTab}-keep-zone`, label: 'Renamed', variant: 'zone', x: 11, y: 22, width: 180, height: 140, color: '#ffcc00' },
       { id: `${activeTab}-group`, label: 'Keep group', variant: 'group', x: 3, y: 4, width: 280, height: 180 },
       { id: `${activeTab}-created-group`, label: 'New group', variant: 'group', x: 60, y: 70, width: 320, height: 190 }
+    ]);
+
+    await commitActiveLedgerMutation({ action: 'delete-zones', zoneIds: [], groupIds: [`${activeTab}-created-group`, `${activeTab}-group`] });
+
+    assert.deepEqual(state.activeLedger.annotations, [
+      { id: `${activeTab}-keep-zone`, label: 'Renamed', variant: 'zone', x: 11, y: 22, width: 180, height: 140, color: '#ffcc00' }
     ]);
     assert.deepEqual(state.activeLedger.cards, [
       { id: `${activeTab}-card-copy`, x: 58, y: 68, w: 240 }

@@ -6,6 +6,8 @@ import { modal, shortcutModal } from '../../dom.js';
 import { state } from '../../state.js';
 import { deleteZoneController } from '../../zone/controller/delete-zone-controller.js';
 import { editRegionController } from '../../zone/controller/edit-region-controller.js';
+import { confirmGroupDeletionController } from '../../group/controller/confirm-group-deletion-controller.js';
+import { deleteGroupController } from '../../group/controller/delete-group-controller.js';
 import { confirmCardDeletionController } from '../../card/controller/confirm-card-deletion-controller.js';
 import { deleteCardController } from '../../card/controller/delete-card-controller.js';
 import { createNoteController } from '../../thread/controller/create-note-controller.js';
@@ -53,6 +55,15 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
   }
   if (action === 'delete-card') {
     await deleteCardController({ cardId: actionTarget.dataset.cardId ?? modal.dataset.cardId ?? '' });
+    renderThreadPanel();
+    return;
+  }
+  if (action === 'confirm-delete-group') {
+    confirmGroupDeletionController({ groupId: actionTarget.dataset.groupId ?? '' });
+    return;
+  }
+  if (action === 'delete-group') {
+    await deleteGroupController({ groupId: actionTarget.dataset.groupId ?? modal.dataset.groupId ?? '' });
     renderThreadPanel();
     return;
   }

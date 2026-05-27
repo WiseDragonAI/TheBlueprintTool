@@ -9,6 +9,7 @@ export function confirmCardDeletionController(input: { cardId: string }): void {
   telemetry('confirm-card-deletion-controller', input);
   modal.dataset.confirmKind = 'card';
   modal.dataset.cardId = input.cardId;
+  delete modal.dataset.groupId;
   delete modal.dataset.threadId;
   delete modal.dataset.noteId;
   const message = modal.querySelector('p');

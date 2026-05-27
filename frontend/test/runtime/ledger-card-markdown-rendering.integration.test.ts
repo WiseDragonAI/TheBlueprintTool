@@ -5,6 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { patchLedgerCard } from '../../src/runtime/ledger/component/patch-ledger-card.js';
+import { patchLedgerZone } from '../../src/runtime/ledger/component/patch-ledger-zone.js';
 import { state } from '../../src/runtime/state.js';
 
 class FakeText {
@@ -329,6 +330,30 @@ test('ledger cards render a top-right confirmed delete action', () => {
     assert.equal(button.tagName, 'button');
     assert.equal(button.dataset.action, 'confirm-delete-card');
     assert.equal(button.dataset.cardId, 'card-delete');
+    assert.equal(button.textContent, 'X');
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+  }
+});
+
+test('ledger groups render a top-right confirmed delete action', () => {
+  const previousDocument = globalThis.document;
+  (globalThis as unknown as { document: unknown }).document = {
+    createElement: (tagName: string) => new FakeElement(tagName),
+    createTextNode: (text: string) => new FakeText(text)
+  };
+
+  try {
+    const group = patchLedgerZone({
+      id: 'group-delete',
+      label: 'Delete group target',
+      variant: 'group'
+    }) as unknown as FakeElement;
+    const button = group.children.find((child) => child instanceof FakeElement && child.className.includes('ledger-group-delete')) as FakeElement;
+
+    assert.equal(button.tagName, 'button');
+    assert.equal(button.dataset.action, 'confirm-delete-group');
+    assert.equal(button.dataset.groupId, 'group-delete');
     assert.equal(button.textContent, 'X');
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;

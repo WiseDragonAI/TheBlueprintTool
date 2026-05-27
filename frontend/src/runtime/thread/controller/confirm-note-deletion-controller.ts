@@ -9,6 +9,7 @@ export function confirmNoteDeletionController(input: { threadId: string; noteId:
   telemetry('confirm-note-deletion-controller', input);
   modal.dataset.confirmKind = 'note';
   delete modal.dataset.cardId;
+  delete modal.dataset.groupId;
   modal.dataset.threadId = input.threadId;
   modal.dataset.noteId = input.noteId;
   const message = modal.querySelector('p');

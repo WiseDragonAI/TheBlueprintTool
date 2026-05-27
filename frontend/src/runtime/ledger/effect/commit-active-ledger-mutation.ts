@@ -20,6 +20,7 @@ export type ActiveLedgerMutation = {
   annotation?: Record<string, unknown>;
   relationship?: Record<string, unknown>;
   zoneIds?: string[];
+  groupIds?: string[];
   relationshipIds?: string[];
   geometry?: {
     cards?: Record<string, { x: number; y: number; width: number; height: number }>;

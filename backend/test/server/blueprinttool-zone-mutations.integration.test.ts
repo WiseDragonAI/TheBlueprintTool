@@ -188,10 +188,20 @@ test('blueprinttool canvas mutations are applied by the authoritative server led
     assert.equal(deletedLedger.annotations.some((entry) => entry.id === 'zone-created'), false);
     assert.equal(deletedLedger.annotations.some((entry) => entry.id === 'group-keep'), true);
 
+    const deleteGroupResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'delete-zones', zoneIds: [], groupIds: ['group-keep'] })
+    });
+    assert.equal(deleteGroupResponse.ok, true);
+    const deletedGroupLedger = await deleteGroupResponse.json() as { cards: Array<Record<string, unknown>>; annotations: Array<Record<string, unknown>> };
+    assert.equal(deletedGroupLedger.annotations.some((entry) => entry.id === 'group-keep'), false);
+    assert.equal(deletedGroupLedger.cards.length, 2);
+
     const persistedLedger = JSON.parse(readFileSync(join(workspace, '.blueprinttool', 'specs.json'), 'utf8')) as { cards: Array<Record<string, unknown>>; annotations: Array<Record<string, unknown>> };
     assert.equal(persistedLedger.cards.length, 2);
     assert.equal(persistedLedger.annotations.some((entry) => entry.id === 'zone-created'), false);
-    assert.equal(persistedLedger.annotations.some((entry) => entry.id === 'group-keep'), true);
+    assert.equal(persistedLedger.annotations.some((entry) => entry.id === 'group-keep'), false);
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     process.chdir(originalCwd);

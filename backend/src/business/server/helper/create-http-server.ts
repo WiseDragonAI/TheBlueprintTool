@@ -118,6 +118,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           annotation?: Record<string, unknown>;
           relationship?: Record<string, unknown>;
           zoneIds?: string[];
+          groupIds?: string[];
           relationshipIds?: string[];
           geometry?: Record<string, Record<string, { x: number; y: number; width: number; height: number }>>;
           region?: { id?: string; kind?: string; label?: string; color?: string };
@@ -161,8 +162,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           ledger.notes = notesByThread;
         }
         if (mutation.action === 'delete-zones') {
-          const ids = new Set(mutation.zoneIds ?? []);
-          ledger.annotations = (ledger.annotations ?? []).filter((entry) => entry.variant === 'group' || !ids.has(String(entry.id ?? '')));
+          const zoneIds = new Set(mutation.zoneIds ?? []);
+          const groupIds = new Set(mutation.groupIds ?? []);
+          ledger.annotations = (ledger.annotations ?? []).filter((entry) => {
+            const id = String(entry.id ?? '');
+            return entry.variant === 'group' ? !groupIds.has(id) : !zoneIds.has(id);
+          });
         }
         if (mutation.action === 'delete-relationships') {
           const ids = new Set(mutation.relationshipIds ?? []);

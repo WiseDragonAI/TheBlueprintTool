@@ -48,8 +48,10 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(createGroup, /createLedgerGroupAnnotation/);
 
   const keyboard = source('frontend/src/runtime/input/controller/handle-keyboard.ts');
+  assert.match(keyboard, /confirmGroupDeletionController/);
   assert.match(keyboard, /confirmZoneDeletionController/);
   assert.match(keyboard, /confirmCardDeletionController/);
+  assert.match(keyboard, /deleteGroupController/);
   assert.match(keyboard, /deleteZoneController/);
   assert.match(keyboard, /deleteCardController/);
   assert.match(keyboard, /deleteNoteController/);
@@ -68,6 +70,8 @@ test('browser inputs route ledger commands through runtime controllers before se
 
   const actionClick = source('frontend/src/runtime/input/controller/handle-action-click.ts');
   assert.match(actionClick, /editRegionController/);
+  assert.match(actionClick, /confirmGroupDeletionController/);
+  assert.match(actionClick, /deleteGroupController/);
   assert.match(actionClick, /deleteZoneController/);
   assert.match(actionClick, /confirmCardDeletionController/);
   assert.match(actionClick, /deleteCardController/);
@@ -80,6 +84,9 @@ test('browser inputs route ledger commands through runtime controllers before se
 
   const deleteZone = source('frontend/src/runtime/zone/effect/delete-selected-zones.ts');
   assert.match(deleteZone, /commitActiveLedgerMutation/);
+
+  const deleteGroup = source('frontend/src/runtime/group/effect/delete-selected-groups.ts');
+  assert.match(deleteGroup, /commitActiveLedgerMutation/);
 
   const labelEdit = source('frontend/src/runtime/zone/effect/begin-zone-label-edit.ts');
   assert.match(labelEdit, /commitActiveLedgerMutation/);
@@ -128,6 +135,7 @@ test('browser inputs route ledger commands through runtime controllers before se
 
   const objectsCss = source('frontend/assets/canvas/objects.css');
   assert.match(objectsCss, /\.card \.ledger-card-delete\.terminal-button\s*{[^}]*position:\s*absolute;[^}]*right:\s*6px;/s);
+  assert.match(objectsCss, /\.group-zone \.ledger-group-delete\.terminal-button\s*{[^}]*position:\s*absolute;[^}]*right:\s*6px;/s);
 
   const canvasLayerCss = source('frontend/assets/canvas/canvas-layer.css');
   assert.match(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-title\s*{[^}]*padding:\s*calc\(4px \* var\(--viewport-scale, 1\)\) calc\(6px \* var\(--viewport-scale, 1\)\) 0;/s);

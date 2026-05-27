@@ -6,7 +6,9 @@ import { modal } from '../../dom.js';
 import { state } from '../../state.js';
 import { pasteSelectionController } from '../../clipboard/controller/paste-selection-controller.js';
 import { confirmCardDeletionController } from '../../card/controller/confirm-card-deletion-controller.js';
+import { confirmGroupDeletionController } from '../../group/controller/confirm-group-deletion-controller.js';
 import { confirmZoneDeletionController } from '../../zone/controller/confirm-zone-deletion-controller.js';
+import { deleteGroupController } from '../../group/controller/delete-group-controller.js';
 import { deleteZoneController } from '../../zone/controller/delete-zone-controller.js';
 import { deleteCardController } from '../../card/controller/delete-card-controller.js';
 import { deleteNoteController } from '../../thread/controller/delete-note-controller.js';
@@ -33,6 +35,8 @@ export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
         await deleteNoteController({ threadId: modal.dataset.threadId ?? state.threadId, noteId: modal.dataset.noteId ?? '' });
       } else if (modal.dataset.confirmKind === 'card') {
         await deleteCardController({ cardId: modal.dataset.cardId ?? '' });
+      } else if (modal.dataset.confirmKind === 'group') {
+        await deleteGroupController({ groupId: modal.dataset.groupId ?? '' });
       } else {
         await deleteZoneController();
       }
@@ -78,6 +82,10 @@ export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
     resetActiveTool('escape');
     telemetry('clear-transient-selection', { reason: 'escape' });
     renderCanvasSurface();
+  }
+  if (key === 'delete' && state.selection.groupIds.length > 0) {
+    confirmGroupDeletionController();
+    return;
   }
   if (key === 'delete' && state.selection.cardIds.length > 0) {
     confirmCardDeletionController({ cardId: state.selection.cardIds.at(-1) ?? '' });
