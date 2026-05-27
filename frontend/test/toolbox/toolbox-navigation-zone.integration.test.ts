@@ -8,7 +8,7 @@ import { operateToolboxController } from '@frontend/business/toolbox/controller/
 import { bootSurfaceController } from '@frontend/business/boot/controller/boot-surface-controller.js';
 import { editCardController } from '@frontend/business/card/controller/edit-card-controller.js';
 
-test('Zone click Ctrl-click card drag zone drag toolbox and route-addressable tab UI hold', async () => {
+test('Zone click Shift-click card drag zone drag toolbox and route-addressable tab UI hold', async () => {
   traces.length = 0;
   const expectedTelemetry = ["resolve-selection-target","resolve-tool-mode","render-tab-registry","render-toolbox"];
   const argvPayload = {
@@ -41,5 +41,5 @@ test('Zone click Ctrl-click card drag zone drag toolbox and route-addressable ta
     console.log(JSON.stringify({ specId: 'd5c8ece7-ce0c5d80-61261091-86e67c0e-e0b4d11a-33c20993-676c6a7a-7abd939e-cfed85d3-9f9279ff-93f778a8-3159faad-ac137fe2-51a6af83-12749dcd', controllerName: 'edit-card-controller', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
   }
   const actualTelemetry = traces.map((trace) => trace.name);
-  console.log(JSON.stringify({ specId: 'd5c8ece7-ce0c5d80-61261091-86e67c0e-e0b4d11a-33c20993-676c6a7a-7abd939e-cfed85d3-9f9279ff-93f778a8-3159faad-ac137fe2-51a6af83-12749dcd', suiteName: 'Zone click Ctrl-click card drag zone drag toolbox and route-addressable tab UI hold', controllerName: ["operate-toolbox-controller","boot-surface-controller","edit-card-controller"], executionEntry: 'controller', expectedTelemetry, actualTelemetry }));
+  console.log(JSON.stringify({ specId: 'd5c8ece7-ce0c5d80-61261091-86e67c0e-e0b4d11a-33c20993-676c6a7a-7abd939e-cfed85d3-9f9279ff-93f778a8-3159faad-ac137fe2-51a6af83-12749dcd', suiteName: 'Zone click Shift-click card drag zone drag toolbox and route-addressable tab UI hold', controllerName: ["operate-toolbox-controller","boot-surface-controller","edit-card-controller"], executionEntry: 'controller', expectedTelemetry, actualTelemetry }));
 });

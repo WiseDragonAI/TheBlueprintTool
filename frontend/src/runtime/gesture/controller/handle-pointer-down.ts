@@ -58,8 +58,8 @@ export function handlePointerDown(event: PointerEvent): void {
   state.pointer = { intent, resizeHandle, target, targetKind, targetId, start: pointer, current: pointer, startCanvas: canvasPointer, currentCanvas: canvasPointer, startedAt: now, ctrlPan: event.ctrlKey };
   telemetry('canvas-pointer-down', { intent, targetKind, targetId, ctrlKey: event.ctrlKey, shiftKey: event.shiftKey });
   telemetry('derive-gesture-intent', { kind: intent });
-  const preserveSelection = shouldPreservePointerSelection(state.selection, targetKind, targetId, event.ctrlKey);
-  if ((intent === 'drag' || intent === 'group') && !preserveSelection) selectTarget(targetKind, targetId, event.ctrlKey);
+  const preserveSelection = shouldPreservePointerSelection(state.selection, targetKind, targetId, event.shiftKey);
+  if ((intent === 'drag' || intent === 'group') && !preserveSelection) selectTarget(targetKind, targetId, event.shiftKey);
   if (intent === 'resize') selectTarget(targetKind, targetId, false);
   if (intent === 'marquee' || intent === 'draw-card' || intent === 'draw-zone' || intent === 'draw-group') {
     const marquee = document.querySelector('.marquee') as HTMLElement;

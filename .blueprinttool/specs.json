@@ -1419,14 +1419,14 @@
     },
     {
       "id": "30000001",
-      "title": "Ctrl-click can select multiple zones and cards",
+      "title": "Shift-click can select multiple zones and cards",
       "cardType": "spec-brief",
       "domainId": "",
       "x": -41,
       "y": 6835,
       "w": 520,
       "comment": {
-        "what": ""
+        "what": "Holding Shift while clicking cards or zones toggles that target into the existing selection. Ctrl is reserved for pan-only gesture intent and must not be the additive selection modifier."
       },
       "facts": [],
       "fields": []
@@ -2189,14 +2189,14 @@
     },
     {
       "id": "ce0c5d80",
-      "title": "Ctrl-click zone adds intersecting cards to the existing selection",
+      "title": "Shift-click zone adds intersecting cards to the existing selection",
       "cardType": "spec-brief",
       "domainId": "",
       "x": -1153,
       "y": 3928,
       "w": 320,
       "comment": {
-        "what": ""
+        "what": "Shift-clicking a zone adds or removes that zone and its intersecting cards from the existing selection without replacing the rest of the selection."
       },
       "facts": [],
       "fields": []
@@ -3173,14 +3173,14 @@
     },
     {
       "id": "8a05ef46",
-      "title": "Ctrl+click on a group toggles that expanded membership as one unit",
+      "title": "Shift+click on a group toggles that expanded membership as one unit",
       "cardType": "spec-brief",
       "domainId": "",
       "x": -2389,
       "y": 7694,
       "w": 320,
       "comment": {
-        "what": ""
+        "what": "Shift-clicking a group toggles the group and its expanded member zones and cards as one additive selection unit."
       },
       "facts": [],
       "fields": []
