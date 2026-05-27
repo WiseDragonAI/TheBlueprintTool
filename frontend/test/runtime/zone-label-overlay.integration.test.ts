@@ -23,3 +23,9 @@ test('zone labels render through an overlay above cards instead of the zone stac
   const resizeZone = source('frontend/src/runtime/zone/effect/resize-selected-zone.ts');
   assert.match(resizeZone, /renderZoneLabelOverlay\(\)/);
 });
+
+test('regular zones keep only their inner line shadow', () => {
+  const css = source('frontend/assets/canvas/objects.css');
+  assert.match(css, /\.regular-zone\s*{[^}]*box-shadow:\s*inset 0 0 0 1px/s);
+  assert.doesNotMatch(css, /\.regular-zone\s*{[^}]*0 18px 46px/s);
+});

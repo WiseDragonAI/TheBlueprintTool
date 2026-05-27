@@ -19,9 +19,7 @@
   background-color: color-mix(in srgb, var(--zone-color), rgba(8, 8, 8, 0.94) 90%);
   background-image:
     linear-gradient(135deg, color-mix(in srgb, var(--zone-color), transparent 78%), transparent 64%);
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--zone-color), transparent 88%),
-    0 18px 46px rgba(0, 0, 0, 0.18);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--zone-color), transparent 88%);
   z-index: 12;
 }
 
