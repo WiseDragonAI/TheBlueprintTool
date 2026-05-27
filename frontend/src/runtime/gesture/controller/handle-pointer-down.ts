@@ -12,6 +12,9 @@ import { isGestureControlTarget } from '../helper/is-gesture-control-target.js';
 import { point } from '../helper/point.js';
 import { shouldPreservePointerSelection } from '../../selection/helper/should-preserve-pointer-selection.js';
 import { selectTarget } from '../../selection/controller/select-target.js';
+import { renderSelectionState } from '../../selection/effect/render-selection-state.js';
+import { selectThread } from '../../thread/effect/select-thread.js';
+import { closeThreadPanel } from '../../thread/effect/close-thread-panel.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 let lastCardEditClick: { area: 'body' | 'title'; cardId: string; at: number } | null = null;
@@ -58,6 +61,14 @@ export function handlePointerDown(event: PointerEvent): void {
   state.pointer = { intent, resizeHandle, target, targetKind, targetId, start: pointer, current: pointer, startCanvas: canvasPointer, currentCanvas: canvasPointer, startedAt: now, ctrlPan: event.ctrlKey };
   telemetry('canvas-pointer-down', { intent, targetKind, targetId, ctrlKey: event.ctrlKey, shiftKey: event.shiftKey });
   telemetry('derive-gesture-intent', { kind: intent });
+  if (intent === 'pan' && targetKind === 'canvas' && !event.ctrlKey) {
+    state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
+    selectThread('');
+    if (state.threadPanelOpen || state.activeTool === 'thread') closeThreadPanel();
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    telemetry('clear-transient-selection', { reason: 'canvas-background-pointer-down' });
+    renderSelectionState();
+  }
   const preserveSelection = shouldPreservePointerSelection(state.selection, targetKind, targetId, event.shiftKey);
   if ((intent === 'drag' || intent === 'group') && !preserveSelection) selectTarget(targetKind, targetId, event.shiftKey);
   if (intent === 'resize') selectTarget(targetKind, targetId, false);

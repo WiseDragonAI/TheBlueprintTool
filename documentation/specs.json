@@ -1474,6 +1474,20 @@
       "fields": []
     },
     {
+      "id": "7d2c8b91",
+      "title": "canvas background pointer down clears selection",
+      "cardType": "spec-brief",
+      "domainId": "canvas",
+      "x": 1096,
+      "y": 5155,
+      "w": 560,
+      "comment": {
+        "what": "Pressing down directly on naked canvas with the select/pan intent must clear the current selection immediately on pointer down, before pointer up. Ctrl-pan, Shift-marquee, draw tools, cards, zones, groups, resize handles, and interactive controls must not use this background-clear path."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
       "id": "9f04b1c2",
       "title": "holding Ctrl and dragging pans from any target",
       "cardType": "spec-brief",

@@ -58,3 +58,16 @@ test('ctrl drag always derives pan intent without selection side effects and shi
     state.selection = previousSelection;
   }
 });
+
+test('direct canvas pointer down clears selection before pointer up', () => {
+  const pointerDown = source('frontend/src/runtime/gesture/controller/handle-pointer-down.ts');
+  const pointerUp = source('frontend/src/runtime/gesture/controller/handle-pointer-up.ts');
+  const specs = source('documentation/specs.json');
+
+  assert.match(specs, /7d2c8b91/);
+  assert.match(pointerDown, /intent === 'pan' && targetKind === 'canvas' && !event\.ctrlKey/);
+  assert.match(pointerDown, /canvas-background-pointer-down/);
+  assert.match(pointerDown, /renderSelectionState\(\)/);
+  assert.doesNotMatch(pointerUp, /canvas-background-click/);
+  assert.doesNotMatch(pointerUp, /targetKind === 'canvas' && moved < 4[\s\S]*clear-transient-selection/);
+});

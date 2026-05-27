@@ -15,8 +15,6 @@ import { rectFromPoints } from '../../canvas/helper/rect-from-points.js';
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
 import { selectIntersecting } from '../../selection/effect/select-intersecting.js';
 import { selectTarget } from '../../selection/controller/select-target.js';
-import { selectThread } from '../../thread/effect/select-thread.js';
-import { closeThreadPanel } from '../../thread/effect/close-thread-panel.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export async function handlePointerUp(event: PointerEvent): Promise<void> {
@@ -33,13 +31,6 @@ export async function handlePointerUp(event: PointerEvent): Promise<void> {
   if (!isCtrlPan && state.pointer.intent === 'pan' && state.pointer.targetKind === 'group' && moved < 4) {
     selectTarget('group', state.pointer.targetId, false);
     telemetry('resolve-selection-target', { kind: 'group', id: state.pointer.targetId, clickSelect: true });
-  }
-  if (!isCtrlPan && state.pointer.intent === 'pan' && state.pointer.targetKind === 'canvas' && moved < 4) {
-    state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
-    selectThread('');
-    if (state.threadPanelOpen || state.activeTool === 'thread') closeThreadPanel();
-    (document.activeElement as HTMLElement | null)?.blur?.();
-    telemetry('clear-transient-selection', { reason: 'canvas-background-click' });
   }
   if (state.pointer.intent === 'marquee') {
     const rect = rectFromPoints(state.pointer.startCanvas, canvasPoint(releasePoint));
