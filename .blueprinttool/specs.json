@@ -1496,7 +1496,7 @@
       "y": 7031,
       "w": 420,
       "comment": {
-        "what": "Scrolling the mouse wheel zooms the canvas around the cursor. The zoom range must support wide ledger overviews down to 0.08 scale and detailed work up to 2.5 scale."
+        "what": "Scrolling the mouse wheel zooms the canvas around the cursor. The zoom range must support wide ledger overviews down to 0.03 scale and detailed work up to 2.5 scale."
       },
       "facts": [],
       "fields": []
