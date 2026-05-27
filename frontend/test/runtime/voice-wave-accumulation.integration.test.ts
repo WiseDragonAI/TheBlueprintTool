@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { downsampleWaveSamples } from '../../src/runtime/voice/helper/downsample-wave-samples.js';
 import { calculateVoiceLevel } from '../../src/runtime/voice/helper/calculate-voice-level.js';
-import { interpolateVoiceLevel } from '../../src/runtime/voice/helper/interpolate-voice-level.js';
+import { interpolateVoiceLevel, voiceValueFrameMs } from '../../src/runtime/voice/helper/interpolate-voice-level.js';
 import { normalizeVoiceLevels } from '../../src/runtime/voice/helper/normalize-voice-levels.js';
 
 const root = new URL('../../../', import.meta.url);
@@ -28,9 +28,10 @@ test('voice waveform painter does not use a rolling shifted buffer', () => {
   assert.match(frame, /waveSamples\.push/);
 });
 
-test('voice values tick at 20 fps while render remains requestAnimationFrame driven', () => {
+test('voice values tick at 30 fps while render remains requestAnimationFrame driven', () => {
   const frame = readFileSync(new URL('frontend/src/runtime/voice/effect/update-voice-recording-frame.ts', root), 'utf8');
   const stop = readFileSync(new URL('frontend/src/runtime/voice/controller/stop-voice-recording.ts', root), 'utf8');
+  assert.ok(Math.abs(voiceValueFrameMs - (1000 / 30)) < 0.000001);
   assert.match(frame, /voiceValueFrameMs/);
   assert.match(frame, /pendingVoicePeak/);
   assert.match(frame, /renderVoiceStatus\(\);\s*\n\s*state\.voice\.animationFrameId = requestAnimationFrame/);
@@ -63,7 +64,7 @@ test('voice visualization rescales the observed recording peak to 1.0', () => {
   assert.equal(normalized.peak, 0.03);
 });
 
-test('voice gauge interpolates between committed 20 fps value changes', () => {
-  assert.ok(Math.abs(interpolateVoiceLevel({ from: 0.2, to: 1, startedAt: 1000, now: 1025 }) - 0.6) < 0.000001);
-  assert.equal(interpolateVoiceLevel({ from: 0.2, to: 1, startedAt: 1000, now: 1050 }), 1);
+test('voice gauge interpolates between committed 30 fps value changes', () => {
+  assert.ok(Math.abs(interpolateVoiceLevel({ from: 0.2, to: 1, startedAt: 1000, now: 1000 + (voiceValueFrameMs / 2) }) - 0.6) < 0.000001);
+  assert.ok(Math.abs(interpolateVoiceLevel({ from: 0.2, to: 1, startedAt: 1000, now: 1000 + voiceValueFrameMs }) - 1) < 0.000001);
 });
