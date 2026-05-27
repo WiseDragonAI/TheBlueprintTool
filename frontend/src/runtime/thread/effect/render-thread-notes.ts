@@ -4,6 +4,7 @@
  */
 import { state } from '../../state.js';
 import { renderLedgerCardMarkdown } from '../../ledger/component/render-ledger-card-markdown.js';
+import { deletedNoteIdSet } from '../../ledger/helper/normalize-deleted-note-ids.js';
 
 export function renderThreadNotes(): void {
   const existing = document.querySelector('.thread-note-list') as HTMLElement | null;
@@ -12,7 +13,8 @@ export function renderThreadNotes(): void {
   const list = existing ?? document.createElement('ol');
   list.className = 'thread-note-list';
   if (!existing) feed?.append(list);
-  const notes = state.threadId ? (state.activeLedger?.notes?.[state.threadId] ?? []) : [];
+  const deletedIds = state.threadId && state.activeLedger ? deletedNoteIdSet(state.activeLedger, state.threadId) : new Set<string>();
+  const notes = state.threadId ? (state.activeLedger?.notes?.[state.threadId] ?? []).filter((note: Record<string, unknown>) => !deletedIds.has(String(note.id ?? ''))) : [];
   list.replaceChildren();
   for (const note of notes) {
     const status = String(note.status ?? '');

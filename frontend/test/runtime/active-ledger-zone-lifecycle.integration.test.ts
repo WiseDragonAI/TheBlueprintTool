@@ -101,9 +101,20 @@ test('specs and data ledger tabs commit canvas mutations through the server ledg
         if (body.region.color) region.color = body.region.color;
       }
       if (body.action === 'append-note') {
+        const deletedIds = serverLedger.deletedNoteIds?.[body.note.threadId] ?? [];
+        if (deletedIds.includes(body.note.id)) return {
+          ok: true,
+          async json() {
+            return structuredClone(serverLedger);
+          }
+        };
         serverLedger.notes[body.note.threadId].push({ id: 'note-1', role: 'operator', message: body.note.body, timestamp: 'now' });
       }
       if (body.action === 'delete-note') {
+        const deletedNoteIds = serverLedger.deletedNoteIds ?? {};
+        const tombstonedId = body.note.id || serverLedger.notes[body.note.threadId].at(-1)?.id;
+        if (tombstonedId) deletedNoteIds[body.note.threadId] = Array.from(new Set([...(deletedNoteIds[body.note.threadId] ?? []), tombstonedId]));
+        serverLedger.deletedNoteIds = deletedNoteIds;
         serverLedger.notes[body.note.threadId] = body.note.id
           ? serverLedger.notes[body.note.threadId].filter((entry: Record<string, unknown>) => entry.id !== body.note.id)
           : serverLedger.notes[body.note.threadId].slice(0, -1);
@@ -169,6 +180,13 @@ test('specs and data ledger tabs commit canvas mutations through the server ledg
 
     await commitActiveLedgerMutation({ action: 'delete-note', note: { threadId: `thread-${activeTab}-card`, id: 'note-1' } });
     assert.equal(state.activeLedger.notes[`thread-${activeTab}-card`].length, 0);
+    assert.deepEqual(state.activeLedger.deletedNoteIds[`thread-${activeTab}-card`], ['note-1']);
+
+    state.activeLedger.notes[`thread-${activeTab}-card`].push({ id: 'note-race', role: 'operator', message: 'Optimistic stale note', optimistic: true });
+    state.activeLedger.deletedNoteIds[`thread-${activeTab}-card`].push('note-race');
+    serverLedger.notes[`thread-${activeTab}-card`].push({ id: 'note-race', role: 'operator', message: 'Late server note' });
+    await commitActiveLedgerMutation({ action: 'patch-region', region: { id: `${activeTab}-keep-zone`, kind: 'zone', label: 'Renamed' } });
+    assert.equal(state.activeLedger.notes[`thread-${activeTab}-card`].some((note: Record<string, unknown>) => note.id === 'note-race'), false);
 
     await commitActiveLedgerMutation({ action: 'paste-selection', selection: { cardIds: [`${activeTab}-card`], zoneIds: [], groupIds: [] } });
     assert.equal(state.activeLedger.cards.at(-1).id, `${activeTab}-card-copy`);

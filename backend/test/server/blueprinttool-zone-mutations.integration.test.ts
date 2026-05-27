@@ -135,8 +135,18 @@ test('blueprinttool canvas mutations are applied by the authoritative server led
       body: JSON.stringify({ action: 'delete-note', note: { threadId: 'thread-card-a', id: voiceNoteId } })
     });
     assert.equal(deleteNoteResponse.ok, true);
-    const deletedNoteLedger = await deleteNoteResponse.json() as { notes: Record<string, Array<Record<string, unknown>>> };
+    const deletedNoteLedger = await deleteNoteResponse.json() as { notes: Record<string, Array<Record<string, unknown>>>; deletedNoteIds: Record<string, string[]> };
     assert.equal(deletedNoteLedger.notes['thread-card-a'].length, 1);
+    assert.deepEqual(deletedNoteLedger.deletedNoteIds['thread-card-a'], [voiceNoteId]);
+
+    const appendDeletedNoteResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'append-note', note: { id: voiceNoteId, threadId: 'thread-card-a', body: 'late deleted voice note', source: 'voice', voiceFileRef: '/tmp/voice.webm', status: 'uploading' } })
+    });
+    assert.equal(appendDeletedNoteResponse.ok, true);
+    const appendDeletedLedger = await appendDeletedNoteResponse.json() as { notes: Record<string, Array<Record<string, unknown>>> };
+    assert.equal(appendDeletedLedger.notes['thread-card-a'].some((note) => note.id === voiceNoteId), false);
 
     const upsertVoiceNoteResponse = await fetch(endpoint, {
       method: 'PATCH',

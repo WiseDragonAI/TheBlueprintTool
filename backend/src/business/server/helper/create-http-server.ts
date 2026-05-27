@@ -129,6 +129,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           annotations?: Array<Record<string, unknown>>;
           relationships?: Array<Record<string, unknown>>;
           notes?: Record<string, Array<Record<string, unknown>>>;
+          deletedNoteIds?: Record<string, string[]>;
         };
         if ((mutation.action === 'create-zone' || mutation.action === 'create-group') && mutation.annotation?.id) {
           const id = String(mutation.annotation.id);
@@ -198,6 +199,14 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           const notesByThread = normalizeLedgerNotes(ledger);
           const notes = notesByThread[mutation.note.threadId] ?? [];
           const noteId = String(mutation.note.id ?? `note-${Date.now()}`);
+          const deletedNoteIds = ledger.deletedNoteIds?.[mutation.note.threadId] ?? [];
+          if (deletedNoteIds.map((id) => String(id)).includes(noteId)) {
+            notesByThread[mutation.note.threadId] = notes.filter((entry) => String(entry.id ?? '') !== noteId);
+            ledger.notes = notesByThread;
+            writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
+            response.end(JSON.stringify(ledger));
+            return;
+          }
           const existing = notes.find((entry) => String(entry.id ?? '') === noteId);
           const nextNote = { id: noteId, role: mutation.note.source === 'voice' ? 'voice' : 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), voiceFileRef: mutation.note.voiceFileRef ?? '', status: mutation.note.status ?? '', error: mutation.note.error ?? '' };
           if (existing) {
@@ -213,6 +222,14 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           const notesByThread = normalizeLedgerNotes(ledger);
           const notes = notesByThread[mutation.note.threadId] ?? [];
           const noteId = String(mutation.note.id ?? '');
+          const deletedNoteIds = ledger.deletedNoteIds?.[mutation.note.threadId] ?? [];
+          if (noteId && deletedNoteIds.map((id) => String(id)).includes(noteId)) {
+            notesByThread[mutation.note.threadId] = notes.filter((entry) => String(entry.id ?? '') !== noteId);
+            ledger.notes = notesByThread;
+            writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
+            response.end(JSON.stringify(ledger));
+            return;
+          }
           let note = notes.find((entry) => String(entry.id ?? '') === noteId || String(entry.voiceFileRef ?? '') === mutation.note?.voiceFileRef);
           if (!note && noteId) {
             note = { id: noteId, role: mutation.note.source === 'voice' ? 'voice' : 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), voiceFileRef: mutation.note.voiceFileRef ?? '', status: mutation.note.status ?? '', error: mutation.note.error ?? '' };
@@ -231,6 +248,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           const notesByThread = normalizeLedgerNotes(ledger);
           const notes = notesByThread[mutation.note.threadId] ?? [];
           const noteId = String(mutation.note.id ?? '');
+          const tombstonedId = noteId || String(notes.at(-1)?.id ?? '');
+          if (tombstonedId) {
+            const deletedNoteIds = ledger.deletedNoteIds && typeof ledger.deletedNoteIds === 'object' ? ledger.deletedNoteIds : {};
+            deletedNoteIds[mutation.note.threadId] = Array.from(new Set([...(deletedNoteIds[mutation.note.threadId] ?? []), tombstonedId]));
+            ledger.deletedNoteIds = deletedNoteIds;
+          }
           notesByThread[mutation.note.threadId] = noteId ? notes.filter((entry) => String(entry.id ?? '') !== noteId) : notes.slice(0, -1);
         }
         if (mutation.action === 'paste-selection' && mutation.selection) {
