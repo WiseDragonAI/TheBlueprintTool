@@ -37,7 +37,7 @@ export async function requestTranscription(audio: Blob | null, threadId = state.
   }
   state.voice.voiceFileRef = upload.voiceFileRef;
   state.voice.transcriptionStatus = 'transcribing';
-  void updateVoiceNote({ threadId, noteId: note.noteId, body: 'Voice uploaded.', voiceFileRef: upload.voiceFileRef, status: 'transcribing', error: '' });
+  void updateVoiceNote({ threadId, noteId: note.noteId, body: 'Voice uploaded.', voiceFileRef: upload.voiceFileRef, status: 'transcribing', error: '', transcriptionStartedAt: new Date().toISOString() });
   renderVoiceStatus();
   const result = await transcribeUploadedVoiceAudio(upload.voiceFileRef, threadId);
   if (result.ok && result.text.trim()) {

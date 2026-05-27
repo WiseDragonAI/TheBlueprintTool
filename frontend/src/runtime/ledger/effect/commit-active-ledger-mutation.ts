@@ -39,6 +39,7 @@ export type ActiveLedgerMutation = {
     body?: string;
     voiceFileRef?: string;
     status?: string;
+    transcriptionStartedAt?: string;
     source?: string;
     error?: string;
   };

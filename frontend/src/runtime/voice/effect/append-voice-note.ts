@@ -12,7 +12,7 @@ export type AppendVoiceNoteResult = {
   committed: Promise<boolean>;
 };
 
-export function appendVoiceNote(input: { body: string; threadId?: string; voiceFileRef?: string; status?: string; error?: string }): AppendVoiceNoteResult {
+export function appendVoiceNote(input: { body: string; threadId?: string; voiceFileRef?: string; status?: string; error?: string; transcriptionStartedAt?: string }): AppendVoiceNoteResult {
   const threadId = input.threadId ?? state.threadId;
   if (!threadId) return { ok: false, noteId: '', committed: Promise.resolve(false) };
   const noteId = appendOptimisticThreadNote({
@@ -21,6 +21,7 @@ export function appendVoiceNote(input: { body: string; threadId?: string; voiceF
     voiceFileRef: input.voiceFileRef,
     status: input.status,
     error: input.error,
+    transcriptionStartedAt: input.transcriptionStartedAt,
     source: 'voice'
   });
   const committed = sendActiveLedgerMutation({
@@ -32,6 +33,7 @@ export function appendVoiceNote(input: { body: string; threadId?: string; voiceF
       voiceFileRef: input.voiceFileRef,
       status: input.status,
       error: input.error,
+      transcriptionStartedAt: input.transcriptionStartedAt,
       source: 'voice'
     }
   });

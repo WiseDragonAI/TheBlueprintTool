@@ -12,6 +12,7 @@ export type OptimisticThreadNoteInput = {
   voiceFileRef?: string;
   status?: string;
   error?: string;
+  transcriptionStartedAt?: string;
 };
 
 export function appendOptimisticThreadNote(input: OptimisticThreadNoteInput): string {
@@ -27,6 +28,7 @@ export function appendOptimisticThreadNote(input: OptimisticThreadNoteInput): st
     voiceFileRef: input.voiceFileRef ?? '',
     status: input.status ?? '',
     error: input.error ?? '',
+    transcriptionStartedAt: input.transcriptionStartedAt ?? '',
     optimistic: true
   });
   notesByThread[input.threadId] = notes;

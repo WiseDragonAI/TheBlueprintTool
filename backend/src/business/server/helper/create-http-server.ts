@@ -122,7 +122,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           relationshipIds?: string[];
           geometry?: Record<string, Record<string, { x: number; y: number; width: number; height: number }>>;
           region?: { id?: string; kind?: string; label?: string; color?: string };
-          note?: { id?: string; threadId?: string; body?: string; voiceFileRef?: string; status?: string; source?: string; error?: string };
+          note?: { id?: string; threadId?: string; body?: string; voiceFileRef?: string; status?: string; transcriptionStartedAt?: string; source?: string; error?: string };
           selection?: { cardIds?: string[]; zoneIds?: string[]; groupIds?: string[] };
         } : {};
         const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as {
@@ -213,11 +213,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             return;
           }
           const existing = notes.find((entry) => String(entry.id ?? '') === noteId);
-          const nextNote = { id: noteId, role: mutation.note.source === 'voice' ? 'voice' : 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), voiceFileRef: mutation.note.voiceFileRef ?? '', status: mutation.note.status ?? '', error: mutation.note.error ?? '' };
+          const nextNote = { id: noteId, role: mutation.note.source === 'voice' ? 'voice' : 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), voiceFileRef: mutation.note.voiceFileRef ?? '', status: mutation.note.status ?? '', transcriptionStartedAt: mutation.note.transcriptionStartedAt ?? '', error: mutation.note.error ?? '' };
           if (existing) {
             if (!existing.message && nextNote.message) existing.message = nextNote.message;
             if (!existing.voiceFileRef && nextNote.voiceFileRef) existing.voiceFileRef = nextNote.voiceFileRef;
             if (!existing.status && nextNote.status) existing.status = nextNote.status;
+            if (!existing.transcriptionStartedAt && nextNote.transcriptionStartedAt) existing.transcriptionStartedAt = nextNote.transcriptionStartedAt;
             if (!existing.error && nextNote.error) existing.error = nextNote.error;
             existing.updatedAt = new Date().toISOString();
           } else notes.push(nextNote);
@@ -237,13 +238,14 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           }
           let note = notes.find((entry) => String(entry.id ?? '') === noteId || String(entry.voiceFileRef ?? '') === mutation.note?.voiceFileRef);
           if (!note && noteId) {
-            note = { id: noteId, role: mutation.note.source === 'voice' ? 'voice' : 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), voiceFileRef: mutation.note.voiceFileRef ?? '', status: mutation.note.status ?? '', error: mutation.note.error ?? '' };
+            note = { id: noteId, role: mutation.note.source === 'voice' ? 'voice' : 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), voiceFileRef: mutation.note.voiceFileRef ?? '', status: mutation.note.status ?? '', transcriptionStartedAt: mutation.note.transcriptionStartedAt ?? '', error: mutation.note.error ?? '' };
             notes.push(note);
           }
           if (note) {
             if (typeof mutation.note.body === 'string') note.message = mutation.note.body;
             if (typeof mutation.note.voiceFileRef === 'string') note.voiceFileRef = mutation.note.voiceFileRef;
             if (typeof mutation.note.status === 'string') note.status = mutation.note.status;
+            if (typeof mutation.note.transcriptionStartedAt === 'string') note.transcriptionStartedAt = mutation.note.transcriptionStartedAt;
             if (typeof mutation.note.error === 'string') note.error = mutation.note.error;
             note.updatedAt = new Date().toISOString();
           }

@@ -2608,6 +2608,20 @@
       "fields": []
     },
     {
+      "id": "c73a0e4d",
+      "title": "Voice transcription timeout exposes retry.",
+      "cardType": "spec-brief",
+      "domainId": "voice",
+      "x": -884,
+      "y": 6311,
+      "w": 360,
+      "comment": {
+        "what": "A voice note may stay in `transcribing` for at most 30 seconds after `transcriptionStartedAt`. When the timeout elapses, the optimistic note must change to `transcription failed`, keep its `voiceFileRef`, and expose Retry. Any loaded transcribing note with no `transcriptionStartedAt` is considered stale immediately and must move to failed/retryable state."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
       "id": "74c3e1b8",
       "title": "Selecting an object prepares its thread by default.",
       "cardType": "spec-brief",

@@ -211,7 +211,7 @@ test('render-thread-notes keeps failed voice audio retryable', () => {
   }
 });
 
-test('render-thread-notes keeps busy voice progress concise', () => {
+test('render-thread-notes keeps active voice transcription progress concise', () => {
   const previousDocument = globalThis.document;
   const rendered: TestElement[] = [];
   const list = {
@@ -239,7 +239,7 @@ test('render-thread-notes keeps busy voice progress concise', () => {
     state.threadId = 'thread-card-a';
     state.activeLedger = {
       notes: {
-        'thread-card-a': [{ id: 'note-busy', role: 'voice', message: 'Voice uploaded.', voiceFileRef: '/tmp/voice.webm', status: 'transcribing' }]
+        'thread-card-a': [{ id: 'note-busy', role: 'voice', message: 'Voice uploaded.', voiceFileRef: '/tmp/voice.webm', status: 'transcribing', transcriptionStartedAt: new Date().toISOString() }]
       }
     };
     renderThreadNotes();
@@ -247,6 +247,52 @@ test('render-thread-notes keeps busy voice progress concise', () => {
     assert.equal(rendered[0].children.some((child) => child.className === 'thread-note-meta'), false);
     const spinner = rendered[0].children.find((child) => child.className === 'thread-note-spinner');
     assert.equal(spinner?.textContent, 'transcribing');
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+    state.threadId = '';
+    state.activeLedger = null;
+  }
+});
+
+test('render-thread-notes fails stale voice transcription and exposes retry', () => {
+  const previousDocument = globalThis.document;
+  const rendered: TestElement[] = [];
+  const list = {
+    className: '',
+    replaceChildren() {
+      rendered.length = 0;
+    },
+    append(item: TestElement) {
+      rendered.push(item);
+    }
+  };
+  (globalThis as unknown as { document: unknown }).document = {
+    querySelector(selector: string) {
+      if (selector === '.thread-note-list') return list;
+      return null;
+    },
+    createElement(tagName: string) {
+      return createTestElement('', tagName);
+    },
+    createTextNode(text: string) {
+      return createTestElement(text);
+    }
+  };
+  try {
+    state.threadId = 'thread-card-a';
+    state.activeLedger = {
+      notes: {
+        'thread-card-a': [{ id: 'note-stale', role: 'voice', message: 'Voice uploaded.', voiceFileRef: '/tmp/voice.webm', status: 'transcribing' }]
+      }
+    };
+    renderThreadNotes();
+    const note = state.activeLedger.notes['thread-card-a'][0];
+    assert.equal(note.status, 'transcription failed');
+    assert.equal(rendered[0].className, 'thread-note voice-note is-retryable is-operator');
+    const retry = rendered[0].children.find((child) => child.className?.includes('thread-note-retry'));
+    assert.equal(retry?.dataset?.action, 'voice-retry');
+    assert.equal(retry?.dataset?.noteId, 'note-stale');
+    assert.equal(retry?.dataset?.voiceFileRef, '/tmp/voice.webm');
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
     state.threadId = '';

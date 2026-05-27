@@ -13,7 +13,7 @@ export async function retryVoiceTranscription(input: { noteId: string; voiceFile
   const threadId = input.threadId || state.threadId;
   state.voice.transcriptionStatus = 'retrying transcription';
   renderVoiceStatus();
-  void updateVoiceNote({ threadId, noteId: input.noteId, voiceFileRef: input.voiceFileRef, status: 'transcribing', body: 'Voice uploaded.' });
+  void updateVoiceNote({ threadId, noteId: input.noteId, voiceFileRef: input.voiceFileRef, status: 'transcribing', body: 'Voice uploaded.', transcriptionStartedAt: new Date().toISOString() });
   telemetry('retry-voice-transcription', { threadId, noteId: input.noteId });
   const result = await transcribeUploadedVoiceAudio(input.voiceFileRef, threadId);
   const voiceFileRef = result.voiceFileRef || input.voiceFileRef;

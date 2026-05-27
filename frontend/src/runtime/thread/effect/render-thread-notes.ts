@@ -5,6 +5,7 @@
 import { state } from '../../state.js';
 import { renderLedgerCardMarkdown } from '../../ledger/component/render-ledger-card-markdown.js';
 import { deletedNoteIdSet } from '../../ledger/helper/normalize-deleted-note-ids.js';
+import { expireStaleVoiceTranscription, scheduleVoiceTranscriptionTimeout } from '../../voice/helper/expire-stale-voice-transcription.js';
 
 export function renderThreadNotes(): void {
   const existing = document.querySelector('.thread-note-list') as HTMLElement | null;
@@ -17,6 +18,7 @@ export function renderThreadNotes(): void {
   const notes = state.threadId ? (state.activeLedger?.notes?.[state.threadId] ?? []).filter((note: Record<string, unknown>) => !deletedIds.has(String(note.id ?? ''))) : [];
   list.replaceChildren();
   for (const note of notes) {
+    if (!expireStaleVoiceTranscription(note)) scheduleVoiceTranscriptionTimeout({ threadId: state.threadId, note });
     const status = String(note.status ?? '');
     const role = String(note.role ?? 'operator').toLowerCase();
     const agentOwned = role === 'agent' || role === 'assistant';
