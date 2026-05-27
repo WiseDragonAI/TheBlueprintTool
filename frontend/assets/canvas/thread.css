@@ -99,7 +99,7 @@
   line-height: 1.45;
 }
 
-.thread-note span {
+.thread-note-meta {
   color: var(--muted);
   font-size: 12px;
   font-style: italic;
@@ -159,6 +159,13 @@
 
 .thread-note-message code {
   font-size: 1em;
+  font-style: normal;
+}
+
+.thread-note-message .ledger-card-code-block,
+.thread-note-message .ledger-card-code-block code,
+.thread-note-message .ledger-card-code-block span {
+  font-style: normal;
 }
 
 .thread-note-message .ledger-card-hr {

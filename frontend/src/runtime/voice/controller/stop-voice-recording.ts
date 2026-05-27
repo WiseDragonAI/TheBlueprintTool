@@ -19,6 +19,13 @@ export async function stopVoiceRecording(): Promise<void> {
   processor?.disconnect();
   const silentGain = state.voice.silentGain as GainNode | undefined;
   silentGain?.disconnect();
+  const pendingPeak = Math.max(0, Math.min(1, Number(state.voice.pendingVoicePeak ?? 0)));
+  if (pendingPeak > 0) {
+    const waveSamples = Array.isArray(state.voice.waveSamples) ? state.voice.waveSamples : [];
+    waveSamples.push(pendingPeak);
+    state.voice.waveSamples = waveSamples;
+    state.voice.pendingVoicePeak = 0;
+  }
   const pcmChunks = state.voice.pcmChunks as Float32Array[] | undefined;
   const sampleRate = Number(state.voice.sampleRate ?? 0);
   const audio = pcmChunks?.length && sampleRate > 0 ? encodeWavBlob(pcmChunks, sampleRate) : await collectVoiceRecordingBlob(recorder, chunks, recorderMimeType);
