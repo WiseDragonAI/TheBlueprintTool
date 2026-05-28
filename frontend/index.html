@@ -140,9 +140,38 @@
         <button type="button" data-action="confirm-delete">Delete</button>
         <button type="button" data-action="cancel-delete">Cancel</button>
       </dialog>
-      <dialog class="shortcut-modal" data-spec="33c20993">
-        <p>Esc clears selection. Del confirms zone deletion. Ctrl+C copies. Ctrl+V pastes.</p>
+      <dialog class="shortcut-modal" data-spec="33c20993" aria-labelledby="shortcut-modal-title">
+        <h2 id="shortcut-modal-title">Keys</h2>
+        <dl class="key-list">
+          <div><dt>A</dt><dd>Open or focus the thread panel.</dd></div>
+          <div><dt>X</dt><dd>Start or stop the active voice note.</dd></div>
+          <div><dt>Esc</dt><dd>Cancel voice capture, close thread tooling, or clear selection.</dd></div>
+          <div><dt>Del</dt><dd>Confirm deletion for the selected card, zone, or group.</dd></div>
+          <div><dt>Ctrl+C</dt><dd>Copy the selected cards, zones, and groups.</dd></div>
+          <div><dt>Ctrl+V</dt><dd>Paste the copied selection.</dd></div>
+          <div><dt>Ctrl+D</dt><dd>Resize selected cards to their content.</dd></div>
+        </dl>
         <button type="button" data-action="close-shortcut-help">Close</button>
+      </dialog>
+      <dialog class="runbook-modal" data-spec="676c6a7a" aria-labelledby="runbook-modal-title">
+        <h2 id="runbook-modal-title">Runbook</h2>
+        <div class="runbook-sections">
+          <section>
+            <h3>Workspace Server</h3>
+            <p>Start CoreV2 from the target workspace cwd so the active <code>.blueprinttool</code> directory resolves from that workspace.</p>
+            <code>env PORT=4174 /home/jbb/dev/EditorBP/CoreV2/bin/blueprinttool-server.mjs</code>
+          </section>
+          <section>
+            <h3>Card Images</h3>
+            <p>Markdown image URLs under <code>.blueprinttool</code> render in cards. Adjacent standalone images become a carousel, and width resizing keeps the loaded image aspect ratio while persisting <code>card.imageSizes[src]</code>.</p>
+            <code>![Alt](.blueprinttool/ui-mockups/example.png)</code>
+          </section>
+          <section>
+            <h3>Voice Notes</h3>
+            <p>Voice config stays workspace-local in <code>.blueprinttool/.settings.json</code>. Uploaded audio remains under <code>.blueprinttool/voice-uploads/</code>.</p>
+          </section>
+        </div>
+        <button type="button" data-action="close-runbook">Close</button>
       </dialog>
     </main>
     <script src="/assets/vendor/highlight.min.js"></script>

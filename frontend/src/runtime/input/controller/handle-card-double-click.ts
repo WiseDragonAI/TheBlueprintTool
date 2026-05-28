@@ -6,6 +6,7 @@ import { beginLedgerCardDescriptionEdit, beginLedgerCardTitleEdit } from '../../
 
 export function handleCardDoubleClick(event: MouseEvent): void {
   const target = event.target as HTMLElement;
+  if (target.closest('[data-ledger-card-media]')) return;
   const card = target.closest('[data-card-id]') as HTMLElement | null;
   if (!card) return;
 

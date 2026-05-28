@@ -2,9 +2,9 @@
  * WHAT: Implements the create-http-server helper from the front/back master ledger.
  * WHY: The generated scaffold needs executable behavior while preserving one function per file.
  */
-import { createServer } from 'node:http';
+import { createServer, type ServerResponse } from 'node:http';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { isAbsolute, relative, resolve } from 'node:path';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 import { telemetry } from '@backend/telemetry/harness.js';
 import { transcribeVoiceController } from '@backend/business/transcription/controller/transcribe-voice-controller.js';
@@ -16,6 +16,37 @@ import { normalizeLedgerNotes } from './normalize-ledger-notes.js';
 import { relationshipReferencesCard } from '../../ledger/helper/relationship-references-card.js';
 
 type AnyRecord = Record<string, unknown>;
+
+const blueprinttoolAssetPrefix = '/.blueprinttool/';
+const allowedBlueprinttoolAssetExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'];
+
+function isAllowedBlueprinttoolAsset(filePath: string): boolean {
+  const normalized = filePath.toLowerCase();
+  return allowedBlueprinttoolAssetExtensions.some((extension) => normalized.endsWith(extension));
+}
+
+function tryServeBlueprinttoolAsset(input: { url: string; blueprinttoolRoot: string; response: ServerResponse }): boolean {
+  let decodedUrl = '';
+  try {
+    decodedUrl = decodeURIComponent(input.url);
+  } catch {
+    decodedUrl = input.url;
+  }
+  if (!decodedUrl.startsWith(blueprinttoolAssetPrefix)) return false;
+  const assetPath = resolve(input.blueprinttoolRoot, decodedUrl.slice(blueprinttoolAssetPrefix.length));
+  const relativeAssetPath = relative(input.blueprinttoolRoot, assetPath);
+  const isInsideBlueprinttool = relativeAssetPath && !relativeAssetPath.startsWith('..') && !isAbsolute(relativeAssetPath);
+  if (!isInsideBlueprinttool || !isAllowedBlueprinttoolAsset(assetPath) || !existsSync(assetPath)) {
+    input.response.statusCode = 404;
+    input.response.setHeader('content-type', 'application/json');
+    input.response.end(JSON.stringify({ ok: false, missing: decodedUrl }));
+    return true;
+  }
+  input.response.setHeader('content-type', contentTypeFor(assetPath));
+  input.response.setHeader('cache-control', 'no-store');
+  input.response.end(readFileSync(assetPath));
+  return true;
+}
 
 export function createHttpServer(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): Record<string, unknown> {
   telemetry('create-http-server', { role: 'helper', action: 'create-http-server' });
@@ -36,6 +67,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   }
   const server = createServer(async (request, response) => {
     const url = (request.url ?? '/').split('?')[0];
+    if (tryServeBlueprinttoolAsset({ url, blueprinttoolRoot, response })) return;
     if (url === '/api/transcribe' && request.method === 'POST') {
       const audioBuffer = await readRequestBuffer(request);
       await transcribeVoiceController({
@@ -114,7 +146,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           action?: string;
           card?: Record<string, unknown>;
           cardId?: string;
-          cardPatch?: { id?: string; title?: string; description?: string };
+          cardPatch?: { id?: string; title?: string; description?: string; imageSizes?: Record<string, { width?: number; height?: number }> };
           annotation?: Record<string, unknown>;
           relationship?: Record<string, unknown>;
           zoneIds?: string[];
@@ -152,6 +184,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             comment.what = mutation.cardPatch.description;
             card.comment = comment;
           }
+          if (card && mutation.cardPatch.imageSizes && typeof mutation.cardPatch.imageSizes === 'object') card.imageSizes = mutation.cardPatch.imageSizes;
         }
         if (mutation.action === 'delete-card' && mutation.cardId) {
           const cardId = String(mutation.cardId);

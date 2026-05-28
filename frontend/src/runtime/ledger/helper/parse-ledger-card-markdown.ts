@@ -10,19 +10,34 @@ import { parseLedgerMarkdownTableRow } from './parse-ledger-markdown-table-row.j
 export type LedgerMarkdownInline = {
   kind: 'text' | 'strong' | 'code';
   text: string;
+} | {
+  kind: 'image';
+  alt: string;
+  src: string;
+  title: string;
 };
 
 export type LedgerMarkdownBlock =
   | { kind: 'heading'; level: number; children: LedgerMarkdownInline[] }
   | { kind: 'paragraph'; children: LedgerMarkdownInline[] }
+  | { kind: 'images'; images: Extract<LedgerMarkdownInline, { kind: 'image' }>[] }
   | { kind: 'list'; items: LedgerMarkdownInline[][] }
   | { kind: 'table'; headers: LedgerMarkdownInline[][]; rows: LedgerMarkdownInline[][][] }
   | { kind: 'hr' }
   | { kind: 'code'; language: string; text: string };
 
+function standaloneImagesFromLine(line: string): Extract<LedgerMarkdownInline, { kind: 'image' }>[] {
+  const inline = parseLedgerMarkdownInline(line);
+  const images = inline.filter((node): node is Extract<LedgerMarkdownInline, { kind: 'image' }> => node.kind === 'image');
+  if (images.length === 0) return [];
+  const hasOnlyImagesAndSpacing = inline.every((node) => node.kind === 'image' || (node.kind === 'text' && node.text.trim() === ''));
+  return hasOnlyImagesAndSpacing ? images : [];
+}
+
 export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[] {
   const blocks: LedgerMarkdownBlock[] = [];
   let list: Extract<LedgerMarkdownBlock, { kind: 'list' }> | null = null;
+  let images: Extract<LedgerMarkdownBlock, { kind: 'images' }> | null = null;
   const lines = normalizeLedgerMarkdown(markdown).split('\n');
 
   for (let index = 0; index < lines.length; index += 1) {
@@ -36,6 +51,7 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
         codeLines.push(lines[index]);
       }
       list = null;
+      images = null;
       blocks.push({ kind: 'code', language: fence[1] ?? '', text: codeLines.join('\n') });
       continue;
     }
@@ -46,12 +62,14 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
     }
     if (/^(?:-{3,}|\*{3,}|_{3,})$/.test(line)) {
       list = null;
+      images = null;
       blocks.push({ kind: 'hr' });
       continue;
     }
     const heading = line.match(/^(#{1,6})\s+(.*)$/);
     if (heading) {
       list = null;
+      images = null;
       blocks.push({
         kind: 'heading',
         level: heading[1].length,
@@ -76,11 +94,23 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
       }
       index -= 1;
       list = null;
+      images = null;
       blocks.push(table);
+      continue;
+    }
+    const standaloneImages = standaloneImagesFromLine(line);
+    if (standaloneImages.length > 0) {
+      list = null;
+      if (!images) {
+        images = { kind: 'images', images: [] };
+        blocks.push(images);
+      }
+      images.images.push(...standaloneImages);
       continue;
     }
     const item = line.match(/^[-*]\s+(.*)$/);
     if (item) {
+      images = null;
       if (!list) {
         list = { kind: 'list', items: [] };
         blocks.push(list);
@@ -89,6 +119,7 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
       continue;
     }
     list = null;
+    images = null;
     blocks.push({ kind: 'paragraph', children: parseLedgerMarkdownInline(line) });
   }
 

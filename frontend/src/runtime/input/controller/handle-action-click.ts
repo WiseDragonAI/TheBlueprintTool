@@ -2,7 +2,7 @@
  * WHAT: Routes toolbar and inline action clicks into runtime controllers.
  * WHY: Input action dispatch is the canonical control flow for UI command buttons.
  */
-import { modal, shortcutModal } from '../../dom.js';
+import { modal, runbookModal, shortcutModal } from '../../dom.js';
 import { state } from '../../state.js';
 import { resizeSelectedCardsController } from '../../card/controller/resize-selected-cards-controller.js';
 import { deleteZoneController } from '../../zone/controller/delete-zone-controller.js';
@@ -104,10 +104,23 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
   if (action === 'confirm-delete') await deleteZoneController();
   if (action === 'cancel-delete') modal.close?.();
   if (action === 'shortcut-help') {
-    telemetry('open-shortcut-help', { shortcuts: ['Escape', 'Delete', 'Ctrl+C', 'Ctrl+V'] });
+    telemetry('open-shortcut-help', { shortcuts: ['A', 'X', 'Escape', 'Delete', 'Ctrl+C', 'Ctrl+V', 'Ctrl+D'] });
     shortcutModal.showModal?.();
+    return;
   }
-  if (action === 'close-shortcut-help') shortcutModal.close?.();
+  if (action === 'close-shortcut-help') {
+    shortcutModal.close?.();
+    return;
+  }
+  if (action === 'runbook') {
+    telemetry('open-runbook', { sections: ['workspace-server', 'card-images', 'voice-notes'] });
+    runbookModal.showModal?.();
+    return;
+  }
+  if (action === 'close-runbook') {
+    runbookModal.close?.();
+    return;
+  }
   if (action === 'refresh') {
     void refreshRuntimeState();
   }

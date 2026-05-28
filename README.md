@@ -46,6 +46,35 @@ From the CoreV2 repo itself, this is equivalent:
 npm run start:workspace
 ```
 
+## Run In The Background
+
+For operator-facing document sessions, run the server as a detached background process from the
+target workspace cwd.
+
+Example for the MOH workspace:
+
+```bash
+cd /home/jbb/dev/MOH
+setsid sh -c 'cd /home/jbb/dev/MOH && exec env PORT=4174 /home/jbb/dev/EditorBP/CoreV2/bin/blueprinttool-server.mjs >> /tmp/moh-corev2-blueprinttool-4174.log 2>&1' </dev/null >/dev/null 2>&1 &
+```
+
+Then verify the process and route before reporting the URL:
+
+```bash
+ps -ef | rg 'blueprinttool-server|server.ts|4174' | rg -v rg
+curl -sS -I http://127.0.0.1:4174/ses
+```
+
+MOH document routes:
+
+```text
+http://127.0.0.1:4174/ses
+http://127.0.0.1:4174/s3
+```
+
+Do not use a plain foreground command for operator-facing sessions. Do not assume a returned
+background PID means the server stayed alive; always verify the HTTP route.
+
 ## Workspace Discovery
 
 The backend resolves the active `.blueprinttool` directory by walking upward from the process cwd. That means the launcher should be run from the target workspace or a child directory of that workspace.
@@ -80,6 +109,20 @@ CoreV2/
 }
 ```
 
+## Operator Keys
+
+The in-app Keys panel is the operator-facing source for keyboard shortcuts:
+
+```text
+A       Open or focus the thread panel.
+X       Start or stop the active voice note.
+Esc     Cancel voice capture, close thread tooling, or clear selection.
+Del     Confirm deletion for the selected card, zone, or group.
+Ctrl+C  Copy the selected cards, zones, and groups.
+Ctrl+V  Paste the copied selection.
+Ctrl+D  Resize selected cards to their content.
+```
+
 ## Ledger CLI
 
 Ledger JSON editing is owned by the separate `ledger-cli` package, not by `generator-cli`.
@@ -91,6 +134,31 @@ npm run cli -- mutate --ledger ../.blueprinttool/specs.json --card-id 60000006 -
 ```
 
 `generator-cli` is reserved for scaffold generation from the MasterLedger and related generation checks.
+
+## Card Markdown Images
+
+Card markdown supports image syntax in descriptions and field tabs:
+
+```markdown
+![Campaign UI Summary](.blueprinttool/ui-mockups/campaign-ui-3-summary.png)
+```
+
+Image assets under the active workspace `.blueprinttool` directory are served by the backend from the matching `/.blueprinttool/...` URL. The asset route is intentionally limited to image extensions (`.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.svg`) and rejects path traversal outside the active workspace.
+
+Standalone adjacent images are wrapped into an in-card carousel automatically, including image-only lines separated by blank lines. Each image frame preserves the card form factor with `object-fit: contain`, is resized by width inside the card, derives height from the loaded image aspect ratio, and persists its dimensions by markdown source URL:
+
+```json
+{
+  "imageSizes": {
+    ".blueprinttool/ui-mockups/campaign-ui-3-summary.png": {
+      "width": 320,
+      "height": 180
+    }
+  }
+}
+```
+
+The persistence path stores layout pixels from `offsetWidth` and `offsetHeight`, so canvas zoom does not shrink the saved size.
 
 ## Transcription Setup
 
@@ -144,6 +212,8 @@ Captured browser audio is encoded as mono PCM WAV before upload so provider tran
 ```
 
 If transcription fails, the note and `voiceFileRef` remain in the ledger so the UI can offer retry.
+
+The waveform accumulates the full recording envelope instead of shifting through a rolling buffer, and the displayed peak uses 95% of the graph height. Press `X` to start or stop recording, and `Esc` to cancel an active capture.
 
 ## Useful Checks
 

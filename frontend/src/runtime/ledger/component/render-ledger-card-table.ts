@@ -1,7 +1,8 @@
 import { type LedgerMarkdownBlock } from '../helper/parse-ledger-card-markdown.js';
 import { appendInlineNodes } from './append-inline-nodes.js';
+import { type LedgerCardImageSizes } from './render-ledger-card-media.js';
 
-export function renderLedgerCardTable(block: Extract<LedgerMarkdownBlock, { kind: 'table' }>): HTMLElement {
+export function renderLedgerCardTable(block: Extract<LedgerMarkdownBlock, { kind: 'table' }>, options: { cardId?: string; imageSizes?: LedgerCardImageSizes } = {}): HTMLElement {
   const scroll = document.createElement('div');
   scroll.className = 'ledger-card-table-scroll';
   const table = document.createElement('table');
@@ -10,7 +11,7 @@ export function renderLedgerCardTable(block: Extract<LedgerMarkdownBlock, { kind
   const headerRow = document.createElement('tr');
   for (const cell of block.headers) {
     const th = document.createElement('th');
-    appendInlineNodes(th, cell);
+    appendInlineNodes(th, cell, options);
     headerRow.appendChild(th);
   }
   thead.appendChild(headerRow);
@@ -19,7 +20,7 @@ export function renderLedgerCardTable(block: Extract<LedgerMarkdownBlock, { kind
     const tr = document.createElement('tr');
     for (const cell of row) {
       const td = document.createElement('td');
-      appendInlineNodes(td, cell);
+      appendInlineNodes(td, cell, options);
       tr.appendChild(td);
     }
     tbody.appendChild(tr);

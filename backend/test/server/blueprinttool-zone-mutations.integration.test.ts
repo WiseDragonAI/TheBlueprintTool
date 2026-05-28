@@ -12,9 +12,11 @@ test('blueprinttool canvas mutations are applied by the authoritative server led
   const originalCwd = process.cwd();
   const workspace = mkdtempSync(join(tmpdir(), 'corev2-ledger-'));
   mkdirSync(join(workspace, '.blueprinttool'));
+  mkdirSync(join(workspace, '.blueprinttool', 'ui-mockups'));
   writeFileSync(join(workspace, '.blueprinttool', 'state.json'), JSON.stringify({
     tabs: [{ id: 'specs', title: 'Specs', ledgerFile: '.blueprinttool/specs.json' }]
   }));
+  writeFileSync(join(workspace, '.blueprinttool', 'ui-mockups', 'mock.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
   writeFileSync(join(workspace, '.blueprinttool', 'specs.json'), JSON.stringify({
     cards: [{ id: 'card-a', x: 10, y: 20, w: 240 }],
     annotations: [
@@ -32,8 +34,14 @@ test('blueprinttool canvas mutations are applied by the authoritative server led
   await once(server, 'listening');
   const address = server.address() as AddressInfo;
   const endpoint = `http://127.0.0.1:${address.port}/blueprinttool/specs`;
+  const assetEndpoint = `http://127.0.0.1:${address.port}/.blueprinttool/ui-mockups/mock.png`;
 
   try {
+    const assetResponse = await fetch(assetEndpoint);
+    assert.equal(assetResponse.ok, true);
+    assert.equal(assetResponse.headers.get('content-type'), 'image/png');
+    assert.equal((await assetResponse.arrayBuffer()).byteLength, 4);
+
     const createResponse = await fetch(endpoint, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
@@ -96,6 +104,15 @@ test('blueprinttool canvas mutations are applied by the authoritative server led
     assert.equal(regionResponse.ok, true);
     const regionLedger = await regionResponse.json() as { annotations: Array<Record<string, unknown>> };
     assert.deepEqual(regionLedger.annotations.find((entry) => entry.id === 'zone-keep'), { id: 'zone-keep', label: 'Renamed', variant: 'zone', color: '#ffcc00', x: 11, y: 22, width: 188, height: 144 });
+
+    const imageSizeResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'card-a', imageSizes: { '/.blueprinttool/ui-mockups/mock.png': { width: 320, height: 180 } } } })
+    });
+    assert.equal(imageSizeResponse.ok, true);
+    const imageSizeLedger = await imageSizeResponse.json() as { cards: Array<Record<string, unknown>> };
+    assert.deepEqual(imageSizeLedger.cards.find((entry) => entry.id === 'card-a')?.imageSizes, { '/.blueprinttool/ui-mockups/mock.png': { width: 320, height: 180 } });
 
     const appendNoteResponse = await fetch(endpoint, {
       method: 'PATCH',

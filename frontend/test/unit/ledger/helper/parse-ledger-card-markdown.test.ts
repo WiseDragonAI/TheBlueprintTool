@@ -56,3 +56,23 @@ test('parse-ledger-card-markdown treats escaped newlines as markdown line breaks
     { kind: 'list', items: [[{ kind: 'code', text: 'Item' }, { kind: 'text', text: ' detail' }]] }
   ]);
 });
+
+test('parse-ledger-card-markdown promotes adjacent standalone images into one image block', () => {
+  assert.deepEqual(parseLedgerCardMarkdown('![First](/one.png)\n\n![Second](/two.jpg "Second title")\n\nMixed ![Icon](/icon.svg) text'), [
+    {
+      kind: 'images',
+      images: [
+        { kind: 'image', alt: 'First', src: '/one.png', title: '' },
+        { kind: 'image', alt: 'Second', src: '/two.jpg', title: 'Second title' }
+      ]
+    },
+    {
+      kind: 'paragraph',
+      children: [
+        { kind: 'text', text: 'Mixed ' },
+        { kind: 'image', alt: 'Icon', src: '/icon.svg', title: '' },
+        { kind: 'text', text: ' text' }
+      ]
+    }
+  ]);
+});

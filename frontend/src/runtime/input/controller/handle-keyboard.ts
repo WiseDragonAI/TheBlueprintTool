@@ -5,6 +5,7 @@
 import { modal } from '../../dom.js';
 import { state } from '../../state.js';
 import { pasteSelectionController } from '../../clipboard/controller/paste-selection-controller.js';
+import { resizeSelectedCardsController } from '../../card/controller/resize-selected-cards-controller.js';
 import { confirmCardDeletionController } from '../../card/controller/confirm-card-deletion-controller.js';
 import { confirmGroupDeletionController } from '../../group/controller/confirm-group-deletion-controller.js';
 import { confirmZoneDeletionController } from '../../zone/controller/confirm-zone-deletion-controller.js';
@@ -97,6 +98,10 @@ export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
   if (event.ctrlKey && key === 'c') {
     state.clipboard = structuredClone(state.selection);
     telemetry('copy-selection-payload', state.clipboard);
+  }
+  if (event.ctrlKey && key === 'd') {
+    event.preventDefault();
+    await resizeSelectedCardsController();
   }
   if (event.ctrlKey && key === 'v' && state.clipboard) {
     await pasteSelectionController();

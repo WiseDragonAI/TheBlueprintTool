@@ -9,6 +9,7 @@ import { downsampleWaveSamples } from '../../src/runtime/voice/helper/downsample
 import { calculateVoiceLevel } from '../../src/runtime/voice/helper/calculate-voice-level.js';
 import { interpolateVoiceLevel, voiceValueFrameMs } from '../../src/runtime/voice/helper/interpolate-voice-level.js';
 import { normalizeVoiceLevels } from '../../src/runtime/voice/helper/normalize-voice-levels.js';
+import { buildWavePath } from '../../src/runtime/voice/helper/build-wave-path.js';
 
 const root = new URL('../../../', import.meta.url);
 
@@ -62,6 +63,10 @@ test('voice visualization rescales the observed recording peak to 1.0', () => {
   assert.deepEqual(normalized.samples, [0.33333333333333337, 1, 0.5]);
   assert.equal(normalized.level, 0.5);
   assert.equal(normalized.peak, 0.03);
+});
+
+test('voice waveform peak fills 95 percent of the graph height', () => {
+  assert.match(buildWavePath([1], 1), /L0 5\.0 L1000 5\.0/);
 });
 
 test('voice gauge interpolates between committed 30 fps value changes', () => {

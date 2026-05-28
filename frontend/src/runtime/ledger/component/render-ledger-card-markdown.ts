@@ -5,9 +5,15 @@
 import { appendInlineNodes } from './append-inline-nodes.js';
 import { parseLedgerCardMarkdown } from '../helper/parse-ledger-card-markdown.js';
 import { renderLedgerCardCodeBlock } from './render-ledger-card-code-block.js';
+import { renderLedgerCardMedia, type LedgerCardImageSizes } from './render-ledger-card-media.js';
 import { renderLedgerCardTable } from './render-ledger-card-table.js';
 
-export function renderLedgerCardMarkdown(markdown: string): HTMLElement {
+type LedgerCardMarkdownOptions = {
+  cardId?: string;
+  imageSizes?: LedgerCardImageSizes;
+};
+
+export function renderLedgerCardMarkdown(markdown: string, options: LedgerCardMarkdownOptions = {}): HTMLElement {
   const body = document.createElement('div');
   body.className = 'ledger-card-body';
 
@@ -15,7 +21,7 @@ export function renderLedgerCardMarkdown(markdown: string): HTMLElement {
     if (block.kind === 'heading') {
       const heading = document.createElement(`h${Math.min(6, Math.max(1, block.level))}`);
       heading.className = `ledger-card-heading ledger-card-heading-${block.level}`;
-      appendInlineNodes(heading, block.children);
+      appendInlineNodes(heading, block.children, options);
       body.appendChild(heading);
       continue;
     }
@@ -23,14 +29,18 @@ export function renderLedgerCardMarkdown(markdown: string): HTMLElement {
       const list = document.createElement('ul');
       for (const item of block.items) {
         const li = document.createElement('li');
-        appendInlineNodes(li, item);
+        appendInlineNodes(li, item, options);
         list.appendChild(li);
       }
       body.appendChild(list);
       continue;
     }
     if (block.kind === 'table') {
-      body.appendChild(renderLedgerCardTable(block));
+      body.appendChild(renderLedgerCardTable(block, options));
+      continue;
+    }
+    if (block.kind === 'images') {
+      body.appendChild(renderLedgerCardMedia(block, options));
       continue;
     }
     if (block.kind === 'code') {
@@ -44,7 +54,7 @@ export function renderLedgerCardMarkdown(markdown: string): HTMLElement {
       continue;
     }
     const paragraph = document.createElement('p');
-    appendInlineNodes(paragraph, block.children);
+    appendInlineNodes(paragraph, block.children, options);
     body.appendChild(paragraph);
   }
 

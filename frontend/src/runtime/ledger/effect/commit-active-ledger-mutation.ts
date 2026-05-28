@@ -16,6 +16,7 @@ export type ActiveLedgerMutation = {
     id: string;
     title?: string;
     description?: string;
+    imageSizes?: Record<string, { width?: number; height?: number }>;
   };
   annotation?: Record<string, unknown>;
   relationship?: Record<string, unknown>;

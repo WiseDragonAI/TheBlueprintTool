@@ -5,7 +5,7 @@
 const viewBoxWidth = 1000;
 const viewBoxHeight = 100;
 const baseline = 100;
-const maxAmplitude = 72;
+const maxAmplitude = 95;
 
 export function buildWavePath(samples: number[], amplitudeScale: number): string {
   const values = samples.length ? samples : [0];

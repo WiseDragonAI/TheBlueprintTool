@@ -68,7 +68,10 @@ export function patchLedgerCard(card: Record<string, unknown>, existing?: HTMLEl
   const title = document.createElement('strong');
   title.className = 'ledger-card-title';
   appendTitleText(title, String(card.title ?? id));
-  const body = hasFieldTabs ? renderLedgerCardTabFrame(card, fields, activeTab) : renderLedgerCardMarkdown(ledgerCardBody(card));
+  const imageSizes = card.imageSizes && typeof card.imageSizes === 'object' && !Array.isArray(card.imageSizes)
+    ? card.imageSizes as Record<string, { width?: number; height?: number }>
+    : {};
+  const body = hasFieldTabs ? renderLedgerCardTabFrame(card, fields, activeTab) : renderLedgerCardMarkdown(ledgerCardBody(card), { cardId: id, imageSizes });
   const handles = createCardResizeHandles();
   const deleteButton = renderLedgerCardDeleteButton(id);
   const labelNodes = labels.length > 0 ? [renderLedgerCardLabels(labels)] : [];

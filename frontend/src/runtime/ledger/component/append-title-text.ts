@@ -10,6 +10,10 @@ export function appendTitleText(parent: HTMLElement, text: string): void {
   if (heading) parent.dataset.titleHeading = String(heading[1].length);
   const inlineNodes = parseLedgerMarkdownInline(heading ? heading[2] : text);
   for (const node of inlineNodes) {
+    if (node.kind === 'image') {
+      parent.appendChild(document.createTextNode(node.alt || node.src));
+      continue;
+    }
     if (node.kind !== 'text') {
       const child = document.createElement(node.kind);
       child.textContent = node.text;
