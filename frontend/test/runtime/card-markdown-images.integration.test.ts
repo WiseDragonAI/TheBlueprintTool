@@ -15,6 +15,7 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   const mediaRenderer = source('frontend/src/runtime/ledger/component/render-ledger-card-media.ts');
   const titleRenderer = source('frontend/src/runtime/ledger/component/append-title-text.ts');
   const doubleClick = source('frontend/src/runtime/input/controller/handle-card-double-click.ts');
+  const wheel = source('frontend/src/runtime/gesture/controller/handle-wheel.ts');
   const css = source('frontend/assets/canvas/objects.css');
 
   assert.match(inlineParser, /text\.startsWith\('!\[', start\)/);
@@ -39,6 +40,11 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   assert.match(mediaRenderer, /track\.scrollTo\(\{ left: nextIndex \* slideWidth, behavior: 'smooth' \}\)/);
   assert.match(renderer, /renderLedgerCardMarkdown\(markdown: string, options/);
   assert.match(doubleClick, /target\.closest\('\[data-ledger-card-media\]'\)/);
+  assert.match(wheel, /advanceCarouselFromWheel\(event\)/);
+  assert.match(wheel, /event\.ctrlKey/);
+  assert.match(wheel, /\.ledger-card-media-carousel/);
+  assert.match(wheel, /event\.preventDefault\(\)/);
+  assert.match(wheel, /track\.scrollTo\(\{ left: nextIndex \* slideWidth, behavior: 'smooth' \}\)/);
   assert.match(titleRenderer, /node\.kind === 'image'/);
   assert.match(source('frontend/src/runtime/ledger/component/append-inline-nodes.ts'), /Math\.round\(frame\.offsetWidth\)/);
   assert.doesNotMatch(source('frontend/src/runtime/ledger/component/append-inline-nodes.ts'), /getBoundingClientRect\(\)\.(width|height)/);

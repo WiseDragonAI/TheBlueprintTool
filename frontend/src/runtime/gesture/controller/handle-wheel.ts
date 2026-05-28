@@ -13,7 +13,28 @@ import { shouldCaptureWheelTarget } from '../helper/should-capture-wheel-target.
 export const minCanvasZoomScale = 0.03;
 export const maxCanvasZoomScale = 2.2;
 
+function advanceCarouselFromWheel(event: WheelEvent): boolean {
+  if (!event.ctrlKey) return false;
+  const target = event.target as HTMLElement | null;
+  const carousel = target?.closest('.ledger-card-media-carousel') as HTMLElement | null;
+  if (!carousel) return false;
+  event.preventDefault();
+  event.stopPropagation();
+  const track = carousel.querySelector('.ledger-card-media-track') as HTMLElement | null;
+  const slideCount = track?.children.length ?? 0;
+  if (!track || slideCount <= 0) return true;
+  const slideWidth = Math.max(1, track.clientWidth);
+  const currentIndex = Math.round(track.scrollLeft / slideWidth);
+  const wheelDelta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+  const direction = wheelDelta < 0 ? -1 : 1;
+  const nextIndex = (currentIndex + direction + slideCount) % slideCount;
+  track.scrollTo({ left: nextIndex * slideWidth, behavior: 'smooth' });
+  telemetry('card-image-carousel-wheel', { direction, currentIndex, nextIndex, slideCount });
+  return true;
+}
+
 export function handleWheel(event: WheelEvent): void {
+  if (advanceCarouselFromWheel(event)) return;
   if (shouldCaptureWheelTarget(event)) return;
   event.preventDefault();
   telemetry('canvas-wheel', { deltaX: event.deltaX, deltaY: event.deltaY, ctrlKey: event.ctrlKey });
