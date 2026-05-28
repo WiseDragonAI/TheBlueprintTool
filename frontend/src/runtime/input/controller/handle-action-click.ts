@@ -4,6 +4,7 @@
  */
 import { modal, shortcutModal } from '../../dom.js';
 import { state } from '../../state.js';
+import { resizeSelectedCardsController } from '../../card/controller/resize-selected-cards-controller.js';
 import { deleteZoneController } from '../../zone/controller/delete-zone-controller.js';
 import { editRegionController } from '../../zone/controller/edit-region-controller.js';
 import { confirmGroupDeletionController } from '../../group/controller/confirm-group-deletion-controller.js';
@@ -30,6 +31,10 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
   const action = actionTarget?.dataset.action;
   if (!action) return;
   telemetry('tool-button-click', { action });
+  if (action === 'resize') {
+    await resizeSelectedCardsController();
+    return;
+  }
   if (action === 'open-card-thread' || action === 'open-zone-thread' || action === 'conversation') {
     const target = targetElement.closest('[data-card-id],[data-zone-id],[data-group-id]') as HTMLElement | null;
     if (action === 'conversation') state.activeTool = 'thread';
