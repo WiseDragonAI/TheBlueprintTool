@@ -237,14 +237,15 @@
 .card[data-card-id="card-ledger"] { left: 420px; top: 555px; }
 .card.open { z-index: 9999; }
 
-.card-agent-indicator {
+.card-status-indicator {
   position: absolute;
   top: 8px;
   left: 8px;
   display: grid;
   place-items: center;
-  width: 20px;
+  min-width: 38px;
   height: 18px;
+  padding: 0 5px;
   border: 1px solid color-mix(in srgb, var(--card-zone-color), white 24%);
   border-radius: 2px;
   background: color-mix(in srgb, var(--card-zone-color), rgba(3, 4, 5, 0.94) 44%);
@@ -256,11 +257,22 @@
     inset 0 0 10px rgba(0, 0, 0, 0.54),
     0 0 14px rgba(0, 0, 0, 0.42);
   pointer-events: none;
+  text-transform: uppercase;
 }
 
-.card[data-agent-last-answer="true"] .hash {
+.card[data-card-work-status="processing"] .card-status-indicator {
+  border-color: color-mix(in srgb, #f4c542, white 18%);
+  background: color-mix(in srgb, #f4c542, rgba(3, 4, 5, 0.94) 38%);
+}
+
+.card[data-card-work-status="done"] .card-status-indicator {
+  border-color: color-mix(in srgb, #74d680, white 18%);
+  background: color-mix(in srgb, #74d680, rgba(3, 4, 5, 0.94) 40%);
+}
+
+.card:has(.card-status-indicator) .hash {
   min-height: 18px;
-  padding-left: 28px;
+  padding-left: 50px;
 }
 
 .card.connected {
@@ -370,6 +382,32 @@
   transition: opacity 120ms ease, transform 120ms ease;
 }
 
+.card .ledger-card-status-toggle.terminal-button {
+  position: absolute;
+  top: 6px;
+  right: 34px;
+  z-index: 7;
+  width: auto;
+  height: 24px;
+  min-width: 42px;
+  min-height: 0;
+  padding: 0 9px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition: opacity 120ms ease, transform 120ms ease;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.card .ledger-card-status-toggle:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
 .group-zone .ledger-group-delete.terminal-button {
   position: absolute;
   top: 6px;
@@ -388,10 +426,19 @@
 
 .card:hover .ledger-card-delete,
 .card:focus-within .ledger-card-delete,
-.card.selected .ledger-card-delete {
+.card.selected .ledger-card-delete,
+.card:hover .ledger-card-status-toggle,
+.card:focus-within .ledger-card-status-toggle,
+.card.selected .ledger-card-status-toggle {
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);
+}
+
+.card:hover .ledger-card-status-toggle:disabled,
+.card:focus-within .ledger-card-status-toggle:disabled,
+.card.selected .ledger-card-status-toggle:disabled {
+  pointer-events: none;
 }
 
 .group-zone:hover .ledger-group-delete,
@@ -403,8 +450,8 @@
 }
 
 .card:has(.ledger-card-delete) .ledger-card-labels {
-  right: 38px;
-  max-width: calc(100% - 102px);
+  right: 88px;
+  max-width: calc(100% - 152px);
 }
 
 .ledger-card-tabs {

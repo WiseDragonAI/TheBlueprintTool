@@ -20,6 +20,7 @@ export async function dispatchLedgerCliCommandController(
     ledgerJsonFile: command.ledgerJsonFile,
     mutationFile: command.mutationFile,
     mutationOperation: command.mutationOperation,
+    statusOperation: command.statusOperation,
   }, ports.fs);
   if (result.ok && command.mode === 'overview' && typeof result.value === 'string') {
     ports.emit ? ports.emit(result.value) : console.log(result.value);

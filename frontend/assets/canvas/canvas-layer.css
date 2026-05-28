@@ -85,6 +85,10 @@
 .canvas.low-detail .card-actions,
 .canvas.low-detail .zone p,
 .canvas.low-detail .hash,
+.canvas.low-detail .ledger-card-labels,
+.canvas.low-detail .card-status-indicator,
+.canvas.low-detail .ledger-card-status-toggle,
+.canvas.low-detail .ledger-card-delete,
 .canvas.low-detail .relationships text {
   display: none;
 }
@@ -111,8 +115,7 @@
   text-shadow: 0 0 10px color-mix(in srgb, var(--card-zone-color), transparent 64%);
 }
 
-.canvas.low-detail .ledger-card-labels,
-.canvas.low-detail .card:has(.ledger-card-delete) .ledger-card-labels {
+.canvas.low-detail .card[data-card-work-status="todo"] .card-status-indicator {
   display: flex;
   top: 50%;
   left: 50%;
@@ -125,8 +128,11 @@
   transform-origin: center;
 }
 
-.canvas.low-detail .ledger-card-label {
+.canvas.low-detail .card[data-card-work-status="todo"] .card-status-indicator {
+  width: auto;
+  min-width: 38px;
   max-width: 140px;
+  height: 18px;
   font-size: 9px;
 }
 

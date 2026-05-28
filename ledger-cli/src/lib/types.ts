@@ -6,7 +6,7 @@ import type { Stats } from 'node:fs';
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
-export type LedgerCommand = 'inspect' | 'mutate' | 'overview';
+export type LedgerCommand = 'done' | 'inspect' | 'mutate' | 'overview' | 'todo';
 
 export type LedgerMutationOperation = {
   addCardFile?: string;
@@ -29,6 +29,10 @@ export type LedgerCliCommand = {
   ledgerJsonFile: string;
   mutationFile?: string;
   mutationOperation: LedgerMutationOperation;
+  statusOperation?: {
+    cardId?: string;
+    status: 'todo' | 'done';
+  };
 };
 
 export type FileSystemPort = {

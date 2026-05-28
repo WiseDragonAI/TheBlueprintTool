@@ -5,6 +5,7 @@
 import { modal, runbookModal, shortcutModal } from '../../dom.js';
 import { state } from '../../state.js';
 import { resizeSelectedCardsController } from '../../card/controller/resize-selected-cards-controller.js';
+import { toggleCardStatusController } from '../../card/controller/toggle-card-status-controller.js';
 import { deleteZoneController } from '../../zone/controller/delete-zone-controller.js';
 import { editRegionController } from '../../zone/controller/edit-region-controller.js';
 import { confirmGroupDeletionController } from '../../group/controller/confirm-group-deletion-controller.js';
@@ -56,6 +57,11 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
   }
   if (action === 'confirm-delete-card') {
     confirmCardDeletionController({ cardId: actionTarget.dataset.cardId ?? '' });
+    return;
+  }
+  if (action === 'toggle-card-status') {
+    const status = actionTarget.dataset.nextStatus === 'todo' ? 'todo' : 'done';
+    await toggleCardStatusController({ cardId: actionTarget.dataset.cardId ?? '', status });
     return;
   }
   if (action === 'delete-card') {

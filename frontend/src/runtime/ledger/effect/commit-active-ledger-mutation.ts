@@ -14,6 +14,7 @@ export type ActiveLedgerMutation = {
   cardId?: string;
   cardPatch?: {
     id: string;
+    status?: 'todo' | 'done';
     title?: string;
     description?: string;
     imageSizes?: Record<string, { width?: number; height?: number }>;

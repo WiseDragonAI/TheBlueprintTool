@@ -101,6 +101,10 @@ test('specs and data ledger tabs commit canvas mutations through the server ledg
         if (body.region.label) region.label = body.region.label;
         if (body.region.color) region.color = body.region.color;
       }
+      if (body.action === 'patch-card') {
+        const card = serverLedger.cards.find((entry: Record<string, unknown>) => entry.id === body.cardPatch.id) as Record<string, unknown>;
+        if (body.cardPatch.status) card.status = body.cardPatch.status;
+      }
       if (body.action === 'append-note') {
         const deletedIds = serverLedger.deletedNoteIds?.[body.note.threadId] ?? [];
         if (deletedIds.includes(body.note.id)) return {
@@ -175,6 +179,9 @@ test('specs and data ledger tabs commit canvas mutations through the server ledg
 
     assert.equal(state.activeLedger.annotations[0].label, 'Renamed');
     assert.equal(state.activeLedger.annotations[0].color, '#ffcc00');
+
+    await commitActiveLedgerMutation({ action: 'patch-card', cardPatch: { id: `${activeTab}-card`, status: 'done' } });
+    assert.equal((state.activeLedger.cards[0] as Record<string, unknown>).status, 'done');
 
     await commitActiveLedgerMutation({ action: 'append-note', note: { threadId: `thread-${activeTab}-card`, body: 'Server note' } });
     assert.equal(state.activeLedger.notes[`thread-${activeTab}-card`].length, 1);

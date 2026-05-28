@@ -146,7 +146,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           action?: string;
           card?: Record<string, unknown>;
           cardId?: string;
-          cardPatch?: { id?: string; title?: string; description?: string; imageSizes?: Record<string, { width?: number; height?: number }> };
+          cardPatch?: { id?: string; status?: string; title?: string; description?: string; imageSizes?: Record<string, { width?: number; height?: number }> };
           annotation?: Record<string, unknown>;
           relationship?: Record<string, unknown>;
           zoneIds?: string[];
@@ -178,6 +178,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         }
         if (mutation.action === 'patch-card' && mutation.cardPatch?.id) {
           const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === mutation.cardPatch?.id);
+          if (card && (mutation.cardPatch.status === 'todo' || mutation.cardPatch.status === 'done')) card.status = mutation.cardPatch.status;
           if (card && typeof mutation.cardPatch.title === 'string') card.title = mutation.cardPatch.title;
           if (card && typeof mutation.cardPatch.description === 'string') {
             const comment = card.comment && typeof card.comment === 'object' && !Array.isArray(card.comment) ? card.comment as Record<string, unknown> : {};

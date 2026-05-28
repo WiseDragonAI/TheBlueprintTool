@@ -47,7 +47,7 @@ function relationshipValues(args: string[]): Array<{ from: string; id: string; l
 
 export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
   const [mode] = argv;
-  const normalizedMode: LedgerCommand = mode === 'mutate' || mode === 'overview' ? mode : 'inspect';
+  const normalizedMode: LedgerCommand = mode === 'done' || mode === 'mutate' || mode === 'overview' || mode === 'todo' ? mode : 'inspect';
   return {
     mode: normalizedMode,
     ledgerJsonFile: flagValue(argv, '--ledger') ?? argv[1] ?? '../.blueprinttool/specs.json',
@@ -62,5 +62,8 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
       removeCardIds: trailingValues(argv, '--remove-card'),
       removeRelationshipIds: trailingValues(argv, '--remove-relationship'),
     },
+    statusOperation: normalizedMode === 'todo' || normalizedMode === 'done'
+      ? { cardId: flagValue(argv, '--card-id'), status: normalizedMode }
+      : undefined,
   };
 }

@@ -5,6 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cardHasAgentLastAnswer } from '../../src/runtime/card/helper/card-has-agent-last-answer.js';
+import { resolveCardWorkStatus } from '../../src/runtime/card/helper/resolve-card-work-status.js';
 import { resolveThreadTargetTitle } from '../../src/runtime/thread/helper/resolve-thread-target-title.js';
 import { state } from '../../src/runtime/state.js';
 
@@ -48,6 +49,26 @@ test('card-has-agent-last-answer only marks assistant or agent latest notes', ()
   try {
     assert.equal(cardHasAgentLastAnswer('card-a'), true);
     assert.equal(cardHasAgentLastAnswer('card-b'), false);
+  } finally {
+    state.activeLedger = null;
+  }
+});
+
+test('resolve-card-work-status derives processing from latest operator notes and lets done win', () => {
+  state.activeLedger = {
+    notes: {
+      'thread-card-a': [{ role: 'operator', message: 'Question' }, { role: 'assistant', message: 'Answer' }],
+      'thread-card-b': [{ role: 'assistant', message: 'Answer' }, { role: 'operator', message: 'Follow-up' }],
+      'thread-card-c': [{ role: 'operator', message: 'Follow-up' }],
+      'thread-card-d': [{ role: 'voice', message: 'Transcribed operator note' }]
+    }
+  };
+  try {
+    assert.equal(resolveCardWorkStatus({ id: 'card-a' }), 'todo');
+    assert.equal(resolveCardWorkStatus({ id: 'card-b' }), 'processing');
+    assert.equal(resolveCardWorkStatus({ id: 'card-c', status: 'done' }), 'done');
+    assert.equal(resolveCardWorkStatus({ id: 'card-d' }), 'processing');
+    assert.equal(resolveCardWorkStatus({ id: 'card-new' }), 'todo');
   } finally {
     state.activeLedger = null;
   }

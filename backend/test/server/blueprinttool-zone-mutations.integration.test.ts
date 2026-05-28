@@ -114,6 +114,15 @@ test('blueprinttool canvas mutations are applied by the authoritative server led
     const imageSizeLedger = await imageSizeResponse.json() as { cards: Array<Record<string, unknown>> };
     assert.deepEqual(imageSizeLedger.cards.find((entry) => entry.id === 'card-a')?.imageSizes, { '/.blueprinttool/ui-mockups/mock.png': { width: 320, height: 180 } });
 
+    const cardStatusResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'card-a', status: 'done' } })
+    });
+    assert.equal(cardStatusResponse.ok, true);
+    const cardStatusLedger = await cardStatusResponse.json() as { cards: Array<Record<string, unknown>> };
+    assert.equal(cardStatusLedger.cards.find((entry) => entry.id === 'card-a')?.status, 'done');
+
     const appendNoteResponse = await fetch(endpoint, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },

@@ -12,6 +12,7 @@ export async function createCardFromRect(rect: { x: number; y: number; width: nu
     title: 'New card',
     cardType: 'note',
     domainId: state.activeTab,
+    status: 'todo',
     x: Math.max(0, rect.x),
     y: Math.max(0, rect.y),
     w: Math.max(260, rect.width),

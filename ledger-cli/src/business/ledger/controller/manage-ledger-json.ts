@@ -138,9 +138,22 @@ async function readFileWithNode(path: string): Promise<string> {
   return promises.readFile(path, 'utf8');
 }
 
+function setLedgerCardStatus(ledger: unknown, operation: { cardId?: string; status?: 'todo' | 'done' } | undefined): Result<unknown> {
+  if (!operation?.cardId) return { ok: false, error: 'Card status command requires --card-id.' };
+  if (operation.status !== 'todo' && operation.status !== 'done') return { ok: false, error: 'Card status command requires todo or done.' };
+  if (!isRecord(ledger)) return { ok: false, error: 'Card status command requires an object ledger.' };
+
+  const cards = Array.isArray(ledger.cards) ? ledger.cards.map((card) => (isRecord(card) ? { ...card } : card)) : [];
+  const card = cards.find((entry) => isRecord(entry) && entry.id === operation.cardId);
+  if (!isRecord(card)) return { ok: false, error: `Card not found: ${operation.cardId}` };
+
+  card.status = operation.status;
+  return { ok: true, value: { ...ledger, cards } };
+}
+
 export async function manageLedgerJsonController(
   actionPayload: {
-    ledgerCommand: 'inspect' | 'mutate' | 'overview';
+    ledgerCommand: 'done' | 'inspect' | 'mutate' | 'overview' | 'todo';
     ledgerJsonFile: string;
     mutation?: unknown;
     mutationFile?: string;
@@ -159,6 +172,7 @@ export async function manageLedgerJsonController(
       removeCardIds?: string[];
       removeRelationshipIds?: string[];
     };
+    statusOperation?: { cardId?: string; status: 'todo' | 'done' };
   },
   fs?: FileSystemPort,
 ): Promise<Result<unknown>> {
@@ -175,6 +189,18 @@ export async function manageLedgerJsonController(
   if (actionPayload.ledgerCommand === 'overview') {
     telemetry('manage-ledger-json-completed');
     return { ok: true, value: formatLedgerOverview(ledger.value) };
+  }
+
+  if (actionPayload.ledgerCommand === 'todo' || actionPayload.ledgerCommand === 'done') {
+    const statusResult = setLedgerCardStatus(ledger.value, actionPayload.statusOperation);
+    if (!statusResult.ok) {
+      telemetry('manage-ledger-json-rejected', { error: statusResult.error });
+      return statusResult;
+    }
+    await writeLedgerJson(actionPayload.ledgerJsonFile, statusResult.value, fs);
+    telemetry('write-ledger-json', { path: actionPayload.ledgerJsonFile });
+    telemetry('manage-ledger-json-completed');
+    return statusResult;
   }
 
   // WHY: mutate mode is the only ledger command allowed to write.
