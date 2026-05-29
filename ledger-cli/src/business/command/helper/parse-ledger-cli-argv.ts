@@ -38,6 +38,14 @@ function trailingValues(args: string[], flag: string): string[] {
   });
 }
 
+function flagNumber(args: string[], flag: string): number | undefined {
+  const value = flagValue(args, flag);
+  if (value === undefined) return undefined;
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 function relationshipValues(args: string[]): Array<{ from: string; id: string; label?: string; to: string }> {
   return trailingValues(args, '--add-relationship').map((value) => {
     const [id = '', from = '', to = '', label] = value.split(':');
@@ -47,18 +55,29 @@ function relationshipValues(args: string[]): Array<{ from: string; id: string; l
 
 export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
   const [mode] = argv;
-  const normalizedMode: LedgerCommand = mode === 'done' || mode === 'mutate' || mode === 'overview' || mode === 'todo' ? mode : 'inspect';
+  const normalizedMode: LedgerCommand = mode === 'answer' || mode === 'done' || mode === 'mutate' || mode === 'overview' || mode === 'todo' || mode === 'unanswered' ? mode : 'inspect';
   return {
     mode: normalizedMode,
     ledgerJsonFile: flagValue(argv, '--ledger') ?? argv[1] ?? '../.blueprinttool/specs.json',
+    answerOperation: {
+      message: flagValue(argv, '--message'),
+      messageFile: flagValue(argv, '--message-file'),
+      threadId: flagValue(argv, '--thread-id'),
+    },
+    json: argv.includes('--json'),
     mutationFile: flagValue(argv, '--mutation'),
     mutationOperation: {
       addCardFile: flagValue(argv, '--add-card-file'),
       addRelationships: relationshipValues(argv),
       cardLabels: flagValues(argv, '--card-labels'),
       cardId: flagValue(argv, '--card-id'),
+      cardComment: flagValue(argv, '--card-comment'),
       cardCommentFile: flagValue(argv, '--card-comment-file'),
+      cardH: flagNumber(argv, '--card-h'),
       cardTitle: flagValue(argv, '--card-title'),
+      cardW: flagNumber(argv, '--card-w'),
+      cardX: flagNumber(argv, '--card-x'),
+      cardY: flagNumber(argv, '--card-y'),
       removeCardIds: trailingValues(argv, '--remove-card'),
       removeRelationshipIds: trailingValues(argv, '--remove-relationship'),
     },

@@ -2126,7 +2126,7 @@
       "y": 3346,
       "w": 320,
       "comment": {
-        "what": ""
+        "what": "Shift-clicking a zone adds or removes that zone and its intersecting cards from the existing selection without replacing the rest of the selection."
       },
       "facts": [],
       "fields": []
@@ -2140,7 +2140,7 @@
       "y": 3346,
       "w": 320,
       "comment": {
-        "what": ""
+        "what": "Shift-clicking a group toggles the group and its expanded member zones and cards as one additive selection unit."
       },
       "facts": [],
       "fields": []
@@ -2210,7 +2210,7 @@
       "y": 3875,
       "w": 320,
       "comment": {
-        "what": "Shift-clicking a zone adds or removes that zone and its intersecting cards from the existing selection without replacing the rest of the selection."
+        "what": ""
       },
       "facts": [],
       "fields": []
@@ -3194,7 +3194,7 @@
       "y": 7434,
       "w": 320,
       "comment": {
-        "what": "Shift-clicking a group toggles the group and its expanded member zones and cards as one additive selection unit."
+        "what": ""
       },
       "facts": [],
       "fields": []
@@ -4791,6 +4791,20 @@
       "w": 640,
       "comment": {
         "what": "`generator-cli` is reserved for scaffold generation from the MasterLedger and related non-mutating ledger checks. Committed ledger JSON inspection and mutation must be owned by the separate `ledger-cli` package and executable, so editing specs/data ledgers cannot be coupled to scaffold generation control flow."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "9e2b4c7a",
+      "title": "Ledger CLI exposes agent communication queue",
+      "cardType": "spec-brief",
+      "domainId": "cli",
+      "x": -7707,
+      "y": 4972,
+      "w": 680,
+      "comment": {
+        "what": "`ledger-cli unanswered --ledger <file>` must list every thread whose latest meaningful note is not `agent` or `assistant`, including thread id, target title, last note role/message/status/timestamp, and an exact `ledger-cli answer --ledger <file> --thread-id <id> --message ...` command. `ledger-cli answer` appends a persisted `role: agent` note to `ledger.notes[threadId]`, making the ledger a communication layer between operator and agent."
       },
       "facts": [],
       "fields": []
