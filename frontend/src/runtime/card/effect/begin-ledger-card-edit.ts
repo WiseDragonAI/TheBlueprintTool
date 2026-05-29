@@ -44,10 +44,13 @@ export function beginLedgerCardDescriptionEdit(cardElement: HTMLElement): void {
   const body = cardElement.querySelector('.ledger-card-body') as HTMLElement | null;
   if (!cardId || !body) return;
   const card = activeLedgerCard(cardId);
+  const bodyHeight = Math.max(120, Math.ceil(body.offsetHeight || body.getBoundingClientRect().height));
   const textarea = document.createElement('textarea');
   textarea.className = 'ledger-card-description-editor';
   textarea.value = card ? ledgerCardBody(card) : body.textContent?.trim() ?? '';
   textarea.rows = 7;
+  textarea.style.minHeight = `${bodyHeight}px`;
+  textarea.style.height = `${bodyHeight}px`;
   body.replaceChildren(textarea);
   textarea.focus();
   textarea.select();
@@ -60,6 +63,9 @@ export function beginLedgerCardDescriptionEdit(cardElement: HTMLElement): void {
       event.preventDefault();
       textarea.blur();
     }
+  });
+  textarea.addEventListener('wheel', (event) => {
+    event.stopPropagation();
   });
   textarea.addEventListener('blur', () => {
     if (state.activeLedger) {

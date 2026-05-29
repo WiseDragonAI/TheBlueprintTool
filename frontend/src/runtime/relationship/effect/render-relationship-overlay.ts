@@ -22,12 +22,22 @@ export function renderRelationshipOverlay(): void {
       const relationshipId = path.dataset.relationshipId ?? '';
       const relationshipLabel = path.dataset.relationshipLabelText || path.dataset.relationshipId || '';
       const sourceTitle = source.querySelector('strong')?.textContent?.trim() || path.dataset.source || '';
-      patchRelationshipLabel(overlay, relationshipId, 'target', relationshipLabel, route.startLabel);
-      patchRelationshipLabel(overlay, relationshipId, 'source', sourceTitle, route.endLabel);
+      patchRelationshipLabel(overlay, relationshipId, 'target', relationshipLabel, route.startLabel, relationshipLabelColor(source));
+      patchRelationshipLabel(overlay, relationshipId, 'source', sourceTitle, route.endLabel, relationshipLabelColor(target));
       count += 1;
     }
   }
   telemetry('render-relationship-overlay', { count });
+}
+
+function relationshipLabelColor(endpoint: HTMLElement): string {
+  const style = getComputedStyle(endpoint);
+  return endpoint.style.getPropertyValue('--card-readable-color').trim()
+    || endpoint.style.getPropertyValue('--card-code-color').trim()
+    || style.getPropertyValue('--card-readable-color').trim()
+    || style.getPropertyValue('--card-code-color').trim()
+    || style.getPropertyValue('--card-zone-color').trim()
+    || 'rgba(243, 240, 231, 0.72)';
 }
 
 function patchRelationshipLabel(
@@ -35,7 +45,8 @@ function patchRelationshipLabel(
   relationshipId: string,
   kind: 'source' | 'target',
   text: string,
-  point: { x: number; y: number; anchor?: string }
+  point: { x: number; y: number; anchor?: string },
+  color: string
 ): void {
   const labelId = `${relationshipId}:${kind}`;
   let label = overlay.querySelector(`[data-relationship-label="${labelId}"]`) as SVGTextElement | null;
@@ -52,4 +63,5 @@ function patchRelationshipLabel(
   label.setAttribute('x', String(point.x));
   label.setAttribute('y', String(point.y));
   label.setAttribute('text-anchor', point.anchor ?? 'middle');
+  label.style.setProperty('--relationship-label-color', color);
 }

@@ -4,6 +4,7 @@
  */
 import { modal, runbookModal, shortcutModal } from '../../dom.js';
 import { state } from '../../state.js';
+import { switchCardTabController } from '../../card/controller/switch-card-tab-controller.js';
 import { resizeSelectedCardsController } from '../../card/controller/resize-selected-cards-controller.js';
 import { toggleCardStatusController } from '../../card/controller/toggle-card-status-controller.js';
 import { deleteZoneController } from '../../zone/controller/delete-zone-controller.js';
@@ -32,6 +33,12 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
   const action = actionTarget?.dataset.action;
   if (!action) return;
   telemetry('tool-button-click', { action });
+  if (action === 'switch-card-tab') {
+    const card = actionTarget.closest('.card[data-card-id]') as HTMLElement | null;
+    const tab = actionTarget.dataset.cardTab === 'fields' ? 'fields' : 'description';
+    if (card) switchCardTabController(card, tab);
+    return;
+  }
   if (action === 'resize') {
     await resizeSelectedCardsController();
     return;

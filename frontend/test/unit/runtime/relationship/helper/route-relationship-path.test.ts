@@ -16,6 +16,6 @@ test('route-relationship-path uses Core-style cubic port-normal curves and endpo
 
   assert.match(route.path, /^M 100 40 C /);
   assert.doesNotMatch(route.path, / L /);
-  assert.deepEqual(route.startLabel, { x: 146, y: 32, anchor: 'start' });
-  assert.deepEqual(route.endLabel, { x: 214, y: 32, anchor: 'end' });
+  assert.deepEqual(route.startLabel, { x: 172, y: 32, anchor: 'start' });
+  assert.deepEqual(route.endLabel, { x: 188, y: 32, anchor: 'end' });
 });

@@ -14,11 +14,12 @@ function source(path: string): string {
 
 test('browser inputs route ledger commands through runtime controllers before server effects', () => {
   const pointerUp = source('frontend/src/runtime/gesture/controller/handle-pointer-up.ts');
+  const pointerDown = source('frontend/src/runtime/gesture/controller/handle-pointer-down.ts');
   assert.match(pointerUp, /createZoneController/);
   assert.match(pointerUp, /createGroupController/);
   assert.match(pointerUp, /commitSelectedLedgerGeometry/);
-  assert.match(pointerUp, /selectThread\(''\)/);
-  assert.match(pointerUp, /closeThreadPanel\(\)/);
+  assert.match(pointerDown, /selectThread\(''\)/);
+  assert.match(pointerDown, /closeThreadPanel\(\)/);
   assert.doesNotMatch(pointerUp, /createZoneFromRect/);
   assert.doesNotMatch(pointerUp, /createGroupFromRect/);
   assert.doesNotMatch(pointerUp, /commitActiveLedgerMutation/);
@@ -139,7 +140,7 @@ test('browser inputs route ledger commands through runtime controllers before se
 
   const canvasLayerCss = source('frontend/assets/canvas/canvas-layer.css');
   assert.match(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-title\s*{[^}]*padding:\s*calc\(4px \* var\(--viewport-scale, 1\)\) calc\(6px \* var\(--viewport-scale, 1\)\) 0;/s);
-  assert.match(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-labels,[\s\S]*top:\s*50%;[^}]*left:\s*50%;[^}]*justify-content:\s*center;[^}]*transform:\s*translate\(-50%, -50%\) scale\(var\(--inverse-viewport-scale, 1\)\);/);
-  assert.doesNotMatch(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-labels,[\s\S]{0,220}display:\s*none;/);
-  assert.match(canvasLayerCss, /\.canvas\.low-detail \.hash,[\s\S]{0,160}display:\s*none;/);
+  assert.match(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-labels,[\s\S]{0,220}display:\s*none;/);
+  assert.match(canvasLayerCss, /\.canvas\.low-detail \.card\[data-card-work-status="todo"\] \.card-status-indicator\s*{[^}]*top:\s*50%;[^}]*left:\s*50%;[^}]*justify-content:\s*center;[^}]*transform:\s*translate\(-50%, -50%\) scale\(var\(--inverse-viewport-scale, 1\)\);/s);
+  assert.match(canvasLayerCss, /\.canvas\.low-detail \.hash,[\s\S]{0,260}display:\s*none;/);
 });

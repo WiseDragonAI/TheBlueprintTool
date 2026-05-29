@@ -6,6 +6,8 @@ type Point = { x: number; y: number };
 type Normal = { x: number; y: number };
 type LabelPoint = Point & { anchor: 'start' | 'middle' | 'end' };
 
+const RELATIONSHIP_LABEL_SAFETY_MARGIN = 72;
+
 export function routeRelationshipPath({ sourcePort, targetPort, sourceRect, targetRect }: {
   sourcePort: Point;
   targetPort: Point;
@@ -19,8 +21,8 @@ export function routeRelationshipPath({ sourcePort, targetPort, sourceRect, targ
   const control = normalControlPoints(sourcePort, targetPort, sourceNormal, targetNormal);
   const path = `M ${sourcePort.x} ${sourcePort.y} C ${control.c1.x} ${control.c1.y}, ${control.c2.x} ${control.c2.y}, ${targetPort.x} ${targetPort.y}`;
   const label = cubicPoint(sourcePort, control.c1, control.c2, targetPort, 0.5);
-  const startLabel = portLabelPoint(sourcePort, sourceNormal);
-  const endLabel = portLabelPoint(targetPort, targetNormal);
+  const startLabel = portLabelPoint(sourcePort, sourceNormal, sourceRect);
+  const endLabel = portLabelPoint(targetPort, targetNormal, targetRect);
   telemetry('route-relationship-path', { path, label, startLabel, endLabel, sourceNormal, targetNormal, curve: 'core-v1-port-normal-bezier' });
   return { path, label, startLabel, endLabel };
 }
@@ -34,13 +36,18 @@ function normalControlPoints(sourcePort: Point, targetPort: Point, sourceNormal:
   };
 }
 
-function portLabelPoint(port: Point, normal: Normal): LabelPoint {
-  const vertical = normal.y !== 0;
-  return {
-    x: port.x + normal.x * 46,
-    y: port.y + normal.y * 24 - (vertical ? 0 : 8),
-    anchor: normal.x > 0 ? 'start' : normal.x < 0 ? 'end' : 'middle'
-  };
+function portLabelPoint(port: Point, normal: Normal, rect: CanvasRect): LabelPoint {
+  const anchor = normal.x > 0 ? 'start' : normal.x < 0 ? 'end' : 'middle';
+  if (normal.x > 0) {
+    return { x: rect.right + RELATIONSHIP_LABEL_SAFETY_MARGIN, y: port.y - 8, anchor };
+  }
+  if (normal.x < 0) {
+    return { x: rect.left - RELATIONSHIP_LABEL_SAFETY_MARGIN, y: port.y - 8, anchor };
+  }
+  if (normal.y > 0) {
+    return { x: port.x, y: rect.bottom + RELATIONSHIP_LABEL_SAFETY_MARGIN, anchor };
+  }
+  return { x: port.x, y: rect.top - RELATIONSHIP_LABEL_SAFETY_MARGIN, anchor };
 }
 
 function cubicPoint(start: Point, c1: Point, c2: Point, end: Point, t: number): Point {
