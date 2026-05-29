@@ -20,12 +20,13 @@ test('zone color input previews during drag and commits only on final change', (
   assert.match(bindInputs, /addEventListener\('change', handleRegionColorChange\)/);
 
   const colorEffect = source('frontend/src/runtime/zone/effect/apply-zone-color-edit.ts');
-  const previewBody = colorEffect.match(/export function previewZoneColorEdit[\s\S]*?\n}\n/)?.[0] ?? '';
-  assert.match(previewBody, /setProperty\('--zone-color', color\)/);
-  assert.match(previewBody, /renderCardZoneColors\(\)/);
-  assert.match(previewBody, /renderZoneLabelOverlay\(\)/);
-  assert.doesNotMatch(previewBody, /commitActiveLedgerMutation/);
-  assert.doesNotMatch(previewBody, /renderCanvasSurface/);
+  assert.match(colorEffect, /export function previewZoneColorEdit/);
+  assert.match(colorEffect, /setProperty\('--zone-color', color\)/);
+  assert.match(colorEffect, /previewCachedZoneColor\(zone\.dataset\.zoneId, color\)/);
+  assert.match(colorEffect, /else renderCardZoneColors\(\)/);
+  assert.match(colorEffect, /renderZoneLabelOverlay\(\)/);
+  assert.doesNotMatch(colorEffect.match(/export function previewZoneColorEdit[\s\S]*?export function applyZoneColorEdit/)?.[0] ?? '', /commitActiveLedgerMutation/);
+  assert.doesNotMatch(colorEffect.match(/export function previewZoneColorEdit[\s\S]*?export function applyZoneColorEdit/)?.[0] ?? '', /renderCanvasSurface/);
 
   const commitBody = colorEffect.match(/export function applyZoneColorEdit[\s\S]*?^}/m)?.[0] ?? '';
   assert.match(commitBody, /previewZoneColorEdit\(zone, color\)/);
@@ -42,5 +43,5 @@ test('interactive color controls are excluded from canvas pointer and drag captu
   assert.match(dragStart, /event\.preventDefault\(\)/);
 
   const helper = source('frontend/src/runtime/gesture/helper/is-gesture-control-target.ts');
-  assert.match(helper, /button,input,textarea,select,\[data-action\],\[contenteditable="true"\]/);
+  assert.match(helper, /button,input,textarea,select,\[data-action\],\[data-wheel-capture\],\[contenteditable="true"\]/);
 });

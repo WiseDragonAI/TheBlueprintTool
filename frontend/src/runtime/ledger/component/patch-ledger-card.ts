@@ -15,8 +15,9 @@ import { renderLedgerCardTabFrame } from './render-ledger-card-tab-frame.js';
 import { renderLedgerCardTabs } from './render-ledger-card-tabs.js';
 import { renderLedgerCardDeleteButton } from './render-ledger-card-delete-button.js';
 import { renderLedgerCardStatusButton } from './render-ledger-card-status-button.js';
+import { applyZoneAttributionToCardElement, normalizeZoneAttribution, type ZoneAttribution } from '../helper/zone-attribution-cache.js';
 
-export function patchLedgerCard(card: Record<string, unknown>, existing?: HTMLElement | null, zone?: Record<string, unknown> | null): HTMLElement {
+export function patchLedgerCard(card: Record<string, unknown>, existing?: HTMLElement | null, attribution?: ZoneAttribution | Record<string, unknown> | null): HTMLElement {
   const element = existing ?? document.createElement('article');
   const id = String(card.id ?? '');
   const labels = cardLabels(card);
@@ -35,16 +36,7 @@ export function patchLedgerCard(card: Record<string, unknown>, existing?: HTMLEl
   delete element.dataset.agentLastAnswer;
   if (labels.length > 0) element.dataset.cardLabels = labels.join(',');
   else delete element.dataset.cardLabels;
-  if (zone && typeof zone.color === 'string') {
-    if (typeof zone.id === 'string') element.dataset.cardZoneId = zone.id;
-    else delete element.dataset.cardZoneId;
-    element.dataset.cardZoneColor = zone.color;
-    element.style.setProperty('--card-zone-color', zone.color);
-  } else {
-    delete element.dataset.cardZoneId;
-    delete element.dataset.cardZoneColor;
-    element.style.removeProperty('--card-zone-color');
-  }
+  applyZoneAttributionToCardElement(element, normalizeZoneAttribution(attribution));
   element.style.left = `${Number(card.x ?? 0)}px`;
   element.style.top = `${Number(card.y ?? 0)}px`;
   element.style.width = `${Math.max(220, Number(card.w ?? 280))}px`;

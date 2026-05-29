@@ -1,5 +1,5 @@
 export const state: any = {
-  routePath: window.location.pathname,
+  routePath: globalThis.window?.location?.pathname ?? '/',
   activeTab: 'specs',
   ledgerTabs: [
     { id: 'specs', title: 'Specs', ledgerFile: '.blueprinttool/specs.json' },
@@ -14,6 +14,8 @@ export const state: any = {
   viewport: { x: 0, y: 0, scale: 1 },
   surfaceViewport: { x: 0, y: 0, scale: 1 },
   viewports: { specs: { x: 0, y: 0, scale: 1 }, data: { x: 0, y: 0, scale: 1 } },
+  cardUi: { openCardIds: [], activeTabByCardId: {} },
+  zoneAttributionCache: null,
   selection: { cardIds: [], zoneIds: [], groupIds: [] },
   pointer: null,
   clipboard: null,

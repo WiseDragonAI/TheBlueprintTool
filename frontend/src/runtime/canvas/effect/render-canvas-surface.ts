@@ -14,7 +14,7 @@ export function renderCanvasSurface(): void {
   renderLedgerSurface();
   applyViewportTransform();
   renderSelectionState();
-  renderCardZoneColors();
+  if (!state.activeLedger) renderCardZoneColors();
   renderZoneLabelOverlay();
   renderRelationshipOverlay();
   renderRelationshipLabelVisibility();

@@ -1,12 +1,17 @@
 import { content } from '../../dom.js';
 import { state } from '../../state.js';
 import { createLedgerRelationshipOverlay } from '../../relationship/component/create-ledger-relationship-overlay.js';
+import { scheduleLedgerCardTabFrameSync } from '../../card/effect/schedule-ledger-card-tab-frame-sync.js';
+import { watchLedgerCardTabFrameSize } from '../../card/effect/watch-ledger-card-tab-frame-size.js';
 import { patchLedgerCard } from '../component/patch-ledger-card.js';
 import { patchLedgerZone } from '../component/patch-ledger-zone.js';
 import { setCanvasLayerHidden } from '../../canvas/effect/set-canvas-layer-hidden.js';
+import { ensureZoneAttributionCache } from '../helper/zone-attribution-cache.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { invalidateDetailModeCardSizeCache } from '../../canvas/effect/update-detail-mode.js';
 
 export function renderLedgerSurface(): void {
+  invalidateDetailModeCardSizeCache();
   const ledger = state.activeLedger as { cards?: unknown; annotations?: unknown; relationships?: unknown } | null;
   const isLedgerTab = Boolean(ledger);
   content.querySelectorAll(':scope > .card:not(.ledger-node), :scope > .zone:not(.ledger-node), :scope > .relationships:not(.ledger-relationships)').forEach((node) => {
@@ -23,6 +28,7 @@ export function renderLedgerSurface(): void {
   const cards = Array.isArray(ledger.cards) ? ledger.cards as Array<Record<string, unknown>> : [];
   const annotations = Array.isArray(ledger.annotations) ? ledger.annotations as Array<Record<string, unknown>> : [];
   const relationships = Array.isArray(ledger.relationships) ? ledger.relationships as Array<Record<string, unknown>> : [];
+  const zoneAttribution = ensureZoneAttributionCache('render-ledger-surface');
   for (const zone of annotations) {
     const id = String(zone.id ?? '');
     activeZoneIds.add(id);
@@ -33,7 +39,7 @@ export function renderLedgerSurface(): void {
   for (const card of cards) {
     const id = String(card.id ?? '');
     activeCardIds.add(id);
-    const node = patchLedgerCard(card, content.querySelector(`[data-card-id="${CSS.escape(id)}"].ledger-node`) as HTMLElement | null);
+    const node = patchLedgerCard(card, content.querySelector(`[data-card-id="${CSS.escape(id)}"].ledger-node`) as HTMLElement | null, zoneAttribution?.cardById?.[id]);
     if (!node.parentElement) content.insertBefore(node, marquee);
   }
   content.querySelectorAll('.ledger-node[data-zone-id]').forEach((node) => {
@@ -47,6 +53,8 @@ export function renderLedgerSurface(): void {
   });
   const overlay = createLedgerRelationshipOverlay(relationships, content.querySelector('.ledger-relationships') as SVGSVGElement | null, ledgerRelationshipBounds({ cards, annotations }));
   if (!overlay.parentElement) content.insertBefore(overlay, marquee);
+  scheduleLedgerCardTabFrameSync(content);
+  watchLedgerCardTabFrameSize(content);
   telemetry('render-ledger-surface', { activeTab: state.activeTab, cards: cards.length, zones: annotations.length, relationships: relationships.length });
 }
 

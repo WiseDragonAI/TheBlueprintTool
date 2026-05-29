@@ -19,6 +19,7 @@ test('canvas pan uses a transform-only path with sampled performance telemetry',
   const panTransform = source('frontend/src/runtime/canvas/effect/apply-pan-viewport-transform.ts');
   const panTelemetry = source('frontend/src/runtime/gesture/effect/emit-pan-performance-telemetry.ts');
   const pointerDown = source('frontend/src/runtime/gesture/controller/handle-pointer-down.ts');
+  const pointHelper = source('frontend/src/runtime/gesture/helper/point.ts');
   assert.match(pointerMove, /applyPanViewportTransform/);
   assert.match(pointerMove, /emitPanPerformanceTelemetry/);
   assert.match(pointerMove, /if \(isPan\)[\s\S]*return;/);
@@ -28,6 +29,8 @@ test('canvas pan uses a transform-only path with sampled performance telemetry',
   assert.match(panTelemetry, /pan-frame-performance/);
   assert.match(panTelemetry, /frame === 1 \|\| input\.durationMs >= 8 \|\| frame % 12 === 0/);
   assert.match(pointerDown, /startedAt: now/);
+  assert.match(pointHelper, /cachedCanvasBounds/);
+  assert.match(pointHelper, /invalidateCanvasPointBounds/);
 });
 
 test('ctrl drag always derives pan intent without selection side effects and shift canvas drag derives marquee', () => {
@@ -52,7 +55,7 @@ test('ctrl drag always derives pan intent without selection side effects and shi
     const pointerUp = source('frontend/src/runtime/gesture/controller/handle-pointer-up.ts');
     assert.match(pointerDown, /ctrlPan:\s*event\.ctrlKey/);
     assert.match(pointerUp, /const isCtrlPan = Boolean\(state\.pointer\.ctrlPan\)/);
-    assert.match(pointerUp, /!isCtrlPan && state\.pointer\.intent === 'pan'/);
+    assert.match(pointerUp, /!isCtrlPan && pointerIntent === 'pan'/);
   } finally {
     state.activeTool = previousTool;
     state.selection = previousSelection;
@@ -70,4 +73,10 @@ test('direct canvas pointer down clears selection before pointer up', () => {
   assert.match(pointerDown, /renderSelectionState\(\)/);
   assert.doesNotMatch(pointerUp, /canvas-background-click/);
   assert.doesNotMatch(pointerUp, /targetKind === 'canvas' && moved < 4[\s\S]*clear-transient-selection/);
+});
+
+test('plain pan pointer up does not force a full canvas rerender', () => {
+  const pointerUp = source('frontend/src/runtime/gesture/controller/handle-pointer-up.ts');
+  assert.match(pointerUp, /const pointerIntent = state\.pointer\.intent/);
+  assert.match(pointerUp, /if \(pointerIntent !== 'pan'\) renderCanvasSurface\(\)/);
 });

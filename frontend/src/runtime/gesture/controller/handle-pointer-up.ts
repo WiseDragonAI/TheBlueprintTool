@@ -20,43 +20,44 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 export async function handlePointerUp(event: PointerEvent): Promise<void> {
   if (!state.pointer) return;
   event.preventDefault();
-  telemetry('canvas-pointer-up', { intent: state.pointer.intent });
+  const pointerIntent = state.pointer.intent;
+  telemetry('canvas-pointer-up', { intent: pointerIntent });
   const releasePoint = point(event);
   const moved = Math.hypot(releasePoint.x - state.pointer.start.x, releasePoint.y - state.pointer.start.y);
   const isCtrlPan = Boolean(state.pointer.ctrlPan);
-  if (!isCtrlPan && state.pointer.intent === 'pan' && state.pointer.targetKind === 'zone' && moved < 4) {
+  if (!isCtrlPan && pointerIntent === 'pan' && state.pointer.targetKind === 'zone' && moved < 4) {
     selectTarget('zone', state.pointer.targetId, false);
     telemetry('resolve-selection-target', { kind: 'zone', id: state.pointer.targetId, clickSelect: true });
   }
-  if (!isCtrlPan && state.pointer.intent === 'pan' && state.pointer.targetKind === 'group' && moved < 4) {
+  if (!isCtrlPan && pointerIntent === 'pan' && state.pointer.targetKind === 'group' && moved < 4) {
     selectTarget('group', state.pointer.targetId, false);
     telemetry('resolve-selection-target', { kind: 'group', id: state.pointer.targetId, clickSelect: true });
   }
-  if (state.pointer.intent === 'marquee') {
+  if (pointerIntent === 'marquee') {
     const rect = rectFromPoints(state.pointer.startCanvas, canvasPoint(releasePoint));
     selectIntersecting(rect);
     (document.querySelector('.marquee') as HTMLElement).hidden = true;
     telemetry('resolve-selection-target', { selection: state.selection });
   }
-  if (state.pointer.intent === 'draw-card') {
+  if (pointerIntent === 'draw-card') {
     const rect = rectFromPoints(state.pointer.startCanvas, canvasPoint(releasePoint));
     (document.querySelector('.marquee') as HTMLElement).hidden = true;
     await createCardController(rect);
   }
-  if (state.pointer.intent === 'draw-zone') {
+  if (pointerIntent === 'draw-zone') {
     const rect = rectFromPoints(state.pointer.startCanvas, canvasPoint(releasePoint));
     (document.querySelector('.marquee') as HTMLElement).hidden = true;
     await createZoneController(rect);
   }
-  if (state.pointer.intent === 'draw-group') {
+  if (pointerIntent === 'draw-group') {
     const rect = rectFromPoints(state.pointer.startCanvas, canvasPoint(releasePoint));
     (document.querySelector('.marquee') as HTMLElement).hidden = true;
     await createGroupController(rect);
   }
-  if (state.pointer.intent === 'drag' || state.pointer.intent === 'group' || state.pointer.intent === 'resize') {
+  if (pointerIntent === 'drag' || pointerIntent === 'group' || pointerIntent === 'resize') {
     await commitSelectedLedgerGeometry();
   }
   persistState();
   finishPointer(event);
-  renderCanvasSurface();
+  if (pointerIntent !== 'pan') renderCanvasSurface();
 }

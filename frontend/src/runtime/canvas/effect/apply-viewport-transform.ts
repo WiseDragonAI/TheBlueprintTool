@@ -4,6 +4,7 @@ import { updateDetailMode } from './update-detail-mode.js';
 
 export function applyViewportTransform(): void {
   canvas.style.setProperty('--viewport-scale', String(state.viewport.scale));
+  canvas.style.setProperty('--inverse-viewport-scale', String(1 / state.viewport.scale));
   updateDetailMode();
   const devicePixelRatio = window.devicePixelRatio || 1;
   const x = Math.round(state.viewport.x * devicePixelRatio) / devicePixelRatio;
