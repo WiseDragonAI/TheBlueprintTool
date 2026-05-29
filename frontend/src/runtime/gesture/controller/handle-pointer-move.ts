@@ -13,6 +13,7 @@ import { rectFromPoints } from '../../canvas/helper/rect-from-points.js';
 import { resizeSelectedCard } from '../../card/effect/resize-selected-card.js';
 import { resizeSelectedZone } from '../../zone/effect/resize-selected-zone.js';
 import { emitPanPerformanceTelemetry } from '../effect/emit-pan-performance-telemetry.js';
+import { schedulePanningEffects } from '../effect/schedule-panning-effects.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export function handlePointerMove(event: PointerEvent): void {
@@ -32,6 +33,7 @@ export function handlePointerMove(event: PointerEvent): void {
     state.viewport.x += dx;
     state.viewport.y += dy;
     applyPanViewportTransform();
+    schedulePanningEffects();
     emitPanPerformanceTelemetry({ dx, dy, durationMs: performance.now() - frameStartedAt, frameStartedAt });
     return;
   }

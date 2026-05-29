@@ -19,6 +19,7 @@ test('canvas pan uses a transform-only path with sampled performance telemetry',
   const panTransform = source('frontend/src/runtime/canvas/effect/apply-pan-viewport-transform.ts');
   const panTelemetry = source('frontend/src/runtime/gesture/effect/emit-pan-performance-telemetry.ts');
   const pointerDown = source('frontend/src/runtime/gesture/controller/handle-pointer-down.ts');
+  const panningEffects = source('frontend/src/runtime/gesture/effect/schedule-panning-effects.ts');
   const finishPointer = source('frontend/src/runtime/gesture/effect/finish-pointer.ts');
   const pointHelper = source('frontend/src/runtime/gesture/helper/point.ts');
   const canvasCss = source('frontend/assets/canvas/canvas-layer.css');
@@ -33,8 +34,12 @@ test('canvas pan uses a transform-only path with sampled performance telemetry',
   assert.match(pointerDown, /startedAt: now/);
   assert.match(pointHelper, /cachedCanvasBounds/);
   assert.match(pointHelper, /invalidateCanvasPointBounds/);
-  assert.match(pointerDown, /canvas\.classList\.toggle\('is-panning', intent === 'pan'\)/);
-  assert.match(finishPointer, /canvas\.classList\.remove\('is-panning'\)/);
+  assert.doesNotMatch(pointerDown, /classList\.(?:add|toggle)\('is-panning'/);
+  assert.match(pointerMove, /schedulePanningEffects\(\)/);
+  assert.match(finishPointer, /clearPanningEffects\(\)/);
+  assert.match(panningEffects, /requestAnimationFrame/);
+  assert.match(panningEffects, /canvas\.classList\.add\('is-panning'\)/);
+  assert.match(panningEffects, /canvas\.classList\.remove\('is-panning'\)/);
   assert.match(canvasCss, /\.canvas-content\s*{[\s\S]*will-change:\s*transform;/);
   assert.match(canvasCss, /\.canvas\.is-panning \.ledger-card-title,[\s\S]*text-shadow:\s*none;/);
   assert.match(canvasCss, /\.canvas\.is-panning \.card-status-indicator,[\s\S]*box-shadow:\s*none;/);

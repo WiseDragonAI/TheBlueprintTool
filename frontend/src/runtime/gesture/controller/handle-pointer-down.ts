@@ -59,7 +59,6 @@ export function handlePointerDown(event: PointerEvent): void {
   const canvasPointer = canvasPoint(pointer);
   const intent = derivePointerIntent(event, targetKind, resizeHandle);
   state.pointer = { intent, resizeHandle, target, targetKind, targetId, start: pointer, current: pointer, startCanvas: canvasPointer, currentCanvas: canvasPointer, startedAt: now, ctrlPan: event.ctrlKey };
-  canvas.classList.toggle('is-panning', intent === 'pan');
   telemetry('canvas-pointer-down', { intent, targetKind, targetId, ctrlKey: event.ctrlKey, shiftKey: event.shiftKey });
   telemetry('derive-gesture-intent', { kind: intent });
   if (intent === 'pan' && targetKind === 'canvas' && !event.ctrlKey) {

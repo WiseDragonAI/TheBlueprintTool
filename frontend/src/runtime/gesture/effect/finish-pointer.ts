@@ -1,9 +1,10 @@
 import { canvas } from '../../dom.js';
 import { state } from '../../state.js';
+import { clearPanningEffects } from './schedule-panning-effects.js';
 
 export function finishPointer(event?: PointerEvent): void {
   state.pointer = null;
-  canvas.classList.remove('is-panning');
+  clearPanningEffects();
   if (event?.pointerId !== undefined) {
     try {
       canvas.releasePointerCapture?.(event.pointerId);
