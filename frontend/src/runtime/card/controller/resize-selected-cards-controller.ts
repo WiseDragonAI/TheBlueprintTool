@@ -5,12 +5,12 @@ import { state } from '../../state.js';
 import { resizeSelectedCardsToContent } from '../effect/resize-selected-cards-to-content.js';
 
 export async function resizeSelectedCardsController(): Promise<void> {
-  const cards = resizeSelectedCardsToContent();
-  if (Object.keys(cards).length === 0) return;
+  const geometry = resizeSelectedCardsToContent();
+  if (Object.keys(geometry.cards).length === 0 && Object.keys(geometry.zones).length === 0) return;
 
   persistState();
   if (state.activeLedger) {
-    await commitActiveLedgerMutation({ action: 'patch-geometry', geometry: { cards } }, { render: true });
+    await commitActiveLedgerMutation({ action: 'patch-geometry', geometry }, { render: true });
     return;
   }
 

@@ -6,6 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { threadIdForTarget } from '../../src/runtime/thread/helper/thread-id-for-target.js';
 import { selectThread } from '../../src/runtime/thread/effect/select-thread.js';
+import { restoreThreadDraft, saveThreadDraft } from '../../src/runtime/thread/effect/persist-thread-draft.js';
 import { pinThreadFeedToLastMessage } from '../../src/runtime/thread/effect/pin-thread-feed-to-last-message.js';
 import { renderThreadNotes } from '../../src/runtime/thread/effect/render-thread-notes.js';
 import { state } from '../../src/runtime/state.js';
@@ -81,6 +82,56 @@ test('select-thread clears stale idle voice status when card context changes', (
     state.threadId = '';
     delete state.threadPinOnRender;
     state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
+  }
+});
+
+test('select-thread ignores thread changes while voice recording is active', () => {
+  const previousWindow = globalThis.window;
+  const previousCustomEvent = globalThis.CustomEvent;
+  (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
+  (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
+    constructor(_name: string, public options: Record<string, unknown> = {}) {}
+  };
+  try {
+    state.threadId = 'thread-card-a';
+    state.voice = { recording: true, startedAt: Date.now(), durationMs: 0, level: 0, transcriptionStatus: 'recording', threadId: 'thread-card-a' };
+    selectThread('thread-card-b');
+    assert.equal(state.threadId, 'thread-card-a');
+    assert.equal(state.voice.threadId, 'thread-card-a');
+    assert.equal(state.voice.transcriptionStatus, 'recording');
+  } finally {
+    (globalThis as unknown as { window: unknown }).window = previousWindow;
+    (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
+    state.threadId = '';
+    state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
+  }
+});
+
+test('thread drafts persist per thread through localStorage', () => {
+  const previousDocument = globalThis.document;
+  const previousLocalStorage = globalThis.localStorage;
+  const values = new Map<string, string>();
+  const draft = { value: 'Draft A' };
+  (globalThis as unknown as { document: unknown }).document = {
+    querySelector: (selector: string) => selector === '.thread-draft' ? draft : null
+  };
+  (globalThis as unknown as { localStorage: unknown }).localStorage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => values.set(key, value)
+  };
+
+  try {
+    saveThreadDraft('thread-card-a');
+    draft.value = 'Draft B';
+    saveThreadDraft('thread-card-b');
+    draft.value = '';
+    restoreThreadDraft('thread-card-a');
+    assert.equal(draft.value, 'Draft A');
+    restoreThreadDraft('thread-card-b');
+    assert.equal(draft.value, 'Draft B');
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+    (globalThis as unknown as { localStorage: unknown }).localStorage = previousLocalStorage;
   }
 });
 

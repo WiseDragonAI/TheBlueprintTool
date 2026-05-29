@@ -1118,7 +1118,7 @@
       "y": 5022,
       "w": 280,
       "comment": {
-        "what": ""
+        "what": "When a selected zone participates in Resize to content, its intersecting selected cards resize first and the zone then expands as needed so every contained card remains inside the zone bounds. The command must persist both card geometry and selected zone geometry in the same ledger patch."
       },
       "facts": [],
       "fields": []
@@ -2210,7 +2210,7 @@
       "y": 3875,
       "w": 320,
       "comment": {
-        "what": ""
+        "what": "A voice recording captures the active thread id at recording start. While recording is active, selecting another card, zone, or group, or clearing selection, must not change `state.threadId` or move the recording context away from the captured thread."
       },
       "facts": [],
       "fields": []
@@ -2644,7 +2644,7 @@
       "y": 6455,
       "w": 560,
       "comment": {
-        "what": "Selecting a card, zone, or group sets the active thread to that object thread without opening the right panel. Changing thread context clears stale idle voice upload status so a previous card's voice state does not follow the next selection. Clearing the last selected card, zone, or group clears the active thread and closes the right notes panel through the canonical animated close flow instead of leaving a visible No thread selected terminal."
+        "what": "Selecting a card, zone, or group sets the active thread to that object thread without opening the right panel. Changing thread context clears stale idle voice upload status so a previous card's voice state does not follow the next selection. Clearing the last selected card, zone, or group clears the active thread and closes the right notes panel through the canonical animated close flow instead of leaving a visible No thread selected terminal. While voice recording is active, thread selection changes are ignored so the recording stays attached to the thread captured at start."
       },
       "facts": [],
       "fields": []
@@ -2742,7 +2742,7 @@
       "y": 7045,
       "w": 560,
       "comment": {
-        "what": "The right terminal removes standalone Create note and Delete note buttons. Text notes are written in the dock composer and committed by keyboard so the input zone occupies the same terminal footprint as voice capture. The draft only clears after the server confirms the note exists in the ledger."
+        "what": "The right terminal removes standalone Create note and Delete note buttons. Text notes are written in the dock composer and committed by keyboard so the input zone occupies the same terminal footprint as voice capture. Draft text is persisted per thread in localStorage when typed, before thread switches, and before panel close, then restored when the operator returns to that thread. The draft only clears after the server confirms the note exists in the ledger."
       },
       "facts": [],
       "fields": []

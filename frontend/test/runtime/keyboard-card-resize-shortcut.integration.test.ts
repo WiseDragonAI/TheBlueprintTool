@@ -7,12 +7,18 @@ const root = new URL('../../../', import.meta.url);
 test('ctrl-d routes selected card resize through the same controller as the toolbar command', () => {
   const keyboard = readFileSync(new URL('frontend/src/runtime/input/controller/handle-keyboard.ts', root), 'utf8');
   const actionClick = readFileSync(new URL('frontend/src/runtime/input/controller/handle-action-click.ts', root), 'utf8');
+  const resizeController = readFileSync(new URL('frontend/src/runtime/card/controller/resize-selected-cards-controller.ts', root), 'utf8');
+  const resizeEffect = readFileSync(new URL('frontend/src/runtime/card/effect/resize-selected-cards-to-content.ts', root), 'utf8');
   const index = readFileSync(new URL('frontend/index.html', root), 'utf8');
 
   assert.match(keyboard, /resizeSelectedCardsController/);
   assert.match(keyboard, /event\.ctrlKey && key === 'd'/);
   assert.match(keyboard, /event\.preventDefault\(\);\s*\n\s*await resizeSelectedCardsController\(\);/);
   assert.match(actionClick, /action === 'resize'[\s\S]*await resizeSelectedCardsController\(\);/);
+  assert.match(resizeController, /commitActiveLedgerMutation\(\{ action: 'patch-geometry', geometry \}/);
+  assert.match(resizeEffect, /expandSelectedZonesToCards/);
+  assert.match(resizeEffect, /zone\.style\.height = `\$\{height\}px`/);
+  assert.match(resizeEffect, /renderZoneLabelOverlay\(\)/);
   assert.match(actionClick, /shortcuts:\s*\['A', 'X', 'Escape', 'Delete', 'Ctrl\+C', 'Ctrl\+V', 'Ctrl\+D'\]/);
   assert.match(index, /<dt>Ctrl\+D<\/dt><dd>Resize selected cards to their content\.<\/dd>/);
 });

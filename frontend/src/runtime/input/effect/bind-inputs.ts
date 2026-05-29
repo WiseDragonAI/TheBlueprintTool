@@ -17,6 +17,7 @@ import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.j
 import { renderTabRegistry } from '../../navigation/effect/render-tab-registry.js';
 import { renderToolbox } from '../../toolbox/effect/render-toolbox.js';
 import { openThreadPanel } from '../../thread/effect/open-thread-panel.js';
+import { saveThreadDraft } from '../../thread/effect/persist-thread-draft.js';
 import { selectThread } from '../../thread/effect/select-thread.js';
 import { routeTab } from '../../navigation/helper/route-tab.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
@@ -63,6 +64,9 @@ export function bindInputs(): void {
   document.addEventListener('click', handleActionClick);
   document.addEventListener('dblclick', handleCardDoubleClick);
   document.addEventListener('input', handleRegionColorInput);
+  document.addEventListener('input', (event) => {
+    if ((event.target as HTMLElement | null)?.closest('.thread-draft')) saveThreadDraft();
+  });
   document.addEventListener('change', handleRegionColorChange);
   window.addEventListener('popstate', () => {
     state.viewports = { ...(state.viewports ?? {}), [state.activeTab]: { ...state.viewport } };
