@@ -4990,7 +4990,7 @@
       "y": 4776,
       "w": 640,
       "comment": {
-        "what": "`generator-cli` is reserved for scaffold generation from the MasterLedger and related non-mutating ledger checks. Committed ledger JSON inspection and mutation must be owned by the separate `ledger-cli` package and executable, so editing specs/data ledgers cannot be coupled to scaffold generation control flow."
+        "what": "`generator-cli` is reserved for scaffold generation from the MasterLedger and related non-mutating ledger checks. Committed ledger JSON inspection, mutation, and markdown export must be owned by the separate `ledger-cli` package and executable, so editing specs/data ledgers cannot be coupled to scaffold generation control flow. `ledger-cli export --ledger <file> --output <file.md>` must write a complete markdown export grouped by canvas zones sorted by x then y, with zone titles as sections and card titles plus card content as subsections."
       },
       "facts": [],
       "fields": []

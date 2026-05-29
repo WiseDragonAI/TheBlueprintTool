@@ -96,6 +96,69 @@ test('ledger-cli overview prints cards and relationships without layout noise', 
   assert.equal(String(result.ok ? result.value : '').includes('x'), false);
 });
 
+test('ledger-cli export writes a zone-grouped markdown file', async () => {
+  const file = await createJsonFile({
+    cards: [
+      {
+        id: 'card-zone-a',
+        title: 'Zone A Card',
+        x: 10,
+        y: 60,
+        w: 50,
+        h: 60,
+        cardType: 'spec-brief',
+        comment: { what: 'Zone A card body.' },
+        facts: [{ title: 'Fact A', what: 'Fact A body.' }],
+        fields: [{ title: 'Field A', value: 'Field A body.' }],
+      },
+      {
+        id: 'card-zone-b',
+        title: 'Zone B Card',
+        x: 130,
+        y: 10,
+        w: 40,
+        h: 40,
+        comment: { what: 'Zone B card body.' },
+      },
+      {
+        id: 'card-unstyled',
+        title: 'Outside Card',
+        x: 500,
+        y: 500,
+        w: 40,
+        h: 40,
+        comment: { what: 'Outside body.' },
+      },
+    ],
+    annotations: [
+      { id: 'zone-b', label: 'Zone B', x: 120, y: 0, width: 120, height: 120, variant: 'zone' },
+      { id: 'group-hidden', label: 'Hidden Group', x: 0, y: 0, width: 300, height: 300, variant: 'group' },
+      { id: 'zone-a', label: 'Zone A', x: 0, y: 50, width: 100, height: 120 },
+    ],
+  });
+  const outputFile = join(file, '..', 'ledger-export.md');
+
+  const result = await manageLedgerJsonController({
+    exportOperation: { outputFile },
+    ledgerCommand: 'export',
+    ledgerJsonFile: file,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.ok ? result.value : '', `Exported markdown to ${outputFile}`);
+  const markdown = await readFile(outputFile, 'utf8');
+  assert.equal(markdown.includes('Hidden Group'), false);
+  assert.ok(markdown.indexOf('# Zone A') < markdown.indexOf('# Zone B'));
+  assert.ok(markdown.indexOf('## Zone A Card') < markdown.indexOf('## Zone B Card'));
+  assert.match(markdown, /Zone A card body/);
+  assert.match(markdown, /### Facts/);
+  assert.match(markdown, /Fact A body/);
+  assert.match(markdown, /### Fields/);
+  assert.match(markdown, /Field A body/);
+  assert.match(markdown, /# Unzoned/);
+  assert.match(markdown, /## Outside Card/);
+});
+
 test('ledger-cli unanswered lists threads whose latest note is not an agent answer', async () => {
   const file = await createJsonFile({
     cards: [

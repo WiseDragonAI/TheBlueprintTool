@@ -69,6 +69,20 @@ test('parse-ledger-cli-argv parses ledger overview command', () => {
   assert.equal(command.ledgerJsonFile, '.blueprinttool/data.json');
 });
 
+test('parse-ledger-cli-argv parses ledger export command', () => {
+  const command = parseLedgerCliArgv([
+    'export',
+    '--ledger',
+    '.blueprinttool/data.json',
+    '--output',
+    'ledger-export.md',
+  ]);
+
+  assert.equal(command.mode, 'export');
+  assert.equal(command.ledgerJsonFile, '.blueprinttool/data.json');
+  assert.equal(command.exportOperation?.outputFile, 'ledger-export.md');
+});
+
 test('parse-ledger-cli-argv parses answer commands', () => {
   const command = parseLedgerCliArgv([
     'answer',

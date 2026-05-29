@@ -17,6 +17,7 @@ export async function dispatchLedgerCliCommandController(
 
   const result = await manageLedgerJsonController({
     answerOperation: command.answerOperation,
+    exportOperation: command.exportOperation,
     json: command.json,
     ledgerCommand: command.mode,
     ledgerJsonFile: command.ledgerJsonFile,
@@ -24,7 +25,7 @@ export async function dispatchLedgerCliCommandController(
     mutationOperation: command.mutationOperation,
     statusOperation: command.statusOperation,
   }, ports.fs);
-  if (result.ok && (command.mode === 'overview' || command.mode === 'unanswered') && typeof result.value === 'string') {
+  if (result.ok && (command.mode === 'export' || command.mode === 'overview' || command.mode === 'unanswered') && typeof result.value === 'string') {
     ports.emit ? ports.emit(result.value) : console.log(result.value);
   }
   return result;

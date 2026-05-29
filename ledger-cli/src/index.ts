@@ -8,6 +8,7 @@ export { readLedgerJson } from './business/ledger/helper/read-ledger-json.js';
 export { writeLedgerJson } from './business/ledger/effect/write-ledger-json.js';
 export { manageLedgerJsonController } from './business/ledger/controller/manage-ledger-json.js';
 export { formatLedgerOverview } from './business/ledger/helper/format-ledger-overview.js';
+export { formatLedgerMarkdownExport } from './business/ledger/helper/format-ledger-markdown-export.js';
 export { appendThreadAnswer } from './business/ledger/helper/append-thread-answer.js';
 export { findUnansweredThreads } from './business/ledger/helper/find-unanswered-threads.js';
 export { formatUnansweredThreads } from './business/ledger/helper/format-unanswered-threads.js';

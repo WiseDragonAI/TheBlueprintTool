@@ -55,7 +55,7 @@ function relationshipValues(args: string[]): Array<{ from: string; id: string; l
 
 export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
   const [mode] = argv;
-  const normalizedMode: LedgerCommand = mode === 'answer' || mode === 'done' || mode === 'mutate' || mode === 'overview' || mode === 'todo' || mode === 'unanswered' ? mode : 'inspect';
+  const normalizedMode: LedgerCommand = mode === 'answer' || mode === 'done' || mode === 'export' || mode === 'mutate' || mode === 'overview' || mode === 'todo' || mode === 'unanswered' ? mode : 'inspect';
   return {
     mode: normalizedMode,
     ledgerJsonFile: flagValue(argv, '--ledger') ?? argv[1] ?? '../.blueprinttool/specs.json',
@@ -65,6 +65,9 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
       threadId: flagValue(argv, '--thread-id'),
     },
     json: argv.includes('--json'),
+    exportOperation: {
+      outputFile: flagValue(argv, '--output') ?? flagValue(argv, '--out'),
+    },
     mutationFile: flagValue(argv, '--mutation'),
     mutationOperation: {
       addCardFile: flagValue(argv, '--add-card-file'),

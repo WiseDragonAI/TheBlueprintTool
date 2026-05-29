@@ -5,6 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { dispatchLedgerCliCommandController } from '../../src/index.js';
 import { createJsonFile } from '../fixture/scenario.js';
 
@@ -47,4 +48,19 @@ test('ledger-cli command lists unanswered threads and posts an answer', async ()
   assert.match(messages.join('\n'), /ledger-cli answer/);
   assert.equal(answer.ok, true);
   assert.equal(JSON.parse(await readFile(ledgerFile, 'utf8')).notes['thread-card-a'].at(-1).role, 'agent');
+});
+
+test('ledger-cli command exports a markdown file', async () => {
+  const ledgerFile = await createJsonFile({
+    cards: [{ id: 'card-a', title: 'Card A', x: 10, y: 10, w: 80, h: 80, comment: { what: 'Body.' } }],
+    annotations: [{ id: 'zone-a', label: 'Zone A', x: 0, y: 0, width: 100, height: 100 }],
+  });
+  const outputFile = join(ledgerFile, '..', 'export.md');
+  const messages: string[] = [];
+
+  const result = await dispatchLedgerCliCommandController(['export', '--ledger', ledgerFile, '--output', outputFile], { emit: (message) => messages.push(message) });
+
+  assert.equal(result.ok, true);
+  assert.match(messages.join('\n'), /Exported markdown/);
+  assert.match(await readFile(outputFile, 'utf8'), /# Zone A\n\n## Card A/);
 });

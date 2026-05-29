@@ -7,6 +7,7 @@ import { telemetry } from '../../../lib/telemetry/telemetry.js';
 import { readLedgerJson } from '../helper/read-ledger-json.js';
 import { writeLedgerJson } from '../effect/write-ledger-json.js';
 import { formatLedgerOverview } from '../helper/format-ledger-overview.js';
+import { formatLedgerMarkdownExport } from '../helper/format-ledger-markdown-export.js';
 import { appendThreadAnswer } from '../helper/append-thread-answer.js';
 import { findUnansweredThreads } from '../helper/find-unanswered-threads.js';
 import { formatUnansweredThreads } from '../helper/format-unanswered-threads.js';
@@ -152,6 +153,11 @@ async function readFileWithNode(path: string): Promise<string> {
   return promises.readFile(path, 'utf8');
 }
 
+async function writeFileWithNode(path: string, content: string): Promise<void> {
+  const { promises } = await import('node:fs');
+  await promises.writeFile(path, content, 'utf8');
+}
+
 function setLedgerCardStatus(ledger: unknown, operation: { cardId?: string; status?: 'todo' | 'done' } | undefined): Result<unknown> {
   if (!operation?.cardId) return { ok: false, error: 'Card status command requires --card-id.' };
   if (operation.status !== 'todo' && operation.status !== 'done') return { ok: false, error: 'Card status command requires todo or done.' };
@@ -167,8 +173,9 @@ function setLedgerCardStatus(ledger: unknown, operation: { cardId?: string; stat
 
 export async function manageLedgerJsonController(
   actionPayload: {
-    ledgerCommand: 'answer' | 'done' | 'inspect' | 'mutate' | 'overview' | 'todo' | 'unanswered';
+    ledgerCommand: 'answer' | 'done' | 'export' | 'inspect' | 'mutate' | 'overview' | 'todo' | 'unanswered';
     answerOperation?: { message?: string; messageFile?: string; threadId?: string };
+    exportOperation?: { outputFile?: string };
     json?: boolean;
     ledgerJsonFile: string;
     mutation?: unknown;
@@ -210,6 +217,26 @@ export async function manageLedgerJsonController(
   if (actionPayload.ledgerCommand === 'overview') {
     telemetry('manage-ledger-json-completed');
     return { ok: true, value: formatLedgerOverview(ledger.value) };
+  }
+
+  if (actionPayload.ledgerCommand === 'export') {
+    const outputFile = actionPayload.exportOperation?.outputFile;
+    if (!outputFile) {
+      const error = 'Ledger export requires --output <file.md>.';
+      telemetry('manage-ledger-json-rejected', { error });
+      return { ok: false, error };
+    }
+    if (!outputFile.endsWith('.md')) {
+      const error = 'Ledger export output must be a .md file.';
+      telemetry('manage-ledger-json-rejected', { error });
+      return { ok: false, error };
+    }
+
+    const markdown = formatLedgerMarkdownExport(ledger.value);
+    await (fs ? fs.writeFile(outputFile, markdown) : writeFileWithNode(outputFile, markdown));
+    telemetry('write-ledger-markdown-export', { path: outputFile });
+    telemetry('manage-ledger-json-completed');
+    return { ok: true, value: `Exported markdown to ${outputFile}` };
   }
 
   if (actionPayload.ledgerCommand === 'unanswered') {
