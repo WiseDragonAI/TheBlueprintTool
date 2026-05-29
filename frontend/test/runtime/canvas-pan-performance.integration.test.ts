@@ -35,6 +35,7 @@ test('canvas pan uses a transform-only path with sampled performance telemetry',
   assert.match(pointHelper, /invalidateCanvasPointBounds/);
   assert.match(pointerDown, /canvas\.classList\.toggle\('is-panning', intent === 'pan'\)/);
   assert.match(finishPointer, /canvas\.classList\.remove\('is-panning'\)/);
+  assert.match(canvasCss, /\.canvas-content\s*{[\s\S]*will-change:\s*transform;/);
   assert.match(canvasCss, /\.canvas\.is-panning \.ledger-card-title,[\s\S]*text-shadow:\s*none;/);
   assert.match(canvasCss, /\.canvas\.is-panning \.card-status-indicator,[\s\S]*box-shadow:\s*none;/);
 });
