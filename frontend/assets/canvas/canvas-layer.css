@@ -151,5 +151,5 @@
 }
 
 .canvas.overview-detail .grid {
-  opacity: 0.38;
+  display: none;
 }

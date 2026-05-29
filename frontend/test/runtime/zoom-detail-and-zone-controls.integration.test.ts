@@ -26,6 +26,7 @@ test('low-detail zoom hides card detail while keeping counter-scaled card titles
   assert.match(detailRuntime, /invalidateDetailModeCardSizeCache/);
   assert.match(detailRuntime, /if \(hasLowDetail !== shouldUseLowDetail\) canvas\.classList\.toggle/);
   assert.match(detailRuntime, /if \(hasOverviewDetail !== shouldUseOverviewDetail\) canvas\.classList\.toggle/);
+  assert.match(css, /\.canvas\.overview-detail \.grid\s*{[^}]*display:\s*none;/s);
 });
 
 test('zone edit and color controls are hidden until the owning zone is hovered or focused', () => {

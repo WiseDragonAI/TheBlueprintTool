@@ -490,3 +490,129 @@ Remaining optimization direction:
 - Coalesce wheel input through `requestAnimationFrame` so the app applies at most one viewport update per frame.
 - Keep avoiding layout reads in the hot wheel path.
 - Consider updating counter-scaled low-detail labels less frequently during active wheel if compositor/style traces still show frame drops in an interactive browser.
+
+## Ardaria zoom-pan stress follow-up
+
+The operator reported one remaining slow path: after a zoom change, the first pan can feel sluggish. A repeatable browser stress test now lives at:
+
+```bash
+COREV2_URL=http://127.0.0.1:4173/ardaria-game-design \
+COREV2_CDP_JSON=http://127.0.0.1:9223/json \
+node tools/live-verify/zoom-pan-stress.mjs
+```
+
+Test shape:
+
+- Start the Ardaria game-design ledger at scale `0.12`.
+- Run 12 cycles zooming out and 12 cycles zooming in.
+- Each cycle performs a random mixed zoom burst, an immediate short pan, a random multi-step directional zoom burst, then a large pan.
+- The test records wheel event sync cost, first pan pointermove sync cost, total pan sync cost, and time to the first animation frame after the first pan move.
+
+Observed on headless Chromium:
+
+- Runtime DOM: 69 ledger cards, 16 zones, 0 ledger relationships.
+- Mixed zoom events: 119 events, average `20.89 ms`, p95 `40.1 ms`, max `41.6 ms`, total `2486.4 ms`.
+- Directional zoom events: 194 events, average `7.76 ms`, p95 `38.4 ms`, max `40.1 ms`, total `1505.7 ms`.
+- First pan after mixed zoom, first pointermove sync: p95 `0.1 ms`, max `0.2 ms`.
+- First pan after mixed zoom, first visual frame: p95 `2.4 ms`, max `3.1 ms`.
+- Large pan after directional zoom, first pointermove sync: p95 `0.1 ms`, max `0.1 ms`.
+- Large pan after directional zoom, first visual frame: p95 `15.4 ms`, max `15.5 ms`.
+- Pan telemetry slow frames: `0`.
+
+Interpretation:
+
+- The reproduced pan JavaScript path is still cheap; the first pointermove after zoom is not spending hundreds of milliseconds in the handler.
+- The large pan visual-frame metric can approach one 60 Hz frame budget after directional zoom, especially at full zoom-in scale.
+- The remaining user-visible sluggishness is more likely frame/render/compositor debt after zoom than card-zone attribution or pan handler logic.
+- The next precision step should be CDP tracing around this script with `devtools.timeline`, `cc`, `blink`, and `gpu` categories, then compare paint/raster/composite time for the worst first-frame cases.
+
+## Ardaria overview pan trace
+
+The operator provided a screenshot at the overview/detail zoom level where pan feels slow. A trace collector now lives at:
+
+```bash
+COREV2_URL=http://127.0.0.1:4173/ardaria-game-design \
+COREV2_CDP_JSON=http://127.0.0.1:9223/json \
+COREV2_TRACE_SCALE=0.12 \
+node tools/live-verify/zoom-pan-trace.mjs
+```
+
+Trace shape:
+
+- Force the Ardaria game-design ledger to scale `0.12`.
+- Inject real CDP mouse input, not synthetic DOM dispatch.
+- Pan `760px x 180px` over `4200 ms` with 263 mouse moves.
+- Collect Chrome trace categories for input, timeline, Blink, compositor, and GPU.
+
+Baseline trace:
+
+- Raw trace: `/tmp/corev2-zoom-pan-trace-1780038906289.json`
+- Runtime DOM: 69 cards, 16 zones, 0 ledger relationships.
+- Input events: p95 `0.17 ms`, max `22 ms`, total `390.4 ms`.
+- Scripting: p95 `0.55 ms`, max `22.03 ms`, total `3493.27 ms`.
+- Style/layout: p95 `0.13 ms`, max `20.27 ms`, total `56.19 ms`.
+- Paint/layer: p95 `0.22 ms`, max `0.36 ms`, total `145.47 ms`.
+- Raster/composite/GPU bucket: p95 `4.64 ms`, max `19.84 ms`, total `21279.24 ms`.
+- Long trace events above `16 ms`: `1399`.
+- Top repeated trace costs were raster/compositor work:
+  - `DisplayItemList::Raster`: total `37056.56 ms`, max `7.63 ms`.
+  - `RasterTask`: total `18702.61 ms`, max `7.64 ms`.
+  - `ProxyMain::BeginMainFrame`: total `2847.95 ms`, max `20.81 ms`.
+  - `Commit`: total `2576.63 ms`, max `19.84 ms`.
+
+Grid-hidden A/B:
+
+```bash
+COREV2_URL=http://127.0.0.1:4173/ardaria-game-design \
+COREV2_CDP_JSON=http://127.0.0.1:9223/json \
+COREV2_TRACE_SCALE=0.12 \
+COREV2_TRACE_HIDE_GRID=1 \
+node tools/live-verify/zoom-pan-trace.mjs
+```
+
+- Raw trace: `/tmp/corev2-zoom-pan-trace-1780038946192.json`
+- Input events: p95 `0.16 ms`, max `21.99 ms`, total `375.41 ms`.
+- Scripting: p95 `0.47 ms`, max `22.04 ms`, total `861.92 ms`.
+- Style/layout: p95 `0.09 ms`, max `18.2 ms`, total `53.27 ms`.
+- Paint/layer: p95 `0.18 ms`, max `0.31 ms`, total `125.34 ms`.
+- Raster/composite/GPU bucket: p95 `1.73 ms`, max `2.9 ms`, total `3018.15 ms`.
+- Long trace events above `16 ms`: `28`.
+- `DisplayItemList::Raster` dropped from `37056.56 ms` to `5741.91 ms`.
+- `RasterTask` dropped from `18702.61 ms` to `2970.59 ms`.
+- `Commit` dropped from `2576.63 ms` to below the top 12 trace totals.
+
+Conclusion:
+
+- The sluggish overview pan is reproducible in Chrome tracing.
+- It is not primarily JavaScript, card-zone attribution, or relationship rendering.
+- The dominant cost is raster/compositor work from panning the huge transformed grid/world layer.
+- If the honeycomb must remain visible at overview scale, the deeper optimization would be replacing the giant transformed honeycomb grid with a viewport-sized fixed/composited background whose background position is derived from viewport translation and whose tile scale is derived from viewport scale.
+
+Reassessment after operator feedback:
+
+- At overview-detail scale, the honeycomb pattern is too small to add design value.
+- Because hiding the grid produced nearly the same effect as a deeper grid refactor, the pragmatic first fix is to hide `.grid` while `.canvas.overview-detail` is active.
+- Keep the honeycomb visible above the overview threshold so the normal canvas still has the intended world-material background.
+
+Implemented CSS change:
+
+- `.canvas.overview-detail .grid { display: none; }`
+- The existing overview-detail threshold is `scale < 0.18`, so the change targets the screenshot-level zoom without changing ordinary low-detail mode between `0.18` and `0.35`.
+
+Post-change production trace:
+
+- Raw trace: `/tmp/corev2-zoom-pan-trace-1780039119162.json`
+- Runtime DOM: 69 cards, 16 zones, 0 ledger relationships.
+- Input events: p95 `0.16 ms`, max `20.15 ms`, total `366.82 ms`.
+- Scripting: p95 `0.47 ms`, max `20.19 ms`, total `858.75 ms`.
+- Style/layout: p95 `0.1 ms`, max `18.23 ms`, total `52.17 ms`.
+- Paint/layer: p95 `0.18 ms`, max `0.28 ms`, total `124.44 ms`.
+- Raster/composite/GPU bucket: p95 `1.32 ms`, max `3.16 ms`, total `2637.16 ms`.
+- Long trace events above `16 ms`: `21`.
+
+Measured improvement from baseline:
+
+- Raster/composite/GPU bucket: `21279.24 ms` -> `2637.16 ms`.
+- Long trace events above `16 ms`: `1399` -> `21`.
+- `RasterTask`: `18702.61 ms` -> `2588.92 ms`.
+- `DisplayItemList::Raster`: `37056.56 ms` -> `4990.49 ms`.
