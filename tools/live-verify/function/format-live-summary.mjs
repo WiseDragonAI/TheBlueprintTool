@@ -41,8 +41,8 @@ export function formatLiveSummary(report) {
     && report.dataTabLoad?.staticRelationshipsHidden === true
     && report.specsTabLoad?.staticRelationshipVisibleCount === 0
     && report.dataTabLoad?.staticRelationshipVisibleCount === 0;
-  const overviewOk = report.overviewDetail?.overviewDetail === true && report.overviewDetail?.zoneTitleHidden === true && report.overviewDetail?.cardTitleHidden === true && report.overviewDetail?.worldCoversCanvas === true;
-  const lowDetailOk = report.overviewDetail?.lowDetailState?.lowDetail === true && report.overviewDetail?.lowDetailState?.zoneTitleHidden === true && report.overviewDetail?.lowDetailState?.cardTitleHidden === true;
+  const overviewOk = report.overviewDetail?.overviewDetail === true && report.overviewDetail?.zoneTitleHidden === true && report.overviewDetail?.cardTitleVisible === true && report.overviewDetail?.cardTitleCounterScaled === true && report.overviewDetail?.worldCoversCanvas === true;
+  const lowDetailOk = report.overviewDetail?.lowDetailState?.lowDetail === true && report.overviewDetail?.lowDetailState?.zoneTitleHidden === true && report.overviewDetail?.lowDetailState?.cardTitleVisible === true && report.overviewDetail?.lowDetailState?.cardTitleCounterScaled === true;
   const lines = [
     `ok=${routeLoadingOk && honeycombOk && geometryRecoveryOk && closeRelationshipOk && zoneColorCardsOk && zoneFillTransparentOk && zoneStackOk && connectedCardGlowOk && viewportRefreshOk && ledgerStaticOverlayOk && failedRelationships.length === 0 && report.ledgerGroupSelection?.ok === true && overviewOk && lowDetailOk && portSpreadOk}`,
     `specsUrlLoadsApp=${report.specsUrlLoadsApp}`,
@@ -90,10 +90,12 @@ export function formatLiveSummary(report) {
     `lowDetailOk=${lowDetailOk}`,
     `lowDetailScale=${report.overviewDetail?.lowDetailState?.viewportScale}`,
     `lowDetailZoneTitleHidden=${report.overviewDetail?.lowDetailState?.zoneTitleHidden}`,
-    `lowDetailCardTitleHidden=${report.overviewDetail?.lowDetailState?.cardTitleHidden}`,
+    `lowDetailCardTitleVisible=${report.overviewDetail?.lowDetailState?.cardTitleVisible}`,
+    `lowDetailCardTitleCounterScaled=${report.overviewDetail?.lowDetailState?.cardTitleCounterScaled}`,
     `overviewScale=${report.overviewDetail?.viewportScale}`,
     `overviewZoneTitleHidden=${report.overviewDetail?.zoneTitleHidden}`,
-    `overviewCardTitleHidden=${report.overviewDetail?.cardTitleHidden}`,
+    `overviewCardTitleVisible=${report.overviewDetail?.cardTitleVisible}`,
+    `overviewCardTitleCounterScaled=${report.overviewDetail?.cardTitleCounterScaled}`,
     `overviewCardBodyHidden=${report.overviewDetail?.cardBodyHidden}`,
     `threadVisibleAfterNotes=${report.cardNotesOpenedThreadFromUnselected}`
   ];

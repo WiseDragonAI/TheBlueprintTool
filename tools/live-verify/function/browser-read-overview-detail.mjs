@@ -15,7 +15,8 @@ async function browserReadOverviewDetail() {
     viewportScale: window.__coreState.viewport.scale,
     lowDetail: canvas.classList.contains('low-detail'),
     zoneTitleHidden: lowDetailZoneTitleStyle?.display === 'none',
-    cardTitleHidden: lowDetailCardTitleStyle?.display === 'none'
+    cardTitleVisible: lowDetailCardTitleStyle?.display !== 'none',
+    cardTitleCounterScaled: lowDetailCardTitleStyle?.transform !== 'none'
   };
   for (let index = 0; index < 20; index += 1) {
     canvas.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, clientX: 700, clientY: 360, deltaY: 120 }));
@@ -33,11 +34,12 @@ async function browserReadOverviewDetail() {
     overviewDetail: canvas.classList.contains('overview-detail'),
     worldCoversCanvas: gridRect.left <= canvasRect.left && gridRect.right >= canvasRect.right && gridRect.top <= canvasRect.top && gridRect.bottom >= canvasRect.bottom,
     zoneTitleHidden: zoneTitleStyle?.display === 'none',
-    cardTitleHidden: cardTitleStyle?.display === 'none',
+    cardTitleVisible: cardTitleStyle?.display !== 'none',
+    cardTitleCounterScaled: cardTitleStyle?.transform !== 'none',
     lowDetailState,
     zoneTitleMaxWidth: zoneTitleStyle?.maxWidth ?? '',
     cardBodyHidden: getComputedStyle(document.querySelector('.card p')).display === 'none',
-    cardControlsHidden: getComputedStyle(document.querySelector('.card-tabs')).display === 'none'
+    cardControlsHidden: getComputedStyle(document.querySelector('.card-actions')).display === 'none'
   };
 }
 `;
