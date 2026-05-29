@@ -47,8 +47,7 @@
   display: none;
 }
 .agent-chat .wave-head-glow {
-  fill: rgba(255, 215, 170, .18);
-  filter: blur(10px);
+  display: none;
 }
 .agent-chat .wave-head-line {
   stroke: rgba(247,249,255,0.78);

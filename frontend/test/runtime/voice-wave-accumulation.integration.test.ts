@@ -56,6 +56,7 @@ test('voice capture path disables browser noise gates and visual smoothing', () 
   assert.match(start, /createScriptProcessor\(1024/);
   assert.match(controlsCss, /wave-core-path\s*{[\s\S]*transition:\s*none/);
   assert.match(controlsCss, /meter-fill[\s\S]*transition:\s*none/);
+  assert.match(controlsCss, /wave-head-glow\s*{[\s\S]*display:\s*none/);
 });
 
 test('voice visualization rescales the observed recording peak to 1.0', () => {
