@@ -136,6 +136,19 @@
   font-size: 9px;
 }
 
+.canvas.is-panning .ledger-card-title,
+.canvas.is-panning .zone-title,
+.canvas.is-panning .zone-label-proxy {
+  text-shadow: none;
+}
+
+.canvas.is-panning .card-status-indicator,
+.canvas.is-panning .ledger-card-label,
+.canvas.is-panning .regular-zone,
+.canvas.is-panning .card.connected {
+  box-shadow: none;
+}
+
 .canvas.low-detail .relationships path {
   stroke-width: 2;
 }

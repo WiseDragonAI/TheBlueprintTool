@@ -3,6 +3,7 @@ import { state } from '../../state.js';
 
 export function finishPointer(event?: PointerEvent): void {
   state.pointer = null;
+  canvas.classList.remove('is-panning');
   if (event?.pointerId !== undefined) {
     try {
       canvas.releasePointerCapture?.(event.pointerId);
