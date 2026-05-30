@@ -232,6 +232,9 @@ test('ledger-cli unanswered lists threads whose latest note is not an agent answ
   assert.match(output, /Threads awaiting agent answer \(2\)/);
   assert.match(output, /Smith Repair Scaffold/);
   assert.match(output, /Mason Stone Sale/);
+  assert.match(output, /threadFile: \.blueprinttool\/threads\/ledger\/thread-smith_repair_scaffold\.md/);
+  assert.match(output, /Append one parsed answer section/);
+  assert.match(output, /Only # OPERATOR and # AGENT are valid top-level message headings/);
   assert.match(output, /ledger-cli answer --ledger/);
   assert.equal(output.includes('Answered Card'), false);
 });
@@ -260,6 +263,25 @@ test('ledger-cli unanswered lists every pending note since the last agent answer
   assert.match(output, /Defend the concept/);
   assert.match(output, /Do not rollback my edits/);
   assert.equal(output.includes('Old question'), false);
+});
+
+test('ledger-cli unanswered reports existing thread markdown sidecar refs', async () => {
+  const file = await createJsonFile({
+    cards: [{ id: 'card-a', title: 'Card A' }],
+    threadFiles: {
+      'thread-card-a': '.blueprinttool/threads/custom/thread-card-a.md',
+    },
+    notes: {
+      'thread-card-a': [{ role: 'operator', message: 'Question' }],
+    },
+  });
+
+  const result = await manageLedgerJsonController({ ledgerCommand: 'unanswered', ledgerJsonFile: file });
+
+  assert.equal(result.ok, true);
+  const output = String(result.ok ? result.value : '');
+  assert.match(output, /threadFile: \.blueprinttool\/threads\/custom\/thread-card-a\.md/);
+  assert.match(output, /Patch \.blueprinttool\/threads\/custom\/thread-card-a\.md directly/);
 });
 
 test('ledger-cli answer appends an agent note to a thread', async () => {

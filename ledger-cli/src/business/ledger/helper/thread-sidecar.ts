@@ -26,7 +26,7 @@ function ledgerStem(ledgerJsonFile: string): string {
   return basename(ledgerJsonFile, extname(ledgerJsonFile));
 }
 
-function threadContentFileRef(ledgerJsonFile: string, threadId: string): string {
+export function threadContentFileRef(ledgerJsonFile: string, threadId: string): string {
   return `.blueprinttool/threads/${safeSegment(ledgerStem(ledgerJsonFile))}/${safeSegment(threadId)}.md`;
 }
 

@@ -1,6 +1,6 @@
 /**
  * WHAT: Formats unanswered thread records for operator and agent command-line use.
- * WHY: agents need thread ids and exact answer commands to post replies back into the ledger.
+ * WHY: agents need thread ids, sidecar paths, and exact patch instructions for direct Markdown replies.
  */
 import type { UnansweredThread } from '../../../lib/types.js';
 
@@ -17,6 +17,8 @@ export function formatUnansweredThreads(threads: UnansweredThread[], json = fals
     lines.push(
       `- ${thread.title}`,
       `  threadId: ${thread.threadId}`,
+      `  threadFile: ${thread.threadFile}`,
+      `  edit: ${thread.editInstruction}`,
       `  answer: ${thread.answerCommand}`,
     );
     if (notes.length > 1) lines.push(`  pendingNotes: ${notes.length}`);

@@ -61,9 +61,11 @@ export type ThreadNote = {
 
 export type UnansweredThread = {
   answerCommand: string;
+  editInstruction: string;
   lastNote: ThreadNote;
   pendingNotes: ThreadNote[];
   targetId: string;
+  threadFile: string;
   threadId: string;
   title: string;
 };

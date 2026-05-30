@@ -45,6 +45,10 @@ test('ledger-cli command lists unanswered threads and posts an answer', async ()
 
   assert.equal(unanswered.ok, true);
   assert.match(messages.join('\n'), /thread-card-a/);
+  assert.match(messages.join('\n'), /\.blueprinttool\/threads\/ledger\/thread-card-a\.md/);
+  assert.match(messages.join('\n'), /Patch .* directly/);
+  assert.match(messages.join('\n'), /# AGENT/);
+  assert.match(messages.join('\n'), /Only # OPERATOR and # AGENT/);
   assert.match(messages.join('\n'), /ledger-cli answer/);
   assert.equal(answer.ok, true);
   const persisted = JSON.parse(await readFile(ledgerFile, 'utf8')) as { notes: Record<string, unknown>; threadFiles: Record<string, string> };

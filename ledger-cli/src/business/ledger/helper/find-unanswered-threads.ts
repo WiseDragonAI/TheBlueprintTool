@@ -3,6 +3,7 @@
  * WHY: the ledger acts as the operator-to-agent communication queue.
  */
 import type { UnansweredThread } from '../../../lib/types.js';
+import { threadContentFileRef } from './thread-sidecar.js';
 
 type JsonObject = Record<string, unknown>;
 
@@ -55,6 +56,17 @@ function titleForThread(ledger: JsonObject, threadId: string): string {
   return text(card?.title) || text(annotation?.label) || targetId || threadId;
 }
 
+function threadFileForThread(ledger: JsonObject, ledgerJsonFile: string, threadId: string): string {
+  if (isRecord(ledger.threadFiles) && typeof ledger.threadFiles[threadId] === 'string') {
+    return ledger.threadFiles[threadId];
+  }
+  return threadContentFileRef(ledgerJsonFile, threadId);
+}
+
+function editInstructionForThread(threadFile: string): string {
+  return `Patch ${threadFile} directly. Append one parsed answer section: # AGENT, then <!-- corev2:note {"id":"note-agent-<unique>","timestamp":"<ISO-8601>"} -->, then the answer markdown. Only # OPERATOR and # AGENT are valid top-level message headings; do not regenerate ledger JSON for the reply.`;
+}
+
 export function findUnansweredThreads(ledger: unknown, ledgerJsonFile: string): UnansweredThread[] {
   if (!isRecord(ledger) || !isRecord(ledger.notes)) return [];
   return Object.entries(ledger.notes).flatMap(([threadId, rawNotes]) => {
@@ -64,11 +76,14 @@ export function findUnansweredThreads(ledger: unknown, ledgerJsonFile: string): 
     const pendingNotes = meaningfulNotes.slice(lastAgentIndex + 1).filter((note) => !isAgentAnswer(note));
     const lastNote = pendingNotes.at(-1);
     if (!lastNote) return [];
+    const threadFile = threadFileForThread(ledger, ledgerJsonFile, threadId);
     return [{
       answerCommand: `ledger-cli answer --ledger ${JSON.stringify(ledgerJsonFile)} --thread-id ${JSON.stringify(threadId)} --message ${JSON.stringify('...')}`,
+      editInstruction: editInstructionForThread(threadFile),
       lastNote: toThreadNote(lastNote),
       pendingNotes: pendingNotes.map(toThreadNote),
       targetId: targetIdFromThreadId(threadId),
+      threadFile,
       threadId,
       title: titleForThread(ledger, threadId),
     }];
