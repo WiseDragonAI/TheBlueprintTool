@@ -64,13 +64,22 @@ export function writeCardDescriptionSidecar(input: { blueprinttoolRoot: string; 
 
 export function externalizeCardContent(input: { blueprinttoolRoot: string; card: AnyRecord; ledgerPath: string }): void {
   const comment = commentFor(input.card);
-  if (typeof comment.what !== 'string') return;
-  writeCardDescriptionSidecar({
-    blueprinttoolRoot: input.blueprinttoolRoot,
-    card: input.card,
-    description: comment.what,
-    ledgerPath: input.ledgerPath,
-  });
+  if (typeof comment.what === 'string') {
+    writeCardDescriptionSidecar({
+      blueprinttoolRoot: input.blueprinttoolRoot,
+      card: input.card,
+      description: comment.what,
+      ledgerPath: input.ledgerPath,
+    });
+    return;
+  }
+
+  const contentFile = typeof comment.contentFile === 'string' ? comment.contentFile : cardContentFileRef(input.ledgerPath, input.card);
+  const file = resolveCardContentFile(input.blueprinttoolRoot, contentFile);
+  if (!file) throw new Error(`Invalid card content file for ${String(input.card.id ?? '')}`);
+  mkdirSync(dirname(file), { recursive: true });
+  if (!existsSync(file)) writeFileSync(file, '', 'utf8');
+  input.card.comment = { ...comment, contentFile };
 }
 
 export function duplicateCardContentSidecar(input: { blueprinttoolRoot: string; ledgerPath: string; sourceCard: AnyRecord; targetCard: AnyRecord }): void {

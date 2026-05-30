@@ -199,6 +199,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         if (mutation.action === 'create-card' && mutation.card?.id) {
           const id = String(mutation.card.id);
           externalizeCardContent({ blueprinttoolRoot, card: mutation.card, ledgerPath });
+          writeThreadNotesSidecar({ blueprinttoolRoot, ledger, ledgerPath, threadId: `thread-${id}`, notes: [] });
           ledger.cards = (ledger.cards ?? []).filter((entry) => String(entry.id ?? '') !== id).concat(mutation.card);
         }
         if (mutation.action === 'create-relationship' && mutation.relationship?.id) {

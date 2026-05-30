@@ -64,6 +64,42 @@ test('blueprinttool server hydrates card sidecar markdown and keeps JSON lean on
   }
 });
 
+test('blueprinttool server creates card and thread markdown sidecars for new cards', async () => {
+  const { endpoint, server, workspace } = await startSidecarServer();
+
+  try {
+    const createResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'create-card',
+        card: { id: 'card-new', title: 'New card', x: 30, y: 40, w: 260, h: 132 },
+      }),
+    });
+    assert.equal(createResponse.ok, true);
+    const created = await createResponse.json() as { cards: Array<Record<string, any>>; threadFiles: Record<string, string> };
+    const createdCard = created.cards.find((card) => card.id === 'card-new');
+    assert.equal(createdCard?.comment.contentFile, '.blueprinttool/cards/specs/card-new.md');
+    assert.equal(created.threadFiles['thread-card-new'], '.blueprinttool/threads/specs/thread-card-new.md');
+
+    const persisted = JSON.parse(readFileSync(join(workspace, '.blueprinttool', 'specs.json'), 'utf8')) as {
+      cards: Array<Record<string, any>>;
+      notes: Record<string, unknown>;
+      threadFiles: Record<string, string>;
+    };
+    const persistedCard = persisted.cards.find((card) => card.id === 'card-new');
+    assert.equal(persistedCard?.comment.contentFile, '.blueprinttool/cards/specs/card-new.md');
+    assert.equal(persistedCard?.comment.what, undefined);
+    assert.equal(persisted.threadFiles['thread-card-new'], '.blueprinttool/threads/specs/thread-card-new.md');
+    assert.equal(persisted.notes['thread-card-new'], undefined);
+    assert.equal(readFileSync(join(workspace, '.blueprinttool', 'cards', 'specs', 'card-new.md'), 'utf8'), '');
+    assert.equal(readFileSync(join(workspace, '.blueprinttool', 'threads', 'specs', 'thread-card-new.md'), 'utf8'), '\n');
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
 test('blueprinttool server emits card content change events for direct markdown edits', async () => {
   const { eventsEndpoint, server, workspace } = await startSidecarServer();
   const controller = new AbortController();
