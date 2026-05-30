@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { dispatchLedgerCliCommandController } from '../../src/index.js';
 import { createJsonFile } from '../fixture/scenario.js';
 
@@ -47,7 +47,11 @@ test('ledger-cli command lists unanswered threads and posts an answer', async ()
   assert.match(messages.join('\n'), /thread-card-a/);
   assert.match(messages.join('\n'), /ledger-cli answer/);
   assert.equal(answer.ok, true);
-  assert.equal(JSON.parse(await readFile(ledgerFile, 'utf8')).notes['thread-card-a'].at(-1).role, 'agent');
+  const persisted = JSON.parse(await readFile(ledgerFile, 'utf8')) as { notes: Record<string, unknown>; threadFiles: Record<string, string> };
+  assert.equal(persisted.notes['thread-card-a'], undefined);
+  const threadMarkdown = await readFile(join(dirname(dirname(ledgerFile)), persisted.threadFiles['thread-card-a']), 'utf8');
+  assert.match(threadMarkdown, /^# AGENT/m);
+  assert.match(threadMarkdown, /Answer\./);
 });
 
 test('ledger-cli command exports a markdown file', async () => {

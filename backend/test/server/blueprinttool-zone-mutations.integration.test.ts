@@ -140,9 +140,10 @@ test('blueprinttool canvas mutations are applied by the authoritative server led
     });
     assert.equal(appendVoiceNoteResponse.ok, true);
     const voiceNoteLedger = await appendVoiceNoteResponse.json() as { notes: Record<string, Array<Record<string, unknown>>> };
-    assert.equal(voiceNoteLedger.notes['thread-card-a'].at(-1)?.role, 'voice');
+    assert.equal(voiceNoteLedger.notes['thread-card-a'].at(-1)?.role, 'operator');
     assert.equal(voiceNoteLedger.notes['thread-card-a'].at(-1)?.voiceFileRef, '/tmp/voice.webm');
     assert.equal(voiceNoteLedger.notes['thread-card-a'].at(-1)?.status, 'pending');
+    assert.match(readFileSync(join(workspace, '.blueprinttool', 'threads', 'specs', 'thread-card-a.md'), 'utf8'), /^# OPERATOR/m);
     const voiceNoteId = String(voiceNoteLedger.notes['thread-card-a'].at(-1)?.id ?? '');
 
     const updateVoiceNoteResponse = await fetch(endpoint, {
@@ -276,11 +277,14 @@ test('blueprinttool note mutations normalize legacy notes arrays and persist fro
       body: JSON.stringify({ action: 'update-note', note: { id: 'note-client-1', threadId: 'thread-card-a', body: 'transcription failed', source: 'voice', voiceFileRef: '/tmp/voice.webm', status: 'transcription failed', error: 'provider failed' } })
     });
     assert.equal(updateResponse.ok, true);
-    const persisted = JSON.parse(readFileSync(join(workspace, '.blueprinttool', 'game-design.json'), 'utf8')) as { notes: Record<string, Array<Record<string, unknown>>> };
+    const persisted = JSON.parse(readFileSync(join(workspace, '.blueprinttool', 'game-design.json'), 'utf8')) as { notes: Record<string, Array<Record<string, unknown>>>; threadFiles: Record<string, string> };
     assert.equal(Array.isArray(persisted.notes), false);
-    assert.equal(persisted.notes['thread-card-a'][0].message, 'transcription failed');
-    assert.equal(persisted.notes['thread-card-a'][0].status, 'transcription failed');
-    assert.equal(persisted.notes['thread-card-a'][0].voiceFileRef, '/tmp/voice.webm');
+    assert.equal(persisted.notes['thread-card-a'], undefined);
+    assert.equal(persisted.threadFiles['thread-card-a'], '.blueprinttool/threads/game-design/thread-card-a.md');
+    const threadMarkdown = readFileSync(join(workspace, '.blueprinttool', 'threads', 'game-design', 'thread-card-a.md'), 'utf8');
+    assert.match(threadMarkdown, /^# OPERATOR/m);
+    assert.match(threadMarkdown, /transcription failed/);
+    assert.equal(threadMarkdown.includes('"voiceFileRef":"/tmp/voice.webm"'), true);
 
     const reloadResponse = await fetch(endpoint);
     const reloaded = await reloadResponse.json() as { notes: Record<string, Array<Record<string, unknown>>> };

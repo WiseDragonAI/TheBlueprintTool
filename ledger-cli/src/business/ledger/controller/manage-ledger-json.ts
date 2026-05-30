@@ -12,6 +12,7 @@ import { appendThreadAnswer } from '../helper/append-thread-answer.js';
 import { findUnansweredThreads } from '../helper/find-unanswered-threads.js';
 import { formatUnansweredThreads } from '../helper/format-unanswered-threads.js';
 import { hydrateLedgerCardContent, writeCardCommentContent } from '../helper/card-content-sidecar.js';
+import { hydrateLedgerThreadNotes, stripHydratedThreadNotes } from '../helper/thread-sidecar.js';
 
 type JsonObject = Record<string, unknown>;
 
@@ -213,6 +214,7 @@ export async function manageLedgerJsonController(
     telemetry('manage-ledger-json-rejected', { error: ledger.error });
     return ledger;
   }
+  await hydrateLedgerThreadNotes(ledger.value, actionPayload.ledgerJsonFile, fs);
 
   if (actionPayload.ledgerCommand === 'overview') {
     telemetry('manage-ledger-json-completed');
@@ -247,12 +249,12 @@ export async function manageLedgerJsonController(
   }
 
   if (actionPayload.ledgerCommand === 'answer') {
-    const answered = await appendThreadAnswer(ledger.value, actionPayload.answerOperation, fs);
+    const answered = await appendThreadAnswer(ledger.value, actionPayload.answerOperation, actionPayload.ledgerJsonFile, fs);
     if (!answered.ok) {
       telemetry('manage-ledger-json-rejected', { error: answered.error });
       return answered;
     }
-    await writeLedgerJson(actionPayload.ledgerJsonFile, answered.value, fs);
+    await writeLedgerJson(actionPayload.ledgerJsonFile, stripHydratedThreadNotes(answered.value), fs);
     telemetry('write-ledger-json', { path: actionPayload.ledgerJsonFile });
     telemetry('manage-ledger-json-completed');
     return answered;
@@ -264,7 +266,7 @@ export async function manageLedgerJsonController(
       telemetry('manage-ledger-json-rejected', { error: statusResult.error });
       return statusResult;
     }
-    await writeLedgerJson(actionPayload.ledgerJsonFile, statusResult.value, fs);
+    await writeLedgerJson(actionPayload.ledgerJsonFile, stripHydratedThreadNotes(statusResult.value), fs);
     telemetry('write-ledger-json', { path: actionPayload.ledgerJsonFile });
     telemetry('manage-ledger-json-completed');
     return statusResult;
@@ -286,7 +288,7 @@ export async function manageLedgerJsonController(
       return operatedMutation;
     }
 
-    await writeLedgerJson(actionPayload.ledgerJsonFile, operatedMutation.value, fs);
+    await writeLedgerJson(actionPayload.ledgerJsonFile, stripHydratedThreadNotes(operatedMutation.value), fs);
     telemetry('write-ledger-json', { path: actionPayload.ledgerJsonFile });
   }
 

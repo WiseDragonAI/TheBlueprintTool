@@ -22,7 +22,7 @@ export function appendOptimisticThreadNote(input: OptimisticThreadNoteInput): st
   const noteId = `note-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   notes.push({
     id: noteId,
-    role: input.source === 'voice' ? 'voice' : 'operator',
+    role: 'operator',
     message: input.body,
     timestamp: new Date().toISOString(),
     voiceFileRef: input.voiceFileRef ?? '',

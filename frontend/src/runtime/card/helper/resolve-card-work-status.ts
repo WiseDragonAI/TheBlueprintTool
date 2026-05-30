@@ -23,7 +23,7 @@ export function resolveCardWorkStatus(card: Record<string, unknown>): CardVisibl
   if (persistedStatus === 'done') return 'done';
 
   const role = latestThreadRole(String(card.id ?? ''));
-  if (role === 'operator' || role === 'voice') return 'processing';
+  if (role === 'operator') return 'processing';
 
   return 'todo';
 }

@@ -15,6 +15,7 @@ import { contentTypeFor } from './content-type-for.js';
 import { normalizeLedgerNotes } from './normalize-ledger-notes.js';
 import { relationshipReferencesCard } from '../../ledger/helper/relationship-references-card.js';
 import { duplicateCardContentSidecar, externalizeCardContent, hydrateLedgerCardContent, writeCardDescriptionSidecar } from '../../ledger/helper/card-content-sidecar.js';
+import { hydrateLedgerThreadNotes, stripHydratedThreadNotes, writeThreadNotesSidecar } from '../../ledger/helper/thread-sidecar.js';
 import { watchCardContentFiles, type CardContentChange } from '../../refresh/helper/watch-card-content-files.js';
 
 type AnyRecord = Record<string, unknown>;
@@ -71,6 +72,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const publishCardContentChange = (event: CardContentChange): void => {
     const message = `event: card-content-change\ndata: ${JSON.stringify(event)}\n\n`;
     for (const client of contentEventClients) client.write(message);
+  };
+  const hydrateLedgerSidecars = (ledger: AnyRecord): AnyRecord => hydrateLedgerCardContent(hydrateLedgerThreadNotes(ledger, blueprinttoolRoot), blueprinttoolRoot);
+  const persistLedgerAndRespond = (ledgerPath: string, ledger: AnyRecord, response: ServerResponse): void => {
+    stripHydratedThreadNotes(ledger);
+    writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
+    response.end(JSON.stringify(hydrateLedgerSidecars(ledger)));
   };
   const cardContentWatcher = watchCardContentFiles({ blueprinttoolRoot, onChange: publishCardContentChange });
   const server = createServer(async (request, response) => {
@@ -182,7 +189,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           relationships?: Array<Record<string, unknown>>;
           notes?: Record<string, Array<Record<string, unknown>>>;
           deletedNoteIds?: Record<string, string[]>;
-        };
+          threadFiles?: Record<string, string>;
+        } & AnyRecord;
+        hydrateLedgerThreadNotes(ledger, blueprinttoolRoot);
         if ((mutation.action === 'create-zone' || mutation.action === 'create-group') && mutation.annotation?.id) {
           const id = String(mutation.annotation.id);
           ledger.annotations = (ledger.annotations ?? []).filter((entry) => String(entry.id ?? '') !== id).concat(mutation.annotation);
@@ -212,6 +221,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           const notesByThread = normalizeLedgerNotes(ledger);
           delete notesByThread[`thread-${cardId}`];
           ledger.notes = notesByThread;
+          if (ledger.threadFiles && typeof ledger.threadFiles === 'object') delete ledger.threadFiles[`thread-${cardId}`];
         }
         if (mutation.action === 'delete-zones') {
           const zoneIds = new Set(mutation.zoneIds ?? []);
@@ -260,12 +270,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           if (deletedNoteIds.map((id) => String(id)).includes(noteId)) {
             notesByThread[mutation.note.threadId] = notes.filter((entry) => String(entry.id ?? '') !== noteId);
             ledger.notes = notesByThread;
-            writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
-            response.end(JSON.stringify(hydrateLedgerCardContent(ledger, blueprinttoolRoot)));
+            writeThreadNotesSidecar({ blueprinttoolRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes: notesByThread[mutation.note.threadId] });
+            persistLedgerAndRespond(ledgerPath, ledger, response);
             return;
           }
           const existing = notes.find((entry) => String(entry.id ?? '') === noteId);
-          const nextNote = { id: noteId, role: mutation.note.source === 'voice' ? 'voice' : 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), voiceFileRef: mutation.note.voiceFileRef ?? '', status: mutation.note.status ?? '', transcriptionStartedAt: mutation.note.transcriptionStartedAt ?? '', error: mutation.note.error ?? '' };
+          const nextNote = { id: noteId, role: 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), voiceFileRef: mutation.note.voiceFileRef ?? '', status: mutation.note.status ?? '', transcriptionStartedAt: mutation.note.transcriptionStartedAt ?? '', error: mutation.note.error ?? '' };
           if (existing) {
             if (!existing.message && nextNote.message) existing.message = nextNote.message;
             if (!existing.voiceFileRef && nextNote.voiceFileRef) existing.voiceFileRef = nextNote.voiceFileRef;
@@ -275,6 +285,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             existing.updatedAt = new Date().toISOString();
           } else notes.push(nextNote);
           notesByThread[mutation.note.threadId] = notes;
+          writeThreadNotesSidecar({ blueprinttoolRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes });
         }
         if (mutation.action === 'update-note' && mutation.note?.threadId) {
           const notesByThread = normalizeLedgerNotes(ledger);
@@ -284,16 +295,17 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           if (noteId && deletedNoteIds.map((id) => String(id)).includes(noteId)) {
             notesByThread[mutation.note.threadId] = notes.filter((entry) => String(entry.id ?? '') !== noteId);
             ledger.notes = notesByThread;
-            writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
-            response.end(JSON.stringify(hydrateLedgerCardContent(ledger, blueprinttoolRoot)));
+            writeThreadNotesSidecar({ blueprinttoolRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes: notesByThread[mutation.note.threadId] });
+            persistLedgerAndRespond(ledgerPath, ledger, response);
             return;
           }
           let note = notes.find((entry) => String(entry.id ?? '') === noteId || String(entry.voiceFileRef ?? '') === mutation.note?.voiceFileRef);
           if (!note && noteId) {
-            note = { id: noteId, role: mutation.note.source === 'voice' ? 'voice' : 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), voiceFileRef: mutation.note.voiceFileRef ?? '', status: mutation.note.status ?? '', transcriptionStartedAt: mutation.note.transcriptionStartedAt ?? '', error: mutation.note.error ?? '' };
+            note = { id: noteId, role: 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), voiceFileRef: mutation.note.voiceFileRef ?? '', status: mutation.note.status ?? '', transcriptionStartedAt: mutation.note.transcriptionStartedAt ?? '', error: mutation.note.error ?? '' };
             notes.push(note);
           }
           if (note) {
+            note.role = 'operator';
             if (typeof mutation.note.body === 'string') note.message = mutation.note.body;
             if (typeof mutation.note.voiceFileRef === 'string') note.voiceFileRef = mutation.note.voiceFileRef;
             if (typeof mutation.note.status === 'string') note.status = mutation.note.status;
@@ -302,6 +314,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             note.updatedAt = new Date().toISOString();
           }
           notesByThread[mutation.note.threadId] = notes;
+          writeThreadNotesSidecar({ blueprinttoolRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes });
         }
         if (mutation.action === 'delete-note' && mutation.note?.threadId) {
           const notesByThread = normalizeLedgerNotes(ledger);
@@ -314,6 +327,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             ledger.deletedNoteIds = deletedNoteIds;
           }
           notesByThread[mutation.note.threadId] = noteId ? notes.filter((entry) => String(entry.id ?? '') !== noteId) : notes.slice(0, -1);
+          writeThreadNotesSidecar({ blueprinttoolRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes: notesByThread[mutation.note.threadId] });
         }
         if (mutation.action === 'paste-selection' && mutation.selection) {
           const suffix = `copy-${Date.now()}`;
@@ -339,13 +353,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           ledger.cards = (ledger.cards ?? []).concat(copiedCards);
           ledger.annotations = (ledger.annotations ?? []).concat(copiedAnnotations);
         }
-        writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
-        response.end(JSON.stringify(hydrateLedgerCardContent(ledger, blueprinttoolRoot)));
+        persistLedgerAndRespond(ledgerPath, ledger, response);
         return;
       }
       if (existsSync(ledgerPath)) {
         const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord;
-        response.end(JSON.stringify(hydrateLedgerCardContent(ledger, blueprinttoolRoot)));
+        response.end(JSON.stringify(hydrateLedgerSidecars(ledger)));
       } else {
         response.end(JSON.stringify({ ok: false, missing: ledgerPath }));
       }

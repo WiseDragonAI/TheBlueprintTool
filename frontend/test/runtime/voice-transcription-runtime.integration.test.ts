@@ -15,9 +15,9 @@ import { state } from '../../src/runtime/state.js';
 
 test('stale transcribing voice notes fail after 30 seconds or missing start time', () => {
   const startedAt = new Date('2026-05-27T00:00:00.000Z').toISOString();
-  const active = { id: 'note-active', role: 'voice', message: 'Voice uploaded.', voiceFileRef: '/tmp/voice.webm', status: 'transcribing', transcriptionStartedAt: startedAt };
-  const stale = { id: 'note-stale', role: 'voice', message: 'Voice uploaded.', voiceFileRef: '/tmp/voice.webm', status: 'transcribing', transcriptionStartedAt: startedAt };
-  const missingStart = { id: 'note-missing-start', role: 'voice', message: 'Voice uploaded.', voiceFileRef: '/tmp/voice.webm', status: 'transcribing' };
+  const active = { id: 'note-active', role: 'operator', message: 'Voice uploaded.', voiceFileRef: '/tmp/voice.webm', status: 'transcribing', transcriptionStartedAt: startedAt };
+  const stale = { id: 'note-stale', role: 'operator', message: 'Voice uploaded.', voiceFileRef: '/tmp/voice.webm', status: 'transcribing', transcriptionStartedAt: startedAt };
+  const missingStart = { id: 'note-missing-start', role: 'operator', message: 'Voice uploaded.', voiceFileRef: '/tmp/voice.webm', status: 'transcribing' };
 
   assert.equal(expireStaleVoiceTranscription(active, Date.parse(startedAt) + voiceTranscriptionTimeoutMs - 1), false);
   assert.equal(active.status, 'transcribing');
@@ -198,7 +198,7 @@ test('request-transcription keeps optimistic upload status separate from provide
     return {
       ok: true,
       status: 200,
-      json: async () => ({ notes: { [state.threadId]: [{ id: 'note-1', role: 'voice', message, voiceFileRef: mutation.note.voiceFileRef ?? '', status: statusValue, error: mutation.note.error ?? '' }] } })
+      json: async () => ({ notes: { [state.threadId]: [{ id: 'note-1', role: 'operator', message, voiceFileRef: mutation.note.voiceFileRef ?? '', status: statusValue, error: mutation.note.error ?? '' }] } })
     };
   };
 
@@ -208,7 +208,7 @@ test('request-transcription keeps optimistic upload status separate from provide
     assert.equal(state.voice.transcriptionStatus, 'voice uploaded; transcription not configured');
     assert.equal(state.voice.voiceFileRef, '/tmp/voice.webm');
     assert.equal(status.textContent, 'voice uploaded; transcription not configured');
-    assert.equal(state.activeLedger.notes['thread-card-a'][0].role, 'voice');
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].role, 'operator');
   } finally {
     (globalThis as unknown as { fetch: unknown }).fetch = previousFetch;
     (globalThis as unknown as { document: unknown }).document = previousDocument;
@@ -362,7 +362,7 @@ test('append-voice-note persists voice metadata to the active thread ledger', as
     mutation = JSON.parse(String(init.body ?? '{}'));
     return {
       ok: true,
-      json: async () => ({ notes: { 'thread-card-a': [{ id: 'note-voice-1', role: 'voice', message: mutation.note.body, voiceFileRef: mutation.note.voiceFileRef, status: mutation.note.status }] } })
+      json: async () => ({ notes: { 'thread-card-a': [{ id: 'note-voice-1', role: 'operator', message: mutation.note.body, voiceFileRef: mutation.note.voiceFileRef, status: mutation.note.status }] } })
     };
   };
 
@@ -438,7 +438,7 @@ test('active ledger reload keeps optimistic thread notes missing from stale serv
     notes: {
       'thread-card-a': [{
         id: 'note-local-voice',
-        role: 'voice',
+        role: 'operator',
         message: 'Voice uploaded; transcription failed.',
         voiceFileRef: '/tmp/voice.webm',
         status: 'transcription failed',
@@ -452,7 +452,7 @@ test('active ledger reload keeps optimistic thread notes missing from stale serv
   };
   (globalThis as unknown as { fetch: unknown }).fetch = async () => ({
     ok: true,
-    json: async () => ({ cards: [], annotations: [], notes: { 'thread-card-a': [{ id: 'note-local-voice', role: 'voice', message: 'Voice note captured. Uploading audio...', status: 'uploading' }] } })
+    json: async () => ({ cards: [], annotations: [], notes: { 'thread-card-a': [{ id: 'note-local-voice', role: 'operator', message: 'Voice note captured. Uploading audio...', status: 'uploading' }] } })
   });
 
   try {

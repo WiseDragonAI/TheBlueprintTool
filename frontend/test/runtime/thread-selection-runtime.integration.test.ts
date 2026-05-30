@@ -201,7 +201,7 @@ test('render-thread-notes shows active thread conversation entries', () => {
     state.threadId = 'thread-card-a';
     state.activeLedger = {
       notes: {
-        'thread-card-a': [{ role: 'voice', message: 'Voice uploaded.', voiceFileRef: '/tmp/voice.webm', status: 'pending' }]
+        'thread-card-a': [{ role: 'operator', message: 'Voice uploaded.', voiceFileRef: '/tmp/voice.webm', status: 'pending' }]
       }
     };
     renderThreadNotes();
@@ -242,7 +242,7 @@ test('render-thread-notes keeps failed voice audio retryable', () => {
     state.threadId = 'thread-card-a';
     state.activeLedger = {
       notes: {
-        'thread-card-a': [{ id: 'note-1', role: 'voice', message: 'Voice uploaded; transcription failed.', voiceFileRef: '/tmp/voice.webm', status: 'transcription failed' }]
+        'thread-card-a': [{ id: 'note-1', role: 'operator', message: 'Voice uploaded; transcription failed.', voiceFileRef: '/tmp/voice.webm', status: 'transcription failed' }]
       }
     };
     renderThreadNotes();
@@ -290,7 +290,7 @@ test('render-thread-notes keeps active voice transcription progress concise', ()
     state.threadId = 'thread-card-a';
     state.activeLedger = {
       notes: {
-        'thread-card-a': [{ id: 'note-busy', role: 'voice', message: 'Voice uploaded.', voiceFileRef: '/tmp/voice.webm', status: 'transcribing', transcriptionStartedAt: new Date().toISOString() }]
+        'thread-card-a': [{ id: 'note-busy', role: 'operator', message: 'Voice uploaded.', voiceFileRef: '/tmp/voice.webm', status: 'transcribing', transcriptionStartedAt: new Date().toISOString() }]
       }
     };
     renderThreadNotes();
@@ -333,7 +333,7 @@ test('render-thread-notes fails stale voice transcription and exposes retry', ()
     state.threadId = 'thread-card-a';
     state.activeLedger = {
       notes: {
-        'thread-card-a': [{ id: 'note-stale', role: 'voice', message: 'Voice uploaded.', voiceFileRef: '/tmp/voice.webm', status: 'transcribing' }]
+        'thread-card-a': [{ id: 'note-stale', role: 'operator', message: 'Voice uploaded.', voiceFileRef: '/tmp/voice.webm', status: 'transcribing' }]
       }
     };
     renderThreadNotes();

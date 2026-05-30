@@ -60,7 +60,7 @@ test('resolve-card-work-status derives processing from latest operator notes and
       'thread-card-a': [{ role: 'operator', message: 'Question' }, { role: 'assistant', message: 'Answer' }],
       'thread-card-b': [{ role: 'assistant', message: 'Answer' }, { role: 'operator', message: 'Follow-up' }],
       'thread-card-c': [{ role: 'operator', message: 'Follow-up' }],
-      'thread-card-d': [{ role: 'voice', message: 'Transcribed operator note' }]
+      'thread-card-d': [{ role: 'operator', message: 'Transcribed operator note' }]
     }
   };
   try {

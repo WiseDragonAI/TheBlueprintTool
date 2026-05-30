@@ -4,6 +4,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { FileSystemPort, Result } from '../../../lib/types.js';
+import { writeThreadNotesSidecar } from './thread-sidecar.js';
 
 type JsonObject = Record<string, unknown>;
 
@@ -20,6 +21,7 @@ async function readMessageFile(path: string, fs?: FileSystemPort): Promise<strin
 export async function appendThreadAnswer(
   ledger: unknown,
   operation: { message?: string; messageFile?: string; threadId?: string } | undefined,
+  ledgerJsonFile: string,
   fs?: FileSystemPort,
 ): Promise<Result<unknown>> {
   const threadId = String(operation?.threadId ?? '').trim();
@@ -30,13 +32,15 @@ export async function appendThreadAnswer(
   const nextLedger: JsonObject = { ...ledger };
   const notes = isRecord(nextLedger.notes) ? { ...nextLedger.notes } : {};
   const threadNotes = Array.isArray(notes[threadId]) ? [...notes[threadId] as unknown[]] : [];
-  threadNotes.push({
+  const note = {
     id: `note-agent-${Date.now()}-${randomUUID()}`,
     role: 'agent',
     message,
     timestamp: new Date().toISOString(),
-  });
+  };
+  threadNotes.push(note);
   notes[threadId] = threadNotes;
   nextLedger.notes = notes;
+  await writeThreadNotesSidecar({ ledger: nextLedger, ledgerJsonFile, threadId, notes: threadNotes.filter(isRecord), fs });
   return { ok: true, value: nextLedger };
 }

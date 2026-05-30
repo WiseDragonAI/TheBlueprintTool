@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { createJsonFile, tempDir } from '../fixture/scenario.js';
 import { manageLedgerJsonController } from '../../src/index.js';
 
@@ -220,7 +220,7 @@ test('ledger-cli unanswered lists threads whose latest note is not an agent answ
     ],
     notes: {
       'thread-smith_repair_scaffold': [{ role: 'operator', message: 'Need repair details.', timestamp: '2026-05-26T00:00:00.000Z' }],
-      'thread-mason_stone_sale': [{ role: 'voice', message: 'Voice uploaded; transcription failed.', status: 'transcription failed', timestamp: '2026-05-26T00:01:00.000Z' }],
+      'thread-mason_stone_sale': [{ role: 'operator', message: 'Voice uploaded; transcription failed.', status: 'transcription failed', timestamp: '2026-05-26T00:01:00.000Z' }],
       'thread-answered-card': [{ role: 'operator', message: 'Question' }, { role: 'agent', message: 'Answer' }]
     }
   });
@@ -245,7 +245,7 @@ test('ledger-cli unanswered lists every pending note since the last agent answer
       'thread-mining_success_tuning': [
         { role: 'operator', message: 'Old question.' },
         { role: 'agent', message: 'Old answer.' },
-        { role: 'voice', message: 'Defend the concept.', status: 'transcribed', timestamp: '2026-05-26T00:01:00.000Z' },
+        { role: 'operator', message: 'Defend the concept.', status: 'transcribed', timestamp: '2026-05-26T00:01:00.000Z' },
         { role: 'operator', message: 'Do not rollback my edits.', timestamp: '2026-05-26T00:02:00.000Z' },
       ]
     }
@@ -277,7 +277,9 @@ test('ledger-cli answer appends an agent note to a thread', async () => {
   });
 
   assert.equal(result.ok, true);
-  const ledger = JSON.parse(await readFile(file, 'utf8')) as { notes: Record<string, Array<{ role: string; message: string }>> };
-  assert.equal(ledger.notes['thread-card-a'].at(-1)?.role, 'agent');
-  assert.equal(ledger.notes['thread-card-a'].at(-1)?.message, 'Agent answer.');
+  const ledger = JSON.parse(await readFile(file, 'utf8')) as { notes: Record<string, unknown>; threadFiles: Record<string, string> };
+  assert.equal(ledger.notes['thread-card-a'], undefined);
+  const threadMarkdown = await readFile(join(dirname(dirname(file)), ledger.threadFiles['thread-card-a']), 'utf8');
+  assert.match(threadMarkdown, /^# AGENT/m);
+  assert.match(threadMarkdown, /Agent answer\./);
 });
