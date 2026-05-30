@@ -5,6 +5,7 @@
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { interpolateVoiceLevel } from '../helper/interpolate-voice-level.js';
+import { formatVoiceDuration } from '../helper/format-voice-duration.js';
 import { normalizeVoiceLevels } from '../helper/normalize-voice-levels.js';
 import { paintVoiceWaveLevel } from './paint-voice-wave-level.js';
 
@@ -16,7 +17,6 @@ export function renderVoiceStatus(): void {
   const recorder = document.querySelector('.voice-recorder') as HTMLElement | null;
   if (!status || !meter || !panel) return;
   const seconds = (Number(state.voice.durationMs ?? 0) / 1000).toFixed(1);
-  const wholeSeconds = Math.max(0, Math.floor(Number(state.voice.durationMs ?? 0) / 1000));
   const level = Math.max(0, Math.min(1, Number(state.voice.level ?? 0)));
   const waveSamples = Array.isArray(state.voice.waveSamples) ? state.voice.waveSamples : [];
   const normalized = normalizeVoiceLevels(waveSamples, level);
@@ -35,7 +35,7 @@ export function renderVoiceStatus(): void {
   if (recorder) recorder.hidden = !state.voice.recording;
   meter.style.height = `${Math.round(18 + displayLevel * 74)}%`;
   paintVoiceWaveLevel(panel, level, Boolean(state.voice.recording), waveSamples, displayLevel);
-  if (timer) timer.textContent = `00:${String(wholeSeconds).padStart(2, '0')}`;
+  if (timer) timer.textContent = formatVoiceDuration(state.voice.durationMs);
   status.textContent = state.voice.recording
     ? `Recording ${seconds}s  level ${displayLevel.toFixed(2)}`
     : String(state.voice.transcriptionStatus ?? 'idle');
