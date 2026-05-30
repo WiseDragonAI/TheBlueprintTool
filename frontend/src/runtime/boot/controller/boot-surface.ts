@@ -8,6 +8,7 @@ import { readPersistedState } from '../../persistence/helper/read-persisted-stat
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
 import { renderTabRegistry } from '../../navigation/effect/render-tab-registry.js';
 import { renderThreadPanel } from '../../thread/effect/render-thread-panel.js';
+import { subscribeLedgerContentEvents } from '../../refresh/effect/subscribe-ledger-content-events.js';
 import { routeTab } from '../../navigation/helper/route-tab.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
@@ -25,6 +26,7 @@ export function bootSurface(): void {
   state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
   telemetry('clear-transient-selection', { reason: 'boot' });
   bindInputs();
+  subscribeLedgerContentEvents();
   renderTabRegistry();
   void loadBlueprinttoolState().then(loadActiveLedgerState).then(renderCanvasSurface);
   renderCanvasSurface();

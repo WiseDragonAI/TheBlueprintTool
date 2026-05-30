@@ -1062,7 +1062,7 @@
       "y": 3203,
       "w": 266,
       "comment": {
-        "what": "Core opens the correct surface, restores durable truth, clears transient selection by default, and renders a usable canvas. The canvas world must behave as an effectively infinite surface for panning, zooming, grid rendering, and relationship overlays; internal content layers must not crop visible world material or routes at nominal SVG/content bounds."
+        "contentFile": ".blueprinttool/cards/specs/10000001.md"
       },
       "facts": [],
       "fields": [],
@@ -1077,7 +1077,7 @@
       "y": 4045,
       "w": 266,
       "comment": {
-        "what": "Switching tabs changes the active surface without corrupting any other surface-local truth."
+        "contentFile": ".blueprinttool/cards/specs/10000002.md"
       },
       "facts": [],
       "fields": [],
@@ -1092,7 +1092,7 @@
       "y": 5053,
       "w": 320,
       "comment": {
-        "what": "Zone edit controls must remain clickable inside the canvas. Pointer gesture handling must not capture these button events as pan, drag, resize, or selection gestures."
+        "contentFile": ".blueprinttool/cards/specs/20000001.md"
       },
       "facts": [],
       "fields": [],
@@ -1107,7 +1107,7 @@
       "y": 5053,
       "w": 320,
       "comment": {
-        "what": "Relationship routing must group every visible source and target endpoint by card id and border side before routing. Endpoints in the same card-side group receive deterministic evenly spaced slots along that side instead of all using the card center."
+        "contentFile": ".blueprinttool/cards/specs/20000002.md"
       },
       "facts": [],
       "fields": [],
@@ -1122,7 +1122,7 @@
       "y": 5053,
       "w": 280,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/20000003.md"
       },
       "facts": [],
       "fields": [],
@@ -1137,7 +1137,7 @@
       "y": 5053,
       "w": 260,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/20000004.md"
       },
       "facts": [],
       "fields": [],
@@ -1152,7 +1152,7 @@
       "y": 4899,
       "w": 620,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/20000005.md"
       },
       "facts": [],
       "fields": [],
@@ -1167,7 +1167,7 @@
       "y": 5249,
       "w": 300,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/20000006.md"
       },
       "facts": [],
       "fields": [],
@@ -1182,7 +1182,7 @@
       "y": 5249,
       "w": 280,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/20000007.md"
       },
       "facts": [],
       "fields": [],
@@ -1197,7 +1197,7 @@
       "y": 5249,
       "w": 280,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/20000008.md"
       },
       "facts": [],
       "fields": [],
@@ -1212,7 +1212,7 @@
       "y": 5445,
       "w": 420,
       "comment": {
-        "what": "Zone notes controls must remain clickable inside the canvas and must open the thread for the zone that owns the button. Pointer gesture handling must not capture the button event as a canvas gesture."
+        "contentFile": ".blueprinttool/cards/specs/20000009.md"
       },
       "facts": [],
       "fields": [],
@@ -1227,7 +1227,7 @@
       "y": 5445,
       "w": 500,
       "comment": {
-        "what": "Card notes controls must remain clickable inside the canvas and must open the thread for the card that owns the button. Pointer gesture handling must not capture the button event as a canvas gesture."
+        "contentFile": ".blueprinttool/cards/specs/2000000a.md"
       },
       "facts": [],
       "fields": [],
@@ -1242,7 +1242,7 @@
       "y": 5445,
       "w": 460,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/2000000b.md"
       },
       "facts": [],
       "fields": [],
@@ -1257,7 +1257,7 @@
       "y": 5641,
       "w": 320,
       "comment": {
-        "what": "Relationship paths must route from card border ports with enough clearance to avoid visually crossing through the source or target card interiors."
+        "contentFile": ".blueprinttool/cards/specs/2000000c.md"
       },
       "facts": [],
       "fields": [],
@@ -1272,7 +1272,7 @@
       "y": 5641,
       "w": 420,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/2000000d.md"
       },
       "facts": [],
       "fields": [],
@@ -1287,7 +1287,7 @@
       "y": 5641,
       "w": 640,
       "comment": {
-        "what": "Zone labels stay readable at a stable screen size while the zone remains large enough to inspect. In overview-detail zoom, labels are suppressed instead of inverse-scaling across neighboring cards or zones."
+        "contentFile": ".blueprinttool/cards/specs/2000000e.md"
       },
       "facts": [],
       "fields": [],
@@ -1302,7 +1302,7 @@
       "y": 5837,
       "w": 420,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/2000000f.md"
       },
       "facts": [],
       "fields": [],
@@ -1317,7 +1317,7 @@
       "y": 5837,
       "w": 420,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/20000010.md"
       },
       "facts": [],
       "fields": [],
@@ -1332,7 +1332,7 @@
       "y": 5837,
       "w": 540,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/20000011.md"
       },
       "facts": [],
       "fields": [],
@@ -1347,7 +1347,7 @@
       "y": 6033,
       "w": 620,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/20000012.md"
       },
       "facts": [],
       "fields": [],
@@ -1362,7 +1362,7 @@
       "y": 6229,
       "w": 760,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/20000013.md"
       },
       "facts": [],
       "fields": [],
@@ -1377,7 +1377,7 @@
       "y": 6229,
       "w": 520,
       "comment": {
-        "what": "The zone tool creates a zone at the exact canvas rectangle drawn by the operator, including negative canvas coordinates after panning or zooming. New zone geometry must not clamp x or y to zero, and the created zone must use the current selected zone color."
+        "contentFile": ".blueprinttool/cards/specs/20000014.md"
       },
       "facts": [],
       "fields": [],
@@ -1392,7 +1392,7 @@
       "y": 6425,
       "w": 760,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/20000015.md"
       },
       "facts": [],
       "fields": [],
@@ -1407,7 +1407,7 @@
       "y": 6425,
       "w": 700,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/20000016.md"
       },
       "facts": [],
       "fields": [],
@@ -1422,7 +1422,7 @@
       "y": 6621,
       "w": 620,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/20000017.md"
       },
       "facts": [],
       "fields": [],
@@ -1437,7 +1437,7 @@
       "y": 6621,
       "w": 620,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/20000018.md"
       },
       "facts": [],
       "fields": [],
@@ -1452,7 +1452,7 @@
       "y": 6835,
       "w": 520,
       "comment": {
-        "what": "Holding Shift while clicking cards or zones toggles that target into the existing selection. Ctrl is reserved for pan-only gesture intent and must not be the additive selection modifier."
+        "contentFile": ".blueprinttool/cards/specs/30000001.md"
       },
       "facts": [],
       "fields": [],
@@ -1467,7 +1467,7 @@
       "y": 6831,
       "w": 560,
       "comment": {
-        "what": "Holding Shift while left-click dragging on the canvas draws the marquee selection box. Holding Ctrl while dragging is reserved for pan-only movement and must not start marquee selection."
+        "contentFile": ".blueprinttool/cards/specs/30000002.md"
       },
       "facts": [],
       "fields": [],
@@ -1482,7 +1482,7 @@
       "y": 6835,
       "w": 500,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/30000003.md"
       },
       "facts": [],
       "fields": [],
@@ -1497,7 +1497,7 @@
       "y": 7031,
       "w": 560,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/30000004.md"
       },
       "facts": [],
       "fields": [],
@@ -1512,7 +1512,7 @@
       "y": 7031,
       "w": 560,
       "comment": {
-        "what": "Pressing down directly on naked canvas with the select/pan intent must clear the current selection immediately on pointer down, before pointer up. Ctrl-pan, Shift-marquee, draw tools, cards, zones, groups, resize handles, and interactive controls must not use this background-clear path."
+        "contentFile": ".blueprinttool/cards/specs/7d2c8b91.md"
       },
       "facts": [],
       "fields": [],
@@ -1527,7 +1527,7 @@
       "y": 7031,
       "w": 600,
       "comment": {
-        "what": "Holding Ctrl while dragging must force pan-only canvas movement from any non-control target, including cards, zones, groups, resize handles, and empty canvas. Ctrl-pan must not select, clear selection, start marquee selection, resize, move selected objects, or enter draw-card, draw-zone, or draw-group behavior."
+        "contentFile": ".blueprinttool/cards/specs/9f04b1c2.md"
       },
       "facts": [],
       "fields": [],
@@ -1542,7 +1542,7 @@
       "y": 7031,
       "w": 420,
       "comment": {
-        "what": "Scrolling the mouse wheel zooms the canvas around the cursor. The zoom range must support wide ledger overviews down to 0.03 scale and detailed work up to 2.5 scale."
+        "contentFile": ".blueprinttool/cards/specs/30000005.md"
       },
       "facts": [],
       "fields": [],
@@ -1557,7 +1557,7 @@
       "y": 7031,
       "w": 560,
       "comment": {
-        "what": "Holding Ctrl while scrolling the mouse wheel pans the canvas viewport on the Y axis only. Vertical wheel delta must update viewport.y, must not mutate viewport.x, and must not trigger zoom."
+        "contentFile": ".blueprinttool/cards/specs/30000006.md"
       },
       "facts": [],
       "fields": [],
@@ -1572,7 +1572,7 @@
       "y": 7431,
       "w": 520,
       "comment": {
-        "what": "Wheel zoom must keep the canvas-space point under the cursor at the same screen position by adjusting viewport translation when scale changes."
+        "contentFile": ".blueprinttool/cards/specs/a25db692.md"
       },
       "facts": [],
       "fields": [],
@@ -1587,7 +1587,7 @@
       "y": 7624,
       "w": 560,
       "comment": {
-        "what": "When the viewport scale is not 1, card, zone, resize, marquee, and zone-draw geometry must convert screen pointer deltas into canvas-space deltas before mutating element geometry."
+        "contentFile": ".blueprinttool/cards/specs/74567497.md"
       },
       "facts": [],
       "fields": [],
@@ -1602,7 +1602,7 @@
       "y": 7449,
       "w": 640,
       "comment": {
-        "what": "The dark honeycomb grid is canvas-world material. It must live inside the transformed canvas content layer so wheel zoom changes the visible tile scale and panning/zooming moves it with cards, zones, groups, and relationship overlays without a second viewport-locked coordinate system."
+        "contentFile": ".blueprinttool/cards/specs/bf394c62.md"
       },
       "facts": [],
       "fields": [],
@@ -1617,7 +1617,7 @@
       "y": 7227,
       "w": 480,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/30000007.md"
       },
       "facts": [],
       "fields": [],
@@ -1632,7 +1632,7 @@
       "y": 7227,
       "w": 520,
       "comment": {
-        "what": "Canvas rendering must keep pointer interaction responsive at wide zoom-out levels by switching the canvas into low-detail mode below 0.35 scale and overview-detail mode below 0.18 scale. Low-detail mode removes expensive shadows, description blocks, buttons, hashes, and relationship labels while preserving geometry, selection affordances, readable card titles, and card label chips. Overview-detail mode keeps card titles readable with the viewport counter-scale rule instead of rendering unreadable description columns."
+        "contentFile": ".blueprinttool/cards/specs/30000008.md"
       },
       "facts": [],
       "fields": [],
@@ -1647,7 +1647,7 @@
       "y": 7227,
       "w": 560,
       "comment": {
-        "what": "Cards, zones, and relationship overlays must not render high-detail text, controls, shadows, or labels when the viewport is zoomed far enough that those details are not legible. The low-detail state must be derived from viewport scale, not from a separate persisted mode."
+        "contentFile": ".blueprinttool/cards/specs/30000009.md"
       },
       "facts": [],
       "fields": [],
@@ -1662,7 +1662,7 @@
       "y": 7820,
       "w": 560,
       "comment": {
-        "what": "The public canvas stylesheet is an import entrypoint. Tokens, shell chrome, canvas layer mechanics, canvas objects, thread inspector, dialogs, and responsive overrides live in separate CSS modules so style ownership stays decoupled and inspectable."
+        "contentFile": ".blueprinttool/cards/specs/6b4a0ed8.md"
       },
       "facts": [],
       "fields": [],
@@ -1677,7 +1677,7 @@
       "y": 7645,
       "w": 560,
       "comment": {
-        "what": "Repeated live browser inspection must be implemented as reusable tooling, not ad hoc terminal scripts. The summary command reports route loading, honeycomb scale behavior, relationship endpoint failures, group expansion, and thread/voice plumbing."
+        "contentFile": ".blueprinttool/cards/specs/9f96ad8c.md"
       },
       "facts": [],
       "fields": [],
@@ -1692,7 +1692,7 @@
       "y": 3238,
       "w": 286,
       "comment": {
-        "what": "Invalid, partial, or out-of-bounds gestures do not create broken cards, zones, notes, or persisted state."
+        "contentFile": ".blueprinttool/cards/specs/40000002.md"
       },
       "facts": [],
       "fields": [],
@@ -1707,7 +1707,7 @@
       "y": 3740,
       "w": 266,
       "comment": {
-        "what": "If cards and zones are selected together, Core preserves one coherent mixed selection."
+        "contentFile": ".blueprinttool/cards/specs/40000005.md"
       },
       "facts": [],
       "fields": [],
@@ -1722,7 +1722,7 @@
       "y": 3852,
       "w": 266,
       "comment": {
-        "what": "Clear selection removes transient selection and temporary UI state without damaging durable truth."
+        "contentFile": ".blueprinttool/cards/specs/40000006.md"
       },
       "facts": [],
       "fields": [],
@@ -1737,7 +1737,7 @@
       "y": 3461,
       "w": 286,
       "comment": {
-        "what": "Entering or exiting tool modes is explicit and normal selection behavior resumes correctly afterward. Pressing Escape must always reset the active tool back to Select."
+        "contentFile": ".blueprinttool/cards/specs/40000007.md"
       },
       "facts": [],
       "fields": [],
@@ -1752,7 +1752,7 @@
       "y": 4251,
       "w": 286,
       "comment": {
-        "what": "The active tab or surface persists and restores correctly."
+        "contentFile": ".blueprinttool/cards/specs/40000012.md"
       },
       "facts": [],
       "fields": [],
@@ -1767,7 +1767,7 @@
       "y": 4051,
       "w": 266,
       "comment": {
-        "what": "Switch from one tab surface to another while preserving each surface state."
+        "contentFile": ".blueprinttool/cards/specs/50000002.md"
       },
       "facts": [],
       "fields": [],
@@ -1782,7 +1782,7 @@
       "y": 3219,
       "w": 266,
       "comment": {
-        "what": "Refresh reloads the runtime tab route and hydrates persisted viewport and canvas geometry back into view from the current persisted ledger state."
+        "contentFile": ".blueprinttool/cards/specs/50000006.md"
       },
       "facts": [],
       "fields": [],
@@ -1797,7 +1797,7 @@
       "y": 3389,
       "w": 360,
       "comment": {
-        "what": "After the zone drawing gesture creates a zone, the active tool must reset to Select so repeated drags do not create unintended zones."
+        "contentFile": ".blueprinttool/cards/specs/bd0651aa.md"
       },
       "facts": [],
       "fields": [],
@@ -1812,7 +1812,7 @@
       "y": 3475,
       "w": 266,
       "comment": {
-        "what": "Draw a selection rectangle and collect cards and zones inside the region."
+        "contentFile": ".blueprinttool/cards/specs/5000000b.md"
       },
       "facts": [],
       "fields": [],
@@ -1827,7 +1827,7 @@
       "y": 3494,
       "w": 266,
       "comment": {
-        "what": "Clear transient selection and temporary tool state, including any active drawing, group, relationship, or thread tool."
+        "contentFile": ".blueprinttool/cards/specs/5000000c.md"
       },
       "facts": [],
       "fields": [],
@@ -1842,7 +1842,7 @@
       "y": 5236,
       "w": 266,
       "comment": {
-        "what": "Open the drawer on the selected card or zone thread."
+        "contentFile": ".blueprinttool/cards/specs/50000013.md"
       },
       "facts": [],
       "fields": [],
@@ -1857,7 +1857,7 @@
       "y": 5236,
       "w": 520,
       "comment": {
-        "what": "The production inspector must not show telemetry as the thread tab. Selecting a card, zone, or group prepares that object's thread, but it must not open the right panel. The operator opens the animated terminal panel with `A`, the Thread tool, or the Notes button."
+        "contentFile": ".blueprinttool/cards/specs/2b67c924.md"
       },
       "facts": [],
       "fields": [],
@@ -1872,7 +1872,7 @@
       "y": 5236,
       "w": 266,
       "comment": {
-        "what": "Append a new note to the selected model thread."
+        "contentFile": ".blueprinttool/cards/specs/50000014.md"
       },
       "facts": [],
       "fields": [],
@@ -1887,7 +1887,7 @@
       "y": 5236,
       "w": 266,
       "comment": {
-        "what": "Append a note deletion marker and hide the deleted message from the active thread."
+        "contentFile": ".blueprinttool/cards/specs/50000015.md"
       },
       "facts": [],
       "fields": [],
@@ -1902,7 +1902,7 @@
       "y": 3221,
       "w": 266,
       "comment": {
-        "what": "Export the current card/zone selection as structured JSON."
+        "contentFile": ".blueprinttool/cards/specs/50000016.md"
       },
       "facts": [],
       "fields": [],
@@ -1917,7 +1917,7 @@
       "y": 4969,
       "w": 320,
       "comment": {
-        "what": "Card geometry changes must be committed into durable canvas state rather than only mutating DOM position. A persisted card record must include the stable card id and x/y geometry."
+        "contentFile": ".blueprinttool/cards/specs/60000001.md"
       },
       "facts": [],
       "fields": [],
@@ -1932,7 +1932,7 @@
       "y": 4979,
       "w": 320,
       "comment": {
-        "what": "Dragging a card must persist the moved x/y position at pointer release so a reload restores the same canvas-space geometry."
+        "contentFile": ".blueprinttool/cards/specs/60000002.md"
       },
       "facts": [],
       "fields": [],
@@ -1947,7 +1947,7 @@
       "y": 3235,
       "w": 320,
       "comment": {
-        "what": "On boot, persisted card geometry must be hydrated before relationship routing is rendered so cards and arrows use the restored position."
+        "contentFile": ".blueprinttool/cards/specs/60000003.md"
       },
       "facts": [],
       "fields": [],
@@ -1962,7 +1962,7 @@
       "y": 5660,
       "w": 320,
       "comment": {
-        "what": "Route-addressable tab paths such as /surface, /specs, and /runtime must load the browser application directly from the URL and tab buttons must push the matching URL."
+        "contentFile": ".blueprinttool/cards/specs/60000004.md"
       },
       "facts": [],
       "fields": [],
@@ -1977,7 +1977,7 @@
       "y": 3231,
       "w": 320,
       "comment": {
-        "what": "The browser route path determines the active tab on direct load and browser history navigation."
+        "contentFile": ".blueprinttool/cards/specs/60000005.md"
       },
       "facts": [],
       "fields": [],
@@ -1992,7 +1992,7 @@
       "y": 4979,
       "w": 320,
       "comment": {
-        "what": "Selected cards expose the same corner resize handles as zones. Dragging a card resize handle mutates canvas-space x/y/w/h geometry, reroutes connected relationships live, and persists width and height to the ledger on pointer release."
+        "contentFile": ".blueprinttool/cards/specs/60000006.md"
       },
       "facts": [],
       "fields": [],
@@ -2007,7 +2007,7 @@
       "y": 5175,
       "w": 560,
       "comment": {
-        "what": "Default card surfaces must use a near-black charcoal background while card paragraph and markdown body text use a slightly lighter muted text color than the global muted token. Zone-derived accent colors remain reserved for borders, code, labels, and highlights."
+        "contentFile": ".blueprinttool/cards/specs/6d3e8a4b.md"
       },
       "facts": [],
       "fields": [],
@@ -2022,7 +2022,7 @@
       "y": 5213,
       "w": 360,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/60000009.md"
       },
       "facts": [],
       "fields": [],
@@ -2037,7 +2037,7 @@
       "y": 5212,
       "w": 360,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/6000000a.md"
       },
       "facts": [],
       "fields": [],
@@ -2052,7 +2052,7 @@
       "y": 5207,
       "w": 420,
       "comment": {
-        "what": "Selecting a card highlights every directly connected card in both relationship directions by deriving adjacency from relationship source and target metadata, without adding those connected cards to the selection."
+        "contentFile": ".blueprinttool/cards/specs/6000000b.md"
       },
       "facts": [],
       "fields": [],
@@ -2067,7 +2067,7 @@
       "y": 5436,
       "w": 320,
       "comment": {
-        "what": "An unselected group background follows the same drag precedence as an unselected zone: dragging over it pans the canvas instead of selecting or moving the group."
+        "contentFile": ".blueprinttool/cards/specs/6000000c.md"
       },
       "facts": [],
       "fields": [],
@@ -2082,7 +2082,7 @@
       "y": 5393,
       "w": 360,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/6000000d.md"
       },
       "facts": [],
       "fields": [],
@@ -2097,7 +2097,7 @@
       "y": 6030,
       "w": 500,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/6000000e.md"
       },
       "facts": [],
       "fields": [],
@@ -2112,7 +2112,7 @@
       "y": 5642,
       "w": 340,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/6000000f.md"
       },
       "facts": [],
       "fields": [],
@@ -2127,7 +2127,7 @@
       "y": 5846,
       "w": 620,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/60000010.md"
       },
       "facts": [],
       "fields": [],
@@ -2142,7 +2142,7 @@
       "y": 3751,
       "w": 320,
       "comment": {
-        "what": "Selecting a group must compute contained cards and regular zones from the current group geometry, not from hard-coded membership."
+        "contentFile": ".blueprinttool/cards/specs/70000001.md"
       },
       "facts": [],
       "fields": [],
@@ -2157,7 +2157,7 @@
       "y": 3751,
       "w": 320,
       "comment": {
-        "what": "Dragging a selected group must move the group boundary and its computed contained selection together."
+        "contentFile": ".blueprinttool/cards/specs/70000002.md"
       },
       "facts": [],
       "fields": [],
@@ -2172,7 +2172,7 @@
       "y": 3751,
       "w": 320,
       "comment": {
-        "what": "Selecting a group must visibly select the intersecting regular zones, then include every card intersecting those selected zones as part of the expanded grouped selection scope."
+        "contentFile": ".blueprinttool/cards/specs/70000003.md"
       },
       "facts": [],
       "fields": [],
@@ -2187,7 +2187,7 @@
       "y": 3399,
       "w": 320,
       "comment": {
-        "what": "Shift-clicking a zone adds or removes that zone and its intersecting cards from the existing selection without replacing the rest of the selection."
+        "contentFile": ".blueprinttool/cards/specs/70000004.md"
       },
       "facts": [],
       "fields": [],
@@ -2202,7 +2202,7 @@
       "y": 3399,
       "w": 320,
       "comment": {
-        "what": "Shift-clicking a group toggles the group and its expanded member zones and cards as one additive selection unit."
+        "contentFile": ".blueprinttool/cards/specs/70000005.md"
       },
       "facts": [],
       "fields": [],
@@ -2217,7 +2217,7 @@
       "y": 3399,
       "w": 320,
       "comment": {
-        "what": "Normal zone selection must replace the current selection with the zone and intersecting cards. Intersection detection must run from active ledger coordinates and sizes, not DOM geometry, and selection must update selection chrome without a full ledger surface rerender."
+        "contentFile": ".blueprinttool/cards/specs/70000006.md"
       },
       "facts": [],
       "fields": [],
@@ -2232,7 +2232,7 @@
       "y": 3595,
       "w": 360,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/70000007.md"
       },
       "facts": [],
       "fields": [],
@@ -2247,7 +2247,7 @@
       "y": 3595,
       "w": 320,
       "comment": {
-        "what": "On server boot, every ledger file present in `./.blueprinttool` is loaded into server state and represented as a default navigation tab unless the ledger is invalid."
+        "contentFile": ".blueprinttool/cards/specs/9c31f0a4.md"
       },
       "facts": [],
       "fields": [],
@@ -2262,7 +2262,7 @@
       "y": 3595,
       "w": 560,
       "comment": {
-        "what": "CoreV2 must keep live-editable specs and data ledger JSON files in `./.blueprinttool` so the browser/server workbench can visualize current spec and data edits without reading application source files."
+        "contentFile": ".blueprinttool/cards/specs/c5a84d77.md"
       },
       "facts": [],
       "fields": [],
@@ -2277,7 +2277,7 @@
       "y": 3449,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/d5c8ece7.md"
       },
       "facts": [],
       "fields": [],
@@ -2292,7 +2292,7 @@
       "y": 3928,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/ce0c5d80.md"
       },
       "facts": [],
       "fields": [],
@@ -2307,7 +2307,7 @@
       "y": 3664,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/61261091.md"
       },
       "facts": [],
       "fields": [],
@@ -2322,7 +2322,7 @@
       "y": 3252,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/86e67c0e.md"
       },
       "facts": [],
       "fields": [],
@@ -2337,7 +2337,7 @@
       "y": 3206,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/e0b4d11a.md"
       },
       "facts": [],
       "fields": [],
@@ -2352,7 +2352,7 @@
       "y": 3206,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/33c20993.md"
       },
       "facts": [],
       "fields": [],
@@ -2367,7 +2367,7 @@
       "y": 3202,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/676c6a7a.md"
       },
       "facts": [],
       "fields": [],
@@ -2382,7 +2382,7 @@
       "y": 3518,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/7abd939e.md"
       },
       "facts": [],
       "fields": [],
@@ -2397,7 +2397,7 @@
       "y": 3361,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/cfed85d3.md"
       },
       "facts": [],
       "fields": [],
@@ -2412,7 +2412,7 @@
       "y": 3357,
       "w": 320,
       "comment": {
-        "what": "Selecting the zone tool opens the zone color picker without resetting the selected color. The picker value mirrors `state.zoneColor`, and newly drawn zones use that value until the operator chooses another color."
+        "contentFile": ".blueprinttool/cards/specs/9f9279ff.md"
       },
       "facts": [],
       "fields": [],
@@ -2427,7 +2427,7 @@
       "y": 3604,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/93f778a8.md"
       },
       "facts": [],
       "fields": [],
@@ -2442,7 +2442,7 @@
       "y": 3670,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/3159faad.md"
       },
       "facts": [],
       "fields": [],
@@ -2457,7 +2457,7 @@
       "y": 4259,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/ac137fe2.md"
       },
       "facts": [],
       "fields": [],
@@ -2472,7 +2472,7 @@
       "y": 4430,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/51a6af83.md"
       },
       "facts": [],
       "fields": [],
@@ -2487,7 +2487,7 @@
       "y": 4418,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/12749dcd.md"
       },
       "facts": [],
       "fields": [],
@@ -2502,7 +2502,7 @@
       "y": 5491,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/eaced0c9.md"
       },
       "facts": [],
       "fields": [],
@@ -2517,7 +2517,7 @@
       "y": 5491,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/667ae9a9.md"
       },
       "facts": [],
       "fields": [],
@@ -2532,7 +2532,7 @@
       "y": 5647,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/5f8c7152.md"
       },
       "facts": [],
       "fields": [],
@@ -2547,7 +2547,7 @@
       "y": 5647,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/cc7ed3b4.md"
       },
       "facts": [],
       "fields": [],
@@ -2562,7 +2562,7 @@
       "y": 5647,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/7984a4f3.md"
       },
       "facts": [],
       "fields": [],
@@ -2577,7 +2577,7 @@
       "y": 5843,
       "w": 320,
       "comment": {
-        "what": "Voice recording must request real microphone input through browser media APIs and must surface permission failures to the operator instead of pretending that recording started."
+        "contentFile": ".blueprinttool/cards/specs/d38927c1.md"
       },
       "facts": [],
       "fields": [],
@@ -2592,7 +2592,7 @@
       "y": 5843,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/747b461e.md"
       },
       "facts": [],
       "fields": [],
@@ -2607,7 +2607,7 @@
       "y": 5843,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/3d074416.md"
       },
       "facts": [],
       "fields": [],
@@ -2622,7 +2622,7 @@
       "y": 5999,
       "w": 320,
       "comment": {
-        "what": "Stopping voice recording must stop media tracks, release audio resources, create an optimistic voice ledger entry, upload the captured audio, then request provider transcription from the preserved `voiceFileRef`."
+        "contentFile": ".blueprinttool/cards/specs/8b1ff788.md"
       },
       "facts": [],
       "fields": [],
@@ -2637,7 +2637,7 @@
       "y": 5999,
       "w": 320,
       "comment": {
-        "what": "A transcript may only replace the optimistic voice note body when it comes from an actual provider transcript result. The UI must not insert fabricated transcript text or leave the transcript only in the draft."
+        "contentFile": ".blueprinttool/cards/specs/6cc37b58.md"
       },
       "facts": [],
       "fields": [],
@@ -2652,7 +2652,7 @@
       "y": 5999,
       "w": 320,
       "comment": {
-        "what": "While recording, the thread panel must show live elapsed duration and a level meter updated from microphone analyser samples on animation frames."
+        "contentFile": ".blueprinttool/cards/specs/040cef84.md"
       },
       "facts": [],
       "fields": [],
@@ -2667,7 +2667,7 @@
       "y": 6155,
       "w": 320,
       "comment": {
-        "what": "Voice permission, device, and capture failures must be shown in the voice status area and recorded in telemetry."
+        "contentFile": ".blueprinttool/cards/specs/828e6225.md"
       },
       "facts": [],
       "fields": [],
@@ -2682,7 +2682,7 @@
       "y": 6155,
       "w": 320,
       "comment": {
-        "what": "Voice transcription is optional and configuration-gated. When transcription is unavailable, the UI must explicitly say transcription is unavailable instead of showing a fake transcript."
+        "contentFile": ".blueprinttool/cards/specs/c0c42d20.md"
       },
       "facts": [],
       "fields": [],
@@ -2697,7 +2697,7 @@
       "y": 6194,
       "w": 320,
       "comment": {
-        "what": "Voice audio is uploaded before final transcript confirmation. Browser capture is encoded as mono PCM WAV before upload so provider transcription receives a conservative supported container instead of fragile MediaRecorder WebM. The active conversation ledger receives a local voice note before any backend response, then backend append/update calls reconcile the same client note id and record `voiceFileRef` before provider transcription, so missing or failing transcription credentials do not make the upload or note disappear."
+        "contentFile": ".blueprinttool/cards/specs/5c4e5c22.md"
       },
       "facts": [],
       "fields": [],
@@ -2712,7 +2712,7 @@
       "y": 6311,
       "w": 320,
       "comment": {
-        "what": "Captured voice audio is held in the workspace upload cache after upload and remains attached to the visible ledger note through success, failure, unconfigured transcription, or backend reconciliation failure. Failed and unconfigured voice notes must expose retry without losing the recorded audio."
+        "contentFile": ".blueprinttool/cards/specs/21b2b050.md"
       },
       "facts": [],
       "fields": [],
@@ -2727,7 +2727,7 @@
       "y": 6311,
       "w": 320,
       "comment": {
-        "what": "The UI shows voice capture, uploading, transcribing, retrying, success, and failed/unconfigured lifecycle status by patching the already-rendered note immediately. If upload succeeds but transcription fails or is unconfigured, status must say the voice was uploaded, keep the ledger note visible, and expose retry from the preserved `voiceFileRef`."
+        "contentFile": ".blueprinttool/cards/specs/b5a783cd.md"
       },
       "facts": [],
       "fields": [],
@@ -2742,7 +2742,7 @@
       "y": 6311,
       "w": 360,
       "comment": {
-        "what": "A voice note may stay in `transcribing` for at most 30 seconds after `transcriptionStartedAt`. When the timeout elapses, the optimistic note must change to `transcription failed`, keep its `voiceFileRef`, and expose Retry. Any loaded transcribing note with no `transcriptionStartedAt` is considered stale immediately and must move to failed/retryable state."
+        "contentFile": ".blueprinttool/cards/specs/c73a0e4d.md"
       },
       "facts": [],
       "fields": [],
@@ -2757,7 +2757,7 @@
       "y": 6455,
       "w": 560,
       "comment": {
-        "what": "Selecting a card, zone, or group sets the active thread to that object thread without opening the right panel. Changing thread context clears stale idle voice upload status so a previous card's voice state does not follow the next selection. Clearing the last selected card, zone, or group clears the active thread and closes the right notes panel through the canonical animated close flow instead of leaving a visible No thread selected terminal."
+        "contentFile": ".blueprinttool/cards/specs/74c3e1b8.md"
       },
       "facts": [],
       "fields": [],
@@ -2772,7 +2772,7 @@
       "y": 6455,
       "w": 560,
       "comment": {
-        "what": "Starting the stop/send flow synchronously creates an optimistic voice note in the active thread ledger before upload or transcription work runs. Upload, transcription, success, failure, and retry patch that same note in place, preserving `voiceFileRef` whenever audio was accepted."
+        "contentFile": ".blueprinttool/cards/specs/2a9d6f41.md"
       },
       "facts": [],
       "fields": [],
@@ -2787,7 +2787,7 @@
       "y": 6605,
       "w": 560,
       "comment": {
-        "what": "Text and voice thread notes are inserted into the local conversation ledger immediately with a client-generated note id. Backend append/update calls reconcile that same id without replacing local state and must persist to the active .blueprinttool ledger file resolved from the launch cwd. Legacy `notes: []` ledgers are normalized into thread-id keyed note maps before any local or server note write, because string keys on arrays are dropped by JSON persistence. Failed reconciliation patches note status instead of deleting the note or returning the draft to the void. Server reloads and mutation responses must merge locally optimistic thread notes before replacing active ledger state. If a later append arrives after an update for the same id, it must not overwrite newer note body or lifecycle status."
+        "contentFile": ".blueprinttool/cards/specs/e0f4c8a7.md"
       },
       "facts": [],
       "fields": [],
@@ -2802,7 +2802,7 @@
       "y": 6455,
       "w": 560,
       "comment": {
-        "what": "CoreV2 imports the DroidFleet voice composer control dock class contract for voice notes: `.agent-chat.phone`, `.control-dock`, terminal STOP/SEND buttons, waveform SVG, and vertical meter. The dock is wired to real voice state, renders no fake attachment chips, stays in the right-side terminal panel, and spans the panel width."
+        "contentFile": ".blueprinttool/cards/specs/b8d4f0a2.md"
       },
       "facts": [],
       "fields": [],
@@ -2817,7 +2817,7 @@
       "y": 6455,
       "w": 560,
       "comment": {
-        "what": "The right-side notes terminal opens and closes as a fixed floating overlay and uses roughly one third of the viewport width, clamped for usability. It must never change the shell grid, canvas viewport, or ledger layout offset. The first `A` press opens the terminal without taking focus so voice shortcuts still work; pressing `A` again focuses the textarea for typing."
+        "contentFile": ".blueprinttool/cards/specs/e3a71d5c.md"
       },
       "facts": [],
       "fields": [],
@@ -2832,7 +2832,7 @@
       "y": 6455,
       "w": 560,
       "comment": {
-        "what": "`X` starts voice recording from the terminal panel and pressing `X` again stops and sends the recording for transcription. `Esc` cancels an ongoing recording without upload; pressing `Esc` again closes the terminal panel."
+        "contentFile": ".blueprinttool/cards/specs/c6f91a24.md"
       },
       "facts": [],
       "fields": [],
@@ -2847,7 +2847,7 @@
       "y": 7045,
       "w": 560,
       "comment": {
-        "what": "The terminal voice dock must be driven by the real microphone session. The waveform and vertical meter use `state.voice.level`; the waveform accumulates the full current recording envelope and compresses it into visible points instead of showing only the last milliseconds or seconds. Idle text input replaces the recorder when not recording, and no fake attachment chips are rendered."
+        "contentFile": ".blueprinttool/cards/specs/9c44b0a1.md"
       },
       "facts": [],
       "fields": [],
@@ -2862,7 +2862,7 @@
       "y": 7045,
       "w": 560,
       "comment": {
-        "what": "The right terminal removes standalone Create note and Delete note buttons. Text notes are written in the dock composer and committed by keyboard so the input zone occupies the same terminal footprint as voice capture. The draft only clears after the server confirms the note exists in the ledger."
+        "contentFile": ".blueprinttool/cards/specs/d8d1f4a2.md"
       },
       "facts": [],
       "fields": [],
@@ -2877,7 +2877,7 @@
       "y": 7045,
       "w": 560,
       "comment": {
-        "what": "When a card, zone, or group thread is active, the side terminal derives its accent variables from that canvas target color, preferring `--card-zone-color` and `--zone-color` over transient selection borders. Accent color is used for identity surfaces such as borders, waveform, meter, and input border; the outside overlay shadow remains black."
+        "contentFile": ".blueprinttool/cards/specs/3f0c9e77.md"
       },
       "facts": [],
       "fields": [],
@@ -2892,7 +2892,7 @@
       "y": 7635,
       "w": 560,
       "comment": {
-        "what": "The right notes terminal header must show the active card, zone, or group title as the primary target label, with the thread id only as secondary metadata."
+        "contentFile": ".blueprinttool/cards/specs/f72a6d31.md"
       },
       "facts": [],
       "fields": [],
@@ -2907,7 +2907,7 @@
       "y": 7635,
       "w": 560,
       "comment": {
-        "what": "When a zone is selected and its intersecting cards are included in the expanded selection, a direct non-additive click on a card must clear the zone selection and select that card as the active target."
+        "contentFile": ".blueprinttool/cards/specs/a6c2f0d4.md"
       },
       "facts": [],
       "fields": [],
@@ -2922,7 +2922,7 @@
       "y": 7635,
       "w": 560,
       "comment": {
-        "what": "A card whose conversation thread's latest note has role `agent` or `assistant` must show a compact non-interactive pictogram on the card chrome."
+        "contentFile": ".blueprinttool/cards/specs/c4e8b91a.md"
       },
       "facts": [],
       "fields": [],
@@ -2937,7 +2937,7 @@
       "y": 7635,
       "w": 560,
       "comment": {
-        "what": "The floating notes terminal uses black backdrop shadow outside the panel. The composer textarea is the only lighter inset surface; the rest of the terminal body stays visually quiet and dark."
+        "contentFile": ".blueprinttool/cards/specs/5e6a9b23.md"
       },
       "facts": [],
       "fields": [],
@@ -2952,7 +2952,7 @@
       "y": 5380,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/a946fbe0.md"
       },
       "facts": [],
       "fields": [],
@@ -2967,7 +2967,7 @@
       "y": 5435,
       "w": 320,
       "comment": {
-        "what": "Ledger cards can declare visual tags using a `labels` or `tags` string array. Non-empty labels render as compact chips in the card's top-right corner at normal detail. The chip background uses the card's own `--card-zone-color`, so labels stay visually tied to the card color/zone context. Labels are decorative metadata on the card, not relationships, identities, or runtime state. In low-detail zoom, labels remain visible with viewport counter-scaling, centered horizontally and vertically inside the card, while internal hash ids stay hidden."
+        "contentFile": ".blueprinttool/cards/specs/aa42ff94.md"
       },
       "facts": [],
       "fields": [],
@@ -2986,7 +2986,7 @@
       "y": 5435,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/4dfbf38c.md"
       },
       "facts": [],
       "fields": [],
@@ -3001,7 +3001,7 @@
       "y": 5603,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/d0936729.md"
       },
       "facts": [],
       "fields": [],
@@ -3016,7 +3016,7 @@
       "y": 3221,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/b7e4dfd1.md"
       },
       "facts": [],
       "fields": [],
@@ -3031,7 +3031,7 @@
       "y": 3221,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/2e4c6d2b.md"
       },
       "facts": [],
       "fields": [],
@@ -3046,7 +3046,7 @@
       "y": 3221,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/10f4a4c7.md"
       },
       "facts": [],
       "fields": [],
@@ -3061,7 +3061,7 @@
       "y": 3221,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/689842e0.md"
       },
       "facts": [],
       "fields": [],
@@ -3076,7 +3076,7 @@
       "y": 3221,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/929342ae.md"
       },
       "facts": [],
       "fields": [],
@@ -3091,7 +3091,7 @@
       "y": 3377,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/ac07dc1b.md"
       },
       "facts": [],
       "fields": [],
@@ -3106,7 +3106,7 @@
       "y": 3377,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/9d1b7c36.md"
       },
       "facts": [],
       "fields": [],
@@ -3121,7 +3121,7 @@
       "y": 3377,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/0f361538.md"
       },
       "facts": [],
       "fields": [],
@@ -3136,7 +3136,7 @@
       "y": 3377,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/be4ec9c2.md"
       },
       "facts": [],
       "fields": [],
@@ -3151,7 +3151,7 @@
       "y": 3722,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/6583c446.md"
       },
       "facts": [],
       "fields": [],
@@ -3166,7 +3166,7 @@
       "y": 7226,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/53d49146.md"
       },
       "facts": [],
       "fields": [],
@@ -3181,7 +3181,7 @@
       "y": 7226,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/90d84349.md"
       },
       "facts": [],
       "fields": [],
@@ -3196,7 +3196,7 @@
       "y": 7226,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/1d444573.md"
       },
       "facts": [],
       "fields": [],
@@ -3211,7 +3211,7 @@
       "y": 7226,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/796827d0.md"
       },
       "facts": [],
       "fields": [],
@@ -3226,7 +3226,7 @@
       "y": 7382,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/4801e6c7.md"
       },
       "facts": [],
       "fields": [],
@@ -3241,7 +3241,7 @@
       "y": 7382,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/85c81d67.md"
       },
       "facts": [],
       "fields": [],
@@ -3256,7 +3256,7 @@
       "y": 7382,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/0421d906.md"
       },
       "facts": [],
       "fields": [],
@@ -3271,7 +3271,7 @@
       "y": 7382,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/dff19657.md"
       },
       "facts": [],
       "fields": [],
@@ -3286,7 +3286,7 @@
       "y": 7538,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/d9d57c2c.md"
       },
       "facts": [],
       "fields": [],
@@ -3301,7 +3301,7 @@
       "y": 7538,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/2476bfa1.md"
       },
       "facts": [],
       "fields": [],
@@ -3316,7 +3316,7 @@
       "y": 7538,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/d2fbfa28.md"
       },
       "facts": [],
       "fields": [],
@@ -3331,7 +3331,7 @@
       "y": 7538,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/612afeda.md"
       },
       "facts": [],
       "fields": [],
@@ -3346,7 +3346,7 @@
       "y": 7694,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/8a05ef46.md"
       },
       "facts": [],
       "fields": [],
@@ -3361,7 +3361,7 @@
       "y": 7694,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/5b918cd3.md"
       },
       "facts": [],
       "fields": [],
@@ -3376,7 +3376,7 @@
       "y": 7694,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/d4f90f42.md"
       },
       "facts": [],
       "fields": [],
@@ -3391,7 +3391,7 @@
       "y": 7694,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/abad6dcb.md"
       },
       "facts": [],
       "fields": [],
@@ -3406,7 +3406,7 @@
       "y": 8082,
       "w": 360,
       "comment": {
-        "what": "Selected groups expose resize handles and resize using the same canvas-space geometry rules as zones while preserving group identity."
+        "contentFile": ".blueprinttool/cards/specs/f18da923.md"
       },
       "facts": [],
       "fields": [],
@@ -3421,7 +3421,7 @@
       "y": 7856,
       "w": 360,
       "comment": {
-        "what": "After the group drawing gesture creates a group, the active tool must reset to Select so the next drag pans or selects normally."
+        "contentFile": ".blueprinttool/cards/specs/c271a0df.md"
       },
       "facts": [],
       "fields": [],
@@ -3436,7 +3436,7 @@
       "y": 7856,
       "w": 560,
       "comment": {
-        "what": "Every regular zone and group, including static surface regions, newly drawn regions, and ledger-rendered regions, must expose a persistent edit icon button. Activating it edits the visible zone or group label inline; regular zones must also expose a color edit control that updates the zone color without requiring toolbox mode changes."
+        "contentFile": ".blueprinttool/cards/specs/3fd7a96a.md"
       },
       "facts": [],
       "fields": [],
@@ -3451,7 +3451,7 @@
       "y": 3484,
       "w": 320,
       "comment": {
-        "what": "The agent writes one canonical batch file for a slice. The batch contains input, controller, helper, effect, test, and component function groups."
+        "contentFile": ".blueprinttool/cards/specs/c41d5c52.md"
       },
       "facts": [],
       "fields": []
@@ -3465,7 +3465,7 @@
       "y": 3163,
       "w": 320,
       "comment": {
-        "what": "The CLI reads the master ledger and creates a complete generated slice inside a git worktree under `./.worktrees/`. The `./.worktrees/` directory is git ignored and owned as CLI generated output."
+        "contentFile": ".blueprinttool/cards/specs/17ecbce8.md"
       },
       "facts": [],
       "fields": []
@@ -3479,7 +3479,7 @@
       "y": 3163,
       "w": 320,
       "comment": {
-        "what": "Every generated source file contains exactly one generated function."
+        "contentFile": ".blueprinttool/cards/specs/51395472.md"
       },
       "facts": [],
       "fields": []
@@ -3493,7 +3493,7 @@
       "y": 3163,
       "w": 320,
       "comment": {
-        "what": "The CLI parses generated function bodies and resolves referenced functions, types, and constants into imports automatically."
+        "contentFile": ".blueprinttool/cards/specs/0dc5be37.md"
       },
       "facts": [],
       "fields": []
@@ -3507,7 +3507,7 @@
       "y": 3163,
       "w": 320,
       "comment": {
-        "what": "The CLI outputs a function dependency graph showing how generated functions call each other through the executable path."
+        "contentFile": ".blueprinttool/cards/specs/3a12567f.md"
       },
       "facts": [],
       "fields": []
@@ -3521,7 +3521,7 @@
       "y": 3640,
       "w": 320,
       "comment": {
-        "what": "Generated tests include explicit previous state and next state contracts."
+        "contentFile": ".blueprinttool/cards/specs/678cf79e.md"
       },
       "facts": [],
       "fields": []
@@ -3535,7 +3535,7 @@
       "y": 3319,
       "w": 320,
       "comment": {
-        "what": "Each suite includes one integration test running the full path through input, action, controller, helper, reducer, component, and effect plumbing. Runtime browser-input suites must assert that inputs dispatch controller-owned actions before any helper/effect is invoked; implementation evidence that only mentions a controller name is not sufficient."
+        "contentFile": ".blueprinttool/cards/specs/88d069d5.md"
       },
       "facts": [],
       "fields": []
@@ -3549,7 +3549,7 @@
       "y": 3319,
       "w": 320,
       "comment": {
-        "what": "Pure generated functions have unit tests. Unit tests prove pure behavior but do not count as runtime function usage."
+        "contentFile": ".blueprinttool/cards/specs/0954dc5c.md"
       },
       "facts": [],
       "fields": []
@@ -3563,7 +3563,7 @@
       "y": 3319,
       "w": 320,
       "comment": {
-        "what": "Generated files include default telemetry for function name and arguments."
+        "contentFile": ".blueprinttool/cards/specs/c5329a69.md"
       },
       "facts": [],
       "fields": []
@@ -3577,7 +3577,7 @@
       "y": 3319,
       "w": 320,
       "comment": {
-        "what": "Main integration tests execute with input state, observe mutated state and plumbing, and report execution stack traces for success and failure."
+        "contentFile": ".blueprinttool/cards/specs/ccb07726.md"
       },
       "facts": [],
       "fields": []
@@ -3591,7 +3591,7 @@
       "y": 3796,
       "w": 320,
       "comment": {
-        "what": "The CLI writes one generated report file for a run."
+        "contentFile": ".blueprinttool/cards/specs/69109a76.md"
       },
       "facts": [],
       "fields": []
@@ -3605,7 +3605,7 @@
       "y": 3493,
       "w": 320,
       "comment": {
-        "what": "A function is unused when it never appears in a proven integration-test telemetry stack. Unit-test calls do not count as called or used."
+        "contentFile": ".blueprinttool/cards/specs/a8b01160.md"
       },
       "facts": [],
       "fields": []
@@ -3619,7 +3619,7 @@
       "y": 3559,
       "w": 320,
       "comment": {
-        "what": "The CLI resolves imports during generation; the agent does not specify dependency import paths manually."
+        "contentFile": ".blueprinttool/cards/specs/3aec8ea9.md"
       },
       "facts": [],
       "fields": []
@@ -3633,7 +3633,7 @@
       "y": 3545,
       "w": 320,
       "comment": {
-        "what": "The agent writes canonical document edits into one patch batch file and the CLI applies that batch in one pass."
+        "contentFile": ".blueprinttool/cards/specs/67e83237.md"
       },
       "facts": [],
       "fields": []
@@ -3647,7 +3647,7 @@
       "y": 3952,
       "w": 320,
       "comment": {
-        "what": "Each generation run reads the master ledger and creates a fresh git worktree under `./.worktrees/`. Files and directories inside that generated worktree are regenerated from scratch instead of being patched in place."
+        "contentFile": ".blueprinttool/cards/specs/7fb12b4c.md"
       },
       "facts": [],
       "fields": []
@@ -3661,7 +3661,7 @@
       "y": 3773,
       "w": 320,
       "comment": {
-        "what": "Functions in the master ledger contain domain or model, dash-case name, comments, and pseudocode only."
+        "contentFile": ".blueprinttool/cards/specs/99fab004.md"
       },
       "facts": [],
       "fields": []
@@ -3675,7 +3675,7 @@
       "y": 3730,
       "w": 320,
       "comment": {
-        "what": "Generated functions do not reference specs. The test suite path connects specs to test runs, and the report infers function usage from telemetry."
+        "contentFile": ".blueprinttool/cards/specs/521476a5.md"
       },
       "facts": [],
       "fields": []
@@ -3689,7 +3689,7 @@
       "y": 4107,
       "w": 320,
       "comment": {
-        "what": "Generated component functions participate in the executable telemetry chain and expose render output for tests."
+        "contentFile": ".blueprinttool/cards/specs/be53a317.md"
       },
       "facts": [],
       "fields": []
@@ -3703,7 +3703,7 @@
       "y": 4106,
       "w": 320,
       "comment": {
-        "what": "Dry-run mode prints planned files, imports, graph, and generation output without writing the worktree."
+        "contentFile": ".blueprinttool/cards/specs/efaafd16.md"
       },
       "facts": [],
       "fields": []
@@ -3717,7 +3717,7 @@
       "y": 3875,
       "w": 320,
       "comment": {
-        "what": "Apply mode writes the generated worktree, imports, tests, telemetry harness, and report configuration."
+        "contentFile": ".blueprinttool/cards/specs/6d853968.md"
       },
       "facts": [],
       "fields": []
@@ -3731,7 +3731,7 @@
       "y": 3944,
       "w": 320,
       "comment": {
-        "what": "Report mode runs tests, gathers telemetry, and writes the generated report file."
+        "contentFile": ".blueprinttool/cards/specs/7ec16380.md"
       },
       "facts": [],
       "fields": []
@@ -3745,7 +3745,7 @@
       "y": 3900,
       "w": 320,
       "comment": {
-        "what": "Patch-doc mode applies a patch batch file to a canonical master document."
+        "contentFile": ".blueprinttool/cards/specs/1b28c191.md"
       },
       "facts": [],
       "fields": []
@@ -3759,7 +3759,7 @@
       "y": 4452,
       "w": 320,
       "comment": {
-        "what": "The master ledger contains syntactically correct pseudocode with telemetry calls, branching, parameter usage, state usage, and WHAT WHY HOW comments."
+        "contentFile": ".blueprinttool/cards/specs/65bf9ae6.md"
       },
       "facts": [],
       "fields": []
@@ -3773,7 +3773,7 @@
       "y": 6463,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/61bea65c.md"
       },
       "facts": [],
       "fields": [],
@@ -3788,7 +3788,7 @@
       "y": 6463,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/81557a54.md"
       },
       "facts": [],
       "fields": [],
@@ -3803,7 +3803,7 @@
       "y": 6463,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/708a7bfc.md"
       },
       "facts": [],
       "fields": [],
@@ -3818,7 +3818,7 @@
       "y": 6463,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/53dc0295.md"
       },
       "facts": [],
       "fields": [],
@@ -3833,7 +3833,7 @@
       "y": 6463,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/6f01b700.md"
       },
       "facts": [],
       "fields": [],
@@ -3848,7 +3848,7 @@
       "y": 6619,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/47237c02.md"
       },
       "facts": [],
       "fields": [],
@@ -3863,7 +3863,7 @@
       "y": 6619,
       "w": 320,
       "comment": {
-        "what": "Relationship arrows must share the same canvas-world pixel coordinate system as cards. SVG overlays must not introduce an independent viewBox scale that can detach arrows from their source or target card borders."
+        "contentFile": ".blueprinttool/cards/specs/5027f419.md"
       },
       "facts": [],
       "fields": [],
@@ -3878,7 +3878,7 @@
       "y": 6619,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/b200b57e.md"
       },
       "facts": [],
       "fields": [],
@@ -3893,7 +3893,7 @@
       "y": 5846,
       "w": 500,
       "comment": {
-        "what": "Card descriptions use the shared markdown parser and renderer for paragraphs, lists, tables, fenced code, horizontal rules, strong spans, inline code, and heading blocks. `##` and `###` headings must render with visible hierarchy instead of raw hash-prefixed text or flat paragraphs."
+        "contentFile": ".blueprinttool/cards/specs/cd58fd49.md"
       },
       "facts": [],
       "fields": [],
@@ -3908,7 +3908,7 @@
       "y": 6619,
       "w": 320,
       "comment": {
-        "what": ""
+        "contentFile": ".blueprinttool/cards/specs/ba1544b0.md"
       },
       "facts": [],
       "fields": [],
@@ -3923,7 +3923,7 @@
       "y": 6619,
       "w": 420,
       "comment": {
-        "what": "When a connected card is moved, relationship routing must recompute ports and patch the SVG path and label positions from the current card geometry."
+        "contentFile": ".blueprinttool/cards/specs/1d6f456a.md"
       },
       "facts": [],
       "fields": [],
@@ -3938,7 +3938,7 @@
       "y": 6796,
       "w": 520,
       "comment": {
-        "what": "Relationship arrows must use square SVG routing with explicit source and target clearance points so paths remain readable and avoid crossing through connected card interiors. The visible SVG path must start and end outside connected card borders using outward normals derived from each card border side. For each relationship, routing must evaluate candidate source and target border sides and choose the shortest outward-facing side pair before assigning per-side slots. For non-direct routes, the route must leave the card through a clearance lane and use a short final connector near the middle of the target side; long route segments must not run on the standoff line next to a card border. Multiple visible routes must use deterministic bounded lanes instead of merging on the same segment; lane offsets must not grow from the global relationship index. If source and target have a clean direct horizontal or vertical gap, the route must not add a decorative detour."
+        "contentFile": ".blueprinttool/cards/specs/9bd42e71.md"
       },
       "facts": [],
       "fields": [],
@@ -3953,7 +3953,7 @@
       "y": 6014,
       "w": 520,
       "comment": {
-        "what": "Regular zones must use their primary color for border/identity and a darker, slightly transparent fill so zones read as canvas regions instead of opaque cards."
+        "contentFile": ".blueprinttool/cards/specs/8f43d21c.md"
       },
       "facts": [],
       "fields": [],
@@ -3968,7 +3968,7 @@
       "y": 6493,
       "w": 520,
       "comment": {
-        "what": "Zone labels must inherit the zone identity color family while mixing toward white enough to keep a minimum readable brightness on dark or saturated zone fills."
+        "contentFile": ".blueprinttool/cards/specs/5ac8d0f1.md"
       },
       "facts": [],
       "fields": [],
@@ -3983,7 +3983,7 @@
       "y": 6151,
       "w": 360,
       "comment": {
-        "what": "The browser canvas UI must use Ubuntu, matching the Core canvas typography convention, with system sans-serif fallback."
+        "contentFile": ".blueprinttool/cards/specs/c90ad7e1.md"
       },
       "facts": [],
       "fields": [],
@@ -3998,7 +3998,7 @@
       "y": 6800,
       "w": 520,
       "comment": {
-        "what": "A click on empty canvas background with no meaningful pointer movement must blur the active element, clear transient selection, and return the operator to neutral canvas focus."
+        "contentFile": ".blueprinttool/cards/specs/72af9d0b.md"
       },
       "facts": [],
       "fields": [],
@@ -4013,7 +4013,7 @@
       "y": 3158,
       "w": 320,
       "comment": {
-        "what": "**Implementation direction**\n\n- Target `Node >=24` from `package.json` engines.\n- Use `node:http` with `http.createServer`.\n- Route requests through Core server modules.\n- Keep server transport native unless a concrete boundary requires a server framework."
+        "contentFile": ".blueprinttool/cards/specs/10e09767.md"
       },
       "facts": [],
       "fields": []
@@ -4027,7 +4027,7 @@
       "y": 3340,
       "w": 320,
       "comment": {
-        "what": "**Implementation direction**\n\n- Write all backend source, route, business, helper, effect, test, and support modules in TypeScript.\n- Do not author backend implementation files as plain `.js` source.\n- Runtime output may be emitted JavaScript, but the source of truth is `.ts` and TypeScript project configuration."
+        "contentFile": ".blueprinttool/cards/specs/bb69a6f4.md"
       },
       "facts": [],
       "fields": []
@@ -4041,7 +4041,7 @@
       "y": 4965,
       "w": 320,
       "comment": {
-        "what": "**Implementation direction**\n\n- CLI reads and writes ledger JSON as an architecture work surface.\n- Use ledger JSON for inspection, zone grouping, generated architecture planning, and controlled ledger mutations.\n- Keep CLI architecture edits operating on committed ledger files, not shadow state."
+        "contentFile": ".blueprinttool/cards/specs/a598989d.md"
       },
       "facts": [],
       "fields": []
@@ -4055,7 +4055,7 @@
       "y": 3227,
       "w": 320,
       "comment": {
-        "what": "**Implementation direction**\n\n- Author client source as TypeScript browser modules.\n- Attach behavior through Core canvas runtime modules.\n- Use browser APIs as the primary client integration layer.\n- Runtime output may be emitted JavaScript for browsers, but source files are TypeScript."
+        "contentFile": ".blueprinttool/cards/specs/c32e3e5c.md"
       },
       "facts": [],
       "fields": []
@@ -4069,7 +4069,7 @@
       "y": 3358,
       "w": 320,
       "comment": {
-        "what": "**Implementation direction**\n\n- Write all frontend source, route, state, business, component, helper, effect, and test modules in TypeScript.\n- Do not author frontend implementation files as plain `.js` source.\n- Keep the frameworkless browser architecture; TypeScript is the source language, not a client framework."
+        "contentFile": ".blueprinttool/cards/specs/f4b6d2a8.md"
       },
       "facts": [],
       "fields": []
@@ -4083,7 +4083,7 @@
       "y": 3498,
       "w": 320,
       "comment": {
-        "what": "**Implementation direction**\n\n- Render cards, zones, editors, and panels with DOM nodes.\n- Patch visible canvas regions from runtime render modules.\n- Drive interactions with pointer, wheel, keyboard, and DOM event APIs."
+        "contentFile": ".blueprinttool/cards/specs/a9ef20a7.md"
       },
       "facts": [],
       "fields": []
@@ -4097,7 +4097,7 @@
       "y": 3207,
       "w": 320,
       "comment": {
-        "what": "**Implementation direction**\n\n- Render relationship arrows in SVG overlay layers.\n- Create paths, markers, and labels with SVG DOM APIs.\n- Keep routing geometry separate from SVG patching."
+        "contentFile": ".blueprinttool/cards/specs/f93e1bb7.md"
       },
       "facts": [],
       "fields": []
@@ -4111,7 +4111,7 @@
       "y": 3213,
       "w": 320,
       "comment": {
-        "what": "**Implementation direction**\n\n- Keep visual styling in Core CSS files.\n- Style canvas cards, zones, controls, and overlays with classes.\n- Change stylesheets before changing DOM structure for visual-only updates."
+        "contentFile": ".blueprinttool/cards/specs/e9469688.md"
       },
       "facts": [],
       "fields": []
@@ -4125,7 +4125,7 @@
       "y": 3929,
       "w": 320,
       "comment": {
-        "what": "**Implementation direction**\n\n- Use browser `fetch` for reads and mutations against server endpoints.\n- Send JSON payloads for ledger updates.\n- Keep network IO behind explicit runtime/server boundaries."
+        "contentFile": ".blueprinttool/cards/specs/e4ed5372.md"
       },
       "facts": [],
       "fields": []
@@ -4139,7 +4139,7 @@
       "y": 3475,
       "w": 320,
       "comment": {
-        "what": "**Implementation direction**\n\n- Use native `fs.watch` from the server side.\n- Route file watcher changes through the HMR refresh module.\n- Detect external file edits without client-side polling."
+        "contentFile": ".blueprinttool/cards/specs/94ab097a.md"
       },
       "facts": [],
       "fields": []
@@ -4153,7 +4153,7 @@
       "y": 3187,
       "w": 320,
       "comment": {
-        "what": "**Implementation direction**\n\n- Use `node:test` for unit and browser-helper tests.\n- Run TypeScript test files through the archi-generator TypeScript test configuration.\n- Keep pure geometry, state, routing, and store checks runnable without a browser."
+        "contentFile": ".blueprinttool/cards/specs/ee77191d.md"
       },
       "facts": [],
       "fields": []
@@ -4167,7 +4167,7 @@
       "y": 3516,
       "w": 320,
       "comment": {
-        "what": "**Implementation direction**\n\n- Use `@playwright/test` for real browser interaction tests.\n- Exercise pointer, keyboard, route, and rendering flows in `tests/browser`.\n- Use Playwright when DOM layout or browser event behavior must be proven."
+        "contentFile": ".blueprinttool/cards/specs/cef65c97.md"
       },
       "facts": [],
       "fields": []
@@ -4181,7 +4181,7 @@
       "y": 4978,
       "w": 320,
       "comment": {
-        "what": "**Implementation direction**\n\n- Implement CLI tools as TypeScript Node scripts under `archi-generator/`.\n- Use `ledger-zones.js` for ledger inspection and mutation commands.\n- Prefer CLI commands over ad hoc JSON edits for operator-facing automation."
+        "contentFile": ".blueprinttool/cards/specs/c8f02619.md"
       },
       "facts": [],
       "fields": []
@@ -4195,7 +4195,7 @@
       "y": 5161,
       "w": 320,
       "comment": {
-        "what": "For every generated function in the Master Ledger, the generator must create exactly one source file in the generated worktree."
+        "contentFile": ".blueprinttool/cards/specs/f2a91c7d.md"
       },
       "facts": [],
       "fields": []
@@ -4209,7 +4209,7 @@
       "y": 5161,
       "w": 320,
       "comment": {
-        "what": "For every generated function, the generator creates one unit test file dedicated to that function. These per-function unit tests are additional to integration test suites."
+        "contentFile": ".blueprinttool/cards/specs/d4b8e02a.md"
       },
       "facts": [],
       "fields": []
@@ -4223,7 +4223,7 @@
       "y": 5347,
       "w": 320,
       "comment": {
-        "what": "All archi-generator source, helper, controller, effect, action, generated test harness, and tests are written in TypeScript. The package may expose a Node executable entrypoint, but implementation files use `.ts` source and TypeScript project configuration."
+        "contentFile": ".blueprinttool/cards/specs/e6c2a41f.md"
       },
       "facts": [],
       "fields": []
@@ -4237,7 +4237,7 @@
       "y": 3482,
       "w": 320,
       "comment": {
-        "what": "**Implementation direction**\n\n- Core differs from Start UI: no React, TanStack Router, Expo, or generated client runtime owns the canvas.\n- Implement UI behavior with browser DOM modules and Core runtime composition.\n- Keep route handling lightweight and server-backed instead of adopting Start UI client framework structure.\n- Treat framework adoption as a separate architecture decision, not an implied dependency."
+        "contentFile": ".blueprinttool/cards/specs/3f9dda8e.md"
       },
       "facts": [],
       "fields": []
@@ -4251,7 +4251,7 @@
       "y": 3906,
       "w": 320,
       "comment": {
-        "what": "**Implementation direction**\n\n- Serve browser files directly from the demo workbench.\n- Keep local runtime execution independent from `Vite`, `Webpack`, `Rollup`, or generated bundles.\n- Reserve build steps for distribution paths, not the local canvas path."
+        "contentFile": ".blueprinttool/cards/specs/aba21270.md"
       },
       "facts": [],
       "fields": []
@@ -4265,7 +4265,7 @@
       "y": 3513,
       "w": 320,
       "comment": {
-        "what": "**Implementation direction**\n\n- Use OpenAI audio transcription only for voice note transcription.\n- Keep transcription behind the server `transcription` module.\n- Treat transcription as optional external HTTP IO.\n- Keep voice upload, local save, status, and thread state independent from the provider."
+        "contentFile": ".blueprinttool/cards/specs/31ef718a.md"
       },
       "facts": [],
       "fields": []
@@ -4279,7 +4279,7 @@
       "y": 6170,
       "w": 560,
       "comment": {
-        "what": "The server transcription module uses `gpt-4o-mini-transcribe` as the default OpenAI transcription model when `OPENAI_API_KEY` is configured. Frontend voice code posts captured audio to the backend and never calls OpenAI directly."
+        "contentFile": ".blueprinttool/cards/specs/4f7a2c9d.md"
       },
       "facts": [],
       "fields": [],
@@ -4294,7 +4294,7 @@
       "y": 3788,
       "w": 320,
       "comment": {
-        "what": "**Implementation direction**\n\n- Server reads ledger JSON as the backing store for route-addressable tabs.\n- Server is authoritative for every persisted ledger mutation on route-addressable tabs: create zone, create group, delete zone, geometry move/resize, label edit, color edit, note create/delete, and paste.\n- Browser inputs resolve the active tab context and dispatch controller-owned actions; they must not write active ledger state directly.\n- Server writes ledger JSON when client tab edits are committed through API routes, then returns the persisted ledger for the frontend to replace active state.\n- Server keeps tab registry and active ledger routing aligned with the available ledger files.\n- Server refresh flows reload clients from persisted ledger state when external file edits are detected."
+        "contentFile": ".blueprinttool/cards/specs/5835377e.md"
       },
       "facts": [],
       "fields": []
@@ -4308,7 +4308,7 @@
       "y": 4088,
       "w": 560,
       "comment": {
-        "what": "Backend startup resolves the active `.blueprinttool` directory from the launch cwd or `BLUEPRINTTOOL_ROOT`, reads optional `.blueprinttool/.settings.json`, and applies workspace settings for frontend root, host, port, and transcription configuration. External project workspaces are separate repos; Blueprint Tool must support launching from their cwd without embedding project-specific names or settings."
+        "contentFile": ".blueprinttool/cards/specs/9f2c8a91.md"
       },
       "facts": [],
       "fields": []
@@ -4322,7 +4322,7 @@
       "y": 5347,
       "w": 320,
       "comment": {
-        "what": "Check-ledger mode reads a MasterLedger and SpecsLedger, reports root blocks, domains, controllers, helpers, effects, generated functions, test suites, spec coverage, selected groups, and structural problems without generating files."
+        "contentFile": ".blueprinttool/cards/specs/205fdb23.md"
       },
       "facts": [],
       "fields": []
@@ -4336,7 +4336,7 @@
       "y": 4452,
       "w": 320,
       "comment": {
-        "what": "The CLI parses each control-flow entry pseudoCode block from the MasterLedger into the matching controller GeneratedFunction body so generation, dependency discovery, validation, and tests use the ledger-authored pseudocode."
+        "contentFile": ".blueprinttool/cards/specs/a83e8c85.md"
       },
       "facts": [],
       "fields": []
@@ -4350,7 +4350,7 @@
       "y": 4140,
       "w": 320,
       "comment": {
-        "what": "Every helper and effect generated from the MasterLedger declares an explicit `return_type`; `any` is illegal and generation must report it as a ledger problem."
+        "contentFile": ".blueprinttool/cards/specs/b0f3a2d1.md"
       },
       "facts": [],
       "fields": []
@@ -4364,7 +4364,7 @@
       "y": 4140,
       "w": 320,
       "comment": {
-        "what": "Generated helper and effect scaffold files emit telemetry and do not invent behavior, branch data, ok/value objects, mode defaults, or fake return payloads."
+        "contentFile": ".blueprinttool/cards/specs/d8e7c3a4.md"
       },
       "facts": [],
       "fields": []
@@ -4378,7 +4378,7 @@
       "y": 4140,
       "w": 320,
       "comment": {
-        "what": "Generated integration test suites only trigger controller entries and record telemetry facts; they do not assert expected telemetry or decide scaffold quality."
+        "contentFile": ".blueprinttool/cards/specs/e1a9b6c2.md"
       },
       "facts": [],
       "fields": []
@@ -4392,7 +4392,7 @@
       "y": 4314,
       "w": 320,
       "comment": {
-        "what": "After generation, apply mode runs generated integration suites for telemetry evidence and does not run generated unit tests, because scaffold unit tests are intentionally red."
+        "contentFile": ".blueprinttool/cards/specs/f4c2d8e9.md"
       },
       "facts": [],
       "fields": []
@@ -4406,7 +4406,7 @@
       "y": 4314,
       "w": 320,
       "comment": {
-        "what": "Every generated unit test is an intentional failing placeholder so a scaffold cannot be validated as implemented before real function behavior exists."
+        "contentFile": ".blueprinttool/cards/specs/a7d3e5f1.md"
       },
       "facts": [],
       "fields": []
@@ -4420,7 +4420,7 @@
       "y": 4314,
       "w": 320,
       "comment": {
-        "what": "Generated source and test files use root-block aliases derived from the ledger such as `@generator-cli/*`, not long relative imports or `#` aliases."
+        "contentFile": ".blueprinttool/cards/specs/c6b4a8e2.md"
       },
       "facts": [],
       "fields": []
@@ -4434,7 +4434,7 @@
       "y": 4488,
       "w": 320,
       "comment": {
-        "what": "Apply mode creates the git worktree, removes the inherited root block directory inside it, then writes the generated scaffold so implementation files cannot survive generation."
+        "contentFile": ".blueprinttool/cards/specs/de19f4a6.md"
       },
       "facts": [],
       "fields": []
@@ -4448,7 +4448,7 @@
       "y": 7883,
       "w": 520,
       "comment": {
-        "what": "When the group tool is used, pointerdown and pointerup coordinates are converted through the canvas bounding box and viewport transform, so the created group starts at the visible cursor origin regardless of shell offsets or zoom."
+        "contentFile": ".blueprinttool/cards/specs/b7c2e91f.md"
       },
       "facts": [],
       "fields": [],
@@ -4463,7 +4463,7 @@
       "y": 4673,
       "w": 520,
       "comment": {
-        "what": "The frontend tab registry is built from CoreV2 .blueprinttool state, and /specs plus /data must load the app while /blueprinttool/specs and /blueprinttool/data serve the live JSON ledgers."
+        "contentFile": ".blueprinttool/cards/specs/e6a91d34.md"
       },
       "facts": [],
       "fields": [],
@@ -4478,7 +4478,7 @@
       "y": 6253,
       "w": 520,
       "comment": {
-        "what": "A Notes button on a card is a direct thread action: clicking it selects that card context, sets the card thread id, and opens the right thread panel even when the card was not previously selected."
+        "contentFile": ".blueprinttool/cards/specs/a4f8d2c9.md"
       },
       "facts": [],
       "fields": [],
@@ -4493,7 +4493,7 @@
       "y": 4719,
       "w": 560,
       "comment": {
-        "what": "When an operator clicks a route-addressable ledger tab, navigate-tab-controller derives the route, fetches that tab ledger, replaces the canvas graph with the ledger cards, zones, and relationships, and records load-ledger-state/render-ledger-surface telemetry."
+        "contentFile": ".blueprinttool/cards/specs/f2d6c8b1.md"
       },
       "facts": [],
       "fields": [],
@@ -4508,7 +4508,7 @@
       "y": 6781,
       "w": 560,
       "comment": {
-        "what": "When two connected cards are close together, relationship routing must avoid choosing a facing border pair without enough corridor space. The route must choose a better source/target side pair, keep every visible segment long enough to read, and keep the marker outside the target card border instead of cropped under the card."
+        "contentFile": ".blueprinttool/cards/specs/3f9c2a11.md"
       },
       "facts": [],
       "fields": [],
@@ -4523,7 +4523,7 @@
       "y": 5165,
       "w": 520,
       "comment": {
-        "what": "A card that intersects a regular zone must use that zone color for its card accent, border tint, and background tint. Group zones must not project their visual theme onto cards."
+        "contentFile": ".blueprinttool/cards/specs/7b2e4c90.md"
       },
       "facts": [],
       "fields": [],
@@ -4538,7 +4538,7 @@
       "y": 5361,
       "w": 520,
       "comment": {
-        "what": "When selecting a card highlights its directly connected cards, the connected-card outline and glow must be visible and must use the highlighted card inherited zone color rather than a generic low-contrast border."
+        "contentFile": ".blueprinttool/cards/specs/6e18b4d2.md"
       },
       "facts": [],
       "fields": [],
@@ -4553,7 +4553,7 @@
       "y": 7856,
       "w": 620,
       "comment": {
-        "what": "Dragging inside a regular zone color input must update the visible zone color continuously without committing or re-rendering the ledger DOM on each input event. The final change event commits one persisted color update."
+        "contentFile": ".blueprinttool/cards/specs/a2f9c013.md"
       },
       "facts": [],
       "fields": [],
@@ -4568,7 +4568,7 @@
       "y": 5504,
       "w": 560,
       "comment": {
-        "what": "When the canvas enters low-detail or overview-detail zoom, card descriptions, buttons, and hashes must stay hidden, but each card title and non-empty label chip remains visible. Titles and labels use the same viewport counter-scale rule as zone labels so they stay readable while remaining anchored to the card geometry. Low-detail titles keep a small card-relative inset so the text does not touch the card border."
+        "contentFile": ".blueprinttool/cards/specs/84cf2a6b.md"
       },
       "facts": [],
       "fields": [],
@@ -4583,7 +4583,7 @@
       "y": 5700,
       "w": 560,
       "comment": {
-        "what": "Regular zone color controls and zone or group edit icon controls are hidden during normal canvas inspection and become visible only while the owning zone is hovered or has focus within. Notes controls remain governed by their thread action specs."
+        "contentFile": ".blueprinttool/cards/specs/2aa4f070.md"
       },
       "facts": [],
       "fields": [],
@@ -4598,7 +4598,7 @@
       "y": 5896,
       "w": 560,
       "comment": {
-        "what": "Inline markdown code spans rendered inside a card description use the card inherited zone hue by defaulting to cyan when no zone is inherited. Runtime rendering clamps the color brightness upward so dark zone colors remain readable while preserving the original hue and saturation."
+        "contentFile": ".blueprinttool/cards/specs/f1c7a9d4.md"
       },
       "facts": [],
       "fields": [],
@@ -4613,7 +4613,7 @@
       "y": 6092,
       "w": 560,
       "comment": {
-        "what": "Markdown strong spans rendered inside card descriptions display as inline white bold text. This styling is separate from the block-level card title strong element."
+        "contentFile": ".blueprinttool/cards/specs/8b6e4d2a.md"
       },
       "facts": [],
       "fields": [],
@@ -4628,7 +4628,7 @@
       "y": 6288,
       "w": 560,
       "comment": {
-        "what": "Before low-detail or overview-detail zoom hides card descriptions, runtime measures each rendered card in full-detail mode and stores its width and height as a transient size cache on the card element. While zoomed out, the card keeps that cached footprint even though description content is hidden."
+        "contentFile": ".blueprinttool/cards/specs/c4e8b2f9.md"
       },
       "facts": [],
       "fields": [],
@@ -4643,7 +4643,7 @@
       "y": 6484,
       "w": 560,
       "comment": {
-        "what": "Opening a card description editor measures the existing rendered description area before replacing it and applies that size to the textarea. Wheel input over the textarea scrolls the textarea instead of zooming or panning the canvas."
+        "contentFile": ".blueprinttool/cards/specs/9a7d3c5e.md"
       },
       "facts": [],
       "fields": [],
@@ -4658,7 +4658,7 @@
       "y": 6680,
       "w": 560,
       "comment": {
-        "what": "Zone edit and color controls must fade and ease into place when the owning zone is hovered or focused. Hidden controls remain non-interactive until visible, but the reveal and hide transitions should feel smooth rather than abruptly popping."
+        "contentFile": ".blueprinttool/cards/specs/5d8f2a1b.md"
       },
       "facts": [],
       "fields": [],
@@ -4673,7 +4673,7 @@
       "y": 6876,
       "w": 560,
       "comment": {
-        "what": "Inline code color clamping uses the inherited card hue and saturation while targeting HSV value 0.85 for dark or mid-value zone colors. Purple, blue, red, and green zones must produce readable bright code text without forcing neon full-value color."
+        "contentFile": ".blueprinttool/cards/specs/1e9b7c4f.md"
       },
       "facts": [],
       "fields": [],
@@ -4688,7 +4688,7 @@
       "y": 7072,
       "w": 560,
       "comment": {
-        "what": "Relationship arrow labels must use the color inherited from the nearby endpoint card or zone. Source or target label classes must not override that inherited color with a global accent."
+        "contentFile": ".blueprinttool/cards/specs/0f6a3e91.md"
       },
       "facts": [],
       "fields": [],
@@ -4703,7 +4703,7 @@
       "y": 7268,
       "w": 560,
       "comment": {
-        "what": "Relationship endpoint labels are placed outside the source or target card box with a fixed safety margin. Label routing must account for the endpoint rectangle so text does not intersect the card edge or arrow port."
+        "contentFile": ".blueprinttool/cards/specs/6c2d8e0a.md"
       },
       "facts": [],
       "fields": [],
@@ -4718,7 +4718,7 @@
       "y": 7464,
       "w": 560,
       "comment": {
-        "what": "When low-detail or overview-detail zoom keeps card titles visible, long card titles wrap across lines instead of truncating with ellipsis. The readable counter-scaled title remains anchored to the card."
+        "contentFile": ".blueprinttool/cards/specs/4b7c1d9e.md"
       },
       "facts": [],
       "fields": [],
@@ -4733,7 +4733,7 @@
       "y": 7660,
       "w": 560,
       "comment": {
-        "what": "Readable colors for inline code, zone labels, card-derived labels, and relationship labels are produced by decomposing the source RGB color into HSV, targeting value 0.85, rebuilding RGB, then lowering saturation only as needed to satisfy a perceptual luminance floor. Saturated purple and blue colors must not remain visually dim or become neon full-value highlights."
+        "contentFile": ".blueprinttool/cards/specs/2f9a6c8d.md"
       },
       "facts": [],
       "fields": [],
@@ -4748,7 +4748,7 @@
       "y": 7856,
       "w": 560,
       "comment": {
-        "what": "Card title rendering inserts non-destructive word break opportunities at PascalCase and acronym-to-word boundaries so long Unreal-style identifiers can wrap cleanly when zoomed out while preserving editable title text."
+        "contentFile": ".blueprinttool/cards/specs/7e4b0a2c.md"
       },
       "facts": [],
       "fields": [],
@@ -4763,7 +4763,7 @@
       "y": 8052,
       "w": 560,
       "comment": {
-        "what": "The local development server serves app HTML and frontend asset routes with no-store cache headers so iterative canvas styling and runtime changes are visible after reload without stale browser module cache ambiguity."
+        "contentFile": ".blueprinttool/cards/specs/3c1d8f6b.md"
       },
       "facts": [],
       "fields": [],
@@ -4778,7 +4778,7 @@
       "y": 8248,
       "w": 560,
       "comment": {
-        "what": "Low-detail card titles that use viewport counter-scaling must lay out in a pre-transform width equal to the card width multiplied by the current viewport scale. After the inverse transform is applied, the visible title wraps within the card instead of overflowing its card box. The title box uses border-box sizing and a small viewport-scaled inset so the visible title has stable padding at zoom-out."
+        "contentFile": ".blueprinttool/cards/specs/9d5e0b7a.md"
       },
       "facts": [],
       "fields": [],
@@ -4793,7 +4793,7 @@
       "y": 8444,
       "w": 560,
       "comment": {
-        "what": "Cards with structured `fields` expose an in-card tab strip with Description and Fields tabs. The description tab shows the existing comment or markdown body, and the fields tab visualizes each field name and type without replacing the card title or labels."
+        "contentFile": ".blueprinttool/cards/specs/a6f4c2e1.md"
       },
       "facts": [],
       "fields": [],
@@ -4808,7 +4808,7 @@
       "y": 8640,
       "w": 560,
       "comment": {
-        "what": "Switching a card to its Fields tab keeps the tab frame height measured from the Description tab. Field content scrolls inside the card frame and wheel events over the tab frame are captured by the card content instead of zooming or panning the canvas."
+        "contentFile": ".blueprinttool/cards/specs/d0b7e3a9.md"
       },
       "facts": [],
       "fields": []
@@ -4822,7 +4822,7 @@
       "y": 8836,
       "w": 560,
       "comment": {
-        "what": "Card tab switches animate between Description and Fields with a short fade out and fade in. The inactive panel remains mounted for measurement but is non-interactive."
+        "contentFile": ".blueprinttool/cards/specs/e4c1b8f5.md"
       },
       "facts": [],
       "fields": []
@@ -4836,7 +4836,7 @@
       "y": 9032,
       "w": 560,
       "comment": {
-        "what": "Runtime card rendering follows the CoreV2 one-file-per-function canon. `patchLedgerCard` composes imported component/helper functions instead of declaring tab, field, label, markdown, or title helper functions inside the same source file."
+        "contentFile": ".blueprinttool/cards/specs/91f0c6a2.md"
       },
       "facts": [],
       "fields": []
@@ -4850,7 +4850,7 @@
       "y": 9228,
       "w": 560,
       "comment": {
-        "what": "Card tab hover and focus states use the card's readable zone color and zone hue for border, background, and glow. Generic accent hover styling must not override card tabs."
+        "contentFile": ".blueprinttool/cards/specs/b0f6a1c3.md"
       },
       "facts": [],
       "fields": []
@@ -4864,7 +4864,7 @@
       "y": 9424,
       "w": 560,
       "comment": {
-        "what": "The Description panel expands to its measured content height and must not show horizontal or vertical scrollbars. Only the Fields panel may scroll inside the preserved description-height frame."
+        "contentFile": ".blueprinttool/cards/specs/c6e3b7d1.md"
       },
       "facts": [],
       "fields": []
@@ -4878,7 +4878,7 @@
       "y": 9620,
       "w": 560,
       "comment": {
-        "what": "Card Description and Fields controls are absolutely positioned floating controls. They fade and slide in on card hover, focus-within, or selection, and they do not consume layout space or push description content down."
+        "contentFile": ".blueprinttool/cards/specs/f8d2c4a7.md"
       },
       "facts": [],
       "fields": []
@@ -4892,7 +4892,7 @@
       "y": 9816,
       "w": 560,
       "comment": {
-        "what": "When a ledger first loads, card tab frames resync after browser layout, after font readiness, and when the description panel resizes. The card border must grow to contain the full Description panel so description text never overflows below the card."
+        "contentFile": ".blueprinttool/cards/specs/6a2d9f0e.md"
       },
       "facts": [],
       "fields": []
@@ -4906,7 +4906,7 @@
       "y": 10012,
       "w": 560,
       "comment": {
-        "what": "Floating Description and Fields buttons use opaque dark surfaces with strong backdrop shadows and card-zone-colored hover/focus glows. Base, hover, active, and active-hover states are visually distinct, and each state uses opaque gradient stops mixed from the card zone color so labels remain readable while layered above description text."
+        "contentFile": ".blueprinttool/cards/specs/0d4c8b2f.md"
       },
       "facts": [],
       "fields": []
@@ -4920,7 +4920,7 @@
       "y": 10208,
       "w": 560,
       "comment": {
-        "what": "Activating a card Description or Fields tab must not pin the floating tab controls open. The tab strip reveals on card hover and keyboard-visible tab focus, then fades out again when the pointer leaves and no keyboard-visible tab focus is present."
+        "contentFile": ".blueprinttool/cards/specs/7b0f2e6c.md"
       },
       "facts": [],
       "fields": []
@@ -4934,7 +4934,7 @@
       "y": 10404,
       "w": 560,
       "comment": {
-        "what": "Card tab frame height is derived from the rendered Description content children, not from the stretched absolute panel box. Switching to Fields must not feed field content or a previous frame height back into the card's outer height; Fields stays inside the preserved description-height scroll frame."
+        "contentFile": ".blueprinttool/cards/specs/1a8d5f7b.md"
       },
       "facts": [],
       "fields": []
@@ -4948,7 +4948,7 @@
       "y": 10600,
       "w": 560,
       "comment": {
-        "what": "Floating card tab controls must show visibly different base, hover, active, and active-hover states at card scale. Hover and active states use direct card zone hue for button borders, fills, and glows instead of pale readable-color mixes. The floating tab group backdrop shadow is dark only, never zone colored, so controls remain legible over card text."
+        "contentFile": ".blueprinttool/cards/specs/2e7c9a1d.md"
       },
       "facts": [],
       "fields": []
@@ -4962,7 +4962,7 @@
       "y": 10796,
       "w": 640,
       "comment": {
-        "what": "Floating card tab base, hover, active, and active-hover colors must be driven by the card owning zone color resolved from ledger coordinates before DOM measurement. CSS using `--card-zone-color` is not sufficient unless the card receives a deterministic zone id and zone-color value before tab controls paint; the DOM overlap pass may refresh the current color of that owning zone and remains only a fallback for non-ledger cards."
+        "contentFile": ".blueprinttool/cards/specs/5f3a9d2e.md"
       },
       "facts": [],
       "fields": []
@@ -4976,7 +4976,7 @@
       "y": 10992,
       "w": 640,
       "comment": {
-        "what": "Floating card tab buttons must not visually fall back to the generic grey button surface. Each tab state sets raw `--card-zone-color` as `background-color` and only uses gradients as `background-image` enhancement, so active and hover states remain visibly zone colored even if advanced color mixing is ignored or partially overridden."
+        "contentFile": ".blueprinttool/cards/specs/8c4e2b71.md"
       },
       "facts": [],
       "fields": []
@@ -4990,7 +4990,7 @@
       "y": 4776,
       "w": 640,
       "comment": {
-        "what": "`generator-cli` is reserved for scaffold generation from the MasterLedger and related non-mutating ledger checks. Committed ledger JSON inspection, mutation, and markdown export must be owned by the separate `ledger-cli` package and executable, so editing specs/data ledgers cannot be coupled to scaffold generation control flow. `ledger-cli export --ledger <file> --output <file.md>` must write a complete markdown export grouped by canvas zones sorted by x then y, with zone titles as sections and card titles plus card content as subsections."
+        "contentFile": ".blueprinttool/cards/specs/4f7c2a91.md"
       },
       "facts": [],
       "fields": []
@@ -5004,7 +5004,7 @@
       "y": 4972,
       "w": 680,
       "comment": {
-        "what": "`ledger-cli unanswered --ledger <file>` must list every thread whose latest meaningful note is not `agent` or `assistant`, including thread id, target title, last note role/message/status/timestamp, and an exact `ledger-cli answer --ledger <file> --thread-id <id> --message ...` command. `ledger-cli answer` appends a persisted `role: agent` note to `ledger.notes[threadId]`, making the ledger a communication layer between operator and agent."
+        "contentFile": ".blueprinttool/cards/specs/9e2b4c7a.md"
       },
       "facts": [],
       "fields": []
@@ -5018,7 +5018,7 @@
       "y": 5168,
       "w": 680,
       "comment": {
-        "what": "After recording stops and upload/transcription processing is represented by the optimistic voice note, the bottom waveform recorder dock must be hidden and the thread text composer must remain visible. The thread draft input uses a neutral zero-saturation grey surface roughly 3% lighter than the footer container and must not use the thread accent color for its border or focus border."
+        "contentFile": ".blueprinttool/cards/specs/6a1f0d8c.md"
       },
       "facts": [],
       "fields": []
@@ -5032,7 +5032,7 @@
       "y": 5364,
       "w": 680,
       "comment": {
-        "what": "Thread notes must classify message ownership in the renderer. Operator-origin notes, including voice notes, align right inside a compact neutral grey card matching the input surface with only the left border colored by the active card or zone accent. Agent and assistant replies align left and render as plain terminal conversation text without a surrounding card."
+        "contentFile": ".blueprinttool/cards/specs/c3a8d4f1.md"
       },
       "facts": [],
       "fields": []
@@ -5046,7 +5046,7 @@
       "y": 5560,
       "w": 680,
       "comment": {
-        "what": "Each rendered thread note with a durable note id exposes a delete action only on hover or focus. Clicking it opens the shared confirmation modal for that exact thread id and note id. Enter confirms the deletion, Escape cancels it, and the backend must delete the matching note id instead of blindly removing the latest note."
+        "contentFile": ".blueprinttool/cards/specs/a7d5c3e2.md"
       },
       "facts": [],
       "fields": []
@@ -5060,7 +5060,7 @@
       "y": 5756,
       "w": 680,
       "comment": {
-        "what": "Thread note bodies use the same markdown parser and DOM renderer as card bodies so agent replies can contain paragraphs, lists, tables, code blocks, inline code, horizontal rules, markdown headings, and bold spans. Default note text is regular weight Ubuntu text, agent replies stay left as unframed conversation text, operator notes stay right in a neutral grey card with only a left target-accent border, metadata is reduced to status only, and the thread input has no CSS border, only a lighter neutral inset surface."
+        "contentFile": ".blueprinttool/cards/specs/e4f1a9b6.md"
       },
       "facts": [],
       "fields": []
@@ -5074,7 +5074,7 @@
       "y": 5952,
       "w": 680,
       "comment": {
-        "what": "The executor skills used to precheck, analyze stack, write the master ledger, and implement generated scaffold must be carried inside the repository under `.skills/` with their SKILL.md files, agent metadata, and references. The repo must not depend only on operator-local Codex skill storage to regenerate or audit the master ledger workflow."
+        "contentFile": ".blueprinttool/cards/specs/b2e7c5d9.md"
       },
       "facts": [],
       "fields": []
@@ -5088,7 +5088,7 @@
       "y": 6148,
       "w": 680,
       "comment": {
-        "what": "When the operator scrolls to the bottom of a thread, the final conversation entry must keep a safe bottom margin above the input/voice footer. A note delete affordance must remain a small floating square in the top-right corner of the note on hover or focus; it must never render as a full-width bottom action row."
+        "contentFile": ".blueprinttool/cards/specs/d9c4a1f8.md"
       },
       "facts": [],
       "fields": []
@@ -5102,7 +5102,7 @@
       "y": 6344,
       "w": 680,
       "comment": {
-        "what": "Thread conversation text must render one pixel larger than the prior terminal note size. The scrollable conversation must keep bottom padding inside the chat surface and inside the note list so the last agent reply never touches the input footer border. Inline markdown code in thread notes must use the same hue-preserving readable color algorithm as card body code, with HSV value targeting 0.85 instead of neon 1.0."
+        "contentFile": ".blueprinttool/cards/specs/f6a2d7c4.md"
       },
       "facts": [],
       "fields": []
@@ -5116,7 +5116,7 @@
       "y": 6540,
       "w": 680,
       "comment": {
-        "what": "Opening the right terminal for a card, zone, group, or conversation thread must scroll the conversation viewport to the newest rendered note after the notes and footer are mounted. Switching thread context while the panel is already open must also pin to the newest note. Ordinary note re-renders must not force-scroll unless the open or thread-switch control flow requested the pin."
+        "contentFile": ".blueprinttool/cards/specs/a4d9e2b6.md"
       },
       "facts": [],
       "fields": []
@@ -5130,7 +5130,7 @@
       "y": 6736,
       "w": 680,
       "comment": {
-        "what": "Dragging the naked canvas to pan must update only viewport x/y and the content transform on pointermove. Pan must not rerun scale-driven detail-mode work, card measuring, relationship routing, or full canvas rendering while the pointer is moving. Performance telemetry for pan records the first frame, slow frames, and periodic samples so diagnostics are available without logging every move."
+        "contentFile": ".blueprinttool/cards/specs/b3d8a5e1.md"
       },
       "facts": [],
       "fields": []
@@ -5144,7 +5144,7 @@
       "y": 6932,
       "w": 680,
       "comment": {
-        "what": "For cards with Description and Fields tabs, the active Description panel participates in normal layout and the card uses persisted height only as a minimum so comment text never crosses the card border on first paint. Wheel events over non-scrollable tab content must fall through to canvas zoom; only interactive controls or an active Fields panel with real scrollable overflow may consume wheel input."
+        "contentFile": ".blueprinttool/cards/specs/f0c2d8a9.md"
       },
       "facts": [],
       "fields": []
@@ -5158,7 +5158,7 @@
       "y": 7128,
       "w": 680,
       "comment": {
-        "what": "Voice recording captures its thread id at session start and every upload, transcription retry, and note update must use that captured thread id instead of the current selected card when async work finishes. Card bodies and thread notes use the same markdown parser and renderer, including `---`, `***`, and `___` horizontal rules plus `##` and `###` heading blocks. Escaped newline sequences from CLI or agent answers are normalized into real markdown line breaks before block parsing. Thread inline code must not shrink below normal note text size, and operator note cards use the neutral input-grey surface with only a left accent border."
+        "contentFile": ".blueprinttool/cards/specs/c1f7a9e3.md"
       },
       "facts": [],
       "fields": []
@@ -5172,7 +5172,7 @@
       "y": 7324,
       "w": 680,
       "comment": {
-        "what": "Card titles render inline markdown through the shared inline parser while preserving PascalCase wrap opportunities. Leading heading markers such as `##` and `###` are stripped from the displayed title text but stored as title heading level so the title renders with differentiated scale. Entering title edit restores the raw ledger title source so backticks, bold markers, and heading markers are not lost. Each card exposes a small hover/focus delete button in the top-right corner that opens the shared confirmation modal; confirming deletes the card, its connected relationships, and its card thread. Global shortcuts are ignored while card title or description editors own the keyboard event, including `A` for the thread panel."
+        "contentFile": ".blueprinttool/cards/specs/e8b4d2a6.md"
       },
       "facts": [],
       "fields": []
@@ -5186,7 +5186,7 @@
       "y": 7520,
       "w": 680,
       "comment": {
-        "what": "Card descriptions and field-tab markdown support standard image syntax. Standalone image-only lines render through the managed media component instead of raw text or broken image placeholders. Inline images also render through the shared inline parser while preserving markdown text around them."
+        "contentFile": ".blueprinttool/cards/specs/7c2a91f0.md"
       },
       "facts": [],
       "fields": []
@@ -5200,7 +5200,7 @@
       "y": 7716,
       "w": 680,
       "comment": {
-        "what": "Multiple standalone card images next to each other, including image-only lines separated by blank lines, are grouped into one carousel media block. Carousel navigation is index-based and wraps infinitely: next from the last image returns to the first image, and previous from the first image returns to the last image."
+        "contentFile": ".blueprinttool/cards/specs/91b7e4c2.md"
       },
       "facts": [],
       "fields": []
@@ -5214,7 +5214,7 @@
       "y": 7912,
       "w": 680,
       "comment": {
-        "what": "Managed card image frames resize by width inside the card and derive height from the loaded image natural aspect ratio. The frame must not impose a fixed max-height that crops tall content. Persisted image dimensions are stored under `card.imageSizes[src]` and measured from layout pixels with `offsetWidth` and `offsetHeight` so canvas zoom does not shrink saved values."
+        "contentFile": ".blueprinttool/cards/specs/4e8d16b7.md"
       },
       "facts": [],
       "fields": []
@@ -5228,7 +5228,7 @@
       "y": 8108,
       "w": 680,
       "comment": {
-        "what": "The backend serves image assets referenced by markdown from the active workspace `.blueprinttool` directory through matching `/.blueprinttool/...` URLs. The route is constrained to image file extensions and must reject traversal outside the active workspace root."
+        "contentFile": ".blueprinttool/cards/specs/a6f3c8d1.md"
       },
       "facts": [],
       "fields": []
@@ -5242,7 +5242,7 @@
       "y": 8304,
       "w": 680,
       "comment": {
-        "what": "The in-app Keys dialog lists the active shortcut contract: `A` opens or focuses the thread panel, `X` starts or stops voice recording, `Esc` cancels capture or clears/closes tooling, `Del` confirms selected object deletion, `Ctrl+C` copies selection, `Ctrl+V` pastes selection, and `Ctrl+D` resizes selected cards to content. The Runbook dialog summarizes workspace launch, card image media behavior, and voice-note configuration."
+        "contentFile": ".blueprinttool/cards/specs/5d9f2a80.md"
       },
       "facts": [],
       "fields": []
@@ -5256,7 +5256,7 @@
       "y": 8500,
       "w": 680,
       "comment": {
-        "what": "Voice transcription configuration remains workspace-local in `.blueprinttool/.settings.json` with documented key aliases. The waveform renders the accumulated recording envelope and uses 95% of the graph height for peak amplitude so live capture reflects the actual recording instead of a half-height graph."
+        "contentFile": ".blueprinttool/cards/specs/2f6b94e1.md"
       },
       "facts": [],
       "fields": []
@@ -5270,7 +5270,7 @@
       "y": 8696,
       "w": 680,
       "comment": {
-        "what": "Card-to-zone attribution and derived readable zone colors must be cached from ledger/canvas geometry instead of recomputed during pan, zoom, selection rendering, or full surface refreshes that do not change geometry. The cache key is the active ledger tab plus card and regular-zone geometry/color revision. It stores each card id's owning regular zone id, raw zone color, readable/clamped color, and fallback/no-zone state. The cache is invalidated only when a card or regular zone is created, deleted, moved, resized, recolored, or when a new ledger tab is loaded; viewport pan/zoom, low-detail mode changes, relationship redraw, selection changes, thread panel changes, and telemetry rendering must not invalidate or recompute attribution.\n\nRefactor shape: introduce a canvas runtime `zoneAttributionCache` owned outside the DOM renderer. Build it from `state.activeLedger.cards` and regular `annotations` using ledger coordinates on ledger load/render, and update dirty entries incrementally from geometry mutation paths. `patchLedgerCard()` applies cached `data-card-zone-id`, `data-card-zone-color`, `--card-zone-color`, `--card-code-color`, and `--card-readable-color` without measuring DOM. `renderCardZoneColors()` becomes a fallback/compatibility effect for static non-ledger cards and explicit dirty-zone recalculation only; it must not scan every card against every zone during pan or zoom. Acceptance: a synthetic 15-zone x 5-card-per-zone canvas must keep plain pan pointermove transform-only, pan pointerup under 16 ms when no geometry changed, and 10-15 wheel zoom events must not trigger card-zone attribution recomputation."
+        "contentFile": ".blueprinttool/cards/specs/c8a4f6d2.md"
       },
       "facts": [],
       "fields": []

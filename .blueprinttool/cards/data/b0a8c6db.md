@@ -1,0 +1,1 @@
+Current hovered graph target under pointer inspection.

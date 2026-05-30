@@ -11,6 +11,7 @@ import { formatLedgerMarkdownExport } from '../helper/format-ledger-markdown-exp
 import { appendThreadAnswer } from '../helper/append-thread-answer.js';
 import { findUnansweredThreads } from '../helper/find-unanswered-threads.js';
 import { formatUnansweredThreads } from '../helper/format-unanswered-threads.js';
+import { hydrateLedgerCardContent, writeCardCommentContent } from '../helper/card-content-sidecar.js';
 
 type JsonObject = Record<string, unknown>;
 
@@ -40,6 +41,7 @@ async function applyLedgerMutationOperation(
     removeCardIds?: string[];
     removeRelationshipIds?: string[];
   } | undefined,
+  ledgerJsonFile: string,
   fs?: FileSystemPort,
 ): Promise<Result<unknown>> {
   const hasCardLabels = (operation?.cardLabels ?? []).length > 0;
@@ -116,9 +118,7 @@ async function applyLedgerMutationOperation(
 
     if (operation.cardComment !== undefined || operation.cardCommentFile) {
       const commentText = operation.cardComment ?? await (fs ? fs.readFile(operation.cardCommentFile ?? '') : readFileWithNode(operation.cardCommentFile ?? ''));
-      const comment = isRecord(card.comment) ? { ...card.comment } : {};
-      comment.what = commentText.trimEnd();
-      card.comment = comment;
+      await writeCardCommentContent({ card, content: commentText, fs, ledgerJsonFile });
     }
   }
 
@@ -232,7 +232,8 @@ export async function manageLedgerJsonController(
       return { ok: false, error };
     }
 
-    const markdown = formatLedgerMarkdownExport(ledger.value);
+    const hydratedLedger = await hydrateLedgerCardContent(ledger.value, actionPayload.ledgerJsonFile, fs);
+    const markdown = formatLedgerMarkdownExport(hydratedLedger);
     await (fs ? fs.writeFile(outputFile, markdown) : writeFileWithNode(outputFile, markdown));
     telemetry('write-ledger-markdown-export', { path: outputFile });
     telemetry('manage-ledger-json-completed');
@@ -279,7 +280,7 @@ export async function manageLedgerJsonController(
     }
 
     const baseMutation = actionPayload.mutation ?? mutationFromFile?.value ?? ledger.value;
-    const operatedMutation = await applyLedgerMutationOperation(baseMutation, actionPayload.mutationOperation, fs);
+    const operatedMutation = await applyLedgerMutationOperation(baseMutation, actionPayload.mutationOperation, actionPayload.ledgerJsonFile, fs);
     if (!operatedMutation.ok) {
       telemetry('manage-ledger-json-rejected', { error: operatedMutation.error });
       return operatedMutation;

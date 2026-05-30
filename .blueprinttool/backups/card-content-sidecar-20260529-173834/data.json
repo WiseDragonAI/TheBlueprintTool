@@ -1,0 +1,1839 @@
+{
+  "modelName": "core_qa_data",
+  "source": "Core/examples/qa-canvas/ledgers/data.json",
+  "diagramSize": {
+    "width": 5200,
+    "height": 2600
+  },
+  "viewport": {
+    "x": 247.91335757734169,
+    "y": -49.704520676278946,
+    "scale": 0.8304989250185475
+  },
+  "positions": {
+    "31283996": {
+      "x": 2443,
+      "y": 3103,
+      "w": 320
+    },
+    "8f053726": {
+      "x": 3504,
+      "y": 895,
+      "w": 320
+    },
+    "4ae0a8e0": {
+      "x": 3504,
+      "y": 1240,
+      "w": 320
+    },
+    "e8d484fe": {
+      "x": 4210,
+      "y": 907,
+      "w": 320
+    },
+    "9fe8052e": {
+      "x": 4841,
+      "y": 1167,
+      "w": 320
+    },
+    "449dbbbe": {
+      "x": 5114,
+      "y": 874,
+      "w": 320
+    },
+    "8e969212": {
+      "x": 5581,
+      "y": 1092,
+      "w": 320
+    },
+    "66a4f377": {
+      "x": 4170,
+      "y": 1380,
+      "w": 320
+    },
+    "7d7b4077": {
+      "x": 4851,
+      "y": 194,
+      "w": 320
+    },
+    "d86e5fbb": {
+      "x": 5321,
+      "y": 193,
+      "w": 320
+    },
+    "eb61ae1f": {
+      "x": 2770,
+      "y": 659,
+      "w": 320
+    },
+    "ffd440e4": {
+      "x": 2760,
+      "y": 1577,
+      "w": 320
+    },
+    "85b432dd": {
+      "x": 2757,
+      "y": 1255,
+      "w": 320
+    },
+    "518e238d": {
+      "x": 2309,
+      "y": 1257,
+      "w": 320
+    },
+    "d91df27a": {
+      "x": 852,
+      "y": 2980,
+      "w": 320
+    },
+    "8457546e": {
+      "x": 1413,
+      "y": 3117,
+      "w": 320
+    },
+    "9cd40009": {
+      "x": 1991,
+      "y": 2601,
+      "w": 320
+    },
+    "3c96cf27": {
+      "x": 1995,
+      "y": 3507,
+      "w": 320
+    },
+    "b0a8c6db": {
+      "x": 1993,
+      "y": 2938,
+      "w": 320
+    },
+    "0c063c90": {
+      "x": 1992,
+      "y": 3213,
+      "w": 320
+    },
+    "c148aeb0": {
+      "x": 2476,
+      "y": 3602,
+      "w": 320
+    },
+    "6c40f015": {
+      "x": 3286,
+      "y": 3083,
+      "w": 320
+    },
+    "01173a06": {
+      "x": 3704,
+      "y": 3109,
+      "w": 320
+    },
+    "254e72c1": {
+      "x": 3287,
+      "y": 2635,
+      "w": 320
+    },
+    "2d242706": {
+      "x": 2795,
+      "y": 3103,
+      "w": 320
+    },
+    "e24fe89f": {
+      "x": 2457,
+      "y": 2637,
+      "w": 320
+    },
+    "d8ef7d8b": {
+      "x": 2809,
+      "y": 2637,
+      "w": 320
+    },
+    "a49821b6": {
+      "x": 1418,
+      "y": 2584,
+      "w": 320
+    },
+    "7bb532f1": {
+      "x": 4845,
+      "y": 1438,
+      "w": 320
+    },
+    "7c83ee82": {
+      "x": 140,
+      "y": 661,
+      "w": 320
+    },
+    "5ec1172d": {
+      "x": 138,
+      "y": 245,
+      "w": 320
+    },
+    "a7f943b3": {
+      "x": 787,
+      "y": 215,
+      "w": 320
+    },
+    "0a91751a": {
+      "x": 35,
+      "y": 1588,
+      "w": 320
+    },
+    "3cc57f9d": {
+      "x": -431,
+      "y": 1140,
+      "w": 320
+    },
+    "52dd08fc": {
+      "x": -438,
+      "y": 1475,
+      "w": 320
+    },
+    "a9949f3a": {
+      "x": 30,
+      "y": 1357,
+      "w": 320
+    },
+    "18acdd10": {
+      "x": 1417,
+      "y": 3574,
+      "w": 320
+    },
+    "a70c969c": {
+      "x": 781,
+      "y": 791,
+      "w": 320
+    },
+    "025274e9": {
+      "x": -415,
+      "y": 153,
+      "w": 320
+    },
+    "7ef6c99b": {
+      "x": -430,
+      "y": 610,
+      "w": 320
+    }
+  },
+  "cards": [
+    {
+      "id": "8f053726",
+      "title": "Ledger",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 3504,
+      "y": 895,
+      "w": 320,
+      "comment": {
+        "what": "Durable ledger state for one committed canvas surface."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "ledgerId",
+          "type": "hash8"
+        },
+        {
+          "name": "surfaceIds",
+          "type": "hash8[]"
+        },
+        {
+          "name": "updatedAt",
+          "type": "iso8601"
+        }
+      ]
+    },
+    {
+      "id": "4ae0a8e0",
+      "title": "NavTab",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 3504,
+      "y": 1240,
+      "w": 320,
+      "comment": {
+        "what": "Route-addressable navigation tab opening one canvas surface."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "navTabId",
+          "type": "hash8"
+        },
+        {
+          "name": "canvasId",
+          "type": "hash8"
+        },
+        {
+          "name": "path",
+          "type": "string"
+        },
+        {
+          "name": "status",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "e8d484fe",
+      "title": "Canvas",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 4210,
+      "y": 907,
+      "w": 320,
+      "comment": {
+        "what": "Primary graph surface containing cards, zones, relationships, and viewport state."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "canvasId",
+          "type": "hash8"
+        },
+        {
+          "name": "ledgerId",
+          "type": "hash8"
+        },
+        {
+          "name": "viewportId",
+          "type": "hash8"
+        }
+      ]
+    },
+    {
+      "id": "9fe8052e",
+      "title": "Card",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 4841,
+      "y": 1167,
+      "w": 320,
+      "comment": {
+        "what": "Primary graph object with persistent position, tabs, notes, and hash identity."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "cardId",
+          "type": "hash8"
+        },
+        {
+          "name": "canvasId",
+          "type": "hash8"
+        },
+        {
+          "name": "threadId",
+          "type": "hash8"
+        }
+      ]
+    },
+    {
+      "id": "449dbbbe",
+      "title": "Zone",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 5114,
+      "y": 874,
+      "w": 320,
+      "comment": {
+        "what": "Primary graph object grouping cards with label, color, geometry, notes, and hash identity."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "zoneId",
+          "type": "hash8"
+        },
+        {
+          "name": "canvasId",
+          "type": "hash8"
+        },
+        {
+          "name": "threadId",
+          "type": "hash8"
+        }
+      ]
+    },
+    {
+      "id": "8e969212",
+      "title": "Relationship",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 5581,
+      "y": 1092,
+      "w": 320,
+      "comment": {
+        "what": "Relation table linking graph objects through source and target roles. Durable arrow state is limited to authored endpoints, label, and label visibility."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "relationshipId",
+          "type": "hash8"
+        },
+        {
+          "name": "sourceId",
+          "type": "hash8"
+        },
+        {
+          "name": "sourceKind",
+          "type": "string"
+        },
+        {
+          "name": "targetId",
+          "type": "hash8"
+        },
+        {
+          "name": "targetKind",
+          "type": "string"
+        },
+        {
+          "name": "label",
+          "type": "string"
+        },
+        {
+          "name": "labelVisible",
+          "type": "boolean"
+        }
+      ]
+    },
+    {
+      "id": "66a4f377",
+      "title": "Viewport",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 4170,
+      "y": 1380,
+      "w": 320,
+      "comment": {
+        "what": "Persisted camera state framing one canvas surface."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "viewportId",
+          "type": "hash8"
+        },
+        {
+          "name": "canvasId",
+          "type": "hash8"
+        },
+        {
+          "name": "scale",
+          "type": "number"
+        }
+      ]
+    },
+    {
+      "id": "7d7b4077",
+      "title": "Thread",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 4851,
+      "y": 194,
+      "w": 320,
+      "comment": {
+        "what": "Primary chat container attached to one canvas and one card or zone target."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "threadId",
+          "type": "hash8"
+        },
+        {
+          "name": "canvasId",
+          "type": "hash8"
+        },
+        {
+          "name": "targetId",
+          "type": "hash8"
+        },
+        {
+          "name": "targetKind",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "d86e5fbb",
+      "title": "Message",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 5321,
+      "y": 193,
+      "w": 320,
+      "comment": {
+        "what": "One persisted operator or assistant message inside a thread."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "messageId",
+          "type": "hash8"
+        },
+        {
+          "name": "threadId",
+          "type": "hash8"
+        },
+        {
+          "name": "role",
+          "type": "string"
+        },
+        {
+          "name": "body",
+          "type": "markdown"
+        }
+      ]
+    },
+    {
+      "id": "eb61ae1f",
+      "title": "Event",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 2770,
+      "y": 659,
+      "w": 320,
+      "comment": {
+        "what": "Persisted event record emitted by server or API activity."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "eventId",
+          "type": "hash8"
+        },
+        {
+          "name": "ledgerId",
+          "type": "hash8"
+        },
+        {
+          "name": "kind",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "ffd440e4",
+      "title": "Router",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 2760,
+      "y": 1577,
+      "w": 320,
+      "comment": {
+        "what": "Routes runtime requests to server controllers."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "routerId",
+          "type": "hash8"
+        },
+        {
+          "name": "route",
+          "type": "string"
+        },
+        {
+          "name": "method",
+          "type": "string"
+        },
+        {
+          "name": "payload",
+          "type": "object"
+        }
+      ]
+    },
+    {
+      "id": "85b432dd",
+      "title": "Server",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 2757,
+      "y": 1255,
+      "w": 320,
+      "comment": {
+        "what": "Controllers and IO"
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "serverId",
+          "type": "hash8"
+        },
+        {
+          "name": "controllerRefs",
+          "type": "string[]"
+        },
+        {
+          "name": "ioRefs",
+          "type": "string[]"
+        }
+      ]
+    },
+    {
+      "id": "518e238d",
+      "title": "Knowledge",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 2309,
+      "y": 1257,
+      "w": 320,
+      "comment": {
+        "what": "System toolbox actions and entrypoints."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "toolboxId",
+          "type": "hash8"
+        },
+        {
+          "name": "activeToolId",
+          "type": "hash8"
+        },
+        {
+          "name": "actions",
+          "type": "string[]"
+        }
+      ]
+    },
+    {
+      "id": "d91df27a",
+      "title": "RouteState",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 852,
+      "y": 2980,
+      "w": 320,
+      "comment": {
+        "what": "Current routed tab and active canvas for the UI surface."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "routePath",
+          "type": "string"
+        },
+        {
+          "name": "activeNavTabId",
+          "type": "hash8"
+        },
+        {
+          "name": "activeCanvasId",
+          "type": "hash8"
+        },
+        {
+          "name": "availableNavTabIds",
+          "type": "hash8[]"
+        },
+        {
+          "name": "pendingRoute",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "8457546e",
+      "title": "CanvasState",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 1413,
+      "y": 3117,
+      "w": 320,
+      "comment": {
+        "what": "Live working graph state for the active surface."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "canvasId",
+          "type": "hash8"
+        },
+        {
+          "name": "cardIds",
+          "type": "hash8[]"
+        },
+        {
+          "name": "zoneIds",
+          "type": "hash8[]"
+        },
+        {
+          "name": "groupIds",
+          "type": "hash8[]"
+        },
+        {
+          "name": "relationshipIds",
+          "type": "hash8[]"
+        },
+        {
+          "name": "viewportId",
+          "type": "hash8"
+        },
+        {
+          "name": "revision",
+          "type": "hash8"
+        }
+      ]
+    },
+    {
+      "id": "9cd40009",
+      "title": "SelectionState",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 1991,
+      "y": 2601,
+      "w": 320,
+      "comment": {
+        "what": "Current selected cards and zones on the active canvas."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "cardIds",
+          "type": "hash8[]"
+        },
+        {
+          "name": "zoneIds",
+          "type": "hash8[]"
+        },
+        {
+          "name": "groupIds",
+          "type": "hash8[]"
+        },
+        {
+          "name": "anchorId",
+          "type": "hash8"
+        },
+        {
+          "name": "selectionSource",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "3c96cf27",
+      "title": "GestureState",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 1995,
+      "y": 3507,
+      "w": 320,
+      "comment": {
+        "what": "Single active pointer gesture for drag, resize, marquee, pan, or zoom."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "intent",
+          "type": "string"
+        },
+        {
+          "name": "targetId",
+          "type": "hash8"
+        },
+        {
+          "name": "targetKind",
+          "type": "string"
+        },
+        {
+          "name": "pointerStart",
+          "type": "point"
+        },
+        {
+          "name": "pointerCurrent",
+          "type": "point"
+        },
+        {
+          "name": "marqueeRect",
+          "type": "rect"
+        },
+        {
+          "name": "resizeHandle",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "b0a8c6db",
+      "title": "HoverState",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 1993,
+      "y": 2938,
+      "w": 320,
+      "comment": {
+        "what": "Current hovered graph target under pointer inspection."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "cardId",
+          "type": "hash8"
+        },
+        {
+          "name": "zoneId",
+          "type": "hash8"
+        },
+        {
+          "name": "groupId",
+          "type": "hash8"
+        },
+        {
+          "name": "relationshipId",
+          "type": "hash8"
+        }
+      ]
+    },
+    {
+      "id": "0c063c90",
+      "title": "CardUIState",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 1992,
+      "y": 3213,
+      "w": 320,
+      "comment": {
+        "what": "Open card stack, visible card tabs, and hash-id presentation state."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "openCardIds",
+          "type": "hash8[]"
+        },
+        {
+          "name": "topCardId",
+          "type": "hash8"
+        },
+        {
+          "name": "activeTabByCardId",
+          "type": "map"
+        },
+        {
+          "name": "hashIdVisibleCardId",
+          "type": "hash8"
+        }
+      ]
+    },
+    {
+      "id": "c148aeb0",
+      "title": "ToolState",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 2476,
+      "y": 3602,
+      "w": 320,
+      "comment": {
+        "what": "Current toolbox mode and zone tool parameters."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "activeTool",
+          "type": "string"
+        },
+        {
+          "name": "zoneColor",
+          "type": "hex"
+        },
+        {
+          "name": "isColorPickerOpen",
+          "type": "boolean"
+        }
+      ]
+    },
+    {
+      "id": "6c40f015",
+      "title": "ThreadPanelState",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 3286,
+      "y": 3083,
+      "w": 320,
+      "comment": {
+        "what": "Current right-panel thread target and visibility state."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "isOpen",
+          "type": "boolean"
+        },
+        {
+          "name": "threadId",
+          "type": "hash8"
+        },
+        {
+          "name": "targetId",
+          "type": "hash8"
+        },
+        {
+          "name": "targetKind",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "01173a06",
+      "title": "DraftState",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 3704,
+      "y": 3109,
+      "w": 320,
+      "comment": {
+        "what": "Current unsent thread message draft."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "threadId",
+          "type": "hash8"
+        },
+        {
+          "name": "body",
+          "type": "markdown"
+        },
+        {
+          "name": "status",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "254e72c1",
+      "title": "VoiceState",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 3287,
+      "y": 2635,
+      "w": 320,
+      "comment": {
+        "what": "Voice recording and transcription lifecycle for one thread."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "threadId",
+          "type": "hash8"
+        },
+        {
+          "name": "voiceFileRef",
+          "type": "string"
+        },
+        {
+          "name": "recordingStatus",
+          "type": "string"
+        },
+        {
+          "name": "durationMs",
+          "type": "number"
+        },
+        {
+          "name": "level",
+          "type": "number"
+        },
+        {
+          "name": "uploadStatus",
+          "type": "string"
+        },
+        {
+          "name": "transcriptionStatus",
+          "type": "string"
+        },
+        {
+          "name": "localMessageId",
+          "type": "hash8"
+        }
+      ]
+    },
+    {
+      "id": "31283996",
+      "title": "ModalState",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 2443,
+      "y": 3103,
+      "w": 320,
+      "comment": {
+        "what": "Active modal or edit panel state for the current target."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "modalKind",
+          "type": "string"
+        },
+        {
+          "name": "targetId",
+          "type": "hash8"
+        },
+        {
+          "name": "draftValue",
+          "type": "string"
+        },
+        {
+          "name": "confirmAction",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "2d242706",
+      "title": "NotificationState",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 2795,
+      "y": 3103,
+      "w": 320,
+      "comment": {
+        "what": "Transient operator notification state."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "level",
+          "type": "string"
+        },
+        {
+          "name": "message",
+          "type": "string"
+        },
+        {
+          "name": "eventId",
+          "type": "hash8"
+        }
+      ]
+    },
+    {
+      "id": "e24fe89f",
+      "title": "RefreshState",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 2457,
+      "y": 2637,
+      "w": 320,
+      "comment": {
+        "what": "Server-triggered reload lifecycle state for the active surface."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "surfaceId",
+          "type": "hash8"
+        },
+        {
+          "name": "mode",
+          "type": "string"
+        },
+        {
+          "name": "updatedAt",
+          "type": "iso8601"
+        },
+        {
+          "name": "source",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "d8ef7d8b",
+      "title": "PersistenceState",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 2809,
+      "y": 2637,
+      "w": 320,
+      "comment": {
+        "what": "Pending and recent save lifecycle state for the active surface."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "pendingSaveReason",
+          "type": "string"
+        },
+        {
+          "name": "pendingSurfaceId",
+          "type": "hash8"
+        },
+        {
+          "name": "lastSavedAt",
+          "type": "iso8601"
+        },
+        {
+          "name": "lastSaveError",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "a49821b6",
+      "title": "ClipboardState",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 1418,
+      "y": 2584,
+      "w": 320,
+      "comment": {
+        "what": "Current copied canvas payload for paste into the active canvas."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "cardIds",
+          "type": "hash8[]"
+        },
+        {
+          "name": "zoneIds",
+          "type": "hash8[]"
+        },
+        {
+          "name": "relationshipIds",
+          "type": "hash8[]"
+        },
+        {
+          "name": "sourceCanvasId",
+          "type": "hash8"
+        },
+        {
+          "name": "payload",
+          "type": "object"
+        },
+        {
+          "name": "copiedAt",
+          "type": "iso8601"
+        }
+      ]
+    },
+    {
+      "id": "7bb532f1",
+      "title": "Group",
+      "cardType": "base-class",
+      "domainId": "data",
+      "x": 4845,
+      "y": 1438,
+      "w": 320,
+      "comment": {
+        "what": "Primary graph object grouping cards and zones as one selectable unit."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "groupId",
+          "type": "hash8"
+        },
+        {
+          "name": "canvasId",
+          "type": "hash8"
+        },
+        {
+          "name": "title",
+          "type": "string"
+        },
+        {
+          "name": "x",
+          "type": "number"
+        },
+        {
+          "name": "y",
+          "type": "number"
+        },
+        {
+          "name": "width",
+          "type": "number"
+        },
+        {
+          "name": "height",
+          "type": "number"
+        }
+      ]
+    },
+    {
+      "id": "7c83ee82",
+      "title": "MasterLedger",
+      "cardType": "base-class",
+      "domainId": "",
+      "x": 140,
+      "y": 661,
+      "w": 320,
+      "comment": {
+        "what": "Canonical source containing syntactically valid pseudocode, telemetry calls, branching, parameters, state usage, and WHAT WHY HOW comments."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "5ec1172d",
+      "title": "Worktree",
+      "cardType": "base-class",
+      "domainId": "",
+      "x": 138,
+      "y": 245,
+      "w": 320,
+      "comment": {
+        "what": "Generated filesystem output containing one file per function."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "a7f943b3",
+      "title": "GeneratedFunction",
+      "cardType": "base-class",
+      "domainId": "",
+      "x": 787,
+      "y": 215,
+      "w": 320,
+      "comment": {
+        "what": "Generated function file.\n\n- `input`: normalizes boundary data into typed actions only and must not call helpers or effects directly.\n- `controller`: orchestrates action execution, resolves active runtime document context, calls helpers/effects, and owns domain branching.\n- `helper`: performs pure policy or computation and returns data.\n- `effect`: crosses IO or DOM boundaries and does not decide domain behavior.\n- `test`: proves behavior with state contracts and proves browser input paths route through controllers before effects.\n- `component`: renders runtime output and emits actions."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "functionId",
+          "type": "hash8"
+        },
+        {
+          "name": "kind",
+          "type": "enum(input,controller,helper,effect,test,component)"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "path",
+          "type": "string"
+        },
+        {
+          "name": "sourceSpecIds",
+          "type": "string[]"
+        },
+        {
+          "name": "telemetryName",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "0a91751a",
+      "title": "TelemetryTrace",
+      "cardType": "base-class",
+      "domainId": "",
+      "x": 35,
+      "y": 1588,
+      "w": 320,
+      "comment": {
+        "what": "Default telemetry emitted by generated files for function name, arguments, and execution phase."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "3cc57f9d",
+      "title": "TestRun",
+      "cardType": "base-class",
+      "domainId": "",
+      "x": -431,
+      "y": 1140,
+      "w": 320,
+      "comment": {
+        "what": "Execution record for integration and unit tests."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "52dd08fc",
+      "title": "GeneratedReport",
+      "cardType": "base-class",
+      "domainId": "",
+      "x": -438,
+      "y": 1475,
+      "w": 320,
+      "comment": {
+        "what": "Single generated report file for test results, telemetry, stack traces, graph, and unused functions."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "a9949f3a",
+      "title": "ExecutionStackTrace",
+      "cardType": "base-class",
+      "domainId": "",
+      "x": 30,
+      "y": 1357,
+      "w": 320,
+      "comment": {
+        "what": "Execution stack trace captured for both passing and failing main integration tests."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "18acdd10",
+      "title": "RelationshipRenderState",
+      "cardType": "base-class",
+      "domainId": "",
+      "x": 1417,
+      "y": 3574,
+      "w": 320,
+      "comment": {
+        "what": "Runtime arrow rendering state computed from Relationship, card geometry, DOM measurements, viewport, and selection."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "relationshipId",
+          "type": "hash8"
+        },
+        {
+          "name": "sourceSide",
+          "type": "string"
+        },
+        {
+          "name": "targetSide",
+          "type": "string"
+        },
+        {
+          "name": "sourcePortSlot",
+          "type": "number"
+        },
+        {
+          "name": "targetPortSlot",
+          "type": "number"
+        },
+        {
+          "name": "path",
+          "type": "string"
+        },
+        {
+          "name": "labelPoint",
+          "type": "object"
+        },
+        {
+          "name": "selected",
+          "type": "boolean"
+        }
+      ]
+    },
+    {
+      "id": "a70c969c",
+      "title": "RuntimeData",
+      "cardType": "base-class",
+      "domainId": "",
+      "x": 781,
+      "y": 791,
+      "w": 320,
+      "comment": {
+        "what": "Runtime data used by generated functions.\n\n- `State`: previous and next application data observed by reducers, controllers, components, and tests.\n- `Action`: typed command created from input and consumed by controllers. Browser events never target DOM effects directly; they resolve an active document context and dispatch a controller-owned action.\n- Route-addressable ledger tabs treat the server response as authoritative persisted state. Client actions may stage transient DOM feedback during gestures, but every persisted ledger mutation is committed through the active tab server route before replacing `activeLedger`."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "runtimeDataId",
+          "type": "hash8"
+        },
+        {
+          "name": "kind",
+          "type": "enum(State,Action)"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "shape",
+          "type": "object"
+        },
+        {
+          "name": "usage",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "025274e9",
+      "title": "Directory",
+      "cardType": "base-class",
+      "domainId": "",
+      "x": -415,
+      "y": 153,
+      "w": 320,
+      "comment": {
+        "what": "Generated directory node inside the worktree. Directories organize generated one-function files by semantic responsibility."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "directoryId",
+          "type": "hash8"
+        },
+        {
+          "name": "worktreeId",
+          "type": "hash8"
+        },
+        {
+          "name": "path",
+          "type": "string"
+        },
+        {
+          "name": "purpose",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": "7ef6c99b",
+      "title": "SpecsLedger",
+      "cardType": "base-class",
+      "domainId": "",
+      "x": -430,
+      "y": 610,
+      "w": 320,
+      "comment": {
+        "what": "Source ledger containing the spec cards used to generate tests, functions, runtime data, and reports."
+      },
+      "facts": [],
+      "fields": [
+        {
+          "name": "specsLedgerId",
+          "type": "hash8"
+        },
+        {
+          "name": "path",
+          "type": "string"
+        },
+        {
+          "name": "specCardIds",
+          "type": "string[]"
+        },
+        {
+          "name": "suiteIds",
+          "type": "string[]"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "id": "0ef0f4a5",
+      "from": "8f053726",
+      "to": "e8d484fe",
+      "label": "contains"
+    },
+    {
+      "id": "962d88e2",
+      "from": "e8d484fe",
+      "to": "66a4f377",
+      "label": "frames"
+    },
+    {
+      "id": "56e8aa6d",
+      "from": "9fe8052e",
+      "to": "7d7b4077",
+      "label": "discusses"
+    },
+    {
+      "id": "a379dd1c",
+      "from": "449dbbbe",
+      "to": "7d7b4077",
+      "label": "discusses"
+    },
+    {
+      "id": "483d2d3c",
+      "from": "8e969212",
+      "to": "9fe8052e",
+      "label": "source"
+    },
+    {
+      "id": "89174d64",
+      "from": "7d7b4077",
+      "to": "d86e5fbb",
+      "label": "stores"
+    },
+    {
+      "id": "82fc4467",
+      "from": "ffd440e4",
+      "to": "85b432dd",
+      "label": "routes"
+    },
+    {
+      "id": "43646730",
+      "from": "85b432dd",
+      "to": "eb61ae1f",
+      "label": "writes"
+    },
+    {
+      "id": "f4077cf2",
+      "from": "518e238d",
+      "to": "85b432dd",
+      "label": "triggers"
+    },
+    {
+      "id": "c87182f9",
+      "from": "9fe8052e",
+      "to": "e8d484fe",
+      "label": "refers"
+    },
+    {
+      "id": "1e9334eb",
+      "from": "449dbbbe",
+      "to": "e8d484fe",
+      "label": "refers"
+    },
+    {
+      "id": "b3630549",
+      "from": "8e969212",
+      "to": "449dbbbe",
+      "label": "target"
+    },
+    {
+      "id": "4cab3332",
+      "from": "d91df27a",
+      "to": "8457546e",
+      "label": "activates"
+    },
+    {
+      "id": "24b975f9",
+      "from": "8457546e",
+      "to": "9cd40009",
+      "label": "owns"
+    },
+    {
+      "id": "1b0c255d",
+      "from": "8457546e",
+      "to": "3c96cf27",
+      "label": "owns"
+    },
+    {
+      "id": "91907d82",
+      "from": "8457546e",
+      "to": "b0a8c6db",
+      "label": "owns"
+    },
+    {
+      "id": "794971a5",
+      "from": "8457546e",
+      "to": "0c063c90",
+      "label": "owns"
+    },
+    {
+      "id": "36efb933",
+      "from": "c148aeb0",
+      "to": "3c96cf27",
+      "label": "configures"
+    },
+    {
+      "id": "193e5e17",
+      "from": "6c40f015",
+      "to": "01173a06",
+      "label": "owns"
+    },
+    {
+      "id": "75e6c7db",
+      "from": "6c40f015",
+      "to": "254e72c1",
+      "label": "owns"
+    },
+    {
+      "id": "24beacda",
+      "from": "e24fe89f",
+      "to": "ffd440e4",
+      "label": "requests"
+    },
+    {
+      "id": "703b5b27",
+      "from": "d8ef7d8b",
+      "to": "ffd440e4",
+      "label": "requests"
+    },
+    {
+      "id": "a10bf9f5",
+      "from": "254e72c1",
+      "to": "ffd440e4",
+      "label": "uploads"
+    },
+    {
+      "id": "b046ec63",
+      "from": "85b432dd",
+      "to": "4ae0a8e0",
+      "label": "indexes"
+    },
+    {
+      "id": "0e235687",
+      "from": "4ae0a8e0",
+      "to": "8f053726",
+      "label": "opens"
+    },
+    {
+      "id": "9d4f3ffe",
+      "from": "9cd40009",
+      "to": "a49821b6",
+      "label": "copies"
+    },
+    {
+      "id": "078f1d7a",
+      "from": "a49821b6",
+      "to": "8457546e",
+      "label": "pastes"
+    },
+    {
+      "id": "57dd1a8e",
+      "from": "7bb532f1",
+      "to": "e8d484fe",
+      "label": "refers"
+    },
+    {
+      "id": "b3d3b880",
+      "from": "8e969212",
+      "to": "7bb532f1",
+      "label": "source"
+    },
+    {
+      "id": "86c4e45c",
+      "from": "7c83ee82",
+      "to": "a7f943b3",
+      "label": "defines"
+    },
+    {
+      "id": "d1adcfbb",
+      "from": "7c83ee82",
+      "to": "5ec1172d",
+      "label": "generates"
+    },
+    {
+      "id": "18f06118",
+      "from": "3cc57f9d",
+      "to": "52dd08fc",
+      "label": "produces"
+    },
+    {
+      "id": "3bded5f4",
+      "from": "8457546e",
+      "to": "18acdd10",
+      "label": "tracks arrow render state"
+    },
+    {
+      "id": "b2568338",
+      "from": "025274e9",
+      "to": "5ec1172d",
+      "label": "belongs to"
+    },
+    {
+      "id": "3e8d85d4",
+      "from": "7ef6c99b",
+      "to": "7c83ee82",
+      "label": "feeds"
+    },
+    {
+      "id": "14095029",
+      "from": "7ef6c99b",
+      "to": "3cc57f9d",
+      "label": "defines tests"
+    },
+    {
+      "id": "45c438d6",
+      "from": "7c83ee82",
+      "to": "a70c969c",
+      "label": "uses runtime data"
+    },
+    {
+      "id": "b08c115f",
+      "from": "52dd08fc",
+      "to": "0a91751a",
+      "label": "includes telemetry"
+    },
+    {
+      "id": "a37681a7",
+      "from": "52dd08fc",
+      "to": "a9949f3a",
+      "label": "includes stack trace"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "63375460",
+      "x": 3331,
+      "y": 850,
+      "width": 619,
+      "height": 736,
+      "color": "#d97706",
+      "label": "System",
+      "comments": []
+    },
+    {
+      "id": "92eed725",
+      "x": 4138,
+      "y": 781,
+      "width": 1792,
+      "height": 1113,
+      "color": "#38d9e8",
+      "label": "Graph",
+      "comments": []
+    },
+    {
+      "id": "1feb1d7d",
+      "x": 4768,
+      "y": 103,
+      "width": 927,
+      "height": 421,
+      "color": "#a855f7",
+      "label": "Chat",
+      "comments": []
+    },
+    {
+      "id": "b0a01401",
+      "x": 2595,
+      "y": 559,
+      "width": 620,
+      "height": 420,
+      "color": "#16a34a",
+      "label": "Event",
+      "comments": []
+    },
+    {
+      "id": "09739d30",
+      "x": 2261,
+      "y": 1100,
+      "width": 958,
+      "height": 826,
+      "color": "#facc15",
+      "label": "Server",
+      "comments": []
+    },
+    {
+      "id": "ceac3895",
+      "x": 763,
+      "y": 2917,
+      "width": 469,
+      "height": 399,
+      "color": "#4f7cff",
+      "label": "Navigation",
+      "comments": []
+    },
+    {
+      "id": "b1f543e5",
+      "x": 2416,
+      "y": 3029,
+      "width": 762,
+      "height": 426,
+      "color": "#8b5cf6",
+      "label": "Overlay",
+      "comments": []
+    },
+    {
+      "id": "29a2da22",
+      "x": 3228,
+      "y": 2548,
+      "width": 980,
+      "height": 900,
+      "color": "#16a34a",
+      "label": "Threads",
+      "comments": []
+    },
+    {
+      "id": "2cbb5244",
+      "x": 2430,
+      "y": 2563,
+      "width": 748,
+      "height": 414,
+      "color": "#22c55e",
+      "label": "Sync",
+      "comments": []
+    },
+    {
+      "id": "881950a3",
+      "x": 1327,
+      "y": 2571,
+      "width": 1022,
+      "height": 1322,
+      "color": "#38d9e8",
+      "label": "Canvas",
+      "comments": []
+    },
+    {
+      "id": "4994dec2",
+      "x": 2432,
+      "y": 3527,
+      "width": 443,
+      "height": 367,
+      "color": "#f59e0b",
+      "label": "Toolbox",
+      "comments": []
+    },
+    {
+      "id": "zone_da052f1da7",
+      "x": 640,
+      "y": 2506,
+      "width": 3592,
+      "height": 1592,
+      "color": "#38d9e8",
+      "label": "Runtime State",
+      "variant": "group",
+      "comments": []
+    },
+    {
+      "id": "zone_92b4ffc62c",
+      "x": 1863,
+      "y": -62,
+      "width": 4421,
+      "height": 2138,
+      "color": "#38d9e8",
+      "label": "Data Model",
+      "variant": "group",
+      "comments": []
+    },
+    {
+      "id": "001048f2",
+      "x": -593,
+      "y": 109,
+      "width": 1204,
+      "height": 872,
+      "color": "#f59e0b",
+      "label": "Generation Source",
+      "comments": []
+    },
+    {
+      "id": "421e7602",
+      "x": 674,
+      "y": 115,
+      "width": 512,
+      "height": 1190,
+      "color": "#38bdf8",
+      "label": "Function Cards",
+      "comments": []
+    },
+    {
+      "id": "593eb44e",
+      "x": -596,
+      "y": 1057,
+      "width": 1195,
+      "height": 744,
+      "color": "#22c55e",
+      "label": "Execution Proof",
+      "comments": []
+    },
+    {
+      "id": "zone_e982028cc7",
+      "x": -671,
+      "y": 7,
+      "width": 1985,
+      "height": 1892,
+      "color": "#38d9e8",
+      "label": "CLI Tool",
+      "variant": "group",
+      "comments": []
+    }
+  ],
+  "notes": {},
+  "selection": {
+    "cardId": "",
+    "cardIds": [],
+    "zoneId": "",
+    "zoneIds": []
+  },
+  "updatedAt": "2026-05-07T15:11:37.804Z",
+  "cardEdits": {}
+}

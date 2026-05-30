@@ -1,0 +1,1 @@
+The CLI reads the master ledger and creates a complete generated slice inside a git worktree under `./.worktrees/`. The `./.worktrees/` directory is git ignored and owned as CLI generated output.

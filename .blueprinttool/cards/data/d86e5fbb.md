@@ -1,0 +1,1 @@
+One persisted operator or assistant message inside a thread.

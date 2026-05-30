@@ -14,6 +14,8 @@ import { readRequestBuffer } from './read-request-buffer.js';
 import { contentTypeFor } from './content-type-for.js';
 import { normalizeLedgerNotes } from './normalize-ledger-notes.js';
 import { relationshipReferencesCard } from '../../ledger/helper/relationship-references-card.js';
+import { duplicateCardContentSidecar, externalizeCardContent, hydrateLedgerCardContent, writeCardDescriptionSidecar } from '../../ledger/helper/card-content-sidecar.js';
+import { watchCardContentFiles, type CardContentChange } from '../../refresh/helper/watch-card-content-files.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -65,9 +67,26 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   if (payload.mode === 'dry-run') {
     return { ok: true, port, server: { listening: false, port } };
   }
+  const contentEventClients = new Set<ServerResponse>();
+  const publishCardContentChange = (event: CardContentChange): void => {
+    const message = `event: card-content-change\ndata: ${JSON.stringify(event)}\n\n`;
+    for (const client of contentEventClients) client.write(message);
+  };
+  const cardContentWatcher = watchCardContentFiles({ blueprinttoolRoot, onChange: publishCardContentChange });
   const server = createServer(async (request, response) => {
     const url = (request.url ?? '/').split('?')[0];
     if (tryServeBlueprinttoolAsset({ url, blueprinttoolRoot, response })) return;
+    if (url === '/api/ledger-content-events' && request.method === 'GET') {
+      response.writeHead(200, {
+        'cache-control': 'no-store',
+        connection: 'keep-alive',
+        'content-type': 'text/event-stream',
+      });
+      response.write(': connected\n\n');
+      contentEventClients.add(response);
+      request.on('close', () => contentEventClients.delete(response));
+      return;
+    }
     if (url === '/api/transcribe' && request.method === 'POST') {
       const audioBuffer = await readRequestBuffer(request);
       await transcribeVoiceController({
@@ -170,6 +189,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         }
         if (mutation.action === 'create-card' && mutation.card?.id) {
           const id = String(mutation.card.id);
+          externalizeCardContent({ blueprinttoolRoot, card: mutation.card, ledgerPath });
           ledger.cards = (ledger.cards ?? []).filter((entry) => String(entry.id ?? '') !== id).concat(mutation.card);
         }
         if (mutation.action === 'create-relationship' && mutation.relationship?.id) {
@@ -181,9 +201,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           if (card && (mutation.cardPatch.status === 'todo' || mutation.cardPatch.status === 'done')) card.status = mutation.cardPatch.status;
           if (card && typeof mutation.cardPatch.title === 'string') card.title = mutation.cardPatch.title;
           if (card && typeof mutation.cardPatch.description === 'string') {
-            const comment = card.comment && typeof card.comment === 'object' && !Array.isArray(card.comment) ? card.comment as Record<string, unknown> : {};
-            comment.what = mutation.cardPatch.description;
-            card.comment = comment;
+            writeCardDescriptionSidecar({ blueprinttoolRoot, card, description: mutation.cardPatch.description, ledgerPath });
           }
           if (card && mutation.cardPatch.imageSizes && typeof mutation.cardPatch.imageSizes === 'object') card.imageSizes = mutation.cardPatch.imageSizes;
         }
@@ -243,7 +261,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             notesByThread[mutation.note.threadId] = notes.filter((entry) => String(entry.id ?? '') !== noteId);
             ledger.notes = notesByThread;
             writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
-            response.end(JSON.stringify(ledger));
+            response.end(JSON.stringify(hydrateLedgerCardContent(ledger, blueprinttoolRoot)));
             return;
           }
           const existing = notes.find((entry) => String(entry.id ?? '') === noteId);
@@ -267,7 +285,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             notesByThread[mutation.note.threadId] = notes.filter((entry) => String(entry.id ?? '') !== noteId);
             ledger.notes = notesByThread;
             writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
-            response.end(JSON.stringify(ledger));
+            response.end(JSON.stringify(hydrateLedgerCardContent(ledger, blueprinttoolRoot)));
             return;
           }
           let note = notes.find((entry) => String(entry.id ?? '') === noteId || String(entry.voiceFileRef ?? '') === mutation.note?.voiceFileRef);
@@ -302,12 +320,16 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           const cardIds = new Set(mutation.selection.cardIds ?? []);
           const zoneIds = new Set(mutation.selection.zoneIds ?? []);
           const groupIds = new Set(mutation.selection.groupIds ?? []);
-          const copiedCards = (ledger.cards ?? []).filter((card) => cardIds.has(String(card.id ?? ''))).map((card) => ({
-            ...card,
-            id: `${String(card.id ?? 'card')}-${suffix}`,
-            x: Number(card.x ?? 0) + 48,
-            y: Number(card.y ?? 0) + 48
-          }));
+          const copiedCards = (ledger.cards ?? []).filter((card) => cardIds.has(String(card.id ?? ''))).map((card) => {
+            const copiedCard = {
+              ...card,
+              id: `${String(card.id ?? 'card')}-${suffix}`,
+              x: Number(card.x ?? 0) + 48,
+              y: Number(card.y ?? 0) + 48
+            };
+            duplicateCardContentSidecar({ blueprinttoolRoot, ledgerPath, sourceCard: card, targetCard: copiedCard });
+            return copiedCard;
+          });
           const copiedAnnotations = (ledger.annotations ?? []).filter((annotation) => zoneIds.has(String(annotation.id ?? '')) || groupIds.has(String(annotation.id ?? ''))).map((annotation) => ({
             ...annotation,
             id: `${String(annotation.id ?? 'region')}-${suffix}`,
@@ -318,10 +340,15 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           ledger.annotations = (ledger.annotations ?? []).concat(copiedAnnotations);
         }
         writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
-        response.end(JSON.stringify(ledger));
+        response.end(JSON.stringify(hydrateLedgerCardContent(ledger, blueprinttoolRoot)));
         return;
       }
-      response.end(existsSync(ledgerPath) ? readFileSync(ledgerPath, 'utf8') : JSON.stringify({ ok: false, missing: ledgerPath }));
+      if (existsSync(ledgerPath)) {
+        const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord;
+        response.end(JSON.stringify(hydrateLedgerCardContent(ledger, blueprinttoolRoot)));
+      } else {
+        response.end(JSON.stringify({ ok: false, missing: ledgerPath }));
+      }
       return;
     }
     const isAssetRoute = url.startsWith('/assets/') || url.startsWith('/src/');
@@ -341,6 +368,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     }
     response.setHeader('content-type', 'application/json');
     response.end(JSON.stringify({ ok: true, method: request.method, url }));
+  });
+  server.on('close', () => {
+    cardContentWatcher.close();
+    contentEventClients.clear();
   });
   server.listen(port, String(payload.host ?? '127.0.0.1'));
   runtime.server = server;

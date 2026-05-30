@@ -4,9 +4,9 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createJsonFile } from '../fixture/scenario.js';
+import { createJsonFile, tempDir } from '../fixture/scenario.js';
 import { manageLedgerJsonController } from '../../src/index.js';
 
 test('ledger-cli JSON storage reads and writes committed ledger files', async () => {
@@ -157,6 +157,58 @@ test('ledger-cli export writes a zone-grouped markdown file', async () => {
   assert.match(markdown, /Field A body/);
   assert.match(markdown, /# Unzoned/);
   assert.match(markdown, /## Outside Card/);
+});
+
+test('ledger-cli export hydrates sidecar markdown card content', async () => {
+  const workspace = await tempDir();
+  const blueprinttool = join(workspace, '.blueprinttool');
+  await mkdir(join(blueprinttool, 'cards', 'specs'), { recursive: true });
+  const file = join(blueprinttool, 'specs.json');
+  const outputFile = join(workspace, 'export.md');
+  await writeFile(join(blueprinttool, 'cards', 'specs', 'card-a.md'), 'Sidecar body for export.', 'utf8');
+  await writeFile(file, JSON.stringify({
+    cards: [{ id: 'card-a', title: 'Card A', x: 0, y: 0, w: 100, h: 100, comment: { contentFile: '.blueprinttool/cards/specs/card-a.md' } }],
+    annotations: [{ id: 'zone-a', label: 'Zone A', x: -10, y: -10, width: 200, height: 200 }],
+  }, null, 2), 'utf8');
+
+  const result = await manageLedgerJsonController({
+    exportOperation: { outputFile },
+    ledgerCommand: 'export',
+    ledgerJsonFile: file,
+  });
+
+  assert.equal(result.ok, true);
+  assert.match(await readFile(outputFile, 'utf8'), /Sidecar body for export/);
+});
+
+test('ledger-cli mutate writes card comments to sidecar files when present', async () => {
+  const workspace = await tempDir();
+  const blueprinttool = join(workspace, '.blueprinttool');
+  await mkdir(join(blueprinttool, 'cards', 'specs'), { recursive: true });
+  const file = join(blueprinttool, 'specs.json');
+  const sidecar = join(blueprinttool, 'cards', 'specs', 'card-a.md');
+  await writeFile(sidecar, 'Old body.', 'utf8');
+  await writeFile(file, JSON.stringify({
+    cards: [{ id: 'card-a', title: 'Card A', comment: { contentFile: '.blueprinttool/cards/specs/card-a.md' } }],
+  }, null, 2), 'utf8');
+
+  const result = await manageLedgerJsonController({
+    ledgerCommand: 'mutate',
+    ledgerJsonFile: file,
+    mutationOperation: {
+      addRelationships: [],
+      cardId: 'card-a',
+      cardComment: 'New sidecar body.',
+      removeCardIds: [],
+      removeRelationshipIds: [],
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(await readFile(sidecar, 'utf8'), 'New sidecar body.');
+  const persisted = JSON.parse(await readFile(file, 'utf8')) as { cards: Array<{ comment?: { contentFile?: string; what?: string } }> };
+  assert.equal(persisted.cards[0].comment?.contentFile, '.blueprinttool/cards/specs/card-a.md');
+  assert.equal(persisted.cards[0].comment?.what, undefined);
 });
 
 test('ledger-cli unanswered lists threads whose latest note is not an agent answer', async () => {

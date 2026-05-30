@@ -8,6 +8,7 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { requestTranscription } from '../effect/request-transcription.js';
 import { collectVoiceRecordingBlob } from '../helper/collect-voice-recording-blob.js';
 import { encodeWavBlob } from '../helper/encode-wav-blob.js';
+import { flushPendingLedgerContentRefresh } from '../../refresh/effect/subscribe-ledger-content-events.js';
 
 export async function stopVoiceRecording(): Promise<void> {
   if (state.voice.animationFrameId) cancelAnimationFrame(state.voice.animationFrameId);
@@ -40,5 +41,6 @@ export async function stopVoiceRecording(): Promise<void> {
   state.voice.transcriptionStatus = 'uploading voice';
   telemetry('render-voice-status', { status: state.voice.transcriptionStatus, durationMs: state.voice.durationMs });
   renderVoiceStatus();
+  flushPendingLedgerContentRefresh();
   await requestTranscription(audio, threadId);
 }

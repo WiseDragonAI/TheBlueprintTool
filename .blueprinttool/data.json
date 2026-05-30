@@ -222,7 +222,7 @@
       "y": 895,
       "w": 320,
       "comment": {
-        "what": "Durable ledger state for one committed canvas surface."
+        "contentFile": ".blueprinttool/cards/data/8f053726.md"
       },
       "facts": [],
       "fields": [
@@ -249,7 +249,7 @@
       "y": 1240,
       "w": 320,
       "comment": {
-        "what": "Route-addressable navigation tab opening one canvas surface."
+        "contentFile": ".blueprinttool/cards/data/4ae0a8e0.md"
       },
       "facts": [],
       "fields": [
@@ -280,7 +280,7 @@
       "y": 907,
       "w": 320,
       "comment": {
-        "what": "Primary graph surface containing cards, zones, relationships, and viewport state."
+        "contentFile": ".blueprinttool/cards/data/e8d484fe.md"
       },
       "facts": [],
       "fields": [
@@ -307,7 +307,7 @@
       "y": 1167,
       "w": 320,
       "comment": {
-        "what": "Primary graph object with persistent position, tabs, notes, and hash identity."
+        "contentFile": ".blueprinttool/cards/data/9fe8052e.md"
       },
       "facts": [],
       "fields": [
@@ -334,7 +334,7 @@
       "y": 874,
       "w": 320,
       "comment": {
-        "what": "Primary graph object grouping cards with label, color, geometry, notes, and hash identity."
+        "contentFile": ".blueprinttool/cards/data/449dbbbe.md"
       },
       "facts": [],
       "fields": [
@@ -361,7 +361,7 @@
       "y": 1092,
       "w": 320,
       "comment": {
-        "what": "Relation table linking graph objects through source and target roles. Durable arrow state is limited to authored endpoints, label, and label visibility."
+        "contentFile": ".blueprinttool/cards/data/8e969212.md"
       },
       "facts": [],
       "fields": [
@@ -404,7 +404,7 @@
       "y": 1380,
       "w": 320,
       "comment": {
-        "what": "Persisted camera state framing one canvas surface."
+        "contentFile": ".blueprinttool/cards/data/66a4f377.md"
       },
       "facts": [],
       "fields": [
@@ -431,7 +431,7 @@
       "y": 194,
       "w": 320,
       "comment": {
-        "what": "Primary chat container attached to one canvas and one card or zone target."
+        "contentFile": ".blueprinttool/cards/data/7d7b4077.md"
       },
       "facts": [],
       "fields": [
@@ -462,7 +462,7 @@
       "y": 193,
       "w": 320,
       "comment": {
-        "what": "One persisted operator or assistant message inside a thread."
+        "contentFile": ".blueprinttool/cards/data/d86e5fbb.md"
       },
       "facts": [],
       "fields": [
@@ -493,7 +493,7 @@
       "y": 659,
       "w": 320,
       "comment": {
-        "what": "Persisted event record emitted by server or API activity."
+        "contentFile": ".blueprinttool/cards/data/eb61ae1f.md"
       },
       "facts": [],
       "fields": [
@@ -520,7 +520,7 @@
       "y": 1577,
       "w": 320,
       "comment": {
-        "what": "Routes runtime requests to server controllers."
+        "contentFile": ".blueprinttool/cards/data/ffd440e4.md"
       },
       "facts": [],
       "fields": [
@@ -551,7 +551,7 @@
       "y": 1255,
       "w": 320,
       "comment": {
-        "what": "Controllers and IO"
+        "contentFile": ".blueprinttool/cards/data/85b432dd.md"
       },
       "facts": [],
       "fields": [
@@ -578,7 +578,7 @@
       "y": 1257,
       "w": 320,
       "comment": {
-        "what": "System toolbox actions and entrypoints."
+        "contentFile": ".blueprinttool/cards/data/518e238d.md"
       },
       "facts": [],
       "fields": [
@@ -605,7 +605,7 @@
       "y": 2980,
       "w": 320,
       "comment": {
-        "what": "Current routed tab and active canvas for the UI surface."
+        "contentFile": ".blueprinttool/cards/data/d91df27a.md"
       },
       "facts": [],
       "fields": [
@@ -640,7 +640,7 @@
       "y": 3117,
       "w": 320,
       "comment": {
-        "what": "Live working graph state for the active surface."
+        "contentFile": ".blueprinttool/cards/data/8457546e.md"
       },
       "facts": [],
       "fields": [
@@ -683,7 +683,7 @@
       "y": 2601,
       "w": 320,
       "comment": {
-        "what": "Current selected cards and zones on the active canvas."
+        "contentFile": ".blueprinttool/cards/data/9cd40009.md"
       },
       "facts": [],
       "fields": [
@@ -718,7 +718,7 @@
       "y": 3507,
       "w": 320,
       "comment": {
-        "what": "Single active pointer gesture for drag, resize, marquee, pan, or zoom."
+        "contentFile": ".blueprinttool/cards/data/3c96cf27.md"
       },
       "facts": [],
       "fields": [
@@ -761,7 +761,7 @@
       "y": 2938,
       "w": 320,
       "comment": {
-        "what": "Current hovered graph target under pointer inspection."
+        "contentFile": ".blueprinttool/cards/data/b0a8c6db.md"
       },
       "facts": [],
       "fields": [
@@ -792,7 +792,7 @@
       "y": 3213,
       "w": 320,
       "comment": {
-        "what": "Open card stack, visible card tabs, and hash-id presentation state."
+        "contentFile": ".blueprinttool/cards/data/0c063c90.md"
       },
       "facts": [],
       "fields": [
@@ -823,7 +823,7 @@
       "y": 3602,
       "w": 320,
       "comment": {
-        "what": "Current toolbox mode and zone tool parameters."
+        "contentFile": ".blueprinttool/cards/data/c148aeb0.md"
       },
       "facts": [],
       "fields": [
@@ -850,7 +850,7 @@
       "y": 3083,
       "w": 320,
       "comment": {
-        "what": "Current right-panel thread target and visibility state."
+        "contentFile": ".blueprinttool/cards/data/6c40f015.md"
       },
       "facts": [],
       "fields": [
@@ -881,7 +881,7 @@
       "y": 3109,
       "w": 320,
       "comment": {
-        "what": "Current unsent thread message draft."
+        "contentFile": ".blueprinttool/cards/data/01173a06.md"
       },
       "facts": [],
       "fields": [
@@ -908,7 +908,7 @@
       "y": 2635,
       "w": 320,
       "comment": {
-        "what": "Voice recording and transcription lifecycle for one thread."
+        "contentFile": ".blueprinttool/cards/data/254e72c1.md"
       },
       "facts": [],
       "fields": [
@@ -955,7 +955,7 @@
       "y": 3103,
       "w": 320,
       "comment": {
-        "what": "Active modal or edit panel state for the current target."
+        "contentFile": ".blueprinttool/cards/data/31283996.md"
       },
       "facts": [],
       "fields": [
@@ -986,7 +986,7 @@
       "y": 3103,
       "w": 320,
       "comment": {
-        "what": "Transient operator notification state."
+        "contentFile": ".blueprinttool/cards/data/2d242706.md"
       },
       "facts": [],
       "fields": [
@@ -1013,7 +1013,7 @@
       "y": 2637,
       "w": 320,
       "comment": {
-        "what": "Server-triggered reload lifecycle state for the active surface."
+        "contentFile": ".blueprinttool/cards/data/e24fe89f.md"
       },
       "facts": [],
       "fields": [
@@ -1044,7 +1044,7 @@
       "y": 2637,
       "w": 320,
       "comment": {
-        "what": "Pending and recent save lifecycle state for the active surface."
+        "contentFile": ".blueprinttool/cards/data/d8ef7d8b.md"
       },
       "facts": [],
       "fields": [
@@ -1075,7 +1075,7 @@
       "y": 2584,
       "w": 320,
       "comment": {
-        "what": "Current copied canvas payload for paste into the active canvas."
+        "contentFile": ".blueprinttool/cards/data/a49821b6.md"
       },
       "facts": [],
       "fields": [
@@ -1114,7 +1114,7 @@
       "y": 1438,
       "w": 320,
       "comment": {
-        "what": "Primary graph object grouping cards and zones as one selectable unit."
+        "contentFile": ".blueprinttool/cards/data/7bb532f1.md"
       },
       "facts": [],
       "fields": [
@@ -1157,7 +1157,7 @@
       "y": 661,
       "w": 320,
       "comment": {
-        "what": "Canonical source containing syntactically valid pseudocode, telemetry calls, branching, parameters, state usage, and WHAT WHY HOW comments."
+        "contentFile": ".blueprinttool/cards/data/7c83ee82.md"
       },
       "facts": [],
       "fields": []
@@ -1171,7 +1171,7 @@
       "y": 245,
       "w": 320,
       "comment": {
-        "what": "Generated filesystem output containing one file per function."
+        "contentFile": ".blueprinttool/cards/data/5ec1172d.md"
       },
       "facts": [],
       "fields": []
@@ -1185,7 +1185,7 @@
       "y": 215,
       "w": 320,
       "comment": {
-        "what": "Generated function file.\n\n- `input`: normalizes boundary data into typed actions only and must not call helpers or effects directly.\n- `controller`: orchestrates action execution, resolves active runtime document context, calls helpers/effects, and owns domain branching.\n- `helper`: performs pure policy or computation and returns data.\n- `effect`: crosses IO or DOM boundaries and does not decide domain behavior.\n- `test`: proves behavior with state contracts and proves browser input paths route through controllers before effects.\n- `component`: renders runtime output and emits actions."
+        "contentFile": ".blueprinttool/cards/data/a7f943b3.md"
       },
       "facts": [],
       "fields": [
@@ -1224,7 +1224,7 @@
       "y": 1588,
       "w": 320,
       "comment": {
-        "what": "Default telemetry emitted by generated files for function name, arguments, and execution phase."
+        "contentFile": ".blueprinttool/cards/data/0a91751a.md"
       },
       "facts": [],
       "fields": []
@@ -1238,7 +1238,7 @@
       "y": 1140,
       "w": 320,
       "comment": {
-        "what": "Execution record for integration and unit tests."
+        "contentFile": ".blueprinttool/cards/data/3cc57f9d.md"
       },
       "facts": [],
       "fields": []
@@ -1252,7 +1252,7 @@
       "y": 1475,
       "w": 320,
       "comment": {
-        "what": "Single generated report file for test results, telemetry, stack traces, graph, and unused functions."
+        "contentFile": ".blueprinttool/cards/data/52dd08fc.md"
       },
       "facts": [],
       "fields": []
@@ -1266,7 +1266,7 @@
       "y": 1357,
       "w": 320,
       "comment": {
-        "what": "Execution stack trace captured for both passing and failing main integration tests."
+        "contentFile": ".blueprinttool/cards/data/a9949f3a.md"
       },
       "facts": [],
       "fields": []
@@ -1280,7 +1280,7 @@
       "y": 3574,
       "w": 320,
       "comment": {
-        "what": "Runtime arrow rendering state computed from Relationship, card geometry, DOM measurements, viewport, and selection."
+        "contentFile": ".blueprinttool/cards/data/18acdd10.md"
       },
       "facts": [],
       "fields": [
@@ -1327,7 +1327,7 @@
       "y": 791,
       "w": 320,
       "comment": {
-        "what": "Runtime data used by generated functions.\n\n- `State`: previous and next application data observed by reducers, controllers, components, and tests.\n- `Action`: typed command created from input and consumed by controllers. Browser events never target DOM effects directly; they resolve an active document context and dispatch a controller-owned action.\n- Route-addressable ledger tabs treat the server response as authoritative persisted state. Client actions may stage transient DOM feedback during gestures, but every persisted ledger mutation is committed through the active tab server route before replacing `activeLedger`."
+        "contentFile": ".blueprinttool/cards/data/a70c969c.md"
       },
       "facts": [],
       "fields": [
@@ -1362,7 +1362,7 @@
       "y": 153,
       "w": 320,
       "comment": {
-        "what": "Generated directory node inside the worktree. Directories organize generated one-function files by semantic responsibility."
+        "contentFile": ".blueprinttool/cards/data/025274e9.md"
       },
       "facts": [],
       "fields": [
@@ -1393,7 +1393,7 @@
       "y": 610,
       "w": 320,
       "comment": {
-        "what": "Source ledger containing the spec cards used to generate tests, functions, runtime data, and reports."
+        "contentFile": ".blueprinttool/cards/data/7ef6c99b.md"
       },
       "facts": [],
       "fields": [

@@ -1,0 +1,1 @@
+Persisted event record emitted by server or API activity.

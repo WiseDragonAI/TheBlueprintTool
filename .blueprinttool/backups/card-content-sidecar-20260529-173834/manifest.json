@@ -1,0 +1,17 @@
+{
+  "label": "card-content-sidecar-20260529-173834",
+  "entries": [
+    {
+      "original": "/home/jbb/dev/EditorBP/CoreV2/.blueprinttool/specs.json",
+      "backup": "/home/jbb/dev/EditorBP/CoreV2/.blueprinttool/backups/card-content-sidecar-20260529-173834/specs.json",
+      "originalSha256": "b52b8a8a5e1d8295d6e227378b235884a76418e37ba732a430ddea40d4e3276e",
+      "backupSha256": "b52b8a8a5e1d8295d6e227378b235884a76418e37ba732a430ddea40d4e3276e"
+    },
+    {
+      "original": "/home/jbb/dev/EditorBP/CoreV2/.blueprinttool/data.json",
+      "backup": "/home/jbb/dev/EditorBP/CoreV2/.blueprinttool/backups/card-content-sidecar-20260529-173834/data.json",
+      "originalSha256": "25a72a064d40848ee3b6c75a51e8b1d6ff38723c6a677f3ef7b2a2f844b07895",
+      "backupSha256": "25a72a064d40848ee3b6c75a51e8b1d6ff38723c6a677f3ef7b2a2f844b07895"
+    }
+  ]
+}
