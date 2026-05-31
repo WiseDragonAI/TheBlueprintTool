@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { viewportWorldBounds, visibleLedgerCards } from '../../src/runtime/card/helper/visible-ledger-cards.js';
-import { visibleCardQualityRefreshBucketForScale } from '../../src/runtime/card/effect/schedule-visible-card-quality-refresh.js';
 
 const root = new URL('../../../', import.meta.url);
 
@@ -22,41 +21,28 @@ test('visible card quality refresh computes viewport card candidates from ledger
   assert.deepEqual(visible.map((card) => card.id), ['inside', 'edge']);
 });
 
-test('visible card quality refresh buckets inspection zoom levels', () => {
-  assert.equal(visibleCardQualityRefreshBucketForScale(0.99), 0);
-  assert.equal(visibleCardQualityRefreshBucketForScale(1), 1);
-  assert.equal(visibleCardQualityRefreshBucketForScale(1.24), 1);
-  assert.equal(visibleCardQualityRefreshBucketForScale(1.25), 1.25);
-  assert.equal(visibleCardQualityRefreshBucketForScale(1.51), 1.5);
-  assert.equal(visibleCardQualityRefreshBucketForScale(1.76), 1.75);
-  assert.equal(visibleCardQualityRefreshBucketForScale(2.2), 2);
-});
-
-test('wheel zoom schedules visible-card refreshes when crossing quality buckets', () => {
+test('zoomed card images render through an untransformed visible-card media overlay', () => {
   const wheel = source('frontend/src/runtime/gesture/controller/handle-wheel.ts');
-  const refresh = source('frontend/src/runtime/card/effect/schedule-visible-card-quality-refresh.ts');
-  const css = source('frontend/assets/canvas/objects.css');
+  const transform = source('frontend/src/runtime/canvas/effect/apply-viewport-transform.ts');
+  const renderLedgerSurface = source('frontend/src/runtime/ledger/effect/render-ledger-surface.ts');
+  const media = source('frontend/src/runtime/canvas/effect/render-canvas-media-overlay.ts');
+  const mediaComponent = source('frontend/src/runtime/ledger/component/render-ledger-card-media.ts');
+  const canvasCss = source('frontend/assets/canvas/canvas-layer.css');
+  const objectCss = source('frontend/assets/canvas/objects.css');
 
-  assert.match(wheel, /const oldScale = state\.viewport\.scale/);
-  assert.match(wheel, /noteZoomForVisibleCardQualityRefresh\(oldScale, state\.viewport\.scale\)/);
-  assert.match(refresh, /visibleCardQualityRefreshScaleThreshold = 1/);
-  assert.match(refresh, /visibleCardQualityRefreshScaleThresholds = \[1, 1\.25, 1\.5, 1\.75, 2\]/);
-  assert.match(refresh, /previousBucket = visibleCardQualityRefreshBucketForScale\(previousScale\)/);
-  assert.match(refresh, /nextBucket = visibleCardQualityRefreshBucketForScale\(nextScale\)/);
-  assert.match(refresh, /if \(nextBucket > previousBucket\)/);
-  assert.match(refresh, /state\.visibleCardQualityRefreshCompleted = true/);
-  assert.match(refresh, /state\.visibleCardQualityRefreshCompletedBucket = visibleCardQualityRefreshBucketForScale\(scale\)/);
-  assert.match(refresh, /visibleLedgerCards\(cards, bounds\)\.slice\(0, maxVisibleCardQualityRefreshCount\)/);
-  assert.match(refresh, /patchLedgerCard\(card, existing, zoneAttribution\?\.cardById\?\.\[id\]\)/);
-  assert.match(refresh, /promoteCardMediaQuality\(existing, scale\)/);
-  assert.match(refresh, /clearPromotedMediaQuality\(content\)/);
-  assert.match(refresh, /querySelectorAll\('\.ledger-card-media-shell, \.ledger-card-inline-image-frame'\)/);
-  assert.match(refresh, /maxVisibleCardMediaQualityScale = 2\.5/);
-  assert.match(css, /\.ledger-card-media-shell\[data-quality-promoted="true"\] \.ledger-card-media-image/s);
-  assert.match(css, /--media-quality-scale/);
-  assert.match(css, /--media-quality-inverse-scale/);
-  assert.match(css, /position:\s*absolute;[^}]*top:\s*0;[^}]*left:\s*0;[^}]*transform:\s*scale\(var\(--media-quality-inverse-scale, 1\)\);[^}]*transform-origin:\s*left top;/s);
-  assert.doesNotMatch(refresh, /renderCanvasSurface/);
-  assert.equal(refresh.includes("querySelectorAll('[data-ledger-card-media]"), false);
-  assert.equal(refresh.includes('querySelectorAll("[data-ledger-card-media]'), false);
+  assert.match(transform, /scheduleCanvasMediaOverlayRender\(\)/);
+  assert.match(renderLedgerSurface, /scheduleCanvasMediaOverlayRender\(\)/);
+  assert.match(wheel, /scheduleCanvasMediaOverlayRender\(\)/);
+  assert.doesNotMatch(wheel, /noteZoomForVisibleCardQualityRefresh/);
+  assert.match(mediaComponent, /track\.addEventListener\('scroll', scheduleCanvasMediaOverlayRender/);
+  assert.match(media, /canvasMediaOverlayScaleThreshold = 1/);
+  assert.match(media, /visibleLedgerCards\(cards, bounds\)\.slice\(0, maxCanvasMediaOverlayCards\)/);
+  assert.match(media, /querySelectorAll\('\.ledger-card-media-shell'\)/);
+  assert.match(media, /getBoundingClientRect\(\)/);
+  assert.match(media, /className = 'canvas-media-overlay-image'/);
+  assert.match(canvasCss, /\.canvas-media-overlay\s*{[^}]*position:\s*absolute;[^}]*z-index:\s*80;[^}]*pointer-events:\s*none;/s);
+  assert.match(canvasCss, /\.canvas-media-overlay-image\s*{[^}]*position:\s*absolute;[^}]*object-fit:\s*contain;/s);
+  assert.match(objectCss, /\.ledger-card-media-shell\[data-media-overlay-active="true"\] \.ledger-card-media-image\s*{[^}]*visibility:\s*hidden;/s);
+  assert.doesNotMatch(objectCss, /data-quality-promoted/);
+  assert.doesNotMatch(objectCss, /--media-quality-scale/);
 });

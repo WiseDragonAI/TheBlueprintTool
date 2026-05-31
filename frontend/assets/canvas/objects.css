@@ -666,15 +666,8 @@
   object-position: center;
 }
 
-.ledger-card-media-shell[data-quality-promoted="true"] .ledger-card-media-image,
-.ledger-card-inline-image-frame[data-quality-promoted="true"] .ledger-card-inline-image {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: calc(100% * var(--media-quality-scale, 1));
-  height: calc(100% * var(--media-quality-scale, 1));
-  transform: scale(var(--media-quality-inverse-scale, 1));
-  transform-origin: left top;
+.ledger-card-media-shell[data-media-overlay-active="true"] .ledger-card-media-image {
+  visibility: hidden;
 }
 
 .ledger-card-media-nav {

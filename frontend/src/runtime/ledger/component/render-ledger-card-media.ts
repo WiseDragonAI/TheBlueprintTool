@@ -1,5 +1,6 @@
 import { type LedgerMarkdownBlock } from '../helper/parse-ledger-card-markdown.js';
 import { commitActiveLedgerMutation } from '../effect/commit-active-ledger-mutation.js';
+import { scheduleCanvasMediaOverlayRender } from '../../canvas/effect/render-canvas-media-overlay.js';
 import { state } from '../../state.js';
 
 type LedgerCardImage = Extract<LedgerMarkdownBlock, { kind: 'images' }>['images'][number];
@@ -80,7 +81,10 @@ function renderMediaSlide(image: LedgerCardImage, index: number, shell: HTMLElem
   element.draggable = false;
   if (image.title) element.title = image.title;
   if (index === 0) {
-    element.addEventListener('load', () => applyImageAspectRatio(shell, element), { once: true });
+    element.addEventListener('load', () => {
+      applyImageAspectRatio(shell, element);
+      scheduleCanvasMediaOverlayRender();
+    }, { once: true });
     if (element.complete) applyImageAspectRatio(shell, element);
   }
 
@@ -95,6 +99,7 @@ function scrollCarousel(track: HTMLElement, direction: -1 | 1): void {
   const currentIndex = Math.round(track.scrollLeft / slideWidth);
   const nextIndex = (currentIndex + direction + slideCount) % slideCount;
   track.scrollTo({ left: nextIndex * slideWidth, behavior: 'smooth' });
+  scheduleCanvasMediaOverlayRender();
 }
 
 export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind: 'images' }>, options: LedgerCardMediaOptions = {}): HTMLElement {
@@ -113,6 +118,7 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
   const track = document.createElement('div');
   track.className = 'ledger-card-media-track';
   track.setAttribute('aria-label', isCarousel ? 'Card image carousel' : 'Card image');
+  track.addEventListener('scroll', scheduleCanvasMediaOverlayRender, { passive: true });
   for (const [index, image] of block.images.entries()) {
     track.appendChild(renderMediaSlide(image, index, shell));
   }

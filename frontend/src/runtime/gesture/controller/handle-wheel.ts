@@ -4,7 +4,7 @@
  */
 import { state } from '../../state.js';
 import { applyViewportTransform } from '../../canvas/effect/apply-viewport-transform.js';
-import { noteZoomForVisibleCardQualityRefresh } from '../../card/effect/schedule-visible-card-quality-refresh.js';
+import { scheduleCanvasMediaOverlayRender } from '../../canvas/effect/render-canvas-media-overlay.js';
 import { scheduleViewportPersistence } from '../../persistence/effect/schedule-viewport-persistence.js';
 import { renderRelationshipOverlay } from '../../relationship/effect/render-relationship-overlay.js';
 import { point } from '../helper/point.js';
@@ -30,6 +30,7 @@ function advanceCarouselFromWheel(event: WheelEvent): boolean {
   const direction = wheelDelta < 0 ? -1 : 1;
   const nextIndex = (currentIndex + direction + slideCount) % slideCount;
   track.scrollTo({ left: nextIndex * slideWidth, behavior: 'smooth' });
+  scheduleCanvasMediaOverlayRender();
   telemetry('card-image-carousel-wheel', { direction, currentIndex, nextIndex, slideCount });
   return true;
 }
@@ -54,7 +55,6 @@ export function handleWheel(event: WheelEvent): void {
     state.viewport.scale = Math.min(maxCanvasZoomScale, Math.max(minCanvasZoomScale, nextScale));
     state.viewport.x = pointer.x - anchoredCanvasPoint.x * state.viewport.scale;
     state.viewport.y = pointer.y - anchoredCanvasPoint.y * state.viewport.scale;
-    noteZoomForVisibleCardQualityRefresh(oldScale, state.viewport.scale);
     telemetry('calculate-viewport-transform', { kind: 'zoom', pointer, anchoredCanvasPoint, viewport: state.viewport });
   }
   scheduleViewportPersistence();

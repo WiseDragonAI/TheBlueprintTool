@@ -41,6 +41,22 @@
   pointer-events: none;
 }
 
+.canvas-media-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.canvas-media-overlay-image {
+  position: absolute;
+  display: block;
+  object-fit: contain;
+  object-position: center;
+  pointer-events: none;
+}
+
 .canvas-control {
   position: absolute;
   display: inline-flex;

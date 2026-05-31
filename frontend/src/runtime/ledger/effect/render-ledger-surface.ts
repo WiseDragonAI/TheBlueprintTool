@@ -9,6 +9,7 @@ import { setCanvasLayerHidden } from '../../canvas/effect/set-canvas-layer-hidde
 import { ensureZoneAttributionCache } from '../helper/zone-attribution-cache.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { invalidateDetailModeCardSizeCache } from '../../canvas/effect/update-detail-mode.js';
+import { scheduleCanvasMediaOverlayRender } from '../../canvas/effect/render-canvas-media-overlay.js';
 
 export function renderLedgerSurface(): void {
   invalidateDetailModeCardSizeCache();
@@ -55,6 +56,7 @@ export function renderLedgerSurface(): void {
   if (!overlay.parentElement) content.insertBefore(overlay, marquee);
   scheduleLedgerCardTabFrameSync(content);
   watchLedgerCardTabFrameSize(content);
+  scheduleCanvasMediaOverlayRender();
   telemetry('render-ledger-surface', { activeTab: state.activeTab, cards: cards.length, zones: annotations.length, relationships: relationships.length });
 }
 
