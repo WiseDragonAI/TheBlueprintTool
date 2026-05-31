@@ -24,6 +24,7 @@ test('visible card quality refresh computes viewport card candidates from ledger
 test('wheel zoom schedules one visible-card refresh only when crossing into scale one', () => {
   const wheel = source('frontend/src/runtime/gesture/controller/handle-wheel.ts');
   const refresh = source('frontend/src/runtime/card/effect/schedule-visible-card-quality-refresh.ts');
+  const css = source('frontend/assets/canvas/objects.css');
 
   assert.match(wheel, /const oldScale = state\.viewport\.scale/);
   assert.match(wheel, /noteZoomForVisibleCardQualityRefresh\(oldScale, state\.viewport\.scale\)/);
@@ -32,6 +33,13 @@ test('wheel zoom schedules one visible-card refresh only when crossing into scal
   assert.match(refresh, /state\.visibleCardQualityRefreshCompleted = true/);
   assert.match(refresh, /visibleLedgerCards\(cards, bounds\)\.slice\(0, maxVisibleCardQualityRefreshCount\)/);
   assert.match(refresh, /patchLedgerCard\(card, existing, zoneAttribution\?\.cardById\?\.\[id\]\)/);
+  assert.match(refresh, /promoteCardMediaQuality\(existing, scale\)/);
+  assert.match(refresh, /clearPromotedMediaQuality\(content\)/);
+  assert.match(refresh, /querySelectorAll\('\.ledger-card-media-shell, \.ledger-card-inline-image-frame'\)/);
+  assert.match(refresh, /maxVisibleCardMediaQualityScale = 2\.5/);
+  assert.match(css, /\.ledger-card-media-shell\[data-quality-promoted="true"\] \.ledger-card-media-image/s);
+  assert.match(css, /--media-quality-scale/);
+  assert.match(css, /--media-quality-inverse-scale/);
   assert.doesNotMatch(refresh, /renderCanvasSurface/);
   assert.equal(refresh.includes("querySelectorAll('[data-ledger-card-media]"), false);
   assert.equal(refresh.includes('querySelectorAll("[data-ledger-card-media]'), false);

@@ -665,6 +665,14 @@
   object-position: center;
 }
 
+.ledger-card-media-shell[data-quality-promoted="true"] .ledger-card-media-image,
+.ledger-card-inline-image-frame[data-quality-promoted="true"] .ledger-card-inline-image {
+  width: calc(100% * var(--media-quality-scale, 1));
+  height: calc(100% * var(--media-quality-scale, 1));
+  transform: scale(var(--media-quality-inverse-scale, 1));
+  transform-origin: center center;
+}
+
 .ledger-card-media-nav {
   position: absolute;
   inset: 0;
