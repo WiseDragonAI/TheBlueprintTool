@@ -66,7 +66,8 @@ test('ctrl drag always derives pan intent without selection side effects and shi
     const pointerDown = source('frontend/src/runtime/gesture/controller/handle-pointer-down.ts');
     const pointerUp = source('frontend/src/runtime/gesture/controller/handle-pointer-up.ts');
     assert.match(pointerDown, /ctrlPan:\s*event\.ctrlKey/);
-    assert.match(pointerUp, /const isCtrlPan = Boolean\(state\.pointer\.ctrlPan\)/);
+    assert.match(pointerUp, /const pointerSession = state\.pointer/);
+    assert.match(pointerUp, /const isCtrlPan = Boolean\(pointerSession\.ctrlPan\)/);
     assert.match(pointerUp, /!isCtrlPan && pointerIntent === 'pan'/);
   } finally {
     state.activeTool = previousTool;
@@ -89,6 +90,6 @@ test('direct canvas pointer down clears selection before pointer up', () => {
 
 test('plain pan pointer up does not force a full canvas rerender', () => {
   const pointerUp = source('frontend/src/runtime/gesture/controller/handle-pointer-up.ts');
-  assert.match(pointerUp, /const pointerIntent = state\.pointer\.intent/);
+  assert.match(pointerUp, /const pointerIntent = pointerSession\.intent/);
   assert.match(pointerUp, /if \(pointerIntent !== 'pan'\) renderCanvasSurface\(\)/);
 });

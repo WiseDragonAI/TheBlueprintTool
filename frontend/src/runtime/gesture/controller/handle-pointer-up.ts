@@ -15,49 +15,67 @@ import { rectFromPoints } from '../../canvas/helper/rect-from-points.js';
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
 import { selectIntersecting } from '../../selection/effect/select-intersecting.js';
 import { selectTarget } from '../../selection/controller/select-target.js';
+import { moveSelected } from '../../selection/effect/move-selected.js';
+import { resizeSelectedCard } from '../../card/effect/resize-selected-card.js';
+import { resizeSelectedZone } from '../../zone/effect/resize-selected-zone.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export async function handlePointerUp(event: PointerEvent): Promise<void> {
   if (!state.pointer) return;
   event.preventDefault();
-  const pointerIntent = state.pointer.intent;
+  const pointerSession = state.pointer;
+  const pointerIntent = pointerSession.intent;
   telemetry('canvas-pointer-up', { intent: pointerIntent });
   const releasePoint = point(event);
-  const moved = Math.hypot(releasePoint.x - state.pointer.start.x, releasePoint.y - state.pointer.start.y);
-  const isCtrlPan = Boolean(state.pointer.ctrlPan);
-  if (!isCtrlPan && pointerIntent === 'pan' && state.pointer.targetKind === 'zone' && moved < 4) {
-    selectTarget('zone', state.pointer.targetId, false);
-    telemetry('resolve-selection-target', { kind: 'zone', id: state.pointer.targetId, clickSelect: true });
+  const releaseCanvas = canvasPoint(releasePoint);
+  const moved = Math.hypot(releasePoint.x - pointerSession.start.x, releasePoint.y - pointerSession.start.y);
+  const isCtrlPan = Boolean(pointerSession.ctrlPan);
+  if (!isCtrlPan && pointerIntent === 'pan' && pointerSession.targetKind === 'zone' && moved < 4) {
+    selectTarget('zone', pointerSession.targetId, false);
+    telemetry('resolve-selection-target', { kind: 'zone', id: pointerSession.targetId, clickSelect: true });
   }
-  if (!isCtrlPan && pointerIntent === 'pan' && state.pointer.targetKind === 'group' && moved < 4) {
-    selectTarget('group', state.pointer.targetId, false);
-    telemetry('resolve-selection-target', { kind: 'group', id: state.pointer.targetId, clickSelect: true });
+  if (!isCtrlPan && pointerIntent === 'pan' && pointerSession.targetKind === 'group' && moved < 4) {
+    selectTarget('group', pointerSession.targetId, false);
+    telemetry('resolve-selection-target', { kind: 'group', id: pointerSession.targetId, clickSelect: true });
   }
   if (pointerIntent === 'marquee') {
-    const rect = rectFromPoints(state.pointer.startCanvas, canvasPoint(releasePoint));
+    const rect = rectFromPoints(pointerSession.startCanvas, releaseCanvas);
     selectIntersecting(rect);
     (document.querySelector('.marquee') as HTMLElement).hidden = true;
     telemetry('resolve-selection-target', { selection: state.selection });
   }
   if (pointerIntent === 'draw-card') {
-    const rect = rectFromPoints(state.pointer.startCanvas, canvasPoint(releasePoint));
+    const rect = rectFromPoints(pointerSession.startCanvas, releaseCanvas);
     (document.querySelector('.marquee') as HTMLElement).hidden = true;
+    finishPointer(event);
     await createCardController(rect);
   }
   if (pointerIntent === 'draw-zone') {
-    const rect = rectFromPoints(state.pointer.startCanvas, canvasPoint(releasePoint));
+    const rect = rectFromPoints(pointerSession.startCanvas, releaseCanvas);
     (document.querySelector('.marquee') as HTMLElement).hidden = true;
+    finishPointer(event);
     await createZoneController(rect);
   }
   if (pointerIntent === 'draw-group') {
-    const rect = rectFromPoints(state.pointer.startCanvas, canvasPoint(releasePoint));
+    const rect = rectFromPoints(pointerSession.startCanvas, releaseCanvas);
     (document.querySelector('.marquee') as HTMLElement).hidden = true;
+    finishPointer(event);
     await createGroupController(rect);
   }
   if (pointerIntent === 'drag' || pointerIntent === 'group' || pointerIntent === 'resize') {
+    const canvasDx = releaseCanvas.x - pointerSession.currentCanvas.x;
+    const canvasDy = releaseCanvas.y - pointerSession.currentCanvas.y;
+    if (canvasDx || canvasDy) {
+      if (pointerIntent === 'drag' || pointerIntent === 'group') moveSelected(canvasDx, canvasDy);
+      if (pointerIntent === 'resize') {
+        if (pointerSession.targetKind === 'card') resizeSelectedCard(canvasDx, canvasDy);
+        else resizeSelectedZone(canvasDx, canvasDy);
+      }
+    }
+    finishPointer(event);
     await commitSelectedLedgerGeometry();
   }
+  if (pointerIntent === 'pan' || pointerIntent === 'marquee') finishPointer(event);
   persistState();
-  finishPointer(event);
   if (pointerIntent !== 'pan') renderCanvasSurface();
 }
