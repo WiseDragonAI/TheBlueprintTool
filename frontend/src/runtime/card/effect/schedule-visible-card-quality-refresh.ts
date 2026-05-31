@@ -1,5 +1,5 @@
 /**
- * WHAT: Re-patches visible ledger cards once after crossing into inspection zoom.
+ * WHAT: Re-patches visible ledger cards after crossing inspection zoom quality buckets.
  * WHY: Cards painted while zoomed out can stay backed by a soft compositor raster when zoomed in.
  */
 import { canvas, content } from '../../dom.js';
@@ -13,6 +13,7 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { viewportWorldBounds, visibleLedgerCards } from '../helper/visible-ledger-cards.js';
 
 export const visibleCardQualityRefreshScaleThreshold = 1;
+export const visibleCardQualityRefreshScaleThresholds = [1, 1.25, 1.5, 1.75, 2] as const;
 const visibleCardQualityRefreshDelayMs = 160;
 const maxVisibleCardQualityRefreshCount = 16;
 const maxVisibleCardMediaQualityScale = 2.5;
@@ -35,6 +36,15 @@ function hasActiveEditor(card: HTMLElement): boolean {
 
 function cardNode(cardId: string): HTMLElement | null {
   return content.querySelector(`:scope > .card[data-card-id="${CSS.escape(cardId)}"].ledger-node`) as HTMLElement | null;
+}
+
+export function visibleCardQualityRefreshBucketForScale(scale: number): number {
+  const value = Number.isFinite(scale) ? scale : 0;
+  let bucket = 0;
+  for (const threshold of visibleCardQualityRefreshScaleThresholds) {
+    if (value >= threshold) bucket = threshold;
+  }
+  return bucket;
 }
 
 function clearMediaQualityPromotion(shell: HTMLElement): void {
@@ -124,7 +134,13 @@ function runVisibleCardQualityRefresh(): void {
     renderCanvasControlOverlay();
   }
   state.visibleCardQualityRefreshCompleted = true;
-  telemetry('visible-card-quality-refresh', { refreshed, candidates: visible.length, threshold: visibleCardQualityRefreshScaleThreshold });
+  state.visibleCardQualityRefreshCompletedBucket = visibleCardQualityRefreshBucketForScale(scale);
+  telemetry('visible-card-quality-refresh', {
+    refreshed,
+    candidates: visible.length,
+    bucket: state.visibleCardQualityRefreshCompletedBucket,
+    threshold: visibleCardQualityRefreshScaleThreshold
+  });
 }
 
 function scheduleVisibleCardQualityRefresh(): void {
@@ -134,20 +150,24 @@ function scheduleVisibleCardQualityRefresh(): void {
 }
 
 export function noteZoomForVisibleCardQualityRefresh(previousScale: number, nextScale: number): void {
-  if (nextScale < visibleCardQualityRefreshScaleThreshold) {
+  const previousBucket = visibleCardQualityRefreshBucketForScale(previousScale);
+  const nextBucket = visibleCardQualityRefreshBucketForScale(nextScale);
+
+  if (nextBucket === 0) {
     clearVisibleCardQualityRefreshTimer();
     clearPromotedMediaQuality(content);
     state.visibleCardQualityRefreshAboveThreshold = false;
     state.visibleCardQualityRefreshCompleted = false;
+    state.visibleCardQualityRefreshCompletedBucket = 0;
     return;
   }
 
-  if (previousScale < visibleCardQualityRefreshScaleThreshold && nextScale >= visibleCardQualityRefreshScaleThreshold) {
-    state.visibleCardQualityRefreshAboveThreshold = true;
+  state.visibleCardQualityRefreshAboveThreshold = true;
+  if (nextBucket > previousBucket) {
     state.visibleCardQualityRefreshCompleted = false;
   }
 
-  if (state.visibleCardQualityRefreshAboveThreshold && !state.visibleCardQualityRefreshCompleted) {
+  if (!state.visibleCardQualityRefreshCompleted) {
     scheduleVisibleCardQualityRefresh();
   }
 }
