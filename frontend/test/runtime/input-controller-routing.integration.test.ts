@@ -136,6 +136,11 @@ test('browser inputs route ledger commands through runtime controllers before se
 
   const objectsCss = source('frontend/assets/canvas/objects.css');
   assert.match(objectsCss, /\.card \.ledger-card-delete\.terminal-button\s*{[^}]*position:\s*absolute;[^}]*right:\s*6px;/s);
+  assert.match(objectsCss, /\.card \.ledger-card-delete\.terminal-button\s*{[^}]*transition:\s*opacity 120ms ease;/s);
+  assert.match(objectsCss, /\.card \.ledger-card-status-toggle\.terminal-button\s*{[^}]*transition:\s*opacity 120ms ease;/s);
+  assert.doesNotMatch(objectsCss, /\.card \.ledger-card-delete\.terminal-button\s*{[^}]*\n\s+transform:/s);
+  assert.doesNotMatch(objectsCss, /\.card \.ledger-card-status-toggle\.terminal-button\s*{[^}]*\n\s+transform:/s);
+  assert.doesNotMatch(objectsCss, /\.card:hover \.ledger-card-delete,[^}]*\n\s+transform:/s);
   assert.match(objectsCss, /\.group-zone \.ledger-group-delete\.terminal-button\s*{[^}]*position:\s*absolute;[^}]*right:\s*6px;/s);
 
   const canvasLayerCss = source('frontend/assets/canvas/canvas-layer.css');

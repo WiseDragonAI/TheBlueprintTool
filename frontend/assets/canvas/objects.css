@@ -402,8 +402,7 @@
   padding: 0;
   opacity: 0;
   pointer-events: none;
-  transform: translateY(-2px);
-  transition: opacity 120ms ease, transform 120ms ease;
+  transition: opacity 120ms ease;
 }
 
 .card .ledger-card-status-toggle.terminal-button {
@@ -418,8 +417,7 @@
   padding: 0 9px;
   opacity: 0;
   pointer-events: none;
-  transform: translateY(-2px);
-  transition: opacity 120ms ease, transform 120ms ease;
+  transition: opacity 120ms ease;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0;
@@ -456,7 +454,6 @@
 .card.selected .ledger-card-status-toggle {
   opacity: 1;
   pointer-events: auto;
-  transform: translateY(0);
 }
 
 .card:hover .ledger-card-status-toggle:disabled,
@@ -491,17 +488,13 @@
     drop-shadow(0 4px 8px rgba(0, 0, 0, 0.9));
   opacity: 0;
   pointer-events: none;
-  transform: translateY(-4px) scale(0.98);
-  transition:
-    opacity 150ms ease,
-    transform 170ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: opacity 150ms ease;
 }
 
 .card:hover .ledger-card-tabs,
 .card:has(.ledger-card-tab:focus-visible) .ledger-card-tabs {
   opacity: 1;
   pointer-events: auto;
-  transform: translateY(0) scale(1);
 }
 
 .card .ledger-card-tabs .ledger-card-tab {

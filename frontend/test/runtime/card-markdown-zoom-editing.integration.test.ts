@@ -130,10 +130,12 @@ test('card field tabs preserve measured description height and fade panel switch
   assert.match(renderSurface, /scheduleLedgerCardTabFrameSync\(content\)/);
   assert.match(renderSurface, /watchLedgerCardTabFrameSize\(content\)/);
   assert.match(gesture, /\[data-wheel-capture\]/);
-  assert.match(css, /\.ledger-card-tabs\s*{[^}]*position:\s*absolute;[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;[^}]*transition:/s);
+  assert.match(css, /\.ledger-card-tabs\s*{[^}]*position:\s*absolute;[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;[^}]*transition:\s*opacity 150ms ease;/s);
+  assert.doesNotMatch(css, /\.ledger-card-tabs\s*{[^}]*transform:/s);
   assert.match(sync, /description\.children/);
   assert.match(css, /\.card:hover \.ledger-card-tabs,/);
   assert.match(css, /\.card:has\(\.ledger-card-tab:focus-visible\) \.ledger-card-tabs/);
+  assert.doesNotMatch(css, /\.card:hover \.ledger-card-tabs,[^}]*transform:/s);
   assert.doesNotMatch(css, /\.card:focus-within \.ledger-card-tabs/);
   assert.doesNotMatch(css, /\.card\.selected \.ledger-card-tabs/);
   assert.match(css, /\.ledger-card-tabs\s*{[^}]*drop-shadow\(0 16px 18px rgba\(0, 0, 0, 0\.94\)\)[^}]*drop-shadow\(0 4px 8px rgba\(0, 0, 0, 0\.9\)\)/s);
