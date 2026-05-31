@@ -40,6 +40,7 @@ test('wheel zoom schedules one visible-card refresh only when crossing into scal
   assert.match(css, /\.ledger-card-media-shell\[data-quality-promoted="true"\] \.ledger-card-media-image/s);
   assert.match(css, /--media-quality-scale/);
   assert.match(css, /--media-quality-inverse-scale/);
+  assert.match(css, /position:\s*absolute;[^}]*top:\s*0;[^}]*left:\s*0;[^}]*transform:\s*scale\(var\(--media-quality-inverse-scale, 1\)\);[^}]*transform-origin:\s*left top;/s);
   assert.doesNotMatch(refresh, /renderCanvasSurface/);
   assert.equal(refresh.includes("querySelectorAll('[data-ledger-card-media]"), false);
   assert.equal(refresh.includes('querySelectorAll("[data-ledger-card-media]'), false);

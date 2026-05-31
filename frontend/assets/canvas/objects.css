@@ -647,6 +647,7 @@
 }
 
 .ledger-card-media-slide {
+  position: relative;
   display: grid;
   flex: 0 0 100%;
   min-width: 100%;
@@ -667,10 +668,13 @@
 
 .ledger-card-media-shell[data-quality-promoted="true"] .ledger-card-media-image,
 .ledger-card-inline-image-frame[data-quality-promoted="true"] .ledger-card-inline-image {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: calc(100% * var(--media-quality-scale, 1));
   height: calc(100% * var(--media-quality-scale, 1));
   transform: scale(var(--media-quality-inverse-scale, 1));
-  transform-origin: center center;
+  transform-origin: left top;
 }
 
 .ledger-card-media-nav {
@@ -710,6 +714,7 @@
 }
 
 .ledger-card-inline-image-frame {
+  position: relative;
   display: inline-grid;
   width: min(100%, 96px);
   height: auto;
