@@ -4,6 +4,7 @@
  */
 import { state } from '../../state.js';
 import { applyViewportTransform } from '../../canvas/effect/apply-viewport-transform.js';
+import { noteZoomForVisibleCardQualityRefresh } from '../../card/effect/schedule-visible-card-quality-refresh.js';
 import { scheduleViewportPersistence } from '../../persistence/effect/schedule-viewport-persistence.js';
 import { renderRelationshipOverlay } from '../../relationship/effect/render-relationship-overlay.js';
 import { point } from '../helper/point.js';
@@ -53,6 +54,7 @@ export function handleWheel(event: WheelEvent): void {
     state.viewport.scale = Math.min(maxCanvasZoomScale, Math.max(minCanvasZoomScale, nextScale));
     state.viewport.x = pointer.x - anchoredCanvasPoint.x * state.viewport.scale;
     state.viewport.y = pointer.y - anchoredCanvasPoint.y * state.viewport.scale;
+    noteZoomForVisibleCardQualityRefresh(oldScale, state.viewport.scale);
     telemetry('calculate-viewport-transform', { kind: 'zoom', pointer, anchoredCanvasPoint, viewport: state.viewport });
   }
   scheduleViewportPersistence();
