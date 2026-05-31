@@ -232,6 +232,30 @@
   contain: layout style;
 }
 
+.ledger-card-detail-layer {
+  position: relative;
+  min-height: 100%;
+  contain: layout style;
+}
+
+.ledger-card-overview-layer {
+  position: absolute;
+  inset: 8px;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  contain: layout style paint;
+}
+
+.ledger-card-overview-title {
+  display: block;
+  color: var(--text);
+}
+
+.ledger-card-overview-status {
+  position: absolute;
+}
+
 .card[data-card-id="card-boot"] { left: 120px; top: 300px; }
 .card[data-card-id="card-zone"] { left: 420px; top: 190px; }
 .card[data-card-id="card-ledger"] { left: 420px; top: 555px; }

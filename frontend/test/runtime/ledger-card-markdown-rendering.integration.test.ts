@@ -75,6 +75,16 @@ class FakeElement {
 
 }
 
+function findElementByClass(root: FakeElement, className: string): FakeElement | undefined {
+  for (const child of root.children) {
+    if (!(child instanceof FakeElement)) continue;
+    if (child.className.split(/\s+/).includes(className)) return child;
+    const nested = findElementByClass(child, className);
+    if (nested) return nested;
+  }
+  return undefined;
+}
+
 test('ledger cards render markdown descriptions as DOM elements', () => {
   const previousDocument = globalThis.document;
   (globalThis as unknown as { document: unknown }).document = {
@@ -88,7 +98,7 @@ test('ledger cards render markdown descriptions as DOM elements', () => {
       title: 'Markdown card',
       comment: { what: '**Props**: `mode`\n- latestPinned\n- anchoredHistory' }
     }) as unknown as FakeElement;
-    const body = card.children.find((child) => child instanceof FakeElement && child.className === 'ledger-card-body') as FakeElement;
+    const body = findElementByClass(card, 'ledger-card-body') as FakeElement;
     const paragraph = body.children[0] as FakeElement;
     const list = body.children[1] as FakeElement;
 
@@ -117,7 +127,7 @@ test('ledger cards render markdown tables as table elements', () => {
       title: 'Table card',
       comment: { what: '| Blueprint asset | Symbol use | Refactor impact |\n|---|---|---|\n| `BP-health-bar` | `UpdateHealth` | Keep as legacy display actor. |' }
     }) as unknown as FakeElement;
-    const body = card.children.find((child) => child instanceof FakeElement && child.className === 'ledger-card-body') as FakeElement;
+    const body = findElementByClass(card, 'ledger-card-body') as FakeElement;
     const scroll = body.children[0] as FakeElement;
     const table = scroll.children[0] as FakeElement;
     const thead = table.children[0] as FakeElement;
@@ -151,7 +161,7 @@ test('ledger cards render markdown headings through the shared markdown renderer
       title: 'Heading card',
       comment: { what: '### Quest tags\n- `mine.quarry.started`' }
     }) as unknown as FakeElement;
-    const body = card.children.find((child) => child instanceof FakeElement && child.className === 'ledger-card-body') as FakeElement;
+    const body = findElementByClass(card, 'ledger-card-body') as FakeElement;
     const heading = body.children[0] as FakeElement;
     const list = body.children[1] as FakeElement;
 
@@ -177,7 +187,7 @@ test('ledger cards render horizontal rules through the shared markdown renderer'
       title: 'Rule card',
       comment: { what: 'Before\n\n---\n\nAfter' }
     }) as unknown as FakeElement;
-    const body = card.children.find((child) => child instanceof FakeElement && child.className === 'ledger-card-body') as FakeElement;
+    const body = findElementByClass(card, 'ledger-card-body') as FakeElement;
     const rule = body.children[1] as FakeElement;
 
     assert.equal(rule.tagName, 'hr');
@@ -200,7 +210,7 @@ test('ledger cards render fenced code blocks with syntax spans', () => {
       title: 'Code card',
       comment: { what: '```cpp\nUSTRUCT(BlueprintType)\nstruct FCreatureState\n{\n  GENERATED_BODY()\n  float Current = 100.f;\n};\n```' }
     }) as unknown as FakeElement;
-    const body = card.children.find((child) => child instanceof FakeElement && child.className === 'ledger-card-body') as FakeElement;
+    const body = findElementByClass(card, 'ledger-card-body') as FakeElement;
     const pre = body.children[0] as FakeElement;
     const code = pre.children[0] as FakeElement;
 
@@ -237,7 +247,7 @@ test('ledger cards use highlight.js for mainstream language fences when availabl
       title: 'TypeScript code card',
       comment: { what: '```ts\ninterface User { id: string }\n```' }
     }) as unknown as FakeElement;
-    const body = card.children.find((child) => child instanceof FakeElement && child.className === 'ledger-card-body') as FakeElement;
+    const body = findElementByClass(card, 'ledger-card-body') as FakeElement;
     const pre = body.children[0] as FakeElement;
     const code = pre.children[0] as FakeElement;
 
@@ -287,7 +297,7 @@ test('ledger cards render visual labels as top-right card-colored chips', () => 
       labels: ['validated', 'runtime'],
       comment: { what: 'Label rendering target.' }
     }) as unknown as FakeElement;
-    const labels = card.children.find((child) => child instanceof FakeElement && child.className === 'ledger-card-labels') as FakeElement;
+    const labels = findElementByClass(card, 'ledger-card-labels') as FakeElement;
     const firstLabel = labels.children[0] as FakeElement;
     const secondLabel = labels.children[1] as FakeElement;
 
@@ -319,7 +329,7 @@ test('ledger cards receive deterministic zone color before tab controls paint', 
     assert.equal(card.dataset.cardZoneId, 'zone-owner');
     assert.equal(card.dataset.cardZoneColor, '#eab308');
     assert.equal(card.style['--card-zone-color'], '#eab308');
-    assert.equal((card.children.find((child) => child instanceof FakeElement && child.className === 'ledger-card-tabs') as FakeElement).className, 'ledger-card-tabs');
+    assert.equal((findElementByClass(card, 'ledger-card-tabs') as FakeElement).className, 'ledger-card-tabs');
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
   }
@@ -338,7 +348,7 @@ test('ledger card titles include PascalCase word break opportunities without cha
       title: 'UOptimizedInstancedStaticMeshComponent',
       comment: { what: 'Pascal title wrap target.' }
     }) as unknown as FakeElement;
-    const title = card.children.find((child) => child instanceof FakeElement && child.className === 'ledger-card-title') as FakeElement;
+    const title = findElementByClass(card, 'ledger-card-title') as FakeElement;
 
     assert.equal(title.className, 'ledger-card-title');
     assert.equal(title.children.some((child) => child instanceof FakeElement && child.tagName === 'wbr'), true);
@@ -361,7 +371,7 @@ test('ledger card titles render inline markdown without dropping title wrapping'
       title: '### RuneItem `FInventoryItem::Buffs` **Model**',
       comment: { what: 'Title markdown target.' }
     }) as unknown as FakeElement;
-    const title = card.children.find((child) => child instanceof FakeElement && child.className === 'ledger-card-title') as FakeElement;
+    const title = findElementByClass(card, 'ledger-card-title') as FakeElement;
 
     assert.equal(title.dataset.titleHeading, '3');
     assert.equal(title.children.some((child) => child instanceof FakeElement && child.tagName === 'code' && child.textContent === 'FInventoryItem::Buffs'), true);
@@ -440,8 +450,8 @@ test('ledger cards with fields render description and fields tab panels', () => 
         { name: 'Stamina', type: 'FCreatureState' }
       ]
     }) as unknown as FakeElement;
-    const tabs = card.children.find((child) => child instanceof FakeElement && child.className === 'ledger-card-tabs') as FakeElement;
-    const frame = card.children.find((child) => child instanceof FakeElement && child.className === 'ledger-card-tab-frame') as FakeElement;
+    const tabs = findElementByClass(card, 'ledger-card-tabs') as FakeElement;
+    const frame = findElementByClass(card, 'ledger-card-tab-frame') as FakeElement;
     const description = frame.children[0] as FakeElement;
     const fields = frame.children[1] as FakeElement;
     const list = fields.children[0] as FakeElement;

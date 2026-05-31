@@ -238,8 +238,7 @@
           "name": "updatedAt",
           "type": "iso8601"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "4ae0a8e0",
@@ -270,8 +269,7 @@
           "name": "status",
           "type": "string"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "e8d484fe",
@@ -298,8 +296,7 @@
           "name": "viewportId",
           "type": "hash8"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "9fe8052e",
@@ -326,8 +323,7 @@
           "name": "threadId",
           "type": "hash8"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "449dbbbe",
@@ -354,8 +350,7 @@
           "name": "threadId",
           "type": "hash8"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "8e969212",
@@ -398,8 +393,7 @@
           "name": "labelVisible",
           "type": "boolean"
         }
-      ],
-      "h": 192
+      ]
     },
     {
       "id": "66a4f377",
@@ -426,8 +420,7 @@
           "name": "scale",
           "type": "number"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "7d7b4077",
@@ -458,8 +451,7 @@
           "name": "targetKind",
           "type": "string"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "d86e5fbb",
@@ -490,8 +482,7 @@
           "name": "body",
           "type": "markdown"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "eb61ae1f",
@@ -518,8 +509,7 @@
           "name": "kind",
           "type": "string"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "ffd440e4",
@@ -550,8 +540,7 @@
           "name": "payload",
           "type": "object"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "85b432dd",
@@ -578,8 +567,7 @@
           "name": "ioRefs",
           "type": "string[]"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "518e238d",
@@ -606,8 +594,7 @@
           "name": "actions",
           "type": "string[]"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "d91df27a",
@@ -642,8 +629,7 @@
           "name": "pendingRoute",
           "type": "string"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "8457546e",
@@ -686,8 +672,7 @@
           "name": "revision",
           "type": "hash8"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "9cd40009",
@@ -722,8 +707,7 @@
           "name": "selectionSource",
           "type": "string"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "3c96cf27",
@@ -766,8 +750,7 @@
           "name": "resizeHandle",
           "type": "string"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "b0a8c6db",
@@ -798,8 +781,7 @@
           "name": "relationshipId",
           "type": "hash8"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "0c063c90",
@@ -830,8 +812,7 @@
           "name": "hashIdVisibleCardId",
           "type": "hash8"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "c148aeb0",
@@ -858,8 +839,7 @@
           "name": "isColorPickerOpen",
           "type": "boolean"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "6c40f015",
@@ -890,8 +870,7 @@
           "name": "targetKind",
           "type": "string"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "01173a06",
@@ -918,8 +897,7 @@
           "name": "status",
           "type": "string"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "254e72c1",
@@ -966,8 +944,7 @@
           "name": "localMessageId",
           "type": "hash8"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "31283996",
@@ -998,8 +975,7 @@
           "name": "confirmAction",
           "type": "string"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "2d242706",
@@ -1026,8 +1002,7 @@
           "name": "eventId",
           "type": "hash8"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "e24fe89f",
@@ -1058,8 +1033,7 @@
           "name": "source",
           "type": "string"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "d8ef7d8b",
@@ -1090,8 +1064,7 @@
           "name": "lastSaveError",
           "type": "string"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "a49821b6",
@@ -1130,8 +1103,7 @@
           "name": "copiedAt",
           "type": "iso8601"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "7bb532f1",
@@ -1174,8 +1146,7 @@
           "name": "height",
           "type": "number"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "7c83ee82",
@@ -1189,8 +1160,7 @@
         "contentFile": ".blueprinttool/cards/data/7c83ee82.md"
       },
       "facts": [],
-      "fields": [],
-      "h": 200
+      "fields": []
     },
     {
       "id": "5ec1172d",
@@ -1204,8 +1174,7 @@
         "contentFile": ".blueprinttool/cards/data/5ec1172d.md"
       },
       "facts": [],
-      "fields": [],
-      "h": 132
+      "fields": []
     },
     {
       "id": "a7f943b3",
@@ -1244,8 +1213,7 @@
           "name": "telemetryName",
           "type": "string"
         }
-      ],
-      "h": 543
+      ]
     },
     {
       "id": "0a91751a",
@@ -1259,8 +1227,7 @@
         "contentFile": ".blueprinttool/cards/data/0a91751a.md"
       },
       "facts": [],
-      "fields": [],
-      "h": 154
+      "fields": []
     },
     {
       "id": "3cc57f9d",
@@ -1274,8 +1241,7 @@
         "contentFile": ".blueprinttool/cards/data/3cc57f9d.md"
       },
       "facts": [],
-      "fields": [],
-      "h": 132
+      "fields": []
     },
     {
       "id": "52dd08fc",
@@ -1289,8 +1255,7 @@
         "contentFile": ".blueprinttool/cards/data/52dd08fc.md"
       },
       "facts": [],
-      "fields": [],
-      "h": 154
+      "fields": []
     },
     {
       "id": "a9949f3a",
@@ -1304,8 +1269,7 @@
         "contentFile": ".blueprinttool/cards/data/a9949f3a.md"
       },
       "facts": [],
-      "fields": [],
-      "h": 154
+      "fields": []
     },
     {
       "id": "18acdd10",
@@ -1352,8 +1316,7 @@
           "name": "selected",
           "type": "boolean"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "a70c969c",
@@ -1388,8 +1351,7 @@
           "name": "usage",
           "type": "string"
         }
-      ],
-      "h": 528
+      ]
     },
     {
       "id": "025274e9",
@@ -1420,8 +1382,7 @@
           "name": "purpose",
           "type": "string"
         }
-      ],
-      "h": 174
+      ]
     },
     {
       "id": "7ef6c99b",
@@ -1452,8 +1413,7 @@
           "name": "suiteIds",
           "type": "string[]"
         }
-      ],
-      "h": 174
+      ]
     }
   ],
   "relationships": [

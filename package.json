@@ -5,7 +5,8 @@
   "private": true,
   "bin": {
     "blueprinttool-server": "./bin/blueprinttool-server.mjs",
-    "ledger-cli": "./bin/ledger-cli.mjs"
+    "ledger-cli": "./bin/ledger-cli.mjs",
+    "normalize-card-heights": "./bin/normalize-card-heights.mjs"
   },
   "scripts": {
     "start:workspace": "node ./bin/blueprinttool-server.mjs",

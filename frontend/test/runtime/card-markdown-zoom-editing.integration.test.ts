@@ -31,23 +31,40 @@ test('card markdown inline code and bold styling follow card color specs', () =>
   assert.match(css, /\.ledger-card-body strong\s*{[^}]*color:\s*var\(--text\);[^}]*font-weight:\s*800;/s);
 });
 
-test('low-detail mode caches full-detail card size before hiding card bodies', () => {
+test('low-detail mode switches card paint layers without threshold layout measurement', () => {
   const specs = source('documentation/specs.json');
   const css = source('frontend/assets/canvas/canvas-layer.css');
   const detailRuntime = source('frontend/src/runtime/canvas/effect/update-detail-mode.ts');
+  const cardRenderer = source('frontend/src/runtime/ledger/component/patch-ledger-card.ts');
 
   assert.match(specs, /c4e8b2f9/);
   assert.match(specs, /4b7c1d9e/);
   assert.match(specs, /7e4b0a2c/);
   assert.match(specs, /9d5e0b7a/);
-  assert.match(detailRuntime, /function cacheRenderedCardSizes\(\)/);
-  assert.match(detailRuntime, /classList\.remove\('low-detail', 'overview-detail'\)/);
-  assert.match(detailRuntime, /--card-size-cache-height/);
-  assert.match(css, /\.canvas\.low-detail \.card\s*{[^}]*min-height:\s*var\(--card-size-cache-height, 132px\);/s);
-  assert.match(css, /\.canvas\.overview-detail \.card\s*{[^}]*min-height:\s*var\(--card-size-cache-height, 34px\);/s);
-  assert.match(css, /\.canvas\.low-detail \.ledger-card-title\s*{[^}]*width:\s*calc\(100% \* var\(--viewport-scale, 1\)\);/s);
-  assert.match(css, /\.canvas\.low-detail \.ledger-card-title\s*{[^}]*white-space:\s*normal;[^}]*word-break:\s*break-word;/s);
-  assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-title\s*{[^}]*text-overflow:\s*ellipsis;/s);
+  assert.doesNotMatch(detailRuntime, /offsetWidth|offsetHeight|getBoundingClientRect|scrollHeight/);
+  assert.doesNotMatch(detailRuntime, /cacheRenderedCardSizes/);
+  assert.match(cardRenderer, /ledger-card-detail-layer/);
+  assert.match(cardRenderer, /ledger-card-overview-layer/);
+  assert.match(css, /\.canvas\.low-detail \.ledger-card-detail-layer\s*{[^}]*content-visibility:\s*hidden;/s);
+  assert.match(css, /\.canvas\.low-detail \.ledger-card-overview-layer\s*{[^}]*visibility:\s*visible;[^}]*opacity:\s*1;/s);
+  assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-title\s*{[^}]*width:\s*calc\(100% \* var\(--viewport-scale, 1\)\);/s);
+  assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-title\s*{[^}]*padding:\s*calc/);
+  assert.match(css, /\.canvas\.low-detail \.ledger-card-overview-title\s*{[^}]*white-space:\s*normal;[^}]*word-break:\s*break-word;/s);
+  assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-overview-title\s*{[^}]*text-overflow:\s*ellipsis;/s);
+});
+
+test('card height normalization command backs up and migrates legacy natural-height cards', () => {
+  const packageJson = source('package.json');
+  const script = source('bin/normalize-card-heights.mjs');
+
+  assert.match(packageJson, /"normalize-card-heights": "\.\/bin\/normalize-card-heights\.mjs"/);
+  assert.match(script, /card-height-\$\{stamp\(\)\}/);
+  assert.match(script, /typeof card\.h !== 'number' && typeof card\.height !== 'number'/);
+  assert.match(script, /ledger-card-detail-layer/);
+  assert.match(script, /card\.scrollHeight \|\| card\.getBoundingClientRect\(\)\.height/);
+  assert.match(script, /await mkdir\(backupDir, \{ recursive: true \}\)/);
+  assert.match(script, /await writeFile\(backupPath, originalText, 'utf8'\)/);
+  assert.match(script, /await writeFile\(absoluteLedgerPath, `\$\{JSON\.stringify\(ledger, null, 2\)\}\\n`, 'utf8'\)/);
 });
 
 test('description editor preserves rendered body size and lets textarea own wheel scroll', () => {

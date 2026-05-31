@@ -47,6 +47,16 @@ class FakeElement {
   }
 }
 
+function findElementByClass(root: FakeElement, className: string): FakeElement | undefined {
+  for (const child of root.children) {
+    if (!(child instanceof FakeElement)) continue;
+    if (child.className.split(/\s+/).includes(className)) return child;
+    const nested = findElementByClass(child, className);
+    if (nested) return nested;
+  }
+  return undefined;
+}
+
 test('ledger card chrome renders todo processing and done workflow statuses', async () => {
   const previousDocument = globalThis.document;
   (globalThis as unknown as { document: unknown }).document = {
@@ -69,8 +79,8 @@ test('ledger card chrome renders todo processing and done workflow statuses', as
     const processing = patchLedgerCard({ id: 'card-processing', title: 'Processing', comment: { what: 'Processing.' } }) as unknown as FakeElement;
     const done = patchLedgerCard({ id: 'card-done', status: 'done', title: 'Done', comment: { what: 'Done.' } }) as unknown as FakeElement;
 
-    const todoIndicator = todo.children.find((child) => child instanceof FakeElement && child.className === 'card-status-indicator') as FakeElement;
-    const processingIndicator = processing.children.find((child) => child instanceof FakeElement && child.className === 'card-status-indicator') as FakeElement;
+    const todoIndicator = findElementByClass(todo, 'card-status-indicator') as FakeElement;
+    const processingIndicator = findElementByClass(processing, 'card-status-indicator') as FakeElement;
     const processingButton = processing.children.find((child) => child instanceof FakeElement && child.className.includes('ledger-card-status-toggle')) as FakeElement;
     const doneButton = done.children.find((child) => child instanceof FakeElement && child.className.includes('ledger-card-status-toggle')) as FakeElement;
 

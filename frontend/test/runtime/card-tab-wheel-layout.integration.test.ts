@@ -1,6 +1,6 @@
 /**
- * WHAT: Runtime tests for multi-tab card height and wheel ownership.
- * WHY: Description tabs should size to content and only scrollable fields should steal wheel from canvas zoom.
+ * WHAT: Runtime tests for multi-tab card geometry and wheel ownership.
+ * WHY: Card geometry is fixed by ledger height while only scrollable fields should steal wheel from canvas zoom.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,7 +13,7 @@ function source(path: string): string {
   return readFileSync(new URL(path, root), 'utf8');
 }
 
-test('multi-tab card descriptions own natural height while wheel capture is scroll-gated', () => {
+test('multi-tab cards use fixed ledger height while wheel capture is scroll-gated', () => {
   const specs = source('documentation/specs.json');
   const css = source('frontend/assets/canvas/objects.css');
   const patchCard = source('frontend/src/runtime/ledger/component/patch-ledger-card.ts');
@@ -22,9 +22,10 @@ test('multi-tab card descriptions own natural height while wheel capture is scro
   assert.match(specs, /f0c2d8a9/);
   assert.match(css, /\.ledger-card-tab-frame\[data-active-card-tab="description"\]\s*{[^}]*height:\s*auto;[^}]*overflow:\s*visible;/s);
   assert.match(css, /\.ledger-card-tab-frame\[data-active-card-tab="description"\] \.ledger-card-description-panel\.is-active\s*{[^}]*position:\s*relative;[^}]*inset:\s*auto;/s);
-  assert.match(patchCard, /Number\.isFinite\(cardHeight\) && hasFieldTabs/);
-  assert.match(patchCard, /element\.style\.minHeight = `\$\{Math\.max\(132, cardHeight\)\}px`;/);
-  assert.match(patchCard, /element\.style\.removeProperty\('height'\);/);
+  assert.match(patchCard, /const fixedHeight = Math\.max\(132, Number\.isFinite\(cardHeight\) \? cardHeight : 132\);/);
+  assert.match(patchCard, /element\.style\.height = `\$\{fixedHeight\}px`;/);
+  assert.match(patchCard, /element\.style\.removeProperty\('min-height'\);/);
+  assert.doesNotMatch(patchCard, /Number\.isFinite\(cardHeight\) && hasFieldTabs/);
   assert.match(wheel, /shouldCaptureWheelTarget\(event\)/);
   assert.match(helper, /scrollHeight > node\.clientHeight/);
   assert.match(helper, /ledger-card-fields-panel\.is-active/);

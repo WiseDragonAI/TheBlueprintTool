@@ -17,6 +17,23 @@ import { renderLedgerCardDeleteButton } from './render-ledger-card-delete-button
 import { renderLedgerCardStatusButton } from './render-ledger-card-status-button.js';
 import { applyZoneAttributionToCardElement, normalizeZoneAttribution, type ZoneAttribution } from '../helper/zone-attribution-cache.js';
 
+function createLedgerCardTitle(card: Record<string, unknown>, id: string, className = 'ledger-card-title'): HTMLElement {
+  const title = document.createElement('strong');
+  title.className = className;
+  appendTitleText(title, String(card.title ?? id));
+  return title;
+}
+
+function createCardStatusIndicator(status: string, className = 'card-status-indicator'): HTMLElement {
+  const statusIndicator = document.createElement('span');
+  statusIndicator.className = className;
+  statusIndicator.dataset.spec = 'c4e8b91a';
+  statusIndicator.title = `Card status: ${status}`;
+  statusIndicator.ariaLabel = statusIndicator.title;
+  statusIndicator.textContent = status;
+  return statusIndicator;
+}
+
 export function patchLedgerCard(card: Record<string, unknown>, existing?: HTMLElement | null, attribution?: ZoneAttribution | Record<string, unknown> | null): HTMLElement {
   const element = existing ?? document.createElement('article');
   const id = String(card.id ?? '');
@@ -41,37 +58,33 @@ export function patchLedgerCard(card: Record<string, unknown>, existing?: HTMLEl
   element.style.top = `${Number(card.y ?? 0)}px`;
   element.style.width = `${Math.max(220, Number(card.w ?? 280))}px`;
   const cardHeight = Number(card.h ?? card.height);
-  if (Number.isFinite(cardHeight) && hasFieldTabs) {
-    element.style.minHeight = `${Math.max(132, cardHeight)}px`;
-    element.style.removeProperty('height');
-  } else if (Number.isFinite(cardHeight)) {
-    element.style.height = `${Math.max(132, cardHeight)}px`;
-    element.style.removeProperty('min-height');
-  } else {
-    element.style.removeProperty('height');
-    element.style.removeProperty('min-height');
-  }
+  const fixedHeight = Math.max(132, Number.isFinite(cardHeight) ? cardHeight : 132);
+  element.style.height = `${fixedHeight}px`;
+  element.style.removeProperty('min-height');
+  element.dataset.sizeCacheWidth = String(Math.max(220, Number(card.w ?? 280)));
+  element.dataset.sizeCacheHeight = String(fixedHeight);
+  element.style.setProperty('--card-size-cache-width', `${Math.max(220, Number(card.w ?? 280))}px`);
+  element.style.setProperty('--card-size-cache-height', `${fixedHeight}px`);
   const hash = document.createElement('span');
   hash.className = 'hash';
   hash.textContent = `#${id}`;
-  const statusIndicator = document.createElement('span');
-  statusIndicator.className = 'card-status-indicator';
-  statusIndicator.dataset.spec = 'c4e8b91a';
-  statusIndicator.title = `Card status: ${visibleStatus}`;
-  statusIndicator.ariaLabel = statusIndicator.title;
-  statusIndicator.textContent = visibleStatus;
-  const title = document.createElement('strong');
-  title.className = 'ledger-card-title';
-  appendTitleText(title, String(card.title ?? id));
+  const statusIndicator = createCardStatusIndicator(visibleStatus);
+  const title = createLedgerCardTitle(card, id);
+  const overview = document.createElement('div');
+  overview.className = 'ledger-card-overview-layer';
+  overview.replaceChildren(createLedgerCardTitle(card, id, 'ledger-card-overview-title'), createCardStatusIndicator(visibleStatus, 'card-status-indicator ledger-card-overview-status'));
   const imageSizes = card.imageSizes && typeof card.imageSizes === 'object' && !Array.isArray(card.imageSizes)
     ? card.imageSizes as Record<string, { width?: number; height?: number }>
     : {};
   const body = hasFieldTabs ? renderLedgerCardTabFrame(card, fields, activeTab) : renderLedgerCardMarkdown(ledgerCardBody(card), { cardId: id, imageSizes });
+  const detailLayer = document.createElement('div');
+  detailLayer.className = 'ledger-card-detail-layer';
   const handles = createCardResizeHandles();
   const deleteButton = renderLedgerCardDeleteButton(id);
   const statusButton = renderLedgerCardStatusButton(id, persistedStatus, visibleStatus);
   const labelNodes = labels.length > 0 ? [renderLedgerCardLabels(labels)] : [];
   const tabs = hasFieldTabs ? [renderLedgerCardTabs(id, activeTab)] : [];
-  element.replaceChildren(...handles, deleteButton, statusButton, statusIndicator, hash, ...labelNodes, title, ...tabs, body);
+  detailLayer.replaceChildren(statusIndicator, hash, ...labelNodes, title, ...tabs, body);
+  element.replaceChildren(...handles, deleteButton, statusButton, detailLayer, overview);
   return element;
 }
