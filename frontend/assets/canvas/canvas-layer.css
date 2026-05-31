@@ -46,6 +46,13 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease;
+}
+
+.canvas-control.is-visible {
+  opacity: 1;
   pointer-events: auto;
 }
 

@@ -143,7 +143,8 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(controlOverlay, /edit\.dataset\.zoneId = id/);
   assert.match(controlOverlay, /color\.dataset\.zoneId = id/);
   assert.match(canvasLayerCss, /\.canvas-control-overlay\s*{[^}]*position:\s*absolute;[^}]*pointer-events:\s*none;/s);
-  assert.match(canvasLayerCss, /\.canvas-control\s*{[^}]*position:\s*absolute;[^}]*pointer-events:\s*auto;/s);
+  assert.match(canvasLayerCss, /\.canvas-control\s*{[^}]*position:\s*absolute;[^}]*opacity:\s*0;[^}]*transition:\s*opacity 140ms ease;/s);
+  assert.match(canvasLayerCss, /\.canvas-control\.is-visible\s*{[^}]*opacity:\s*1;[^}]*pointer-events:\s*auto;/s);
   assert.match(canvasLayerCss, /\.canvas-control \.terminal-button,[\s\S]*transition:\s*none;/);
   assert.match(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-overview-title\s*{[^}]*padding:\s*4px 6px 0;/s);
   assert.match(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-detail-layer\s*{[^}]*content-visibility:\s*hidden;/s);

@@ -10,6 +10,8 @@ type ControlTarget = {
 
 let hoveredTarget: ControlTarget | null = null;
 let hoverBindingInitialized = false;
+const removalTimers = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
+const controlFadeDurationMs = 160;
 
 function targetKey(target: ControlTarget | null): string {
   return target ? `${target.kind}:${target.id}` : '';
@@ -66,35 +68,54 @@ function visibleTargets(): ControlTarget[] {
   return [...byKey.values()];
 }
 
-function placeControlGroup(group: HTMLElement, source: HTMLElement, align: 'left' | 'right'): boolean {
+function nextFrame(callback: () => void): void {
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(callback);
+  else setTimeout(callback, 0);
+}
+
+function cancelScheduledRemoval(control: HTMLElement): void {
+  const timer = removalTimers.get(control);
+  if (timer) clearTimeout(timer);
+  removalTimers.delete(control);
+}
+
+function scheduleRemoval(control: HTMLElement): void {
+  if (removalTimers.has(control)) return;
+  control.classList.remove('is-visible');
+  const timer = setTimeout(() => {
+    if (!control.classList.contains('is-visible')) control.remove();
+    removalTimers.delete(control);
+  }, controlFadeDurationMs);
+  removalTimers.set(control, timer);
+}
+
+function placeControlGroup(group: HTMLElement, source: HTMLElement, align: 'left' | 'right', yOffset = 6): boolean {
   const canvasRect = canvas.getBoundingClientRect();
   const rect = source.getBoundingClientRect();
   if (rect.right < canvasRect.left || rect.left > canvasRect.right || rect.bottom < canvasRect.top || rect.top > canvasRect.bottom) return false;
   const x = align === 'right' ? rect.right - canvasRect.left - 6 : rect.left - canvasRect.left + 6;
-  const y = rect.top - canvasRect.top + 6;
+  const y = rect.top - canvasRect.top + yOffset;
   group.style.left = `${Math.round(x)}px`;
   group.style.top = `${Math.round(y)}px`;
   group.style.transform = align === 'right' ? 'translateX(-100%)' : 'none';
   return true;
 }
 
-function createCardControls(card: HTMLElement): HTMLElement | null {
-  if (!card.classList.contains('ledger-node')) return null;
+function syncCardControls(group: HTMLElement, card: HTMLElement): boolean {
+  if (!card.classList.contains('ledger-node')) return false;
   const cardId = card.dataset.cardId ?? '';
-  if (!cardId) return null;
+  if (!cardId) return false;
   const persistedStatus = card.dataset.cardStatus === 'done' ? 'done' : 'todo';
   const visibleStatus = card.dataset.cardWorkStatus === 'processing' ? 'processing' : persistedStatus;
-  const group = document.createElement('div');
   group.className = 'canvas-control canvas-control--card';
   group.dataset.cardId = cardId;
-  group.append(renderLedgerCardStatusButton(cardId, persistedStatus, visibleStatus), renderLedgerCardDeleteButton(cardId));
-  return placeControlGroup(group, card, 'right') ? group : null;
+  group.replaceChildren(renderLedgerCardStatusButton(cardId, persistedStatus, visibleStatus), renderLedgerCardDeleteButton(cardId));
+  return placeControlGroup(group, card, 'right');
 }
 
-function createZoneControls(zone: HTMLElement, kind: 'zone' | 'group'): HTMLElement | null {
+function syncZoneControls(group: HTMLElement, zone: HTMLElement, kind: 'zone' | 'group'): boolean {
   const id = kind === 'zone' ? zone.dataset.zoneId ?? '' : zone.dataset.groupId ?? '';
-  if (!id) return null;
-  const group = document.createElement('div');
+  if (!id) return false;
   group.className = `canvas-control canvas-control--${kind}`;
   if (kind === 'zone') group.dataset.zoneId = id;
   else group.dataset.groupId = id;
@@ -108,7 +129,7 @@ function createZoneControls(zone: HTMLElement, kind: 'zone' | 'group'): HTMLElem
   edit.title = kind === 'zone' ? 'Edit zone name' : 'Edit group name';
   edit.ariaLabel = edit.title;
   edit.textContent = '✎';
-  group.append(edit);
+  const controls: HTMLElement[] = [edit];
 
   if (kind === 'zone') {
     const color = document.createElement('input');
@@ -118,7 +139,7 @@ function createZoneControls(zone: HTMLElement, kind: 'zone' | 'group'): HTMLElem
     color.dataset.zoneId = id;
     color.ariaLabel = 'Edit zone color';
     color.value = zone.style.getPropertyValue('--zone-color').trim() || '#55b8ff';
-    group.append(color);
+    controls.push(color);
   } else if (zone.classList.contains('ledger-node')) {
     const deleteButton = document.createElement('button');
     deleteButton.className = 'ledger-group-delete terminal-button terminal-button--compact';
@@ -128,25 +149,43 @@ function createZoneControls(zone: HTMLElement, kind: 'zone' | 'group'): HTMLElem
     deleteButton.title = 'Delete group';
     deleteButton.setAttribute('aria-label', 'Delete group');
     deleteButton.textContent = 'X';
-    group.append(deleteButton);
+    controls.push(deleteButton);
   }
 
-  return placeControlGroup(group, zone, kind === 'group' ? 'right' : 'left') ? group : null;
+  group.replaceChildren(...controls);
+  return placeControlGroup(group, zone, kind === 'group' ? 'right' : 'left', 32);
 }
 
 export function renderCanvasControlOverlay(): void {
   const overlay = resolveControlOverlay();
   if (!overlay || !canvas || !content) return;
-  const controls: HTMLElement[] = [];
+  const activeKeys = new Set<string>();
   for (const target of visibleTargets()) {
     const source = sourceElement(target);
     if (!source || source.hidden || source.style.display === 'none') continue;
-    const control = target.kind === 'card'
-      ? createCardControls(source)
-      : createZoneControls(source, target.kind);
-    if (control) controls.push(control);
+    const key = targetKey(target);
+    let control = overlay.querySelector(`[data-control-key="${CSS.escape(key)}"]`) as HTMLElement | null;
+    const isNew = !control;
+    if (!control) {
+      control = document.createElement('div');
+      control.dataset.controlKey = key;
+    }
+    const visible = target.kind === 'card'
+      ? syncCardControls(control, source)
+      : syncZoneControls(control, source, target.kind);
+    if (!visible) continue;
+    activeKeys.add(key);
+    cancelScheduledRemoval(control);
+    if (isNew) {
+      overlay.append(control);
+      nextFrame(() => nextFrame(() => control?.classList.add('is-visible')));
+    } else {
+      control.classList.add('is-visible');
+    }
   }
-  overlay.replaceChildren(...controls);
+  for (const control of Array.from(overlay.querySelectorAll('.canvas-control')) as HTMLElement[]) {
+    if (!activeKeys.has(control.dataset.controlKey ?? '')) scheduleRemoval(control);
+  }
 }
 
 export function bindCanvasControlOverlayHover(): void {

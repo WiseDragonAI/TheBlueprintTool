@@ -42,8 +42,10 @@ test('zone edit and color controls render in the viewport overlay instead of zon
   assert.doesNotMatch(css, /\.zone:hover \.zone-actions/);
   assert.doesNotMatch(css, /\.zone \.zone-actions \.icon-button/);
   assert.match(overlayCss, /\.canvas-control-overlay\s*{[^}]*z-index:\s*120;/s);
+  assert.match(overlayCss, /\.canvas-control\s*{[^}]*transition:\s*opacity 140ms ease;/s);
   assert.match(overlayCss, /\.canvas-control \.terminal-button,[\s\S]*transition:\s*none;/);
   assert.match(overlayRuntime, /className = `canvas-control canvas-control--\$\{kind\}`/);
+  assert.match(overlayRuntime, /placeControlGroup\(group, zone, kind === 'group' \? 'right' : 'left', 32\)/);
   assert.match(overlayRuntime, /color\.dataset\.action = 'edit-zone-color'/);
   assert.match(overlayRuntime, /canvas\.addEventListener\('mouseover'/);
 });
