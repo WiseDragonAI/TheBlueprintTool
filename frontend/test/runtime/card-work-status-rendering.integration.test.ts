@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 class FakeText {
   textContent: string;
@@ -99,4 +100,10 @@ test('ledger card chrome renders todo processing and done workflow statuses', as
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
   }
+});
+
+test('card status chip stays in the header flow instead of overlaying the title', () => {
+  const css = readFileSync(new URL('../../assets/canvas/objects.css', import.meta.url), 'utf8');
+  assert.match(css, /\.card-status-indicator\s*{[^}]*float:\s*left;[^}]*margin:\s*2px 6px 2px 2px;/s);
+  assert.doesNotMatch(css, /\.card-status-indicator\s*{[^}]*position:\s*absolute;/s);
 });
