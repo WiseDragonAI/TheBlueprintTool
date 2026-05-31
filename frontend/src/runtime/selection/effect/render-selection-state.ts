@@ -1,5 +1,6 @@
 import { state } from '../../state.js';
 import { connectedCardIds } from '../../relationship/helper/connected-card-ids.js';
+import { renderCanvasControlOverlay } from '../../canvas/effect/render-canvas-control-overlay.js';
 
 export function renderSelectionState(): void {
   const connectedIds = connectedCardIds(state.selection.cardIds);
@@ -16,4 +17,5 @@ export function renderSelectionState(): void {
     const element = node as HTMLElement;
     element.classList.toggle('selected', state.selection.groupIds.includes(element.dataset.groupId));
   });
+  renderCanvasControlOverlay();
 }

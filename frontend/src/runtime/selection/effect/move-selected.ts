@@ -1,4 +1,5 @@
 import { state } from '../../state.js';
+import { renderCanvasControlOverlay } from '../../canvas/effect/render-canvas-control-overlay.js';
 import { renderRelationshipOverlay } from '../../relationship/effect/render-relationship-overlay.js';
 import { renderZoneLabelOverlay } from '../../zone/effect/render-zone-label-overlay.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
@@ -18,4 +19,5 @@ export function moveSelected(dx: number, dy: number): void {
   telemetry('render-group-layer', { moved: state.selection.groupIds });
   renderZoneLabelOverlay();
   renderRelationshipOverlay();
+  renderCanvasControlOverlay();
 }

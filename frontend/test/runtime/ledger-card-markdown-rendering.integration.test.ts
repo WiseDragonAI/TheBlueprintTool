@@ -8,6 +8,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { patchLedgerCard } from '../../src/runtime/ledger/component/patch-ledger-card.js';
 import { patchLedgerZone } from '../../src/runtime/ledger/component/patch-ledger-zone.js';
+import { renderLedgerCardDeleteButton } from '../../src/runtime/ledger/component/render-ledger-card-delete-button.js';
 import { state } from '../../src/runtime/state.js';
 
 const root = new URL('../../../', import.meta.url);
@@ -383,7 +384,7 @@ test('ledger card titles render inline markdown without dropping title wrapping'
   }
 });
 
-test('ledger cards render a top-right confirmed delete action', () => {
+test('ledger card delete action is rendered by overlay controls, not inside card DOM', () => {
   const previousDocument = globalThis.document;
   (globalThis as unknown as { document: unknown }).document = {
     createElement: (tagName: string) => new FakeElement(tagName),
@@ -396,8 +397,9 @@ test('ledger cards render a top-right confirmed delete action', () => {
       title: 'Delete target',
       comment: { what: 'Delete control target.' }
     }) as unknown as FakeElement;
-    const button = card.children.find((child) => child instanceof FakeElement && child.className.includes('ledger-card-delete')) as FakeElement;
+    const button = renderLedgerCardDeleteButton('card-delete') as unknown as FakeElement;
 
+    assert.equal(card.children.some((child) => child instanceof FakeElement && child.className.includes('ledger-card-delete')), false);
     assert.equal(button.tagName, 'button');
     assert.equal(button.dataset.action, 'confirm-delete-card');
     assert.equal(button.dataset.cardId, 'card-delete');
@@ -407,7 +409,7 @@ test('ledger cards render a top-right confirmed delete action', () => {
   }
 });
 
-test('ledger groups render a top-right confirmed delete action', () => {
+test('ledger groups leave delete action to overlay controls', () => {
   const previousDocument = globalThis.document;
   (globalThis as unknown as { document: unknown }).document = {
     createElement: (tagName: string) => new FakeElement(tagName),
@@ -420,12 +422,9 @@ test('ledger groups render a top-right confirmed delete action', () => {
       label: 'Delete group target',
       variant: 'group'
     }) as unknown as FakeElement;
-    const button = group.children.find((child) => child instanceof FakeElement && child.className.includes('ledger-group-delete')) as FakeElement;
 
-    assert.equal(button.tagName, 'button');
-    assert.equal(button.dataset.action, 'confirm-delete-group');
-    assert.equal(button.dataset.groupId, 'group-delete');
-    assert.equal(button.textContent, 'X');
+    assert.equal(group.children.some((child) => child instanceof FakeElement && child.className.includes('ledger-group-delete')), false);
+    assert.equal(group.children.some((child) => child instanceof FakeElement && child.className.includes('zone-actions')), false);
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
   }

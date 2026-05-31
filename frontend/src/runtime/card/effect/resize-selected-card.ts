@@ -1,4 +1,5 @@
 import { renderRelationshipOverlay } from '../../relationship/effect/render-relationship-overlay.js';
+import { renderCanvasControlOverlay } from '../../canvas/effect/render-canvas-control-overlay.js';
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
@@ -37,5 +38,6 @@ export function resizeSelectedCard(dx: number, dy: number): void {
   card.style.setProperty('--card-size-cache-width', `${nextWidth}px`);
   card.style.setProperty('--card-size-cache-height', `${nextHeight}px`);
   renderRelationshipOverlay();
+  renderCanvasControlOverlay();
   telemetry('render-card-layer', { spec: '60000006', resized: card.dataset.cardId, geometry: card.getBoundingClientRect().toJSON?.() });
 }

@@ -39,7 +39,6 @@ export async function createCardFromRect(rect: { x: number; y: number; width: nu
   element.style.height = `${card.h}px`;
   element.replaceChildren(
     ...createCardResizeHandles(),
-    Object.assign(document.createElement('span'), { className: 'hash' }),
     Object.assign(document.createElement('strong'), { className: 'ledger-card-title', textContent: 'New card' }),
     Object.assign(document.createElement('div'), { className: 'ledger-card-body', innerHTML: '<p>New description</p>' })
   );

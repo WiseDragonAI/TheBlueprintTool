@@ -24,7 +24,7 @@ export async function createGroupFromRect(rect: { x: number; y: number; width: n
   group.style.top = `${Math.max(0, rect.y)}px`;
   group.style.width = `${Math.max(220, rect.width)}px`;
   group.style.height = `${Math.max(160, rect.height)}px`;
-  group.innerHTML = '<div class="resize-handle nw"></div><div class="resize-handle ne"></div><div class="resize-handle sw"></div><div class="resize-handle se"></div><div class="zone-title">New group</div><div class="zone-actions"><button class="icon-button" type="button" data-action="edit-zone" data-spec="3fd7a96a" title="Edit group name" aria-label="Edit group name">✎</button></div>';
+  group.innerHTML = '<div class="resize-handle nw"></div><div class="resize-handle ne"></div><div class="resize-handle sw"></div><div class="resize-handle se"></div><div class="zone-title">New group</div>';
   content.insertBefore(group, content.querySelector('.marquee'));
   state.selection = { cardIds: [], zoneIds: [], groupIds: [groupId] };
   telemetry('commit-static-surface-edit', { createGroup: groupId, geometry: rect });

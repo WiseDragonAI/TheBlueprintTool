@@ -14,6 +14,7 @@ import { ledgerEndpointForTab } from '../../ledger/helper/ledger-endpoint-for-ta
 import { loadActiveLedgerState } from '../../ledger/effect/load-active-ledger-state.js';
 import { persistState } from '../../persistence/effect/persist-state.js';
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
+import { bindCanvasControlOverlayHover } from '../../canvas/effect/render-canvas-control-overlay.js';
 import { renderTabRegistry } from '../../navigation/effect/render-tab-registry.js';
 import { renderToolbox } from '../../toolbox/effect/render-toolbox.js';
 import { openThreadPanel } from '../../thread/effect/open-thread-panel.js';
@@ -23,6 +24,7 @@ import { routeTab } from '../../navigation/helper/route-tab.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export function bindInputs(): void {
+  bindCanvasControlOverlayHover();
   document.querySelectorAll('[data-tool]').forEach((button) => {
     button.addEventListener('click', () => {
       state.activeTool = (button as HTMLElement).dataset.tool;

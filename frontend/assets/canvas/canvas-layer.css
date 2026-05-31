@@ -34,6 +34,61 @@
   will-change: transform;
 }
 
+.canvas-control-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 120;
+  pointer-events: none;
+}
+
+.canvas-control {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: auto;
+}
+
+.canvas-control .terminal-button,
+.canvas-control .icon-button,
+.canvas-control .zone-color-edit {
+  transition: none;
+}
+
+.canvas-control .terminal-button {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 0;
+  padding: 0;
+  font-size: 10px;
+}
+
+.canvas-control .ledger-card-status-toggle {
+  width: auto;
+  min-width: 42px;
+  padding: 0 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.canvas-control .icon-button,
+.canvas-control .zone-color-edit {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 2px;
+}
+
+.canvas-control .terminal-button::after {
+  display: none;
+}
+
+.canvas-control .terminal-button:hover,
+.canvas-control .icon-button:hover {
+  transform: none;
+}
+
 .grid {
   position: absolute;
   left: -100000px;
@@ -78,8 +133,6 @@
 .canvas.low-detail .ledger-card-detail-layer,
 .canvas.low-detail .card-actions,
 .canvas.low-detail .zone p,
-.canvas.low-detail .ledger-card-status-toggle,
-.canvas.low-detail .ledger-card-delete,
 .canvas.low-detail .relationships text {
   visibility: hidden;
   opacity: 0;

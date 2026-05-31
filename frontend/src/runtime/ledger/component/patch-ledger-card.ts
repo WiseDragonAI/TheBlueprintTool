@@ -13,8 +13,6 @@ import { renderLedgerCardLabels } from './render-ledger-card-labels.js';
 import { renderLedgerCardMarkdown } from './render-ledger-card-markdown.js';
 import { renderLedgerCardTabFrame } from './render-ledger-card-tab-frame.js';
 import { renderLedgerCardTabs } from './render-ledger-card-tabs.js';
-import { renderLedgerCardDeleteButton } from './render-ledger-card-delete-button.js';
-import { renderLedgerCardStatusButton } from './render-ledger-card-status-button.js';
 import { applyZoneAttributionToCardElement, normalizeZoneAttribution, type ZoneAttribution } from '../helper/zone-attribution-cache.js';
 
 function createLedgerCardTitle(card: Record<string, unknown>, id: string, className = 'ledger-card-title'): HTMLElement {
@@ -65,9 +63,6 @@ export function patchLedgerCard(card: Record<string, unknown>, existing?: HTMLEl
   element.dataset.sizeCacheHeight = String(fixedHeight);
   element.style.setProperty('--card-size-cache-width', `${Math.max(220, Number(card.w ?? 280))}px`);
   element.style.setProperty('--card-size-cache-height', `${fixedHeight}px`);
-  const hash = document.createElement('span');
-  hash.className = 'hash';
-  hash.textContent = `#${id}`;
   const statusIndicator = createCardStatusIndicator(visibleStatus);
   const title = createLedgerCardTitle(card, id);
   const overview = document.createElement('div');
@@ -80,11 +75,9 @@ export function patchLedgerCard(card: Record<string, unknown>, existing?: HTMLEl
   const detailLayer = document.createElement('div');
   detailLayer.className = 'ledger-card-detail-layer';
   const handles = createCardResizeHandles();
-  const deleteButton = renderLedgerCardDeleteButton(id);
-  const statusButton = renderLedgerCardStatusButton(id, persistedStatus, visibleStatus);
   const labelNodes = labels.length > 0 ? [renderLedgerCardLabels(labels)] : [];
   const tabs = hasFieldTabs ? [renderLedgerCardTabs(id, activeTab)] : [];
-  detailLayer.replaceChildren(statusIndicator, hash, ...labelNodes, title, ...tabs, body);
-  element.replaceChildren(...handles, deleteButton, statusButton, detailLayer, overview);
+  detailLayer.replaceChildren(statusIndicator, ...labelNodes, title, ...tabs, body);
+  element.replaceChildren(...handles, detailLayer, overview);
   return element;
 }

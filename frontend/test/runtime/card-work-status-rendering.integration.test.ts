@@ -67,6 +67,7 @@ test('ledger card chrome renders todo processing and done workflow statuses', as
 
   try {
     const { patchLedgerCard } = await import('../../src/runtime/ledger/component/patch-ledger-card.js');
+    const { renderLedgerCardStatusButton } = await import('../../src/runtime/ledger/component/render-ledger-card-status-button.js');
     const { state } = await import('../../src/runtime/state.js');
     state.activeLedger = {
       notes: {
@@ -81,8 +82,8 @@ test('ledger card chrome renders todo processing and done workflow statuses', as
 
     const todoIndicator = findElementByClass(todo, 'card-status-indicator') as FakeElement;
     const processingIndicator = findElementByClass(processing, 'card-status-indicator') as FakeElement;
-    const processingButton = processing.children.find((child) => child instanceof FakeElement && child.className.includes('ledger-card-status-toggle')) as FakeElement;
-    const doneButton = done.children.find((child) => child instanceof FakeElement && child.className.includes('ledger-card-status-toggle')) as FakeElement;
+    const processingButton = renderLedgerCardStatusButton('card-processing', 'todo', 'processing') as unknown as FakeElement;
+    const doneButton = renderLedgerCardStatusButton('card-done', 'done', 'done') as unknown as FakeElement;
 
     assert.equal(todo.dataset.cardStatus, 'todo');
     assert.equal(todo.dataset.cardWorkStatus, 'todo');
@@ -91,6 +92,7 @@ test('ledger card chrome renders todo processing and done workflow statuses', as
     assert.equal(processing.dataset.cardWorkStatus, 'processing');
     assert.equal(processingIndicator.textContent, 'processing');
     assert.equal(processingButton.disabled, true);
+    assert.equal(processing.children.some((child) => child instanceof FakeElement && child.className.includes('ledger-card-status-toggle')), false);
     assert.equal(done.dataset.cardStatus, 'done');
     assert.equal(done.dataset.cardWorkStatus, 'done');
     assert.equal(doneButton.dataset.nextStatus, 'todo');

@@ -86,7 +86,11 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     return;
   }
   if (action === 'edit-zone') {
-    const zone = targetElement.closest('[data-zone-id],[data-group-id]') as HTMLElement | null;
+    const zone = actionTarget.dataset.zoneId
+      ? document.querySelector(`[data-zone-id="${CSS.escape(actionTarget.dataset.zoneId)}"]`) as HTMLElement | null
+      : actionTarget.dataset.groupId
+        ? document.querySelector(`[data-group-id="${CSS.escape(actionTarget.dataset.groupId)}"]`) as HTMLElement | null
+        : targetElement.closest('[data-zone-id],[data-group-id]') as HTMLElement | null;
     editRegionController(zone);
   }
   if (action === 'create-note') {

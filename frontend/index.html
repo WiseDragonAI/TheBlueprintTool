@@ -45,11 +45,6 @@
               <div class="resize-handle se"></div>
               <div class="zone-title">Frontend surface</div>
               <p>Canvas, selection, gestures, cards, zones, groups, threads and voice controls.</p>
-              <div class="zone-actions">
-                <button class="icon-button" type="button" data-action="edit-zone" data-spec="3fd7a96a" title="Edit zone name" aria-label="Edit zone name">✎</button>
-                <input class="zone-color-edit" type="color" value="#38d9e8" data-action="edit-zone-color" data-spec="3fd7a96a a2f9c013" aria-label="Edit zone color">
-                <button type="button" data-action="open-zone-thread">Notes</button>
-              </div>
             </article>
             <article class="zone group-zone" data-group-id="group-core" data-thread-id="thread-group-core" data-spec="1d444573 796827d0 4801e6c7 85c81d67 0421d906 dff19657 d9d57c2c 2476bfa1 d2fbfa28 612afeda 8a05ef46 5b918cd3 d4f90f42 abad6dcb f18da923 c271a0df 3fd7a96a">
               <div class="resize-handle nw"></div>
@@ -57,9 +52,6 @@
               <div class="resize-handle sw"></div>
               <div class="resize-handle se"></div>
               <div class="zone-title">Core group</div>
-              <div class="zone-actions">
-                <button class="icon-button" type="button" data-action="edit-zone" data-spec="3fd7a96a" title="Edit group name" aria-label="Edit group name">✎</button>
-              </div>
             </article>
             <article class="zone regular-zone" data-zone-id="zone-backend" data-thread-id="thread-zone-backend" data-spec="20000007 20000009 20000017 20000018 8f43d21c 5ac8d0f1 3fd7a96a">
               <div class="resize-handle nw"></div>
@@ -68,18 +60,12 @@
               <div class="resize-handle se"></div>
               <div class="zone-title">Backend ledger</div>
               <p>Routes, persistence, refresh events, transcription and Blueprinttool tab state.</p>
-              <div class="zone-actions">
-                <button class="icon-button" type="button" data-action="edit-zone" data-spec="3fd7a96a" title="Edit zone name" aria-label="Edit zone name">✎</button>
-                <input class="zone-color-edit" type="color" value="#f59e0b" data-action="edit-zone-color" data-spec="3fd7a96a a2f9c013" aria-label="Edit zone color">
-                <button type="button" data-action="open-zone-thread">Notes</button>
-              </div>
             </article>
             <article class="card" data-card-id="card-boot" data-thread-id="thread-card-boot" data-card-class="base-card" data-spec="60000001 60000002 60000003 60000004 60000005 60000006 60000009 60000010 a946fbe0 aa42ff94 4dfbf38c d0936729 30000008 30000009 a4f8d2c9 7b2e4c90 6e18b4d2">
               <div class="resize-handle nw" data-spec="60000006"></div>
               <div class="resize-handle ne" data-spec="60000006"></div>
               <div class="resize-handle sw" data-spec="60000006"></div>
               <div class="resize-handle se" data-spec="60000006"></div>
-              <span class="hash">#10000001</span>
               <strong>Boot surface</strong>
               <p data-markdown-source="# Boot surface">Load ledger, derive route, clear transient selection, render canvas.</p>
               <div class="card-actions"><button type="button" data-action="open-card-thread">Notes</button></div>
@@ -89,7 +75,6 @@
               <div class="resize-handle ne" data-spec="60000006"></div>
               <div class="resize-handle sw" data-spec="60000006"></div>
               <div class="resize-handle se" data-spec="60000006"></div>
-              <span class="hash">#20000001</span>
               <strong>Zone model</strong>
               <p>Persistent ID, name, color, geometry and notes.</p>
               <div class="card-actions"><button type="button" data-action="open-card-thread">Notes</button></div>
@@ -99,7 +84,6 @@
               <div class="resize-handle ne" data-spec="60000006"></div>
               <div class="resize-handle sw" data-spec="60000006"></div>
               <div class="resize-handle se" data-spec="60000006"></div>
-              <span class="hash">#70000001</span>
               <strong>Ledger routing</strong>
               <p>Serve ledgers, accept edits and publish refresh.</p>
               <div class="card-actions"><button type="button" data-action="open-card-thread">Notes</button></div>
@@ -115,6 +99,7 @@
               <path data-relationship-id="rel-zone-ledger" data-source="card-zone" data-target="card-ledger" data-relationship-label-text="persists" marker-start="url(#static-arrow)" marker-end="url(#static-arrow)" d="M 360 455 C 520 570, 680 570, 840 455"></path>
             </svg>
           </div>
+          <div class="canvas-control-overlay" aria-hidden="false"></div>
         </section>
       </section>
       <aside class="panel" aria-label="Inspector" hidden>

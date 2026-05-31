@@ -31,14 +31,19 @@ test('low-detail zoom hides card detail while keeping counter-scaled card titles
   assert.match(css, /\.canvas\.overview-detail \.grid\s*{[^}]*display:\s*none;/s);
 });
 
-test('zone edit and color controls are hidden until the owning zone is hovered or focused', () => {
+test('zone edit and color controls render in the viewport overlay instead of zone DOM', () => {
   const css = source('frontend/assets/canvas/objects.css');
+  const overlayCss = source('frontend/assets/canvas/canvas-layer.css');
+  const overlayRuntime = source('frontend/src/runtime/canvas/effect/render-canvas-control-overlay.ts');
   const specs = source('documentation/specs.json');
 
   assert.match(specs, /2aa4f070/);
   assert.match(specs, /5d8f2a1b/);
-  assert.match(css, /\.zone \.zone-actions \.icon-button,\s*\n\.zone \.zone-color-edit\s*{[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;[^}]*transition:/s);
-  assert.match(css, /\.zone:hover \.zone-actions \.icon-button,/);
-  assert.match(css, /\.zone:hover \.zone-color-edit,/);
-  assert.match(css, /\.zone:focus-within \.zone-color-edit\s*{[^}]*opacity:\s*1;[^}]*pointer-events:\s*auto;[^}]*transform:\s*translateY\(0\) scale\(1\);/s);
+  assert.doesNotMatch(css, /\.zone:hover \.zone-actions/);
+  assert.doesNotMatch(css, /\.zone \.zone-actions \.icon-button/);
+  assert.match(overlayCss, /\.canvas-control-overlay\s*{[^}]*z-index:\s*120;/s);
+  assert.match(overlayCss, /\.canvas-control \.terminal-button,[\s\S]*transition:\s*none;/);
+  assert.match(overlayRuntime, /className = `canvas-control canvas-control--\$\{kind\}`/);
+  assert.match(overlayRuntime, /color\.dataset\.action = 'edit-zone-color'/);
+  assert.match(overlayRuntime, /canvas\.addEventListener\('mouseover'/);
 });

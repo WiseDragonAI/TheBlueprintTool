@@ -2,6 +2,7 @@ const runtimeDocument = globalThis.document;
 
 export const canvas = runtimeDocument?.querySelector('.canvas') as HTMLElement;
 export const content = runtimeDocument?.querySelector('.canvas-content') as HTMLElement;
+export const controlOverlay = runtimeDocument?.querySelector('.canvas-control-overlay') as HTMLElement;
 export const telemetryList = runtimeDocument?.querySelector('.telemetry-list') as HTMLOListElement;
 export const modal = runtimeDocument?.querySelector('.confirm-modal') as HTMLDialogElement;
 export const shortcutModal = runtimeDocument?.querySelector('.shortcut-modal') as HTMLDialogElement;
