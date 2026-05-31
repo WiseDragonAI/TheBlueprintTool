@@ -75,6 +75,37 @@ test('ctrl drag always derives pan intent without selection side effects and shi
   }
 });
 
+test('card tool draws over zone and group backgrounds while select mode keeps zone pan precedence', () => {
+  const previousTool = state.activeTool;
+  const previousSelection = state.selection;
+  state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
+
+  try {
+    const zoneEvent = { shiftKey: false, ctrlKey: false, target: { closest: (selector: string) => selector === '[data-zone-id]' ? { dataset: { zoneId: 'zone-a' } } : null } } as unknown as PointerEvent;
+    const groupEvent = { shiftKey: false, ctrlKey: false, target: { closest: (selector: string) => selector === '[data-group-id]' ? { dataset: { groupId: 'group-a' } } : null } } as unknown as PointerEvent;
+    const ctrlZoneEvent = { shiftKey: false, ctrlKey: true, target: zoneEvent.target } as unknown as PointerEvent;
+
+    state.activeTool = 'card';
+    assert.equal(derivePointerIntent(zoneEvent, 'zone', null), 'draw-card');
+    assert.equal(derivePointerIntent(groupEvent, 'group', null), 'draw-card');
+    assert.equal(derivePointerIntent(ctrlZoneEvent, 'zone', null), 'pan');
+
+    state.activeTool = 'select';
+    assert.equal(derivePointerIntent(zoneEvent, 'zone', null), 'pan');
+  } finally {
+    state.activeTool = previousTool;
+    state.selection = previousSelection;
+  }
+});
+
+test('card creation preserves canvas x and y instead of clamping to positive space', () => {
+  const createCard = source('frontend/src/runtime/card/effect/create-card-from-rect.ts');
+  assert.match(createCard, /x:\s*rect\.x/);
+  assert.match(createCard, /y:\s*rect\.y/);
+  assert.doesNotMatch(createCard, /x:\s*Math\.max\(0,\s*rect\.x\)/);
+  assert.doesNotMatch(createCard, /y:\s*Math\.max\(0,\s*rect\.y\)/);
+});
+
 test('direct canvas pointer down clears selection before pointer up', () => {
   const pointerDown = source('frontend/src/runtime/gesture/controller/handle-pointer-down.ts');
   const pointerUp = source('frontend/src/runtime/gesture/controller/handle-pointer-up.ts');

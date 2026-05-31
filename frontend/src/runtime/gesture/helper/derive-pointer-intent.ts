@@ -6,7 +6,7 @@ export function derivePointerIntent(event: PointerEvent, targetKind: string, res
   if (event.ctrlKey) return 'pan';
   if (resizeHandle) return 'resize';
   if (event.shiftKey && targetKind === 'canvas') return 'marquee';
-  if (state.activeTool === 'card' && targetKind === 'canvas') return 'draw-card';
+  if (state.activeTool === 'card' && (targetKind === 'canvas' || targetKind === 'zone' || targetKind === 'group')) return 'draw-card';
   if (state.activeTool === 'zone' && targetKind === 'canvas') return 'draw-zone';
   if (state.activeTool === 'group' && targetKind === 'canvas') return 'draw-group';
   if (targetKind === 'canvas') return 'pan';
