@@ -1050,6 +1050,11 @@
       "x": 600,
       "y": 7045,
       "w": 560
+    },
+    "d4b9a6c1": {
+      "x": 1160,
+      "y": 7431,
+      "w": 560
     }
   },
   "cards": [
@@ -1577,6 +1582,21 @@
       "facts": [],
       "fields": [],
       "h": 150
+    },
+    {
+      "id": "d4b9a6c1",
+      "title": "Command chrome wheel falls through to canvas zoom",
+      "cardType": "spec-brief",
+      "domainId": "canvas",
+      "x": 1160,
+      "y": 7431,
+      "w": 560,
+      "comment": {
+        "contentFile": ".blueprinttool/cards/specs/d4b9a6c1.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
     },
     {
       "id": "74567497",
@@ -5599,7 +5619,7 @@
     "zoneId": "",
     "zoneIds": []
   },
-  "updatedAt": "2026-05-29T04:45:00.000Z",
+  "updatedAt": "2026-05-31T09:20:00.000Z",
   "cardEdits": {},
   "threadFiles": {}
 }

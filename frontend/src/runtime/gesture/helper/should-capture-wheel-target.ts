@@ -1,11 +1,12 @@
 /**
- * WHAT: Decides whether a wheel event belongs to an interactive control instead of canvas zoom.
+ * WHAT: Decides whether a wheel event belongs to scroll/editing UI instead of canvas zoom.
  * WHY: Card descriptions should fall through to zoom unless the active content can actually scroll.
  */
 export function shouldCaptureWheelTarget(event: WheelEvent): boolean {
   const target = event.target as HTMLElement | null;
   if (!target) return false;
-  if (target.closest('button,input,textarea,select,[data-action],[contenteditable="true"]')) return true;
+  if (target.closest('button,[data-action]')) return false;
+  if (target.closest('input,textarea,select,[contenteditable="true"]')) return true;
   const capture = target.closest('[data-wheel-capture]') as HTMLElement | null;
   if (!capture) return false;
   const scrollTarget = resolveScrollableWheelTarget(capture);

@@ -1050,6 +1050,11 @@
       "x": 600,
       "y": 7045,
       "w": 560
+    },
+    "d4b9a6c1": {
+      "x": 1160,
+      "y": 7431,
+      "w": 560
     }
   },
   "cards": [
@@ -1539,6 +1544,20 @@
       "w": 520,
       "comment": {
         "what": "Wheel zoom must keep the canvas-space point under the cursor at the same screen position by adjusting viewport translation when scale changes."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "d4b9a6c1",
+      "title": "Command chrome wheel falls through to canvas zoom",
+      "cardType": "spec-brief",
+      "domainId": "canvas",
+      "x": 1160,
+      "y": 7431,
+      "w": 560,
+      "comment": {
+        "what": "Wheel events over command chrome such as todo status buttons, edit buttons, delete buttons, color/action controls, and other non-scroll command affordances must fall through to canvas navigation. Scrolling over those controls must keep the same behavior as scrolling over the canvas: normal wheel zooms around the cursor, and Ctrl-wheel pans the viewport. Only true text/editing surfaces and scrollable content panels with real overflow may capture wheel input."
       },
       "facts": [],
       "fields": []
@@ -5214,6 +5233,6 @@
     "zoneId": "",
     "zoneIds": []
   },
-  "updatedAt": "2026-05-25T00:00:00.000Z",
+  "updatedAt": "2026-05-31T09:20:00.000Z",
   "cardEdits": {}
 }

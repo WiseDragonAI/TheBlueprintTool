@@ -20,6 +20,7 @@ test('multi-tab cards use fixed ledger height while wheel capture is scroll-gate
   const wheel = source('frontend/src/runtime/gesture/controller/handle-wheel.ts');
   const helper = source('frontend/src/runtime/gesture/helper/should-capture-wheel-target.ts');
   assert.match(specs, /f0c2d8a9/);
+  assert.match(specs, /d4b9a6c1/);
   assert.match(css, /\.ledger-card-tab-frame\[data-active-card-tab="description"\]\s*{[^}]*height:\s*auto;[^}]*overflow:\s*visible;/s);
   assert.match(css, /\.ledger-card-tab-frame\[data-active-card-tab="description"\] \.ledger-card-description-panel\.is-active\s*{[^}]*position:\s*relative;[^}]*inset:\s*auto;/s);
   assert.match(patchCard, /const fixedHeight = Math\.max\(132, Number\.isFinite\(cardHeight\) \? cardHeight : 132\);/);
@@ -29,6 +30,7 @@ test('multi-tab cards use fixed ledger height while wheel capture is scroll-gate
   assert.match(wheel, /shouldCaptureWheelTarget\(event\)/);
   assert.match(helper, /scrollHeight > node\.clientHeight/);
   assert.match(helper, /ledger-card-fields-panel\.is-active/);
+  assert.match(helper, /target\.closest\('button,\[data-action\]'\)\) return false/);
 });
 
 test('wheel capture helper returns false for non-scrollable tab frames', () => {
@@ -56,6 +58,18 @@ test('wheel capture helper returns true for scrollable active fields', () => {
   assert.equal(shouldCaptureWheelTarget(event), true);
 });
 
+test('wheel capture helper lets command chrome fall through to canvas zoom', () => {
+  const target = fakeElement({ command: true });
+  const event = { target, deltaX: 0, deltaY: 80 } as unknown as WheelEvent;
+  assert.equal(shouldCaptureWheelTarget(event), false);
+});
+
+test('wheel capture helper keeps editing inputs out of canvas zoom', () => {
+  const target = fakeElement({ editingInput: true });
+  const event = { target, deltaX: 0, deltaY: 80 } as unknown as WheelEvent;
+  assert.equal(shouldCaptureWheelTarget(event), true);
+});
+
 function fakeElement(input: Record<string, unknown>): HTMLElement {
   return {
     scrollHeight: Number(input.scrollHeight ?? 0),
@@ -65,7 +79,9 @@ function fakeElement(input: Record<string, unknown>): HTMLElement {
     scrollTop: Number(input.scrollTop ?? 0),
     scrollLeft: Number(input.scrollLeft ?? 0),
     closest(selector: string) {
-      if (selector.includes('button') && input.control) return this;
+      if (selector.includes('button') && input.command) return this;
+      if (selector.includes('[data-action]') && input.command) return this;
+      if (selector.includes('input') && input.editingInput) return this;
       if (selector.includes('[data-wheel-capture]')) return input.wheelCapture ?? null;
       return null;
     },
