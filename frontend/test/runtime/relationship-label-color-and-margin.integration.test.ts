@@ -8,7 +8,7 @@ function source(path: string): string {
   return readFileSync(new URL(path, root), 'utf8');
 }
 
-test('relationship labels inherit endpoint colors without class overrides', () => {
+test('relationship labels inherit cached endpoint colors without class overrides', () => {
   const specs = source('documentation/specs.json');
   const css = source('frontend/assets/canvas/objects.css');
   const runtime = source('frontend/src/runtime/relationship/effect/render-relationship-overlay.ts');
@@ -18,10 +18,12 @@ test('relationship labels inherit endpoint colors without class overrides', () =
   assert.match(specs, /2f9a6c8d/);
   assert.match(colorRuntime, /--zone-readable-color/);
   assert.match(css, /--zone-label-color:\s*var\(--zone-readable-color,/);
-  assert.match(runtime, /relationshipLabelColor\(source\)/);
-  assert.match(runtime, /relationshipLabelColor\(target\)/);
+  assert.match(runtime, /ensureZoneAttributionCache/);
+  assert.match(runtime, /readableColor/);
+  assert.match(runtime, /relationshipLabelColor\(sourceId/);
+  assert.match(runtime, /relationshipLabelColor\(targetId/);
   assert.match(runtime, /--relationship-label-color/);
-  assert.match(runtime, /--card-readable-color/);
+  assert.doesNotMatch(runtime, /getComputedStyle/);
   assert.match(css, /\.relationships text\s*{[^}]*fill:\s*var\(--relationship-label-color,/s);
   assert.doesNotMatch(css, /\.relationships text\.is-source\s*{[^}]*fill:\s*var\(--accent\)/s);
 });

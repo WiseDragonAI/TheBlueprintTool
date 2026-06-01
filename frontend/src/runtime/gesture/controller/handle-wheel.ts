@@ -6,7 +6,6 @@ import { state } from '../../state.js';
 import { applyViewportTransform } from '../../canvas/effect/apply-viewport-transform.js';
 import { scheduleCanvasMediaOverlayRender } from '../../canvas/effect/render-canvas-media-overlay.js';
 import { scheduleViewportPersistence } from '../../persistence/effect/schedule-viewport-persistence.js';
-import { renderRelationshipOverlay } from '../../relationship/effect/render-relationship-overlay.js';
 import { point } from '../helper/point.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { shouldCaptureWheelTarget } from '../helper/should-capture-wheel-target.js';
@@ -59,5 +58,4 @@ export function handleWheel(event: WheelEvent): void {
   }
   scheduleViewportPersistence();
   applyViewportTransform();
-  renderRelationshipOverlay();
 }

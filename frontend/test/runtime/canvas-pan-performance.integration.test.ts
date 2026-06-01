@@ -124,3 +124,9 @@ test('plain pan pointer up does not force a full canvas rerender', () => {
   assert.match(pointerUp, /const pointerIntent = pointerSession\.intent/);
   assert.match(pointerUp, /if \(pointerIntent !== 'pan'\) renderCanvasSurface\(\)/);
 });
+
+test('wheel zoom stays transform-only and does not reroute relationships', () => {
+  const wheel = source('frontend/src/runtime/gesture/controller/handle-wheel.ts');
+  assert.match(wheel, /applyViewportTransform\(\)/);
+  assert.doesNotMatch(wheel, /renderRelationshipOverlay/);
+});

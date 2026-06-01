@@ -26,7 +26,7 @@ test('browser inputs route ledger commands through runtime controllers before se
 
   const wheel = source('frontend/src/runtime/gesture/controller/handle-wheel.ts');
   assert.match(wheel, /applyViewportTransform/);
-  assert.match(wheel, /renderRelationshipOverlay/);
+  assert.doesNotMatch(wheel, /renderRelationshipOverlay/);
   assert.doesNotMatch(wheel, /viewport\.x\s*-=/);
   assert.doesNotMatch(wheel, /deltaX\s*\|\|\s*event\.deltaY/);
 
