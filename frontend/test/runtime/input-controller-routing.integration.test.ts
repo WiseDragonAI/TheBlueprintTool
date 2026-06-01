@@ -139,6 +139,8 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(controlOverlay, /className = 'canvas-control canvas-control--card'/);
   assert.match(controlOverlay, /renderLedgerCardStatusButton\(cardId, persistedStatus, visibleStatus\)/);
   assert.match(controlOverlay, /renderLedgerCardDeleteButton\(cardId\)/);
+  assert.doesNotMatch(controlOverlay, /selection\.cardIds/);
+  assert.match(controlOverlay, /if \(hoveredTarget\) byKey\.set\(targetKey\(hoveredTarget\), hoveredTarget\)/);
   assert.match(controlOverlay, /deleteButton\.dataset\.action = 'confirm-delete-group'/);
   assert.match(controlOverlay, /edit\.dataset\.zoneId = id/);
   assert.match(controlOverlay, /color\.dataset\.zoneId = id/);

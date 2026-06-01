@@ -55,7 +55,6 @@ function sourceElement(target: ControlTarget): HTMLElement | null {
 
 function selectedTargets(): ControlTarget[] {
   const targets: ControlTarget[] = [];
-  for (const id of new Set(state.selection.cardIds as string[])) targets.push({ kind: 'card', id });
   for (const id of new Set(state.selection.zoneIds as string[])) targets.push({ kind: 'zone', id });
   for (const id of new Set(state.selection.groupIds as string[])) targets.push({ kind: 'group', id });
   return targets;
