@@ -24,6 +24,7 @@ test('visible card quality refresh computes viewport card candidates from ledger
 test('zoomed card images render through an untransformed visible-card media overlay', () => {
   const wheel = source('frontend/src/runtime/gesture/controller/handle-wheel.ts');
   const transform = source('frontend/src/runtime/canvas/effect/apply-viewport-transform.ts');
+  const panTransform = source('frontend/src/runtime/canvas/effect/apply-pan-viewport-transform.ts');
   const renderLedgerSurface = source('frontend/src/runtime/ledger/effect/render-ledger-surface.ts');
   const media = source('frontend/src/runtime/canvas/effect/render-canvas-media-overlay.ts');
   const mediaComponent = source('frontend/src/runtime/ledger/component/render-ledger-card-media.ts');
@@ -31,6 +32,7 @@ test('zoomed card images render through an untransformed visible-card media over
   const objectCss = source('frontend/assets/canvas/objects.css');
 
   assert.match(transform, /scheduleCanvasMediaOverlayRender\(\)/);
+  assert.match(panTransform, /applyCanvasMediaOverlayPanTransform\(\)/);
   assert.match(renderLedgerSurface, /scheduleCanvasMediaOverlayRender\(\)/);
   assert.match(wheel, /scheduleCanvasMediaOverlayRender\(\)/);
   assert.doesNotMatch(wheel, /noteZoomForVisibleCardQualityRefresh/);
@@ -39,6 +41,9 @@ test('zoomed card images render through an untransformed visible-card media over
   assert.match(media, /visibleLedgerCards\(cards, bounds\)\.slice\(0, maxCanvasMediaOverlayCards\)/);
   assert.match(media, /querySelectorAll\('\.ledger-card-media-shell'\)/);
   assert.match(media, /getBoundingClientRect\(\)/);
+  assert.match(media, /lastRenderedViewport/);
+  assert.match(media, /mirror\.style\.transform = transform/);
+  assert.match(media, /setTimeout\(\(\) => \{[\s\S]*scheduleCanvasMediaOverlayRender\(\);[\s\S]*\}, 80\)/);
   assert.match(media, /className = 'canvas-media-overlay-image'/);
   assert.match(canvasCss, /\.canvas-media-overlay\s*{[^}]*position:\s*absolute;[^}]*z-index:\s*80;[^}]*pointer-events:\s*none;/s);
   assert.match(canvasCss, /\.canvas-media-overlay-image\s*{[^}]*position:\s*absolute;[^}]*object-fit:\s*contain;/s);

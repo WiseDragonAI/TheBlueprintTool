@@ -11,6 +11,8 @@ export const canvasMediaOverlayScaleThreshold = 1;
 const maxCanvasMediaOverlayCards = 16;
 
 let scheduled = false;
+let panReconcileTimer: ReturnType<typeof setTimeout> | undefined;
+let lastRenderedViewport: { x: number; y: number; scale: number } | null = null;
 
 function resolveMediaOverlay(): HTMLElement | null {
   if (initialMediaOverlay?.isConnected) return initialMediaOverlay;
@@ -36,6 +38,8 @@ function clearActiveShells(activeShells = new Set<HTMLElement>()): void {
 
 function clearMediaOverlay(overlay: HTMLElement | null = resolveMediaOverlay()): void {
   overlay?.replaceChildren();
+  if (overlay) overlay.style.transform = '';
+  lastRenderedViewport = null;
   clearActiveShells();
 }
 
@@ -81,6 +85,7 @@ function syncOverlayImage(overlay: HTMLElement, key: string, image: HTMLImageEle
   mirror.style.top = `${Math.round(rect.top - canvasRect.top)}px`;
   mirror.style.width = `${Math.round(rect.width)}px`;
   mirror.style.height = `${Math.round(rect.height)}px`;
+  mirror.style.transform = '';
   return mirror;
 }
 
@@ -137,6 +142,7 @@ export function renderCanvasMediaOverlay(): void {
     if (!activeKeys.has(node.dataset.mediaKey ?? '')) node.remove();
   }
   clearActiveShells(activeShells);
+  lastRenderedViewport = { x: Number(state.viewport.x), y: Number(state.viewport.y), scale: Number(state.viewport.scale) };
   telemetry('render-canvas-media-overlay', { mirrored, threshold: canvasMediaOverlayScaleThreshold });
 }
 
@@ -149,4 +155,28 @@ export function scheduleCanvasMediaOverlayRender(): void {
   };
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
   else setTimeout(run, 0);
+}
+
+export function applyCanvasMediaOverlayPanTransform(): void {
+  if (Number(state.viewport.scale) < canvasMediaOverlayScaleThreshold) return;
+  const overlay = resolveMediaOverlay();
+  if (!overlay || !lastRenderedViewport || lastRenderedViewport.scale !== Number(state.viewport.scale)) {
+    scheduleCanvasMediaOverlayRender();
+    return;
+  }
+  const mirrors = Array.from(overlay.querySelectorAll('.canvas-media-overlay-image')) as HTMLImageElement[];
+  if (mirrors.length === 0) {
+    scheduleCanvasMediaOverlayRender();
+    return;
+  }
+  const devicePixelRatio = window.devicePixelRatio || 1;
+  const dx = Math.round((Number(state.viewport.x) - lastRenderedViewport.x) * devicePixelRatio) / devicePixelRatio;
+  const dy = Math.round((Number(state.viewport.y) - lastRenderedViewport.y) * devicePixelRatio) / devicePixelRatio;
+  const transform = dx || dy ? `translate(${dx}px, ${dy}px)` : '';
+  for (const mirror of mirrors) mirror.style.transform = transform;
+  if (panReconcileTimer) clearTimeout(panReconcileTimer);
+  panReconcileTimer = setTimeout(() => {
+    panReconcileTimer = undefined;
+    scheduleCanvasMediaOverlayRender();
+  }, 80);
 }
