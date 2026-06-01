@@ -17,13 +17,17 @@ const dragDx = Number(process.env.COREV2_DRAG_TRACE_DX ?? 144);
 const dragDy = Number(process.env.COREV2_DRAG_TRACE_DY ?? 4);
 const longEventThresholdMs = Number(process.env.COREV2_DRAG_TRACE_LONG_EVENT_MS ?? 8);
 const enableDomReadProbes = process.env.COREV2_DRAG_TRACE_DOM_READ_PROBES === '1';
+const mockGeometryCommit = process.env.COREV2_DRAG_TRACE_MOCK_GEOMETRY_COMMIT !== '0';
 const variants = parseList(process.env.COREV2_DRAG_TRACE_VARIANTS, [
   'baseline',
   'preselected',
+  'skip-zone-labels',
   'no-hover-controls',
   'no-hover-tabs',
   'cheap-visuals',
-  'no-images'
+  'no-images',
+  'no-release-render',
+  'block-pointerup'
 ]);
 const hoverModes = parseList(process.env.COREV2_DRAG_TRACE_HOVER_MODES, ['cold', 'warm']);
 
@@ -226,6 +230,10 @@ function setupPageExpression(input) {
 
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
+    if (input.variant === 'skip-zone-labels') {
+      for (const title of document.querySelectorAll('.zone-title')) title.classList.add('editing');
+      document.querySelector('.zone-label-overlay')?.replaceChildren();
+    }
     if (input.variant === 'no-hover-controls') {
       const stopHover = (event) => event.stopImmediatePropagation();
       canvas.addEventListener('mouseover', stopHover, { capture: true });
@@ -233,18 +241,65 @@ function setupPageExpression(input) {
       canvas.addEventListener('pointerover', stopHover, { capture: true });
       canvas.addEventListener('pointerout', stopHover, { capture: true });
     }
+    if (input.variant === 'block-pointerup') {
+      canvas.addEventListener('pointerup', (event) => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }, { capture: true });
+      canvas.addEventListener('mouseup', (event) => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }, { capture: true });
+    }
 
     const rect = target.getBoundingClientRect();
+    const targetCardId = target.dataset.cardId;
+    const candidatePoints = [];
+    const xFractions = [0.18, 0.32, 0.5, 0.68, 0.82];
+    const yOffsets = [18, 28, 42, 64, 88, Math.min(rect.height - 14, 120)];
+    for (const yOffset of yOffsets) {
+      for (const xFraction of xFractions) {
+        candidatePoints.push({
+          x: Math.round(rect.left + rect.width * xFraction),
+          y: Math.round(rect.top + Math.max(8, yOffset))
+        });
+      }
+    }
+    let hitPoint = null;
+    for (const point of candidatePoints) {
+      const stack = document.elementsFromPoint(point.x, point.y);
+      const firstCard = stack.find((node) => node instanceof HTMLElement && node.matches?.('.canvas-content > .card[data-card-id]'));
+      if (firstCard?.dataset.cardId === targetCardId) {
+        hitPoint = point;
+        break;
+      }
+    }
+    if (!hitPoint) {
+      hitPoint = {
+        x: Math.round(rect.left + rect.width / 2),
+        y: Math.round(rect.top + Math.min(28, rect.height / 4))
+      };
+    }
+    const hitStack = document.elementsFromPoint(hitPoint.x, hitPoint.y)
+      .filter((node) => node instanceof HTMLElement)
+      .slice(0, 8)
+      .map((node) => ({
+        tag: node.tagName.toLowerCase(),
+        cardId: node.dataset.cardId ?? '',
+        zoneId: node.dataset.zoneId ?? '',
+        className: String(node.className ?? '').split(/\s+/).filter(Boolean).slice(0, 4).join(' ')
+      }));
     return {
       route: location.pathname,
       activeTab: state.activeTab,
       variant: input.variant,
       hoverMode: input.hoverMode,
       scale: state.viewport.scale,
-      targetCardId: target.dataset.cardId,
+      targetCardId,
       targetRect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
-      startX: Math.round(rect.left + rect.width / 2),
-      startY: Math.round(rect.top + Math.min(28, rect.height / 4)),
+      startX: hitPoint.x,
+      startY: hitPoint.y,
+      hitStack,
       offscreenX: 8,
       offscreenY: 8,
       counts: {
@@ -352,6 +407,26 @@ function installInstrumentationExpression(input) {
         });
         state.restoreFns.push(() => Object.defineProperty(HTMLElement.prototype, property, descriptor));
       }
+    }
+
+    if (input.mockGeometryCommit || input.variant === 'no-release-render') {
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = async function tracedFetch(resource, options = {}) {
+        const method = String(options?.method ?? '').toUpperCase();
+        const body = typeof options?.body === 'string' ? options.body : '';
+        if (method === 'PATCH' && body.includes('"action":"patch-geometry"')) {
+          mark('mock-patch-geometry-commit');
+          if (input.variant === 'no-release-render') {
+            return new Response('', { status: 204 });
+          }
+          return new Response(JSON.stringify(window.__coreState?.activeLedger ?? {}), {
+            status: 200,
+            headers: { 'content-type': 'application/json' }
+          });
+        }
+        return originalFetch(resource, options);
+      };
+      state.restoreFns.push(() => { window.fetch = originalFetch; });
     }
 
     const observer = new MutationObserver((records) => {
@@ -477,7 +552,7 @@ async function runTraceCase({ socket, send, variant, hoverMode, runIndex }) {
   await wait(1200);
   await waitLiveCanvasReady(send);
 
-  const input = { targetCardId, scale, variant, hoverMode, runIndex, enableDomReadProbes };
+  const input = { targetCardId, scale, variant, hoverMode, runIndex, enableDomReadProbes, mockGeometryCommit };
   const setup = await evaluate(send, setupPageExpression(input));
   await evaluate(send, installInstrumentationExpression({ ...input, targetCardId: setup.targetCardId }));
 
@@ -504,7 +579,7 @@ async function runTraceCase({ socket, send, variant, hoverMode, runIndex }) {
 
   await send('Tracing.start', { categories: traceCategories, options: 'record-as-much-as-possible' });
   await wait(50);
-  await evaluate(send, `performance.mark(${JSON.stringify(`corev2-drag:${variant}:${hoverMode}:trace-input-start`)})`);
+  await evaluate(send, `window.__corev2DragTrace?.mark(${JSON.stringify('trace-input-start')})`);
   if (hoverMode === 'cold') {
     await dispatchMouse(send, 'mouseMoved', setup.startX, setup.startY);
     await wait(24);
@@ -522,7 +597,7 @@ async function runTraceCase({ socket, send, variant, hoverMode, runIndex }) {
   await wait(120);
   await dispatchMouse(send, 'mouseReleased', setup.startX + dragDx, setup.startY + dragDy);
   await wait(320);
-  await evaluate(send, `performance.mark(${JSON.stringify(`corev2-drag:${variant}:${hoverMode}:trace-input-end`)})`);
+  await evaluate(send, `window.__corev2DragTrace?.mark(${JSON.stringify('trace-input-end')})`);
   await send('Tracing.end');
   await tracingComplete;
 
@@ -565,17 +640,35 @@ function mutationTimeAfter(page, attributeName, afterMs) {
   ))?.t ?? 0;
 }
 
+function telemetryCounts(page) {
+  const counts = new Map();
+  for (const entry of page.telemetry ?? []) {
+    counts.set(entry.name, (counts.get(entry.name) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 16)
+    .map(([name, count]) => ({ name, count }));
+}
+
+function pointerDownTelemetry(page) {
+  const entry = (page.telemetry ?? []).find((telemetryEntry) => telemetryEntry.name === 'canvas-pointer-down');
+  return entry?.args ?? {};
+}
+
 function summarizeCase(report) {
   const moveCapture = markTime(report.page, 'pointermove:capture');
   const pointerDown = markTime(report.page, 'pointerdown:capture');
   const firstDragMove = markTimeAfter(report.page, 'pointermove:capture', pointerDown);
   const firstCardStyle = mutationTimeAfter(report.page, 'style', firstDragMove);
   const release = markTime(report.page, 'pointerup:capture');
+  const traceInputEnd = markTime(report.page, 'trace-input-end') || Number.POSITIVE_INFINITY;
   const frameGapRows = report.page.frames.slice(1).map((t, index) => ({ start: report.page.frames[index], end: t, gap: round(t - report.page.frames[index]) }));
   const maxGapInWindow = (start, end) => round(Math.max(0, ...frameGapRows.filter((row) => row.start >= start && row.start <= end).map((row) => row.gap)));
   return {
     case: `${report.case.variant}/${report.case.hoverMode}#${report.case.runIndex + 1}`,
     targetCardId: report.case.targetCardId,
+    pointerDown: pointerDownTelemetry(report.page),
     counts: report.setup.counts,
     pointerDownMs: round(pointerDown),
     firstMoveMs: round(firstDragMove || moveCapture),
@@ -587,9 +680,10 @@ function summarizeCase(report) {
     p95FrameGapMs: report.page.frameGapsSummary.p95Ms,
     maxFrameGapBeforeDragMs: maxGapInWindow(0, pointerDown),
     maxFrameGapDuringDragMs: maxGapInWindow(pointerDown, release),
-    maxFrameGapAfterReleaseMs: maxGapInWindow(release, Number.POSITIVE_INFINITY),
+    maxFrameGapAfterReleaseMs: maxGapInWindow(release, traceInputEnd),
     domReadsByKind: report.page.domReads.byKind.slice(0, 8),
     domReadsByEvent: report.page.domReads.byEvent.slice(0, 8),
+    telemetryCounts: telemetryCounts(report.page),
     eventDispatchByType: report.trace.eventDispatchByType.slice(0, 8),
     traceGroups: report.trace.groups,
     topTraceNames: report.trace.topNames.slice(0, 10),
@@ -604,17 +698,20 @@ function formatSuiteSummary(summaries) {
     `Card drag CDP trace suite`,
     `url=${url}`,
     `outputDir=${outputDir}`,
-    `scale=${scale} variants=${variants.join(',')} hoverModes=${hoverModes.join(',')} runs=${runsPerCase} domReadProbes=${enableDomReadProbes}`,
+    `scale=${scale} variants=${variants.join(',')} hoverModes=${hoverModes.join(',')} runs=${runsPerCase} domReadProbes=${enableDomReadProbes} mockGeometryCommit=${mockGeometryCommit}`,
     ''
   ];
   for (const summary of summaries) {
     lines.push(`${summary.case}: cards=${summary.counts.cards} zones=${summary.counts.zones} rel=${summary.counts.relationships} images=${summary.counts.images}`);
+    lines.push(`  target=${summary.targetCardId} pointerDown=${summary.pointerDown.targetKind ?? '?'}:${summary.pointerDown.targetId ?? '?'}`);
     lines.push(`  down->firstMove=${summary.pointerDownToFirstMoveMs}ms move->style=${summary.moveToStyleMutationMs}ms release=${summary.releaseMs}ms frameGap before/during/after=${summary.maxFrameGapBeforeDragMs}/${summary.maxFrameGapDuringDragMs}/${summary.maxFrameGapAfterReleaseMs}ms p95=${summary.p95FrameGapMs}ms`);
     lines.push(`  trace input total=${summary.traceGroups.input.totalMs}ms max=${summary.traceGroups.input.maxMs}ms style/layout total=${summary.traceGroups.forcedStyleLayout.totalMs}ms max=${summary.traceGroups.forcedStyleLayout.maxMs}ms raster total=${summary.traceGroups.rasterComposite.totalMs}ms max=${summary.traceGroups.rasterComposite.maxMs}ms`);
     const reads = summary.domReadsByEvent.slice(0, 4).map((entry) => `${entry.activeEvent}/${entry.kind}:${entry.count}`).join(', ');
     lines.push(`  dom reads: ${reads || 'none'}`);
     const dispatch = summary.eventDispatchByType.slice(0, 4).map((entry) => `${entry.type}:${entry.totalMs}ms/${entry.maxMs}ms`).join(', ');
     lines.push(`  event dispatch: ${dispatch || 'none'}`);
+    const telemetry = summary.telemetryCounts.slice(0, 6).map((entry) => `${entry.name}:${entry.count}`).join(', ');
+    lines.push(`  telemetry: ${telemetry || 'none'}`);
     lines.push(`  report=${summary.reportPath}`);
   }
   return lines.join('\n');
@@ -640,7 +737,7 @@ try {
   const summaries = reports.map(summarizeCase);
   const suiteReport = {
     generatedAt: new Date().toISOString(),
-    config: { url, cdpJsonUrl, outputDir, targetCardId, scale, variants, hoverModes, runsPerCase, moveSteps, moveIntervalMs, dragDx, dragDy, longEventThresholdMs, enableDomReadProbes },
+    config: { url, cdpJsonUrl, outputDir, targetCardId, scale, variants, hoverModes, runsPerCase, moveSteps, moveIntervalMs, dragDx, dragDy, longEventThresholdMs, enableDomReadProbes, mockGeometryCommit },
     summaries,
     reports: reports.map((report) => report.reportPath)
   };
