@@ -9,7 +9,9 @@ const url = process.env.COREV2_URL ?? 'http://127.0.0.1:4173/ardaria-game-design
 const cdpJsonUrl = process.env.COREV2_CDP_JSON ?? 'http://127.0.0.1:9223/json';
 const outputDir = process.env.COREV2_DRAG_TRACE_OUTPUT_DIR ?? `/tmp/corev2-card-drag-trace-${Date.now()}`;
 const targetCardId = process.env.COREV2_DRAG_TRACE_CARD_ID ?? 'prep_ui_implementation_surfaces_5b947d58';
+const targetCardIds = parseList(process.env.COREV2_DRAG_TRACE_CARD_IDS, [targetCardId]);
 const scale = Number(process.env.COREV2_DRAG_TRACE_SCALE ?? 0.5);
+const scales = parseNumberList(process.env.COREV2_DRAG_TRACE_SCALES, [scale]);
 const runsPerCase = Math.max(1, Number(process.env.COREV2_DRAG_TRACE_RUNS ?? 1));
 const moveSteps = Math.max(1, Number(process.env.COREV2_DRAG_TRACE_MOVES ?? 12));
 const moveIntervalMs = Math.max(0, Number(process.env.COREV2_DRAG_TRACE_MOVE_INTERVAL_MS ?? 16));
@@ -52,6 +54,15 @@ const traceCategories = [
 function parseList(value, fallback) {
   if (!value) return fallback;
   return value.split(',').map((part) => part.trim()).filter(Boolean);
+}
+
+function parseNumberList(value, fallback) {
+  if (!value) return fallback;
+  const parsed = value
+    .split(',')
+    .map((part) => Number(part.trim()))
+    .filter((value) => Number.isFinite(value));
+  return parsed.length ? parsed : fallback;
 }
 
 function round(value) {
@@ -711,7 +722,7 @@ async function dispatchMouse(send, type, x, y) {
   });
 }
 
-async function runTraceCase({ socket, send, variant, hoverMode, runIndex }) {
+async function runTraceCase({ socket, send, variant, hoverMode, runIndex, targetCardId, scale }) {
   await send('Page.navigate', { url });
   await wait(1200);
   await waitLiveCanvasReady(send);
@@ -767,7 +778,9 @@ async function runTraceCase({ socket, send, variant, hoverMode, runIndex }) {
 
   const page = await evaluate(send, finishInstrumentationExpression(), 30000);
   const traceSummary = summarizeTrace(traceEvents, page);
-  const baseName = `${variant}-${hoverMode}-run${runIndex + 1}`;
+  const safeTarget = setup.targetCardId.replace(/[^a-zA-Z0-9_-]+/g, '_');
+  const safeScale = String(scale).replace(/[^a-zA-Z0-9_-]+/g, '_');
+  const baseName = `${safeTarget}-scale${safeScale}-${variant}-${hoverMode}-run${runIndex + 1}`;
   const tracePath = join(outputDir, `${baseName}.trace.json`);
   const reportPath = join(outputDir, `${baseName}.report.json`);
   await writeFile(tracePath, JSON.stringify({ traceEvents }));
@@ -838,6 +851,7 @@ function summarizeCase(report) {
   const maxGapInWindow = (start, end) => round(Math.max(0, ...frameGapRows.filter((row) => row.start >= start && row.start <= end).map((row) => row.gap)));
   return {
     case: `${report.case.variant}/${report.case.hoverMode}#${report.case.runIndex + 1}`,
+    scale: report.case.scale,
     targetCardId: report.case.targetCardId,
     pointerDown: pointerDownTelemetry(report.page),
     counts: report.setup.counts,
@@ -876,11 +890,11 @@ function formatSuiteSummary(summaries) {
     `Card drag CDP trace suite`,
     `url=${url}`,
     `outputDir=${outputDir}`,
-    `scale=${scale} variants=${variants.join(',')} hoverModes=${hoverModes.join(',')} runs=${runsPerCase} domReadProbes=${enableDomReadProbes} mockGeometryCommit=${mockGeometryCommit}`,
+    `scales=${scales.join(',')} targets=${targetCardIds.join(',')} variants=${variants.join(',')} hoverModes=${hoverModes.join(',')} runs=${runsPerCase} domReadProbes=${enableDomReadProbes} mockGeometryCommit=${mockGeometryCommit}`,
     ''
   ];
   for (const summary of summaries) {
-    lines.push(`${summary.case}: cards=${summary.counts.cards} zones=${summary.counts.zones} rel=${summary.counts.relationships} images=${summary.counts.images}`);
+    lines.push(`${summary.case} scale=${summary.scale}: cards=${summary.counts.cards} zones=${summary.counts.zones} rel=${summary.counts.relationships} images=${summary.counts.images}`);
     lines.push(`  target=${summary.targetCardId} pointerDown=${summary.pointerDown.targetKind ?? '?'}:${summary.pointerDown.targetId ?? '?'}`);
     lines.push(`  down->firstMove=${summary.pointerDownToFirstMoveMs}ms move->style=${summary.moveToStyleMutationMs}ms release=${summary.releaseMs}ms frameGap before/during/after=${summary.maxFrameGapBeforeDragMs}/${summary.maxFrameGapDuringDragMs}/${summary.maxFrameGapAfterReleaseMs}ms p95=${summary.p95FrameGapMs}ms`);
     lines.push(`  trace input total=${summary.traceGroups.input.totalMs}ms max=${summary.traceGroups.input.maxMs}ms style/layout total=${summary.traceGroups.forcedStyleLayout.totalMs}ms max=${summary.traceGroups.forcedStyleLayout.maxMs}ms raster total=${summary.traceGroups.rasterComposite.totalMs}ms max=${summary.traceGroups.rasterComposite.maxMs}ms`);
@@ -923,10 +937,22 @@ try {
   await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 920, deviceScaleFactor: 1, mobile: false });
 
   const reports = [];
-  for (const variant of variants) {
-    for (const hoverMode of hoverModes) {
-      for (let runIndex = 0; runIndex < runsPerCase; runIndex += 1) {
-        reports.push(await runTraceCase({ socket, send, variant, hoverMode, runIndex }));
+  for (const currentTargetCardId of targetCardIds) {
+    for (const currentScale of scales) {
+      for (const variant of variants) {
+        for (const hoverMode of hoverModes) {
+          for (let runIndex = 0; runIndex < runsPerCase; runIndex += 1) {
+            reports.push(await runTraceCase({
+              socket,
+              send,
+              variant,
+              hoverMode,
+              runIndex,
+              targetCardId: currentTargetCardId,
+              scale: currentScale
+            }));
+          }
+        }
       }
     }
   }
@@ -934,7 +960,7 @@ try {
   const summaries = reports.map(summarizeCase);
   const suiteReport = {
     generatedAt: new Date().toISOString(),
-    config: { url, cdpJsonUrl, outputDir, targetCardId, scale, variants, hoverModes, runsPerCase, moveSteps, moveIntervalMs, dragDx, dragDy, longEventThresholdMs, enableDomReadProbes, mockGeometryCommit },
+    config: { url, cdpJsonUrl, outputDir, targetCardIds, scales, variants, hoverModes, runsPerCase, moveSteps, moveIntervalMs, dragDx, dragDy, longEventThresholdMs, enableDomReadProbes, mockGeometryCommit },
     summaries,
     reports: reports.map((report) => report.reportPath)
   };
