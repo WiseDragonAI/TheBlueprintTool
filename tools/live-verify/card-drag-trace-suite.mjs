@@ -16,6 +16,8 @@ const moveIntervalMs = Math.max(0, Number(process.env.COREV2_DRAG_TRACE_MOVE_INT
 const dragDx = Number(process.env.COREV2_DRAG_TRACE_DX ?? 144);
 const dragDy = Number(process.env.COREV2_DRAG_TRACE_DY ?? 4);
 const longEventThresholdMs = Number(process.env.COREV2_DRAG_TRACE_LONG_EVENT_MS ?? 8);
+const slowFrameThresholdMs = Number(process.env.COREV2_DRAG_TRACE_SLOW_FRAME_MS ?? 16.7);
+const frameOffenderThresholdMs = Number(process.env.COREV2_DRAG_TRACE_FRAME_OFFENDER_MS ?? 10);
 const enableDomReadProbes = process.env.COREV2_DRAG_TRACE_DOM_READ_PROBES === '1';
 const mockGeometryCommit = process.env.COREV2_DRAG_TRACE_MOCK_GEOMETRY_COMMIT !== '0';
 const variants = parseList(process.env.COREV2_DRAG_TRACE_VARIANTS, [
@@ -99,6 +101,11 @@ function eventArgType(event) {
     ?? '';
 }
 
+function eventLabel(event) {
+  const argType = eventArgType(event);
+  return argType ? `${event.name}:${argType}` : event.name;
+}
+
 function completeTraceEvents(events) {
   return events.filter((event) => event.ph === 'X' && typeof event.dur === 'number' && event.dur > 0);
 }
@@ -133,7 +140,163 @@ function summarizeChildren(parent, completeEvents) {
   }));
 }
 
-function summarizeTrace(traceEvents) {
+function traceMarkLabel(name) {
+  const value = String(name ?? '');
+  const marker = ':';
+  if (!value.startsWith('corev2-drag:')) return '';
+  const parts = value.split(marker);
+  return parts.slice(3).join(marker);
+}
+
+function traceMarks(traceEvents) {
+  return traceEvents
+    .filter((event) => event.cat?.includes('blink.user_timing') && event.ph === 'I' && String(event.name ?? '').startsWith('corev2-drag:'))
+    .map((event) => ({ label: traceMarkLabel(event.name), ts: event.ts, name: event.name }))
+    .filter((mark) => mark.label && typeof mark.ts === 'number');
+}
+
+function traceAlignmentOffsetUs(traceEvents, page) {
+  const marks = traceMarks(traceEvents);
+  const byLabel = new Map();
+  for (const mark of marks) {
+    if (!byLabel.has(mark.label)) byLabel.set(mark.label, mark);
+  }
+  const anchorLabels = ['trace-input-start', 'pointerdown:capture', 'pointermove:capture'];
+  for (const label of anchorLabels) {
+    const pageMark = (page?.marks ?? []).find((mark) => mark.label === label);
+    const traceMark = byLabel.get(label);
+    if (pageMark && traceMark) return traceMark.ts - pageMark.t * 1000;
+  }
+  return 0;
+}
+
+function intervalOverlapUs(aStart, aEnd, bStart, bEnd) {
+  return Math.max(0, Math.min(aEnd, bEnd) - Math.max(aStart, bStart));
+}
+
+function framePhase(page, startMs, endMs) {
+  const marks = page?.marks ?? [];
+  const pointerDown = marks.find((mark) => mark.label === 'pointerdown:capture')?.t ?? Number.POSITIVE_INFINITY;
+  const pointerUp = marks.find((mark) => mark.label === 'pointerup:capture')?.t ?? Number.POSITIVE_INFINITY;
+  const traceInputEnd = marks.find((mark) => mark.label === 'trace-input-end')?.t ?? Number.POSITIVE_INFINITY;
+  if (endMs <= pointerDown) return 'before-drag';
+  if (startMs >= pointerDown && endMs <= pointerUp) return 'during-drag';
+  if (startMs >= pointerUp && startMs <= traceInputEnd) return 'after-release';
+  return 'boundary';
+}
+
+function summarizeFrameEvents(events, frameStartUs, frameEndUs) {
+  const byLabel = new Map();
+  const byGroup = new Map();
+  const offenders = [];
+  const groupMatchers = [
+    { group: 'input', names: new Set(['EventDispatch', 'WebFrameWidgetImpl::HandleInputEvent', 'EventHandler::handleMouseMoveEvent', 'EventHandler::handleMousePressEvent', 'EventHandler::handleMouseReleaseEvent', 'LayoutView::HitTest']) },
+    { group: 'style-layout', names: new Set(['Document::UpdateStyleAndLayout', 'LocalFrameView::UpdateStyleAndLayout', 'Blink.ForcedStyleAndLayout.UpdateTime', 'UpdateLayoutTree', 'Document::recalcStyle', 'Document::updateStyle', 'Document::rebuildLayoutTree', 'Layout', 'LocalFrameView::layout', 'LocalFrameView::RunStyleAndLayoutLifecyclePhases']) },
+    { group: 'paint-layer', names: new Set(['PrePaint', 'Paint', 'PaintImage', 'Layerize', 'UpdateLayerTree', 'LocalFrameView::RunPaintLifecyclePhase', 'LocalFrameView::pushPaintArtifactToCompositor']) },
+    { group: 'raster-composite', names: new Set(['RasterTask', 'RasterizerTaskImpl::RunOnWorkerThread', 'TaskGraphRunner::RunTask', 'ZeroCopyRasterBuffer::Playback', 'DisplayItemList::Raster', 'ProxyMain::BeginMainFrame', 'ProxyMain::BeginMainFrame::commit', 'LayerTreeHost::WaitForCommitCompletion', 'Commit', 'CompositeLayers', 'DrawFrame']) }
+  ];
+  const wrapperNames = new Set([
+    'RunTask',
+    'ThreadControllerImpl::RunTask',
+    'ThreadPool_RunTask',
+    'LatencyInfo.Flow',
+    'WebFrameWidgetImpl::HandleInputEvent',
+    'EventHandler::handleMouseMoveEvent',
+    'EventHandler::handleMousePressEvent',
+    'EventHandler::handleMouseReleaseEvent',
+    'BlinkScheduler_PerformMicrotaskCheckpoint',
+    'v8.callFunction',
+    'FunctionCall'
+  ]);
+  for (const event of events) {
+    const eventStart = event.ts;
+    const eventEnd = event.ts + event.dur;
+    const overlapMs = intervalOverlapUs(frameStartUs, frameEndUs, eventStart, eventEnd) / 1000;
+    if (overlapMs <= 0) continue;
+    const label = eventLabel(event);
+    addDuration(byLabel, label, overlapMs, { name: event.name, label, argType: eventArgType(event), cat: event.cat });
+    for (const matcher of groupMatchers) {
+      if (matcher.names.has(event.name)) addDuration(byGroup, matcher.group, overlapMs, { group: matcher.group });
+    }
+    if (overlapMs >= frameOffenderThresholdMs) {
+      offenders.push({
+        name: event.name,
+        label,
+        argType: eventArgType(event),
+        cat: event.cat,
+        overlapMs: round(overlapMs),
+        durationMs: round(event.dur / 1000)
+      });
+    }
+  }
+  return {
+    top: topByTotal(byLabel, 12).map((entry) => ({
+      label: entry.label,
+      name: entry.name,
+      argType: entry.argType,
+      count: entry.count,
+      totalMs: entry.totalMs,
+      maxMs: entry.maxMs
+    })),
+    offenders: offenders.sort((a, b) => b.overlapMs - a.overlapMs).slice(0, 12),
+    actionableOffenders: offenders
+      .filter((event) => !wrapperNames.has(event.name))
+      .sort((a, b) => b.overlapMs - a.overlapMs)
+      .slice(0, 12),
+    groupOffenders: topByTotal(byGroup, 8)
+      .filter((entry) => entry.totalMs >= frameOffenderThresholdMs)
+      .map((entry) => ({ group: entry.group, totalMs: entry.totalMs, maxMs: entry.maxMs, count: entry.count }))
+  };
+}
+
+function analyzeSlowFrames(traceEvents, page) {
+  const frames = page?.frames ?? [];
+  if (frames.length < 2) return { alignment: null, frames: [], byPhase: [] };
+  const completeEvents = completeTraceEvents(traceEvents);
+  const offsetUs = traceAlignmentOffsetUs(traceEvents, page);
+  const traceInputEnd = (page?.marks ?? []).find((mark) => mark.label === 'trace-input-end')?.t ?? Number.POSITIVE_INFINITY;
+  const slowFrames = [];
+  const phaseDurations = new Map();
+  for (let index = 0; index < frames.length - 1; index += 1) {
+    const startMs = frames[index];
+    const endMs = frames[index + 1];
+    if (startMs > traceInputEnd) continue;
+    const durationMs = round(endMs - startMs);
+    if (durationMs < slowFrameThresholdMs) continue;
+    const frameStartUs = offsetUs + startMs * 1000;
+    const frameEndUs = offsetUs + endMs * 1000;
+    const phase = framePhase(page, startMs, endMs);
+    const summary = summarizeFrameEvents(completeEvents, frameStartUs, frameEndUs);
+    addDuration(phaseDurations, phase, durationMs, { phase });
+    slowFrames.push({
+      index,
+      phase,
+      startMs: round(startMs),
+      endMs: round(endMs),
+      durationMs,
+      offendersOverThresholdMs: summary.offenders,
+      actionableOffendersOverThresholdMs: summary.actionableOffenders,
+      groupOffendersOverThresholdMs: summary.groupOffenders,
+      topOverlappingEvents: summary.top
+    });
+  }
+  return {
+    alignment: { offsetUs: round(offsetUs), anchor: 'trace-input-start' },
+    thresholdMs: slowFrameThresholdMs,
+    offenderThresholdMs: frameOffenderThresholdMs,
+    count: slowFrames.length,
+    worst: slowFrames.slice().sort((a, b) => b.durationMs - a.durationMs).slice(0, 12),
+    frames: slowFrames,
+    byPhase: topByTotal(phaseDurations, 8).map((entry) => ({
+      phase: entry.phase,
+      count: entry.count,
+      totalMs: entry.totalMs,
+      maxMs: entry.maxMs
+    }))
+  };
+}
+
+function summarizeTrace(traceEvents, page = null) {
   const completeEvents = completeTraceEvents(traceEvents);
   const byName = new Map();
   const byEventDispatchType = new Map();
@@ -178,7 +341,8 @@ function summarizeTrace(traceEvents) {
       forcedStyleLayout: groupDurations(completeEvents, ['Document::UpdateStyleAndLayout', 'LocalFrameView::UpdateStyleAndLayout', 'Blink.ForcedStyleAndLayout.UpdateTime', 'UpdateLayoutTree', 'Document::recalcStyle', 'Document::updateStyle', 'Layout', 'LocalFrameView::layout']),
       paintLayer: groupDurations(completeEvents, ['PrePaint', 'Paint', 'PaintImage', 'Layerize', 'UpdateLayerTree', 'LocalFrameView::RunPaintLifecyclePhase', 'LocalFrameView::pushPaintArtifactToCompositor']),
       rasterComposite: groupDurations(completeEvents, ['RasterTask', 'RasterizerTaskImpl::RunOnWorkerThread', 'TaskGraphRunner::RunTask', 'ZeroCopyRasterBuffer::Playback', 'DisplayItemList::Raster', 'ProxyMain::BeginMainFrame', 'LayerTreeHost::WaitForCommitCompletion', 'CompositeLayers', 'DrawFrame'])
-    }
+    },
+    slowFrames: analyzeSlowFrames(traceEvents, page)
   };
 }
 
@@ -602,7 +766,7 @@ async function runTraceCase({ socket, send, variant, hoverMode, runIndex }) {
   await tracingComplete;
 
   const page = await evaluate(send, finishInstrumentationExpression(), 30000);
-  const traceSummary = summarizeTrace(traceEvents);
+  const traceSummary = summarizeTrace(traceEvents, page);
   const baseName = `${variant}-${hoverMode}-run${runIndex + 1}`;
   const tracePath = join(outputDir, `${baseName}.trace.json`);
   const reportPath = join(outputDir, `${baseName}.report.json`);
@@ -656,6 +820,13 @@ function pointerDownTelemetry(page) {
   return entry?.args ?? {};
 }
 
+function worstFramesForPhase(traceSlowFrames, phase, count = 3) {
+  return (traceSlowFrames.frames ?? [])
+    .filter((frame) => frame.phase === phase)
+    .sort((a, b) => b.durationMs - a.durationMs)
+    .slice(0, count);
+}
+
 function summarizeCase(report) {
   const moveCapture = markTime(report.page, 'pointermove:capture');
   const pointerDown = markTime(report.page, 'pointerdown:capture');
@@ -688,6 +859,13 @@ function summarizeCase(report) {
     traceGroups: report.trace.groups,
     topTraceNames: report.trace.topNames.slice(0, 10),
     topLongEvents: report.trace.longEvents.slice(0, 8),
+    slowFrames: {
+      count: report.trace.slowFrames.count,
+      byPhase: report.trace.slowFrames.byPhase,
+      worst: report.trace.slowFrames.worst.slice(0, 6),
+      worstDuringDrag: worstFramesForPhase(report.trace.slowFrames, 'during-drag'),
+      worstAfterRelease: worstFramesForPhase(report.trace.slowFrames, 'after-release')
+    },
     reportPath: report.reportPath,
     tracePath: report.tracePath
   };
@@ -712,6 +890,25 @@ function formatSuiteSummary(summaries) {
     lines.push(`  event dispatch: ${dispatch || 'none'}`);
     const telemetry = summary.telemetryCounts.slice(0, 6).map((entry) => `${entry.name}:${entry.count}`).join(', ');
     lines.push(`  telemetry: ${telemetry || 'none'}`);
+    const slowFrames = summary.slowFrames.byPhase.map((entry) => `${entry.phase}:${entry.count}/max${entry.maxMs}ms`).join(', ');
+    lines.push(`  slow frames: count=${summary.slowFrames.count} ${slowFrames || 'none'}`);
+    for (const frame of summary.slowFrames.worst.slice(0, 3)) {
+      const offenders = frame.actionableOffendersOverThresholdMs.slice(0, 3).map((entry) => `${entry.label} ${entry.overlapMs}ms`).join(', ');
+      const groupOffenders = frame.groupOffendersOverThresholdMs.slice(0, 3).map((entry) => `${entry.group} ${entry.totalMs}ms`).join(', ');
+      const wrappers = frame.offendersOverThresholdMs.slice(0, 3).map((entry) => `${entry.label} ${entry.overlapMs}ms`).join(', ');
+      const fallback = frame.topOverlappingEvents.slice(0, 3).map((entry) => `${entry.label} ${entry.totalMs}ms`).join(', ');
+      lines.push(`    frame#${frame.index} ${frame.phase} ${frame.durationMs}ms groups=${groupOffenders || 'none>=10ms'} actionable=${offenders || 'none>=10ms'} wrappers=${wrappers || fallback || 'none>=10ms'}`);
+    }
+    for (const frame of summary.slowFrames.worstDuringDrag.slice(0, 2)) {
+      const offenders = frame.actionableOffendersOverThresholdMs.slice(0, 3).map((entry) => `${entry.label} ${entry.overlapMs}ms`).join(', ');
+      const groupOffenders = frame.groupOffendersOverThresholdMs.slice(0, 3).map((entry) => `${entry.group} ${entry.totalMs}ms`).join(', ');
+      lines.push(`    during-drag frame#${frame.index} ${frame.durationMs}ms groups=${groupOffenders || 'none>=10ms'} actionable=${offenders || 'none>=10ms'}`);
+    }
+    for (const frame of summary.slowFrames.worstAfterRelease.slice(0, 1)) {
+      const offenders = frame.actionableOffendersOverThresholdMs.slice(0, 3).map((entry) => `${entry.label} ${entry.overlapMs}ms`).join(', ');
+      const groupOffenders = frame.groupOffendersOverThresholdMs.slice(0, 3).map((entry) => `${entry.group} ${entry.totalMs}ms`).join(', ');
+      lines.push(`    after-release frame#${frame.index} ${frame.durationMs}ms groups=${groupOffenders || 'none>=10ms'} actionable=${offenders || 'none>=10ms'}`);
+    }
     lines.push(`  report=${summary.reportPath}`);
   }
   return lines.join('\n');
