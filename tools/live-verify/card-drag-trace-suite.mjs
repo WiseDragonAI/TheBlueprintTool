@@ -65,6 +65,10 @@ function parseNumberList(value, fallback) {
   return parsed.length ? parsed : fallback;
 }
 
+function variantHas(variant, flag) {
+  return variant === flag || variant.split('+').includes(flag);
+}
+
 function round(value) {
   return Number(value.toFixed(3));
 }
@@ -369,6 +373,7 @@ function setupPageExpression(input) {
     const { renderSelectionState } = await import('/src/runtime/selection/effect/render-selection-state.js');
     const canvas = document.querySelector('.canvas');
     const content = document.querySelector('.canvas-content');
+    const variantHas = (flag) => input.variant === flag || input.variant.split('+').includes(flag);
     let target = document.querySelector(`[data-card-id="${CSS.escape(input.targetCardId)}"]`);
     if (!target) target = document.querySelector('.canvas-content > .card[data-card-id]');
     if (!canvas || !content || !target) throw new Error('CoreV2 drag trace target is not available');
@@ -377,13 +382,13 @@ function setupPageExpression(input) {
     const style = document.createElement('style');
     style.dataset.corev2DragTraceStyle = input.variant;
     const css = [];
-    if (input.variant === 'no-hover-tabs') {
+    if (variantHas('no-hover-tabs')) {
       css.push('.ledger-card-tabs{display:none!important}.card:hover .ledger-card-tabs,.card:has(.ledger-card-tab:focus-visible) .ledger-card-tabs{opacity:0!important;pointer-events:none!important}');
     }
-    if (input.variant === 'cheap-visuals') {
+    if (variantHas('cheap-visuals')) {
       css.push('.card,.regular-zone,.ledger-card-label,.card-status-indicator,.ledger-card-tabs,.ledger-card-tab{box-shadow:none!important;filter:none!important;text-shadow:none!important}.grid{display:none!important}');
     }
-    if (input.variant === 'no-images') {
+    if (variantHas('no-images')) {
       css.push('.ledger-card-media-shell,.ledger-card-inline-image-frame,.canvas-media-overlay{display:none!important}');
     }
     style.textContent = css.join('\n');
@@ -405,18 +410,18 @@ function setupPageExpression(input) {
 
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
-    if (input.variant === 'skip-zone-labels') {
+    if (variantHas('skip-zone-labels')) {
       for (const title of document.querySelectorAll('.zone-title')) title.classList.add('editing');
       document.querySelector('.zone-label-overlay')?.replaceChildren();
     }
-    if (input.variant === 'no-hover-controls') {
+    if (variantHas('no-hover-controls')) {
       const stopHover = (event) => event.stopImmediatePropagation();
       canvas.addEventListener('mouseover', stopHover, { capture: true });
       canvas.addEventListener('mouseout', stopHover, { capture: true });
       canvas.addEventListener('pointerover', stopHover, { capture: true });
       canvas.addEventListener('pointerout', stopHover, { capture: true });
     }
-    if (input.variant === 'block-pointerup') {
+    if (variantHas('block-pointerup')) {
       canvas.addEventListener('pointerup', (event) => {
         event.preventDefault();
         event.stopImmediatePropagation();
