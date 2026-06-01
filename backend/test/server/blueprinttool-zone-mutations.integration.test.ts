@@ -35,12 +35,35 @@ test('blueprinttool canvas mutations are applied by the authoritative server led
   const address = server.address() as AddressInfo;
   const endpoint = `http://127.0.0.1:${address.port}/blueprinttool/specs`;
   const assetEndpoint = `http://127.0.0.1:${address.port}/.blueprinttool/ui-mockups/mock.png`;
+  const imageUploadEndpoint = `http://127.0.0.1:${address.port}/api/thread-image-upload`;
 
   try {
     const assetResponse = await fetch(assetEndpoint);
     assert.equal(assetResponse.ok, true);
     assert.equal(assetResponse.headers.get('content-type'), 'image/png');
     assert.equal((await assetResponse.arrayBuffer()).byteLength, 4);
+
+    const imageUploadResponse = await fetch(imageUploadEndpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'image/png', 'x-thread-id': 'thread/card:a' },
+      body: Buffer.from([0x89, 0x50, 0x4e, 0x47])
+    });
+    assert.equal(imageUploadResponse.status, 201);
+    const imageUpload = await imageUploadResponse.json() as { ok: boolean; imageFileRef: string; markdown: string };
+    assert.equal(imageUpload.ok, true);
+    assert.match(imageUpload.imageFileRef, /^\.blueprinttool\/thread-images\/thread-card-a\/paste-.*\.png$/);
+    assert.equal(imageUpload.markdown, `![Pasted image](${imageUpload.imageFileRef})`);
+    assert.deepEqual(readFileSync(join(workspace, imageUpload.imageFileRef)), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    const pastedAssetResponse = await fetch(`http://127.0.0.1:${address.port}/${imageUpload.imageFileRef}`);
+    assert.equal(pastedAssetResponse.ok, true);
+    assert.equal(pastedAssetResponse.headers.get('content-type'), 'image/png');
+
+    const invalidImageUploadResponse = await fetch(imageUploadEndpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain', 'x-thread-id': 'thread-card-a' },
+      body: 'not an image'
+    });
+    assert.equal(invalidImageUploadResponse.status, 400);
 
     const createResponse = await fetch(endpoint, {
       method: 'PATCH',

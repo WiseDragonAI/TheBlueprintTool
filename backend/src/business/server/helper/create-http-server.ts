@@ -3,7 +3,7 @@
  * WHY: The generated scaffold needs executable behavior while preserving one function per file.
  */
 import { createServer, type ServerResponse } from 'node:http';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 import { telemetry } from '@backend/telemetry/harness.js';
@@ -22,6 +22,19 @@ type AnyRecord = Record<string, unknown>;
 
 const blueprinttoolAssetPrefix = '/.blueprinttool/';
 const allowedBlueprinttoolAssetExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'];
+
+function safeAssetSegment(value: unknown): string {
+  return String(value || 'untitled').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled';
+}
+
+function imageExtensionForMimeType(mimeType: unknown): string {
+  const normalized = String(mimeType ?? '').toLowerCase().split(';')[0].trim();
+  if (normalized === 'image/jpeg' || normalized === 'image/jpg') return '.jpg';
+  if (normalized === 'image/webp') return '.webp';
+  if (normalized === 'image/gif') return '.gif';
+  if (normalized === 'image/svg+xml') return '.svg';
+  return '.png';
+}
 
 function isAllowedBlueprinttoolAsset(filePath: string): boolean {
   const normalized = filePath.toLowerCase();
@@ -122,6 +135,28 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.setHeader('content-type', 'application/json');
       response.statusCode = upload.ok === false ? 400 : 202;
       response.end(JSON.stringify({ body: { ok: upload.ok !== false, uploaded: upload.ok !== false, configured: true, voiceFileRef: upload.voiceFileRef ?? '', text: '', error: upload.error } }));
+      return;
+    }
+    if (url === '/api/thread-image-upload' && request.method === 'POST') {
+      const imageBuffer = await readRequestBuffer(request);
+      const mimeType = request.headers['content-type'] ?? 'image/png';
+      const contentType = String(mimeType).toLowerCase().split(';')[0].trim();
+      response.setHeader('content-type', 'application/json');
+      if (!contentType.startsWith('image/') || imageBuffer.length === 0) {
+        response.statusCode = 400;
+        response.end(JSON.stringify({ ok: false, error: 'Expected a non-empty image upload.' }));
+        return;
+      }
+      const threadId = safeAssetSegment(request.headers['x-thread-id'] ?? 'conversation-ledger');
+      const extension = imageExtensionForMimeType(mimeType);
+      const directory = resolve(blueprinttoolRoot, 'thread-images', threadId);
+      mkdirSync(directory, { recursive: true });
+      const fileName = `paste-${Date.now()}-${Math.random().toString(16).slice(2)}${extension}`;
+      const filePath = resolve(directory, fileName);
+      writeFileSync(filePath, imageBuffer);
+      const imageFileRef = `.blueprinttool/thread-images/${threadId}/${fileName}`;
+      response.statusCode = 201;
+      response.end(JSON.stringify({ ok: true, imageFileRef, markdown: `![Pasted image](${imageFileRef})` }));
       return;
     }
     if (url === '/api/transcribe/retry' && request.method === 'POST') {
