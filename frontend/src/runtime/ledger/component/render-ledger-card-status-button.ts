@@ -7,9 +7,11 @@ export function renderLedgerCardStatusButton(cardId: string, persistedStatus: Ca
   button.type = 'button';
   button.dataset.action = 'toggle-card-status';
   button.dataset.cardId = cardId;
+  button.dataset.cardCurrentStatus = visibleStatus;
+  button.dataset.cardPersistedStatus = persistedStatus;
   button.dataset.nextStatus = nextStatus;
   button.disabled = visibleStatus === 'processing';
-  button.title = button.disabled ? 'Waiting for agent response' : `Mark card ${nextStatus}`;
+  button.title = button.disabled ? 'Current status: processing. Waiting for agent response' : `Current status: ${visibleStatus}. Mark card ${nextStatus}`;
   button.setAttribute('aria-label', button.title);
   button.textContent = nextStatus;
   return button;

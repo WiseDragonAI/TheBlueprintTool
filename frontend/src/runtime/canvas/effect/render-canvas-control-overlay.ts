@@ -106,8 +106,11 @@ function syncCardControls(group: HTMLElement, card: HTMLElement): boolean {
   if (!cardId) return false;
   const persistedStatus = card.dataset.cardStatus === 'done' ? 'done' : 'todo';
   const visibleStatus = card.dataset.cardWorkStatus === 'processing' ? 'processing' : persistedStatus;
+  const cardZoneColor = card.dataset.cardZoneColor || card.style.getPropertyValue('--card-zone-color').trim();
   group.className = 'canvas-control canvas-control--card';
   group.dataset.cardId = cardId;
+  if (cardZoneColor) group.style.setProperty('--card-zone-color', cardZoneColor);
+  else group.style.removeProperty('--card-zone-color');
   group.replaceChildren(renderLedgerCardStatusButton(cardId, persistedStatus, visibleStatus), renderLedgerCardDeleteButton(cardId));
   return placeControlGroup(group, card, 'right');
 }

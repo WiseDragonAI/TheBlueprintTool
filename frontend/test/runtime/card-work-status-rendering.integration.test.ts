@@ -93,9 +93,12 @@ test('ledger card chrome renders todo processing and done workflow statuses', as
     assert.equal(processing.dataset.cardWorkStatus, 'processing');
     assert.equal(processingIndicator.textContent, 'processing');
     assert.equal(processingButton.disabled, true);
+    assert.equal(processingButton.dataset.cardCurrentStatus, 'processing');
+    assert.equal(processingButton.attributes['aria-label'], 'Current status: processing. Waiting for agent response');
     assert.equal(processing.children.some((child) => child instanceof FakeElement && child.className.includes('ledger-card-status-toggle')), false);
     assert.equal(done.dataset.cardStatus, 'done');
     assert.equal(done.dataset.cardWorkStatus, 'done');
+    assert.equal(doneButton.dataset.cardCurrentStatus, 'done');
     assert.equal(doneButton.dataset.nextStatus, 'todo');
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
@@ -106,4 +109,14 @@ test('card status chip stays in the header flow instead of overlaying the title'
   const css = readFileSync(new URL('../../assets/canvas/objects.css', import.meta.url), 'utf8');
   assert.match(css, /\.card-status-indicator\s*{[^}]*float:\s*left;[^}]*margin:\s*2px 6px 2px 2px;/s);
   assert.doesNotMatch(css, /\.card-status-indicator\s*{[^}]*position:\s*absolute;/s);
+});
+
+test('card status toggle color follows the current card status', () => {
+  const css = readFileSync(new URL('../../assets/canvas/objects.css', import.meta.url), 'utf8');
+  const controlOverlay = readFileSync(new URL('../../src/runtime/canvas/effect/render-canvas-control-overlay.ts', import.meta.url), 'utf8');
+  assert.match(css, /\.ledger-card-status-toggle\[data-card-current-status\]/);
+  assert.match(css, /--card-status-toggle-accent:\s*var\(--card-zone-color,\s*#55b8ff\);/);
+  assert.match(css, /\.ledger-card-status-toggle\[data-card-current-status="done"\]\s*{[^}]*--card-status-toggle-accent:\s*#74d680;/s);
+  assert.match(css, /\.ledger-card-status-toggle\[data-card-current-status="processing"\]\s*{[^}]*--card-status-toggle-accent:\s*#f4c542;/s);
+  assert.match(controlOverlay, /group\.style\.setProperty\('--card-zone-color', cardZoneColor\);/);
 });

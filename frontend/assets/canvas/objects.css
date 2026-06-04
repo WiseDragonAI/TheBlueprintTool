@@ -352,9 +352,45 @@
 }
 
 .ledger-card-status-toggle:disabled {
-  opacity: 0.48;
+  opacity: 0.76;
   cursor: not-allowed;
   pointer-events: none;
+}
+
+.ledger-card-status-toggle[data-card-current-status] {
+  --card-status-toggle-accent: var(--card-zone-color, #55b8ff);
+  --terminal-button-background:
+    linear-gradient(
+      165deg,
+      color-mix(in srgb, var(--card-status-toggle-accent), #1b1f24 42%) 0%,
+      color-mix(in srgb, var(--card-status-toggle-accent), #11151a 62%) 54%,
+      color-mix(in srgb, var(--card-status-toggle-accent), #090d12 74%) 100%
+    );
+  --terminal-button-color: color-mix(in srgb, var(--card-status-toggle-accent), white 72%);
+  --terminal-button-gradient-shadow:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--card-status-toggle-accent), transparent 44%),
+      color-mix(in srgb, var(--card-status-toggle-accent), transparent 62%)
+    );
+  --fx-shell-control:
+    inset 0 0 0 1px color-mix(in srgb, var(--card-status-toggle-accent), white 22%),
+    inset 0 0 12px color-mix(in srgb, var(--card-status-toggle-accent), transparent 76%),
+    0 0 12px color-mix(in srgb, var(--card-status-toggle-accent), transparent 82%);
+}
+
+.ledger-card-status-toggle[data-card-current-status="done"] {
+  --card-status-toggle-accent: #74d680;
+  --terminal-button-background: linear-gradient(165deg, #203421 0%, #172418 54%, #101811 100%);
+  --terminal-button-color: #c9f6cf;
+  --terminal-button-gradient-shadow: linear-gradient(90deg, rgba(116, 214, 128, 0.56), rgba(62, 156, 84, 0.42));
+}
+
+.ledger-card-status-toggle[data-card-current-status="processing"] {
+  --card-status-toggle-accent: #f4c542;
+  --terminal-button-background: linear-gradient(165deg, #3a311b 0%, #282214 54%, #19160f 100%);
+  --terminal-button-color: #ffe8a3;
+  --terminal-button-gradient-shadow: linear-gradient(90deg, rgba(244, 197, 66, 0.6), rgba(184, 128, 36, 0.44));
 }
 
 .ledger-card-tabs {
