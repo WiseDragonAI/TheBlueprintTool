@@ -2,6 +2,9 @@ import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export function renderTabRegistry(): void {
+  const activeLedgerTitle = state.ledgerTabs.find((tab: { id: string }) => tab.id === state.activeTab)?.title;
+  document.title = typeof activeLedgerTitle === 'string' && activeLedgerTitle.trim() ? activeLedgerTitle : 'Core Canvas';
+
   const registry = document.querySelector('.tabs') as HTMLElement | null;
   if (registry) {
     const tabs = state.ledgerTabs.filter((tab: { id: string }, index: number, list: Array<{ id: string }>) => (
