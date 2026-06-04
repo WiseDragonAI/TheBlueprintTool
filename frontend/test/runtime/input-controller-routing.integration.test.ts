@@ -70,6 +70,9 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.doesNotMatch(keyboard, /showModal\?\.\(/);
 
   const actionClick = source('frontend/src/runtime/input/controller/handle-action-click.ts');
+  assert.match(actionClick, /action === 'toggle-rail'[\s\S]*toggleRail\(actionTarget\)/);
+  assert.match(actionClick, /applyRailCollapsedState\(collapsed, button\)/);
+  assert.match(actionClick, /persistState\(\)/);
   assert.match(actionClick, /editRegionController/);
   assert.match(actionClick, /confirmGroupDeletionController/);
   assert.match(actionClick, /deleteGroupController/);
@@ -126,10 +129,44 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.doesNotMatch(colorInput, /applyZoneColorEdit/);
 
   const shellCss = source('frontend/assets/canvas/shell.css');
-  assert.match(shellCss, /grid-template-columns:\s*132px minmax\(0, 1fr\)/);
+  assert.match(shellCss, /\.shell\s*{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\)/);
+  assert.match(shellCss, /\.shell\.has-inspector\s*{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\)/);
+  assert.match(shellCss, /\.rail\s*{[\s\S]*position:\s*fixed;[\s\S]*width:\s*132px/);
+  assert.match(shellCss, /\.rail\s*{[^}]*background:\s*var\(--bg\)/);
+  assert.match(shellCss, /\.rail\s*{[\s\S]*width 220ms cubic-bezier\(0\.2, 0\.8, 0\.2, 1\)/);
+  assert.match(shellCss, /\.shell\.rail-collapsed \.rail[\s\S]*width:\s*54px/);
+  assert.match(shellCss, /\.shell\.rail-collapsed \.tool[\s\S]*width:\s*40px/);
+  assert.match(shellCss, /\.tool span:last-child[\s\S]*max-width 180ms cubic-bezier\(0\.2, 0\.8, 0\.2, 1\)/);
+  assert.match(shellCss, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.doesNotMatch(shellCss, /grid-template-columns:\s*132px minmax\(0, 1fr\)/);
+  assert.doesNotMatch(shellCss, /grid-template-columns:\s*54px minmax\(0, 1fr\)/);
+  assert.doesNotMatch(shellCss, /transition:\s*grid-template-columns/);
+  assert.doesNotMatch(shellCss, /\.rail\s*{[^}]*background:\s*rgba/);
+  assert.doesNotMatch(shellCss, /\.rail:hover,\s*\.rail:focus-within\s*{[^}]*background:\s*rgba/);
   assert.match(shellCss, /\.panel\s*{[\s\S]*position:\s*fixed/);
   assert.match(shellCss, /transform:\s*translateX\(100%\)/);
   assert.doesNotMatch(shellCss, /clamp\(420px,\s*33vw,\s*620px\);[\s\S]*grid-template-columns/);
+
+  const dialogsCss = source('frontend/assets/canvas/dialogs.css');
+  assert.doesNotMatch(dialogsCss, /@media \(max-width: 900px\)[\s\S]*grid-template-columns:\s*56px minmax\(0, 1fr\)/);
+  assert.match(dialogsCss, /@media \(max-width: 900px\)[\s\S]*\.rail\s*{[\s\S]*width:\s*56px/);
+
+  const stateSource = source('frontend/src/runtime/state.ts');
+  const bootSurface = source('frontend/src/runtime/boot/controller/boot-surface.ts');
+  const refreshRuntime = source('frontend/src/runtime/refresh/controller/refresh-runtime-state.ts');
+  const persistState = source('frontend/src/runtime/persistence/effect/persist-state.ts');
+  const scheduledPersistence = source('frontend/src/runtime/persistence/effect/schedule-viewport-persistence.ts');
+  const railState = source('frontend/src/runtime/toolbox/effect/apply-rail-collapsed-state.ts');
+  const specsLedger = source('.blueprinttool/specs.json');
+  assert.match(stateSource, /railCollapsed:\s*false/);
+  assert.match(bootSurface, /applyRailCollapsedState\(persisted\.railCollapsed === true\)/);
+  assert.match(refreshRuntime, /applyRailCollapsedState\(persisted\.railCollapsed === true\)/);
+  assert.match(persistState, /railCollapsed:\s*state\.railCollapsed/);
+  assert.match(scheduledPersistence, /railCollapsed:\s*state\.railCollapsed/);
+  assert.match(railState, /state\.railCollapsed = collapsed/);
+  assert.match(railState, /classList\.toggle\('rail-collapsed', collapsed\)/);
+  assert.match(specsLedger, /"title": "Sidebar collapse state persists locally"/);
+  assert.doesNotMatch(specsLedger, /"id": "b4e9c2d7"[\s\S]{0,260}"comment"/);
 
   const openThreadPanel = source('frontend/src/runtime/thread/effect/open-thread-panel.ts');
   assert.doesNotMatch(openThreadPanel, /focusThreadDraft/);

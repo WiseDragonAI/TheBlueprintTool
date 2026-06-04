@@ -7,6 +7,7 @@ export const state: any = {
   ],
   activeLedger: null,
   activeTool: 'select',
+  railCollapsed: false,
   zoneColor: '#55b8ff',
   cardCounter: 1,
   zoneCounter: 3,

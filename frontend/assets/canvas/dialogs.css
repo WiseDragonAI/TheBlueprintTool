@@ -112,11 +112,8 @@
 }
 
 @media (max-width: 900px) {
-  .shell,
-  .shell.has-inspector {
-    grid-template-columns: 56px minmax(0, 1fr);
-  }
   .rail {
+    width: 56px;
     padding: 8px;
   }
   .tool {

@@ -25,7 +25,16 @@ import { startVoiceRecording } from '../../voice/controller/start-voice-recordin
 import { stopVoiceRecording } from '../../voice/controller/stop-voice-recording.js';
 import { cancelVoiceRecording } from '../../voice/controller/cancel-voice-recording.js';
 import { retryVoiceTranscription } from '../../voice/effect/retry-voice-transcription.js';
+import { applyRailCollapsedState } from '../../toolbox/effect/apply-rail-collapsed-state.js';
+import { persistState } from '../../persistence/effect/persist-state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+
+function toggleRail(button: HTMLElement): void {
+  const collapsed = !state.railCollapsed;
+  applyRailCollapsedState(collapsed, button);
+  persistState();
+  telemetry('toggle-toolbox-rail', { collapsed });
+}
 
 export async function handleActionClick(event: MouseEvent): Promise<void> {
   const targetElement = event.target as HTMLElement;
@@ -33,6 +42,10 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
   const action = actionTarget?.dataset.action;
   if (!action) return;
   telemetry('tool-button-click', { action });
+  if (action === 'toggle-rail') {
+    toggleRail(actionTarget);
+    return;
+  }
   if (action === 'switch-card-tab') {
     const card = actionTarget.closest('.card[data-card-id]') as HTMLElement | null;
     const tab = actionTarget.dataset.cardTab === 'fields' ? 'fields' : 'description';

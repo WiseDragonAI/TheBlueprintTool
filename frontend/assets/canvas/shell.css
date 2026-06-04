@@ -4,13 +4,13 @@
  */
 .shell {
   display: grid;
-  grid-template-columns: 132px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   min-height: 100vh;
   background: var(--bg);
 }
 
 .shell.has-inspector {
-  grid-template-columns: 132px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .rail, .panel {
@@ -18,26 +18,35 @@
 }
 
 .rail {
+  position: fixed;
+  z-index: 180;
+  top: 0;
+  bottom: 0;
+  left: 0;
   display: grid;
   align-content: start;
   gap: 7px;
+  width: 132px;
   padding: 10px;
   border-right: 1px solid var(--line);
-  background: rgba(9, 10, 12, 0.24);
+  background: var(--bg);
+  overflow: hidden;
   transition:
     background-color 160ms ease,
-    border-color 160ms ease;
+    border-color 160ms ease,
+    padding 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .rail:hover,
 .rail:focus-within {
-  background: rgba(16, 18, 23, 0.94);
+  background: var(--panel-3);
   border-color: var(--line-strong);
 }
 
 .tool {
   display: grid;
-  grid-template-columns: 24px 1fr;
+  grid-template-columns: 24px minmax(0, 1fr);
   align-items: center;
   gap: 7px;
   width: 112px;
@@ -47,6 +56,7 @@
   background: var(--button-bg);
   color: var(--text);
   cursor: pointer;
+  overflow: hidden;
   padding: 7px 9px;
   text-align: left;
   transition:
@@ -54,7 +64,14 @@
     border-color 140ms ease,
     box-shadow 140ms ease,
     color 140ms ease,
-    transform 140ms ease;
+    transform 140ms ease,
+    width 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    gap 180ms ease,
+    padding 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.rail-toggle {
+  margin-bottom: 3px;
 }
 
 .tool span:first-child {
@@ -66,8 +83,15 @@
 }
 
 .tool span:last-child {
+  max-width: 72px;
   overflow: hidden;
+  opacity: 1;
   text-overflow: ellipsis;
+  transform: translateX(0);
+  transition:
+    max-width 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 120ms ease,
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
   white-space: nowrap;
 }
 
@@ -83,6 +107,38 @@
 .tool:active {
   background: var(--button-bg-active);
   transform: translateY(0) scale(0.985);
+}
+
+.shell.rail-collapsed .rail {
+  gap: 7px;
+  width: 54px;
+  padding: 8px 6px;
+}
+
+.shell.rail-collapsed .tool {
+  grid-template-columns: 24px minmax(0, 0fr);
+  justify-items: center;
+  gap: 0;
+  width: 40px;
+  padding: 7px;
+}
+
+.shell.rail-collapsed .tool span:first-child {
+  min-width: 0;
+}
+
+.shell.rail-collapsed .tool span:last-child {
+  max-width: 0;
+  opacity: 0;
+  transform: translateX(-4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail,
+  .tool,
+  .tool span:last-child {
+    transition-duration: 1ms;
+  }
 }
 
 .color-picker input {

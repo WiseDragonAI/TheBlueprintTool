@@ -21,6 +21,11 @@
       "y": 3992,
       "w": 266
     },
+    "b4e9c2d7": {
+      "x": -7707,
+      "y": 8892,
+      "w": 680
+    },
     "20000001": {
       "x": -3453,
       "y": 5022,
@@ -5381,6 +5386,18 @@
       "facts": [],
       "fields": [],
       "h": 548
+    },
+    {
+      "id": "b4e9c2d7",
+      "title": "Sidebar collapse state persists locally",
+      "cardType": "spec-brief",
+      "domainId": "input",
+      "x": -7707,
+      "y": 8892,
+      "w": 680,
+      "facts": [],
+      "fields": [],
+      "h": 154
     }
   ],
   "relationships": [],

@@ -14,7 +14,8 @@ export function scheduleViewportPersistence(delayMs = 140): void {
       ...persisted,
       viewport: state.viewport,
       viewports: state.viewports,
-      activeTab: state.activeTab
+      activeTab: state.activeTab,
+      railCollapsed: state.railCollapsed
     }));
   }, delayMs);
 }

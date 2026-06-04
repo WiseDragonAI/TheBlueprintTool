@@ -9,7 +9,8 @@
   </head>
   <body>
     <main class="shell" aria-label="Core canvas workspace">
-      <aside class="rail" aria-label="Toolbox">
+      <aside class="rail" id="toolbox-rail" aria-label="Toolbox">
+        <button class="tool rail-toggle" type="button" data-action="toggle-rail" title="Collapse toolbox" aria-controls="toolbox-rail" aria-expanded="true"><span>‹</span><span class="rail-toggle-label">Collapse</span></button>
         <button class="tool active" type="button" data-tool="select" title="Select" data-spec="40000007"><span>↖</span><span>Select</span></button>
         <button class="tool" type="button" data-tool="card" title="Card"><span>▤</span><span>Card</span></button>
         <button class="tool" type="button" data-tool="zone" title="Zone" data-spec="e0b4d11a 20000014 bd0651aa"><span>▣</span><span>Zone</span></button>

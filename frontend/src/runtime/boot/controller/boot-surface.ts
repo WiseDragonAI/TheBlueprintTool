@@ -10,6 +10,7 @@ import { renderTabRegistry } from '../../navigation/effect/render-tab-registry.j
 import { renderThreadPanel } from '../../thread/effect/render-thread-panel.js';
 import { subscribeLedgerContentEvents } from '../../refresh/effect/subscribe-ledger-content-events.js';
 import { routeTab } from '../../navigation/helper/route-tab.js';
+import { applyRailCollapsedState } from '../../toolbox/effect/apply-rail-collapsed-state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export function bootSurface(): void {
@@ -18,6 +19,7 @@ export function bootSurface(): void {
   state.viewports = persisted.viewports && typeof persisted.viewports === 'object' ? persisted.viewports : state.viewports;
   const restoredViewport = state.viewports?.[state.activeTab] ?? persisted.viewport ?? {};
   Object.assign(state.viewport, restoredViewport);
+  applyRailCollapsedState(persisted.railCollapsed === true);
   telemetry('browser-load', { routePath: state.routePath });
   telemetry('derive-route-state', { activeTab: state.activeTab });
   telemetry('load-ledger-state', { restored: Boolean(persisted.viewport) });

@@ -5,6 +5,7 @@ import { readPersistedState } from '../../persistence/helper/read-persisted-stat
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
 import { renderTabRegistry } from '../../navigation/effect/render-tab-registry.js';
 import { routeTab } from '../../navigation/helper/route-tab.js';
+import { applyRailCollapsedState } from '../../toolbox/effect/apply-rail-collapsed-state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export async function refreshRuntimeState(): Promise<void> {
@@ -14,6 +15,7 @@ export async function refreshRuntimeState(): Promise<void> {
   state.activeTab = routeTab(window.location.pathname);
   state.viewports = persisted.viewports && typeof persisted.viewports === 'object' ? persisted.viewports : state.viewports;
   Object.assign(state.viewport, state.viewports?.[state.activeTab] ?? persisted.viewport ?? { x: 0, y: 0, scale: 1 });
+  applyRailCollapsedState(persisted.railCollapsed === true);
   state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
   hydratePersistedGeometry(persisted.geometry);
   await loadActiveLedgerState();

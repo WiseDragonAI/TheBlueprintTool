@@ -21,6 +21,7 @@ test('ctrl-d routes selected card resize through the same controller as the tool
   assert.match(resizeEffect, /renderZoneLabelOverlay\(\)/);
   assert.match(actionClick, /shortcuts:\s*\['A', 'X', 'Escape', 'Delete', 'Ctrl\+C', 'Ctrl\+V', 'Ctrl\+D'\]/);
   assert.match(index, /<dt>Ctrl\+D<\/dt><dd>Resize selected cards to their content\.<\/dd>/);
+  assert.match(index, /data-action="toggle-rail"[^>]*aria-expanded="true"/);
 });
 
 test('runbook button opens current workspace, image, and voice configuration notes', () => {
