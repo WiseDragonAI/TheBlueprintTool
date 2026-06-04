@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { clampCardCodeColor } from '../../src/runtime/card/effect/render-card-zone-colors.js';
-import { colorToRgbChannels } from '../../src/runtime/thread/helper/color-to-rgb-channels.js';
+import { colorToRgbChannels, lightenColorInHsv } from '../../src/runtime/thread/helper/color-to-rgb-channels.js';
 import { resolveThreadTargetAccent } from '../../src/runtime/thread/helper/resolve-thread-target-accent.js';
 
 const root = new URL('../../../', import.meta.url);
@@ -27,6 +27,8 @@ test('thread accent resolves card zone color before selected border color', () =
 
 test('thread accent colors feed the voice widget graph and frame', () => {
   assert.equal(colorToRgbChannels('#123abc'), '18, 58, 188');
+  assert.equal(lightenColorInHsv('#123abc'), 'rgb(24, 79, 255)');
+  assert.equal(lightenColorInHsv('rgb(80, 160, 120)'), 'rgb(123, 247, 185)');
   assert.equal(clampCardCodeColor('#4b00ff'), '#8968d9');
   const shellCss = readFileSync(new URL('frontend/assets/canvas/shell.css', root), 'utf8');
   const threadCss = readFileSync(new URL('frontend/assets/canvas/thread.css', root), 'utf8');
@@ -42,6 +44,7 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   assert.match(threadCss, /thread-note\.is-operator[\s\S]*background: #111315/);
   assert.match(threadCss, /thread-note\.is-agent[\s\S]*background: transparent/);
   assert.match(threadCss, /thread-note-message code[\s\S]*font-size: 1em/);
+  assert.match(threadCss, /thread-note-message \.ledger-card-heading[\s\S]*--thread-heading-color/);
   assert.match(threadCss, /thread-note-message \.ledger-card-hr[\s\S]*border-top-color: rgba\(255, 255, 255, 0\.18\)/);
   assert.match(threadCss, /--card-code-color: var\(--thread-code-color/);
   assert.match(threadCss, /thread-note-delete\.terminal-button[\s\S]*width: 24px/);
@@ -54,6 +57,7 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   assert.match(controlsCss, /wave-panel[\s\S]*--thread-accent/);
   assert.match(accentEffect, /clampCardCodeColor/);
   assert.match(accentEffect, /--thread-code-color/);
+  assert.match(accentEffect, /--thread-heading-color/);
   assert.match(accentEffect, /--card-code-color/);
   assert.match(accentEffect, /--voice-graph-secondary/);
   assert.match(accentEffect, /inspector\?\.style\.setProperty\('--thread-accent'/);

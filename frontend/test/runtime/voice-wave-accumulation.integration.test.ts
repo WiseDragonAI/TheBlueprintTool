@@ -40,6 +40,11 @@ test('voice values tick at 30 fps while render remains requestAnimationFrame dri
   assert.match(stop, /waveSamples\.push\(pendingPeak\)/);
 });
 
+test('recording voice dock hides the idle thread input status row', () => {
+  const css = readFileSync(new URL('frontend/assets/canvas/thread.css', root), 'utf8');
+  assert.match(css, /voice-panel\.recording \.voice-terminal-status[\s\S]*display: none/);
+});
+
 test('voice level calculation preserves quiet input without a threshold gate', () => {
   const quiet = calculateVoiceLevel(new Float32Array([0.004, -0.004, 0.004, -0.004]));
   const louder = calculateVoiceLevel(new Float32Array([0.08, -0.08, 0.08, -0.08]));

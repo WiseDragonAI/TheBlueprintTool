@@ -6,6 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { threadIdForTarget } from '../../src/runtime/thread/helper/thread-id-for-target.js';
 import { selectThread } from '../../src/runtime/thread/effect/select-thread.js';
+import { closeThreadPanel } from '../../src/runtime/thread/effect/close-thread-panel.js';
 import { restoreThreadDraft, saveThreadDraft } from '../../src/runtime/thread/effect/persist-thread-draft.js';
 import { pinThreadFeedToLastMessage } from '../../src/runtime/thread/effect/pin-thread-feed-to-last-message.js';
 import { renderThreadNotes } from '../../src/runtime/thread/effect/render-thread-notes.js';
@@ -103,6 +104,32 @@ test('select-thread ignores thread changes while voice recording is active', () 
     (globalThis as unknown as { window: unknown }).window = previousWindow;
     (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
     state.threadId = '';
+    state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
+  }
+});
+
+test('close-thread-panel ignores close requests while voice recording is active', () => {
+  const previousWindow = globalThis.window;
+  const previousCustomEvent = globalThis.CustomEvent;
+  (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
+  (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
+    constructor(_name: string, public options: Record<string, unknown> = {}) {}
+  };
+  try {
+    state.threadId = 'thread-card-a';
+    state.threadPanelOpen = true;
+    state.activeTool = 'select';
+    state.voice = { recording: true, startedAt: Date.now(), durationMs: 0, level: 0, transcriptionStatus: 'recording', threadId: 'thread-card-a' };
+    closeThreadPanel();
+    assert.equal(state.threadPanelOpen, true);
+    assert.equal(state.threadId, 'thread-card-a');
+    assert.equal(state.voice.recording, true);
+  } finally {
+    (globalThis as unknown as { window: unknown }).window = previousWindow;
+    (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
+    state.threadId = '';
+    state.threadPanelOpen = false;
+    state.activeTool = 'select';
     state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
   }
 });

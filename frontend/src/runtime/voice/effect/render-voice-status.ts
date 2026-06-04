@@ -16,7 +16,6 @@ export function renderVoiceStatus(): void {
   const panel = document.querySelector('.voice-panel') as HTMLElement | null;
   const recorder = document.querySelector('.voice-recorder') as HTMLElement | null;
   if (!status || !meter || !panel) return;
-  const seconds = (Number(state.voice.durationMs ?? 0) / 1000).toFixed(1);
   const level = Math.max(0, Math.min(1, Number(state.voice.level ?? 0)));
   const waveSamples = Array.isArray(state.voice.waveSamples) ? state.voice.waveSamples : [];
   const normalized = normalizeVoiceLevels(waveSamples, level);
@@ -37,7 +36,7 @@ export function renderVoiceStatus(): void {
   paintVoiceWaveLevel(panel, level, Boolean(state.voice.recording), waveSamples, displayLevel);
   if (timer) timer.textContent = formatVoiceDuration(state.voice.durationMs);
   status.textContent = state.voice.recording
-    ? `Recording ${seconds}s  level ${displayLevel.toFixed(2)}`
+    ? ''
     : String(state.voice.transcriptionStatus ?? 'idle');
   if (typeof document.querySelectorAll === 'function') {
     document.querySelectorAll('[data-action="voice-cancel"]').forEach((button) => {

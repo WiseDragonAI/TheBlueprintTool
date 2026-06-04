@@ -149,6 +149,10 @@
   margin: 0 0 7px;
 }
 
+.thread-note-message .ledger-card-heading {
+  color: var(--thread-heading-color, var(--thread-accent));
+}
+
 .thread-note-message p:last-child,
 .thread-note-message ul:last-child,
 .thread-note-message .ledger-card-hr:last-child,
@@ -317,6 +321,10 @@
 }
 
 .voice-panel.recording .terminal-composer {
+  display: none;
+}
+
+.voice-panel.recording .voice-terminal-status {
   display: none;
 }
 

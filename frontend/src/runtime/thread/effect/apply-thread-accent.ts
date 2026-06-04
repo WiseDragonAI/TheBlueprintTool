@@ -4,7 +4,7 @@
  */
 import { state } from '../../state.js';
 import { clampCardCodeColor } from '../../card/effect/render-card-zone-colors.js';
-import { colorToRgbChannels } from '../helper/color-to-rgb-channels.js';
+import { colorToRgbChannels, lightenColorInHsv } from '../helper/color-to-rgb-channels.js';
 import { resolveThreadTargetAccent } from '../helper/resolve-thread-target-accent.js';
 
 export function applyThreadAccent(): void {
@@ -17,7 +17,9 @@ export function applyThreadAccent(): void {
   const color = resolveThreadTargetAccent(target);
   const rgb = colorToRgbChannels(color) ?? '255, 112, 67';
   const codeColor = clampCardCodeColor(color) ?? color;
+  const headingColor = lightenColorInHsv(color) ?? color;
   panel.style.setProperty('--thread-accent', color);
+  panel.style.setProperty('--thread-heading-color', headingColor);
   panel.style.setProperty('--thread-code-color', codeColor);
   panel.style.setProperty('--card-code-color', codeColor);
   panel.style.setProperty('--workspace-secondary-rgb', rgb);
@@ -26,6 +28,7 @@ export function applyThreadAccent(): void {
   panel.style.setProperty('--voice-workspace-primary', color);
   panel.style.setProperty('--voice-graph-secondary', `color-mix(in srgb, ${color}, #05070d 76%)`);
   inspector?.style.setProperty('--thread-accent', color);
+  inspector?.style.setProperty('--thread-heading-color', headingColor);
   inspector?.style.setProperty('--thread-code-color', codeColor);
   inspector?.style.setProperty('--card-code-color', codeColor);
 }
