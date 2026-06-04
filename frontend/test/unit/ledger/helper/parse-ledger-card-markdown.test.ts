@@ -57,6 +57,21 @@ test('parse-ledger-card-markdown treats escaped newlines as markdown line breaks
   ]);
 });
 
+test('parse-ledger-card-markdown parses markdown links and bare urls', () => {
+  assert.deepEqual(parseLedgerCardMarkdown('See [Image #1](https://example.com/mock.png) and (https://example.com/story).'), [
+    {
+      kind: 'paragraph',
+      children: [
+        { kind: 'text', text: 'See ' },
+        { kind: 'link', text: 'Image #1', href: 'https://example.com/mock.png', title: '' },
+        { kind: 'text', text: ' and (' },
+        { kind: 'link', text: 'https://example.com/story', href: 'https://example.com/story', title: '' },
+        { kind: 'text', text: ').' }
+      ]
+    }
+  ]);
+});
+
 test('parse-ledger-card-markdown promotes adjacent standalone images into one image block', () => {
   assert.deepEqual(parseLedgerCardMarkdown('![First](/one.png)\n\n![Second](/two.jpg "Second title")\n\nMixed ![Icon](/icon.svg) text'), [
     {

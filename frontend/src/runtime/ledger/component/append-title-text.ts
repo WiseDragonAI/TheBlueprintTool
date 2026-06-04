@@ -14,6 +14,10 @@ export function appendTitleText(parent: HTMLElement, text: string): void {
       parent.appendChild(document.createTextNode(node.alt || node.src));
       continue;
     }
+    if (node.kind === 'link') {
+      parent.appendChild(document.createTextNode(node.text || node.href));
+      continue;
+    }
     if (node.kind !== 'text') {
       const child = document.createElement(node.kind);
       child.textContent = node.text;

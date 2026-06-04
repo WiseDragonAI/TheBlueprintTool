@@ -11,6 +11,11 @@ export type LedgerMarkdownInline = {
   kind: 'text' | 'strong' | 'code';
   text: string;
 } | {
+  kind: 'link';
+  text: string;
+  href: string;
+  title: string;
+} | {
   kind: 'image';
   alt: string;
   src: string;

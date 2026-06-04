@@ -10,6 +10,10 @@ type InlineNodeOptions = {
 
 const pendingInlineResizeTimers = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
 
+function canRenderHref(href: string): boolean {
+  return /^(?:https?:\/\/|mailto:|\/|\.\/|\.\.\/|#)/.test(href);
+}
+
 function currentCardImageSizes(cardId: string): LedgerCardImageSizes {
   const cards = Array.isArray(state.activeLedger?.cards) ? state.activeLedger.cards as Array<Record<string, unknown>> : [];
   const card = cards.find((entry) => String(entry.id ?? '') === cardId);
@@ -56,6 +60,21 @@ export function appendInlineNodes(parent: HTMLElement, nodes: LedgerMarkdownInli
   for (const node of nodes) {
     if (node.kind === 'text') {
       parent.appendChild(document.createTextNode(node.text));
+      continue;
+    }
+    if (node.kind === 'link') {
+      if (!canRenderHref(node.href)) {
+        parent.appendChild(document.createTextNode(node.text || node.href));
+        continue;
+      }
+      const link = document.createElement('a');
+      link.className = 'ledger-card-link';
+      link.setAttribute('href', node.href);
+      link.setAttribute('target', '_blank');
+      link.setAttribute('rel', 'noopener noreferrer');
+      if (node.title) link.setAttribute('title', node.title);
+      link.textContent = node.text || node.href;
+      parent.appendChild(link);
       continue;
     }
     if (node.kind === 'image') {

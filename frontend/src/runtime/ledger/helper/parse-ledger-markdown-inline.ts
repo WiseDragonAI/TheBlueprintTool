@@ -1,5 +1,10 @@
 import { type LedgerMarkdownInline } from './parse-ledger-card-markdown.js';
 
+function parseDestination(destination: string): { url: string; title: string } | null {
+  const match = destination.trim().match(/^<?([^<>"'\s]+)>?(?:\s+["']([^"']*)["'])?$/);
+  return match ? { url: match[1], title: match[2] ?? '' } : null;
+}
+
 function parseImageAt(text: string, start: number): { node: LedgerMarkdownInline; end: number } | null {
   if (!text.startsWith('![', start)) return null;
   const altEnd = text.indexOf('](', start + 2);
@@ -19,22 +24,92 @@ function parseImageAt(text: string, start: number): { node: LedgerMarkdownInline
     if (character === ')') break;
   }
   if (cursor >= text.length) return null;
-  const destination = text.slice(altEnd + 2, cursor).trim();
-  const match = destination.match(/^<?([^<>"'\s]+)>?(?:\s+["']([^"']*)["'])?$/);
-  if (!match) return null;
+  const destination = parseDestination(text.slice(altEnd + 2, cursor));
+  if (!destination) return null;
   return {
     node: {
       kind: 'image',
       alt: text.slice(start + 2, altEnd),
-      src: match[1],
-      title: match[2] ?? ''
+      src: destination.url,
+      title: destination.title
     },
     end: cursor + 1
   };
 }
 
+function parseLinkAt(text: string, start: number): { node: LedgerMarkdownInline; end: number } | null {
+  if (!text.startsWith('[', start) || text.startsWith('![', start)) return null;
+  const labelEnd = text.indexOf('](', start + 1);
+  if (labelEnd === -1) return null;
+  let cursor = labelEnd + 2;
+  let escaped = false;
+  for (; cursor < text.length; cursor += 1) {
+    const character = text[cursor];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (character === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (character === ')') break;
+  }
+  if (cursor >= text.length) return null;
+  const destination = parseDestination(text.slice(labelEnd + 2, cursor));
+  if (!destination) return null;
+  return {
+    node: {
+      kind: 'link',
+      text: text.slice(start + 1, labelEnd),
+      href: destination.url,
+      title: destination.title
+    },
+    end: cursor + 1
+  };
+}
+
+function shouldTrimClosingParen(url: string): boolean {
+  const opens = [...url].filter((character) => character === '(').length;
+  const closes = [...url].filter((character) => character === ')').length;
+  return closes > opens;
+}
+
+function trimBareUrlEnd(text: string, start: number, end: number): number {
+  let cursor = end;
+  while (cursor > start) {
+    const character = text[cursor - 1];
+    if (/[.,;:!?]/.test(character) || (character === ')' && shouldTrimClosingParen(text.slice(start, cursor)))) {
+      cursor -= 1;
+      continue;
+    }
+    break;
+  }
+  return cursor;
+}
+
+function parseBareUrlAt(text: string, start: number): { node: LedgerMarkdownInline; end: number } | null {
+  if (!text.startsWith('https://', start) && !text.startsWith('http://', start)) return null;
+  let cursor = start;
+  for (; cursor < text.length; cursor += 1) {
+    if (/[\s<>"']/.test(text[cursor])) break;
+  }
+  const end = trimBareUrlEnd(text, start, cursor);
+  if (end <= start) return null;
+  const href = text.slice(start, end);
+  return {
+    node: {
+      kind: 'link',
+      text: href,
+      href,
+      title: ''
+    },
+    end
+  };
+}
+
 function nextInlineTokenIndex(text: string, start: number): number {
-  const indexes = ['![', '`', '**']
+  const indexes = ['![', '[', 'https://', 'http://', '`', '**']
     .map((token) => text.indexOf(token, start))
     .filter((index) => index >= 0);
   return indexes.length > 0 ? Math.min(...indexes) : -1;
@@ -48,6 +123,18 @@ export function parseLedgerMarkdownInline(text: string): LedgerMarkdownInline[] 
     if (image) {
       nodes.push(image.node);
       index = image.end;
+      continue;
+    }
+    const link = parseLinkAt(text, index);
+    if (link) {
+      nodes.push(link.node);
+      index = link.end;
+      continue;
+    }
+    const bareUrl = parseBareUrlAt(text, index);
+    if (bareUrl) {
+      nodes.push(bareUrl.node);
+      index = bareUrl.end;
       continue;
     }
     if (text[index] === '`') {

@@ -149,6 +149,39 @@ test('ledger cards render markdown tables as table elements', () => {
   }
 });
 
+test('ledger cards render markdown and bare urls as links', () => {
+  const previousDocument = globalThis.document;
+  (globalThis as unknown as { document: unknown }).document = {
+    createElement: (tagName: string) => new FakeElement(tagName),
+    createTextNode: (text: string) => new FakeText(text)
+  };
+
+  try {
+    const card = patchLedgerCard({
+      id: 'card-links',
+      title: 'Link card',
+      comment: { what: 'Reference [Image #1](https://example.com/image.png) and (https://example.com/story).' }
+    }) as unknown as FakeElement;
+    const body = findElementByClass(card, 'ledger-card-body') as FakeElement;
+    const paragraph = body.children[0] as FakeElement;
+    const markdownLink = paragraph.children[1] as FakeElement;
+    const bareUrlLink = paragraph.children[3] as FakeElement;
+
+    assert.equal(markdownLink.tagName, 'a');
+    assert.equal(markdownLink.className, 'ledger-card-link');
+    assert.equal(markdownLink.textContent, 'Image #1');
+    assert.equal(markdownLink.attributes.href, 'https://example.com/image.png');
+    assert.equal(markdownLink.attributes.target, '_blank');
+    assert.equal(markdownLink.attributes.rel, 'noopener noreferrer');
+    assert.equal(bareUrlLink.tagName, 'a');
+    assert.equal(bareUrlLink.textContent, 'https://example.com/story');
+    assert.equal(bareUrlLink.attributes.href, 'https://example.com/story');
+    assert.equal(paragraph.children.map((child) => child.textContent).join(''), 'Reference Image #1 and (https://example.com/story).');
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+  }
+});
+
 test('ledger cards render markdown headings through the shared markdown renderer', () => {
   const previousDocument = globalThis.document;
   (globalThis as unknown as { document: unknown }).document = {

@@ -540,6 +540,21 @@
   margin: 0 0 8px;
 }
 
+.ledger-card-link {
+  color: color-mix(in srgb, var(--card-code-color), white 16%);
+  overflow-wrap: anywhere;
+  pointer-events: auto;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  user-select: text;
+}
+
+.ledger-card-link:hover,
+.ledger-card-link:focus-visible {
+  color: var(--text);
+}
+
 .ledger-card-heading {
   margin: 10px 0 6px;
   color: var(--text);
