@@ -11,6 +11,8 @@ export type ResizeToContentGeometry = {
   zones: ResizedCardGeometry;
 };
 
+const zoneFitPadding = 96;
+
 type DetailClasses = {
   low: boolean;
   overview: boolean;
@@ -25,7 +27,7 @@ type BoxGeometry = {
 
 export function resizeZoneGeometryToContainedCards(cards: BoxGeometry[], options: { padding?: number; minWidth?: number; minHeight?: number } = {}): BoxGeometry | null {
   if (cards.length === 0) return null;
-  const padding = options.padding ?? 18;
+  const padding = Math.max(zoneFitPadding, options.padding ?? zoneFitPadding);
   const minWidth = options.minWidth ?? 180;
   const minHeight = options.minHeight ?? 140;
   const left = Math.min(...cards.map((card) => card.x)) - padding;
@@ -124,7 +126,6 @@ function selectedZoneCardMap(cards: HTMLElement[], zones = selectedZoneElements(
 
 function expandSelectedZonesToCards(cardsByZoneId: Map<string, HTMLElement[]>, zones = selectedZoneElements()): ResizedCardGeometry {
   if (zones.length === 0 || cardsByZoneId.size === 0) return {};
-  const padding = 18;
   const geometry: ResizedCardGeometry = {};
 
   for (const zone of zones) {
@@ -136,7 +137,7 @@ function expandSelectedZonesToCards(cardsByZoneId: Map<string, HTMLElement[]>, z
       y: card.offsetTop,
       width: card.offsetWidth,
       height: card.offsetHeight
-    })), { padding });
+    })));
     if (!next) continue;
     zone.style.left = `${next.x}px`;
     zone.style.top = `${next.y}px`;

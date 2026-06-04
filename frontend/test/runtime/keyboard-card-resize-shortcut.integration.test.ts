@@ -18,6 +18,7 @@ test('ctrl-d routes selected card resize through the same controller as the tool
   assert.match(actionClick, /action === 'resize'[\s\S]*await resizeSelectedCardsController\(\);/);
   assert.match(resizeController, /commitActiveLedgerMutation\(\{ action: 'patch-geometry', geometry \}/);
   assert.match(resizeEffect, /expandSelectedZonesToCards/);
+  assert.match(resizeEffect, /const zoneFitPadding = 96;/);
   assert.match(resizeEffect, /const zoneSourceCards = cards\.length > 0 \? cards : allCardElements\(\);/);
   assert.match(resizeEffect, /zone\.style\.height = `\$\{next\.height\}px`/);
   assert.match(resizeEffect, /renderZoneLabelOverlay\(\)/);
@@ -33,10 +34,10 @@ test('ctrl-d zone fit can shrink a selected zone down to smaller card bounds', (
   ], { padding: 18, minWidth: 180, minHeight: 140 });
 
   assert.deepEqual(geometry, {
-    x: 242,
-    y: 172,
-    width: 366,
-    height: 166
+    x: 164,
+    y: 94,
+    width: 522,
+    height: 322
   });
 });
 
