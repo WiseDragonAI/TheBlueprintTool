@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { resizeZoneGeometryToContainedCards } from '../../src/runtime/card/effect/resize-selected-cards-to-content.js';
 
 const root = new URL('../../../', import.meta.url);
 
@@ -17,11 +18,26 @@ test('ctrl-d routes selected card resize through the same controller as the tool
   assert.match(actionClick, /action === 'resize'[\s\S]*await resizeSelectedCardsController\(\);/);
   assert.match(resizeController, /commitActiveLedgerMutation\(\{ action: 'patch-geometry', geometry \}/);
   assert.match(resizeEffect, /expandSelectedZonesToCards/);
-  assert.match(resizeEffect, /zone\.style\.height = `\$\{height\}px`/);
+  assert.match(resizeEffect, /const zoneSourceCards = cards\.length > 0 \? cards : allCardElements\(\);/);
+  assert.match(resizeEffect, /zone\.style\.height = `\$\{next\.height\}px`/);
   assert.match(resizeEffect, /renderZoneLabelOverlay\(\)/);
   assert.match(actionClick, /shortcuts:\s*\['A', 'X', 'Escape', 'Delete', 'Ctrl\+C', 'Ctrl\+V', 'Ctrl\+D'\]/);
   assert.match(index, /<dt>Ctrl\+D<\/dt><dd>Resize selected cards to their content\.<\/dd>/);
   assert.match(index, /data-action="toggle-rail"[^>]*aria-expanded="true"/);
+});
+
+test('ctrl-d zone fit can shrink a selected zone down to smaller card bounds', () => {
+  const geometry = resizeZoneGeometryToContainedCards([
+    { x: 260, y: 190, width: 140, height: 90 },
+    { x: 440, y: 210, width: 150, height: 110 }
+  ], { padding: 18, minWidth: 180, minHeight: 140 });
+
+  assert.deepEqual(geometry, {
+    x: 242,
+    y: 172,
+    width: 366,
+    height: 166
+  });
 });
 
 test('runbook button opens current workspace, image, and voice configuration notes', () => {

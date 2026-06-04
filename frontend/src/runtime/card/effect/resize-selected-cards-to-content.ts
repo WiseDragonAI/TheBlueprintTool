@@ -16,10 +16,39 @@ type DetailClasses = {
   overview: boolean;
 };
 
+type BoxGeometry = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export function resizeZoneGeometryToContainedCards(cards: BoxGeometry[], options: { padding?: number; minWidth?: number; minHeight?: number } = {}): BoxGeometry | null {
+  if (cards.length === 0) return null;
+  const padding = options.padding ?? 18;
+  const minWidth = options.minWidth ?? 180;
+  const minHeight = options.minHeight ?? 140;
+  const left = Math.min(...cards.map((card) => card.x)) - padding;
+  const top = Math.min(...cards.map((card) => card.y)) - padding;
+  const right = Math.max(...cards.map((card) => card.x + card.width)) + padding;
+  const bottom = Math.max(...cards.map((card) => card.y + card.height)) + padding;
+  return {
+    x: Math.floor(left),
+    y: Math.floor(top),
+    width: Math.ceil(Math.max(minWidth, right - left)),
+    height: Math.ceil(Math.max(minHeight, bottom - top))
+  };
+}
+
 function selectedCardElements(): HTMLElement[] {
   return Array.from(new Set(state.selection.cardIds))
     .map((id: string) => document.querySelector(`[data-card-id="${CSS.escape(id)}"]`) as HTMLElement | null)
     .filter((card): card is HTMLElement => Boolean(card && !card.hidden));
+}
+
+function allCardElements(): HTMLElement[] {
+  return Array.from(document.querySelectorAll('.card[data-card-id]') as NodeListOf<HTMLElement>)
+    .filter((card) => !card.hidden);
 }
 
 function clearLowDetailForMeasurement(): DetailClasses {
@@ -89,12 +118,11 @@ function cardsIntersectingZone(cards: HTMLElement[], zone: HTMLElement): HTMLEle
   });
 }
 
-function selectedZoneCardMap(cards: HTMLElement[]): Map<string, HTMLElement[]> {
-  return new Map(selectedZoneElements().map((zone) => [zone.dataset.zoneId ?? '', cardsIntersectingZone(cards, zone)]));
+function selectedZoneCardMap(cards: HTMLElement[], zones = selectedZoneElements()): Map<string, HTMLElement[]> {
+  return new Map(zones.map((zone) => [zone.dataset.zoneId ?? '', cardsIntersectingZone(cards, zone)]));
 }
 
-function expandSelectedZonesToCards(cardsByZoneId: Map<string, HTMLElement[]>): ResizedCardGeometry {
-  const zones = selectedZoneElements();
+function expandSelectedZonesToCards(cardsByZoneId: Map<string, HTMLElement[]>, zones = selectedZoneElements()): ResizedCardGeometry {
   if (zones.length === 0 || cardsByZoneId.size === 0) return {};
   const padding = 18;
   const geometry: ResizedCardGeometry = {};
@@ -103,17 +131,18 @@ function expandSelectedZonesToCards(cardsByZoneId: Map<string, HTMLElement[]>): 
     const zoneId = zone.dataset.zoneId ?? '';
     const containedCards = cardsByZoneId.get(zoneId) ?? [];
     if (!zoneId || containedCards.length === 0) continue;
-    const minLeft = Math.min(zone.offsetLeft, ...containedCards.map((card) => card.offsetLeft - padding));
-    const minTop = Math.min(zone.offsetTop, ...containedCards.map((card) => card.offsetTop - padding));
-    const maxRight = Math.max(zone.offsetLeft + zone.offsetWidth, ...containedCards.map((card) => card.offsetLeft + card.offsetWidth + padding));
-    const maxBottom = Math.max(zone.offsetTop + zone.offsetHeight, ...containedCards.map((card) => card.offsetTop + card.offsetHeight + padding));
-    const width = Math.ceil(maxRight - minLeft);
-    const height = Math.ceil(maxBottom - minTop);
-    zone.style.left = `${Math.floor(minLeft)}px`;
-    zone.style.top = `${Math.floor(minTop)}px`;
-    zone.style.width = `${width}px`;
-    zone.style.height = `${height}px`;
-    geometry[zoneId] = { x: Math.floor(minLeft), y: Math.floor(minTop), width, height };
+    const next = resizeZoneGeometryToContainedCards(containedCards.map((card) => ({
+      x: card.offsetLeft,
+      y: card.offsetTop,
+      width: card.offsetWidth,
+      height: card.offsetHeight
+    })), { padding });
+    if (!next) continue;
+    zone.style.left = `${next.x}px`;
+    zone.style.top = `${next.y}px`;
+    zone.style.width = `${next.width}px`;
+    zone.style.height = `${next.height}px`;
+    geometry[zoneId] = next;
   }
 
   return geometry;
@@ -121,14 +150,16 @@ function expandSelectedZonesToCards(cardsByZoneId: Map<string, HTMLElement[]>): 
 
 export function resizeSelectedCardsToContent(): ResizeToContentGeometry {
   const cards = selectedCardElements();
-  if (cards.length === 0) {
+  const zones = selectedZoneElements();
+  if (cards.length === 0 && zones.length === 0) {
     telemetry('resize-selected-cards', { count: 0 });
     return { cards: {}, zones: {} };
   }
 
   const detail = clearLowDetailForMeasurement();
   try {
-    const cardsByZoneId = selectedZoneCardMap(cards);
+    const zoneSourceCards = cards.length > 0 ? cards : allCardElements();
+    const cardsByZoneId = selectedZoneCardMap(zoneSourceCards, zones);
     const measured = cards.map((card) => {
       const height = measureNaturalCardHeight(card);
       return {
@@ -149,12 +180,12 @@ export function resizeSelectedCardsToContent(): ResizeToContentGeometry {
       applyCardBox(card, record.top, record.height);
       geometry[record.id] = { x: record.left, y: record.top, width: record.width, height: record.height };
     }
-    const zones = expandSelectedZonesToCards(cardsByZoneId);
+    const resizedZones = expandSelectedZonesToCards(cardsByZoneId, zones);
 
     renderRelationshipOverlay();
-    if (Object.keys(zones).length > 0) renderZoneLabelOverlay();
-    telemetry('resize-selected-cards', { count: arranged.length, cardIds: arranged.map((card) => card.id), zoneIds: Object.keys(zones) });
-    return { cards: geometry, zones };
+    if (Object.keys(resizedZones).length > 0) renderZoneLabelOverlay();
+    telemetry('resize-selected-cards', { count: arranged.length, cardIds: arranged.map((card) => card.id), zoneIds: Object.keys(resizedZones) });
+    return { cards: geometry, zones: resizedZones };
   } finally {
     restoreDetailClasses(detail);
   }
