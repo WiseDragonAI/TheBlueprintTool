@@ -1,0 +1,222 @@
+{
+  "modelName": "CoreV2 Next Features",
+  "source": "operator-request",
+  "updatedAt": "2026-06-03T05:27:57Z",
+  "diagramSize": {
+    "width": 2200,
+    "height": 1300
+  },
+  "viewport": {
+    "x": -120,
+    "y": -120,
+    "scale": 0.82
+  },
+  "selection": {
+    "cardIds": [],
+    "zoneIds": [],
+    "groupIds": []
+  },
+  "annotations": [
+    {
+      "id": "zone-processing-queue",
+      "label": "Processing Queue Panel",
+      "variant": "zone",
+      "color": "#2f9e8f",
+      "x": 40,
+      "y": 40,
+      "width": 1900,
+      "height": 1040
+    }
+  ],
+  "cards": [
+    {
+      "id": "queue-panel-empty-selection",
+      "title": "Empty Selection Panel",
+      "cardType": "implementation",
+      "domainId": "next-features",
+      "x": 120,
+      "y": 140,
+      "w": 360,
+      "h": 230,
+      "comment": {
+        "what": "Show a floating left-side panel when the active selection has no cards, zones, or groups. Match the thread panel positioning and chrome, but keep it focused on queue status and trigger controls."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "queue-awaiting-cards-source",
+      "title": "Awaiting Cards Source",
+      "cardType": "implementation",
+      "domainId": "next-features",
+      "x": 560,
+      "y": 140,
+      "w": 360,
+      "h": 230,
+      "comment": {
+        "what": "Resolve the queue from the existing card schema first. Prefer an existing status, label, or work-status marker before adding a new queue-specific field."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "queue-trigger-controller",
+      "title": "Trigger Controller",
+      "cardType": "implementation",
+      "domainId": "next-features",
+      "x": 1000,
+      "y": 140,
+      "w": 360,
+      "h": 230,
+      "comment": {
+        "what": "Add a backend route for the panel button. The controller should return quickly with run metadata, reject concurrent trigger races, and delegate process ownership to a workspace-scoped runner service."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "queue-codex-launch",
+      "title": "Headless Codex Launch",
+      "cardType": "implementation",
+      "domainId": "next-features",
+      "x": 1440,
+      "y": 140,
+      "w": 360,
+      "h": 230,
+      "comment": {
+        "what": "Spawn `codex exec --dangerously-bypass-approvals-and-sandbox --json -C <workspace> -c model_reasoning_effort=\\\"high\\\" --model gpt-5.5 -`. Use the doc-server cwd as the workspace so AGENTS.md resolution remains correct."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "queue-session-reuse",
+      "title": "One Hour Session Reuse",
+      "cardType": "implementation",
+      "domainId": "next-features",
+      "x": 120,
+      "y": 470,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "what": "Persist the real Codex thread id and last trigger timestamp under `.blueprinttool`. Reuse with `codex exec resume <sessionId>` only when the last trigger is less than one hour old."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "queue-resume-failure",
+      "title": "Resume Failure Recovery",
+      "cardType": "implementation",
+      "domainId": "next-features",
+      "x": 560,
+      "y": 470,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "what": "Parse resume failures from stderr and only invalidate the stored session when the error names the active resumed thread. Retry the same queue prompt once as a fresh session."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "queue-state-and-logs",
+      "title": "State And Logs",
+      "cardType": "implementation",
+      "domainId": "next-features",
+      "x": 1000,
+      "y": 470,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "what": "Store queue-agent state, run metadata, and raw stdout/stderr JSONL in workspace-local `.blueprinttool/queue-agent/`. Keep parsed UI status derived from durable state instead of transient process memory."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "queue-process-tree",
+      "title": "Process Ownership",
+      "cardType": "implementation",
+      "domainId": "next-features",
+      "x": 1440,
+      "y": 470,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "what": "Own the full process tree for future cancel or replacement behavior. Killing only a wrapper can leave `codex exec` running, so descendant cleanup should target Codex children first."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "queue-tests",
+      "title": "Verification Plan",
+      "cardType": "implementation",
+      "domainId": "next-features",
+      "x": 120,
+      "y": 800,
+      "w": 1680,
+      "h": 170,
+      "comment": {
+        "what": "Cover tab loading, empty-selection panel visibility, queue card rendering, trigger request states, command argument construction, one-hour reuse, resume-failure fresh retry, and workspace cwd preservation."
+      },
+      "facts": [],
+      "fields": []
+    }
+  ],
+  "relationships": [
+    {
+      "id": "rel-panel-source",
+      "source": "queue-panel-empty-selection",
+      "target": "queue-awaiting-cards-source",
+      "label": "reads"
+    },
+    {
+      "id": "rel-source-trigger",
+      "source": "queue-awaiting-cards-source",
+      "target": "queue-trigger-controller",
+      "label": "submits"
+    },
+    {
+      "id": "rel-trigger-launch",
+      "source": "queue-trigger-controller",
+      "target": "queue-codex-launch",
+      "label": "spawns"
+    },
+    {
+      "id": "rel-launch-reuse",
+      "source": "queue-codex-launch",
+      "target": "queue-session-reuse",
+      "label": "persists"
+    },
+    {
+      "id": "rel-reuse-recovery",
+      "source": "queue-session-reuse",
+      "target": "queue-resume-failure",
+      "label": "guards"
+    },
+    {
+      "id": "rel-recovery-logs",
+      "source": "queue-resume-failure",
+      "target": "queue-state-and-logs",
+      "label": "records"
+    },
+    {
+      "id": "rel-logs-process",
+      "source": "queue-state-and-logs",
+      "target": "queue-process-tree",
+      "label": "owns"
+    },
+    {
+      "id": "rel-process-tests",
+      "source": "queue-process-tree",
+      "target": "queue-tests",
+      "label": "verifies"
+    }
+  ],
+  "positions": {},
+  "cardEdits": {},
+  "notes": {},
+  "threadFiles": {}
+}
