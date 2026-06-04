@@ -4,7 +4,7 @@
  */
 import { canvas } from '../../dom.js';
 import { state } from '../../state.js';
-import { derivePointerIntent } from '../helper/derive-pointer-intent.js';
+import { derivePointerIntent, isForcedPanPointer } from '../helper/derive-pointer-intent.js';
 import { canvasPoint } from '../../canvas/helper/canvas-point.js';
 import { patchBox } from '../../canvas/effect/patch-box.js';
 import { beginLedgerCardDescriptionEdit, beginLedgerCardTitleEdit } from '../../card/effect/begin-ledger-card-edit.js';
@@ -21,7 +21,8 @@ let lastCardEditClick: { area: 'body' | 'title'; cardId: string; at: number } | 
 
 export function handlePointerDown(event: PointerEvent): void {
   const rawTarget = event.target as HTMLElement;
-  if (isGestureControlTarget(rawTarget)) return;
+  const forcedPan = isForcedPanPointer(event);
+  if (!forcedPan && isGestureControlTarget(rawTarget)) return;
   const editedCard = rawTarget.closest('[data-card-id]') as HTMLElement | null;
   const editArea = rawTarget.closest('.ledger-card-title') ? 'title' : rawTarget.closest('.ledger-card-body') ? 'body' : '';
   const editedCardId = editedCard?.dataset.cardId ?? '';
@@ -37,7 +38,7 @@ export function handlePointerDown(event: PointerEvent): void {
   if (editedCardId && editArea) {
     lastCardEditClick = { area: editArea, cardId: editedCardId, at: now };
   }
-  if ((event.detail >= 2 || isCardEditDoubleClick) && editedCard) {
+  if (!forcedPan && (event.detail >= 2 || isCardEditDoubleClick) && editedCard) {
     event.preventDefault();
     event.stopPropagation();
     lastCardEditClick = null;
@@ -58,10 +59,10 @@ export function handlePointerDown(event: PointerEvent): void {
   const pointer = point(event);
   const canvasPointer = canvasPoint(pointer);
   const intent = derivePointerIntent(event, targetKind, resizeHandle);
-  state.pointer = { intent, resizeHandle, target, targetKind, targetId, start: pointer, current: pointer, startCanvas: canvasPointer, currentCanvas: canvasPointer, startedAt: now, ctrlPan: event.ctrlKey };
-  telemetry('canvas-pointer-down', { intent, targetKind, targetId, ctrlKey: event.ctrlKey, shiftKey: event.shiftKey });
+  state.pointer = { intent, resizeHandle, target, targetKind, targetId, start: pointer, current: pointer, startCanvas: canvasPointer, currentCanvas: canvasPointer, startedAt: now, ctrlPan: event.ctrlKey, forcedPan };
+  telemetry('canvas-pointer-down', { intent, targetKind, targetId, ctrlKey: event.ctrlKey, middleButton: event.button === 1, shiftKey: event.shiftKey });
   telemetry('derive-gesture-intent', { kind: intent });
-  if (intent === 'pan' && targetKind === 'canvas' && !event.ctrlKey) {
+  if (intent === 'pan' && targetKind === 'canvas' && !forcedPan) {
     state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
     selectThread('');
     if (state.threadPanelOpen || state.activeTool === 'thread') closeThreadPanel();

@@ -45,14 +45,15 @@ test('canvas pan uses a transform-only path with sampled performance telemetry',
   assert.match(canvasCss, /\.canvas\.is-panning \.card-status-indicator,[\s\S]*box-shadow:\s*none;/);
 });
 
-test('ctrl drag always derives pan intent without selection side effects and shift canvas drag derives marquee', () => {
+test('ctrl and middle-button drag always derive pan intent without selection side effects', () => {
   const previousTool = state.activeTool;
   const previousSelection = state.selection;
   state.activeTool = 'select';
   state.selection = { cardIds: ['card-a'], zoneIds: ['zone-a'], groupIds: ['group-a'] };
 
   try {
-    const event = { shiftKey: false, ctrlKey: true, target: { closest: () => null } } as unknown as PointerEvent;
+    const event = { shiftKey: false, ctrlKey: true, button: 0, buttons: 1, target: { closest: () => null } } as unknown as PointerEvent;
+    const middleEvent = { shiftKey: false, ctrlKey: false, button: 1, buttons: 4, target: { closest: () => null } } as unknown as PointerEvent;
     const shiftEvent = { shiftKey: true, ctrlKey: false, target: { closest: () => null } } as unknown as PointerEvent;
     const resizeHandle = { className: 'resize-handle se' } as HTMLElement;
     assert.equal(ctrlPanOnlySpec, '9f04b1c2');
@@ -61,14 +62,21 @@ test('ctrl drag always derives pan intent without selection side effects and shi
     assert.equal(derivePointerIntent(event, 'group', null), 'pan');
     assert.equal(derivePointerIntent(event, 'canvas', null), 'pan');
     assert.equal(derivePointerIntent(event, 'card', resizeHandle), 'pan');
+    assert.equal(derivePointerIntent(middleEvent, 'card', null), 'pan');
+    assert.equal(derivePointerIntent(middleEvent, 'zone', null), 'pan');
+    assert.equal(derivePointerIntent(middleEvent, 'group', null), 'pan');
+    assert.equal(derivePointerIntent(middleEvent, 'canvas', null), 'pan');
+    assert.equal(derivePointerIntent(middleEvent, 'card', resizeHandle), 'pan');
     assert.equal(derivePointerIntent(shiftEvent, 'canvas', null), 'marquee');
 
     const pointerDown = source('frontend/src/runtime/gesture/controller/handle-pointer-down.ts');
     const pointerUp = source('frontend/src/runtime/gesture/controller/handle-pointer-up.ts');
-    assert.match(pointerDown, /ctrlPan:\s*event\.ctrlKey/);
+    assert.match(pointerDown, /const forcedPan = isForcedPanPointer\(event\)/);
+    assert.match(pointerDown, /ctrlPan:\s*event\.ctrlKey,\s*forcedPan/);
+    assert.match(pointerDown, /intent === 'pan' && targetKind === 'canvas' && !forcedPan/);
     assert.match(pointerUp, /const pointerSession = state\.pointer/);
-    assert.match(pointerUp, /const isCtrlPan = Boolean\(pointerSession\.ctrlPan\)/);
-    assert.match(pointerUp, /!isCtrlPan && pointerIntent === 'pan'/);
+    assert.match(pointerUp, /const isForcedPan = Boolean\(pointerSession\.forcedPan \|\| pointerSession\.ctrlPan\)/);
+    assert.match(pointerUp, /!isForcedPan && pointerIntent === 'pan'/);
   } finally {
     state.activeTool = previousTool;
     state.selection = previousSelection;
@@ -112,7 +120,7 @@ test('direct canvas pointer down clears selection before pointer up', () => {
   const specs = source('documentation/specs.json');
 
   assert.match(specs, /7d2c8b91/);
-  assert.match(pointerDown, /intent === 'pan' && targetKind === 'canvas' && !event\.ctrlKey/);
+  assert.match(pointerDown, /intent === 'pan' && targetKind === 'canvas' && !forcedPan/);
   assert.match(pointerDown, /canvas-background-pointer-down/);
   assert.match(pointerDown, /renderSelectionState\(\)/);
   assert.doesNotMatch(pointerUp, /canvas-background-click/);

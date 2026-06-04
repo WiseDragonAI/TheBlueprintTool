@@ -2,8 +2,12 @@ import { state } from '../../state.js';
 
 export const ctrlPanOnlySpec = '9f04b1c2';
 
+export function isForcedPanPointer(event: PointerEvent): boolean {
+  return event.ctrlKey || event.button === 1 || Boolean(event.buttons & 4);
+}
+
 export function derivePointerIntent(event: PointerEvent, targetKind: string, resizeHandle: HTMLElement | null): string {
-  if (event.ctrlKey) return 'pan';
+  if (isForcedPanPointer(event)) return 'pan';
   if (resizeHandle) return 'resize';
   if (event.shiftKey && targetKind === 'canvas') return 'marquee';
   if (state.activeTool === 'card' && (targetKind === 'canvas' || targetKind === 'zone' || targetKind === 'group')) return 'draw-card';

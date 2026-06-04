@@ -29,12 +29,12 @@ export async function handlePointerUp(event: PointerEvent): Promise<void> {
   const releasePoint = point(event);
   const releaseCanvas = canvasPoint(releasePoint);
   const moved = Math.hypot(releasePoint.x - pointerSession.start.x, releasePoint.y - pointerSession.start.y);
-  const isCtrlPan = Boolean(pointerSession.ctrlPan);
-  if (!isCtrlPan && pointerIntent === 'pan' && pointerSession.targetKind === 'zone' && moved < 4) {
+  const isForcedPan = Boolean(pointerSession.forcedPan || pointerSession.ctrlPan);
+  if (!isForcedPan && pointerIntent === 'pan' && pointerSession.targetKind === 'zone' && moved < 4) {
     selectTarget('zone', pointerSession.targetId, false);
     telemetry('resolve-selection-target', { kind: 'zone', id: pointerSession.targetId, clickSelect: true });
   }
-  if (!isCtrlPan && pointerIntent === 'pan' && pointerSession.targetKind === 'group' && moved < 4) {
+  if (!isForcedPan && pointerIntent === 'pan' && pointerSession.targetKind === 'group' && moved < 4) {
     selectTarget('group', pointerSession.targetId, false);
     telemetry('resolve-selection-target', { kind: 'group', id: pointerSession.targetId, clickSelect: true });
   }
