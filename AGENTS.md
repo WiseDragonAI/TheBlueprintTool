@@ -95,7 +95,17 @@ Esc     Cancel voice capture, close thread tooling, or clear selection.
 Del     Confirm deletion for the selected card, zone, or group.
 Ctrl+C  Copy the selected cards, zones, and groups.
 Ctrl+V  Paste the copied selection.
-Ctrl+D  Resize selected cards to their content.
+Ctrl+D  Resize selected cards to their content and selected zones to contained cards.
+```
+
+## Commit Hygiene
+
+- Never finish a feature with implementation changes left uncommitted.
+- After implementing and verifying a feature, create focused commits before reporting the feature complete.
+- When the operator asks to push committed work, push with the Wise SSH key:
+
+```bash
+GIT_SSH_COMMAND='ssh -i ~/.ssh/id_jb_wise -o IdentitiesOnly=yes' git push
 ```
 
 ## Card Image Assets
