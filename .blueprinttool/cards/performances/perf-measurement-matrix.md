@@ -15,6 +15,21 @@ Representative baseline results:
 
 The pattern is consistent: zoomed-out large cards are worst because a single card can still occupy a tall screen region after scale, and moving it with `left/top` creates large dirty paint/commit work.
 
+Measured frame decomposition from the fresh drag trace:
+
+| Scope | Measured time | Evidence | Interpretation |
+| --- | ---: | --- | --- |
+| Full drag trace, input bucket | 604.771ms total / 43.620ms max | Baseline trace group `input` | Input handling is not free, but it is not the whole frame story. |
+| Pointermove dispatch | 102.937ms total / 11.948ms max | `EventDispatch:pointermove`, 12 moves | The pointermove chain can exceed a 60 FPS per-frame budget before Chrome commits the visual frame. |
+| Pointermove DOM reads | 576 `offsetLeft` reads | DOM read probe during `pointermove:capture` | Zone-label work is doing repeated layout-dependent reads during movement. |
+| Worst during-drag frame | 29.1ms | Slow frame #7, phase `during-drag` | This is the visible drag hitch while the pointer is moving. |
+| Worst during-drag input overlap | 11.948ms | `EventDispatch:pointermove` inside frame #7 | JS input work explains part of the 29.1ms frame. |
+| Worst during-drag compositor overlap | 12.093ms | `ProxyMain::BeginMainFrame` inside frame #7 | Browser frame production explains another measured part of the same bad frame. |
+| Worst during-drag raster bucket | 590.466ms summed overlap | Trace group `raster-composite` for frame #7 | This is overlapping compositor/raster work, not serial wall time, but it shows significant rendering debt attached to the frame. |
+| Worst after-release frame | 844.4ms | Slow frame #38, phase `after-release` | Release jank is a separate problem from movement jank. |
+| After-release style/layout | 212.921ms | `Document::UpdateStyleAndLayout` in frame #38 | The release freeze is dominated by browser style/layout lifecycle work. |
+| After-release style update | 152.570ms | `Blink.Style.UpdateTime` in frame #38 | A large part of the release frame is style recalculation. |
+
 Probe variants:
 
 | Variant | Meaning | Result |

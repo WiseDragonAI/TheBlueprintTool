@@ -17,10 +17,10 @@
       "title": "Drag Performance Summary",
       "cardType": "perf-analysis",
       "domainId": "performances",
-      "x": 48.405410450462455,
-      "y": -19.155394894870085,
-      "w": 760,
-      "h": 399,
+      "x": 18.916946170522806,
+      "y": -48.63532802357598,
+      "w": 917.6381993968773,
+      "h": 393.4099929291888,
       "comment": {
         "contentFile": ".blueprinttool/cards/performances/perf-drag-summary.md"
       },
@@ -32,10 +32,10 @@
       "title": "Measurement Matrix",
       "cardType": "perf-evidence",
       "domainId": "performances",
-      "x": 33.07889203218167,
-      "y": -804.7071413411857,
-      "w": 820,
-      "h": 631,
+      "x": 8.999394817853727,
+      "y": -1280.017760485146,
+      "w": 941.3983260835025,
+      "h": 1150.1323334448693,
       "comment": {
         "contentFile": ".blueprinttool/cards/performances/perf-measurement-matrix.md"
       },
@@ -47,8 +47,8 @@
       "title": "CDP Trace Suite",
       "cardType": "perf-tooling",
       "domainId": "performances",
-      "x": 1036.5833903705054,
-      "y": -744.1350745944517,
+      "x": 1012.5827851883591,
+      "y": -1219.152835079598,
       "w": 700,
       "h": 538,
       "comment": {
@@ -64,8 +64,8 @@
       "domainId": "performances",
       "x": 120,
       "y": 930,
-      "w": 800,
-      "h": 669,
+      "w": 1176,
+      "h": 1563,
       "comment": {
         "contentFile": ".blueprinttool/cards/performances/perf-drag-call-chain.md"
       },
@@ -77,10 +77,10 @@
       "title": "Zone Label Overlay Reads",
       "cardType": "perf-mechanism",
       "domainId": "performances",
-      "x": 970,
-      "y": 930,
+      "x": 1650,
+      "y": 911,
       "w": 760,
-      "h": 673,
+      "h": 1215,
       "comment": {
         "contentFile": ".blueprinttool/cards/performances/perf-zone-label-overlay.md"
       },
@@ -92,10 +92,10 @@
       "title": "Commit And Raster Mechanism",
       "cardType": "perf-mechanism",
       "domainId": "performances",
-      "x": 1780,
-      "y": 930,
+      "x": 2572,
+      "y": 937,
       "w": 820,
-      "h": 639,
+      "h": 892,
       "comment": {
         "contentFile": ".blueprinttool/cards/performances/perf-commit-raster.md"
       },
@@ -107,8 +107,8 @@
       "title": "Relationship Boundary",
       "cardType": "perf-boundary",
       "domainId": "performances",
-      "x": 2650,
-      "y": 930,
+      "x": 3445,
+      "y": 935,
       "w": 680,
       "h": 415,
       "comment": {
@@ -152,10 +152,10 @@
   "annotations": [
     {
       "id": "perf-zone-evidence",
-      "x": -1.5945895495375453,
-      "y": -906.4706519117492,
-      "width": 1763.9977974976152,
-      "height": 1627.3152570168793,
+      "x": -25.59519473168382,
+      "y": -1381.4884123968955,
+      "width": 1658.0785558824423,
+      "height": 1876.407480286672,
       "color": "#38bdf8",
       "label": "Measured Evidence",
       "comments": []
@@ -164,8 +164,8 @@
       "id": "perf-zone-mechanisms",
       "x": 70,
       "y": 870,
-      "width": 3300,
-      "height": 820,
+      "width": 4118,
+      "height": 1641,
       "color": "#f97316",
       "label": "Runtime Mechanisms",
       "comments": []
@@ -189,5 +189,10 @@
   },
   "updatedAt": "2026-06-02T00:00:00.000Z",
   "cardEdits": {},
-  "threadFiles": {}
+  "threadFiles": {
+    "thread-perf-zone-label-overlay": ".blueprinttool/threads/performances/thread-perf-zone-label-overlay.md",
+    "thread-perf-commit-raster": ".blueprinttool/threads/performances/thread-perf-commit-raster.md",
+    "thread-perf-drag-call-chain": ".blueprinttool/threads/performances/thread-perf-drag-call-chain.md",
+    "thread-perf-measurement-matrix": ".blueprinttool/threads/performances/thread-perf-measurement-matrix.md"
+  }
 }
