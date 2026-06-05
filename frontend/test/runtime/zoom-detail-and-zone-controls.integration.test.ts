@@ -16,11 +16,12 @@ test('low-detail zoom hides card detail while keeping counter-scaled card titles
   assert.match(specs, /84cf2a6b/);
   assert.match(css, /\.canvas\.low-detail \.ledger-card-detail-layer,/);
   assert.doesNotMatch(css, /\.canvas\.low-detail \.card strong,\s*\n/);
-  assert.match(css, /\.canvas\.low-detail \.ledger-card-overview-title\s*{[^}]*transform:\s*scale\(var\(--inverse-viewport-scale, 1\)\);/s);
+  assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-overview-title/);
+  assert.match(objectsCss, /\.ledger-card-overview-title\s*{[^}]*transform:\s*scale\(var\(--inverse-viewport-scale, 1\)\);/s);
   assert.match(specs, /9d5e0b7a/);
-  assert.match(css, /\.canvas\.low-detail \.ledger-card-overview-title\s*{[^}]*white-space:\s*normal;/s);
-  assert.match(css, /\.canvas\.low-detail \.ledger-card-overview-title\s*{[^}]*max-width:\s*calc\(100% \* var\(--viewport-scale, 1\)\);/s);
-  assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-overview-title\s*{[^}]*(?<!-)width:\s*calc\(100% \* var\(--viewport-scale, 1\)\);/s);
+  assert.match(objectsCss, /\.ledger-card-overview-title\s*{[^}]*white-space:\s*normal;/s);
+  assert.match(objectsCss, /\.ledger-card-overview-title\s*{[^}]*max-width:\s*calc\(100% \* var\(--viewport-scale, 1\)\);/s);
+  assert.doesNotMatch(objectsCss, /\.ledger-card-overview-title\s*{[^}]*(?<!-)width:\s*calc\(100% \* var\(--viewport-scale, 1\)\);/s);
 
   const viewportRuntime = source('frontend/src/runtime/canvas/effect/apply-viewport-transform.ts');
   const viewportCssScaleRuntime = source('frontend/src/runtime/canvas/helper/resolve-detail-mode-css-scale.ts');
@@ -80,6 +81,7 @@ test('low-detail zoom hides card detail while keeping counter-scaled card titles
   assert.match(css, /\.canvas\.detail-reveal-staged \.ledger-card-detail-layer,[\s\S]{0,120}transition:\s*opacity 160ms ease-out;/);
   assert.match(css, /\.canvas\.detail-reveal-staged \.card\[data-detail-reveal="hidden"\] \.ledger-card-detail-layer,[\s\S]{0,260}visibility:\s*hidden;/);
   assert.match(css, /\.canvas\.detail-reveal-staged \.card\[data-detail-reveal="hidden"\] \.ledger-card-overview-layer,[\s\S]{0,140}visibility:\s*visible;[\s\S]{0,60}opacity:\s*1;/);
+  assert.doesNotMatch(css, /content-visibility:\s*hidden/);
   assert.match(detailRuntime, /if \(hasLowDetail !== shouldUseLowDetail\) \{/);
   assert.match(detailRuntime, /if \(hasOverviewDetail !== shouldUseOverviewDetail\) \{[\s\S]*canvas\.classList\.toggle/);
   assert.doesNotMatch(css, /\.canvas\.overview-detail \.regular-zone/);

@@ -34,6 +34,7 @@ test('card markdown inline code and bold styling follow card color specs', () =>
 test('low-detail mode switches card paint layers without threshold layout measurement', () => {
   const specs = source('documentation/specs.json');
   const css = source('frontend/assets/canvas/canvas-layer.css');
+  const objectsCss = source('frontend/assets/canvas/objects.css');
   const detailRuntime = source('frontend/src/runtime/canvas/effect/update-detail-mode.ts');
   const stagedRuntime = [
     'frontend/src/runtime/canvas/effect/stage-detail-reveal.ts',
@@ -77,18 +78,18 @@ test('low-detail mode switches card paint layers without threshold layout measur
   assert.doesNotMatch(stagedRuntime, /requestIdleCallback|DETAIL_REVEAL_BACKGROUND_CHUNK/);
   assert.match(cardRenderer, /ledger-card-detail-layer/);
   assert.match(cardRenderer, /ledger-card-overview-layer/);
-  assert.match(css, /\.canvas\.low-detail \.ledger-card-detail-layer\s*{[^}]*content-visibility:\s*hidden;/s);
   assert.match(css, /\.canvas\.detail-reveal-staged \.ledger-card-detail-layer,[\s\S]{0,120}transition:\s*opacity 160ms ease-out;/);
-  assert.match(css, /\.canvas\.detail-reveal-staged \.card\[data-detail-reveal="hidden"\] \.ledger-card-detail-layer,[\s\S]{0,260}content-visibility:\s*hidden;/);
   assert.match(css, /\.canvas\.low-detail \.ledger-card-overview-layer\s*{[^}]*visibility:\s*visible;[^}]*opacity:\s*1;/s);
   assert.match(css, /\.canvas\.detail-reveal-staged \.card\[data-detail-reveal="hidden"\] \.ledger-card-overview-layer,[\s\S]{0,140}visibility:\s*visible;[\s\S]{0,60}opacity:\s*1;/);
+  assert.doesNotMatch(css, /content-visibility:\s*hidden/);
   assert.doesNotMatch(css, /zoom-grid-suppressed/);
   assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-title\s*{[^}]*width:\s*calc\(100% \* var\(--viewport-scale, 1\)\);/s);
   assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-title\s*{[^}]*padding:\s*calc/);
-  assert.match(css, /\.canvas\.low-detail \.ledger-card-overview-title\s*{[^}]*max-width:\s*calc\(100% \* var\(--viewport-scale, 1\)\);/s);
-  assert.match(css, /\.canvas\.low-detail \.ledger-card-overview-title\s*{[^}]*white-space:\s*normal;[^}]*word-break:\s*break-word;/s);
-  assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-overview-title\s*{[^}]*(?<!-)width:\s*calc\(100% \* var\(--viewport-scale, 1\)\);/s);
-  assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-overview-title\s*{[^}]*text-overflow:\s*ellipsis;/s);
+  assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-overview-title/);
+  assert.match(objectsCss, /\.ledger-card-overview-title\s*{[^}]*max-width:\s*calc\(100% \* var\(--viewport-scale, 1\)\);/s);
+  assert.match(objectsCss, /\.ledger-card-overview-title\s*{[^}]*white-space:\s*normal;[^}]*word-break:\s*break-word;/s);
+  assert.doesNotMatch(objectsCss, /\.ledger-card-overview-title\s*{[^}]*(?<!-)width:\s*calc\(100% \* var\(--viewport-scale, 1\)\);/s);
+  assert.doesNotMatch(objectsCss, /\.ledger-card-overview-title\s*{[^}]*text-overflow:\s*ellipsis;/s);
 });
 
 test('card height normalization command backs up and migrates legacy natural-height cards', () => {

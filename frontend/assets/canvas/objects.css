@@ -224,13 +224,14 @@
     0 0 0 1px color-mix(in srgb, var(--card-zone-color), transparent 34%),
     var(--shadow-card);
   z-index: 30;
-  contain: layout style;
+  contain: layout style paint;
 }
 
 .ledger-card-detail-layer {
   position: relative;
   min-height: 100%;
-  contain: layout style;
+  contain: layout style paint;
+  will-change: opacity;
 }
 
 .ledger-card-overview-layer {
@@ -240,15 +241,48 @@
   opacity: 0;
   pointer-events: none;
   contain: layout style paint;
+  will-change: opacity;
 }
 
 .ledger-card-overview-title {
   display: block;
+  max-width: calc(100% * var(--viewport-scale, 1));
+  margin: 0;
+  box-sizing: border-box;
+  padding: 4px 6px 0;
+  overflow: visible;
   color: var(--text);
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  word-break: break-word;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.15;
+  transform: scale(var(--inverse-viewport-scale, 1));
+  transform-origin: left top;
+  text-shadow: 0 0 10px color-mix(in srgb, var(--card-zone-color), transparent 64%);
 }
 
 .ledger-card-overview-status {
   position: absolute;
+  display: none;
+  width: auto;
+  min-width: 38px;
+  max-width: 140px;
+  height: 18px;
+  font-size: 9px;
+}
+
+.card[data-card-work-status="todo"] .ledger-card-overview-status {
+  display: flex;
+  top: 50%;
+  left: 50%;
+  right: auto;
+  justify-content: center;
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(var(--inverse-viewport-scale, 1));
+  transform-origin: center;
 }
 
 .card[data-card-id="card-boot"] { left: 120px; top: 300px; }
