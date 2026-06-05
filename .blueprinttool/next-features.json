@@ -163,6 +163,20 @@
       },
       "facts": [],
       "fields": []
+    },
+    {
+      "id": "card-c294607d-7a4a-4631-bc0b-7e67f84f84e1",
+      "title": "Graphs",
+      "cardType": "note",
+      "domainId": "next-features",
+      "status": "todo",
+      "x": 2413.674514299782,
+      "y": 114.50351462445155,
+      "w": 957.773890497449,
+      "h": 436.5463311870993,
+      "comment": {
+        "contentFile": ".blueprinttool/cards/next-features/card-c294607d-7a4a-4631-bc0b-7e67f84f84e1.md"
+      }
     }
   ],
   "relationships": [
@@ -218,5 +232,7 @@
   "positions": {},
   "cardEdits": {},
   "notes": {},
-  "threadFiles": {}
+  "threadFiles": {
+    "thread-card-c294607d-7a4a-4631-bc0b-7e67f84f84e1": ".blueprinttool/threads/next-features/thread-card-c294607d-7a4a-4631-bc0b-7e67f84f84e1.md"
+  }
 }
