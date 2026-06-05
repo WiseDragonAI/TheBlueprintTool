@@ -14,7 +14,8 @@ export function updateDetailMode(): void {
   const hasLowDetail = canvas.classList.contains('low-detail');
   const hasOverviewDetail = canvas.classList.contains('overview-detail');
   const hasSuppressedGrid = canvas.classList.contains('zoom-grid-suppressed');
-  if (shouldUseLowDetail) cancelStagedDetailReveal();
+  const hasStagedReveal = canvas.classList.contains('detail-reveal-staged');
+  if (shouldUseLowDetail && hasStagedReveal) cancelStagedDetailReveal();
   else if (hasLowDetail) beginStagedDetailReveal();
   if (hasLowDetail !== shouldUseLowDetail) canvas.classList.toggle('low-detail', shouldUseLowDetail);
   if (hasOverviewDetail !== shouldUseOverviewDetail) canvas.classList.toggle('overview-detail', shouldUseOverviewDetail);

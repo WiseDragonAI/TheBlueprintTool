@@ -31,6 +31,9 @@ test('low-detail zoom hides card detail while keeping counter-scaled card titles
   assert.doesNotMatch(stagedRuntime, /offsetWidth|offsetHeight|getBoundingClientRect|scrollHeight/);
   assert.match(detailRuntime, /beginStagedDetailReveal\(\)/);
   assert.match(detailRuntime, /scheduleStagedDetailReveal\(\)/);
+  assert.doesNotMatch(detailRuntime, /if \(shouldUseLowDetail\) cancelStagedDetailReveal\(\)/);
+  assert.match(detailRuntime, /shouldUseLowDetail && hasStagedReveal/);
+  assert.match(stagedRuntime, /if \(!hasScheduledWork && !canvas\.classList\.contains\('detail-reveal-staged'\)\) return/);
   assert.match(stagedRuntime, /DETAIL_REVEAL_TARGET_MS = 4/);
   assert.match(stagedRuntime, /detail-reveal-frame/);
   assert.match(css, /\.canvas\.detail-reveal-staged \.card\[data-detail-reveal="hidden"\] \.ledger-card-detail-layer,[\s\S]{0,260}visibility:\s*hidden;/);

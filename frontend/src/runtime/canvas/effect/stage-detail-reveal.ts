@@ -192,6 +192,8 @@ export function beginStagedDetailReveal(): void {
 }
 
 export function cancelStagedDetailReveal(): void {
+  const hasScheduledWork = Boolean(settleTimer || frameHandle || idleHandle || urgentQueue.length || backgroundQueue.length);
+  if (!hasScheduledWork && !canvas.classList.contains('detail-reveal-staged')) return;
   sequence += 1;
   clearScheduledWork();
   urgentQueue = [];
