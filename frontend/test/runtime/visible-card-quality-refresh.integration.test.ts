@@ -23,6 +23,7 @@ test('visible card quality refresh computes viewport card candidates from ledger
 
 test('zoomed card images render through an untransformed visible-card media overlay', () => {
   const wheel = source('frontend/src/runtime/gesture/controller/handle-wheel.ts');
+  const carouselWheel = source('frontend/src/runtime/gesture/helper/advance-carousel-from-wheel.ts');
   const transform = source('frontend/src/runtime/canvas/effect/apply-viewport-transform.ts');
   const panTransform = source('frontend/src/runtime/canvas/effect/apply-pan-viewport-transform.ts');
   const renderLedgerSurface = source('frontend/src/runtime/ledger/effect/render-ledger-surface.ts');
@@ -34,7 +35,8 @@ test('zoomed card images render through an untransformed visible-card media over
   assert.match(transform, /scheduleCanvasMediaOverlayRender\(\)/);
   assert.match(panTransform, /applyCanvasMediaOverlayPanTransform\(\)/);
   assert.match(renderLedgerSurface, /scheduleCanvasMediaOverlayRender\(\)/);
-  assert.match(wheel, /scheduleCanvasMediaOverlayRender\(\)/);
+  assert.match(wheel, /scheduleViewportTransform\(\)/);
+  assert.match(carouselWheel, /scheduleCanvasMediaOverlayRender\(\)/);
   assert.doesNotMatch(wheel, /noteZoomForVisibleCardQualityRefresh/);
   assert.match(mediaComponent, /track\.addEventListener\('scroll', scheduleCanvasMediaOverlayRender/);
   assert.match(media, /canvasMediaOverlayScaleThreshold = 1/);

@@ -25,7 +25,11 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.doesNotMatch(pointerUp, /commitActiveLedgerMutation/);
 
   const wheel = source('frontend/src/runtime/gesture/controller/handle-wheel.ts');
-  assert.match(wheel, /applyViewportTransform/);
+  const scheduledViewport = source('frontend/src/runtime/canvas/effect/schedule-viewport-transform.ts');
+  const applyScheduledViewport = source('frontend/src/runtime/canvas/effect/apply-scheduled-viewport-transform.ts');
+  assert.match(wheel, /scheduleViewportTransform/);
+  assert.match(scheduledViewport, /requestAnimationFrame\(applyScheduledViewportTransform\)/);
+  assert.match(applyScheduledViewport, /applyViewportTransform/);
   assert.doesNotMatch(wheel, /renderRelationshipOverlay/);
   assert.doesNotMatch(wheel, /viewport\.x\s*-=/);
   assert.doesNotMatch(wheel, /deltaX\s*\|\|\s*event\.deltaY/);

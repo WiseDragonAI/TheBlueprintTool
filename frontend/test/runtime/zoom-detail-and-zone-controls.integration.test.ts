@@ -23,6 +23,7 @@ test('low-detail zoom hides card detail while keeping counter-scaled card titles
   assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-overview-title\s*{[^}]*(?<!-)width:\s*calc\(100% \* var\(--viewport-scale, 1\)\);/s);
 
   const viewportRuntime = source('frontend/src/runtime/canvas/effect/apply-viewport-transform.ts');
+  const viewportCssScaleRuntime = source('frontend/src/runtime/canvas/helper/resolve-detail-mode-css-scale.ts');
   const detailRuntime = source('frontend/src/runtime/canvas/effect/update-detail-mode.ts');
   const invalidationRuntime = source('frontend/src/runtime/canvas/effect/invalidate-detail-mode-card-size-cache.ts');
   const stagedFiles = [
@@ -50,8 +51,12 @@ test('low-detail zoom hides card detail while keeping counter-scaled card titles
   ];
   const stagedRuntime = stagedFiles.map((path) => source(path)).join('\n');
   const stagedRuntimeWithoutComments = stagedRuntime.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
-  const touchedRuntimeFiles = [detailRuntime, invalidationRuntime, ...stagedFiles.map((path) => source(path))];
+  const touchedRuntimeFiles = [viewportRuntime, viewportCssScaleRuntime, detailRuntime, invalidationRuntime, ...stagedFiles.map((path) => source(path))];
   assert.match(viewportRuntime, /--inverse-viewport-scale/);
+  assert.match(viewportRuntime, /resolveDetailModeCssScale\(state\.viewport\.scale, state\.viewport\.scale < 0\.35\)/);
+  assert.match(viewportRuntime, /getPropertyValue\('--viewport-scale'\) !== viewportScale/);
+  assert.match(viewportCssScaleRuntime, /lowDetailCssScaleBuckets = \[0\.08, 0\.18, 0\.35\]/);
+  assert.match(viewportCssScaleRuntime, /if \(!lowDetail\) \{/);
   assert.match(invalidationRuntime, /export function invalidateDetailModeCardSizeCache/);
   assert.doesNotMatch(detailRuntime, /offsetWidth|offsetHeight|getBoundingClientRect|scrollHeight/);
   assert.match(detailRuntime, /const shouldUseLowDetail = state\.viewport\.scale < 0\.35/);

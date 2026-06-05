@@ -114,7 +114,7 @@ test('description editor preserves rendered body size and lets textarea own whee
   assert.match(editorRuntime, /textarea\.style\.minHeight = `\$\{bodyHeight\}px`;/);
   assert.match(editorRuntime, /textarea\.style\.height = `\$\{bodyHeight\}px`;/);
   assert.match(editorRuntime, /addEventListener\('wheel', \(event\) => \{\s*event\.stopPropagation\(\);/s);
-  assert.match(wheelRuntime, /if \(shouldCaptureWheelTarget\(event\)\) return;/);
+  assert.match(wheelRuntime, /if \(shouldCaptureWheelTarget\(event\)\) \{[\s\S]*return;[\s\S]*\}/);
   assert.match(css, /\.ledger-card-description-editor\s*{[^}]*overflow:\s*auto;[^}]*overscroll-behavior:\s*contain;/s);
 });
 
