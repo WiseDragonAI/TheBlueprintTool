@@ -44,3 +44,21 @@ Counter-analysis verdict:
 | Pointer release jank is separate from movement jank. | Validated | Fresh after-release frame max was `1281.9ms`, dominated by style/layout lifecycle work. |
 
 The strongest corrected conclusion is: zone labels can consume most of an individual pointermove event budget, but they do not explain the worst visible drag frame. A correct fix must remove hot-path DOM geometry reads and also stop dragging selected nodes through `left/top` layout-position writes every move.
+
+## Real-offender correction
+
+The rerun in `/tmp/corev2-real-offenders-drag` shows the actual drag split:
+
+| Variant | Worst during-drag frame | Frame offender shape |
+| --- | ---: | --- |
+| `baseline` | `38.8ms` | `EventDispatch:pointermove` and `ProxyMain::BeginMainFrame` both overlap the bad frame at about `16ms`. |
+| `skip-zone-labels` | `33.2ms` | JS is cheap, but `ProxyMain::BeginMainFrame` rises to `28.194ms` and waits on commit. |
+| `cheap-visuals` | `30.5ms` | Visual cost drops, but pointermove JS still overlaps the frame at `13.841ms`. |
+| `skip-zone-labels+no-images+cheap-visuals` | `18.0ms` | No single actionable offender over `10ms`; this is the only run close to budget. |
+
+Therefore card drag is slow because two offenders stack in the same frame:
+
+- **Hot-path JS/layout reads:** `renderZoneLabelOverlay()` reads zone/title layout during pointermove.
+- **Browser frame commit/raster:** moving rich absolutely positioned cards with `left/top` forces Chrome to produce an expensive committed frame.
+
+Images alone are not the root cause. Relationship rendering is not required for this reproduction because the trace has `0 relationships`.

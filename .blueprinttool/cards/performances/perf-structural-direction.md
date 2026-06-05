@@ -74,3 +74,26 @@ Proof still needed before final implementation:
 - A transform-only trace variant that suppresses `left/top` writes while keeping relationship/label/control feedback correct.
 - An active relationship-heavy drag trace to prove route recalculation stays bounded.
 - A release trace split that separates local rerender, style/layout lifecycle, mocked network commit, and persistence.
+
+## Direction after real-offender rerun
+
+Drag fix direction:
+
+1. Replace pointermove-time `renderZoneLabelOverlay()` rebuilds with cached label geometry and rAF-coalesced updates.
+2. Move selected cards/zones/groups during drag with compositor-friendly preview transforms instead of `left/top`.
+3. Keep relationships, labels, and controls reading the same in-flight geometry snapshot so the preview remains correct.
+4. Commit ledger `x/y` and DOM `left/top` once on release.
+
+The drag trace shows that either side alone is insufficient:
+
+- Removing zone labels makes JS cheap, but the frame still hits `33.2ms` because commit/raster remains.
+- Cheap visuals reduce frame cost, but the frame still hits `28.5ms` when label reads remain.
+- The combined cheap-label/cheap-visual path reaches `18.0ms`, which is close enough to justify the full structural drag preview.
+
+Zoom transition fix direction:
+
+1. Treat `low-detail -> normal detail` as a staged reveal, not a single class flip across all cards.
+2. Do not reveal every `.ledger-card-detail-layer` in the same frame. Reveal visible/near-viewport cards first, then hydrate the rest in later frames or idle time.
+3. Keep card detail content available for editing/interaction only after the card is in or near the viewport.
+4. Consider retaining `content-visibility: auto` or an intrinsic-size strategy for detail layers so Chrome does not need to lay out all card bodies immediately on threshold crossing.
+5. Keep the overview/grid optimizations, but do not mistake them for the primary fix. Hiding the grid cuts the worst `low-to-normal` frame roughly in half; hiding detail layers cuts it by about 80%.

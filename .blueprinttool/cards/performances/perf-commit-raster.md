@@ -58,3 +58,26 @@ Corrected confidence:
 - Not yet proven exclusively: the exact share of cost owned by `left/top` versus rich card paint, grid/world raster, media, and forced style/layout after release.
 
 Next proof step: add a trace variant that moves the selected card with `transform: translate(...)` while suppressing `left/top` writes, but still feeds relationships/labels/controls from in-flight geometry. That isolates layout-position invalidation from the rest of the visual surface.
+
+## Zoom detail transition offender
+
+The same browser-frame mechanism appears in zoom detail transitions, but the trigger is different.
+
+For `low-detail -> normal detail` at `0.34 -> 0.365`, the baseline worst frame was `114.6ms-117.4ms`. The largest overlapping events were browser lifecycle/commit events, not input handling:
+
+| Event class | Observed role |
+| --- | --- |
+| `ProxyMain::BeginMainFrame` | Main overlapping offender at `114ms-117ms`. |
+| `WebFrameWidgetImpl::UpdateLifecycle` | Nearly the same duration as the frame-producing work. |
+| Style/layout | Max overlap around `75ms-78ms`. |
+| Paint/layer | Max overlap around `20ms-26ms`. |
+
+A/B result:
+
+| Variant | Worst frame | Meaning |
+| --- | ---: | --- |
+| baseline | `114.6ms-117.4ms` | Full detail reveal is very expensive. |
+| `no-detail-layer` | `23.3ms-24.5ms` | Removing full card detail content removes most of the stall. |
+| `no-grid` | `50.4ms-62.2ms` | The grid/world layer contributes to commit/raster cost, but it is not the primary offender. |
+
+Correct conclusion: the slow "no details to details" transition is not caused by wheel math or relationship drawing. It is caused by removing `.low-detail`, which makes every `.ledger-card-detail-layer` visible again and forces a large style/layout/paint/raster/commit frame.

@@ -63,3 +63,69 @@ This counter-run preserves the earlier qualitative split but changes the confide
 - The exact `80.4ms` / `71ms Commit` case remains a ledger-reported prior result until the raw trace for `Logo and naming` is attached or rerun.
 - The current trace validates that a single pointermove event can consume most of a frame budget, but visible during-drag frames can stay above budget even after that JS cost is removed.
 - The after-release freeze is consistently much larger than movement jank and should be treated as a separate release/render lifecycle issue.
+
+## Real-offender rerun: drag, 2026-06-05
+
+Fresh frame-focused run:
+
+```bash
+COREV2_DRAG_TRACE_OUTPUT_DIR=/tmp/corev2-real-offenders-drag
+COREV2_DRAG_TRACE_VARIANTS=baseline,skip-zone-labels,no-images,cheap-visuals,no-images+cheap-visuals,skip-zone-labels+no-images+cheap-visuals,no-release-render
+```
+
+The meaningful drag number is the worst during-drag frame and the largest overlapping events inside that frame:
+
+| Variant | Worst during-drag frame | Worst pointermove event | Largest frame offenders | Conclusion |
+| --- | ---: | ---: | --- | --- |
+| `baseline` | `38.8ms` | `18.425ms` | `EventDispatch:pointermove` `16.435ms`, `ProxyMain::BeginMainFrame` `16.641ms` and `15.987ms` | Both app JS and Chrome frame production are in the bad frame. |
+| `skip-zone-labels` | `33.2ms` | `1.151ms` | `ProxyMain::BeginMainFrame` `28.194ms`, `LayerTreeHost::WaitForCommitCompletion` `17.876ms` | Zone-label JS is not the main visible-frame offender after it is removed. |
+| `no-images` | `46.3ms` | `13.675ms` | `ProxyMain::BeginMainFrame` `23.837ms`, `WaitForCommitCompletion` `22.964ms` | Images alone are not the root cause. |
+| `cheap-visuals` | `30.5ms` | `15.610ms` | `EventDispatch:pointermove` `13.841ms`, `ProxyMain::BeginMainFrame` `14.053ms` | Visual effects matter, but JS label work still keeps frames over budget. |
+| `no-images+cheap-visuals` | `28.5ms` | `12.942ms` | `EventDispatch:pointermove` `12.924ms`, `ProxyMain::BeginMainFrame` `13.049ms` | Cheaper paint helps, but label reads still dominate the app side. |
+| `skip-zone-labels+no-images+cheap-visuals` | `18.0ms` | `1.242ms` | none above `10ms` in the worst during-drag frame | Only the combined removal approaches budget. |
+
+Correct drag offender model:
+
+- `renderZoneLabelOverlay()` is the concrete JS offender because it forces layout-dependent reads during pointermove.
+- Browser frame production remains over budget after zone labels are removed, with `ProxyMain::BeginMainFrame` and commit wait as the visible-frame offenders.
+- Image hiding alone does not fix the frame. Cheap visuals help, but only the combined cheap-visuals plus no-label path gets near `16.7ms`.
+- Therefore the drag fix cannot be just "cache zone labels." It must also stop `left/top` drag movement from forcing expensive frame commits for a rich card/world surface.
+
+## Real-offender rerun: zoom detail transitions, 2026-06-05
+
+Fresh trace tool:
+
+```bash
+node tools/live-verify/zoom-detail-transition-trace.mjs
+```
+
+Reports:
+
+```text
+/tmp/corev2-real-offenders-zoom-detail
+/tmp/corev2-real-offenders-zoom-detail-combo
+```
+
+The slow user-visible transition is `low-detail -> normal detail`, crossing `0.35` upward:
+
+| Transition / variant | Worst transition frame | Largest frame offenders | Conclusion |
+| --- | ---: | --- | --- |
+| `low-to-normal / baseline` | `114.6ms` to `117.4ms` | `ProxyMain::BeginMainFrame` `114ms-117ms`, `WebFrameWidgetImpl::UpdateLifecycle` `113ms-116ms`; style/layout max about `75ms-78ms`, paint max about `20ms-26ms` | Revealing full detail for about 100 cards is the main slow transition. |
+| `low-to-normal / no-detail-layer` | `23.3ms` to `24.5ms` | `ProxyMain::BeginMainFrame` about `23ms-24ms` | Hiding detail layers removes most of the stall. |
+| `low-to-normal / no-grid` | `50.4ms` to `62.2ms` | `ProxyMain::BeginMainFrame` about `50ms-62ms` | Grid/world raster participates but is secondary to detail-layer reveal. |
+| `low-to-normal / no-overview-layer` | `42.0ms` | `ProxyMain::BeginMainFrame` about `41.9ms` | Overview layer also contributes, but less than full detail reveal. |
+| `low-to-normal / no-counter-scale` | `63.4ms` | `ProxyMain::BeginMainFrame` about `63.3ms` | Counter-scaled titles are not the primary cause. |
+
+Other threshold crossings are smaller:
+
+| Transition | Baseline worst frame | Interpretation |
+| --- | ---: | --- |
+| `normal-to-low` | `31.5ms` to `35.9ms` | Hiding full detail is costly, but much cheaper than revealing it. |
+| `low-to-overview` | `21.6ms` | Overview threshold is near budget and not the main complaint. |
+| `overview-to-low` | `20.2ms` | Grid can matter here, but the stall is much smaller than `low-to-normal`. |
+
+Correct zoom offender model:
+
+- The old "detail transition measures card dimensions" claim is stale. `updateDetailMode()` now only toggles `low-detail` and `overview-detail` classes.
+- The real offender is the CSS/class transition itself: removing `.low-detail` reveals `.ledger-card-detail-layer` for about 100 cards, invalidating style/layout, paint, raster, and commit in one frame.
+- Input handling is not the offender in the zoom transition traces; the largest input overlap is effectively zero compared with frame lifecycle and commit work.

@@ -42,3 +42,31 @@ node tools/live-verify/card-drag-trace-suite.mjs
 ```
 
 Use this run as the current counter-analysis proof for the Ardaria zero-relationship case. Do not treat old exact timings as current facts unless their raw report is attached or the same target is rerun with the same scale, move count, variants, and browser mode.
+
+## Zoom Detail Transition Suite
+
+The live transition trace suite is:
+
+```bash
+node tools/live-verify/zoom-detail-transition-trace.mjs
+```
+
+Useful command shape:
+
+```bash
+COREV2_URL=http://127.0.0.1:4173/ardaria-game-design \
+COREV2_CDP_JSON=http://127.0.0.1:9223/json \
+COREV2_ZOOM_DETAIL_TRACE_OUTPUT_DIR=/tmp/corev2-real-offenders-zoom-detail \
+COREV2_ZOOM_DETAIL_CASES=normal-to-low,low-to-normal,low-to-overview,overview-to-low \
+COREV2_ZOOM_DETAIL_VARIANTS=baseline,no-grid,no-detail-layer,no-overview-layer,no-counter-scale \
+node tools/live-verify/zoom-detail-transition-trace.mjs
+```
+
+The suite uses one real wheel input to cross a detail threshold, records page `requestAnimationFrame` gaps, aligns Chrome trace events to page marks, and reports the largest overlapping offenders inside the slow transition frame.
+
+Current proof outputs:
+
+```text
+/tmp/corev2-real-offenders-zoom-detail
+/tmp/corev2-real-offenders-zoom-detail-combo
+```

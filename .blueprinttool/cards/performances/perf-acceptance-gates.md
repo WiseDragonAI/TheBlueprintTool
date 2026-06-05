@@ -45,3 +45,19 @@ Required additional variants:
 - `transform-drag-preview`: selected object moved via transform, no `left/top` writes until release, labels/relationships/controls read in-flight geometry.
 - `no-release-render`: already supported by the trace suite, but must be compared in the same run as baseline.
 - relationship-heavy ledger run: same card count/scale/move-count discipline, with relationship count reported.
+
+## Updated gates after real-offender rerun
+
+Drag gates:
+
+- Worst during-drag frame must be below `16.7ms` in Ardaria zero-relationship drag.
+- Worst individual `EventDispatch:pointermove` should stay below `4ms`.
+- Worst `ProxyMain::BeginMainFrame` / commit-wait overlap during drag should stay below `8ms`.
+- A passing run must keep zone labels, controls, and relationships visible and correct; the `skip-zone-labels+no-images+cheap-visuals` probe is evidence, not an acceptable product behavior.
+
+Zoom detail-transition gates:
+
+- `low-detail -> normal detail` (`0.34 -> 0.365`) must stay below `16.7ms` worst frame or use a documented staged reveal where no single frame blocks interaction.
+- The trace must report the largest overlapping events inside the transition frame. Aggregate totals are not acceptable.
+- The fix must be verified against baseline, `no-detail-layer`, and `no-grid` variants so the result proves the detail reveal, not just the grid, has been addressed.
+- `normal -> low`, `low -> overview`, and `overview -> low` should remain below or near one frame budget, but they are secondary to `low -> normal`.
