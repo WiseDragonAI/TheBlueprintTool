@@ -43,6 +43,21 @@
       "fields": []
     },
     {
+      "id": "perf-real-offender-mechanism-proof",
+      "title": "Real Offender Mechanism Proof",
+      "cardType": "perf-analysis",
+      "domainId": "performances",
+      "x": -1511,
+      "y": 2275,
+      "w": 1570,
+      "h": 1880,
+      "comment": {
+        "contentFile": ".blueprinttool/cards/performances/perf-real-offender-mechanism-proof.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
       "id": "perf-trace-suite",
       "title": "CDP Trace Suite",
       "cardType": "perf-tooling",
@@ -155,7 +170,7 @@
       "x": -25.59519473168382,
       "y": -1381.4884123968955,
       "width": 1658.0785558824423,
-      "height": 1876.407480286672,
+      "height": 4800,
       "color": "#38bdf8",
       "label": "Measured Evidence",
       "comments": []
