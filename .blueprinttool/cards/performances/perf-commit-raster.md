@@ -29,3 +29,32 @@ Trace totals like `raster-composite total=1694ms` inside an 80ms frame are sums 
 This is why removing some visuals helps but does not fully solve the problem. The structural problem is the drag rendering model.
 
 The measurable target is not “make the card prettier cheaper”. The target is “make pointermove stop producing layout-position invalidation”. The expected implementation shape is a temporary transform layer during drag, with ledger `x/y` and DOM `left/top` committed once on release.
+
+## Counter-analysis update
+
+The `80.4ms` / `71ms Commit` result remains useful, but it should be treated as a prior trace result until the raw report is linked or rerun for the same `Logo and naming` target. The fresh `2026-06-05` counter-run used `prep_development_cheat_menu_ae913a0a`, so it validates the mechanism class, not the exact old worst-case number.
+
+Fresh evidence:
+
+| Variant | Worst during-drag frame | During-drag actionable offenders | Interpretation |
+| --- | ---: | --- | --- |
+| `baseline` | `33.6ms` | `ProxyMain::BeginMainFrame` around `12.9ms`, `EventDispatch:pointermove` around `12.8ms` in the same slow frame | App JS and browser frame production both contribute. |
+| `skip-zone-labels` | `33.1ms` | `ProxyMain::BeginMainFrame` around `25.3ms`, `LayerTreeHost::WaitForCommitCompletion` around `15.2ms` | Removing zone-label JS does not remove commit/raster debt. |
+| `no-hover-controls` | `46.1ms` | `ProxyMain::BeginMainFrame` around `25.7ms`, `LayerTreeHost::WaitForCommitCompletion` around `24.8ms` | Hover controls are not required for a slow browser-produced frame. |
+
+Fresh after-release evidence:
+
+| Variant | Worst after-release frame | Dominant offender |
+| --- | ---: | --- |
+| `baseline` | `1281.9ms` | `Document::UpdateStyleAndLayout` / `Blink.ForcedStyleAndLayout.UpdateTime` around `305.9ms` inside the frame |
+| `skip-zone-labels` | `1257.2ms` | same style/layout lifecycle class, around `315.6ms` |
+| `no-hover-controls` | `1223.6ms` | same style/layout lifecycle class, around `312.7ms` |
+
+Corrected confidence:
+
+- Validated: `left/top` drag writes are layout-position mutations and should be removed from the raw pointermove path.
+- Validated: browser frame production can remain over budget after the zone-label JS offender is suppressed.
+- Validated: release jank is separate and much larger in the current sample.
+- Not yet proven exclusively: the exact share of cost owned by `left/top` versus rich card paint, grid/world raster, media, and forced style/layout after release.
+
+Next proof step: add a trace variant that moves the selected card with `transform: translate(...)` while suppressing `left/top` writes, but still feeds relationships/labels/controls from in-flight geometry. That isolates layout-position invalidation from the rest of the visual surface.

@@ -67,3 +67,41 @@ This explains why the browser trace shows both:
 The JS event is only the trigger. The user-visible frame loss happens when Chrome tries to produce the next committed frame after the layout-position mutation.
 
 Required next measurement before implementing the drag-preview refactor: add explicit `performance.mark()` spans around `moveSelectedLedgerGeometry`, `patchNodePosition`, `renderZoneLabelOverlay`, `renderRelationshipOverlay`, and `renderCanvasControlOverlay`. The current trace proves the zone-label A/B and the browser frame cost, but it does not provide exclusive function timings for every function in the call chain.
+
+## Source validation and counter-findings
+
+Source-confirmed path:
+
+```text
+handlePointerMove()
+  -> moveSelected(canvasDx, canvasDy)
+  -> moveSelectedLedgerGeometry(dx, dy)
+  -> patchLedgerCardGeometry(...) / patchLedgerAnnotationGeometry(...)
+  -> patchNodePosition(... left/top ...)
+  -> renderZoneLabelOverlay()
+  -> renderRelationshipOverlay()
+  -> renderCanvasControlOverlay()
+```
+
+Code proof:
+
+- `frontend/src/runtime/gesture/controller/handle-pointer-move.ts` calls `moveSelected()` for `drag` and `group` pointer intents.
+- `frontend/src/runtime/selection/effect/move-selected.ts` patches active-ledger geometry in memory on every move, then writes `node.style.left` and `node.style.top`.
+- The same `moveSelected()` call then synchronously renders zone labels, relationships, and controls.
+- `frontend/src/runtime/gesture/controller/handle-pointer-up.ts` may call one final `moveSelected()` for the release delta, then commits selected ledger geometry, persists state, and rerenders the canvas surface for non-pan intents.
+
+Fresh counter-run:
+
+| Variant | Pointermove dispatch | Worst during-drag frame | Worst after-release frame | What this validates |
+| --- | ---: | ---: | ---: | --- |
+| `baseline` | `151.635ms / 13 events` | `33.6ms` | `1281.9ms` | Current source path can exceed budget before and after browser frame production. |
+| `skip-zone-labels` | `11.462ms / 13 events` | `33.1ms` | `1257.2ms` | Zone labels dominate pointermove JS but are not the only visible frame bottleneck. |
+| `no-hover-controls` | `149.843ms / 13 events` | `46.1ms` | `1223.6ms` | Hover controls are not the main pointermove offender here. |
+
+Important correction: the current active-ledger relationship renderer already consumes ledger geometry through `activeLedgerCardRectMap()`, not DOM card rectangles. That is good for active ledgers. The missing piece is an explicit in-flight geometry snapshot that lets drag visuals, relationships, labels, and controls consume the same coalesced position once per animation frame without mutating persisted ledger records and layout-position DOM on every raw pointer event.
+
+Implementation implication:
+
+- A transform-only drag preview is insufficient by itself if relationships and labels still read stale ledger geometry.
+- A ledger-only in-memory update is insufficient by itself if selected DOM nodes still move via `left/top`.
+- The target model needs both: in-flight geometry for all overlays, and compositor-friendly visual movement for selected objects until release.

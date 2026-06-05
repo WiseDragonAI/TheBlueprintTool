@@ -40,3 +40,27 @@ Probe variants:
 | `skip-zone-labels+no-images+cheap-visuals` | Combined cheap probe | Heavy card still around 19ms |
 
 Even aggressive visual probes do not reliably reach 16.7ms, so the structural problem is how drag frames are produced, not one decorative effect.
+
+## Counter-run: Ardaria drag, 2026-06-05
+
+Fresh headless CDP run:
+
+| Variant | Runtime shape | Pointermove dispatch | Pointermove DOM reads | Worst during-drag frame | Worst after-release frame | Valid conclusion |
+| --- | --- | ---: | --- | ---: | ---: | --- |
+| `baseline` | 103 cards / 23 zones / 0 relationships / 35 images | `151.635ms total / 13.469ms max` | `offsetLeft` 756, `offsetTop` 504, `offsetWidth` 252, `getComputedStyle` 252 | `33.6ms` | `1281.9ms` | Zero relationships still reproduce drag jank; zone-label reads are present on the move path. |
+| `skip-zone-labels` | same | `11.462ms total / 1.163ms max` | no pointermove layout-read top entries | `33.1ms` | `1257.2ms` | Zone labels explain most pointermove JS cost, but not enough visible frame cost. |
+| `no-hover-controls` | same | `149.843ms total / 12.948ms max` | `offsetLeft` 756, `offsetTop` 504, `offsetWidth` 252 | `46.1ms` | `1223.6ms` | Hover controls are not the primary offender in this run. |
+
+Reports:
+
+```text
+/tmp/corev2-perf-counter-drag/prep_development_cheat_menu_ae913a0a-scale0_35-baseline-cold-run1.report.json
+/tmp/corev2-perf-counter-drag/prep_development_cheat_menu_ae913a0a-scale0_35-skip-zone-labels-cold-run1.report.json
+/tmp/corev2-perf-counter-drag/prep_development_cheat_menu_ae913a0a-scale0_35-no-hover-controls-cold-run1.report.json
+```
+
+This counter-run preserves the earlier qualitative split but changes the confidence level of some numeric claims:
+
+- The exact `80.4ms` / `71ms Commit` case remains a ledger-reported prior result until the raw trace for `Logo and naming` is attached or rerun.
+- The current trace validates that pointermove JS can approach or exceed budget, but visible during-drag frames can stay above budget even after that JS cost is removed.
+- The after-release freeze is consistently much larger than movement jank and should be treated as a separate release/render lifecycle issue.

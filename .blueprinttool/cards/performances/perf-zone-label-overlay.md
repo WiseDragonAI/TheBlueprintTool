@@ -50,8 +50,33 @@ The stable model should be:
 | Coordinate layer | Formula |
 | --- | --- |
 | Zone canvas x/y | `annotation.x`, `annotation.y` |
-| Zone screen x/y | `viewport.x + annotation.x * viewport.scale`, `viewport.y + annotation.y * viewport.scale` |
-| Label screen padding | `basePadding * viewport.scale`, then clamped to a readable minimum when counter-scaled text is used |
-| Label width cap | `annotation.width * viewport.scale - horizontalPadding` |
+| Label canvas x/y | `annotation.x + titleAnchorX`, `annotation.y + titleAnchorY` |
+| Label canvas width cap | `annotation.width - titleAnchorX` |
+| Readability scaling | Keep `.zone-label-proxy { transform: scale(var(--inverse-viewport-scale, 1)) }` so text remains readable inside the transformed world layer. |
 
 The important distinction is that zoom changes the projection of known geometry; it does not change the underlying zone/card canvas rectangles. Fresh DOM reads are only needed when CSS layout truly changes, for example after a label text edit, font change, or zone geometry resize. Pan and zoom should reuse ledger geometry plus viewport scale.
+
+## Counter-analysis update
+
+The previous screen-coordinate replacement was too broad for the current DOM structure. `renderZoneLabelOverlay()` inserts `.zone-label-overlay` into `.canvas-content`, and `.canvas-content` is the transformed world layer. Therefore label `left/top/maxWidth` should remain canvas-space values. Screen-space projection is only needed for overlays outside `.canvas-content`, such as the canvas control overlay.
+
+Source proof:
+
+- `frontend/src/runtime/zone/effect/render-zone-label-overlay.ts` inserts `.zone-label-overlay` into `content`.
+- `frontend/assets/canvas/canvas-layer.css` transforms `.canvas-content` with `translate(...) scale(...)`.
+- `frontend/assets/canvas/objects.css` counter-scales `.zone-label-proxy` with `--inverse-viewport-scale`.
+
+Fresh trace proof:
+
+| Variant | Pointermove layout reads | Pointermove dispatch |
+| --- | --- | ---: |
+| `baseline` | `offsetLeft` 756, `offsetTop` 504, `offsetWidth` 252, `getComputedStyle` 252 | `151.635ms / 13 events` |
+| `skip-zone-labels` | no pointermove layout-read top entries | `11.462ms / 13 events` |
+
+Correct replacement shape:
+
+- Source zone geometry from `activeLedgerAnnotationMap()` or a maintained render cache.
+- Source label text/color/readable shadow from ledger/render-time data, not `getComputedStyle()` during pointermove.
+- Use fixed title anchors in canvas coordinates unless the title is actively edited or typography changes.
+- Rebuild all labels on ledger load, zone create/delete, zone rename, color edit, and zone geometry resize.
+- During drag, update only affected labels from in-flight geometry and coalesce with `requestAnimationFrame`.

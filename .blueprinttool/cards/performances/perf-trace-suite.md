@@ -22,3 +22,23 @@ The suite records:
 - Optional DOM read probes with `COREV2_DRAG_TRACE_DOM_READ_PROBES=1`.
 
 The important reporting unit is per-frame, not aggregate totals. Aggregate raster totals can exceed frame duration because they sum overlapping worker tasks; the frame gap itself is still the user-visible stall.
+
+## Counter-analysis run
+
+Fresh run used a temporary headless Chromium CDP session:
+
+```bash
+COREV2_URL=http://127.0.0.1:4173/ardaria-game-design \
+COREV2_CDP_JSON=http://127.0.0.1:9223/json \
+COREV2_DRAG_TRACE_OUTPUT_DIR=/tmp/corev2-perf-counter-drag \
+COREV2_DRAG_TRACE_CARD_ID=prep_development_cheat_menu_ae913a0a \
+COREV2_DRAG_TRACE_SCALE=0.35 \
+COREV2_DRAG_TRACE_VARIANTS=baseline,skip-zone-labels,no-hover-controls \
+COREV2_DRAG_TRACE_HOVER_MODES=cold \
+COREV2_DRAG_TRACE_RUNS=1 \
+COREV2_DRAG_TRACE_MOVES=12 \
+COREV2_DRAG_TRACE_DOM_READ_PROBES=1 \
+node tools/live-verify/card-drag-trace-suite.mjs
+```
+
+Use this run as the current counter-analysis proof for the Ardaria zero-relationship case. Do not treat old exact timings as current facts unless their raw report is attached or the same target is rerun with the same scale, move count, variants, and browser mode.
