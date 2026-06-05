@@ -1,37 +1,31 @@
 # Real Offender Mechanism Proof
 
-This card separates two different slow paths:
+This card identifies the current real offenders for:
 
-1. Card drag while a card is moving.
+1. Card drag while the pointer is moving.
 2. Zoom transition from low-detail cards back to full-detail cards.
 
-The mechanisms are different. Drag has an app-side hot path plus browser frame production. Zoom transition is mostly browser frame production caused by revealing full card detail for the whole ledger in one class change.
+The mechanisms are different. Drag is a bad pointermove frame with a measured app-code offender plus browser frame production. Zoom detail transition is a global detail-layer reveal that forces browser lifecycle, layout, paint, raster, and commit work.
 
-## Evidence Sources
+## Drag: Frame-Decomposed Proof
 
-Trace outputs:
-
-```text
-/tmp/corev2-real-offenders-drag
-/tmp/corev2-real-offenders-zoom-detail
-/tmp/corev2-real-offenders-zoom-detail-combo
-```
-
-Trace tools:
+Fresh trace:
 
 ```text
-tools/live-verify/card-drag-trace-suite.mjs
-tools/live-verify/zoom-detail-transition-trace.mjs
+output: /tmp/corev2-drag-frame-decomposition-rerun
+report: /tmp/corev2-drag-frame-decomposition-rerun/prep_development_cheat_menu_ae913a0a-scale0_35-baseline-cold-run1.report.json
+route: http://127.0.0.1:4173/ardaria-game-design
+target: prep_development_cheat_menu_ae913a0a
+scale: 0.35
+runtime: 104 cards, 23 zones, 0 relationships, 35 images
 ```
 
-Current measured Ardaria route shape in the trace runs:
+Instrumentation proof:
 
-| Run | Cards | Zones | Relationships | Images |
-| --- | ---: | ---: | ---: | ---: |
-| Drag trace | 103 | 23 | 0 | 35 |
-| Zoom detail trace | 100 | 21 | 0 | not material to primary result |
-
-## Drag Mechanism
+- `tools/live-verify/card-drag-trace-suite.mjs:561-586` installs `window.__corev2DragTraceSpan`.
+- `tools/live-verify/card-drag-trace-suite.mjs:872-902` computes exclusive source-span timing.
+- `tools/live-verify/card-drag-trace-suite.mjs:904-930` groups spans by pointermove event and by frame window.
+- `frontend/src/runtime/performance/drag-trace-span.ts` makes spans no-op unless the live verifier installs the tracing hook.
 
 Runtime code path:
 
@@ -39,7 +33,7 @@ Runtime code path:
 pointermove
   -> handlePointerMove()
   -> moveSelected(canvasDx, canvasDy)
-  -> moveSelectedLedgerGeometry(dx, dy)
+  -> moveSelectedLedgerGeometry()
   -> patchNodePosition(... left/top ...)
   -> renderZoneLabelOverlay()
   -> renderRelationshipOverlay()
@@ -48,46 +42,106 @@ pointermove
 
 Source proof:
 
-| Step | File / line | Mechanism |
-| --- | --- | --- |
-| Drag enters `moveSelected()` | `frontend/src/runtime/gesture/controller/handle-pointer-move.ts:37-42` | Pointermove dispatch calls selected-object movement for drag/group intents. |
-| Move path renders overlays synchronously | `frontend/src/runtime/selection/effect/move-selected.ts:8-19` | After geometry mutation, it immediately renders zone labels, relationships, and controls in the same pointermove. |
-| Active-ledger movement mutates ledger geometry and DOM position | `frontend/src/runtime/selection/effect/move-selected.ts:22-45` | Each selected card/zone/group patches in-memory geometry and calls `patchNodePosition`. |
-| DOM move is layout-position mutation | `frontend/src/runtime/selection/effect/move-selected.ts:60-63` | `node.style.left` and `node.style.top` are written during drag. |
-| Zone label overlay reads layout during drag | `frontend/src/runtime/zone/effect/render-zone-label-overlay.ts:4-24` | It rebuilds labels and reads `zone.offsetLeft`, `title.offsetLeft`, `zone.offsetTop`, `title.offsetTop`, `zone.offsetWidth`, and `getComputedStyle(title)`. |
+- `frontend/src/runtime/gesture/controller/handle-pointer-move.ts:20-57`: drag/group pointermove calls `moveSelected()`.
+- `frontend/src/runtime/selection/effect/move-selected.ts:9-38`: movement and all overlay renderers run synchronously inside pointermove.
+- `frontend/src/runtime/selection/effect/move-selected.ts:41-52`: selected card geometry is patched, then the selected node is repositioned.
+- `frontend/src/runtime/selection/effect/move-selected.ts:93-96`: DOM movement writes `left/top`.
+- `frontend/src/runtime/zone/effect/render-zone-label-overlay.ts:5-48`: zone labels are rebuilt.
+- `frontend/src/runtime/zone/effect/render-zone-label-overlay.ts:30-36`: each label reads layout/style.
 
-Frame proof from `/tmp/corev2-real-offenders-drag/suite-summary.json`:
+Worst during-drag frame:
 
-| Variant | Worst during-drag frame | Largest overlapping offenders inside the frame | What it proves |
-| --- | ---: | --- | --- |
-| `baseline` | `38.8ms` | `EventDispatch:pointermove` `16.435ms`; `ProxyMain::BeginMainFrame` `16.641ms` and `15.987ms` | App JS and browser commit/raster both overlap the same bad frame. |
-| `skip-zone-labels` | `33.2ms` | `ProxyMain::BeginMainFrame` `28.194ms`; `LayerTreeHost::WaitForCommitCompletion` `17.876ms` | Removing label JS does not remove the visible-frame stall. |
-| `cheap-visuals` | `30.5ms` | `EventDispatch:pointermove` `13.841ms`; `ProxyMain::BeginMainFrame` `14.053ms` | Reducing visual cost does not remove label JS cost. |
-| `no-images` | `46.3ms` | `ProxyMain::BeginMainFrame` `23.837ms`; `LayerTreeHost::WaitForCommitCompletion` `22.964ms` | Images alone are not the root cause. |
-| `skip-zone-labels+no-images+cheap-visuals` | `18.0ms` | no actionable offender above `10ms` | Only removing both JS layout reads and heavy visual/commit cost gets close to budget. |
+```text
+frame #13
+duration: 52.0ms
+phase: during-drag
+```
 
-Interpretation:
+Same-frame Chrome trace overlap:
 
-- `renderZoneLabelOverlay()` is a real app-code offender because the A/B run drops worst pointermove dispatch from a frame-consuming event to about `1ms`.
-- The visible drag frame remains slow after that because Chrome still has to produce a committed frame after `left/top` movement of rich DOM cards.
-- The trace identifies `ProxyMain::BeginMainFrame` and `LayerTreeHost::WaitForCommitCompletion` as the remaining frame offenders after label JS is removed.
-- Relationships are not the reproduced cause here because the measured ledger has `0 relationships`. They still need a relationship-heavy trace before making claims about relationship-heavy drag.
+```text
+EventDispatch:pointermove: 18.224ms
+ProxyMain::BeginMainFrame: 30.839ms
+LayerTreeHost::WaitForCommitCompletion: 29.770ms
+```
 
-Fix implications:
+Same-frame app source spans:
 
-| Required change | Why |
-| --- | --- |
-| Cache or ledger-drive zone label geometry | Removes layout reads from `renderZoneLabelOverlay()` during pointermove. |
-| Coalesce drag rendering through `requestAnimationFrame` | Prevents multiple raw pointer events from forcing repeated overlay/DOM work before the next paint. |
-| Move selected objects with transform preview | Avoids per-pointermove `left/top` layout-position mutation. |
-| Commit `left/top` once on release | Preserves persisted ledger geometry without forcing layout-position commits every frame. |
-| Feed labels/relationships/controls from in-flight geometry | Keeps visible feedback correct while the selected object is transform-previewed. |
+```text
+handlePointerMove: 17.9ms
+  moveSelected: 17.7ms
+    renderZoneLabelOverlay: 16.5ms
+      buildLabels: 15.0ms
+        readLayoutAndStyle: 13.8ms exclusive, 22 calls
+      replaceChildren: 1.1ms exclusive
+      appendLabel: 1.1ms exclusive, 22 calls
+```
+
+Worst pointermove event:
+
+```text
+pointermove#2
+top-level handlePointerMove: 17.9ms
+  moveSelected: 17.7ms
+    moveSelectedLedgerGeometry: 0.7ms
+      patchNodePosition:card: 0.3ms
+    renderZoneLabelOverlay: 16.5ms
+      readLayoutAndStyle: 13.8ms exclusive, 22 calls
+      replaceChildren: 1.1ms
+      appendLabel: 1.1ms exclusive, 22 calls
+```
+
+DOM read proof:
+
+```text
+pointermove:capture / offsetLeft: 792 reads, 135.6ms total
+pointermove:capture / offsetTop: 528 reads, 3.5ms total
+pointermove:capture / offsetWidth: 264 reads, 0.8ms total
+pointermove:capture / getComputedStyle: 264 reads, 0.1ms total
+```
+
+Those reads are exactly the code in `renderZoneLabelOverlay()`:
+
+```ts
+label.style.left = `${zone.offsetLeft + title.offsetLeft}px`;
+label.style.top = `${zone.offsetTop + title.offsetTop}px`;
+label.style.maxWidth = `${Math.max(0, zone.offsetWidth - title.offsetLeft)}px`;
+const titleStyle = getComputedStyle(title);
+```
+
+Conclusion:
+
+- The app-side drag offender is not a vague CSS claim. It is `renderZoneLabelOverlay()` doing repeated layout/style reads during pointermove.
+- `moveSelectedLedgerGeometry()` and `patchNodePosition()` are in the critical path, but they are not the measured `16ms` JS cost in this run.
+- The browser-side offender is frame production after the drag mutation: the same bad frame overlaps `ProxyMain::BeginMainFrame`, lifecycle, raster/compositor events, and the app pointermove.
+- This is why only removing label JS is not enough in older A/B runs: browser frame production remains slow after the selected card is moved with `left/top`.
+
+## Drag Fix Implications
+
+Required:
+
+- Do not rebuild every zone label on every raw pointermove.
+- Do not read zone/title `offset*` and computed style during drag.
+- Drive label positions from ledger or in-flight geometry.
+- Cache title visual style unless the title/style actually changes.
+- Coalesce drag overlay rendering through `requestAnimationFrame`.
+- Use transform preview for selected cards during drag, then commit `left/top` once on release.
+
+Acceptance:
+
+```text
+same route/card/scale
+worst during-drag frame < 16.7ms
+worst EventDispatch:pointermove < 4ms
+renderZoneLabelOverlay:readLayoutAndStyle absent or < 1ms per pointermove
+no ProxyMain::BeginMainFrame or commit wait > 8ms during drag
+```
 
 ## Zoom Detail Transition Mechanism
 
 The slow zoom transition is specifically `low-detail -> normal detail`, crossing upward through scale `0.35`.
 
-Runtime code path:
+Runtime path:
 
 ```text
 wheel
@@ -102,71 +156,61 @@ wheel
 
 Source proof:
 
-| Step | File / line | Mechanism |
-| --- | --- | --- |
-| Wheel computes new scale | `frontend/src/runtime/gesture/controller/handle-wheel.ts:37-60` | Wheel updates `state.viewport.scale`, `x`, and `y`, then calls `applyViewportTransform()`. |
-| Viewport apply updates CSS vars and transform | `frontend/src/runtime/canvas/effect/apply-viewport-transform.ts:7-16` | Writes `--viewport-scale`, `--inverse-viewport-scale`, calls `updateDetailMode()`, then writes `.canvas-content` transform. |
-| Detail mode threshold is class-only | `frontend/src/runtime/canvas/effect/update-detail-mode.ts:9-15` | At `scale >= 0.35`, `low-detail` is removed. No card-size measurement happens here. |
-| Low-detail hides full detail layer | `frontend/assets/canvas/canvas-layer.css:156-167` | `.canvas.low-detail .ledger-card-detail-layer` is hidden and `content-visibility: hidden`. |
-| Low-detail shows overview layer | `frontend/assets/canvas/canvas-layer.css:169-195` | Overview title/status becomes the visible card representation. |
-| Each card contains both layers | `frontend/src/runtime/ledger/component/patch-ledger-card.ts:66-81` | Every ledger card has a `.ledger-card-detail-layer` and a `.ledger-card-overview-layer`. |
-| Detail layer contains full title/body/tabs/labels | `frontend/src/runtime/ledger/component/patch-ledger-card.ts:74-80` | The expensive layer includes rendered markdown/body or tab frame plus labels/tabs/status/title. |
-| Detail and overview layers are normal DOM | `frontend/assets/canvas/objects.css:213-225` | The detail layer participates in layout/style; overview layer has separate containment. |
+- `frontend/src/runtime/gesture/controller/handle-wheel.ts:37-60`: wheel updates viewport scale and calls `applyViewportTransform()`.
+- `frontend/src/runtime/canvas/effect/apply-viewport-transform.ts:7-16`: viewport apply writes CSS vars, calls `updateDetailMode()`, then writes the canvas transform.
+- `frontend/src/runtime/canvas/effect/update-detail-mode.ts:9-15`: detail mode toggles classes at the threshold; it does not measure card dimensions.
+- `frontend/assets/canvas/canvas-layer.css:156-167`: `.canvas.low-detail .ledger-card-detail-layer` is hidden and uses `content-visibility: hidden`.
+- `frontend/src/runtime/ledger/component/patch-ledger-card.ts:66-81`: each card contains both detail and overview layers.
+- `frontend/src/runtime/ledger/component/patch-ledger-card.ts:74-80`: the detail layer contains title/body/tabs/labels/status.
 
-Frame proof from `/tmp/corev2-real-offenders-zoom-detail` and `/tmp/corev2-real-offenders-zoom-detail-combo`:
+Trace outputs:
 
-| Transition / variant | Worst frame | Largest overlapping frame events | What it proves |
-| --- | ---: | --- | --- |
-| `low-to-normal / baseline` | `114.6ms-117.4ms` | `ProxyMain::BeginMainFrame` `114ms-117ms`; `WebFrameWidgetImpl::UpdateLifecycle` `113ms-116ms`; style/layout max about `75ms-78ms`; paint max about `20ms-26ms` | Full detail reveal creates the slow frame. |
-| `low-to-normal / no-detail-layer` | `23.3ms-24.5ms` | `ProxyMain::BeginMainFrame` about `23ms-24ms` | Removing full detail layers removes most of the stall. |
-| `low-to-normal / no-grid` | `50.4ms-62.2ms` | `ProxyMain::BeginMainFrame` about `50ms-62ms` | Grid/world raster contributes, but is secondary to detail-layer reveal. |
-| `low-to-normal / no-overview-layer` | `42.0ms` | `ProxyMain::BeginMainFrame` about `41.9ms` | Overview layer also contributes but is not primary. |
-| `low-to-normal / no-counter-scale` | `63.4ms` | `ProxyMain::BeginMainFrame` about `63.3ms` | Counter-scaled titles are not the primary cause. |
-
-Negative proof:
-
-- Input is not the bottleneck in the zoom transition traces. The slow frames are dominated by browser lifecycle and commit events, not `EventDispatch:wheel`.
-- The old hypothesis that `updateDetailMode()` measures card dimensions is stale. The current code only toggles classes.
-- The A/B run is decisive: hiding `.ledger-card-detail-layer` changes the worst frame from about `115ms` to about `24ms`.
-
-Mechanism conclusion:
-
-Removing `.low-detail` changes the rendering state of every card at once:
-
-```css
-.canvas.low-detail .ledger-card-detail-layer {
-  visibility: hidden;
-  opacity: 0;
-  pointer-events: none;
-  content-visibility: hidden;
-}
+```text
+/tmp/corev2-real-offenders-zoom-detail
+/tmp/corev2-real-offenders-zoom-detail-combo
 ```
 
-When `.low-detail` is removed, those rules stop applying to every `.ledger-card-detail-layer`. The browser must make the full card body surfaces visible again for the whole ledger. The trace shows the resulting cost as `WebFrameWidgetImpl::UpdateLifecycle`, style/layout, paint, `ProxyMain::BeginMainFrame`, and commit wait inside one slow frame.
+Frame proof:
 
-Fix implications:
+```text
+low-to-normal baseline: 114.6ms-117.4ms worst frame
+low-to-normal no-detail-layer: 23.3ms-24.5ms worst frame
+low-to-normal no-grid: 50.4ms-62.2ms worst frame
+low-to-normal no-overview-layer: 42.0ms worst frame
+low-to-normal no-counter-scale: 63.4ms worst frame
+```
 
-| Required change | Why |
-| --- | --- |
-| Stage `low-detail -> normal` reveal | Avoid revealing every full card body in one frame. |
-| Reveal visible/near-viewport details first | Limits layout/paint to content the user can inspect immediately. |
-| Hydrate offscreen card detail in later frames or idle time | Prevents one global frame from doing all detail work. |
-| Keep `content-visibility` or intrinsic-size strategy for hidden/offscreen details | Lets Chrome skip layout for card bodies that are not needed yet. |
-| Keep grid optimization as secondary | `no-grid` helps, but `no-detail-layer` proves detail reveal is the primary offender. |
+Largest baseline events:
 
-## Next Fix Should Prove This
+```text
+ProxyMain::BeginMainFrame: about 114ms-117ms
+WebFrameWidgetImpl::UpdateLifecycle: about 113ms-116ms
+style/layout max: about 75ms-78ms
+paint max: about 20ms-26ms
+```
 
-Minimum proof for a drag fix:
+Conclusion:
 
-- Same target card and scale as `/tmp/corev2-real-offenders-drag`.
-- Worst during-drag frame below `16.7ms`.
-- Worst `EventDispatch:pointermove` below `4ms`.
-- No `ProxyMain::BeginMainFrame` or commit-wait overlap above `8ms`.
-- Labels, controls, and relationships remain visually correct.
+- The zoom slowdown is not input JS.
+- The stale hypothesis that `updateDetailMode()` measures cards is invalid; current code toggles classes.
+- The primary offender is revealing every `.ledger-card-detail-layer` at once when `.low-detail` is removed.
+- Grid/world raster contributes, but the `no-detail-layer` A/B result proves detail-layer reveal is the main offender.
 
-Minimum proof for a zoom detail fix:
+## Zoom Fix Implications
 
-- Same `low-to-normal` transition (`0.34 -> 0.365`) as `/tmp/corev2-real-offenders-zoom-detail`.
-- Worst transition frame below `16.7ms`, or a staged reveal with no single blocking frame.
-- Trace shows reduced `WebFrameWidgetImpl::UpdateLifecycle`, style/layout, paint, and `ProxyMain::BeginMainFrame` overlap.
-- A/B comparison includes baseline, `no-detail-layer`, and the implemented fix.
+Required:
+
+- Stage `low-detail -> normal` reveal instead of revealing every full card body in one frame.
+- Reveal visible and near-viewport details first.
+- Hydrate offscreen card detail later or in idle time.
+- Keep `content-visibility` or intrinsic-size strategy for hidden/offscreen details.
+- Treat grid optimization as secondary after detail reveal is staged.
+
+Acceptance:
+
+```text
+same 0.34 -> 0.365 low-to-normal transition
+worst transition frame < 16.7ms, or staged reveal with no single blocking frame
+reduced WebFrameWidgetImpl::UpdateLifecycle, style/layout, paint, and ProxyMain::BeginMainFrame overlap
+comparison includes baseline, no-detail-layer, and implemented fix
+```

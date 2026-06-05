@@ -2,6 +2,7 @@ import { canvas, content, controlOverlay as initialControlOverlay } from '../../
 import { renderLedgerCardDeleteButton } from '../../ledger/component/render-ledger-card-delete-button.js';
 import { renderLedgerCardStatusButton } from '../../ledger/component/render-ledger-card-status-button.js';
 import { state } from '../../state.js';
+import { dragTraceHook } from '../../performance/drag-trace-span.js';
 
 type ControlTarget = {
   kind: 'card' | 'zone' | 'group';
@@ -159,35 +160,56 @@ function syncZoneControls(group: HTMLElement, zone: HTMLElement, kind: 'zone' | 
 }
 
 export function renderCanvasControlOverlay(): void {
-  const overlay = resolveControlOverlay();
-  if (!overlay || !canvas || !content) return;
-  const activeKeys = new Set<string>();
-  for (const target of visibleTargets()) {
-    const source = sourceElement(target);
-    if (!source || source.hidden || source.style.display === 'none') continue;
-    const key = targetKey(target);
-    let control = overlay.querySelector(`[data-control-key="${CSS.escape(key)}"]`) as HTMLElement | null;
-    const isNew = !control;
-    if (!control) {
-      control = document.createElement('div');
-      control.dataset.controlKey = key;
-    }
-    const visible = target.kind === 'card'
-      ? syncCardControls(control, source)
-      : syncZoneControls(control, source, target.kind);
-    if (!visible) continue;
-    activeKeys.add(key);
-    cancelScheduledRemoval(control);
-    if (isNew) {
-      overlay.append(control);
-      nextFrame(() => nextFrame(() => control?.classList.add('is-visible')));
-    } else {
-      control.classList.add('is-visible');
-    }
+  const span = dragTraceHook();
+  if (!span) {
+    renderCanvasControlOverlayBody();
+    return;
   }
-  for (const control of Array.from(overlay.querySelectorAll('.canvas-control')) as HTMLElement[]) {
-    if (!activeKeys.has(control.dataset.controlKey ?? '')) scheduleRemoval(control);
-  }
+  span('renderCanvasControlOverlay', () => renderCanvasControlOverlayBody(span));
+}
+
+function renderCanvasControlOverlayBody(span?: NonNullable<ReturnType<typeof dragTraceHook>>): void {
+    const overlay = span ? span('renderCanvasControlOverlay:resolveControlOverlay', () => resolveControlOverlay()) : resolveControlOverlay();
+    if (!overlay || !canvas || !content) return;
+    const activeKeys = new Set<string>();
+    const targets = span ? span('renderCanvasControlOverlay:visibleTargets', () => visibleTargets()) : visibleTargets();
+    for (const target of targets) {
+      const source = span ? span('renderCanvasControlOverlay:sourceElement', () => sourceElement(target)) : sourceElement(target);
+      if (!source || source.hidden || source.style.display === 'none') continue;
+      const key = targetKey(target);
+      let control = span ? span('renderCanvasControlOverlay:queryControl', () => overlay.querySelector(`[data-control-key="${CSS.escape(key)}"]`) as HTMLElement | null) : overlay.querySelector(`[data-control-key="${CSS.escape(key)}"]`) as HTMLElement | null;
+      const isNew = !control;
+      if (!control) {
+        control = document.createElement('div');
+        control.dataset.controlKey = key;
+      }
+      let visible = false;
+      if (target.kind === 'card') {
+        visible = span ? span('renderCanvasControlOverlay:syncCardControls', () => syncCardControls(control, source)) : syncCardControls(control, source);
+      } else {
+        const zoneKind = target.kind;
+        visible = span ? span('renderCanvasControlOverlay:syncZoneControls', () => syncZoneControls(control, source, zoneKind)) : syncZoneControls(control, source, zoneKind);
+      }
+      if (!visible) continue;
+      activeKeys.add(key);
+      if (span) span('renderCanvasControlOverlay:cancelScheduledRemoval', () => cancelScheduledRemoval(control));
+      else cancelScheduledRemoval(control);
+      if (isNew) {
+        if (span) span('renderCanvasControlOverlay:appendControl', () => overlay.append(control));
+        else overlay.append(control);
+        nextFrame(() => nextFrame(() => control?.classList.add('is-visible')));
+      } else {
+        if (span) span('renderCanvasControlOverlay:showControl', () => control.classList.add('is-visible'));
+        else control.classList.add('is-visible');
+      }
+    }
+    const controls = span ? span('renderCanvasControlOverlay:queryExistingControls', () => Array.from(overlay.querySelectorAll('.canvas-control')) as HTMLElement[]) : Array.from(overlay.querySelectorAll('.canvas-control')) as HTMLElement[];
+    for (const control of controls) {
+      if (!activeKeys.has(control.dataset.controlKey ?? '')) {
+        if (span) span('renderCanvasControlOverlay:scheduleRemoval', () => scheduleRemoval(control));
+        else scheduleRemoval(control);
+      }
+    }
 }
 
 export function bindCanvasControlOverlayHover(): void {

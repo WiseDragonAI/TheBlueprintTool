@@ -34,3 +34,28 @@ I also added an explicit “Required next measurement” row: exclusive `perform
 <!-- corev2:note {"id":"note-1780336941747-9603435066a0a8","timestamp":"2026-06-01T18:02:21.753Z","voiceFileRef":"/home/jbb/dev/EditorBP/CoreV2/.blueprinttool/voice-uploads/voice-1780336941758-a99a73c1-a60d-4542-87d6-27a17d71011d.wav","status":"transcribed","transcriptionStartedAt":"2026-06-01T18:02:21.781Z"} -->
 
 Bah c'est faux, c'est complètement faux ce qu'il y a écrit, puisque la réalité c'est que les frames pendant qu'on fait un drag, elles sont très mauvaises. Donc là, t'es en train de me dire que ça va, on est à 29 MS, c'est OK. Non, ça fait 30 FPS, il n'y aurait pas de problème. Je te dis, on est à du 15, 10, 15 FPS, c'est une catastrophe, ça va pas du tout. Et là, t'es en train de me dire, c'est après, une fois qu'on fait le after release, non, non, ce n'est pas la réalité. La réalité, c'est qu'il y a des frames horribles de 40, 50, 80 millisecondes pendant qu'on fait le drag, avant qu'on fait le drag. Le problème ne vient pas d'après, donc ton analyse, elle est nulle, tu la scrapes, elle ne vaut strictement rien et tu recommences. C'est de la merde ce que tu fais, tu remplis juste des cases pour essayer de faire croire que t'as travaillé, mais ce n'est pas du travail, ce n'est complètement faux. Ce n'est pas du tout les vrais résultats d'analyse que t'es en train de sortir. Et en plus, tu rajoutes des tableaux les uns après les autres et les uns après les autres, mais c'est insupportable à lire, c'est illisible.
+
+# AGENT
+<!-- corev2:note {"id":"note-agent-1780643112000-drag-frame-redone","timestamp":"2026-06-05T07:05:12Z"} -->
+
+Treated. The earlier card was wrong because it over-weighted after-release cost and did not decompose the bad frames during drag.
+
+I replaced `Drag Move Call Chain` with a frame-focused analysis based on a fresh trace:
+
+```text
+/tmp/corev2-drag-frame-decomposition-rerun
+/tmp/corev2-drag-frame-decomposition-rerun/prep_development_cheat_menu_ae913a0a-scale0_35-baseline-cold-run1.report.json
+```
+
+The new card now leads with the during-drag frame:
+
+```text
+frame #13 during drag: 52.0ms
+EventDispatch:pointermove: 18.224ms
+ProxyMain::BeginMainFrame: 30.839ms
+handlePointerMove source span: 17.9ms
+renderZoneLabelOverlay source span: 16.5ms
+renderZoneLabelOverlay:readLayoutAndStyle: 13.8ms exclusive, 22 calls
+```
+
+So the corrected conclusion is: the real drag problem is inside pointermove frames. The proven app-code offender is `renderZoneLabelOverlay()` reading layout/style for all visible zone labels during drag. Browser frame production also overlaps the same bad frame after the selected card is moved with `left/top`. The card now explicitly invalidates the old after-release framing and avoids accumulated totals as evidence.

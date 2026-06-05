@@ -513,6 +513,11 @@ function installInstrumentationExpression(input) {
       domReadsByEvent: new Map(),
       domReadsByTarget: new Map(),
       slowDomReads: [],
+      spans: [],
+      spanStack: [],
+      nextSpanId: 0,
+      activeEventId: 'idle',
+      eventCounters: new Map(),
       telemetryStart: (window.__coreTelemetry ?? []).length,
       eventAbort: new AbortController(),
       restoreFns: [],
@@ -553,6 +558,32 @@ function installInstrumentationExpression(input) {
         state.slowDomReads.length = Math.min(state.slowDomReads.length, 32);
       }
     };
+    window.__corev2DragTraceSpan = function corev2DragTraceSpan(label, callback) {
+      const id = ++state.nextSpanId;
+      const parentId = state.spanStack.length ? state.spanStack[state.spanStack.length - 1] : null;
+      const depth = state.spanStack.length;
+      const startedAt = performance.now();
+      const startMs = now();
+      state.spanStack.push(id);
+      try {
+        return callback();
+      } finally {
+        const durationMs = performance.now() - startedAt;
+        state.spanStack.pop();
+        state.spans.push({
+          id,
+          parentId,
+          depth,
+          label,
+          startMs,
+          endMs: now(),
+          durationMs: round(durationMs),
+          activeEvent: state.activeEvent,
+          activeEventId: state.activeEventId
+        });
+      }
+    };
+    state.restoreFns.push(() => { delete window.__corev2DragTraceSpan; });
 
     if (input.enableDomReadProbes) {
       const originalGetComputedStyle = window.getComputedStyle.bind(window);
@@ -640,12 +671,16 @@ function installInstrumentationExpression(input) {
     const eventTypes = ['mouseover', 'mouseout', 'pointerover', 'pointerout', 'pointerdown', 'pointermove', 'pointerup', 'mousedown', 'mousemove', 'mouseup'];
     for (const type of eventTypes) {
       canvas.addEventListener(type, (event) => {
+        const eventIndex = (state.eventCounters.get(type) ?? 0) + 1;
+        state.eventCounters.set(type, eventIndex);
         state.activeEvent = `${type}:capture`;
+        state.activeEventId = `${type}#${eventIndex}`;
         mark(`${type}:capture`, { x: event.clientX, y: event.clientY });
       }, { capture: true, signal: state.eventAbort.signal });
       canvas.addEventListener(type, (event) => {
         mark(`${type}:bubble`, { x: event.clientX, y: event.clientY });
         state.activeEvent = 'idle';
+        state.activeEventId = 'idle';
       }, { signal: state.eventAbort.signal });
     }
     state.restoreFns.push(() => state.eventAbort.abort());
@@ -685,6 +720,7 @@ function installInstrumentationExpression(input) {
           },
           mutations: state.mutations,
           longTasks: state.longTasks,
+          spans: state.spans,
           domReads: {
             total: [...state.domReadsByKind.values()].reduce((sum, entry) => sum + entry.count, 0),
             byKind: sortRows(state.domReadsByKind),
@@ -833,6 +869,68 @@ function telemetryCounts(page) {
     .map(([name, count]) => ({ name, count }));
 }
 
+function spanRows(page) {
+  const spans = page.spans ?? [];
+  const childTotals = new Map();
+  for (const span of spans) {
+    if (span.parentId == null) continue;
+    childTotals.set(span.parentId, (childTotals.get(span.parentId) ?? 0) + span.durationMs);
+  }
+  return spans.map((span) => ({
+    ...span,
+    exclusiveMs: round(Math.max(0, span.durationMs - (childTotals.get(span.id) ?? 0)))
+  }));
+}
+
+function topSpanTotals(spans, count = 16) {
+  const byLabel = new Map();
+  for (const span of spans) {
+    addDuration(byLabel, span.label, span.durationMs, { label: span.label, exclusiveTotalMs: 0, maxExclusiveMs: 0 });
+    const current = byLabel.get(span.label);
+    current.exclusiveTotalMs += span.exclusiveMs;
+    current.maxExclusiveMs = Math.max(current.maxExclusiveMs, span.exclusiveMs);
+  }
+  return [...byLabel.values()]
+    .sort((a, b) => b.totalMs - a.totalMs)
+    .slice(0, count)
+    .map((entry) => ({
+      label: entry.label,
+      count: entry.count,
+      totalMs: round(entry.totalMs),
+      maxMs: round(entry.maxMs),
+      exclusiveTotalMs: round(entry.exclusiveTotalMs),
+      maxExclusiveMs: round(entry.maxExclusiveMs)
+    }));
+}
+
+function pointerMoveSpanBreakdown(page) {
+  const rows = spanRows(page);
+  const pointerMoves = new Map();
+  for (const span of rows) {
+    if (!String(span.activeEventId ?? '').startsWith('pointermove#')) continue;
+    const current = pointerMoves.get(span.activeEventId) ?? { eventId: span.activeEventId, startMs: span.startMs, endMs: span.endMs, durationMs: 0, topLevelMs: 0, spans: [] };
+    current.startMs = Math.min(current.startMs, span.startMs);
+    current.endMs = Math.max(current.endMs, span.endMs);
+    current.durationMs = round(current.endMs - current.startMs);
+    if (span.parentId == null) current.topLevelMs += span.durationMs;
+    current.spans.push(span);
+    pointerMoves.set(span.activeEventId, current);
+  }
+  return [...pointerMoves.values()]
+    .map((event) => ({
+      ...event,
+      topLevelMs: round(event.topLevelMs),
+      topSpans: topSpanTotals(event.spans, 14)
+    }))
+    .sort((a, b) => b.topLevelMs - a.topLevelMs)
+    .slice(0, 8);
+}
+
+function spanBreakdownForWindow(page, startMs, endMs, count = 12) {
+  const rows = spanRows(page).filter((span) => span.endMs >= startMs && span.startMs <= endMs);
+  return topSpanTotals(rows, count);
+}
+
 function pointerDownTelemetry(page) {
   const entry = (page.telemetry ?? []).find((telemetryEntry) => telemetryEntry.name === 'canvas-pointer-down');
   return entry?.args ?? {};
@@ -874,6 +972,11 @@ function summarizeCase(report) {
     domReadsByKind: report.page.domReads.byKind.slice(0, 8),
     domReadsByEvent: report.page.domReads.byEvent.slice(0, 8),
     telemetryCounts: telemetryCounts(report.page),
+    appSpans: {
+      total: report.page.spans?.length ?? 0,
+      topByDuration: topSpanTotals(spanRows(report.page), 18),
+      worstPointerMoves: pointerMoveSpanBreakdown(report.page)
+    },
     eventDispatchByType: report.trace.eventDispatchByType.slice(0, 8),
     traceGroups: report.trace.groups,
     topTraceNames: report.trace.topNames.slice(0, 10),
@@ -881,9 +984,18 @@ function summarizeCase(report) {
     slowFrames: {
       count: report.trace.slowFrames.count,
       byPhase: report.trace.slowFrames.byPhase,
-      worst: report.trace.slowFrames.worst.slice(0, 6),
-      worstDuringDrag: worstFramesForPhase(report.trace.slowFrames, 'during-drag'),
-      worstAfterRelease: worstFramesForPhase(report.trace.slowFrames, 'after-release')
+      worst: report.trace.slowFrames.worst.slice(0, 6).map((frame) => ({
+        ...frame,
+        appSpans: spanBreakdownForWindow(report.page, frame.startMs, frame.endMs, 10)
+      })),
+      worstDuringDrag: worstFramesForPhase(report.trace.slowFrames, 'during-drag').map((frame) => ({
+        ...frame,
+        appSpans: spanBreakdownForWindow(report.page, frame.startMs, frame.endMs, 10)
+      })),
+      worstAfterRelease: worstFramesForPhase(report.trace.slowFrames, 'after-release').map((frame) => ({
+        ...frame,
+        appSpans: spanBreakdownForWindow(report.page, frame.startMs, frame.endMs, 10)
+      }))
     },
     reportPath: report.reportPath,
     tracePath: report.tracePath
@@ -909,6 +1021,12 @@ function formatSuiteSummary(summaries) {
     lines.push(`  event dispatch: ${dispatch || 'none'}`);
     const telemetry = summary.telemetryCounts.slice(0, 6).map((entry) => `${entry.name}:${entry.count}`).join(', ');
     lines.push(`  telemetry: ${telemetry || 'none'}`);
+    const appSpans = summary.appSpans.topByDuration.slice(0, 6).map((entry) => `${entry.label}:${entry.totalMs}ms excl=${entry.exclusiveTotalMs}ms`).join(', ');
+    lines.push(`  app spans: total=${summary.appSpans.total} ${appSpans || 'none'}`);
+    for (const move of summary.appSpans.worstPointerMoves.slice(0, 2)) {
+      const moveSpans = move.topSpans.slice(0, 6).map((entry) => `${entry.label}:${entry.totalMs}ms excl=${entry.exclusiveTotalMs}ms`).join(', ');
+      lines.push(`    ${move.eventId} topLevel=${move.topLevelMs}ms spanWindow=${move.durationMs}ms ${moveSpans || 'none'}`);
+    }
     const slowFrames = summary.slowFrames.byPhase.map((entry) => `${entry.phase}:${entry.count}/max${entry.maxMs}ms`).join(', ');
     lines.push(`  slow frames: count=${summary.slowFrames.count} ${slowFrames || 'none'}`);
     for (const frame of summary.slowFrames.worst.slice(0, 3)) {
@@ -916,12 +1034,14 @@ function formatSuiteSummary(summaries) {
       const groupOffenders = frame.groupOffendersOverThresholdMs.slice(0, 3).map((entry) => `${entry.group} ${entry.totalMs}ms`).join(', ');
       const wrappers = frame.offendersOverThresholdMs.slice(0, 3).map((entry) => `${entry.label} ${entry.overlapMs}ms`).join(', ');
       const fallback = frame.topOverlappingEvents.slice(0, 3).map((entry) => `${entry.label} ${entry.totalMs}ms`).join(', ');
-      lines.push(`    frame#${frame.index} ${frame.phase} ${frame.durationMs}ms groups=${groupOffenders || 'none>=10ms'} actionable=${offenders || 'none>=10ms'} wrappers=${wrappers || fallback || 'none>=10ms'}`);
+      const frameSpans = frame.appSpans.slice(0, 4).map((entry) => `${entry.label} ${entry.totalMs}ms excl=${entry.exclusiveTotalMs}ms`).join(', ');
+      lines.push(`    frame#${frame.index} ${frame.phase} ${frame.durationMs}ms groups=${groupOffenders || 'none>=10ms'} actionable=${offenders || 'none>=10ms'} wrappers=${wrappers || fallback || 'none>=10ms'} app=${frameSpans || 'none'}`);
     }
     for (const frame of summary.slowFrames.worstDuringDrag.slice(0, 2)) {
       const offenders = frame.actionableOffendersOverThresholdMs.slice(0, 3).map((entry) => `${entry.label} ${entry.overlapMs}ms`).join(', ');
       const groupOffenders = frame.groupOffendersOverThresholdMs.slice(0, 3).map((entry) => `${entry.group} ${entry.totalMs}ms`).join(', ');
-      lines.push(`    during-drag frame#${frame.index} ${frame.durationMs}ms groups=${groupOffenders || 'none>=10ms'} actionable=${offenders || 'none>=10ms'}`);
+      const frameSpans = frame.appSpans.slice(0, 4).map((entry) => `${entry.label} ${entry.totalMs}ms excl=${entry.exclusiveTotalMs}ms`).join(', ');
+      lines.push(`    during-drag frame#${frame.index} ${frame.durationMs}ms groups=${groupOffenders || 'none>=10ms'} actionable=${offenders || 'none>=10ms'} app=${frameSpans || 'none'}`);
     }
     for (const frame of summary.slowFrames.worstAfterRelease.slice(0, 1)) {
       const offenders = frame.actionableOffendersOverThresholdMs.slice(0, 3).map((entry) => `${entry.label} ${entry.overlapMs}ms`).join(', ');
