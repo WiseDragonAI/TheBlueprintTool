@@ -8,7 +8,7 @@ import { patchLedgerZone } from '../component/patch-ledger-zone.js';
 import { setCanvasLayerHidden } from '../../canvas/effect/set-canvas-layer-hidden.js';
 import { ensureZoneAttributionCache } from '../helper/zone-attribution-cache.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
-import { invalidateDetailModeCardSizeCache } from '../../canvas/effect/update-detail-mode.js';
+import { invalidateDetailModeCardSizeCache } from '../../canvas/effect/invalidate-detail-mode-card-size-cache.js';
 import { scheduleCanvasMediaOverlayRender } from '../../canvas/effect/render-canvas-media-overlay.js';
 
 export function renderLedgerSurface(): void {
