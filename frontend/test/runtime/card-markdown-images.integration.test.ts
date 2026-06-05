@@ -34,6 +34,11 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   assert.match(mediaRenderer, /if \(index === 0\)[\s\S]*applyImageAspectRatio\(shell, element\)/);
   assert.match(mediaRenderer, /--ledger-card-media-contained-width/);
   assert.match(mediaRenderer, /--ledger-card-media-contained-height/);
+  assert.match(mediaRenderer, /syncCarouselSlider/);
+  assert.match(mediaRenderer, /--ledger-card-media-slider-thumb-width/);
+  assert.match(mediaRenderer, /--ledger-card-media-slider-thumb-left/);
+  assert.match(mediaRenderer, /ledger-card-media-progress/);
+  assert.match(mediaRenderer, /ledger-card-media-progress-thumb/);
   assert.match(mediaRenderer, /const track = shell\.querySelector\('\.ledger-card-media-track'\)/);
   assert.match(mediaRenderer, /const width = imageRatio > frameRatio \? frameWidth : frameHeight \* imageRatio/);
   assert.match(mediaRenderer, /const height = imageRatio > frameRatio \? frameWidth \/ imageRatio : frameHeight/);
@@ -58,8 +63,11 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   assert.doesNotMatch(source('frontend/src/runtime/ledger/component/append-inline-nodes.ts'), /getBoundingClientRect\(\)\.(width|height)/);
   assert.match(css, /\.ledger-card-media-shell\s*{[^}]*max-width:\s*100%;[^}]*aspect-ratio:\s*var\(--ledger-card-media-aspect-ratio, 4 \/ 3\);[^}]*resize:\s*horizontal;/s);
   assert.match(css, /\.ledger-card-media-track\s*{[^}]*scroll-snap-type:\s*x mandatory;/s);
+  assert.match(css, /\.ledger-card-media-carousel \.ledger-card-media-track\s*{[^}]*scrollbar-width:\s*none;/s);
   assert.match(css, /\.ledger-card-media-slide\s*{[^}]*overflow:\s*hidden;/s);
   assert.match(css, /\.ledger-card-media-image\s*{[^}]*width:\s*var\(--ledger-card-media-contained-width, auto\);[^}]*height:\s*var\(--ledger-card-media-contained-height, auto\);[^}]*max-width:\s*100%;[^}]*max-height:\s*100%;[^}]*object-fit:\s*contain;[^}]*object-position:\s*center;/s);
+  assert.match(css, /\.ledger-card-media-progress\s*{[^}]*right:\s*28px;[^}]*bottom:\s*7px;[^}]*left:\s*8px;/s);
+  assert.match(css, /\.ledger-card-media-progress-thumb\s*{[^}]*left:\s*var\(--ledger-card-media-slider-thumb-left, 0%\);[^}]*width:\s*var\(--ledger-card-media-slider-thumb-width, 100%\);/s);
   assert.match(css, /\.ledger-card-inline-image-frame\s*{[^}]*aspect-ratio:\s*var\(--ledger-card-inline-image-aspect-ratio, 3 \/ 2\);[^}]*resize:\s*horizontal;/s);
   assert.match(css, /\.ledger-card-inline-image\s*{[^}]*object-fit:\s*contain;/s);
 });

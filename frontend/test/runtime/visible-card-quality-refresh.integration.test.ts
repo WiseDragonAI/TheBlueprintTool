@@ -38,7 +38,7 @@ test('zoomed card images render through an untransformed visible-card media over
   assert.match(wheel, /scheduleViewportTransform\(\)/);
   assert.match(carouselWheel, /scheduleCanvasMediaOverlayRender\(\)/);
   assert.doesNotMatch(wheel, /noteZoomForVisibleCardQualityRefresh/);
-  assert.match(mediaComponent, /track\.addEventListener\('scroll', scheduleCanvasMediaOverlayRender/);
+  assert.match(mediaComponent, /track\.addEventListener\('scroll', \(\) => \{[\s\S]*scheduleCanvasMediaOverlayRender\(\);[\s\S]*\}/);
   assert.match(media, /canvasMediaOverlayScaleThreshold = 1/);
   assert.match(media, /visibleLedgerCards\(cards, bounds\)\.slice\(0, maxCanvasMediaOverlayCards\)/);
   assert.match(media, /querySelectorAll\('\.ledger-card-media-shell'\)/);
