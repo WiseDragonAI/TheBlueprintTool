@@ -29,11 +29,11 @@ pointermove
 
 Trace evidence:
 
-| Variant | Pointermove dispatch total | Pointermove max | Pointermove DOM reads | Worst during-drag frame | After-release max frame | Interpretation |
-| --- | ---: | ---: | --- | ---: | ---: | --- |
-| `baseline` | 102.937ms | 11.948ms | `offsetLeft` 576 | 29.1ms | 844.4ms | Pointermove has measurable sync work; release is a separate huge style/layout problem. |
-| `skip-zone-labels` | 10.153ms | 0.944ms | no pointermove `offsetLeft` top entry | 17.8ms | 860.6ms | Zone-label reads explain most pointermove event cost, but not release jank. |
-| `no-hover-controls` | 102.736ms | 9.917ms | `offsetLeft` 576, `offsetTop` 384 | 32.4ms | 899.7ms | Hover controls are not the main pointermove offender in this run. |
+| Variant | Worst pointermove dispatch | Pointermove DOM reads | Worst during-drag frame | After-release max frame | Interpretation |
+| --- | ---: | --- | ---: | ---: | --- |
+| `baseline` | 11.948ms | `offsetLeft` 576 | 29.1ms | 844.4ms | Pointermove can consume most of a frame budget; release is a separate huge style/layout problem. |
+| `skip-zone-labels` | 0.944ms | no pointermove `offsetLeft` top entry | 17.8ms | 860.6ms | Zone-label reads explain the pointermove event cost, but not release jank. |
+| `no-hover-controls` | 9.917ms | `offsetLeft` 576, `offsetTop` 384 | 32.4ms | 899.7ms | Hover controls are not the main pointermove offender in this run. |
 
 The critical measured write is that every pointermove writes layout position:
 
@@ -50,13 +50,13 @@ Function-level evidence:
 
 | Function / phase | Evidence status | Measured signal | Valid conclusion |
 | --- | --- | --- | --- |
-| `handlePointerMove()` | measured as aggregate, not isolated | Baseline `EventDispatch:pointermove` total 102.937ms / max 11.948ms | The whole pointermove chain can exceed budget. |
+| `handlePointerMove()` | measured as event, not isolated | Baseline `EventDispatch:pointermove` max 11.948ms | The whole pointermove chain can consume most of a frame budget. |
 | `moveSelected()` | not isolated as its own function timer | Style mutation occurs about 11.7ms after first move in baseline | It is on the critical path, but exact exclusive time is not proven yet. |
-| `renderZoneLabelOverlay()` | measured by A/B probe | Skipping it drops pointermove dispatch total from 102.937ms to 10.153ms | This is a proven pointermove offender. |
+| `renderZoneLabelOverlay()` | measured by A/B probe | Skipping it drops worst pointermove dispatch from 11.948ms to 0.944ms | This is a proven pointermove offender. |
 | `renderRelationshipOverlay()` | bounded by ledger shape | Runtime had 0 relationships | It is not the cause in this Ardaria Game Design drag trace. |
-| `renderCanvasControlOverlay()` | measured by A/B probe | `no-hover-controls` keeps pointermove total at 102.736ms | It is not the main pointermove offender in this run. |
+| `renderCanvasControlOverlay()` | measured by A/B probe | `no-hover-controls` keeps worst pointermove dispatch near baseline at 9.917ms | It is not the main pointermove offender in this run. |
 | Browser style/layout after release | measured by trace | After-release frame 844.4ms, `Document::UpdateStyleAndLayout` 212.921ms | Release jank is a separate style/layout lifecycle problem. |
-| Raster/composite during drag | measured by trace groups | Baseline raster bucket total 10128.319ms, max 40.529ms | Drag also creates compositor/raster debt; totals are overlapping trace work, not one serial task. |
+| Raster/composite during drag | measured by trace events | Baseline raster/composite max event 40.529ms | Drag also creates compositor/raster debt. |
 
 This explains why the browser trace shows both:
 
@@ -92,11 +92,11 @@ Code proof:
 
 Fresh counter-run:
 
-| Variant | Pointermove dispatch | Worst during-drag frame | Worst after-release frame | What this validates |
+| Variant | Worst pointermove dispatch | Worst during-drag frame | Worst after-release frame | What this validates |
 | --- | ---: | ---: | ---: | --- |
-| `baseline` | `151.635ms / 13 events` | `33.6ms` | `1281.9ms` | Current source path can exceed budget before and after browser frame production. |
-| `skip-zone-labels` | `11.462ms / 13 events` | `33.1ms` | `1257.2ms` | Zone labels dominate pointermove JS but are not the only visible frame bottleneck. |
-| `no-hover-controls` | `149.843ms / 13 events` | `46.1ms` | `1223.6ms` | Hover controls are not the main pointermove offender here. |
+| `baseline` | `13.469ms` | `33.6ms` | `1281.9ms` | Current source path can consume most of the frame budget before browser frame production. |
+| `skip-zone-labels` | `1.163ms` | `33.1ms` | `1257.2ms` | Zone labels dominate pointermove event cost but are not the only visible frame bottleneck. |
+| `no-hover-controls` | `12.948ms` | `46.1ms` | `1223.6ms` | Hover controls are not the main pointermove offender here. |
 
 Important correction: the current active-ledger relationship renderer already consumes ledger geometry through `activeLedgerCardRectMap()`, not DOM card rectangles. That is good for active ledgers. The missing piece is an explicit in-flight geometry snapshot that lets drag visuals, relationships, labels, and controls consume the same coalesced position once per animation frame without mutating persisted ledger records and layout-position DOM on every raw pointer event.
 

@@ -24,7 +24,7 @@ Why it is expensive:
 | The world layer is transformed | The canvas scale changes how pixels are sampled and committed, so softened/repainted content can force extra work. |
 | Overlay renderers run after the write | Zone label/control work can add synchronous layout reads before Chrome even starts the visual frame commit. |
 
-Trace totals like `raster-composite total=1694ms` inside an 80ms frame are sums of overlapping trace events and worker tasks. They do not mean a 1.6s frame; they mean the frame spawned a large amount of raster/compositor work and the main thread waited on a costly commit.
+Ignore aggregate trace totals for frame-budget decisions. The useful numbers are the actual frame gap and the largest overlapping events inside that frame, such as `ProxyMain::BeginMainFrame`, `Commit`, or `LayerTreeHost::WaitForCommitCompletion`.
 
 This is why removing some visuals helps but does not fully solve the problem. The structural problem is the drag rendering model.
 

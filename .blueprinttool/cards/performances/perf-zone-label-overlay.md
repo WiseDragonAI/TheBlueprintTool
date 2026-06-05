@@ -18,17 +18,7 @@ pointermove:capture / offsetLeft: 576 reads
 pointermove:capture / getBoundingClientRect: 24 reads
 ```
 
-Disabling only zone label overlay in the probe reduced pointermove dispatch from roughly:
-
-```text
-109ms / 13 pointermoves
-```
-
-to roughly:
-
-```text
-24ms / 13 pointermoves
-```
+Disabling only zone label overlay in the probe reduced the worst individual pointermove dispatch from roughly `11.948ms` to `0.944ms` in the older run, and from `13.469ms` to `1.163ms` in the fresh `2026-06-05` counter-run.
 
 This is a direct synchronous offender. It is not the only offender, but it is a guaranteed tax on every drag frame and it compounds with browser commit/raster work.
 
@@ -68,10 +58,10 @@ Source proof:
 
 Fresh trace proof:
 
-| Variant | Pointermove layout reads | Pointermove dispatch |
+| Variant | Pointermove layout reads | Worst pointermove dispatch |
 | --- | --- | ---: |
-| `baseline` | `offsetLeft` 756, `offsetTop` 504, `offsetWidth` 252, `getComputedStyle` 252 | `151.635ms / 13 events` |
-| `skip-zone-labels` | no pointermove layout-read top entries | `11.462ms / 13 events` |
+| `baseline` | `offsetLeft` 756, `offsetTop` 504, `offsetWidth` 252, `getComputedStyle` 252 | `13.469ms` |
+| `skip-zone-labels` | no pointermove layout-read top entries | `1.163ms` |
 
 Correct replacement shape:
 
