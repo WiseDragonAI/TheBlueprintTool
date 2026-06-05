@@ -7,9 +7,10 @@ export function invalidateDetailModeCardSizeCache(): void {
 }
 
 export function updateDetailMode(): void {
-  const shouldUseLowDetail = state.viewport.scale < 0.35;
-  const shouldUseOverviewDetail = state.viewport.scale < 0.18;
   const hasLowDetail = canvas.classList.contains('low-detail');
+  const lowDetailThreshold = hasLowDetail ? 0.45 : 0.35;
+  const shouldUseLowDetail = state.viewport.scale < lowDetailThreshold;
+  const shouldUseOverviewDetail = state.viewport.scale < 0.18;
   const hasOverviewDetail = canvas.classList.contains('overview-detail');
   if (hasLowDetail !== shouldUseLowDetail) canvas.classList.toggle('low-detail', shouldUseLowDetail);
   if (hasOverviewDetail !== shouldUseOverviewDetail) canvas.classList.toggle('overview-detail', shouldUseOverviewDetail);

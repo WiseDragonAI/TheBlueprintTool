@@ -27,6 +27,7 @@ test('low-detail zoom hides card detail while keeping counter-scaled card titles
   assert.match(viewportRuntime, /--inverse-viewport-scale/);
   assert.match(detailRuntime, /invalidateDetailModeCardSizeCache/);
   assert.doesNotMatch(detailRuntime, /offsetWidth|offsetHeight|getBoundingClientRect|scrollHeight/);
+  assert.match(detailRuntime, /const lowDetailThreshold = hasLowDetail \? 0\.45 : 0\.35/);
   assert.doesNotMatch(detailRuntime, /StagedDetailReveal|detail-reveal|zoom-grid-suppressed/);
   assert.doesNotMatch(css, /detail-reveal-staged|zoom-grid-suppressed/);
   assert.match(detailRuntime, /if \(hasLowDetail !== shouldUseLowDetail\) canvas\.classList\.toggle/);
