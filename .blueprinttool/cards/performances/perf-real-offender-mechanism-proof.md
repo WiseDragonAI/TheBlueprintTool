@@ -206,6 +206,42 @@ Required:
 - Keep `content-visibility` or intrinsic-size strategy for hidden/offscreen details.
 - Treat grid optimization as secondary after detail reveal is staged.
 
+Concrete meaning of "stage reveal":
+
+```text
+wheel crosses 0.35 upward
+  -> update viewport transform immediately
+  -> keep most card detail hidden for the crossing frame
+  -> after zoom settles, compute visible/near-viewport cards
+  -> reveal visible/near-viewport details in small requestAnimationFrame chunks
+  -> keep offscreen detail hidden
+  -> hydrate offscreen details later through idle/background chunks
+```
+
+This does not mean "remove low-detail, reveal all detail, then animate opacity." That would still force the same global detail-layer lifecycle work.
+
+The intended model is:
+
+- The zoom interaction itself must stay cheap. Crossing `0.35` should not synchronously wake every `.ledger-card-detail-layer`.
+- Visible and near-viewport cards are the only urgent details because they are the only details the operator can inspect immediately after the zoom.
+- Offscreen cards can remain in overview/hidden-detail state until they approach the viewport or until the browser has idle budget.
+- The reveal chunk size should be budget-based, not necessarily exactly one card per frame. Start conservatively, for example `1-4` cards or `<= 4ms` of reveal work per frame, then tune from trace data.
+- The scheduler should stop/restart if the operator keeps zooming or panning, because continuing to hydrate old offscreen work during interaction can create new jank.
+- The implementation needs a per-card detail readiness state, such as `data-detail-reveal="hidden|queued|visible"`, rather than one global `.low-detail` class being the only switch.
+
+Important implementation constraint:
+
+```text
+current global class:
+  .canvas.low-detail removed
+  -> every .ledger-card-detail-layer becomes render-relevant together
+
+target staged state:
+  .canvas may leave low-detail interaction mode
+  -> individual cards still keep detail hidden until scheduled
+  -> only scheduled visible cards expose .ledger-card-detail-layer
+```
+
 Acceptance:
 
 ```text
@@ -213,4 +249,5 @@ same 0.34 -> 0.365 low-to-normal transition
 worst transition frame < 16.7ms, or staged reveal with no single blocking frame
 reduced WebFrameWidgetImpl::UpdateLifecycle, style/layout, paint, and ProxyMain::BeginMainFrame overlap
 comparison includes baseline, no-detail-layer, and implemented fix
+trace proves visible card details become available first and offscreen detail reveal does not run in the crossing frame
 ```

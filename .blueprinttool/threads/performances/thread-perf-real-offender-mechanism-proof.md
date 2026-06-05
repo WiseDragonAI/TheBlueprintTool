@@ -42,3 +42,47 @@ renderZoneLabelOverlay:readLayoutAndStyle: 13.8ms exclusive in the frame
 ```
 
 The mechanism is now backed by source spans, DOM read probes, and Chrome frame overlap, not just feature-flag deltas.
+
+# OPERATOR
+<!-- corev2:note {"id":"note-1780643951234-1a2bdba1f74968","timestamp":"2026-06-05T07:19:11.239Z","voiceFileRef":"/home/jbb/dev/EditorBP/CoreV2/.blueprinttool/voice-uploads/voice-1780643951239-c66aca7b-1aec-43bb-8d1e-45229a5c7cf7.wav","status":"transcribed","transcriptionStartedAt":"2026-06-05T07:19:11.267Z"} -->
+
+Quand tu dis qu'il faudrait stage, ça voudrait dire qu'on voudrait faire les cartes petit à petit, c'est ça ? Pas toutes sur la même frame ?
+
+# OPERATOR
+<!-- corev2:note {"id":"note-1780643989309-b23330e6f790f","timestamp":"2026-06-05T07:19:49.312Z","voiceFileRef":"/home/jbb/dev/EditorBP/CoreV2/.blueprinttool/voice-uploads/voice-1780643989314-0da1e61e-7a7a-488e-a044-03cda7bcfb73.wav","status":"transcribed","transcriptionStartedAt":"2026-06-05T07:19:49.316Z"} -->
+
+Bah oui, c'est vrai aussi qu'on n'a pas besoin de révéler les cartes qui ne sont pas dans la window, on pourrait le faire après. Et en fait, ce que tu dis, c'est qu'on fait le zoom et une fois que le zoom il est settled et qu'il est terminé, là, on vient reveal les cartes petit à petit, les unes après les autres peut-être, une sur chaque frame.
+
+# AGENT
+<!-- corev2:note {"id":"note-agent-1780644047000-zoom-staged-reveal","timestamp":"2026-06-05T07:20:47Z"} -->
+
+Yes. "Stage reveal" means: do not let crossing `0.35` make every `.ledger-card-detail-layer` render-relevant in the same frame.
+
+The intended sequence is:
+
+```text
+wheel crosses 0.35 upward
+  -> apply the zoom transform immediately
+  -> keep most detail layers hidden for that crossing frame
+  -> after zoom settles, compute visible and near-viewport cards
+  -> reveal those details in small requestAnimationFrame chunks
+  -> keep offscreen details hidden
+  -> hydrate offscreen details later, during idle/background chunks
+```
+
+So yes, conceptually it is "cards progressively," but not necessarily exactly one card per frame. The scheduler should be budget-based, for example `1-4` cards or `<= 4ms` of reveal work per frame, then tuned from the trace. The important invariant is that offscreen cards do not join the urgent frame.
+
+I updated the card with this concrete model. The key implementation distinction is:
+
+```text
+bad:
+  remove .low-detail globally
+  -> every detail layer wakes up together
+
+target:
+  leave zoom interaction cheaply
+  -> visible/near-viewport cards reveal first
+  -> offscreen details stay hidden until scheduled
+```
+
+This means the fix probably needs per-card detail readiness state, not only the current global `.canvas.low-detail` switch.
