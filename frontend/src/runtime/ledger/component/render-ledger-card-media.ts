@@ -47,6 +47,24 @@ function watchContainedImageSizing(shell: HTMLElement): void {
   observer.observe(shell);
 }
 
+function syncCarouselSlider(shell: HTMLElement, track: HTMLElement): void {
+  const slideCount = Math.max(1, track.children.length);
+  const thumbWidth = slideCount > 1 ? Math.max(8, 100 / slideCount) : 100;
+  const maxLeft = Math.max(0, 100 - thumbWidth);
+  const maxScroll = Math.max(0, track.scrollWidth - track.clientWidth);
+  const progress = maxScroll > 0 ? track.scrollLeft / maxScroll : 0;
+  const thumbLeft = Math.min(maxLeft, Math.max(0, progress * maxLeft));
+  shell.style.setProperty('--ledger-card-media-slider-thumb-width', `${thumbWidth}%`);
+  shell.style.setProperty('--ledger-card-media-slider-thumb-left', `${thumbLeft}%`);
+}
+
+function watchCarouselSlider(shell: HTMLElement, track: HTMLElement): void {
+  if (typeof ResizeObserver === 'undefined') return;
+  const observer = new ResizeObserver(() => syncCarouselSlider(shell, track));
+  observer.observe(shell);
+  observer.observe(track);
+}
+
 function dimensionsFor(source: string, imageSizes: LedgerCardImageSizes = {}): { width?: number; height?: number } {
   const dimensions = imageSizes[source] ?? {};
   return {
@@ -153,7 +171,10 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
   const track = document.createElement('div');
   track.className = 'ledger-card-media-track';
   track.setAttribute('aria-label', isCarousel ? 'Card image carousel' : 'Card image');
-  track.addEventListener('scroll', scheduleCanvasMediaOverlayRender, { passive: true });
+  track.addEventListener('scroll', () => {
+    syncCarouselSlider(shell, track);
+    scheduleCanvasMediaOverlayRender();
+  }, { passive: true });
   for (const [index, image] of block.images.entries()) {
     track.appendChild(renderMediaSlide(image, index, shell));
   }
@@ -162,6 +183,17 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
   scheduleContainedImageSizing(shell);
 
   if (isCarousel) {
+    const progress = document.createElement('div');
+    progress.className = 'ledger-card-media-progress';
+    progress.setAttribute('aria-hidden', 'true');
+
+    const thumb = document.createElement('div');
+    thumb.className = 'ledger-card-media-progress-thumb';
+    progress.appendChild(thumb);
+    shell.appendChild(progress);
+    watchCarouselSlider(shell, track);
+    syncCarouselSlider(shell, track);
+
     const nav = document.createElement('div');
     nav.className = 'ledger-card-media-nav';
 
