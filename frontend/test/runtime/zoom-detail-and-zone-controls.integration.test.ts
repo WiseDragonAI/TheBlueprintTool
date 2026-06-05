@@ -24,23 +24,11 @@ test('low-detail zoom hides card detail while keeping counter-scaled card titles
 
   const viewportRuntime = source('frontend/src/runtime/canvas/effect/apply-viewport-transform.ts');
   const detailRuntime = source('frontend/src/runtime/canvas/effect/update-detail-mode.ts');
-  const stagedRuntime = source('frontend/src/runtime/canvas/effect/stage-detail-reveal.ts');
   assert.match(viewportRuntime, /--inverse-viewport-scale/);
   assert.match(detailRuntime, /invalidateDetailModeCardSizeCache/);
   assert.doesNotMatch(detailRuntime, /offsetWidth|offsetHeight|getBoundingClientRect|scrollHeight/);
-  assert.doesNotMatch(stagedRuntime, /offsetWidth|offsetHeight|getBoundingClientRect|scrollHeight/);
-  assert.match(detailRuntime, /beginStagedDetailReveal\(\)/);
-  assert.match(detailRuntime, /scheduleStagedDetailReveal\(\)/);
-  assert.doesNotMatch(detailRuntime, /if \(shouldUseLowDetail\) cancelStagedDetailReveal\(\)/);
-  assert.match(detailRuntime, /shouldUseLowDetail && hasStagedReveal/);
-  assert.match(stagedRuntime, /if \(!hasScheduledWork && !canvas\.classList\.contains\('detail-reveal-staged'\)\) return/);
-  assert.match(stagedRuntime, /DETAIL_REVEAL_TARGET_MS = 4/);
-  assert.match(stagedRuntime, /detail-reveal-frame/);
-  assert.match(css, /\.canvas\.detail-reveal-staged \.card\[data-detail-reveal="hidden"\] \.ledger-card-detail-layer,[\s\S]{0,260}visibility:\s*hidden;/);
-  assert.match(css, /\.canvas\.detail-reveal-staged \.card\[data-detail-reveal="hidden"\] \.ledger-card-overview-layer,[\s\S]{0,140}visibility:\s*visible;[\s\S]{0,60}opacity:\s*1;/);
-  assert.match(detailRuntime, /shouldSuppressGrid = state\.viewport\.scale < 0\.45/);
-  assert.match(detailRuntime, /zoom-grid-suppressed/);
-  assert.match(css, /\.canvas\.zoom-grid-suppressed \.grid\s*{[^}]*display:\s*none;/s);
+  assert.doesNotMatch(detailRuntime, /StagedDetailReveal|detail-reveal|zoom-grid-suppressed/);
+  assert.doesNotMatch(css, /detail-reveal-staged|zoom-grid-suppressed/);
   assert.match(detailRuntime, /if \(hasLowDetail !== shouldUseLowDetail\) canvas\.classList\.toggle/);
   assert.match(detailRuntime, /if \(hasOverviewDetail !== shouldUseOverviewDetail\) canvas\.classList\.toggle/);
   assert.doesNotMatch(css, /\.canvas\.overview-detail \.regular-zone/);

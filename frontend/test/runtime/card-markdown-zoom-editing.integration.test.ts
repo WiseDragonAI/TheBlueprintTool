@@ -35,7 +35,6 @@ test('low-detail mode switches card paint layers without threshold layout measur
   const specs = source('documentation/specs.json');
   const css = source('frontend/assets/canvas/canvas-layer.css');
   const detailRuntime = source('frontend/src/runtime/canvas/effect/update-detail-mode.ts');
-  const stagedRuntime = source('frontend/src/runtime/canvas/effect/stage-detail-reveal.ts');
   const cardRenderer = source('frontend/src/runtime/ledger/component/patch-ledger-card.ts');
 
   assert.match(specs, /c4e8b2f9/);
@@ -43,20 +42,13 @@ test('low-detail mode switches card paint layers without threshold layout measur
   assert.match(specs, /7e4b0a2c/);
   assert.match(specs, /9d5e0b7a/);
   assert.doesNotMatch(detailRuntime, /offsetWidth|offsetHeight|getBoundingClientRect|scrollHeight/);
-  assert.doesNotMatch(stagedRuntime, /offsetWidth|offsetHeight|getBoundingClientRect|scrollHeight/);
   assert.doesNotMatch(detailRuntime, /cacheRenderedCardSizes/);
-  assert.match(detailRuntime, /beginStagedDetailReveal\(\)/);
-  assert.match(stagedRuntime, /requestAnimationFrame\(\(\) => revealUrgentFrame/);
-  assert.match(stagedRuntime, /requestIdleCallback/);
-  assert.match(stagedRuntime, /content\.querySelectorAll<HTMLElement>\('\.card\[data-card-id\]'\)/);
-  assert.match(detailRuntime, /zoom-grid-suppressed/);
+  assert.doesNotMatch(detailRuntime, /StagedDetailReveal|detail-reveal|zoom-grid-suppressed/);
   assert.match(cardRenderer, /ledger-card-detail-layer/);
   assert.match(cardRenderer, /ledger-card-overview-layer/);
   assert.match(css, /\.canvas\.low-detail \.ledger-card-detail-layer\s*{[^}]*content-visibility:\s*hidden;/s);
-  assert.match(css, /\.canvas\.detail-reveal-staged \.card\[data-detail-reveal="hidden"\] \.ledger-card-detail-layer,[\s\S]{0,260}content-visibility:\s*hidden;/);
   assert.match(css, /\.canvas\.low-detail \.ledger-card-overview-layer\s*{[^}]*visibility:\s*visible;[^}]*opacity:\s*1;/s);
-  assert.match(css, /\.canvas\.detail-reveal-staged \.card\[data-detail-reveal="hidden"\] \.ledger-card-overview-layer,[\s\S]{0,140}visibility:\s*visible;[\s\S]{0,60}opacity:\s*1;/);
-  assert.match(css, /\.canvas\.zoom-grid-suppressed \.grid\s*{[^}]*display:\s*none;/s);
+  assert.doesNotMatch(css, /detail-reveal-staged|zoom-grid-suppressed/);
   assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-title\s*{[^}]*width:\s*calc\(100% \* var\(--viewport-scale, 1\)\);/s);
   assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-title\s*{[^}]*padding:\s*calc/);
   assert.match(css, /\.canvas\.low-detail \.ledger-card-overview-title\s*{[^}]*max-width:\s*calc\(100% \* var\(--viewport-scale, 1\)\);/s);

@@ -206,7 +206,6 @@ function setupExpression(input) {
     const input = window.__zoomDetailTraceInput;
     const { state } = await import('/src/runtime/state.js');
     const { applyViewportTransform } = await import('/src/runtime/canvas/effect/apply-viewport-transform.js');
-    const { cancelStagedDetailReveal } = await import('/src/runtime/canvas/effect/stage-detail-reveal.js');
     const canvas = document.querySelector('.canvas');
     if (!canvas) throw new Error('Canvas not found');
     document.querySelector('[data-zoom-detail-variant]')?.remove();
@@ -228,7 +227,6 @@ function setupExpression(input) {
     state.threadPanelOpen = false;
     document.querySelector('.thread-panel')?.setAttribute('hidden', '');
     applyViewportTransform();
-    if (input.beforeScale >= 0.35) cancelStagedDetailReveal();
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     return {
       route: location.pathname,
