@@ -238,6 +238,8 @@
     "thread-perf-zone-label-overlay": ".blueprinttool/threads/performances/thread-perf-zone-label-overlay.md",
     "thread-perf-commit-raster": ".blueprinttool/threads/performances/thread-perf-commit-raster.md",
     "thread-perf-drag-call-chain": ".blueprinttool/threads/performances/thread-perf-drag-call-chain.md",
-    "thread-perf-measurement-matrix": ".blueprinttool/threads/performances/thread-perf-measurement-matrix.md"
+    "thread-perf-measurement-matrix": ".blueprinttool/threads/performances/thread-perf-measurement-matrix.md",
+    "thread-perf-real-offender-mechanism-proof": ".blueprinttool/threads/performances/thread-perf-real-offender-mechanism-proof.md",
+    "thread-perf-zone-drag-direction": ".blueprinttool/threads/performances/thread-perf-zone-drag-direction.md"
   }
 }

@@ -166,7 +166,33 @@
   content-visibility: hidden;
 }
 
+.canvas.detail-reveal-staged .card[data-detail-reveal="hidden"],
+.canvas.detail-reveal-staged .card[data-detail-reveal="queued"] {
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.canvas.detail-reveal-staged .card[data-detail-reveal="hidden"] .ledger-card-detail-layer,
+.canvas.detail-reveal-staged .card[data-detail-reveal="queued"] .ledger-card-detail-layer,
+.canvas.detail-reveal-staged .card[data-detail-reveal="hidden"] .card-actions,
+.canvas.detail-reveal-staged .card[data-detail-reveal="queued"] .card-actions {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.canvas.detail-reveal-staged .card[data-detail-reveal="hidden"] .ledger-card-detail-layer,
+.canvas.detail-reveal-staged .card[data-detail-reveal="queued"] .ledger-card-detail-layer {
+  content-visibility: hidden;
+}
+
 .canvas.low-detail .ledger-card-overview-layer {
+  visibility: visible;
+  opacity: 1;
+}
+
+.canvas.detail-reveal-staged .card[data-detail-reveal="hidden"] .ledger-card-overview-layer,
+.canvas.detail-reveal-staged .card[data-detail-reveal="queued"] .ledger-card-overview-layer {
   visibility: visible;
   opacity: 1;
 }
@@ -175,9 +201,35 @@
   display: none;
 }
 
+.canvas.detail-reveal-staged .card[data-detail-reveal="hidden"] .ledger-card-overview-status,
+.canvas.detail-reveal-staged .card[data-detail-reveal="queued"] .ledger-card-overview-status {
+  display: none;
+}
+
 .canvas.low-detail .ledger-card-overview-title {
   display: block;
-  max-width: 100%;
+  max-width: calc(100% * var(--viewport-scale, 1));
+  margin: 0;
+  box-sizing: border-box;
+  padding: 4px 6px 0;
+  overflow: visible;
+  color: var(--text);
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  word-break: break-word;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.15;
+  transform: scale(var(--inverse-viewport-scale, 1));
+  transform-origin: left top;
+  text-shadow: 0 0 10px color-mix(in srgb, var(--card-zone-color), transparent 64%);
+}
+
+.canvas.detail-reveal-staged .card[data-detail-reveal="hidden"] .ledger-card-overview-title,
+.canvas.detail-reveal-staged .card[data-detail-reveal="queued"] .ledger-card-overview-title {
+  display: block;
+  max-width: calc(100% * var(--viewport-scale, 1));
   margin: 0;
   box-sizing: border-box;
   padding: 4px 6px 0;
@@ -206,7 +258,28 @@
   transform-origin: center;
 }
 
+.canvas.detail-reveal-staged .card[data-detail-reveal="hidden"][data-card-work-status="todo"] .ledger-card-overview-status,
+.canvas.detail-reveal-staged .card[data-detail-reveal="queued"][data-card-work-status="todo"] .ledger-card-overview-status {
+  display: flex;
+  top: 50%;
+  left: 50%;
+  right: auto;
+  justify-content: center;
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(var(--inverse-viewport-scale, 1));
+  transform-origin: center;
+}
+
 .canvas.low-detail .card[data-card-work-status="todo"] .ledger-card-overview-status {
+  width: auto;
+  min-width: 38px;
+  max-width: 140px;
+  height: 18px;
+  font-size: 9px;
+}
+
+.canvas.detail-reveal-staged .card[data-detail-reveal="hidden"][data-card-work-status="todo"] .ledger-card-overview-status,
+.canvas.detail-reveal-staged .card[data-detail-reveal="queued"][data-card-work-status="todo"] .ledger-card-overview-status {
   width: auto;
   min-width: 38px;
   max-width: 140px;
@@ -225,6 +298,10 @@
 .canvas.is-panning .regular-zone,
 .canvas.is-panning .card.connected {
   box-shadow: none;
+}
+
+.canvas.zoom-grid-suppressed .grid {
+  display: none;
 }
 
 .canvas.low-detail .relationships path {

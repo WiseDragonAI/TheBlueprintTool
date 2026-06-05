@@ -26,7 +26,8 @@ test('canvas pan uses a transform-only path with sampled performance telemetry',
   assert.match(pointerMove, /applyPanViewportTransform/);
   assert.match(pointerMove, /emitPanPerformanceTelemetry/);
   assert.match(pointerMove, /if \(isPan\)[\s\S]*return;/);
-  assert.match(pointerMove, /const canvasPointer = isPan \? state\.pointer\.currentCanvas : canvasPoint\(pointer\)/);
+  assert.match(pointerMove, /const canvasPointer = isPan \? state\.pointer!\.currentCanvas :/);
+  assert.match(pointerMove, /canvasPoint\(pointer\)/);
   assert.match(panTransform, /content\.style\.transform/);
   assert.doesNotMatch(panTransform, /updateDetailMode/);
   assert.match(panTelemetry, /pan-frame-performance/);
