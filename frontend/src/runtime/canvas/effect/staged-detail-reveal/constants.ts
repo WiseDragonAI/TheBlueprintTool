@@ -5,3 +5,4 @@
 export const DETAIL_REVEAL_SETTLE_MS = 120;
 export const DETAIL_REVEAL_TARGET_MS = 4;
 export const DETAIL_REVEAL_MAX_CHUNK = 24;
+export const DETAIL_REVEAL_OPACITY_MS = 160;

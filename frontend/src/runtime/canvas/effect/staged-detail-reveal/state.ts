@@ -15,5 +15,6 @@ export const stagedDetailRevealState = {
   sequence: 0,
   settleSequence: 0,
   frameSequence: 0,
-  backgroundSequence: 0
+  backgroundSequence: 0,
+  cleanupPending: false
 };

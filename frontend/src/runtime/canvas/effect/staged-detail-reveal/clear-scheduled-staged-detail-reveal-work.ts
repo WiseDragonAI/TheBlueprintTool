@@ -16,15 +16,8 @@ export function clearScheduledStagedDetailRevealWork(): void {
     stagedDetailRevealState.frameHandle = 0;
   }
   if (stagedDetailRevealState.idleHandle) {
-    // Branch: Cancel background idle work because it is not relevant after a mode edge reversal.
-    const cancelIdle = (window as any).cancelIdleCallback as ((handle: number) => void) | undefined;
-    if (cancelIdle) {
-      // Branch: Prefer the browser idle callback cancellation API when available.
-      cancelIdle(stagedDetailRevealState.idleHandle);
-    } else {
-      // Branch: Match the setTimeout fallback used when idle callbacks are unavailable.
-      window.clearTimeout(stagedDetailRevealState.idleHandle);
-    }
+    // Branch: Cancel delayed cleanup because it is not relevant after a mode edge reversal.
+    window.clearTimeout(stagedDetailRevealState.idleHandle);
     stagedDetailRevealState.idleHandle = 0;
   }
 }

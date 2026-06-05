@@ -12,6 +12,10 @@ export function scheduleStagedDetailReveal(): void {
     // Branch: Steady normal-detail viewport updates do not schedule reveal work.
     return;
   }
+  if (stagedDetailRevealState.cleanupPending) {
+    // Branch: During delayed cleanup, staged mode only preserves CSS transition rules.
+    return;
+  }
   stagedDetailRevealState.settleSequence = stagedDetailRevealState.sequence;
   if (stagedDetailRevealState.settleTimer) {
     // Branch: Replace the previous settle timer so only the latest edge state queues work.

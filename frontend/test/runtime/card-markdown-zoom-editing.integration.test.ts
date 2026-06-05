@@ -42,6 +42,7 @@ test('low-detail mode switches card paint layers without threshold layout measur
     'frontend/src/runtime/canvas/effect/staged-detail-reveal/calculate-staged-card-distance.ts',
     'frontend/src/runtime/canvas/effect/staged-detail-reveal/cancel-staged-detail-reveal.ts',
     'frontend/src/runtime/canvas/effect/staged-detail-reveal/clear-scheduled-staged-detail-reveal-work.ts',
+    'frontend/src/runtime/canvas/effect/staged-detail-reveal/complete-staged-detail-reveal-after-transition.ts',
     'frontend/src/runtime/canvas/effect/staged-detail-reveal/compare-background-reveal-card.ts',
     'frontend/src/runtime/canvas/effect/staged-detail-reveal/compare-urgent-reveal-card.ts',
     'frontend/src/runtime/canvas/effect/staged-detail-reveal/constants.ts',
@@ -72,6 +73,7 @@ test('low-detail mode switches card paint layers without threshold layout measur
   assert.match(detailRuntime, /const shouldUseLowDetail = state\.viewport\.scale < 0\.35/);
   assert.match(detailRuntime, /beginStagedDetailReveal\(\)/);
   assert.match(stagedRuntime, /requestAnimationFrame\(revealUrgentStagedDetailFrame\)/);
+  assert.match(stagedRuntime, /window\.setTimeout\(completeStagedDetailRevealAfterTransition, DETAIL_REVEAL_OPACITY_MS\)/);
   assert.doesNotMatch(stagedRuntime, /requestIdleCallback|DETAIL_REVEAL_BACKGROUND_CHUNK/);
   assert.match(cardRenderer, /ledger-card-detail-layer/);
   assert.match(cardRenderer, /ledger-card-overview-layer/);

@@ -22,5 +22,6 @@ export function cancelStagedDetailReveal(): void {
   clearScheduledStagedDetailRevealWork();
   stagedDetailRevealState.urgentQueue = [];
   stagedDetailRevealState.backgroundQueue = [];
+  stagedDetailRevealState.cleanupPending = false;
   canvas.classList.remove('detail-reveal-staged');
 }

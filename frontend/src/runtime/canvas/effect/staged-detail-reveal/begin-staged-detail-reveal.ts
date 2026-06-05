@@ -13,6 +13,7 @@ export function beginStagedDetailReveal(): void {
   clearScheduledStagedDetailRevealWork();
   stagedDetailRevealState.urgentQueue = [];
   stagedDetailRevealState.backgroundQueue = [];
+  stagedDetailRevealState.cleanupPending = false;
   const cards = content.querySelectorAll<HTMLElement>('.card[data-card-id]');
   for (const element of cards) {
     element.dataset.detailReveal = 'hidden';

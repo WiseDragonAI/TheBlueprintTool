@@ -33,6 +33,7 @@ test('low-detail zoom hides card detail while keeping counter-scaled card titles
     'frontend/src/runtime/canvas/effect/staged-detail-reveal/calculate-staged-card-distance.ts',
     'frontend/src/runtime/canvas/effect/staged-detail-reveal/cancel-staged-detail-reveal.ts',
     'frontend/src/runtime/canvas/effect/staged-detail-reveal/clear-scheduled-staged-detail-reveal-work.ts',
+    'frontend/src/runtime/canvas/effect/staged-detail-reveal/complete-staged-detail-reveal-after-transition.ts',
     'frontend/src/runtime/canvas/effect/staged-detail-reveal/compare-background-reveal-card.ts',
     'frontend/src/runtime/canvas/effect/staged-detail-reveal/compare-urgent-reveal-card.ts',
     'frontend/src/runtime/canvas/effect/staged-detail-reveal/constants.ts',
@@ -66,8 +67,10 @@ test('low-detail zoom hides card detail while keeping counter-scaled card titles
   assert.match(detailRuntime, /if \(shouldUseLowDetail\) \{[\s\S]*cancelStagedDetailReveal\(\);[\s\S]*\} else \{[\s\S]*beginStagedDetailReveal\(\);/);
   assert.match(detailRuntime, /if \(!shouldUseLowDetail\) \{[\s\S]*scheduleStagedDetailReveal\(\);/);
   assert.match(stagedRuntime, /DETAIL_REVEAL_TARGET_MS = 4/);
+  assert.match(stagedRuntime, /DETAIL_REVEAL_OPACITY_MS = 160/);
   assert.match(stagedRuntime, /if \(!hasScheduledWork && !canvas\.classList\.contains\('detail-reveal-staged'\)\) \{[\s\S]*return;/);
   assert.match(stagedRuntime, /requestAnimationFrame\(revealUrgentStagedDetailFrame\)/);
+  assert.match(stagedRuntime, /window\.setTimeout\(completeStagedDetailRevealAfterTransition, DETAIL_REVEAL_OPACITY_MS\)/);
   assert.doesNotMatch(stagedRuntime, /requestIdleCallback|DETAIL_REVEAL_BACKGROUND_CHUNK/);
   for (const runtime of touchedRuntimeFiles) {
     assert.match(runtime, /^\/\*\*[\s\S]*WHAT:[\s\S]*WHY:[\s\S]*\*\//);
