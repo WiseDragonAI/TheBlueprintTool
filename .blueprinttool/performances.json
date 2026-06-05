@@ -191,6 +191,22 @@
       },
       "facts": [],
       "fields": []
+    },
+    {
+      "id": "perf-low-detail-post-mortem",
+      "title": "Low Detail Performance Post-Mortem",
+      "cardType": "perf-analysis",
+      "domainId": "performances",
+      "x": 5366.009581095875,
+      "y": 3002.9604020535426,
+      "w": 1180,
+      "h": 2850,
+      "comment": {
+        "contentFile": ".blueprinttool/cards/performances/perf-low-detail-post-mortem.md"
+      },
+      "facts": [],
+      "fields": [],
+      "status": "done"
     }
   ],
   "relationships": [],
@@ -232,7 +248,7 @@
     "zoneIds": [],
     "groupIds": []
   },
-  "updatedAt": "2026-06-02T00:00:00.000Z",
+  "updatedAt": "2026-06-05T11:05:00.000Z",
   "cardEdits": {},
   "threadFiles": {
     "thread-perf-zone-label-overlay": ".blueprinttool/threads/performances/thread-perf-zone-label-overlay.md",
