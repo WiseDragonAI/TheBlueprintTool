@@ -191,6 +191,23 @@
 .resize-handle.sw { left: -7px; bottom: -7px; cursor: nesw-resize; }
 .resize-handle.se { right: -7px; bottom: -7px; cursor: nwse-resize; }
 
+.canvas.low-detail .card.selected .resize-handle {
+  display: none;
+}
+
+.canvas.low-detail .zone.selected .resize-handle {
+  display: block;
+  width: 22px;
+  height: 22px;
+  transform: scale(var(--inverse-viewport-scale, 1));
+  transform-origin: center;
+}
+
+.canvas.low-detail .zone.selected .resize-handle.nw { left: -11px; top: -11px; }
+.canvas.low-detail .zone.selected .resize-handle.ne { right: -11px; top: -11px; }
+.canvas.low-detail .zone.selected .resize-handle.sw { left: -11px; bottom: -11px; }
+.canvas.low-detail .zone.selected .resize-handle.se { right: -11px; bottom: -11px; }
+
 .card {
   --card-zone-color: var(--primary-bright);
   --card-readable-color: color-mix(in srgb, var(--card-zone-color), white 52%);

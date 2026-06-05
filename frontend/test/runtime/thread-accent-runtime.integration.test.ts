@@ -46,6 +46,10 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   assert.match(threadCss, /thread-note-message code[\s\S]*font-size: 1em/);
   assert.match(threadCss, /thread-note-message \.ledger-card-heading[\s\S]*--thread-heading-color/);
   assert.match(threadCss, /thread-note-message \.ledger-card-hr[\s\S]*border-top-color: rgba\(255, 255, 255, 0\.18\)/);
+  assert.match(threadCss, /thread-feed\s*{[\s\S]*min-width: 0;[\s\S]*min-height: 0;/);
+  assert.match(threadCss, /thread-note\s*{[\s\S]*min-width: 0;[\s\S]*max-width: min\(86%, 520px\)/);
+  assert.match(threadCss, /thread-note-message\s*{[\s\S]*min-width: 0;[\s\S]*max-width: 100%;/);
+  assert.match(threadCss, /thread-note-message \.ledger-card-body,[\s\S]*thread-note-message \.ledger-card-table-scroll\s*{[\s\S]*max-width: 100%;/);
   assert.match(threadCss, /--card-code-color: var\(--thread-code-color/);
   assert.match(threadCss, /thread-note-delete\.terminal-button[\s\S]*width: 24px/);
   assert.match(threadCss, /thread-draft[\s\S]*border: 0/);

@@ -10,6 +10,7 @@ function source(path: string): string {
 
 test('low-detail zoom hides card detail while keeping counter-scaled card titles', () => {
   const css = source('frontend/assets/canvas/canvas-layer.css');
+  const objectsCss = source('frontend/assets/canvas/objects.css');
   const specs = source('documentation/specs.json');
 
   assert.match(specs, /84cf2a6b/);
@@ -29,6 +30,9 @@ test('low-detail zoom hides card detail while keeping counter-scaled card titles
   assert.match(detailRuntime, /if \(hasOverviewDetail !== shouldUseOverviewDetail\) canvas\.classList\.toggle/);
   assert.doesNotMatch(css, /\.canvas\.overview-detail \.regular-zone/);
   assert.match(css, /\.canvas\.overview-detail \.grid\s*{[^}]*display:\s*none;/s);
+  assert.match(objectsCss, /\.canvas\.low-detail \.card\.selected \.resize-handle\s*{[^}]*display:\s*none;/s);
+  assert.match(objectsCss, /\.canvas\.low-detail \.zone\.selected \.resize-handle\s*{[^}]*display:\s*block;[^}]*width:\s*22px;[^}]*height:\s*22px;[^}]*transform:\s*scale\(var\(--inverse-viewport-scale, 1\)\);/s);
+  assert.match(objectsCss, /\.canvas\.low-detail \.zone\.selected \.resize-handle\.nw\s*{[^}]*left:\s*-11px;[^}]*top:\s*-11px;/s);
 });
 
 test('zone edit and color controls render in the viewport overlay instead of zone DOM', () => {
