@@ -86,3 +86,52 @@ target:
 ```
 
 This means the fix probably needs per-card detail readiness state, not only the current global `.canvas.low-detail` switch.
+
+# OPERATOR
+<!-- corev2:note {"id":"note-1780645588278-0033f27902503","timestamp":"2026-06-05T07:46:28.282Z","voiceFileRef":"/home/jbb/dev/EditorBP/CoreV2/.blueprinttool/voice-uploads/voice-1780645588286-308fbb27-ac46-4e7b-8166-9c3fc67bb2df.wav","status":"transcribed","transcriptionStartedAt":"2026-06-05T07:46:28.288Z"} -->
+
+Moi, j'aimerais bien mettre en place un système parce qu'en fait, en fonction du système de l'utilisateur, on va avoir des valeurs qui vont être différentes. Donc on ne veut pas hardcoder un nombre de cards. Par contre, ce qu'on veut faire, c'est qu'on veut faire un bench. Ça veut dire qu'il faut qu'on adapte le nombre de cards qu'on peut reveal en fonction des précédentes mesures qu'on a faites. Effectivement, il faut que ce soit en dessous de 4000 secondes. Donc ce qu'on peut faire, c'est on peut en reveal une par frame et on voit quel est le coût de ce reveal-là quand on fait une transition. Puis au prochain zoom, on pourra adapter le nombre par frame et en fait faire une quantité de cartes qui sont reveal adaptative en fonction des précédentes mesures. Et ça, ça me paraît être bien.
+
+# OPERATOR
+<!-- corev2:note {"id":"note-1780645668485-59873b2f1dfbd","timestamp":"2026-06-05T07:47:48.494Z","voiceFileRef":"/home/jbb/dev/EditorBP/CoreV2/.blueprinttool/voice-uploads/voice-1780645668500-f5a08188-5c6a-4b21-9389-973c5531faac.wav","status":"transcribed","transcriptionStartedAt":"2026-06-05T07:47:48.524Z"} -->
+
+Ensuite, il y a un autre truc. L'autre truc, c'est de dire que quand on est en full detail et qu'on commence à vouloir faire bouger une zone, et ben là, on se retrouve avec des repaint time. À mon avis, c'est le repaint time qui est extrêmement lourd. Je pense pas que ce soit un problème sur du JavaScript. Mais donc, c'est pareil, il faut que tu fasses aussi des analyses sur ça pour qu'on puisse comprendre le drag fix dans quelle direction on doit aller. Toi, tu dis qu'il ne faut pas rebuild chaque zone label sur chaque row pointer move, ouais. Mais pourquoi on le rebuild le zone label ? Pourquoi on ne le bouge pas simplement ? J'ai du mal à comprendre. Compute its tile during drag. Et donc, comment est-ce qu'on pourrait faire pour le drag pour l'améliorer ? Parce qu'effectivement, c'est un autre problème qu'il faut absolument qu'on arrive à résoudre, ça. J'ai l'impression que draguer une carte, ça va, c'est bien, mais effectivement, draguer une zone, c'est assez catastrophique. Donc quelles sont les meilleures directions ?
+
+# OPERATOR
+<!-- corev2:note {"id":"note-1780645716570-d77deafbb597","timestamp":"2026-06-05T07:48:36.575Z","voiceFileRef":"/home/jbb/dev/EditorBP/CoreV2/.blueprinttool/voice-uploads/voice-1780645716579-5adb4ffd-7dfa-4650-8262-e10722e1bed1.wav","status":"transcribed","transcriptionStartedAt":"2026-06-05T07:48:36.584Z"} -->
+
+Concernant le zoom, tu fais un plan pour l'instant, tu me mets un plan dans une autre carte pour savoir exactement comment tu vas modifier le code. Est-ce que tu vas modifier dans quelle direction on va avec ce nombre de cartes à render qui est adaptatif avec une mesure qui permet de savoir combien on en reveal à chaque fois et de faire évidemment le reveal de le delay après que le zoom est settled. Et de faire de pas reaviller toutes les cartes en même temps, mais de reveal en priorité les cartes qui sont autour de la zone visible, autour du milieu du viewport en fait.
+
+# AGENT
+<!-- corev2:note {"id":"note-agent-1780645889000-zoom-zone-plan-cards","timestamp":"2026-06-05T07:51:29Z"} -->
+
+Treated.
+
+I added a separate zoom implementation plan card:
+
+```text
+Zoom Detail Reveal Plan
+.blueprinttool/cards/performances/perf-zoom-detail-reveal-plan.md
+```
+
+It specifies the direction you asked for:
+
+- no hardcoded fixed card count;
+- reveal delayed until zoom settles;
+- initial conservative reveal can start at one card/frame;
+- each reveal chunk measures its real cost;
+- next chunk size adapts from the measured cost and a target budget;
+- visible and near-viewport cards reveal first;
+- ordering is by distance from the viewport center;
+- offscreen card detail remains hidden until idle/background hydration or until the card approaches the viewport.
+
+I also added a separate drag direction card for the zone-drag concern:
+
+```text
+Zone Drag Direction
+.blueprinttool/cards/performances/perf-zone-drag-direction.md
+```
+
+Answer to the label question: yes, we should not rebuild all zone labels during drag. The current implementation rebuilds them because `renderZoneLabelOverlay()` is a global sync path: it calls `replaceChildren()`, queries every zone, reads offsets/style, and appends new proxy labels. That is the current simple implementation, not a requirement. The better drag path is to create stable label proxies and, during drag, move only the affected proxy from in-flight geometry.
+
+For zone drag specifically, I documented that the repaint/commit hypothesis is plausible but still needs a dedicated zone-drag trace. Zone drag is different from card drag because selecting a zone also selects intersecting cards, so the current path can move the zone plus many cards with `left/top`, rebuild labels, and repaint a large gradient/shadow zone surface. The new card defines the trace variants and acceptance gates before we implement the zone drag fix.

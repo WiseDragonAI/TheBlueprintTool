@@ -161,6 +161,36 @@
       },
       "facts": [],
       "fields": []
+    },
+    {
+      "id": "perf-zoom-detail-reveal-plan",
+      "title": "Zoom Detail Reveal Plan",
+      "cardType": "perf-plan",
+      "domainId": "performances",
+      "x": 7930,
+      "y": -449,
+      "w": 980,
+      "h": 1320,
+      "comment": {
+        "contentFile": ".blueprinttool/cards/performances/perf-zoom-detail-reveal-plan.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "perf-zone-drag-direction",
+      "title": "Zone Drag Direction",
+      "cardType": "perf-plan",
+      "domainId": "performances",
+      "x": 2012,
+      "y": 1260,
+      "w": 1160,
+      "h": 1510,
+      "comment": {
+        "contentFile": ".blueprinttool/cards/performances/perf-zone-drag-direction.md"
+      },
+      "facts": [],
+      "fields": []
     }
   ],
   "relationships": [],
