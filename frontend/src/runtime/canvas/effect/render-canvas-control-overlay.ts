@@ -32,6 +32,21 @@ function resolveControlOverlay(): HTMLElement | null {
   return overlay;
 }
 
+function existingControlOverlay(): HTMLElement | null {
+  if (initialControlOverlay?.isConnected) return initialControlOverlay;
+  if (!canvas || typeof canvas.querySelector !== 'function') return null;
+  return canvas.querySelector(':scope > .canvas-control-overlay') as HTMLElement | null;
+}
+
+function clearCanvasControlOverlay(): void {
+  hoveredTarget = null;
+  existingControlOverlay()?.replaceChildren();
+}
+
+function controlsDisabled(): boolean {
+  return Boolean(canvas?.classList?.contains('low-detail'));
+}
+
 function targetFromElement(element: EventTarget | null): ControlTarget | null {
   const node = element as HTMLElement | null;
   const control = node?.closest?.('.canvas-control') as HTMLElement | null;
@@ -159,6 +174,10 @@ function syncZoneControls(group: HTMLElement, zone: HTMLElement, kind: 'zone' | 
 }
 
 export function renderCanvasControlOverlay(): void {
+  if (controlsDisabled()) {
+    clearCanvasControlOverlay();
+    return;
+  }
   const overlay = resolveControlOverlay();
   if (!overlay || !canvas || !content) return;
   const activeKeys = new Set<string>();
@@ -194,12 +213,20 @@ export function bindCanvasControlOverlayHover(): void {
   if (hoverBindingInitialized || !canvas) return;
   hoverBindingInitialized = true;
   canvas.addEventListener('mouseover', (event) => {
+    if (controlsDisabled()) {
+      clearCanvasControlOverlay();
+      return;
+    }
     const next = targetFromElement(event.target);
     if (!next || sameTarget(hoveredTarget, next)) return;
     hoveredTarget = next;
     renderCanvasControlOverlay();
   });
   canvas.addEventListener('mouseout', (event) => {
+    if (controlsDisabled()) {
+      clearCanvasControlOverlay();
+      return;
+    }
     const previous = targetFromElement(event.target);
     if (!previous) return;
     const next = targetFromElement(event.relatedTarget);

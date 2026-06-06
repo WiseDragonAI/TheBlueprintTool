@@ -14,12 +14,13 @@ test('low-detail zoom hides card detail while keeping counter-scaled card titles
   const specs = source('documentation/specs.json');
 
   assert.match(specs, /84cf2a6b/);
-  assert.match(css, /\.canvas\.low-detail \.ledger-card-detail-layer,/);
+  assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-detail-layer/);
+  assert.match(css, /\.canvas \.card:not\(\.detail-visible\) \.ledger-card-detail-layer/);
   assert.doesNotMatch(css, /\.canvas\.low-detail \.card strong,\s*\n/);
-  assert.match(css, /\.canvas\.low-detail \.ledger-card-overview-title\s*{[^}]*transform:\s*scale\(var\(--inverse-viewport-scale, 1\)\);/s);
+  assert.match(css, /\.canvas \.card:not\(\.detail-visible\) \.ledger-card-overview-title\s*{[^}]*transform:\s*scale\(var\(--inverse-viewport-scale, 1\)\);/s);
   assert.match(specs, /9d5e0b7a/);
-  assert.match(css, /\.canvas\.low-detail \.ledger-card-overview-title\s*{[^}]*white-space:\s*normal;/s);
-  assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-overview-title\s*{[^}]*width:\s*calc\(100% \* var\(--viewport-scale, 1\)\);/s);
+  assert.match(css, /\.canvas \.card:not\(\.detail-visible\) \.ledger-card-overview-title\s*{[^}]*white-space:\s*normal;/s);
+  assert.doesNotMatch(css, /\.ledger-card-overview-title\s*{[^}]*width:\s*calc\(100% \* var\(--viewport-scale, 1\)\);/s);
 
   const viewportRuntime = source('frontend/src/runtime/canvas/effect/apply-viewport-transform.ts');
   const detailRuntime = source('frontend/src/runtime/canvas/effect/update-detail-mode.ts');
@@ -28,6 +29,7 @@ test('low-detail zoom hides card detail while keeping counter-scaled card titles
   assert.doesNotMatch(detailRuntime, /offsetWidth|offsetHeight|getBoundingClientRect|scrollHeight/);
   assert.match(detailRuntime, /if \(hasLowDetail !== shouldUseLowDetail\) canvas\.classList\.toggle/);
   assert.match(detailRuntime, /if \(hasOverviewDetail !== shouldUseOverviewDetail\) canvas\.classList\.toggle/);
+  assert.match(objectsCss, /\.card:not\(\.detail-visible\),\s*\.card\.connected:not\(\.detail-visible\)\s*{[^}]*box-shadow:\s*none;/s);
   assert.doesNotMatch(css, /\.canvas\.overview-detail \.regular-zone/);
   assert.match(css, /\.canvas\.overview-detail \.grid\s*{[^}]*display:\s*none;/s);
   assert.match(objectsCss, /\.canvas\.low-detail \.card\.selected \.resize-handle\s*{[^}]*display:\s*none;/s);

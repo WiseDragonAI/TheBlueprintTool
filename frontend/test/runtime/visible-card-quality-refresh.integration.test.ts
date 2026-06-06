@@ -32,12 +32,17 @@ test('zoomed card images render through an untransformed visible-card media over
   const objectCss = source('frontend/assets/canvas/objects.css');
 
   assert.match(transform, /scheduleCanvasMediaOverlayRender\(\)/);
+  assert.match(transform, /clearCanvasMediaOverlay\(\)/);
+  assert.match(transform, /!settled \|\| Number\(state\.viewport\.scale\) < canvasMediaOverlayScaleThreshold/);
   assert.match(panTransform, /applyCanvasMediaOverlayPanTransform\(\)/);
   assert.match(renderLedgerSurface, /scheduleCanvasMediaOverlayRender\(\)/);
   assert.match(wheel, /scheduleCanvasMediaOverlayRender\(\)/);
   assert.doesNotMatch(wheel, /noteZoomForVisibleCardQualityRefresh/);
   assert.match(mediaComponent, /track\.addEventListener\('scroll', \(\) => \{[\s\S]*scheduleCanvasMediaOverlayRender\(\);[\s\S]*\}/);
   assert.match(media, /canvasMediaOverlayScaleThreshold = 1/);
+  assert.match(media, /export function clearCanvasMediaOverlay\(\)/);
+  assert.match(media, /let activeOverlayShells = new Set<HTMLElement>\(\)/);
+  assert.match(media, /if \(Number\(state\.viewport\.scale\) < canvasMediaOverlayScaleThreshold\) \{[\s\S]*clearCanvasMediaOverlay\(\);[\s\S]*return;/);
   assert.match(media, /visibleLedgerCards\(cards, bounds\)\.slice\(0, maxCanvasMediaOverlayCards\)/);
   assert.match(media, /querySelectorAll\('\.ledger-card-media-shell'\)/);
   assert.match(media, /getBoundingClientRect\(\)/);

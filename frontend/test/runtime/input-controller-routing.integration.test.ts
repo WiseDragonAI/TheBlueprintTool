@@ -25,7 +25,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.doesNotMatch(pointerUp, /commitActiveLedgerMutation/);
 
   const wheel = source('frontend/src/runtime/gesture/controller/handle-wheel.ts');
-  assert.match(wheel, /applyViewportTransform/);
+  assert.match(wheel, /scheduleViewportTransform/);
   assert.doesNotMatch(wheel, /renderRelationshipOverlay/);
   assert.doesNotMatch(wheel, /viewport\.x\s*-=/);
   assert.doesNotMatch(wheel, /deltaX\s*\|\|\s*event\.deltaY/);
@@ -177,6 +177,9 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(controlOverlay, /renderLedgerCardStatusButton\(cardId, persistedStatus, visibleStatus\)/);
   assert.match(controlOverlay, /renderLedgerCardDeleteButton\(cardId\)/);
   assert.doesNotMatch(controlOverlay, /selection\.cardIds/);
+  assert.match(controlOverlay, /function controlsDisabled\(\): boolean \{[\s\S]*classList\?\.contains\('low-detail'\)/);
+  assert.match(controlOverlay, /export function renderCanvasControlOverlay\(\): void \{\s*if \(controlsDisabled\(\)\) \{[\s\S]*clearCanvasControlOverlay\(\);[\s\S]*return;/);
+  assert.match(controlOverlay, /canvas\.addEventListener\('mouseover', \(event\) => \{\s*if \(controlsDisabled\(\)\) \{[\s\S]*clearCanvasControlOverlay\(\);[\s\S]*return;/);
   assert.match(controlOverlay, /if \(hoveredTarget\) byKey\.set\(targetKey\(hoveredTarget\), hoveredTarget\)/);
   assert.match(controlOverlay, /deleteButton\.dataset\.action = 'confirm-delete-group'/);
   assert.match(controlOverlay, /edit\.dataset\.zoneId = id/);
@@ -185,8 +188,8 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(canvasLayerCss, /\.canvas-control\s*{[^}]*position:\s*absolute;[^}]*opacity:\s*0;[^}]*transition:\s*opacity 140ms ease;/s);
   assert.match(canvasLayerCss, /\.canvas-control\.is-visible\s*{[^}]*opacity:\s*1;[^}]*pointer-events:\s*auto;/s);
   assert.match(canvasLayerCss, /\.canvas-control \.terminal-button,[\s\S]*transition:\s*none;/);
-  assert.match(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-overview-title\s*{[^}]*padding:\s*4px 6px 0;/s);
-  assert.match(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-detail-layer\s*{[^}]*content-visibility:\s*hidden;/s);
-  assert.match(canvasLayerCss, /\.canvas\.low-detail \.card\[data-card-work-status="todo"\] \.ledger-card-overview-status\s*{[^}]*top:\s*50%;[^}]*left:\s*50%;[^}]*justify-content:\s*center;[^}]*transform:\s*translate\(-50%, -50%\) scale\(var\(--inverse-viewport-scale, 1\)\);/s);
+  assert.match(canvasLayerCss, /\.canvas \.card:not\(\.detail-visible\) \.ledger-card-overview-title\s*{[^}]*padding:\s*4px 6px 0;/s);
+  assert.match(canvasLayerCss, /\.canvas \.card:not\(\.detail-visible\) \.ledger-card-detail-layer\s*{[^}]*content-visibility:\s*hidden;/s);
+  assert.match(canvasLayerCss, /\.canvas \.card:not\(\.detail-visible\)\[data-card-work-status="todo"\] \.ledger-card-overview-status\s*{[^}]*top:\s*50%;[^}]*left:\s*50%;[^}]*justify-content:\s*center;[^}]*transform:\s*translate\(-50%, -50%\) scale\(var\(--inverse-viewport-scale, 1\)\);/s);
   assert.doesNotMatch(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-status-toggle/);
 });

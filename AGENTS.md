@@ -108,6 +108,19 @@ Ctrl+D  Resize selected cards to their content and selected zones to contained c
 GIT_SSH_COMMAND='ssh -i ~/.ssh/id_jb_wise -o IdentitiesOnly=yes' git push
 ```
 
+## Debugging
+
+- Solve one problem at a time instead of trying to fix everything.
+- List all possible options.
+- Find what is wrong in the chain at a fundamental level.
+- Choose one thing with the most yield, the least effort, the smallest amount of LOC, and the most structurally correcting change.
+- After choosing a direction, expand your knowledge and check everything related so you do not miss critical elements.
+- Correcting means fixing the technical debt.
+
+## Code Smells
+
+- It is a code smell to do expensive operations for many more elements than are needed in the end.
+
 ## Card Image Assets
 
 Markdown image assets can be referenced from the active workspace `.blueprinttool` directory:

@@ -3,8 +3,8 @@
  * WHY: Wheel events should control canvas navigation unless an interactive child can consume them.
  */
 import { state } from '../../state.js';
-import { applyViewportTransform } from '../../canvas/effect/apply-viewport-transform.js';
 import { scheduleCanvasMediaOverlayRender } from '../../canvas/effect/render-canvas-media-overlay.js';
+import { scheduleViewportTransform } from '../../canvas/effect/schedule-viewport-transform.js';
 import { scheduleViewportPersistence } from '../../persistence/effect/schedule-viewport-persistence.js';
 import { point } from '../helper/point.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
@@ -57,5 +57,5 @@ export function handleWheel(event: WheelEvent): void {
     telemetry('calculate-viewport-transform', { kind: 'zoom', pointer, anchoredCanvasPoint, viewport: state.viewport });
   }
   scheduleViewportPersistence();
-  applyViewportTransform();
+  scheduleViewportTransform(!event.ctrlKey);
 }

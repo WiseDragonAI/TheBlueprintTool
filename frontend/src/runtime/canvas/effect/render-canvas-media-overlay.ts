@@ -13,6 +13,7 @@ const maxCanvasMediaOverlayCards = 16;
 let scheduled = false;
 let panReconcileTimer: ReturnType<typeof setTimeout> | undefined;
 let lastRenderedViewport: { x: number; y: number; scale: number } | null = null;
+let activeOverlayShells = new Set<HTMLElement>();
 
 function resolveMediaOverlay(): HTMLElement | null {
   if (initialMediaOverlay?.isConnected) return initialMediaOverlay;
@@ -28,12 +29,12 @@ function resolveMediaOverlay(): HTMLElement | null {
 }
 
 function clearActiveShells(activeShells = new Set<HTMLElement>()): void {
-  if (!content) return;
-  for (const shell of content.querySelectorAll('.ledger-card-media-shell[data-media-overlay-active="true"]')) {
-    if (activeShells.has(shell as HTMLElement)) continue;
-    delete (shell as HTMLElement).dataset.mediaOverlayActive;
-    delete (shell as HTMLElement).dataset.mediaOverlayKey;
+  for (const shell of activeOverlayShells) {
+    if (activeShells.has(shell) && shell.isConnected) continue;
+    delete shell.dataset.mediaOverlayActive;
+    delete shell.dataset.mediaOverlayKey;
   }
+  activeOverlayShells = new Set(activeShells);
 }
 
 function clearMediaOverlay(overlay: HTMLElement | null = resolveMediaOverlay()): void {
@@ -41,6 +42,10 @@ function clearMediaOverlay(overlay: HTMLElement | null = resolveMediaOverlay()):
   if (overlay) overlay.style.transform = '';
   lastRenderedViewport = null;
   clearActiveShells();
+}
+
+export function clearCanvasMediaOverlay(): void {
+  clearMediaOverlay();
 }
 
 function cardNode(cardId: string): HTMLElement | null {
@@ -158,7 +163,10 @@ export function scheduleCanvasMediaOverlayRender(): void {
 }
 
 export function applyCanvasMediaOverlayPanTransform(): void {
-  if (Number(state.viewport.scale) < canvasMediaOverlayScaleThreshold) return;
+  if (Number(state.viewport.scale) < canvasMediaOverlayScaleThreshold) {
+    clearCanvasMediaOverlay();
+    return;
+  }
   const overlay = resolveMediaOverlay();
   if (!overlay || !lastRenderedViewport || lastRenderedViewport.scale !== Number(state.viewport.scale)) {
     scheduleCanvasMediaOverlayRender();

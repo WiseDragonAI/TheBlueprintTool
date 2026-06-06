@@ -135,6 +135,53 @@ test('plain pan pointer up does not force a full canvas rerender', () => {
 
 test('wheel zoom stays transform-only and does not reroute relationships', () => {
   const wheel = source('frontend/src/runtime/gesture/controller/handle-wheel.ts');
-  assert.match(wheel, /applyViewportTransform\(\)/);
+  const scheduler = source('frontend/src/runtime/canvas/effect/schedule-viewport-transform.ts');
+  const viewport = source('frontend/src/runtime/canvas/effect/apply-viewport-transform.ts');
+  assert.match(wheel, /scheduleViewportTransform\(!event\.ctrlKey\)/);
+  assert.match(scheduler, /applyViewportTransform\(settled\)/);
+  assert.match(scheduler, /settleTimer = setTimeout\(finishZoomSettle, 120\)/);
+  assert.match(scheduler, /applyViewportSettledEffects\(\)/);
+  assert.doesNotMatch(scheduler, /syncScaleCssVars|applyViewportScaleCssVars/);
+  assert.doesNotMatch(scheduler, /is-zooming|state\.viewport\.scale < 0\.35|classList\.add|classList\.remove/);
+  assert.match(viewport, /export function applyViewportSettledEffects\(\)/);
+  assert.match(viewport, /export function applyViewportTransform\(settled = true\)/);
   assert.doesNotMatch(wheel, /renderRelationshipOverlay/);
+});
+
+test('normal detail reveal is viewport-local and layout-free', () => {
+  const viewport = source('frontend/src/runtime/canvas/effect/apply-viewport-transform.ts');
+  const pan = source('frontend/src/runtime/canvas/effect/apply-pan-viewport-transform.ts');
+  const sync = source('frontend/src/runtime/canvas/effect/sync-viewport-card-details.ts');
+  const cardRenderer = source('frontend/src/runtime/ledger/component/patch-ledger-card.ts');
+  const detailRenderer = source('frontend/src/runtime/ledger/component/render-ledger-card-detail-layer.ts');
+  const css = source('frontend/assets/canvas/canvas-layer.css');
+  const objects = source('frontend/assets/canvas/objects.css');
+
+  assert.match(viewport, /syncViewportCardDetails\(\)/);
+  assert.match(pan, /syncViewportCardDetails\(\)/);
+  assert.match(sync, /const detailedCardIds = new Set<string>\(\)/);
+  assert.match(sync, /activeLedgerCardMap\(\)/);
+  assert.match(sync, /viewportWorldBounds\(state\.viewport, viewportCanvasSize\(\)\)/);
+  assert.match(sync, /canvasBoundsIntersect\(ledgerCardBounds\(ledgerCard\), bounds\)/);
+  assert.match(sync, /renderLedgerCardDetailLayer\(ledgerCard\)/);
+  assert.match(sync, /directChildByClass\(card, 'ledger-card-detail-layer'\)/);
+  assert.match(sync, /directChildByClass\(card, 'ledger-card-detail-layer'\)\?\.remove\(\)/);
+  assert.match(sync, /classList\.add\('detail-visible'\)/);
+  assert.match(sync, /classList\.remove\('detail-visible'\)/);
+  assert.doesNotMatch(sync, /querySelectorAll<HTMLElement>\(':scope > \.card\[data-card-id\]'\)/);
+  assert.doesNotMatch(sync, /classList\.toggle\('detail-visible'/);
+  assert.match(cardRenderer, /const detailVisible = element\.className\.split\(\/\\s\+\/\)\.includes\('detail-visible'\)/);
+  assert.match(cardRenderer, /card ledger-node\$\{detailVisible \? ' detail-visible' : ''\}/);
+  assert.match(cardRenderer, /mountedDetail \? renderLedgerCardDetailLayer\(card, mountedDetail\) : null/);
+  assert.doesNotMatch(cardRenderer, /renderLedgerCardMarkdown\(ledgerCardBody\(card\)/);
+  assert.match(detailRenderer, /renderLedgerCardMarkdown\(ledgerCardBody\(card\)/);
+  assert.match(detailRenderer, /renderLedgerCardTabFrame\(card, fields, activeTab\)/);
+  assert.doesNotMatch(sync, /getBoundingClientRect|offsetWidth|offsetHeight|scrollWidth|scrollHeight/);
+  assert.match(css, /\.canvas \.card:not\(\.detail-visible\) \.ledger-card-detail-layer/);
+  assert.match(css, /\.canvas \.card:not\(\.detail-visible\) \.ledger-card-overview-layer/);
+  assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-detail-layer/);
+  assert.match(objects, /\.ledger-card-detail-layer\s*{[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;/s);
+  assert.match(objects, /\.card\.detail-visible \.ledger-card-detail-layer\s*{[^}]*opacity:\s*1;[^}]*transition:\s*opacity 160ms ease-out;/s);
+  assert.match(objects, /\.card:not\(\.detail-visible\),\s*\.card\.connected:not\(\.detail-visible\)\s*{[^}]*box-shadow:\s*none;/s);
+  assert.doesNotMatch(cardRenderer, /const body = hasFieldTabs/);
 });

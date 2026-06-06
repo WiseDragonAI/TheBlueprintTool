@@ -147,13 +147,11 @@
     0 0;
 }
 
-.canvas.low-detail .card,
 .canvas.low-detail .zone {
   box-shadow: none;
   backdrop-filter: none;
 }
 
-.canvas.low-detail .ledger-card-detail-layer,
 .canvas.low-detail .card-actions,
 .canvas.low-detail .zone p,
 .canvas.low-detail .relationships text {
@@ -162,20 +160,23 @@
   pointer-events: none;
 }
 
-.canvas.low-detail .ledger-card-detail-layer {
+.canvas .card:not(.detail-visible) .ledger-card-overview-status {
+  display: none;
+}
+
+.canvas .card:not(.detail-visible) .ledger-card-detail-layer {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
   content-visibility: hidden;
 }
 
-.canvas.low-detail .ledger-card-overview-layer {
+.canvas .card:not(.detail-visible) .ledger-card-overview-layer {
   visibility: visible;
   opacity: 1;
 }
 
-.canvas.low-detail .ledger-card-overview-status {
-  display: none;
-}
-
-.canvas.low-detail .ledger-card-overview-title {
+.canvas .card:not(.detail-visible) .ledger-card-overview-title {
   display: block;
   max-width: 100%;
   margin: 0;
@@ -195,7 +196,7 @@
   text-shadow: 0 0 10px color-mix(in srgb, var(--card-zone-color), transparent 64%);
 }
 
-.canvas.low-detail .card[data-card-work-status="todo"] .ledger-card-overview-status {
+.canvas .card:not(.detail-visible)[data-card-work-status="todo"] .ledger-card-overview-status {
   display: flex;
   top: 50%;
   left: 50%;
@@ -204,9 +205,6 @@
   opacity: 1;
   transform: translate(-50%, -50%) scale(var(--inverse-viewport-scale, 1));
   transform-origin: center;
-}
-
-.canvas.low-detail .card[data-card-work-status="todo"] .ledger-card-overview-status {
   width: auto;
   min-width: 38px;
   max-width: 140px;
@@ -231,6 +229,7 @@
   stroke-width: 2;
 }
 
+.canvas.low-detail .grid,
 .canvas.overview-detail .grid {
   display: none;
 }

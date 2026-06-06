@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { patchLedgerCard } from '../../src/runtime/ledger/component/patch-ledger-card.js';
+import { renderLedgerCardDetailLayer } from '../../src/runtime/ledger/component/render-ledger-card-detail-layer.js';
 import { patchLedgerZone } from '../../src/runtime/ledger/component/patch-ledger-zone.js';
 import { renderLedgerCardDeleteButton } from '../../src/runtime/ledger/component/render-ledger-card-delete-button.js';
 import { state } from '../../src/runtime/state.js';
@@ -86,6 +87,10 @@ function findElementByClass(root: FakeElement, className: string): FakeElement |
   return undefined;
 }
 
+function renderDetail(card: Record<string, unknown>): FakeElement {
+  return renderLedgerCardDetailLayer(card) as unknown as FakeElement;
+}
+
 test('ledger cards render markdown descriptions as DOM elements', () => {
   const previousDocument = globalThis.document;
   (globalThis as unknown as { document: unknown }).document = {
@@ -94,7 +99,7 @@ test('ledger cards render markdown descriptions as DOM elements', () => {
   };
 
   try {
-    const card = patchLedgerCard({
+    const card = renderDetail({
       id: 'card-markdown',
       title: 'Markdown card',
       comment: { what: '**Props**: `mode`\n- latestPinned\n- anchoredHistory' }
@@ -123,7 +128,7 @@ test('ledger cards render markdown tables as table elements', () => {
   };
 
   try {
-    const card = patchLedgerCard({
+    const card = renderDetail({
       id: 'card-table',
       title: 'Table card',
       comment: { what: '| Blueprint asset | Symbol use | Refactor impact |\n|---|---|---|\n| `BP-health-bar` | `UpdateHealth` | Keep as legacy display actor. |' }
@@ -157,7 +162,7 @@ test('ledger cards render markdown and bare urls as links', () => {
   };
 
   try {
-    const card = patchLedgerCard({
+    const card = renderDetail({
       id: 'card-links',
       title: 'Link card',
       comment: { what: 'Reference [Image #1](https://example.com/image.png) and (https://example.com/story).' }
@@ -190,7 +195,7 @@ test('ledger cards render markdown headings through the shared markdown renderer
   };
 
   try {
-    const card = patchLedgerCard({
+    const card = renderDetail({
       id: 'card-heading',
       title: 'Heading card',
       comment: { what: '### Quest tags\n- `mine.quarry.started`' }
@@ -216,7 +221,7 @@ test('ledger cards render horizontal rules through the shared markdown renderer'
   };
 
   try {
-    const card = patchLedgerCard({
+    const card = renderDetail({
       id: 'card-rule',
       title: 'Rule card',
       comment: { what: 'Before\n\n---\n\nAfter' }
@@ -239,7 +244,7 @@ test('ledger cards render fenced code blocks with syntax spans', () => {
   };
 
   try {
-    const card = patchLedgerCard({
+    const card = renderDetail({
       id: 'card-code',
       title: 'Code card',
       comment: { what: '```cpp\nUSTRUCT(BlueprintType)\nstruct FCreatureState\n{\n  GENERATED_BODY()\n  float Current = 100.f;\n};\n```' }
@@ -276,7 +281,7 @@ test('ledger cards use highlight.js for mainstream language fences when availabl
   };
 
   try {
-    const card = patchLedgerCard({
+    const card = renderDetail({
       id: 'card-ts-code',
       title: 'TypeScript code card',
       comment: { what: '```ts\ninterface User { id: string }\n```' }
@@ -325,13 +330,15 @@ test('ledger cards render visual labels as top-right card-colored chips', () => 
   };
 
   try {
-    const card = patchLedgerCard({
+    const input = {
       id: 'card-labels',
       title: 'Labeled card',
       labels: ['validated', 'runtime'],
       comment: { what: 'Label rendering target.' }
-    }) as unknown as FakeElement;
-    const labels = findElementByClass(card, 'ledger-card-labels') as FakeElement;
+    };
+    const card = patchLedgerCard(input) as unknown as FakeElement;
+    const detail = renderDetail(input);
+    const labels = findElementByClass(detail, 'ledger-card-labels') as FakeElement;
     const firstLabel = labels.children[0] as FakeElement;
     const secondLabel = labels.children[1] as FakeElement;
 
@@ -353,17 +360,19 @@ test('ledger cards receive deterministic zone color before tab controls paint', 
   };
 
   try {
-    const card = patchLedgerCard({
+    const input = {
       id: 'card-zone-color',
       title: 'Zone Colored',
       fields: [{ name: 'id', type: 'hash8' }],
       comment: { what: 'Zone color target.' }
-    }, null, { id: 'zone-owner', color: '#eab308' }) as unknown as FakeElement;
+    };
+    const card = patchLedgerCard(input, null, { id: 'zone-owner', color: '#eab308' }) as unknown as FakeElement;
+    const detail = renderDetail(input);
 
     assert.equal(card.dataset.cardZoneId, 'zone-owner');
     assert.equal(card.dataset.cardZoneColor, '#eab308');
     assert.equal(card.style['--card-zone-color'], '#eab308');
-    assert.equal((findElementByClass(card, 'ledger-card-tabs') as FakeElement).className, 'ledger-card-tabs');
+    assert.equal((findElementByClass(detail, 'ledger-card-tabs') as FakeElement).className, 'ledger-card-tabs');
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
   }
@@ -377,11 +386,11 @@ test('ledger card titles include PascalCase word break opportunities without cha
   };
 
   try {
-    const card = patchLedgerCard({
+    const card = renderDetail({
       id: 'card-pascal',
       title: 'UOptimizedInstancedStaticMeshComponent',
       comment: { what: 'Pascal title wrap target.' }
-    }) as unknown as FakeElement;
+    });
     const title = findElementByClass(card, 'ledger-card-title') as FakeElement;
 
     assert.equal(title.className, 'ledger-card-title');
@@ -400,11 +409,11 @@ test('ledger card titles render inline markdown without dropping title wrapping'
   };
 
   try {
-    const card = patchLedgerCard({
+    const card = renderDetail({
       id: 'card-title-markdown',
       title: '### RuneItem `FInventoryItem::Buffs` **Model**',
       comment: { what: 'Title markdown target.' }
-    }) as unknown as FakeElement;
+    });
     const title = findElementByClass(card, 'ledger-card-title') as FakeElement;
 
     assert.equal(title.dataset.titleHeading, '3');
@@ -442,6 +451,35 @@ test('ledger card delete action is rendered by overlay controls, not inside card
   }
 });
 
+test('ledger card shell stays overview-only unless detail is already mounted', () => {
+  const previousDocument = globalThis.document;
+  (globalThis as unknown as { document: unknown }).document = {
+    createElement: (tagName: string) => new FakeElement(tagName),
+    createTextNode: (text: string) => new FakeText(text)
+  };
+
+  try {
+    const input = {
+      id: 'card-hydration',
+      title: 'Hydrated card',
+      comment: { what: '**Detailed** body.' }
+    };
+    const shell = patchLedgerCard(input) as unknown as FakeElement;
+    const detail = renderLedgerCardDetailLayer(input);
+    shell.classList.add('detail-visible');
+    shell.children.splice(shell.children.length - 1, 0, detail as unknown as FakeElement);
+    const patched = patchLedgerCard({ ...input, title: 'Hydrated card patched' }, shell as unknown as HTMLElement) as unknown as FakeElement;
+
+    assert.equal(findElementByClass(patchLedgerCard(input) as unknown as FakeElement, 'ledger-card-detail-layer'), undefined);
+    assert.equal(Boolean(findElementByClass(shell, 'ledger-card-overview-layer')), true);
+    assert.equal(patched.className.includes('detail-visible'), true);
+    assert.equal(findElementByClass(patched, 'ledger-card-detail-layer'), detail);
+    assert.equal((findElementByClass(patched, 'ledger-card-title') as FakeElement).children.map((child) => child.textContent).join(''), 'Hydrated card patched');
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+  }
+});
+
 test('ledger groups leave delete action to overlay controls', () => {
   const previousDocument = globalThis.document;
   (globalThis as unknown as { document: unknown }).document = {
@@ -473,7 +511,7 @@ test('ledger cards with fields render description and fields tab panels', () => 
   };
 
   try {
-    const card = patchLedgerCard({
+    const input = {
       id: 'card-fields',
       title: 'Field card',
       comment: { what: 'Description body.' },
@@ -481,9 +519,11 @@ test('ledger cards with fields render description and fields tab panels', () => 
         { name: 'Health', type: 'FCreatureState' },
         { name: 'Stamina', type: 'FCreatureState' }
       ]
-    }) as unknown as FakeElement;
-    const tabs = findElementByClass(card, 'ledger-card-tabs') as FakeElement;
-    const frame = findElementByClass(card, 'ledger-card-tab-frame') as FakeElement;
+    };
+    const card = patchLedgerCard(input) as unknown as FakeElement;
+    const detail = renderDetail(input);
+    const tabs = findElementByClass(detail, 'ledger-card-tabs') as FakeElement;
+    const frame = findElementByClass(detail, 'ledger-card-tab-frame') as FakeElement;
     const description = frame.children[0] as FakeElement;
     const fields = frame.children[1] as FakeElement;
     const list = fields.children[0] as FakeElement;

@@ -36,6 +36,7 @@ test('low-detail mode switches card paint layers without threshold layout measur
   const css = source('frontend/assets/canvas/canvas-layer.css');
   const detailRuntime = source('frontend/src/runtime/canvas/effect/update-detail-mode.ts');
   const cardRenderer = source('frontend/src/runtime/ledger/component/patch-ledger-card.ts');
+  const detailRenderer = source('frontend/src/runtime/ledger/component/render-ledger-card-detail-layer.ts');
 
   assert.match(specs, /c4e8b2f9/);
   assert.match(specs, /4b7c1d9e/);
@@ -43,13 +44,18 @@ test('low-detail mode switches card paint layers without threshold layout measur
   assert.match(specs, /9d5e0b7a/);
   assert.doesNotMatch(detailRuntime, /offsetWidth|offsetHeight|getBoundingClientRect|scrollHeight/);
   assert.doesNotMatch(detailRuntime, /cacheRenderedCardSizes/);
-  assert.match(cardRenderer, /ledger-card-detail-layer/);
-  assert.match(cardRenderer, /ledger-card-overview-layer/);
-  assert.match(css, /\.canvas\.low-detail \.ledger-card-detail-layer\s*{[^}]*content-visibility:\s*hidden;/s);
-  assert.match(css, /\.canvas\.low-detail \.ledger-card-overview-layer\s*{[^}]*visibility:\s*visible;[^}]*opacity:\s*1;/s);
+  assert.match(cardRenderer, /mountedDetail \? renderLedgerCardDetailLayer\(card, mountedDetail\) : null/);
+  assert.doesNotMatch(cardRenderer, /renderLedgerCardMarkdown\(ledgerCardBody\(card\)/);
+  assert.match(detailRenderer, /ledger-card-detail-layer/);
+  assert.match(detailRenderer, /renderLedgerCardMarkdown\(ledgerCardBody\(card\)/);
+  assert.match(cardRenderer, /renderLedgerCardOverviewLayer\(card, id, visibleStatus\)/);
+  assert.match(detailRenderer, /ledger-card-overview-layer/);
+  assert.match(css, /\.canvas \.card:not\(\.detail-visible\) \.ledger-card-detail-layer\s*{[^}]*content-visibility:\s*hidden;/s);
+  assert.match(css, /\.canvas \.card:not\(\.detail-visible\) \.ledger-card-overview-layer\s*{[^}]*visibility:\s*visible;[^}]*opacity:\s*1;/s);
+  assert.match(css, /\.canvas\.low-detail \.grid,\s*\.canvas\.overview-detail \.grid\s*{[^}]*display:\s*none;/s);
   assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-title\s*{[^}]*width:\s*calc\(100% \* var\(--viewport-scale, 1\)\);/s);
   assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-title\s*{[^}]*padding:\s*calc/);
-  assert.match(css, /\.canvas\.low-detail \.ledger-card-overview-title\s*{[^}]*white-space:\s*normal;[^}]*word-break:\s*break-word;/s);
+  assert.match(css, /\.canvas \.card:not\(\.detail-visible\) \.ledger-card-overview-title\s*{[^}]*white-space:\s*normal;[^}]*word-break:\s*break-word;/s);
   assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-overview-title\s*{[^}]*text-overflow:\s*ellipsis;/s);
 });
 
@@ -93,7 +99,7 @@ test('local app and asset routes are served without browser cache ambiguity', ()
 test('card field tabs preserve measured description height and fade panel switches', () => {
   const specs = source('documentation/specs.json');
   const css = source('frontend/assets/canvas/objects.css');
-  const component = source('frontend/src/runtime/ledger/component/patch-ledger-card.ts');
+  const component = source('frontend/src/runtime/ledger/component/render-ledger-card-detail-layer.ts');
   const action = source('frontend/src/runtime/input/controller/handle-action-click.ts');
   const controller = source('frontend/src/runtime/card/controller/switch-card-tab-controller.ts');
   const sync = source('frontend/src/runtime/card/effect/sync-ledger-card-tab-frames.ts');
