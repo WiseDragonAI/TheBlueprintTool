@@ -161,6 +161,52 @@
       },
       "facts": [],
       "fields": []
+    },
+    {
+      "id": "perf-zoom-detail-reveal-plan",
+      "title": "Zoom Detail Reveal Plan",
+      "cardType": "perf-plan",
+      "domainId": "performances",
+      "x": 7930,
+      "y": -449,
+      "w": 980,
+      "h": 1320,
+      "comment": {
+        "contentFile": ".blueprinttool/cards/performances/perf-zoom-detail-reveal-plan.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "perf-zone-drag-direction",
+      "title": "Zone Drag Direction",
+      "cardType": "perf-plan",
+      "domainId": "performances",
+      "x": 2012,
+      "y": 1260,
+      "w": 1160,
+      "h": 1510,
+      "comment": {
+        "contentFile": ".blueprinttool/cards/performances/perf-zone-drag-direction.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "perf-low-detail-post-mortem",
+      "title": "Low Detail Performance Post-Mortem",
+      "cardType": "perf-analysis",
+      "domainId": "performances",
+      "x": 5366.009581095875,
+      "y": 3002.9604020535426,
+      "w": 1180,
+      "h": 2850,
+      "comment": {
+        "contentFile": ".blueprinttool/cards/performances/perf-low-detail-post-mortem.md"
+      },
+      "facts": [],
+      "fields": [],
+      "status": "done"
     }
   ],
   "relationships": [],
@@ -202,12 +248,14 @@
     "zoneIds": [],
     "groupIds": []
   },
-  "updatedAt": "2026-06-02T00:00:00.000Z",
+  "updatedAt": "2026-06-05T11:05:00.000Z",
   "cardEdits": {},
   "threadFiles": {
     "thread-perf-zone-label-overlay": ".blueprinttool/threads/performances/thread-perf-zone-label-overlay.md",
     "thread-perf-commit-raster": ".blueprinttool/threads/performances/thread-perf-commit-raster.md",
     "thread-perf-drag-call-chain": ".blueprinttool/threads/performances/thread-perf-drag-call-chain.md",
-    "thread-perf-measurement-matrix": ".blueprinttool/threads/performances/thread-perf-measurement-matrix.md"
+    "thread-perf-measurement-matrix": ".blueprinttool/threads/performances/thread-perf-measurement-matrix.md",
+    "thread-perf-real-offender-mechanism-proof": ".blueprinttool/threads/performances/thread-perf-real-offender-mechanism-proof.md",
+    "thread-perf-zone-drag-direction": ".blueprinttool/threads/performances/thread-perf-zone-drag-direction.md"
   }
 }

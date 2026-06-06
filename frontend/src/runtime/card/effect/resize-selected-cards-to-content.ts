@@ -15,7 +15,6 @@ const zoneFitPadding = 96;
 
 type DetailClasses = {
   low: boolean;
-  overview: boolean;
 };
 
 type BoxGeometry = {
@@ -55,16 +54,14 @@ function allCardElements(): HTMLElement[] {
 
 function clearLowDetailForMeasurement(): DetailClasses {
   const detail = {
-    low: canvas.classList.contains('low-detail'),
-    overview: canvas.classList.contains('overview-detail')
+    low: canvas.classList.contains('low-detail')
   };
-  if (detail.low || detail.overview) canvas.classList.remove('low-detail', 'overview-detail');
+  if (detail.low) canvas.classList.remove('low-detail');
   return detail;
 }
 
 function restoreDetailClasses(detail: DetailClasses): void {
   canvas.classList.toggle('low-detail', detail.low);
-  canvas.classList.toggle('overview-detail', detail.overview);
 }
 
 function syncCardTabFrameForMeasurement(card: HTMLElement): void {

@@ -2,22 +2,17 @@ import { canvas, content, controlOverlay as initialControlOverlay } from '../../
 import { renderLedgerCardDeleteButton } from '../../ledger/component/render-ledger-card-delete-button.js';
 import { renderLedgerCardStatusButton } from '../../ledger/component/render-ledger-card-status-button.js';
 import { state } from '../../state.js';
-
-type ControlTarget = {
-  kind: 'card' | 'zone' | 'group';
-  id: string;
-};
-
-let hoveredTarget: ControlTarget | null = null;
+import { dragTraceHook } from '../../performance/drag-trace-span.js';
+import { canvasControlOverlayHoverState, type CanvasControlTarget } from './canvas-control-overlay-hover-state.js';
 let hoverBindingInitialized = false;
 const removalTimers = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
 const controlFadeDurationMs = 160;
 
-function targetKey(target: ControlTarget | null): string {
+function targetKey(target: CanvasControlTarget | null): string {
   return target ? `${target.kind}:${target.id}` : '';
 }
 
-function sameTarget(a: ControlTarget | null, b: ControlTarget | null): boolean {
+function sameTarget(a: CanvasControlTarget | null, b: CanvasControlTarget | null): boolean {
   return targetKey(a) === targetKey(b);
 }
 
@@ -32,7 +27,7 @@ function resolveControlOverlay(): HTMLElement | null {
   return overlay;
 }
 
-function targetFromElement(element: EventTarget | null): ControlTarget | null {
+function targetFromElement(element: EventTarget | null): CanvasControlTarget | null {
   const node = element as HTMLElement | null;
   const control = node?.closest?.('.canvas-control') as HTMLElement | null;
   if (control?.dataset.cardId) return { kind: 'card', id: control.dataset.cardId };
@@ -46,24 +41,26 @@ function targetFromElement(element: EventTarget | null): ControlTarget | null {
   return null;
 }
 
-function sourceElement(target: ControlTarget): HTMLElement | null {
+function sourceElement(target: CanvasControlTarget): HTMLElement | null {
   if (!content) return null;
   if (target.kind === 'card') return content.querySelector(`:scope > .card[data-card-id="${CSS.escape(target.id)}"]`) as HTMLElement | null;
   if (target.kind === 'zone') return content.querySelector(`:scope > .zone[data-zone-id="${CSS.escape(target.id)}"]`) as HTMLElement | null;
   return content.querySelector(`:scope > .zone[data-group-id="${CSS.escape(target.id)}"]`) as HTMLElement | null;
 }
 
-function selectedTargets(): ControlTarget[] {
-  const targets: ControlTarget[] = [];
+function selectedTargets(): CanvasControlTarget[] {
+  const targets: CanvasControlTarget[] = [];
   for (const id of new Set(state.selection.zoneIds as string[])) targets.push({ kind: 'zone', id });
   for (const id of new Set(state.selection.groupIds as string[])) targets.push({ kind: 'group', id });
   return targets;
 }
 
-function visibleTargets(): ControlTarget[] {
-  const byKey = new Map<string, ControlTarget>();
+function visibleTargets(): CanvasControlTarget[] {
+  const byKey = new Map<string, CanvasControlTarget>();
   for (const target of selectedTargets()) byKey.set(targetKey(target), target);
-  if (hoveredTarget) byKey.set(targetKey(hoveredTarget), hoveredTarget);
+  if (canvasControlOverlayHoverState.target) {
+    byKey.set(targetKey(canvasControlOverlayHoverState.target), canvasControlOverlayHoverState.target);
+  }
   return [...byKey.values()];
 }
 
@@ -159,53 +156,76 @@ function syncZoneControls(group: HTMLElement, zone: HTMLElement, kind: 'zone' | 
 }
 
 export function renderCanvasControlOverlay(): void {
-  const overlay = resolveControlOverlay();
-  if (!overlay || !canvas || !content) return;
-  const activeKeys = new Set<string>();
-  for (const target of visibleTargets()) {
-    const source = sourceElement(target);
-    if (!source || source.hidden || source.style.display === 'none') continue;
-    const key = targetKey(target);
-    let control = overlay.querySelector(`[data-control-key="${CSS.escape(key)}"]`) as HTMLElement | null;
-    const isNew = !control;
-    if (!control) {
-      control = document.createElement('div');
-      control.dataset.controlKey = key;
-    }
-    const visible = target.kind === 'card'
-      ? syncCardControls(control, source)
-      : syncZoneControls(control, source, target.kind);
-    if (!visible) continue;
-    activeKeys.add(key);
-    cancelScheduledRemoval(control);
-    if (isNew) {
-      overlay.append(control);
-      nextFrame(() => nextFrame(() => control?.classList.add('is-visible')));
-    } else {
-      control.classList.add('is-visible');
-    }
+  const span = dragTraceHook();
+  if (!span) {
+    renderCanvasControlOverlayBody();
+    return;
   }
-  for (const control of Array.from(overlay.querySelectorAll('.canvas-control')) as HTMLElement[]) {
-    if (!activeKeys.has(control.dataset.controlKey ?? '')) scheduleRemoval(control);
-  }
+  span('renderCanvasControlOverlay', () => renderCanvasControlOverlayBody(span));
+}
+
+function renderCanvasControlOverlayBody(span?: NonNullable<ReturnType<typeof dragTraceHook>>): void {
+    const overlay = span ? span('renderCanvasControlOverlay:resolveControlOverlay', () => resolveControlOverlay()) : resolveControlOverlay();
+    if (!overlay || !canvas || !content) return;
+    const activeKeys = new Set<string>();
+    const targets = span ? span('renderCanvasControlOverlay:visibleTargets', () => visibleTargets()) : visibleTargets();
+    for (const target of targets) {
+      const source = span ? span('renderCanvasControlOverlay:sourceElement', () => sourceElement(target)) : sourceElement(target);
+      if (!source || source.hidden || source.style.display === 'none') continue;
+      const key = targetKey(target);
+      let control = span ? span('renderCanvasControlOverlay:queryControl', () => overlay.querySelector(`[data-control-key="${CSS.escape(key)}"]`) as HTMLElement | null) : overlay.querySelector(`[data-control-key="${CSS.escape(key)}"]`) as HTMLElement | null;
+      const isNew = !control;
+      if (!control) {
+        control = document.createElement('div');
+        control.dataset.controlKey = key;
+      }
+      let visible = false;
+      if (target.kind === 'card') {
+        visible = span ? span('renderCanvasControlOverlay:syncCardControls', () => syncCardControls(control, source)) : syncCardControls(control, source);
+      } else {
+        const zoneKind = target.kind;
+        visible = span ? span('renderCanvasControlOverlay:syncZoneControls', () => syncZoneControls(control, source, zoneKind)) : syncZoneControls(control, source, zoneKind);
+      }
+      if (!visible) continue;
+      activeKeys.add(key);
+      if (span) span('renderCanvasControlOverlay:cancelScheduledRemoval', () => cancelScheduledRemoval(control));
+      else cancelScheduledRemoval(control);
+      if (isNew) {
+        if (span) span('renderCanvasControlOverlay:appendControl', () => overlay.append(control));
+        else overlay.append(control);
+        nextFrame(() => nextFrame(() => control?.classList.add('is-visible')));
+      } else {
+        if (span) span('renderCanvasControlOverlay:showControl', () => control.classList.add('is-visible'));
+        else control.classList.add('is-visible');
+      }
+    }
+    const controls = span ? span('renderCanvasControlOverlay:queryExistingControls', () => Array.from(overlay.querySelectorAll('.canvas-control')) as HTMLElement[]) : Array.from(overlay.querySelectorAll('.canvas-control')) as HTMLElement[];
+    for (const control of controls) {
+      if (!activeKeys.has(control.dataset.controlKey ?? '')) {
+        if (span) span('renderCanvasControlOverlay:scheduleRemoval', () => scheduleRemoval(control));
+        else scheduleRemoval(control);
+      }
+    }
 }
 
 export function bindCanvasControlOverlayHover(): void {
   if (hoverBindingInitialized || !canvas) return;
   hoverBindingInitialized = true;
   canvas.addEventListener('mouseover', (event) => {
+    if (state.pointer?.intent === 'pan') return;
     const next = targetFromElement(event.target);
-    if (!next || sameTarget(hoveredTarget, next)) return;
-    hoveredTarget = next;
+    if (!next || sameTarget(canvasControlOverlayHoverState.target, next)) return;
+    canvasControlOverlayHoverState.target = next;
     renderCanvasControlOverlay();
   });
   canvas.addEventListener('mouseout', (event) => {
+    if (state.pointer?.intent === 'pan') return;
     const previous = targetFromElement(event.target);
     if (!previous) return;
     const next = targetFromElement(event.relatedTarget);
     if (sameTarget(previous, next)) return;
-    if (sameTarget(previous, hoveredTarget)) {
-      hoveredTarget = next;
+    if (sameTarget(previous, canvasControlOverlayHoverState.target)) {
+      canvasControlOverlayHoverState.target = next;
       renderCanvasControlOverlay();
     }
   });

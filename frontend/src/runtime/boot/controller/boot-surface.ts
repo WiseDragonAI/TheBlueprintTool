@@ -1,3 +1,7 @@
+/**
+ * WHAT: Boots the browser canvas runtime for the active BlueprintTool route.
+ * WHY: Startup must restore persisted state, bind input controllers, and render the active ledger in one canonical order.
+ */
 import { state } from '../../state.js';
 import { SPEC_IMPLEMENTATION_SURFACE } from '../../spec-implementation-surface.js';
 import { bindInputs } from '../../input/effect/bind-inputs.js';
@@ -12,6 +16,7 @@ import { subscribeLedgerContentEvents } from '../../refresh/effect/subscribe-led
 import { routeTab } from '../../navigation/helper/route-tab.js';
 import { applyRailCollapsedState } from '../../toolbox/effect/apply-rail-collapsed-state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { initializeZoomDebugOverlay } from '../../debug/zoom-debug/effect/initialize-zoom-debug-overlay.js';
 
 export function bootSurface(): void {
   const persisted = readPersistedState();
@@ -28,6 +33,7 @@ export function bootSurface(): void {
   state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
   telemetry('clear-transient-selection', { reason: 'boot' });
   bindInputs();
+  initializeZoomDebugOverlay();
   subscribeLedgerContentEvents();
   renderTabRegistry();
   void loadBlueprinttoolState().then(loadActiveLedgerState).then(renderCanvasSurface);

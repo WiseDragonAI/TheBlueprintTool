@@ -8,8 +8,9 @@ import { patchLedgerZone } from '../component/patch-ledger-zone.js';
 import { setCanvasLayerHidden } from '../../canvas/effect/set-canvas-layer-hidden.js';
 import { ensureZoneAttributionCache } from '../helper/zone-attribution-cache.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
-import { invalidateDetailModeCardSizeCache } from '../../canvas/effect/update-detail-mode.js';
+import { invalidateDetailModeCardSizeCache } from '../../canvas/effect/invalidate-detail-mode-card-size-cache.js';
 import { scheduleCanvasMediaOverlayRender } from '../../canvas/effect/render-canvas-media-overlay.js';
+import { canvas } from '../../dom.js';
 
 export function renderLedgerSurface(): void {
   invalidateDetailModeCardSizeCache();
@@ -54,8 +55,11 @@ export function renderLedgerSurface(): void {
   });
   const overlay = createLedgerRelationshipOverlay(relationships, content.querySelector('.ledger-relationships') as SVGSVGElement | null, ledgerRelationshipBounds({ cards, annotations }));
   if (!overlay.parentElement) content.insertBefore(overlay, marquee);
-  scheduleLedgerCardTabFrameSync(content);
-  watchLedgerCardTabFrameSize(content);
+  if (!canvas.classList.contains('low-detail')) {
+    // Branch: Low-detail owns no visible tab panels, so detail-frame measurement must stay out of the zoomed-out render path.
+    scheduleLedgerCardTabFrameSync(content);
+    watchLedgerCardTabFrameSize(content);
+  }
   scheduleCanvasMediaOverlayRender();
   telemetry('render-ledger-surface', { activeTab: state.activeTab, cards: cards.length, zones: annotations.length, relationships: relationships.length });
 }

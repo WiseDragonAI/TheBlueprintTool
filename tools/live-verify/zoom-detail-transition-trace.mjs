@@ -10,6 +10,9 @@ const cdpJsonUrl = process.env.COREV2_CDP_JSON ?? 'http://127.0.0.1:9223/json';
 const outputDir = process.env.COREV2_ZOOM_DETAIL_TRACE_OUTPUT_DIR ?? `/tmp/corev2-zoom-detail-transition-${Date.now()}`;
 const cases = parseList(process.env.COREV2_ZOOM_DETAIL_CASES, ['normal-to-low', 'low-to-normal', 'low-to-overview', 'overview-to-low']);
 const variants = parseList(process.env.COREV2_ZOOM_DETAIL_VARIANTS, ['baseline', 'no-grid', 'no-detail-layer', 'no-overview-layer', 'no-counter-scale']);
+const targets = parseTargets(process.env.COREV2_ZOOM_DETAIL_TARGETS);
+const runCount = Math.max(1, Number(process.env.COREV2_ZOOM_DETAIL_RUNS ?? 1));
+const postInputWaitMs = Math.max(200, Number(process.env.COREV2_ZOOM_DETAIL_POST_INPUT_WAIT_MS ?? 1400));
 const slowFrameThresholdMs = Number(process.env.COREV2_ZOOM_DETAIL_SLOW_FRAME_MS ?? 16.7);
 const offenderThresholdMs = Number(process.env.COREV2_ZOOM_DETAIL_OFFENDER_MS ?? 8);
 
@@ -40,6 +43,19 @@ function parseList(value, fallback) {
   if (!value) return fallback;
   const parsed = value.split(',').map((part) => part.trim()).filter(Boolean);
   return parsed.length ? parsed : fallback;
+}
+
+function parseTargets(value) {
+  if (!value) return [{ name: 'fixed', viewportX: -820, viewportY: -360 }];
+  return value.split(';').map((part) => part.trim()).filter(Boolean).map((part) => {
+    const [namePart, coordinatePart] = part.split(':');
+    if (!coordinatePart) throw new Error(`Invalid target ${part}; expected name:x,y or name@viewport:x,y`);
+    const viewport = namePart.endsWith('@viewport');
+    const name = viewport ? namePart.slice(0, -'@viewport'.length) : namePart;
+    const [x, y] = coordinatePart.split(',').map((coordinate) => Number(coordinate.trim()));
+    if (!name || !Number.isFinite(x) || !Number.isFinite(y)) throw new Error(`Invalid target ${part}; expected finite x,y`);
+    return viewport ? { name, viewportX: x, viewportY: y } : { name, worldX: x, worldY: y };
+  });
 }
 
 function round(value) {
@@ -158,6 +174,33 @@ function analyzeTrace(traceEvents, page) {
   };
 }
 
+function revealSummary(telemetry) {
+  const queue = telemetry.find((trace) => trace.name === 'detail-reveal-queue')?.args ?? null;
+  const frames = telemetry.filter((trace) => trace.name === 'detail-reveal-frame');
+  const urgentFrames = frames.filter((trace) => trace.args?.phase === 'urgent');
+  const backgroundFrames = frames.filter((trace) => trace.args?.phase === 'background');
+  const maxDurationMs = frames.reduce((max, trace) => Math.max(max, Number(trace.args?.durationMs ?? 0)), 0);
+  const totalRevealed = frames.reduce((sum, trace) => sum + Number(trace.args?.revealed ?? 0), 0);
+  const chunkEvolution = frames.slice(0, 10).map((trace) => ({
+    phase: trace.args?.phase,
+    revealed: trace.args?.revealed,
+    durationMs: trace.args?.durationMs,
+    nextChunkSize: trace.args?.nextChunkSize,
+    remainingUrgent: trace.args?.remainingUrgent,
+    remainingBackground: trace.args?.remainingBackground
+  }));
+  return {
+    queue,
+    frameCount: frames.length,
+    urgentFrameCount: urgentFrames.length,
+    backgroundFrameCount: backgroundFrames.length,
+    totalRevealed,
+    maxDurationMs: round(maxDurationMs),
+    completed: telemetry.some((trace) => trace.name === 'detail-reveal-complete'),
+    chunkEvolution
+  };
+}
+
 function setupExpression(input) {
   return `(${async function setupZoomDetailTrace() {
     const input = window.__zoomDetailTraceInput;
@@ -176,17 +219,23 @@ function setupExpression(input) {
     if (variantHas('no-counter-scale')) css.push('.ledger-card-overview-title,.zone-title,.zone-label-proxy{transform:none!important;max-width:100%!important}');
     style.textContent = css.join('\\n');
     document.head.append(style);
-    state.viewport = { x: -820, y: -360, scale: input.beforeScale };
+    const rect = canvas.getBoundingClientRect();
+    const viewportX = Number.isFinite(input.viewportX) ? input.viewportX : (rect.width / 2) - input.worldX * input.beforeScale;
+    const viewportY = Number.isFinite(input.viewportY) ? input.viewportY : (rect.height / 2) - input.worldY * input.beforeScale;
+    state.viewport = { x: viewportX, y: viewportY, scale: input.beforeScale };
     state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
     state.threadPanelOpen = false;
     document.querySelector('.thread-panel')?.setAttribute('hidden', '');
     applyViewportTransform();
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    const rect = canvas.getBoundingClientRect();
     return {
       route: location.pathname,
       activeTab: state.activeTab,
+      targetName: input.targetName,
+      runIndex: input.runIndex,
       beforeScale: state.viewport.scale,
+      viewport: { x: state.viewport.x, y: state.viewport.y },
+      worldTarget: Number.isFinite(input.worldX) ? { x: input.worldX, y: input.worldY } : null,
       lowDetail: canvas.classList.contains('low-detail'),
       overviewDetail: canvas.classList.contains('overview-detail'),
       x: Math.round(rect.left + rect.width / 2),
@@ -195,7 +244,9 @@ function setupExpression(input) {
         cards: document.querySelectorAll('.ledger-node[data-card-id]').length,
         zones: document.querySelectorAll('.ledger-node[data-zone-id]').length,
         relationships: document.querySelectorAll('.ledger-relationships [data-relationship-id]').length,
-        images: document.querySelectorAll('img').length
+        images: document.querySelectorAll('img').length,
+        stagedHidden: document.querySelectorAll('.card[data-detail-reveal="hidden"]').length,
+        stagedVisible: document.querySelectorAll('.card[data-detail-reveal="visible"]').length
       }
     };
   }}).call(null)`.replace('const input = window.__zoomDetailTraceInput;', `const input = ${JSON.stringify(input)};`);
@@ -238,12 +289,15 @@ function installInstrumentationExpression(input) {
           frames: state.frames,
           telemetry: (window.__coreTelemetry ?? []).slice(state.telemetryStart),
           final: {
-            scale: window.__coreState.viewport.scale,
-            lowDetail: canvas.classList.contains('low-detail'),
-            overviewDetail: canvas.classList.contains('overview-detail')
-          }
-        };
+        scale: window.__coreState.viewport.scale,
+        lowDetail: canvas.classList.contains('low-detail'),
+        overviewDetail: canvas.classList.contains('overview-detail'),
+        staged: canvas.classList.contains('detail-reveal-staged'),
+        stagedHidden: document.querySelectorAll('.card[data-detail-reveal="hidden"]').length,
+        stagedVisible: document.querySelectorAll('.card[data-detail-reveal="visible"]').length
       }
+    };
+  }
     };
     mark('instrumentation-installed', { caseName: input.caseName, variant: input.variant });
     return true;
@@ -257,13 +311,13 @@ async function evaluate(send, expression, timeoutMs = 30000) {
   return response.result.result.value;
 }
 
-async function runCase({ socket, send, caseName, variant }) {
+async function runCase({ socket, send, caseName, variant, target, runIndex }) {
   const scales = caseScales[caseName];
   if (!scales) throw new Error(`Unknown zoom detail case: ${caseName}`);
   await send('Page.navigate', { url });
   await wait(1200);
   await waitLiveCanvasReady(send);
-  const input = { caseName, variant, beforeScale: scales.before, afterScale: scales.after };
+  const input = { caseName, variant, targetName: target.name, runIndex, beforeScale: scales.before, afterScale: scales.after, ...target };
   const setup = await evaluate(send, setupExpression(input));
   await evaluate(send, installInstrumentationExpression(input));
 
@@ -290,13 +344,13 @@ async function runCase({ socket, send, caseName, variant }) {
     deltaX: 0,
     deltaY: wheelDeltaForScale(scales.before, scales.after)
   });
-  await wait(640);
+  await wait(postInputWaitMs);
   await evaluate(send, `window.__zoomDetailTrace.mark(${JSON.stringify('trace-end')})`);
   await send('Tracing.end');
   await tracingComplete;
 
   const page = await evaluate(send, 'window.__zoomDetailTrace.finish()');
-  const safeName = `${caseName}-${variant}`.replace(/[^a-zA-Z0-9_-]+/g, '_');
+  const safeName = `${caseName}-${variant}-${target.name}-run${runIndex}`.replace(/[^a-zA-Z0-9_-]+/g, '_');
   const tracePath = join(outputDir, `${safeName}.trace.json`);
   const reportPath = join(outputDir, `${safeName}.report.json`);
   await writeFile(tracePath, JSON.stringify({ traceEvents }));
@@ -306,9 +360,12 @@ async function runCase({ socket, send, caseName, variant }) {
     url,
     setup,
     target: scales,
+    viewportTarget: target,
+    runIndex,
     wheelDeltaY: round(wheelDeltaForScale(scales.before, scales.after)),
     page,
     trace: analyzeTrace(traceEvents, page),
+    reveal: revealSummary(page.telemetry ?? []),
     tracePath,
     reportPath
   };
@@ -321,15 +378,21 @@ function formatReport(reports) {
     'Zoom detail transition CDP trace suite',
     `url=${url}`,
     `outputDir=${outputDir}`,
-    `cases=${cases.join(',')} variants=${variants.join(',')}`,
+    `cases=${cases.join(',')} variants=${variants.join(',')} targets=${targets.map((target) => target.name).join(',')} runs=${runCount}`,
+    `postInputWaitMs=${postInputWaitMs}`,
     ''
   ];
   for (const report of reports) {
     const worst = report.trace.worst[0];
     const offenders = worst?.offenders?.slice(0, 4).map((entry) => `${entry.label} ${entry.overlapMs}ms`).join(', ') || 'none>=threshold';
     const groups = worst?.groups?.slice(0, 4).map((entry) => `${entry.group} ${entry.totalMs}ms/max${entry.maxMs}`).join(', ') || 'none';
-    lines.push(`${report.caseName}/${report.variant}: ${report.setup.beforeScale}->${report.page.final.scale.toFixed(3)} low=${report.page.final.lowDetail} overview=${report.page.final.overviewDetail} cards=${report.setup.counts.cards} zones=${report.setup.counts.zones} rel=${report.setup.counts.relationships}`);
+    const revealQueue = report.reveal.queue;
+    const revealLine = revealQueue
+      ? ` reveal visible=${revealQueue.visibleCards} urgent=${revealQueue.urgentCards} background=${revealQueue.backgroundCards} frames=${report.reveal.frameCount} maxChunk=${report.reveal.maxDurationMs}ms completed=${report.reveal.completed}`
+      : ' reveal=none';
+    lines.push(`${report.caseName}/${report.variant}/${report.setup.targetName}/run${report.runIndex}: ${report.setup.beforeScale}->${report.page.final.scale.toFixed(3)} low=${report.page.final.lowDetail} overview=${report.page.final.overviewDetail} staged=${report.page.final.staged} cards=${report.setup.counts.cards} zones=${report.setup.counts.zones} rel=${report.setup.counts.relationships}`);
     lines.push(`  slowFrames=${report.trace.count} worst=${worst?.durationMs ?? 0}ms groups=${groups}`);
+    lines.push(`  ${revealLine}`);
     lines.push(`  offenders=${offenders}`);
     lines.push(`  report=${report.reportPath}`);
   }
@@ -345,7 +408,11 @@ try {
   const reports = [];
   for (const caseName of cases) {
     for (const variant of variants) {
-      reports.push(await runCase({ socket, send, caseName, variant }));
+      for (const target of targets) {
+        for (let runIndex = 1; runIndex <= runCount; runIndex += 1) {
+          reports.push(await runCase({ socket, send, caseName, variant, target, runIndex }));
+        }
+      }
     }
   }
   await writeFile(join(outputDir, 'suite-summary.json'), JSON.stringify({ generatedAt: new Date().toISOString(), reports }, null, 2));

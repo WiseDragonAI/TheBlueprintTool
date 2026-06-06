@@ -25,7 +25,11 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.doesNotMatch(pointerUp, /commitActiveLedgerMutation/);
 
   const wheel = source('frontend/src/runtime/gesture/controller/handle-wheel.ts');
-  assert.match(wheel, /applyViewportTransform/);
+  const scheduledViewport = source('frontend/src/runtime/canvas/effect/schedule-viewport-transform.ts');
+  const applyScheduledViewport = source('frontend/src/runtime/canvas/effect/apply-scheduled-viewport-transform.ts');
+  assert.match(wheel, /scheduleViewportTransform/);
+  assert.match(scheduledViewport, /requestAnimationFrame\(applyScheduledViewportTransform\)/);
+  assert.match(applyScheduledViewport, /applyViewportTransform/);
   assert.doesNotMatch(wheel, /renderRelationshipOverlay/);
   assert.doesNotMatch(wheel, /viewport\.x\s*-=/);
   assert.doesNotMatch(wheel, /deltaX\s*\|\|\s*event\.deltaY/);
@@ -185,8 +189,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(canvasLayerCss, /\.canvas-control\s*{[^}]*position:\s*absolute;[^}]*opacity:\s*0;[^}]*transition:\s*opacity 140ms ease;/s);
   assert.match(canvasLayerCss, /\.canvas-control\.is-visible\s*{[^}]*opacity:\s*1;[^}]*pointer-events:\s*auto;/s);
   assert.match(canvasLayerCss, /\.canvas-control \.terminal-button,[\s\S]*transition:\s*none;/);
-  assert.match(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-overview-title\s*{[^}]*padding:\s*4px 6px 0;/s);
-  assert.match(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-detail-layer\s*{[^}]*content-visibility:\s*hidden;/s);
-  assert.match(canvasLayerCss, /\.canvas\.low-detail \.card\[data-card-work-status="todo"\] \.ledger-card-overview-status\s*{[^}]*top:\s*50%;[^}]*left:\s*50%;[^}]*justify-content:\s*center;[^}]*transform:\s*translate\(-50%, -50%\) scale\(var\(--inverse-viewport-scale, 1\)\);/s);
+  assert.doesNotMatch(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-overview-title/);
+  assert.doesNotMatch(canvasLayerCss, /content-visibility:\s*hidden/);
   assert.doesNotMatch(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-status-toggle/);
 });

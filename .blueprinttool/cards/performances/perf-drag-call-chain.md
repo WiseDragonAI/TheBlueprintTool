@@ -1,107 +1,169 @@
 # Drag Move Call Chain
 
-Measured run:
+This card replaces the earlier after-release-focused analysis. The relevant drag problem is inside frames while the pointer is moving.
 
-| Field | Value |
-| --- | --- |
-| Tool | `tools/live-verify/card-drag-trace-suite.mjs` |
-| Output | `/tmp/corev2-card-drag-open-notes` |
-| URL | `http://127.0.0.1:4173/ardaria-game-design` |
-| Target card | `prep_development_cheat_menu_ae913a0a` |
-| Scale | `0.35` |
-| Runtime shape | 77 cards, 18 zones, 0 relationships, 35 images |
-| Moves | 12 pointer moves |
-| DOM read probes | enabled |
-| Geometry commit | mocked to isolate local rendering path |
-
-Measured drag flow:
+Fresh measured run:
 
 ```text
-pointermove
-  -> handlePointerMove()
-  -> moveSelected(canvasDx, canvasDy)
-  -> moveSelectedLedgerGeometry()
-  -> patchNodePosition()
-  -> renderZoneLabelOverlay()
-  -> renderRelationshipOverlay()
-  -> renderCanvasControlOverlay()
+output: /tmp/corev2-drag-frame-decomposition-rerun
+report: /tmp/corev2-drag-frame-decomposition-rerun/prep_development_cheat_menu_ae913a0a-scale0_35-baseline-cold-run1.report.json
+route: http://127.0.0.1:4173/ardaria-game-design
+target: prep_development_cheat_menu_ae913a0a
+scale: 0.35
+runtime: 104 cards, 23 zones, 0 relationships, 35 images
+moves: 12 pointer moves
+DOM read probes: enabled
+source spans: enabled
 ```
 
-Trace evidence:
+## Current Source Path
 
-| Variant | Worst pointermove dispatch | Pointermove DOM reads | Worst during-drag frame | After-release max frame | Interpretation |
-| --- | ---: | --- | ---: | ---: | --- |
-| `baseline` | 11.948ms | `offsetLeft` 576 | 29.1ms | 844.4ms | Pointermove can consume most of a frame budget; release is a separate huge style/layout problem. |
-| `skip-zone-labels` | 0.944ms | no pointermove `offsetLeft` top entry | 17.8ms | 860.6ms | Zone-label reads explain the pointermove event cost, but not release jank. |
-| `no-hover-controls` | 9.917ms | `offsetLeft` 576, `offsetTop` 384 | 32.4ms | 899.7ms | Hover controls are not the main pointermove offender in this run. |
-
-The critical measured write is that every pointermove writes layout position:
-
-```ts
-node.style.left = `${x}px`;
-node.style.top = `${y}px`;
-```
-
-Those writes happen inside `moveSelected()`, after the ledger geometry has already been patched in memory. Because the DOM node is absolutely positioned, changing `left/top` is a layout-position mutation, not a compositor-only transform.
-
-After the write, overlay renderers run synchronously in the same pointermove. In this measured run there are zero relationships, so relationship routing is not responsible for the drag lag. Zone labels are proven expensive by the `skip-zone-labels` probe.
-
-Function-level evidence:
-
-| Function / phase | Evidence status | Measured signal | Valid conclusion |
-| --- | --- | --- | --- |
-| `handlePointerMove()` | measured as event, not isolated | Baseline `EventDispatch:pointermove` max 11.948ms | The whole pointermove chain can consume most of a frame budget. |
-| `moveSelected()` | not isolated as its own function timer | Style mutation occurs about 11.7ms after first move in baseline | It is on the critical path, but exact exclusive time is not proven yet. |
-| `renderZoneLabelOverlay()` | measured by A/B probe | Skipping it drops worst pointermove dispatch from 11.948ms to 0.944ms | This is a proven pointermove offender. |
-| `renderRelationshipOverlay()` | bounded by ledger shape | Runtime had 0 relationships | It is not the cause in this Ardaria Game Design drag trace. |
-| `renderCanvasControlOverlay()` | measured by A/B probe | `no-hover-controls` keeps worst pointermove dispatch near baseline at 9.917ms | It is not the main pointermove offender in this run. |
-| Browser style/layout after release | measured by trace | After-release frame 844.4ms, `Document::UpdateStyleAndLayout` 212.921ms | Release jank is a separate style/layout lifecycle problem. |
-| Raster/composite during drag | measured by trace events | Baseline raster/composite max event 40.529ms | Drag also creates compositor/raster debt. |
-
-This explains why the browser trace shows both:
-
-- `EventDispatch(pointermove)` around 10-12ms max in baseline.
-- During-drag frames around 29-32ms in the measured run.
-- After-release frames around 844-900ms in this particular run, dominated by style/layout lifecycle work.
-
-The JS event is only the trigger. The user-visible frame loss happens when Chrome tries to produce the next committed frame after the layout-position mutation.
-
-Required next measurement before implementing the drag-preview refactor: add explicit `performance.mark()` spans around `moveSelectedLedgerGeometry`, `patchNodePosition`, `renderZoneLabelOverlay`, `renderRelationshipOverlay`, and `renderCanvasControlOverlay`. The current trace proves the zone-label A/B and the browser frame cost, but it does not provide exclusive function timings for every function in the call chain.
-
-## Source validation and counter-findings
-
-Source-confirmed path:
+The drag pointermove path is:
 
 ```text
 handlePointerMove()
   -> moveSelected(canvasDx, canvasDy)
-  -> moveSelectedLedgerGeometry(dx, dy)
-  -> patchLedgerCardGeometry(...) / patchLedgerAnnotationGeometry(...)
+  -> moveSelectedLedgerGeometry()
   -> patchNodePosition(... left/top ...)
   -> renderZoneLabelOverlay()
   -> renderRelationshipOverlay()
   -> renderCanvasControlOverlay()
 ```
 
-Code proof:
+Source links:
 
-- `frontend/src/runtime/gesture/controller/handle-pointer-move.ts` calls `moveSelected()` for `drag` and `group` pointer intents.
-- `frontend/src/runtime/selection/effect/move-selected.ts` patches active-ledger geometry in memory on every move, then writes `node.style.left` and `node.style.top`.
-- The same `moveSelected()` call then synchronously renders zone labels, relationships, and controls.
-- `frontend/src/runtime/gesture/controller/handle-pointer-up.ts` may call one final `moveSelected()` for the release delta, then commits selected ledger geometry, persists state, and rerenders the canvas surface for non-pan intents.
+- `frontend/src/runtime/gesture/controller/handle-pointer-move.ts:20-57`: `handlePointerMove()` calls `moveSelected()` for `drag` and `group`.
+- `frontend/src/runtime/selection/effect/move-selected.ts:9-38`: `moveSelected()` moves selected geometry, emits telemetry, then synchronously renders zone labels, relationships, and controls.
+- `frontend/src/runtime/selection/effect/move-selected.ts:41-52`: active-ledger card drag patches ledger geometry and calls `patchNodePosition()`.
+- `frontend/src/runtime/selection/effect/move-selected.ts:93-96`: `patchNodePosition()` writes `style.left` and `style.top`.
+- `frontend/src/runtime/zone/effect/render-zone-label-overlay.ts:5-48`: zone labels are fully rebuilt on every call.
+- `frontend/src/runtime/zone/effect/render-zone-label-overlay.ts:30-36`: each label reads `offsetLeft`, `offsetTop`, `offsetWidth`, and `getComputedStyle()`.
 
-Fresh counter-run:
+## Worst During-Drag Frame
 
-| Variant | Worst pointermove dispatch | Worst during-drag frame | Worst after-release frame | What this validates |
-| --- | ---: | ---: | ---: | --- |
-| `baseline` | `13.469ms` | `33.6ms` | `1281.9ms` | Current source path can consume most of the frame budget before browser frame production. |
-| `skip-zone-labels` | `1.163ms` | `33.1ms` | `1257.2ms` | Zone labels dominate pointermove event cost but are not the only visible frame bottleneck. |
-| `no-hover-controls` | `12.948ms` | `46.1ms` | `1223.6ms` | Hover controls are not the main pointermove offender here. |
+The worst during-drag frame in the fresh run is frame `#13`:
 
-Important correction: the current active-ledger relationship renderer already consumes ledger geometry through `activeLedgerCardRectMap()`, not DOM card rectangles. That is good for active ledgers. The missing piece is an explicit in-flight geometry snapshot that lets drag visuals, relationships, labels, and controls consume the same coalesced position once per animation frame without mutating persisted ledger records and layout-position DOM on every raw pointer event.
+```text
+frame #13
+phase: during-drag
+duration: 52.0ms
+window: 259.2ms -> 311.2ms
+```
 
-Implementation implication:
+Chrome trace overlap inside that same frame:
 
-- A transform-only drag preview is insufficient by itself if relationships and labels still read stale ledger geometry.
-- A ledger-only in-memory update is insufficient by itself if selected DOM nodes still move via `left/top`.
-- The target model needs both: in-flight geometry for all overlays, and compositor-friendly visual movement for selected objects until release.
+```text
+EventDispatch:pointermove: 18.224ms
+ProxyMain::BeginMainFrame: 30.839ms
+LayerTreeHost::WaitForCommitCompletion: 29.770ms
+raster-composite grouped overlap: 645.322ms across traced raster/compositor events
+style-layout grouped overlap: 58.067ms across many small layout/style events
+```
+
+App source spans inside that same frame:
+
+```text
+handlePointerMove: 17.9ms
+  moveSelected: 17.7ms
+    renderZoneLabelOverlay: 16.5ms
+      renderZoneLabelOverlay:buildLabels: 15.0ms
+        renderZoneLabelOverlay:readLayoutAndStyle: 13.8ms exclusive, 22 calls
+      renderZoneLabelOverlay:replaceChildren: 1.1ms exclusive
+      renderZoneLabelOverlay:appendLabel: 1.1ms exclusive, 22 calls
+```
+
+That is the missing frame decomposition. The app event alone nearly consumes a full `16.7ms` frame budget, and most of that app event is not abstract "CSS"; it is source code in `renderZoneLabelOverlay()` repeatedly forcing layout-dependent reads while rebuilding labels.
+
+## Worst Pointermove Event
+
+Worst measured pointermove source span:
+
+```text
+pointermove#2
+top-level app span: 17.9ms
+handlePointerMove: 17.9ms
+  moveSelected: 17.7ms
+    moveSelectedLedgerGeometry: 0.7ms
+      patchNodePosition:card: 0.3ms
+    renderZoneLabelOverlay: 16.5ms
+      replaceChildren: 1.1ms
+      buildLabels: 15.0ms
+        readLayoutAndStyle: 13.8ms exclusive, 22 calls
+      telemetry: 0.1ms
+      appendLabel: 1.1ms exclusive, 22 calls
+  calculate-drag-delta telemetry: 0.1ms
+```
+
+This recomposes to the pointermove app time with normal rounding error:
+
+```text
+0.7ms movement
++ 16.5ms zone labels
++ 0.5ms relationships/controls/surrounding pointermove work
+= 17.7ms measured inside a 17.9ms top-level handlePointerMove span
+```
+
+## DOM Read Proof
+
+The same report recorded DOM reads by active event:
+
+```text
+pointermove:capture / offsetLeft: 792 reads, 135.6ms total
+pointermove:capture / offsetTop: 528 reads, 3.5ms total
+pointermove:capture / offsetWidth: 264 reads, 0.8ms total
+pointermove:capture / getComputedStyle: 264 reads, 0.1ms total
+```
+
+This matches the code exactly:
+
+```ts
+label.style.left = `${zone.offsetLeft + title.offsetLeft}px`;
+label.style.top = `${zone.offsetTop + title.offsetTop}px`;
+label.style.maxWidth = `${Math.max(0, zone.offsetWidth - title.offsetLeft)}px`;
+const titleStyle = getComputedStyle(title);
+```
+
+There are 22 visible labels in the bad pointermove. The function reads layout/style per visible label, then appends a replacement label. That is why a label pass is around `16ms`.
+
+## What Is Validated
+
+Validated:
+
+- Drag frames are bad during pointer movement, not only after release.
+- `renderZoneLabelOverlay()` is the dominant app-side pointermove offender in this Ardaria trace.
+- The exact hot subspan is `renderZoneLabelOverlay:readLayoutAndStyle`.
+- `moveSelectedLedgerGeometry()` and `patchNodePosition()` are present in the chain but are not the measured `16ms` JS cost in this run.
+- Relationships are not the reproduced cause in this run because the ledger has `0 relationships`; relationships measured below the dominant label path.
+- Controls are not the reproduced pointermove cause in this run; the measured app frame is dominated by zone labels.
+- Browser frame production is also a real visible-frame offender: the same bad frame overlaps `ProxyMain::BeginMainFrame` and lifecycle/raster work after the selected card is moved with `left/top`.
+
+Invalidated:
+
+- Any claim that the drag problem is mainly after release.
+- Any claim based only on accumulated totals.
+- Any claim that "CSS style" alone explains the slowdown without pointing to the code path that triggers style/layout work.
+
+## Fix Direction
+
+First fix the measured JS offender:
+
+- Stop rebuilding every zone label on every raw pointermove.
+- Stop reading `offsetLeft`, `offsetTop`, `offsetWidth`, and `getComputedStyle()` for every visible zone during drag.
+- Use ledger/in-flight geometry for label position and cached title style.
+- Coalesce label/relationship/control overlay updates through one `requestAnimationFrame`.
+
+Then fix the browser frame-production offender:
+
+- Move selected cards with a compositor-friendly transform preview during drag.
+- Commit `left/top` once on release.
+- Feed labels, relationships, and controls from the same in-flight geometry so feedback stays correct while the DOM position is previewed.
+
+Acceptance proof for the drag fix:
+
+```text
+same route/card/scale
+worst during-drag frame < 16.7ms
+worst EventDispatch:pointermove < 4ms
+renderZoneLabelOverlay:readLayoutAndStyle absent or below 1ms per pointermove
+no ProxyMain::BeginMainFrame / commit overlap above 8ms during drag
+```
