@@ -231,17 +231,30 @@
   position: relative;
   min-height: 100%;
   contain: layout style paint;
+  opacity: 1;
+  transition: opacity 160ms ease-out;
   will-change: opacity;
+}
+
+.ledger-card-detail-host {
+  position: relative;
+  min-height: 100%;
 }
 
 .ledger-card-overview-layer {
   position: absolute;
   inset: 8px;
-  visibility: hidden;
   opacity: 0;
   pointer-events: none;
   contain: layout style paint;
+  transition: opacity 160ms ease-out;
   will-change: opacity;
+}
+
+.card[data-detail-mounted="mounting"] .ledger-card-detail-layer,
+.card[data-detail-mounted="unmounting"] .ledger-card-detail-layer {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .ledger-card-overview-title {

@@ -57,6 +57,28 @@
   pointer-events: none;
 }
 
+.zoom-debug-overlay {
+  position: fixed;
+  z-index: 500;
+  top: 54px;
+  right: 12px;
+  max-width: min(980px, calc(100vw - 24px));
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--accent), white 18%);
+  border-radius: 4px;
+  background: rgba(2, 10, 14, 0.98);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 10px 28px rgba(0, 0, 0, 0.6);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  pointer-events: none;
+  white-space: normal;
+}
+
 .canvas-control {
   position: absolute;
   display: inline-flex;
@@ -156,11 +178,6 @@
   pointer-events: none;
 }
 
-.canvas.detail-reveal-staged .ledger-card-detail-layer,
-.canvas.detail-reveal-staged .ledger-card-overview-layer {
-  transition: opacity 160ms ease-out;
-}
-
 .canvas.detail-reveal-staged .card[data-detail-reveal="hidden"] .ledger-card-detail-layer,
 .canvas.detail-reveal-staged .card[data-detail-reveal="queued"] .ledger-card-detail-layer,
 .canvas.detail-reveal-staged .card[data-detail-reveal="hidden"] .card-actions,
@@ -198,6 +215,6 @@
   stroke-width: 2;
 }
 
-.canvas.overview-detail .grid {
+.canvas.low-detail .grid {
   display: none;
 }

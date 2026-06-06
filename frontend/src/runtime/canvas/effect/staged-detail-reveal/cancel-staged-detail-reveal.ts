@@ -3,6 +3,7 @@
  * WHY: Crossing into low-detail must leave no perpetual reveal scheduler or normal-detail work behind.
  */
 import { canvas } from '../../../dom.js';
+import { clearStagedDetailRevealAttributes } from './clear-staged-detail-reveal-attributes.js';
 import { clearScheduledStagedDetailRevealWork } from './clear-scheduled-staged-detail-reveal-work.js';
 import { stagedDetailRevealState } from './state.js';
 
@@ -23,5 +24,6 @@ export function cancelStagedDetailReveal(): void {
   stagedDetailRevealState.urgentQueue = [];
   stagedDetailRevealState.backgroundQueue = [];
   stagedDetailRevealState.cleanupPending = false;
+  clearStagedDetailRevealAttributes();
   canvas.classList.remove('detail-reveal-staged');
 }

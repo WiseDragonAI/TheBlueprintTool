@@ -1,33 +1,47 @@
 /**
  * WHAT: Updates canvas detail CSS modes from the current viewport scale.
- * WHY: Zoom transitions must flip detail state only at approved thresholds and gate reveal scheduling to mode edges.
+ * WHY: Zoom transitions must collapse to one low-detail mode while coordinating viewport-driven detail mounting.
  */
 import { canvas } from '../../dom.js';
 import { state } from '../../state.js';
-import { beginStagedDetailReveal, cancelStagedDetailReveal, scheduleStagedDetailReveal } from './stage-detail-reveal.js';
+import { clearMountedLedgerCardDetails } from '../../card/detail-mount/clear-mounted-ledger-card-details.js';
+import { scheduleMountedLedgerCardDetailsSync } from '../../card/detail-mount/schedule-mounted-ledger-card-details-sync.js';
+import { mountAllLedgerCardLowDetail } from '../../card/low-detail-mount/mount-all-ledger-card-low-detail.js';
+import { unmountAllLedgerCardLowDetail } from '../../card/low-detail-mount/unmount-all-ledger-card-low-detail.js';
+import { clearZoneLabelOverlay } from '../../zone/effect/clear-zone-label-overlay.js';
+import { clearRelationshipLabels } from '../../relationship/effect/clear-relationship-labels.js';
+import { rebuildLowDetailLedgerWorld } from '../../ledger/effect/rebuild-low-detail-ledger-world.js';
+import { queryEnablesWorldResetDebug } from '../../debug/zoom-debug/helper/query-enables-world-reset-debug.js';
+import { stopDetailRuntime } from '../../card/detail-runtime/stop-detail-runtime.js';
+import { clearCanvasControlOverlayHoverTarget } from './clear-canvas-control-overlay-hover-target.js';
 
 export function updateDetailMode(): void {
   const shouldUseLowDetail = state.viewport.scale < 0.35;
-  const shouldUseOverviewDetail = state.viewport.scale < 0.18;
   const hasLowDetail = canvas.classList.contains('low-detail');
-  const hasOverviewDetail = canvas.classList.contains('overview-detail');
   if (hasLowDetail !== shouldUseLowDetail) {
-    // Branch: A low-detail threshold edge is the only point that can start or cancel reveal work.
+    // Branch: The single low-detail threshold owns all zoom presentation edges now.
     if (shouldUseLowDetail) {
-      // Branch: Normal-detail to low-detail hides details and cancels any queued reveal immediately.
-      cancelStagedDetailReveal();
+      stopDetailRuntime();
+      clearCanvasControlOverlayHoverTarget();
+      if (queryEnablesWorldResetDebug()) {
+        // Branch: The world-reset debug flag rebuilds the world nodes themselves before low-detail mounts to test retained layer state.
+        rebuildLowDetailLedgerWorld();
+      }
+      mountAllLedgerCardLowDetail();
+      canvas.classList.add('low-detail');
+      clearMountedLedgerCardDetails();
+      clearZoneLabelOverlay();
+      clearRelationshipLabels();
     } else {
-      // Branch: Low-detail to normal-detail stages detail layers before the reveal scheduler runs.
-      beginStagedDetailReveal();
+      // Branch: Crossing back into detail tears down every low-detail branch before detail remount begins.
+      canvas.classList.remove('low-detail');
+      unmountAllLedgerCardLowDetail();
+      clearZoneLabelOverlay();
+      scheduleMountedLedgerCardDetailsSync(true);
     }
-    canvas.classList.toggle('low-detail', shouldUseLowDetail);
-  }
-  if (hasOverviewDetail !== shouldUseOverviewDetail) {
-    // Branch: Overview-detail remains a visual-only mode flip at its independent threshold.
-    canvas.classList.toggle('overview-detail', shouldUseOverviewDetail);
   }
   if (!shouldUseLowDetail) {
-    // Branch: Scheduling is a no-op unless a low-detail to normal-detail edge already staged cards.
-    scheduleStagedDetailReveal();
+    // Branch: Detail mode keeps the mounted card working set aligned after zoom settles.
+    scheduleMountedLedgerCardDetailsSync();
   }
 }

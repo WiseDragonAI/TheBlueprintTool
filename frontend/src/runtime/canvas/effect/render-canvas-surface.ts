@@ -10,12 +10,13 @@ import { renderZoneLabelOverlay } from '../../zone/effect/render-zone-label-over
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { applyViewportTransform } from './apply-viewport-transform.js';
 import { renderCanvasControlOverlay } from './render-canvas-control-overlay.js';
+import { canvas } from '../../dom.js';
 
 export function renderCanvasSurface(): void {
   renderLedgerSurface();
   applyViewportTransform();
   renderSelectionState();
-  if (!state.activeLedger) renderCardZoneColors();
+  if (!state.activeLedger && !canvas.classList.contains('low-detail')) renderCardZoneColors();
   renderZoneLabelOverlay();
   renderRelationshipOverlay();
   renderRelationshipLabelVisibility();

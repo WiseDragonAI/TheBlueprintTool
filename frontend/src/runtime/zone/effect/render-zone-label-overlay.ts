@@ -1,8 +1,15 @@
 import { content } from '../../dom.js';
+import { canvas } from '../../dom.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { dragTraceHook } from '../../performance/drag-trace-span.js';
+import { clearZoneLabelOverlay } from './clear-zone-label-overlay.js';
 
 export function renderZoneLabelOverlay(): void {
+  if (!canvas.classList.contains('low-detail')) {
+    // Branch: Detail mode owns no low-detail proxy labels, so remove the overlay entirely.
+    clearZoneLabelOverlay();
+    return;
+  }
   const span = dragTraceHook();
   if (!span) {
     renderZoneLabelOverlayBody();

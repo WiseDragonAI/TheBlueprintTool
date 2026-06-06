@@ -1,4 +1,5 @@
 import { SVG_NS } from '../../dom.js';
+import { canvas } from '../../dom.js';
 import { state } from '../../state.js';
 import { elementCanvasRect } from '../../canvas/helper/element-canvas-rect.js';
 import { activeLedgerCardMap, activeLedgerCardRectMap } from '../../ledger/helper/active-ledger-geometry.js';
@@ -8,8 +9,14 @@ import { resolveRelationshipPortSlots } from '../helper/resolve-relationship-por
 import { routeRelationshipPath } from '../helper/route-relationship-path.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { dragTraceHook } from '../../performance/drag-trace-span.js';
+import { clearRelationshipLabels } from './clear-relationship-labels.js';
 
 export function renderRelationshipOverlay(): void {
+  if (canvas.classList.contains('low-detail')) {
+    // Branch: Low-detail keeps relationship paths but drops label text to avoid reusing hidden detail-exposed survivors.
+    clearRelationshipLabels();
+    return;
+  }
   const span = dragTraceHook();
   if (!span) {
     renderRelationshipOverlayBody();

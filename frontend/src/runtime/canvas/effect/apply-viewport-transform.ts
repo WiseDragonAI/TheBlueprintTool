@@ -8,6 +8,7 @@ import { resolveDetailModeCssScale } from '../helper/resolve-detail-mode-css-sca
 import { renderCanvasControlOverlay } from './render-canvas-control-overlay.js';
 import { scheduleCanvasMediaOverlayRender } from './render-canvas-media-overlay.js';
 import { updateDetailMode } from './update-detail-mode.js';
+import { renderZoomDebugOverlay } from '../../debug/zoom-debug/effect/render-zoom-debug-overlay.js';
 
 export function applyViewportTransform(): void {
   const cssScale = resolveDetailModeCssScale(state.viewport.scale, state.viewport.scale < 0.35);
@@ -27,5 +28,9 @@ export function applyViewportTransform(): void {
   const y = Math.round(state.viewport.y * devicePixelRatio) / devicePixelRatio;
   content.style.transform = `translate(${x}px, ${y}px) scale(${state.viewport.scale})`;
   scheduleCanvasMediaOverlayRender();
-  renderCanvasControlOverlay();
+  if (!canvas.classList.contains('low-detail')) {
+    // Branch: Low-detail zoom frames must not place controls after root scale invalidation.
+    renderCanvasControlOverlay();
+  }
+  renderZoomDebugOverlay();
 }

@@ -2,43 +2,21 @@
  * WHAT: Patches one ledger-authored card into the canvas DOM.
  * WHY: Ledger cards own geometry, thread identity, tabs, labels, and markdown body rendering.
  */
-import { state } from '../../state.js';
 import { createCardResizeHandles } from '../../card/component/create-card-resize-handles.js';
-import { appendTitleText } from './append-title-text.js';
+import { cardPersistedWorkStatus, resolveCardWorkStatus } from '../../card/helper/resolve-card-work-status.js';
+import { state } from '../../state.js';
 import { cardFields } from '../helper/card-fields.js';
 import { cardLabels } from '../helper/card-labels.js';
-import { cardPersistedWorkStatus, resolveCardWorkStatus } from '../../card/helper/resolve-card-work-status.js';
-import { ledgerCardBody } from '../helper/ledger-card-body.js';
-import { renderLedgerCardLabels } from './render-ledger-card-labels.js';
-import { renderLedgerCardMarkdown } from './render-ledger-card-markdown.js';
-import { renderLedgerCardTabFrame } from './render-ledger-card-tab-frame.js';
-import { renderLedgerCardTabs } from './render-ledger-card-tabs.js';
 import { applyZoneAttributionToCardElement, normalizeZoneAttribution, type ZoneAttribution } from '../helper/zone-attribution-cache.js';
-
-function createLedgerCardTitle(card: Record<string, unknown>, id: string, className = 'ledger-card-title'): HTMLElement {
-  const title = document.createElement('strong');
-  title.className = className;
-  appendTitleText(title, String(card.title ?? id));
-  return title;
-}
-
-function createCardStatusIndicator(status: string, className = 'card-status-indicator'): HTMLElement {
-  const statusIndicator = document.createElement('span');
-  statusIndicator.className = className;
-  statusIndicator.dataset.spec = 'c4e8b91a';
-  statusIndicator.title = `Card status: ${status}`;
-  statusIndicator.ariaLabel = statusIndicator.title;
-  statusIndicator.textContent = status;
-  return statusIndicator;
-}
+import { createLedgerCardDetailLayer } from './create-ledger-card-detail-layer.js';
+import { createLedgerCardOverviewLayer } from './create-ledger-card-overview-layer.js';
 
 export function patchLedgerCard(card: Record<string, unknown>, existing?: HTMLElement | null, attribution?: ZoneAttribution | Record<string, unknown> | null): HTMLElement {
   const element = existing ?? document.createElement('article');
   const id = String(card.id ?? '');
   const labels = cardLabels(card);
   const fields = cardFields(card);
-  const hasFieldTabs = fields.length > 0;
-  const activeTab = hasFieldTabs && state.cardUi?.activeTabByCardId?.[id] === 'fields' ? 'fields' : 'description';
+  const activeTab = fields.length > 0 && state.cardUi?.activeTabByCardId?.[id] === 'fields' ? 'fields' : 'description';
   const persistedStatus = cardPersistedWorkStatus(card);
   const visibleStatus = resolveCardWorkStatus(card);
   element.className = 'card ledger-node';
@@ -63,21 +41,25 @@ export function patchLedgerCard(card: Record<string, unknown>, existing?: HTMLEl
   element.dataset.sizeCacheHeight = String(fixedHeight);
   element.style.setProperty('--card-size-cache-width', `${Math.max(220, Number(card.w ?? 280))}px`);
   element.style.setProperty('--card-size-cache-height', `${fixedHeight}px`);
-  const statusIndicator = createCardStatusIndicator(visibleStatus);
-  const title = createLedgerCardTitle(card, id);
-  const overview = document.createElement('div');
-  overview.className = 'ledger-card-overview-layer';
-  overview.replaceChildren(createLedgerCardTitle(card, id, 'ledger-card-overview-title'), createCardStatusIndicator(visibleStatus, 'card-status-indicator ledger-card-overview-status'));
-  const imageSizes = card.imageSizes && typeof card.imageSizes === 'object' && !Array.isArray(card.imageSizes)
-    ? card.imageSizes as Record<string, { width?: number; height?: number }>
-    : {};
-  const body = hasFieldTabs ? renderLedgerCardTabFrame(card, fields, activeTab) : renderLedgerCardMarkdown(ledgerCardBody(card), { cardId: id, imageSizes });
-  const detailLayer = document.createElement('div');
-  detailLayer.className = 'ledger-card-detail-layer';
   const handles = createCardResizeHandles();
-  const labelNodes = labels.length > 0 ? [renderLedgerCardLabels(labels)] : [];
-  const tabs = hasFieldTabs ? [renderLedgerCardTabs(id, activeTab)] : [];
-  detailLayer.replaceChildren(statusIndicator, ...labelNodes, title, ...tabs, body);
-  element.replaceChildren(...handles, detailLayer, overview);
+  const detailHost = (element.querySelector('.ledger-card-detail-host') as HTMLElement | null) ?? document.createElement('div');
+  detailHost.className = 'ledger-card-detail-host';
+  const overviewHost = (element.querySelector('.ledger-card-overview-host') as HTMLElement | null) ?? document.createElement('div');
+  overviewHost.className = 'ledger-card-overview-host';
+  if (element.dataset.detailMounted === 'mounted' || element.dataset.detailMounted === 'mounting' || element.dataset.detailMounted === 'unmounting') {
+    // Branch: Mounted detail cards refresh their subtree from ledger data when the surface rerenders.
+    detailHost.replaceChildren(createLedgerCardDetailLayer(card, id, visibleStatus));
+  } else if (!detailHost.querySelector('.ledger-card-detail-layer')) {
+    // Branch: Unmounted cards keep an empty host so viewport-driven mounting can populate it later.
+    detailHost.replaceChildren();
+  }
+  if (element.dataset.lowDetailMounted === 'mounted' || element.dataset.lowDetailMounted === 'mounting' || element.dataset.lowDetailMounted === 'unmounting') {
+    // Branch: Low-detail cards refresh the visible overview branch while it remains the active mode branch.
+    overviewHost.replaceChildren(createLedgerCardOverviewLayer(card, id, visibleStatus));
+  } else if (!overviewHost.querySelector('.ledger-card-overview-layer')) {
+    // Branch: Detail-mode cards keep an empty overview host so low-detail can mount a fresh branch on entry.
+    overviewHost.replaceChildren();
+  }
+  element.replaceChildren(...handles, detailHost, overviewHost);
   return element;
 }

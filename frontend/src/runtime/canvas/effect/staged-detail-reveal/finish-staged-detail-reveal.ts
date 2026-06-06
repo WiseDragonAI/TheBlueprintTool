@@ -4,6 +4,7 @@
  */
 import { canvas } from '../../../dom.js';
 import { telemetry } from '../../../telemetry/effect/telemetry.js';
+import { clearStagedDetailRevealAttributes } from './clear-staged-detail-reveal-attributes.js';
 import { stagedDetailRevealState } from './state.js';
 
 export function finishStagedDetailReveal(): void {
@@ -15,4 +16,5 @@ export function finishStagedDetailReveal(): void {
   stagedDetailRevealState.urgentQueue = [];
   stagedDetailRevealState.backgroundQueue = [];
   stagedDetailRevealState.cleanupPending = false;
+  clearStagedDetailRevealAttributes();
 }

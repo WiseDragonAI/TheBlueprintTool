@@ -26,66 +26,88 @@ test('low-detail zoom hides card detail while keeping counter-scaled card titles
   const viewportRuntime = source('frontend/src/runtime/canvas/effect/apply-viewport-transform.ts');
   const viewportCssScaleRuntime = source('frontend/src/runtime/canvas/helper/resolve-detail-mode-css-scale.ts');
   const detailRuntime = source('frontend/src/runtime/canvas/effect/update-detail-mode.ts');
+  const panRuntime = source('frontend/src/runtime/canvas/effect/apply-pan-viewport-transform.ts');
   const invalidationRuntime = source('frontend/src/runtime/canvas/effect/invalidate-detail-mode-card-size-cache.ts');
-  const stagedFiles = [
-    'frontend/src/runtime/canvas/effect/stage-detail-reveal.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/adapt-staged-detail-reveal-chunk-size.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/begin-staged-detail-reveal.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/calculate-staged-card-distance.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/cancel-staged-detail-reveal.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/clear-scheduled-staged-detail-reveal-work.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/complete-staged-detail-reveal-after-transition.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/compare-background-reveal-card.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/compare-urgent-reveal-card.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/constants.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/expand-staged-bounds.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/finish-staged-detail-reveal.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/order-staged-detail-reveal-cards.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/parse-staged-detail-pixels.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/resolve-staged-card-bounds.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/reveal-queued-detail-cards.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/reveal-urgent-staged-detail-frame.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/schedule-background-staged-detail-reveal.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/schedule-staged-detail-reveal.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/settle-staged-detail-reveal-queue.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/state.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/types.ts'
+  const detailMountConstants = source('frontend/src/runtime/card/detail-mount/constants.ts');
+  const zoomDebugQuery = source('frontend/src/runtime/debug/zoom-debug/helper/query-enables-zoom-debug.ts');
+  const worldResetDebugQuery = source('frontend/src/runtime/debug/zoom-debug/helper/query-enables-world-reset-debug.ts');
+  const zoomDebugRuntime = source('frontend/src/runtime/debug/zoom-debug/effect/render-zoom-debug-overlay.ts');
+  const zoomDebugCounts = source('frontend/src/runtime/debug/zoom-debug/helper/count-ledger-card-detail-states.ts');
+  const zoomDebugSurvivors = source('frontend/src/runtime/debug/zoom-debug/helper/count-zoom-debug-survivor-states.ts');
+  const zoomDebugMarkDetail = source('frontend/src/runtime/debug/zoom-debug/helper/mark-zoom-debug-detail-exposure.ts');
+  const detailMountFiles = [
+    'frontend/src/runtime/card/detail-mount/collect-detail-mounted-card-ids.ts',
+    'frontend/src/runtime/card/detail-mount/mount-ledger-card-detail.ts',
+    'frontend/src/runtime/card/detail-mount/begin-unmount-ledger-card-detail.ts',
+    'frontend/src/runtime/card/detail-mount/clear-mounted-ledger-card-details.ts',
+    'frontend/src/runtime/card/detail-mount/constants.ts',
+    'frontend/src/runtime/card/detail-mount/resolve-detail-mount-bounds.ts',
+    'frontend/src/runtime/card/detail-mount/resolve-detail-mount-canvas-size.ts',
+    'frontend/src/runtime/card/detail-mount/schedule-mounted-ledger-card-details-sync.ts',
+    'frontend/src/runtime/card/detail-mount/sync-mounted-ledger-card-details.ts',
+    'frontend/src/runtime/card/detail-mount/mark-ledger-card-detail-mounted.ts',
+    'frontend/src/runtime/card/detail-mount/state.ts'
   ];
-  const stagedRuntime = stagedFiles.map((path) => source(path)).join('\n');
-  const stagedRuntimeWithoutComments = stagedRuntime.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
-  const touchedRuntimeFiles = [viewportRuntime, viewportCssScaleRuntime, detailRuntime, invalidationRuntime, ...stagedFiles.map((path) => source(path))];
+  const detailMountRuntime = detailMountFiles.map((path) => source(path)).join('\n');
+  const detailMountRuntimeWithoutComments = detailMountRuntime.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
+  const touchedRuntimeFiles = [viewportRuntime, viewportCssScaleRuntime, detailRuntime, panRuntime, invalidationRuntime, ...detailMountFiles.map((path) => source(path))];
   assert.match(viewportRuntime, /--inverse-viewport-scale/);
   assert.match(viewportRuntime, /resolveDetailModeCssScale\(state\.viewport\.scale, state\.viewport\.scale < 0\.35\)/);
   assert.match(viewportRuntime, /getPropertyValue\('--viewport-scale'\) !== viewportScale/);
-  assert.match(viewportCssScaleRuntime, /lowDetailCssScaleBuckets = \[0\.08, 0\.18, 0\.35\]/);
+  assert.match(viewportCssScaleRuntime, /lowDetailMinimumScale = 0\.08/);
   assert.match(viewportCssScaleRuntime, /if \(!lowDetail\) \{/);
+  assert.match(viewportCssScaleRuntime, /Math\.max\(lowDetailMinimumScale, safeScale\)/);
   assert.match(invalidationRuntime, /export function invalidateDetailModeCardSizeCache/);
   assert.doesNotMatch(detailRuntime, /offsetWidth|offsetHeight|getBoundingClientRect|scrollHeight/);
   assert.match(detailRuntime, /const shouldUseLowDetail = state\.viewport\.scale < 0\.35/);
   assert.doesNotMatch(detailRuntime, /0\.45|lowDetailThreshold|zoom-grid-suppressed/);
   assert.doesNotMatch(css, /zoom-grid-suppressed/);
-  assert.doesNotMatch(stagedRuntimeWithoutComments, /offsetWidth|offsetHeight|getBoundingClientRect|scrollHeight/);
-  assert.match(detailRuntime, /if \(shouldUseLowDetail\) \{[\s\S]*cancelStagedDetailReveal\(\);[\s\S]*\} else \{[\s\S]*beginStagedDetailReveal\(\);/);
-  assert.match(detailRuntime, /if \(!shouldUseLowDetail\) \{[\s\S]*scheduleStagedDetailReveal\(\);/);
-  assert.match(stagedRuntime, /DETAIL_REVEAL_TARGET_MS = 4/);
-  assert.match(stagedRuntime, /DETAIL_REVEAL_OPACITY_MS = 160/);
-  assert.match(stagedRuntime, /if \(!hasScheduledWork && !canvas\.classList\.contains\('detail-reveal-staged'\)\) \{[\s\S]*return;/);
-  assert.match(stagedRuntime, /requestAnimationFrame\(revealUrgentStagedDetailFrame\)/);
-  assert.match(stagedRuntime, /window\.setTimeout\(completeStagedDetailRevealAfterTransition, DETAIL_REVEAL_OPACITY_MS\)/);
-  assert.doesNotMatch(stagedRuntime, /requestIdleCallback|DETAIL_REVEAL_BACKGROUND_CHUNK/);
+  assert.doesNotMatch(detailMountRuntimeWithoutComments, /offsetWidth|offsetHeight|getBoundingClientRect|scrollHeight/);
+  assert.match(detailRuntime, /clearMountedLedgerCardDetails\(\)/);
+  assert.match(detailRuntime, /queryEnablesWorldResetDebug\(\)/);
+  assert.match(detailRuntime, /scheduleMountedLedgerCardDetailsSync\(true\)/);
+  assert.match(detailRuntime, /scheduleMountedLedgerCardDetailsSync\(\)/);
+  assert.match(panRuntime, /scheduleMountedLedgerCardDetailsSync\(\)/);
+  assert.match(detailMountConstants, /DETAIL_MOUNT_SETTLE_MS = 120/);
+  assert.match(detailMountConstants, /DETAIL_MOUNT_OPACITY_MS = 160/);
+  assert.match(detailMountRuntime, /viewportWorldBounds/);
+  assert.match(detailMountRuntime, /activeLedgerCardMap/);
+  assert.match(detailMountRuntime, /requestAnimationFrame/);
+  assert.match(detailMountRuntime, /window\.setTimeout/);
+  assert.match(zoomDebugQuery, /params\.has\('detailMountDebug'\)/);
+  assert.match(zoomDebugQuery, /params\.get\('debug'\) === 'detail-mount'/);
+  assert.match(worldResetDebugQuery, /params\.has\('worldResetDebug'\)/);
+  assert.match(worldResetDebugQuery, /params\.get\('debug'\) === 'world-reset'/);
+  assert.match(zoomDebugRuntime, /countLedgerCardDetailStates\(\)/);
+  assert.match(zoomDebugRuntime, /countZoomDebugSurvivorStates\(\)/);
+  assert.match(zoomDebugRuntime, /markZoomDebugDetailExposure\(\)/);
+  assert.match(zoomDebugRuntime, /`detail-dom \$\{detailStates\.detailLayers\}`/);
+  assert.match(zoomDebugRuntime, /`mounted \$\{detailStates\.mounted\}`/);
+  assert.match(zoomDebugRuntime, /`mounting \$\{detailStates\.mounting\}`/);
+  assert.match(zoomDebugRuntime, /`unmounting \$\{detailStates\.unmounting\}`/);
+  assert.match(zoomDebugRuntime, /`overview \$\{survivorStates\.overviewLayers\}\/\$\{survivorStates\.overviewSawDetail\}`/);
+  assert.match(zoomDebugRuntime, /`pan-text \$\{survivorStates\.textShadowTargets\}`/);
+  assert.match(zoomDebugCounts, /\.ledger-card-detail-host > \.ledger-card-detail-layer/);
+  assert.match(zoomDebugCounts, /detailMounted === 'mounted'/);
+  assert.match(zoomDebugSurvivors, /\.ledger-card-overview-layer\[data-debug-saw-detail="1"\]/);
+  assert.match(zoomDebugSurvivors, /\.relationships text/);
+  assert.match(zoomDebugSurvivors, /detailRevealAttrs/);
+  assert.match(zoomDebugMarkDetail, /dataset\.debugSawDetail = '1'/);
   for (const runtime of touchedRuntimeFiles) {
     assert.match(runtime, /^\/\*\*[\s\S]*WHAT:[\s\S]*WHY:[\s\S]*\*\//);
     assert.ok((runtime.match(/export function /g) ?? []).length <= 1);
-    assert.ok((runtime.match(/\/\/ Branch:/g) ?? []).length >= (runtime.match(/\bif \(/g) ?? []).length);
+    const branchCount = (runtime.match(/\/\/ Branch:/g) ?? []).length;
+    const ifCount = (runtime.match(/\bif \(/g) ?? []).length;
+    assert.ok(branchCount >= ifCount);
   }
-  assert.match(css, /\.canvas\.detail-reveal-staged \.ledger-card-detail-layer,[\s\S]{0,120}transition:\s*opacity 160ms ease-out;/);
-  assert.match(css, /\.canvas\.detail-reveal-staged \.card\[data-detail-reveal="hidden"\] \.ledger-card-detail-layer,[\s\S]{0,260}visibility:\s*hidden;/);
-  assert.match(css, /\.canvas\.detail-reveal-staged \.card\[data-detail-reveal="hidden"\] \.ledger-card-overview-layer,[\s\S]{0,140}visibility:\s*visible;[\s\S]{0,60}opacity:\s*1;/);
+  assert.match(objectsCss, /\.ledger-card-detail-layer\s*{[^}]*transition:\s*opacity 160ms ease-out;/s);
+  assert.match(objectsCss, /\.ledger-card-overview-layer\s*{[^}]*transition:\s*opacity 160ms ease-out;/s);
+  assert.match(objectsCss, /\.card\[data-detail-mounted="mounting"\] \.ledger-card-detail-layer,[\s\S]{0,120}\.card\[data-detail-mounted="unmounting"\] \.ledger-card-detail-layer\s*{[^}]*opacity:\s*0;/s);
   assert.doesNotMatch(css, /content-visibility:\s*hidden/);
   assert.match(detailRuntime, /if \(hasLowDetail !== shouldUseLowDetail\) \{/);
-  assert.match(detailRuntime, /if \(hasOverviewDetail !== shouldUseOverviewDetail\) \{[\s\S]*canvas\.classList\.toggle/);
-  assert.doesNotMatch(css, /\.canvas\.overview-detail \.regular-zone/);
-  assert.match(css, /\.canvas\.overview-detail \.grid\s*{[^}]*display:\s*none;/s);
+  assert.doesNotMatch(detailRuntime, /overview-detail/);
+  assert.doesNotMatch(css, /\.canvas\.overview-detail/);
+  assert.match(css, /\.canvas\.low-detail \.grid\s*{[^}]*display:\s*none;/s);
   assert.match(objectsCss, /\.canvas\.low-detail \.card\.selected \.resize-handle\s*{[^}]*display:\s*none;/s);
   assert.match(objectsCss, /\.canvas\.low-detail \.zone\.selected \.resize-handle\s*{[^}]*display:\s*block;[^}]*width:\s*22px;[^}]*height:\s*22px;[^}]*transform:\s*scale\(var\(--inverse-viewport-scale, 1\)\);/s);
   assert.match(objectsCss, /\.canvas\.low-detail \.zone\.selected \.resize-handle\.nw\s*{[^}]*left:\s*-11px;[^}]*top:\s*-11px;/s);

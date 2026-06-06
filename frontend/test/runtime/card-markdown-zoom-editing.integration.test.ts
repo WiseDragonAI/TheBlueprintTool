@@ -36,31 +36,18 @@ test('low-detail mode switches card paint layers without threshold layout measur
   const css = source('frontend/assets/canvas/canvas-layer.css');
   const objectsCss = source('frontend/assets/canvas/objects.css');
   const detailRuntime = source('frontend/src/runtime/canvas/effect/update-detail-mode.ts');
-  const stagedRuntime = [
-    'frontend/src/runtime/canvas/effect/stage-detail-reveal.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/adapt-staged-detail-reveal-chunk-size.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/begin-staged-detail-reveal.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/calculate-staged-card-distance.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/cancel-staged-detail-reveal.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/clear-scheduled-staged-detail-reveal-work.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/complete-staged-detail-reveal-after-transition.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/compare-background-reveal-card.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/compare-urgent-reveal-card.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/constants.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/expand-staged-bounds.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/finish-staged-detail-reveal.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/order-staged-detail-reveal-cards.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/parse-staged-detail-pixels.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/resolve-staged-card-bounds.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/reveal-queued-detail-cards.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/reveal-urgent-staged-detail-frame.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/schedule-background-staged-detail-reveal.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/schedule-staged-detail-reveal.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/settle-staged-detail-reveal-queue.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/state.ts',
-    'frontend/src/runtime/canvas/effect/staged-detail-reveal/types.ts'
+  const detailMountRuntime = [
+    'frontend/src/runtime/card/detail-mount/collect-detail-mounted-card-ids.ts',
+    'frontend/src/runtime/card/detail-mount/mount-ledger-card-detail.ts',
+    'frontend/src/runtime/card/detail-mount/begin-unmount-ledger-card-detail.ts',
+    'frontend/src/runtime/card/detail-mount/clear-mounted-ledger-card-details.ts',
+    'frontend/src/runtime/card/detail-mount/resolve-detail-mount-bounds.ts',
+    'frontend/src/runtime/card/detail-mount/resolve-detail-mount-canvas-size.ts',
+    'frontend/src/runtime/card/detail-mount/schedule-mounted-ledger-card-details-sync.ts',
+    'frontend/src/runtime/card/detail-mount/sync-mounted-ledger-card-details.ts',
+    'frontend/src/runtime/card/detail-mount/state.ts'
   ].map((path) => source(path)).join('\n');
-  const stagedRuntimeWithoutComments = stagedRuntime.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
+  const detailMountRuntimeWithoutComments = detailMountRuntime.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
   const cardRenderer = source('frontend/src/runtime/ledger/component/patch-ledger-card.ts');
 
   assert.match(specs, /c4e8b2f9/);
@@ -70,17 +57,17 @@ test('low-detail mode switches card paint layers without threshold layout measur
   assert.doesNotMatch(detailRuntime, /offsetWidth|offsetHeight|getBoundingClientRect|scrollHeight/);
   assert.doesNotMatch(detailRuntime, /cacheRenderedCardSizes/);
   assert.doesNotMatch(detailRuntime, /0\.45|lowDetailThreshold|zoom-grid-suppressed/);
-  assert.doesNotMatch(stagedRuntimeWithoutComments, /offsetWidth|offsetHeight|getBoundingClientRect|scrollHeight/);
+  assert.doesNotMatch(detailMountRuntimeWithoutComments, /offsetWidth|offsetHeight|getBoundingClientRect|scrollHeight/);
   assert.match(detailRuntime, /const shouldUseLowDetail = state\.viewport\.scale < 0\.35/);
-  assert.match(detailRuntime, /beginStagedDetailReveal\(\)/);
-  assert.match(stagedRuntime, /requestAnimationFrame\(revealUrgentStagedDetailFrame\)/);
-  assert.match(stagedRuntime, /window\.setTimeout\(completeStagedDetailRevealAfterTransition, DETAIL_REVEAL_OPACITY_MS\)/);
-  assert.doesNotMatch(stagedRuntime, /requestIdleCallback|DETAIL_REVEAL_BACKGROUND_CHUNK/);
-  assert.match(cardRenderer, /ledger-card-detail-layer/);
+  assert.match(detailRuntime, /scheduleMountedLedgerCardDetailsSync\(true\)/);
+  assert.match(detailRuntime, /clearMountedLedgerCardDetails\(\)/);
+  assert.match(detailMountRuntime, /requestAnimationFrame/);
+  assert.match(detailMountRuntime, /window\.setTimeout/);
+  assert.match(cardRenderer, /ledger-card-detail-host/);
   assert.match(cardRenderer, /ledger-card-overview-layer/);
-  assert.match(css, /\.canvas\.detail-reveal-staged \.ledger-card-detail-layer,[\s\S]{0,120}transition:\s*opacity 160ms ease-out;/);
+  assert.match(objectsCss, /\.ledger-card-detail-layer\s*{[^}]*transition:\s*opacity 160ms ease-out;/s);
   assert.match(css, /\.canvas\.low-detail \.ledger-card-overview-layer\s*{[^}]*visibility:\s*visible;[^}]*opacity:\s*1;/s);
-  assert.match(css, /\.canvas\.detail-reveal-staged \.card\[data-detail-reveal="hidden"\] \.ledger-card-overview-layer,[\s\S]{0,140}visibility:\s*visible;[\s\S]{0,60}opacity:\s*1;/);
+  assert.match(objectsCss, /\.card\[data-detail-mounted="mounting"\] \.ledger-card-detail-layer,[\s\S]{0,120}\.card\[data-detail-mounted="unmounting"\] \.ledger-card-detail-layer\s*{[^}]*opacity:\s*0;/s);
   assert.doesNotMatch(css, /content-visibility:\s*hidden/);
   assert.doesNotMatch(css, /zoom-grid-suppressed/);
   assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-title\s*{[^}]*width:\s*calc\(100% \* var\(--viewport-scale, 1\)\);/s);
@@ -132,7 +119,7 @@ test('local app and asset routes are served without browser cache ambiguity', ()
 test('card field tabs preserve measured description height and fade panel switches', () => {
   const specs = source('documentation/specs.json');
   const css = source('frontend/assets/canvas/objects.css');
-  const component = source('frontend/src/runtime/ledger/component/patch-ledger-card.ts');
+  const component = source('frontend/src/runtime/ledger/component/create-ledger-card-detail-layer.ts');
   const action = source('frontend/src/runtime/input/controller/handle-action-click.ts');
   const controller = source('frontend/src/runtime/card/controller/switch-card-tab-controller.ts');
   const sync = source('frontend/src/runtime/card/effect/sync-ledger-card-tab-frames.ts');
@@ -156,8 +143,6 @@ test('card field tabs preserve measured description height and fade panel switch
   assert.match(specs, /8c4e2b71/);
   assert.match(component, /renderLedgerCardTabs/);
   assert.match(component, /renderLedgerCardTabFrame/);
-  assert.doesNotMatch(component, /function renderLedgerCardTabs/);
-  assert.doesNotMatch(component, /function renderLedgerCardTabFrame/);
   assert.match(action, /switch-card-tab/);
   assert.match(action, /closest\('\.card\[data-card-id\]'\)/);
   assert.match(controller, /activeTabByCardId/);
