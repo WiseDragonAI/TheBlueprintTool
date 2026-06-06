@@ -26,7 +26,8 @@ test('canvas pan uses a transform-only path with sampled performance telemetry',
   assert.match(pointerMove, /applyPanViewportTransform/);
   assert.match(pointerMove, /emitPanPerformanceTelemetry/);
   assert.match(pointerMove, /if \(isPan\)[\s\S]*return;/);
-  assert.match(pointerMove, /const canvasPointer = isPan \? state\.pointer\.currentCanvas : canvasPoint\(pointer\)/);
+  assert.match(pointerMove, /const canvasPointer = isPan \? state\.pointer!\.currentCanvas :/);
+  assert.match(pointerMove, /canvasPoint\(pointer\)/);
   assert.match(panTransform, /content\.style\.transform/);
   assert.doesNotMatch(panTransform, /updateDetailMode/);
   assert.match(panTelemetry, /pan-frame-performance/);
@@ -135,6 +136,14 @@ test('plain pan pointer up does not force a full canvas rerender', () => {
 
 test('wheel zoom stays transform-only and does not reroute relationships', () => {
   const wheel = source('frontend/src/runtime/gesture/controller/handle-wheel.ts');
-  assert.match(wheel, /applyViewportTransform\(\)/);
+  const scheduledViewport = source('frontend/src/runtime/canvas/effect/schedule-viewport-transform.ts');
+  const applyScheduledViewport = source('frontend/src/runtime/canvas/effect/apply-scheduled-viewport-transform.ts');
+  const carouselWheel = source('frontend/src/runtime/gesture/helper/advance-carousel-from-wheel.ts');
+  assert.match(wheel, /scheduleViewportTransform\(\)/);
+  assert.doesNotMatch(wheel, /applyViewportTransform\(\)/);
+  assert.ok((wheel.match(/export function /g) ?? []).length <= 1);
+  assert.match(scheduledViewport, /requestAnimationFrame\(applyScheduledViewportTransform\)/);
+  assert.match(applyScheduledViewport, /applyViewportTransform\(\)/);
+  assert.match(carouselWheel, /export function advanceCarouselFromWheel/);
   assert.doesNotMatch(wheel, /renderRelationshipOverlay/);
 });

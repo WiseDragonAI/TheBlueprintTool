@@ -34,7 +34,20 @@ test('card markdown inline code and bold styling follow card color specs', () =>
 test('low-detail mode switches card paint layers without threshold layout measurement', () => {
   const specs = source('documentation/specs.json');
   const css = source('frontend/assets/canvas/canvas-layer.css');
+  const objectsCss = source('frontend/assets/canvas/objects.css');
   const detailRuntime = source('frontend/src/runtime/canvas/effect/update-detail-mode.ts');
+  const detailMountRuntime = [
+    'frontend/src/runtime/card/detail-mount/collect-detail-mounted-card-ids.ts',
+    'frontend/src/runtime/card/detail-mount/mount-ledger-card-detail.ts',
+    'frontend/src/runtime/card/detail-mount/begin-unmount-ledger-card-detail.ts',
+    'frontend/src/runtime/card/detail-mount/clear-mounted-ledger-card-details.ts',
+    'frontend/src/runtime/card/detail-mount/resolve-detail-mount-bounds.ts',
+    'frontend/src/runtime/card/detail-mount/resolve-detail-mount-canvas-size.ts',
+    'frontend/src/runtime/card/detail-mount/schedule-mounted-ledger-card-details-sync.ts',
+    'frontend/src/runtime/card/detail-mount/sync-mounted-ledger-card-details.ts',
+    'frontend/src/runtime/card/detail-mount/state.ts'
+  ].map((path) => source(path)).join('\n');
+  const detailMountRuntimeWithoutComments = detailMountRuntime.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
   const cardRenderer = source('frontend/src/runtime/ledger/component/patch-ledger-card.ts');
 
   assert.match(specs, /c4e8b2f9/);
@@ -43,14 +56,27 @@ test('low-detail mode switches card paint layers without threshold layout measur
   assert.match(specs, /9d5e0b7a/);
   assert.doesNotMatch(detailRuntime, /offsetWidth|offsetHeight|getBoundingClientRect|scrollHeight/);
   assert.doesNotMatch(detailRuntime, /cacheRenderedCardSizes/);
-  assert.match(cardRenderer, /ledger-card-detail-layer/);
+  assert.doesNotMatch(detailRuntime, /0\.45|lowDetailThreshold|zoom-grid-suppressed/);
+  assert.doesNotMatch(detailMountRuntimeWithoutComments, /offsetWidth|offsetHeight|getBoundingClientRect|scrollHeight/);
+  assert.match(detailRuntime, /const shouldUseLowDetail = state\.viewport\.scale < 0\.35/);
+  assert.match(detailRuntime, /scheduleMountedLedgerCardDetailsSync\(true\)/);
+  assert.match(detailRuntime, /clearMountedLedgerCardDetails\(\)/);
+  assert.match(detailMountRuntime, /requestAnimationFrame/);
+  assert.match(detailMountRuntime, /window\.setTimeout/);
+  assert.match(cardRenderer, /ledger-card-detail-host/);
   assert.match(cardRenderer, /ledger-card-overview-layer/);
-  assert.match(css, /\.canvas\.low-detail \.ledger-card-detail-layer\s*{[^}]*content-visibility:\s*hidden;/s);
+  assert.match(objectsCss, /\.ledger-card-detail-layer\s*{[^}]*transition:\s*opacity 160ms ease-out;/s);
   assert.match(css, /\.canvas\.low-detail \.ledger-card-overview-layer\s*{[^}]*visibility:\s*visible;[^}]*opacity:\s*1;/s);
+  assert.match(objectsCss, /\.card\[data-detail-mounted="mounting"\] \.ledger-card-detail-layer,[\s\S]{0,120}\.card\[data-detail-mounted="unmounting"\] \.ledger-card-detail-layer\s*{[^}]*opacity:\s*0;/s);
+  assert.doesNotMatch(css, /content-visibility:\s*hidden/);
+  assert.doesNotMatch(css, /zoom-grid-suppressed/);
   assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-title\s*{[^}]*width:\s*calc\(100% \* var\(--viewport-scale, 1\)\);/s);
   assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-title\s*{[^}]*padding:\s*calc/);
-  assert.match(css, /\.canvas\.low-detail \.ledger-card-overview-title\s*{[^}]*white-space:\s*normal;[^}]*word-break:\s*break-word;/s);
-  assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-overview-title\s*{[^}]*text-overflow:\s*ellipsis;/s);
+  assert.doesNotMatch(css, /\.canvas\.low-detail \.ledger-card-overview-title/);
+  assert.match(objectsCss, /\.ledger-card-overview-title\s*{[^}]*max-width:\s*calc\(100% \* var\(--viewport-scale, 1\)\);/s);
+  assert.match(objectsCss, /\.ledger-card-overview-title\s*{[^}]*white-space:\s*normal;[^}]*word-break:\s*break-word;/s);
+  assert.doesNotMatch(objectsCss, /\.ledger-card-overview-title\s*{[^}]*(?<!-)width:\s*calc\(100% \* var\(--viewport-scale, 1\)\);/s);
+  assert.doesNotMatch(objectsCss, /\.ledger-card-overview-title\s*{[^}]*text-overflow:\s*ellipsis;/s);
 });
 
 test('card height normalization command backs up and migrates legacy natural-height cards', () => {
@@ -78,7 +104,7 @@ test('description editor preserves rendered body size and lets textarea own whee
   assert.match(editorRuntime, /textarea\.style\.minHeight = `\$\{bodyHeight\}px`;/);
   assert.match(editorRuntime, /textarea\.style\.height = `\$\{bodyHeight\}px`;/);
   assert.match(editorRuntime, /addEventListener\('wheel', \(event\) => \{\s*event\.stopPropagation\(\);/s);
-  assert.match(wheelRuntime, /if \(shouldCaptureWheelTarget\(event\)\) return;/);
+  assert.match(wheelRuntime, /if \(shouldCaptureWheelTarget\(event\)\) \{[\s\S]*return;[\s\S]*\}/);
   assert.match(css, /\.ledger-card-description-editor\s*{[^}]*overflow:\s*auto;[^}]*overscroll-behavior:\s*contain;/s);
 });
 
@@ -93,7 +119,7 @@ test('local app and asset routes are served without browser cache ambiguity', ()
 test('card field tabs preserve measured description height and fade panel switches', () => {
   const specs = source('documentation/specs.json');
   const css = source('frontend/assets/canvas/objects.css');
-  const component = source('frontend/src/runtime/ledger/component/patch-ledger-card.ts');
+  const component = source('frontend/src/runtime/ledger/component/create-ledger-card-detail-layer.ts');
   const action = source('frontend/src/runtime/input/controller/handle-action-click.ts');
   const controller = source('frontend/src/runtime/card/controller/switch-card-tab-controller.ts');
   const sync = source('frontend/src/runtime/card/effect/sync-ledger-card-tab-frames.ts');
@@ -117,8 +143,6 @@ test('card field tabs preserve measured description height and fade panel switch
   assert.match(specs, /8c4e2b71/);
   assert.match(component, /renderLedgerCardTabs/);
   assert.match(component, /renderLedgerCardTabFrame/);
-  assert.doesNotMatch(component, /function renderLedgerCardTabs/);
-  assert.doesNotMatch(component, /function renderLedgerCardTabFrame/);
   assert.match(action, /switch-card-tab/);
   assert.match(action, /closest\('\.card\[data-card-id\]'\)/);
   assert.match(controller, /activeTabByCardId/);

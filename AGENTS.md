@@ -1,5 +1,13 @@
 # CoreV2 Agent Instructions
 
+## Codebase Rules
+
+- Follow the local runtime convention of one function per implementation file. Split helpers/effects/controllers into separate files instead of grouping several functions in one module.
+- Group private helper/effect files under a feature directory such as `runtime/debug/zoom-debug/...`; do not dump feature-specific helpers into broad shared folders that will accumulate unrelated files.
+- Start implementation files with the existing `WHAT` / `WHY` comment block that explains the file responsibility and reason.
+- Add `// Branch:` comments for meaningful conditional branches so control-flow intent remains explicit.
+- Preserve these conventions when adding debug or measurement code; temporary instrumentation must obey the same structure as product code unless the operator explicitly asks for a throwaway script outside the repo.
+
 ## Blueprint Tool Server Procedure
 
 CoreV2 serves the active `.blueprinttool` workspace by resolving the workspace root from the process

@@ -1,4 +1,5 @@
 import { SVG_NS } from '../../dom.js';
+import { canvas } from '../../dom.js';
 import { state } from '../../state.js';
 import { elementCanvasRect } from '../../canvas/helper/element-canvas-rect.js';
 import { activeLedgerCardMap, activeLedgerCardRectMap } from '../../ledger/helper/active-ledger-geometry.js';
@@ -7,30 +8,47 @@ import { calculateRelationshipPorts } from '../helper/calculate-relationship-por
 import { resolveRelationshipPortSlots } from '../helper/resolve-relationship-port-slots.js';
 import { routeRelationshipPath } from '../helper/route-relationship-path.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { dragTraceHook } from '../../performance/drag-trace-span.js';
+import { clearRelationshipLabels } from './clear-relationship-labels.js';
 
 export function renderRelationshipOverlay(): void {
-  const overlays = Array.from(document.querySelectorAll('.relationships')) as SVGSVGElement[];
-  let count = 0;
-  for (const overlay of overlays) {
-    if (overlay.hasAttribute('hidden')) continue;
-    const relationships = Array.from(overlay.querySelectorAll('path[data-relationship-id]')) as SVGPathElement[];
-    count += state.activeLedger
-      ? renderLedgerRelationshipOverlay(overlay, relationships)
-      : renderStaticRelationshipOverlay(overlay, relationships);
+  if (canvas.classList.contains('low-detail')) {
+    // Branch: Low-detail keeps relationship paths but drops label text to avoid reusing hidden detail-exposed survivors.
+    clearRelationshipLabels();
+    return;
   }
-  telemetry('render-relationship-overlay', { count });
+  const span = dragTraceHook();
+  if (!span) {
+    renderRelationshipOverlayBody();
+    return;
+  }
+  span('renderRelationshipOverlay', () => renderRelationshipOverlayBody(span));
 }
 
-function renderLedgerRelationshipOverlay(overlay: SVGSVGElement, relationships: SVGPathElement[]): number {
-  const rectByCardId = activeLedgerCardRectMap();
-  const cardById = activeLedgerCardMap();
-  const zoneAttribution = ensureZoneAttributionCache('render-relationship-overlay');
+function renderRelationshipOverlayBody(span?: NonNullable<ReturnType<typeof dragTraceHook>>): void {
+    const overlays = span ? span('renderRelationshipOverlay:queryOverlays', () => Array.from(document.querySelectorAll('.relationships')) as SVGSVGElement[]) : Array.from(document.querySelectorAll('.relationships')) as SVGSVGElement[];
+    let count = 0;
+    for (const overlay of overlays) {
+      if (overlay.hasAttribute('hidden')) continue;
+      const relationships = span ? span('renderRelationshipOverlay:queryRelationships', () => Array.from(overlay.querySelectorAll('path[data-relationship-id]')) as SVGPathElement[]) : Array.from(overlay.querySelectorAll('path[data-relationship-id]')) as SVGPathElement[];
+      count += state.activeLedger
+        ? span ? span('renderRelationshipOverlay:renderLedgerRelationshipOverlay', () => renderLedgerRelationshipOverlay(overlay, relationships, span)) : renderLedgerRelationshipOverlay(overlay, relationships)
+        : span ? span('renderRelationshipOverlay:renderStaticRelationshipOverlay', () => renderStaticRelationshipOverlay(overlay, relationships)) : renderStaticRelationshipOverlay(overlay, relationships);
+    }
+    if (span) span('renderRelationshipOverlay:telemetry', () => telemetry('render-relationship-overlay', { count }));
+    else telemetry('render-relationship-overlay', { count });
+}
+
+function renderLedgerRelationshipOverlay(overlay: SVGSVGElement, relationships: SVGPathElement[], span?: NonNullable<ReturnType<typeof dragTraceHook>>): number {
+  const rectByCardId = span ? span('renderLedgerRelationshipOverlay:activeLedgerCardRectMap', () => activeLedgerCardRectMap()) : activeLedgerCardRectMap();
+  const cardById = span ? span('renderLedgerRelationshipOverlay:activeLedgerCardMap', () => activeLedgerCardMap()) : activeLedgerCardMap();
+  const zoneAttribution = span ? span('renderLedgerRelationshipOverlay:ensureZoneAttributionCache', () => ensureZoneAttributionCache('render-relationship-overlay')) : ensureZoneAttributionCache('render-relationship-overlay');
   const endpoints = relationships.map((path) => ({
     relationshipId: path.dataset.relationshipId ?? '',
     sourceId: path.dataset.source ?? '',
     targetId: path.dataset.target ?? ''
   })).filter((relationship) => relationship.relationshipId && relationship.sourceId && relationship.targetId);
-  const portSlots = resolveRelationshipPortSlots(endpoints, rectByCardId);
+  const portSlots = span ? span('renderLedgerRelationshipOverlay:resolveRelationshipPortSlots', () => resolveRelationshipPortSlots(endpoints, rectByCardId)) : resolveRelationshipPortSlots(endpoints, rectByCardId);
   let count = 0;
   for (const [routeIndex, path] of relationships.entries()) {
     const relationshipId = path.dataset.relationshipId ?? '';
@@ -39,14 +57,18 @@ function renderLedgerRelationshipOverlay(overlay: SVGSVGElement, relationships: 
     const sourceRect = rectByCardId.get(sourceId);
     const targetRect = rectByCardId.get(targetId);
     if (!sourceRect || !targetRect) continue;
-    const ports = calculateRelationshipPorts(sourceRect, targetRect, portSlots[relationshipId], { sourceId, targetId });
-    const route = routeRelationshipPath({ ...ports, routeIndex });
+    const ports = span ? span('renderLedgerRelationshipOverlay:calculateRelationshipPorts', () => calculateRelationshipPorts(sourceRect, targetRect, portSlots[relationshipId], { sourceId, targetId })) : calculateRelationshipPorts(sourceRect, targetRect, portSlots[relationshipId], { sourceId, targetId });
+    const route = span ? span('renderLedgerRelationshipOverlay:routeRelationshipPath', () => routeRelationshipPath({ ...ports, routeIndex })) : routeRelationshipPath({ ...ports, routeIndex });
     path.setAttribute('d', route.path);
     path.dataset.routeVersion = String(Number(path.dataset.routeVersion ?? '0') + 1);
     const relationshipLabel = path.dataset.relationshipLabelText || relationshipId;
     const sourceTitle = String(cardById.get(sourceId)?.title ?? sourceId);
-    patchRelationshipLabel(overlay, relationshipId, 'target', relationshipLabel, route.startLabel, relationshipLabelColor(sourceId, zoneAttribution?.cardById?.[sourceId]?.readableColor));
-    patchRelationshipLabel(overlay, relationshipId, 'source', sourceTitle, route.endLabel, relationshipLabelColor(targetId, zoneAttribution?.cardById?.[targetId]?.readableColor));
+    const patchLabels = () => {
+      patchRelationshipLabel(overlay, relationshipId, 'target', relationshipLabel, route.startLabel, relationshipLabelColor(sourceId, zoneAttribution?.cardById?.[sourceId]?.readableColor));
+      patchRelationshipLabel(overlay, relationshipId, 'source', sourceTitle, route.endLabel, relationshipLabelColor(targetId, zoneAttribution?.cardById?.[targetId]?.readableColor));
+    };
+    if (span) span('renderLedgerRelationshipOverlay:patchRelationshipLabels', patchLabels);
+    else patchLabels();
     count += 1;
   }
   return count;
