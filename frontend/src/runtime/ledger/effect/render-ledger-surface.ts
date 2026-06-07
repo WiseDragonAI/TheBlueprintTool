@@ -10,8 +10,10 @@ import { ensureZoneAttributionCache } from '../helper/zone-attribution-cache.js'
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { invalidateDetailModeCardSizeCache } from '../../canvas/effect/update-detail-mode.js';
 import { scheduleCanvasMediaOverlayRender } from '../../canvas/effect/render-canvas-media-overlay.js';
+import { syncRenderDensity } from '../../canvas/helper/render-density.js';
 
 export function renderLedgerSurface(): void {
+  syncRenderDensity();
   invalidateDetailModeCardSizeCache();
   const ledger = state.activeLedger as { cards?: unknown; annotations?: unknown; relationships?: unknown } | null;
   const isLedgerTab = Boolean(ledger);

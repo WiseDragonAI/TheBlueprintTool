@@ -4,6 +4,7 @@ import { renderRelationshipOverlay } from '../../relationship/effect/render-rela
 import { renderZoneLabelOverlay } from '../../zone/effect/render-zone-label-overlay.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { activeLedgerAnnotationMap, activeLedgerCardMap, ledgerAnnotationGeometry, ledgerCardGeometry, patchLedgerAnnotationGeometry, patchLedgerCardGeometry } from '../../ledger/helper/active-ledger-geometry.js';
+import { renderGeometry } from '../../canvas/helper/render-density.js';
 
 export function moveSelected(dx: number, dy: number): void {
   if (state.activeLedger) {
@@ -59,6 +60,7 @@ function moveSelectedDomGeometry(dx: number, dy: number): void {
 
 function patchNodePosition(node: HTMLElement | null, x: number, y: number): void {
   if (!node) return;
-  node.style.left = `${x}px`;
-  node.style.top = `${y}px`;
+  const renderedGeometry = renderGeometry({ x, y, width: 0, height: 0 });
+  node.style.left = `${renderedGeometry.x}px`;
+  node.style.top = `${renderedGeometry.y}px`;
 }

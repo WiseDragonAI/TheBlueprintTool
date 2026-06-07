@@ -3,6 +3,7 @@ import { renderCanvasControlOverlay } from '../../canvas/effect/render-canvas-co
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { activeLedgerCardMap, ledgerCardGeometry, patchLedgerCardGeometry, type LedgerGeometry } from '../../ledger/helper/active-ledger-geometry.js';
+import { renderGeometry } from '../../canvas/helper/render-density.js';
 
 export function resizeSelectedCard(dx: number, dy: number): void {
   const card = state.pointer?.target as HTMLElement | null;
@@ -45,10 +46,11 @@ export function resizeSelectedCard(dx: number, dy: number): void {
 }
 
 function patchCardBox(card: HTMLElement, geometry: LedgerGeometry): void {
-  card.style.left = `${geometry.x}px`;
-  card.style.top = `${geometry.y}px`;
-  card.style.width = `${geometry.width}px`;
-  card.style.height = `${geometry.height}px`;
+  const renderedGeometry = state.activeLedger ? renderGeometry(geometry) : geometry;
+  card.style.left = `${renderedGeometry.x}px`;
+  card.style.top = `${renderedGeometry.y}px`;
+  card.style.width = `${renderedGeometry.width}px`;
+  card.style.height = `${renderedGeometry.height}px`;
   card.dataset.sizeCacheWidth = String(geometry.width);
   card.dataset.sizeCacheHeight = String(geometry.height);
   card.style.setProperty('--card-size-cache-width', `${geometry.width}px`);

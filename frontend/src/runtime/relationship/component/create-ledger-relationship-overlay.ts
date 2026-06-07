@@ -1,4 +1,5 @@
 import { SVG_NS } from '../../dom.js';
+import { renderLength } from '../../canvas/helper/render-density.js';
 
 export function createLedgerRelationshipOverlay(
   relationships: Array<Record<string, unknown>>,
@@ -10,8 +11,12 @@ export function createLedgerRelationshipOverlay(
   overlay.setAttribute('width', String(bounds.width));
   overlay.setAttribute('height', String(bounds.height));
   overlay.setAttribute('viewBox', `0 0 ${bounds.width} ${bounds.height}`);
-  overlay.style.width = `${bounds.width}px`;
-  overlay.style.height = `${bounds.height}px`;
+  overlay.style.left = '0px';
+  overlay.style.top = '0px';
+  overlay.style.right = 'auto';
+  overlay.style.bottom = 'auto';
+  overlay.style.width = `${renderLength(bounds.width)}px`;
+  overlay.style.height = `${renderLength(bounds.height)}px`;
   overlay.setAttribute('role', 'img');
   overlay.setAttribute('aria-label', 'Ledger relationships');
   let defs = overlay.querySelector('defs');

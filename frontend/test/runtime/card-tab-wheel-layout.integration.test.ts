@@ -24,7 +24,9 @@ test('multi-tab cards use fixed ledger height while wheel capture is scroll-gate
   assert.match(css, /\.ledger-card-tab-frame\[data-active-card-tab="description"\]\s*{[^}]*height:\s*auto;[^}]*overflow:\s*visible;/s);
   assert.match(css, /\.ledger-card-tab-frame\[data-active-card-tab="description"\] \.ledger-card-description-panel\.is-active\s*{[^}]*position:\s*relative;[^}]*inset:\s*auto;/s);
   assert.match(patchCard, /const fixedHeight = Math\.max\(132, Number\.isFinite\(cardHeight\) \? cardHeight : 132\);/);
-  assert.match(patchCard, /element\.style\.height = `\$\{fixedHeight\}px`;/);
+  assert.match(patchCard, /const renderedGeometry = renderGeometry\(geometry\);/);
+  assert.match(patchCard, /element\.style\.height = `\$\{renderedGeometry\.height\}px`;/);
+  assert.match(patchCard, /element\.dataset\.sizeCacheHeight = String\(fixedHeight\);/);
   assert.match(patchCard, /element\.style\.removeProperty\('min-height'\);/);
   assert.doesNotMatch(patchCard, /Number\.isFinite\(cardHeight\) && hasFieldTabs/);
   assert.match(wheel, /shouldCaptureWheelTarget\(event\)/);

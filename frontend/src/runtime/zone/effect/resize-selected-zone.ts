@@ -3,6 +3,7 @@ import { renderCanvasControlOverlay } from '../../canvas/effect/render-canvas-co
 import { renderZoneLabelOverlay } from './render-zone-label-overlay.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { activeLedgerAnnotationMap, ledgerAnnotationGeometry, patchLedgerAnnotationGeometry, type LedgerGeometry } from '../../ledger/helper/active-ledger-geometry.js';
+import { renderGeometry } from '../../canvas/helper/render-density.js';
 
 export function resizeSelectedZone(dx: number, dy: number): void {
   const zone = state.pointer?.target as HTMLElement | null;
@@ -44,8 +45,9 @@ export function resizeSelectedZone(dx: number, dy: number): void {
 }
 
 function patchZoneBox(zone: HTMLElement, geometry: LedgerGeometry): void {
-  zone.style.left = `${geometry.x}px`;
-  zone.style.top = `${geometry.y}px`;
-  zone.style.width = `${geometry.width}px`;
-  zone.style.height = `${geometry.height}px`;
+  const renderedGeometry = state.activeLedger ? renderGeometry(geometry) : geometry;
+  zone.style.left = `${renderedGeometry.x}px`;
+  zone.style.top = `${renderedGeometry.y}px`;
+  zone.style.width = `${renderedGeometry.width}px`;
+  zone.style.height = `${renderedGeometry.height}px`;
 }

@@ -9,6 +9,7 @@ import { cardLabels } from '../helper/card-labels.js';
 import { cardPersistedWorkStatus, resolveCardWorkStatus } from '../../card/helper/resolve-card-work-status.js';
 import { applyZoneAttributionToCardElement, normalizeZoneAttribution, type ZoneAttribution } from '../helper/zone-attribution-cache.js';
 import { renderLedgerCardDetailLayer, renderLedgerCardOverviewLayer } from './render-ledger-card-detail-layer.js';
+import { renderGeometry } from '../../canvas/helper/render-density.js';
 
 function directChildByClass(element: HTMLElement, className: string): HTMLElement | null {
   for (const child of Array.from(element.children) as HTMLElement[]) {
@@ -38,16 +39,19 @@ export function patchLedgerCard(card: Record<string, unknown>, existing?: HTMLEl
   if (labels.length > 0) element.dataset.cardLabels = labels.join(',');
   else delete element.dataset.cardLabels;
   applyZoneAttributionToCardElement(element, normalizeZoneAttribution(attribution));
-  element.style.left = `${Number(card.x ?? 0)}px`;
-  element.style.top = `${Number(card.y ?? 0)}px`;
-  element.style.width = `${Math.max(220, Number(card.w ?? 280))}px`;
+  const width = Math.max(220, Number(card.w ?? 280));
   const cardHeight = Number(card.h ?? card.height);
   const fixedHeight = Math.max(132, Number.isFinite(cardHeight) ? cardHeight : 132);
-  element.style.height = `${fixedHeight}px`;
+  const geometry = { x: Number(card.x ?? 0), y: Number(card.y ?? 0), width, height: fixedHeight };
+  const renderedGeometry = renderGeometry(geometry);
+  element.style.left = `${renderedGeometry.x}px`;
+  element.style.top = `${renderedGeometry.y}px`;
+  element.style.width = `${renderedGeometry.width}px`;
+  element.style.height = `${renderedGeometry.height}px`;
   element.style.removeProperty('min-height');
-  element.dataset.sizeCacheWidth = String(Math.max(220, Number(card.w ?? 280)));
+  element.dataset.sizeCacheWidth = String(width);
   element.dataset.sizeCacheHeight = String(fixedHeight);
-  element.style.setProperty('--card-size-cache-width', `${Math.max(220, Number(card.w ?? 280))}px`);
+  element.style.setProperty('--card-size-cache-width', `${width}px`);
   element.style.setProperty('--card-size-cache-height', `${fixedHeight}px`);
   const handles = createCardResizeHandles();
   const mountedDetail = directChildByClass(element, 'ledger-card-detail-layer');

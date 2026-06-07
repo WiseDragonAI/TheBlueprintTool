@@ -4,6 +4,11 @@
  */
 import { applyViewportSettledEffects, applyViewportTransform } from './apply-viewport-transform.js';
 import { hideCanvasControlOverlay } from './render-canvas-control-overlay.js';
+import { syncRenderDensity } from '../helper/render-density.js';
+import { renderLedgerSurface } from '../../ledger/effect/render-ledger-surface.js';
+import { renderRelationshipOverlay } from '../../relationship/effect/render-relationship-overlay.js';
+import { renderSelectionState } from '../../selection/effect/render-selection-state.js';
+import { renderZoneLabelOverlay } from '../../zone/effect/render-zone-label-overlay.js';
 
 let frame = 0;
 let settleTimer: ReturnType<typeof setTimeout> | 0 = 0;
@@ -31,8 +36,15 @@ export function scheduleViewportTransform(zooming = true): void {
   if (frame) return;
   nextFrame(() => {
     frame = 0;
+    const densityChanged = syncRenderDensity();
+    if (densityChanged) {
+      renderLedgerSurface();
+      renderSelectionState();
+      renderZoneLabelOverlay();
+      renderRelationshipOverlay();
+    }
     const settled = frameSettled;
-    const animated = frameAnimated;
+    const animated = frameAnimated && !densityChanged;
     frameSettled = true;
     frameAnimated = false;
     applyViewportTransform(settled, animated);

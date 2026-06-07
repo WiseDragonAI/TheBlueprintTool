@@ -1,3 +1,5 @@
+import { renderGeometry } from '../../canvas/helper/render-density.js';
+
 export function patchLedgerZone(zone: Record<string, unknown>, existing?: HTMLElement | null): HTMLElement {
   const element = existing ?? document.createElement('article');
   const id = String(zone.id ?? '');
@@ -10,10 +12,17 @@ export function patchLedgerZone(zone: Record<string, unknown>, existing?: HTMLEl
   else element.dataset.zoneId = id;
   element.dataset.threadId = `thread-${id}`;
   element.dataset.ledgerNode = 'zone';
-  element.style.left = `${Number(zone.x ?? 0)}px`;
-  element.style.top = `${Number(zone.y ?? 0)}px`;
-  element.style.width = `${Math.max(180, Number(zone.width ?? 280))}px`;
-  element.style.height = `${Math.max(120, Number(zone.height ?? 180))}px`;
+  const geometry = {
+    x: Number(zone.x ?? 0),
+    y: Number(zone.y ?? 0),
+    width: Math.max(180, Number(zone.width ?? 280)),
+    height: Math.max(120, Number(zone.height ?? 180))
+  };
+  const renderedGeometry = renderGeometry(geometry);
+  element.style.left = `${renderedGeometry.x}px`;
+  element.style.top = `${renderedGeometry.y}px`;
+  element.style.width = `${renderedGeometry.width}px`;
+  element.style.height = `${renderedGeometry.height}px`;
   if (typeof zone.color === 'string') element.style.setProperty('--zone-color', zone.color);
   else element.style.removeProperty('--zone-color');
   const handles = ['nw', 'ne', 'sw', 'se'].map((position) => {

@@ -137,8 +137,20 @@ test('wheel zoom stays transform-only and does not reroute relationships', () =>
   const wheel = source('frontend/src/runtime/gesture/controller/handle-wheel.ts');
   const scheduler = source('frontend/src/runtime/canvas/effect/schedule-viewport-transform.ts');
   const viewport = source('frontend/src/runtime/canvas/effect/apply-viewport-transform.ts');
+  const density = source('frontend/src/runtime/canvas/helper/render-density.ts');
+  const ledgerRenderer = source('frontend/src/runtime/ledger/effect/render-ledger-surface.ts');
+  const canvasPoint = source('frontend/src/runtime/canvas/helper/canvas-point.ts');
+  const visibleCards = source('frontend/src/runtime/card/helper/visible-ledger-cards.ts');
   assert.match(wheel, /scheduleViewportTransform\(!event\.ctrlKey\)/);
+  assert.match(density, /lowZoomRenderDensityThreshold = 0\.2/);
+  assert.match(density, /lowZoomRenderDensity = 4/);
+  assert.match(density, /state\.activeLedger && scale < lowZoomRenderDensityThreshold/);
+  assert.match(density, /currentRenderDensity\(\): number \{[\s\S]*state\.activeLedger \? activeRenderDensity : 1/);
+  assert.match(density, /effectiveViewportScale\(scale = Number\(state\.viewport\.scale\)\): number \{[\s\S]*scale \* currentRenderDensity\(\)/);
   assert.match(scheduler, /const animated = frameAnimated/);
+  assert.match(scheduler, /const densityChanged = syncRenderDensity\(\)/);
+  assert.match(scheduler, /if \(densityChanged\) \{[\s\S]*renderLedgerSurface\(\);[\s\S]*renderSelectionState\(\);[\s\S]*renderZoneLabelOverlay\(\);[\s\S]*renderRelationshipOverlay\(\);[\s\S]*\}/);
+  assert.match(scheduler, /const animated = frameAnimated && !densityChanged/);
   assert.match(scheduler, /applyViewportTransform\(settled, animated\)/);
   assert.match(scheduler, /import \{ hideCanvasControlOverlay \} from '\.\/render-canvas-control-overlay\.js'/);
   assert.match(scheduler, /if \(zooming\) \{\s*hideCanvasControlOverlay\(\);[\s\S]*settleTimer = setTimeout\(finishZoomSettle, 120\)/);
@@ -150,6 +162,12 @@ test('wheel zoom stays transform-only and does not reroute relationships', () =>
   assert.match(viewport, /viewportTransformTransition = 'transform 90ms cubic-bezier/);
   assert.match(viewport, /export function applyViewportTransform\(settled = true, animated = false\)/);
   assert.match(viewport, /applyViewportTransformTransition\(animated\)/);
+  assert.match(viewport, /content\.style\.transform = `translate\(\$\{x\}px, \$\{y\}px\) scale\(\$\{effectiveViewportScale\(\)\}\)`/);
+  assert.match(ledgerRenderer, /syncRenderDensity\(\)/);
+  assert.match(canvasPoint, /state\.viewport\.scale/);
+  assert.doesNotMatch(canvasPoint, /effectiveViewportScale|currentRenderDensity|renderDensity/);
+  assert.match(visibleCards, /const scale = Math\.max\(0\.0001, finiteNumber\(viewport\.scale, 1\)\)/);
+  assert.doesNotMatch(visibleCards, /effectiveViewportScale|currentRenderDensity|renderDensity/);
   assert.doesNotMatch(wheel, /renderRelationshipOverlay/);
 });
 
@@ -159,12 +177,21 @@ test('normal detail reveal is viewport-local and layout-free', () => {
   const sync = source('frontend/src/runtime/canvas/effect/sync-viewport-card-details.ts');
   const cardRenderer = source('frontend/src/runtime/ledger/component/patch-ledger-card.ts');
   const detailRenderer = source('frontend/src/runtime/ledger/component/render-ledger-card-detail-layer.ts');
+  const cardPatch = source('frontend/src/runtime/ledger/component/patch-ledger-card.ts');
+  const zonePatch = source('frontend/src/runtime/ledger/component/patch-ledger-zone.ts');
+  const relationships = source('frontend/src/runtime/relationship/component/create-ledger-relationship-overlay.ts');
   const css = source('frontend/assets/canvas/canvas-layer.css');
   const objects = source('frontend/assets/canvas/objects.css');
 
   assert.match(viewport, /syncViewportCardDetails\(\)/);
   assert.match(pan, /syncViewportCardDetails\(\)/);
   assert.match(pan, /content\.style\.transition !== 'none'/);
+  assert.match(pan, /scale\(\$\{effectiveViewportScale\(\)\}\)/);
+  assert.match(cardPatch, /const renderedGeometry = renderGeometry\(geometry\)/);
+  assert.match(cardPatch, /element\.style\.left = `\$\{renderedGeometry\.x\}px`/);
+  assert.match(zonePatch, /const renderedGeometry = renderGeometry\(geometry\)/);
+  assert.match(relationships, /overlay\.setAttribute\('viewBox', `0 0 \$\{bounds\.width\} \$\{bounds\.height\}`\)/);
+  assert.match(relationships, /overlay\.style\.width = `\$\{renderLength\(bounds\.width\)\}px`/);
   assert.match(sync, /const detailedCardIds = new Set<string>\(\)/);
   assert.match(sync, /activeLedgerCardMap\(\)/);
   assert.match(sync, /viewportWorldBounds\(state\.viewport, viewportCanvasSize\(\)\)/);
