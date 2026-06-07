@@ -19,8 +19,13 @@ test('ctrl-d routes selected card resize through the same controller as the tool
   assert.match(resizeController, /commitActiveLedgerMutation\(\{ action: 'patch-geometry', geometry \}/);
   assert.match(resizeEffect, /expandSelectedZonesToCards/);
   assert.match(resizeEffect, /const zoneFitPadding = 96;/);
-  assert.match(resizeEffect, /const zoneSourceCards = cards\.length > 0 \? cards : allCardElements\(\);/);
-  assert.match(resizeEffect, /zone\.style\.height = `\$\{next\.height\}px`/);
+  assert.match(resizeEffect, /forceDetailsForMeasurement\(cards\)/);
+  assert.match(resizeEffect, /renderLedgerCardDetailLayer\(ledgerCard, mountedDetail\)/);
+  assert.match(resizeEffect, /measureNaturalCardHeight\(card, sourceGeometry\.width\)/);
+  assert.match(resizeEffect, /const cards = uniqueCards\(\[\.\.\.selectedCards, \.\.\.Array\.from\(cardsByZoneId\.values\(\)\)\.flat\(\)\]\)/);
+  assert.match(resizeEffect, /const renderedGeometry = state\.activeLedger \? renderGeometry\(next\) : next/);
+  assert.match(resizeEffect, /syncViewportCardDetails\(\)/);
+  assert.match(resizeEffect, /zone\.style\.height = `\$\{renderedGeometry\.height\}px`/);
   assert.match(resizeEffect, /renderZoneLabelOverlay\(\)/);
   assert.match(actionClick, /shortcuts:\s*\['A', 'X', 'Escape', 'Delete', 'Ctrl\+C', 'Ctrl\+V', 'Ctrl\+D'\]/);
   assert.match(index, /<dt>Ctrl\+D<\/dt><dd>Resize selected cards to their content\.<\/dd>/);
