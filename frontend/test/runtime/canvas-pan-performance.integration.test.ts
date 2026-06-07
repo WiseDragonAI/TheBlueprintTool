@@ -150,6 +150,8 @@ test('wheel zoom stays transform-only and does not reroute relationships', () =>
   assert.match(scheduler, /const animated = frameAnimated/);
   assert.match(scheduler, /const densityChanged = syncRenderDensity\(\)/);
   assert.match(scheduler, /if \(densityChanged\) \{[\s\S]*clearViewportCardDetails\(\);[\s\S]*renderLedgerSurface\(\);[\s\S]*renderSelectionState\(\);[\s\S]*renderZoneLabelOverlay\(\);[\s\S]*renderRelationshipOverlay\(\);[\s\S]*\}/);
+  assert.match(scheduler, /const detailModeChanged = updateDetailMode\(\)/);
+  assert.match(scheduler, /if \(densityChanged \|\| detailModeChanged\) syncViewportCardDetails\(\)/);
   assert.match(scheduler, /const animated = frameAnimated && !densityChanged/);
   assert.match(scheduler, /applyViewportTransform\(settled, animated\)/);
   assert.match(scheduler, /import \{ hideCanvasControlOverlay \} from '\.\/render-canvas-control-overlay\.js'/);
@@ -205,6 +207,7 @@ test('normal detail reveal is viewport-local and layout-free', () => {
   const sync = source('frontend/src/runtime/canvas/effect/sync-viewport-card-details.ts');
   const cardRenderer = source('frontend/src/runtime/ledger/component/patch-ledger-card.ts');
   const detailRenderer = source('frontend/src/runtime/ledger/component/render-ledger-card-detail-layer.ts');
+  const detailMode = source('frontend/src/runtime/canvas/effect/update-detail-mode.ts');
   const cardPatch = source('frontend/src/runtime/ledger/component/patch-ledger-card.ts');
   const zonePatch = source('frontend/src/runtime/ledger/component/patch-ledger-zone.ts');
   const relationships = source('frontend/src/runtime/relationship/component/create-ledger-relationship-overlay.ts');
@@ -231,6 +234,9 @@ test('normal detail reveal is viewport-local and layout-free', () => {
   assert.match(sync, /content\.querySelectorAll\(':scope > \.card\.detail-visible, :scope > \.card > \.ledger-card-detail-layer'\)/);
   assert.match(sync, /detailedCardIds\.clear\(\)/);
   assert.match(sync, /if \(canvas\.classList\.contains\('low-detail'\)\) \{[\s\S]*clearViewportCardDetails\(\);[\s\S]*return;/);
+  assert.match(detailMode, /export function updateDetailMode\(\): boolean/);
+  assert.match(detailMode, /return hasLowDetail !== shouldUseLowDetail \|\| hasOverviewDetail !== shouldUseOverviewDetail/);
+  assert.doesNotMatch(detailMode, /getBoundingClientRect|offsetWidth|offsetHeight|scrollWidth|scrollHeight/);
   assert.match(sync, /classList\.add\('detail-visible'\)/);
   assert.match(sync, /classList\.remove\('detail-visible'\)/);
   assert.doesNotMatch(sync, /querySelectorAll<HTMLElement>\(':scope > \.card\[data-card-id\]'\)/);
