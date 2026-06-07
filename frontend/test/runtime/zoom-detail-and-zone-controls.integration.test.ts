@@ -29,6 +29,13 @@ test('low-detail zoom hides card detail while keeping counter-scaled card titles
   assert.doesNotMatch(detailRuntime, /offsetWidth|offsetHeight|getBoundingClientRect|scrollHeight/);
   assert.match(detailRuntime, /if \(hasLowDetail !== shouldUseLowDetail\) canvas\.classList\.toggle/);
   assert.match(detailRuntime, /if \(hasOverviewDetail !== shouldUseOverviewDetail\) canvas\.classList\.toggle/);
+  assert.match(detailRuntime, /state\.viewport\.scale < 0\.06/);
+  assert.match(detailRuntime, /state\.viewport\.scale > 0\.15/);
+  assert.match(detailRuntime, /low-detail-zone-border-wide/);
+  assert.match(detailRuntime, /low-detail-zone-border-fine/);
+  assert.match(css, /\.canvas\.low-detail \.zone\s*{[^}]*border-width:\s*3px;/s);
+  assert.match(css, /\.canvas\.low-detail\.low-detail-zone-border-wide \.zone\s*{[^}]*border-width:\s*5px;/s);
+  assert.match(css, /\.canvas\.low-detail\.low-detail-zone-border-fine \.zone\s*{[^}]*border-width:\s*2px;/s);
   assert.match(objectsCss, /\.card:not\(\.detail-visible\),\s*\.card\.connected:not\(\.detail-visible\)\s*{[^}]*box-shadow:\s*none;/s);
   assert.doesNotMatch(css, /\.canvas\.overview-detail \.regular-zone/);
   assert.match(css, /\.canvas\.overview-detail \.grid\s*{[^}]*display:\s*none;/s);
