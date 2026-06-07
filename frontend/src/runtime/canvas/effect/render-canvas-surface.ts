@@ -8,6 +8,7 @@ import { renderTelemetry } from '../../telemetry/effect/render-telemetry.js';
 import { renderThreadPanel } from '../../thread/effect/render-thread-panel.js';
 import { renderZoneLabelOverlay } from '../../zone/effect/render-zone-label-overlay.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { renderCanvasDebugOverlay } from '../../debug/effect/render-canvas-debug-overlay.js';
 import { applyViewportTransform } from './apply-viewport-transform.js';
 import { renderCanvasControlOverlay } from './render-canvas-control-overlay.js';
 
@@ -23,4 +24,5 @@ export function renderCanvasSurface(): void {
   telemetry('render-canvas-surface', { viewport: state.viewport, selection: state.selection });
   renderTelemetry();
   renderThreadPanel();
+  renderCanvasDebugOverlay('surface');
 }

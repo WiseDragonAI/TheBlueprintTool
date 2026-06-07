@@ -7,6 +7,7 @@ import { state } from '../../state.js';
 import { applyCanvasMediaOverlayPanTransform } from './render-canvas-media-overlay.js';
 import { syncViewportCardDetails } from './sync-viewport-card-details.js';
 import { effectiveViewportScale } from '../helper/render-density.js';
+import { renderCanvasDebugOverlay } from '../../debug/effect/render-canvas-debug-overlay.js';
 
 export function applyPanViewportTransform(): void {
   const devicePixelRatio = window.devicePixelRatio || 1;
@@ -16,4 +17,5 @@ export function applyPanViewportTransform(): void {
   content.style.transform = `translate(${x}px, ${y}px) scale(${effectiveViewportScale()})`;
   applyCanvasMediaOverlayPanTransform();
   syncViewportCardDetails();
+  renderCanvasDebugOverlay('pan');
 }

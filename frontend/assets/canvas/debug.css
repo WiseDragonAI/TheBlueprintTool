@@ -1,0 +1,59 @@
+/**
+ * WHAT: URL-param gated canvas diagnostics.
+ * WHY: Performance work needs live scale/detail state without opening normal UI panels.
+ */
+.canvas-debug-overlay {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 10000;
+  max-width: min(420px, calc(100vw - 28px));
+  max-height: min(70vh, 720px);
+  overflow: auto;
+  padding: 12px 14px 14px;
+  border: 1px solid rgba(93, 232, 255, 0.42);
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(14, 23, 30, 0.96), rgba(7, 10, 14, 0.92)),
+    rgba(7, 10, 14, 0.94);
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.58),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  color: #d8f8ff;
+  font: 12px/1.35 "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  pointer-events: none;
+}
+
+.canvas-debug-overlay h2 {
+  margin: 0 0 8px;
+  color: #7deaff;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.canvas-debug-overlay table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.canvas-debug-overlay th,
+.canvas-debug-overlay td {
+  padding: 3px 0;
+  border-top: 1px solid rgba(125, 234, 255, 0.14);
+  vertical-align: top;
+}
+
+.canvas-debug-overlay th {
+  min-width: 128px;
+  padding-right: 16px;
+  color: rgba(216, 248, 255, 0.68);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.canvas-debug-overlay td {
+  color: #ffffff;
+  overflow-wrap: anywhere;
+}

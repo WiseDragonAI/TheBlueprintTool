@@ -5,6 +5,7 @@ import { canvasMediaOverlayScaleThreshold, clearCanvasMediaOverlay, scheduleCanv
 import { syncViewportCardDetails } from './sync-viewport-card-details.js';
 import { updateDetailMode } from './update-detail-mode.js';
 import { effectiveViewportScale } from '../helper/render-density.js';
+import { renderCanvasDebugOverlay } from '../../debug/effect/render-canvas-debug-overlay.js';
 
 const viewportTransformTransition = 'transform 90ms cubic-bezier(0.22, 0.61, 0.36, 1)';
 
@@ -37,4 +38,5 @@ export function applyViewportTransform(settled = true, animated = false): void {
   content.style.transform = `translate(${x}px, ${y}px) scale(${effectiveViewportScale()})`;
   if (!settled || Number(state.viewport.scale) < canvasMediaOverlayScaleThreshold) clearCanvasMediaOverlay();
   if (settled) applyViewportSettledEffects();
+  renderCanvasDebugOverlay(settled ? 'viewport-settled' : 'viewport-frame');
 }

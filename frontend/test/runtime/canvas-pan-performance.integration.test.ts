@@ -171,6 +171,34 @@ test('wheel zoom stays transform-only and does not reroute relationships', () =>
   assert.doesNotMatch(wheel, /renderRelationshipOverlay/);
 });
 
+test('canvas debug overlay is URL-param gated and reports zoom density state', () => {
+  const debugRuntime = source('frontend/src/runtime/debug/effect/render-canvas-debug-overlay.ts');
+  const viewport = source('frontend/src/runtime/canvas/effect/apply-viewport-transform.ts');
+  const pan = source('frontend/src/runtime/canvas/effect/apply-pan-viewport-transform.ts');
+  const surface = source('frontend/src/runtime/canvas/effect/render-canvas-surface.ts');
+  const canvasCss = source('frontend/assets/canvas.css');
+  const debugCss = source('frontend/assets/canvas/debug.css');
+
+  assert.match(canvasCss, /@import url\('\.\/canvas\/debug\.css'\)/);
+  assert.match(debugRuntime, /params\.has\('canvasDebug'\)/);
+  assert.match(debugRuntime, /params\.get\('debug'\) === 'canvas'/);
+  assert.match(debugRuntime, /params\.get\('debugCanvas'\) === '1'/);
+  assert.match(debugRuntime, /if \(!canvasDebugEnabled\(\)\) return/);
+  assert.match(debugRuntime, /className = 'canvas-debug-overlay'/);
+  assert.match(debugRuntime, /row\('raw zoom', formatNumber\(state\.viewport\.scale, 4\)\)/);
+  assert.match(debugRuntime, /row\('effective zoom', formatNumber\(effectiveViewportScale\(\), 4\)\)/);
+  assert.match(debugRuntime, /row\('render density', String\(currentRenderDensity\(\)\)\)/);
+  assert.match(debugRuntime, /row\('detail mode', detailMode\(\)\)/);
+  assert.match(debugRuntime, /row\('detail DOM', String\(count\(':scope > \.card \.ledger-card-detail-layer'\)\)\)/);
+  assert.match(debugRuntime, /row\('transform', content\?\.style\.transform \|\| 'none'\)/);
+  assert.doesNotMatch(debugRuntime, /getBoundingClientRect|offsetWidth|offsetHeight|scrollWidth|scrollHeight/);
+  assert.match(viewport, /renderCanvasDebugOverlay\(settled \? 'viewport-settled' : 'viewport-frame'\)/);
+  assert.match(pan, /renderCanvasDebugOverlay\('pan'\)/);
+  assert.match(surface, /renderCanvasDebugOverlay\('surface'\)/);
+  assert.match(debugCss, /\.canvas-debug-overlay\s*{[^}]*position:\s*fixed;[^}]*z-index:\s*10000;/s);
+  assert.match(debugCss, /\.canvas-debug-overlay table\s*{[^}]*border-collapse:\s*collapse;/s);
+});
+
 test('normal detail reveal is viewport-local and layout-free', () => {
   const viewport = source('frontend/src/runtime/canvas/effect/apply-viewport-transform.ts');
   const pan = source('frontend/src/runtime/canvas/effect/apply-pan-viewport-transform.ts');
