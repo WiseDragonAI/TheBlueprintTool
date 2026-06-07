@@ -148,6 +148,22 @@
 }
 
 .canvas.low-detail .zone {
+  border-width: 3px;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.canvas.low-detail .regular-zone {
+  border-color: var(--zone-color, var(--line));
+  background-color: color-mix(in srgb, var(--zone-color, var(--line)), rgb(8, 8, 8) 88%);
+  background-image: none;
+}
+
+.canvas.low-detail .card:not(.detail-visible),
+.canvas.low-detail .card.connected:not(.detail-visible) {
+  border-width: 0;
+  border-color: var(--card-zone-color, var(--line));
+  background: rgb(10, 12, 15);
   box-shadow: none;
   backdrop-filter: none;
 }
@@ -196,6 +212,12 @@
   text-shadow: 0 0 10px color-mix(in srgb, var(--card-zone-color), transparent 64%);
 }
 
+.canvas.low-detail .card:not(.detail-visible) .ledger-card-overview-title,
+.canvas.low-detail .zone-title,
+.canvas.low-detail .zone-label-proxy {
+  text-shadow: none;
+}
+
 .canvas .card:not(.detail-visible)[data-card-work-status="todo"] .ledger-card-overview-status {
   display: flex;
   top: 50%;
@@ -210,6 +232,12 @@
   max-width: 140px;
   height: 18px;
   font-size: 9px;
+}
+
+.canvas.low-detail .card:not(.detail-visible) .ledger-card-overview-status {
+  border-color: var(--card-zone-color, var(--line));
+  background: rgb(12, 16, 12);
+  box-shadow: none;
 }
 
 .canvas.is-panning .ledger-card-title,

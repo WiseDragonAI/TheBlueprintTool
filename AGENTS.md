@@ -116,6 +116,7 @@ GIT_SSH_COMMAND='ssh -i ~/.ssh/id_jb_wise -o IdentitiesOnly=yes' git push
 - Choose one thing with the most yield, the least effort, the smallest amount of LOC, and the most structurally correcting change.
 - After choosing a direction, expand your knowledge and check everything related so you do not miss critical elements.
 - Correcting means fixing the technical debt.
+- Do not propose hiding, disabling, or bypassing the behavior under investigation as an optimization. That is avoiding the bug, not solving it, unless the operator explicitly asks for a degraded-mode tradeoff.
 
 ## Code Smells
 
