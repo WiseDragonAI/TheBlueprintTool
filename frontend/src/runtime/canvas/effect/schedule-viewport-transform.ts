@@ -9,6 +9,7 @@ import { renderLedgerSurface } from '../../ledger/effect/render-ledger-surface.j
 import { renderRelationshipOverlay } from '../../relationship/effect/render-relationship-overlay.js';
 import { renderSelectionState } from '../../selection/effect/render-selection-state.js';
 import { renderZoneLabelOverlay } from '../../zone/effect/render-zone-label-overlay.js';
+import { clearViewportCardDetails } from './sync-viewport-card-details.js';
 
 let frame = 0;
 let settleTimer: ReturnType<typeof setTimeout> | 0 = 0;
@@ -38,6 +39,7 @@ export function scheduleViewportTransform(zooming = true): void {
     frame = 0;
     const densityChanged = syncRenderDensity();
     if (densityChanged) {
+      clearViewportCardDetails();
       renderLedgerSurface();
       renderSelectionState();
       renderZoneLabelOverlay();

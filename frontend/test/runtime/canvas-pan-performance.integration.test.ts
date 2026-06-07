@@ -149,7 +149,7 @@ test('wheel zoom stays transform-only and does not reroute relationships', () =>
   assert.match(density, /effectiveViewportScale\(scale = Number\(state\.viewport\.scale\)\): number \{[\s\S]*scale \* currentRenderDensity\(\)/);
   assert.match(scheduler, /const animated = frameAnimated/);
   assert.match(scheduler, /const densityChanged = syncRenderDensity\(\)/);
-  assert.match(scheduler, /if \(densityChanged\) \{[\s\S]*renderLedgerSurface\(\);[\s\S]*renderSelectionState\(\);[\s\S]*renderZoneLabelOverlay\(\);[\s\S]*renderRelationshipOverlay\(\);[\s\S]*\}/);
+  assert.match(scheduler, /if \(densityChanged\) \{[\s\S]*clearViewportCardDetails\(\);[\s\S]*renderLedgerSurface\(\);[\s\S]*renderSelectionState\(\);[\s\S]*renderZoneLabelOverlay\(\);[\s\S]*renderRelationshipOverlay\(\);[\s\S]*\}/);
   assert.match(scheduler, /const animated = frameAnimated && !densityChanged/);
   assert.match(scheduler, /applyViewportTransform\(settled, animated\)/);
   assert.match(scheduler, /import \{ hideCanvasControlOverlay \} from '\.\/render-canvas-control-overlay\.js'/);
@@ -227,6 +227,10 @@ test('normal detail reveal is viewport-local and layout-free', () => {
   assert.match(sync, /renderLedgerCardDetailLayer\(ledgerCard\)/);
   assert.match(sync, /directChildByClass\(card, 'ledger-card-detail-layer'\)/);
   assert.match(sync, /directChildByClass\(card, 'ledger-card-detail-layer'\)\?\.remove\(\)/);
+  assert.match(sync, /export function clearViewportCardDetails\(\)/);
+  assert.match(sync, /content\.querySelectorAll\(':scope > \.card\.detail-visible, :scope > \.card > \.ledger-card-detail-layer'\)/);
+  assert.match(sync, /detailedCardIds\.clear\(\)/);
+  assert.match(sync, /if \(canvas\.classList\.contains\('low-detail'\)\) \{[\s\S]*clearViewportCardDetails\(\);[\s\S]*return;/);
   assert.match(sync, /classList\.add\('detail-visible'\)/);
   assert.match(sync, /classList\.remove\('detail-visible'\)/);
   assert.doesNotMatch(sync, /querySelectorAll<HTMLElement>\(':scope > \.card\[data-card-id\]'\)/);

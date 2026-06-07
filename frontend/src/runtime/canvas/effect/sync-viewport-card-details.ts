@@ -36,6 +36,15 @@ function removeDetail(cardId: string): void {
   detailedCardIds.delete(cardId);
 }
 
+export function clearViewportCardDetails(): void {
+  for (const cardId of Array.from(detailedCardIds)) removeDetail(cardId);
+  content.querySelectorAll(':scope > .card.detail-visible, :scope > .card > .ledger-card-detail-layer').forEach((node) => {
+    if (node.classList.contains('detail-visible')) (node as HTMLElement).classList.remove('detail-visible');
+    else node.remove();
+  });
+  detailedCardIds.clear();
+}
+
 function addDetail(cardId: string, ledgerCard: Record<string, unknown>): void {
   const card = cardElement(cardId);
   if (!card) return;
@@ -54,7 +63,7 @@ function addDetail(cardId: string, ledgerCard: Record<string, unknown>): void {
 
 export function syncViewportCardDetails(): void {
   if (canvas.classList.contains('low-detail')) {
-    for (const cardId of Array.from(detailedCardIds)) removeDetail(cardId);
+    clearViewportCardDetails();
     return;
   }
 
