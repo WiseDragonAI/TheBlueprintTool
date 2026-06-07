@@ -177,6 +177,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(controlOverlay, /renderLedgerCardStatusButton\(cardId, persistedStatus, visibleStatus\)/);
   assert.match(controlOverlay, /renderLedgerCardDeleteButton\(cardId\)/);
   assert.doesNotMatch(controlOverlay, /selection\.cardIds/);
+  assert.match(controlOverlay, /export function hideCanvasControlOverlay\(\): void \{[\s\S]*existingControlOverlay\(\)\?\.replaceChildren\(\);[\s\S]*\}/);
   assert.match(controlOverlay, /function controlsDisabled\(\): boolean \{[\s\S]*classList\?\.contains\('low-detail'\)/);
   assert.match(controlOverlay, /export function renderCanvasControlOverlay\(\): void \{\s*if \(controlsDisabled\(\)\) \{[\s\S]*clearCanvasControlOverlay\(\);[\s\S]*return;/);
   assert.match(controlOverlay, /canvas\.addEventListener\('mouseover', \(event\) => \{\s*if \(controlsDisabled\(\)\) \{[\s\S]*clearCanvasControlOverlay\(\);[\s\S]*return;/);

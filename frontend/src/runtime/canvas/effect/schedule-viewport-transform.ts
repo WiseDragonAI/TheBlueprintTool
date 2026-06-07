@@ -3,10 +3,12 @@
  * WHY: Wheel bursts should update transform once per frame, then reconcile detail mode after input settles.
  */
 import { applyViewportSettledEffects, applyViewportTransform } from './apply-viewport-transform.js';
+import { hideCanvasControlOverlay } from './render-canvas-control-overlay.js';
 
 let frame = 0;
 let settleTimer: ReturnType<typeof setTimeout> | 0 = 0;
 let frameSettled = true;
+let frameAnimated = false;
 
 function nextFrame(callback: () => void): void {
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(callback);
@@ -20,16 +22,20 @@ function finishZoomSettle(): void {
 
 export function scheduleViewportTransform(zooming = true): void {
   if (zooming) {
+    hideCanvasControlOverlay();
     if (settleTimer) clearTimeout(settleTimer);
     settleTimer = setTimeout(finishZoomSettle, 120);
   }
   frameSettled = frameSettled && !zooming;
+  frameAnimated = frameAnimated || zooming;
   if (frame) return;
   nextFrame(() => {
     frame = 0;
     const settled = frameSettled;
+    const animated = frameAnimated;
     frameSettled = true;
-    applyViewportTransform(settled);
+    frameAnimated = false;
+    applyViewportTransform(settled, animated);
   });
   frame = 1;
 }

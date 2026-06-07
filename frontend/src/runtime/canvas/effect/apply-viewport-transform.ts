@@ -5,11 +5,18 @@ import { canvasMediaOverlayScaleThreshold, clearCanvasMediaOverlay, scheduleCanv
 import { syncViewportCardDetails } from './sync-viewport-card-details.js';
 import { updateDetailMode } from './update-detail-mode.js';
 
+const viewportTransformTransition = 'transform 90ms cubic-bezier(0.22, 0.61, 0.36, 1)';
+
 function applyViewportScaleCssVars(): void {
   const viewportScale = String(state.viewport.scale);
   const inverseViewportScale = String(1 / state.viewport.scale);
   if (canvas.style.getPropertyValue('--viewport-scale') !== viewportScale) canvas.style.setProperty('--viewport-scale', viewportScale);
   if (canvas.style.getPropertyValue('--inverse-viewport-scale') !== inverseViewportScale) canvas.style.setProperty('--inverse-viewport-scale', inverseViewportScale);
+}
+
+function applyViewportTransformTransition(animated: boolean): void {
+  const transition = animated ? viewportTransformTransition : 'none';
+  if (content.style.transition !== transition) content.style.transition = transition;
 }
 
 export function applyViewportSettledEffects(): void {
@@ -20,10 +27,11 @@ export function applyViewportSettledEffects(): void {
   renderCanvasControlOverlay();
 }
 
-export function applyViewportTransform(settled = true): void {
+export function applyViewportTransform(settled = true, animated = false): void {
   const devicePixelRatio = window.devicePixelRatio || 1;
   const x = Math.round(state.viewport.x * devicePixelRatio) / devicePixelRatio;
   const y = Math.round(state.viewport.y * devicePixelRatio) / devicePixelRatio;
+  applyViewportTransformTransition(animated);
   content.style.transform = `translate(${x}px, ${y}px) scale(${state.viewport.scale})`;
   if (!settled || Number(state.viewport.scale) < canvasMediaOverlayScaleThreshold) clearCanvasMediaOverlay();
   if (settled) applyViewportSettledEffects();

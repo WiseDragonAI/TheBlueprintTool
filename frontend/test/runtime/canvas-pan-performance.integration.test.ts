@@ -138,13 +138,18 @@ test('wheel zoom stays transform-only and does not reroute relationships', () =>
   const scheduler = source('frontend/src/runtime/canvas/effect/schedule-viewport-transform.ts');
   const viewport = source('frontend/src/runtime/canvas/effect/apply-viewport-transform.ts');
   assert.match(wheel, /scheduleViewportTransform\(!event\.ctrlKey\)/);
-  assert.match(scheduler, /applyViewportTransform\(settled\)/);
+  assert.match(scheduler, /const animated = frameAnimated/);
+  assert.match(scheduler, /applyViewportTransform\(settled, animated\)/);
+  assert.match(scheduler, /import \{ hideCanvasControlOverlay \} from '\.\/render-canvas-control-overlay\.js'/);
+  assert.match(scheduler, /if \(zooming\) \{\s*hideCanvasControlOverlay\(\);[\s\S]*settleTimer = setTimeout\(finishZoomSettle, 120\)/);
   assert.match(scheduler, /settleTimer = setTimeout\(finishZoomSettle, 120\)/);
   assert.match(scheduler, /applyViewportSettledEffects\(\)/);
   assert.doesNotMatch(scheduler, /syncScaleCssVars|applyViewportScaleCssVars/);
   assert.doesNotMatch(scheduler, /is-zooming|state\.viewport\.scale < 0\.35|classList\.add|classList\.remove/);
   assert.match(viewport, /export function applyViewportSettledEffects\(\)/);
-  assert.match(viewport, /export function applyViewportTransform\(settled = true\)/);
+  assert.match(viewport, /viewportTransformTransition = 'transform 90ms cubic-bezier/);
+  assert.match(viewport, /export function applyViewportTransform\(settled = true, animated = false\)/);
+  assert.match(viewport, /applyViewportTransformTransition\(animated\)/);
   assert.doesNotMatch(wheel, /renderRelationshipOverlay/);
 });
 
@@ -159,6 +164,7 @@ test('normal detail reveal is viewport-local and layout-free', () => {
 
   assert.match(viewport, /syncViewportCardDetails\(\)/);
   assert.match(pan, /syncViewportCardDetails\(\)/);
+  assert.match(pan, /content\.style\.transition !== 'none'/);
   assert.match(sync, /const detailedCardIds = new Set<string>\(\)/);
   assert.match(sync, /activeLedgerCardMap\(\)/);
   assert.match(sync, /viewportWorldBounds\(state\.viewport, viewportCanvasSize\(\)\)/);

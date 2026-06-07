@@ -43,6 +43,10 @@ function clearCanvasControlOverlay(): void {
   existingControlOverlay()?.replaceChildren();
 }
 
+export function hideCanvasControlOverlay(): void {
+  existingControlOverlay()?.replaceChildren();
+}
+
 function controlsDisabled(): boolean {
   return Boolean(canvas?.classList?.contains('low-detail'));
 }
