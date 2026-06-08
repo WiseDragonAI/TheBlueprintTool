@@ -51,6 +51,7 @@ function patchCardBox(card: HTMLElement, geometry: LedgerGeometry): void {
   card.style.top = `${renderedGeometry.y}px`;
   card.style.width = `${renderedGeometry.width}px`;
   card.style.height = `${renderedGeometry.height}px`;
+  card.style.minHeight = `${renderedGeometry.height}px`;
   card.dataset.sizeCacheWidth = String(geometry.width);
   card.dataset.sizeCacheHeight = String(geometry.height);
   card.style.setProperty('--card-size-cache-width', `${geometry.width}px`);

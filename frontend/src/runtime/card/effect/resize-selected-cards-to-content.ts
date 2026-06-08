@@ -146,7 +146,7 @@ function applyCardBox(card: HTMLElement, geometry: LedgerGeometry): void {
   card.style.top = `${renderedGeometry.y}px`;
   card.style.width = `${renderedGeometry.width}px`;
   card.style.height = `${renderedGeometry.height}px`;
-  card.style.removeProperty('min-height');
+  card.style.minHeight = `${renderedGeometry.height}px`;
   card.dataset.sizeCacheWidth = String(geometry.width);
   card.dataset.sizeCacheHeight = String(geometry.height);
   card.style.setProperty('--card-size-cache-width', `${geometry.width}px`);
@@ -197,6 +197,7 @@ function expandSelectedZonesToCards(cardsByZoneId: Map<string, HTMLElement[]>, z
     zone.style.top = `${renderedGeometry.y}px`;
     zone.style.width = `${renderedGeometry.width}px`;
     zone.style.height = `${renderedGeometry.height}px`;
+    zone.style.minHeight = `${renderedGeometry.height}px`;
     geometry[zoneId] = next;
   }
 

@@ -23,6 +23,7 @@ export function patchLedgerZone(zone: Record<string, unknown>, existing?: HTMLEl
   element.style.top = `${renderedGeometry.y}px`;
   element.style.width = `${renderedGeometry.width}px`;
   element.style.height = `${renderedGeometry.height}px`;
+  element.style.minHeight = `${renderedGeometry.height}px`;
   if (typeof zone.color === 'string') element.style.setProperty('--zone-color', zone.color);
   else element.style.removeProperty('--zone-color');
   const handles = ['nw', 'ne', 'sw', 'se'].map((position) => {

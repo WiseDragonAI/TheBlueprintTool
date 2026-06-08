@@ -220,7 +220,9 @@ test('normal detail reveal is viewport-local and layout-free', () => {
   assert.match(pan, /scale\(\$\{effectiveViewportScale\(\)\}\)/);
   assert.match(cardPatch, /const renderedGeometry = renderGeometry\(geometry\)/);
   assert.match(cardPatch, /element\.style\.left = `\$\{renderedGeometry\.x\}px`/);
+  assert.match(cardPatch, /element\.style\.minHeight = `\$\{renderedGeometry\.height\}px`/);
   assert.match(zonePatch, /const renderedGeometry = renderGeometry\(geometry\)/);
+  assert.match(zonePatch, /element\.style\.minHeight = `\$\{renderedGeometry\.height\}px`/);
   assert.match(relationships, /overlay\.setAttribute\('viewBox', `0 0 \$\{bounds\.width\} \$\{bounds\.height\}`\)/);
   assert.match(relationships, /overlay\.style\.width = `\$\{renderLength\(bounds\.width\)\}px`/);
   assert.match(sync, /const detailedCardIds = new Set<string>\(\)/);

@@ -48,7 +48,7 @@ export function patchLedgerCard(card: Record<string, unknown>, existing?: HTMLEl
   element.style.top = `${renderedGeometry.y}px`;
   element.style.width = `${renderedGeometry.width}px`;
   element.style.height = `${renderedGeometry.height}px`;
-  element.style.removeProperty('min-height');
+  element.style.minHeight = `${renderedGeometry.height}px`;
   element.dataset.sizeCacheWidth = String(width);
   element.dataset.sizeCacheHeight = String(fixedHeight);
   element.style.setProperty('--card-size-cache-width', `${width}px`);

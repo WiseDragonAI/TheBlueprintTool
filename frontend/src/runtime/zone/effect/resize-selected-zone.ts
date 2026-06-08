@@ -50,4 +50,5 @@ function patchZoneBox(zone: HTMLElement, geometry: LedgerGeometry): void {
   zone.style.top = `${renderedGeometry.y}px`;
   zone.style.width = `${renderedGeometry.width}px`;
   zone.style.height = `${renderedGeometry.height}px`;
+  zone.style.minHeight = `${renderedGeometry.height}px`;
 }
