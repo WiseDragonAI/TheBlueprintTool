@@ -10,6 +10,7 @@ test('ctrl-d routes selected card resize through the same controller as the tool
   const actionClick = readFileSync(new URL('frontend/src/runtime/input/controller/handle-action-click.ts', root), 'utf8');
   const resizeController = readFileSync(new URL('frontend/src/runtime/card/controller/resize-selected-cards-controller.ts', root), 'utf8');
   const resizeEffect = readFileSync(new URL('frontend/src/runtime/card/effect/resize-selected-cards-to-content.ts', root), 'utf8');
+  const detailSync = readFileSync(new URL('frontend/src/runtime/canvas/effect/sync-viewport-card-details.ts', root), 'utf8');
   const index = readFileSync(new URL('frontend/index.html', root), 'utf8');
 
   assert.match(keyboard, /resizeSelectedCardsController/);
@@ -19,12 +20,16 @@ test('ctrl-d routes selected card resize through the same controller as the tool
   assert.match(resizeController, /commitActiveLedgerMutation\(\{ action: 'patch-geometry', geometry \}/);
   assert.match(resizeEffect, /expandSelectedZonesToCards/);
   assert.match(resizeEffect, /const zoneFitPadding = 96;/);
-  assert.match(resizeEffect, /forceDetailsForMeasurement\(cards\)/);
-  assert.match(resizeEffect, /renderLedgerCardDetailLayer\(ledgerCard, mountedDetail\)/);
+  assert.match(resizeEffect, /forceCardDetailsForMeasurement\(cards\.map\(\(card\) => card\.dataset\.cardId \?\? ''\)\)/);
   assert.match(resizeEffect, /measureNaturalCardHeight\(card, sourceGeometry\.width\)/);
+  assert.match(resizeEffect, /directChildByClass\(card, 'ledger-card-detail-layer'\)/);
+  assert.match(resizeEffect, /detailLayer\?\.scrollHeight/);
   assert.match(resizeEffect, /const cards = uniqueCards\(\[\.\.\.selectedCards, \.\.\.Array\.from\(cardsByZoneId\.values\(\)\)\.flat\(\)\]\)/);
   assert.match(resizeEffect, /const renderedGeometry = state\.activeLedger \? renderGeometry\(next\) : next/);
-  assert.match(resizeEffect, /syncViewportCardDetails\(\)/);
+  assert.match(resizeEffect, /restoreDetailClasses\(detail\);\s*\n\s*restoreForcedDetails\(\);/);
+  assert.match(detailSync, /export function forceCardDetailsForMeasurement/);
+  assert.match(detailSync, /addDetail\(cardId, ledgerCard, \{ reveal: 'immediate' \}\)/);
+  assert.match(detailSync, /syncViewportCardDetails\(\)/);
   assert.match(resizeEffect, /zone\.style\.height = `\$\{renderedGeometry\.height\}px`/);
   assert.match(resizeEffect, /renderZoneLabelOverlay\(\)/);
   assert.match(actionClick, /shortcuts:\s*\['A', 'X', 'Escape', 'Delete', 'Ctrl\+C', 'Ctrl\+V', 'Ctrl\+D'\]/);

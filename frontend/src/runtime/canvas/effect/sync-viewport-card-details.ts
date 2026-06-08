@@ -6,6 +6,13 @@ import { renderLedgerCardDetailLayer } from '../../ledger/component/render-ledge
 
 const detailedCardIds = new Set<string>();
 
+type ForcedDetailRecord = {
+  cardId: string;
+  hadDetail: boolean;
+  wasDetailed: boolean;
+  wasVisible: boolean;
+};
+
 function nextFrame(callback: () => void): void {
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(callback);
   else setTimeout(callback, 0);
@@ -45,7 +52,7 @@ export function clearViewportCardDetails(): void {
   detailedCardIds.clear();
 }
 
-function addDetail(cardId: string, ledgerCard: Record<string, unknown>): void {
+function addDetail(cardId: string, ledgerCard: Record<string, unknown>, options: { reveal?: 'next-frame' | 'immediate' } = {}): void {
   const card = cardElement(cardId);
   if (!card) return;
   if (!directChildByClass(card, 'ledger-card-detail-layer')) {
@@ -55,10 +62,47 @@ function addDetail(cardId: string, ledgerCard: Record<string, unknown>): void {
     else card.append(detailLayer);
   }
   detailedCardIds.add(cardId);
+  if (options.reveal === 'immediate') {
+    card.classList.add('detail-visible');
+    return;
+  }
   nextFrame(() => {
     if (!detailedCardIds.has(cardId) || canvas.classList.contains('low-detail')) return;
     cardElement(cardId)?.classList.add('detail-visible');
   });
+}
+
+export function forceCardDetailsForMeasurement(cardIds: Iterable<string>): () => void {
+  const ledgerCards = activeLedgerCardMap();
+  const forced: ForcedDetailRecord[] = [];
+
+  for (const cardId of Array.from(new Set(cardIds)).filter(Boolean)) {
+    const card = cardElement(cardId);
+    const ledgerCard = ledgerCards.get(cardId);
+    if (!card || !ledgerCard) continue;
+    forced.push({
+      cardId,
+      hadDetail: Boolean(directChildByClass(card, 'ledger-card-detail-layer')),
+      wasDetailed: detailedCardIds.has(cardId),
+      wasVisible: card.classList.contains('detail-visible')
+    });
+    addDetail(cardId, ledgerCard, { reveal: 'immediate' });
+  }
+
+  return () => {
+    for (const detail of forced) {
+      const card = cardElement(detail.cardId);
+      if (!card) {
+        if (!detail.wasDetailed) detailedCardIds.delete(detail.cardId);
+        continue;
+      }
+      if (detail.wasVisible) card.classList.add('detail-visible');
+      else card.classList.remove('detail-visible');
+      if (!detail.hadDetail) directChildByClass(card, 'ledger-card-detail-layer')?.remove();
+      if (!detail.wasDetailed) detailedCardIds.delete(detail.cardId);
+    }
+    syncViewportCardDetails();
+  };
 }
 
 export function syncViewportCardDetails(): void {

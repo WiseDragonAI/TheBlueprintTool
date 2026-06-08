@@ -1,8 +1,7 @@
 import { canvas } from '../../dom.js';
 import { renderGeometry } from '../../canvas/helper/render-density.js';
-import { syncViewportCardDetails } from '../../canvas/effect/sync-viewport-card-details.js';
+import { forceCardDetailsForMeasurement } from '../../canvas/effect/sync-viewport-card-details.js';
 import { activeLedgerAnnotationMap, activeLedgerCardMap, ledgerAnnotationGeometry, ledgerCardGeometry, type LedgerGeometry } from '../../ledger/helper/active-ledger-geometry.js';
-import { renderLedgerCardDetailLayer } from '../../ledger/component/render-ledger-card-detail-layer.js';
 import { renderRelationshipOverlay } from '../../relationship/effect/render-relationship-overlay.js';
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
@@ -27,12 +26,6 @@ type BoxGeometry = {
   y: number;
   width: number;
   height: number;
-};
-
-type ForcedDetailState = {
-  card: HTMLElement;
-  hadDetail: boolean;
-  wasVisible: boolean;
 };
 
 export function resizeZoneGeometryToContainedCards(cards: BoxGeometry[], options: { padding?: number; minWidth?: number; minHeight?: number } = {}): BoxGeometry | null {
@@ -101,36 +94,6 @@ function directChildByClass(element: HTMLElement, className: string): HTMLElemen
   return null;
 }
 
-function insertDetailLayer(card: HTMLElement, detailLayer: HTMLElement): void {
-  const overview = directChildByClass(card, 'ledger-card-overview-layer');
-  if (overview) card.insertBefore(detailLayer, overview);
-  else card.append(detailLayer);
-}
-
-function forceDetailsForMeasurement(cards: HTMLElement[]): () => void {
-  const ledgerCards = activeLedgerCardMap();
-  const forced: ForcedDetailState[] = [];
-
-  for (const card of cards) {
-    const cardId = card.dataset.cardId ?? '';
-    const ledgerCard = ledgerCards.get(cardId);
-    const mountedDetail = directChildByClass(card, 'ledger-card-detail-layer');
-    forced.push({ card, hadDetail: Boolean(mountedDetail), wasVisible: card.classList.contains('detail-visible') });
-    if (ledgerCard) {
-      const detailLayer = renderLedgerCardDetailLayer(ledgerCard, mountedDetail);
-      if (!mountedDetail) insertDetailLayer(card, detailLayer);
-    }
-    if (directChildByClass(card, 'ledger-card-detail-layer')) card.classList.add('detail-visible');
-  }
-
-  return () => {
-    for (const detail of forced) {
-      if (!detail.wasVisible) detail.card.classList.remove('detail-visible');
-      if (!detail.hadDetail) directChildByClass(detail.card, 'ledger-card-detail-layer')?.remove();
-    }
-  };
-}
-
 function measureNaturalCardHeight(card: HTMLElement, sourceWidth: number): number {
   const previousHeight = card.style.height;
   const previousMinHeight = card.style.minHeight;
@@ -139,7 +102,9 @@ function measureNaturalCardHeight(card: HTMLElement, sourceWidth: number): numbe
   card.style.height = 'auto';
   card.style.minHeight = '132px';
   syncCardTabFrameForMeasurement(card);
-  const height = Math.max(132, Math.ceil(card.scrollHeight || card.getBoundingClientRect().height));
+  const detailLayer = directChildByClass(card, 'ledger-card-detail-layer');
+  const measuredHeight = detailLayer?.scrollHeight || detailLayer?.getBoundingClientRect().height || card.scrollHeight || card.getBoundingClientRect().height;
+  const height = Math.max(132, Math.ceil(measuredHeight));
   card.style.width = previousWidth;
   card.style.height = previousHeight;
   card.style.minHeight = previousMinHeight;
@@ -172,6 +137,7 @@ function sourceZoneGeometry(zone: HTMLElement, ledgerAnnotations = activeLedgerA
 
 function applyCardBox(card: HTMLElement, geometry: LedgerGeometry): void {
   const renderedGeometry = state.activeLedger ? renderGeometry(geometry) : geometry;
+  card.style.left = `${renderedGeometry.x}px`;
   card.style.top = `${renderedGeometry.y}px`;
   card.style.width = `${renderedGeometry.width}px`;
   card.style.height = `${renderedGeometry.height}px`;
@@ -246,7 +212,7 @@ export function resizeSelectedCardsToContent(): ResizeToContentGeometry {
   const cardsByZoneId = selectedZoneCardMap(allCards, zones, sourceByCardId);
   const cards = uniqueCards([...selectedCards, ...Array.from(cardsByZoneId.values()).flat()]);
   const detail = clearLowDetailForMeasurement();
-  const restoreForcedDetails = forceDetailsForMeasurement(cards);
+  const restoreForcedDetails = forceCardDetailsForMeasurement(cards.map((card) => card.dataset.cardId ?? ''));
   let result: ResizeToContentGeometry = { cards: {}, zones: {} };
   try {
     const measured = cards.map((card) => {
@@ -273,9 +239,8 @@ export function resizeSelectedCardsToContent(): ResizeToContentGeometry {
     const resizedZones = expandSelectedZonesToCards(cardsByZoneId, zones, sourceByCardId, geometry);
     result = { cards: geometry, zones: resizedZones };
   } finally {
-    restoreForcedDetails();
     restoreDetailClasses(detail);
-    syncViewportCardDetails();
+    restoreForcedDetails();
   }
   renderRelationshipOverlay();
   if (Object.keys(result.zones).length > 0) renderZoneLabelOverlay();
