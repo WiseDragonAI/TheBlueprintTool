@@ -191,6 +191,6 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(canvasLayerCss, /\.canvas-control \.terminal-button,[\s\S]*transition:\s*none;/);
   assert.match(canvasLayerCss, /\.canvas \.card:not\(\.detail-visible\) \.ledger-card-overview-title\s*{[^}]*padding:\s*4px 6px 0;/s);
   assert.match(canvasLayerCss, /\.canvas \.card:not\(\.detail-visible\) \.ledger-card-detail-layer\s*{[^}]*content-visibility:\s*hidden;/s);
-  assert.match(canvasLayerCss, /\.canvas \.card:not\(\.detail-visible\)\[data-card-work-status="todo"\] \.ledger-card-overview-status\s*{[^}]*top:\s*50%;[^}]*left:\s*50%;[^}]*justify-content:\s*center;[^}]*transform:\s*translate\(-50%, -50%\) scale\(var\(--inverse-viewport-scale, 1\)\);/s);
+  assert.match(canvasLayerCss, /\.canvas \.card:not\(\.detail-visible\)\[data-card-work-status="processing"\] \.ledger-card-overview-status\s*{[^}]*top:\s*50%;[^}]*left:\s*50%;[^}]*justify-content:\s*center;[^}]*transform:\s*translate\(-50%, -50%\) scale\(var\(--inverse-viewport-scale, 1\)\);/s);
   assert.doesNotMatch(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-status-toggle/);
 });

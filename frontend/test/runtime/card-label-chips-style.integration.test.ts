@@ -21,5 +21,6 @@ test('card label chips are positioned top right and inherit the card color', () 
   assert.match(objectsCss, /\.ledger-card-label\s*{[^}]*border:\s*1px solid color-mix\(in srgb,\s*var\(--card-zone-color\)/s);
   assert.match(canvasLayerCss, /\.canvas \.card:not\(\.detail-visible\) \.ledger-card-detail-layer[\s\S]{0,220}visibility:\s*hidden;/);
   assert.match(canvasLayerCss, /\.canvas \.card:not\(\.detail-visible\) \.ledger-card-overview-status\s*{[^}]*display:\s*none;/s);
-  assert.match(canvasLayerCss, /\.canvas \.card:not\(\.detail-visible\)\[data-card-work-status="todo"\] \.ledger-card-overview-status\s*{[^}]*top:\s*50%;[^}]*left:\s*50%;[^}]*justify-content:\s*center;[^}]*transform:\s*translate\(-50%, -50%\) scale\(var\(--inverse-viewport-scale, 1\)\);/s);
+  assert.match(canvasLayerCss, /\.canvas \.card:not\(\.detail-visible\)\[data-card-work-status="processing"\] \.ledger-card-overview-status\s*{[^}]*top:\s*50%;[^}]*left:\s*50%;[^}]*justify-content:\s*center;[^}]*transform:\s*translate\(-50%, -50%\) scale\(var\(--inverse-viewport-scale, 1\)\);/s);
+  assert.match(canvasLayerCss, /\.canvas\.low-detail \.card:not\(\.detail-visible\)\[data-card-work-status="processing"\] \.ledger-card-overview-status\s*{[^}]*border-color:\s*color-mix\(in srgb, #f4c542, white 18%\);[^}]*background:\s*color-mix\(in srgb, #f4c542, rgba\(3, 4, 5, 0\.94\) 38%\);/s);
 });
