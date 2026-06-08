@@ -36,6 +36,7 @@ test('low-detail zoom hides card detail while keeping counter-scaled card titles
   assert.match(css, /\.canvas\.low-detail \.zone\s*{[^}]*border-width:\s*3px;/s);
   assert.match(css, /\.canvas\.low-detail\.low-detail-zone-border-wide \.zone\s*{[^}]*border-width:\s*5px;/s);
   assert.match(css, /\.canvas\.low-detail\.low-detail-zone-border-fine \.zone\s*{[^}]*border-width:\s*2px;/s);
+  assert.match(css, /\.canvas\.low-detail \.zone\.selected,\s*\.canvas\.low-detail \.regular-zone\.selected,\s*\.canvas\.low-detail \.group-zone\.selected\s*{[^}]*border-color:\s*rgba\(226, 238, 255, 0\.95\);/s);
   assert.match(css, /\.canvas\.low-detail \.card:not\(\.detail-visible\),\s*\.canvas\.low-detail \.card\.connected:not\(\.detail-visible\)\s*{[^}]*border-width:\s*0;/s);
   assert.match(css, /\.canvas\.low-detail \.card\.selected:not\(\.detail-visible\),\s*\.canvas\.low-detail \.card\.connected\.selected:not\(\.detail-visible\)\s*{[^}]*border-width:\s*2px;[^}]*border-color:\s*rgba\(226, 238, 255, 0\.95\);/s);
   assert.match(objectsCss, /\.card:not\(\.detail-visible\),\s*\.card\.connected:not\(\.detail-visible\)\s*{[^}]*box-shadow:\s*none;/s);

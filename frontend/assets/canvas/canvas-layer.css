@@ -167,6 +167,12 @@
   background-image: none;
 }
 
+.canvas.low-detail .zone.selected,
+.canvas.low-detail .regular-zone.selected,
+.canvas.low-detail .group-zone.selected {
+  border-color: rgba(226, 238, 255, 0.95);
+}
+
 .canvas.low-detail .card:not(.detail-visible),
 .canvas.low-detail .card.connected:not(.detail-visible) {
   border-width: 0;
