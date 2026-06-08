@@ -94,6 +94,11 @@ function directChildByClass(element: HTMLElement, className: string): HTMLElemen
   return null;
 }
 
+function cardBlockPadding(card: HTMLElement): number {
+  const style = getComputedStyle(card);
+  return (Number.parseFloat(style.paddingTop) || 0) + (Number.parseFloat(style.paddingBottom) || 0);
+}
+
 function measureNaturalCardHeight(card: HTMLElement, sourceWidth: number): number {
   const previousHeight = card.style.height;
   const previousMinHeight = card.style.minHeight;
@@ -104,7 +109,7 @@ function measureNaturalCardHeight(card: HTMLElement, sourceWidth: number): numbe
   syncCardTabFrameForMeasurement(card);
   const detailLayer = directChildByClass(card, 'ledger-card-detail-layer');
   const measuredHeight = detailLayer?.scrollHeight || detailLayer?.getBoundingClientRect().height || card.scrollHeight || card.getBoundingClientRect().height;
-  const height = Math.max(132, Math.ceil(measuredHeight));
+  const height = Math.max(132, Math.ceil(measuredHeight + cardBlockPadding(card)));
   card.style.width = previousWidth;
   card.style.height = previousHeight;
   card.style.minHeight = previousMinHeight;

@@ -24,6 +24,8 @@ test('ctrl-d routes selected card resize through the same controller as the tool
   assert.match(resizeEffect, /measureNaturalCardHeight\(card, sourceGeometry\.width\)/);
   assert.match(resizeEffect, /directChildByClass\(card, 'ledger-card-detail-layer'\)/);
   assert.match(resizeEffect, /detailLayer\?\.scrollHeight/);
+  assert.match(resizeEffect, /function cardBlockPadding/);
+  assert.match(resizeEffect, /measuredHeight \+ cardBlockPadding\(card\)/);
   assert.match(resizeEffect, /const cards = uniqueCards\(\[\.\.\.selectedCards, \.\.\.Array\.from\(cardsByZoneId\.values\(\)\)\.flat\(\)\]\)/);
   assert.match(resizeEffect, /const renderedGeometry = state\.activeLedger \? renderGeometry\(next\) : next/);
   assert.match(resizeEffect, /restoreDetailClasses\(detail\);\s*\n\s*restoreForcedDetails\(\);/);
