@@ -176,6 +176,12 @@
   backdrop-filter: none;
 }
 
+.canvas.low-detail .card.selected:not(.detail-visible),
+.canvas.low-detail .card.connected.selected:not(.detail-visible) {
+  border-width: 2px;
+  border-color: rgba(226, 238, 255, 0.95);
+}
+
 .canvas.low-detail .card-actions,
 .canvas.low-detail .zone p,
 .canvas.low-detail .relationships text {
