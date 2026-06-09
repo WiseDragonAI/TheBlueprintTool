@@ -14,6 +14,7 @@ test('default tabs come only from real Blueprinttool ledgers', () => {
   assert.doesNotMatch(html, /data-tab="runtime"/);
   assert.match(html, /data-tab="specs"/);
   assert.match(html, /data-tab="data"/);
+  assert.match(html, /data-action="create-ledger"/);
 
   const state = source('frontend/src/runtime/state.ts');
   assert.match(state, /activeTab: 'specs'/);
@@ -23,6 +24,7 @@ test('default tabs come only from real Blueprinttool ledgers', () => {
   assert.doesNotMatch(renderTabs, /id: 'surface'/);
   assert.doesNotMatch(renderTabs, /id: 'runtime'/);
   assert.match(renderTabs, /state\.ledgerTabs/);
+  assert.match(renderTabs, /create-ledger/);
 
   const routeTab = source('frontend/src/runtime/navigation/helper/route-tab.ts');
   assert.doesNotMatch(routeTab, /'surface', 'specs', 'data', 'runtime'/);

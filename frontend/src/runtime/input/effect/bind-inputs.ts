@@ -11,6 +11,7 @@ import { handlePointerUp } from '../../gesture/controller/handle-pointer-up.js';
 import { handleNativeDragStart } from '../../gesture/controller/handle-native-drag-start.js';
 import { handleWheel } from '../../gesture/controller/handle-wheel.js';
 import { ledgerEndpointForTab } from '../../ledger/helper/ledger-endpoint-for-tab.js';
+import { createNewLedger } from '../../ledger/effect/create-new-ledger.js';
 import { loadActiveLedgerState } from '../../ledger/effect/load-active-ledger-state.js';
 import { persistState } from '../../persistence/effect/persist-state.js';
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
@@ -44,6 +45,11 @@ export function bindInputs(): void {
   });
 
   document.querySelector('.tabs')?.addEventListener('click', async (event) => {
+    const createButton = (event.target as HTMLElement).closest('[data-action="create-ledger"]') as HTMLElement | null;
+    if (createButton) {
+      await createNewLedger();
+      return;
+    }
     const button = (event.target as HTMLElement).closest('[data-tab]') as HTMLElement | null;
     if (!button?.dataset.tab) return;
     state.viewports = { ...(state.viewports ?? {}), [state.activeTab]: { ...state.viewport } };

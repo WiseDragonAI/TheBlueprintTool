@@ -1,0 +1,42 @@
+import { state } from '../../state.js';
+import { loadBlueprinttoolState } from './load-blueprinttool-state.js';
+import { loadActiveLedgerState } from './load-active-ledger-state.js';
+import { persistState } from '../../persistence/effect/persist-state.js';
+import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
+import { renderTabRegistry } from '../../navigation/effect/render-tab-registry.js';
+import { telemetry } from '../../telemetry/effect/telemetry.js';
+
+type CreatedLedgerResponse = {
+  ok?: boolean;
+  tab?: { id?: string; title?: string; ledgerFile?: string };
+  state?: { tabs?: Array<{ id?: string; title?: string; ledgerFile?: string }> };
+  error?: string;
+};
+
+export async function createNewLedger(): Promise<void> {
+  const title = window.prompt('Ledger name', 'New Ledger')?.trim();
+  if (!title) return;
+
+  telemetry('create-ledger', { title });
+  const response = await fetch('/blueprinttool/ledgers', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ title })
+  }).catch(() => undefined);
+  const payload = await response?.json().catch(() => undefined) as CreatedLedgerResponse | undefined;
+  if (!response?.ok || payload?.ok === false || !payload?.tab?.id) {
+    window.alert(payload?.error || 'Could not create ledger.');
+    telemetry('create-ledger-failed', { title, status: response?.status ?? 0 });
+    return;
+  }
+
+  state.viewports = { ...(state.viewports ?? {}), [state.activeTab]: { ...state.viewport } };
+  persistState();
+  if (payload.state?.tabs?.length) state.ledgerTabs = payload.state.tabs;
+  state.activeTab = payload.tab.id;
+  history.pushState({}, '', `/${state.activeTab}`);
+  await loadBlueprinttoolState();
+  await loadActiveLedgerState();
+  renderTabRegistry();
+  renderCanvasSurface();
+}

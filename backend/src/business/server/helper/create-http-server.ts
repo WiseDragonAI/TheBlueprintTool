@@ -27,6 +27,10 @@ function safeAssetSegment(value: unknown): string {
   return String(value || 'untitled').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled';
 }
 
+function ledgerSlug(value: unknown): string {
+  return safeAssetSegment(String(value || 'New Ledger').toLowerCase()).slice(0, 80) || 'new-ledger';
+}
+
 function imageExtensionForMimeType(mimeType: unknown): string {
   const normalized = String(mimeType ?? '').toLowerCase().split(';')[0].trim();
   if (normalized === 'image/jpeg' || normalized === 'image/jpg') return '.jpg';
@@ -178,6 +182,49 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         },
         runtime_state: runtime
       });
+      return;
+    }
+    if (url === '/blueprinttool/ledgers' && request.method === 'POST') {
+      response.setHeader('content-type', 'application/json');
+      const bodyBuffer = await readRequestBuffer(request);
+      const createPayload = (() => {
+        try {
+          return JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
+        } catch {
+          return {};
+        }
+      })();
+      const title = String(createPayload.title || 'New Ledger').trim() || 'New Ledger';
+      const statePath = resolve(blueprinttoolRoot, 'state.json');
+      const blueprintState = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) as { tabs?: Array<{ id?: string; title?: string; ledgerFile?: string }> } : { tabs: [] };
+      const tabs = blueprintState.tabs ?? [];
+      const baseId = ledgerSlug(title);
+      const existingIds = new Set(tabs.map((entry) => String(entry.id ?? '')));
+      const existingFiles = new Set(tabs.map((entry) => String(entry.ledgerFile ?? '').replace(/^\.blueprinttool\//, '')));
+      let id = baseId;
+      let ledgerFile = `${baseId}.json`;
+      let suffix = 2;
+      while (existingIds.has(id) || existingFiles.has(ledgerFile) || existsSync(resolve(blueprinttoolRoot, ledgerFile))) {
+        id = `${baseId}-${suffix}`;
+        ledgerFile = `${baseId}-${suffix}.json`;
+        suffix += 1;
+      }
+      const tab = { id, title, ledgerFile: `.blueprinttool/${ledgerFile}` };
+      const ledger = {
+        modelName: id,
+        diagramSize: { width: 5200, height: 2600 },
+        viewport: { x: 0, y: 0, scale: 1 },
+        cards: [],
+        annotations: [],
+        relationships: [],
+        notes: {}
+      };
+      mkdirSync(blueprinttoolRoot, { recursive: true });
+      writeFileSync(resolve(blueprinttoolRoot, ledgerFile), JSON.stringify(ledger, null, 2));
+      const nextState = { ...blueprintState, tabs: tabs.concat(tab) };
+      writeFileSync(statePath, JSON.stringify(nextState, null, 2));
+      response.statusCode = 201;
+      response.end(JSON.stringify({ ok: true, tab, state: nextState, ledger }));
       return;
     }
     if (url.startsWith('/blueprinttool/')) {

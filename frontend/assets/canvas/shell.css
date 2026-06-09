@@ -3,6 +3,7 @@
  * WHY: Chrome layout should be decoupled from canvas-world object styling.
  */
 .shell {
+  --rail-current-width: 132px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   min-height: 100vh;
@@ -115,6 +116,10 @@
   padding: 8px 6px;
 }
 
+.shell.rail-collapsed {
+  --rail-current-width: 54px;
+}
+
 .shell.rail-collapsed .tool {
   grid-template-columns: 24px minmax(0, 0fr);
   justify-items: center;
@@ -161,7 +166,7 @@
   position: absolute;
   z-index: 120;
   top: 0;
-  left: 0;
+  left: var(--rail-current-width);
   right: 0;
   display: flex;
   justify-content: space-between;
@@ -191,7 +196,7 @@ h1, h2, p { margin-top: 0; }
 h1 { margin-bottom: 0; font-size: 20px; letter-spacing: 0; }
 h2 { font-size: 18px; }
 
-.tabs { display: flex; gap: 8px; }
+.tabs { display: flex; gap: 8px; align-items: center; }
 
 .tab {
   border: 1px solid var(--line);
@@ -201,6 +206,7 @@ h2 { font-size: 18px; }
   min-height: 38px;
   padding: 8px 12px;
   cursor: pointer;
+  flex: 0 0 auto;
   transition:
     background-color 140ms ease,
     border-color 140ms ease,
@@ -222,6 +228,14 @@ h2 { font-size: 18px; }
 
 .tab.active {
   box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.tab-create {
+  width: 38px;
+  padding: 8px 0;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
 }
 
 .panel {

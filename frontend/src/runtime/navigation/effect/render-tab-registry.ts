@@ -11,6 +11,14 @@ export function renderTabRegistry(): void {
       list.findIndex((candidate) => candidate.id === tab.id) === index
     ));
     registry.replaceChildren();
+    const createButton = document.createElement('button');
+    createButton.className = 'tab tab-create';
+    createButton.type = 'button';
+    createButton.dataset.action = 'create-ledger';
+    createButton.title = 'Create ledger';
+    createButton.setAttribute('aria-label', 'Create ledger');
+    createButton.textContent = '+';
+    registry.appendChild(createButton);
     for (const tab of tabs) {
       const button = document.createElement('button');
       button.className = 'tab';
