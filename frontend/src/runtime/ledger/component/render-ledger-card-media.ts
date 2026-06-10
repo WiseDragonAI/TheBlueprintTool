@@ -1,5 +1,10 @@
 import { type LedgerMarkdownBlock } from '../helper/parse-ledger-card-markdown.js';
 import { commitActiveLedgerMutation } from '../effect/commit-active-ledger-mutation.js';
+import {
+  isLedgerCardMediaResizePersistenceSuppressed,
+  scheduleLedgerCardMediaLayout,
+  syncCarouselSlider
+} from '../helper/sync-ledger-card-media-layout.js';
 import { scheduleCanvasMediaOverlayRender } from '../../canvas/effect/render-canvas-media-overlay.js';
 import { state } from '../../state.js';
 
@@ -13,49 +18,10 @@ type LedgerCardMediaOptions = {
 
 const pendingResizeTimers = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
 
-function syncContainedImageSize(shell: HTMLElement, image: HTMLImageElement): void {
-  const track = shell.querySelector('.ledger-card-media-track') as HTMLElement | null;
-  const frameWidth = track?.clientWidth || shell.clientWidth || shell.offsetWidth;
-  const frameHeight = track?.clientHeight || shell.clientHeight || shell.offsetHeight;
-  const naturalWidth = image.naturalWidth;
-  const naturalHeight = image.naturalHeight;
-  if (!frameWidth || !frameHeight || !naturalWidth || !naturalHeight) return;
-
-  const imageRatio = naturalWidth / naturalHeight;
-  const frameRatio = frameWidth / frameHeight;
-  const width = imageRatio > frameRatio ? frameWidth : frameHeight * imageRatio;
-  const height = imageRatio > frameRatio ? frameWidth / imageRatio : frameHeight;
-  image.style.setProperty('--ledger-card-media-contained-width', `${Math.max(1, Math.round(width))}px`);
-  image.style.setProperty('--ledger-card-media-contained-height', `${Math.max(1, Math.round(height))}px`);
-}
-
-function syncContainedImageSizes(shell: HTMLElement): void {
-  for (const image of Array.from(shell.querySelectorAll('.ledger-card-media-image')) as HTMLImageElement[]) {
-    syncContainedImageSize(shell, image);
-  }
-}
-
-function scheduleContainedImageSizing(shell: HTMLElement): void {
-  const run = () => syncContainedImageSizes(shell);
-  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
-  else setTimeout(run, 0);
-}
-
 function watchContainedImageSizing(shell: HTMLElement): void {
   if (typeof ResizeObserver === 'undefined') return;
-  const observer = new ResizeObserver(() => scheduleContainedImageSizing(shell));
+  const observer = new ResizeObserver(() => scheduleLedgerCardMediaLayout(shell));
   observer.observe(shell);
-}
-
-function syncCarouselSlider(shell: HTMLElement, track: HTMLElement): void {
-  const slideCount = Math.max(1, track.children.length);
-  const thumbWidth = slideCount > 1 ? Math.max(8, 100 / slideCount) : 100;
-  const maxLeft = Math.max(0, 100 - thumbWidth);
-  const maxScroll = Math.max(0, track.scrollWidth - track.clientWidth);
-  const progress = maxScroll > 0 ? track.scrollLeft / maxScroll : 0;
-  const thumbLeft = Math.min(maxLeft, Math.max(0, progress * maxLeft));
-  shell.style.setProperty('--ledger-card-media-slider-thumb-width', `${thumbWidth}%`);
-  shell.style.setProperty('--ledger-card-media-slider-thumb-left', `${thumbLeft}%`);
 }
 
 function watchCarouselSlider(shell: HTMLElement, track: HTMLElement): void {
@@ -88,6 +54,12 @@ function currentCardImageSizes(cardId: string): LedgerCardImageSizes {
     : {};
 }
 
+function mediaLocalMaxWidth(element: HTMLElement): number {
+  const promotedMaxWidth = Number(element.dataset.mediaLocalMaxWidth);
+  if (Number.isFinite(promotedMaxWidth) && promotedMaxWidth > 0) return promotedMaxWidth;
+  return Math.max(1, element.parentElement?.clientWidth || element.offsetWidth || 1);
+}
+
 function watchImageResize(element: HTMLElement, options: LedgerCardMediaOptions, source: string): void {
   if (!options.cardId || typeof ResizeObserver === 'undefined') return;
   let initialized = false;
@@ -96,8 +68,13 @@ function watchImageResize(element: HTMLElement, options: LedgerCardMediaOptions,
       initialized = true;
       return;
     }
-    const width = Math.round(element.offsetWidth);
-    const height = Math.round(element.offsetHeight);
+    if (isLedgerCardMediaResizePersistenceSuppressed(element)) {
+      return;
+    }
+    const promotionScale = Number(element.dataset.mediaPromotionScale);
+    const dimensionScale = Number.isFinite(promotionScale) && promotionScale > 0 ? promotionScale : 1;
+    const width = Math.min(mediaLocalMaxWidth(element), Math.round(element.offsetWidth / dimensionScale));
+    const height = Math.round(element.offsetHeight / dimensionScale);
     if (!width || !height) return;
     const previous = pendingResizeTimers.get(element);
     if (previous) clearTimeout(previous);
@@ -136,7 +113,7 @@ function renderMediaSlide(image: LedgerCardImage, index: number, shell: HTMLElem
     if (index === 0) {
       applyImageAspectRatio(shell, element);
     }
-    scheduleContainedImageSizing(shell);
+    scheduleLedgerCardMediaLayout(shell);
     scheduleCanvasMediaOverlayRender();
   }, { once: true });
   if (index === 0 && element.complete) applyImageAspectRatio(shell, element);
@@ -180,7 +157,7 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
   }
   shell.appendChild(track);
   watchContainedImageSizing(shell);
-  scheduleContainedImageSizing(shell);
+  scheduleLedgerCardMediaLayout(shell);
 
   if (isCarousel) {
     const progress = document.createElement('div');

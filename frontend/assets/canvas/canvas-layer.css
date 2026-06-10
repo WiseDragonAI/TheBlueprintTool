@@ -49,14 +49,6 @@
   pointer-events: none;
 }
 
-.canvas-media-overlay-image {
-  position: absolute;
-  display: block;
-  object-fit: contain;
-  object-position: center;
-  pointer-events: none;
-}
-
 .canvas-control {
   position: absolute;
   display: inline-flex;

@@ -11,6 +11,7 @@ import { renderSelectionState } from '../../selection/effect/render-selection-st
 import { renderZoneLabelOverlay } from '../../zone/effect/render-zone-label-overlay.js';
 import { clearViewportCardDetails, syncViewportCardDetails } from './sync-viewport-card-details.js';
 import { updateDetailMode } from './update-detail-mode.js';
+import { resumeCanvasMediaOverlay, suspendCanvasMediaOverlay } from './render-canvas-media-overlay.js';
 
 let frame = 0;
 let settleTimer: ReturnType<typeof setTimeout> | 0 = 0;
@@ -25,10 +26,12 @@ function nextFrame(callback: () => void): void {
 function finishZoomSettle(): void {
   settleTimer = 0;
   applyViewportSettledEffects();
+  resumeCanvasMediaOverlay();
 }
 
 export function scheduleViewportTransform(zooming = true): void {
   if (zooming) {
+    suspendCanvasMediaOverlay();
     hideCanvasControlOverlay();
     if (settleTimer) clearTimeout(settleTimer);
     settleTimer = setTimeout(finishZoomSettle, 120);

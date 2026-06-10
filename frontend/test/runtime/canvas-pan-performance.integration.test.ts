@@ -155,9 +155,10 @@ test('wheel zoom stays transform-only and does not reroute relationships', () =>
   assert.match(scheduler, /const animated = frameAnimated && !densityChanged/);
   assert.match(scheduler, /applyViewportTransform\(settled, animated\)/);
   assert.match(scheduler, /import \{ hideCanvasControlOverlay \} from '\.\/render-canvas-control-overlay\.js'/);
-  assert.match(scheduler, /if \(zooming\) \{\s*hideCanvasControlOverlay\(\);[\s\S]*settleTimer = setTimeout\(finishZoomSettle, 120\)/);
+  assert.match(scheduler, /import \{ resumeCanvasMediaOverlay, suspendCanvasMediaOverlay \} from '\.\/render-canvas-media-overlay\.js'/);
+  assert.match(scheduler, /if \(zooming\) \{\s*suspendCanvasMediaOverlay\(\);[\s\S]*hideCanvasControlOverlay\(\);[\s\S]*settleTimer = setTimeout\(finishZoomSettle, 120\)/);
   assert.match(scheduler, /settleTimer = setTimeout\(finishZoomSettle, 120\)/);
-  assert.match(scheduler, /applyViewportSettledEffects\(\)/);
+  assert.match(scheduler, /applyViewportSettledEffects\(\);[\s\S]*resumeCanvasMediaOverlay\(\)/);
   assert.doesNotMatch(scheduler, /syncScaleCssVars|applyViewportScaleCssVars/);
   assert.doesNotMatch(scheduler, /is-zooming|state\.viewport\.scale < 0\.35|classList\.add|classList\.remove/);
   assert.match(viewport, /export function applyViewportSettledEffects\(\)/);
