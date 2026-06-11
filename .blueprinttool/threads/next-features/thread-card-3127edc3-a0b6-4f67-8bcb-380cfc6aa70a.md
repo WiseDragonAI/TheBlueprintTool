@@ -111,3 +111,29 @@ J'ai corrigé la carte `Watch Notes Loop` pour enlever le modèle faux:
 6. la première inférence n'arrive que quand une vraie note existe et que le watcher injecte le contexte de traitement.
 
 La carte dit maintenant explicitement que l'attente appartient à la couche hook/watcher, pas à un tour assistant consommant du modèle.
+
+# OPERATOR
+<!-- corev2:note {"id":"note-1781160619211-21ff458f43964","timestamp":"2026-06-11T06:50:19.218Z","voiceFileRef":"/home/jbb/dev/EditorBP/CoreV2/.blueprinttool/voice-uploads/voice-1781160619230-99421d99-4439-47cd-bb54-2157c27f750f.wav","status":"transcribed","transcriptionStartedAt":"2026-06-11T06:50:19.260Z"} -->
+
+Sur le profile, il faudrait pouvoir donner quand même un argument. Non seulement il y a le CWD, ça c'est pas mal, mais en plus de ça, il faudrait pouvoir donner un argument qui serait le nom du ledger à regarder. Et pour ça, on pourrait imaginer en fait une tui, TUI, un terminal interface où on pourrait Quand on lance le watcher, d'abord ça va analyser les ledgers qu'il y a dans le repo. On peut sélectionner un ou plusieurs ledgers ou all, il y a une option pour all. Donc ça veut dire que le truc, on le lance dans le CWD, il va scanner Blueprint Tool, il regarde les ledgers qu'il y a, il remonte les ledgers qu'il y a dans l'interface. On peut sélectionner des ledgers et une fois qu'on a sélectionné des ledgers, on lance le watcher que sur ces ledgers-là. Comme ça, l'agent, on est capable, par exemple, si on a des leers qui sont avec des contextes vastement différents, on peut lancer trois agents et les trois agents en fait, même s'ils sont dans le même CWD, ils auront des notifications que sur leur ledger respectif. Ça, c'est vachement important. Donc ça, tu vas me faire une quatrième carte.
+
+# OPERATOR
+<!-- corev2:note {"id":"note-1781160629913-18101f7ff9a44","timestamp":"2026-06-11T06:50:29.915Z","voiceFileRef":"/home/jbb/dev/EditorBP/CoreV2/.blueprinttool/voice-uploads/voice-1781160629916-8e81e09c-a930-426f-950f-6af21b99a4b8.wav","status":"transcribed","transcriptionStartedAt":"2026-06-11T06:50:29.922Z"} -->
+
+Une cinquième carte, je veux dire.
+
+# AGENT
+<!-- corev2:note {"id":"note-agent-1781160714044-c7a91d2e","timestamp":"2026-06-11T06:51:54Z"} -->
+
+Treated.
+
+I added the fifth card, `Watcher Ledger Selection`, in the same Better Open Notes treatment area.
+
+The card covers:
+
+1. cwd remains the workspace root;
+2. the watcher can additionally receive one ledger, multiple ledgers, or `all`;
+3. if no ledger argument is passed, the launcher opens a TUI selector;
+4. the TUI discovers ledgers from `.blueprinttool/state.json`, with a filesystem fallback;
+5. selected ledger file paths become the watcher scope;
+6. multiple watcher agents can run in the same cwd while watching different ledger sets.

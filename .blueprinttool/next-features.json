@@ -32,10 +32,10 @@
       "label": "Better Open Notes treatment",
       "variant": "zone",
       "color": "#55b8ff",
-      "x": 3024,
-      "y": 41,
-      "width": 1643,
-      "height": 2908
+      "x": 1966,
+      "y": 15,
+      "width": 2410,
+      "height": 3176
     }
   ],
   "cards": [
@@ -180,8 +180,8 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 1552.8049804561533,
-      "y": 96.03632264454723,
+      "x": 662.8510196212305,
+      "y": 22.948316199167152,
       "w": 958,
       "h": 1293,
       "comment": {
@@ -194,8 +194,8 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 3120.2065566199403,
-      "y": 137.23454058834253,
+      "x": 2062.5801104103216,
+      "y": 111.4387736076201,
       "w": 698,
       "h": 1054,
       "comment": {
@@ -208,8 +208,8 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 3860.897596198077,
-      "y": 143.90126663036943,
+      "x": 2803.271149988458,
+      "y": 118.10549964964702,
       "w": 710,
       "h": 871,
       "comment": {
@@ -222,10 +222,10 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 3129.3149893013906,
-      "y": 1239.2345405883425,
+      "x": 3569.345171476933,
+      "y": 136.3064201877496,
       "w": 711,
-      "h": 1614,
+      "h": 2959,
       "comment": {
         "contentFile": ".blueprinttool/cards/next-features/card-watchnotes-unanswered-context.md"
       }
@@ -236,12 +236,26 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 3880,
-      "y": 1062.9012666303695,
+      "x": 2822.3735537903813,
+      "y": 1037.105499649647,
       "w": 620,
       "h": 1153,
       "comment": {
         "contentFile": ".blueprinttool/cards/next-features/card-watchnotes-runbook-checklist.md"
+      }
+    },
+    {
+      "id": "card-watchnotes-ledger-selection",
+      "title": "Watcher Ledger Selection",
+      "cardType": "note",
+      "domainId": "next-features",
+      "status": "todo",
+      "x": 2062.5801104103216,
+      "y": 1215,
+      "w": 710,
+      "h": 1210,
+      "comment": {
+        "contentFile": ".blueprinttool/cards/next-features/card-watchnotes-ledger-selection.md"
       }
     }
   ],
