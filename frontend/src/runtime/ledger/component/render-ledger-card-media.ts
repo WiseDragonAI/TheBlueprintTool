@@ -1,10 +1,17 @@
 import { type LedgerMarkdownBlock } from '../helper/parse-ledger-card-markdown.js';
 import { commitActiveLedgerMutation } from '../effect/commit-active-ledger-mutation.js';
 import {
+  captureLedgerCardMediaHandoffState,
   isLedgerCardMediaResizePersistenceSuppressed,
+  restoreLedgerCardMediaHandoffState,
   scheduleLedgerCardMediaLayout,
   syncCarouselSlider
 } from '../helper/sync-ledger-card-media-layout.js';
+import {
+  ledgerCardMediaCarouselStateId,
+  readLedgerCardMediaCarouselSlide,
+  saveLedgerCardMediaCarouselSlide
+} from '../helper/persist-ledger-card-media-carousel.js';
 import { scheduleCanvasMediaOverlayRender } from '../../canvas/effect/render-canvas-media-overlay.js';
 import { state } from '../../state.js';
 
@@ -122,18 +129,49 @@ function renderMediaSlide(image: LedgerCardImage, index: number, shell: HTMLElem
   return slide;
 }
 
-function scrollCarousel(track: HTMLElement, direction: -1 | 1): void {
+function carouselStateId(block: Extract<LedgerMarkdownBlock, { kind: 'images' }>, options: LedgerCardMediaOptions, isCarousel: boolean): string {
+  if (!isCarousel) return '';
+  return ledgerCardMediaCarouselStateId({
+    tabId: String(state.activeTab ?? ''),
+    cardId: options.cardId,
+    sources: block.images.map((image) => image.src)
+  });
+}
+
+function saveCurrentCarouselSlide(shell: HTMLElement, stateId: string): void {
+  if (!stateId) return;
+  const track = shell.querySelector('.ledger-card-media-track') as HTMLElement | null;
+  const slideCount = track?.children.length ?? 0;
+  saveLedgerCardMediaCarouselSlide(stateId, captureLedgerCardMediaHandoffState(shell).slideIndex, slideCount);
+}
+
+function hydrateCarouselSlide(shell: HTMLElement, stateId: string): void {
+  if (!stateId) return;
+  const slideCount = shell.querySelector('.ledger-card-media-track')?.children.length ?? 0;
+  const slideIndex = readLedgerCardMediaCarouselSlide(stateId, slideCount);
+  if (slideIndex <= 0) return;
+  const restore = () => {
+    restoreLedgerCardMediaHandoffState(shell, { slideIndex });
+    scheduleCanvasMediaOverlayRender();
+  };
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(restore);
+  else setTimeout(restore, 0);
+}
+
+function scrollCarousel(shell: HTMLElement, track: HTMLElement, direction: -1 | 1, stateId: string): void {
   const slideCount = track.children.length;
   if (slideCount <= 0) return;
   const slideWidth = Math.max(1, track.clientWidth);
   const currentIndex = Math.round(track.scrollLeft / slideWidth);
   const nextIndex = (currentIndex + direction + slideCount) % slideCount;
+  saveLedgerCardMediaCarouselSlide(stateId, nextIndex, slideCount);
   track.scrollTo({ left: nextIndex * slideWidth, behavior: 'smooth' });
   scheduleCanvasMediaOverlayRender();
 }
 
 export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind: 'images' }>, options: LedgerCardMediaOptions = {}): HTMLElement {
   const isCarousel = block.images.length > 1;
+  const persistedCarouselStateId = carouselStateId(block, options, isCarousel);
   const shell = document.createElement('div');
   shell.className = isCarousel
     ? 'ledger-card-media-shell ledger-card-media-carousel'
@@ -150,6 +188,7 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
   track.setAttribute('aria-label', isCarousel ? 'Card image carousel' : 'Card image');
   track.addEventListener('scroll', () => {
     syncCarouselSlider(shell, track);
+    saveCurrentCarouselSlide(shell, persistedCarouselStateId);
     scheduleCanvasMediaOverlayRender();
   }, { passive: true });
   for (const [index, image] of block.images.entries()) {
@@ -170,6 +209,7 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
     shell.appendChild(progress);
     watchCarouselSlider(shell, track);
     syncCarouselSlider(shell, track);
+    hydrateCarouselSlide(shell, persistedCarouselStateId);
 
     const nav = document.createElement('div');
     nav.className = 'ledger-card-media-nav';
@@ -182,7 +222,7 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
     previous.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
-      scrollCarousel(track, -1);
+      scrollCarousel(shell, track, -1, persistedCarouselStateId);
     });
 
     const next = document.createElement('button');
@@ -193,7 +233,7 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
     next.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
-      scrollCarousel(track, 1);
+      scrollCarousel(shell, track, 1, persistedCarouselStateId);
     });
 
     nav.replaceChildren(previous, next);

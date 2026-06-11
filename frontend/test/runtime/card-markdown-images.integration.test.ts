@@ -14,6 +14,7 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   const renderer = source('frontend/src/runtime/ledger/component/render-ledger-card-markdown.ts');
   const mediaRenderer = source('frontend/src/runtime/ledger/component/render-ledger-card-media.ts');
   const mediaLayout = source('frontend/src/runtime/ledger/helper/sync-ledger-card-media-layout.ts');
+  const mediaCarouselPersistence = source('frontend/src/runtime/ledger/helper/persist-ledger-card-media-carousel.ts');
   const titleRenderer = source('frontend/src/runtime/ledger/component/append-title-text.ts');
   const doubleClick = source('frontend/src/runtime/input/controller/handle-card-double-click.ts');
   const wheel = source('frontend/src/runtime/gesture/controller/handle-wheel.ts');
@@ -27,6 +28,10 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   assert.match(parser, /images\.images\.push\(\.\.\.standaloneImages\)/);
   assert.match(renderer, /renderLedgerCardMedia/);
   assert.match(mediaRenderer, /ledger-card-media-carousel/);
+  assert.match(mediaRenderer, /ledgerCardMediaCarouselStateId/);
+  assert.match(mediaRenderer, /readLedgerCardMediaCarouselSlide/);
+  assert.match(mediaRenderer, /saveLedgerCardMediaCarouselSlide/);
+  assert.match(mediaRenderer, /hydrateCarouselSlide\(shell, persistedCarouselStateId\)/);
   assert.match(mediaRenderer, /dataset\.wheelCapture = 'true'/);
   assert.match(mediaRenderer, /dataset\.imageSizeId = sizeSource/);
   assert.match(mediaRenderer, /--ledger-card-media-aspect-ratio/);
@@ -51,7 +56,13 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   assert.match(mediaRenderer, /commitActiveLedgerMutation\(\{ action: 'patch-card', cardPatch: \{ id: options\.cardId/);
   assert.match(mediaRenderer, /const slideCount = track\.children\.length/);
   assert.match(mediaRenderer, /const nextIndex = \(currentIndex \+ direction \+ slideCount\) % slideCount/);
+  assert.match(mediaRenderer, /saveLedgerCardMediaCarouselSlide\(stateId, nextIndex, slideCount\)/);
+  assert.match(mediaRenderer, /saveCurrentCarouselSlide\(shell, persistedCarouselStateId\)/);
   assert.match(mediaRenderer, /track\.scrollTo\(\{ left: nextIndex \* slideWidth, behavior: 'smooth' \}\)/);
+  assert.match(mediaCarouselPersistence, /storageKey = 'corev2\.cardMedia\.carouselSlides'/);
+  assert.match(mediaCarouselPersistence, /localStorage\.getItem\(storageKey\)/);
+  assert.match(mediaCarouselPersistence, /localStorage\.setItem\(storageKey, JSON\.stringify\(states\)\)/);
+  assert.match(mediaCarouselPersistence, /export function ledgerCardMediaCarouselStateId/);
   assert.match(renderer, /renderLedgerCardMarkdown\(markdown: string, options/);
   assert.match(doubleClick, /target\.closest\('\[data-ledger-card-media\]'\)/);
   assert.match(wheel, /advanceCarouselFromWheel\(event\)/);
