@@ -85,3 +85,29 @@ J'ai transformé la carte en `Watch Notes Loop` et remis au propre la logique d�
 7. pas de hardcoding workspace, résolution depuis le cwd.
 
 La carte dit aussi explicitement pourquoi on ne met pas l'attente infinie dans `SessionStart`.
+
+# OPERATOR
+<!-- corev2:note {"id":"note-1781160045747-b76695a224f11","timestamp":"2026-06-11T06:40:45.753Z","voiceFileRef":"/home/jbb/dev/EditorBP/CoreV2/.blueprinttool/voice-uploads/voice-1781160045754-7b426efc-fc7a-47de-8d60-988ba6e7d67c.wav","status":"transcribed","transcriptionStartedAt":"2026-06-11T06:40:45.772Z"} -->
+
+Non, justement, le launcher ne doit pas prompter codex. Le point A3 est mauvais, non. Le launcher, il start la session codex, et comme on a le hook start, ou alors j'ai pas compris, mais dans l'idée, c'est le watcher, il se lance tout de suite sans avoir à lancer un prompt. Ça n'a pas de sens de devoir lancer un prompt, c'est de l'inférence perdue.
+
+# OPERATOR
+<!-- corev2:note {"id":"note-1781160101890-c72ac031937ec8","timestamp":"2026-06-11T06:41:41.894Z","voiceFileRef":"/home/jbb/dev/EditorBP/CoreV2/.blueprinttool/voice-uploads/voice-1781160101897-468674a4-47f1-4772-a2eb-5eb3cabf5c52.wav","status":"transcribed","transcriptionStartedAt":"2026-06-11T06:41:41.899Z"} -->
+
+Non, s'il n'y a pas de note qui existe, l'assistant il reach pas stop, le watcher il attend. Non, mais le profile, ça load le hook et ça lance le watcher tout de suite et il n'y a pas de session start. Non, t'as pas du tout compris là. On ne veut pas commencer avec de l'inférence. On veut commencer la session avec le watcher, en attendant qu'il y ait quelque chose.
+
+# AGENT
+<!-- corev2:note {"id":"note-agent-1781160377477-8c2e0d91","timestamp":"2026-06-11T06:46:17Z"} -->
+
+Traité.
+
+J'ai corrigé la carte `Watch Notes Loop` pour enlever le modèle faux:
+
+1. plus de seed prompt;
+2. plus de première inférence juste pour atteindre `Stop`;
+3. le launcher démarre seulement la session avec le profil watcher;
+4. le hook de start lance le watcher immédiatement;
+5. quand il n'y a pas de note, le watcher attend hors inférence;
+6. la première inférence n'arrive que quand une vraie note existe et que le watcher injecte le contexte de traitement.
+
+La carte dit maintenant explicitement que l'attente appartient à la couche hook/watcher, pas à un tour assistant consommant du modèle.

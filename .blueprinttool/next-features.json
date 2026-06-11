@@ -180,8 +180,8 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 2095.4879072854233,
-      "y": 61.8899811811325,
+      "x": 1552.8049804561533,
+      "y": 96.03632264454723,
       "w": 958,
       "h": 1293,
       "comment": {
@@ -194,10 +194,10 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 3191.5101112526104,
-      "y": 175.94218453179172,
-      "w": 520,
-      "h": 1267,
+      "x": 3120.2065566199403,
+      "y": 137.23454058834253,
+      "w": 698,
+      "h": 1017,
       "comment": {
         "contentFile": ".blueprinttool/cards/next-features/card-3127edc3-a0b6-4f67-8bcb-380cfc6aa70a.md"
       }
@@ -208,8 +208,8 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 3845.6182630625044,
-      "y": 186.6833994099713,
+      "x": 3860.897596198077,
+      "y": 143.90126663036943,
       "w": 710,
       "h": 871,
       "comment": {
@@ -222,10 +222,10 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 3191.5101112526104,
-      "y": 1490.9421845317918,
-      "w": 620,
-      "h": 970,
+      "x": 3129.3149893013906,
+      "y": 1198.2592577025227,
+      "w": 710.2439024390246,
+      "h": 926.0975609756097,
       "comment": {
         "contentFile": ".blueprinttool/cards/next-features/card-watchnotes-unanswered-context.md"
       }
@@ -301,6 +301,7 @@
   "threadFiles": {
     "thread-card-c294607d-7a4a-4631-bc0b-7e67f84f84e1": ".blueprinttool/threads/next-features/thread-card-c294607d-7a4a-4631-bc0b-7e67f84f84e1.md",
     "thread-card-3127edc3-a0b6-4f67-8bcb-380cfc6aa70a": ".blueprinttool/threads/next-features/thread-card-3127edc3-a0b6-4f67-8bcb-380cfc6aa70a.md",
-    "thread-card-1ac9374f-1591-422e-a0b2-7cccaec49e40": ".blueprinttool/threads/next-features/thread-card-1ac9374f-1591-422e-a0b2-7cccaec49e40.md"
+    "thread-card-1ac9374f-1591-422e-a0b2-7cccaec49e40": ".blueprinttool/threads/next-features/thread-card-1ac9374f-1591-422e-a0b2-7cccaec49e40.md",
+    "thread-card-watchnotes-unanswered-context": ".blueprinttool/threads/next-features/thread-card-watchnotes-unanswered-context.md"
   }
 }
