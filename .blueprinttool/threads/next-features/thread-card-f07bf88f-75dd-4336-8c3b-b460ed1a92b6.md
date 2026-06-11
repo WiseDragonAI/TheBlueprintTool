@@ -20,3 +20,21 @@ The card now covers:
 6. one to three sentence summary rules;
 7. `ledger-cli` update paths for writing card and zone summaries;
 8. watcher context usage for zone summary and sibling card summaries.
+
+# OPERATOR
+<!-- corev2:note {"id":"note-1781165425455-91e92bc56d7dd","timestamp":"2026-06-11T08:10:25.462Z","voiceFileRef":"/home/jbb/dev/EditorBP/CoreV2/.blueprinttool/voice-uploads/voice-1781165425470-574a4b27-7bfa-47ce-a2bd-e72888aea256.wav","status":"transcribed","transcriptionStartedAt":"2026-06-11T08:10:25.483Z"} -->
+
+Tu vas me découper cette carte, ce que tu vas faire, c'est que la nouvelle data structure propose de summary, donc la section C, tu vas me la mettre dans une autre carte, les sections… les sections C et D dans une autre carte, et la section E, tu vas me la mettre dans une autre carte, et tu vas rajouter une commande pour qu'on puisse get missing summaries. Et aussi, ce qu'il faudrait, c'est qu'on ait dans le nouveau data model sur les zones et sur les cartes, il faudrait un updated at et un created at. Et comme ça, on pourrait comparer aussi. Pareil pour le summary. Le summary, il a besoin d'avoir un updated at. Comme ça, en fait, quand on fait une modification de la carte à travers le fichier que le serveur watcher, il détecte un update du fichier, il met à jour directement la date de modification du content de la carte. Et quand on a une discrepancy entre une carte qui a été updatée, mais qu'un summary n'a pas été updaté encore, eh bien dans ce cas-là, en fait, on a une commande qui permet de get les stale summaries et donc du coup, le modèle peut les mettre à jour avec des commandes directement.
+
+# AGENT
+<!-- corev2:note {"id":"note-agent-1781165674037-0ba06a2d","timestamp":"2026-06-11T08:14:34Z"} -->
+
+Traité.
+
+J'ai découpé la carte en trois cartes durables :
+
+1. `Zone And Card Summaries` garde seulement l'analyse du modèle actuel et de l'attribution géométrique des zones.
+2. `Summary Data Model` reprend les anciennes sections C/D et ajoute le modèle `createdAt` / `updatedAt` sur les cartes et les zones, plus `summary.updatedAt`.
+3. `Summary CLI Maintenance` reprend l'ancienne section E et ajoute les commandes proposées `missing-summaries` et `stale-summaries`, avec le contrat du watcher qui met à jour `card.updatedAt` quand un sidecar Markdown change.
+
+Je n'ai pas changé les statuts des cartes.

@@ -1,7 +1,7 @@
 {
   "modelName": "CoreV2 Next Features",
   "source": "operator-request",
-  "updatedAt": "2026-06-03T05:27:57Z",
+  "updatedAt": "2026-06-11T08:12:16Z",
   "diagramSize": {
     "width": 2200,
     "height": 1300
@@ -42,10 +42,10 @@
       "label": "Summaries",
       "variant": "zone",
       "color": "#ff5757",
-      "x": 2876.582235113278,
-      "y": 163.5386199748931,
-      "width": 2855.138498448564,
-      "height": 1932.9361410685372
+      "x": 2889,
+      "y": 175,
+      "width": 1715,
+      "height": 2359
     }
   ],
   "cards": [
@@ -288,12 +288,40 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 2985.310093651322,
-      "y": 271.8952459548336,
-      "w": 608.9017458108092,
-      "h": 545.9119100372772,
+      "x": 2986.160918439213,
+      "y": 271.04442116694213,
+      "w": 609,
+      "h": 850,
       "comment": {
         "contentFile": ".blueprinttool/cards/next-features/card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6.md"
+      }
+    },
+    {
+      "id": "card-summary-data-model",
+      "title": "Summary Data Model",
+      "cardType": "note",
+      "domainId": "next-features",
+      "status": "todo",
+      "x": 3645,
+      "y": 271,
+      "w": 790,
+      "h": 1800,
+      "comment": {
+        "contentFile": ".blueprinttool/cards/next-features/card-summary-data-model.md"
+      }
+    },
+    {
+      "id": "card-summary-cli-maintenance",
+      "title": "Summary CLI Maintenance",
+      "cardType": "note",
+      "domainId": "next-features",
+      "status": "todo",
+      "x": 2986,
+      "y": 1195,
+      "w": 609,
+      "h": 1250,
+      "comment": {
+        "contentFile": ".blueprinttool/cards/next-features/card-summary-cli-maintenance.md"
       }
     }
   ],
