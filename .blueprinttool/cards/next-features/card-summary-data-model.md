@@ -1,8 +1,8 @@
 ## A. Card Body Contract
 
 1. **Replace comment.** New card records should use `body`, not `comment`, for durable card content.
-2. **Body file.** `body.file` points to the Markdown file that contains the card body.
-3. **Body timestamps.** `body.createdAt` is set when the body file is created, and `body.updatedAt` advances when the Markdown body content changes.
+2. **Body file.** `body.file` points to the card body file that contains the durable content.
+3. **Body timestamp.** `body.updatedAt` advances when the card body content changes.
 4. **Legacy fields.** `comment.contentFile`, `comment.what`, `comment.body`, and `comment.description` are legacy read/migration inputs only; new writers should not emit them.
 5. **Watcher source.** When the server watcher detects a body file write, it updates `body.updatedAt`, not a legacy `comment` field.
 
@@ -10,11 +10,11 @@
 
 ## B. Entity Timestamp Fields
 
-1. **Card lifecycle.** `LedgerCard.createdAt` and `LedgerCard.updatedAt` describe the card record itself: title, type, status, geometry, labels, and other card metadata.
-2. **Zone lifecycle.** `LedgerZoneAnnotation.createdAt` and `LedgerZoneAnnotation.updatedAt` describe the zone record itself: label, color, geometry, and other zone metadata.
-3. **Creation time.** `createdAt` is set once when the card, zone, or body file is created and is preserved by later writes.
-4. **Update time.** `updatedAt` changes only for the object whose durable data changed.
-5. **Existing records.** A migration can initialize missing timestamps from the ledger file mtime or a single migration timestamp, but must not invent per-record precision it cannot prove.
+1. **No card timestamps.** Do not add `createdAt` or `updatedAt` directly to `LedgerCard`; card-body freshness belongs on `LedgerBody.updatedAt`.
+2. **No body creation timestamp.** Do not add `body.createdAt`; the stale-summary workflow only needs the last body update time.
+3. **Zone lifecycle.** `LedgerZoneAnnotation.createdAt` and `LedgerZoneAnnotation.updatedAt` can describe zone metadata freshness when a zone summary depends on label, color, geometry, or membership-affecting boundaries.
+4. **Existing records.** A migration can initialize missing zone timestamps from the ledger file mtime or a single migration timestamp, but must not invent per-record precision it cannot prove.
+5. **Summary comparison.** Card summaries compare `body.updatedAt` with `summary.updatedAt`; zone summaries compare `annotation.updatedAt` with `summary.updatedAt`.
 
 ---
 
@@ -31,11 +31,12 @@
 ## D. Proposed Types
 
 1. **Shared summary contract.** Use one object shape for card and zone summaries so write commands can share the same persistence path.
+2. **Card type field.** `cardType` is the current loose ledger classification string used by existing ledgers and exports, for example `note`, `spec-brief`, `base-class`, `perf-analysis`, or `perf-plan`.
+3. **Compatibility.** Keep `cardType?: string` in the proposed type for compatibility, but treat it as a display/workflow kind rather than summary freshness data.
 
 ```ts
 interface LedgerBody {
   file: string;
-  createdAt: string;
   updatedAt: string;
 }
 
@@ -67,8 +68,6 @@ interface LedgerCard {
   y: number;
   w: number;
   h: number;
-  createdAt: string;
-  updatedAt: string;
   body?: LedgerBody;
   summary?: LedgerSummary;
 }
@@ -89,7 +88,7 @@ interface LedgerCard {
 ## F. Watcher Freshness Contract
 
 1. **Body file updates.** When the server watcher detects a successful update to `card.body.file`, it must update `card.body.updatedAt`.
-2. **Card metadata updates.** When title, geometry, labels, status, or other card metadata changes, `card.updatedAt` must advance.
+2. **Card metadata updates.** Title, geometry, labels, status, or `cardType` changes do not require a `LedgerCard.updatedAt` field in this model.
 3. **No automatic summary rewrite.** The watcher should not silently rewrite `summary.text`; it should only make freshness data observable through timestamps.
 4. **Zone updates.** When a zone label, color, geometry, or membership-affecting boundary changes, the zone `updatedAt` must advance.
 5. **Manual summary updates.** Summary write commands must update only `summary.text` and `summary.updatedAt` unless the caller explicitly mutates other card or zone fields.

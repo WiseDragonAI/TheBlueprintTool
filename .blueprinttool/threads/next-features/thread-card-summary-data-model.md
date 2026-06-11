@@ -8,6 +8,27 @@ Et là, en fait, dans le modèle qu'on a, je ne comprends pas pourquoi on a un c
 
 Treated.
 
-I replaced the proposed `comment.contentFile` / `what` contract with `body.file`, with `body.createdAt` and `body.updatedAt` for freshness of the card Markdown file.
+I replaced the proposed `comment.contentFile` / `what` contract with `body.file`, with `body.updatedAt` for freshness of the card body file.
 
 I kept `LedgerSummary` as a `text` + `updatedAt` object, and clarified that `comment.contentFile`, `comment.what`, `comment.body`, and `comment.description` are only legacy read/migration inputs, not fields to write in the new model.
+
+# OPERATOR
+<!-- corev2:note {"id":"note-1781167973587-a58632c2b097f","timestamp":"2026-06-11T08:52:53.591Z","voiceFileRef":"/home/jbb/dev/EditorBP/CoreV2/.blueprinttool/voice-uploads/voice-1781167973593-08fc9fcd-989c-4b03-b941-121309c0d21f.wav","status":"transcribed","transcriptionStartedAt":"2026-06-11T08:52:53.602Z"} -->
+
+C'est quoi le card type string dans LedgerCard ? Je ne comprends pas bien ce que c'est.
+
+# OPERATOR
+<!-- corev2:note {"id":"note-1781167994051-1bc9e9207400b","timestamp":"2026-06-11T08:53:14.054Z","voiceFileRef":"/home/jbb/dev/EditorBP/CoreV2/.blueprinttool/voice-uploads/voice-1781167994056-5fade401-2438-4900-a43f-3d47639d9669.wav","status":"transcribed","transcriptionStartedAt":"2026-06-11T08:53:14.058Z"} -->
+
+Là, le Ledger body, étant donné qu'il a le updated hat déjà, déjà on peut enlever le creative hat, ça ne sert à rien. Je ne vois pas pourquoi on garderait le creative hat et le updated hat sur le Ledger card, ça n'a pas trop de sens.
+
+# AGENT
+<!-- corev2:note {"id":"note-agent-1781168464570-57ae0898","timestamp":"2026-06-11T09:01:04Z"} -->
+
+Treated.
+
+I updated `Summary Data Model` so `LedgerBody` keeps only `file` and `updatedAt`; `body.createdAt` is removed.
+
+I also removed `createdAt` and `updatedAt` from `LedgerCard`. Card summary staleness now compares `card.body.updatedAt` to `card.summary.updatedAt`, while zone summary staleness still uses `annotation.updatedAt` against `annotation.summary.updatedAt`.
+
+For `cardType?: string`: I added an explanation that it is the current loose ledger classification string used by existing ledgers and exports. Current values include `note`, `spec-brief`, `base-class`, `perf-analysis`, and `perf-plan`; it is display/workflow kind metadata, not freshness data.
