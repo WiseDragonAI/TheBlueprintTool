@@ -6,11 +6,11 @@ si je comprends bien, on fait, il y a plusieurs éléments qui font des DOM read
 # AGENT
 <!-- corev2:note {"id":"note-agent-20260601-175652-zone-label-overlay","timestamp":"2026-06-01T17:56:52Z"} -->
 
-Traité.
+Treated.
 
-J'ai complété la carte `Zone Label Overlay Reads` avec une explication mécanistique: quels `offset*` / `getComputedStyle` sont lus, pourquoi ils sont lus aujourd'hui, et par quoi ils doivent être remplacés.
+I expanded the `Zone Label Overlay Reads` card with a mechanism-level explanation: which `offset*` / `getComputedStyle` values are read, why they are read today, and what should replace them.
 
-La réponse courte: oui, l'intuition est correcte. Pour le pan/zoom, les rectangles canvas des zones/cartes ne changent pas. On devrait projeter la géométrie ledger par `viewport.x/y/scale`, pas redécouvrir les offsets via le DOM. Les DOM reads ne devraient revenir que sur invalidation réelle: edit du label, changement de font/style, resize/move de zone, ou changement de géométrie carte/zone.
+Short answer: yes, the intuition is correct. During pan/zoom, the canvas rectangles for zones/cards do not change. We should project ledger geometry through `viewport.x/y/scale`, not rediscover offsets through the DOM. DOM reads should only return on real invalidation: label edits, font/style changes, zone resize/move, or card/zone geometry changes.
 
 # OPERATOR
 <!-- corev2:note {"id":"note-1780336636492-4bf0c434fa3f3","timestamp":"2026-06-01T17:57:16.496Z","voiceFileRef":"/home/jbb/dev/EditorBP/CoreV2/.blueprinttool/voice-uploads/voice-1780336636498-8898f775-8ad0-451d-ae10-123ba370952c.wav","status":"transcribed","transcriptionStartedAt":"2026-06-01T17:57:16.499Z"} -->

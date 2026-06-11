@@ -29,12 +29,12 @@ Tu vas me découper cette carte, ce que tu vas faire, c'est que la nouvelle data
 # AGENT
 <!-- corev2:note {"id":"note-agent-1781165674037-0ba06a2d","timestamp":"2026-06-11T08:14:34Z"} -->
 
-Traité.
+Treated.
 
-J'ai découpé la carte en trois cartes durables :
+I split the card into three durable cards:
 
-1. `Zone And Card Summaries` garde seulement l'analyse du modèle actuel et de l'attribution géométrique des zones.
-2. `Summary Data Model` reprend les anciennes sections C/D et ajoute le modèle `createdAt` / `updatedAt` sur les cartes et les zones, plus `summary.updatedAt`.
-3. `Summary CLI Maintenance` reprend l'ancienne section E et ajoute les commandes proposées `missing-summaries` et `stale-summaries`, avec le contrat du watcher qui met à jour `card.updatedAt` quand un sidecar Markdown change.
+1. `Zone And Card Summaries` keeps only the analysis of the current model and geometric zone attribution.
+2. `Summary Data Model` takes the former C/D sections and adds the `createdAt` / `updatedAt` model for cards and zones, plus `summary.updatedAt`.
+3. `Summary CLI Maintenance` takes the former E section and adds the proposed `missing-summaries` and `stale-summaries` commands, with the watcher contract for updating `card.updatedAt` when a Markdown companion file changes.
 
-Je n'ai pas changé les statuts des cartes.
+I did not change card statuses.

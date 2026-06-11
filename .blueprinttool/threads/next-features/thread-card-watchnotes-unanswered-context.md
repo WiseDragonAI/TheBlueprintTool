@@ -6,9 +6,9 @@ Là, tu ne m'as pas du tout donné la shape de l'output actuel, c'est-à-dire qu
 # AGENT
 <!-- corev2:note {"id":"note-agent-1781160377477-4f93a6bc","timestamp":"2026-06-11T06:46:17Z"} -->
 
-Traité.
+Treated.
 
-J'ai remplacé la carte par une analyse de l'output actuel, basée sur le code:
+I replaced the card with an analysis of the current output, grounded in the code:
 
 1. `bin/ledger-cli.mjs`;
 2. `ledger-cli/bin/ledger-cli.ts`;
@@ -18,7 +18,7 @@ J'ai remplacé la carte par une analyse de l'output actuel, basée sur le code:
 6. `findUnansweredThreads`;
 7. `formatUnansweredThreads`.
 
-La carte détaille maintenant la shape réelle de `ledger-cli unanswered --json`: top-level `{ threads }`, chaque clé d'un thread, chaque clé d'une note, comment `threadId`, `targetId`, `title`, `threadFile`, `pendingNotes` et `lastNote` sont dérivés, et les gaps actuels pour le watcher: pas de card body, pas de zone context, pas de queue metadata, pas de workspace summary.
+The card now details the real shape of `ledger-cli unanswered --json`: top-level `{ threads }`, each thread key, each note key, how `threadId`, `targetId`, `title`, `threadFile`, `pendingNotes`, and `lastNote` are derived, and the current watcher gaps: no card body, no zone context, no queue metadata, and no workspace summary.
 
 # OPERATOR
 <!-- corev2:note {"id":"note-1781160473141-49f1f839afb0f","timestamp":"2026-06-11T06:47:53.146Z","voiceFileRef":"/home/jbb/dev/EditorBP/CoreV2/.blueprinttool/voice-uploads/voice-1781160473147-9e597f47-420b-4ca8-af88-f7d84ab56171.wav","status":"transcribed","transcriptionStartedAt":"2026-06-11T06:47:53.157Z"} -->

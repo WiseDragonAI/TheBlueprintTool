@@ -21,19 +21,19 @@ Il faudra bien penser à updater les runbooks aussi, une fois qu'on fera l'impl�
 # AGENT
 <!-- corev2:note {"id":"note-agent-1781159831336-c83f5a42","timestamp":"2026-06-11T06:37:11Z"} -->
 
-Traité.
+Treated.
 
-J'ai transformé cette carte en `Processing Queue UX` avec:
+I transformed this card into `Processing Queue UX` with:
 
-1. le statut `to_process`;
-2. la transition explicite vers `processing`;
-3. le raccourci `Ctrl+S`;
-4. la notification flottante à droite du canvas quand l'overlay de thread n'est pas ouvert;
-5. la liste expandable des cartes à traiter;
-6. le déclenchement du watcher quand les cartes passent en `processing`;
-7. la séparation claire avec la carte de format de contexte.
+1. the `to_process` status;
+2. the explicit transition to `processing`;
+3. the `Ctrl+S` shortcut;
+4. the floating notification on the right side of the canvas when the thread overlay is not open;
+5. the expandable list of cards to process;
+6. triggering the watcher when cards move to `processing`;
+7. clear separation from the context-format card.
 
-J'ai aussi créé deux cartes dans la même zone:
+I also created two cards in the same zone:
 
-1. `Unanswered Context Payload`, pour définir ce que l'agent reçoit depuis `ledger-cli unanswered` et le contexte étendu attendu: carte, thread, zone, ledger, queue.
-2. `Watcher Runbook Checklist`, pour lister les runbooks et tâches à mettre à jour au moment de l'implémentation.
+1. `Unanswered Context Payload`, to define what the agent receives from `ledger-cli unanswered` and the expected extended context: card, thread, zone, ledger, queue.
+2. `Watcher Runbook Checklist`, to list the runbooks and tasks to update during implementation.

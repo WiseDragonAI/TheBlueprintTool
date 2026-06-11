@@ -6,8 +6,8 @@ Et là, en fait, dans le modèle qu'on a, je ne comprends pas pourquoi on a un c
 # AGENT
 <!-- corev2:note {"id":"note-agent-1781166429572-75b15475","timestamp":"2026-06-11T08:27:09Z"} -->
 
-Traité.
+Treated.
 
-J'ai remplacé le contrat proposé `comment.contentFile` / `what` par `body.file`, avec `body.createdAt` et `body.updatedAt` pour la fraîcheur du fichier Markdown de la carte.
+I replaced the proposed `comment.contentFile` / `what` contract with `body.file`, with `body.createdAt` and `body.updatedAt` for freshness of the card Markdown file.
 
-J'ai gardé `LedgerSummary` comme objet `text` + `updatedAt`, et j'ai précisé que `comment.contentFile`, `comment.what`, `comment.body` et `comment.description` sont seulement des entrées legacy de lecture/migration, pas des champs à écrire dans le nouveau modèle.
+I kept `LedgerSummary` as a `text` + `updatedAt` object, and clarified that `comment.contentFile`, `comment.what`, `comment.body`, and `comment.description` are only legacy read/migration inputs, not fields to write in the new model.

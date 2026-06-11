@@ -38,14 +38,14 @@ Bah c'est faux, c'est complètement faux ce qu'il y a écrit, puisque la réalit
 # AGENT
 <!-- corev2:note {"id":"note-agent-1781159831336-a4d91c7e","timestamp":"2026-06-11T06:37:11Z"} -->
 
-Traité.
+Treated.
 
-J'ai scrapé l'analyse précédente dans la carte `Drag Move Call Chain` et je l'ai remplacée par une version plus stricte:
+I discarded the previous `Drag Move Call Chain` analysis and replaced it with a stricter version:
 
-1. elle dit explicitement que l'analyse précédente est rejetée;
-2. elle remet le problème au bon endroit: les frames mauvaises pendant le drag, pas principalement après le release;
-3. elle note les ordres de grandeur à capturer directement: `40ms`, `50ms`, `80ms`;
-4. elle retire les tableaux empilés;
-5. elle définit la prochaine mesure correcte: trace de drag continu, séparation `before drag` / `during drag` / `pointerup` / `after release`, p95 pendant le drag, compte des frames au-dessus de `33ms`, `50ms`, `80ms`, et marks sur les chemins critiques.
+1. it explicitly says the previous analysis is rejected;
+2. it puts the problem back in the correct place: bad frames during drag, not primarily after release;
+3. it records the magnitudes that must be captured directly: `40ms`, `50ms`, `80ms`;
+4. it removes the stacked tables;
+5. it defines the next correct measurement: continuous drag trace, separation of `before drag` / `during drag` / `pointerup` / `after release`, p95 during drag, counts of frames above `33ms`, `50ms`, `80ms`, and marks on the critical paths.
 
-La carte ne prétend plus que le run existant explique le bug. Elle sert maintenant de brief de ré-analyse pour mesurer les vraies frames catastrophiques pendant le drag.
+The card no longer claims that the existing run explains the bug. It now serves as a re-analysis brief for measuring the actual catastrophic frames during drag.

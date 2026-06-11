@@ -1,5 +1,12 @@
 # CoreV2 Agent Instructions
 
+## Language Policy
+
+- All agent responses MUST be written in English only.
+- The operator may speak or write in French; do not mirror the operator's language.
+- Blueprinttool `# AGENT` thread replies must be in English, even when the corresponding `# OPERATOR` note is French.
+- Do not write French acknowledgements such as `Traité`; use English equivalents such as `Treated`.
+
 ## Blueprint Tool Server Procedure
 
 CoreV2 serves the active `.blueprinttool` workspace by resolving the workspace root from the process

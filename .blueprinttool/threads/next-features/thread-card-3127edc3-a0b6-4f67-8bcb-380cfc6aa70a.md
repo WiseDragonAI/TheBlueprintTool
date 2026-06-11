@@ -72,19 +72,19 @@ Dans cette carte, on parle du nouveau système qu'on est en train de préparer p
 # AGENT
 <!-- corev2:note {"id":"note-agent-1781159831336-b02e68f1","timestamp":"2026-06-11T06:37:11Z"} -->
 
-Traité.
+Treated.
 
-J'ai transformé la carte en `Watch Notes Loop` et remis au propre la logique décidée:
+I transformed the card into `Watch Notes Loop` and cleaned up the decided logic:
 
-1. profil Codex dédié `watchnotes`;
-2. launcher avec un seed prompt unique pour créer le premier vrai tour;
-3. `SessionStart` limité au setup rapide;
-4. boucle durable dans `Stop`, qui attend les notes puis retourne `decision: "block"`;
-5. déclenchement automatique de `corev2-treat-open-notes`;
-6. vérification des notes fermées, puis retour en attente;
-7. pas de hardcoding workspace, résolution depuis le cwd.
+1. dedicated Codex profile `watchnotes`;
+2. launcher with one seed prompt to create the first real turn;
+3. `SessionStart` limited to fast setup;
+4. durable loop in `Stop`, waiting for notes and then returning `decision: "block"`;
+5. automatic triggering of `corev2-treat-open-notes`;
+6. verification that notes are closed, then return to waiting;
+7. no hardcoded workspace, resolution from the cwd.
 
-La carte dit aussi explicitement pourquoi on ne met pas l'attente infinie dans `SessionStart`.
+The card also states explicitly why the infinite wait does not belong in `SessionStart`.
 
 # OPERATOR
 <!-- corev2:note {"id":"note-1781160045747-b76695a224f11","timestamp":"2026-06-11T06:40:45.753Z","voiceFileRef":"/home/jbb/dev/EditorBP/CoreV2/.blueprinttool/voice-uploads/voice-1781160045754-7b426efc-fc7a-47de-8d60-988ba6e7d67c.wav","status":"transcribed","transcriptionStartedAt":"2026-06-11T06:40:45.772Z"} -->
@@ -99,18 +99,18 @@ Non, s'il n'y a pas de note qui existe, l'assistant il reach pas stop, le watche
 # AGENT
 <!-- corev2:note {"id":"note-agent-1781160377477-8c2e0d91","timestamp":"2026-06-11T06:46:17Z"} -->
 
-Traité.
+Treated.
 
-J'ai corrigé la carte `Watch Notes Loop` pour enlever le modèle faux:
+I corrected the `Watch Notes Loop` card to remove the wrong model:
 
-1. plus de seed prompt;
-2. plus de première inférence juste pour atteindre `Stop`;
-3. le launcher démarre seulement la session avec le profil watcher;
-4. le hook de start lance le watcher immédiatement;
-5. quand il n'y a pas de note, le watcher attend hors inférence;
-6. la première inférence n'arrive que quand une vraie note existe et que le watcher injecte le contexte de traitement.
+1. no seed prompt;
+2. no first inference just to reach `Stop`;
+3. the launcher only starts the session with the watcher profile;
+4. the start hook launches the watcher immediately;
+5. when there is no note, the watcher waits outside inference;
+6. the first inference only happens when a real note exists and the watcher injects the treatment context.
 
-La carte dit maintenant explicitement que l'attente appartient à la couche hook/watcher, pas à un tour assistant consommant du modèle.
+The card now states explicitly that waiting belongs to the hook/watcher layer, not to an assistant turn that consumes model work.
 
 # OPERATOR
 <!-- corev2:note {"id":"note-1781160619211-21ff458f43964","timestamp":"2026-06-11T06:50:19.218Z","voiceFileRef":"/home/jbb/dev/EditorBP/CoreV2/.blueprinttool/voice-uploads/voice-1781160619230-99421d99-4439-47cd-bb54-2157c27f750f.wav","status":"transcribed","transcriptionStartedAt":"2026-06-11T06:50:19.260Z"} -->

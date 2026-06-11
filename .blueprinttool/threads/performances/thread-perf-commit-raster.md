@@ -6,10 +6,10 @@ Voilà, fais un tableau pour me présenter la data, ne le fais pas dans un bloc 
 # AGENT
 <!-- corev2:note {"id":"note-agent-20260601-175652-commit-raster","timestamp":"2026-06-01T17:56:52Z"} -->
 
-Traité.
+Treated.
 
-J'ai remplacé le bloc de données brut de `Commit And Raster Mechanism` par un tableau lisible, puis ajouté une table `Mechanism / Why it matters`.
+I replaced the raw data block in `Commit And Raster Mechanism` with a readable table, then added a `Mechanism / Why it matters` table.
 
-J'ai aussi complété `Drag Move Call Chain` avec une table par fonction / phase: `handlePointerMove`, `moveSelected`, `renderZoneLabelOverlay`, `renderRelationshipOverlay`, `renderCanvasControlOverlay`, puis browser commit/raster. Le but est de rendre explicite quelle partie prend du temps dans l'event JS, quelle partie déclenche le commit navigateur, et pourquoi la direction structurelle proposée est bien liée au mécanisme mesuré.
+I also expanded `Drag Move Call Chain` with a function/phase table: `handlePointerMove`, `moveSelected`, `renderZoneLabelOverlay`, `renderRelationshipOverlay`, `renderCanvasControlOverlay`, then browser commit/raster. The goal is to make explicit which part takes time in the JS event, which part triggers browser commit, and why the proposed structural direction is tied to the measured mechanism.
 
-Enfin, `Measurement Matrix` contient maintenant une décomposition de frame qui relie les chiffres CDP aux phases réelles: input event, DOM reads, overlays, relationship routing, commit et raster/composite.
+Finally, `Measurement Matrix` now contains a frame decomposition that connects the CDP numbers to the real phases: input event, DOM reads, overlays, relationship routing, commit, and raster/composite.

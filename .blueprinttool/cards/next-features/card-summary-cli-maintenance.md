@@ -28,7 +28,15 @@
 
 ---
 
-## D. Watcher Timestamp Command Path
+## D. Sidecar Term Provenance
+
+1. **Source.** `sidecar` is inherited from local engineering helper names such as `ledger-cli/src/business/ledger/helper/card-content-sidecar.ts` and `ledger-cli/src/business/ledger/helper/thread-sidecar.ts`.
+2. **Meaning.** In this codebase it means a companion Markdown file stored outside the ledger JSON while the JSON keeps metadata and references the file path.
+3. **Model boundary.** `sidecar` should remain implementation vocabulary only; the data model and operator-facing card language should use `body.file`, `threadFile`, or `Markdown body file`.
+
+---
+
+## E. Watcher Timestamp Command Path
 
 1. **Body file update.** When the server watcher accepts a changed Markdown body file, it updates the matching `card.body.updatedAt` to the detected write time.
 2. **Ledger save.** The watcher persists the timestamp through the same ledger write path used for other card mutations.
@@ -37,7 +45,7 @@
 
 ---
 
-## E. Tests
+## F. Tests
 
 1. **Write commands.** Cover successful card summary writes, successful zone summary writes, unknown ids, group annotation rejection, and timestamp refresh.
 2. **Missing command.** Cover missing card summaries, missing zone summaries, blank summary text, and JSON plus human output.
