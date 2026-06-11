@@ -22,10 +22,20 @@
       "label": "Processing Queue Panel",
       "variant": "zone",
       "color": "#2f9e8f",
-      "x": 40,
-      "y": 40,
+      "x": 4755.078354328096,
+      "y": 104.63930721851153,
       "width": 1900,
       "height": 1040
+    },
+    {
+      "id": "zone-d84c4c6d-d128-4784-97ca-28eee305d72e",
+      "label": "Better Open Notes treatment",
+      "variant": "zone",
+      "color": "#55b8ff",
+      "x": 3095,
+      "y": 79,
+      "width": 1557,
+      "height": 2478
     }
   ],
   "cards": [
@@ -34,8 +44,8 @@
       "title": "Empty Selection Panel",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 120,
-      "y": 140,
+      "x": 4835.078354328096,
+      "y": 204.63930721851165,
       "w": 360,
       "h": 230,
       "comment": {
@@ -49,8 +59,8 @@
       "title": "Awaiting Cards Source",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 560,
-      "y": 140,
+      "x": 5275.078354328097,
+      "y": 204.63930721851165,
       "w": 360,
       "h": 230,
       "comment": {
@@ -64,8 +74,8 @@
       "title": "Trigger Controller",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 1000,
-      "y": 140,
+      "x": 5715.078354328097,
+      "y": 204.63930721851165,
       "w": 360,
       "h": 230,
       "comment": {
@@ -79,8 +89,8 @@
       "title": "Headless Codex Launch",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 1440,
-      "y": 140,
+      "x": 6155.078354328096,
+      "y": 204.63930721851165,
       "w": 360,
       "h": 230,
       "comment": {
@@ -94,8 +104,8 @@
       "title": "One Hour Session Reuse",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 120,
-      "y": 470,
+      "x": 4835.078354328096,
+      "y": 534.6393072185114,
       "w": 360,
       "h": 240,
       "comment": {
@@ -109,8 +119,8 @@
       "title": "Resume Failure Recovery",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 560,
-      "y": 470,
+      "x": 5275.078354328097,
+      "y": 534.6393072185114,
       "w": 360,
       "h": 240,
       "comment": {
@@ -124,8 +134,8 @@
       "title": "State And Logs",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 1000,
-      "y": 470,
+      "x": 5715.078354328097,
+      "y": 534.6393072185114,
       "w": 360,
       "h": 240,
       "comment": {
@@ -139,8 +149,8 @@
       "title": "Process Ownership",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 1440,
-      "y": 470,
+      "x": 6155.078354328096,
+      "y": 534.6393072185114,
       "w": 360,
       "h": 240,
       "comment": {
@@ -154,8 +164,8 @@
       "title": "Verification Plan",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 120,
-      "y": 800,
+      "x": 4835.078354328096,
+      "y": 864.6393072185111,
       "w": 1680,
       "h": 170,
       "comment": {
@@ -170,12 +180,68 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 2413.674514299782,
-      "y": 114.50351462445155,
-      "w": 957.773890497449,
-      "h": 436.5463311870993,
+      "x": 2095.4879072854233,
+      "y": 61.8899811811325,
+      "w": 958,
+      "h": 1293,
       "comment": {
         "contentFile": ".blueprinttool/cards/next-features/card-c294607d-7a4a-4631-bc0b-7e67f84f84e1.md"
+      }
+    },
+    {
+      "id": "card-3127edc3-a0b6-4f67-8bcb-380cfc6aa70a",
+      "title": "Watch Notes Loop",
+      "cardType": "note",
+      "domainId": "next-features",
+      "status": "todo",
+      "x": 3191.5101112526104,
+      "y": 175.94218453179172,
+      "w": 520,
+      "h": 1267,
+      "comment": {
+        "contentFile": ".blueprinttool/cards/next-features/card-3127edc3-a0b6-4f67-8bcb-380cfc6aa70a.md"
+      }
+    },
+    {
+      "id": "card-1ac9374f-1591-422e-a0b2-7cccaec49e40",
+      "title": "Processing Queue UX",
+      "cardType": "note",
+      "domainId": "next-features",
+      "status": "todo",
+      "x": 3845.6182630625044,
+      "y": 186.6833994099713,
+      "w": 710,
+      "h": 871,
+      "comment": {
+        "contentFile": ".blueprinttool/cards/next-features/card-1ac9374f-1591-422e-a0b2-7cccaec49e40.md"
+      }
+    },
+    {
+      "id": "card-watchnotes-unanswered-context",
+      "title": "Unanswered Context Payload",
+      "cardType": "note",
+      "domainId": "next-features",
+      "status": "todo",
+      "x": 3191.5101112526104,
+      "y": 1490.9421845317918,
+      "w": 620,
+      "h": 970,
+      "comment": {
+        "contentFile": ".blueprinttool/cards/next-features/card-watchnotes-unanswered-context.md"
+      }
+    },
+    {
+      "id": "card-watchnotes-runbook-checklist",
+      "title": "Watcher Runbook Checklist",
+      "cardType": "note",
+      "domainId": "next-features",
+      "status": "todo",
+      "x": 3880,
+      "y": 1105.6833994099713,
+      "w": 620,
+      "h": 1153,
+      "comment": {
+        "contentFile": ".blueprinttool/cards/next-features/card-watchnotes-runbook-checklist.md"
       }
     }
   ],
@@ -233,6 +299,8 @@
   "cardEdits": {},
   "notes": {},
   "threadFiles": {
-    "thread-card-c294607d-7a4a-4631-bc0b-7e67f84f84e1": ".blueprinttool/threads/next-features/thread-card-c294607d-7a4a-4631-bc0b-7e67f84f84e1.md"
+    "thread-card-c294607d-7a4a-4631-bc0b-7e67f84f84e1": ".blueprinttool/threads/next-features/thread-card-c294607d-7a4a-4631-bc0b-7e67f84f84e1.md",
+    "thread-card-3127edc3-a0b6-4f67-8bcb-380cfc6aa70a": ".blueprinttool/threads/next-features/thread-card-3127edc3-a0b6-4f67-8bcb-380cfc6aa70a.md",
+    "thread-card-1ac9374f-1591-422e-a0b2-7cccaec49e40": ".blueprinttool/threads/next-features/thread-card-1ac9374f-1591-422e-a0b2-7cccaec49e40.md"
   }
 }

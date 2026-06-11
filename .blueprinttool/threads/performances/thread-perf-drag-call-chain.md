@@ -34,3 +34,18 @@ I also added an explicit “Required next measurement” row: exclusive `perform
 <!-- corev2:note {"id":"note-1780336941747-9603435066a0a8","timestamp":"2026-06-01T18:02:21.753Z","voiceFileRef":"/home/jbb/dev/EditorBP/CoreV2/.blueprinttool/voice-uploads/voice-1780336941758-a99a73c1-a60d-4542-87d6-27a17d71011d.wav","status":"transcribed","transcriptionStartedAt":"2026-06-01T18:02:21.781Z"} -->
 
 Bah c'est faux, c'est complètement faux ce qu'il y a écrit, puisque la réalité c'est que les frames pendant qu'on fait un drag, elles sont très mauvaises. Donc là, t'es en train de me dire que ça va, on est à 29 MS, c'est OK. Non, ça fait 30 FPS, il n'y aurait pas de problème. Je te dis, on est à du 15, 10, 15 FPS, c'est une catastrophe, ça va pas du tout. Et là, t'es en train de me dire, c'est après, une fois qu'on fait le after release, non, non, ce n'est pas la réalité. La réalité, c'est qu'il y a des frames horribles de 40, 50, 80 millisecondes pendant qu'on fait le drag, avant qu'on fait le drag. Le problème ne vient pas d'après, donc ton analyse, elle est nulle, tu la scrapes, elle ne vaut strictement rien et tu recommences. C'est de la merde ce que tu fais, tu remplis juste des cases pour essayer de faire croire que t'as travaillé, mais ce n'est pas du travail, ce n'est complètement faux. Ce n'est pas du tout les vrais résultats d'analyse que t'es en train de sortir. Et en plus, tu rajoutes des tableaux les uns après les autres et les uns après les autres, mais c'est insupportable à lire, c'est illisible.
+
+# AGENT
+<!-- corev2:note {"id":"note-agent-1781159831336-a4d91c7e","timestamp":"2026-06-11T06:37:11Z"} -->
+
+Traité.
+
+J'ai scrapé l'analyse précédente dans la carte `Drag Move Call Chain` et je l'ai remplacée par une version plus stricte:
+
+1. elle dit explicitement que l'analyse précédente est rejetée;
+2. elle remet le problème au bon endroit: les frames mauvaises pendant le drag, pas principalement après le release;
+3. elle note les ordres de grandeur à capturer directement: `40ms`, `50ms`, `80ms`;
+4. elle retire les tableaux empilés;
+5. elle définit la prochaine mesure correcte: trace de drag continu, séparation `before drag` / `during drag` / `pointerup` / `after release`, p95 pendant le drag, compte des frames au-dessus de `33ms`, `50ms`, `80ms`, et marks sur les chemins critiques.
+
+La carte ne prétend plus que le run existant explique le bug. Elle sert maintenant de brief de ré-analyse pour mesurer les vraies frames catastrophiques pendant le drag.
