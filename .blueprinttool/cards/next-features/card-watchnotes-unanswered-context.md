@@ -12,24 +12,116 @@
 
 ## B. Current JSON Shape
 
-1. **Top level.** The output is an object with one key: `threads`.
-2. **`threads`.** Array of unanswered thread records. It is empty when no thread has an operator note after the last agent answer.
-3. **Thread record keys.** Each record contains `answerCommand`, `editInstruction`, `lastNote`, `pendingNotes`, `targetId`, `threadFile`, `threadId`, and `title`.
-4. **Note record keys.** `lastNote` and each `pendingNotes[]` item contain `error`, `id`, `message`, `role`, `status`, `timestamp`, and `voiceFileRef`.
-5. **String normalization.** Missing note fields become empty strings because `toThreadNote` uses `text(value)`.
+1. **Actual output contract.** `ledger-cli unanswered --json` currently returns this shape:
+
+```ts
+/**
+ * Output of:
+ * node ./bin/ledger-cli.mjs unanswered --ledger <ledger-json> --json
+ */
+interface UnansweredThreadsOutput {
+  /**
+   * Empty when every thread is closed by a later agent/assistant note.
+   * One item appears for each thread that still has operator notes after
+   * the last agent/assistant answer.
+   */
+  threads: UnansweredThread[];
+}
+
+interface UnansweredThread {
+  /**
+   * Convenience CLI command for short answers.
+   * For structured answers, the editInstruction is preferred.
+   */
+  answerCommand: string;
+
+  /**
+   * Exact instruction for patching the Markdown sidecar directly.
+   * It always tells the agent to append one # AGENT section with
+   * a corev2:note metadata comment.
+   */
+  editInstruction: string;
+
+  /**
+   * Last pending operator note after the last agent/assistant answer.
+   */
+  lastNote: ThreadNote;
+
+  /**
+   * All meaningful non-agent notes after the last agent/assistant answer.
+   * Multiple operator notes can accumulate here before treatment.
+   */
+  pendingNotes: ThreadNote[];
+
+  /**
+   * threadId without the leading "thread-" prefix.
+   */
+  targetId: string;
+
+  /**
+   * Markdown sidecar path, usually from ledger.threadFiles[threadId].
+   */
+  threadFile: string;
+
+  /**
+   * Key from ledger.notes after sidecar hydration.
+   */
+  threadId: string;
+
+  /**
+   * Card title, annotation label, targetId, or threadId fallback.
+   */
+  title: string;
+}
+
+interface ThreadNote {
+  /**
+   * Voice transcription or note-processing error. Empty string when absent.
+   */
+  error: string;
+
+  /**
+   * Note id from the thread sidecar metadata, or generated parser fallback.
+   */
+  id: string;
+
+  /**
+   * Parsed Markdown body for the note.
+   */
+  message: string;
+
+  /**
+   * "operator", "agent", "assistant", or empty string.
+   */
+  role: string;
+
+  /**
+   * Voice/transcription status such as "transcribed"; empty string when absent.
+   */
+  status: string;
+
+  /**
+   * ISO timestamp from note metadata; empty string when absent.
+   */
+  timestamp: string;
+
+  /**
+   * Workspace-local or absolute voice upload path; empty string when absent.
+   */
+  voiceFileRef: string;
+}
+```
 
 ---
 
 ## C. Field Derivation
 
-1. **`threadId`.** Comes from the key in `ledger.notes`, after sidecar hydration.
-2. **`targetId`.** Derived with `threadId.replace(/^thread-/, "")`.
-3. **`title`.** Resolved from the target card title, then annotation label, then `targetId`, then `threadId`.
-4. **`threadFile`.** Uses `ledger.threadFiles[threadId]` when present; otherwise falls back to `.blueprinttool/threads/<ledger-stem>/<thread-id>.md`.
-5. **`answerCommand`.** Built as `ledger-cli answer --ledger <ledgerJsonFile> --thread-id <threadId> --message "..."`.
-6. **`editInstruction`.** Built from `threadFile` and tells the agent to patch the Markdown sidecar directly with one `# AGENT` section.
-7. **`pendingNotes`.** All meaningful non-agent notes after the last agent or assistant note.
-8. **`lastNote`.** The final item in `pendingNotes`.
+1. **Thread identity.** `threadId` comes from the hydrated `ledger.notes` key. `targetId` is `threadId.replace(/^thread-/, "")`.
+2. **Display title.** `title` resolves in this order: target card `title`, target annotation `label`, `targetId`, `threadId`.
+3. **Thread file.** `threadFile` uses `ledger.threadFiles[threadId]` first, then falls back to `.blueprinttool/threads/<ledger-stem>/<thread-id>.md`.
+4. **Pending notes.** `pendingNotes` is the meaningful non-agent slice after the last `agent` or `assistant` note.
+5. **Last note.** `lastNote` is `pendingNotes.at(-1)`.
+6. **String coercion.** Note fields are normalized through `text(value)`, so missing values become `""` instead of `undefined`.
 
 ---
 

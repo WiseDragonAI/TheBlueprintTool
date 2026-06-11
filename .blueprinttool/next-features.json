@@ -32,10 +32,10 @@
       "label": "Better Open Notes treatment",
       "variant": "zone",
       "color": "#55b8ff",
-      "x": 3095,
-      "y": 79,
-      "width": 1557,
-      "height": 2478
+      "x": 3024,
+      "y": 41,
+      "width": 1643,
+      "height": 2908
     }
   ],
   "cards": [
@@ -197,7 +197,7 @@
       "x": 3120.2065566199403,
       "y": 137.23454058834253,
       "w": 698,
-      "h": 1017,
+      "h": 1054,
       "comment": {
         "contentFile": ".blueprinttool/cards/next-features/card-3127edc3-a0b6-4f67-8bcb-380cfc6aa70a.md"
       }
@@ -223,9 +223,9 @@
       "domainId": "next-features",
       "status": "todo",
       "x": 3129.3149893013906,
-      "y": 1198.2592577025227,
-      "w": 710.2439024390246,
-      "h": 926.0975609756097,
+      "y": 1239.2345405883425,
+      "w": 711,
+      "h": 1614,
       "comment": {
         "contentFile": ".blueprinttool/cards/next-features/card-watchnotes-unanswered-context.md"
       }
@@ -237,7 +237,7 @@
       "domainId": "next-features",
       "status": "todo",
       "x": 3880,
-      "y": 1105.6833994099713,
+      "y": 1062.9012666303695,
       "w": 620,
       "h": 1153,
       "comment": {
