@@ -24,14 +24,14 @@ test('browser title follows the selected ledger title', () => {
   };
 
   state.ledgerTabs = [
-    { id: 'data', title: 'Ardaria Data Model', ledgerFile: '.blueprinttool/data.json' },
-    { id: 'game', title: 'Ardaria Game Design', ledgerFile: '.blueprinttool/game.json' }
+    { id: 'data', title: 'Data', ledgerFile: '.blueprinttool/data.json' },
+    { id: 'game', title: 'Game Design', ledgerFile: '.blueprinttool/game.json' }
   ];
   state.activeTab = 'game';
 
   try {
     renderTabRegistry();
-    assert.equal(globalThis.document.title, 'Ardaria Game Design');
+    assert.equal(globalThis.document.title, 'Game Design');
   } finally {
     state.ledgerTabs = previousTabs;
     state.activeTab = previousActiveTab;
