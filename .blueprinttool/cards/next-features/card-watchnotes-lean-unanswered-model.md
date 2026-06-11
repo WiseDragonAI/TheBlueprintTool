@@ -3,7 +3,7 @@
 1. **Current payload is bloated.** `answerCommand`, `editInstruction`, `lastNote`, `threadId`, `targetId`, `title`, and full `ThreadNote` metadata duplicate information the agent either already knows from the skill or does not need for treatment.
 2. **Current payload misses useful context.** The agent needs the thread file, card file, pending note text, zone title, zone summary, and nearby card summaries more than it needs note ids, statuses, timestamps, or generated answer commands.
 3. **Instruction location is wrong.** Markdown patching rules belong in `corev2-treat-open-notes`, not in every `ledger-cli unanswered` record.
-4. **Pending notes need one readable unit.** Multiple unanswered operator notes must be preserved separately, but also provided as one concatenated text block so the agent handles the full request.
+4. **Pending notes must stay separated.** Multiple unanswered operator notes must be preserved as separate strings in chronological order so each message keeps its own context.
 
 ---
 
@@ -66,10 +66,10 @@ interface WatcherThreadContext {
   }>;
 
   /**
-   * Pending operator notes in chronological order.
-   * Keep separators so individual notes remain identifiable.
+   * Pending operator messages in chronological order.
+   * Each array item is one operator message; do not concatenate them.
    */
-  pendingText: string;
+  pendingOperatorMessages: string[];
 }
 ```
 

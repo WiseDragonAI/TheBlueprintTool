@@ -32,10 +32,20 @@
       "label": "Better Open Notes treatment",
       "variant": "zone",
       "color": "#55b8ff",
-      "x": 1699.4437411992017,
-      "y": -15.095061477509716,
+      "x": -859.5993238595388,
+      "y": 164.67242656380677,
       "width": 3480.6155243113253,
       "height": 3248.0606602901853
+    },
+    {
+      "id": "zone-638547ad-ac90-4444-a2e7-0edad9c8a44b",
+      "label": "Summaries",
+      "variant": "zone",
+      "color": "#ff5757",
+      "x": 2876.582235113278,
+      "y": 163.5386199748931,
+      "width": 2855.138498448564,
+      "height": 1932.9361410685372
     }
   ],
   "cards": [
@@ -180,8 +190,8 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 662.8510196212305,
-      "y": 22.948316199167152,
+      "x": 6436.559753183514,
+      "y": -3424.357630946078,
       "w": 958,
       "h": 1293,
       "comment": {
@@ -194,8 +204,8 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 1796.0238516095233,
-      "y": 81.34371213011039,
+      "x": -763.0192134492172,
+      "y": 261.11120017142684,
       "w": 698,
       "h": 1054,
       "comment": {
@@ -208,8 +218,8 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 2536.7148911876598,
-      "y": 88.0104381721373,
+      "x": -22.328173871080708,
+      "y": 267.7779262134538,
       "w": 710,
       "h": 871,
       "comment": {
@@ -221,9 +231,9 @@
       "title": "Unanswered Context Payload",
       "cardType": "note",
       "domainId": "next-features",
-      "status": "todo",
-      "x": 3302.7889126761347,
-      "y": 106.21135871023989,
+      "status": "done",
+      "x": 743.7458476173942,
+      "y": 285.9788467515564,
       "w": 711,
       "h": 2959,
       "comment": {
@@ -236,10 +246,10 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 2555.817294989583,
-      "y": 1007.0104381721374,
-      "w": 620,
-      "h": 1153,
+      "x": -18.505103204729494,
+      "y": 1168.4427264507674,
+      "w": 702.5083989320892,
+      "h": 1154.0186222090376,
       "comment": {
         "contentFile": ".blueprinttool/cards/next-features/card-watchnotes-runbook-checklist.md"
       }
@@ -250,8 +260,8 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 1796.0238516095233,
-      "y": 1184.9049385224903,
+      "x": -763.0192134492172,
+      "y": 1364.6724265638068,
       "w": 710,
       "h": 1210,
       "comment": {
@@ -264,12 +274,26 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 4045,
-      "y": 106,
+      "x": 1598.5800792708835,
+      "y": 284.916663253425,
       "w": 860,
-      "h": 1660,
+      "h": 2351,
       "comment": {
         "contentFile": ".blueprinttool/cards/next-features/card-watchnotes-lean-unanswered-model.md"
+      }
+    },
+    {
+      "id": "card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6",
+      "title": "Zone And Card Summaries",
+      "cardType": "note",
+      "domainId": "next-features",
+      "status": "todo",
+      "x": 2985.310093651322,
+      "y": 271.8952459548336,
+      "w": 608.9017458108092,
+      "h": 545.9119100372772,
+      "comment": {
+        "contentFile": ".blueprinttool/cards/next-features/card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6.md"
       }
     }
   ],
@@ -330,6 +354,8 @@
     "thread-card-c294607d-7a4a-4631-bc0b-7e67f84f84e1": ".blueprinttool/threads/next-features/thread-card-c294607d-7a4a-4631-bc0b-7e67f84f84e1.md",
     "thread-card-3127edc3-a0b6-4f67-8bcb-380cfc6aa70a": ".blueprinttool/threads/next-features/thread-card-3127edc3-a0b6-4f67-8bcb-380cfc6aa70a.md",
     "thread-card-1ac9374f-1591-422e-a0b2-7cccaec49e40": ".blueprinttool/threads/next-features/thread-card-1ac9374f-1591-422e-a0b2-7cccaec49e40.md",
-    "thread-card-watchnotes-unanswered-context": ".blueprinttool/threads/next-features/thread-card-watchnotes-unanswered-context.md"
+    "thread-card-watchnotes-unanswered-context": ".blueprinttool/threads/next-features/thread-card-watchnotes-unanswered-context.md",
+    "thread-card-watchnotes-lean-unanswered-model": ".blueprinttool/threads/next-features/thread-card-watchnotes-lean-unanswered-model.md",
+    "thread-card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6": ".blueprinttool/threads/next-features/thread-card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6.md"
   }
 }
