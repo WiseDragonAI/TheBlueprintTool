@@ -688,6 +688,10 @@
 }
 
 .ledger-card-media-shell {
+  --ledger-card-media-slider-row-height: 7px;
+  --ledger-card-media-title-row-min-height: 22px;
+  --ledger-card-media-title-slider-gap: 6px;
+  --ledger-card-media-bottom-inset: 8px;
   position: relative;
   width: 100%;
   max-width: 100%;
@@ -777,7 +781,11 @@
   min-width: 100%;
   height: 100%;
   margin: 0;
-  padding: 6px 8px 8px;
+  padding:
+    6px
+    8px
+    calc(var(--ledger-card-media-bottom-inset) + var(--ledger-card-media-slider-row-height) + var(--ledger-card-media-title-slider-gap))
+    8px;
   box-sizing: border-box;
   place-items: center;
   scroll-snap-align: center;
@@ -798,7 +806,7 @@
   display: block;
   box-sizing: border-box;
   width: 100%;
-  min-height: 22px;
+  min-height: var(--ledger-card-media-title-row-min-height);
   padding: 4px 7px;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--card-zone-color), white 18%);
@@ -817,10 +825,10 @@
 .ledger-card-media-progress {
   position: absolute;
   right: 28px;
-  bottom: calc(8px + 22px + 6px);
+  bottom: var(--ledger-card-media-bottom-inset, 8px);
   left: 8px;
   z-index: 2;
-  height: 7px;
+  height: var(--ledger-card-media-slider-row-height);
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--card-zone-color), white 16%);
   border-radius: 0;
@@ -845,7 +853,12 @@
   position: absolute;
   top: 6px;
   right: 8px;
-  bottom: calc(8px + 22px + 6px);
+  bottom: calc(
+    var(--ledger-card-media-bottom-inset, 8px) +
+    var(--ledger-card-media-slider-row-height, 7px) +
+    var(--ledger-card-media-title-slider-gap, 6px) +
+    var(--ledger-card-media-title-row-min-height, 22px)
+  );
   left: 8px;
   z-index: 3;
   display: flex;
