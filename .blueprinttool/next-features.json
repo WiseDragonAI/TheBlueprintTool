@@ -42,10 +42,10 @@
       "label": "Summaries",
       "variant": "zone",
       "color": "#ff5757",
-      "x": 2889,
+      "x": 2890,
       "y": 175,
-      "width": 1715,
-      "height": 2359
+      "width": 1641,
+      "height": 2631
     }
   ],
   "cards": [
@@ -287,11 +287,11 @@
       "title": "Zone And Card Summaries",
       "cardType": "note",
       "domainId": "next-features",
-      "status": "todo",
-      "x": 2986.160918439213,
+      "status": "done",
+      "x": 2987.179540648251,
       "y": 271.04442116694213,
       "w": 609,
-      "h": 850,
+      "h": 900,
       "comment": {
         "contentFile": ".blueprinttool/cards/next-features/card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6.md"
       }
@@ -305,7 +305,7 @@
       "x": 3645,
       "y": 271,
       "w": 790,
-      "h": 1800,
+      "h": 1795,
       "comment": {
         "contentFile": ".blueprinttool/cards/next-features/card-summary-data-model.md"
       }
@@ -316,10 +316,10 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 2986,
-      "y": 1195,
+      "x": 2989.0558666271145,
+      "y": 1219.0444211669421,
       "w": 609,
-      "h": 1250,
+      "h": 1490,
       "comment": {
         "contentFile": ".blueprinttool/cards/next-features/card-summary-cli-maintenance.md"
       }
@@ -384,6 +384,8 @@
     "thread-card-1ac9374f-1591-422e-a0b2-7cccaec49e40": ".blueprinttool/threads/next-features/thread-card-1ac9374f-1591-422e-a0b2-7cccaec49e40.md",
     "thread-card-watchnotes-unanswered-context": ".blueprinttool/threads/next-features/thread-card-watchnotes-unanswered-context.md",
     "thread-card-watchnotes-lean-unanswered-model": ".blueprinttool/threads/next-features/thread-card-watchnotes-lean-unanswered-model.md",
-    "thread-card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6": ".blueprinttool/threads/next-features/thread-card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6.md"
+    "thread-card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6": ".blueprinttool/threads/next-features/thread-card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6.md",
+    "thread-card-summary-data-model": ".blueprinttool/threads/next-features/thread-card-summary-data-model.md",
+    "thread-card-summary-cli-maintenance": ".blueprinttool/threads/next-features/thread-card-summary-cli-maintenance.md"
   }
 }
