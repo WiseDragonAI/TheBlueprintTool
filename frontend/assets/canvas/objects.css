@@ -817,7 +817,7 @@
 .ledger-card-media-progress {
   position: absolute;
   right: 28px;
-  bottom: 7px;
+  bottom: calc(8px + 22px + 6px);
   left: 8px;
   z-index: 2;
   height: 7px;
@@ -843,7 +843,10 @@
 
 .ledger-card-media-nav {
   position: absolute;
-  inset: 0;
+  top: 6px;
+  right: 8px;
+  bottom: calc(8px + 22px + 6px);
+  left: 8px;
   z-index: 3;
   display: flex;
   align-items: center;
