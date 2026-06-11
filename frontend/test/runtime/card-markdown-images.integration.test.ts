@@ -28,7 +28,9 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   assert.match(parser, /images\.images\.push\(\.\.\.standaloneImages\)/);
   assert.match(renderer, /renderLedgerCardMedia/);
   assert.match(mediaRenderer, /ledger-card-media-carousel/);
-  assert.match(mediaRenderer, /const titleText = \(image\.title \|\| image\.alt\)\.trim\(\)/);
+  assert.match(mediaRenderer, /function imageTitleFromSource\(source: string\)/);
+  assert.match(mediaRenderer, /decodeURIComponent\(filename\)/);
+  assert.match(mediaRenderer, /const titleText = imageTitleFromSource\(image\.src\)\.trim\(\)/);
   assert.match(mediaRenderer, /document\.createElement\('figcaption'\)/);
   assert.match(mediaRenderer, /ledger-card-media-title/);
   assert.match(mediaRenderer, /ledgerCardMediaCarouselStateId/);
@@ -79,10 +81,10 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   assert.match(css, /\.ledger-card-media-shell\s*{[^}]*max-width:\s*100%;[^}]*aspect-ratio:\s*var\(--ledger-card-media-aspect-ratio, 4 \/ 3\);[^}]*resize:\s*horizontal;/s);
   assert.match(css, /\.ledger-card-media-track\s*{[^}]*scroll-snap-type:\s*x mandatory;/s);
   assert.match(css, /\.ledger-card-media-carousel \.ledger-card-media-track\s*{[^}]*scrollbar-width:\s*none;/s);
-  assert.match(css, /\.ledger-card-media-slide\s*{[^}]*overflow:\s*hidden;/s);
+  assert.match(css, /\.ledger-card-media-slide\s*{[^}]*grid-template-rows:\s*minmax\(0, 1fr\) auto;[^}]*overflow:\s*hidden;/s);
   assert.match(css, /\.ledger-card-media-image\s*{[^}]*width:\s*var\(--ledger-card-media-contained-width, auto\);[^}]*height:\s*var\(--ledger-card-media-contained-height, auto\);[^}]*max-width:\s*100%;[^}]*max-height:\s*100%;[^}]*object-fit:\s*contain;[^}]*object-position:\s*center;/s);
-  assert.match(css, /\.ledger-card-media-title\s*{[^}]*position:\s*absolute;[^}]*bottom:\s*20px;[^}]*opacity:\s*0;[^}]*transform:\s*translateY\(6px\);/s);
-  assert.match(css, /\.ledger-card-media-shell:hover \.ledger-card-media-title,\s*\.ledger-card-media-shell:focus-within \.ledger-card-media-title\s*{[^}]*opacity:\s*1;[^}]*transform:\s*translateY\(0\);/s);
+  assert.match(css, /\.ledger-card-media-title\s*{[^}]*display:\s*block;[^}]*width:\s*100%;[^}]*overflow-wrap:\s*anywhere;/s);
+  assert.doesNotMatch(css, /\.ledger-card-media-shell:hover \.ledger-card-media-title/);
   assert.match(css, /\.ledger-card-media-progress\s*{[^}]*right:\s*28px;[^}]*bottom:\s*7px;[^}]*left:\s*8px;/s);
   assert.match(css, /\.ledger-card-media-progress-thumb\s*{[^}]*left:\s*var\(--ledger-card-media-slider-thumb-left, 0%\);[^}]*width:\s*var\(--ledger-card-media-slider-thumb-width, 100%\);/s);
   assert.match(css, /\.ledger-card-inline-image-frame\s*{[^}]*aspect-ratio:\s*var\(--ledger-card-inline-image-aspect-ratio, 3 \/ 2\);[^}]*resize:\s*horizontal;/s);

@@ -770,11 +770,15 @@
 .ledger-card-media-slide {
   position: relative;
   display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  row-gap: 6px;
   flex: 0 0 100%;
   overflow: hidden;
   min-width: 100%;
   height: 100%;
   margin: 0;
+  padding: 6px 8px 8px;
+  box-sizing: border-box;
   place-items: center;
   scroll-snap-align: center;
   scroll-snap-stop: always;
@@ -791,41 +795,23 @@
 }
 
 .ledger-card-media-title {
-  position: absolute;
-  right: 8px;
-  bottom: 20px;
-  left: 8px;
-  z-index: 2;
   display: block;
-  max-height: 48px;
-  padding: 5px 7px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 22px;
+  padding: 4px 7px;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--card-zone-color), white 18%);
   border-radius: 2px;
-  background: rgba(3, 5, 8, 0.78);
+  background: rgba(3, 5, 8, 0.72);
   color: var(--text);
   font-size: 11px;
   font-weight: 700;
   line-height: 1.25;
-  opacity: 0;
   pointer-events: none;
   text-align: center;
-  text-overflow: ellipsis;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.72);
-  transform: translateY(6px);
-  transition:
-    opacity 140ms ease,
-    transform 140ms ease;
-}
-
-.ledger-card-media-single .ledger-card-media-title {
-  bottom: 8px;
-}
-
-.ledger-card-media-shell:hover .ledger-card-media-title,
-.ledger-card-media-shell:focus-within .ledger-card-media-title {
-  opacity: 1;
-  transform: translateY(0);
+  overflow-wrap: anywhere;
 }
 
 .ledger-card-media-progress {

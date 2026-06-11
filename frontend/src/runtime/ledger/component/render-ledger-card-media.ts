@@ -103,11 +103,21 @@ function applyImageAspectRatio(shell: HTMLElement, image: HTMLImageElement): voi
   shell.style.setProperty('--ledger-card-media-aspect-ratio', `${width} / ${height}`);
 }
 
+function imageTitleFromSource(source: string): string {
+  const cleanSource = source.split('#')[0]?.split('?')[0] ?? source;
+  const filename = cleanSource.split('/').filter(Boolean).at(-1) ?? cleanSource;
+  try {
+    return decodeURIComponent(filename);
+  } catch {
+    return filename;
+  }
+}
+
 function renderMediaSlide(image: LedgerCardImage, index: number, shell: HTMLElement): HTMLElement {
   const slide = document.createElement('figure');
   slide.className = 'ledger-card-media-slide';
   slide.setAttribute('aria-label', image.alt || `Image ${index + 1}`);
-  const titleText = (image.title || image.alt).trim();
+  const titleText = imageTitleFromSource(image.src).trim();
 
   const element = document.createElement('img');
   element.className = 'ledger-card-media-image';

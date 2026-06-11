@@ -25,8 +25,12 @@ export function isLedgerCardMediaResizePersistenceSuppressed(shell: HTMLElement)
 
 function syncContainedImageSize(shell: HTMLElement, image: HTMLImageElement): void {
   const track = mediaTrack(shell);
+  const slide = image.closest('.ledger-card-media-slide') as HTMLElement | null;
+  const title = slide?.querySelector('.ledger-card-media-title') as HTMLElement | null;
+  const titleHeight = title ? title.offsetHeight : 0;
   const frameWidth = track?.clientWidth || shell.clientWidth || shell.offsetWidth;
-  const frameHeight = track?.clientHeight || shell.clientHeight || shell.offsetHeight;
+  const rawFrameHeight = slide?.clientHeight || track?.clientHeight || shell.clientHeight || shell.offsetHeight;
+  const frameHeight = Math.max(1, rawFrameHeight - titleHeight);
   const naturalWidth = image.naturalWidth;
   const naturalHeight = image.naturalHeight;
   if (!frameWidth || !frameHeight || !naturalWidth || !naturalHeight) return;
