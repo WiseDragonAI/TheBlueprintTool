@@ -107,6 +107,7 @@ function renderMediaSlide(image: LedgerCardImage, index: number, shell: HTMLElem
   const slide = document.createElement('figure');
   slide.className = 'ledger-card-media-slide';
   slide.setAttribute('aria-label', image.alt || `Image ${index + 1}`);
+  const titleText = (image.title || image.alt).trim();
 
   const element = document.createElement('img');
   element.className = 'ledger-card-media-image';
@@ -126,6 +127,12 @@ function renderMediaSlide(image: LedgerCardImage, index: number, shell: HTMLElem
   if (index === 0 && element.complete) applyImageAspectRatio(shell, element);
 
   slide.appendChild(element);
+  if (titleText) {
+    const caption = document.createElement('figcaption');
+    caption.className = 'ledger-card-media-title';
+    caption.textContent = titleText;
+    slide.appendChild(caption);
+  }
   return slide;
 }
 
