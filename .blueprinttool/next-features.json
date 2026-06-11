@@ -22,8 +22,8 @@
       "label": "Processing Queue Panel",
       "variant": "zone",
       "color": "#2f9e8f",
-      "x": 4755.078354328096,
-      "y": 104.63930721851153,
+      "x": 6494.828581334,
+      "y": 156.11120742578674,
       "width": 1900,
       "height": 1040
     },
@@ -32,10 +32,10 @@
       "label": "Better Open Notes treatment",
       "variant": "zone",
       "color": "#55b8ff",
-      "x": 1966,
-      "y": 15,
-      "width": 2410,
-      "height": 3176
+      "x": 1699.4437411992017,
+      "y": -15.095061477509716,
+      "width": 3480.6155243113253,
+      "height": 3248.0606602901853
     }
   ],
   "cards": [
@@ -44,8 +44,8 @@
       "title": "Empty Selection Panel",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 4835.078354328096,
-      "y": 204.63930721851165,
+      "x": 6574.828581334,
+      "y": 256.11120742578686,
       "w": 360,
       "h": 230,
       "comment": {
@@ -59,8 +59,8 @@
       "title": "Awaiting Cards Source",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 5275.078354328097,
-      "y": 204.63930721851165,
+      "x": 7014.828581334001,
+      "y": 256.11120742578686,
       "w": 360,
       "h": 230,
       "comment": {
@@ -74,8 +74,8 @@
       "title": "Trigger Controller",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 5715.078354328097,
-      "y": 204.63930721851165,
+      "x": 7454.828581334001,
+      "y": 256.11120742578686,
       "w": 360,
       "h": 230,
       "comment": {
@@ -89,8 +89,8 @@
       "title": "Headless Codex Launch",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 6155.078354328096,
-      "y": 204.63930721851165,
+      "x": 7894.828581334,
+      "y": 256.11120742578686,
       "w": 360,
       "h": 230,
       "comment": {
@@ -104,8 +104,8 @@
       "title": "One Hour Session Reuse",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 4835.078354328096,
-      "y": 534.6393072185114,
+      "x": 6574.828581334,
+      "y": 586.1112074257866,
       "w": 360,
       "h": 240,
       "comment": {
@@ -119,8 +119,8 @@
       "title": "Resume Failure Recovery",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 5275.078354328097,
-      "y": 534.6393072185114,
+      "x": 7014.828581334001,
+      "y": 586.1112074257866,
       "w": 360,
       "h": 240,
       "comment": {
@@ -134,8 +134,8 @@
       "title": "State And Logs",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 5715.078354328097,
-      "y": 534.6393072185114,
+      "x": 7454.828581334001,
+      "y": 586.1112074257866,
       "w": 360,
       "h": 240,
       "comment": {
@@ -149,8 +149,8 @@
       "title": "Process Ownership",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 6155.078354328096,
-      "y": 534.6393072185114,
+      "x": 7894.828581334,
+      "y": 586.1112074257866,
       "w": 360,
       "h": 240,
       "comment": {
@@ -164,8 +164,8 @@
       "title": "Verification Plan",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 4835.078354328096,
-      "y": 864.6393072185111,
+      "x": 6574.828581334,
+      "y": 916.1112074257863,
       "w": 1680,
       "h": 170,
       "comment": {
@@ -194,8 +194,8 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 2062.5801104103216,
-      "y": 111.4387736076201,
+      "x": 1796.0238516095233,
+      "y": 81.34371213011039,
       "w": 698,
       "h": 1054,
       "comment": {
@@ -208,8 +208,8 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 2803.271149988458,
-      "y": 118.10549964964702,
+      "x": 2536.7148911876598,
+      "y": 88.0104381721373,
       "w": 710,
       "h": 871,
       "comment": {
@@ -222,8 +222,8 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 3569.345171476933,
-      "y": 136.3064201877496,
+      "x": 3302.7889126761347,
+      "y": 106.21135871023989,
       "w": 711,
       "h": 2959,
       "comment": {
@@ -236,8 +236,8 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 2822.3735537903813,
-      "y": 1037.105499649647,
+      "x": 2555.817294989583,
+      "y": 1007.0104381721374,
       "w": 620,
       "h": 1153,
       "comment": {
@@ -250,12 +250,26 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 2062.5801104103216,
-      "y": 1215,
+      "x": 1796.0238516095233,
+      "y": 1184.9049385224903,
       "w": 710,
       "h": 1210,
       "comment": {
         "contentFile": ".blueprinttool/cards/next-features/card-watchnotes-ledger-selection.md"
+      }
+    },
+    {
+      "id": "card-watchnotes-lean-unanswered-model",
+      "title": "Lean Unanswered Payload",
+      "cardType": "note",
+      "domainId": "next-features",
+      "status": "todo",
+      "x": 4045,
+      "y": 106,
+      "w": 860,
+      "h": 1660,
+      "comment": {
+        "contentFile": ".blueprinttool/cards/next-features/card-watchnotes-lean-unanswered-model.md"
       }
     }
   ],
