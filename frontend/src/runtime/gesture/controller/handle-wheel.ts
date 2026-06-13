@@ -11,7 +11,7 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { shouldCaptureWheelTarget } from '../helper/should-capture-wheel-target.js';
 
 export const minCanvasZoomScale = 0.03;
-export const maxCanvasZoomScale = 2.2;
+export const maxCanvasZoomScale = 4;
 
 function advanceCarouselFromWheel(event: WheelEvent): boolean {
   if (!event.ctrlKey) return false;
