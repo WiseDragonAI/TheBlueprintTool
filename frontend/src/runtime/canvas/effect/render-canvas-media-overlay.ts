@@ -33,6 +33,16 @@ type MediaPromotion = {
 
 type MediaOverlayDemotionOptions = {
   reconcilePromotedGeometry?: boolean;
+  hideDemotedMedia?: boolean;
+  preserveZoomSurrogates?: boolean;
+};
+
+type MediaZoomSurrogate = {
+  element: HTMLImageElement;
+  worldX: number;
+  worldY: number;
+  worldWidth: number;
+  worldHeight: number;
 };
 
 let scheduled = false;
@@ -41,6 +51,8 @@ let panReconcileTimer: ReturnType<typeof setTimeout> | undefined;
 let lastRenderedViewport: { x: number; y: number; scale: number } | null = null;
 const promotedMediaShells = new Map<string, MediaPromotion>();
 const promotedShellKeys = new WeakMap<HTMLElement, string>();
+const mediaZoomSurrogates = new Map<string, MediaZoomSurrogate>();
+const hiddenZoomMediaShells = new Map<HTMLElement, string>();
 
 function resolveMediaOverlay(): HTMLElement | null {
   if (initialMediaOverlay?.isConnected) return initialMediaOverlay;
@@ -65,6 +77,80 @@ function readPromotedStyle(element: HTMLElement): Record<PromotedStyleProperty, 
 function restorePromotedStyle(element: HTMLElement, styles: Record<PromotedStyleProperty, string>): void {
   for (const property of promotedStyleProperties) {
     element.style[property] = styles[property];
+  }
+}
+
+function restoreHiddenZoomMediaShells(): void {
+  for (const [shell, visibility] of hiddenZoomMediaShells) {
+    shell.style.visibility = visibility;
+  }
+  hiddenZoomMediaShells.clear();
+}
+
+function hideZoomMediaShell(shell: HTMLElement): void {
+  if (!hiddenZoomMediaShells.has(shell)) hiddenZoomMediaShells.set(shell, shell.style.visibility);
+  shell.style.visibility = 'hidden';
+  suppressLedgerCardMediaResizePersistence(shell);
+}
+
+function clearMediaZoomSurrogates(): void {
+  for (const surrogate of mediaZoomSurrogates.values()) surrogate.element.remove();
+  mediaZoomSurrogates.clear();
+}
+
+function activeMediaImage(shell: HTMLElement): HTMLImageElement | null {
+  const track = shell.querySelector('.ledger-card-media-track') as HTMLElement | null;
+  const slides = Array.from(track?.children ?? []) as HTMLElement[];
+  if (!track || slides.length === 0) return shell.querySelector('.ledger-card-media-image') as HTMLImageElement | null;
+  const slideIndex = Math.max(0, Math.min(slides.length - 1, Math.round(track.scrollLeft / Math.max(1, track.clientWidth))));
+  return slides[slideIndex]?.querySelector('.ledger-card-media-image') as HTMLImageElement | null;
+}
+
+function syncMediaZoomSurrogate(surrogate: MediaZoomSurrogate): void {
+  const scale = Math.max(0.0001, Number(state.viewport.scale) || 1);
+  surrogate.element.style.left = `${Math.round(Number(state.viewport.x) + surrogate.worldX * scale)}px`;
+  surrogate.element.style.top = `${Math.round(Number(state.viewport.y) + surrogate.worldY * scale)}px`;
+  surrogate.element.style.width = `${Math.max(1, Math.round(surrogate.worldWidth * scale))}px`;
+  surrogate.element.style.height = `${Math.max(1, Math.round(surrogate.worldHeight * scale))}px`;
+}
+
+function syncMediaZoomSurrogates(): void {
+  for (const surrogate of mediaZoomSurrogates.values()) syncMediaZoomSurrogate(surrogate);
+}
+
+function captureMediaZoomSurrogates(overlay: HTMLElement | null): void {
+  if (!overlay || !canvas) return;
+  const canvasRect = canvas.getBoundingClientRect();
+  const baseViewport = lastRenderedViewport ?? {
+    x: Number(state.viewport.x),
+    y: Number(state.viewport.y),
+    scale: Number(state.viewport.scale)
+  };
+  const baseScale = Math.max(0.0001, Number(baseViewport.scale) || 1);
+  for (const [key, promotion] of promotedMediaShells) {
+    if (mediaZoomSurrogates.has(key)) continue;
+    const image = activeMediaImage(promotion.shell);
+    if (!image) continue;
+    const rect = image.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) continue;
+    const source = image.currentSrc || image.getAttribute('src') || image.src;
+    if (!source) continue;
+    const element = document.createElement('img');
+    element.className = 'canvas-media-zoom-surrogate';
+    element.src = source;
+    element.alt = image.alt;
+    element.decoding = 'async';
+    element.draggable = false;
+    overlay.append(element);
+    const surrogate: MediaZoomSurrogate = {
+      element,
+      worldX: (rect.left - canvasRect.left - Number(baseViewport.x)) / baseScale,
+      worldY: (rect.top - canvasRect.top - Number(baseViewport.y)) / baseScale,
+      worldWidth: rect.width / baseScale,
+      worldHeight: rect.height / baseScale
+    };
+    mediaZoomSurrogates.set(key, surrogate);
+    syncMediaZoomSurrogate(surrogate);
   }
 }
 
@@ -177,28 +263,40 @@ function demoteMediaShell(key: string, options: MediaOverlayDemotionOptions = {}
       promotion.shell.remove();
     }
   });
+  if (options.hideDemotedMedia) hideZoomMediaShell(promotion.shell);
   promotedMediaShells.delete(key);
 }
 
 function clearMediaOverlay(overlay: HTMLElement | null = resolveMediaOverlay(), options: MediaOverlayDemotionOptions = {}): void {
   for (const key of Array.from(promotedMediaShells.keys())) demoteMediaShell(key, options);
-  overlay?.replaceChildren();
+  if (options.preserveZoomSurrogates) syncMediaZoomSurrogates();
+  else {
+    clearMediaZoomSurrogates();
+    restoreHiddenZoomMediaShells();
+    overlay?.replaceChildren();
+  }
   if (overlay) overlay.style.transform = '';
   lastRenderedViewport = null;
 }
 
 export function clearCanvasMediaOverlay(options: MediaOverlayDemotionOptions = {}): void {
-  clearMediaOverlay(undefined, options);
+  clearMediaOverlay(undefined, mediaOverlaySuspended
+    ? { ...options, reconcilePromotedGeometry: false, preserveZoomSurrogates: true }
+    : options);
 }
 
 export function suspendCanvasMediaOverlay(): void {
   mediaOverlaySuspended = true;
-  clearMediaOverlay(undefined, { reconcilePromotedGeometry: false });
+  const overlay = resolveMediaOverlay();
+  captureMediaZoomSurrogates(overlay);
+  clearMediaOverlay(overlay, { reconcilePromotedGeometry: false, hideDemotedMedia: true, preserveZoomSurrogates: true });
 }
 
 export function resumeCanvasMediaOverlay(): void {
   mediaOverlaySuspended = false;
-  scheduleCanvasMediaOverlayRender();
+  restoreHiddenZoomMediaShells();
+  clearMediaZoomSurrogates();
+  renderCanvasMediaOverlay();
 }
 
 function cardNode(cardId: string): HTMLElement | null {
@@ -305,7 +403,7 @@ function demoteInactiveMediaShells(activeKeys: Set<string>): void {
 export function renderCanvasMediaOverlay(): void {
   const overlay = resolveMediaOverlay();
   if (mediaOverlaySuspended) {
-    clearMediaOverlay(overlay, { reconcilePromotedGeometry: false });
+    clearMediaOverlay(overlay, { reconcilePromotedGeometry: false, preserveZoomSurrogates: true });
     return;
   }
   if (!overlay || !canvas || !content || Number(state.viewport.scale) < canvasMediaOverlayScaleThreshold) {

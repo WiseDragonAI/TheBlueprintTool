@@ -49,6 +49,15 @@
   pointer-events: none;
 }
 
+.canvas-media-zoom-surrogate {
+  position: absolute;
+  display: block;
+  object-fit: contain;
+  object-position: center;
+  pointer-events: none;
+  user-select: none;
+}
+
 .canvas-control {
   position: absolute;
   display: inline-flex;
