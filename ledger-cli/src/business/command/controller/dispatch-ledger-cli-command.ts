@@ -5,6 +5,7 @@
 import type { FileSystemPort, Result } from '../../../lib/types.js';
 import { telemetry } from '../../../lib/telemetry/telemetry.js';
 import { parseLedgerCliArgv } from '../helper/parse-ledger-cli-argv.js';
+import { formatLedgerCliHelp } from '../helper/format-ledger-cli-help.js';
 import { manageLedgerJsonController } from '../../ledger/controller/manage-ledger-json.js';
 
 export async function dispatchLedgerCliCommandController(
@@ -14,6 +15,12 @@ export async function dispatchLedgerCliCommandController(
   telemetry('dispatch-ledger-cli-command', { argv });
   const command = parseLedgerCliArgv(argv);
   telemetry('parse-ledger-cli-argv', { mode: command.mode });
+
+  if (command.mode === 'help') {
+    const helpText = formatLedgerCliHelp();
+    ports.emit ? ports.emit(helpText) : console.log(helpText);
+    return { ok: true, value: helpText };
+  }
 
   const result = await manageLedgerJsonController({
     answerOperation: command.answerOperation,

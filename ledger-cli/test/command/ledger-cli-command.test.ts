@@ -9,6 +9,17 @@ import { dirname, join } from 'node:path';
 import { dispatchLedgerCliCommandController } from '../../src/index.js';
 import { createJsonFile } from '../fixture/scenario.js';
 
+test('ledger-cli command emits help without reading a ledger', async () => {
+  const messages: string[] = [];
+  const result = await dispatchLedgerCliCommandController(['help'], { emit: (message) => messages.push(message) });
+
+  assert.equal(result.ok, true);
+  assert.match(messages.join('\n'), /Usage: ledger-cli <command> \[options\]/);
+  assert.match(messages.join('\n'), /unanswered --ledger <file> \[--json\]/);
+  assert.match(messages.join('\n'), /answer --ledger <file> --thread-id <id>/);
+  assert.match(messages.join('\n'), /--message-file <file>/);
+});
+
 test('ledger-cli command mutates a ledger and emits overview text', async () => {
   const ledgerFile = await createJsonFile({
     cards: [{ id: 'card-a', title: 'Old title' }],

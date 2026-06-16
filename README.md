@@ -129,6 +129,7 @@ Ledger JSON editing is owned by the separate `ledger-cli` package, not by `gener
 
 ```bash
 cd /home/jbb/dev/EditorBP/CoreV2/ledger-cli
+npm run cli -- help
 npm run cli -- overview --ledger ../.blueprinttool/specs.json
 npm run cli -- mutate --ledger ../.blueprinttool/specs.json --card-id 60000006 --card-title "Cards can resize"
 npm run cli -- export --ledger ../.blueprinttool/specs.json --output ../ledger-export.md

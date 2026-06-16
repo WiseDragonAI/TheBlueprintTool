@@ -3,6 +3,7 @@
  * WHY: ledger mutation and inspection need stable module boundaries separate from scaffold generation.
  */
 export { parseLedgerCliArgv } from './business/command/helper/parse-ledger-cli-argv.js';
+export { formatLedgerCliHelp } from './business/command/helper/format-ledger-cli-help.js';
 export { dispatchLedgerCliCommandController } from './business/command/controller/dispatch-ledger-cli-command.js';
 export { readLedgerJson } from './business/ledger/helper/read-ledger-json.js';
 export { writeLedgerJson } from './business/ledger/effect/write-ledger-json.js';

@@ -1,0 +1,48 @@
+/**
+ * WHAT: Human-readable help text for ledger-cli.
+ * WHY: command syntax must be discoverable without requiring a readable workspace ledger.
+ */
+export function formatLedgerCliHelp(): string {
+  return [
+    'Usage: ledger-cli <command> [options]',
+    '',
+    'Commands:',
+    '  help',
+    '      Show this help text.',
+    '',
+    '  overview --ledger <file>',
+    '      Print a compact card and relationship overview.',
+    '',
+    '  unanswered --ledger <file> [--json]',
+    '      List threads whose latest meaningful note still needs an agent answer.',
+    '',
+    '  answer --ledger <file> --thread-id <id> (--message <text> | --message-file <file>)',
+    '      Append a short agent answer to a thread sidecar.',
+    '',
+    '  mutate --ledger <file> [--mutation <file>] [--card-id <id>] [card options]',
+    '      Persist targeted ledger edits.',
+    '',
+    '  export --ledger <file> --output <file.md>',
+    '      Export a ledger to Markdown.',
+    '',
+    '  done --ledger <file> --card-id <id>',
+    '  todo --ledger <file> --card-id <id>',
+    '      Update a card status.',
+    '',
+    'Common mutate options:',
+    '  --card-title <title>',
+    '  --card-comment <markdown>',
+    '  --card-comment-file <file>',
+    '  --card-labels <label-a,label-b>',
+    '  --card-x <number> --card-y <number> --card-w <number> --card-h <number>',
+    '  --add-card-file <file>',
+    '  --remove-card <id>',
+    '  --add-relationship <id:from:to:label>',
+    '  --remove-relationship <id>',
+    '',
+    'Examples:',
+    '  ledger-cli unanswered --ledger .blueprinttool/specs.json --json',
+    '  ledger-cli answer --ledger .blueprinttool/specs.json --thread-id thread-card-a --message "Implemented."',
+    '  ledger-cli answer --ledger .blueprinttool/specs.json --thread-id thread-card-a --message-file /tmp/answer.md',
+  ].join('\n');
+}

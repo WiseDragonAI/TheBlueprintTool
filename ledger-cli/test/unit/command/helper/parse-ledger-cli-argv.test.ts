@@ -6,6 +6,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseLedgerCliArgv } from '../../../../src/business/command/helper/parse-ledger-cli-argv.js';
 
+test('parse-ledger-cli-argv parses help requests', () => {
+  assert.equal(parseLedgerCliArgv([]).mode, 'help');
+  assert.equal(parseLedgerCliArgv(['help']).mode, 'help');
+  assert.equal(parseLedgerCliArgv(['--help']).mode, 'help');
+  assert.equal(parseLedgerCliArgv(['-h']).mode, 'help');
+  assert.equal(parseLedgerCliArgv(['unanswered', '--help']).mode, 'help');
+});
+
 test('parse-ledger-cli-argv parses targeted ledger mutations', () => {
   const command = parseLedgerCliArgv([
     'mutate',
