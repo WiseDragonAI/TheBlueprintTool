@@ -11,8 +11,8 @@ import { formatLedgerMarkdownExport } from '../helper/format-ledger-markdown-exp
 import { appendThreadAnswer } from '../helper/append-thread-answer.js';
 import { findUnansweredThreads } from '../helper/find-unanswered-threads.js';
 import { formatUnansweredThreads } from '../helper/format-unanswered-threads.js';
-import { hydrateLedgerCardContent, writeCardCommentContent } from '../helper/card-content-sidecar.js';
-import { hydrateLedgerThreadNotes, stripHydratedThreadNotes } from '../helper/thread-sidecar.js';
+import { hydrateLedgerCardContent, writeCardCommentContent } from '../helper/card-content-file.js';
+import { hydrateLedgerThreadNotes, stripHydratedThreadNotes } from '../helper/thread-content-file.js';
 
 type JsonObject = Record<string, unknown>;
 

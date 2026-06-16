@@ -4,7 +4,7 @@
 2. **Dispatch.** `ledger-cli/bin/ledger-cli.ts` calls `dispatchLedgerCliCommandController(process.argv.slice(2))`.
 3. **Argument parsing.** `parseLedgerCliArgv` maps `unanswered --ledger <path> --json` to `mode: "unanswered"`, `ledgerJsonFile: <path>`, and `json: true`.
 4. **Ledger read.** `manageLedgerJsonController` reads the committed ledger JSON through `readLedgerJson`.
-5. **Thread hydration.** Before `unanswered` runs, `hydrateLedgerThreadNotes` loads every sidecar listed in `ledger.threadFiles` and writes parsed notes into `ledger.notes[threadId]` in memory.
+5. **Thread hydration.** Before `unanswered` runs, `hydrateLedgerThreadNotes` loads every content file listed in `ledger.threadFiles` and writes parsed notes into `ledger.notes[threadId]` in memory.
 6. **Thread discovery.** `findUnansweredThreads(ledger.value, ledgerJsonFile)` derives the output records.
 7. **Formatting.** `formatUnansweredThreads(threads, true)` returns `JSON.stringify({ threads }, null, 2)`.
 
@@ -36,7 +36,7 @@ interface UnansweredThread {
   answerCommand: string;
 
   /**
-   * Exact instruction for patching the Markdown sidecar directly.
+   * Exact instruction for patching the Markdown content file directly.
    * It always tells the agent to append one # AGENT section with
    * a corev2:note metadata comment.
    */
@@ -59,12 +59,12 @@ interface UnansweredThread {
   targetId: string;
 
   /**
-   * Markdown sidecar path, usually from ledger.threadFiles[threadId].
+   * Markdown content file path, usually from ledger.threadFiles[threadId].
    */
   threadFile: string;
 
   /**
-   * Key from ledger.notes after sidecar hydration.
+   * Key from ledger.notes after content file hydration.
    */
   threadId: string;
 
@@ -81,7 +81,7 @@ interface ThreadNote {
   error: string;
 
   /**
-   * Note id from the thread sidecar metadata, or generated parser fallback.
+   * Note id from the thread content file metadata, or generated parser fallback.
    */
   id: string;
 
@@ -138,7 +138,7 @@ interface ThreadNote {
 ## E. Important Gaps For Watcher Context
 
 1. **No card body.** The output does not include the target card markdown content.
-2. **No full thread body.** It includes note messages, but not the raw sidecar markdown or earlier answered context beyond the pending slice.
+2. **No full thread body.** It includes note messages, but not the raw card content file Markdown or earlier answered context beyond the pending slice.
 3. **No zone context.** It does not identify containing zones, neighboring cards, or zone intent.
 4. **No queue metadata.** It does not include `to_process`, `processing`, trigger source, batch ordering, or watcher run id.
 5. **No workspace summary.** It preserves relative ledger/thread paths but does not include route id, tab title, or workspace cwd.

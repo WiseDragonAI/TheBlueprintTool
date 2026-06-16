@@ -9,7 +9,7 @@ import {
   readLedger,
   resolveContentRef,
   writeLedger,
-} from './ledger-sidecar-common.mjs';
+} from './ledger-content-file-common.mjs';
 
 const ledgerFiles = parseLedgerFiles(process.argv.slice(2));
 

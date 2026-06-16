@@ -1,5 +1,5 @@
 /**
- * WHAT: Thread Markdown sidecar helpers for ledger-cli.
+ * WHAT: Thread Markdown content file helpers for ledger-cli.
  * WHY: agents should answer conversations by patching or appending to Markdown files.
  */
 import { basename, dirname, extname, isAbsolute, relative, resolve } from 'node:path';
@@ -135,14 +135,14 @@ export async function hydrateLedgerThreadNotes(ledger: unknown, ledgerJsonFile: 
     try {
       notes[threadId] = parseThreadMarkdown(await readText(file, fs));
     } catch {
-      // Missing thread sidecars should not block inspection of partial ledgers.
+      // Missing thread content files should not block inspection of partial ledgers.
     }
   }
   ledger.notes = notes;
   return ledger;
 }
 
-export async function writeThreadNotesSidecar(input: { ledger: JsonObject; ledgerJsonFile: string; threadId: string; notes: JsonObject[]; fs?: FileSystemPort }): Promise<void> {
+export async function writeThreadNotesFile(input: { ledger: JsonObject; ledgerJsonFile: string; threadId: string; notes: JsonObject[]; fs?: FileSystemPort }): Promise<void> {
   const threadFiles = isRecord(input.ledger.threadFiles) ? { ...input.ledger.threadFiles } as Record<string, string> : {};
   const contentFile = threadFiles[input.threadId] ?? threadContentFileRef(input.ledgerJsonFile, input.threadId);
   const file = resolveContentFile(input.ledgerJsonFile, contentFile);

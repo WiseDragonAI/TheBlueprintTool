@@ -1,5 +1,5 @@
 /**
- * WHAT: Reads and writes thread conversations as Markdown sidecar files.
+ * WHAT: Reads and writes thread conversations as Markdown content files.
  * WHY: agents should answer by patching a thread file instead of regenerating ledger JSON note arrays.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -138,7 +138,7 @@ export function hydrateLedgerThreadNotes(ledger: AnyRecord, blueprinttoolRoot: s
   return ledger;
 }
 
-export function writeThreadNotesSidecar(input: { blueprinttoolRoot: string; ledger: AnyRecord; ledgerPath: string; threadId: string; notes: AnyRecord[] }): void {
+export function writeThreadNotesFile(input: { blueprinttoolRoot: string; ledger: AnyRecord; ledgerPath: string; threadId: string; notes: AnyRecord[] }): void {
   const threadFiles = normalizeThreadFiles(input.ledger);
   const contentFile = threadFiles[input.threadId] ?? threadContentFileRef(input.ledgerPath, input.threadId);
   const file = resolveThreadContentFile(input.blueprinttoolRoot, contentFile);

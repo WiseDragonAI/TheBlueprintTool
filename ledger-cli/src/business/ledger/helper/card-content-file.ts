@@ -1,5 +1,5 @@
 /**
- * WHAT: Sidecar Markdown helpers for ledger-cli.
+ * WHAT: Markdown content file helpers for ledger-cli.
  * WHY: migrated ledgers store card bodies in individual files while CLI commands still need full card content.
  */
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
@@ -53,7 +53,7 @@ export async function hydrateLedgerCardContent(ledger: unknown, ledgerJsonFile: 
     try {
       card.comment = { ...comment, what: await readText(file, fs) };
     } catch {
-      // Missing sidecar files are ignored so legacy commands can still inspect partial ledgers.
+      // Missing content files are ignored so legacy commands can still inspect partial ledgers.
     }
   }
   return ledger;

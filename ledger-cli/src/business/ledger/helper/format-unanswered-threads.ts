@@ -1,6 +1,6 @@
 /**
  * WHAT: Formats unanswered thread records for operator and agent command-line use.
- * WHY: agents need thread ids, sidecar paths, and exact patch instructions for direct Markdown replies.
+ * WHY: agents need thread ids, content file paths, and exact patch instructions for direct Markdown replies.
  */
 import type { UnansweredThread } from '../../../lib/types.js';
 

@@ -1,5 +1,5 @@
 /**
- * WHAT: Subscribes to backend card-content file change events.
+ * WHAT: Subscribes to backend card content file change events.
  * WHY: direct Markdown file patches must refresh rendered card content without disturbing active voice recording.
  */
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';

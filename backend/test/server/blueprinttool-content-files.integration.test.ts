@@ -8,14 +8,14 @@ import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
 
-async function startSidecarServer(): Promise<{ endpoint: string; eventsEndpoint: string; server: Server; workspace: string }> {
+async function startContentFileServer(): Promise<{ endpoint: string; eventsEndpoint: string; server: Server; workspace: string }> {
   const originalCwd = process.cwd();
-  const workspace = mkdtempSync(join(tmpdir(), 'corev2-card-sidecar-'));
+  const workspace = mkdtempSync(join(tmpdir(), 'corev2-card-content-file-'));
   mkdirSync(join(workspace, '.blueprinttool', 'cards', 'specs'), { recursive: true });
   writeFileSync(join(workspace, '.blueprinttool', 'state.json'), JSON.stringify({
     tabs: [{ id: 'specs', title: 'Specs', ledgerFile: '.blueprinttool/specs.json' }]
   }));
-  writeFileSync(join(workspace, '.blueprinttool', 'cards', 'specs', 'card-a.md'), 'Sidecar body.');
+  writeFileSync(join(workspace, '.blueprinttool', 'cards', 'specs', 'card-a.md'), 'Content file body.');
   writeFileSync(join(workspace, '.blueprinttool', 'specs.json'), JSON.stringify({
     cards: [{ id: 'card-a', title: 'Card A', comment: { contentFile: '.blueprinttool/cards/specs/card-a.md' }, x: 10, y: 20, w: 240 }],
     annotations: [],
@@ -38,12 +38,12 @@ async function startSidecarServer(): Promise<{ endpoint: string; eventsEndpoint:
   };
 }
 
-test('blueprinttool server hydrates card sidecar markdown and keeps JSON lean on edit', async () => {
-  const { endpoint, server, workspace } = await startSidecarServer();
+test('blueprinttool server hydrates card Markdown content files and keeps JSON lean on edit', async () => {
+  const { endpoint, server, workspace } = await startContentFileServer();
 
   try {
     const loaded = await (await fetch(endpoint)).json() as { cards: Array<Record<string, any>> };
-    assert.equal(loaded.cards[0].comment.what, 'Sidecar body.');
+    assert.equal(loaded.cards[0].comment.what, 'Content file body.');
 
     const patchResponse = await fetch(endpoint, {
       method: 'PATCH',
@@ -64,8 +64,8 @@ test('blueprinttool server hydrates card sidecar markdown and keeps JSON lean on
   }
 });
 
-test('blueprinttool server creates card and thread markdown sidecars for new cards', async () => {
-  const { endpoint, server, workspace } = await startSidecarServer();
+test('blueprinttool server creates card and thread Markdown content files for new cards', async () => {
+  const { endpoint, server, workspace } = await startContentFileServer();
 
   try {
     const createResponse = await fetch(endpoint, {
@@ -101,7 +101,7 @@ test('blueprinttool server creates card and thread markdown sidecars for new car
 });
 
 test('blueprinttool server emits card content change events for direct markdown edits', async () => {
-  const { eventsEndpoint, server, workspace } = await startSidecarServer();
+  const { eventsEndpoint, server, workspace } = await startContentFileServer();
   const controller = new AbortController();
 
   try {

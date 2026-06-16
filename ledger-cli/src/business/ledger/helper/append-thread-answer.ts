@@ -4,7 +4,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { FileSystemPort, Result } from '../../../lib/types.js';
-import { writeThreadNotesSidecar } from './thread-sidecar.js';
+import { writeThreadNotesFile } from './thread-content-file.js';
 
 type JsonObject = Record<string, unknown>;
 
@@ -41,6 +41,6 @@ export async function appendThreadAnswer(
   threadNotes.push(note);
   notes[threadId] = threadNotes;
   nextLedger.notes = notes;
-  await writeThreadNotesSidecar({ ledger: nextLedger, ledgerJsonFile, threadId, notes: threadNotes.filter(isRecord), fs });
+  await writeThreadNotesFile({ ledger: nextLedger, ledgerJsonFile, threadId, notes: threadNotes.filter(isRecord), fs });
   return { ok: true, value: nextLedger };
 }

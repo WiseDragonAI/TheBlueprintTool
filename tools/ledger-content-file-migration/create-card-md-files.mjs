@@ -8,7 +8,7 @@ import {
   readLedger,
   resolveContentRef,
   writeTextFile,
-} from './ledger-sidecar-common.mjs';
+} from './ledger-content-file-common.mjs';
 
 const ledgerFiles = parseLedgerFiles(process.argv.slice(2));
 const force = process.argv.includes('--force');

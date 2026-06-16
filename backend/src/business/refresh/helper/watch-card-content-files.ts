@@ -1,5 +1,5 @@
 /**
- * WHAT: Watches card Markdown sidecar files and reports changes to the HTTP event stream.
+ * WHAT: Watches card Markdown content files and reports changes to the HTTP event stream.
  * WHY: direct file patches must refresh browser card content without requiring a manual reload.
  */
 import { existsSync, mkdirSync, readdirSync, statSync, watch, type FSWatcher } from 'node:fs';

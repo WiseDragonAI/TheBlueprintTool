@@ -6,7 +6,7 @@ import {
   copyLedgerBackup,
   optionValue,
   parseLedgerFiles,
-} from './ledger-sidecar-common.mjs';
+} from './ledger-content-file-common.mjs';
 
 const ledgerFiles = parseLedgerFiles(process.argv.slice(2));
 const label = optionValue(process.argv.slice(2), '--label') ?? new Date().toISOString().replace(/[:.]/g, '-');

@@ -1,5 +1,5 @@
 /**
- * WHAT: Reads and writes card markdown sidecar files referenced from ledger JSON.
+ * WHAT: Reads and writes card markdown content files referenced from ledger JSON.
  * WHY: card bodies should be patchable as individual Markdown files while the browser keeps its hydrated runtime contract.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -50,7 +50,7 @@ export function hydrateLedgerCardContent(ledger: AnyRecord, blueprinttoolRoot: s
   return ledger;
 }
 
-export function writeCardDescriptionSidecar(input: { blueprinttoolRoot: string; card: AnyRecord; description: string; ledgerPath: string }): void {
+export function writeCardDescriptionFile(input: { blueprinttoolRoot: string; card: AnyRecord; description: string; ledgerPath: string }): void {
   const comment = commentFor(input.card);
   const contentFile = typeof comment.contentFile === 'string' ? comment.contentFile : cardContentFileRef(input.ledgerPath, input.card);
   const file = resolveCardContentFile(input.blueprinttoolRoot, contentFile);
@@ -65,7 +65,7 @@ export function writeCardDescriptionSidecar(input: { blueprinttoolRoot: string; 
 export function externalizeCardContent(input: { blueprinttoolRoot: string; card: AnyRecord; ledgerPath: string }): void {
   const comment = commentFor(input.card);
   if (typeof comment.what === 'string') {
-    writeCardDescriptionSidecar({
+    writeCardDescriptionFile({
       blueprinttoolRoot: input.blueprinttoolRoot,
       card: input.card,
       description: comment.what,
@@ -82,7 +82,7 @@ export function externalizeCardContent(input: { blueprinttoolRoot: string; card:
   input.card.comment = { ...comment, contentFile };
 }
 
-export function duplicateCardContentSidecar(input: { blueprinttoolRoot: string; ledgerPath: string; sourceCard: AnyRecord; targetCard: AnyRecord }): void {
+export function duplicateCardContentFile(input: { blueprinttoolRoot: string; ledgerPath: string; sourceCard: AnyRecord; targetCard: AnyRecord }): void {
   const sourceComment = commentFor(input.sourceCard);
   const sourceFile = resolveCardContentFile(input.blueprinttoolRoot, sourceComment.contentFile);
   const sourceBody = sourceFile && existsSync(sourceFile)
@@ -91,7 +91,7 @@ export function duplicateCardContentSidecar(input: { blueprinttoolRoot: string; 
       ? sourceComment.what
       : undefined;
   if (sourceBody === undefined) return;
-  writeCardDescriptionSidecar({
+  writeCardDescriptionFile({
     blueprinttoolRoot: input.blueprinttoolRoot,
     card: input.targetCard,
     description: sourceBody,

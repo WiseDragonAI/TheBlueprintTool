@@ -14,8 +14,8 @@ import { readRequestBuffer } from './read-request-buffer.js';
 import { contentTypeFor } from './content-type-for.js';
 import { normalizeLedgerNotes } from './normalize-ledger-notes.js';
 import { relationshipReferencesCard } from '../../ledger/helper/relationship-references-card.js';
-import { duplicateCardContentSidecar, externalizeCardContent, hydrateLedgerCardContent, writeCardDescriptionSidecar } from '../../ledger/helper/card-content-sidecar.js';
-import { hydrateLedgerThreadNotes, stripHydratedThreadNotes, writeThreadNotesSidecar } from '../../ledger/helper/thread-sidecar.js';
+import { duplicateCardContentFile, externalizeCardContent, hydrateLedgerCardContent, writeCardDescriptionFile } from '../../ledger/helper/card-content-file.js';
+import { hydrateLedgerThreadNotes, stripHydratedThreadNotes, writeThreadNotesFile } from '../../ledger/helper/thread-content-file.js';
 import { watchCardContentFiles, type CardContentChange } from '../../refresh/helper/watch-card-content-files.js';
 
 type AnyRecord = Record<string, unknown>;
@@ -90,11 +90,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const message = `event: card-content-change\ndata: ${JSON.stringify(event)}\n\n`;
     for (const client of contentEventClients) client.write(message);
   };
-  const hydrateLedgerSidecars = (ledger: AnyRecord): AnyRecord => hydrateLedgerCardContent(hydrateLedgerThreadNotes(ledger, blueprinttoolRoot), blueprinttoolRoot);
+  const loadLedgerContentFiles = (ledger: AnyRecord): AnyRecord => hydrateLedgerCardContent(hydrateLedgerThreadNotes(ledger, blueprinttoolRoot), blueprinttoolRoot);
   const persistLedgerAndRespond = (ledgerPath: string, ledger: AnyRecord, response: ServerResponse): void => {
     stripHydratedThreadNotes(ledger);
     writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
-    response.end(JSON.stringify(hydrateLedgerSidecars(ledger)));
+    response.end(JSON.stringify(loadLedgerContentFiles(ledger)));
   };
   const cardContentWatcher = watchCardContentFiles({ blueprinttoolRoot, onChange: publishCardContentChange });
   const server = createServer(async (request, response) => {
@@ -281,7 +281,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         if (mutation.action === 'create-card' && mutation.card?.id) {
           const id = String(mutation.card.id);
           externalizeCardContent({ blueprinttoolRoot, card: mutation.card, ledgerPath });
-          writeThreadNotesSidecar({ blueprinttoolRoot, ledger, ledgerPath, threadId: `thread-${id}`, notes: [] });
+          writeThreadNotesFile({ blueprinttoolRoot, ledger, ledgerPath, threadId: `thread-${id}`, notes: [] });
           ledger.cards = (ledger.cards ?? []).filter((entry) => String(entry.id ?? '') !== id).concat(mutation.card);
         }
         if (mutation.action === 'create-relationship' && mutation.relationship?.id) {
@@ -293,7 +293,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           if (card && (mutation.cardPatch.status === 'todo' || mutation.cardPatch.status === 'done')) card.status = mutation.cardPatch.status;
           if (card && typeof mutation.cardPatch.title === 'string') card.title = mutation.cardPatch.title;
           if (card && typeof mutation.cardPatch.description === 'string') {
-            writeCardDescriptionSidecar({ blueprinttoolRoot, card, description: mutation.cardPatch.description, ledgerPath });
+            writeCardDescriptionFile({ blueprinttoolRoot, card, description: mutation.cardPatch.description, ledgerPath });
           }
           if (card && mutation.cardPatch.imageSizes && typeof mutation.cardPatch.imageSizes === 'object') card.imageSizes = mutation.cardPatch.imageSizes;
         }
@@ -353,7 +353,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           if (deletedNoteIds.map((id) => String(id)).includes(noteId)) {
             notesByThread[mutation.note.threadId] = notes.filter((entry) => String(entry.id ?? '') !== noteId);
             ledger.notes = notesByThread;
-            writeThreadNotesSidecar({ blueprinttoolRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes: notesByThread[mutation.note.threadId] });
+            writeThreadNotesFile({ blueprinttoolRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes: notesByThread[mutation.note.threadId] });
             persistLedgerAndRespond(ledgerPath, ledger, response);
             return;
           }
@@ -368,7 +368,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             existing.updatedAt = new Date().toISOString();
           } else notes.push(nextNote);
           notesByThread[mutation.note.threadId] = notes;
-          writeThreadNotesSidecar({ blueprinttoolRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes });
+          writeThreadNotesFile({ blueprinttoolRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes });
         }
         if (mutation.action === 'update-note' && mutation.note?.threadId) {
           const notesByThread = normalizeLedgerNotes(ledger);
@@ -378,7 +378,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           if (noteId && deletedNoteIds.map((id) => String(id)).includes(noteId)) {
             notesByThread[mutation.note.threadId] = notes.filter((entry) => String(entry.id ?? '') !== noteId);
             ledger.notes = notesByThread;
-            writeThreadNotesSidecar({ blueprinttoolRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes: notesByThread[mutation.note.threadId] });
+            writeThreadNotesFile({ blueprinttoolRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes: notesByThread[mutation.note.threadId] });
             persistLedgerAndRespond(ledgerPath, ledger, response);
             return;
           }
@@ -397,7 +397,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             note.updatedAt = new Date().toISOString();
           }
           notesByThread[mutation.note.threadId] = notes;
-          writeThreadNotesSidecar({ blueprinttoolRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes });
+          writeThreadNotesFile({ blueprinttoolRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes });
         }
         if (mutation.action === 'delete-note' && mutation.note?.threadId) {
           const notesByThread = normalizeLedgerNotes(ledger);
@@ -410,7 +410,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             ledger.deletedNoteIds = deletedNoteIds;
           }
           notesByThread[mutation.note.threadId] = noteId ? notes.filter((entry) => String(entry.id ?? '') !== noteId) : notes.slice(0, -1);
-          writeThreadNotesSidecar({ blueprinttoolRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes: notesByThread[mutation.note.threadId] });
+          writeThreadNotesFile({ blueprinttoolRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes: notesByThread[mutation.note.threadId] });
         }
         if (mutation.action === 'paste-selection' && mutation.selection) {
           const suffix = `copy-${Date.now()}`;
@@ -424,7 +424,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
               x: Number(card.x ?? 0) + 48,
               y: Number(card.y ?? 0) + 48
             };
-            duplicateCardContentSidecar({ blueprinttoolRoot, ledgerPath, sourceCard: card, targetCard: copiedCard });
+            duplicateCardContentFile({ blueprinttoolRoot, ledgerPath, sourceCard: card, targetCard: copiedCard });
             return copiedCard;
           });
           const copiedAnnotations = (ledger.annotations ?? []).filter((annotation) => zoneIds.has(String(annotation.id ?? '')) || groupIds.has(String(annotation.id ?? ''))).map((annotation) => ({
@@ -441,7 +441,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       }
       if (existsSync(ledgerPath)) {
         const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord;
-        response.end(JSON.stringify(hydrateLedgerSidecars(ledger)));
+        response.end(JSON.stringify(loadLedgerContentFiles(ledger)));
       } else {
         response.end(JSON.stringify({ ok: false, missing: ledgerPath }));
       }

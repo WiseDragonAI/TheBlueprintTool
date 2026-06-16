@@ -3,7 +3,7 @@
  * WHY: the ledger acts as the operator-to-agent communication queue.
  */
 import type { UnansweredThread } from '../../../lib/types.js';
-import { threadContentFileRef } from './thread-sidecar.js';
+import { threadContentFileRef } from './thread-content-file.js';
 
 type JsonObject = Record<string, unknown>;
 
