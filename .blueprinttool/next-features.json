@@ -18,16 +18,6 @@
   },
   "annotations": [
     {
-      "id": "zone-processing-queue",
-      "label": "Processing Queue Panel",
-      "variant": "zone",
-      "color": "#2f9e8f",
-      "x": 6494.828581334,
-      "y": 156.11120742578674,
-      "width": 1900,
-      "height": 1040
-    },
-    {
       "id": "zone-d84c4c6d-d128-4784-97ca-28eee305d72e",
       "label": "Better Open Notes treatment",
       "variant": "zone",
@@ -42,148 +32,13 @@
       "label": "Summaries",
       "variant": "zone",
       "color": "#ff5757",
-      "x": 2890,
-      "y": 175,
-      "width": 1641,
-      "height": 2631
+      "x": 2904,
+      "y": 183,
+      "width": 3188,
+      "height": 2850
     }
   ],
   "cards": [
-    {
-      "id": "queue-panel-empty-selection",
-      "title": "Empty Selection Panel",
-      "cardType": "implementation",
-      "domainId": "next-features",
-      "x": 6574.828581334,
-      "y": 256.11120742578686,
-      "w": 360,
-      "h": 230,
-      "comment": {
-        "what": "Show a floating left-side panel when the active selection has no cards, zones, or groups. Match the thread panel positioning and chrome, but keep it focused on queue status and trigger controls."
-      },
-      "facts": [],
-      "fields": []
-    },
-    {
-      "id": "queue-awaiting-cards-source",
-      "title": "Awaiting Cards Source",
-      "cardType": "implementation",
-      "domainId": "next-features",
-      "x": 7014.828581334001,
-      "y": 256.11120742578686,
-      "w": 360,
-      "h": 230,
-      "comment": {
-        "what": "Resolve the queue from the existing card schema first. Prefer an existing status, label, or work-status marker before adding a new queue-specific field."
-      },
-      "facts": [],
-      "fields": []
-    },
-    {
-      "id": "queue-trigger-controller",
-      "title": "Trigger Controller",
-      "cardType": "implementation",
-      "domainId": "next-features",
-      "x": 7454.828581334001,
-      "y": 256.11120742578686,
-      "w": 360,
-      "h": 230,
-      "comment": {
-        "what": "Add a backend route for the panel button. The controller should return quickly with run metadata, reject concurrent trigger races, and delegate process ownership to a workspace-scoped runner service."
-      },
-      "facts": [],
-      "fields": []
-    },
-    {
-      "id": "queue-codex-launch",
-      "title": "Headless Codex Launch",
-      "cardType": "implementation",
-      "domainId": "next-features",
-      "x": 7894.828581334,
-      "y": 256.11120742578686,
-      "w": 360,
-      "h": 230,
-      "comment": {
-        "what": "Spawn `codex exec --dangerously-bypass-approvals-and-sandbox --json -C <workspace> -c model_reasoning_effort=\\\"high\\\" --model gpt-5.5 -`. Use the doc-server cwd as the workspace so AGENTS.md resolution remains correct."
-      },
-      "facts": [],
-      "fields": []
-    },
-    {
-      "id": "queue-session-reuse",
-      "title": "One Hour Session Reuse",
-      "cardType": "implementation",
-      "domainId": "next-features",
-      "x": 6574.828581334,
-      "y": 586.1112074257866,
-      "w": 360,
-      "h": 240,
-      "comment": {
-        "what": "Persist the real Codex thread id and last trigger timestamp under `.blueprinttool`. Reuse with `codex exec resume <sessionId>` only when the last trigger is less than one hour old."
-      },
-      "facts": [],
-      "fields": []
-    },
-    {
-      "id": "queue-resume-failure",
-      "title": "Resume Failure Recovery",
-      "cardType": "implementation",
-      "domainId": "next-features",
-      "x": 7014.828581334001,
-      "y": 586.1112074257866,
-      "w": 360,
-      "h": 240,
-      "comment": {
-        "what": "Parse resume failures from stderr and only invalidate the stored session when the error names the active resumed thread. Retry the same queue prompt once as a fresh session."
-      },
-      "facts": [],
-      "fields": []
-    },
-    {
-      "id": "queue-state-and-logs",
-      "title": "State And Logs",
-      "cardType": "implementation",
-      "domainId": "next-features",
-      "x": 7454.828581334001,
-      "y": 586.1112074257866,
-      "w": 360,
-      "h": 240,
-      "comment": {
-        "what": "Store queue-agent state, run metadata, and raw stdout/stderr JSONL in workspace-local `.blueprinttool/queue-agent/`. Keep parsed UI status derived from durable state instead of transient process memory."
-      },
-      "facts": [],
-      "fields": []
-    },
-    {
-      "id": "queue-process-tree",
-      "title": "Process Ownership",
-      "cardType": "implementation",
-      "domainId": "next-features",
-      "x": 7894.828581334,
-      "y": 586.1112074257866,
-      "w": 360,
-      "h": 240,
-      "comment": {
-        "what": "Own the full process tree for future cancel or replacement behavior. Killing only a wrapper can leave `codex exec` running, so descendant cleanup should target Codex children first."
-      },
-      "facts": [],
-      "fields": []
-    },
-    {
-      "id": "queue-tests",
-      "title": "Verification Plan",
-      "cardType": "implementation",
-      "domainId": "next-features",
-      "x": 6574.828581334,
-      "y": 916.1112074257863,
-      "w": 1680,
-      "h": 170,
-      "comment": {
-        "what": "Cover tab loading, empty-selection panel visibility, queue card rendering, trigger request states, command argument construction, one-hour reuse, resume-failure fresh retry, and workspace cwd preservation."
-      },
-      "facts": [],
-      "fields": []
-    },
     {
       "id": "card-c294607d-7a4a-4631-bc0b-7e67f84f84e1",
       "title": "Graphs",
@@ -217,7 +72,7 @@
       "title": "Processing Queue UX",
       "cardType": "note",
       "domainId": "next-features",
-      "status": "todo",
+      "status": "done",
       "x": -22.328173871080708,
       "y": 267.7779262134538,
       "w": 710,
@@ -263,7 +118,7 @@
       "x": -763.0192134492172,
       "y": 1364.6724265638068,
       "w": 710,
-      "h": 1210,
+      "h": 1368,
       "comment": {
         "contentFile": ".blueprinttool/cards/next-features/card-watchnotes-ledger-selection.md"
       }
@@ -274,8 +129,8 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 1598.5800792708835,
-      "y": 284.916663253425,
+      "x": 1523.6736084513034,
+      "y": 292.43946458516916,
       "w": 860,
       "h": 2351,
       "comment": {
@@ -288,8 +143,8 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "done",
-      "x": 2987.179540648251,
-      "y": 271.04442116694213,
+      "x": 3000.3197312191,
+      "y": 279.80454821417504,
       "w": 609,
       "h": 900,
       "comment": {
@@ -301,11 +156,11 @@
       "title": "Summary Data Model",
       "cardType": "note",
       "domainId": "next-features",
-      "status": "todo",
-      "x": 3645,
-      "y": 271,
+      "status": "done",
+      "x": 4392.340586532163,
+      "y": 283.32461052820486,
       "w": 790,
-      "h": 1795,
+      "h": 2261,
       "comment": {
         "contentFile": ".blueprinttool/cards/next-features/card-summary-data-model.md"
       }
@@ -316,65 +171,30 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 2989.0558666271145,
-      "y": 1219.0444211669421,
-      "w": 609,
-      "h": 1490,
+      "x": 3653.5127441761306,
+      "y": 283.79872756521405,
+      "w": 704,
+      "h": 1430,
       "comment": {
         "contentFile": ".blueprinttool/cards/next-features/card-summary-cli-maintenance.md"
       }
+    },
+    {
+      "id": "card-98417809-edb7-47c2-9d9d-9f076174c4dc",
+      "title": "New card",
+      "cardType": "note",
+      "domainId": "next-features",
+      "status": "todo",
+      "x": 5288.137741885933,
+      "y": 290.06745646596505,
+      "w": 708,
+      "h": 2563,
+      "comment": {
+        "contentFile": ".blueprinttool/cards/next-features/card-98417809-edb7-47c2-9d9d-9f076174c4dc.md"
+      }
     }
   ],
-  "relationships": [
-    {
-      "id": "rel-panel-source",
-      "source": "queue-panel-empty-selection",
-      "target": "queue-awaiting-cards-source",
-      "label": "reads"
-    },
-    {
-      "id": "rel-source-trigger",
-      "source": "queue-awaiting-cards-source",
-      "target": "queue-trigger-controller",
-      "label": "submits"
-    },
-    {
-      "id": "rel-trigger-launch",
-      "source": "queue-trigger-controller",
-      "target": "queue-codex-launch",
-      "label": "spawns"
-    },
-    {
-      "id": "rel-launch-reuse",
-      "source": "queue-codex-launch",
-      "target": "queue-session-reuse",
-      "label": "persists"
-    },
-    {
-      "id": "rel-reuse-recovery",
-      "source": "queue-session-reuse",
-      "target": "queue-resume-failure",
-      "label": "guards"
-    },
-    {
-      "id": "rel-recovery-logs",
-      "source": "queue-resume-failure",
-      "target": "queue-state-and-logs",
-      "label": "records"
-    },
-    {
-      "id": "rel-logs-process",
-      "source": "queue-state-and-logs",
-      "target": "queue-process-tree",
-      "label": "owns"
-    },
-    {
-      "id": "rel-process-tests",
-      "source": "queue-process-tree",
-      "target": "queue-tests",
-      "label": "verifies"
-    }
-  ],
+  "relationships": [],
   "positions": {},
   "cardEdits": {},
   "notes": {},
@@ -386,6 +206,7 @@
     "thread-card-watchnotes-lean-unanswered-model": ".blueprinttool/threads/next-features/thread-card-watchnotes-lean-unanswered-model.md",
     "thread-card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6": ".blueprinttool/threads/next-features/thread-card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6.md",
     "thread-card-summary-data-model": ".blueprinttool/threads/next-features/thread-card-summary-data-model.md",
-    "thread-card-summary-cli-maintenance": ".blueprinttool/threads/next-features/thread-card-summary-cli-maintenance.md"
+    "thread-card-summary-cli-maintenance": ".blueprinttool/threads/next-features/thread-card-summary-cli-maintenance.md",
+    "thread-card-98417809-edb7-47c2-9d9d-9f076174c4dc": ".blueprinttool/threads/next-features/thread-card-98417809-edb7-47c2-9d9d-9f076174c4dc.md"
   }
 }
