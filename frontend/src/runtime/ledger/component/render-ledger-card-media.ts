@@ -48,6 +48,9 @@ function dimensionsFor(source: string, imageSizes: LedgerCardImageSizes = {}): {
 
 function applyPersistedDimensions(element: HTMLElement, dimensions: { width?: number; height?: number }): void {
   if (dimensions.width) element.style.width = `${Math.max(96, dimensions.width)}px`;
+  if (dimensions.width && dimensions.height) {
+    element.style.setProperty('--ledger-card-media-aspect-ratio', `${Math.max(1, dimensions.width)} / ${Math.max(1, dimensions.height)}`);
+  }
 }
 
 function currentCardImageSizes(cardId: string): LedgerCardImageSizes {
