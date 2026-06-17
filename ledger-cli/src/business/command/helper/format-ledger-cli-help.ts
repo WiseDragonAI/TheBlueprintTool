@@ -17,7 +17,7 @@ export function formatLedgerCliHelp(): string {
     '      List threads whose latest meaningful note still needs an agent answer.',
     '',
     '  answer --ledger <file> --thread-id <id> (--message <text> | --message-file <file>)',
-    '      Append a short agent answer to a thread sidecar.',
+    '      Append a short agent answer to a thread content file.',
     '',
     '  mutate --ledger <file> [--mutation <file>] [--card-id <id>] [card options]',
     '      Persist targeted ledger edits.',
