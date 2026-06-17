@@ -14,11 +14,12 @@ import { readRequestBuffer } from './read-request-buffer.js';
 import { contentTypeFor } from './content-type-for.js';
 import { normalizeLedgerNotes } from './normalize-ledger-notes.js';
 import { relationshipReferencesCard } from '../../ledger/helper/relationship-references-card.js';
-import { duplicateCardContentFile, externalizeCardContent, hydrateLedgerCardContent, writeCardDescriptionFile } from '../../ledger/helper/card-content-file.js';
+import { deleteCardMarkdownImage, duplicateCardContentFile, externalizeCardContent, hydrateLedgerCardContent, sameMarkdownImageSource, writeCardDescriptionFile } from '../../ledger/helper/card-content-file.js';
 import { hydrateLedgerThreadNotes, stripHydratedThreadNotes, writeThreadNotesFile } from '../../ledger/helper/thread-content-file.js';
 import { watchCardContentFiles, type CardContentChange } from '../../refresh/helper/watch-card-content-files.js';
 
 type AnyRecord = Record<string, unknown>;
+type MutationError = { statusCode: number; body: AnyRecord };
 
 const blueprinttoolAssetPrefix = '/.blueprinttool/';
 const allowedBlueprinttoolAssetExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'];
@@ -254,6 +255,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           action?: string;
           card?: Record<string, unknown>;
           cardId?: string;
+          imageSrc?: string;
           cardPatch?: { id?: string; status?: string; title?: string; description?: string; imageSizes?: Record<string, { width?: number; height?: number }> };
           annotation?: Record<string, unknown>;
           relationship?: Record<string, unknown>;
@@ -273,6 +275,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           deletedNoteIds?: Record<string, string[]>;
           threadFiles?: Record<string, string>;
         } & AnyRecord;
+        let mutationError: MutationError | null = null;
         hydrateLedgerThreadNotes(ledger, blueprinttoolRoot);
         if ((mutation.action === 'create-zone' || mutation.action === 'create-group') && mutation.annotation?.id) {
           const id = String(mutation.annotation.id);
@@ -305,6 +308,26 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           delete notesByThread[`thread-${cardId}`];
           ledger.notes = notesByThread;
           if (ledger.threadFiles && typeof ledger.threadFiles === 'object') delete ledger.threadFiles[`thread-${cardId}`];
+        }
+        if (mutation.action === 'delete-card-image' && mutation.cardId && mutation.imageSrc) {
+          const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === mutation.cardId);
+          const imageSrc = String(mutation.imageSrc);
+          if (!card) {
+            mutationError = { statusCode: 404, body: { ok: false, error: 'Card not found.', cardId: mutation.cardId } };
+          } else {
+            const deletion = deleteCardMarkdownImage({ blueprinttoolRoot, card, imageSrc, ledgerPath });
+            if (!deletion.removedMarkdown) {
+              mutationError = { statusCode: 404, body: { ok: false, error: 'Image source not found in card markdown.', cardId: mutation.cardId, imageSrc } };
+            }
+            const imageSizes = card.imageSizes && typeof card.imageSizes === 'object' && !Array.isArray(card.imageSizes)
+              ? card.imageSizes as Record<string, unknown>
+              : undefined;
+            if (imageSizes) {
+              for (const key of Object.keys(imageSizes)) {
+                if (sameMarkdownImageSource(key, imageSrc)) delete imageSizes[key];
+              }
+            }
+          }
         }
         if (mutation.action === 'delete-zones') {
           const zoneIds = new Set(mutation.zoneIds ?? []);
@@ -435,6 +458,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           }));
           ledger.cards = (ledger.cards ?? []).concat(copiedCards);
           ledger.annotations = (ledger.annotations ?? []).concat(copiedAnnotations);
+        }
+        if (mutationError) {
+          response.statusCode = mutationError.statusCode;
+          response.end(JSON.stringify(mutationError.body));
+          return;
         }
         persistLedgerAndRespond(ledgerPath, ledger, response);
         return;

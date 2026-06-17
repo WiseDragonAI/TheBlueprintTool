@@ -12,6 +12,7 @@ import { confirmZoneDeletionController } from '../../zone/controller/confirm-zon
 import { deleteGroupController } from '../../group/controller/delete-group-controller.js';
 import { deleteZoneController } from '../../zone/controller/delete-zone-controller.js';
 import { deleteCardController } from '../../card/controller/delete-card-controller.js';
+import { deleteCardImageController } from '../../card/controller/delete-card-image-controller.js';
 import { deleteNoteController } from '../../thread/controller/delete-note-controller.js';
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
 import { resetActiveTool } from '../../toolbox/controller/reset-active-tool.js';
@@ -34,6 +35,8 @@ export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
       event.preventDefault();
       if (modal.dataset.confirmKind === 'note') {
         await deleteNoteController({ threadId: modal.dataset.threadId ?? state.threadId, noteId: modal.dataset.noteId ?? '' });
+      } else if (modal.dataset.confirmKind === 'card-image') {
+        await deleteCardImageController({ cardId: modal.dataset.cardId ?? '', imageSrc: modal.dataset.imageSrc ?? '' });
       } else if (modal.dataset.confirmKind === 'card') {
         await deleteCardController({ cardId: modal.dataset.cardId ?? '' });
       } else if (modal.dataset.confirmKind === 'group') {

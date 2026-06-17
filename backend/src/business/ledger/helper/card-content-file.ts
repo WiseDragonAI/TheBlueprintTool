@@ -2,7 +2,7 @@
  * WHAT: Reads and writes card markdown content files referenced from ledger JSON.
  * WHY: card bodies should be patchable as individual Markdown files while the browser keeps its hydrated runtime contract.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, extname, isAbsolute, relative, resolve, basename } from 'node:path';
 
 type AnyRecord = Record<string, unknown>;
@@ -22,6 +22,10 @@ function ledgerStem(ledgerPath: string): string {
 function isInside(parent: string, child: string): boolean {
   const inner = relative(parent, child);
   return Boolean(inner) && !inner.startsWith('..') && !isAbsolute(inner);
+}
+
+function isAllowedImageAsset(filePath: string): boolean {
+  return ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(extname(filePath).toLowerCase());
 }
 
 function commentFor(card: AnyRecord): AnyRecord {
@@ -60,6 +64,88 @@ export function writeCardDescriptionFile(input: { blueprinttoolRoot: string; car
   const nextComment: AnyRecord = { ...comment, contentFile };
   delete nextComment.what;
   input.card.comment = nextComment;
+}
+
+function readCardDescription(input: { blueprinttoolRoot: string; card: AnyRecord }): string {
+  const comment = commentFor(input.card);
+  const file = resolveCardContentFile(input.blueprinttoolRoot, comment.contentFile);
+  if (file && existsSync(file)) return readFileSync(file, 'utf8');
+  return typeof comment.what === 'string' ? comment.what : '';
+}
+
+function markdownImageSource(markdownImage: string): string {
+  const body = markdownImage.slice(markdownImage.indexOf('](') + 2, -1).trim();
+  if (body.startsWith('<')) {
+    const end = body.indexOf('>');
+    return end >= 0 ? body.slice(1, end) : '';
+  }
+  const quoted = body.match(/^"([^"]+)"|^'([^']+)'/);
+  if (quoted) return quoted[1] ?? quoted[2] ?? '';
+  return body.split(/\s+/)[0] ?? '';
+}
+
+function decodedImageSource(source: string): string {
+  try {
+    return decodeURIComponent(source);
+  } catch {
+    return source;
+  }
+}
+
+function canonicalWorkspaceImageSource(source: string): string {
+  const decodedSource = decodedImageSource(source).split('#')[0]?.split('?')[0] ?? '';
+  if (decodedSource.startsWith('/.blueprinttool/')) return decodedSource.slice(1);
+  if (decodedSource.startsWith('.blueprinttool/')) return decodedSource;
+  return decodedSource;
+}
+
+export function sameMarkdownImageSource(left: string, right: string): boolean {
+  return left === right || canonicalWorkspaceImageSource(left) === canonicalWorkspaceImageSource(right);
+}
+
+export function removeMarkdownImage(markdown: string, imageSrc: string): { markdown: string; removed: boolean } {
+  let removed = false;
+  const lines = markdown.split('\n');
+  const nextLines = lines.map((line) => {
+    if (removed) return line;
+    const imagePattern = /!\[[^\]\n]*\]\([^)\n]+\)/g;
+    const matches = Array.from(line.matchAll(imagePattern));
+    if (!matches.some((match) => sameMarkdownImageSource(markdownImageSource(match[0]), imageSrc))) return line;
+    removed = true;
+    const nextLine = line.replace(imagePattern, (token) => sameMarkdownImageSource(markdownImageSource(token), imageSrc) ? '' : token);
+    return nextLine.trim() ? nextLine : '';
+  });
+  return { markdown: nextLines.join('\n').replace(/\n{3,}/g, '\n\n'), removed };
+}
+
+function resolveWorkspaceImageFile(blueprinttoolRoot: string, imageSrc: string): string | null {
+  const sourcePath = canonicalWorkspaceImageSource(imageSrc);
+  const relativePath = sourcePath.startsWith('/.blueprinttool/')
+    ? sourcePath.slice('/.blueprinttool/'.length)
+    : sourcePath.startsWith('.blueprinttool/')
+      ? sourcePath.slice('.blueprinttool/'.length)
+      : '';
+  if (!relativePath) return null;
+  const file = resolve(blueprinttoolRoot, relativePath);
+  return isInside(blueprinttoolRoot, file) && isAllowedImageAsset(file) ? file : null;
+}
+
+export function deleteCardMarkdownImage(input: { blueprinttoolRoot: string; card: AnyRecord; imageSrc: string; ledgerPath: string }): { removedMarkdown: boolean; deletedFile: boolean } {
+  const description = readCardDescription({ blueprinttoolRoot: input.blueprinttoolRoot, card: input.card });
+  const removal = removeMarkdownImage(description, input.imageSrc);
+  if (!removal.removed) {
+    return { removedMarkdown: false, deletedFile: false };
+  }
+  writeCardDescriptionFile({
+    blueprinttoolRoot: input.blueprinttoolRoot,
+    card: input.card,
+    description: removal.markdown,
+    ledgerPath: input.ledgerPath,
+  });
+  const imageFile = resolveWorkspaceImageFile(input.blueprinttoolRoot, input.imageSrc);
+  const deletedFile = Boolean(imageFile && existsSync(imageFile));
+  if (imageFile && existsSync(imageFile)) unlinkSync(imageFile);
+  return { removedMarkdown: removal.removed, deletedFile };
 }
 
 export function externalizeCardContent(input: { blueprinttoolRoot: string; card: AnyRecord; ledgerPath: string }): void {

@@ -13,6 +13,9 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   const inlineParser = source('frontend/src/runtime/ledger/helper/parse-ledger-markdown-inline.ts');
   const renderer = source('frontend/src/runtime/ledger/component/render-ledger-card-markdown.ts');
   const mediaRenderer = source('frontend/src/runtime/ledger/component/render-ledger-card-media.ts');
+  const actionClick = source('frontend/src/runtime/input/controller/handle-action-click.ts');
+  const keyboard = source('frontend/src/runtime/input/controller/handle-keyboard.ts');
+  const deleteImageController = source('frontend/src/runtime/card/controller/delete-card-image-controller.ts');
   const mediaLayout = source('frontend/src/runtime/ledger/helper/sync-ledger-card-media-layout.ts');
   const mediaCarouselPersistence = source('frontend/src/runtime/ledger/helper/persist-ledger-card-media-carousel.ts');
   const titleRenderer = source('frontend/src/runtime/ledger/component/append-title-text.ts');
@@ -33,6 +36,17 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   assert.match(mediaRenderer, /const titleText = imageTitleFromSource\(image\.src\)\.trim\(\)/);
   assert.match(mediaRenderer, /document\.createElement\('figcaption'\)/);
   assert.match(mediaRenderer, /ledger-card-media-title/);
+  assert.match(mediaRenderer, /ledger-card-media-delete/);
+  assert.match(mediaRenderer, /dataset\.action = 'confirm-delete-card-image'/);
+  assert.match(mediaRenderer, /function updateMediaDeleteButton/);
+  assert.match(mediaRenderer, /button\.dataset\.imageSrc = image\.src/);
+  assert.match(mediaRenderer, /deleteButton\.addEventListener\('click', \(\) => \{\s*updateMediaDeleteButton\(deleteButton, block\.images, track\);\s*\}\)/);
+  assert.match(mediaRenderer, /nav\.replaceChildren\(previous, next, \.\.\.\(deleteButton \? \[deleteButton\] : \[\]\)\)/);
+  assert.match(actionClick, /confirmCardImageDeletionController/);
+  assert.match(actionClick, /deleteCardImageController/);
+  assert.match(deleteImageController, /clearCanvasMediaOverlay\(\{ reconcilePromotedGeometry: false \}\)/);
+  assert.match(deleteImageController, /commitActiveLedgerMutation\(\{ action: 'delete-card-image', cardId, imageSrc \}, \{ render: true \}\)/);
+  assert.match(keyboard, /modal\.dataset\.confirmKind === 'card-image'/);
   assert.match(mediaRenderer, /ledgerCardMediaCarouselStateId/);
   assert.match(mediaRenderer, /readLedgerCardMediaCarouselSlide/);
   assert.match(mediaRenderer, /saveLedgerCardMediaCarouselSlide/);
@@ -77,6 +91,7 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   assert.match(wheel, /\.ledger-card-media-carousel/);
   assert.match(wheel, /event\.preventDefault\(\)/);
   assert.match(wheel, /track\.scrollTo\(\{ left: nextIndex \* slideWidth, behavior: 'smooth' \}\)/);
+  assert.match(wheel, /card-image-carousel-wheel/);
   assert.match(titleRenderer, /node\.kind === 'image'/);
   assert.match(source('frontend/src/runtime/ledger/component/append-inline-nodes.ts'), /Math\.round\(frame\.offsetWidth\)/);
   assert.doesNotMatch(source('frontend/src/runtime/ledger/component/append-inline-nodes.ts'), /getBoundingClientRect\(\)\.(width|height)/);
@@ -85,6 +100,9 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   assert.match(css, /\.ledger-card-media-carousel \.ledger-card-media-track\s*{[^}]*scrollbar-width:\s*none;/s);
   assert.match(css, /\.ledger-card-media-slide\s*{[^}]*grid-template-rows:\s*minmax\(0, 1fr\) auto;[^}]*padding:[^}]*calc\(var\(--ledger-card-media-bottom-inset\) \+ var\(--ledger-card-media-slider-row-height\) \+ var\(--ledger-card-media-title-slider-gap\)\)/s);
   assert.match(css, /\.ledger-card-media-image\s*{[^}]*width:\s*var\(--ledger-card-media-contained-width, auto\);[^}]*height:\s*var\(--ledger-card-media-contained-height, auto\);[^}]*max-width:\s*100%;[^}]*max-height:\s*100%;[^}]*object-fit:\s*contain;[^}]*object-position:\s*center;/s);
+  assert.match(css, /\.ledger-card-media-nav \.ledger-card-media-delete\s*{[^}]*position:\s*absolute;[^}]*top:\s*8px;[^}]*right:\s*10px;[^}]*width:\s*24px;[^}]*height:\s*24px;[^}]*opacity:\s*1;/s);
+  assert.match(css, /\.ledger-card-media-nav \.ledger-card-media-delete::after\s*{[^}]*display:\s*none;/s);
+  assert.doesNotMatch(css, /\.ledger-card-media-shell:hover \.ledger-card-media-delete/);
   assert.match(css, /\.ledger-card-media-title\s*{[^}]*display:\s*block;[^}]*width:\s*100%;[^}]*min-height:\s*var\(--ledger-card-media-title-row-min-height\);[^}]*overflow-wrap:\s*anywhere;/s);
   assert.doesNotMatch(css, /\.ledger-card-media-shell:hover \.ledger-card-media-title/);
   assert.match(css, /\.ledger-card-media-progress\s*{[^}]*right:\s*28px;[^}]*bottom:\s*var\(--ledger-card-media-bottom-inset, 8px\);[^}]*left:\s*8px;/s);

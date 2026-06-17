@@ -146,6 +146,34 @@ function renderMediaSlide(image: LedgerCardImage, index: number, shell: HTMLElem
   return slide;
 }
 
+function updateMediaDeleteButton(button: HTMLButtonElement, images: LedgerCardImage[], track: HTMLElement): void {
+  const slideWidth = Math.max(1, track.clientWidth);
+  const index = Math.max(0, Math.min(images.length - 1, Math.round(track.scrollLeft / slideWidth)));
+  const image = images[index];
+  if (!image) return;
+  const titleText = imageTitleFromSource(image.src).trim();
+  button.dataset.imageSrc = image.src;
+  button.setAttribute('aria-label', `Delete ${titleText || image.alt || `image ${index + 1}`}`);
+}
+
+function renderMediaDeleteButton(block: Extract<LedgerMarkdownBlock, { kind: 'images' }>, options: LedgerCardMediaOptions, track: HTMLElement): HTMLButtonElement | null {
+  if (!options.cardId) return null;
+  const deleteButton = document.createElement('button');
+  deleteButton.className = 'ledger-card-media-delete terminal-button terminal-button--compact';
+  deleteButton.type = 'button';
+  deleteButton.textContent = 'X';
+  deleteButton.dataset.action = 'confirm-delete-card-image';
+  deleteButton.dataset.cardId = options.cardId;
+  deleteButton.addEventListener('pointerdown', (event) => {
+    event.stopPropagation();
+  });
+  deleteButton.addEventListener('click', () => {
+    updateMediaDeleteButton(deleteButton, block.images, track);
+  });
+  updateMediaDeleteButton(deleteButton, block.images, track);
+  return deleteButton;
+}
+
 function carouselStateId(block: Extract<LedgerMarkdownBlock, { kind: 'images' }>, options: LedgerCardMediaOptions, isCarousel: boolean): string {
   if (!isCarousel) return '';
   return ledgerCardMediaCarouselStateId({
@@ -206,6 +234,8 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
   track.addEventListener('scroll', () => {
     syncCarouselSlider(shell, track);
     saveCurrentCarouselSlide(shell, persistedCarouselStateId);
+    const deleteButton = shell.querySelector('.ledger-card-media-delete') as HTMLButtonElement | null;
+    if (deleteButton) updateMediaDeleteButton(deleteButton, block.images, track);
     scheduleCanvasMediaOverlayRender();
   }, { passive: true });
   for (const [index, image] of block.images.entries()) {
@@ -253,7 +283,8 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
       scrollCarousel(shell, track, 1, persistedCarouselStateId);
     });
 
-    nav.replaceChildren(previous, next);
+    const deleteButton = renderMediaDeleteButton(block, options, track);
+    nav.replaceChildren(previous, next, ...(deleteButton ? [deleteButton] : []));
     shell.appendChild(nav);
   }
 

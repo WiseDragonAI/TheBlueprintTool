@@ -13,6 +13,7 @@ export function confirmGroupDeletionController(input: { groupId?: string } = {})
   if (input.groupId) modal.dataset.groupId = input.groupId;
   else delete modal.dataset.groupId;
   delete modal.dataset.cardId;
+  delete modal.dataset.imageSrc;
   delete modal.dataset.threadId;
   delete modal.dataset.noteId;
   const message = modal.querySelector('p');

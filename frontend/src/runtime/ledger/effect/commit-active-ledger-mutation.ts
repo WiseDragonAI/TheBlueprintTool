@@ -10,9 +10,10 @@ import { mergeLocalThreadNotes } from '../helper/merge-local-thread-notes.js';
 import { refreshZoneAttributionCache } from '../helper/zone-attribution-cache.js';
 
 export type ActiveLedgerMutation = {
-  action: 'create-card' | 'patch-card' | 'delete-card' | 'create-zone' | 'create-group' | 'create-relationship' | 'delete-zones' | 'delete-relationships' | 'patch-geometry' | 'patch-region' | 'append-note' | 'update-note' | 'delete-note' | 'paste-selection';
+  action: 'create-card' | 'patch-card' | 'delete-card' | 'delete-card-image' | 'create-zone' | 'create-group' | 'create-relationship' | 'delete-zones' | 'delete-relationships' | 'patch-geometry' | 'patch-region' | 'append-note' | 'update-note' | 'delete-note' | 'paste-selection';
   card?: Record<string, unknown>;
   cardId?: string;
+  imageSrc?: string;
   cardPatch?: {
     id: string;
     status?: 'todo' | 'done';

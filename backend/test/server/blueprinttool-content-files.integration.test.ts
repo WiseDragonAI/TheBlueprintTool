@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
@@ -94,6 +94,62 @@ test('blueprinttool server creates card and thread Markdown content files for ne
     assert.equal(persisted.notes['thread-card-new'], undefined);
     assert.equal(readFileSync(join(workspace, '.blueprinttool', 'cards', 'specs', 'card-new.md'), 'utf8'), '');
     assert.equal(readFileSync(join(workspace, '.blueprinttool', 'threads', 'specs', 'thread-card-new.md'), 'utf8'), '\n');
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('blueprinttool server deletes a card markdown image and its workspace asset', async () => {
+  const { endpoint, server, workspace } = await startContentFileServer();
+  const imageSource = '.blueprinttool/ui/carousel-delete.png';
+  const imageFile = join(workspace, '.blueprinttool', 'ui', 'carousel-delete.png');
+
+  try {
+    mkdirSync(join(workspace, '.blueprinttool', 'ui'), { recursive: true });
+    writeFileSync(imageFile, 'png');
+    writeFileSync(join(workspace, '.blueprinttool', 'cards', 'specs', 'card-a.md'), [
+      'Before',
+      `![Delete](${imageSource})`,
+      '![Keep](.blueprinttool/ui/carousel-keep.png)',
+      'After',
+    ].join('\n'));
+
+    const deleteResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'delete-card-image', cardId: 'card-a', imageSrc: `/${imageSource}` }),
+    });
+    assert.equal(deleteResponse.ok, true);
+    const patched = await deleteResponse.json() as { cards: Array<Record<string, any>> };
+    assert.doesNotMatch(patched.cards[0].comment.what, /carousel-delete\.png/);
+    assert.match(patched.cards[0].comment.what, /carousel-keep\.png/);
+    assert.equal(existsSync(imageFile), false);
+    assert.doesNotMatch(readFileSync(join(workspace, '.blueprinttool', 'cards', 'specs', 'card-a.md'), 'utf8'), /carousel-delete\.png/);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('blueprinttool server rejects image deletion when the source is not present in markdown', async () => {
+  const { endpoint, server, workspace } = await startContentFileServer();
+  const imageFile = join(workspace, '.blueprinttool', 'ui', 'missing-from-markdown.png');
+
+  try {
+    mkdirSync(join(workspace, '.blueprinttool', 'ui'), { recursive: true });
+    writeFileSync(imageFile, 'png');
+    writeFileSync(join(workspace, '.blueprinttool', 'cards', 'specs', 'card-a.md'), '![Keep](.blueprinttool/ui/keep.png)');
+
+    const deleteResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'delete-card-image', cardId: 'card-a', imageSrc: '.blueprinttool/ui/missing-from-markdown.png' }),
+    });
+
+    assert.equal(deleteResponse.status, 404);
+    assert.equal(existsSync(imageFile), true);
+    assert.match(readFileSync(join(workspace, '.blueprinttool', 'cards', 'specs', 'card-a.md'), 'utf8'), /keep\.png/);
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     rmSync(workspace, { recursive: true, force: true });

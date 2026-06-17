@@ -13,6 +13,8 @@ import { confirmGroupDeletionController } from '../../group/controller/confirm-g
 import { deleteGroupController } from '../../group/controller/delete-group-controller.js';
 import { confirmCardDeletionController } from '../../card/controller/confirm-card-deletion-controller.js';
 import { deleteCardController } from '../../card/controller/delete-card-controller.js';
+import { confirmCardImageDeletionController } from '../../card/controller/confirm-card-image-deletion-controller.js';
+import { deleteCardImageController } from '../../card/controller/delete-card-image-controller.js';
 import { createNoteController } from '../../thread/controller/create-note-controller.js';
 import { deleteNoteController } from '../../thread/controller/delete-note-controller.js';
 import { confirmNoteDeletionController } from '../../thread/controller/confirm-note-deletion-controller.js';
@@ -79,6 +81,13 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     confirmCardDeletionController({ cardId: actionTarget.dataset.cardId ?? '' });
     return;
   }
+  if (action === 'confirm-delete-card-image') {
+    confirmCardImageDeletionController({
+      cardId: actionTarget.dataset.cardId ?? '',
+      imageSrc: actionTarget.dataset.imageSrc ?? ''
+    });
+    return;
+  }
   if (action === 'toggle-card-status') {
     const status = actionTarget.dataset.nextStatus === 'todo' ? 'todo' : 'done';
     await toggleCardStatusController({ cardId: actionTarget.dataset.cardId ?? '', status });
@@ -86,6 +95,14 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
   }
   if (action === 'delete-card') {
     await deleteCardController({ cardId: actionTarget.dataset.cardId ?? modal.dataset.cardId ?? '' });
+    renderThreadPanel();
+    return;
+  }
+  if (action === 'delete-card-image') {
+    await deleteCardImageController({
+      cardId: actionTarget.dataset.cardId ?? modal.dataset.cardId ?? '',
+      imageSrc: actionTarget.dataset.imageSrc ?? modal.dataset.imageSrc ?? ''
+    });
     renderThreadPanel();
     return;
   }
