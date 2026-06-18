@@ -11,6 +11,8 @@ import { renderLedgerCardTable } from './render-ledger-card-table.js';
 type LedgerCardMarkdownOptions = {
   cardId?: string;
   imageSizes?: LedgerCardImageSizes;
+  mediaSurface?: 'card' | 'thread';
+  onImageResize?: (source: string, dimensions: { width: number; height: number }) => void;
 };
 
 export function renderLedgerCardMarkdown(markdown: string, options: LedgerCardMarkdownOptions = {}): HTMLElement {

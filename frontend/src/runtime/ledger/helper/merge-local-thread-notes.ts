@@ -6,6 +6,11 @@ import { state } from '../../state.js';
 import { normalizeLedgerNotes } from './normalize-ledger-notes.js';
 import { normalizeDeletedNoteIds } from './normalize-deleted-note-ids.js';
 
+function imageSizesRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return Object.keys(value).length > 0 ? value as Record<string, unknown> : null;
+}
+
 export function mergeLocalThreadNotes(ledger: Record<string, any> | null): Record<string, any> | null {
   if (!ledger || typeof ledger !== 'object') return ledger;
   const localNotes = state.activeLedger ? normalizeLedgerNotes(state.activeLedger) : undefined;
@@ -27,11 +32,19 @@ export function mergeLocalThreadNotes(ledger: Record<string, any> | null): Recor
     const deletedSet = new Set((nextDeleted[threadId] ?? []).map((id) => String(id)));
     const merged = Array.isArray(nextNotes[threadId]) ? [...nextNotes[threadId]] : [];
     for (const localNote of notes) {
-      if (!localNote?.optimistic) continue;
       const noteId = String(localNote.id ?? '');
       if (!noteId) continue;
       if (deletedSet.has(noteId)) continue;
+      const localImageSizes = imageSizesRecord(localNote.imageSizes);
       const existingIndex = merged.findIndex((note) => String(note.id ?? '') === noteId);
+      if (localImageSizes && existingIndex >= 0) {
+        const existingImageSizes = imageSizesRecord(merged[existingIndex].imageSizes) ?? {};
+        merged[existingIndex] = {
+          ...merged[existingIndex],
+          imageSizes: { ...existingImageSizes, ...localImageSizes }
+        };
+      }
+      if (!localNote?.optimistic) continue;
       if (existingIndex >= 0) merged[existingIndex] = { ...merged[existingIndex], ...localNote };
       else merged.push(localNote);
     }

@@ -4,8 +4,48 @@
  */
 import { state } from '../../state.js';
 import { renderLedgerCardMarkdown } from '../../ledger/component/render-ledger-card-markdown.js';
+import { sendActiveLedgerMutation } from '../../ledger/effect/send-active-ledger-mutation.js';
 import { deletedNoteIdSet } from '../../ledger/helper/normalize-deleted-note-ids.js';
 import { expireStaleVoiceTranscription, scheduleVoiceTranscriptionTimeout } from '../../voice/helper/expire-stale-voice-transcription.js';
+
+type ThreadImageSizes = Record<string, { width?: number; height?: number }>;
+
+const pendingThreadImageSizeTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function threadImageSizes(value: unknown): ThreadImageSizes {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const sizes: ThreadImageSizes = {};
+  for (const [source, dimensions] of Object.entries(value as Record<string, unknown>)) {
+    if (!dimensions || typeof dimensions !== 'object' || Array.isArray(dimensions)) continue;
+    const width = Number((dimensions as Record<string, unknown>).width);
+    const height = Number((dimensions as Record<string, unknown>).height);
+    sizes[source] = {
+      width: Number.isFinite(width) && width > 0 ? width : undefined,
+      height: Number.isFinite(height) && height > 0 ? height : undefined
+    };
+  }
+  return sizes;
+}
+
+function persistThreadImageSize(input: { threadId: string; note: Record<string, unknown>; source: string; width: number; height: number }): void {
+  const noteId = String(input.note.id ?? '');
+  if (!input.threadId || !noteId) return;
+  const imageSizes = threadImageSizes(input.note.imageSizes);
+  const existing = imageSizes[input.source] ?? {};
+  if (existing.width === input.width && existing.height === input.height) return;
+  imageSizes[input.source] = { width: input.width, height: input.height };
+  input.note.imageSizes = imageSizes;
+  const timerKey = `${input.threadId}:${noteId}:${input.source}`;
+  const pending = pendingThreadImageSizeTimers.get(timerKey);
+  if (pending) clearTimeout(pending);
+  pendingThreadImageSizeTimers.set(timerKey, setTimeout(() => {
+    pendingThreadImageSizeTimers.delete(timerKey);
+    void sendActiveLedgerMutation({
+      action: 'update-note',
+      note: { id: noteId, threadId: input.threadId, imageSizes: threadImageSizes(input.note.imageSizes) }
+    });
+  }, 240));
+}
 
 export function renderThreadNotes(): void {
   const existing = document.querySelector('.thread-note-list') as HTMLElement | null;
@@ -28,7 +68,19 @@ export function renderThreadNotes(): void {
     const retryable = Boolean(note.voiceFileRef) && /failed|not configured|unavailable/.test(normalizedStatus);
     const item = document.createElement('li');
     item.className = ['thread-note', note.voiceFileRef ? 'voice-note' : '', note.optimistic ? 'is-optimistic' : '', busy ? 'is-busy' : '', retryable ? 'is-retryable' : '', agentOwned ? 'is-agent' : 'is-operator'].filter(Boolean).join(' ');
-    const body = renderLedgerCardMarkdown(String(note.message ?? note.body ?? ''));
+    const body = renderLedgerCardMarkdown(String(note.message ?? note.body ?? ''), {
+      imageSizes: threadImageSizes(note.imageSizes),
+      mediaSurface: 'thread',
+      onImageResize: (source, dimensions) => {
+        persistThreadImageSize({
+          threadId: state.threadId,
+          note,
+          source,
+          width: dimensions.width,
+          height: dimensions.height
+        });
+      }
+    });
     body.classList.add('thread-note-message');
     const meta = document.createElement('span');
     meta.className = 'thread-note-meta';

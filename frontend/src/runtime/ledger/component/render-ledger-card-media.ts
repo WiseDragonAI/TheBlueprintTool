@@ -21,6 +21,8 @@ export type LedgerCardImageSizes = Record<string, { width?: number; height?: num
 type LedgerCardMediaOptions = {
   cardId?: string;
   imageSizes?: LedgerCardImageSizes;
+  mediaSurface?: 'card' | 'thread';
+  onImageResize?: (source: string, dimensions: { width: number; height: number }) => void;
 };
 
 const pendingResizeTimers = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
@@ -67,6 +69,20 @@ function mediaLocalMaxWidth(element: HTMLElement): number {
   return Math.max(1, element.parentElement?.clientWidth || element.offsetWidth || 1);
 }
 
+function persistImageResize(element: HTMLElement, options: LedgerCardMediaOptions, source: string, width: number, height: number): void {
+  if (!width || !height) return;
+  if (options.onImageResize) {
+    options.onImageResize(source, { width, height });
+    return;
+  }
+  if (!options.cardId) return;
+  const imageSizes = currentCardImageSizes(options.cardId);
+  const existing = imageSizes[source] ?? {};
+  if (existing.width === width && existing.height === height) return;
+  imageSizes[source] = { width, height };
+  void commitActiveLedgerMutation({ action: 'patch-card', cardPatch: { id: options.cardId, imageSizes } });
+}
+
 function watchImageResize(element: HTMLElement, options: LedgerCardMediaOptions, source: string): void {
   if (!options.cardId || typeof ResizeObserver === 'undefined') return;
   let initialized = false;
@@ -86,14 +102,72 @@ function watchImageResize(element: HTMLElement, options: LedgerCardMediaOptions,
     const previous = pendingResizeTimers.get(element);
     if (previous) clearTimeout(previous);
     pendingResizeTimers.set(element, setTimeout(() => {
-      const imageSizes = currentCardImageSizes(options.cardId ?? '');
-      const existing = imageSizes[source] ?? {};
-      if (existing.width === width && existing.height === height) return;
-      imageSizes[source] = { width, height };
-      void commitActiveLedgerMutation({ action: 'patch-card', cardPatch: { id: options.cardId ?? '', imageSizes } });
+      persistImageResize(element, options, source, width, height);
     }, 350));
   });
   observer.observe(element);
+}
+
+function renderThreadImageResizeHandle(element: HTMLElement, options: LedgerCardMediaOptions, source: string): HTMLElement | null {
+  if (!options.onImageResize) return null;
+  const handle = document.createElement('div');
+  handle.className = 'ledger-card-media-thread-resize';
+  handle.setAttribute('aria-hidden', 'true');
+  const aspectRatio = () => {
+    const configured = element.style.getPropertyValue('--ledger-card-media-aspect-ratio').trim();
+    const ratio = configured.match(/^([0-9.]+)\s*\/\s*([0-9.]+)$/);
+    if (ratio) {
+      const width = Number(ratio[1]);
+      const height = Number(ratio[2]);
+      if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) return width / height;
+    }
+    const measured = element.offsetWidth && element.offsetHeight ? element.offsetWidth / element.offsetHeight : 0;
+    return Number.isFinite(measured) && measured > 0 ? measured : 4 / 3;
+  };
+  const maxThreadWidth = () => {
+    const note = element.closest('.thread-note') as HTMLElement | null;
+    const list = element.closest('.thread-note-list') as HTMLElement | null;
+    const listWidth = list?.clientWidth || note?.parentElement?.clientWidth || element.parentElement?.clientWidth || element.offsetWidth || 320;
+    const noteMax = note?.classList.contains('is-agent') ? Math.min(listWidth * 0.92, 640) : Math.min(listWidth * 0.86, 520);
+    const style = note ? getComputedStyle(note) : null;
+    const horizontalPadding = style ? (Number.parseFloat(style.paddingLeft) || 0) + (Number.parseFloat(style.paddingRight) || 0) : 0;
+    return Math.max(96, Math.floor(noteMax - horizontalPadding));
+  };
+  const persistIntendedSize = (width: number) => {
+    const height = Math.max(1, Math.round(width / aspectRatio()));
+    persistImageResize(element, options, source, width, height);
+  };
+  handle.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = Math.max(1, element.offsetWidth);
+    handle.setPointerCapture?.(event.pointerId);
+    const resize = (moveEvent: PointerEvent) => {
+      moveEvent.preventDefault();
+      moveEvent.stopPropagation();
+      const width = Math.min(maxThreadWidth(), Math.max(96, Math.round(startWidth + moveEvent.clientX - startX)));
+      element.style.maxWidth = 'none';
+      element.style.width = `${width}px`;
+      persistIntendedSize(width);
+    };
+    const finish = (finishEvent: PointerEvent) => {
+      finishEvent.preventDefault();
+      finishEvent.stopPropagation();
+      handle.removeEventListener('pointermove', resize);
+      handle.removeEventListener('pointerup', finish);
+      handle.removeEventListener('pointercancel', finish);
+      handle.releasePointerCapture?.(finishEvent.pointerId);
+      const width = Math.min(maxThreadWidth(), Math.max(96, Math.round(element.offsetWidth)));
+      element.style.maxWidth = 'none';
+      element.style.width = `${width}px`;
+      persistIntendedSize(width);
+    };
+    handle.addEventListener('pointermove', resize);
+    handle.addEventListener('pointerup', finish);
+    handle.addEventListener('pointercancel', finish);
+  });
+  return handle;
 }
 
 function applyImageAspectRatio(shell: HTMLElement, image: HTMLImageElement): void {
@@ -113,7 +187,7 @@ function imageTitleFromSource(source: string): string {
   }
 }
 
-function renderMediaSlide(image: LedgerCardImage, index: number, shell: HTMLElement): HTMLElement {
+function renderMediaSlide(image: LedgerCardImage, index: number, shell: HTMLElement, options: LedgerCardMediaOptions): HTMLElement {
   const slide = document.createElement('figure');
   slide.className = 'ledger-card-media-slide';
   slide.setAttribute('aria-label', image.alt || `Image ${index + 1}`);
@@ -131,8 +205,10 @@ function renderMediaSlide(image: LedgerCardImage, index: number, shell: HTMLElem
     if (index === 0) {
       applyImageAspectRatio(shell, element);
     }
-    scheduleLedgerCardMediaLayout(shell);
-    scheduleCanvasMediaOverlayRender();
+    if (options.mediaSurface !== 'thread') {
+      scheduleLedgerCardMediaLayout(shell);
+      scheduleCanvasMediaOverlayRender();
+    }
   }, { once: true });
   if (index === 0 && element.complete) applyImageAspectRatio(shell, element);
 
@@ -217,16 +293,19 @@ function scrollCarousel(shell: HTMLElement, track: HTMLElement, direction: -1 | 
 export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind: 'images' }>, options: LedgerCardMediaOptions = {}): HTMLElement {
   const isCarousel = block.images.length > 1;
   const persistedCarouselStateId = carouselStateId(block, options, isCarousel);
+  const mediaSurface = options.mediaSurface ?? 'card';
   const shell = document.createElement('div');
-  shell.className = isCarousel
-    ? 'ledger-card-media-shell ledger-card-media-carousel'
-    : 'ledger-card-media-shell ledger-card-media-single';
+  shell.className = [
+    'ledger-card-media-shell',
+    isCarousel ? 'ledger-card-media-carousel' : 'ledger-card-media-single',
+    mediaSurface === 'thread' ? 'ledger-card-media-thread' : ''
+  ].filter(Boolean).join(' ');
   shell.dataset.ledgerCardMedia = 'true';
   shell.dataset.wheelCapture = 'true';
   const sizeSource = block.images[0]?.src ?? '';
   shell.dataset.imageSizeId = sizeSource;
   applyPersistedDimensions(shell, dimensionsFor(sizeSource, options.imageSizes));
-  watchImageResize(shell, options, sizeSource);
+  if (mediaSurface !== 'thread') watchImageResize(shell, options, sizeSource);
 
   const track = document.createElement('div');
   track.className = 'ledger-card-media-track';
@@ -236,14 +315,18 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
     saveCurrentCarouselSlide(shell, persistedCarouselStateId);
     const deleteButton = shell.querySelector('.ledger-card-media-delete') as HTMLButtonElement | null;
     if (deleteButton) updateMediaDeleteButton(deleteButton, block.images, track);
-    scheduleCanvasMediaOverlayRender();
+    if (mediaSurface !== 'thread') scheduleCanvasMediaOverlayRender();
   }, { passive: true });
   for (const [index, image] of block.images.entries()) {
-    track.appendChild(renderMediaSlide(image, index, shell));
+    track.appendChild(renderMediaSlide(image, index, shell, options));
   }
   shell.appendChild(track);
-  watchContainedImageSizing(shell);
-  scheduleLedgerCardMediaLayout(shell);
+  const threadResizeHandle = mediaSurface === 'thread' ? renderThreadImageResizeHandle(shell, options, sizeSource) : null;
+  if (threadResizeHandle) shell.appendChild(threadResizeHandle);
+  if (mediaSurface !== 'thread') {
+    watchContainedImageSizing(shell);
+    scheduleLedgerCardMediaLayout(shell);
+  }
 
   if (isCarousel) {
     const progress = document.createElement('div');

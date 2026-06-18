@@ -46,6 +46,7 @@ export type ActiveLedgerMutation = {
     transcriptionStartedAt?: string;
     source?: string;
     error?: string;
+    imageSizes?: Record<string, { width?: number; height?: number }>;
   };
   selection?: {
     cardIds: string[];

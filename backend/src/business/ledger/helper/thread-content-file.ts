@@ -54,6 +54,7 @@ function metadataFor(note: AnyRecord): AnyRecord {
   for (const key of ['id', 'timestamp', 'voiceFileRef', 'status', 'transcriptionStartedAt', 'error']) {
     if (typeof note[key] === 'string' && note[key]) metadata[key] = note[key];
   }
+  if (isRecord(note.imageSizes) && Object.keys(note.imageSizes).length > 0) metadata.imageSizes = note.imageSizes;
   return metadata;
 }
 

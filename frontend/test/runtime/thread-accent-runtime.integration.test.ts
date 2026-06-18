@@ -6,6 +6,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { clampCardCodeColor } from '../../src/runtime/card/effect/render-card-zone-colors.js';
+import { mergeLocalThreadNotes } from '../../src/runtime/ledger/helper/merge-local-thread-notes.js';
+import { state } from '../../src/runtime/state.js';
 import { colorToRgbChannels, lightenColorInHsv } from '../../src/runtime/thread/helper/color-to-rgb-channels.js';
 import { resolveThreadTargetAccent } from '../../src/runtime/thread/helper/resolve-thread-target-accent.js';
 
@@ -35,6 +37,8 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   const colorRuntime = readFileSync(new URL('frontend/src/runtime/card/effect/render-card-zone-colors.ts', root), 'utf8');
   const controlsCss = readFileSync(new URL('frontend/assets/canvas/terminal-chat-controls.css', root), 'utf8');
   const accentEffect = readFileSync(new URL('frontend/src/runtime/thread/effect/apply-thread-accent.ts', root), 'utf8');
+  const threadNotesRenderer = readFileSync(new URL('frontend/src/runtime/thread/effect/render-thread-notes.ts', root), 'utf8');
+  const mediaRenderer = readFileSync(new URL('frontend/src/runtime/ledger/component/render-ledger-card-media.ts', root), 'utf8');
   assert.match(shellCss, /-34px 0 68px rgba\(0, 0, 0, 0\.86\)/);
   assert.match(threadCss, /voice-panel[\s\S]*--thread-accent/);
   assert.match(threadCss, /thread-panel \.chat[\s\S]*padding: 18px 20px 28px/);
@@ -50,6 +54,9 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   assert.match(threadCss, /thread-note\s*{[\s\S]*min-width: 0;[\s\S]*max-width: min\(86%, 520px\)/);
   assert.match(threadCss, /thread-note-message\s*{[\s\S]*min-width: 0;[\s\S]*max-width: 100%;/);
   assert.match(threadCss, /thread-note-message \.ledger-card-body,[\s\S]*thread-note-message \.ledger-card-table-scroll\s*{[\s\S]*max-width: 100%;/);
+  assert.match(threadCss, /thread-note-message \.ledger-card-media-thread\s*{[\s\S]*width: min\(320px, 100%\);[\s\S]*max-width: none;[\s\S]*resize: none;/);
+  assert.match(threadCss, /thread-note-message \.ledger-card-media-thread-resize\s*{[\s\S]*cursor: ew-resize;[\s\S]*touch-action: none;/);
+  assert.match(threadCss, /thread-note-message \.ledger-card-media-thread \.ledger-card-media-image\s*{[\s\S]*width: 100%;[\s\S]*height: 100%;/);
   assert.match(threadCss, /--card-code-color: var\(--thread-code-color/);
   assert.match(threadCss, /thread-note-delete\.terminal-button[\s\S]*width: 24px/);
   assert.match(threadCss, /thread-draft[\s\S]*border: 0/);
@@ -65,4 +72,46 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   assert.match(accentEffect, /--card-code-color/);
   assert.match(accentEffect, /--voice-graph-secondary/);
   assert.match(accentEffect, /inspector\?\.style\.setProperty\('--thread-accent'/);
+  assert.match(threadNotesRenderer, /mediaSurface: 'thread'/);
+  assert.match(threadNotesRenderer, /imageSizes: threadImageSizes\(note\.imageSizes\)/);
+  assert.match(threadNotesRenderer, /sendActiveLedgerMutation\(\{[\s\S]*action: 'update-note'[\s\S]*imageSizes/);
+  assert.doesNotMatch(threadNotesRenderer, /input\.note\.optimistic\)\s*return/);
+  assert.match(mediaRenderer, /mediaSurface !== 'thread'[\s\S]*watchContainedImageSizing\(shell\)/);
+  assert.match(mediaRenderer, /renderThreadImageResizeHandle\(shell, options, sizeSource\)/);
+});
+
+test('thread note image resize survives stale server ledger merges', () => {
+  const previousLedger = state.activeLedger;
+  try {
+    state.activeLedger = {
+      notes: {
+        'thread-card-a': [
+          {
+            id: 'note-image',
+            role: 'operator',
+            message: '![Image](.blueprinttool/thread/image.png)',
+            imageSizes: {
+              '.blueprinttool/thread/image.png': { width: 184, height: 92 }
+            }
+          }
+        ]
+      }
+    };
+    const merged = mergeLocalThreadNotes({
+      notes: {
+        'thread-card-a': [
+          {
+            id: 'note-image',
+            role: 'operator',
+            message: '![Image](.blueprinttool/thread/image.png)'
+          }
+        ]
+      }
+    });
+    assert.deepEqual(merged?.notes['thread-card-a'][0].imageSizes, {
+      '.blueprinttool/thread/image.png': { width: 184, height: 92 }
+    });
+  } finally {
+    state.activeLedger = previousLedger;
+  }
 });

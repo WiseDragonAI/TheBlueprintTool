@@ -155,6 +155,17 @@ test('blueprinttool canvas mutations are applied by the authoritative server led
     const noteLedger = await appendNoteResponse.json() as { notes: Record<string, Array<Record<string, unknown>>> };
     assert.equal(noteLedger.notes['thread-card-a'].length, 1);
     assert.equal(noteLedger.notes['thread-card-a'][0].message, 'server note');
+    const textNoteId = String(noteLedger.notes['thread-card-a'][0].id ?? '');
+
+    const updateNoteImageSizeResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'update-note', note: { id: textNoteId, threadId: 'thread-card-a', imageSizes: { '.blueprinttool/thread-images/thread-card-a/paste.png': { width: 288, height: 162 } } } })
+    });
+    assert.equal(updateNoteImageSizeResponse.ok, true);
+    const noteImageSizeLedger = await updateNoteImageSizeResponse.json() as { notes: Record<string, Array<Record<string, unknown>>> };
+    assert.deepEqual(noteImageSizeLedger.notes['thread-card-a'][0].imageSizes, { '.blueprinttool/thread-images/thread-card-a/paste.png': { width: 288, height: 162 } });
+    assert.match(readFileSync(join(workspace, '.blueprinttool', 'threads', 'specs', 'thread-card-a.md'), 'utf8'), /"imageSizes":\{".blueprinttool\/thread-images\/thread-card-a\/paste.png":\{"width":288,"height":162\}\}/);
 
     const appendVoiceNoteResponse = await fetch(endpoint, {
       method: 'PATCH',
