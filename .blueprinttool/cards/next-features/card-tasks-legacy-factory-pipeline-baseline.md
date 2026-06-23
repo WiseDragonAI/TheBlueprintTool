@@ -1,41 +1,57 @@
-## A. Existing Pipeline Baseline
+## A. Correct Existing Baseline
 
-1. **State model:** DroidFactory already treated `GitLab issues + labels` as the workflow state machine. The documented lifecycle used `status:*` labels such as `status:todo`, `status:awaiting`, `status:needs_review`, `status:accepted`, and `status:done`, plus `proto:*` labels such as `proto:feature_overview`, `proto:research`, `proto:system`, `proto:task`, and `proto:bug`.
-2. **Role pipeline:** The intended stage chain was `SALES_REP -> RESEARCH_PLANNER -> RESEARCHER -> RESEARCH_MASTER -> PRODUCT_MANAGER -> SYSTEM_ENGINEER -> CTO -> IMPLEMENTATION -> STABILIZATION`, with each role owning a prompt and producing a durable artifact before the next stage.
-3. **Runner concept:** The prior runner contract centered on `agent-runner`, role prompts, repo-local MCP configuration, Codex or Claude full-auto execution, and issue content as the user prompt.
-4. **Human gates:** The docs explicitly required visible human blocking points, visible stage transitions, and verification gates before merge readiness.
-5. **Durable outputs:** Issues, issue notes, wiki pages, prompts, test artifacts, and worktree evidence were meant to be durable handoff artifacts instead of transient chat context.
-6. **Run records:** `.droidmaster/test-mcp/finished/*.json` already stores task execution records with `run_id`, `root_dir`, `cwd`, `domains`, selectors, `scope_summary`, per-domain status, logs, summary paths, artifact directories, queue timestamps, heartbeats, and deadlines.
-
----
-
-## B. Existing Operator Surfaces
-
-1. **Operator MCP:** DroidFleet already contains operator MCP surfaces for `ui.progress`, `ui.file_ref`, `ui.image_ref`, `ui.url_ref`, approval-style events, and file-refresh events.
-2. **Task visibility:** The app already contains conversation/tool-call rendering and a git tree/file panel capable of opening working-tree diffs and commit diffs through backend routes.
-3. **Diff infrastructure:** The backend already exposes git diff behavior through routes such as `/git/diff` and `/git/commit-diff`, with parsing support for `git diff-tree` file lists.
-4. **Test runner telemetry:** The test MCP scheduler already records queued and finished runs with log paths, last heartbeat, last line, status, and artifact locations.
-5. **TUI/reporting idea:** Factory docs already called out KPI and TUI reporting requirements for elapsed time, stage attribution, quality outcomes, event reconciliation, and rollback/evidence metadata.
+1. **Source system:** The relevant prior work is the commercial `Business OS Mock`, not DroidFactory and not GitLab issue automation.
+2. **Primary workspace:** The canonical mock lives in `/home/jbb/dev/DroidFleet/commercial/business-os-mock/`.
+3. **Primary routes:** The mock renders semantic cockpit routes such as `#/decisions`, `#/pipeline`, `#/pipeline/new`, `#/stages`, `#/stages/new`, `#/workspace`, `#/team`, `#/admin/prompts`, and `#/admin/pipeline-library`.
+4. **Data model source:** The model behind this work is the `Content MCP Data Model`, represented by `business-os-mock/content-mcp-model-data.js` and the canvas page `business-os-mock/content-mcp-model.html`.
+5. **CoreV2 mapping:** CoreV2’s `Data` ledger is conceptually adjacent because it represents durable ledger objects, state, routes, canvas, cards, threads, events, generated reports, runtime data, worktrees, and test runs. The commercial model is a product-specific Business OS task/data model, not a GitLab workflow model.
 
 ---
 
-## C. What Was Not Finished
+## B. Content MCP Model
 
-1. **No unified cockpit:** Existing pieces do not converge into one operator-facing task screen that shows all projects, queued work, active agents, required reviews, artifacts, and next decisions.
-2. **No first-class task bundle:** A task run is not yet represented as a single durable object that joins issue/card, stage, prompt, agent session, worktree, diff, logs, artifacts, review request, and operator response.
-3. **No review dashboard contract:** The previous system had the idea of operator review/input, but no implemented contract for rendering a rich review page with summaries, diffs, evidence, screenshots, HTML previews, and explicit decision controls.
-4. **No cross-project queue:** The prior work could run pipeline stages, but it did not become a queue where the operator can launch longer chains, inspect many parallel tasks, and sequence follow-up work across repositories.
-5. **No reliable diff-first review:** Diff infrastructure exists in DroidFleet, but the task workflow does not yet force every review gate to expose the exact changed files, unified diffs, commits, generated artifacts, and test evidence in the review surface.
+1. **Gateway:** `MCP Gateway` is the single entry/exit for agents and operators. Clients use MCP methods only, writes require idempotency keys, writes emit outbox events, and capability gaps are explicitly represented.
+2. **Identity:** `Accounts + Identity` models accounts, auth providers, token secrets, language profiles, lead profiles, and platform identities without silently merging unrelated sources.
+3. **Content:** `Content Registry` models posts, labels, type definitions, assets, variants, publication targets, and publish attempts.
+4. **Interaction:** `Interaction Core` normalizes comments, DMs, forms, calls, email replies, CRM webhooks, messages, translations, lead evidence, CRM entities, and CRM events.
+5. **Tasking:** `Tasks + Scheduler` models `task_types`, `task_instances`, `task_entity_links`, `response_tasks`, `response_actions`, `task_claims`, `task_executions`, dead letters, alerts, circuit breakers, automation runs, checkpoints, job definitions, schedules, and runs.
+6. **Delivery:** `Paid Delivery + KPIs` models campaigns, ad accounts, ad bindings, delivery events, KPI snapshots, KPI values, cost ledgers, budget policies, and budget alerts.
+7. **Knowledge:** `Knowledge Evidence` separates company, offer, ICP, compliance, objection, and analysis context from tasks while linking evidence to interactions and tasking.
+8. **Templates:** `Template Engine` compiles reusable automation behavior into concrete task instances with versioned templates, bindings, compilations, diagnostics, and failure policy.
 
 ---
 
-## D. Source Evidence
+## C. Commercial Cockpit UX
 
-1. **Factory overview:** `/home/jbb/dev/DroidFleet/factory/DROIDFACTORY-OVERVIEW.md`.
-2. **Pipeline architecture:** `/home/jbb/dev/DroidFleet/documentation/documentation/factory/pipeline/pipeline-architecture.md`.
-3. **Pipeline contract:** `/home/jbb/dev/DroidFleet/documentation/specs/factory/pipeline/pipeline-contract.md`.
-4. **Runner contract:** `/home/jbb/dev/DroidFleet/documentation/specs/factory/pipeline/runner-contract.md`.
-5. **Factory execution procedure:** `/home/jbb/dev/DroidFleet/documentation/procedure/factory/pipeline/factory-execution.md`.
-6. **Issue lifecycle:** `/home/jbb/dev/DroidFleet/documentation/documentation/factory/pipeline/issue-lifecycle.md`.
-7. **Operator MCP and diff surfaces:** `/home/jbb/dev/DroidFleet/backend/src/mcp/operator_mapping.ts`, `/home/jbb/dev/DroidFleet/backend/src/http/routes/git_tree.ts`, and `/home/jbb/dev/DroidFleet/app/lib/app/app_file_panel.dart`.
-8. **Run ledger:** `/home/jbb/dev/.droidmaster/test-mcp/finished/*.json`.
+1. **Decision surface:** `#/decisions` shows a decision ledger, one focused decision card, an agent chat panel, and a delegation popover. The operator sees a specific next decision, not a generic dashboard.
+2. **Task records:** Mock task instances include `task_instance_id`, `task_template_key`, `pipeline_type_key`, `pipeline_key`, `pipeline_name`, `task_kind`, `task_status`, `next_turn`, previous agent summary, chat summary, priority, markdown summary, draft output, actions, and chat lines.
+3. **Pipeline library:** `#/pipeline` shows workspace-scoped scheduled automation such as `DM ingestion`, `Comment ingestion`, `Campaign monitor`, `Asset production`, `Creative testing`, and `Lead intake`.
+4. **Pipeline composer:** `#/pipeline/new` defines pipeline identity, trigger, ordered stages, prompt/script artifacts, and a right-side agent chat that helps compose the runnable version.
+5. **Stage library:** `#/stages` and `#/stages/new` define reusable stage contracts with type `Agent`, `Script`, or `Operator gate`, plus input and output contracts.
+6. **Artifact inspection:** Pipeline stages can expose prompt editors, markdown previews, and script previews through artifact dialogs.
+7. **Scope model:** The cockpit scopes work by team, workspace, client, accounts, API keys, permissions, prompt library records, and pipeline library records.
+
+---
+
+## D. Existing Flow Concepts
+
+1. **Publish path:** `post.ingest -> post.plan -> post.schedule -> post.publish -> delivery_events -> kpi_snapshots`.
+2. **Lead signal path:** `interaction.ingest -> lead_profiles -> lead_analysis_snapshots -> task.enqueue -> crm.event.ingest`.
+3. **Reply path:** `social_messages -> message_translations -> response_tasks -> task.claim -> response_actions -> platform_reply_id`.
+4. **Automation path:** `job_schedules -> task_templates -> task_template_compilations -> task_instances -> task_claims`.
+5. **Message lifecycle:** `ingested -> queued_for_operator -> drafted_with_agent -> operator_approved -> replied -> closed`.
+6. **Task lifecycle:** `open -> assigned -> in_progress -> blocked -> completed | canceled`, with audited operator override.
+7. **Automation lifecycle:** `queued -> running -> success | partial_success | failed`, with auditability, retry awareness, and dead-letter safety.
+
+---
+
+## E. Source Evidence
+
+1. **Business OS mock:** `/home/jbb/dev/DroidFleet/commercial/business-os-mock/README.md`.
+2. **Cockpit routes:** `/home/jbb/dev/DroidFleet/commercial/business-os-mock/ux/pages/index.js`.
+3. **Mock task instances:** `/home/jbb/dev/DroidFleet/commercial/business-os-mock/ux/services/mockData.js`.
+4. **Pipeline data:** `/home/jbb/dev/DroidFleet/commercial/business-os-mock/ux/services/mockPipelineData.js`.
+5. **Pipeline composer data:** `/home/jbb/dev/DroidFleet/commercial/business-os-mock/ux/services/mockPipelineCreateData.js`.
+6. **Stage data:** `/home/jbb/dev/DroidFleet/commercial/business-os-mock/ux/services/mockStageData.js`.
+7. **Content MCP model:** `/home/jbb/dev/DroidFleet/commercial/business-os-mock/content-mcp-model-data.js`.
+8. **Content MCP canvas runbook:** `/home/jbb/dev/DroidFleet/commercial/documentation/runbook/CONTENT_MCP_UML_CANVAS_RUNBOOK.md`.

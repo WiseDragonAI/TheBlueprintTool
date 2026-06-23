@@ -1,47 +1,58 @@
-## A. Target Capability
+## A. Correct Target Capability
 
-1. **Unified task cockpit:** Build one operator surface that lists every active and queued task across selected workspaces, repositories, cards, issues, and pipelines.
-2. **Queue control:** Let the operator queue single tasks, ordered task chains, and longer pipeline runs instead of repeatedly driving each increment from chat.
-3. **Agent pipeline visibility:** Show the current stage, assigned role or agent, prompt source, active session, elapsed time, last heartbeat, last meaningful event, and next expected transition.
-4. **Operator action inbox:** Surface all tasks waiting for operator review, approval, clarification, file selection, design choice, or manual input in one place.
-5. **Review dashboard:** For every operator gate, generate a review view that can include summary, changed files, unified diffs, commits, test results, screenshots, generated HTML, artifacts, risks, and exact decision buttons.
-
----
-
-## B. Task Record Contract
-
-1. **Identity:** Store a stable `taskId`, source workspace, source ledger/card or GitLab issue, pipeline id, stage id, role id, and parent/child task links.
-2. **Execution:** Store runner command, agent runtime, model, prompt file, resolved prompt text hash, worktree path, process id, session id, started/finished timestamps, heartbeat, status, and retry count.
-3. **Evidence:** Store commit hash, branch, merge request, changed file list, diff refs, generated files, screenshots, HTML preview refs, logs, test summary paths, and artifact directory.
-4. **Operator gate:** Store gate type, required decision, display payload, answer schema, deadline if any, operator response, response timestamp, and the pipeline transition produced by that response.
-5. **Durability:** Persist the record under `.blueprinttool/tasks/` or another workspace-local store before UI rendering, so the cockpit can recover after server restart.
+1. **Commercial Business OS cockpit:** Bring the `business-os-mock` decision cockpit concept into CoreV2 as a durable task surface backed by ledger-style data, not by GitLab labels.
+2. **Focused next-decision UI:** Preserve the commercial mock principle that the operator should see the next required decision with sufficient context, rather than a broad generic dashboard.
+3. **Task instance ledger:** Model tasks as first-class records similar to `task_instances`, with links to subjects, templates, pipelines, interactions, prior agent summaries, chat summaries, drafts, actions, claims, executions, and artifacts.
+4. **Pipeline composition:** Support reusable pipelines with identity, trigger, ordered stages, and explicit stage types: `Agent`, `Script`, and `Operator gate`.
+5. **Artifact inspection:** Every stage that produces or consumes a prompt, script, report, generated HTML, image, screenshot, diff, or markdown summary must expose that artifact in an inspectable review surface.
 
 ---
 
-## C. Review Surface Requirements
+## B. Data Model Requirements
 
-1. **Diff-first layout:** The review view must make changed files and diffs immediately visible, not buried in chat logs or separate file panels.
-2. **Artifact slots:** The review payload must support Markdown summary, code snippets, file refs, image refs, video/audio refs, HTML preview refs, and arbitrary generated report files.
-3. **Decision controls:** The operator must be able to approve, request changes, ask a question, attach evidence, or route the task back to a named stage.
-4. **Context compression:** The view should include the minimum summary needed to decide, plus expandable raw logs and full conversation details for audit.
-5. **Cross-project filtering:** The cockpit needs filters for workspace, project, pipeline, status, waiting-on-operator, running, failed, completed, and stale.
+1. **Task identity:** Store `task_instance_id`, `task_template_key`, `pipeline_type_key`, `pipeline_key`, `pipeline_name`, `task_kind`, `task_status`, `next_turn`, priority, subject type, subject id, dedupe key, and workspace scope.
+2. **Task context:** Store previous agent task id, previous agent summary, chat session summary, markdown decision summary, draft output, available actions, and chat excerpts.
+3. **Task execution:** Store task claims, claimant ref, lease expiration, execution attempts, run status, retry data, dead-letter records, error events, alerts, automation run ids, and checkpoints.
+4. **Entity links:** Link tasks to content entities, interactions, messages, leads, campaigns, publication targets, knowledge documents, generated reports, files, and runtime data.
+5. **Template lineage:** Store task template, template version, pipeline version, reusable stage key, prompt version, script bundle, compilation diagnostics, and failure policy.
+
+---
+
+## C. UI Requirements
+
+1. **Decision ledger:** Render task lists grouped by pipeline type and pipeline key, with the active task selected and the recommendation visible in the list item.
+2. **Decision card:** Render the task markdown summary into sections such as relationship, latest signal, business state, agent summary, recommendation, risk, and outcome if approved.
+3. **Agent chat:** Show previous agent summary, chat session summary, transcript, task context, and focused conversation lines next to the decision.
+4. **Actions:** Support `Approve`, `Delegate`, `Request changes`, `Ask question`, `Reject`, and pipeline-specific actions as structured commands, not free-form-only replies.
+5. **Delegation:** Keep delegation explicit with workspace members, roles, current workload, and the receiving workspace/team context.
+6. **Scope controls:** Preserve team and workspace switching so the cockpit can show the correct client, workspace, accounts, API keys, pipelines, and tasks.
 
 ---
 
 ## D. Pipeline Requirements
 
-1. **Stage DAG:** Represent each pipeline as a typed DAG of stages where each stage has an input contract, prompt, runner, exit criteria, and allowed next states.
-2. **Operator stage:** Support first-class operator stages that pause execution and render a review dashboard instead of relying on ad hoc chat messages.
-3. **Long task chains:** Allow a pipeline to enqueue `task A -> task B -> task C` and continue only when each stage produces accepted evidence.
-4. **Parallel task management:** Allow 3 to 5 active tasks to be monitored without forcing the operator to remember which chat, card, or diff belongs to which task.
-5. **Failure recovery:** Every failed task should show failed command, last log line, artifacts, likely owner, retry options, and whether a fresh session or resumed session is required.
+1. **Pipeline library:** List workspace-scoped scheduled pipelines with purpose, ingestion sources, stages, output, cadence, next run, and active/paused state.
+2. **Pipeline composer:** Let an operator or agent create a pipeline version by defining identity, trigger, ordered stages, and runnable artifacts.
+3. **Stage contract:** Each stage must define name, reusable key, type, input contract, output contract, and an attached prompt or script when applicable.
+4. **Operator gates:** Operator gates must pause execution and create a focused decision task with markdown summary, draft, actions, artifacts, and continuation metadata.
+5. **Automation output:** Scheduled or immediate pipeline runs should produce task instances only when operator action is needed; safe cases can auto-complete with auditable execution records.
 
 ---
 
-## E. Integration Requirements
+## E. Artifact Requirements
 
-1. **Reuse existing pieces:** Reuse CoreV2 cards/threads for planning, DroidFleet git diff routes for diff display, operator MCP file refs for artifacts, and `.droidmaster/test-mcp` style run records for execution telemetry.
-2. **Do not hide provenance:** Every UI element must link back to the source card/issue, source workspace, worktree, branch, commit, diff, prompt, logs, and generated artifacts.
-3. **Incremental path:** First implement the durable task record and review dashboard for CoreV2 card-triggered tasks, then add GitLab issue pipeline import, then add cross-project aggregation.
-4. **No chat-only state:** Chat can narrate the run, but the task cockpit must be reconstructable from durable task records and artifact files.
-5. **Acceptance:** The operator can open one page and answer: what is running, what is blocked on me, what changed, which diffs need review, what evidence exists, and what action is required next.
+1. **Prompt artifacts:** Agent stages must expose the exact prompt or prompt version, editable markdown preview, and provenance.
+2. **Script artifacts:** Script stages must expose the runnable script bundle or function name, syntax-highlighted preview, inputs, outputs, and last execution result.
+3. **HTML/report artifacts:** Operator gates must be able to display generated HTML reports, markdown summaries, screenshots, canvas views, and file refs.
+4. **Diff artifacts:** When the task changes local files, the decision task must link changed files and diffs as artifacts, but diff is only one artifact type, not the core data model.
+5. **Audit artifacts:** Store decisions, overrides, actor metadata, timestamps, idempotency keys, outbox events, and failure diagnostics.
+
+---
+
+## F. First Implementation Cut
+
+1. **Define CoreV2 task schema:** Add a workspace-local `.blueprinttool/tasks/` schema based on `task_instance`, `task_claim`, `task_execution`, `operator_gate`, `pipeline_stage`, and `artifact` records.
+2. **Build decision route:** Add a `tasks` or `decisions` route/panel in CoreV2 that renders a decision ledger, one decision card, and an agent/context panel.
+3. **Add pipeline/stage registry:** Add durable records for pipeline definitions, reusable stages, prompt/script attachments, and scheduled/immediate runs.
+4. **Bridge existing queue work:** Make the existing Processing Queue feature create task instances and operator gates instead of only spawning one headless agent process.
+5. **Use Data ledger concepts:** Reuse CoreV2 concepts such as `Ledger`, `Card`, `Thread`, `Event`, `RouteState`, `RuntimeData`, `GeneratedReport`, `TestRun`, and `Worktree` as implementation primitives.

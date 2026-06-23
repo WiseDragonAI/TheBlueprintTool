@@ -1,7 +1,7 @@
 {
   "modelName": "CoreV2 Next Features",
   "source": "operator-request",
-  "updatedAt": "2026-06-23T15:59:43.734Z",
+  "updatedAt": "2026-06-23T16:47:25.962Z",
   "diagramSize": {
     "width": 2200,
     "height": 1300
@@ -336,11 +336,11 @@
     },
     {
       "id": "card-tasks-legacy-factory-pipeline-baseline",
-      "title": "Legacy Factory Pipeline Baseline",
+      "title": "Commercial Business OS Baseline",
       "cardType": "note",
       "domainId": "next-features",
       "x": 4827.740402316237,
-      "y": 273.71961885830166,
+      "y": 272.86879407041016,
       "w": 782,
       "h": 1641,
       "comment": {
@@ -351,7 +351,7 @@
     },
     {
       "id": "card-tasks-unified-control-surface-requirements",
-      "title": "Unified Task Control Surface",
+      "title": "Business OS Task Control Surface",
       "cardType": "note",
       "domainId": "next-features",
       "x": 5659.403936508128,
@@ -366,7 +366,7 @@
     },
     {
       "id": "card-tasks-core-problem-statement",
-      "title": "Task Visibility Problem Statement",
+      "title": "Business OS Task Problem Statement",
       "cardType": "note",
       "domainId": "next-features",
       "x": 6295.015683075405,
@@ -433,7 +433,7 @@
       "id": "rel-tasks-baseline-to-control-surface",
       "from": "card-tasks-legacy-factory-pipeline-baseline",
       "to": "card-tasks-unified-control-surface-requirements",
-      "label": "informs"
+      "label": "grounds"
     },
     {
       "id": "rel-tasks-problem-to-control-surface",
@@ -454,6 +454,7 @@
     "thread-card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6": ".blueprinttool/threads/next-features/thread-card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6.md",
     "thread-card-summary-data-model": ".blueprinttool/threads/next-features/thread-card-summary-data-model.md",
     "thread-card-summary-cli-maintenance": ".blueprinttool/threads/next-features/thread-card-summary-cli-maintenance.md",
-    "thread-zone-4a923aaa-1afb-46b2-8be5-32ead2c35a66": ".blueprinttool/threads/next-features/thread-zone-4a923aaa-1afb-46b2-8be5-32ead2c35a66.md"
+    "thread-zone-4a923aaa-1afb-46b2-8be5-32ead2c35a66": ".blueprinttool/threads/next-features/thread-zone-4a923aaa-1afb-46b2-8be5-32ead2c35a66.md",
+    "thread-card-tasks-legacy-factory-pipeline-baseline": ".blueprinttool/threads/next-features/thread-card-tasks-legacy-factory-pipeline-baseline.md"
   }
 }

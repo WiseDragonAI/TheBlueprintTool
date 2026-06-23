@@ -1,46 +1,47 @@
-## A. Problem
+## A. Correct Problem
 
-1. **Current task management does not scale past a few parallel tasks.** After 3 to 5 concurrent tasks, the operator must remember which card, chat, worktree, diff, log, artifact, and decision belongs to each task.
-2. **The critical review evidence is fragmented.** Diffs live in git/file panels, execution state lives in logs or run records, requirements live in cards/issues, and operator discussion lives in threads or chat.
-3. **The system lacks an authoritative next-action surface.** There is no unified place that says which task needs operator input, what exactly changed, why it matters, and which decision unblocks the pipeline.
-4. **Longer autonomous pipelines are risky without review checkpoints.** If agents run longer task chains without a durable review dashboard, the operator loses visibility into intermediate outputs, diffs, and quality gates.
-5. **Chat is being used as an orchestration memory.** That makes the workflow fragile because task state, evidence, and decisions should be stored as durable task records, not inferred from conversation history.
-
----
-
-## B. Why It Matters
-
-1. **Operator throughput is capped:** The operator wants to launch more work, but the cognitive load of finding diffs and reconstructing task state blocks parallelism.
-2. **Review quality drops:** If the changed files, test evidence, and artifacts are not one click away from the review request, approvals become slower and less reliable.
-3. **Pipeline confidence drops:** A task chain can only be trusted when every stage has explicit inputs, outputs, evidence, and visible gates.
-4. **Existing investments stay underused:** DroidFactory stages, operator MCP UI events, git diff routes, test runner records, and CoreV2 cards are valuable but currently disconnected.
+1. **The missing product is a Business OS decision/task cockpit.** The operator needs the commercial `business-os-mock` model translated into CoreV2’s durable ledger system.
+2. **The old analysis used the wrong source.** The relevant prior work is not DroidFactory GitLab labels; it is a web mock with a Content MCP data model, task instances, pipeline templates, stage builder, decision ledger, and operator gates.
+3. **The current CoreV2 card workflow is too loose for task operations.** Cards and threads can capture discussion, but they do not yet provide the structured `task_instance -> operator decision -> execution -> artifact -> next stage` loop from the commercial mock.
+4. **Parallel task handling lacks a task-shaped data model.** When several tasks are active, the operator needs one ledger of task instances, grouped by pipeline/workspace, with the next decision and evidence visible.
+5. **Artifacts are not first-class enough.** The commercial mock expects prompt artifacts, script artifacts, generated HTML, summaries, screenshots, reports, and task context to be attached to decision tasks.
 
 ---
 
-## C. Corrective Principle
+## B. Why The Commercial Model Matters
 
-1. **Make the task the primary object.** A task must own its pipeline state, agent run, worktree, diff set, artifacts, review gates, and operator decisions.
-2. **Make review evidence first-class.** Every operator gate must render a dashboard where diffs, files, screenshots, HTML previews, logs, tests, and decision controls are part of the contract.
-3. **Make queue state durable.** Running, blocked, failed, stale, and completed tasks must be loaded from durable records after restart.
-4. **Make cross-project work scannable.** The operator should see all active tasks across projects with the same mental model: status, owner, evidence, next action.
-5. **Make long pipelines composable.** Longer queues are acceptable only when each stage produces inspectable evidence and can pause for operator input without losing context.
+1. **It already separates concepts correctly:** `task_instances`, `response_tasks`, `task_claims`, `task_executions`, `automation_runs`, `automation_checkpoints`, templates, and schedules are separate entities.
+2. **It is operator-centered:** The `Decisions` route shows one actionable task with recommendation, risk, draft, actions, and previous agent context.
+3. **It supports reusable automation:** Pipelines are not just running agents; they are composed from reusable stages, prompts, scripts, triggers, and operator gates.
+4. **It is multi-workspace:** Team/workspace/client/account scope is part of the UI, which is necessary for managing several work streams.
+5. **It matches CoreV2’s ledger philosophy:** CoreV2 can provide the durable object graph, routes, threads, events, generated reports, runtime data, and persisted UI state that the commercial mock needs.
 
 ---
 
-## D. First Implementation Cut
+## C. Actual Operator Pain
 
-1. **Task record store:** Add `.blueprinttool/tasks/<taskId>.json` records with source card, status, runner metadata, worktree, artifacts, changed files, diff refs, and operator gate fields.
-2. **Tasks cockpit route:** Add a CoreV2 route or panel that lists active task records and highlights `waiting_on_operator`, `running`, `failed`, and `stale`.
-3. **Review dashboard:** Add a detail view for one task that shows summary, diff list, selected diff content, test evidence, artifacts, logs, and decision controls.
-4. **Queue trigger integration:** Connect the existing Processing Queue work to task record creation instead of only launching a headless Codex run.
-5. **Evidence adapters:** Reuse existing git diff commands/routes and file refs rather than inventing a new diff or artifact transport.
+1. **Too many open tasks become hard to triage.** The operator wants to run more work, but needs a structured list of current decision tasks rather than hunting through cards and conversations.
+2. **The next action is unclear.** Each task should say whether the operator must approve, delegate, request changes, answer a question, inspect an artifact, or wait for automation.
+3. **Evidence is scattered.** Summaries, prompt output, scripts, generated previews, diffs, test runs, screenshots, and chat context must converge into the active decision task.
+4. **Long pipelines need gates.** Multi-stage work is viable only if agent/script stages can pause into operator gates with durable review payloads.
+5. **The UI must remain focused.** The cockpit should not become a noisy generic dashboard; it should expose exactly the queue and decision surfaces needed to keep work moving.
+
+---
+
+## D. Corrective Principle
+
+1. **Make `TaskInstance` the primary operational object.** A task instance owns status, subject, pipeline, next turn, decision payload, agent summaries, actions, artifacts, and execution lineage.
+2. **Make `OperatorGate` first-class.** A gate is not a note; it is a stage that pauses automation, renders a decision task, captures an operator action, and resumes or reroutes the pipeline.
+3. **Make artifacts typed.** Treat prompt, script, markdown, generated HTML, screenshot, file ref, diff, test report, and execution log as typed artifacts linked to the task.
+4. **Make templates reusable.** Pipelines, stages, prompts, and scripts need versioned library records with workspace/team permissions and draft/promotion flows.
+5. **Make routes semantic.** CoreV2 should expose route-addressable `decisions`, `pipeline`, `pipeline/new`, `stages`, `workspace`, and `team` views rather than burying task state inside card threads.
 
 ---
 
 ## E. Acceptance Criteria
 
-1. **One task:** A queued CoreV2 card creates a durable task record, launches an agent, records logs/artifacts, and exposes changed files plus diff content in the review dashboard.
-2. **Many tasks:** At least 5 task records across 2 workspaces can be listed and filtered without opening individual chats.
-3. **Operator gate:** A task can pause on `waiting_on_operator`, show a review payload, accept an operator decision, and continue or reroute according to the selected action.
-4. **Recovery:** Restarting the CoreV2 server preserves the task list, latest status, review payload, and artifact links.
-5. **Traceability:** From the task detail view, the operator can reach the source card/issue, prompt, agent session id, worktree, branch/commit, changed files, diffs, tests, and logs.
+1. **Decision record:** A CoreV2 task record can render the same minimum decision card as the commercial mock: title, sections, recommendation, risk, draft, actions, and previous agent context.
+2. **Pipeline record:** A pipeline can define identity, trigger, ordered stages, stage types, prompt/script artifacts, and operator gates.
+3. **Operator gate:** A pipeline run can pause at an operator gate, create a decision task, persist the operator action, and continue or reroute.
+4. **Artifact review:** A decision task can show attached markdown, generated HTML, prompt, script, screenshot, report, and diff artifacts.
+5. **Scope and filtering:** The UI can group tasks by team, workspace, pipeline type, pipeline, status, and next turn.
