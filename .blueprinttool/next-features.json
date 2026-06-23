@@ -1,7 +1,7 @@
 {
   "modelName": "CoreV2 Next Features",
   "source": "operator-request",
-  "updatedAt": "2026-06-11T08:12:16Z",
+  "updatedAt": "2026-06-23T15:59:43.734Z",
   "diagramSize": {
     "width": 2200,
     "height": 1300
@@ -22,8 +22,8 @@
       "label": "Processing Queue Panel",
       "variant": "zone",
       "color": "#2f9e8f",
-      "x": 6494.828581334,
-      "y": 156.11120742578674,
+      "x": 7763.120457886181,
+      "y": 173.30838541293502,
       "width": 1900,
       "height": 1040
     },
@@ -46,6 +46,16 @@
       "y": 175,
       "width": 1641,
       "height": 2631
+    },
+    {
+      "id": "zone-4a923aaa-1afb-46b2-8be5-32ead2c35a66",
+      "label": "Tasks",
+      "variant": "zone",
+      "color": "#4548b0",
+      "x": 4731,
+      "y": 177,
+      "width": 2257,
+      "height": 2198
     }
   ],
   "cards": [
@@ -54,8 +64,8 @@
       "title": "Empty Selection Panel",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 6574.828581334,
-      "y": 256.11120742578686,
+      "x": 7843.120457886181,
+      "y": 273.30838541293514,
       "w": 360,
       "h": 230,
       "comment": {
@@ -69,8 +79,8 @@
       "title": "Awaiting Cards Source",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 7014.828581334001,
-      "y": 256.11120742578686,
+      "x": 8283.120457886182,
+      "y": 273.30838541293514,
       "w": 360,
       "h": 230,
       "comment": {
@@ -84,8 +94,8 @@
       "title": "Trigger Controller",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 7454.828581334001,
-      "y": 256.11120742578686,
+      "x": 8723.120457886183,
+      "y": 273.30838541293514,
       "w": 360,
       "h": 230,
       "comment": {
@@ -99,8 +109,8 @@
       "title": "Headless Codex Launch",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 7894.828581334,
-      "y": 256.11120742578686,
+      "x": 9163.120457886183,
+      "y": 273.30838541293514,
       "w": 360,
       "h": 230,
       "comment": {
@@ -114,8 +124,8 @@
       "title": "One Hour Session Reuse",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 6574.828581334,
-      "y": 586.1112074257866,
+      "x": 7843.120457886181,
+      "y": 603.3083854129349,
       "w": 360,
       "h": 240,
       "comment": {
@@ -129,8 +139,8 @@
       "title": "Resume Failure Recovery",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 7014.828581334001,
-      "y": 586.1112074257866,
+      "x": 8283.120457886182,
+      "y": 603.3083854129349,
       "w": 360,
       "h": 240,
       "comment": {
@@ -144,8 +154,8 @@
       "title": "State And Logs",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 7454.828581334001,
-      "y": 586.1112074257866,
+      "x": 8723.120457886183,
+      "y": 603.3083854129349,
       "w": 360,
       "h": 240,
       "comment": {
@@ -159,8 +169,8 @@
       "title": "Process Ownership",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 7894.828581334,
-      "y": 586.1112074257866,
+      "x": 9163.120457886183,
+      "y": 603.3083854129349,
       "w": 360,
       "h": 240,
       "comment": {
@@ -174,8 +184,8 @@
       "title": "Verification Plan",
       "cardType": "implementation",
       "domainId": "next-features",
-      "x": 6574.828581334,
-      "y": 916.1112074257863,
+      "x": 7843.120457886181,
+      "y": 933.3083854129346,
       "w": 1680,
       "h": 170,
       "comment": {
@@ -323,6 +333,51 @@
       "comment": {
         "contentFile": ".blueprinttool/cards/next-features/card-summary-cli-maintenance.md"
       }
+    },
+    {
+      "id": "card-tasks-legacy-factory-pipeline-baseline",
+      "title": "Legacy Factory Pipeline Baseline",
+      "cardType": "note",
+      "domainId": "next-features",
+      "x": 4827.740402316237,
+      "y": 273.71961885830166,
+      "w": 782,
+      "h": 1641,
+      "comment": {
+        "contentFile": ".blueprinttool/cards/next-features/card-tasks-legacy-factory-pipeline-baseline.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-tasks-unified-control-surface-requirements",
+      "title": "Unified Task Control Surface",
+      "cardType": "note",
+      "domainId": "next-features",
+      "x": 5659.403936508128,
+      "y": 273.1145289365622,
+      "w": 583,
+      "h": 2006,
+      "comment": {
+        "contentFile": ".blueprinttool/cards/next-features/card-tasks-unified-control-surface-requirements.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-tasks-core-problem-statement",
+      "title": "Task Visibility Problem Statement",
+      "cardType": "note",
+      "domainId": "next-features",
+      "x": 6295.015683075405,
+      "y": 278.6527520298986,
+      "w": 597,
+      "h": 1862,
+      "comment": {
+        "contentFile": ".blueprinttool/cards/next-features/card-tasks-core-problem-statement.md"
+      },
+      "facts": [],
+      "fields": []
     }
   ],
   "relationships": [
@@ -373,6 +428,18 @@
       "source": "queue-process-tree",
       "target": "queue-tests",
       "label": "verifies"
+    },
+    {
+      "id": "rel-tasks-baseline-to-control-surface",
+      "from": "card-tasks-legacy-factory-pipeline-baseline",
+      "to": "card-tasks-unified-control-surface-requirements",
+      "label": "informs"
+    },
+    {
+      "id": "rel-tasks-problem-to-control-surface",
+      "from": "card-tasks-core-problem-statement",
+      "to": "card-tasks-unified-control-surface-requirements",
+      "label": "requires"
     }
   ],
   "positions": {},
@@ -386,6 +453,7 @@
     "thread-card-watchnotes-lean-unanswered-model": ".blueprinttool/threads/next-features/thread-card-watchnotes-lean-unanswered-model.md",
     "thread-card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6": ".blueprinttool/threads/next-features/thread-card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6.md",
     "thread-card-summary-data-model": ".blueprinttool/threads/next-features/thread-card-summary-data-model.md",
-    "thread-card-summary-cli-maintenance": ".blueprinttool/threads/next-features/thread-card-summary-cli-maintenance.md"
+    "thread-card-summary-cli-maintenance": ".blueprinttool/threads/next-features/thread-card-summary-cli-maintenance.md",
+    "thread-zone-4a923aaa-1afb-46b2-8be5-32ead2c35a66": ".blueprinttool/threads/next-features/thread-zone-4a923aaa-1afb-46b2-8be5-32ead2c35a66.md"
   }
 }
