@@ -689,6 +689,8 @@
 
 .ledger-card-media-shell {
   --ledger-card-media-slider-row-height: 7px;
+  --ledger-card-media-slide-nav-height: 22px;
+  --ledger-card-media-slide-nav-gap: 4px;
   --ledger-card-media-title-row-min-height: 22px;
   --ledger-card-media-title-slider-gap: 6px;
   --ledger-card-media-bottom-inset: 8px;
@@ -784,7 +786,13 @@
   padding:
     6px
     8px
-    calc(var(--ledger-card-media-bottom-inset) + var(--ledger-card-media-slider-row-height) + var(--ledger-card-media-title-slider-gap))
+    calc(
+      var(--ledger-card-media-bottom-inset) +
+      var(--ledger-card-media-slider-row-height) +
+      var(--ledger-card-media-slide-nav-gap) +
+      var(--ledger-card-media-slide-nav-height) +
+      var(--ledger-card-media-title-slider-gap)
+    )
     8px;
   box-sizing: border-box;
   place-items: center;
@@ -889,6 +897,64 @@
   box-shadow: 0 0 8px color-mix(in srgb, var(--card-zone-color), transparent 34%);
 }
 
+.ledger-card-media-slide-nav {
+  position: absolute;
+  right: 42px;
+  bottom: calc(
+    var(--ledger-card-media-bottom-inset, 8px) +
+    var(--ledger-card-media-slider-row-height, 7px) +
+    var(--ledger-card-media-slide-nav-gap, 4px)
+  );
+  left: 42px;
+  z-index: 3;
+  display: flex;
+  height: var(--ledger-card-media-slide-nav-height);
+  min-width: 0;
+  gap: 3px;
+  align-items: center;
+  justify-content: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 1px 0;
+  box-sizing: border-box;
+  pointer-events: auto;
+  scrollbar-width: thin;
+}
+
+.ledger-card-media-slide-button {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  min-height: 20px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--card-zone-color), white 16%);
+  border-radius: 2px;
+  background: rgba(3, 5, 8, 0.72);
+  color: color-mix(in srgb, var(--text), transparent 22%);
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: center;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.ledger-card-media-slide-button:hover,
+.ledger-card-media-slide-button:focus-visible,
+.ledger-card-media-slide-button.is-active {
+  border-color: color-mix(in srgb, var(--card-zone-color), white 38%);
+  background: color-mix(in srgb, var(--card-zone-color), rgba(3, 5, 8, 0.9) 58%);
+  color: var(--text);
+  outline: none;
+}
+
 .ledger-card-media-nav {
   position: absolute;
   top: 6px;
@@ -896,6 +962,8 @@
   bottom: calc(
     var(--ledger-card-media-bottom-inset, 8px) +
     var(--ledger-card-media-slider-row-height, 7px) +
+    var(--ledger-card-media-slide-nav-gap, 4px) +
+    var(--ledger-card-media-slide-nav-height, 22px) +
     var(--ledger-card-media-title-slider-gap, 6px) +
     var(--ledger-card-media-title-row-min-height, 22px)
   );

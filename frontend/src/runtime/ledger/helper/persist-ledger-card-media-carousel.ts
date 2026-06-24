@@ -47,3 +47,24 @@ export function saveLedgerCardMediaCarouselSlide(stateId: string, slideIndex: nu
   else delete states[stateId];
   writeStates(states);
 }
+
+export function persistLedgerCardMediaCarouselDeleteHandoff(options: {
+  tabId?: string;
+  cardId?: string;
+  imageSrc?: string;
+  sources: readonly string[];
+  slideIndex: number;
+}): void {
+  const cardId = String(options.cardId ?? '').trim();
+  const imageSrc = String(options.imageSrc ?? '');
+  const sources = options.sources.map((source) => String(source)).filter(Boolean);
+  const selectedIndex = normalizeSlideIndex(options.slideIndex, sources.length);
+  const deletedIndex = sources[selectedIndex] === imageSrc
+    ? selectedIndex
+    : sources.findIndex((source) => source === imageSrc);
+  if (!cardId || deletedIndex < 0) return;
+  const nextSources = sources.filter((_, index) => index !== deletedIndex);
+  if (nextSources.length <= 1) return;
+  const stateId = ledgerCardMediaCarouselStateId({ tabId: options.tabId, cardId, sources: nextSources });
+  saveLedgerCardMediaCarouselSlide(stateId, options.slideIndex, nextSources.length);
+}

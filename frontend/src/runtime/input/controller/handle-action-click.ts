@@ -84,7 +84,9 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
   if (action === 'confirm-delete-card-image') {
     confirmCardImageDeletionController({
       cardId: actionTarget.dataset.cardId ?? '',
-      imageSrc: actionTarget.dataset.imageSrc ?? ''
+      imageSrc: actionTarget.dataset.imageSrc ?? '',
+      carouselSources: actionTarget.dataset.carouselSources,
+      carouselSlideIndex: actionTarget.dataset.carouselSlideIndex
     });
     return;
   }
@@ -101,7 +103,9 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
   if (action === 'delete-card-image') {
     await deleteCardImageController({
       cardId: actionTarget.dataset.cardId ?? modal.dataset.cardId ?? '',
-      imageSrc: actionTarget.dataset.imageSrc ?? modal.dataset.imageSrc ?? ''
+      imageSrc: actionTarget.dataset.imageSrc ?? modal.dataset.imageSrc ?? '',
+      carouselSources: actionTarget.dataset.carouselSources ?? modal.dataset.carouselSources,
+      carouselSlideIndex: actionTarget.dataset.carouselSlideIndex ?? modal.dataset.carouselSlideIndex
     });
     renderThreadPanel();
     return;

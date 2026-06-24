@@ -36,7 +36,12 @@ export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
       if (modal.dataset.confirmKind === 'note') {
         await deleteNoteController({ threadId: modal.dataset.threadId ?? state.threadId, noteId: modal.dataset.noteId ?? '' });
       } else if (modal.dataset.confirmKind === 'card-image') {
-        await deleteCardImageController({ cardId: modal.dataset.cardId ?? '', imageSrc: modal.dataset.imageSrc ?? '' });
+        await deleteCardImageController({
+          cardId: modal.dataset.cardId ?? '',
+          imageSrc: modal.dataset.imageSrc ?? '',
+          carouselSources: modal.dataset.carouselSources,
+          carouselSlideIndex: modal.dataset.carouselSlideIndex
+        });
       } else if (modal.dataset.confirmKind === 'card') {
         await deleteCardController({ cardId: modal.dataset.cardId ?? '' });
       } else if (modal.dataset.confirmKind === 'group') {
