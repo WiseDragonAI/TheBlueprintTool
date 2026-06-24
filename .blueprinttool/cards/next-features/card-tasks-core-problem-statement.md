@@ -1,10 +1,9 @@
 ## A. Correct Problem
 
 1. **The missing product is a Business OS decision/task cockpit.** The operator needs the commercial `business-os-mock` model translated into CoreV2’s durable ledger system.
-2. **The old analysis used the wrong source.** The relevant prior work is not DroidFactory GitLab labels; it is a web mock with a Content MCP data model, task instances, pipeline templates, stage builder, decision ledger, and operator gates.
-3. **The current CoreV2 card workflow is too loose for task operations.** Cards and threads can capture discussion, but they do not yet provide the structured `task_instance -> operator decision -> execution -> artifact -> next stage` loop from the commercial mock.
-4. **Parallel task handling lacks a task-shaped data model.** When several tasks are active, the operator needs one ledger of task instances, grouped by pipeline/workspace, with the next decision and evidence visible.
-5. **Artifacts are not first-class enough.** The commercial mock expects prompt artifacts, script artifacts, generated HTML, summaries, screenshots, reports, and task context to be attached to decision tasks.
+2. **The current CoreV2 card workflow is too loose for task operations.** Cards and threads can capture discussion, but they do not yet provide the structured `task_instance -> operator decision -> execution -> artifact -> next stage` loop from the commercial mock.
+3. **Parallel task handling lacks a task-shaped data model.** When several tasks are active, the operator needs one ledger of task instances, grouped by pipeline/workspace, with the next decision and evidence visible.
+4. **Artifacts are not first-class enough.** The commercial mock expects prompt artifacts, script artifacts, generated HTML, summaries, screenshots, reports, and task context to be attached to decision tasks.
 
 ---
 

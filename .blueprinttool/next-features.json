@@ -1,7 +1,7 @@
 {
   "modelName": "CoreV2 Next Features",
   "source": "operator-request",
-  "updatedAt": "2026-06-23T16:47:25.962Z",
+  "updatedAt": "2026-06-24T04:10:38.042Z",
   "diagramSize": {
     "width": 2200,
     "height": 1300
@@ -428,18 +428,6 @@
       "source": "queue-process-tree",
       "target": "queue-tests",
       "label": "verifies"
-    },
-    {
-      "id": "rel-tasks-baseline-to-control-surface",
-      "from": "card-tasks-legacy-factory-pipeline-baseline",
-      "to": "card-tasks-unified-control-surface-requirements",
-      "label": "grounds"
-    },
-    {
-      "id": "rel-tasks-problem-to-control-surface",
-      "from": "card-tasks-core-problem-statement",
-      "to": "card-tasks-unified-control-surface-requirements",
-      "label": "requires"
     }
   ],
   "positions": {},
@@ -455,6 +443,7 @@
     "thread-card-summary-data-model": ".blueprinttool/threads/next-features/thread-card-summary-data-model.md",
     "thread-card-summary-cli-maintenance": ".blueprinttool/threads/next-features/thread-card-summary-cli-maintenance.md",
     "thread-zone-4a923aaa-1afb-46b2-8be5-32ead2c35a66": ".blueprinttool/threads/next-features/thread-zone-4a923aaa-1afb-46b2-8be5-32ead2c35a66.md",
-    "thread-card-tasks-legacy-factory-pipeline-baseline": ".blueprinttool/threads/next-features/thread-card-tasks-legacy-factory-pipeline-baseline.md"
+    "thread-card-tasks-legacy-factory-pipeline-baseline": ".blueprinttool/threads/next-features/thread-card-tasks-legacy-factory-pipeline-baseline.md",
+    "thread-card-tasks-core-problem-statement": ".blueprinttool/threads/next-features/thread-card-tasks-core-problem-statement.md"
   }
 }
