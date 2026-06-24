@@ -259,9 +259,13 @@ function carouselIndex(track: HTMLElement): number {
   return Math.max(0, Math.min(slideCount - 1, Math.round(track.scrollLeft / slideWidth)));
 }
 
-function syncMediaCarousel(shell: HTMLElement, images: LedgerCardImage[], track: HTMLElement, stateId: string): void {
+function hasMeasuredCarouselTrack(track: HTMLElement): boolean {
+  return track.children.length > 0 && track.clientWidth > 0;
+}
+
+function syncMediaCarousel(shell: HTMLElement, images: LedgerCardImage[], track: HTMLElement, stateId: string, options: { persist?: boolean } = {}): void {
   syncCarouselSlider(shell, track);
-  saveCurrentCarouselSlide(shell, stateId);
+  if (options.persist !== false) saveCurrentCarouselSlide(shell, stateId);
   const index = carouselIndex(track);
   const deleteButton = shell.querySelector('.ledger-card-media-delete') as HTMLButtonElement | null;
   if (deleteButton) updateMediaDeleteButton(deleteButton, images, track);
@@ -285,6 +289,7 @@ function saveCurrentCarouselSlide(shell: HTMLElement, stateId: string): void {
   if (!stateId) return;
   const track = shell.querySelector('.ledger-card-media-track') as HTMLElement | null;
   const slideCount = track?.children.length ?? 0;
+  if (!track || !hasMeasuredCarouselTrack(track)) return;
   saveLedgerCardMediaCarouselSlide(stateId, captureLedgerCardMediaHandoffState(shell).slideIndex, slideCount);
 }
 
@@ -293,7 +298,14 @@ function hydrateCarouselSlide(shell: HTMLElement, stateId: string, images: Ledge
   const track = shell.querySelector('.ledger-card-media-track') as HTMLElement | null;
   const slideCount = track?.children.length ?? 0;
   const slideIndex = readLedgerCardMediaCarouselSlide(stateId, slideCount);
+  let attempts = 0;
   const restore = () => {
+    if (track && !hasMeasuredCarouselTrack(track) && attempts < 6) {
+      attempts += 1;
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(restore);
+      else setTimeout(restore, 0);
+      return;
+    }
     restoreLedgerCardMediaHandoffState(shell, { slideIndex });
     if (track) syncMediaCarousel(shell, images, track, stateId);
     scheduleCanvasMediaOverlayRender();
@@ -418,7 +430,7 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
     shell.appendChild(slideNav);
     shell.appendChild(nav);
     watchCarouselSlider(shell, track);
-    syncMediaCarousel(shell, block.images, track, persistedCarouselStateId);
+    syncMediaCarousel(shell, block.images, track, persistedCarouselStateId, { persist: false });
     hydrateCarouselSlide(shell, persistedCarouselStateId, block.images);
   }
 
