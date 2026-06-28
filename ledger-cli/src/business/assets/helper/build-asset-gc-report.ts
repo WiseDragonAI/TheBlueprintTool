@@ -4,6 +4,7 @@ import type { AssetGcReport, AssetReference, ClassifiedAsset } from '../../../li
 import { isManagedMediaPath, managedAssetRoots } from './asset-policy.js';
 import { collectAssetReferences } from './collect-asset-references.js';
 import { collectBlueprinttoolTextState } from './collect-blueprinttool-text-state.js';
+import { collectGitIgnoredPaths } from './collect-git-ignored-paths.js';
 import { matchesKeepRule, readAssetsKeep } from './read-assets-keep.js';
 import { walkFiles } from './walk-files.js';
 import { workspaceRelativePath } from './workspace-paths.js';
@@ -55,11 +56,20 @@ export async function buildAssetGcReport(input: { domain?: string; includeRisky?
   const references = await collectAssetReferences({ domain: input.domain, workspaceRoot: input.workspaceRoot });
   const hardReferences = referenceByPath(references.hardReferences);
   const keepRules = await readAssetsKeep({ workspaceRoot: input.workspaceRoot });
+  const candidateAssets = await managedAssets({ includeRisky, workspaceRoot: input.workspaceRoot });
+  const gitIgnoredPaths = await collectGitIgnoredPaths({
+    paths: [
+      ...candidateAssets.map((asset) => asset.path),
+      ...textState.unusedTextFiles.map((file) => file.path),
+    ],
+    workspaceRoot: input.workspaceRoot,
+  });
   const referencedAssets: ClassifiedAsset[] = [];
   const orphanAssets: ClassifiedAsset[] = [];
   const pinnedAssets: ClassifiedAsset[] = [];
 
-  for (const asset of await managedAssets({ includeRisky, workspaceRoot: input.workspaceRoot })) {
+  for (const asset of candidateAssets) {
+    if (gitIgnoredPaths.has(asset.path)) continue;
     const reference = hardReferences.get(asset.path);
     if (reference) {
       referencedAssets.push({ ...asset, referenceKinds: reference.referenceKinds, sources: reference.sources });
@@ -81,7 +91,7 @@ export async function buildAssetGcReport(input: { domain?: string; includeRisky?
     referencedAssets,
     referencedTextFiles: textState.referencedTextFiles,
     orphanAssets,
-    unusedTextFiles: textState.unusedTextFiles,
+    unusedTextFiles: textState.unusedTextFiles.filter((file) => !gitIgnoredPaths.has(file.path)),
     pinnedAssets,
     missingReferences: references.hardReferences.filter((reference) => !reference.exists),
     jsonReferences: references.jsonReferences,

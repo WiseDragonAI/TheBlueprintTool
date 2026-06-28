@@ -122,6 +122,33 @@ test('assets gc writes a deletion plan without changing the workspace', async ()
   ]);
 });
 
+test('assets gc excludes git ignored files from deletion plans', async () => {
+  const root = await createWorkspace();
+  await execFileAsync('git', ['-C', root, 'init']);
+  await writeFile(join(root, '.gitignore'), [
+    '.blueprinttool/card-images/ui-research/ignored-orphan.png',
+    '.blueprinttool/cards/removed/ignored-card.md',
+  ].join('\n'), 'utf8');
+  await writeFile(join(root, '.blueprinttool/card-images/ui-research/ignored-orphan.png'), 'ignored');
+  await writeFile(join(root, '.blueprinttool/cards/removed/ignored-card.md'), 'ignored');
+
+  const result = await dispatchLedgerCliCommandController([
+    'assets',
+    'gc',
+    '--root',
+    root,
+    '--write-plan',
+    '.blueprinttool/assets-gc-plan.json',
+  ], { emit: () => undefined });
+
+  assert.equal(result.ok, true);
+  const plan = JSON.parse(await readFile(join(root, '.blueprinttool/assets-gc-plan.json'), 'utf8'));
+  const plannedPaths = plan.deleteFiles.map((file: { path: string }) => file.path);
+  assert.equal(plan.summary.deleteFiles, 7);
+  assert.ok(!plannedPaths.includes('.blueprinttool/card-images/ui-research/ignored-orphan.png'));
+  assert.ok(!plannedPaths.includes('.blueprinttool/cards/removed/ignored-card.md'));
+});
+
 test('assets apply-gc-plan deletes only files listed in the plan', async () => {
   const root = await createWorkspace();
   await dispatchLedgerCliCommandController([

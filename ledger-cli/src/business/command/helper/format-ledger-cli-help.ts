@@ -38,6 +38,7 @@ export function formatLedgerCliHelp(): string {
     '  assets gc --root <workspace> --dry-run',
     '  assets gc --root <workspace> --write-plan .blueprinttool/assets-gc-plan.json',
     '      Report or write a deletion plan for unreferenced media and unused BlueprintTool text files from active state.json roots.',
+    '      Git-ignored paths are excluded from GC plans.',
     '',
     '  assets apply-gc-plan --root <workspace> --plan .blueprinttool/assets-gc-plan.json',
     '      Delete exactly the files listed in a previously written asset GC plan.',
