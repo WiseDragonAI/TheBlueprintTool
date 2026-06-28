@@ -23,8 +23,12 @@ test('normalizeAssetReference normalizes workspace asset references', () => {
 test('extractHardAssetReferences reads markdown and html media references', () => {
   const markdown = [
     '![A](/.blueprinttool/card-images/a.png "Title")',
+    '::html[Preview](.blueprinttool/cards/specs/assets/preview.html)',
     '<img src=".blueprinttool/thread-images/t/b.webp">',
+    '<script type="module" src="./assets/app.mjs"></script>',
+    '<link rel="stylesheet" href="./assets/app.css">',
     '```',
+    '::html[Ignored](.blueprinttool/cards/specs/assets/code.html)',
     '![Ignored](.blueprinttool/card-images/code.png)',
     '```',
   ].join('\n');
@@ -32,7 +36,10 @@ test('extractHardAssetReferences reads markdown and html media references', () =
   const markdownRefs = extractHardAssetReferences({ content: markdown, sourceFile, workspaceRoot });
   assert.deepEqual(markdownRefs.map((reference) => reference.path), [
     '.blueprinttool/card-images/a.png',
+    '.blueprinttool/cards/specs/assets/preview.html',
     '.blueprinttool/thread-images/t/b.webp',
+    '.blueprinttool/cards/specs/assets/app.mjs',
+    '.blueprinttool/cards/specs/assets/app.css',
   ]);
 
   const jsonRefs = extractHardAssetReferences({
@@ -59,10 +66,13 @@ test('extractJsonAssetReferences reports json media references separately', () =
 
 test('extractSoftAssetReferences records raw prose mentions separately', () => {
   const refs = extractSoftAssetReferences({
-    content: 'See .blueprinttool/card-images/prose.png for the old run.',
+    content: 'See .blueprinttool/card-images/prose.png and .blueprinttool/cards/specs/assets/prose.html for the old run.',
     sourceFile,
     workspaceRoot,
   });
 
-  assert.deepEqual(refs, [{ kind: 'raw-media-mention', path: '.blueprinttool/card-images/prose.png' }]);
+  assert.deepEqual(refs, [
+    { kind: 'raw-media-mention', path: '.blueprinttool/card-images/prose.png' },
+    { kind: 'raw-media-mention', path: '.blueprinttool/cards/specs/assets/prose.html' }
+  ]);
 });

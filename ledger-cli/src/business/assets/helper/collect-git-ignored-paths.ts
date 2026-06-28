@@ -5,6 +5,7 @@ export async function collectGitIgnoredPaths(input: { paths: string[]; workspace
   if (paths.length === 0) return new Set();
 
   return new Promise((resolve, reject) => {
+    let settled = false;
     const child = spawn('git', ['-C', input.workspaceRoot, 'check-ignore', '-z', '--stdin'], {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -13,8 +14,21 @@ export async function collectGitIgnoredPaths(input: { paths: string[]; workspace
 
     child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk));
     child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
-    child.on('error', reject);
+    child.stdin.on('error', (error: NodeJS.ErrnoException) => {
+      if (error.code !== 'EPIPE' && !settled) {
+        settled = true;
+        reject(error);
+      }
+    });
+    child.on('error', (error) => {
+      if (!settled) {
+        settled = true;
+        reject(error);
+      }
+    });
     child.on('close', (code) => {
+      if (settled) return;
+      settled = true;
       if (code === 0 || code === 1) {
         const output = Buffer.concat(stdout).toString('utf8');
         resolve(new Set(output.split('\0').filter(Boolean)));

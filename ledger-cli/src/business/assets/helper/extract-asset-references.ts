@@ -63,8 +63,21 @@ export function extractHardAssetReferences(input: { content: string; sourceFile:
       rawReference: parseMarkdownDestination(match[1] ?? ''),
     });
   }
+  for (const match of content.matchAll(/::html\[[^\]\n]*\]\(([^)\n]+)\)/g)) {
+    addReference(output, {
+      ...input,
+      kind: 'markdown-html-embed',
+      rawReference: parseMarkdownDestination(match[1] ?? ''),
+    });
+  }
   for (const match of content.matchAll(/<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi)) {
     addReference(output, { ...input, kind: 'html-img', rawReference: match[1] ?? '' });
+  }
+  for (const match of content.matchAll(/<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi)) {
+    addReference(output, { ...input, kind: 'html-script', rawReference: match[1] ?? '' });
+  }
+  for (const match of content.matchAll(/<link\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>/gi)) {
+    addReference(output, { ...input, kind: 'html-link', rawReference: match[1] ?? '' });
   }
 
   return output;
@@ -87,7 +100,7 @@ export function extractSoftAssetReferences(input: { content: string; sourceFile:
   if (input.sourceFile.endsWith('.json')) return [];
   const output: ExtractedAssetReference[] = [];
   const content = stripCodeFences(input.content);
-  for (const match of content.matchAll(/(?:^|[\s"'(<])((?:\/?\.blueprinttool|\.blueprinttool)\/[^\s"'<>),]+\.(?:gif|jpe?g|mov|mp4|png|svg|webm|webp))/gi)) {
+  for (const match of content.matchAll(/(?:^|[\s"'(<])((?:\/?\.blueprinttool|\.blueprinttool)\/[^\s"'<>),]+\.(?:css|gif|html|jpe?g|js|mjs|mov|mp4|png|svg|webm|webp))/gi)) {
     addReference(output, {
       ...input,
       kind: 'raw-media-mention',

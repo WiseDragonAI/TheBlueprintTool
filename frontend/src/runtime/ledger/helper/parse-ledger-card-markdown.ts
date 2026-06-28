@@ -26,6 +26,7 @@ export type LedgerMarkdownBlock =
   | { kind: 'heading'; level: number; children: LedgerMarkdownInline[] }
   | { kind: 'paragraph'; children: LedgerMarkdownInline[] }
   | { kind: 'images'; images: Extract<LedgerMarkdownInline, { kind: 'image' }>[] }
+  | { kind: 'htmlEmbeds'; embeds: { title: string; src: string }[] }
   | { kind: 'list'; items: LedgerMarkdownInline[][] }
   | { kind: 'table'; headers: LedgerMarkdownInline[][]; rows: LedgerMarkdownInline[][][] }
   | { kind: 'hr' }
@@ -39,10 +40,27 @@ function standaloneImagesFromLine(line: string): Extract<LedgerMarkdownInline, {
   return hasOnlyImagesAndSpacing ? images : [];
 }
 
+function parseDestination(destination: string): { url: string; title: string } | null {
+  const match = destination.trim().match(/^<?([^<>"'\s]+)>?(?:\s+["']([^"']*)["'])?$/);
+  return match ? { url: match[1], title: match[2] ?? '' } : null;
+}
+
+function standaloneHtmlEmbedFromLine(line: string): { title: string; src: string } | null {
+  const match = line.match(/^::html\[([^\]\n]*)\]\(([^)\n]+)\)$/);
+  if (!match) return null;
+  const destination = parseDestination(match[2] ?? '');
+  if (!destination) return null;
+  return {
+    title: (match[1] || destination.title).trim(),
+    src: destination.url
+  };
+}
+
 export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[] {
   const blocks: LedgerMarkdownBlock[] = [];
   let list: Extract<LedgerMarkdownBlock, { kind: 'list' }> | null = null;
   let images: Extract<LedgerMarkdownBlock, { kind: 'images' }> | null = null;
+  let htmlEmbeds: Extract<LedgerMarkdownBlock, { kind: 'htmlEmbeds' }> | null = null;
   const lines = normalizeLedgerMarkdown(markdown).split('\n');
 
   for (let index = 0; index < lines.length; index += 1) {
@@ -57,6 +75,7 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
       }
       list = null;
       images = null;
+      htmlEmbeds = null;
       blocks.push({ kind: 'code', language: fence[1] ?? '', text: codeLines.join('\n') });
       continue;
     }
@@ -68,6 +87,7 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
     if (/^(?:-{3,}|\*{3,}|_{3,})$/.test(line)) {
       list = null;
       images = null;
+      htmlEmbeds = null;
       blocks.push({ kind: 'hr' });
       continue;
     }
@@ -75,6 +95,7 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
     if (heading) {
       list = null;
       images = null;
+      htmlEmbeds = null;
       blocks.push({
         kind: 'heading',
         level: heading[1].length,
@@ -100,12 +121,14 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
       index -= 1;
       list = null;
       images = null;
+      htmlEmbeds = null;
       blocks.push(table);
       continue;
     }
     const standaloneImages = standaloneImagesFromLine(line);
     if (standaloneImages.length > 0) {
       list = null;
+      htmlEmbeds = null;
       if (!images) {
         images = { kind: 'images', images: [] };
         blocks.push(images);
@@ -113,9 +136,21 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
       images.images.push(...standaloneImages);
       continue;
     }
+    const htmlEmbed = standaloneHtmlEmbedFromLine(line);
+    if (htmlEmbed) {
+      list = null;
+      images = null;
+      if (!htmlEmbeds) {
+        htmlEmbeds = { kind: 'htmlEmbeds', embeds: [] };
+        blocks.push(htmlEmbeds);
+      }
+      htmlEmbeds.embeds.push(htmlEmbed);
+      continue;
+    }
     const item = line.match(/^[-*]\s+(.*)$/);
     if (item) {
       images = null;
+      htmlEmbeds = null;
       if (!list) {
         list = { kind: 'list', items: [] };
         blocks.push(list);
@@ -125,6 +160,7 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
     }
     list = null;
     images = null;
+    htmlEmbeds = null;
     blocks.push({ kind: 'paragraph', children: parseLedgerMarkdownInline(line) });
   }
 

@@ -64,7 +64,15 @@ export type AssetOperation = {
   write: boolean;
 };
 
-export type AssetReferenceKind = 'html-img' | 'json-key' | 'json-value' | 'markdown-image' | 'raw-media-mention';
+export type AssetReferenceKind =
+  | 'html-img'
+  | 'html-link'
+  | 'html-script'
+  | 'json-key'
+  | 'json-value'
+  | 'markdown-html-embed'
+  | 'markdown-image'
+  | 'raw-media-mention';
 
 export type AssetReference = {
   path: string;

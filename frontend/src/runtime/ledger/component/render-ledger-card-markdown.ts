@@ -5,6 +5,7 @@
 import { appendInlineNodes } from './append-inline-nodes.js';
 import { parseLedgerCardMarkdown } from '../helper/parse-ledger-card-markdown.js';
 import { renderLedgerCardCodeBlock } from './render-ledger-card-code-block.js';
+import { renderLedgerCardHtmlEmbeds } from './render-ledger-card-html-embeds.js';
 import { renderLedgerCardMedia, type LedgerCardImageSizes } from './render-ledger-card-media.js';
 import { renderLedgerCardTable } from './render-ledger-card-table.js';
 
@@ -43,6 +44,10 @@ export function renderLedgerCardMarkdown(markdown: string, options: LedgerCardMa
     }
     if (block.kind === 'images') {
       body.appendChild(renderLedgerCardMedia(block, options));
+      continue;
+    }
+    if (block.kind === 'htmlEmbeds') {
+      body.appendChild(renderLedgerCardHtmlEmbeds(block, options));
       continue;
     }
     if (block.kind === 'code') {

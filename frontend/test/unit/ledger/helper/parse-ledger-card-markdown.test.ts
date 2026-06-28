@@ -91,3 +91,32 @@ test('parse-ledger-card-markdown promotes adjacent standalone images into one im
     }
   ]);
 });
+
+test('parse-ledger-card-markdown promotes adjacent standalone html directives into one embed block', () => {
+  assert.deepEqual(parseLedgerCardMarkdown('::html[Preview](.blueprinttool/cards/specs/assets/preview.html)\n\n::html[](.blueprinttool/cards/specs/assets/second.html "Second")\n\nText ::html[Inline](.blueprinttool/cards/specs/assets/inline.html)'), [
+    {
+      kind: 'htmlEmbeds',
+      embeds: [
+        { title: 'Preview', src: '.blueprinttool/cards/specs/assets/preview.html' },
+        { title: 'Second', src: '.blueprinttool/cards/specs/assets/second.html' }
+      ]
+    },
+    {
+      kind: 'paragraph',
+      children: [
+        { kind: 'text', text: 'Text ::html' },
+        { kind: 'link', text: 'Inline', href: '.blueprinttool/cards/specs/assets/inline.html', title: '' }
+      ]
+    }
+  ]);
+});
+
+test('parse-ledger-card-markdown ignores html directives inside code fences', () => {
+  assert.deepEqual(parseLedgerCardMarkdown('```md\n::html[Preview](.blueprinttool/cards/specs/assets/preview.html)\n```'), [
+    {
+      kind: 'code',
+      language: 'md',
+      text: '::html[Preview](.blueprinttool/cards/specs/assets/preview.html)'
+    }
+  ]);
+});

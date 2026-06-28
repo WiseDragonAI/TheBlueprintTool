@@ -22,7 +22,8 @@ type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
 
 const blueprinttoolAssetPrefix = '/.blueprinttool/';
-const allowedBlueprinttoolAssetExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'];
+const allowedBlueprinttoolImageExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'];
+const allowedLedgerStaticAssetExtensions = ['.html', '.css', '.js', '.mjs', ...allowedBlueprinttoolImageExtensions];
 
 function safeAssetSegment(value: unknown): string {
   return String(value || 'untitled').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled';
@@ -41,9 +42,12 @@ function imageExtensionForMimeType(mimeType: unknown): string {
   return '.png';
 }
 
-function isAllowedBlueprinttoolAsset(filePath: string): boolean {
+function isAllowedBlueprinttoolAsset(filePath: string, relativeAssetPath = ''): boolean {
   const normalized = filePath.toLowerCase();
-  return allowedBlueprinttoolAssetExtensions.some((extension) => normalized.endsWith(extension));
+  if (allowedBlueprinttoolImageExtensions.some((extension) => normalized.endsWith(extension))) return true;
+  const normalizedRelative = relativeAssetPath.split('\\').join('/');
+  return /^cards\/[^/]+\/assets\/.+/.test(normalizedRelative)
+    && allowedLedgerStaticAssetExtensions.some((extension) => normalized.endsWith(extension));
 }
 
 function tryServeBlueprinttoolAsset(input: { url: string; blueprinttoolRoot: string; response: ServerResponse }): boolean {
@@ -57,7 +61,7 @@ function tryServeBlueprinttoolAsset(input: { url: string; blueprinttoolRoot: str
   const assetPath = resolve(input.blueprinttoolRoot, decodedUrl.slice(blueprinttoolAssetPrefix.length));
   const relativeAssetPath = relative(input.blueprinttoolRoot, assetPath);
   const isInsideBlueprinttool = relativeAssetPath && !relativeAssetPath.startsWith('..') && !isAbsolute(relativeAssetPath);
-  if (!isInsideBlueprinttool || !isAllowedBlueprinttoolAsset(assetPath) || !existsSync(assetPath)) {
+  if (!isInsideBlueprinttool || !isAllowedBlueprinttoolAsset(assetPath, relativeAssetPath) || !existsSync(assetPath)) {
     input.response.statusCode = 404;
     input.response.setHeader('content-type', 'application/json');
     input.response.end(JSON.stringify({ ok: false, missing: decodedUrl }));

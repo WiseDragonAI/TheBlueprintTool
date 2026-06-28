@@ -2,8 +2,9 @@ import { extname } from 'node:path';
 
 export function contentTypeFor(filePath: string): string {
   const extension = extname(filePath);
+  if (extension === '.html') return 'text/html; charset=utf-8';
   if (extension === '.css') return 'text/css; charset=utf-8';
-  if (extension === '.js' || extension === '.ts') return 'text/javascript; charset=utf-8';
+  if (extension === '.js' || extension === '.mjs' || extension === '.ts') return 'text/javascript; charset=utf-8';
   if (extension === '.svg') return 'image/svg+xml';
   if (extension === '.png') return 'image/png';
   if (extension === '.jpg' || extension === '.jpeg') return 'image/jpeg';

@@ -132,6 +132,40 @@ test('blueprinttool server deletes a card markdown image and its workspace asset
   }
 });
 
+test('blueprinttool server serves ledger-scoped html embed assets and rejects script html', async () => {
+  const { server, workspace } = await startContentFileServer();
+  const address = server.address() as AddressInfo;
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+
+  try {
+    mkdirSync(join(workspace, '.blueprinttool', 'cards', 'specs', 'assets'), { recursive: true });
+    mkdirSync(join(workspace, '.blueprinttool', '.scripts'), { recursive: true });
+    mkdirSync(join(workspace, '.blueprinttool', 'cards', 'removed', 'assets'), { recursive: true });
+    writeFileSync(join(workspace, '.blueprinttool', 'cards', 'specs', 'assets', 'preview.html'), '<!doctype html><title>Preview</title>');
+    writeFileSync(join(workspace, '.blueprinttool', 'cards', 'specs', 'assets', 'preview.mjs'), 'export default 1;');
+    writeFileSync(join(workspace, '.blueprinttool', '.scripts', 'tool.html'), '<!doctype html><title>Tool</title>');
+    writeFileSync(join(workspace, '.blueprinttool', 'cards', 'removed', 'assets', 'orphan.html'), '<!doctype html><title>Removed</title>');
+
+    const htmlResponse = await fetch(`${baseUrl}/.blueprinttool/cards/specs/assets/preview.html`);
+    assert.equal(htmlResponse.ok, true);
+    assert.equal(htmlResponse.headers.get('content-type'), 'text/html; charset=utf-8');
+    assert.match(await htmlResponse.text(), /Preview/);
+
+    const moduleResponse = await fetch(`${baseUrl}/.blueprinttool/cards/specs/assets/preview.mjs`);
+    assert.equal(moduleResponse.ok, true);
+    assert.equal(moduleResponse.headers.get('content-type'), 'text/javascript; charset=utf-8');
+
+    const scriptHtmlResponse = await fetch(`${baseUrl}/.blueprinttool/.scripts/tool.html`);
+    assert.equal(scriptHtmlResponse.status, 404);
+
+    const rootHtmlResponse = await fetch(`${baseUrl}/.blueprinttool/preview.html`);
+    assert.equal(rootHtmlResponse.status, 404);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
 test('blueprinttool server rejects image deletion when the source is not present in markdown', async () => {
   const { endpoint, server, workspace } = await startContentFileServer();
   const imageFile = join(workspace, '.blueprinttool', 'ui', 'missing-from-markdown.png');

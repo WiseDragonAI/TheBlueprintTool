@@ -48,14 +48,25 @@ export async function collectAssetReferences(input: { domain?: string; workspace
   softReferences: AssetReference[];
 }> {
   const sourceFiles = await collectAssetSourceFiles(input);
+  const scannedSourceFiles = new Set<string>();
+  const sourceQueue = [...sourceFiles];
   const hardReferences = new Map<string, MutableReference>();
   const jsonReferences = new Map<string, MutableReference>();
   const softReferences = new Map<string, MutableReference>();
 
-  for (const sourceFile of sourceFiles) {
+  for (let index = 0; index < sourceQueue.length; index += 1) {
+    const sourceFile = sourceQueue[index];
+    if (!sourceFile || scannedSourceFiles.has(sourceFile)) continue;
+    scannedSourceFiles.add(sourceFile);
     const content = await fs.readFile(sourceFile, 'utf8').catch(() => '');
     for (const reference of extractHardAssetReferences({ content, sourceFile, workspaceRoot: input.workspaceRoot })) {
       addReference(hardReferences, { ...reference, sourceFile, workspaceRoot: input.workspaceRoot });
+      if (reference.path.toLowerCase().endsWith('.html')) {
+        const referencedHtmlFile = resolve(input.workspaceRoot, reference.path);
+        if (!scannedSourceFiles.has(referencedHtmlFile) && await exists(referencedHtmlFile)) {
+          sourceQueue.push(referencedHtmlFile);
+        }
+      }
     }
     for (const reference of extractJsonAssetReferences({ content, sourceFile, workspaceRoot: input.workspaceRoot })) {
       addReference(jsonReferences, { ...reference, sourceFile, workspaceRoot: input.workspaceRoot });
@@ -78,7 +89,7 @@ export async function collectAssetReferences(input: { domain?: string; workspace
   return {
     hardReferences: materializeReferences(hardReferences),
     jsonReferences: materializeReferences(jsonReferences),
-    scannedSourceFiles: sourceFiles.map((sourceFile) => workspaceRelativePath(input.workspaceRoot, sourceFile)).sort(),
+    scannedSourceFiles: Array.from(scannedSourceFiles).map((sourceFile) => workspaceRelativePath(input.workspaceRoot, sourceFile)).sort(),
     softReferences: materializeReferences(softReferences).filter((reference) => !hardReferences.has(reference.path)),
   };
 }

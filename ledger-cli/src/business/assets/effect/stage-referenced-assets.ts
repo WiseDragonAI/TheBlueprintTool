@@ -24,14 +24,9 @@ async function gitAdd(workspaceRoot: string, paths: string[]): Promise<void> {
 }
 
 export async function stageReferencedAssets(input: { domain: string; report: AssetGcReport; workspaceRoot: string }): Promise<string[]> {
-  const textPaths = [
-    `.blueprinttool/cards/${input.domain}`,
-    `.blueprinttool/threads/${input.domain}`,
-    `.blueprinttool/${input.domain}.json`,
-  ];
   const existingTextPaths: string[] = [];
-  for (const path of textPaths) {
-    if (await exists(`${input.workspaceRoot}/${path}`)) existingTextPaths.push(path);
+  for (const file of input.report.referencedTextFiles) {
+    if (await exists(`${input.workspaceRoot}/${file.path}`)) existingTextPaths.push(file.path);
   }
 
   const assetPaths = [
