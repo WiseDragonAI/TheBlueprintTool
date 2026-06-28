@@ -149,6 +149,48 @@ test('assets gc excludes git ignored files from deletion plans', async () => {
   assert.ok(!plannedPaths.includes('.blueprinttool/cards/removed/ignored-card.md'));
 });
 
+test('assets gc reports kept files split by tracked and untracked', async () => {
+  const root = await createWorkspace();
+  await execFileAsync('git', ['-C', root, 'init']);
+  await execFileAsync('git', ['-C', root, 'add',
+    '.blueprinttool/ui-research.json',
+    '.blueprinttool/cards/ui-research/card-a.md',
+    '.blueprinttool/card-images/ui-research/keep.png',
+  ]);
+  const messages: string[] = [];
+
+  const result = await dispatchLedgerCliCommandController([
+    'assets',
+    'gc',
+    '--root',
+    root,
+    '--dry-run',
+  ], { emit: (message) => messages.push(message) });
+
+  assert.equal(result.ok, true);
+  assert.match(messages.join('\n'), /KEEP files: 6 .*tracked 3 .*untracked 3/);
+
+  const jsonResult = await dispatchLedgerCliCommandController([
+    'assets',
+    'gc',
+    '--root',
+    root,
+    '--dry-run',
+    '--json',
+  ], { emit: () => undefined });
+
+  assert.equal(jsonResult.ok, true);
+  const report = JSON.parse(String(jsonResult.value));
+  assert.equal(report.summary.keptFiles, 6);
+  assert.equal(report.summary.keptTrackedFiles, 3);
+  assert.equal(report.summary.keptUntrackedFiles, 3);
+  assert.deepEqual(report.keptTrackedFiles.sort(), [
+    '.blueprinttool/card-images/ui-research/keep.png',
+    '.blueprinttool/cards/ui-research/card-a.md',
+    '.blueprinttool/ui-research.json',
+  ]);
+});
+
 test('assets apply-gc-plan deletes only files listed in the plan', async () => {
   const root = await createWorkspace();
   await dispatchLedgerCliCommandController([

@@ -5,6 +5,7 @@ import { isManagedMediaPath, managedAssetRoots } from './asset-policy.js';
 import { collectAssetReferences } from './collect-asset-references.js';
 import { collectBlueprinttoolTextState } from './collect-blueprinttool-text-state.js';
 import { collectGitIgnoredPaths } from './collect-git-ignored-paths.js';
+import { collectGitTrackedPaths } from './collect-git-tracked-paths.js';
 import { matchesKeepRule, readAssetsKeep } from './read-assets-keep.js';
 import { walkFiles } from './walk-files.js';
 import { workspaceRelativePath } from './workspace-paths.js';
@@ -31,9 +32,23 @@ function referenceByPath(references: AssetReference[]): Map<string, AssetReferen
 }
 
 function summarize(report: Omit<AssetGcReport, 'summary'>): AssetGcReport['summary'] {
+  const keptFiles = [
+    ...report.referencedAssets,
+    ...report.pinnedAssets,
+    ...report.referencedTextFiles,
+  ];
+  const keptTrackedSet = new Set(report.keptTrackedFiles);
+  const keptUntrackedSet = new Set(report.keptUntrackedFiles);
+
   return {
     activeLedgers: report.activeLedgerFiles.length,
     jsonReferences: report.jsonReferences.length,
+    keptBytes: keptFiles.reduce((sum, file) => sum + file.bytes, 0),
+    keptFiles: keptFiles.length,
+    keptTrackedBytes: keptFiles.filter((file) => keptTrackedSet.has(file.path)).reduce((sum, file) => sum + file.bytes, 0),
+    keptTrackedFiles: report.keptTrackedFiles.length,
+    keptUntrackedBytes: keptFiles.filter((file) => keptUntrackedSet.has(file.path)).reduce((sum, file) => sum + file.bytes, 0),
+    keptUntrackedFiles: report.keptUntrackedFiles.length,
     managedAssets: report.referencedAssets.length + report.orphanAssets.length + report.pinnedAssets.length,
     missingReferences: report.missingReferences.length,
     orphanAssets: report.orphanAssets.length,
@@ -82,6 +97,16 @@ export async function buildAssetGcReport(input: { domain?: string; includeRisky?
     orphanAssets.push(asset);
   }
 
+  const keptPaths = Array.from(new Set([
+    ...referencedAssets.map((asset) => asset.path),
+    ...pinnedAssets.map((asset) => asset.path),
+    ...textState.referencedTextFiles.map((file) => file.path),
+  ])).sort();
+  const trackedKeptPaths = await collectGitTrackedPaths({
+    paths: keptPaths,
+    workspaceRoot: input.workspaceRoot,
+  });
+
   const reportWithoutSummary = {
     generatedAt: new Date().toISOString(),
     root: input.workspaceRoot,
@@ -93,6 +118,8 @@ export async function buildAssetGcReport(input: { domain?: string; includeRisky?
     orphanAssets,
     unusedTextFiles: textState.unusedTextFiles.filter((file) => !gitIgnoredPaths.has(file.path)),
     pinnedAssets,
+    keptTrackedFiles: keptPaths.filter((path) => trackedKeptPaths.has(path)),
+    keptUntrackedFiles: keptPaths.filter((path) => !trackedKeptPaths.has(path)),
     missingReferences: references.hardReferences.filter((reference) => !reference.exists),
     jsonReferences: references.jsonReferences,
     softReferences: references.softReferences,

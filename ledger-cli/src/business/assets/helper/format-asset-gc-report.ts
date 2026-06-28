@@ -18,6 +18,7 @@ export function formatAssetGcReport(report: AssetGcReport): string {
     ...report.activeLedgerFiles.map((file) => `  ${file}`),
     `Scanned source files: ${report.scannedSourceFiles.length}`,
     `Managed roots: ${report.managedRoots.join(', ')}`,
+    `KEEP files: ${report.summary.keptFiles} (${formatBytes(report.summary.keptBytes)}), tracked ${report.summary.keptTrackedFiles} (${formatBytes(report.summary.keptTrackedBytes)}), untracked ${report.summary.keptUntrackedFiles} (${formatBytes(report.summary.keptUntrackedBytes)})`,
     '',
     `KEEP referenced: ${report.summary.referencedAssets} (${formatBytes(report.summary.referencedBytes)})`,
     ...assetLines(report.referencedAssets),

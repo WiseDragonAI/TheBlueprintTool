@@ -129,6 +129,8 @@ export type AssetGcReport = {
   orphanAssets: ClassifiedAsset[];
   unusedTextFiles: ClassifiedTextFile[];
   pinnedAssets: ClassifiedAsset[];
+  keptTrackedFiles: string[];
+  keptUntrackedFiles: string[];
   missingReferences: AssetReference[];
   jsonReferences: AssetReference[];
   prunedJsonReferences?: AssetReference[];
@@ -137,6 +139,12 @@ export type AssetGcReport = {
   summary: {
     activeLedgers: number;
     jsonReferences: number;
+    keptBytes: number;
+    keptFiles: number;
+    keptTrackedBytes: number;
+    keptTrackedFiles: number;
+    keptUntrackedBytes: number;
+    keptUntrackedFiles: number;
     managedAssets: number;
     missingReferences: number;
     orphanAssets: number;
