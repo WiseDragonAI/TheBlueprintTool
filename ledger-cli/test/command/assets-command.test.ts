@@ -87,7 +87,7 @@ test('assets commands list referenced and orphan assets', async () => {
   assert.doesNotMatch(orphanMessages.join('\n'), /pinned-final\.png/);
 });
 
-test('assets gc writes a manifest and moves orphan assets plus unused text files', async () => {
+test('assets gc writes a deletion plan without changing the workspace', async () => {
   const root = await createWorkspace();
   const messages: string[] = [];
 
@@ -96,15 +96,55 @@ test('assets gc writes a manifest and moves orphan assets plus unused text files
     'gc',
     '--root',
     root,
-    '--move-to',
-    '.blueprinttool/.trash/assets-test',
-    '--manifest',
-    '.blueprinttool/.trash/assets-test-manifest.json',
+    '--write-plan',
+    '.blueprinttool/assets-gc-plan.json',
   ], { emit: (message) => messages.push(message) });
 
   assert.equal(result.ok, true);
-  assert.match(messages.join('\n'), /MOVED orphan assets: 4/);
-  assert.match(messages.join('\n'), /MOVED unused text files: 3/);
+  assert.match(messages.join('\n'), /Wrote asset GC plan/);
+  assert.match(messages.join('\n'), /Files to delete: 7/);
+  assert.equal(await readFile(join(root, '.blueprinttool/card-images/ui-research/orphan.png'), 'utf8'), 'orphan');
+  assert.equal(await readFile(join(root, '.blueprinttool/card-images/ui-research/json-key.svg'), 'utf8'), 'svg');
+  assert.equal(await readFile(join(root, '.blueprinttool/removed.json'), 'utf8').then((text) => JSON.parse(text).cards[0].id), 'removed');
+  const plan = JSON.parse(await readFile(join(root, '.blueprinttool/assets-gc-plan.json'), 'utf8'));
+  assert.equal(plan.kind, 'corev2.asset-gc-plan');
+  assert.equal(plan.summary.orphanAssets, 4);
+  assert.equal(plan.summary.unusedTextFiles, 3);
+  assert.equal(plan.summary.deleteFiles, 7);
+  assert.deepEqual(plan.deleteFiles.map((file: { path: string }) => file.path).sort(), [
+    '.blueprinttool/card-images/ui-research/json-key.svg',
+    '.blueprinttool/card-images/ui-research/orphan.png',
+    '.blueprinttool/card-images/ui-research/removed-ledger.png',
+    '.blueprinttool/card-images/ui-research/removed-thread.png',
+    '.blueprinttool/cards/removed/card-removed.md',
+    '.blueprinttool/removed.json',
+    '.blueprinttool/threads/removed/thread-removed.md',
+  ]);
+});
+
+test('assets apply-gc-plan deletes only files listed in the plan', async () => {
+  const root = await createWorkspace();
+  await dispatchLedgerCliCommandController([
+    'assets',
+    'gc',
+    '--root',
+    root,
+    '--write-plan',
+    '.blueprinttool/assets-gc-plan.json',
+  ], { emit: () => undefined });
+  const messages: string[] = [];
+
+  const result = await dispatchLedgerCliCommandController([
+    'assets',
+    'apply-gc-plan',
+    '--root',
+    root,
+    '--plan',
+    '.blueprinttool/assets-gc-plan.json',
+  ], { emit: (message) => messages.push(message) });
+
+  assert.equal(result.ok, true);
+  assert.match(messages.join('\n'), /Deleted files: 7/);
   await assert.rejects(readFile(join(root, '.blueprinttool/card-images/ui-research/orphan.png'), 'utf8'));
   await assert.rejects(readFile(join(root, '.blueprinttool/card-images/ui-research/json-key.svg'), 'utf8'));
   await assert.rejects(readFile(join(root, '.blueprinttool/removed.json'), 'utf8'));
@@ -112,14 +152,6 @@ test('assets gc writes a manifest and moves orphan assets plus unused text files
   await assert.rejects(readFile(join(root, '.blueprinttool/threads/removed/thread-removed.md'), 'utf8'));
   assert.equal(await readFile(join(root, '.blueprinttool/card-images/ui-research/keep.png'), 'utf8'), 'png');
   assert.equal(await readFile(join(root, '.blueprinttool/card-images/ui-research/pinned-final.png'), 'utf8'), 'pinned');
-  assert.equal(await readFile(join(root, '.blueprinttool/.trash/assets-test/.blueprinttool/card-images/ui-research/orphan.png'), 'utf8'), 'orphan');
-  assert.equal(await readFile(join(root, '.blueprinttool/.trash/assets-test/.blueprinttool/card-images/ui-research/json-key.svg'), 'utf8'), 'svg');
-  assert.equal(await readFile(join(root, '.blueprinttool/.trash/assets-test/.blueprinttool/removed.json'), 'utf8').then((text) => JSON.parse(text).cards[0].id), 'removed');
-  const manifest = JSON.parse(await readFile(join(root, '.blueprinttool/.trash/assets-test-manifest.json'), 'utf8'));
-  assert.equal(manifest.summary.orphanAssets, 4);
-  assert.equal(manifest.summary.pinnedAssets, 1);
-  assert.equal(manifest.summary.staleJsonReferences, 1);
-  assert.equal(manifest.summary.unusedTextFiles, 3);
 });
 
 test('assets prune-json removes stale imageSizes keys without using json as asset truth', async () => {

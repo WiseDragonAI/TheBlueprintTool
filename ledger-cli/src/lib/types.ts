@@ -8,7 +8,7 @@ export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
 export type LedgerCommand = 'answer' | 'done' | 'export' | 'help' | 'inspect' | 'mutate' | 'overview' | 'todo' | 'unanswered';
 
-export type AssetCommand = 'gc' | 'list-orphans' | 'list-referenced' | 'prune-json' | 'stage-referenced';
+export type AssetCommand = 'apply-gc-plan' | 'gc' | 'list-orphans' | 'list-referenced' | 'prune-json' | 'stage-referenced';
 
 export type LedgerMutationOperation = {
   addCardFile?: string;
@@ -54,14 +54,13 @@ export type LedgerCliCommand = {
 
 export type AssetOperation = {
   action: AssetCommand;
-  delete: boolean;
   domain?: string;
   dryRun: boolean;
   includeRisky: string[];
   json: boolean;
-  manifestFile?: string;
-  moveTo?: string;
+  planFile?: string;
   root?: string;
+  writePlanFile?: string;
   write: boolean;
 };
 
@@ -89,6 +88,36 @@ export type ClassifiedTextFile = {
   referencedBy?: string[];
 };
 
+export type AssetGcPlanEntry = {
+  path: string;
+  bytes: number;
+  category: 'orphan-asset' | 'unused-text';
+  detail: string;
+};
+
+export type AssetGcPlan = {
+  kind: 'corev2.asset-gc-plan';
+  version: 1;
+  generatedAt: string;
+  root: string;
+  activeLedgerFiles: string[];
+  deleteFiles: AssetGcPlanEntry[];
+  summary: {
+    deleteBytes: number;
+    deleteFiles: number;
+    orphanAssets: number;
+    unusedTextFiles: number;
+  };
+};
+
+export type AppliedAssetGcPlan = {
+  planFile: string;
+  root: string;
+  deletedFiles: string[];
+  removedDirectories: string[];
+  skippedMissingFiles: string[];
+};
+
 export type AssetGcReport = {
   generatedAt: string;
   root: string;
@@ -105,13 +134,10 @@ export type AssetGcReport = {
   prunedJsonReferences?: AssetReference[];
   softReferences: AssetReference[];
   staleJsonReferences: AssetReference[];
-  movedAssets?: Array<{ from: string; to: string }>;
-  movedTextFiles?: Array<{ from: string; to: string }>;
   summary: {
     activeLedgers: number;
     jsonReferences: number;
     managedAssets: number;
-    movedTextFiles?: number;
     missingReferences: number;
     orphanAssets: number;
     orphanBytes: number;

@@ -117,8 +117,8 @@ test('parse-ledger-cli-argv parses asset commands', () => {
     '--dry-run',
     '--include-risky',
     'ui-mockups',
-    '--manifest',
-    '.blueprinttool/.trash/assets.json',
+    '--write-plan',
+    '.blueprinttool/assets-gc-plan.json',
     '--write',
   ]);
 
@@ -127,6 +127,22 @@ test('parse-ledger-cli-argv parses asset commands', () => {
   assert.equal(command.assetOperation?.root, '/workspace');
   assert.equal(command.assetOperation?.dryRun, true);
   assert.deepEqual(command.assetOperation?.includeRisky, ['ui-mockups']);
-  assert.equal(command.assetOperation?.manifestFile, '.blueprinttool/.trash/assets.json');
+  assert.equal(command.assetOperation?.writePlanFile, '.blueprinttool/assets-gc-plan.json');
   assert.equal(command.assetOperation?.write, true);
+});
+
+test('parse-ledger-cli-argv parses asset GC plan application', () => {
+  const command = parseLedgerCliArgv([
+    'assets',
+    'apply-gc-plan',
+    '--root',
+    '/workspace',
+    '--plan',
+    '.blueprinttool/assets-gc-plan.json',
+  ]);
+
+  assert.equal(command.mode, 'assets');
+  assert.equal(command.assetOperation?.action, 'apply-gc-plan');
+  assert.equal(command.assetOperation?.root, '/workspace');
+  assert.equal(command.assetOperation?.planFile, '.blueprinttool/assets-gc-plan.json');
 });

@@ -60,21 +60,6 @@ export function formatAssetGcReport(report: AssetGcReport): string {
       ...report.prunedJsonReferences.map((reference) => `  ${reference.path} <- ${reference.sources.join(', ')}`),
     );
   }
-  if (report.movedAssets && report.movedAssets.length > 0) {
-    lines.push(
-      '',
-      `MOVED orphan assets: ${report.movedAssets.length}`,
-      ...report.movedAssets.map((asset) => `  ${asset.from} -> ${asset.to}`),
-    );
-  }
-  if (report.movedTextFiles && report.movedTextFiles.length > 0) {
-    lines.push(
-      '',
-      `MOVED unused text files: ${report.movedTextFiles.length}`,
-      ...report.movedTextFiles.map((file) => `  ${file.from} -> ${file.to}`),
-    );
-  }
-
   return lines.join('\n');
 }
 

@@ -59,7 +59,7 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
     ? 'help'
     : mode === 'assets' ? 'assets'
     : mode === 'answer' || mode === 'done' || mode === 'export' || mode === 'mutate' || mode === 'overview' || mode === 'todo' || mode === 'unanswered' ? mode : 'inspect';
-  const assetAction = (argv[1] === 'gc' || argv[1] === 'list-orphans' || argv[1] === 'list-referenced' || argv[1] === 'prune-json' || argv[1] === 'stage-referenced'
+  const assetAction = (argv[1] === 'apply-gc-plan' || argv[1] === 'gc' || argv[1] === 'list-orphans' || argv[1] === 'list-referenced' || argv[1] === 'prune-json' || argv[1] === 'stage-referenced'
     ? argv[1]
     : 'gc') as AssetCommand;
   return {
@@ -77,14 +77,13 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
     assetOperation: normalizedMode === 'assets'
       ? {
         action: assetAction,
-        delete: argv.includes('--delete'),
         domain: flagValue(argv, '--domain'),
-        dryRun: argv.includes('--dry-run') || (!flagValue(argv, '--move-to') && !argv.includes('--delete') && assetAction === 'gc'),
+        dryRun: argv.includes('--dry-run') || (!flagValue(argv, '--write-plan') && assetAction === 'gc'),
         includeRisky: flagValues(argv, '--include-risky'),
         json: argv.includes('--json'),
-        manifestFile: flagValue(argv, '--manifest') ?? flagValue(argv, '--write-manifest'),
-        moveTo: flagValue(argv, '--move-to'),
+        planFile: flagValue(argv, '--plan'),
         root: flagValue(argv, '--root'),
+        writePlanFile: flagValue(argv, '--write-plan'),
         write: argv.includes('--write'),
       }
       : undefined,

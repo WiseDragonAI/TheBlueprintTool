@@ -1,10 +1,10 @@
 import { resolve } from 'node:path';
 import type { AssetGcReport, AssetOperation, Result } from '../../../lib/types.js';
-import { moveOrphanAssets } from '../effect/move-orphan-assets.js';
-import { moveWorkspaceFiles } from '../effect/move-workspace-files.js';
+import { applyAssetGcPlan } from '../effect/apply-asset-gc-plan.js';
 import { pruneJsonImageSizeReferences } from '../effect/prune-json-image-size-references.js';
 import { stageReferencedAssets } from '../effect/stage-referenced-assets.js';
-import { writeAssetManifest } from '../effect/write-asset-manifest.js';
+import { writeAssetGcPlan } from '../effect/write-asset-gc-plan.js';
+import { buildAssetGcPlan } from '../helper/build-asset-gc-plan.js';
 import { buildAssetGcReport } from '../helper/build-asset-gc-report.js';
 import { formatAssetGcReport, formatAssetPathList } from '../helper/format-asset-gc-report.js';
 
@@ -17,30 +17,54 @@ function commandOutput(operation: AssetOperation, report: AssetGcReport): string
 
 export async function manageAssetsController(operation: AssetOperation | undefined): Promise<Result<string>> {
   if (!operation) return { ok: false, error: 'Assets command requires an action.' };
-  if (operation.delete) return { ok: false, error: 'Asset hard-delete is not supported yet. Use --move-to first and inspect the trash manifest.' };
   if (operation.action === 'stage-referenced' && !operation.domain) {
     return { ok: false, error: 'assets stage-referenced requires --domain <name>.' };
   }
+  if (operation.action === 'apply-gc-plan' && !operation.planFile) {
+    return { ok: false, error: 'assets apply-gc-plan requires --plan <file>.' };
+  }
 
   const workspaceRoot = resolve(operation.root ?? process.cwd());
+  if (operation.action === 'apply-gc-plan') {
+    const applied = await applyAssetGcPlan({
+      planFile: operation.planFile ?? '',
+      workspaceRoot,
+    });
+    const output = operation.json
+      ? JSON.stringify(applied, null, 2)
+      : [
+        `Applied asset GC plan ${applied.planFile}`,
+        `Deleted files: ${applied.deletedFiles.length}`,
+        ...applied.deletedFiles.map((path) => `  ${path}`),
+        `Removed empty directories: ${applied.removedDirectories.length}`,
+        ...applied.removedDirectories.map((path) => `  ${path}`),
+        `Skipped missing files: ${applied.skippedMissingFiles.length}`,
+        ...applied.skippedMissingFiles.map((path) => `  ${path}`),
+      ].join('\n');
+    return { ok: true, value: output };
+  }
+
   const report = await buildAssetGcReport({
     domain: operation.action === 'stage-referenced' ? operation.domain : undefined,
     includeRisky: operation.includeRisky,
     workspaceRoot,
   });
 
-  if (operation.action === 'gc' && operation.moveTo) {
-    report.movedAssets = await moveOrphanAssets({
-      assets: report.orphanAssets,
-      moveTo: operation.moveTo,
+  if (operation.action === 'gc' && operation.writePlanFile) {
+    const plan = buildAssetGcPlan(report);
+    await writeAssetGcPlan({
+      plan,
+      planFile: operation.writePlanFile,
       workspaceRoot,
     });
-    report.movedTextFiles = await moveWorkspaceFiles({
-      files: report.unusedTextFiles,
-      moveTo: operation.moveTo,
-      workspaceRoot,
-    });
-    report.summary.movedTextFiles = report.movedTextFiles.length;
+    const output = operation.json
+      ? JSON.stringify(plan, null, 2)
+      : [
+        `Wrote asset GC plan ${operation.writePlanFile}`,
+        `Files to delete: ${plan.summary.deleteFiles}`,
+        `Bytes to delete: ${plan.summary.deleteBytes}`,
+      ].join('\n');
+    return { ok: true, value: output };
   }
 
   if (operation.action === 'prune-json') {
@@ -61,14 +85,7 @@ export async function manageAssetsController(operation: AssetOperation | undefin
     const output = operation.json
       ? JSON.stringify({ ...report, stagedPaths }, null, 2)
       : [`Staged referenced BlueprintTool assets for domain ${operation.domain}.`, ...stagedPaths.map((path) => `  ${path}`)].join('\n');
-    if (operation.manifestFile) {
-      await writeAssetManifest({ manifestFile: operation.manifestFile, report, workspaceRoot });
-    }
     return { ok: true, value: output };
-  }
-
-  if (operation.manifestFile) {
-    await writeAssetManifest({ manifestFile: operation.manifestFile, report, workspaceRoot });
   }
 
   return { ok: true, value: commandOutput(operation, report) };
