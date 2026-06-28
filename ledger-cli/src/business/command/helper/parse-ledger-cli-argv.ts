@@ -59,7 +59,7 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
     ? 'help'
     : mode === 'assets' ? 'assets'
     : mode === 'answer' || mode === 'done' || mode === 'export' || mode === 'mutate' || mode === 'overview' || mode === 'todo' || mode === 'unanswered' ? mode : 'inspect';
-  const assetAction = (argv[1] === 'gc' || argv[1] === 'list-orphans' || argv[1] === 'list-referenced' || argv[1] === 'stage-referenced'
+  const assetAction = (argv[1] === 'gc' || argv[1] === 'list-orphans' || argv[1] === 'list-referenced' || argv[1] === 'prune-json' || argv[1] === 'stage-referenced'
     ? argv[1]
     : 'gc') as AssetCommand;
   return {
@@ -85,6 +85,7 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
         manifestFile: flagValue(argv, '--manifest') ?? flagValue(argv, '--write-manifest'),
         moveTo: flagValue(argv, '--move-to'),
         root: flagValue(argv, '--root'),
+        write: argv.includes('--write'),
       }
       : undefined,
     mutationFile: flagValue(argv, '--mutation'),

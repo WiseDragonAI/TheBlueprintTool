@@ -52,14 +52,7 @@ export function extractHardAssetReferences(input: { content: string; sourceFile:
   const output: ExtractedAssetReference[] = [];
 
   if (input.sourceFile.endsWith('.json')) {
-    try {
-      collectJsonStrings(JSON.parse(input.content), (rawReference, kind) => {
-        addReference(output, { ...input, kind, rawReference });
-      });
-      return output;
-    } catch {
-      return output;
-    }
+    return output;
   }
 
   const content = stripCodeFences(input.content);
@@ -74,6 +67,19 @@ export function extractHardAssetReferences(input: { content: string; sourceFile:
     addReference(output, { ...input, kind: 'html-img', rawReference: match[1] ?? '' });
   }
 
+  return output;
+}
+
+export function extractJsonAssetReferences(input: { content: string; sourceFile: string; workspaceRoot: string }): ExtractedAssetReference[] {
+  const output: ExtractedAssetReference[] = [];
+  if (!input.sourceFile.endsWith('.json')) return output;
+  try {
+    collectJsonStrings(JSON.parse(input.content), (rawReference, kind) => {
+      addReference(output, { ...input, kind, rawReference });
+    });
+  } catch {
+    return output;
+  }
   return output;
 }
 

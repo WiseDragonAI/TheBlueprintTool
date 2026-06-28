@@ -34,11 +34,25 @@ export function formatAssetGcReport(report: AssetGcReport): string {
       ...report.missingReferences.map((reference) => `  ${reference.path} <- ${reference.sources.join(', ')}`),
     );
   }
+  if (report.staleJsonReferences.length > 0) {
+    lines.push(
+      '',
+      `STALE JSON references not used for keeping assets: ${report.staleJsonReferences.length}`,
+      ...report.staleJsonReferences.map((reference) => `  ${reference.path} <- ${reference.sources.join(', ')}`),
+    );
+  }
   if (report.softReferences.length > 0) {
     lines.push(
       '',
       `SOFT references not used for keeping assets: ${report.softReferences.length}`,
       ...report.softReferences.map((reference) => `  ${reference.path} <- ${reference.sources.join(', ')}`),
+    );
+  }
+  if (report.prunedJsonReferences && report.prunedJsonReferences.length > 0) {
+    lines.push(
+      '',
+      `PRUNED JSON imageSizes references: ${report.prunedJsonReferences.length}`,
+      ...report.prunedJsonReferences.map((reference) => `  ${reference.path} <- ${reference.sources.join(', ')}`),
     );
   }
   if (report.movedAssets && report.movedAssets.length > 0) {

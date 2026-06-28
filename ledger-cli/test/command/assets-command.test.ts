@@ -58,11 +58,12 @@ test('assets commands list referenced and orphan assets', async () => {
 
   assert.equal(referenced.ok, true);
   assert.match(referencedMessages.join('\n'), /keep\.png/);
-  assert.match(referencedMessages.join('\n'), /json-key\.svg/);
+  assert.doesNotMatch(referencedMessages.join('\n'), /json-key\.svg/);
   assert.match(referencedMessages.join('\n'), /thread-a\/keep\.webp/);
   assert.doesNotMatch(referencedMessages.join('\n'), /orphan\.png/);
   assert.equal(orphan.ok, true);
   assert.match(orphanMessages.join('\n'), /orphan\.png/);
+  assert.match(orphanMessages.join('\n'), /json-key\.svg/);
   assert.doesNotMatch(orphanMessages.join('\n'), /pinned-final\.png/);
 });
 
@@ -82,14 +83,48 @@ test('assets gc writes a manifest and moves only orphan assets', async () => {
   ], { emit: (message) => messages.push(message) });
 
   assert.equal(result.ok, true);
-  assert.match(messages.join('\n'), /MOVED orphan assets: 1/);
+  assert.match(messages.join('\n'), /MOVED orphan assets: 2/);
   await assert.rejects(readFile(join(root, '.blueprinttool/card-images/ui-research/orphan.png'), 'utf8'));
+  await assert.rejects(readFile(join(root, '.blueprinttool/card-images/ui-research/json-key.svg'), 'utf8'));
   assert.equal(await readFile(join(root, '.blueprinttool/card-images/ui-research/keep.png'), 'utf8'), 'png');
   assert.equal(await readFile(join(root, '.blueprinttool/card-images/ui-research/pinned-final.png'), 'utf8'), 'pinned');
   assert.equal(await readFile(join(root, '.blueprinttool/.trash/assets-test/.blueprinttool/card-images/ui-research/orphan.png'), 'utf8'), 'orphan');
+  assert.equal(await readFile(join(root, '.blueprinttool/.trash/assets-test/.blueprinttool/card-images/ui-research/json-key.svg'), 'utf8'), 'svg');
   const manifest = JSON.parse(await readFile(join(root, '.blueprinttool/.trash/assets-test-manifest.json'), 'utf8'));
-  assert.equal(manifest.summary.orphanAssets, 1);
+  assert.equal(manifest.summary.orphanAssets, 2);
   assert.equal(manifest.summary.pinnedAssets, 1);
+  assert.equal(manifest.summary.staleJsonReferences, 1);
+});
+
+test('assets prune-json removes stale imageSizes keys without using json as asset truth', async () => {
+  const root = await createWorkspace();
+  const dryRun = await dispatchLedgerCliCommandController([
+    'assets',
+    'prune-json',
+    '--root',
+    root,
+    '--dry-run',
+    '--json',
+  ], { emit: () => undefined });
+
+  assert.equal(dryRun.ok, true);
+  const dryRunReport = JSON.parse(String(dryRun.value));
+  assert.equal(dryRunReport.summary.prunedJsonReferences, 1);
+  assert.match(await readFile(join(root, '.blueprinttool/ui-research.json'), 'utf8'), /json-key\.svg/);
+
+  const write = await dispatchLedgerCliCommandController([
+    'assets',
+    'prune-json',
+    '--root',
+    root,
+    '--write',
+    '--json',
+  ], { emit: () => undefined });
+
+  assert.equal(write.ok, true);
+  const prunedLedger = await readFile(join(root, '.blueprinttool/ui-research.json'), 'utf8');
+  assert.doesNotMatch(prunedLedger, /json-key\.svg/);
+  assert.doesNotMatch(prunedLedger, /imageSizes/);
 });
 
 test('assets stage-referenced stages domain text and referenced assets only', async () => {
@@ -105,7 +140,7 @@ test('assets stage-referenced stages domain text and referenced assets only', as
     root,
     '--domain',
     'ui-research',
-  ]);
+  ], { emit: () => undefined });
 
   assert.equal(result.ok, true);
   const status = await execFileAsync('git', ['-C', root, 'diff', '--cached', '--name-only']);
@@ -114,8 +149,8 @@ test('assets stage-referenced stages domain text and referenced assets only', as
   assert.ok(staged.includes('.blueprinttool/threads/ui-research/thread-a.md'));
   assert.ok(staged.includes('.blueprinttool/ui-research.json'));
   assert.ok(staged.includes('.blueprinttool/card-images/ui-research/keep.png'));
-  assert.ok(staged.includes('.blueprinttool/card-images/ui-research/json-key.svg'));
   assert.ok(staged.includes('.blueprinttool/thread-images/thread-a/keep.webp'));
   assert.ok(staged.includes('.blueprinttool/card-images/ui-research/pinned-final.png'));
   assert.ok(!staged.includes('.blueprinttool/card-images/ui-research/orphan.png'));
+  assert.ok(!staged.includes('.blueprinttool/card-images/ui-research/json-key.svg'));
 });

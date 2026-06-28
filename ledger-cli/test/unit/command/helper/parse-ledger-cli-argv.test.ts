@@ -119,6 +119,7 @@ test('parse-ledger-cli-argv parses asset commands', () => {
     'ui-mockups',
     '--manifest',
     '.blueprinttool/.trash/assets.json',
+    '--write',
   ]);
 
   assert.equal(command.mode, 'assets');
@@ -127,4 +128,5 @@ test('parse-ledger-cli-argv parses asset commands', () => {
   assert.equal(command.assetOperation?.dryRun, true);
   assert.deepEqual(command.assetOperation?.includeRisky, ['ui-mockups']);
   assert.equal(command.assetOperation?.manifestFile, '.blueprinttool/.trash/assets.json');
+  assert.equal(command.assetOperation?.write, true);
 });

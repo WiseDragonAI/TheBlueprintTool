@@ -30,14 +30,17 @@ function referenceByPath(references: AssetReference[]): Map<string, AssetReferen
 
 function summarize(report: Omit<AssetGcReport, 'summary'>): AssetGcReport['summary'] {
   return {
+    jsonReferences: report.jsonReferences.length,
     managedAssets: report.referencedAssets.length + report.orphanAssets.length + report.pinnedAssets.length,
     missingReferences: report.missingReferences.length,
     orphanAssets: report.orphanAssets.length,
     orphanBytes: report.orphanAssets.reduce((sum, asset) => sum + asset.bytes, 0),
     pinnedAssets: report.pinnedAssets.length,
+    prunedJsonReferences: report.prunedJsonReferences?.length,
     referencedAssets: report.referencedAssets.length,
     referencedBytes: report.referencedAssets.reduce((sum, asset) => sum + asset.bytes, 0),
     softReferences: report.softReferences.length,
+    staleJsonReferences: report.staleJsonReferences.length,
   };
 }
 
@@ -73,7 +76,9 @@ export async function buildAssetGcReport(input: { domain?: string; includeRisky?
     orphanAssets,
     pinnedAssets,
     missingReferences: references.hardReferences.filter((reference) => !reference.exists),
+    jsonReferences: references.jsonReferences,
     softReferences: references.softReferences,
+    staleJsonReferences: references.jsonReferences.filter((reference) => !hardReferences.has(reference.path)),
   };
 
   return {

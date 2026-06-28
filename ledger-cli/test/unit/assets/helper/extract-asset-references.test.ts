@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { extractHardAssetReferences, extractSoftAssetReferences, normalizeAssetReference } from '../../../../src/index.js';
+import { extractHardAssetReferences, extractJsonAssetReferences, extractSoftAssetReferences, normalizeAssetReference } from '../../../../src/index.js';
 
 const workspaceRoot = '/workspace';
 const sourceFile = '/workspace/.blueprinttool/cards/specs/card-a.md';
@@ -20,7 +20,7 @@ test('normalizeAssetReference normalizes workspace asset references', () => {
   );
 });
 
-test('extractHardAssetReferences reads markdown, html, and json media references', () => {
+test('extractHardAssetReferences reads markdown and html media references', () => {
   const markdown = [
     '![A](/.blueprinttool/card-images/a.png "Title")',
     '<img src=".blueprinttool/thread-images/t/b.webp">',
@@ -36,6 +36,16 @@ test('extractHardAssetReferences reads markdown, html, and json media references
   ]);
 
   const jsonRefs = extractHardAssetReferences({
+    content: JSON.stringify({ imageSizes: { '/.blueprinttool/card-images/json.png': { width: 10 } }, src: '.blueprinttool/card-images/value.svg' }),
+    sourceFile: '/workspace/.blueprinttool/specs.json',
+    workspaceRoot,
+  });
+
+  assert.deepEqual(jsonRefs, []);
+});
+
+test('extractJsonAssetReferences reports json media references separately', () => {
+  const jsonRefs = extractJsonAssetReferences({
     content: JSON.stringify({ imageSizes: { '/.blueprinttool/card-images/json.png': { width: 10 } }, src: '.blueprinttool/card-images/value.svg' }),
     sourceFile: '/workspace/.blueprinttool/specs.json',
     workspaceRoot,

@@ -8,7 +8,7 @@ export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
 export type LedgerCommand = 'answer' | 'done' | 'export' | 'help' | 'inspect' | 'mutate' | 'overview' | 'todo' | 'unanswered';
 
-export type AssetCommand = 'gc' | 'list-orphans' | 'list-referenced' | 'stage-referenced';
+export type AssetCommand = 'gc' | 'list-orphans' | 'list-referenced' | 'prune-json' | 'stage-referenced';
 
 export type LedgerMutationOperation = {
   addCardFile?: string;
@@ -62,6 +62,7 @@ export type AssetOperation = {
   manifestFile?: string;
   moveTo?: string;
   root?: string;
+  write: boolean;
 };
 
 export type AssetReferenceKind = 'html-img' | 'json-key' | 'json-value' | 'markdown-image' | 'raw-media-mention';
@@ -90,17 +91,23 @@ export type AssetGcReport = {
   orphanAssets: ClassifiedAsset[];
   pinnedAssets: ClassifiedAsset[];
   missingReferences: AssetReference[];
+  jsonReferences: AssetReference[];
+  prunedJsonReferences?: AssetReference[];
   softReferences: AssetReference[];
+  staleJsonReferences: AssetReference[];
   movedAssets?: Array<{ from: string; to: string }>;
   summary: {
+    jsonReferences: number;
     managedAssets: number;
     missingReferences: number;
     orphanAssets: number;
     orphanBytes: number;
     pinnedAssets: number;
+    prunedJsonReferences?: number;
     referencedAssets: number;
     referencedBytes: number;
     softReferences: number;
+    staleJsonReferences: number;
   };
 };
 

@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs';
 import { resolve } from 'node:path';
 import type { AssetReference, AssetReferenceKind } from '../../../lib/types.js';
 import { collectAssetSourceFiles } from './collect-asset-source-files.js';
-import { extractHardAssetReferences, extractSoftAssetReferences } from './extract-asset-references.js';
+import { extractHardAssetReferences, extractJsonAssetReferences, extractSoftAssetReferences } from './extract-asset-references.js';
 import { workspaceRelativePath } from './workspace-paths.js';
 
 type MutableReference = {
@@ -43,17 +43,22 @@ function materializeReferences(references: Map<string, MutableReference>): Asset
 
 export async function collectAssetReferences(input: { domain?: string; workspaceRoot: string }): Promise<{
   hardReferences: AssetReference[];
+  jsonReferences: AssetReference[];
   scannedSourceFiles: string[];
   softReferences: AssetReference[];
 }> {
   const sourceFiles = await collectAssetSourceFiles(input);
   const hardReferences = new Map<string, MutableReference>();
+  const jsonReferences = new Map<string, MutableReference>();
   const softReferences = new Map<string, MutableReference>();
 
   for (const sourceFile of sourceFiles) {
     const content = await fs.readFile(sourceFile, 'utf8').catch(() => '');
     for (const reference of extractHardAssetReferences({ content, sourceFile, workspaceRoot: input.workspaceRoot })) {
       addReference(hardReferences, { ...reference, sourceFile, workspaceRoot: input.workspaceRoot });
+    }
+    for (const reference of extractJsonAssetReferences({ content, sourceFile, workspaceRoot: input.workspaceRoot })) {
+      addReference(jsonReferences, { ...reference, sourceFile, workspaceRoot: input.workspaceRoot });
     }
     for (const reference of extractSoftAssetReferences({ content, sourceFile, workspaceRoot: input.workspaceRoot })) {
       addReference(softReferences, { ...reference, sourceFile, workspaceRoot: input.workspaceRoot });
@@ -66,9 +71,13 @@ export async function collectAssetReferences(input: { domain?: string; workspace
   for (const [path, entry] of softReferences) {
     entry.exists = await exists(resolve(input.workspaceRoot, path));
   }
+  for (const [path, entry] of jsonReferences) {
+    entry.exists = await exists(resolve(input.workspaceRoot, path));
+  }
 
   return {
     hardReferences: materializeReferences(hardReferences),
+    jsonReferences: materializeReferences(jsonReferences),
     scannedSourceFiles: sourceFiles.map((sourceFile) => workspaceRelativePath(input.workspaceRoot, sourceFile)).sort(),
     softReferences: materializeReferences(softReferences).filter((reference) => !hardReferences.has(reference.path)),
   };
