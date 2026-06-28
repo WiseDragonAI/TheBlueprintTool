@@ -8,6 +8,8 @@ export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
 export type LedgerCommand = 'answer' | 'done' | 'export' | 'help' | 'inspect' | 'mutate' | 'overview' | 'todo' | 'unanswered';
 
+export type AssetCommand = 'gc' | 'list-orphans' | 'list-referenced' | 'stage-referenced';
+
 export type LedgerMutationOperation = {
   addCardFile?: string;
   addRelationships: Array<{
@@ -30,8 +32,9 @@ export type LedgerMutationOperation = {
 };
 
 export type LedgerCliCommand = {
-  mode: LedgerCommand;
+  mode: LedgerCommand | 'assets';
   ledgerJsonFile: string;
+  assetOperation?: AssetOperation;
   answerOperation?: {
     message?: string;
     messageFile?: string;
@@ -46,6 +49,58 @@ export type LedgerCliCommand = {
   statusOperation?: {
     cardId?: string;
     status: 'todo' | 'done';
+  };
+};
+
+export type AssetOperation = {
+  action: AssetCommand;
+  delete: boolean;
+  domain?: string;
+  dryRun: boolean;
+  includeRisky: string[];
+  json: boolean;
+  manifestFile?: string;
+  moveTo?: string;
+  root?: string;
+};
+
+export type AssetReferenceKind = 'html-img' | 'json-key' | 'json-value' | 'markdown-image' | 'raw-media-mention';
+
+export type AssetReference = {
+  path: string;
+  exists: boolean;
+  referenceKinds: AssetReferenceKind[];
+  sources: string[];
+};
+
+export type ClassifiedAsset = {
+  path: string;
+  bytes: number;
+  root: string;
+  referenceKinds?: AssetReferenceKind[];
+  sources?: string[];
+};
+
+export type AssetGcReport = {
+  generatedAt: string;
+  root: string;
+  managedRoots: string[];
+  scannedSourceFiles: string[];
+  referencedAssets: ClassifiedAsset[];
+  orphanAssets: ClassifiedAsset[];
+  pinnedAssets: ClassifiedAsset[];
+  missingReferences: AssetReference[];
+  softReferences: AssetReference[];
+  movedAssets?: Array<{ from: string; to: string }>;
+  summary: {
+    managedAssets: number;
+    missingReferences: number;
+    orphanAssets: number;
+    orphanBytes: number;
+    pinnedAssets: number;
+    referencedAssets: number;
+    referencedBytes: number;
+    softReferences: number;
   };
 };
 

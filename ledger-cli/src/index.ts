@@ -13,6 +13,10 @@ export { formatLedgerMarkdownExport } from './business/ledger/helper/format-ledg
 export { appendThreadAnswer } from './business/ledger/helper/append-thread-answer.js';
 export { findUnansweredThreads } from './business/ledger/helper/find-unanswered-threads.js';
 export { formatUnansweredThreads } from './business/ledger/helper/format-unanswered-threads.js';
+export { manageAssetsController } from './business/assets/controller/manage-assets.js';
+export { buildAssetGcReport } from './business/assets/helper/build-asset-gc-report.js';
+export { extractHardAssetReferences, extractSoftAssetReferences } from './business/assets/helper/extract-asset-references.js';
+export { normalizeAssetReference } from './business/assets/helper/workspace-paths.js';
 export { telemetry, telemetryRecorder } from './lib/telemetry/telemetry.js';
 export { nodeFileSystem } from './lib/fs/node-file-system.js';
 export type * from './lib/types.js';

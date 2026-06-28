@@ -7,6 +7,7 @@ import { telemetry } from '../../../lib/telemetry/telemetry.js';
 import { parseLedgerCliArgv } from '../helper/parse-ledger-cli-argv.js';
 import { formatLedgerCliHelp } from '../helper/format-ledger-cli-help.js';
 import { manageLedgerJsonController } from '../../ledger/controller/manage-ledger-json.js';
+import { manageAssetsController } from '../../assets/controller/manage-assets.js';
 
 export async function dispatchLedgerCliCommandController(
   argv: string[],
@@ -20,6 +21,14 @@ export async function dispatchLedgerCliCommandController(
     const helpText = formatLedgerCliHelp();
     ports.emit ? ports.emit(helpText) : console.log(helpText);
     return { ok: true, value: helpText };
+  }
+
+  if (command.mode === 'assets') {
+    const result = await manageAssetsController(command.assetOperation);
+    if (result.ok) {
+      ports.emit ? ports.emit(result.value) : console.log(result.value);
+    }
+    return result;
   }
 
   const result = await manageLedgerJsonController({

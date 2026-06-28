@@ -107,3 +107,24 @@ test('parse-ledger-cli-argv parses answer commands', () => {
   assert.equal(command.answerOperation?.threadId, 'thread-card-a');
   assert.equal(command.answerOperation?.message, 'Agent answer.');
 });
+
+test('parse-ledger-cli-argv parses asset commands', () => {
+  const command = parseLedgerCliArgv([
+    'assets',
+    'gc',
+    '--root',
+    '/workspace',
+    '--dry-run',
+    '--include-risky',
+    'ui-mockups',
+    '--manifest',
+    '.blueprinttool/.trash/assets.json',
+  ]);
+
+  assert.equal(command.mode, 'assets');
+  assert.equal(command.assetOperation?.action, 'gc');
+  assert.equal(command.assetOperation?.root, '/workspace');
+  assert.equal(command.assetOperation?.dryRun, true);
+  assert.deepEqual(command.assetOperation?.includeRisky, ['ui-mockups']);
+  assert.equal(command.assetOperation?.manifestFile, '.blueprinttool/.trash/assets.json');
+});

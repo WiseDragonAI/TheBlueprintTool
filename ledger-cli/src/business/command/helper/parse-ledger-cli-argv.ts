@@ -2,7 +2,7 @@
  * WHAT: CLI argv parser for ledger-cli commands and file arguments.
  * WHY: ledger command controllers need one normalized action payload from terminal input.
  */
-import type { LedgerCliCommand, LedgerCommand } from '../../../lib/types.js';
+import type { AssetCommand, LedgerCliCommand, LedgerCommand } from '../../../lib/types.js';
 
 function flagValue(args: string[], flag: string): string | undefined {
   const index = args.indexOf(flag);
@@ -55,9 +55,13 @@ function relationshipValues(args: string[]): Array<{ from: string; id: string; l
 
 export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
   const [mode] = argv;
-  const normalizedMode: LedgerCommand = argv.length === 0 || argv.includes('--help') || argv.includes('-h') || mode === 'help'
+  const normalizedMode: LedgerCommand | 'assets' = argv.length === 0 || argv.includes('--help') || argv.includes('-h') || mode === 'help'
     ? 'help'
+    : mode === 'assets' ? 'assets'
     : mode === 'answer' || mode === 'done' || mode === 'export' || mode === 'mutate' || mode === 'overview' || mode === 'todo' || mode === 'unanswered' ? mode : 'inspect';
+  const assetAction = (argv[1] === 'gc' || argv[1] === 'list-orphans' || argv[1] === 'list-referenced' || argv[1] === 'stage-referenced'
+    ? argv[1]
+    : 'gc') as AssetCommand;
   return {
     mode: normalizedMode,
     ledgerJsonFile: flagValue(argv, '--ledger') ?? argv[1] ?? '../.blueprinttool/specs.json',
@@ -70,6 +74,19 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
     exportOperation: {
       outputFile: flagValue(argv, '--output') ?? flagValue(argv, '--out'),
     },
+    assetOperation: normalizedMode === 'assets'
+      ? {
+        action: assetAction,
+        delete: argv.includes('--delete'),
+        domain: flagValue(argv, '--domain'),
+        dryRun: argv.includes('--dry-run') || (!flagValue(argv, '--move-to') && !argv.includes('--delete') && assetAction === 'gc'),
+        includeRisky: flagValues(argv, '--include-risky'),
+        json: argv.includes('--json'),
+        manifestFile: flagValue(argv, '--manifest') ?? flagValue(argv, '--write-manifest'),
+        moveTo: flagValue(argv, '--move-to'),
+        root: flagValue(argv, '--root'),
+      }
+      : undefined,
     mutationFile: flagValue(argv, '--mutation'),
     mutationOperation: {
       addCardFile: flagValue(argv, '--add-card-file'),
