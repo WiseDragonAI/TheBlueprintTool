@@ -1,5 +1,6 @@
-import { promises as fs } from 'node:fs';
 import { basename, resolve } from 'node:path';
+import { promises as fs } from 'node:fs';
+import { collectBlueprinttoolTextState } from './collect-blueprinttool-text-state.js';
 import { walkFiles } from './walk-files.js';
 
 async function exists(path: string): Promise<boolean> {
@@ -9,14 +10,6 @@ async function exists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-async function topLevelJsonFiles(blueprinttoolRoot: string): Promise<string[]> {
-  if (!await exists(blueprinttoolRoot)) return [];
-  const entries = await fs.readdir(blueprinttoolRoot, { withFileTypes: true });
-  return entries
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.json') && !entry.name.startsWith('.'))
-    .map((entry) => resolve(blueprinttoolRoot, entry.name));
 }
 
 async function durableCatalogFiles(blueprinttoolRoot: string): Promise<string[]> {
@@ -32,27 +25,18 @@ async function durableCatalogFiles(blueprinttoolRoot: string): Promise<string[]>
 
 export async function collectAssetSourceFiles(input: { domain?: string; workspaceRoot: string }): Promise<string[]> {
   const blueprinttoolRoot = resolve(input.workspaceRoot, '.blueprinttool');
-  const cardRoot = resolve(blueprinttoolRoot, 'cards', input.domain ?? '');
-  const threadRoot = resolve(blueprinttoolRoot, 'threads', input.domain ?? '');
-  const markdownFiles = [
-    ...await walkFiles(cardRoot, (path) => path.endsWith('.md')),
-    ...await walkFiles(threadRoot, (path) => path.endsWith('.md')),
-  ];
+  const textState = await collectBlueprinttoolTextState(input);
 
   if (input.domain) {
-    const ledgerFile = resolve(blueprinttoolRoot, `${input.domain}.json`);
-    const ledgerFiles = await exists(ledgerFile) ? [ledgerFile] : [];
     const catalogFiles = input.domain === 'ui-research' ? await durableCatalogFiles(blueprinttoolRoot) : [];
     return Array.from(new Set([
-      ...markdownFiles,
-      ...ledgerFiles,
+      ...textState.sourceFiles,
       ...catalogFiles,
     ])).sort();
   }
 
   return Array.from(new Set([
-    ...markdownFiles,
-    ...await topLevelJsonFiles(blueprinttoolRoot),
+    ...textState.sourceFiles,
     ...await durableCatalogFiles(blueprinttoolRoot),
   ])).sort();
 }

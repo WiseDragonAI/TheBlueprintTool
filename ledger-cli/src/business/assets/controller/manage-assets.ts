@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import type { AssetGcReport, AssetOperation, Result } from '../../../lib/types.js';
 import { moveOrphanAssets } from '../effect/move-orphan-assets.js';
+import { moveWorkspaceFiles } from '../effect/move-workspace-files.js';
 import { pruneJsonImageSizeReferences } from '../effect/prune-json-image-size-references.js';
 import { stageReferencedAssets } from '../effect/stage-referenced-assets.js';
 import { writeAssetManifest } from '../effect/write-asset-manifest.js';
@@ -34,6 +35,12 @@ export async function manageAssetsController(operation: AssetOperation | undefin
       moveTo: operation.moveTo,
       workspaceRoot,
     });
+    report.movedTextFiles = await moveWorkspaceFiles({
+      files: report.unusedTextFiles,
+      moveTo: operation.moveTo,
+      workspaceRoot,
+    });
+    report.summary.movedTextFiles = report.movedTextFiles.length;
   }
 
   if (operation.action === 'prune-json') {

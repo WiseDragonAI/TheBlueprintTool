@@ -82,13 +82,23 @@ export type ClassifiedAsset = {
   sources?: string[];
 };
 
+export type ClassifiedTextFile = {
+  path: string;
+  bytes: number;
+  kind: 'card-markdown' | 'ledger-json' | 'thread-markdown';
+  referencedBy?: string[];
+};
+
 export type AssetGcReport = {
   generatedAt: string;
   root: string;
   managedRoots: string[];
   scannedSourceFiles: string[];
+  activeLedgerFiles: string[];
   referencedAssets: ClassifiedAsset[];
+  referencedTextFiles: ClassifiedTextFile[];
   orphanAssets: ClassifiedAsset[];
+  unusedTextFiles: ClassifiedTextFile[];
   pinnedAssets: ClassifiedAsset[];
   missingReferences: AssetReference[];
   jsonReferences: AssetReference[];
@@ -96,9 +106,12 @@ export type AssetGcReport = {
   softReferences: AssetReference[];
   staleJsonReferences: AssetReference[];
   movedAssets?: Array<{ from: string; to: string }>;
+  movedTextFiles?: Array<{ from: string; to: string }>;
   summary: {
+    activeLedgers: number;
     jsonReferences: number;
     managedAssets: number;
+    movedTextFiles?: number;
     missingReferences: number;
     orphanAssets: number;
     orphanBytes: number;
@@ -108,6 +121,8 @@ export type AssetGcReport = {
     referencedBytes: number;
     softReferences: number;
     staleJsonReferences: number;
+    unusedTextBytes: number;
+    unusedTextFiles: number;
   };
 };
 

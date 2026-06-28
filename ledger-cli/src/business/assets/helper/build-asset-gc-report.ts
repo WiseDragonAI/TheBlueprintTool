@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import type { AssetGcReport, AssetReference, ClassifiedAsset } from '../../../lib/types.js';
 import { isManagedMediaPath, managedAssetRoots } from './asset-policy.js';
 import { collectAssetReferences } from './collect-asset-references.js';
+import { collectBlueprinttoolTextState } from './collect-blueprinttool-text-state.js';
 import { matchesKeepRule, readAssetsKeep } from './read-assets-keep.js';
 import { walkFiles } from './walk-files.js';
 import { workspaceRelativePath } from './workspace-paths.js';
@@ -30,6 +31,7 @@ function referenceByPath(references: AssetReference[]): Map<string, AssetReferen
 
 function summarize(report: Omit<AssetGcReport, 'summary'>): AssetGcReport['summary'] {
   return {
+    activeLedgers: report.activeLedgerFiles.length,
     jsonReferences: report.jsonReferences.length,
     managedAssets: report.referencedAssets.length + report.orphanAssets.length + report.pinnedAssets.length,
     missingReferences: report.missingReferences.length,
@@ -41,12 +43,15 @@ function summarize(report: Omit<AssetGcReport, 'summary'>): AssetGcReport['summa
     referencedBytes: report.referencedAssets.reduce((sum, asset) => sum + asset.bytes, 0),
     softReferences: report.softReferences.length,
     staleJsonReferences: report.staleJsonReferences.length,
+    unusedTextBytes: report.unusedTextFiles.reduce((sum, file) => sum + file.bytes, 0),
+    unusedTextFiles: report.unusedTextFiles.length,
   };
 }
 
 export async function buildAssetGcReport(input: { domain?: string; includeRisky?: string[]; workspaceRoot: string }): Promise<AssetGcReport> {
   const includeRisky = input.includeRisky ?? [];
   const roots = managedAssetRoots(includeRisky);
+  const textState = await collectBlueprinttoolTextState({ domain: input.domain, workspaceRoot: input.workspaceRoot });
   const references = await collectAssetReferences({ domain: input.domain, workspaceRoot: input.workspaceRoot });
   const hardReferences = referenceByPath(references.hardReferences);
   const keepRules = await readAssetsKeep({ workspaceRoot: input.workspaceRoot });
@@ -72,8 +77,11 @@ export async function buildAssetGcReport(input: { domain?: string; includeRisky?
     root: input.workspaceRoot,
     managedRoots: roots,
     scannedSourceFiles: references.scannedSourceFiles,
+    activeLedgerFiles: textState.activeLedgerFiles,
     referencedAssets,
+    referencedTextFiles: textState.referencedTextFiles,
     orphanAssets,
+    unusedTextFiles: textState.unusedTextFiles,
     pinnedAssets,
     missingReferences: references.hardReferences.filter((reference) => !reference.exists),
     jsonReferences: references.jsonReferences,

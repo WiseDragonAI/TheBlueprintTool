@@ -14,6 +14,8 @@ function assetLines(assets: ClassifiedAsset[]): string[] {
 export function formatAssetGcReport(report: AssetGcReport): string {
   const lines = [
     `Asset GC report for ${report.root}`,
+    `Active ledgers: ${report.summary.activeLedgers}`,
+    ...report.activeLedgerFiles.map((file) => `  ${file}`),
     `Scanned source files: ${report.scannedSourceFiles.length}`,
     `Managed roots: ${report.managedRoots.join(', ')}`,
     '',
@@ -25,6 +27,9 @@ export function formatAssetGcReport(report: AssetGcReport): string {
     '',
     `PINNED kept by policy: ${report.summary.pinnedAssets}`,
     ...assetLines(report.pinnedAssets),
+    '',
+    `UNUSED BlueprintTool text files: ${report.summary.unusedTextFiles} (${formatBytes(report.summary.unusedTextBytes)})`,
+    ...report.unusedTextFiles.map((file) => `  ${file.path} (${formatBytes(file.bytes)}, ${file.kind})`),
   ];
 
   if (report.missingReferences.length > 0) {
@@ -60,6 +65,13 @@ export function formatAssetGcReport(report: AssetGcReport): string {
       '',
       `MOVED orphan assets: ${report.movedAssets.length}`,
       ...report.movedAssets.map((asset) => `  ${asset.from} -> ${asset.to}`),
+    );
+  }
+  if (report.movedTextFiles && report.movedTextFiles.length > 0) {
+    lines.push(
+      '',
+      `MOVED unused text files: ${report.movedTextFiles.length}`,
+      ...report.movedTextFiles.map((file) => `  ${file.from} -> ${file.to}`),
     );
   }
 

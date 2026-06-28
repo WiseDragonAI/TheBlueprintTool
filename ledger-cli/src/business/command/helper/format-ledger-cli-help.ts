@@ -37,7 +37,7 @@ export function formatLedgerCliHelp(): string {
     '',
     '  assets gc --root <workspace> --dry-run [--manifest <file>]',
     '  assets gc --root <workspace> --move-to .blueprinttool/.trash/assets-<date> [--manifest <file>]',
-    '      Report or move unreferenced managed media assets.',
+    '      Report or move unreferenced media and unused BlueprintTool text files from active state.json roots.',
     '',
     '  assets prune-json --root <workspace> [--domain <name>] --dry-run',
     '  assets prune-json --root <workspace> [--domain <name>] --write',
