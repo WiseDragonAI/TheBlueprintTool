@@ -8,6 +8,7 @@ import { threadIdForTarget } from '../../src/runtime/thread/helper/thread-id-for
 import { selectThread } from '../../src/runtime/thread/effect/select-thread.js';
 import { closeThreadPanel } from '../../src/runtime/thread/effect/close-thread-panel.js';
 import { restoreThreadDraft, saveThreadDraft } from '../../src/runtime/thread/effect/persist-thread-draft.js';
+import { restoreThreadScrollPosition, saveThreadScrollPosition } from '../../src/runtime/thread/effect/persist-thread-scroll.js';
 import { pinThreadFeedToLastMessage } from '../../src/runtime/thread/effect/pin-thread-feed-to-last-message.js';
 import { renderThreadNotes } from '../../src/runtime/thread/effect/render-thread-notes.js';
 import { state } from '../../src/runtime/state.js';
@@ -86,6 +87,40 @@ test('select-thread clears stale idle voice status when card context changes', (
   }
 });
 
+test('select-thread restores saved thread scroll instead of pinning when returning to a thread', () => {
+  const previousWindow = globalThis.window;
+  const previousCustomEvent = globalThis.CustomEvent;
+  const previousDocument = globalThis.document;
+  const chat = { scrollTop: 184 };
+  (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
+  (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
+    constructor(_name: string, public options: Record<string, unknown> = {}) {}
+  };
+  (globalThis as unknown as { document: unknown }).document = {
+    querySelector(selector: string) {
+      if (selector === '.thread-panel .chat') return chat;
+      return null;
+    }
+  };
+  try {
+    state.threadId = 'thread-card-a';
+    state.threadScrollTopByThreadId = { 'thread-card-b': 42 };
+    state.voice = { recording: false, startedAt: 0, durationMs: 12, level: 0, transcriptionStatus: 'idle' };
+    selectThread('thread-card-b');
+    assert.equal(state.threadScrollTopByThreadId['thread-card-a'], 184);
+    assert.equal(state.threadId, 'thread-card-b');
+    assert.equal(state.threadPinOnRender, false);
+  } finally {
+    (globalThis as unknown as { window: unknown }).window = previousWindow;
+    (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+    state.threadId = '';
+    state.threadScrollTopByThreadId = {};
+    delete state.threadPinOnRender;
+    state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
+  }
+});
+
 test('select-thread ignores thread changes while voice recording is active', () => {
   const previousWindow = globalThis.window;
   const previousCustomEvent = globalThis.CustomEvent;
@@ -159,6 +194,37 @@ test('thread drafts persist per thread through localStorage', () => {
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
     (globalThis as unknown as { localStorage: unknown }).localStorage = previousLocalStorage;
+  }
+});
+
+test('thread scroll position persists per thread and restores after layout settles', () => {
+  const previousDocument = globalThis.document;
+  const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
+  let deferredFrame: FrameRequestCallback | null = null;
+  const chat = { scrollTop: 128, scrollHeight: 900, clientHeight: 300 };
+  (globalThis as unknown as { document: unknown }).document = {
+    querySelector(selector: string) {
+      if (selector === '.thread-panel .chat') return chat;
+      return null;
+    }
+  };
+  (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = (callback: FrameRequestCallback) => {
+    deferredFrame = callback;
+    return 1;
+  };
+  try {
+    saveThreadScrollPosition('thread-card-a');
+    assert.equal(state.threadScrollTopByThreadId['thread-card-a'], 128);
+    chat.scrollTop = 0;
+    assert.equal(restoreThreadScrollPosition('thread-card-a'), true);
+    assert.equal(chat.scrollTop, 128);
+    chat.scrollTop = 0;
+    deferredFrame?.(0);
+    assert.equal(chat.scrollTop, 128);
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+    (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = previousRequestAnimationFrame;
+    state.threadScrollTopByThreadId = {};
   }
 });
 

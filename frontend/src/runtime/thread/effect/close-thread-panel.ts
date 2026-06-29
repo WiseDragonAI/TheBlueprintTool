@@ -5,6 +5,7 @@
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { saveThreadDraft } from './persist-thread-draft.js';
+import { saveThreadScrollPosition } from './persist-thread-scroll.js';
 import { renderThreadPanel } from './render-thread-panel.js';
 
 export function closeThreadPanel(): void {
@@ -13,6 +14,7 @@ export function closeThreadPanel(): void {
     return;
   }
   saveThreadDraft();
+  saveThreadScrollPosition();
   state.threadPanelOpen = false;
   if (state.activeTool === 'thread') state.activeTool = 'select';
   const draft = document.querySelector('.thread-draft') as HTMLTextAreaElement | null;

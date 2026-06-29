@@ -6,6 +6,7 @@ import { renderThreadNotes } from './render-thread-notes.js';
 import { applyThreadAccent } from './apply-thread-accent.js';
 import { pinThreadFeedToLastMessage } from './pin-thread-feed-to-last-message.js';
 import { restoreThreadDraft } from './persist-thread-draft.js';
+import { restoreThreadScrollPosition, saveThreadScrollPosition } from './persist-thread-scroll.js';
 import { resolveThreadTargetTitle } from '../helper/resolve-thread-target-title.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
@@ -14,6 +15,11 @@ export function renderThreadPanel(): void {
   const inspector = document.querySelector('.panel') as HTMLElement;
   const shell = document.querySelector('.shell') as HTMLElement;
   const shouldOpenThread = Boolean(state.threadPanelOpen || state.activeTool === 'thread');
+  const activeThreadId = String(state.threadId ?? '');
+  const shouldPinThread = Boolean(shouldOpenThread && state.threadPinOnRender);
+  if (shouldOpenThread && !shouldPinThread && activeThreadId && state.renderedThreadId === activeThreadId) {
+    saveThreadScrollPosition(activeThreadId);
+  }
   inspector.hidden = false;
   panel.hidden = !shouldOpenThread;
   shell.classList.toggle('has-inspector', shouldOpenThread);
@@ -33,12 +39,15 @@ export function renderThreadPanel(): void {
   applyThreadAccent();
   telemetry('render-thread-panel', { threadId: state.threadId });
   renderThreadNotes();
+  state.renderedThreadId = activeThreadId;
   renderVoiceDock();
   restoreThreadDraft();
   renderVoiceStatus();
   renderTelemetry();
-  if (shouldOpenThread && state.threadPinOnRender) {
+  if (shouldPinThread) {
     state.threadPinOnRender = false;
     pinThreadFeedToLastMessage();
+  } else if (shouldOpenThread) {
+    restoreThreadScrollPosition(activeThreadId);
   }
 }
