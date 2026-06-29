@@ -31,14 +31,17 @@ test('decision-os ledger create endpoint writes a ledger and appends a tab', asy
       body: JSON.stringify({ title: 'Design Notes' })
     });
     assert.equal(response.status, 201);
-    const body = await response.json() as { tab: { id: string; ledgerFile: string }; ledger: { cards: unknown[] } };
+    const body = await response.json() as { tab: { id: string; ledgerFile: string; cardId: string }; ledger: { cards: unknown[] }; state: { ledgers: Array<{ id: string }> } };
     assert.equal(body.tab.id, 'design-notes');
     assert.equal(body.tab.ledgerFile, '.decision-os/design-notes.json');
+    assert.equal(body.tab.cardId, 'ledger-card:design-notes');
     assert.deepEqual(body.ledger.cards, []);
     assert.equal(existsSync(join(workspace, '.decision-os', 'design-notes.json')), true);
 
-    const state = JSON.parse(readFileSync(join(workspace, '.decision-os', 'state.json'), 'utf8')) as { tabs: Array<{ id: string }> };
-    assert.equal(state.tabs.some((tab) => tab.id === 'design-notes'), true);
+    const state = JSON.parse(readFileSync(join(workspace, '.decision-os', 'state.json'), 'utf8')) as { tabs?: unknown; ledgers: Array<{ id: string }> };
+    assert.equal(state.tabs, undefined);
+    assert.equal(state.ledgers.some((ledger) => ledger.id === 'design-notes'), true);
+    assert.equal(body.state.ledgers.some((ledger) => ledger.id === 'design-notes'), true);
   } finally {
     server.close();
     process.chdir(originalCwd);

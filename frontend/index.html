@@ -17,6 +17,7 @@
         <button class="tool" type="button" data-tool="group" title="Group" data-spec="53d49146 90d84349"><span>◎</span><span>Group</span></button>
         <button class="tool" type="button" data-tool="relationship" title="Relationship" data-spec="61bea65c 9bd42e71"><span>↗</span><span>Link</span></button>
         <button class="tool" type="button" data-action="resize" title="Resize selected cards"><span>↕</span><span>Resize</span></button>
+        <button class="tool" type="button" data-action="open-ledgers-canvas" title="Ledgers"><span>▦</span><span>Ledgers</span></button>
         <button class="tool" type="button" data-action="refresh" title="Refresh" data-spec="cfed85d3 50000006"><span>⟳</span><span>Refresh</span></button>
         <button class="tool" type="button" data-tool="thread" data-action="conversation" title="Conversation ledger" data-spec="7abd939e 667ae9a9 2b67c924"><span>☰</span><span>Threads</span></button>
         <button class="tool" type="button" data-action="shortcut-help" title="Shortcut help" data-spec="33c20993"><span>⌘</span><span>Keys</span></button>
@@ -29,12 +30,12 @@
         <header class="topbar">
           <div>
             <p class="kicker">decision-os</p>
-            <h1>decision-os</h1>
+            <h1><button class="topbar-title-action" type="button" data-action="open-ledgers-canvas">decision-os</button></h1>
           </div>
           <nav class="tabs" aria-label="Open ledgers" data-spec="12749dcd ac137fe2 51a6af83 e6a91d34 f2d6c8b1">
+            <button class="tab tab-ledgers" type="button" data-action="open-ledgers-canvas">Ledgers</button>
+            <span class="tab tab-current">Specs</span>
             <button class="tab tab-create" type="button" data-action="create-ledger" title="Create ledger" aria-label="Create ledger">+</button>
-            <button class="tab active" type="button" data-tab="specs">Specs</button>
-            <button class="tab" type="button" data-tab="data">Data</button>
           </nav>
         </header>
         <section class="canvas" aria-label="Canvas" tabindex="0" data-spec="30000002 30000003 30000005 30000006 30000007 a25db692 74567497 b7c2e91f b3d8a5e1">

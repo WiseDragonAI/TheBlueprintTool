@@ -49,6 +49,20 @@
   pointer-events: none;
 }
 
+.ledgers-min-zoom-indicator {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 140;
+  min-height: 34px;
+  border: 1px solid var(--accent);
+  border-radius: var(--button-radius);
+  background: rgba(8, 10, 12, 0.92);
+  color: var(--text);
+  padding: 7px 12px;
+  cursor: pointer;
+}
+
 .canvas-media-zoom-surrogate {
   position: absolute;
   display: block;

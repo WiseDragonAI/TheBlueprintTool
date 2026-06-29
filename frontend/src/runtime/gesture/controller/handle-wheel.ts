@@ -3,15 +3,19 @@
  * WHY: Wheel events should control canvas navigation unless an interactive child can consume them.
  */
 import { state } from '../../state.js';
+import { canvas } from '../../dom.js';
 import { scheduleCanvasMediaOverlayRender } from '../../canvas/effect/render-canvas-media-overlay.js';
 import { scheduleViewportTransform } from '../../canvas/effect/schedule-viewport-transform.js';
 import { scheduleViewportPersistence } from '../../persistence/effect/schedule-viewport-persistence.js';
+import { enterLedgersCanvasController } from '../../navigation/controller/enter-ledgers-canvas-controller.js';
+import { enterLedgerController } from '../../navigation/controller/enter-ledger-controller.js';
+import { resolveOverviewTargetLedger } from '../../ledger/helper/resolve-overview-target-ledger.js';
 import { point } from '../helper/point.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { shouldCaptureWheelTarget } from '../helper/should-capture-wheel-target.js';
+import { ledgerOpenZoomThreshold, maxCanvasZoomScale, minCanvasZoomScale } from '../../canvas/helper/canvas-zoom-constants.js';
 
-export const minCanvasZoomScale = 0.03;
-export const maxCanvasZoomScale = 6;
+export { maxCanvasZoomScale, minCanvasZoomScale };
 
 function advanceCarouselFromWheel(event: WheelEvent): boolean {
   if (!event.ctrlKey) return false;
@@ -46,11 +50,25 @@ export function handleWheel(event: WheelEvent): void {
   } else {
     const pointer = point(event);
     const oldScale = state.viewport.scale;
+    if (state.canvasMode === 'ledger' && oldScale <= minCanvasZoomScale + 0.00001 && event.deltaY > 0) {
+      void enterLedgersCanvasController();
+      return;
+    }
     const anchoredCanvasPoint = {
       x: (pointer.x - state.viewport.x) / oldScale,
       y: (pointer.y - state.viewport.y) / oldScale
     };
     const nextScale = state.viewport.scale * Math.exp(-event.deltaY * 0.0015);
+    if (state.canvasMode === 'ledgers' && oldScale < ledgerOpenZoomThreshold && nextScale >= ledgerOpenZoomThreshold) {
+      const rect = canvas?.getBoundingClientRect?.() ?? { width: window.innerWidth, height: window.innerHeight };
+      const viewportCenter = {
+        x: (rect.width / 2 - state.viewport.x) / oldScale,
+        y: (rect.height / 2 - state.viewport.y) / oldScale
+      };
+      const targetLedgerId = resolveOverviewTargetLedger({ ledger: state.activeLedger, viewportCenter });
+      if (targetLedgerId) void enterLedgerController(targetLedgerId, { canonicalMinScale: true });
+      return;
+    }
     state.viewport.scale = Math.min(maxCanvasZoomScale, Math.max(minCanvasZoomScale, nextScale));
     state.viewport.x = pointer.x - anchoredCanvasPoint.x * state.viewport.scale;
     state.viewport.y = pointer.y - anchoredCanvasPoint.y * state.viewport.scale;

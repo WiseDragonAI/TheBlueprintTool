@@ -12,6 +12,7 @@ import {
 } from '../helper/persist-ledger-card-media-carousel.js';
 import { scheduleCanvasMediaOverlayRender } from '../../canvas/effect/render-canvas-media-overlay.js';
 import { state } from '../../state.js';
+import { activeLedgers } from '../helper/active-ledgers.js';
 
 type LedgerCardHtmlEmbed = Extract<LedgerMarkdownBlock, { kind: 'htmlEmbeds' }>['embeds'][number];
 type LedgerCardHtmlEmbedOptions = {
@@ -21,7 +22,7 @@ type LedgerCardHtmlEmbedOptions = {
 
 function activeLedgerStem(): string {
   const activeTab = String(state.activeTab ?? '');
-  const ledgerFile = String((state.ledgerTabs ?? []).find((tab: { id?: string }) => String(tab.id ?? '') === activeTab)?.ledgerFile ?? '');
+  const ledgerFile = String(activeLedgers().find((ledger: { id?: string }) => String(ledger.id ?? '') === activeTab)?.ledgerFile ?? '');
   const filename = ledgerFile.split('/').filter(Boolean).at(-1) ?? activeTab;
   return filename.replace(/\.[^.]+$/, '') || activeTab;
 }

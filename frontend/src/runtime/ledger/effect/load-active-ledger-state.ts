@@ -26,7 +26,8 @@ export async function loadActiveLedgerState(): Promise<void> {
   const ledger = await response.json().catch(() => null);
   state.activeLedger = mergeLocalThreadNotes(ledger);
   refreshZoneAttributionCache('load-active-ledger-state');
-  Object.assign(state.viewport, state.viewports?.[state.activeTab] ?? ledger?.viewport ?? state.viewport);
+  if (state.canvasMode === 'ledgers') Object.assign(state.viewport, ledger?.viewport ?? state.viewport);
+  else Object.assign(state.viewport, state.viewports?.[state.activeTab] ?? ledger?.viewport ?? state.viewport);
   state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
-  telemetry('load-ledger-state', { activeTab: state.activeTab, ok: Boolean(ledger), cards: ledger?.cards?.length ?? 0, relationships: ledger?.relationships?.length ?? 0 });
+  telemetry('load-ledger-state', { activeTab: state.activeTab, canvasMode: state.canvasMode, ok: Boolean(ledger), cards: ledger?.cards?.length ?? 0, relationships: ledger?.relationships?.length ?? 0 });
 }

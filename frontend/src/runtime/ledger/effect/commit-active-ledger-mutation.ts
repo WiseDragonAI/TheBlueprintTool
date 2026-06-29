@@ -10,7 +10,7 @@ import { mergeLocalThreadNotes } from '../helper/merge-local-thread-notes.js';
 import { refreshZoneAttributionCache } from '../helper/zone-attribution-cache.js';
 
 export type ActiveLedgerMutation = {
-  action: 'create-card' | 'patch-card' | 'delete-card' | 'delete-card-image' | 'create-zone' | 'create-group' | 'create-relationship' | 'delete-zones' | 'delete-relationships' | 'patch-geometry' | 'patch-region' | 'append-note' | 'update-note' | 'delete-note' | 'paste-selection';
+  action: 'create-card' | 'patch-card' | 'delete-card' | 'delete-card-image' | 'create-zone' | 'create-group' | 'create-relationship' | 'delete-zones' | 'delete-relationships' | 'patch-geometry' | 'patch-viewport' | 'patch-region' | 'append-note' | 'update-note' | 'delete-note' | 'paste-selection';
   card?: Record<string, unknown>;
   cardId?: string;
   imageSrc?: string;
@@ -31,6 +31,7 @@ export type ActiveLedgerMutation = {
     zones?: Record<string, { x: number; y: number; width: number; height: number }>;
     groups?: Record<string, { x: number; y: number; width: number; height: number }>;
   };
+  viewport?: { x: number; y: number; scale: number };
   region?: {
     id: string;
     kind: 'zone' | 'group';

@@ -11,6 +11,7 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { renderCanvasDebugOverlay } from '../../debug/effect/render-canvas-debug-overlay.js';
 import { applyViewportTransform } from './apply-viewport-transform.js';
 import { renderCanvasControlOverlay } from './render-canvas-control-overlay.js';
+import { renderLedgersIndicator } from './render-ledgers-indicator.js';
 
 export function renderCanvasSurface(): void {
   renderLedgerSurface();
@@ -21,6 +22,7 @@ export function renderCanvasSurface(): void {
   renderRelationshipOverlay();
   renderRelationshipLabelVisibility();
   renderCanvasControlOverlay();
+  renderLedgersIndicator();
   telemetry('render-canvas-surface', { viewport: state.viewport, selection: state.selection });
   renderTelemetry();
   renderThreadPanel();

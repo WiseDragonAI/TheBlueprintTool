@@ -9,9 +9,9 @@ export async function createCardFromRect(rect: { x: number; y: number; width: nu
   const cardId = createLedgerObjectId('card');
   const card = {
     id: cardId,
-    title: 'New card',
-    cardType: 'note',
-    domainId: state.activeTab,
+    title: state.canvasMode === 'ledgers' ? 'New Ledger' : 'New card',
+    cardType: state.canvasMode === 'ledgers' ? 'ledger' : 'note',
+    domainId: state.canvasMode === 'ledgers' ? 'ledgers' : state.activeTab,
     status: 'todo',
     x: rect.x,
     y: rect.y,

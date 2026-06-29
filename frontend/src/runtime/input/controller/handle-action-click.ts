@@ -27,6 +27,7 @@ import { startVoiceRecording } from '../../voice/controller/start-voice-recordin
 import { stopVoiceRecording } from '../../voice/controller/stop-voice-recording.js';
 import { cancelVoiceRecording } from '../../voice/controller/cancel-voice-recording.js';
 import { retryVoiceTranscription } from '../../voice/effect/retry-voice-transcription.js';
+import { enterLedgersCanvasController } from '../../navigation/controller/enter-ledgers-canvas-controller.js';
 import { applyRailCollapsedState } from '../../toolbox/effect/apply-rail-collapsed-state.js';
 import { persistState } from '../../persistence/effect/persist-state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
@@ -44,6 +45,10 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
   const action = actionTarget?.dataset.action;
   if (!action) return;
   telemetry('tool-button-click', { action });
+  if (action === 'open-ledgers-canvas') {
+    await enterLedgersCanvasController();
+    return;
+  }
   if (action === 'toggle-rail') {
     toggleRail(actionTarget);
     return;

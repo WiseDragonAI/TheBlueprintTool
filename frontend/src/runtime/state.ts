@@ -1,6 +1,12 @@
 export const state: any = {
   routePath: globalThis.window?.location?.pathname ?? '/',
+  canvasMode: 'ledger',
+  activeLedgerId: 'specs',
   activeTab: 'specs',
+  ledgers: [
+    { id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' },
+    { id: 'data', title: 'Data', ledgerFile: '.decision-os/data.json' }
+  ],
   ledgerTabs: [
     { id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' },
     { id: 'data', title: 'Data', ledgerFile: '.decision-os/data.json' }

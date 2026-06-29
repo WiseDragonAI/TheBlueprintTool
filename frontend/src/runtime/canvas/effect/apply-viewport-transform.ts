@@ -1,6 +1,7 @@
 import { canvas, content } from '../../dom.js';
 import { state } from '../../state.js';
 import { renderCanvasControlOverlay } from './render-canvas-control-overlay.js';
+import { renderLedgersIndicator } from './render-ledgers-indicator.js';
 import { canvasMediaOverlayScaleThreshold, clearCanvasMediaOverlay, scheduleCanvasMediaOverlayRender } from './render-canvas-media-overlay.js';
 import { syncViewportCardDetails } from './sync-viewport-card-details.js';
 import { updateDetailMode } from './update-detail-mode.js';
@@ -28,6 +29,7 @@ export function applyViewportSettledEffects(): void {
   syncViewportCardDetails();
   scheduleCanvasMediaOverlayRender();
   renderCanvasControlOverlay();
+  renderLedgersIndicator();
 }
 
 export function applyViewportTransform(settled = true, animated = false): void {

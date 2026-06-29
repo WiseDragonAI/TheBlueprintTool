@@ -196,6 +196,15 @@ h1, h2, p { margin-top: 0; }
 h1 { margin-bottom: 0; font-size: 20px; letter-spacing: 0; }
 h2 { font-size: 18px; }
 
+.topbar-title-action {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
 .tabs { display: flex; gap: 8px; align-items: center; }
 
 .tab {
@@ -236,6 +245,10 @@ h2 { font-size: 18px; }
   color: var(--text);
   font-size: 18px;
   line-height: 1;
+}
+
+.tab-current {
+  cursor: default;
 }
 
 .panel {

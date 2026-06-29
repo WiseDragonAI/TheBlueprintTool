@@ -9,7 +9,7 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 type CreatedLedgerResponse = {
   ok?: boolean;
   tab?: { id?: string; title?: string; ledgerFile?: string };
-  state?: { tabs?: Array<{ id?: string; title?: string; ledgerFile?: string }> };
+  state?: { ledgers?: Array<{ id?: string; title?: string; ledgerFile?: string; cardId?: string }>; tabs?: Array<{ id?: string; title?: string; ledgerFile?: string; cardId?: string }> };
   error?: string;
 };
 
@@ -32,8 +32,14 @@ export async function createNewLedger(): Promise<void> {
 
   state.viewports = { ...(state.viewports ?? {}), [state.activeTab]: { ...state.viewport } };
   persistState();
-  if (payload.state?.tabs?.length) state.ledgerTabs = payload.state.tabs;
+  const ledgers = payload.state?.ledgers ?? payload.state?.tabs;
+  if (ledgers?.length) {
+    state.ledgers = ledgers;
+    state.ledgerTabs = ledgers;
+  }
   state.activeTab = payload.tab.id;
+  state.activeLedgerId = state.activeTab;
+  state.canvasMode = 'ledger';
   history.pushState({}, '', `/${state.activeTab}`);
   await loadDecisionOsState();
   await loadActiveLedgerState();

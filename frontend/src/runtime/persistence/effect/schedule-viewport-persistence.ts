@@ -1,4 +1,5 @@
 import { state } from '../../state.js';
+import { sendActiveLedgerMutation } from '../../ledger/effect/send-active-ledger-mutation.js';
 import { readPersistedState } from '../helper/read-persisted-state.js';
 
 let viewportPersistenceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -9,6 +10,9 @@ export function scheduleViewportPersistence(delayMs = 140): void {
   if (viewportPersistenceTimer) clearTimeout(viewportPersistenceTimer);
   viewportPersistenceTimer = setTimeout(() => {
     viewportPersistenceTimer = null;
+    if (state.canvasMode === 'ledgers') {
+      void sendActiveLedgerMutation({ action: 'patch-viewport', viewport: { ...state.viewport } });
+    }
     const persisted = readPersistedState();
     localStorage.setItem('decision-os.canvas.state', JSON.stringify({
       ...persisted,

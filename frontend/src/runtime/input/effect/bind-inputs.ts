@@ -22,6 +22,9 @@ import { openThreadPanel } from '../../thread/effect/open-thread-panel.js';
 import { saveThreadDraft } from '../../thread/effect/persist-thread-draft.js';
 import { pasteThreadImageController } from '../../thread/controller/paste-thread-image-controller.js';
 import { selectThread } from '../../thread/effect/select-thread.js';
+import { enterLedgersCanvasController } from '../../navigation/controller/enter-ledgers-canvas-controller.js';
+import { enterLedgerController } from '../../navigation/controller/enter-ledger-controller.js';
+import { routeCanvasMode } from '../../navigation/helper/route-canvas-mode.js';
 import { routeTab } from '../../navigation/helper/route-tab.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
@@ -45,6 +48,11 @@ export function bindInputs(): void {
   });
 
   document.querySelector('.tabs')?.addEventListener('click', async (event) => {
+    const overviewButton = (event.target as HTMLElement).closest('[data-action="open-ledgers-canvas"]') as HTMLElement | null;
+    if (overviewButton) {
+      await enterLedgersCanvasController();
+      return;
+    }
     const createButton = (event.target as HTMLElement).closest('[data-action="create-ledger"]') as HTMLElement | null;
     if (createButton) {
       await createNewLedger();
@@ -83,9 +91,13 @@ export function bindInputs(): void {
   window.addEventListener('popstate', () => {
     state.viewports = { ...(state.viewports ?? {}), [state.activeTab]: { ...state.viewport } };
     persistState();
-    state.activeTab = routeTab(window.location.pathname);
-    telemetry('browser-route-change', { activeTab: state.activeTab });
-    void loadActiveLedgerState().then(renderCanvasSurface);
-    renderTabRegistry();
+    state.canvasMode = routeCanvasMode(window.location.pathname);
+    if (state.canvasMode === 'ledgers') {
+      void enterLedgersCanvasController({ replace: true });
+    } else {
+      const nextLedger = routeTab(window.location.pathname);
+      telemetry('browser-route-change', { activeTab: nextLedger });
+      void enterLedgerController(nextLedger, { replace: true, canonicalMinScale: false });
+    }
   });
 }

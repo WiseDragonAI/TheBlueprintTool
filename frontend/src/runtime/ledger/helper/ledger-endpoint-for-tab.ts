@@ -1,5 +1,7 @@
 import { state } from '../../state.js';
+import { activeLedgers } from './active-ledgers.js';
 
 export function ledgerEndpointForTab(tabId: string): string {
-  return (state.ledgerTabs ?? []).some((tab: { id: string }) => tab.id === tabId) ? `/decision-os/${tabId}` : '';
+  if (state.canvasMode === 'ledgers') return '/decision-os/ledgers-canvas';
+  return activeLedgers().some((ledger: { id: string }) => ledger.id === tabId) ? `/decision-os/${tabId}` : '';
 }

@@ -9,15 +9,18 @@ import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.j
 import { renderTabRegistry } from '../../navigation/effect/render-tab-registry.js';
 import { renderThreadPanel } from '../../thread/effect/render-thread-panel.js';
 import { subscribeLedgerContentEvents } from '../../refresh/effect/subscribe-ledger-content-events.js';
+import { routeCanvasMode } from '../../navigation/helper/route-canvas-mode.js';
 import { routeTab } from '../../navigation/helper/route-tab.js';
 import { applyRailCollapsedState } from '../../toolbox/effect/apply-rail-collapsed-state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export function bootSurface(): void {
   const persisted = readPersistedState();
+  state.canvasMode = routeCanvasMode(window.location.pathname);
   state.activeTab = routeTab(window.location.pathname);
+  state.activeLedgerId = state.activeTab;
   state.viewports = persisted.viewports && typeof persisted.viewports === 'object' ? persisted.viewports : state.viewports;
-  const restoredViewport = state.viewports?.[state.activeTab] ?? persisted.viewport ?? {};
+  const restoredViewport = state.canvasMode === 'ledgers' ? {} : state.viewports?.[state.activeTab] ?? persisted.viewport ?? {};
   Object.assign(state.viewport, restoredViewport);
   applyRailCollapsedState(persisted.railCollapsed === true);
   telemetry('browser-load', { routePath: state.routePath });
