@@ -51,10 +51,33 @@ function imageExtensionForMimeType(mimeType: unknown): string {
   return '.png';
 }
 
+function uploadOriginalFileName(value: unknown): string {
+  let decoded = String(value || 'attachment');
+  try {
+    decoded = decodeURIComponent(decoded);
+  } catch {
+    decoded = String(value || 'attachment');
+  }
+  const leaf = basename(decoded).replace(/[^a-zA-Z0-9._ -]+/g, '-').replace(/^-+|-+$/g, '') || 'attachment';
+  return leaf.slice(0, 120);
+}
+
+function markdownLabel(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/\]/g, '\\]');
+}
+
+function markdownForThreadFile(input: { fileRef: string; originalName: string; contentType: string }): string {
+  const label = markdownLabel(input.originalName || 'Attachment');
+  return input.contentType.startsWith('image/')
+    ? `![${label}](${input.fileRef})`
+    : `[${label}](${input.fileRef})`;
+}
+
 function isAllowedDecisionOsAsset(filePath: string, relativeAssetPath = ''): boolean {
   const normalized = filePath.toLowerCase();
   if (allowedDecisionOsImageExtensions.some((extension) => normalized.endsWith(extension))) return true;
   const normalizedRelative = relativeAssetPath.split('\\').join('/');
+  if (/^thread-files\/[^/]+\/.+/.test(normalizedRelative)) return true;
   return /^cards\/[^/]+\/assets\/.+/.test(normalizedRelative)
     && allowedLedgerStaticAssetExtensions.some((extension) => normalized.endsWith(extension));
 }
@@ -77,6 +100,9 @@ function tryServeDecisionOsAsset(input: { url: string; decisionOsRoot: string; r
     return true;
   }
   input.response.setHeader('content-type', contentTypeFor(assetPath));
+  if (/^thread-files\/[^/]+\/.+/.test(relativeAssetPath.split('\\').join('/'))) {
+    input.response.setHeader('content-disposition', `inline; filename="${basename(assetPath).replace(/"/g, '')}"`);
+  }
   input.response.setHeader('cache-control', 'no-store');
   input.response.end(readFileSync(assetPath));
   return true;
@@ -175,6 +201,33 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const imageFileRef = `.decision-os/thread-images/${threadId}/${fileName}`;
       response.statusCode = 201;
       response.end(JSON.stringify({ ok: true, imageFileRef, markdown: `![Pasted image](${imageFileRef})` }));
+      return;
+    }
+    if (url === '/api/thread-file-upload' && request.method === 'POST') {
+      const fileBuffer = await readRequestBuffer(request);
+      const contentType = String(request.headers['content-type'] ?? 'application/octet-stream').toLowerCase().split(';')[0].trim() || 'application/octet-stream';
+      const originalName = uploadOriginalFileName(request.headers['x-file-name']);
+      response.setHeader('content-type', 'application/json');
+      if (fileBuffer.length === 0) {
+        response.statusCode = 400;
+        response.end(JSON.stringify({ ok: false, error: 'Expected a non-empty file upload.' }));
+        return;
+      }
+      const threadId = safeAssetSegment(request.headers['x-thread-id'] ?? 'conversation-ledger');
+      const directory = resolve(decisionOsRoot, 'thread-files', threadId);
+      mkdirSync(directory, { recursive: true });
+      const fileName = `file-${Date.now()}-${Math.random().toString(16).slice(2)}-${safeAssetSegment(originalName)}`;
+      const filePath = resolve(directory, fileName);
+      writeFileSync(filePath, fileBuffer);
+      const fileRef = `/.decision-os/thread-files/${threadId}/${fileName}`;
+      response.statusCode = 201;
+      response.end(JSON.stringify({
+        ok: true,
+        fileRef,
+        originalName,
+        contentType,
+        markdown: markdownForThreadFile({ fileRef, originalName, contentType })
+      }));
       return;
     }
     if (url === '/api/transcribe/retry' && request.method === 'POST') {

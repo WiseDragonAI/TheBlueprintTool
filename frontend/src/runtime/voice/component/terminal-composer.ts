@@ -8,7 +8,11 @@ export function terminalComposer(): string {
       <textarea class="thread-draft terminal-input" rows="5" aria-label="Thread draft" placeholder="Write in this thread..."></textarea>
       <div class="terminal-command-row">
         <span class="terminal-command-hint">Ctrl+Enter commits note</span>
-        <button class="terminal-button terminal-button--record terminal-button--compact" type="button" data-action="voice-toggle"><span class="terminal-button__key">X</span><span class="terminal-button__label">REC</span></button>
+        <div class="terminal-command-actions">
+          <input class="thread-file-input" type="file" multiple hidden aria-label="Upload files to thread">
+          <button class="terminal-button terminal-button--attach terminal-button--compact" type="button" data-action="thread-file-picker" title="Upload files"><span class="terminal-button__key">+</span><span class="terminal-button__label">FILE</span></button>
+          <button class="terminal-button terminal-button--record terminal-button--compact" type="button" data-action="voice-toggle"><span class="terminal-button__key">X</span><span class="terminal-button__label">REC</span></button>
+        </div>
       </div>
     </section>
   `;

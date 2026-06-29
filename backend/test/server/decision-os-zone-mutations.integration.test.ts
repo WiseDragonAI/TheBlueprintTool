@@ -36,6 +36,7 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
   const endpoint = `http://127.0.0.1:${address.port}/decision-os/specs`;
   const assetEndpoint = `http://127.0.0.1:${address.port}/.decision-os/ui-mockups/mock.png`;
   const imageUploadEndpoint = `http://127.0.0.1:${address.port}/api/thread-image-upload`;
+  const fileUploadEndpoint = `http://127.0.0.1:${address.port}/api/thread-file-upload`;
 
   try {
     const assetResponse = await fetch(assetEndpoint);
@@ -64,6 +65,29 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
       body: 'not an image'
     });
     assert.equal(invalidImageUploadResponse.status, 400);
+
+    const fileUploadResponse = await fetch(fileUploadEndpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain', 'x-thread-id': 'thread/card:a', 'x-file-name': encodeURIComponent('Plan Notes.txt') },
+      body: 'attached context'
+    });
+    assert.equal(fileUploadResponse.status, 201);
+    const fileUpload = await fileUploadResponse.json() as { ok: boolean; fileRef: string; markdown: string; originalName: string };
+    assert.equal(fileUpload.ok, true);
+    assert.equal(fileUpload.originalName, 'Plan Notes.txt');
+    assert.match(fileUpload.fileRef, /^\/\.decision-os\/thread-files\/thread-card-a\/file-.*-Plan-Notes\.txt$/);
+    assert.equal(fileUpload.markdown, `[Plan Notes.txt](${fileUpload.fileRef})`);
+    assert.equal(readFileSync(join(workspace, fileUpload.fileRef.replace(/^\/\.decision-os\//, '.decision-os/')), 'utf8'), 'attached context');
+    const uploadedFileResponse = await fetch(`http://127.0.0.1:${address.port}${fileUpload.fileRef}`);
+    assert.equal(uploadedFileResponse.ok, true);
+    assert.equal(await uploadedFileResponse.text(), 'attached context');
+
+    const invalidFileUploadResponse = await fetch(fileUploadEndpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain', 'x-thread-id': 'thread-card-a', 'x-file-name': 'empty.txt' },
+      body: ''
+    });
+    assert.equal(invalidFileUploadResponse.status, 400);
 
     const createResponse = await fetch(endpoint, {
       method: 'PATCH',

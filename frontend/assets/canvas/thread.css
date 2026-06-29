@@ -389,11 +389,24 @@
   min-height: 28px;
 }
 
+.terminal-command-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .terminal-command-hint {
   color: #7f8a98;
   font-size: 10px;
   letter-spacing: 0.03em;
   text-transform: uppercase;
+}
+
+.terminal-button--attach {
+  --terminal-button-background: linear-gradient(165deg, #142426 0%, #101b1d 54%, #0c1416 100%);
+  --terminal-button-color: color-mix(in srgb, var(--thread-accent), white 42%);
+  --terminal-button-gradient-shadow: linear-gradient(90deg, color-mix(in srgb, var(--thread-accent), transparent 36%), rgba(255, 255, 255, 0.18));
 }
 
 .terminal-button--compact {

@@ -84,6 +84,8 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(actionClick, /createNoteController/);
   assert.match(actionClick, /deleteNoteController/);
   assert.match(actionClick, /confirmNoteDeletionController/);
+  assert.match(actionClick, /action === 'thread-file-picker'/);
+  assert.match(actionClick, /querySelector\('\.thread-file-input'\)/);
   assert.doesNotMatch(actionClick, /beginZoneLabelEdit/);
   assert.doesNotMatch(actionClick, /deleteSelectedZones/);
   assert.doesNotMatch(actionClick, /commitActiveLedgerMutation/);
@@ -102,6 +104,16 @@ test('browser inputs route ledger commands through runtime controllers before se
 
   const noteCreate = source('frontend/src/runtime/thread/controller/create-note-controller.ts');
   assert.match(noteCreate, /sendActiveLedgerMutation/);
+
+  const fileUpload = source('frontend/src/runtime/thread/controller/upload-thread-file-controller.ts');
+  assert.match(fileUpload, /fetch\('\/api\/thread-file-upload'/);
+  assert.match(fileUpload, /sendActiveLedgerMutation\(\{[\s\S]*action: 'append-note'/);
+  assert.match(fileUpload, /appendOptimisticThreadNote/);
+  assert.match(fileUpload, /patchOptimisticThreadNote/);
+
+  const terminalComposer = source('frontend/src/runtime/voice/component/terminal-composer.ts');
+  assert.match(terminalComposer, /class="thread-file-input" type="file" multiple hidden/);
+  assert.match(terminalComposer, /data-action="thread-file-picker"/);
 
   const noteDelete = source('frontend/src/runtime/thread/controller/delete-note-controller.ts');
   assert.match(noteDelete, /commitActiveLedgerMutation/);

@@ -21,6 +21,7 @@ import { renderToolbox } from '../../toolbox/effect/render-toolbox.js';
 import { openThreadPanel } from '../../thread/effect/open-thread-panel.js';
 import { saveThreadDraft } from '../../thread/effect/persist-thread-draft.js';
 import { pasteThreadImageController } from '../../thread/controller/paste-thread-image-controller.js';
+import { uploadThreadFileController } from '../../thread/controller/upload-thread-file-controller.js';
 import { selectThread } from '../../thread/effect/select-thread.js';
 import { enterLedgersCanvasController } from '../../navigation/controller/enter-ledgers-canvas-controller.js';
 import { enterLedgerController } from '../../navigation/controller/enter-ledger-controller.js';
@@ -86,6 +87,10 @@ export function bindInputs(): void {
   document.addEventListener('input', handleRegionColorInput);
   document.addEventListener('input', (event) => {
     if ((event.target as HTMLElement | null)?.closest('.thread-draft')) saveThreadDraft();
+  });
+  document.addEventListener('change', (event) => {
+    const input = event.target as HTMLInputElement | null;
+    if (input?.matches('.thread-file-input')) void uploadThreadFileController(input);
   });
   document.addEventListener('change', handleRegionColorChange);
   window.addEventListener('popstate', () => {

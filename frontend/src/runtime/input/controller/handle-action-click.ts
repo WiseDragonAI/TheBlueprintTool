@@ -87,6 +87,11 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     if (state.voice.recording) await stopVoiceRecording();
     else void startVoiceRecording();
   }
+  if (action === 'thread-file-picker') {
+    const input = actionTarget.closest('.terminal-composer')?.querySelector('.thread-file-input') as HTMLInputElement | null;
+    input?.click();
+    return;
+  }
   if (action === 'voice-cancel') cancelVoiceRecording();
   if (action === 'voice-retry') {
     await retryVoiceTranscription({ threadId: actionTarget.dataset.threadId ?? state.threadId, noteId: actionTarget.dataset.noteId ?? '', voiceFileRef: actionTarget.dataset.voiceFileRef ?? '' });
