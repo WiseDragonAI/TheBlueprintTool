@@ -3,10 +3,10 @@ import { connectPage } from './function/connect-page.mjs';
 import { wait } from './function/wait.mjs';
 import { waitLiveCanvasReady } from './function/wait-live-canvas-ready.mjs';
 
-const url = process.env.COREV2_URL ?? 'http://127.0.0.1:4173/ardaria-game-design';
-const cdpJsonUrl = process.env.COREV2_CDP_JSON ?? 'http://127.0.0.1:9223/json';
-const seed = Number(process.env.COREV2_STRESS_SEED ?? 20260529);
-const cyclesPerDirection = Number(process.env.COREV2_STRESS_CYCLES ?? 12);
+const url = process.env.DECISION_OS_URL ?? 'http://127.0.0.1:4173/ardaria-game-design';
+const cdpJsonUrl = process.env.DECISION_OS_CDP_JSON ?? 'http://127.0.0.1:9223/json';
+const seed = Number(process.env.DECISION_OS_STRESS_SEED ?? 20260529);
+const cyclesPerDirection = Number(process.env.DECISION_OS_STRESS_CYCLES ?? 12);
 
 function percentile(values, p) {
   if (!values.length) return 0;
@@ -71,7 +71,7 @@ try {
       const waitFrame = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       const canvas = document.querySelector('.canvas');
       const grid = document.querySelector('.grid');
-      if (!canvas || !grid || !window.__coreState) throw new Error('CoreV2 canvas runtime is not ready');
+      if (!canvas || !grid || !window.__coreState) throw new Error('decision-os canvas runtime is not ready');
       const { applyViewportTransform } = await import('/src/runtime/canvas/effect/apply-viewport-transform.js');
 
       function lcg(initialSeed) {
@@ -357,7 +357,7 @@ try {
     .sort((a, b) => b.firstMoveFrameMs - a.firstMoveFrameMs)[0];
 
   console.log(formatSummary(report));
-  if (process.env.COREV2_STRESS_JSON === '1') {
+  if (process.env.DECISION_OS_STRESS_JSON === '1') {
     console.log(JSON.stringify(report, null, 2));
   }
 } finally {

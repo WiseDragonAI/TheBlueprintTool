@@ -5,24 +5,24 @@ import { connectPage } from './function/connect-page.mjs';
 import { wait } from './function/wait.mjs';
 import { waitLiveCanvasReady } from './function/wait-live-canvas-ready.mjs';
 
-const url = process.env.COREV2_URL ?? 'http://127.0.0.1:4173/ardaria-game-design';
-const cdpJsonUrl = process.env.COREV2_CDP_JSON ?? 'http://127.0.0.1:9223/json';
-const outputDir = process.env.COREV2_DRAG_TRACE_OUTPUT_DIR ?? `/tmp/corev2-card-drag-trace-${Date.now()}`;
-const targetCardId = process.env.COREV2_DRAG_TRACE_CARD_ID ?? 'prep_ui_implementation_surfaces_5b947d58';
-const targetCardIds = parseList(process.env.COREV2_DRAG_TRACE_CARD_IDS, [targetCardId]);
-const scale = Number(process.env.COREV2_DRAG_TRACE_SCALE ?? 0.5);
-const scales = parseNumberList(process.env.COREV2_DRAG_TRACE_SCALES, [scale]);
-const runsPerCase = Math.max(1, Number(process.env.COREV2_DRAG_TRACE_RUNS ?? 1));
-const moveSteps = Math.max(1, Number(process.env.COREV2_DRAG_TRACE_MOVES ?? 12));
-const moveIntervalMs = Math.max(0, Number(process.env.COREV2_DRAG_TRACE_MOVE_INTERVAL_MS ?? 16));
-const dragDx = Number(process.env.COREV2_DRAG_TRACE_DX ?? 144);
-const dragDy = Number(process.env.COREV2_DRAG_TRACE_DY ?? 4);
-const longEventThresholdMs = Number(process.env.COREV2_DRAG_TRACE_LONG_EVENT_MS ?? 8);
-const slowFrameThresholdMs = Number(process.env.COREV2_DRAG_TRACE_SLOW_FRAME_MS ?? 16.7);
-const frameOffenderThresholdMs = Number(process.env.COREV2_DRAG_TRACE_FRAME_OFFENDER_MS ?? 10);
-const enableDomReadProbes = process.env.COREV2_DRAG_TRACE_DOM_READ_PROBES === '1';
-const mockGeometryCommit = process.env.COREV2_DRAG_TRACE_MOCK_GEOMETRY_COMMIT !== '0';
-const variants = parseList(process.env.COREV2_DRAG_TRACE_VARIANTS, [
+const url = process.env.DECISION_OS_URL ?? 'http://127.0.0.1:4173/ardaria-game-design';
+const cdpJsonUrl = process.env.DECISION_OS_CDP_JSON ?? 'http://127.0.0.1:9223/json';
+const outputDir = process.env.DECISION_OS_DRAG_TRACE_OUTPUT_DIR ?? `/tmp/decision-os-card-drag-trace-${Date.now()}`;
+const targetCardId = process.env.DECISION_OS_DRAG_TRACE_CARD_ID ?? 'prep_ui_implementation_surfaces_5b947d58';
+const targetCardIds = parseList(process.env.DECISION_OS_DRAG_TRACE_CARD_IDS, [targetCardId]);
+const scale = Number(process.env.DECISION_OS_DRAG_TRACE_SCALE ?? 0.5);
+const scales = parseNumberList(process.env.DECISION_OS_DRAG_TRACE_SCALES, [scale]);
+const runsPerCase = Math.max(1, Number(process.env.DECISION_OS_DRAG_TRACE_RUNS ?? 1));
+const moveSteps = Math.max(1, Number(process.env.DECISION_OS_DRAG_TRACE_MOVES ?? 12));
+const moveIntervalMs = Math.max(0, Number(process.env.DECISION_OS_DRAG_TRACE_MOVE_INTERVAL_MS ?? 16));
+const dragDx = Number(process.env.DECISION_OS_DRAG_TRACE_DX ?? 144);
+const dragDy = Number(process.env.DECISION_OS_DRAG_TRACE_DY ?? 4);
+const longEventThresholdMs = Number(process.env.DECISION_OS_DRAG_TRACE_LONG_EVENT_MS ?? 8);
+const slowFrameThresholdMs = Number(process.env.DECISION_OS_DRAG_TRACE_SLOW_FRAME_MS ?? 16.7);
+const frameOffenderThresholdMs = Number(process.env.DECISION_OS_DRAG_TRACE_FRAME_OFFENDER_MS ?? 10);
+const enableDomReadProbes = process.env.DECISION_OS_DRAG_TRACE_DOM_READ_PROBES === '1';
+const mockGeometryCommit = process.env.DECISION_OS_DRAG_TRACE_MOCK_GEOMETRY_COMMIT !== '0';
+const variants = parseList(process.env.DECISION_OS_DRAG_TRACE_VARIANTS, [
   'baseline',
   'preselected',
   'skip-zone-labels',
@@ -33,7 +33,7 @@ const variants = parseList(process.env.COREV2_DRAG_TRACE_VARIANTS, [
   'no-release-render',
   'block-pointerup'
 ]);
-const hoverModes = parseList(process.env.COREV2_DRAG_TRACE_HOVER_MODES, ['cold', 'warm']);
+const hoverModes = parseList(process.env.DECISION_OS_DRAG_TRACE_HOVER_MODES, ['cold', 'warm']);
 
 const traceCategories = [
   'toplevel',
@@ -158,14 +158,14 @@ function summarizeChildren(parent, completeEvents) {
 function traceMarkLabel(name) {
   const value = String(name ?? '');
   const marker = ':';
-  if (!value.startsWith('corev2-drag:')) return '';
+  if (!value.startsWith('decision-os-drag:')) return '';
   const parts = value.split(marker);
   return parts.slice(3).join(marker);
 }
 
 function traceMarks(traceEvents) {
   return traceEvents
-    .filter((event) => event.cat?.includes('blink.user_timing') && event.ph === 'I' && String(event.name ?? '').startsWith('corev2-drag:'))
+    .filter((event) => event.cat?.includes('blink.user_timing') && event.ph === 'I' && String(event.name ?? '').startsWith('decision-os-drag:'))
     .map((event) => ({ label: traceMarkLabel(event.name), ts: event.ts, name: event.name }))
     .filter((mark) => mark.label && typeof mark.ts === 'number');
 }
@@ -367,7 +367,7 @@ function pageExpression(source) {
 
 function setupPageExpression(input) {
   return pageExpression(async function setupCardDragTracePage() {
-    const input = window.__corev2DragTraceInput;
+    const input = window.__decisionOsDragTraceInput;
     const { state } = await import('/src/runtime/state.js');
     const { applyViewportTransform } = await import('/src/runtime/canvas/effect/apply-viewport-transform.js');
     const { renderSelectionState } = await import('/src/runtime/selection/effect/render-selection-state.js');
@@ -376,11 +376,11 @@ function setupPageExpression(input) {
     const variantHas = (flag) => input.variant === flag || input.variant.split('+').includes(flag);
     let target = document.querySelector(`[data-card-id="${CSS.escape(input.targetCardId)}"]`);
     if (!target) target = document.querySelector('.canvas-content > .card[data-card-id]');
-    if (!canvas || !content || !target) throw new Error('CoreV2 drag trace target is not available');
+    if (!canvas || !content || !target) throw new Error('decision-os drag trace target is not available');
 
-    document.querySelector('[data-corev2-drag-trace-style]')?.remove();
+    document.querySelector('[data-decision-os-drag-trace-style]')?.remove();
     const style = document.createElement('style');
-    style.dataset.corev2DragTraceStyle = input.variant;
+    style.dataset.decisionOsDragTraceStyle = input.variant;
     const css = [];
     if (variantHas('no-hover-tabs')) {
       css.push('.ledger-card-tabs{display:none!important}.card:hover .ledger-card-tabs,.card:has(.ledger-card-tab:focus-visible) .ledger-card-tabs{opacity:0!important;pointer-events:none!important}');
@@ -489,18 +489,18 @@ function setupPageExpression(input) {
         images: document.querySelectorAll('img').length
       }
     };
-  }).replace('const input = window.__corev2DragTraceInput;', `const input = ${JSON.stringify(input)};`);
+  }).replace('const input = window.__decisionOsDragTraceInput;', `const input = ${JSON.stringify(input)};`);
 }
 
 function installInstrumentationExpression(input) {
   return pageExpression(async function installCardDragTraceInstrumentation() {
-    const input = window.__corev2DragTraceInput;
+    const input = window.__decisionOsDragTraceInput;
     const canvas = document.querySelector('.canvas');
     const content = document.querySelector('.canvas-content');
     const target = document.querySelector(`[data-card-id="${CSS.escape(input.targetCardId)}"]`) || document.querySelector('.canvas-content > .card[data-card-id]');
-    if (!canvas || !content || !target) throw new Error('CoreV2 drag trace instrumentation target is not available');
+    if (!canvas || !content || !target) throw new Error('decision-os drag trace instrumentation target is not available');
 
-    window.__corev2DragTrace?.restore?.();
+    window.__decisionOsDragTrace?.restore?.();
 
     const state = {
       startedAt: performance.now(),
@@ -531,7 +531,7 @@ function installInstrumentationExpression(input) {
       return `${element.tagName.toLowerCase()}${id}${cls ? `.${cls}` : ''}`;
     };
     const mark = (label, extra = {}) => {
-      performance.mark(`corev2-drag:${input.variant}:${input.hoverMode}:${label}`);
+      performance.mark(`decision-os-drag:${input.variant}:${input.hoverMode}:${label}`);
       state.marks.push({ label, t: now(), activeEvent: state.activeEvent, ...extra });
     };
     const addRead = (map, key, row, durationMs) => {
@@ -657,7 +657,7 @@ function installInstrumentationExpression(input) {
     }
     requestAnimationFrame(frameLoop);
 
-    window.__corev2DragTrace = {
+    window.__decisionOsDragTrace = {
       state,
       mark,
       restore() {
@@ -698,13 +698,13 @@ function installInstrumentationExpression(input) {
     };
     mark('instrumentation-installed', { variant: input.variant, hoverMode: input.hoverMode });
     return true;
-  }).replace('const input = window.__corev2DragTraceInput;', `const input = ${JSON.stringify(input)};`);
+  }).replace('const input = window.__decisionOsDragTraceInput;', `const input = ${JSON.stringify(input)};`);
 }
 
 function finishInstrumentationExpression() {
   return pageExpression(function finishCardDragTraceInstrumentation() {
-    const output = window.__corev2DragTrace?.finish?.();
-    window.__corev2DragTrace?.restore?.();
+    const output = window.__decisionOsDragTrace?.finish?.();
+    window.__decisionOsDragTrace?.restore?.();
     return output;
   });
 }
@@ -759,7 +759,7 @@ async function runTraceCase({ socket, send, variant, hoverMode, runIndex, target
 
   await send('Tracing.start', { categories: traceCategories, options: 'record-as-much-as-possible' });
   await wait(50);
-  await evaluate(send, `window.__corev2DragTrace?.mark(${JSON.stringify('trace-input-start')})`);
+  await evaluate(send, `window.__decisionOsDragTrace?.mark(${JSON.stringify('trace-input-start')})`);
   if (hoverMode === 'cold') {
     await dispatchMouse(send, 'mouseMoved', setup.startX, setup.startY);
     await wait(24);
@@ -777,7 +777,7 @@ async function runTraceCase({ socket, send, variant, hoverMode, runIndex, target
   await wait(120);
   await dispatchMouse(send, 'mouseReleased', setup.startX + dragDx, setup.startY + dragDy);
   await wait(320);
-  await evaluate(send, `window.__corev2DragTrace?.mark(${JSON.stringify('trace-input-end')})`);
+  await evaluate(send, `window.__decisionOsDragTrace?.mark(${JSON.stringify('trace-input-end')})`);
   await send('Tracing.end');
   await tracingComplete;
 

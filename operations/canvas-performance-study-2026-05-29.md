@@ -6,8 +6,8 @@ Investigate why pan and zoom degrade when a ledger has many cards, including the
 
 Primary workspace sampled:
 
-- `/home/jbb/dev/MOH/.blueprinttool/ses.json`: 25 ledger cards, 0 ledger relationships, 8 annotations, image references.
-- `/home/jbb/dev/MOH/.blueprinttool/s3.json`: 21 ledger cards, 20 ledger relationships, 1 annotation.
+- `/home/jbb/dev/MOH/.decision-os/ses.json`: 25 ledger cards, 0 ledger relationships, 8 annotations, image references.
+- `/home/jbb/dev/MOH/.decision-os/s3.json`: 21 ledger cards, 20 ledger relationships, 1 annotation.
 
 The live browser sample was collected from `http://127.0.0.1:4174/ses` with a headless Chromium CDP session. Treat the numbers as directional, not final device-grade paint/compositor metrics, because headless Chromium is not the same as the operator's interactive browser GPU path.
 
@@ -496,8 +496,8 @@ Remaining optimization direction:
 The operator reported one remaining slow path: after a zoom change, the first pan can feel sluggish. A repeatable browser stress test now lives at:
 
 ```bash
-COREV2_URL=http://127.0.0.1:4173/ardaria-game-design \
-COREV2_CDP_JSON=http://127.0.0.1:9223/json \
+DECISION_OS_URL=http://127.0.0.1:4173/ardaria-game-design \
+DECISION_OS_CDP_JSON=http://127.0.0.1:9223/json \
 node tools/live-verify/zoom-pan-stress.mjs
 ```
 
@@ -531,9 +531,9 @@ Interpretation:
 The operator provided a screenshot at the overview/detail zoom level where pan feels slow. A trace collector now lives at:
 
 ```bash
-COREV2_URL=http://127.0.0.1:4173/ardaria-game-design \
-COREV2_CDP_JSON=http://127.0.0.1:9223/json \
-COREV2_TRACE_SCALE=0.12 \
+DECISION_OS_URL=http://127.0.0.1:4173/ardaria-game-design \
+DECISION_OS_CDP_JSON=http://127.0.0.1:9223/json \
+DECISION_OS_TRACE_SCALE=0.12 \
 node tools/live-verify/zoom-pan-trace.mjs
 ```
 
@@ -546,7 +546,7 @@ Trace shape:
 
 Baseline trace:
 
-- Raw trace: `/tmp/corev2-zoom-pan-trace-1780038906289.json`
+- Raw trace: `/tmp/decision-os-zoom-pan-trace-1780038906289.json`
 - Runtime DOM: 69 cards, 16 zones, 0 ledger relationships.
 - Input events: p95 `0.17 ms`, max `22 ms`, total `390.4 ms`.
 - Scripting: p95 `0.55 ms`, max `22.03 ms`, total `3493.27 ms`.
@@ -563,14 +563,14 @@ Baseline trace:
 Grid-hidden A/B:
 
 ```bash
-COREV2_URL=http://127.0.0.1:4173/ardaria-game-design \
-COREV2_CDP_JSON=http://127.0.0.1:9223/json \
-COREV2_TRACE_SCALE=0.12 \
-COREV2_TRACE_HIDE_GRID=1 \
+DECISION_OS_URL=http://127.0.0.1:4173/ardaria-game-design \
+DECISION_OS_CDP_JSON=http://127.0.0.1:9223/json \
+DECISION_OS_TRACE_SCALE=0.12 \
+DECISION_OS_TRACE_HIDE_GRID=1 \
 node tools/live-verify/zoom-pan-trace.mjs
 ```
 
-- Raw trace: `/tmp/corev2-zoom-pan-trace-1780038946192.json`
+- Raw trace: `/tmp/decision-os-zoom-pan-trace-1780038946192.json`
 - Input events: p95 `0.16 ms`, max `21.99 ms`, total `375.41 ms`.
 - Scripting: p95 `0.47 ms`, max `22.04 ms`, total `861.92 ms`.
 - Style/layout: p95 `0.09 ms`, max `18.2 ms`, total `53.27 ms`.
@@ -601,7 +601,7 @@ Implemented CSS change:
 
 Post-change production trace:
 
-- Raw trace: `/tmp/corev2-zoom-pan-trace-1780039119162.json`
+- Raw trace: `/tmp/decision-os-zoom-pan-trace-1780039119162.json`
 - Runtime DOM: 69 cards, 16 zones, 0 ledger relationships.
 - Input events: p95 `0.16 ms`, max `20.15 ms`, total `366.82 ms`.
 - Scripting: p95 `0.47 ms`, max `20.19 ms`, total `858.75 ms`.

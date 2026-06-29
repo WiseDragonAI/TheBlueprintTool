@@ -60,8 +60,8 @@ test('specs and data ledger tabs commit canvas mutations through the server ledg
     const calls: Array<{ url: string; init: RequestInit }> = [];
     state.activeTab = activeTab;
     state.ledgerTabs = [
-      { id: 'specs', title: 'Specs', ledgerFile: '.blueprinttool/specs.json' },
-      { id: 'data', title: 'Data', ledgerFile: '.blueprinttool/data.json' }
+      { id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' },
+      { id: 'data', title: 'Data', ledgerFile: '.decision-os/data.json' }
     ];
     state.activeLedger = {
       cards: [{ id: `${activeTab}-card`, x: 10, y: 20, w: 240 }],
@@ -142,7 +142,7 @@ test('specs and data ledger tabs commit canvas mutations through the server ledg
     });
     await commitActiveLedgerMutation({ action: 'create-zone', annotation });
 
-    assert.equal(calls.at(-1)?.url, `/blueprinttool/${activeTab}`);
+    assert.equal(calls.at(-1)?.url, `/decision-os/${activeTab}`);
     assert.equal(calls.at(-1)?.init.method, 'PATCH');
     assert.equal(state.activeLedger.annotations.length, 3);
     assert.deepEqual(state.activeLedger.annotations.at(-1), {
@@ -240,8 +240,8 @@ test('active ledger load keeps server geometry authoritative over stale browser 
 
   state.activeTab = 'specs';
   state.ledgerTabs = [
-    { id: 'specs', title: 'Specs', ledgerFile: '.blueprinttool/specs.json' },
-    { id: 'data', title: 'Data', ledgerFile: '.blueprinttool/data.json' }
+    { id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' },
+    { id: 'data', title: 'Data', ledgerFile: '.decision-os/data.json' }
   ];
   state.viewports = { specs: { x: 0, y: 0, scale: 1 } };
 
@@ -261,7 +261,7 @@ test('active ledger load keeps server geometry authoritative over stale browser 
   };
 
   (globalThis as any).fetch = async (url: string) => {
-    assert.equal(url, '/blueprinttool/specs');
+    assert.equal(url, '/decision-os/specs');
     return {
       ok: true,
       async json() {

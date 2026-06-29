@@ -17,7 +17,7 @@ export function buildAssetGcPlan(report: AssetGcReport): AssetGcPlan {
   ].sort((left, right) => left.path.localeCompare(right.path));
 
   return {
-    kind: 'corev2.asset-gc-plan',
+    kind: 'decision-os.asset-gc-plan',
     version: 1,
     generatedAt: report.generatedAt,
     root: report.root,

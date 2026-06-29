@@ -5,7 +5,7 @@ import { dispatchLedgerCliCommandController, parseLedgerCliArgv } from '../../sr
 import { createJsonFile } from '../fixture/scenario.js';
 
 test('ledger-cli parses and persists todo and done card status commands', async () => {
-  const parsed = parseLedgerCliArgv(['done', '--ledger', '.blueprinttool/specs.json', '--card-id', 'card-a']);
+  const parsed = parseLedgerCliArgv(['done', '--ledger', '.decision-os/specs.json', '--card-id', 'card-a']);
   assert.equal(parsed.mode, 'done');
   assert.deepEqual(parsed.statusOperation, { cardId: 'card-a', status: 'done' });
 

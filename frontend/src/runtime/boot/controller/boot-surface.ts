@@ -2,7 +2,7 @@ import { state } from '../../state.js';
 import { SPEC_IMPLEMENTATION_SURFACE } from '../../spec-implementation-surface.js';
 import { bindInputs } from '../../input/effect/bind-inputs.js';
 import { hydratePersistedGeometry } from '../../persistence/effect/hydrate-persisted-geometry.js';
-import { loadBlueprinttoolState } from '../../ledger/effect/load-blueprinttool-state.js';
+import { loadDecisionOsState } from '../../ledger/effect/load-decision-os-state.js';
 import { loadActiveLedgerState } from '../../ledger/effect/load-active-ledger-state.js';
 import { readPersistedState } from '../../persistence/helper/read-persisted-state.js';
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
@@ -30,7 +30,7 @@ export function bootSurface(): void {
   bindInputs();
   subscribeLedgerContentEvents();
   renderTabRegistry();
-  void loadBlueprinttoolState().then(loadActiveLedgerState).then(renderCanvasSurface);
+  void loadDecisionOsState().then(loadActiveLedgerState).then(renderCanvasSurface);
   renderCanvasSurface();
   renderThreadPanel();
 }

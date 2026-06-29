@@ -4,7 +4,7 @@
  */
 import { validateLedgerEditPayload } from '@backend/business/persistence/helper/validate-ledger-edit-payload.js';
 import { writeLedgerJsonFile } from '@backend/business/persistence/effect/write-ledger-json-file.js';
-import { writeBlueprinttoolState } from '@backend/business/ledger/effect/write-blueprinttool-state.js';
+import { writeDecisionOsState } from '@backend/business/ledger/effect/write-decision-os-state.js';
 import { sendJsonResponse } from '@backend/business/routing/effect/send-json-response.js';
 import { parseHttpRequest } from '@backend/business/routing/helper/parse-http-request.js';
 
@@ -19,7 +19,7 @@ export async function commitLedgerEditController(input: { action_payload?: AnyRe
   const validation = validateLedgerEditPayload({ action_payload: { ...payload, request }, runtime_state: runtime, data_model: data });
   if (validation.ok !== false) {
     writeLedgerJsonFile({ action_payload: { ...payload, document: validation.document }, runtime_state: runtime, data_model: data });
-    writeBlueprinttoolState({ action_payload: { ...payload, state: { lastEdit: validation.document } }, runtime_state: runtime, data_model: data });
+    writeDecisionOsState({ action_payload: { ...payload, state: { lastEdit: validation.document } }, runtime_state: runtime, data_model: data });
   }
   sendJsonResponse({ action_payload: { ...payload, status: validation.ok === false ? 400 : 200, body: validation }, runtime_state: runtime, data_model: data });
   return { ok: validation.ok !== false, request, validation };

@@ -12,7 +12,7 @@ import { persistUploadedVoiceAudio } from '@backend/business/transcription/effec
 
 test('persist-uploaded-voice-audio writes a transient upload and records runtime state', () => {
   traces.length = 0;
-  const voiceUploadRoot = mkdtempSync(join(tmpdir(), 'corev2-voice-upload-'));
+  const voiceUploadRoot = mkdtempSync(join(tmpdir(), 'decision-os-voice-upload-'));
   const runtime_state: Record<string, unknown> = {};
   try {
     const result = persistUploadedVoiceAudio({

@@ -6,7 +6,7 @@ import type { Stats } from 'node:fs';
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
-export type LedgerCommand = 'answer' | 'done' | 'export' | 'help' | 'inspect' | 'mutate' | 'overview' | 'todo' | 'unanswered';
+export type LedgerCommand = 'answer' | 'done' | 'export' | 'help' | 'inspect' | 'migrate-decision-os' | 'mutate' | 'overview' | 'todo' | 'unanswered';
 
 export type AssetCommand = 'apply-gc-plan' | 'gc' | 'list-orphans' | 'list-referenced' | 'prune-json' | 'stage-referenced';
 
@@ -46,10 +46,30 @@ export type LedgerCliCommand = {
   };
   mutationFile?: string;
   mutationOperation: LedgerMutationOperation;
+  migrationOperation?: MigrationOperation;
   statusOperation?: {
     cardId?: string;
     status: 'todo' | 'done';
   };
+};
+
+export type MigrationOperation = {
+  allowDirty: boolean;
+  dryRun: boolean;
+  json: boolean;
+  root?: string;
+  write: boolean;
+};
+
+export type DecisionOsMigrationReport = {
+  changedFiles: string[];
+  dryRun: boolean;
+  manualFollowUpFiles: string[];
+  movedDirectories: Array<{ from: string; to: string }>;
+  replacements: Record<string, number>;
+  root: string;
+  skippedBinaryFiles: string[];
+  write: boolean;
 };
 
 export type AssetOperation = {
@@ -104,7 +124,7 @@ export type AssetGcPlanEntry = {
 };
 
 export type AssetGcPlan = {
-  kind: 'corev2.asset-gc-plan';
+  kind: 'decision-os.asset-gc-plan';
   version: 1;
   generatedAt: string;
   root: string;

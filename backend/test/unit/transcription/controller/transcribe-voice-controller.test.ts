@@ -26,7 +26,7 @@ test('transcribe-voice-controller accepts voice upload even when transcription i
   traces.length = 0;
   const runtime_state: Record<string, unknown> = {};
   const result = await transcribeVoiceController({
-    action_payload: { audioBuffer: Buffer.from('audio'), mimeType: 'audio/webm' },
+    action_payload: { audioBuffer: Buffer.from('audio'), mimeType: 'audio/webm', transcriptionEnabled: false },
     runtime_state,
     data_model: {}
   });
@@ -43,7 +43,7 @@ test('transcribe-voice-controller accepts voice upload even when transcription i
 
 test('transcribe-voice-controller preserves upload after successful transcription for retry', async () => {
   traces.length = 0;
-  const voiceUploadRoot = mkdtempSync(join(tmpdir(), 'corev2-transcribe-clear-'));
+  const voiceUploadRoot = mkdtempSync(join(tmpdir(), 'decision-os-transcribe-clear-'));
   const runtime_state: Record<string, unknown> = {};
   try {
     const result = await transcribeVoiceController({
@@ -64,7 +64,7 @@ test('transcribe-voice-controller preserves upload after successful transcriptio
 
 test('transcribe-voice-controller retries a preserved voice upload', async () => {
   traces.length = 0;
-  const voiceUploadRoot = mkdtempSync(join(tmpdir(), 'corev2-transcribe-retry-'));
+  const voiceUploadRoot = mkdtempSync(join(tmpdir(), 'decision-os-transcribe-retry-'));
   const runtime_state: Record<string, unknown> = {};
   try {
     const first = await transcribeVoiceController({

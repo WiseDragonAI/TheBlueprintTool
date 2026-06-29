@@ -1,5 +1,5 @@
 /**
- * WHAT: Browser runtime entrypoint for the CoreV2 canvas surface.
+ * WHAT: Browser runtime entrypoint for the decision-os canvas surface.
  * WHY: Runtime behavior is split by domain and role so implementation stays aligned with the ledger convention.
  */
 import { bootSurface } from './boot/controller/boot-surface.js';

@@ -41,7 +41,7 @@ export function keepPatternToRegex(pattern: string): RegExp {
 }
 
 export async function readAssetsKeep(input: { workspaceRoot: string }): Promise<AssetKeepRule[]> {
-  const keepFile = resolve(input.workspaceRoot, '.blueprinttool/assets.keep');
+  const keepFile = resolve(input.workspaceRoot, '.decision-os/assets.keep');
   if (!await exists(keepFile)) return [];
   const content = await fs.readFile(keepFile, 'utf8');
   return content.split(/\r?\n/)

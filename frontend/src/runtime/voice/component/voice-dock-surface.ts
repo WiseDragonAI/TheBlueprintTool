@@ -1,6 +1,6 @@
 /**
- * WHAT: Renders the DroidFleet terminal voice control dock inside CoreV2.
- * WHY: CoreV2 voice notes should use the exact terminal dock class contract and waveform surface.
+ * WHAT: Renders the DroidFleet terminal voice control dock inside decision-os.
+ * WHY: decision-os voice notes should use the exact terminal dock class contract and waveform surface.
  */
 import { controlDock } from './control-dock.js';
 import { terminalComposer } from './terminal-composer.js';

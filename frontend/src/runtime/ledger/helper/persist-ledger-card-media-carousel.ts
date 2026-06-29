@@ -1,4 +1,4 @@
-const storageKey = 'corev2.cardMedia.carouselSlides';
+const storageKey = 'decision-os.cardMedia.carouselSlides';
 
 function readStates(): Record<string, number> {
   try {

@@ -1,0 +1,198 @@
+{
+  "modelName": "decision_os_performances",
+  "source": "decision-os performance investigations",
+  "diagramSize": {
+    "width": 3600,
+    "height": 2200
+  },
+  "viewport": {
+    "x": 420,
+    "y": 160,
+    "scale": 0.42
+  },
+  "positions": {},
+  "cards": [
+    {
+      "id": "perf-drag-summary",
+      "title": "Drag Performance Summary",
+      "cardType": "perf-analysis",
+      "domainId": "performances",
+      "x": 18.916946170522806,
+      "y": -48.63532802357598,
+      "w": 917.6381993968773,
+      "h": 393.4099929291888,
+      "comment": {
+        "contentFile": ".decision-os/cards/performances/perf-drag-summary.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "perf-measurement-matrix",
+      "title": "Measurement Matrix",
+      "cardType": "perf-evidence",
+      "domainId": "performances",
+      "x": 8.999394817853727,
+      "y": -1280.017760485146,
+      "w": 941.3983260835025,
+      "h": 1150.1323334448693,
+      "comment": {
+        "contentFile": ".decision-os/cards/performances/perf-measurement-matrix.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "perf-trace-suite",
+      "title": "CDP Trace Suite",
+      "cardType": "perf-tooling",
+      "domainId": "performances",
+      "x": 1012.5827851883591,
+      "y": -1219.152835079598,
+      "w": 700,
+      "h": 538,
+      "comment": {
+        "contentFile": ".decision-os/cards/performances/perf-trace-suite.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "perf-drag-call-chain",
+      "title": "Drag Move Call Chain",
+      "cardType": "perf-mechanism",
+      "domainId": "performances",
+      "x": 120,
+      "y": 930,
+      "w": 1176,
+      "h": 1563,
+      "comment": {
+        "contentFile": ".decision-os/cards/performances/perf-drag-call-chain.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "perf-zone-label-overlay",
+      "title": "Zone Label Overlay Reads",
+      "cardType": "perf-mechanism",
+      "domainId": "performances",
+      "x": 1650,
+      "y": 911,
+      "w": 760,
+      "h": 1215,
+      "comment": {
+        "contentFile": ".decision-os/cards/performances/perf-zone-label-overlay.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "perf-commit-raster",
+      "title": "Commit And Raster Mechanism",
+      "cardType": "perf-mechanism",
+      "domainId": "performances",
+      "x": 2572,
+      "y": 937,
+      "w": 820,
+      "h": 892,
+      "comment": {
+        "contentFile": ".decision-os/cards/performances/perf-commit-raster.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "perf-relationship-boundary",
+      "title": "Relationship Boundary",
+      "cardType": "perf-boundary",
+      "domainId": "performances",
+      "x": 3445,
+      "y": 935,
+      "w": 680,
+      "h": 415,
+      "comment": {
+        "contentFile": ".decision-os/cards/performances/perf-relationship-boundary.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "perf-structural-direction",
+      "title": "Structural Refactor Direction",
+      "cardType": "perf-plan",
+      "domainId": "performances",
+      "x": 2174.981352713893,
+      "y": -164.21411723219626,
+      "w": 900,
+      "h": 647,
+      "comment": {
+        "contentFile": ".decision-os/cards/performances/perf-structural-direction.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "perf-acceptance-gates",
+      "title": "Acceptance Gates",
+      "cardType": "perf-plan",
+      "domainId": "performances",
+      "x": 3312.689507109194,
+      "y": -149.26391024495987,
+      "w": 760,
+      "h": 574,
+      "comment": {
+        "contentFile": ".decision-os/cards/performances/perf-acceptance-gates.md"
+      },
+      "facts": [],
+      "fields": []
+    }
+  ],
+  "relationships": [],
+  "annotations": [
+    {
+      "id": "perf-zone-evidence",
+      "x": -25.59519473168382,
+      "y": -1381.4884123968955,
+      "width": 1658.0785558824423,
+      "height": 1876.407480286672,
+      "color": "#38bdf8",
+      "label": "Measured Evidence",
+      "comments": []
+    },
+    {
+      "id": "perf-zone-mechanisms",
+      "x": 70,
+      "y": 870,
+      "width": 4118,
+      "height": 1641,
+      "color": "#f97316",
+      "label": "Runtime Mechanisms",
+      "comments": []
+    },
+    {
+      "id": "perf-zone-refactor",
+      "x": 2124.9813527138926,
+      "y": -224.21411723219603,
+      "width": 2147.243419609508,
+      "height": 748.3720612321495,
+      "color": "#84cc16",
+      "label": "Refactor Direction",
+      "comments": []
+    }
+  ],
+  "notes": {},
+  "selection": {
+    "cardIds": [],
+    "zoneIds": [],
+    "groupIds": []
+  },
+  "updatedAt": "2026-06-02T00:00:00.000Z",
+  "cardEdits": {},
+  "threadFiles": {
+    "thread-perf-zone-label-overlay": ".decision-os/threads/performances/thread-perf-zone-label-overlay.md",
+    "thread-perf-commit-raster": ".decision-os/threads/performances/thread-perf-commit-raster.md",
+    "thread-perf-drag-call-chain": ".decision-os/threads/performances/thread-perf-drag-call-chain.md",
+    "thread-perf-measurement-matrix": ".decision-os/threads/performances/thread-perf-measurement-matrix.md"
+  }
+}

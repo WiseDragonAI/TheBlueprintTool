@@ -4,13 +4,13 @@ import { connectPage } from './function/connect-page.mjs';
 import { wait } from './function/wait.mjs';
 import { waitLiveCanvasReady } from './function/wait-live-canvas-ready.mjs';
 
-const url = process.env.COREV2_URL ?? 'http://127.0.0.1:4173/ardaria-game-design';
-const cdpJsonUrl = process.env.COREV2_CDP_JSON ?? 'http://127.0.0.1:9223/json';
-const scale = Number(process.env.COREV2_TRACE_SCALE ?? 0.12);
-const durationMs = Number(process.env.COREV2_TRACE_DURATION_MS ?? 4200);
-const outputPath = process.env.COREV2_TRACE_OUTPUT ?? `/tmp/corev2-zoom-pan-trace-${Date.now()}.json`;
-const hideGrid = process.env.COREV2_TRACE_HIDE_GRID === '1';
-const disableCardShadows = process.env.COREV2_TRACE_DISABLE_CARD_SHADOWS === '1';
+const url = process.env.DECISION_OS_URL ?? 'http://127.0.0.1:4173/ardaria-game-design';
+const cdpJsonUrl = process.env.DECISION_OS_CDP_JSON ?? 'http://127.0.0.1:9223/json';
+const scale = Number(process.env.DECISION_OS_TRACE_SCALE ?? 0.12);
+const durationMs = Number(process.env.DECISION_OS_TRACE_DURATION_MS ?? 4200);
+const outputPath = process.env.DECISION_OS_TRACE_OUTPUT ?? `/tmp/decision-os-zoom-pan-trace-${Date.now()}.json`;
+const hideGrid = process.env.DECISION_OS_TRACE_HIDE_GRID === '1';
+const disableCardShadows = process.env.DECISION_OS_TRACE_DISABLE_CARD_SHADOWS === '1';
 
 const traceCategories = [
   'toplevel',
@@ -213,8 +213,8 @@ try {
   const setupValue = setup.result.result.value;
   const startX = setupValue.startX;
   const startY = setupValue.startY;
-  const dx = Number(process.env.COREV2_TRACE_DX ?? 760);
-  const dy = Number(process.env.COREV2_TRACE_DY ?? 180);
+  const dx = Number(process.env.DECISION_OS_TRACE_DX ?? 760);
+  const dy = Number(process.env.DECISION_OS_TRACE_DY ?? 180);
   const moves = Math.max(1, Math.round(durationMs / 16));
 
   await send('Tracing.start', {
@@ -254,7 +254,7 @@ try {
     summary: parseTrace(trace)
   };
   console.log(formatReport(report));
-  if (process.env.COREV2_TRACE_SUMMARY_JSON === '1') {
+  if (process.env.DECISION_OS_TRACE_SUMMARY_JSON === '1') {
     console.log(JSON.stringify(report, null, 2));
   }
 } finally {

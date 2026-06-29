@@ -740,14 +740,14 @@ backend/
     },
     {
       "kind": "helper",
-      "name": "read-blueprinttool-state",
+      "name": "read-decision-os-state",
       "rootBlock": "backend",
       "domain": "ledger",
-      "comments": "WHAT read-blueprinttool-state helper. WHY the front-back scaffold needs one addressable helper function.",
-      "pseudocode": "function readBlueprinttoolState({ action_payload, runtime_state, data_model }) {\n  telemetry('read-blueprinttool-state-started')\n  const result = { ok: true, kind: 'helper', action_payload, runtime_state, data_model }\n  telemetry('read-blueprinttool-state-completed')\n  return result\n}",
+      "comments": "WHAT read-decision-os-state helper. WHY the front-back scaffold needs one addressable helper function.",
+      "pseudocode": "function readDecisionOsState({ action_payload, runtime_state, data_model }) {\n  telemetry('read-decision-os-state-started')\n  const result = { ok: true, kind: 'helper', action_payload, runtime_state, data_model }\n  telemetry('read-decision-os-state-completed')\n  return result\n}",
       "body": "",
       "sourceSpecIds": [],
-      "telemetryName": "read-blueprinttool-state"
+      "telemetryName": "read-decision-os-state"
     },
     {
       "kind": "helper",
@@ -927,14 +927,14 @@ backend/
     },
     {
       "kind": "effect",
-      "name": "write-blueprinttool-state",
+      "name": "write-decision-os-state",
       "rootBlock": "backend",
       "domain": "ledger",
-      "comments": "WHAT write-blueprinttool-state effect. WHY the front-back scaffold needs one addressable effect function.",
-      "pseudocode": "function writeBlueprinttoolState({ action_payload, runtime_state, data_model }) {\n  telemetry('write-blueprinttool-state-started')\n  const result = { ok: true, kind: 'effect', action_payload, runtime_state, data_model }\n  telemetry('write-blueprinttool-state-completed')\n  return result\n}",
+      "comments": "WHAT write-decision-os-state effect. WHY the front-back scaffold needs one addressable effect function.",
+      "pseudocode": "function writeDecisionOsState({ action_payload, runtime_state, data_model }) {\n  telemetry('write-decision-os-state-started')\n  const result = { ok: true, kind: 'effect', action_payload, runtime_state, data_model }\n  telemetry('write-decision-os-state-completed')\n  return result\n}",
       "body": "",
       "sourceSpecIds": [],
-      "telemetryName": "write-blueprinttool-state"
+      "telemetryName": "write-decision-os-state"
     },
     {
       "kind": "effect",
@@ -1486,16 +1486,16 @@ backend/
       "domain": "navigation"
     },
     {
-      "suiteName": "server state is saved in ./.blueprinttool",
+      "suiteName": "server state is saved in ./.decision-os",
       "specId": "70000007",
-      "integrationPath": "./backend/test/toolbox/server-state-is-saved-in-blueprinttool.integration.test.ts",
+      "integrationPath": "./backend/test/toolbox/server-state-is-saved-in-decision-os.integration.test.ts",
       "rootBlock": "backend",
       "domain": "toolbox"
     },
     {
-      "suiteName": "ledgers in ./.blueprinttool load as default tabs",
+      "suiteName": "ledgers in ./.decision-os load as default tabs",
       "specId": "9c31f0a4",
-      "integrationPath": "./backend/test/navigation/ledgers-in-blueprinttool-load-as-default-tabs.integration.test.ts",
+      "integrationPath": "./backend/test/navigation/ledgers-in-decision-os-load-as-default-tabs.integration.test.ts",
       "rootBlock": "backend",
       "domain": "navigation"
     },
@@ -2130,7 +2130,7 @@ Reflection:
   { root_block: 'frontend', domain_name: 'toolbox', description: 'Core toolbar buttons, zone tool color picker, group tool arming, shortcut help, runbook, conversation ledger, refresh button, and toolbox hover styling.' },
   { root_block: 'backend', domain_name: 'server', description: 'Node 24 native HTTP server, TypeScript backend runtime, and native node:http request lifecycle.' },
   { root_block: 'backend', domain_name: 'routing', description: 'Direct URL slug routes, API route dispatch, route-addressable tab ledger serving, and new persisted ledger route.' },
-  { root_block: 'backend', domain_name: 'ledger', description: 'Committed JSON ledger loading, tab registry state, valid ledger indexing, invalid ledger rejection, and server state saved in ./.blueprinttool.' },
+  { root_block: 'backend', domain_name: 'ledger', description: 'Committed JSON ledger loading, tab registry state, valid ledger indexing, invalid ledger rejection, and server state saved in ./.decision-os.' },
   { root_block: 'backend', domain_name: 'persistence', description: 'Ledger edit API validation, JSON file writes, client-originated save tracking, and persisted event records.' },
   { root_block: 'backend', domain_name: 'refresh', description: 'Native fs.watch ledger hot-reload watcher, external edit detection, debounce/idempotence, server refresh event routing, and WebSocket refresh transport.' },
   { root_block: 'backend', domain_name: 'transcription', description: 'Optional configuration-gated voice transcription boundary using OpenAI audio transcription as external HTTP IO; completed transcription persists text and not audio.' }
@@ -2155,8 +2155,8 @@ Reflection:
   { suite_name: 'Invalid actions mixed selection selection clear tool mode and navigation persistence hold', spec_id: '40000002-40000012', root_block: 'frontend', path: './frontend/test/selection/selection-tool-safety.integration.test.ts', expected_telemetry: ['derive-gesture-intent', 'resolve-selection-target', 'clear-transient-selection', 'resolve-tool-mode'], input_lists: [], prev_state: {}, controller_id: '' },
   { suite_name: 'Tab switch refresh marquee escape drawer note create note delete and copy selection hold', spec_id: '50000002-50000016', root_block: 'frontend', path: './frontend/test/thread/thread-and-selection-actions.integration.test.ts', expected_telemetry: ['derive-route-state', 'render-thread-panel', 'commit-ledger-edit', 'copy-selection-payload'], input_lists: [], prev_state: {}, controller_id: '' },
   { suite_name: 'Card identity selection drag persistence tabs notes labels hash IDs and markdown hold', spec_id: '60000001-60000010', root_block: 'frontend', path: './frontend/test/card/card-lifecycle.integration.test.ts', expected_telemetry: ['resolve-selection-target', 'calculate-drag-delta', 'commit-ledger-edit', 'render-card-layer', 'parse-card-markdown'], input_lists: [], prev_state: {}, controller_id: '' },
-  { suite_name: 'Server routes serve ledgers accept edits persist JSON create ledgers and index .blueprinttool tabs', spec_id: '70000001-70000007', root_block: 'backend', path: './backend/test/routing/server-ledger-routing.integration.test.ts', expected_telemetry: ['parse-http-request', 'resolve-ledger-route', 'read-ledger-json-file', 'validate-ledger-edit-payload', 'write-ledger-json-file', 'write-blueprinttool-state'], input_lists: [], prev_state: {}, controller_id: '' },
-  { suite_name: 'Ledgers in .blueprinttool load as default tabs unless invalid', spec_id: '9c31f0a4', root_block: 'backend', path: './backend/test/ledger/blueprinttool-default-tabs.integration.test.ts', expected_telemetry: ['read-blueprinttool-state', 'read-ledger-json-file', 'validate-ledger-document', 'write-blueprinttool-state'], input_lists: [], prev_state: {}, controller_id: '' },
+  { suite_name: 'Server routes serve ledgers accept edits persist JSON create ledgers and index .decision-os tabs', spec_id: '70000001-70000007', root_block: 'backend', path: './backend/test/routing/server-ledger-routing.integration.test.ts', expected_telemetry: ['parse-http-request', 'resolve-ledger-route', 'read-ledger-json-file', 'validate-ledger-edit-payload', 'write-ledger-json-file', 'write-decision-os-state'], input_lists: [], prev_state: {}, controller_id: '' },
+  { suite_name: 'Ledgers in .decision-os load as default tabs unless invalid', spec_id: '9c31f0a4', root_block: 'backend', path: './backend/test/ledger/decision-os-default-tabs.integration.test.ts', expected_telemetry: ['read-decision-os-state', 'read-ledger-json-file', 'validate-ledger-document', 'write-decision-os-state'], input_lists: [], prev_state: {}, controller_id: '' },
   { suite_name: 'Zone click Ctrl-click card drag zone drag toolbox and route-addressable tab UI hold', spec_id: 'd5c8ece7-ce0c5d80-61261091-86e67c0e-e0b4d11a-33c20993-676c6a7a-7abd939e-cfed85d3-9f9279ff-93f778a8-3159faad-ac137fe2-51a6af83-12749dcd', root_block: 'frontend', path: './frontend/test/toolbox/toolbox-navigation-zone.integration.test.ts', expected_telemetry: ['resolve-selection-target', 'resolve-tool-mode', 'render-tab-registry', 'render-toolbox'], input_lists: [], prev_state: {}, controller_id: '' },
   { suite_name: 'Threads notes voice recording voice transcription status and transient audio hold', spec_id: 'eaced0c9-667ae9a9-5f8c7152-cc7ed3b4-7984a4f3-d38927c1-747b461e-3d074416-8b1ff788-6cc37b58-040cef84-828e6225-c0c42d20-5c4e5c22-21b2b050-b5a783cd', root_block: 'frontend', path: './frontend/test/voice/voice-thread.integration.test.ts', expected_telemetry: ['render-thread-panel', 'resolve-voice-session', 'capture-voice-audio', 'upload-voice-audio', 'request-transcription', 'fill-thread-draft', 'render-voice-status'], input_lists: [], prev_state: {}, controller_id: '' },
   { suite_name: 'Card hash label visibility and placement hold', spec_id: 'a946fbe0-aa42ff94-4dfbf38c-d0936729', root_block: 'frontend', path: './frontend/test/card/card-labels.integration.test.ts', expected_telemetry: ['render-card-layer'], input_lists: [], prev_state: {}, controller_id: '' },
@@ -2269,12 +2269,12 @@ Reflection:
   { type: 'helper', root_block: 'backend', domain: 'server', name: 'create-http-server', description: 'Creates a Node 24 native http.Server with node:http createServer and routes request events through Core server modules.', return_type: 'unknown' },
   { type: 'helper', root_block: 'backend', domain: 'routing', name: 'parse-http-request', description: 'Parses method, URL slug, JSON payload, route parameters, and request body from native HTTP requests.', return_type: 'unknown' },
   { type: 'helper', root_block: 'backend', domain: 'routing', name: 'resolve-ledger-route', description: 'Maps direct URL slug and API path to NavTab, Ledger, edit route, create route, voice upload route, or not-found branch.', return_type: 'unknown' },
-  { type: 'helper', root_block: 'backend', domain: 'ledger', name: 'read-blueprinttool-state', description: 'Reads ./.blueprinttool server state and lists ledger files that should become default tabs.', return_type: 'unknown' },
+  { type: 'helper', root_block: 'backend', domain: 'ledger', name: 'read-decision-os-state', description: 'Reads ./.decision-os server state and lists ledger files that should become default tabs.', return_type: 'unknown' },
   { type: 'helper', root_block: 'backend', domain: 'ledger', name: 'read-ledger-json-file', description: 'Reads committed JSON ledger files and decodes Ledger, NavTab, Canvas, Card, Zone, Group, Relationship, Viewport, Thread, Message, and Event records.', return_type: 'unknown' },
   { type: 'helper', root_block: 'backend', domain: 'ledger', name: 'validate-ledger-document', description: 'Validates durable ledger shape and rejects invalid ledgers without corrupting server state.', return_type: 'unknown' },
   { type: 'helper', root_block: 'backend', domain: 'persistence', name: 'validate-ledger-edit-payload', description: 'Validates JSON edit payloads for ledger mutations before writing any file.', return_type: 'unknown' },
   { type: 'effect', root_block: 'backend', domain: 'persistence', name: 'write-ledger-json-file', description: 'Writes committed JSON ledger edits to disk and persists updated ledger revision or event state.', return_type: 'void' },
-  { type: 'effect', root_block: 'backend', domain: 'ledger', name: 'write-blueprinttool-state', description: 'Writes ./.blueprinttool tab registry server state after boot indexing or new ledger creation.', return_type: 'void' },
+  { type: 'effect', root_block: 'backend', domain: 'ledger', name: 'write-decision-os-state', description: 'Writes ./.decision-os tab registry server state after boot indexing or new ledger creation.', return_type: 'void' },
   { type: 'effect', root_block: 'backend', domain: 'routing', name: 'send-json-response', description: 'Sends HTTP JSON responses for ledger reads, edits, new ledger creation, errors, and transcription responses.', return_type: 'void' },
   { type: 'helper', root_block: 'backend', domain: 'refresh', name: 'watch-ledger-directory', description: 'Uses native fs.watch to observe ledger directory changes while tolerating duplicate, missing, or coarse-grained events.', return_type: 'unknown' },
   { type: 'helper', root_block: 'backend', domain: 'refresh', name: 'debounce-refresh-event', description: 'Coalesces watcher events and prevents redundant client refresh for client-originated ledger edits.', return_type: 'unknown' },
@@ -2318,7 +2318,7 @@ Reflection:
   { root_block: 'frontend', screen_name: 'thread-panel', name: 'draft-composer', parent_component: null, description: 'Shows active thread draft and note submit control.', local_state: ['draftInput'], runtime_state: ['DraftState'], helpers: ['resolve-thread-target'] },
   { root_block: 'frontend', screen_name: 'thread-panel', name: 'voice-control', parent_component: null, description: 'Shows voice recording start stop disabled state tooltip duration level upload transcription and failure status.', local_state: [], runtime_state: ['VoiceState'], helpers: ['resolve-voice-session'] },
   { root_block: 'frontend', screen_name: 'canvas', name: 'confirmation-modal', parent_component: null, description: 'Shows zone deletion confirmation and handles Escape and Enter keyboard decisions.', local_state: [], runtime_state: ['ModalState'], helpers: ['confirm-zone-deletion'] },
-  { root_block: 'frontend', screen_name: 'canvas', name: 'first-launch-modal', parent_component: null, description: 'Shows default tab name input when ./.blueprinttool is missing or has zero valid ledgers.', local_state: ['tabNameDraft'], runtime_state: ['ModalState'], helpers: ['derive-route-state'] },
+  { root_block: 'frontend', screen_name: 'canvas', name: 'first-launch-modal', parent_component: null, description: 'Shows default tab name input when ./.decision-os is missing or has zero valid ledgers.', local_state: ['tabNameDraft'], runtime_state: ['ModalState'], helpers: ['derive-route-state'] },
   { root_block: 'frontend', screen_name: 'canvas', name: 'notification-region', parent_component: null, description: 'Shows transient operator notifications for save, refresh, voice, route, and validation failures.', local_state: [], runtime_state: ['NotificationState'], helpers: [] }
 ]
 ```
@@ -2658,14 +2658,14 @@ Reflection:
     controller: 'start-http-server-controller',
     description: 'Start the Node 24 native HTTP server and connect route dispatch, ledger state, refresh watcher, and transcription boundary.',
     action_payload: ['http-request'],
-    helpers: ['create-http-server', 'read-blueprinttool-state', 'watch-ledger-directory'],
+    helpers: ['create-http-server', 'read-decision-os-state', 'watch-ledger-directory'],
     effects: ['send-json-response'],
     pseudoCode: `async function startHttpServerController({ action_payload, runtime_state, data_model }: { action_payload: { start_requested: true }; runtime_state: {}; data_model: { Server: object | null; Router: object[] } }) {
   telemetry('start-http-server-controller-started')
   // WHAT: Create the native Node HTTP server.
   // WHY: Specs require node:http without a server framework.
   // HOW: Load tab registry, install watcher, and route requests through Core server modules.
-  readBlueprinttoolState()
+  readDecisionOsState()
   watchLedgerDirectory()
   createHttpServer()
   telemetry('start-http-server-controller-completed')
@@ -2700,22 +2700,22 @@ Reflection:
     root_block: 'backend',
     domain: 'ledger',
     controller: 'load-tab-ledgers-controller',
-    description: 'Load ledgers from ./.blueprinttool as default tabs and reject invalid ledgers without corrupting state.',
+    description: 'Load ledgers from ./.decision-os as default tabs and reject invalid ledgers without corrupting state.',
     action_payload: ['http-request'],
-    helpers: ['read-blueprinttool-state', 'read-ledger-json-file', 'validate-ledger-document'],
-    effects: ['write-blueprinttool-state', 'send-json-response'],
+    helpers: ['read-decision-os-state', 'read-ledger-json-file', 'validate-ledger-document'],
+    effects: ['write-decision-os-state', 'send-json-response'],
     pseudoCode: `async function loadTabLedgersController({ action_payload, runtime_state, data_model }: { action_payload: { boot_or_create: boolean }; runtime_state: {}; data_model: { Ledger: object[]; NavTab: object[] } }) {
   telemetry('load-tab-ledgers-controller-started')
   // WHAT: Build server tab registry from committed ledger files.
   // WHY: Navigation tabs represent all available ledgers in server state.
   // HOW: Read registry, validate each ledger, reject invalid ledgers, then persist server state.
-  const registry = readBlueprinttoolState()
+  const registry = readDecisionOsState()
   const ledgers = readLedgerJsonFile()
   const valid = validateLedgerDocument()
   if (!valid.ok) {
     telemetry('load-tab-ledgers-invalid-ledger-rejected')
   }
-  writeBlueprinttoolState()
+  writeDecisionOsState()
   sendJsonResponse()
   telemetry('load-tab-ledgers-controller-completed')
 }`

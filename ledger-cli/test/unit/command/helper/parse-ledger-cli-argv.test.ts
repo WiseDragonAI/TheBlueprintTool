@@ -18,7 +18,7 @@ test('parse-ledger-cli-argv parses targeted ledger mutations', () => {
   const command = parseLedgerCliArgv([
     'mutate',
     '--ledger',
-    '.blueprinttool/specs.json',
+    '.decision-os/specs.json',
     '--card-id',
     'note_spawnable_vs_inventory_item',
     '--card-comment',
@@ -50,7 +50,7 @@ test('parse-ledger-cli-argv parses targeted ledger mutations', () => {
   ]);
 
   assert.equal(command.mode, 'mutate');
-  assert.equal(command.ledgerJsonFile, '.blueprinttool/specs.json');
+  assert.equal(command.ledgerJsonFile, '.decision-os/specs.json');
   assert.equal(command.mutationOperation.cardId, 'note_spawnable_vs_inventory_item');
   assert.equal(command.mutationOperation.cardComment, 'inline comment');
   assert.equal(command.mutationOperation.cardCommentFile, 'tmp/comment.md');
@@ -70,24 +70,24 @@ test('parse-ledger-cli-argv parses ledger overview command', () => {
   const command = parseLedgerCliArgv([
     'overview',
     '--ledger',
-    '.blueprinttool/data.json',
+    '.decision-os/data.json',
   ]);
 
   assert.equal(command.mode, 'overview');
-  assert.equal(command.ledgerJsonFile, '.blueprinttool/data.json');
+  assert.equal(command.ledgerJsonFile, '.decision-os/data.json');
 });
 
 test('parse-ledger-cli-argv parses ledger export command', () => {
   const command = parseLedgerCliArgv([
     'export',
     '--ledger',
-    '.blueprinttool/data.json',
+    '.decision-os/data.json',
     '--output',
     'ledger-export.md',
   ]);
 
   assert.equal(command.mode, 'export');
-  assert.equal(command.ledgerJsonFile, '.blueprinttool/data.json');
+  assert.equal(command.ledgerJsonFile, '.decision-os/data.json');
   assert.equal(command.exportOperation?.outputFile, 'ledger-export.md');
 });
 
@@ -95,7 +95,7 @@ test('parse-ledger-cli-argv parses answer commands', () => {
   const command = parseLedgerCliArgv([
     'answer',
     '--ledger',
-    '.blueprinttool/specs.json',
+    '.decision-os/specs.json',
     '--thread-id',
     'thread-card-a',
     '--message',
@@ -103,7 +103,7 @@ test('parse-ledger-cli-argv parses answer commands', () => {
   ]);
 
   assert.equal(command.mode, 'answer');
-  assert.equal(command.ledgerJsonFile, '.blueprinttool/specs.json');
+  assert.equal(command.ledgerJsonFile, '.decision-os/specs.json');
   assert.equal(command.answerOperation?.threadId, 'thread-card-a');
   assert.equal(command.answerOperation?.message, 'Agent answer.');
 });
@@ -118,7 +118,7 @@ test('parse-ledger-cli-argv parses asset commands', () => {
     '--include-risky',
     'ui-mockups',
     '--write-plan',
-    '.blueprinttool/assets-gc-plan.json',
+    '.decision-os/assets-gc-plan.json',
     '--write',
   ]);
 
@@ -127,7 +127,7 @@ test('parse-ledger-cli-argv parses asset commands', () => {
   assert.equal(command.assetOperation?.root, '/workspace');
   assert.equal(command.assetOperation?.dryRun, true);
   assert.deepEqual(command.assetOperation?.includeRisky, ['ui-mockups']);
-  assert.equal(command.assetOperation?.writePlanFile, '.blueprinttool/assets-gc-plan.json');
+  assert.equal(command.assetOperation?.writePlanFile, '.decision-os/assets-gc-plan.json');
   assert.equal(command.assetOperation?.write, true);
 });
 
@@ -138,11 +138,25 @@ test('parse-ledger-cli-argv parses asset GC plan application', () => {
     '--root',
     '/workspace',
     '--plan',
-    '.blueprinttool/assets-gc-plan.json',
+    '.decision-os/assets-gc-plan.json',
   ]);
 
   assert.equal(command.mode, 'assets');
   assert.equal(command.assetOperation?.action, 'apply-gc-plan');
   assert.equal(command.assetOperation?.root, '/workspace');
-  assert.equal(command.assetOperation?.planFile, '.blueprinttool/assets-gc-plan.json');
+  assert.equal(command.assetOperation?.planFile, '.decision-os/assets-gc-plan.json');
+});
+
+test('parse-ledger-cli-argv parses decision-os migration commands', () => {
+  const dryRun = parseLedgerCliArgv(['migrate-decision-os', '--root', '/workspace', '--json']);
+  const write = parseLedgerCliArgv(['migrate-decision-os', '--root', '/workspace', '--write', '--allow-dirty']);
+
+  assert.equal(dryRun.mode, 'migrate-decision-os');
+  assert.equal(dryRun.migrationOperation?.root, '/workspace');
+  assert.equal(dryRun.migrationOperation?.dryRun, true);
+  assert.equal(dryRun.migrationOperation?.write, false);
+  assert.equal(dryRun.migrationOperation?.json, true);
+  assert.equal(write.migrationOperation?.dryRun, false);
+  assert.equal(write.migrationOperation?.write, true);
+  assert.equal(write.migrationOperation?.allowDirty, true);
 });

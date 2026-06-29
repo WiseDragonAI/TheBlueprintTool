@@ -89,9 +89,9 @@ test('thread note image resize survives stale server ledger merges', () => {
           {
             id: 'note-image',
             role: 'operator',
-            message: '![Image](.blueprinttool/thread/image.png)',
+            message: '![Image](.decision-os/thread/image.png)',
             imageSizes: {
-              '.blueprinttool/thread/image.png': { width: 184, height: 92 }
+              '.decision-os/thread/image.png': { width: 184, height: 92 }
             }
           }
         ]
@@ -103,13 +103,13 @@ test('thread note image resize survives stale server ledger merges', () => {
           {
             id: 'note-image',
             role: 'operator',
-            message: '![Image](.blueprinttool/thread/image.png)'
+            message: '![Image](.decision-os/thread/image.png)'
           }
         ]
       }
     });
     assert.deepEqual(merged?.notes['thread-card-a'][0].imageSizes, {
-      '.blueprinttool/thread/image.png': { width: 184, height: 92 }
+      '.decision-os/thread/image.png': { width: 184, height: 92 }
     });
   } finally {
     state.activeLedger = previousLedger;

@@ -5,7 +5,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 import { telemetry } from '@backend/telemetry/harness.js';
-import { resolveBlueprinttoolRoot } from '@backend/business/server/helper/resolve-blueprinttool-root.js';
+import { resolveDecisionOsRoot } from '@backend/business/server/helper/resolve-decision-os-root.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -16,8 +16,8 @@ export function loadUploadedVoiceAudio(input: { action_payload?: AnyRecord; runt
   const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
   const voiceFileRef = String(payload.voiceFileRef ?? runtime.voiceFileRef ?? '');
   if (!voiceFileRef) return { ok: false, error: 'No voice upload was provided' };
-  const blueprintRoot = resolveBlueprinttoolRoot({ action_payload: payload, runtime_state: runtime });
-  const uploadRoot = resolve(String(payload.voiceUploadRoot ?? process.env.COREV2_VOICE_UPLOAD_ROOT ?? resolve(blueprintRoot, 'voice-uploads')));
+  const blueprintRoot = resolveDecisionOsRoot({ action_payload: payload, runtime_state: runtime });
+  const uploadRoot = resolve(String(payload.voiceUploadRoot ?? process.env.DECISION_OS_VOICE_UPLOAD_ROOT ?? resolve(blueprintRoot, 'voice-uploads')));
   const resolvedFileRef = resolve(voiceFileRef);
   if (resolvedFileRef !== uploadRoot && !resolvedFileRef.startsWith(`${uploadRoot}${sep}`)) return { ok: false, error: 'Voice upload is outside the workspace cache' };
   if (!existsSync(resolvedFileRef)) return { ok: false, error: 'Voice upload is missing' };

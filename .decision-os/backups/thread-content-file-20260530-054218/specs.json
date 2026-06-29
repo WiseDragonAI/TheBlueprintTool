@@ -1,0 +1,5517 @@
+{
+  "modelName": "core_qa_specs",
+  "source": "Core/examples/qa-canvas/ledgers/specs.json",
+  "diagramSize": {
+    "width": 2160,
+    "height": 8900
+  },
+  "viewport": {
+    "x": 1586.2181233977608,
+    "y": -310.5101828354706,
+    "scale": 0.1146663531648272
+  },
+  "positions": {
+    "10000001": {
+      "x": -3113,
+      "y": 3150,
+      "w": 266
+    },
+    "10000002": {
+      "x": -4217,
+      "y": 3992,
+      "w": 266
+    },
+    "20000001": {
+      "x": -3453,
+      "y": 5022,
+      "w": 320
+    },
+    "20000002": {
+      "x": -3093,
+      "y": 5022,
+      "w": 320
+    },
+    "20000003": {
+      "x": -2733,
+      "y": 5022,
+      "w": 280
+    },
+    "20000004": {
+      "x": -2413,
+      "y": 5022,
+      "w": 260
+    },
+    "20000005": {
+      "x": -3057,
+      "y": 4868,
+      "w": 620
+    },
+    "20000006": {
+      "x": -2453,
+      "y": 5218,
+      "w": 300
+    },
+    "20000007": {
+      "x": -3093,
+      "y": 5218,
+      "w": 280
+    },
+    "20000008": {
+      "x": -2773,
+      "y": 5218,
+      "w": 280
+    },
+    "20000009": {
+      "x": -3453,
+      "y": 5414,
+      "w": 420
+    },
+    "20000010": {
+      "x": -2993,
+      "y": 5806,
+      "w": 420
+    },
+    "20000011": {
+      "x": -2533,
+      "y": 5806,
+      "w": 540
+    },
+    "20000012": {
+      "x": -3453,
+      "y": 6002,
+      "w": 620
+    },
+    "20000013": {
+      "x": -3453,
+      "y": 6198,
+      "w": 760
+    },
+    "20000014": {
+      "x": -2653,
+      "y": 6198,
+      "w": 520
+    },
+    "20000015": {
+      "x": -3453,
+      "y": 6394,
+      "w": 760
+    },
+    "20000016": {
+      "x": -2653,
+      "y": 6394,
+      "w": 700
+    },
+    "20000017": {
+      "x": -3453,
+      "y": 6590,
+      "w": 620
+    },
+    "20000018": {
+      "x": -2773,
+      "y": 6590,
+      "w": 620
+    },
+    "30000001": {
+      "x": -114,
+      "y": 4959,
+      "w": 520
+    },
+    "30000002": {
+      "x": 440,
+      "y": 4955,
+      "w": 560
+    },
+    "30000003": {
+      "x": 1046,
+      "y": 4959,
+      "w": 500
+    },
+    "30000004": {
+      "x": -114,
+      "y": 5155,
+      "w": 560
+    },
+    "30000005": {
+      "x": 486,
+      "y": 5155,
+      "w": 420
+    },
+    "30000006": {
+      "x": 946,
+      "y": 5155,
+      "w": 560
+    },
+    "30000007": {
+      "x": -114,
+      "y": 5351,
+      "w": 480
+    },
+    "30000008": {
+      "x": 406,
+      "y": 5351,
+      "w": 520
+    },
+    "30000009": {
+      "x": 966,
+      "y": 5351,
+      "w": 560
+    },
+    "40000002": {
+      "x": -812,
+      "y": 3185,
+      "w": 286
+    },
+    "40000005": {
+      "x": -851,
+      "y": 3687,
+      "w": 266
+    },
+    "40000006": {
+      "x": -1602,
+      "y": 3799,
+      "w": 266
+    },
+    "40000007": {
+      "x": -154,
+      "y": 3408,
+      "w": 286
+    },
+    "40000012": {
+      "x": -4229,
+      "y": 4198,
+      "w": 286
+    },
+    "50000002": {
+      "x": -3811,
+      "y": 3998,
+      "w": 266
+    },
+    "50000006": {
+      "x": -163,
+      "y": 3166,
+      "w": 266
+    },
+    "50000013": {
+      "x": -1696,
+      "y": 4901,
+      "w": 266
+    },
+    "50000014": {
+      "x": -1360,
+      "y": 4901,
+      "w": 266
+    },
+    "50000015": {
+      "x": -1024,
+      "y": 4901,
+      "w": 266
+    },
+    "50000016": {
+      "x": -1159,
+      "y": 3168,
+      "w": 266
+    },
+    "51395472": {
+      "x": -7271,
+      "y": 3163,
+      "w": 320
+    },
+    "60000001": {
+      "x": -5160,
+      "y": 4916,
+      "w": 320
+    },
+    "60000002": {
+      "x": -4785,
+      "y": 4926,
+      "w": 320
+    },
+    "60000003": {
+      "x": -2792,
+      "y": 3182,
+      "w": 320
+    },
+    "60000004": {
+      "x": -4727,
+      "y": 5607,
+      "w": 320
+    },
+    "60000005": {
+      "x": -2401,
+      "y": 3178,
+      "w": 320
+    },
+    "60000006": {
+      "x": -4316,
+      "y": 4979,
+      "w": 320
+    },
+    "60000009": {
+      "x": -5147,
+      "y": 5160,
+      "w": 360
+    },
+    "60000010": {
+      "x": -4727,
+      "y": 5793,
+      "w": 620
+    },
+    "61261091": {
+      "x": -1621,
+      "y": 3611,
+      "w": 320
+    },
+    "70000001": {
+      "x": -3147,
+      "y": 3698,
+      "w": 320
+    },
+    "70000002": {
+      "x": -2787,
+      "y": 3698,
+      "w": 320
+    },
+    "70000003": {
+      "x": -2427,
+      "y": 3698,
+      "w": 320
+    },
+    "70000004": {
+      "x": -3121,
+      "y": 3346,
+      "w": 320
+    },
+    "70000005": {
+      "x": -2761,
+      "y": 3346,
+      "w": 320
+    },
+    "70000006": {
+      "x": -2401,
+      "y": 3346,
+      "w": 320
+    },
+    "70000007": {
+      "x": -2941,
+      "y": 3542,
+      "w": 360
+    },
+    "74567497": {
+      "x": 1546,
+      "y": 5351,
+      "w": 560
+    },
+    "a25db692": {
+      "x": 1546,
+      "y": 5155,
+      "w": 520
+    },
+    "9c31f0a4": {
+      "x": -2401,
+      "y": 3542,
+      "w": 320
+    },
+    "2000000a": {
+      "x": -2993,
+      "y": 5414,
+      "w": 500
+    },
+    "2000000b": {
+      "x": -2453,
+      "y": 5414,
+      "w": 460
+    },
+    "2000000c": {
+      "x": -3453,
+      "y": 5610,
+      "w": 320
+    },
+    "2000000d": {
+      "x": -3093,
+      "y": 5610,
+      "w": 420
+    },
+    "2000000e": {
+      "x": -2633,
+      "y": 5610,
+      "w": 640
+    },
+    "2000000f": {
+      "x": -3453,
+      "y": 5806,
+      "w": 420
+    },
+    "5000000b": {
+      "x": -1168,
+      "y": 3422,
+      "w": 266
+    },
+    "5000000c": {
+      "x": -747,
+      "y": 3441,
+      "w": 266
+    },
+    "6000000a": {
+      "x": -4710,
+      "y": 5159,
+      "w": 360
+    },
+    "6000000b": {
+      "x": -4271,
+      "y": 5154,
+      "w": 420
+    },
+    "6000000c": {
+      "x": -5137,
+      "y": 5383,
+      "w": 320
+    },
+    "6000000d": {
+      "x": -4436,
+      "y": 5340,
+      "w": 360
+    },
+    "6000000e": {
+      "x": -5112,
+      "y": 5977,
+      "w": 500
+    },
+    "6000000f": {
+      "x": -5134,
+      "y": 5589,
+      "w": 340
+    },
+    "d5c8ece7": {
+      "x": -1660,
+      "y": 3396,
+      "w": 320
+    },
+    "ce0c5d80": {
+      "x": -1242,
+      "y": 3875,
+      "w": 320
+    },
+    "86e67c0e": {
+      "x": -1631,
+      "y": 3199,
+      "w": 320
+    },
+    "e0b4d11a": {
+      "x": 532,
+      "y": 3153,
+      "w": 320
+    },
+    "33c20993": {
+      "x": 884,
+      "y": 3153,
+      "w": 320
+    },
+    "676c6a7a": {
+      "x": 160,
+      "y": 3149,
+      "w": 320
+    },
+    "7abd939e": {
+      "x": 622,
+      "y": 3459,
+      "w": 320
+    },
+    "cfed85d3": {
+      "x": 532,
+      "y": 3309,
+      "w": 320
+    },
+    "9f9279ff": {
+      "x": 884,
+      "y": 3309,
+      "w": 320
+    },
+    "93f778a8": {
+      "x": 245,
+      "y": 3551,
+      "w": 320
+    },
+    "3159faad": {
+      "x": 732,
+      "y": 3617,
+      "w": 320
+    },
+    "ac137fe2": {
+      "x": -3781,
+      "y": 4206,
+      "w": 320
+    },
+    "51a6af83": {
+      "x": -4244,
+      "y": 4377,
+      "w": 320
+    },
+    "12749dcd": {
+      "x": -3848,
+      "y": 4365,
+      "w": 320
+    },
+    "eaced0c9": {
+      "x": -1686,
+      "y": 5156,
+      "w": 320
+    },
+    "667ae9a9": {
+      "x": -1334,
+      "y": 5156,
+      "w": 320
+    },
+    "5f8c7152": {
+      "x": -1686,
+      "y": 5312,
+      "w": 320
+    },
+    "cc7ed3b4": {
+      "x": -1333,
+      "y": 5312,
+      "w": 320
+    },
+    "7984a4f3": {
+      "x": -982,
+      "y": 5312,
+      "w": 320
+    },
+    "d38927c1": {
+      "x": -1689,
+      "y": 5508,
+      "w": 320
+    },
+    "747b461e": {
+      "x": -1338,
+      "y": 5508,
+      "w": 320
+    },
+    "3d074416": {
+      "x": -986,
+      "y": 5508,
+      "w": 320
+    },
+    "8b1ff788": {
+      "x": -1690,
+      "y": 5664,
+      "w": 320
+    },
+    "6cc37b58": {
+      "x": -1338,
+      "y": 5664,
+      "w": 320
+    },
+    "040cef84": {
+      "x": -986,
+      "y": 5664,
+      "w": 320
+    },
+    "828e6225": {
+      "x": -1690,
+      "y": 5820,
+      "w": 320
+    },
+    "c0c42d20": {
+      "x": -1338,
+      "y": 5820,
+      "w": 320
+    },
+    "5c4e5c22": {
+      "x": -983,
+      "y": 5859,
+      "w": 320
+    },
+    "21b2b050": {
+      "x": -1690,
+      "y": 5976,
+      "w": 320
+    },
+    "b5a783cd": {
+      "x": -1337,
+      "y": 5976,
+      "w": 320
+    },
+    "a946fbe0": {
+      "x": -4041,
+      "y": 5327,
+      "w": 320
+    },
+    "aa42ff94": {
+      "x": -5155,
+      "y": 5382,
+      "w": 320
+    },
+    "4dfbf38c": {
+      "x": -4803,
+      "y": 5382,
+      "w": 320
+    },
+    "d0936729": {
+      "x": -4277,
+      "y": 5550,
+      "w": 320
+    },
+    "b7e4dfd1": {
+      "x": -5085,
+      "y": 3168,
+      "w": 320
+    },
+    "2e4c6d2b": {
+      "x": -4733,
+      "y": 3168,
+      "w": 320
+    },
+    "10f4a4c7": {
+      "x": -4381,
+      "y": 3168,
+      "w": 320
+    },
+    "689842e0": {
+      "x": -4029,
+      "y": 3168,
+      "w": 320
+    },
+    "929342ae": {
+      "x": -3677,
+      "y": 3168,
+      "w": 320
+    },
+    "ac07dc1b": {
+      "x": -5085,
+      "y": 3324,
+      "w": 320
+    },
+    "9d1b7c36": {
+      "x": -4733,
+      "y": 3324,
+      "w": 320
+    },
+    "0f361538": {
+      "x": -4381,
+      "y": 3324,
+      "w": 320
+    },
+    "be4ec9c2": {
+      "x": -4029,
+      "y": 3324,
+      "w": 320
+    },
+    "6583c446": {
+      "x": -1245,
+      "y": 3669,
+      "w": 320
+    },
+    "53d49146": {
+      "x": -3419,
+      "y": 6966,
+      "w": 320
+    },
+    "90d84349": {
+      "x": -3067,
+      "y": 6966,
+      "w": 320
+    },
+    "1d444573": {
+      "x": -2715,
+      "y": 6966,
+      "w": 320
+    },
+    "796827d0": {
+      "x": -2363,
+      "y": 6966,
+      "w": 320
+    },
+    "4801e6c7": {
+      "x": -3419,
+      "y": 7122,
+      "w": 320
+    },
+    "85c81d67": {
+      "x": -3067,
+      "y": 7122,
+      "w": 320
+    },
+    "0421d906": {
+      "x": -2715,
+      "y": 7122,
+      "w": 320
+    },
+    "dff19657": {
+      "x": -2363,
+      "y": 7122,
+      "w": 320
+    },
+    "d9d57c2c": {
+      "x": -3419,
+      "y": 7278,
+      "w": 320
+    },
+    "2476bfa1": {
+      "x": -3067,
+      "y": 7278,
+      "w": 320
+    },
+    "d2fbfa28": {
+      "x": -2715,
+      "y": 7278,
+      "w": 320
+    },
+    "612afeda": {
+      "x": -2363,
+      "y": 7278,
+      "w": 320
+    },
+    "8a05ef46": {
+      "x": -3419,
+      "y": 7434,
+      "w": 320
+    },
+    "5b918cd3": {
+      "x": -3067,
+      "y": 7434,
+      "w": 320
+    },
+    "d4f90f42": {
+      "x": -2715,
+      "y": 7434,
+      "w": 320
+    },
+    "abad6dcb": {
+      "x": -2363,
+      "y": 7434,
+      "w": 320
+    },
+    "c41d5c52": {
+      "x": -7609,
+      "y": 3484,
+      "w": 320
+    },
+    "17ecbce8": {
+      "x": -7623,
+      "y": 3163,
+      "w": 320
+    },
+    "0dc5be37": {
+      "x": -6919,
+      "y": 3163,
+      "w": 320
+    },
+    "3a12567f": {
+      "x": -6567,
+      "y": 3163,
+      "w": 320
+    },
+    "678cf79e": {
+      "x": -7609,
+      "y": 3640,
+      "w": 320
+    },
+    "88d069d5": {
+      "x": -7623,
+      "y": 3319,
+      "w": 320
+    },
+    "0954dc5c": {
+      "x": -7271,
+      "y": 3319,
+      "w": 320
+    },
+    "c5329a69": {
+      "x": -6919,
+      "y": 3319,
+      "w": 320
+    },
+    "ccb07726": {
+      "x": -6567,
+      "y": 3319,
+      "w": 320
+    },
+    "69109a76": {
+      "x": -7609,
+      "y": 3796,
+      "w": 320
+    },
+    "a8b01160": {
+      "x": -7273,
+      "y": 3493,
+      "w": 320
+    },
+    "3aec8ea9": {
+      "x": -6938,
+      "y": 3559,
+      "w": 320
+    },
+    "67e83237": {
+      "x": -6567,
+      "y": 3545,
+      "w": 320
+    },
+    "7fb12b4c": {
+      "x": -7609,
+      "y": 3952,
+      "w": 320
+    },
+    "99fab004": {
+      "x": -6915,
+      "y": 3773,
+      "w": 320
+    },
+    "521476a5": {
+      "x": -6560,
+      "y": 3730,
+      "w": 320
+    },
+    "be53a317": {
+      "x": -6572,
+      "y": 4107,
+      "w": 320
+    },
+    "efaafd16": {
+      "x": -6928,
+      "y": 4106,
+      "w": 320
+    },
+    "6d853968": {
+      "x": -7298,
+      "y": 3875,
+      "w": 320
+    },
+    "7ec16380": {
+      "x": -6918,
+      "y": 3944,
+      "w": 320
+    },
+    "1b28c191": {
+      "x": -6538,
+      "y": 3900,
+      "w": 320
+    },
+    "65bf9ae6": {
+      "x": -7677,
+      "y": 4452,
+      "w": 320
+    },
+    "61bea65c": {
+      "x": -5560,
+      "y": 6410,
+      "w": 320
+    },
+    "81557a54": {
+      "x": -5208,
+      "y": 6410,
+      "w": 320
+    },
+    "708a7bfc": {
+      "x": -4856,
+      "y": 6410,
+      "w": 320
+    },
+    "53dc0295": {
+      "x": -4504,
+      "y": 6410,
+      "w": 320
+    },
+    "6f01b700": {
+      "x": -4152,
+      "y": 6410,
+      "w": 320
+    },
+    "47237c02": {
+      "x": -5560,
+      "y": 6566,
+      "w": 320
+    },
+    "5027f419": {
+      "x": -5208,
+      "y": 6566,
+      "w": 320
+    },
+    "b200b57e": {
+      "x": -4856,
+      "y": 6566,
+      "w": 320
+    },
+    "cd58fd49": {
+      "x": -4070,
+      "y": 5793,
+      "w": 500
+    },
+    "ba1544b0": {
+      "x": -4504,
+      "y": 6566,
+      "w": 320
+    },
+    "1d6f456a": {
+      "x": -4152,
+      "y": 6566,
+      "w": 420
+    },
+    "10e09767": {
+      "x": -10397,
+      "y": 3158,
+      "w": 320
+    },
+    "a598989d": {
+      "x": -10405,
+      "y": 4965,
+      "w": 320
+    },
+    "c32e3e5c": {
+      "x": -8752,
+      "y": 3227,
+      "w": 320
+    },
+    "a9ef20a7": {
+      "x": -9104,
+      "y": 3498,
+      "w": 320
+    },
+    "f93e1bb7": {
+      "x": -9102,
+      "y": 3207,
+      "w": 320
+    },
+    "e9469688": {
+      "x": -9451,
+      "y": 3213,
+      "w": 320
+    },
+    "e4ed5372": {
+      "x": -9138,
+      "y": 3929,
+      "w": 320
+    },
+    "94ab097a": {
+      "x": -10367,
+      "y": 3475,
+      "w": 320
+    },
+    "ee77191d": {
+      "x": -10025,
+      "y": 3187,
+      "w": 320
+    },
+    "cef65c97": {
+      "x": -8766,
+      "y": 3516,
+      "w": 320
+    },
+    "c8f02619": {
+      "x": -9846,
+      "y": 4978,
+      "w": 320
+    },
+    "f2a91c7d": {
+      "x": -10405,
+      "y": 5161,
+      "w": 320
+    },
+    "d4b8e02a": {
+      "x": -9846,
+      "y": 5161,
+      "w": 320
+    },
+    "e6c2a41f": {
+      "x": -10405,
+      "y": 5347,
+      "w": 320
+    },
+    "3f9dda8e": {
+      "x": -9469,
+      "y": 3482,
+      "w": 320
+    },
+    "aba21270": {
+      "x": -9483,
+      "y": 3906,
+      "w": 320
+    },
+    "31ef718a": {
+      "x": -9996,
+      "y": 3513,
+      "w": 320
+    },
+    "5835377e": {
+      "x": -10380,
+      "y": 3788,
+      "w": 320
+    },
+    "205fdb23": {
+      "x": -9460,
+      "y": 5347,
+      "w": 320
+    },
+    "a83e8c85": {
+      "x": -7310,
+      "y": 4452,
+      "w": 320
+    },
+    "b7c2e91f": {
+      "x": -3030,
+      "y": 7400,
+      "w": 520
+    },
+    "e6a91d34": {
+      "x": -3480,
+      "y": 4620,
+      "w": 520
+    },
+    "a4f8d2c9": {
+      "x": -4540,
+      "y": 6200,
+      "w": 520
+    },
+    "f2d6c8b1": {
+      "x": -3480,
+      "y": 4688,
+      "w": 560
+    },
+    "3f9c2a11": {
+      "x": -3140,
+      "y": 6566,
+      "w": 560
+    },
+    "7b2e4c90": {
+      "x": -4780,
+      "y": 5112,
+      "w": 520
+    },
+    "6e18b4d2": {
+      "x": -4780,
+      "y": 5308,
+      "w": 520
+    },
+    "5f3a9d2e": {
+      "x": -4780,
+      "y": 10796,
+      "w": 640
+    },
+    "8c4e2b71": {
+      "x": -4780,
+      "y": 10992,
+      "w": 640
+    },
+    "6d3e8a4b": {
+      "x": -4316,
+      "y": 5175,
+      "w": 560
+    },
+    "4f7a2c9d": {
+      "x": -1682,
+      "y": 6170,
+      "w": 560
+    },
+    "9f2c8a91": {
+      "x": -10380,
+      "y": 4088,
+      "w": 560
+    },
+    "74c3e1b8": {
+      "x": -1760,
+      "y": 6455,
+      "w": 560
+    },
+    "2a9d6f41": {
+      "x": -1170,
+      "y": 6455,
+      "w": 560
+    },
+    "e0f4c8a7": {
+      "x": -1760,
+      "y": 6605,
+      "w": 560
+    },
+    "b8d4f0a2": {
+      "x": -580,
+      "y": 6455,
+      "w": 560
+    },
+    "e3a71d5c": {
+      "x": 10,
+      "y": 6455,
+      "w": 560
+    },
+    "c6f91a24": {
+      "x": 600,
+      "y": 6455,
+      "w": 560
+    },
+    "9c44b0a1": {
+      "x": -580,
+      "y": 7045,
+      "w": 560
+    },
+    "d8d1f4a2": {
+      "x": 10,
+      "y": 7045,
+      "w": 560
+    },
+    "3f0c9e77": {
+      "x": 600,
+      "y": 7045,
+      "w": 560
+    }
+  },
+  "cards": [
+    {
+      "id": "10000001",
+      "title": "boot",
+      "cardType": "spec-brief",
+      "domainId": "specs",
+      "x": -3024,
+      "y": 3203,
+      "w": 266,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/10000001.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 355
+    },
+    {
+      "id": "10000002",
+      "title": "navigation",
+      "cardType": "spec-brief",
+      "domainId": "specs",
+      "x": -4128,
+      "y": 4045,
+      "w": 266,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/10000002.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "20000001",
+      "title": "zones are first-class canvas objects",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3403,
+      "y": 5053,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/20000001.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 196
+    },
+    {
+      "id": "20000002",
+      "title": "zones can be created on the canvas",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3043,
+      "y": 5053,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/20000002.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 241
+    },
+    {
+      "id": "20000003",
+      "title": "zones can be named",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2683,
+      "y": 5053,
+      "w": 280,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/20000003.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "20000004",
+      "title": "zones have a color",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2363,
+      "y": 5053,
+      "w": 260,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/20000004.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "20000005",
+      "title": "zone resizing uses drag n drop from zone corners when the zone is selected",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3007,
+      "y": 4899,
+      "w": 620,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/20000005.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "20000006",
+      "title": "zones can be resized",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2403,
+      "y": 5249,
+      "w": 300,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/20000006.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "20000007",
+      "title": "zones can be moved",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3043,
+      "y": 5249,
+      "w": 280,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/20000007.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "20000008",
+      "title": "zones can contain cards",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2723,
+      "y": 5249,
+      "w": 280,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/20000008.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "20000009",
+      "title": "zones are rendered behind the cards",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3403,
+      "y": 5445,
+      "w": 420,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/20000009.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "2000000a",
+      "title": "selecting a zone selects all the cards intersecting with the zone",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2943,
+      "y": 5445,
+      "w": 500,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/2000000a.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 191
+    },
+    {
+      "id": "2000000b",
+      "title": "moving a zone moves the zone and the intersecting cards",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2403,
+      "y": 5445,
+      "w": 460,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/2000000b.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "2000000c",
+      "title": "a zone has an edit button",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3403,
+      "y": 5641,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/2000000c.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "2000000d",
+      "title": "a zone has a notes button linked to a thread",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3043,
+      "y": 5641,
+      "w": 420,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/2000000d.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "2000000e",
+      "title": "zone labels are always visible at the same size for any zoom level",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2583,
+      "y": 5641,
+      "w": 640,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/2000000e.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 150
+    },
+    {
+      "id": "2000000f",
+      "title": "a zone can be deleted from the edit panel",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3403,
+      "y": 5837,
+      "w": 420,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/2000000f.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "20000010",
+      "title": "a zone can be deleted by pressing Del while selected",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2943,
+      "y": 5837,
+      "w": 420,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/20000010.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "20000011",
+      "title": "deleting a zone does not delete the intersecting cards",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2483,
+      "y": 5837,
+      "w": 540,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/20000011.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "20000012",
+      "title": "zone deletion by pressing Del requires a confirmation modal",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3403,
+      "y": 6033,
+      "w": 620,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/20000012.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "20000013",
+      "title": "a selected zone has its border rendered in white glow and the resize icon at corners",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3403,
+      "y": 6229,
+      "w": 760,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/20000013.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "20000014",
+      "title": "zones can be drawn from the tool box zone tool",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2603,
+      "y": 6229,
+      "w": 520,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/20000014.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "20000015",
+      "title": "zone confirmation modal can process keyboard shortcuts",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3403,
+      "y": 6425,
+      "w": 760,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/20000015.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "20000016",
+      "title": "suppression confirmation modal uses escape and enter keyboard to cancel or validate",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2603,
+      "y": 6425,
+      "w": 700,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/20000016.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "20000017",
+      "title": "zone position and geometry is persisted",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3403,
+      "y": 6621,
+      "w": 620,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/20000017.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "20000018",
+      "title": "Zone is a primary model and has a persistent ID",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2723,
+      "y": 6621,
+      "w": 620,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/20000018.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "30000001",
+      "title": "Shift-click can select multiple zones and cards",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -41,
+      "y": 6835,
+      "w": 520,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/30000001.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "30000002",
+      "title": "holding Shift + left-click and dragging draws a selection box",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": 513,
+      "y": 6831,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/30000002.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "30000003",
+      "title": "left-clicking naked canvas and dragging pans the canvas",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": 1119,
+      "y": 6835,
+      "w": 500,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/30000003.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "30000004",
+      "title": "left-clicking an unselected zone and dragging pans the canvas",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -41,
+      "y": 7031,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/30000004.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "7d2c8b91",
+      "title": "canvas background pointer down clears selection",
+      "cardType": "spec-brief",
+      "domainId": "canvas",
+      "x": 1169,
+      "y": 7031,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/7d2c8b91.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "9f04b1c2",
+      "title": "holding Ctrl and dragging pans from any target",
+      "cardType": "spec-brief",
+      "domainId": "canvas",
+      "x": 559,
+      "y": 7031,
+      "w": 600,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/9f04b1c2.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "30000005",
+      "title": "scrolling the mouse wheel zooms the canvas",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": 559,
+      "y": 7031,
+      "w": 420,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/30000005.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "30000006",
+      "title": "holding Ctrl and scrolling the mouse wheel moves the canvas viewport",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": 1019,
+      "y": 7031,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/30000006.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 150
+    },
+    {
+      "id": "a25db692",
+      "title": "Mouse wheel zoom preserves cursor anchored canvas point",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": 599,
+      "y": 7431,
+      "w": 520,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/a25db692.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 150
+    },
+    {
+      "id": "74567497",
+      "title": "Dragging elements at non-default zoom uses canvas-space deltas",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": 605,
+      "y": 7624,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/74567497.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 150
+    },
+    {
+      "id": "bf394c62",
+      "title": "Honeycomb background tiling scales with canvas zoom",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -77,
+      "y": 7449,
+      "w": 640,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/bf394c62.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "30000007",
+      "title": "the canvas has a dark honeycomb background",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -41,
+      "y": 7227,
+      "w": 480,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/30000007.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "30000008",
+      "title": "canvas card rendering is optimized for high performance",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": 479,
+      "y": 7227,
+      "w": 520,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/30000008.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 264
+    },
+    {
+      "id": "30000009",
+      "title": "canvas cards do not render high definition when it is not needed",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": 1039,
+      "y": 7227,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/30000009.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "6b4a0ed8",
+      "title": "Canvas styles are split into focused stylesheet modules",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": 605,
+      "y": 7820,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/6b4a0ed8.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "9f96ad8c",
+      "title": "Live verification has reusable CLI summaries",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -77,
+      "y": 7645,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/9f96ad8c.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "40000002",
+      "title": "invalid action safety",
+      "cardType": "spec-brief",
+      "domainId": "specs",
+      "x": -723,
+      "y": 3238,
+      "w": 286,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/40000002.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "40000005",
+      "title": "mixed selection",
+      "cardType": "spec-brief",
+      "domainId": "specs",
+      "x": -762,
+      "y": 3740,
+      "w": 266,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/40000005.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 150
+    },
+    {
+      "id": "40000006",
+      "title": "selection clear",
+      "cardType": "spec-brief",
+      "domainId": "specs",
+      "x": -1513,
+      "y": 3852,
+      "w": 266,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/40000006.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "40000007",
+      "title": "tool mode switch",
+      "cardType": "spec-brief",
+      "domainId": "specs",
+      "x": -65,
+      "y": 3461,
+      "w": 286,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/40000007.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 218
+    },
+    {
+      "id": "40000012",
+      "title": "navigation persistence",
+      "cardType": "spec-brief",
+      "domainId": "specs",
+      "x": -4140,
+      "y": 4251,
+      "w": 286,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/40000012.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "50000002",
+      "title": "tab switch",
+      "cardType": "spec-brief",
+      "domainId": "interactions",
+      "x": -3722,
+      "y": 4051,
+      "w": 266,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/50000002.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 150
+    },
+    {
+      "id": "50000006",
+      "title": "refresh",
+      "cardType": "spec-brief",
+      "domainId": "interactions",
+      "x": -74,
+      "y": 3219,
+      "w": 266,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/50000006.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 196
+    },
+    {
+      "id": "bd0651aa",
+      "title": "Placing a zone returns to Select tool",
+      "cardType": "spec-brief",
+      "domainId": "interactions",
+      "x": 332,
+      "y": 3389,
+      "w": 360,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/bd0651aa.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "5000000b",
+      "title": "marquee select",
+      "cardType": "spec-brief",
+      "domainId": "interactions",
+      "x": -1079,
+      "y": 3475,
+      "w": 266,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/5000000b.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 150
+    },
+    {
+      "id": "5000000c",
+      "title": "escape clear",
+      "cardType": "spec-brief",
+      "domainId": "interactions",
+      "x": -658,
+      "y": 3494,
+      "w": 266,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/5000000c.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "50000013",
+      "title": "open conversation drawer",
+      "cardType": "spec-brief",
+      "domainId": "interactions",
+      "x": -1594,
+      "y": 5236,
+      "w": 266,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/50000013.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "2b67c924",
+      "title": "Thread panel opens only by command.",
+      "cardType": "spec-brief",
+      "domainId": "interactions",
+      "x": -1218,
+      "y": 5236,
+      "w": 520,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/2b67c924.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 196
+    },
+    {
+      "id": "50000014",
+      "title": "create note",
+      "cardType": "spec-brief",
+      "domainId": "interactions",
+      "x": -1258,
+      "y": 5236,
+      "w": 266,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/50000014.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "50000015",
+      "title": "delete note",
+      "cardType": "spec-brief",
+      "domainId": "interactions",
+      "x": -922,
+      "y": 5236,
+      "w": 266,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/50000015.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 150
+    },
+    {
+      "id": "50000016",
+      "title": "copy selection",
+      "cardType": "spec-brief",
+      "domainId": "interactions",
+      "x": -1070,
+      "y": 3221,
+      "w": 266,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/50000016.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "60000001",
+      "title": "a selected card has a white glowy border",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -5071,
+      "y": 4969,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/60000001.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 236
+    },
+    {
+      "id": "60000002",
+      "title": "a card is drag-and-drop enabled",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -4696,
+      "y": 4979,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/60000002.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "60000003",
+      "title": "card positions are persisted in a JSON ledger",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2703,
+      "y": 3235,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/60000003.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 191
+    },
+    {
+      "id": "60000004",
+      "title": "card position is persisted",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -4638,
+      "y": 5660,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/60000004.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 196
+    },
+    {
+      "id": "60000005",
+      "title": "persisted card positions are restored on reload",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2312,
+      "y": 3231,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/60000005.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 168
+    },
+    {
+      "id": "60000006",
+      "title": "cards can be resized",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4316,
+      "y": 4979,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/60000006.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 218
+    },
+    {
+      "id": "6d3e8a4b",
+      "title": "Default cards use darker surface and lighter body text",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4316,
+      "y": 5175,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/6d3e8a4b.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "60000009",
+      "title": "cards from the base card class can be extended for sub-modules",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -5058,
+      "y": 5213,
+      "w": 360,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/60000009.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "6000000a",
+      "title": "an open card is shown on top of everything with max z-index",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -4621,
+      "y": 5212,
+      "w": 360,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/6000000a.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "6000000b",
+      "title": "selecting a card highlights its directly connected cards",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -4182,
+      "y": 5207,
+      "w": 420,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/6000000b.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 214
+    },
+    {
+      "id": "6000000c",
+      "title": "cards have a tab system",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -5048,
+      "y": 5436,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/6000000c.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 196
+    },
+    {
+      "id": "6000000d",
+      "title": "the default tab for the base card class is notes",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -4347,
+      "y": 5393,
+      "w": 360,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/6000000d.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "6000000e",
+      "title": "clicking on card notes opens the card thread in the right panel",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -5023,
+      "y": 6030,
+      "w": 500,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/6000000e.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "6000000f",
+      "title": "cards have a discussion thread",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -5045,
+      "y": 5642,
+      "w": 340,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/6000000f.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "60000010",
+      "title": "Card is a primary model and has a persistent ID",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -4638,
+      "y": 5846,
+      "w": 620,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/60000010.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "70000001",
+      "title": "server routes are reachable by direct URL slug",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3058,
+      "y": 3751,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/70000001.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 191
+    },
+    {
+      "id": "70000002",
+      "title": "the server serves the committed JSON ledger for each tab",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2698,
+      "y": 3751,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/70000002.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 168
+    },
+    {
+      "id": "70000003",
+      "title": "the server exposes an API for ledger edits",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2338,
+      "y": 3751,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/70000003.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 214
+    },
+    {
+      "id": "70000004",
+      "title": "ledger edits are persisted to JSON files",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3032,
+      "y": 3399,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/70000004.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "70000005",
+      "title": "the server exposes a route to create a new persisted ledger",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2672,
+      "y": 3399,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/70000005.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "70000006",
+      "title": "navigation tabs represent all the available ledgers in server state",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2312,
+      "y": 3399,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/70000006.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "70000007",
+      "title": "server state is saved in ./.decision-os",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2852,
+      "y": 3595,
+      "w": 360,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/70000007.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "9c31f0a4",
+      "title": "ledgers in ./.decision-os load as default tabs",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2312,
+      "y": 3595,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/9c31f0a4.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 214
+    },
+    {
+      "id": "c5a84d77",
+      "title": "Specs and data ledgers are available from decision-os .decision-os",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1931,
+      "y": 3595,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/c5a84d77.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 150
+    },
+    {
+      "id": "d5c8ece7",
+      "title": "Normal zone click replaces selection with intersecting cards",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1571,
+      "y": 3449,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/d5c8ece7.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "ce0c5d80",
+      "title": "Shift-click zone adds intersecting cards to the existing selection",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1153,
+      "y": 3928,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/ce0c5d80.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "61261091",
+      "title": "Dragging an unselected card selects the card and drags it",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1532,
+      "y": 3664,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/61261091.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "86e67c0e",
+      "title": "A zone must be selected before being draggable",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1542,
+      "y": 3252,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/86e67c0e.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "e0b4d11a",
+      "title": "Zone Drawing Button",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": 621,
+      "y": 3206,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/e0b4d11a.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "33c20993",
+      "title": "Shortcut Help Button",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": 973,
+      "y": 3206,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/33c20993.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "676c6a7a",
+      "title": "Runbook Button",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": 249,
+      "y": 3202,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/676c6a7a.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "7abd939e",
+      "title": "Conversation Ledger Button",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": 825,
+      "y": 3518,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/7abd939e.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "cfed85d3",
+      "title": "Refresh Button",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": 826,
+      "y": 3361,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/cfed85d3.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "9f9279ff",
+      "title": "Selecting the zone tool opens the color picker.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": 1199,
+      "y": 3357,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/9f9279ff.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 236
+    },
+    {
+      "id": "93f778a8",
+      "title": "The toolbox background is transparent.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": 334,
+      "y": 3604,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/93f778a8.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "3159faad",
+      "title": "Hovering the toolbox animates the background to dark grey.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": 821,
+      "y": 3670,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/3159faad.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "ac137fe2",
+      "title": "Tabs are route-addressable.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3692,
+      "y": 4259,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/ac137fe2.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "51a6af83",
+      "title": "The active tab is derived from the browser path.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -4155,
+      "y": 4430,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/51a6af83.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "12749dcd",
+      "title": "The navbar renders the tab registry.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3759,
+      "y": 4418,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/12749dcd.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "eaced0c9",
+      "title": "Threads are a primary model.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1584,
+      "y": 5491,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/eaced0c9.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "667ae9a9",
+      "title": "The conversation ledger aggregates card and zone threads.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1232,
+      "y": 5491,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/667ae9a9.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "5f8c7152",
+      "title": "Threads preserve operator and assistant history.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1584,
+      "y": 5647,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/5f8c7152.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "cc7ed3b4",
+      "title": "Notes opened from a card target that card thread.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1231,
+      "y": 5647,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/cc7ed3b4.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "7984a4f3",
+      "title": "Notes opened from a zone target that zone thread.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -880,
+      "y": 5647,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/7984a4f3.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "d38927c1",
+      "title": "Threads support voice recording.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1587,
+      "y": 5843,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/d38927c1.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 196
+    },
+    {
+      "id": "747b461e",
+      "title": "Voice recording is thread-scoped.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1236,
+      "y": 5843,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/747b461e.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "3d074416",
+      "title": "Only one voice recording is active at a time.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -884,
+      "y": 5843,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/3d074416.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "8b1ff788",
+      "title": "Stopping a voice recording uploads captured audio before transcription.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1588,
+      "y": 5999,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/8b1ff788.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 236
+    },
+    {
+      "id": "6cc37b58",
+      "title": "Transcribed voice text updates the optimistic voice note.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1236,
+      "y": 5999,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/6cc37b58.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 236
+    },
+    {
+      "id": "040cef84",
+      "title": "Voice recording shows live duration and level telemetry.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -884,
+      "y": 5999,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/040cef84.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 191
+    },
+    {
+      "id": "828e6225",
+      "title": "Voice recording failures are surfaced to the operator.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1588,
+      "y": 6155,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/828e6225.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 168
+    },
+    {
+      "id": "c0c42d20",
+      "title": "Voice transcription is optional and configuration-gated.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1236,
+      "y": 6155,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/c0c42d20.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 214
+    },
+    {
+      "id": "5c4e5c22",
+      "title": "Voice transcription upload is optimistic.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -881,
+      "y": 6194,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/5c4e5c22.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 441
+    },
+    {
+      "id": "21b2b050",
+      "title": "Voice audio is preserved for retry.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1588,
+      "y": 6311,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/21b2b050.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 264
+    },
+    {
+      "id": "b5a783cd",
+      "title": "Voice transcription status is visible in the UI.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1235,
+      "y": 6311,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/b5a783cd.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 305
+    },
+    {
+      "id": "c73a0e4d",
+      "title": "Voice transcription timeout exposes retry.",
+      "cardType": "spec-brief",
+      "domainId": "voice",
+      "x": -884,
+      "y": 6311,
+      "w": 360,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/c73a0e4d.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 305
+    },
+    {
+      "id": "74c3e1b8",
+      "title": "Selecting an object prepares its thread by default.",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": -1760,
+      "y": 6455,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/74c3e1b8.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "2a9d6f41",
+      "title": "Voice uploads create conversation ledger entries.",
+      "cardType": "spec-brief",
+      "domainId": "voice",
+      "x": -1170,
+      "y": 6455,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/2a9d6f41.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "e0f4c8a7",
+      "title": "Thread notes render before server commit.",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": -1760,
+      "y": 6605,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/e0f4c8a7.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 355
+    },
+    {
+      "id": "b8d4f0a2",
+      "title": "Voice composer uses the DroidFleet terminal dock.",
+      "cardType": "spec-brief",
+      "domainId": "voice",
+      "x": -580,
+      "y": 6455,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/b8d4f0a2.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 196
+    },
+    {
+      "id": "e3a71d5c",
+      "title": "Right thread terminal is animated and one third width.",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": 10,
+      "y": 6455,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/e3a71d5c.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 196
+    },
+    {
+      "id": "c6f91a24",
+      "title": "Voice terminal shortcuts use X and Esc.",
+      "cardType": "spec-brief",
+      "domainId": "voice",
+      "x": 600,
+      "y": 6455,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/c6f91a24.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 151
+    },
+    {
+      "id": "9c44b0a1",
+      "title": "Voice dock renders live capture state, not mock content.",
+      "cardType": "spec-brief",
+      "domainId": "voice",
+      "x": -580,
+      "y": 7045,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/9c44b0a1.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 218
+    },
+    {
+      "id": "d8d1f4a2",
+      "title": "Thread notes are composed in the terminal input dock.",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": 10,
+      "y": 7045,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/d8d1f4a2.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 196
+    },
+    {
+      "id": "3f0c9e77",
+      "title": "Thread terminal inherits the active target color.",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": 600,
+      "y": 7045,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/3f0c9e77.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 196
+    },
+    {
+      "id": "f72a6d31",
+      "title": "Thread header shows the active target title.",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": -580,
+      "y": 7635,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/f72a6d31.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 150
+    },
+    {
+      "id": "a6c2f0d4",
+      "title": "Direct card clicks replace active zone selection.",
+      "cardType": "spec-brief",
+      "domainId": "selection",
+      "x": 10,
+      "y": 7635,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/a6c2f0d4.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 150
+    },
+    {
+      "id": "c4e8b91a",
+      "title": "Cards indicate when the latest thread answer is from the agent.",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": 600,
+      "y": 7635,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/c4e8b91a.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "5e6a9b23",
+      "title": "Thread terminal uses black outer shadow and input-only inset frame.",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": 1190,
+      "y": 7635,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/5e6a9b23.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 150
+    },
+    {
+      "id": "a946fbe0",
+      "title": "hovering a card shows its hash id",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3952,
+      "y": 5380,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/a946fbe0.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "aa42ff94",
+      "title": "cards have labels show top right",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -5066,
+      "y": 5435,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/aa42ff94.md"
+      },
+      "facts": [],
+      "fields": [],
+      "labels": [
+        "visual",
+        "validated"
+      ],
+      "h": 310
+    },
+    {
+      "id": "4dfbf38c",
+      "title": "selected cards show their hash id top right",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -4714,
+      "y": 5435,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/4dfbf38c.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "d0936729",
+      "title": "hash id is displayed top right in a smaller font grey",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -4188,
+      "y": 5603,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/d0936729.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "b7e4dfd1",
+      "title": "External ledger updates trigger a server refresh flow.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -4996,
+      "y": 3221,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/b7e4dfd1.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "2e4c6d2b",
+      "title": "Client-originated ledger updates do not trigger a client refresh.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -4644,
+      "y": 3221,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/2e4c6d2b.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "10f4a4c7",
+      "title": "Client refresh is triggered by server-side refresh events.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -4292,
+      "y": 3221,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/10f4a4c7.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "689842e0",
+      "title": "External ledger updates preserve the live client interaction state when possible.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3940,
+      "y": 3221,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/689842e0.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 141
+    },
+    {
+      "id": "929342ae",
+      "title": "Server-side refresh can target one surface.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3588,
+      "y": 3221,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/929342ae.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "ac07dc1b",
+      "title": "Server-side refresh can target all surfaces.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -4996,
+      "y": 3377,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/ac07dc1b.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "9d1b7c36",
+      "title": "The refresh system preserves canvas continuity during operator work.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -4644,
+      "y": 3377,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/9d1b7c36.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "0f361538",
+      "title": "Live ledger editing from outside the client is first-class.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -4292,
+      "y": 3377,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/0f361538.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "be4ec9c2",
+      "title": "Server refresh can force a full client state reload when required.",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3940,
+      "y": 3377,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/be4ec9c2.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "6583c446",
+      "title": "Selected zones and card can be copied with ctrl C and pasted with ctrl V",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1156,
+      "y": 3722,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/6583c446.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "53d49146",
+      "title": "Group tool is present next to Zone in the Core toolbar",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2389,
+      "y": 7226,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/53d49146.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "90d84349",
+      "title": "Clicking Group arms the tool",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2037,
+      "y": 7226,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/90d84349.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "1d444573",
+      "title": "Group background is transparent",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1685,
+      "y": 7226,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/1d444573.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "796827d0",
+      "title": "Group border is thicker than a normal zone border",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1333,
+      "y": 7226,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/796827d0.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "4801e6c7",
+      "title": "Group uses the same title structure and title sizing rules as zones",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2389,
+      "y": 7382,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/4801e6c7.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "85c81d67",
+      "title": "Group renders behind regular zones",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2037,
+      "y": 7382,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/85c81d67.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "0421d906",
+      "title": "Group renders behind cards",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1685,
+      "y": 7382,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/0421d906.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "dff19657",
+      "title": "Click precedence is currently: card -> regular zone -> group background",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1333,
+      "y": 7382,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/dff19657.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "d9d57c2c",
+      "title": "Clicking a card inside a group targets the card",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2389,
+      "y": 7538,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/d9d57c2c.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "2476bfa1",
+      "title": "Clicking a regular zone inside a group targets the zone",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2037,
+      "y": 7538,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/2476bfa1.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "d2fbfa28",
+      "title": "Clicking exposed group background targets the group",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1685,
+      "y": 7538,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/d2fbfa28.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "612afeda",
+      "title": "Selecting a group expands selection to cards and zones in the grouped selection scope",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1333,
+      "y": 7538,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/612afeda.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 141
+    },
+    {
+      "id": "8a05ef46",
+      "title": "Shift+click on a group toggles that expanded membership as one unit",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2389,
+      "y": 7694,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/8a05ef46.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "5b918cd3",
+      "title": "After group selection, dragging a selected inner zone moves the full grouped selection together",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2037,
+      "y": 7694,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/5b918cd3.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 141
+    },
+    {
+      "id": "d4f90f42",
+      "title": "Group selection participates in the existing mixed-selection drag system",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1685,
+      "y": 7694,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/d4f90f42.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "abad6dcb",
+      "title": "Groups do not project zone visual theming onto cards",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1333,
+      "y": 7694,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/abad6dcb.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "f18da923",
+      "title": "Groups can be resized with resize handles",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1366,
+      "y": 8082,
+      "w": 360,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/f18da923.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "c271a0df",
+      "title": "Placing a group returns to Select tool",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2379,
+      "y": 7856,
+      "w": 360,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/c271a0df.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 150
+    },
+    {
+      "id": "3fd7a96a",
+      "title": "Zones and groups always expose an edit icon for name and zone color changes",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1979,
+      "y": 7856,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/3fd7a96a.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 214
+    },
+    {
+      "id": "c41d5c52",
+      "title": "Master function batch file",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -7609,
+      "y": 3484,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/c41d5c52.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "17ecbce8",
+      "title": ".worktrees git worktree generation",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -7623,
+      "y": 3163,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/17ecbce8.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "51395472",
+      "title": "One file per function",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -7271,
+      "y": 3163,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/51395472.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "0dc5be37",
+      "title": "Automatic dependency discovery",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -6919,
+      "y": 3163,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/0dc5be37.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "3a12567f",
+      "title": "Dependency graph output",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -6567,
+      "y": 3163,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/3a12567f.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "678cf79e",
+      "title": "Generated test state contracts",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -7609,
+      "y": 3640,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/678cf79e.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "88d069d5",
+      "title": "One integration test per suite",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -7623,
+      "y": 3319,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/88d069d5.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "0954dc5c",
+      "title": "Pure function unit tests",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -7271,
+      "y": 3319,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/0954dc5c.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "c5329a69",
+      "title": "Generated files include default telemetry for function name and arguments",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -6919,
+      "y": 3319,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/c5329a69.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "ccb07726",
+      "title": "Main integration tests report execution stack traces for success and failure",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -6567,
+      "y": 3319,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/ccb07726.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "69109a76",
+      "title": "One generated report file",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -7609,
+      "y": 3796,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/69109a76.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "a8b01160",
+      "title": "Unused function detection",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -7273,
+      "y": 3493,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/a8b01160.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "3aec8ea9",
+      "title": "Auto-import during generation",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -6938,
+      "y": 3559,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/3aec8ea9.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "67e83237",
+      "title": "Batch patch system for canonical documents",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -6567,
+      "y": 3545,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/67e83237.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "7fb12b4c",
+      "title": "New run from ledger creates a new worktree from scratch",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -7609,
+      "y": 3952,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/7fb12b4c.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "99fab004",
+      "title": "Function metadata header",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -6915,
+      "y": 3773,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/99fab004.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "521476a5",
+      "title": "Test run infers function usage from telemetry and writes it to the report",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -6560,
+      "y": 3730,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/521476a5.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "be53a317",
+      "title": "Component path support",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -6572,
+      "y": 4107,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/be53a317.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "efaafd16",
+      "title": "CLI dry-run mode",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -6928,
+      "y": 4106,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/efaafd16.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "6d853968",
+      "title": "CLI apply mode",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -7298,
+      "y": 3875,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/6d853968.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "7ec16380",
+      "title": "CLI report mode",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -6918,
+      "y": 3944,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/7ec16380.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "1b28c191",
+      "title": "CLI patch-doc mode",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -6538,
+      "y": 3900,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/1b28c191.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "65bf9ae6",
+      "title": "Master ledger contains syntactically correct pseudocode with telemetry branching parameter usage state usage and WHAT WHY HOW comments",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -7677,
+      "y": 4452,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/65bf9ae6.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "61bea65c",
+      "title": "Relationships render as SVG bezier arrows between card borders",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -5471,
+      "y": 6463,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/61bea65c.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "81557a54",
+      "title": "Arrow markers render in an overlay",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -5119,
+      "y": 6463,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/81557a54.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "708a7bfc",
+      "title": "Arrows attach to the nearest card border side based on source and target geometry",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -4767,
+      "y": 6463,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/708a7bfc.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 141
+    },
+    {
+      "id": "53dc0295",
+      "title": "Multiple arrows sharing the same card side use deterministic spread ports instead of stacking",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -4415,
+      "y": 6463,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/53dc0295.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 141
+    },
+    {
+      "id": "6f01b700",
+      "title": "Bidirectional links between the same cards use separated ports",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -4063,
+      "y": 6463,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/6f01b700.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "47237c02",
+      "title": "Relationship labels render near arrow ports and preserve relationship source context",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -5471,
+      "y": 6619,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/47237c02.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 141
+    },
+    {
+      "id": "5027f419",
+      "title": "Arrows adapt and attach to the better suited card border",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -5119,
+      "y": 6619,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/5027f419.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 236
+    },
+    {
+      "id": "b200b57e",
+      "title": "Arrow labels can be hidden per arrow with their own display state",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -4767,
+      "y": 6619,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/b200b57e.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "cd58fd49",
+      "title": "card descriptions are parsed and rendered as markdown",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3981,
+      "y": 5846,
+      "w": 500,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/cd58fd49.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "ba1544b0",
+      "title": "Arrows should try to avoid colliding with cards",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -4415,
+      "y": 6619,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/ba1544b0.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 132
+    },
+    {
+      "id": "1d6f456a",
+      "title": "Relationship arrows redraw when connected cards move",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -4063,
+      "y": 6619,
+      "w": 420,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/1d6f456a.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 168
+    },
+    {
+      "id": "9bd42e71",
+      "title": "Relationship arrows use orthogonal square routing with card clearance",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3375,
+      "y": 6796,
+      "w": 520,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/9bd42e71.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 464
+    },
+    {
+      "id": "8f43d21c",
+      "title": "Zones use darker transparent fill than their primary border color",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2652,
+      "y": 6014,
+      "w": 520,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/8f43d21c.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 150
+    },
+    {
+      "id": "5ac8d0f1",
+      "title": "Zone labels keep zone color with minimum brightness",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -894,
+      "y": 6493,
+      "w": 520,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/5ac8d0f1.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 150
+    },
+    {
+      "id": "c90ad7e1",
+      "title": "Canvas UI uses Ubuntu font",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3710,
+      "y": 6151,
+      "w": 360,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/c90ad7e1.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 150
+    },
+    {
+      "id": "72af9d0b",
+      "title": "Clicking canvas background clears focus and selection",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -2837,
+      "y": 6800,
+      "w": 520,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/72af9d0b.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 150
+    },
+    {
+      "id": "10e09767",
+      "title": "Node 24 native HTTP server",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -10397,
+      "y": 3158,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/10e09767.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "bb69a6f4",
+      "title": "Backend implementation is TypeScript",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -10036,
+      "y": 3340,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/bb69a6f4.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "a598989d",
+      "title": "CLI architecture ledger JSON storage",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -10405,
+      "y": 4965,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/a598989d.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "c32e3e5c",
+      "title": "Browser TypeScript client runtime",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -8752,
+      "y": 3227,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/c32e3e5c.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "f4b6d2a8",
+      "title": "Frontend implementation is TypeScript",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -8398,
+      "y": 3358,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/f4b6d2a8.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "a9ef20a7",
+      "title": "DOM-based canvas rendering",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -9104,
+      "y": 3498,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/a9ef20a7.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "f93e1bb7",
+      "title": "SVG relationship arrow rendering",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -9102,
+      "y": 3207,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/f93e1bb7.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "e9469688",
+      "title": "CSS stylesheet rendering system",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -9451,
+      "y": 3213,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/e9469688.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "e4ed5372",
+      "title": "Fetch-based client/server API calls",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -9138,
+      "y": 3929,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/e4ed5372.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "94ab097a",
+      "title": "Native fs.watch ledger hot-reload watcher",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -10367,
+      "y": 3475,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/94ab097a.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "ee77191d",
+      "title": "Node test runner for unit and browser-runtime tests",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -10025,
+      "y": 3187,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/ee77191d.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "cef65c97",
+      "title": "Playwright for real browser interaction tests",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -8766,
+      "y": 3516,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/cef65c97.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "c8f02619",
+      "title": "CLI tools are TypeScript Node scripts",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -9846,
+      "y": 4978,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/c8f02619.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "f2a91c7d",
+      "title": "Generator creates one source file per function",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -10405,
+      "y": 5161,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/f2a91c7d.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "d4b8e02a",
+      "title": "Generator creates one unit test file per function",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -9846,
+      "y": 5161,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/d4b8e02a.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "e6c2a41f",
+      "title": "archi-generator is TypeScript",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -10405,
+      "y": 5347,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/e6c2a41f.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "3f9dda8e",
+      "title": "Frameworkless browser client runtime",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -9469,
+      "y": 3482,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/3f9dda8e.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "aba21270",
+      "title": "No bundler-required runtime path",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -9483,
+      "y": 3906,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/aba21270.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "31ef718a",
+      "title": "OpenAI transcription API for voice note transcription",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -9996,
+      "y": 3513,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/31ef718a.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "4f7a2c9d",
+      "title": "Voice transcription defaults to gpt-4o-mini-transcribe",
+      "cardType": "spec-brief",
+      "domainId": "voice",
+      "x": -1682,
+      "y": 6170,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/4f7a2c9d.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "5835377e",
+      "title": "Server tab ledger JSON storage",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -10380,
+      "y": 3788,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/5835377e.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "9f2c8a91",
+      "title": "Backend reads workspace .decision-os settings",
+      "cardType": "spec-brief",
+      "domainId": "server",
+      "x": -10380,
+      "y": 4088,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/9f2c8a91.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "205fdb23",
+      "title": "CLI check-ledger mode",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -9460,
+      "y": 5347,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/205fdb23.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "a83e8c85",
+      "title": "MasterLedger pseudoCode block parsing",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -7310,
+      "y": 4452,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/a83e8c85.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "b0f3a2d1",
+      "title": "Helper and effect return contracts are explicit",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -7650,
+      "y": 4140,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/b0f3a2d1.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "d8e7c3a4",
+      "title": "Generated helper and effect stubs are telemetry-only",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -7298,
+      "y": 4140,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/d8e7c3a4.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "e1a9b6c2",
+      "title": "Generated integration suites record telemetry facts only",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -6946,
+      "y": 4140,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/e1a9b6c2.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "f4c2d8e9",
+      "title": "Apply mode runs generated integration suites only",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -7650,
+      "y": 4314,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/f4c2d8e9.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "a7d3e5f1",
+      "title": "Generated unit tests are red until implementation",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -7298,
+      "y": 4314,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/a7d3e5f1.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "c6b4a8e2",
+      "title": "Generated imports use ledger-derived @ aliases",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -6946,
+      "y": 4314,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/c6b4a8e2.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "de19f4a6",
+      "title": "Generation cleans inherited root block before writing scaffold",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -7650,
+      "y": 4488,
+      "w": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/de19f4a6.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "b7c2e91f",
+      "title": "Group draft geometry uses the canvas-local pointer origin",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1324,
+      "y": 7883,
+      "w": 520,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/b7c2e91f.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "e6a91d34",
+      "title": "decision-os state drives ledger tabs and routes",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -3391,
+      "y": 4673,
+      "w": 520,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/e6a91d34.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 150
+    },
+    {
+      "id": "a4f8d2c9",
+      "title": "Notes clicked from an unselected card opens its thread inspector",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -4451,
+      "y": 6253,
+      "w": 520,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/a4f8d2c9.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 150
+    },
+    {
+      "id": "f2d6c8b1",
+      "title": "Tab click loads the active ledger graph into the canvas",
+      "cardType": "spec-brief",
+      "domainId": "specs",
+      "x": -3430,
+      "y": 4719,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/f2d6c8b1.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "3f9c2a11",
+      "title": "Relationship arrows reserve marker clearance when connected cards are close",
+      "cardType": "spec-brief",
+      "domainId": "relationship",
+      "x": -2202,
+      "y": 6781,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/3f9c2a11.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 214
+    },
+    {
+      "id": "7b2e4c90",
+      "title": "Cards visually inherit the color of the regular zone they intersect",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4691,
+      "y": 5165,
+      "w": 520,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/7b2e4c90.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 150
+    },
+    {
+      "id": "6e18b4d2",
+      "title": "Connected card highlights use the inherited card color glow",
+      "cardType": "spec-brief",
+      "domainId": "selection",
+      "x": -4691,
+      "y": 5361,
+      "w": 520,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/6e18b4d2.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "a2f9c013",
+      "title": "Zone color dragging previews without replacing the color input",
+      "cardType": "spec-brief",
+      "domainId": "",
+      "x": -1379,
+      "y": 7856,
+      "w": 620,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/a2f9c013.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 150
+    },
+    {
+      "id": "84cf2a6b",
+      "title": "Low-detail zoom keeps card titles readable",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 5504,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/84cf2a6b.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 196
+    },
+    {
+      "id": "2aa4f070",
+      "title": "Zone edit and color controls reveal on hover",
+      "cardType": "spec-brief",
+      "domainId": "zone",
+      "x": -4780,
+      "y": 5700,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/2aa4f070.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "f1c7a9d4",
+      "title": "Inline code uses bright card hue",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 5896,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/f1c7a9d4.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "8b6e4d2a",
+      "title": "Markdown bold renders white bold",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 6092,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/8b6e4d2a.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 150
+    },
+    {
+      "id": "c4e8b2f9",
+      "title": "Low-detail zoom preserves measured card size",
+      "cardType": "spec-brief",
+      "domainId": "canvas",
+      "x": -4780,
+      "y": 6288,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/c4e8b2f9.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 196
+    },
+    {
+      "id": "9a7d3c5e",
+      "title": "Description editor preserves body size and captures scroll",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 6484,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/9a7d3c5e.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "5d8f2a1b",
+      "title": "Zone edit controls animate hover reveal",
+      "cardType": "spec-brief",
+      "domainId": "zone",
+      "x": -4780,
+      "y": 6680,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/5d8f2a1b.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "1e9b7c4f",
+      "title": "Inline code HSV value clamp stays bright",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 6876,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/1e9b7c4f.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "0f6a3e91",
+      "title": "Relationship labels inherit endpoint zone color",
+      "cardType": "spec-brief",
+      "domainId": "relationship",
+      "x": -4780,
+      "y": 7072,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/0f6a3e91.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 150
+    },
+    {
+      "id": "6c2d8e0a",
+      "title": "Relationship labels avoid card boxes with safety margin",
+      "cardType": "spec-brief",
+      "domainId": "relationship",
+      "x": -4780,
+      "y": 7268,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/6c2d8e0a.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "4b7c1d9e",
+      "title": "Low-detail card titles wrap instead of ellipsizing",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 7464,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/4b7c1d9e.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 150
+    },
+    {
+      "id": "2f9a6c8d",
+      "title": "Readable colors use HSV rebuild plus luminance floor",
+      "cardType": "spec-brief",
+      "domainId": "canvas",
+      "x": -4780,
+      "y": 7660,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/2f9a6c8d.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 196
+    },
+    {
+      "id": "7e4b0a2c",
+      "title": "PascalCase titles expose wrap opportunities",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 7856,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/7e4b0a2c.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "3c1d8f6b",
+      "title": "Local app routes serve uncached current assets",
+      "cardType": "spec-brief",
+      "domainId": "server",
+      "x": -4780,
+      "y": 8052,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/3c1d8f6b.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "9d5e0b7a",
+      "title": "Counter-scaled low-detail titles fit card width",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 8248,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/9d5e0b7a.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "a6f4c2e1",
+      "title": "Cards expose description and fields tabs",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 8444,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/a6f4c2e1.md"
+      },
+      "facts": [],
+      "fields": [],
+      "h": 173
+    },
+    {
+      "id": "d0b7e3a9",
+      "title": "Fields tab preserves description height and owns scroll",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 8640,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/d0b7e3a9.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "e4c1b8f5",
+      "title": "Card tab switches fade between panels",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 8836,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/e4c1b8f5.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "91f0c6a2",
+      "title": "Runtime card render functions stay split by file",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 9032,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/91f0c6a2.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "b0f6a1c3",
+      "title": "Card tab hover color uses zone hue",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 9228,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/b0f6a1c3.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "c6e3b7d1",
+      "title": "Description tab never scrolls",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 9424,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/c6e3b7d1.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "f8d2c4a7",
+      "title": "Card tabs are hover-revealed floating controls",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 9620,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/f8d2c4a7.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "6a2d9f0e",
+      "title": "Loaded ledger cards resync tab frame height after layout",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 9816,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/6a2d9f0e.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "0d4c8b2f",
+      "title": "Floating card tabs use opaque contrast surfaces",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 10012,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/0d4c8b2f.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "7b0f2e6c",
+      "title": "Activated card tabs hide after pointer leaves",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 10208,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/7b0f2e6c.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "1a8d5f7b",
+      "title": "Field tab height is measured from description content",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 10404,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/1a8d5f7b.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "2e7c9a1d",
+      "title": "Card tab active and hover states are visibly zone colored",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -4780,
+      "y": 10600,
+      "w": 560,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/2e7c9a1d.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "5f3a9d2e",
+      "title": "Card tabs resolve color from deterministic zone ownership",
+      "cardType": "spec-brief",
+      "domainId": "specs",
+      "x": -4780,
+      "y": 10796,
+      "w": 640,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/5f3a9d2e.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "8c4e2b71",
+      "title": "Card tab button fallback surface is raw zone color",
+      "cardType": "spec-brief",
+      "domainId": "specs",
+      "x": -4780,
+      "y": 10992,
+      "w": 640,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/8c4e2b71.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "4f7c2a91",
+      "title": "Ledger editing is separate from scaffold generation",
+      "cardType": "spec-brief",
+      "domainId": "cli",
+      "x": -7707,
+      "y": 4776,
+      "w": 640,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/4f7c2a91.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "9e2b4c7a",
+      "title": "Ledger CLI exposes agent communication queue",
+      "cardType": "spec-brief",
+      "domainId": "cli",
+      "x": -7707,
+      "y": 4972,
+      "w": 680,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/9e2b4c7a.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "6a1f0d8c",
+      "title": "Voice processing returns footer to text composer",
+      "cardType": "spec-brief",
+      "domainId": "voice",
+      "x": -7707,
+      "y": 5168,
+      "w": 680,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/6a1f0d8c.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "c3a8d4f1",
+      "title": "Thread notes split operator cards from agent terminal replies",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": -7707,
+      "y": 5364,
+      "w": 680,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/c3a8d4f1.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "a7d5c3e2",
+      "title": "Thread notes delete through a confirmed note-specific action",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": -7707,
+      "y": 5560,
+      "w": 680,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/a7d5c3e2.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "e4f1a9b6",
+      "title": "Thread conversation renders markdown without forced bold chrome",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": -7707,
+      "y": 5756,
+      "w": 680,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/e4f1a9b6.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "b2e7c5d9",
+      "title": "Master ledger executor skills are repo-local",
+      "cardType": "spec-brief",
+      "domainId": "generator",
+      "x": -7707,
+      "y": 5952,
+      "w": 680,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/b2e7c5d9.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "d9c4a1f8",
+      "title": "Thread feed keeps safe scroll margin and compact note delete",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": -7707,
+      "y": 6148,
+      "w": 680,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/d9c4a1f8.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "f6a2d7c4",
+      "title": "Thread markdown uses card code color and larger readable type",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": -7707,
+      "y": 6344,
+      "w": 680,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/f6a2d7c4.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "a4d9e2b6",
+      "title": "Opening a thread pins to the latest message",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": -7707,
+      "y": 6540,
+      "w": 680,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/a4d9e2b6.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "b3d8a5e1",
+      "title": "Canvas pan uses transform-only sampled performance telemetry",
+      "cardType": "spec-brief",
+      "domainId": "canvas",
+      "x": -7707,
+      "y": 6736,
+      "w": 680,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/b3d8a5e1.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "f0c2d8a9",
+      "title": "Description tab sizes naturally and wheel falls through",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -7707,
+      "y": 6932,
+      "w": 680,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/f0c2d8a9.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "c1f7a9e3",
+      "title": "Thread markdown and voice updates keep captured ownership",
+      "cardType": "spec-brief",
+      "domainId": "thread",
+      "x": -7707,
+      "y": 7128,
+      "w": 680,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/c1f7a9e3.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "e8b4d2a6",
+      "title": "Card titles edit and delete through canonical controls",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -7707,
+      "y": 7324,
+      "w": 680,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/e8b4d2a6.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "7c2a91f0",
+      "title": "Card markdown images render as managed media",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -7707,
+      "y": 7520,
+      "w": 680,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/7c2a91f0.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "91b7e4c2",
+      "title": "Adjacent card images form an infinite carousel",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -7707,
+      "y": 7716,
+      "w": 680,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/91b7e4c2.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "4e8d16b7",
+      "title": "Card image resize is aspect-ratio and zoom safe",
+      "cardType": "spec-brief",
+      "domainId": "card",
+      "x": -7707,
+      "y": 7912,
+      "w": 680,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/4e8d16b7.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "a6f3c8d1",
+      "title": "Workspace image assets are served from decision-os",
+      "cardType": "spec-brief",
+      "domainId": "backend",
+      "x": -7707,
+      "y": 8108,
+      "w": 680,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/a6f3c8d1.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "5d9f2a80",
+      "title": "Keys and runbook expose current operator contract",
+      "cardType": "spec-brief",
+      "domainId": "input",
+      "x": -7707,
+      "y": 8304,
+      "w": 680,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/5d9f2a80.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "2f6b94e1",
+      "title": "Voice waveform and config stay operator accurate",
+      "cardType": "spec-brief",
+      "domainId": "voice",
+      "x": -7707,
+      "y": 8500,
+      "w": 680,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/2f6b94e1.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "c8a4f6d2",
+      "title": "Card-zone attribution is cached and geometry invalidated",
+      "cardType": "spec-brief",
+      "domainId": "canvas",
+      "x": -7707,
+      "y": 8696,
+      "w": 680,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/c8a4f6d2.md"
+      },
+      "facts": [],
+      "fields": []
+    }
+  ],
+  "relationships": [],
+  "annotations": [
+    {
+      "id": "zone-int-zone",
+      "x": -3409,
+      "y": 4876,
+      "width": 1653,
+      "height": 2250,
+      "color": "#84cc16",
+      "label": "Zone",
+      "comments": [
+        {
+          "id": "int-zone-4",
+          "role": "operator",
+          "message": "Zone click, additive click, drag, resize, draw, and delete-confirm flows belong to the zone model.",
+          "timestamp": "2026-05-06T16:29:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "zone-int-selection",
+      "x": -1618,
+      "y": 3123,
+      "width": 1332,
+      "height": 1027,
+      "color": "#eab308",
+      "label": "Interactions / Selection Model",
+      "comments": [
+        {
+          "id": "int-zone-5",
+          "role": "assistant",
+          "message": "Marquee select and escape clear are selection-system entry paths.",
+          "timestamp": "2026-05-06T16:30:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "zone-int-notes",
+      "x": -1634,
+      "y": 5188,
+      "width": 1350,
+      "height": 1548,
+      "color": "#a855f7",
+      "label": "Threads",
+      "comments": [
+        {
+          "id": "int-zone-6",
+          "role": "assistant",
+          "message": "Drawer open and note create/delete are grouped by the note system model.",
+          "timestamp": "2026-05-06T16:31:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "zone-spec-card-literal",
+      "x": -5106,
+      "y": 4911,
+      "width": 1593,
+      "height": 1278,
+      "color": "#8b5cf6",
+      "label": "Card",
+      "comments": [
+        {
+          "id": "spec-zone-7",
+          "role": "operator",
+          "message": "These are the literal positive card specs: concrete truths, not interaction names and not anti-spec restatements.",
+          "timestamp": "2026-05-06T16:40:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "zone-1778084304236",
+      "x": -3084,
+      "y": 3155,
+      "width": 1182,
+      "height": 1277,
+      "color": "#22c55e",
+      "label": "Server",
+      "comments": []
+    },
+    {
+      "id": "zone-1778087413019",
+      "x": -228,
+      "y": 6708,
+      "width": 2190,
+      "height": 1319,
+      "color": "#36c4e7",
+      "label": "Canvas",
+      "comments": []
+    },
+    {
+      "id": "zone-1778087455524",
+      "x": -123,
+      "y": 3150,
+      "width": 1740,
+      "height": 657,
+      "color": "#38d9e8",
+      "label": "Tool Box",
+      "comments": []
+    },
+    {
+      "id": "zone-1778087467848",
+      "x": -4200,
+      "y": 3979,
+      "width": 927,
+      "height": 626,
+      "color": "#8b5cf6",
+      "label": "NavBar",
+      "comments": []
+    },
+    {
+      "id": "zone_5c52e25307",
+      "x": -5083,
+      "y": 3175,
+      "width": 1828,
+      "height": 539,
+      "color": "#22c55e",
+      "label": "Admin",
+      "comments": []
+    },
+    {
+      "id": "75e21cd7",
+      "x": -2429,
+      "y": 7170,
+      "width": 1766,
+      "height": 1158,
+      "color": "#22c55e",
+      "label": "Group",
+      "comments": []
+    },
+    {
+      "id": "b77baae9",
+      "x": -5511,
+      "y": 6403,
+      "width": 1900,
+      "height": 620,
+      "color": "#38bdf8",
+      "label": "Relationships",
+      "comments": []
+    },
+    {
+      "id": "zone_75ebfb2558",
+      "x": -7691,
+      "y": 3098,
+      "width": 1533,
+      "height": 1540,
+      "color": "#8b5cf6",
+      "label": "Generator",
+      "variant": "zone",
+      "comments": []
+    },
+    {
+      "id": "zone_689b6abb5f",
+      "x": -5648,
+      "y": 3000,
+      "width": 7913,
+      "height": 5616,
+      "color": "#8b5cf6",
+      "label": "BlueprintCore",
+      "variant": "group",
+      "comments": []
+    },
+    {
+      "id": "zone_787d93672d",
+      "x": -7885,
+      "y": 2987,
+      "width": 1990,
+      "height": 1796,
+      "color": "#8b5cf6",
+      "label": "CLI Tool",
+      "variant": "group",
+      "comments": []
+    },
+    {
+      "id": "zone_47c4a43289",
+      "x": -7707,
+      "y": 4332,
+      "width": 1507,
+      "height": 409,
+      "color": "#22c55e",
+      "label": "MasterLedger",
+      "variant": "zone",
+      "comments": []
+    },
+    {
+      "id": "zone_6fe86c0af3",
+      "x": -10497,
+      "y": 3043,
+      "width": 2453,
+      "height": 2500,
+      "color": "#22c55e",
+      "label": "Stack",
+      "variant": "group",
+      "comments": []
+    },
+    {
+      "id": "zone_fd9e7d9017",
+      "x": -10413,
+      "y": 3121,
+      "width": 796,
+      "height": 1715,
+      "color": "#22c55e",
+      "label": "Server",
+      "variant": "zone",
+      "comments": []
+    },
+    {
+      "id": "zone_0cbdb4a686",
+      "x": -9542,
+      "y": 3152,
+      "width": 1446,
+      "height": 1053,
+      "color": "#f59e0b",
+      "label": "Client",
+      "variant": "zone",
+      "comments": []
+    },
+    {
+      "id": "zone_0bc65dff18",
+      "x": -10462,
+      "y": 4897,
+      "width": 1061,
+      "height": 620,
+      "color": "#8b5cf6",
+      "label": "CLI",
+      "variant": "zone",
+      "comments": []
+    }
+  ],
+  "notes": {},
+  "selection": {
+    "cardId": "",
+    "cardIds": [],
+    "zoneId": "",
+    "zoneIds": []
+  },
+  "updatedAt": "2026-05-29T04:45:00.000Z",
+  "cardEdits": {}
+}

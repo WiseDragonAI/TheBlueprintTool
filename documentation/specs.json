@@ -1977,7 +1977,7 @@
       "y": 5160,
       "w": 360,
       "comment": {
-        "what": "Navigation tabs must be derived from the server Blueprinttool state only. Static Surface and Runtime tabs must not be injected as defaults because the canvas operates on real ledger files."
+        "what": "Navigation tabs must be derived from the server decision-os state only. Static Surface and Runtime tabs must not be injected as defaults because the canvas operates on real ledger files."
       },
       "facts": [],
       "fields": []
@@ -2166,7 +2166,7 @@
     },
     {
       "id": "70000007",
-      "title": "server state is saved in ./.blueprinttool",
+      "title": "server state is saved in ./.decision-os",
       "cardType": "spec-brief",
       "domainId": "",
       "x": -2941,
@@ -2180,28 +2180,28 @@
     },
     {
       "id": "9c31f0a4",
-      "title": "ledgers in ./.blueprinttool load as default tabs",
+      "title": "ledgers in ./.decision-os load as default tabs",
       "cardType": "spec-brief",
       "domainId": "",
       "x": -2401,
       "y": 3542,
       "w": 320,
       "comment": {
-        "what": "On server boot, every ledger file present in `./.blueprinttool` is loaded into server state and represented as a default navigation tab unless the ledger is invalid."
+        "what": "On server boot, every ledger file present in `./.decision-os` is loaded into server state and represented as a default navigation tab unless the ledger is invalid."
       },
       "facts": [],
       "fields": []
     },
     {
       "id": "c5a84d77",
-      "title": "Specs and data ledgers are available from CoreV2 .blueprinttool",
+      "title": "Specs and data ledgers are available from decision-os .decision-os",
       "cardType": "spec-brief",
       "domainId": "",
       "x": -2020,
       "y": 3542,
       "w": 560,
       "comment": {
-        "what": "CoreV2 must keep live-editable specs and data ledger JSON files in `./.blueprinttool` so the browser/server workbench can visualize current spec and data edits without reading application source files."
+        "what": "decision-os must keep live-editable specs and data ledger JSON files in `./.decision-os` so the browser/server workbench can visualize current spec and data edits without reading application source files."
       },
       "facts": [],
       "fields": []
@@ -2691,7 +2691,7 @@
       "y": 6605,
       "w": 560,
       "comment": {
-        "what": "Text and voice thread notes are inserted into the local conversation ledger immediately with a client-generated note id. Backend append/update calls reconcile that same id without replacing local state and must persist to the active .blueprinttool ledger file resolved from the launch cwd. Legacy `notes: []` ledgers are normalized into thread-id keyed note maps before any local or server note write, because string keys on arrays are dropped by JSON persistence. Failed reconciliation patches note status instead of deleting the note or returning the draft to the void. Server reloads and mutation responses must merge locally optimistic thread notes before replacing active ledger state. If a later append arrives after an update for the same id, it must not overwrite newer note body or lifecycle status."
+        "what": "Text and voice thread notes are inserted into the local conversation ledger immediately with a client-generated note id. Backend append/update calls reconcile that same id without replacing local state and must persist to the active .decision-os ledger file resolved from the launch cwd. Legacy `notes: []` ledgers are normalized into thread-id keyed note maps before any local or server note write, because string keys on arrays are dropped by JSON persistence. Failed reconciliation patches note status instead of deleting the note or returning the draft to the void. Server reloads and mutation responses must merge locally optimistic thread notes before replacing active ledger state. If a later append arrives after an update for the same id, it must not overwrite newer note body or lifecycle status."
       },
       "facts": [],
       "fields": []
@@ -2705,7 +2705,7 @@
       "y": 6455,
       "w": 560,
       "comment": {
-        "what": "CoreV2 imports the DroidFleet voice composer control dock class contract for voice notes: `.agent-chat.phone`, `.control-dock`, terminal STOP/SEND buttons, waveform SVG, and vertical meter. The dock is wired to real voice state, renders no fake attachment chips, stays in the right-side terminal panel, and spans the panel width."
+        "what": "decision-os imports the DroidFleet voice composer control dock class contract for voice notes: `.agent-chat.phone`, `.control-dock`, terminal STOP/SEND buttons, waveform SVG, and vertical meter. The dock is wired to real voice state, renders no fake attachment chips, stays in the right-side terminal panel, and spans the panel width."
       },
       "facts": [],
       "fields": []
@@ -4158,14 +4158,14 @@
     },
     {
       "id": "9f2c8a91",
-      "title": "Backend reads workspace .blueprinttool settings",
+      "title": "Backend reads workspace .decision-os settings",
       "cardType": "spec-brief",
       "domainId": "server",
       "x": -10380,
       "y": 4088,
       "w": 560,
       "comment": {
-        "what": "Backend startup resolves the active `.blueprinttool` directory from the launch cwd or `BLUEPRINTTOOL_ROOT`, reads optional `.blueprinttool/.settings.json`, and applies workspace settings for frontend root, host, port, and transcription configuration. External project workspaces are separate repos; Blueprint Tool must support launching from their cwd without embedding project-specific names or settings."
+        "what": "Backend startup resolves the active `.decision-os` directory from the launch cwd or `DECISION_OS_ROOT`, reads optional `.decision-os/.settings.json`, and applies workspace settings for frontend root, host, port, and transcription configuration. External project workspaces are separate repos; decision-os must support launching from their cwd without embedding project-specific names or settings."
       },
       "facts": [],
       "fields": []
@@ -4312,14 +4312,14 @@
     },
     {
       "id": "e6a91d34",
-      "title": "Blueprinttool state drives ledger tabs and routes",
+      "title": "decision-os state drives ledger tabs and routes",
       "cardType": "spec-brief",
       "domainId": "",
       "x": -3480,
       "y": 4620,
       "w": 520,
       "comment": {
-        "what": "The frontend tab registry is built only from CoreV2 .blueprinttool state. /specs plus /data load the app, /blueprinttool/specs and /blueprinttool/data serve and mutate the live JSON ledgers, and Surface/Runtime mock tabs are not rendered."
+        "what": "The frontend tab registry is built only from decision-os .decision-os state. /specs plus /data load the app, /decision-os/specs and /decision-os/data serve and mutate the live JSON ledgers, and Surface/Runtime mock tabs are not rendered."
       },
       "facts": [],
       "fields": []
@@ -4655,7 +4655,7 @@
       "y": 9032,
       "w": 560,
       "comment": {
-        "what": "Runtime card rendering follows the CoreV2 one-file-per-function canon. `patchLedgerCard` composes imported component/helper functions instead of declaring tab, field, label, markdown, or title helper functions inside the same source file."
+        "what": "Runtime card rendering follows the decision-os one-file-per-function canon. `patchLedgerCard` composes imported component/helper functions instead of declaring tab, field, label, markdown, or title helper functions inside the same source file."
       },
       "facts": [],
       "fields": []

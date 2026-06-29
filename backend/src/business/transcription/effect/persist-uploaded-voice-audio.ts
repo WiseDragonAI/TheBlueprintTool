@@ -6,7 +6,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { telemetry } from '@backend/telemetry/harness.js';
-import { resolveBlueprinttoolRoot } from '@backend/business/server/helper/resolve-blueprinttool-root.js';
+import { resolveDecisionOsRoot } from '@backend/business/server/helper/resolve-decision-os-root.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -17,8 +17,8 @@ export function persistUploadedVoiceAudio(input: { action_payload?: AnyRecord; r
   const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
   const audioBuffer = payload.audioBuffer as Buffer | undefined;
   if (!audioBuffer?.byteLength) return { ok: false, error: 'No audio was uploaded' };
-  const blueprintRoot = resolveBlueprinttoolRoot({ action_payload: payload, runtime_state: runtime });
-  const uploadRoot = resolve(String(payload.voiceUploadRoot ?? process.env.COREV2_VOICE_UPLOAD_ROOT ?? resolve(blueprintRoot, 'voice-uploads')));
+  const blueprintRoot = resolveDecisionOsRoot({ action_payload: payload, runtime_state: runtime });
+  const uploadRoot = resolve(String(payload.voiceUploadRoot ?? process.env.DECISION_OS_VOICE_UPLOAD_ROOT ?? resolve(blueprintRoot, 'voice-uploads')));
   mkdirSync(uploadRoot, { recursive: true });
   const mimeType = String(payload.mimeType ?? 'audio/webm');
   const extension = mimeType.includes('wav') ? 'wav' : mimeType.includes('mpeg') || mimeType.includes('mp3') ? 'mp3' : mimeType.includes('ogg') ? 'ogg' : 'webm';

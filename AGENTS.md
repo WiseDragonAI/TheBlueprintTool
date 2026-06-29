@@ -1,29 +1,29 @@
-# CoreV2 Agent Instructions
+# decision-os Agent Instructions
 
 ## Language Policy
 
 - All agent responses MUST be written in English only.
 - The operator may speak or write in French; do not mirror the operator's language.
-- Blueprinttool `# AGENT` thread replies must be in English, even when the corresponding `# OPERATOR` note is French.
+- decision-os `# AGENT` thread replies must be in English, even when the corresponding `# OPERATOR` note is French.
 - Do not write French acknowledgements such as `Traité`; use English equivalents such as `Treated`.
 
-## Blueprint Tool Server Procedure
+## decision-os Server Procedure
 
-CoreV2 serves the active `.blueprinttool` workspace by resolving the workspace root from the process
+decision-os serves the active `.decision-os` workspace by resolving the workspace root from the process
 current working directory. Always start the server from the target project workspace, not from the
-CoreV2 repo, unless the operator explicitly wants to inspect CoreV2's own ledgers.
+decision-os repo, unless the operator explicitly wants to inspect the repo's own ledgers.
 
 For the MOH workspace:
 
 ```bash
 cd /home/jbb/dev/MOH
-setsid sh -c 'cd /home/jbb/dev/MOH && exec env PORT=4174 /home/jbb/dev/EditorBP/CoreV2/bin/blueprinttool-server.mjs >> /tmp/moh-corev2-blueprinttool-4174.log 2>&1' </dev/null >/dev/null 2>&1 &
+setsid sh -c 'cd /home/jbb/dev/MOH && exec env PORT=4174 /home/jbb/dev/EditorBP/decision-os/bin/decision-os-server.mjs >> /tmp/moh-decision-os-4174.log 2>&1' </dev/null >/dev/null 2>&1 &
 ```
 
 Then verify both the process and HTTP route:
 
 ```bash
-ps -ef | rg 'blueprinttool-server|server.ts|4174' | rg -v rg
+ps -ef | rg 'decision-os-server|server.ts|4174' | rg -v rg
 curl -sS -I http://127.0.0.1:4174/ses
 ```
 
@@ -36,8 +36,8 @@ http://127.0.0.1:4174/s3
 
 ## Background Launch Rules
 
-- Use the repo launcher: `/home/jbb/dev/EditorBP/CoreV2/bin/blueprinttool-server.mjs`.
-- Run it from the target workspace cwd so `.blueprinttool/state.json` resolves correctly.
+- Use the repo launcher: `/home/jbb/dev/EditorBP/decision-os/bin/decision-os-server.mjs`.
+- Run it from the target workspace cwd so `.decision-os/state.json` resolves correctly.
 - Use `setsid sh -c 'cd <workspace> && exec env PORT=<port> <launcher> >> <log> 2>&1' </dev/null >/dev/null 2>&1 &`
   for a real background server.
 - Redirect stdout and stderr to a workspace-specific log under `/tmp`.
@@ -47,17 +47,17 @@ http://127.0.0.1:4174/s3
 
 ## Launcher Notes
 
-The launcher derives CoreV2 runtime paths from its own location and sets:
+The launcher derives decision-os runtime paths from its own location and sets:
 
 ```bash
-COREV2_FRONTEND_ROOT=/home/jbb/dev/EditorBP/CoreV2/frontend
-TSX_TSCONFIG_PATH=/home/jbb/dev/EditorBP/CoreV2/backend/tsconfig.json
+DECISION_OS_FRONTEND_ROOT=/home/jbb/dev/EditorBP/decision-os/frontend
+TSX_TSCONFIG_PATH=/home/jbb/dev/EditorBP/decision-os/backend/tsconfig.json
 ```
 
 To inspect the underlying command without starting the server:
 
 ```bash
-/home/jbb/dev/EditorBP/CoreV2/bin/blueprinttool-server.mjs --print-command
+/home/jbb/dev/EditorBP/decision-os/bin/decision-os-server.mjs --print-command
 ```
 
 ## Voice Transcription
@@ -65,14 +65,14 @@ To inspect the underlying command without starting the server:
 Voice transcription is configured per target workspace through:
 
 ```text
-<workspace>/.blueprinttool/.settings.json
+<workspace>/.decision-os/.settings.json
 ```
 
 Minimal settings:
 
 ```json
 {
-  "corev2FrontendRoot": "/home/jbb/dev/EditorBP/CoreV2/frontend",
+  "decisionOsFrontendRoot": "/home/jbb/dev/EditorBP/decision-os/frontend",
   "transcriptionModel": "gpt-4o-mini-transcribe",
   "openaiApiKey": "sk-..."
 }
@@ -82,8 +82,8 @@ Supported aliases are also accepted:
 
 ```json
 {
-  "frontendRoot": "/home/jbb/dev/EditorBP/CoreV2/frontend",
-  "COREV2_FRONTEND_ROOT": "/home/jbb/dev/EditorBP/CoreV2/frontend",
+  "frontendRoot": "/home/jbb/dev/EditorBP/decision-os/frontend",
+  "DECISION_OS_FRONTEND_ROOT": "/home/jbb/dev/EditorBP/decision-os/frontend",
   "OPENAI_API_KEY": "sk-...",
   "OPENAI_TRANSCRIPTION_MODEL": "gpt-4o-mini-transcribe"
 }
@@ -131,10 +131,10 @@ GIT_SSH_COMMAND='ssh -i ~/.ssh/id_jb_wise -o IdentitiesOnly=yes' git push
 
 ## Card Image Assets
 
-Markdown image assets can be referenced from the active workspace `.blueprinttool` directory:
+Markdown image assets can be referenced from the active workspace `.decision-os` directory:
 
 ```markdown
-![Campaign UI Summary](.blueprinttool/ui-mockups/campaign-ui-3-summary.png)
+![Campaign UI Summary](.decision-os/ui-mockups/campaign-ui-3-summary.png)
 ```
 
-The backend serves image files from `/.blueprinttool/...` for the active workspace only. Adjacent standalone images, including image-only lines separated by blank lines, render as a carousel. Image frames resize by width, derive height from the loaded image aspect ratio, and persist dimensions in the card JSON under `imageSizes`, keyed by the markdown image URL.
+The backend serves image files from `/.decision-os/...` for the active workspace only. Adjacent standalone images, including image-only lines separated by blank lines, render as a carousel. Image frames resize by width, derive height from the loaded image aspect ratio, and persist dimensions in the card JSON under `imageSizes`, keyed by the markdown image URL.

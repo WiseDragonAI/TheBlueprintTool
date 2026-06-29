@@ -1,0 +1,449 @@
+{
+  "modelName": "decision-os Next Features",
+  "source": "operator-request",
+  "updatedAt": "2026-06-24T04:10:38.042Z",
+  "diagramSize": {
+    "width": 2200,
+    "height": 1300
+  },
+  "viewport": {
+    "x": -120,
+    "y": -120,
+    "scale": 0.82
+  },
+  "selection": {
+    "cardIds": [],
+    "zoneIds": [],
+    "groupIds": []
+  },
+  "annotations": [
+    {
+      "id": "zone-processing-queue",
+      "label": "Processing Queue Panel",
+      "variant": "zone",
+      "color": "#2f9e8f",
+      "x": 7763.120457886181,
+      "y": 173.30838541293502,
+      "width": 1900,
+      "height": 1040
+    },
+    {
+      "id": "zone-d84c4c6d-d128-4784-97ca-28eee305d72e",
+      "label": "Better Open Notes treatment",
+      "variant": "zone",
+      "color": "#55b8ff",
+      "x": -859.5993238595388,
+      "y": 164.67242656380677,
+      "width": 3480.6155243113253,
+      "height": 3248.0606602901853
+    },
+    {
+      "id": "zone-638547ad-ac90-4444-a2e7-0edad9c8a44b",
+      "label": "Summaries",
+      "variant": "zone",
+      "color": "#ff5757",
+      "x": 2890,
+      "y": 175,
+      "width": 1641,
+      "height": 2631
+    },
+    {
+      "id": "zone-4a923aaa-1afb-46b2-8be5-32ead2c35a66",
+      "label": "Tasks",
+      "variant": "zone",
+      "color": "#4548b0",
+      "x": 4731,
+      "y": 176,
+      "width": 2257,
+      "height": 2649
+    }
+  ],
+  "cards": [
+    {
+      "id": "queue-panel-empty-selection",
+      "title": "Empty Selection Panel",
+      "cardType": "implementation",
+      "domainId": "next-features",
+      "x": 7843.120457886181,
+      "y": 273.30838541293514,
+      "w": 360,
+      "h": 230,
+      "comment": {
+        "what": "Show a floating left-side panel when the active selection has no cards, zones, or groups. Match the thread panel positioning and chrome, but keep it focused on queue status and trigger controls."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "queue-awaiting-cards-source",
+      "title": "Awaiting Cards Source",
+      "cardType": "implementation",
+      "domainId": "next-features",
+      "x": 8283.120457886182,
+      "y": 273.30838541293514,
+      "w": 360,
+      "h": 230,
+      "comment": {
+        "what": "Resolve the queue from the existing card schema first. Prefer an existing status, label, or work-status marker before adding a new queue-specific field."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "queue-trigger-controller",
+      "title": "Trigger Controller",
+      "cardType": "implementation",
+      "domainId": "next-features",
+      "x": 8723.120457886183,
+      "y": 273.30838541293514,
+      "w": 360,
+      "h": 230,
+      "comment": {
+        "what": "Add a backend route for the panel button. The controller should return quickly with run metadata, reject concurrent trigger races, and delegate process ownership to a workspace-scoped runner service."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "queue-codex-launch",
+      "title": "Headless Codex Launch",
+      "cardType": "implementation",
+      "domainId": "next-features",
+      "x": 9163.120457886183,
+      "y": 273.30838541293514,
+      "w": 360,
+      "h": 230,
+      "comment": {
+        "what": "Spawn `codex exec --dangerously-bypass-approvals-and-sandbox --json -C <workspace> -c model_reasoning_effort=\\\"high\\\" --model gpt-5.5 -`. Use the doc-server cwd as the workspace so AGENTS.md resolution remains correct."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "queue-session-reuse",
+      "title": "One Hour Session Reuse",
+      "cardType": "implementation",
+      "domainId": "next-features",
+      "x": 7843.120457886181,
+      "y": 603.3083854129349,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "what": "Persist the real Codex thread id and last trigger timestamp under `.decision-os`. Reuse with `codex exec resume <sessionId>` only when the last trigger is less than one hour old."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "queue-resume-failure",
+      "title": "Resume Failure Recovery",
+      "cardType": "implementation",
+      "domainId": "next-features",
+      "x": 8283.120457886182,
+      "y": 603.3083854129349,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "what": "Parse resume failures from stderr and only invalidate the stored session when the error names the active resumed thread. Retry the same queue prompt once as a fresh session."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "queue-state-and-logs",
+      "title": "State And Logs",
+      "cardType": "implementation",
+      "domainId": "next-features",
+      "x": 8723.120457886183,
+      "y": 603.3083854129349,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "what": "Store queue-agent state, run metadata, and raw stdout/stderr JSONL in workspace-local `.decision-os/queue-agent/`. Keep parsed UI status derived from durable state instead of transient process memory."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "queue-process-tree",
+      "title": "Process Ownership",
+      "cardType": "implementation",
+      "domainId": "next-features",
+      "x": 9163.120457886183,
+      "y": 603.3083854129349,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "what": "Own the full process tree for future cancel or replacement behavior. Killing only a wrapper can leave `codex exec` running, so descendant cleanup should target Codex children first."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "queue-tests",
+      "title": "Verification Plan",
+      "cardType": "implementation",
+      "domainId": "next-features",
+      "x": 7843.120457886181,
+      "y": 933.3083854129346,
+      "w": 1680,
+      "h": 170,
+      "comment": {
+        "what": "Cover tab loading, empty-selection panel visibility, queue card rendering, trigger request states, command argument construction, one-hour reuse, resume-failure fresh retry, and workspace cwd preservation."
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-c294607d-7a4a-4631-bc0b-7e67f84f84e1",
+      "title": "Graphs",
+      "cardType": "note",
+      "domainId": "next-features",
+      "status": "todo",
+      "x": 6436.559753183514,
+      "y": -3424.357630946078,
+      "w": 958,
+      "h": 1293,
+      "comment": {
+        "contentFile": ".decision-os/cards/next-features/card-c294607d-7a4a-4631-bc0b-7e67f84f84e1.md"
+      }
+    },
+    {
+      "id": "card-3127edc3-a0b6-4f67-8bcb-380cfc6aa70a",
+      "title": "Watch Notes Loop",
+      "cardType": "note",
+      "domainId": "next-features",
+      "status": "todo",
+      "x": -763.0192134492172,
+      "y": 261.11120017142684,
+      "w": 698,
+      "h": 1054,
+      "comment": {
+        "contentFile": ".decision-os/cards/next-features/card-3127edc3-a0b6-4f67-8bcb-380cfc6aa70a.md"
+      }
+    },
+    {
+      "id": "card-1ac9374f-1591-422e-a0b2-7cccaec49e40",
+      "title": "Processing Queue UX",
+      "cardType": "note",
+      "domainId": "next-features",
+      "status": "todo",
+      "x": -22.328173871080708,
+      "y": 267.7779262134538,
+      "w": 710,
+      "h": 871,
+      "comment": {
+        "contentFile": ".decision-os/cards/next-features/card-1ac9374f-1591-422e-a0b2-7cccaec49e40.md"
+      }
+    },
+    {
+      "id": "card-watchnotes-unanswered-context",
+      "title": "Unanswered Context Payload",
+      "cardType": "note",
+      "domainId": "next-features",
+      "status": "done",
+      "x": 743.7458476173942,
+      "y": 285.9788467515564,
+      "w": 711,
+      "h": 2959,
+      "comment": {
+        "contentFile": ".decision-os/cards/next-features/card-watchnotes-unanswered-context.md"
+      }
+    },
+    {
+      "id": "card-watchnotes-runbook-checklist",
+      "title": "Watcher Runbook Checklist",
+      "cardType": "note",
+      "domainId": "next-features",
+      "status": "todo",
+      "x": -18.505103204729494,
+      "y": 1168.4427264507674,
+      "w": 702.5083989320892,
+      "h": 1154.0186222090376,
+      "comment": {
+        "contentFile": ".decision-os/cards/next-features/card-watchnotes-runbook-checklist.md"
+      }
+    },
+    {
+      "id": "card-watchnotes-ledger-selection",
+      "title": "Watcher Ledger Selection",
+      "cardType": "note",
+      "domainId": "next-features",
+      "status": "todo",
+      "x": -763.0192134492172,
+      "y": 1364.6724265638068,
+      "w": 710,
+      "h": 1210,
+      "comment": {
+        "contentFile": ".decision-os/cards/next-features/card-watchnotes-ledger-selection.md"
+      }
+    },
+    {
+      "id": "card-watchnotes-lean-unanswered-model",
+      "title": "Lean Unanswered Payload",
+      "cardType": "note",
+      "domainId": "next-features",
+      "status": "todo",
+      "x": 1598.5800792708835,
+      "y": 284.916663253425,
+      "w": 860,
+      "h": 2351,
+      "comment": {
+        "contentFile": ".decision-os/cards/next-features/card-watchnotes-lean-unanswered-model.md"
+      }
+    },
+    {
+      "id": "card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6",
+      "title": "Zone And Card Summaries",
+      "cardType": "note",
+      "domainId": "next-features",
+      "status": "done",
+      "x": 2987.179540648251,
+      "y": 271.04442116694213,
+      "w": 609,
+      "h": 900,
+      "comment": {
+        "contentFile": ".decision-os/cards/next-features/card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6.md"
+      }
+    },
+    {
+      "id": "card-summary-data-model",
+      "title": "Summary Data Model",
+      "cardType": "note",
+      "domainId": "next-features",
+      "status": "todo",
+      "x": 3645,
+      "y": 271,
+      "w": 790,
+      "h": 1795,
+      "comment": {
+        "contentFile": ".decision-os/cards/next-features/card-summary-data-model.md"
+      }
+    },
+    {
+      "id": "card-summary-cli-maintenance",
+      "title": "Summary CLI Maintenance",
+      "cardType": "note",
+      "domainId": "next-features",
+      "status": "todo",
+      "x": 2989.0558666271145,
+      "y": 1219.0444211669421,
+      "w": 609,
+      "h": 1490,
+      "comment": {
+        "contentFile": ".decision-os/cards/next-features/card-summary-cli-maintenance.md"
+      }
+    },
+    {
+      "id": "card-tasks-legacy-factory-pipeline-baseline",
+      "title": "Commercial Business OS Baseline",
+      "cardType": "note",
+      "domainId": "next-features",
+      "x": 4827.740402316237,
+      "y": 272.86879407041016,
+      "w": 782,
+      "h": 2199,
+      "comment": {
+        "contentFile": ".decision-os/cards/next-features/card-tasks-legacy-factory-pipeline-baseline.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-tasks-unified-control-surface-requirements",
+      "title": "Business OS Task Control Surface",
+      "cardType": "note",
+      "domainId": "next-features",
+      "x": 5659.403936508128,
+      "y": 273.1145289365622,
+      "w": 583,
+      "h": 2456,
+      "comment": {
+        "contentFile": ".decision-os/cards/next-features/card-tasks-unified-control-surface-requirements.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-tasks-core-problem-statement",
+      "title": "Business OS Task Problem Statement",
+      "cardType": "note",
+      "domainId": "next-features",
+      "x": 6295.015683075405,
+      "y": 278.6527520298986,
+      "w": 597,
+      "h": 1930,
+      "comment": {
+        "contentFile": ".decision-os/cards/next-features/card-tasks-core-problem-statement.md"
+      },
+      "facts": [],
+      "fields": []
+    }
+  ],
+  "relationships": [
+    {
+      "id": "rel-panel-source",
+      "source": "queue-panel-empty-selection",
+      "target": "queue-awaiting-cards-source",
+      "label": "reads"
+    },
+    {
+      "id": "rel-source-trigger",
+      "source": "queue-awaiting-cards-source",
+      "target": "queue-trigger-controller",
+      "label": "submits"
+    },
+    {
+      "id": "rel-trigger-launch",
+      "source": "queue-trigger-controller",
+      "target": "queue-codex-launch",
+      "label": "spawns"
+    },
+    {
+      "id": "rel-launch-reuse",
+      "source": "queue-codex-launch",
+      "target": "queue-session-reuse",
+      "label": "persists"
+    },
+    {
+      "id": "rel-reuse-recovery",
+      "source": "queue-session-reuse",
+      "target": "queue-resume-failure",
+      "label": "guards"
+    },
+    {
+      "id": "rel-recovery-logs",
+      "source": "queue-resume-failure",
+      "target": "queue-state-and-logs",
+      "label": "records"
+    },
+    {
+      "id": "rel-logs-process",
+      "source": "queue-state-and-logs",
+      "target": "queue-process-tree",
+      "label": "owns"
+    },
+    {
+      "id": "rel-process-tests",
+      "source": "queue-process-tree",
+      "target": "queue-tests",
+      "label": "verifies"
+    }
+  ],
+  "positions": {},
+  "cardEdits": {},
+  "notes": {},
+  "threadFiles": {
+    "thread-card-c294607d-7a4a-4631-bc0b-7e67f84f84e1": ".decision-os/threads/next-features/thread-card-c294607d-7a4a-4631-bc0b-7e67f84f84e1.md",
+    "thread-card-3127edc3-a0b6-4f67-8bcb-380cfc6aa70a": ".decision-os/threads/next-features/thread-card-3127edc3-a0b6-4f67-8bcb-380cfc6aa70a.md",
+    "thread-card-1ac9374f-1591-422e-a0b2-7cccaec49e40": ".decision-os/threads/next-features/thread-card-1ac9374f-1591-422e-a0b2-7cccaec49e40.md",
+    "thread-card-watchnotes-unanswered-context": ".decision-os/threads/next-features/thread-card-watchnotes-unanswered-context.md",
+    "thread-card-watchnotes-lean-unanswered-model": ".decision-os/threads/next-features/thread-card-watchnotes-lean-unanswered-model.md",
+    "thread-card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6": ".decision-os/threads/next-features/thread-card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6.md",
+    "thread-card-summary-data-model": ".decision-os/threads/next-features/thread-card-summary-data-model.md",
+    "thread-card-summary-cli-maintenance": ".decision-os/threads/next-features/thread-card-summary-cli-maintenance.md",
+    "thread-zone-4a923aaa-1afb-46b2-8be5-32ead2c35a66": ".decision-os/threads/next-features/thread-zone-4a923aaa-1afb-46b2-8be5-32ead2c35a66.md",
+    "thread-card-tasks-legacy-factory-pipeline-baseline": ".decision-os/threads/next-features/thread-card-tasks-legacy-factory-pipeline-baseline.md",
+    "thread-card-tasks-core-problem-statement": ".decision-os/threads/next-features/thread-card-tasks-core-problem-statement.md"
+  }
+}

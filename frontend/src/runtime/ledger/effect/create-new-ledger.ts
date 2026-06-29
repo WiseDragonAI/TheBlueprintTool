@@ -1,5 +1,5 @@
 import { state } from '../../state.js';
-import { loadBlueprinttoolState } from './load-blueprinttool-state.js';
+import { loadDecisionOsState } from './load-decision-os-state.js';
 import { loadActiveLedgerState } from './load-active-ledger-state.js';
 import { persistState } from '../../persistence/effect/persist-state.js';
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
@@ -18,7 +18,7 @@ export async function createNewLedger(): Promise<void> {
   if (!title) return;
 
   telemetry('create-ledger', { title });
-  const response = await fetch('/blueprinttool/ledgers', {
+  const response = await fetch('/decision-os/ledgers', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ title })
@@ -35,7 +35,7 @@ export async function createNewLedger(): Promise<void> {
   if (payload.state?.tabs?.length) state.ledgerTabs = payload.state.tabs;
   state.activeTab = payload.tab.id;
   history.pushState({}, '', `/${state.activeTab}`);
-  await loadBlueprinttoolState();
+  await loadDecisionOsState();
   await loadActiveLedgerState();
   renderTabRegistry();
   renderCanvasSurface();

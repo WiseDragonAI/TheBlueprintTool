@@ -1,6 +1,6 @@
 # Spec Violation Ledger - 2026-05-10
 
-Scope: CoreV2 canvas workbench implementation pass.
+Scope: decision-os canvas workbench implementation pass.
 
 ## V-001: Card edit control was inert
 

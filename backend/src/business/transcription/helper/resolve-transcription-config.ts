@@ -11,7 +11,7 @@ export function resolveTranscriptionConfig(input: { action_payload?: AnyRecord; 
   const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord };
   const payload = (envelope.action_payload ?? input) as AnyRecord;
   const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
-  const settings = (runtime.blueprinttoolSettings ?? {}) as AnyRecord;
+  const settings = (runtime.decisionOsSettings ?? {}) as AnyRecord;
   const apiKey = String(payload.openaiApiKey ?? process.env.OPENAI_API_KEY ?? runtime.openaiApiKey ?? settings.openaiApiKey ?? '');
   const model = String(payload.transcriptionModel ?? process.env.OPENAI_TRANSCRIPTION_MODEL ?? runtime.transcriptionModel ?? settings.transcriptionModel ?? 'gpt-4o-mini-transcribe');
   const transcriptionEnabled = payload.transcriptionEnabled ?? runtime.transcriptionEnabled ?? settings.transcriptionEnabled;

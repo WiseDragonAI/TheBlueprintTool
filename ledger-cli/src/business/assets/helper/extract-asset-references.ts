@@ -100,7 +100,7 @@ export function extractSoftAssetReferences(input: { content: string; sourceFile:
   if (input.sourceFile.endsWith('.json')) return [];
   const output: ExtractedAssetReference[] = [];
   const content = stripCodeFences(input.content);
-  for (const match of content.matchAll(/(?:^|[\s"'(<])((?:\/?\.blueprinttool|\.blueprinttool)\/[^\s"'<>),]+\.(?:css|gif|html|jpe?g|js|mjs|mov|mp4|png|svg|webm|webp))/gi)) {
+  for (const match of content.matchAll(/(?:^|[\s"'(<])((?:\/?\.decision-os|\.decision-os)\/[^\s"'<>),]+\.(?:css|gif|html|jpe?g|js|mjs|mov|mp4|png|svg|webm|webp))/gi)) {
     addReference(output, {
       ...input,
       kind: 'raw-media-mention',

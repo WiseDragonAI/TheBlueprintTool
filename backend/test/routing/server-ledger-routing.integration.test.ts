@@ -8,9 +8,9 @@ import { commitLedgerEditController } from '@backend/business/persistence/contro
 import { loadTabLedgersController } from '@backend/business/ledger/controller/load-tab-ledgers-controller.js';
 import { dispatchRouteController } from '@backend/business/routing/controller/dispatch-route-controller.js';
 
-test('Server routes serve ledgers accept edits persist JSON create ledgers and index .blueprinttool tabs', async () => {
+test('Server routes serve ledgers accept edits persist JSON create ledgers and index .decision-os tabs', async () => {
   traces.length = 0;
-  const expectedTelemetry = ["parse-http-request","resolve-ledger-route","read-ledger-json-file","validate-ledger-edit-payload","write-ledger-json-file","write-blueprinttool-state"];
+  const expectedTelemetry = ["parse-http-request","resolve-ledger-route","read-ledger-json-file","validate-ledger-edit-payload","write-ledger-json-file","write-decision-os-state"];
   const argvPayload = {
     ok: true,
     mode: 'dry-run',
@@ -41,5 +41,5 @@ test('Server routes serve ledgers accept edits persist JSON create ledgers and i
     console.log(JSON.stringify({ specId: '70000001-70000007', controllerName: 'dispatch-route-controller', ignoredScaffoldError: error instanceof Error ? error.message : String(error) }));
   }
   const actualTelemetry = traces.map((trace) => trace.name);
-  console.log(JSON.stringify({ specId: '70000001-70000007', suiteName: 'Server routes serve ledgers accept edits persist JSON create ledgers and index .blueprinttool tabs', controllerName: ["commit-ledger-edit-controller","load-tab-ledgers-controller","dispatch-route-controller"], executionEntry: 'controller', expectedTelemetry, actualTelemetry }));
+  console.log(JSON.stringify({ specId: '70000001-70000007', suiteName: 'Server routes serve ledgers accept edits persist JSON create ledgers and index .decision-os tabs', controllerName: ["commit-ledger-edit-controller","load-tab-ledgers-controller","dispatch-route-controller"], executionEntry: 'controller', expectedTelemetry, actualTelemetry }));
 });

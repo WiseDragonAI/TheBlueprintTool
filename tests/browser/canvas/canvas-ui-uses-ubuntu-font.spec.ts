@@ -1,6 +1,6 @@
 /**
  * WHAT: Integration test for spec c90ad7e1: Canvas UI uses Ubuntu font.
- * WHY: CoreV2 should inherit the Core canvas typography convention.
+ * WHY: decision-os should inherit the Core canvas typography convention.
  */
 
 import test from 'node:test';

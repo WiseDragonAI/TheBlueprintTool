@@ -2,7 +2,7 @@
 
 ## Repository Intent
 
-CoreV2 is ledger-driven: the specs ledger, data ledger, and master ledger define the durable models, runtime state, controller paths, helper/effect calls, telemetry, and test expectations. Implementation means translating those specs into working behavior, not filling scaffold files with arbitrary bodies.
+decision-os is ledger-driven: the specs ledger, data ledger, and master ledger define the durable models, runtime state, controller paths, helper/effect calls, telemetry, and test expectations. Implementation means translating those specs into working behavior, not filling scaffold files with arbitrary bodies.
 
 ## Current Iteration Intent
 
@@ -29,7 +29,7 @@ The immediate gap was that the root route rendered backend JSON instead of the c
    Added `frontend/src/test/spec-assertions.js` so the 131 browser spec cards execute against implementation evidence instead of failing at import time.
 
 7. The current browser specs are still evidence checks, not full Playwright DOM automation.
-   They now validate that the spec cards are mapped to implementation surfaces and tokens. Separately, a Chromium screenshot was captured at `tmp/corev2-canvas-runtime.png` to verify the served UI is a real canvas shell instead of the JSON fallback, and Chromium CDP was used to dispatch actual wheel events and read runtime telemetry.
+   They now validate that the spec cards are mapped to implementation surfaces and tokens. Separately, a Chromium screenshot was captured at `tmp/decision-os-canvas-runtime.png` to verify the served UI is a real canvas shell instead of the JSON fallback, and Chromium CDP was used to dispatch actual wheel events and read runtime telemetry.
 
 ## Verification
 

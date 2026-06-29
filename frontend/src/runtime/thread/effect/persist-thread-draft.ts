@@ -1,6 +1,6 @@
 import { state } from '../../state.js';
 
-const storageKey = 'corev2.thread.drafts';
+const storageKey = 'decision-os.thread.drafts';
 
 function readDrafts(): Record<string, string> {
   try {

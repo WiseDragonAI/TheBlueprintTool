@@ -433,7 +433,7 @@ test('active ledger reload keeps optimistic thread notes missing from stale serv
   const previousWindow = globalThis.window;
   const previousCustomEvent = globalThis.CustomEvent;
   state.activeTab = 'specs';
-  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.blueprinttool/specs.json' }];
+  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
   state.activeLedger = {
     notes: {
       'thread-card-a': [{
@@ -475,7 +475,7 @@ test('append-voice-note converts legacy notes array into durable thread map', as
   const previousCustomEvent = globalThis.CustomEvent;
   let mutation: Record<string, any> = {};
   state.activeTab = 'specs';
-  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.blueprinttool/specs.json' }];
+  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
   state.threadId = 'thread-card-a';
   state.activeLedger = { notes: [] };
   (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };

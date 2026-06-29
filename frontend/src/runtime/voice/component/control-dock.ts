@@ -1,5 +1,5 @@
 /**
- * WHAT: Renders the DroidFleet terminal dock controls for CoreV2 voice capture.
+ * WHAT: Renders the DroidFleet terminal dock controls for decision-os voice capture.
  * WHY: Voice recording actions should use the imported STOP/wave/meter/SEND layout exactly.
  */
 import { waveSvg } from './wave-svg.js';

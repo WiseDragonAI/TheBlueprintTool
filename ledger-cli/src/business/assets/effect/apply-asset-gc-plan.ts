@@ -8,7 +8,7 @@ function isPlan(value: unknown): value is AssetGcPlan {
     value
       && typeof value === 'object'
       && 'kind' in value
-      && value.kind === 'corev2.asset-gc-plan'
+      && value.kind === 'decision-os.asset-gc-plan'
       && 'version' in value
       && value.version === 1
       && 'deleteFiles' in value
@@ -52,15 +52,15 @@ async function readPlan(input: { planFile: string; workspaceRoot: string }): Pro
 
 export async function applyAssetGcPlan(input: { planFile: string; workspaceRoot: string }): Promise<AppliedAssetGcPlan> {
   const plan = await readPlan(input);
-  const blueprinttoolRoot = resolve(input.workspaceRoot, '.blueprinttool');
+  const decisionOsRoot = resolve(input.workspaceRoot, '.decision-os');
   const deletedFiles: string[] = [];
   const removedDirectories = new Set<string>();
   const skippedMissingFiles: string[] = [];
 
   for (const file of plan.deleteFiles) {
     const resolved = resolveWorkspacePath(input.workspaceRoot, file.path);
-    if (!resolved || !isInsideWorkspace(blueprinttoolRoot, resolved)) {
-      throw new Error(`Refusing to delete file outside .blueprinttool: ${file.path}`);
+    if (!resolved || !isInsideWorkspace(decisionOsRoot, resolved)) {
+      throw new Error(`Refusing to delete file outside .decision-os: ${file.path}`);
     }
     if (!await exists(resolved)) {
       skippedMissingFiles.push(file.path);
@@ -70,7 +70,7 @@ export async function applyAssetGcPlan(input: { planFile: string; workspaceRoot:
     if (!stat.isFile()) throw new Error(`Refusing to delete non-file path from GC plan: ${file.path}`);
     await fs.rm(resolved);
     deletedFiles.push(file.path);
-    for (const directory of await removeEmptyAncestors({ filePath: resolved, stopRoot: blueprinttoolRoot, workspaceRoot: input.workspaceRoot })) {
+    for (const directory of await removeEmptyAncestors({ filePath: resolved, stopRoot: decisionOsRoot, workspaceRoot: input.workspaceRoot })) {
       removedDirectories.add(directory);
     }
   }

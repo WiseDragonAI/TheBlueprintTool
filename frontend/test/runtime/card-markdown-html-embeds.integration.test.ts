@@ -22,7 +22,7 @@ test('card markdown html directives render as sandboxed ledger-scoped iframe med
   assert.match(htmlRenderer, /ledger-card-html-shell/);
   assert.match(htmlRenderer, /ledger-card-html-frame/);
   assert.match(htmlRenderer, /iframe\.sandbox\.add\('allow-scripts', 'allow-same-origin'\)/);
-  assert.match(htmlRenderer, /allowedPrefix = `\.blueprinttool\/cards\/\$\{ledgerStem\}\/assets\/`/);
+  assert.match(htmlRenderer, /allowedPrefix = `\.decision-os\/cards\/\$\{ledgerStem\}\/assets\/`/);
   assert.match(htmlRenderer, /normalized\.toLowerCase\(\)\.endsWith\('\.html'\)/);
   assert.match(htmlRenderer, /browserUrlForWorkspacePath\(normalizedSource\)/);
   assert.match(htmlRenderer, /ledgerCardMediaCarouselStateId/);

@@ -143,7 +143,7 @@ test('card drag release clears pointer before slow geometry commit can accept la
   const { handlePointerMove } = await import('../../src/runtime/gesture/controller/handle-pointer-move.js');
 
   state.activeTab = 'specs';
-  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.blueprinttool/specs.json' }];
+  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
   state.activeLedger = { cards: [{ id: 'card-a', x: 20, y: 20, w: 120, h: 80 }], annotations: [], relationships: [], notes: {} };
   state.viewport = { x: 0, y: 0, scale: 1 };
   state.selection = { cardIds: ['card-a'], zoneIds: [], groupIds: [] };

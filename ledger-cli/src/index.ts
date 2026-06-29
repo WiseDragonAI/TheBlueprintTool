@@ -14,6 +14,7 @@ export { appendThreadAnswer } from './business/ledger/helper/append-thread-answe
 export { findUnansweredThreads } from './business/ledger/helper/find-unanswered-threads.js';
 export { formatUnansweredThreads } from './business/ledger/helper/format-unanswered-threads.js';
 export { manageAssetsController } from './business/assets/controller/manage-assets.js';
+export { manageDecisionOsMigrationController } from './business/migration/controller/manage-decision-os-migration.js';
 export { buildAssetGcReport } from './business/assets/helper/build-asset-gc-report.js';
 export { extractHardAssetReferences, extractJsonAssetReferences, extractSoftAssetReferences } from './business/assets/helper/extract-asset-references.js';
 export { normalizeAssetReference } from './business/assets/helper/workspace-paths.js';

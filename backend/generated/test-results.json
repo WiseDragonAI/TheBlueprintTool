@@ -422,18 +422,18 @@
       "telemetrySuites": [
         {
           "specId": "9c31f0a4",
-          "suiteName": "Ledgers in .blueprinttool load as default tabs unless invalid",
+          "suiteName": "Ledgers in .decision-os load as default tabs unless invalid",
           "expectedTelemetry": [
-            "read-blueprinttool-state",
+            "read-decision-os-state",
             "read-ledger-json-file",
             "validate-ledger-document",
-            "write-blueprinttool-state"
+            "write-decision-os-state"
           ],
           "actualTelemetry": [
-            "read-blueprinttool-state",
+            "read-decision-os-state",
             "read-ledger-json-file",
             "validate-ledger-document",
-            "write-blueprinttool-state"
+            "write-decision-os-state"
           ],
           "missingTelemetry": [],
           "extraTelemetry": []
@@ -461,25 +461,25 @@
         },
         {
           "specId": "70000001-70000007",
-          "suiteName": "Server routes serve ledgers accept edits persist JSON create ledgers and index .blueprinttool tabs",
+          "suiteName": "Server routes serve ledgers accept edits persist JSON create ledgers and index .decision-os tabs",
           "expectedTelemetry": [
             "parse-http-request",
             "resolve-ledger-route",
             "read-ledger-json-file",
             "validate-ledger-edit-payload",
             "write-ledger-json-file",
-            "write-blueprinttool-state"
+            "write-decision-os-state"
           ],
           "actualTelemetry": [
             "parse-http-request",
             "validate-ledger-edit-payload",
             "write-ledger-json-file",
-            "write-blueprinttool-state",
+            "write-decision-os-state",
             "send-json-response",
-            "read-blueprinttool-state",
+            "read-decision-os-state",
             "read-ledger-json-file",
             "validate-ledger-document",
-            "write-blueprinttool-state",
+            "write-decision-os-state",
             "parse-http-request",
             "resolve-ledger-route",
             "read-ledger-json-file",
@@ -488,7 +488,7 @@
           "missingTelemetry": [],
           "extraTelemetry": [
             "send-json-response",
-            "read-blueprinttool-state",
+            "read-decision-os-state",
             "validate-ledger-document",
             "send-json-response"
           ]
@@ -511,9 +511,9 @@
             "parse-http-request",
             "validate-ledger-edit-payload",
             "write-ledger-json-file",
-            "write-blueprinttool-state",
+            "write-decision-os-state",
             "send-json-response",
-            "read-blueprinttool-state",
+            "read-decision-os-state",
             "watch-ledger-directory",
             "create-http-server"
           ],
@@ -524,9 +524,9 @@
             "validate-ledger-document",
             "validate-ledger-edit-payload",
             "write-ledger-json-file",
-            "write-blueprinttool-state",
+            "write-decision-os-state",
             "send-json-response",
-            "read-blueprinttool-state",
+            "read-decision-os-state",
             "watch-ledger-directory"
           ]
         }
@@ -938,18 +938,18 @@
       "telemetrySuites": [
         {
           "specId": "9c31f0a4",
-          "suiteName": "Ledgers in .blueprinttool load as default tabs unless invalid",
+          "suiteName": "Ledgers in .decision-os load as default tabs unless invalid",
           "expectedTelemetry": [
-            "read-blueprinttool-state",
+            "read-decision-os-state",
             "read-ledger-json-file",
             "validate-ledger-document",
-            "write-blueprinttool-state"
+            "write-decision-os-state"
           ],
           "actualTelemetry": [
-            "read-blueprinttool-state",
+            "read-decision-os-state",
             "read-ledger-json-file",
             "validate-ledger-document",
-            "write-blueprinttool-state"
+            "write-decision-os-state"
           ],
           "missingTelemetry": [],
           "extraTelemetry": []
@@ -977,25 +977,25 @@
         },
         {
           "specId": "70000001-70000007",
-          "suiteName": "Server routes serve ledgers accept edits persist JSON create ledgers and index .blueprinttool tabs",
+          "suiteName": "Server routes serve ledgers accept edits persist JSON create ledgers and index .decision-os tabs",
           "expectedTelemetry": [
             "parse-http-request",
             "resolve-ledger-route",
             "read-ledger-json-file",
             "validate-ledger-edit-payload",
             "write-ledger-json-file",
-            "write-blueprinttool-state"
+            "write-decision-os-state"
           ],
           "actualTelemetry": [
             "parse-http-request",
             "validate-ledger-edit-payload",
             "write-ledger-json-file",
-            "write-blueprinttool-state",
+            "write-decision-os-state",
             "send-json-response",
-            "read-blueprinttool-state",
+            "read-decision-os-state",
             "read-ledger-json-file",
             "validate-ledger-document",
-            "write-blueprinttool-state",
+            "write-decision-os-state",
             "parse-http-request",
             "resolve-ledger-route",
             "read-ledger-json-file",
@@ -1004,7 +1004,7 @@
           "missingTelemetry": [],
           "extraTelemetry": [
             "send-json-response",
-            "read-blueprinttool-state",
+            "read-decision-os-state",
             "validate-ledger-document",
             "send-json-response"
           ]
@@ -1027,9 +1027,9 @@
             "parse-http-request",
             "validate-ledger-edit-payload",
             "write-ledger-json-file",
-            "write-blueprinttool-state",
+            "write-decision-os-state",
             "send-json-response",
-            "read-blueprinttool-state",
+            "read-decision-os-state",
             "watch-ledger-directory",
             "create-http-server"
           ],
@@ -1040,9 +1040,9 @@
             "validate-ledger-document",
             "validate-ledger-edit-payload",
             "write-ledger-json-file",
-            "write-blueprinttool-state",
+            "write-decision-os-state",
             "send-json-response",
-            "read-blueprinttool-state",
+            "read-decision-os-state",
             "watch-ledger-directory"
           ]
         }

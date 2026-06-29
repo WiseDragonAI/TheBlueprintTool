@@ -1,6 +1,6 @@
 import { basename, resolve } from 'node:path';
 import { promises as fs } from 'node:fs';
-import { collectBlueprinttoolTextState } from './collect-blueprinttool-text-state.js';
+import { collectDecisionOsTextState } from './collect-decision-os-text-state.js';
 import { walkFiles } from './walk-files.js';
 
 async function exists(path: string): Promise<boolean> {
@@ -12,8 +12,8 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-async function durableCatalogFiles(blueprinttoolRoot: string): Promise<string[]> {
-  const uiResearchRoot = resolve(blueprinttoolRoot, 'ui-research');
+async function durableCatalogFiles(decisionOsRoot: string): Promise<string[]> {
+  const uiResearchRoot = resolve(decisionOsRoot, 'ui-research');
   const shaderCatalogs = await walkFiles(resolve(uiResearchRoot, 'shadered-runs'), (path) => /catalog.*\.json$/i.test(basename(path)));
   const pipelineCatalog = resolve(uiResearchRoot, 'ui-pipeline-catalog.json');
   const pipelineCatalogs = await exists(pipelineCatalog) ? [pipelineCatalog] : [];
@@ -24,11 +24,11 @@ async function durableCatalogFiles(blueprinttoolRoot: string): Promise<string[]>
 }
 
 export async function collectAssetSourceFiles(input: { domain?: string; workspaceRoot: string }): Promise<string[]> {
-  const blueprinttoolRoot = resolve(input.workspaceRoot, '.blueprinttool');
-  const textState = await collectBlueprinttoolTextState(input);
+  const decisionOsRoot = resolve(input.workspaceRoot, '.decision-os');
+  const textState = await collectDecisionOsTextState(input);
 
   if (input.domain) {
-    const catalogFiles = input.domain === 'ui-research' ? await durableCatalogFiles(blueprinttoolRoot) : [];
+    const catalogFiles = input.domain === 'ui-research' ? await durableCatalogFiles(decisionOsRoot) : [];
     return Array.from(new Set([
       ...textState.sourceFiles,
       ...catalogFiles,
@@ -37,6 +37,6 @@ export async function collectAssetSourceFiles(input: { domain?: string; workspac
 
   return Array.from(new Set([
     ...textState.sourceFiles,
-    ...await durableCatalogFiles(blueprinttoolRoot),
+    ...await durableCatalogFiles(decisionOsRoot),
   ])).sort();
 }

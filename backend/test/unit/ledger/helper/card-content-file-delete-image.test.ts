@@ -8,12 +8,12 @@ import { deleteCardMarkdownImage, removeMarkdownImage, writeCardDescriptionFile 
 test('removeMarkdownImage removes one standalone markdown image token by source', () => {
   const markdown = [
     'Before',
-    '![First](.blueprinttool/ui/one.png)',
-    '![Second](.blueprinttool/ui/two.png)',
+    '![First](.decision-os/ui/one.png)',
+    '![Second](.decision-os/ui/two.png)',
     'After',
   ].join('\n');
 
-  const result = removeMarkdownImage(markdown, '.blueprinttool/ui/two.png');
+  const result = removeMarkdownImage(markdown, '.decision-os/ui/two.png');
 
   assert.equal(result.removed, true);
   assert.match(result.markdown, /one\.png/);
@@ -24,12 +24,12 @@ test('removeMarkdownImage removes one standalone markdown image token by source'
 
 test('removeMarkdownImage matches workspace image sources across leading slash and URL encoding', () => {
   const markdown = [
-    '![First](.blueprinttool/ui/one%20image.png)',
-    '![Second](/.blueprinttool/ui/two.png)',
+    '![First](.decision-os/ui/one%20image.png)',
+    '![Second](/.decision-os/ui/two.png)',
   ].join('\n');
 
-  const first = removeMarkdownImage(markdown, '/.blueprinttool/ui/one image.png');
-  const second = removeMarkdownImage(markdown, '.blueprinttool/ui/two.png');
+  const first = removeMarkdownImage(markdown, '/.decision-os/ui/one image.png');
+  const second = removeMarkdownImage(markdown, '.decision-os/ui/two.png');
 
   assert.equal(first.removed, true);
   assert.doesNotMatch(first.markdown, /one%20image\.png/);
@@ -40,22 +40,22 @@ test('removeMarkdownImage matches workspace image sources across leading slash a
 });
 
 test('deleteCardMarkdownImage updates the card content file and deletes the workspace image asset', () => {
-  const blueprinttoolRoot = mkdtempSync(join(tmpdir(), 'corev2-card-image-'));
-  const ledgerPath = join(blueprinttoolRoot, 'specs.json');
+  const decisionOsRoot = mkdtempSync(join(tmpdir(), 'decision-os-card-image-'));
+  const ledgerPath = join(decisionOsRoot, 'specs.json');
   const card = { id: 'card-1', comment: {} };
-  const imageSource = '.blueprinttool/ui/card-image.png';
-  const imageFile = join(blueprinttoolRoot, 'ui', 'card-image.png');
-  mkdirSync(join(blueprinttoolRoot, 'ui'), { recursive: true });
+  const imageSource = '.decision-os/ui/card-image.png';
+  const imageFile = join(decisionOsRoot, 'ui', 'card-image.png');
+  mkdirSync(join(decisionOsRoot, 'ui'), { recursive: true });
   writeFileSync(imageFile, 'png');
   writeCardDescriptionFile({
-    blueprinttoolRoot,
+    decisionOsRoot,
     ledgerPath,
     card,
-    description: `Keep\n![Delete me](${imageSource})\n![Keep me](.blueprinttool/ui/other.png)`,
+    description: `Keep\n![Delete me](${imageSource})\n![Keep me](.decision-os/ui/other.png)`,
   });
 
-  const result = deleteCardMarkdownImage({ blueprinttoolRoot, ledgerPath, card, imageSrc: `/${imageSource}` });
-  const contentFile = join(blueprinttoolRoot, 'cards', 'specs', 'card-1.md');
+  const result = deleteCardMarkdownImage({ decisionOsRoot, ledgerPath, card, imageSrc: `/${imageSource}` });
+  const contentFile = join(decisionOsRoot, 'cards', 'specs', 'card-1.md');
   const markdown = readFileSync(contentFile, 'utf8');
 
   assert.deepEqual(result, { removedMarkdown: true, deletedFile: true });
@@ -65,22 +65,22 @@ test('deleteCardMarkdownImage updates the card content file and deletes the work
 });
 
 test('deleteCardMarkdownImage does not delete the image asset when the markdown token is not found', () => {
-  const blueprinttoolRoot = mkdtempSync(join(tmpdir(), 'corev2-card-image-'));
-  const ledgerPath = join(blueprinttoolRoot, 'specs.json');
+  const decisionOsRoot = mkdtempSync(join(tmpdir(), 'decision-os-card-image-'));
+  const ledgerPath = join(decisionOsRoot, 'specs.json');
   const card = { id: 'card-1', comment: {} };
-  const imageSource = '.blueprinttool/ui/card-image.png';
-  const imageFile = join(blueprinttoolRoot, 'ui', 'card-image.png');
-  mkdirSync(join(blueprinttoolRoot, 'ui'), { recursive: true });
+  const imageSource = '.decision-os/ui/card-image.png';
+  const imageFile = join(decisionOsRoot, 'ui', 'card-image.png');
+  mkdirSync(join(decisionOsRoot, 'ui'), { recursive: true });
   writeFileSync(imageFile, 'png');
   writeCardDescriptionFile({
-    blueprinttoolRoot,
+    decisionOsRoot,
     ledgerPath,
     card,
-    description: 'Keep\n![Other](.blueprinttool/ui/other.png)',
+    description: 'Keep\n![Other](.decision-os/ui/other.png)',
   });
 
-  const result = deleteCardMarkdownImage({ blueprinttoolRoot, ledgerPath, card, imageSrc: imageSource });
-  const contentFile = join(blueprinttoolRoot, 'cards', 'specs', 'card-1.md');
+  const result = deleteCardMarkdownImage({ decisionOsRoot, ledgerPath, card, imageSrc: imageSource });
+  const contentFile = join(decisionOsRoot, 'cards', 'specs', 'card-1.md');
   const markdown = readFileSync(contentFile, 'utf8');
 
   assert.deepEqual(result, { removedMarkdown: false, deletedFile: false });

@@ -10,7 +10,7 @@ export function scheduleViewportPersistence(delayMs = 140): void {
   viewportPersistenceTimer = setTimeout(() => {
     viewportPersistenceTimer = null;
     const persisted = readPersistedState();
-    localStorage.setItem('corev2.canvas.state', JSON.stringify({
+    localStorage.setItem('decision-os.canvas.state', JSON.stringify({
       ...persisted,
       viewport: state.viewport,
       viewports: state.viewports,

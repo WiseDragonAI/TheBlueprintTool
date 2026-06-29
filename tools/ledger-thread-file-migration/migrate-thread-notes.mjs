@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 
-const metadataPrefix = '<!-- corev2:note ';
+const metadataPrefix = '<!-- decision-os:note ';
 const metadataSuffix = ' -->';
 
 function safeSegment(value) {
@@ -16,12 +16,12 @@ function parseLedgerFiles(argv) {
 
 function ledgerWorkspaceRoot(ledgerFile) {
   const dir = dirname(resolve(ledgerFile));
-  if (basename(dir) !== '.blueprinttool') throw new Error(`Ledger must live directly in .blueprinttool: ${ledgerFile}`);
+  if (basename(dir) !== '.decision-os') throw new Error(`Ledger must live directly in .decision-os: ${ledgerFile}`);
   return dirname(dir);
 }
 
 function threadContentRef(ledgerFile, threadId) {
-  return `.blueprinttool/threads/${safeSegment(basename(ledgerFile, extname(ledgerFile)))}/${safeSegment(threadId)}.md`;
+  return `.decision-os/threads/${safeSegment(basename(ledgerFile, extname(ledgerFile)))}/${safeSegment(threadId)}.md`;
 }
 
 function resolveContentRef(ledgerFile, contentRef) {

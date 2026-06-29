@@ -11,10 +11,10 @@ export type CardContentChange = {
   kind: 'card-content' | 'thread-content';
 };
 
-export function watchCardContentFiles(input: { blueprinttoolRoot: string; onChange: (event: CardContentChange) => void }): { close(): void; watchedDirectories: number } {
+export function watchCardContentFiles(input: { decisionOsRoot: string; onChange: (event: CardContentChange) => void }): { close(): void; watchedDirectories: number } {
   const roots = [
-    { directory: resolve(input.blueprinttoolRoot, 'cards'), kind: 'card-content' as const },
-    { directory: resolve(input.blueprinttoolRoot, 'threads'), kind: 'thread-content' as const },
+    { directory: resolve(input.decisionOsRoot, 'cards'), kind: 'card-content' as const },
+    { directory: resolve(input.decisionOsRoot, 'threads'), kind: 'thread-content' as const },
   ];
   const watchers = new Map<string, FSWatcher>();
   const pendingEvents = new Map<string, NodeJS.Timeout>();
@@ -25,7 +25,7 @@ export function watchCardContentFiles(input: { blueprinttoolRoot: string; onChan
     if (existingTimer) clearTimeout(existingTimer);
     pendingEvents.set(file, setTimeout(() => {
       pendingEvents.delete(file);
-      const contentFile = `.blueprinttool/${relative(input.blueprinttoolRoot, file)}`;
+      const contentFile = `.decision-os/${relative(input.decisionOsRoot, file)}`;
       input.onChange({ contentFile, file, kind });
     }, 50));
   }

@@ -7,6 +7,7 @@ import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export function previewZoneColorEdit(zone: HTMLElement, color: string): void {
+  // Spec a2f9c013: preview native color-picker drags without committing ledger rerenders.
   zone.style.setProperty('--zone-color', color);
   const readableColor = clampReadableHsvColor(color);
   if (readableColor) zone.style.setProperty('--zone-readable-color', readableColor);

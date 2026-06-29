@@ -3,7 +3,7 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export function renderTabRegistry(): void {
   const activeLedgerTitle = state.ledgerTabs.find((tab: { id: string }) => tab.id === state.activeTab)?.title;
-  document.title = typeof activeLedgerTitle === 'string' && activeLedgerTitle.trim() ? activeLedgerTitle : 'Core Canvas';
+  document.title = typeof activeLedgerTitle === 'string' && activeLedgerTitle.trim() ? activeLedgerTitle : 'decision-os';
 
   const registry = document.querySelector('.tabs') as HTMLElement | null;
   if (registry) {
@@ -29,5 +29,5 @@ export function renderTabRegistry(): void {
     }
   }
   document.querySelectorAll('[data-tab]').forEach((tab) => tab.classList.toggle('active', (tab as HTMLElement).dataset.tab === state.activeTab));
-  telemetry('render-tab-registry', { activeTab: state.activeTab, tabs: state.ledgerTabs.map((tab: { id: string }) => tab.id), source: 'blueprinttool-state' });
+  telemetry('render-tab-registry', { activeTab: state.activeTab, tabs: state.ledgerTabs.map((tab: { id: string }) => tab.id), source: 'decision-os-state' });
 }

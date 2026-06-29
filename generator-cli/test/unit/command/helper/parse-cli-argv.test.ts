@@ -12,7 +12,7 @@ test('parse-cli-argv exports an implemented function', () => {
 
 test('parse-cli-argv rejects ledger mutation commands', () => {
   assert.throws(
-    () => parseCliArgv(['ledger', 'mutate', '--ledger', '.blueprinttool/specs.json']),
+    () => parseCliArgv(['ledger', 'mutate', '--ledger', '.decision-os/specs.json']),
     /Unsupported generator-cli mode: ledger/,
   );
 });

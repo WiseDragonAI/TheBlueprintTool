@@ -10,7 +10,7 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export async function refreshRuntimeState(): Promise<void> {
   telemetry('subscribe-server-refresh', { specId: '50000006', source: 'refresh-button' });
-  await fetch('/blueprinttool/data').catch(() => undefined);
+  await fetch('/decision-os/data').catch(() => undefined);
   const persisted = readPersistedState();
   state.activeTab = routeTab(window.location.pathname);
   state.viewports = persisted.viewports && typeof persisted.viewports === 'object' ? persisted.viewports : state.viewports;

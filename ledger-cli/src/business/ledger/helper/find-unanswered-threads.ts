@@ -64,7 +64,7 @@ function threadFileForThread(ledger: JsonObject, ledgerJsonFile: string, threadI
 }
 
 function editInstructionForThread(threadFile: string): string {
-  return `Patch ${threadFile} directly. Append one parsed answer section: # AGENT, then <!-- corev2:note {"id":"note-agent-<unique>","timestamp":"<ISO-8601>"} -->, then the answer markdown. Only # OPERATOR and # AGENT are valid top-level message headings; do not regenerate ledger JSON for the reply.`;
+  return `Patch ${threadFile} directly. Append one parsed answer section: # AGENT, then <!-- decision-os:note {"id":"note-agent-<unique>","timestamp":"<ISO-8601>"} -->, then the answer markdown. Only # OPERATOR and # AGENT are valid top-level message headings; do not regenerate ledger JSON for the reply.`;
 }
 
 export function findUnansweredThreads(ledger: unknown, ledgerJsonFile: string): UnansweredThread[] {

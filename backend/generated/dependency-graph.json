@@ -35,7 +35,7 @@
     "persist-transcribed-text",
     "publish-refresh-event",
     "publish-server-refresh-controller",
-    "read-blueprinttool-state",
+    "read-decision-os-state",
     "read-ledger-json-file",
     "record-voice-controller",
     "render-canvas-surface",
@@ -68,7 +68,7 @@
     "validate-ledger-edit-payload",
     "validate-zone-draft",
     "watch-ledger-directory",
-    "write-blueprinttool-state",
+    "write-decision-os-state",
     "write-ledger-json-file"
   ],
   "edges": [
@@ -319,8 +319,8 @@
     },
     {
       "from": "load-tab-ledgers-controller",
-      "to": "read-blueprinttool-state",
-      "importPath": "../helper/read-blueprinttool-state.js"
+      "to": "read-decision-os-state",
+      "importPath": "../helper/read-decision-os-state.js"
     },
     {
       "from": "load-tab-ledgers-controller",
@@ -339,8 +339,8 @@
     },
     {
       "from": "load-tab-ledgers-controller",
-      "to": "write-blueprinttool-state",
-      "importPath": "../effect/write-blueprinttool-state.js"
+      "to": "write-decision-os-state",
+      "importPath": "../effect/write-decision-os-state.js"
     },
     {
       "from": "navigate-tab-controller",
@@ -454,8 +454,8 @@
     },
     {
       "from": "start-http-server-controller",
-      "to": "read-blueprinttool-state",
-      "importPath": "../../ledger/helper/read-blueprinttool-state.js"
+      "to": "read-decision-os-state",
+      "importPath": "../../ledger/helper/read-decision-os-state.js"
     },
     {
       "from": "start-http-server-controller",

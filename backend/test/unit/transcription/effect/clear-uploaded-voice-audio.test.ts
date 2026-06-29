@@ -12,7 +12,7 @@ import { clearUploadedVoiceAudio } from '@backend/business/transcription/effect/
 
 test('clear-uploaded-voice-audio removes the transient upload and clears runtime state', () => {
   traces.length = 0;
-  const voiceUploadRoot = mkdtempSync(join(tmpdir(), 'corev2-voice-clear-'));
+  const voiceUploadRoot = mkdtempSync(join(tmpdir(), 'decision-os-voice-clear-'));
   const voiceFileRef = join(voiceUploadRoot, 'voice.webm');
   const runtime_state: Record<string, unknown> = { voiceFileRef };
   try {

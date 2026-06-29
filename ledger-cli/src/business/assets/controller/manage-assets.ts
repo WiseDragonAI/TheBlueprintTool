@@ -84,7 +84,7 @@ export async function manageAssetsController(operation: AssetOperation | undefin
     });
     const output = operation.json
       ? JSON.stringify({ ...report, stagedPaths }, null, 2)
-      : [`Staged referenced BlueprintTool assets for domain ${operation.domain}.`, ...stagedPaths.map((path) => `  ${path}`)].join('\n');
+      : [`Staged referenced decision-os assets for domain ${operation.domain}.`, ...stagedPaths.map((path) => `  ${path}`)].join('\n');
     return { ok: true, value: output };
   }
 

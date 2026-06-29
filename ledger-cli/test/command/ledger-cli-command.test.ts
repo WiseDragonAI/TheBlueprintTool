@@ -4,10 +4,14 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
 import { dirname, join } from 'node:path';
+import { promisify } from 'node:util';
 import { dispatchLedgerCliCommandController } from '../../src/index.js';
-import { createJsonFile } from '../fixture/scenario.js';
+import { createJsonFile, tempDir } from '../fixture/scenario.js';
+
+const execFileAsync = promisify(execFile);
 
 test('ledger-cli command emits help without reading a ledger', async () => {
   const messages: string[] = [];
@@ -56,7 +60,7 @@ test('ledger-cli command lists unanswered threads and posts an answer', async ()
 
   assert.equal(unanswered.ok, true);
   assert.match(messages.join('\n'), /thread-card-a/);
-  assert.match(messages.join('\n'), /\.blueprinttool\/threads\/ledger\/thread-card-a\.md/);
+  assert.match(messages.join('\n'), /\.decision-os\/threads\/ledger\/thread-card-a\.md/);
   assert.match(messages.join('\n'), /Patch .* directly/);
   assert.match(messages.join('\n'), /# AGENT/);
   assert.match(messages.join('\n'), /Only # OPERATOR and # AGENT/);
@@ -82,4 +86,75 @@ test('ledger-cli command exports a markdown file', async () => {
   assert.equal(result.ok, true);
   assert.match(messages.join('\n'), /Exported markdown/);
   assert.match(await readFile(outputFile, 'utf8'), /# Zone A\n\n## Card A/);
+});
+
+test('ledger-cli migration dry-run reports changes without moving workspace state', async () => {
+  const root = await tempDir('decision-os-migrate-dry-');
+  await mkdir(join(root, '.blueprinttool', 'threads', 'specs'), { recursive: true });
+  await writeFile(join(root, '.blueprinttool', 'state.json'), JSON.stringify({
+    tabs: [{ id: 'specs', title: 'Specs', ledgerFile: '.blueprinttool/specs.json' }],
+    corev2FrontendRoot: 'CoreV2/frontend',
+  }, null, 2));
+  await writeFile(join(root, '.blueprinttool', 'threads', 'specs', 'thread-card-a.md'), [
+    '# OPERATOR',
+    '<!-- corev2:note {"id":"note-a"} -->',
+    '',
+    'See .blueprinttool/card-images/a.png',
+  ].join('\n'));
+  const messages: string[] = [];
+
+  const result = await dispatchLedgerCliCommandController(['migrate-decision-os', '--root', root, '--dry-run', '--json'], { emit: (message) => messages.push(message) });
+
+  assert.equal(result.ok, true);
+  assert.match(messages.join('\n'), /"dryRun": true/);
+  assert.match(messages.join('\n'), /thread-card-a\.md/);
+  assert.equal(await access(join(root, '.blueprinttool', 'state.json')).then(() => true), true);
+  await assert.rejects(access(join(root, '.decision-os', 'state.json')));
+});
+
+test('ledger-cli migration write moves storage and rewrites settings and note metadata', async () => {
+  const root = await tempDir('decision-os-migrate-write-');
+  await mkdir(join(root, '.blueprinttool', 'threads', 'specs'), { recursive: true });
+  await writeFile(join(root, '.blueprinttool', '.settings.json'), JSON.stringify({
+    corev2FrontendRoot: 'CoreV2/frontend',
+    OPENAI_API_KEY: 'sk-test-not-printed',
+  }, null, 2));
+  await writeFile(join(root, '.blueprinttool', 'state.json'), JSON.stringify({
+    tabs: [{ id: 'specs', title: 'Specs', ledgerFile: '.blueprinttool/specs.json' }],
+  }, null, 2));
+  await writeFile(join(root, '.blueprinttool', 'threads', 'specs', 'thread-card-a.md'), '<!-- corev2:note {"voiceFileRef":"/workspace/CoreV2/.blueprinttool/voice-uploads/a.wav"} -->');
+
+  const result = await dispatchLedgerCliCommandController(['migrate-decision-os', '--root', root, '--write']);
+
+  assert.equal(result.ok, true);
+  await assert.rejects(access(join(root, '.blueprinttool')));
+  const state = await readFile(join(root, '.decision-os', 'state.json'), 'utf8');
+  const settings = await readFile(join(root, '.decision-os', '.settings.json'), 'utf8');
+  const thread = await readFile(join(root, '.decision-os', 'threads', 'specs', 'thread-card-a.md'), 'utf8');
+  assert.match(state, /\.decision-os\/specs\.json/);
+  assert.match(settings, /decisionOsFrontendRoot/);
+  assert.doesNotMatch(settings, /corev2FrontendRoot/);
+  assert.match(thread, /decision-os:note/);
+  assert.match(thread, /\.decision-os\/voice-uploads\/a\.wav/);
+});
+
+test('ledger-cli migration rejects mixed and dirty workspaces', async () => {
+  const mixed = await tempDir('decision-os-migrate-mixed-');
+  await mkdir(join(mixed, '.blueprinttool'), { recursive: true });
+  await mkdir(join(mixed, '.decision-os'), { recursive: true });
+  const mixedResult = await dispatchLedgerCliCommandController(['migrate-decision-os', '--root', mixed, '--write']);
+  assert.equal(mixedResult.ok, false);
+
+  const dirty = await tempDir('decision-os-migrate-dirty-');
+  await mkdir(join(dirty, '.blueprinttool'), { recursive: true });
+  await writeFile(join(dirty, '.blueprinttool', 'state.json'), '{}');
+  await execFileAsync('git', ['-C', dirty, 'init']);
+  await execFileAsync('git', ['-C', dirty, 'add', '.blueprinttool/state.json']);
+  await writeFile(join(dirty, '.blueprinttool', 'state.json'), '{"changed":true}');
+
+  const dirtyResult = await dispatchLedgerCliCommandController(['migrate-decision-os', '--root', dirty, '--write']);
+  const allowedResult = await dispatchLedgerCliCommandController(['migrate-decision-os', '--root', dirty, '--write', '--allow-dirty']);
+
+  assert.equal(dirtyResult.ok, false);
+  assert.equal(allowedResult.ok, true);
 });

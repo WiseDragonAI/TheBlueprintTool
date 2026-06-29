@@ -64,6 +64,6 @@ test('runbook button opens current workspace, image, and voice configuration not
   assert.match(actionClick, /action === 'close-runbook'[\s\S]*runbookModal\.close/);
   assert.match(index, /class="runbook-modal"/);
   assert.match(index, /card\.imageSizes\[src\]/);
-  assert.match(index, /\.blueprinttool\/voice-uploads\//);
+  assert.match(index, /\.decision-os\/voice-uploads\//);
   assert.match(css, /\.runbook-modal/);
 });

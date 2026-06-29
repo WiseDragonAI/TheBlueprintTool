@@ -7,7 +7,7 @@ import type { FileSystemPort } from '../../../lib/types.js';
 
 type JsonObject = Record<string, unknown>;
 
-const metadataPrefix = '<!-- corev2:note ';
+const metadataPrefix = '<!-- decision-os:note ';
 const metadataSuffix = ' -->';
 
 function isRecord(value: unknown): value is JsonObject {
@@ -27,7 +27,7 @@ function ledgerStem(ledgerJsonFile: string): string {
 }
 
 export function threadContentFileRef(ledgerJsonFile: string, threadId: string): string {
-  return `.blueprinttool/threads/${safeSegment(ledgerStem(ledgerJsonFile))}/${safeSegment(threadId)}.md`;
+  return `.decision-os/threads/${safeSegment(ledgerStem(ledgerJsonFile))}/${safeSegment(threadId)}.md`;
 }
 
 function resolveContentFile(ledgerJsonFile: string, contentFile: unknown): string | null {

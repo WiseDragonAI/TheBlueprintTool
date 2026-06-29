@@ -4,7 +4,7 @@
  */
 import { resolve } from 'node:path';
 import { telemetry } from '@backend/telemetry/harness.js';
-import { resolveBlueprinttoolRoot } from '@backend/business/server/helper/resolve-blueprinttool-root.js';
+import { resolveDecisionOsRoot } from '@backend/business/server/helper/resolve-decision-os-root.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -13,7 +13,7 @@ export function watchLedgerDirectory(input: { action_payload?: AnyRecord; runtim
   const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord };
   const payload = (envelope.action_payload ?? input) as AnyRecord;
   const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
-  const blueprinttoolRoot = resolveBlueprinttoolRoot({ action_payload: payload, runtime_state: runtime });
-  const directory = resolve(String(payload.ledgerDirectory ?? blueprinttoolRoot));
+  const decisionOsRoot = resolveDecisionOsRoot({ action_payload: payload, runtime_state: runtime });
+  const directory = resolve(String(payload.ledgerDirectory ?? decisionOsRoot));
   return { ok: true, directory, watching: payload.mode !== 'dry-run' };
 }

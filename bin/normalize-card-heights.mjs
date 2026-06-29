@@ -86,7 +86,7 @@ async function waitForCards(client, count) {
 }
 
 async function measureMissingHeights(url, ids, chromeBinary, port) {
-  const profile = await mkdtemp(resolve(tmpdir(), 'corev2-height-migration-'));
+  const profile = await mkdtemp(resolve(tmpdir(), 'decision-os-height-migration-'));
   const browser = spawn(chromeBinary, [
     '--headless=new',
     '--no-sandbox',

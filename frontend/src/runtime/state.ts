@@ -2,8 +2,8 @@ export const state: any = {
   routePath: globalThis.window?.location?.pathname ?? '/',
   activeTab: 'specs',
   ledgerTabs: [
-    { id: 'specs', title: 'Specs', ledgerFile: '.blueprinttool/specs.json' },
-    { id: 'data', title: 'Data', ledgerFile: '.blueprinttool/data.json' }
+    { id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' },
+    { id: 'data', title: 'Data', ledgerFile: '.decision-os/data.json' }
   ],
   activeLedger: null,
   activeTool: 'select',

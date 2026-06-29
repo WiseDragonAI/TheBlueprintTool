@@ -36,15 +36,15 @@ function decodeSource(source: string): string {
 
 function normalizeHtmlEmbedSource(source: string): string | null {
   const decoded = decodeSource(source).split('#')[0]?.split('?')[0] ?? '';
-  const normalized = decoded.startsWith('/.blueprinttool/')
+  const normalized = decoded.startsWith('/.decision-os/')
     ? decoded.slice(1)
-    : decoded.startsWith('./.blueprinttool/')
+    : decoded.startsWith('./.decision-os/')
       ? decoded.slice(2)
-      : decoded.startsWith('.blueprinttool/')
+      : decoded.startsWith('.decision-os/')
         ? decoded
         : '';
   const ledgerStem = activeLedgerStem().replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
-  const allowedPrefix = `.blueprinttool/cards/${ledgerStem}/assets/`;
+  const allowedPrefix = `.decision-os/cards/${ledgerStem}/assets/`;
   if (!normalized.startsWith(allowedPrefix) || !normalized.toLowerCase().endsWith('.html')) return null;
   if (normalized.split('/').some((segment) => segment === '..' || segment === '')) return null;
   return normalized;

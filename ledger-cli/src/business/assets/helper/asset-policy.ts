@@ -1,16 +1,16 @@
 import { extname } from 'node:path';
 
 export const defaultManagedAssetRoots = [
-  '.blueprinttool/cards',
-  '.blueprinttool/card-images',
-  '.blueprinttool/thread-images',
-  '.blueprinttool/captures',
-  '.blueprinttool/ui-research/verification',
-  '.blueprinttool/ui-research/demos/generated',
+  '.decision-os/cards',
+  '.decision-os/card-images',
+  '.decision-os/thread-images',
+  '.decision-os/captures',
+  '.decision-os/ui-research/verification',
+  '.decision-os/ui-research/demos/generated',
 ];
 
 export const riskyManagedAssetRoots: Record<string, string> = {
-  'ui-mockups': '.blueprinttool/ui-mockups',
+  'ui-mockups': '.decision-os/ui-mockups',
 };
 
 const managedAssetExtensions = new Set([

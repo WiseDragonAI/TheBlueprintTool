@@ -31,14 +31,14 @@ test('resolve-transcription-config defaults to gpt-4o-mini-transcribe when OpenA
   assert.equal(result.provider, 'openai');
 });
 
-test('resolve-transcription-config reads OpenAI settings from runtime .blueprinttool settings', () => {
+test('resolve-transcription-config reads OpenAI settings from runtime .decision-os settings', () => {
   traces.length = 0;
   const previousKey = process.env.OPENAI_API_KEY;
   delete process.env.OPENAI_API_KEY;
   try {
     const result = resolveTranscriptionConfig({
       action_payload: {},
-      runtime_state: { blueprinttoolSettings: { openaiApiKey: 'settings-key', transcriptionModel: 'gpt-4o-mini-transcribe' } },
+      runtime_state: { decisionOsSettings: { openaiApiKey: 'settings-key', transcriptionModel: 'gpt-4o-mini-transcribe' } },
       data_model: {}
     });
     assert.equal(result.ok, true);

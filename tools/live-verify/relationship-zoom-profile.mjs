@@ -3,13 +3,13 @@ import { connectPage } from './function/connect-page.mjs';
 import { wait } from './function/wait.mjs';
 import { waitLiveCanvasReady } from './function/wait-live-canvas-ready.mjs';
 
-const cdpJsonUrl = process.env.COREV2_CDP_JSON ?? 'http://127.0.0.1:9223/json';
-const scenarioInput = process.env.COREV2_REL_PROFILE_SCENARIOS;
-const scales = parseNumberList(process.env.COREV2_REL_PROFILE_SCALES, [0.12, 0.5, 1, 1.5]);
-const directIterations = Number(process.env.COREV2_REL_PROFILE_DIRECT_ITERATIONS ?? 7);
-const wheelIterations = Number(process.env.COREV2_REL_PROFILE_WHEEL_ITERATIONS ?? 10);
-const enableTrace = process.env.COREV2_REL_PROFILE_TRACE === '1';
-const navigationWaitMs = Number(process.env.COREV2_REL_PROFILE_NAV_WAIT_MS ?? 1200);
+const cdpJsonUrl = process.env.DECISION_OS_CDP_JSON ?? 'http://127.0.0.1:9223/json';
+const scenarioInput = process.env.DECISION_OS_REL_PROFILE_SCENARIOS;
+const scales = parseNumberList(process.env.DECISION_OS_REL_PROFILE_SCALES, [0.12, 0.5, 1, 1.5]);
+const directIterations = Number(process.env.DECISION_OS_REL_PROFILE_DIRECT_ITERATIONS ?? 7);
+const wheelIterations = Number(process.env.DECISION_OS_REL_PROFILE_WHEEL_ITERATIONS ?? 10);
+const enableTrace = process.env.DECISION_OS_REL_PROFILE_TRACE === '1';
+const navigationWaitMs = Number(process.env.DECISION_OS_REL_PROFILE_NAV_WAIT_MS ?? 1200);
 
 const defaultScenarios = [
   ['ardaria-data-model', 'http://127.0.0.1:4173/ardaria-data-model'],
@@ -109,7 +109,7 @@ function pageProfileExpression(input) {
     const { renderRelationshipOverlay } = await import('/src/runtime/relationship/effect/render-relationship-overlay.js');
     const canvas = document.querySelector('.canvas');
     const overlay = document.querySelector('.ledger-relationships');
-    if (!canvas || !overlay || !state) throw new Error('CoreV2 canvas runtime is not ready');
+    if (!canvas || !overlay || !state) throw new Error('decision-os canvas runtime is not ready');
 
     const directIterations = ${JSON.stringify(input.directIterations)};
     const wheelIterations = ${JSON.stringify(input.wheelIterations)};

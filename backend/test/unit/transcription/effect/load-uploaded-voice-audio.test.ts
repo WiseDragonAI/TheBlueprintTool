@@ -12,7 +12,7 @@ import { loadUploadedVoiceAudio } from '@backend/business/transcription/effect/l
 
 test('load-uploaded-voice-audio reads a cached upload for retry', () => {
   traces.length = 0;
-  const voiceUploadRoot = mkdtempSync(join(tmpdir(), 'corev2-voice-load-'));
+  const voiceUploadRoot = mkdtempSync(join(tmpdir(), 'decision-os-voice-load-'));
   const voiceFileRef = join(voiceUploadRoot, 'voice.webm');
   const runtime_state: Record<string, unknown> = {};
   try {
@@ -29,8 +29,8 @@ test('load-uploaded-voice-audio reads a cached upload for retry', () => {
 });
 
 test('load-uploaded-voice-audio rejects files outside the upload cache', () => {
-  const voiceUploadRoot = mkdtempSync(join(tmpdir(), 'corev2-voice-root-'));
-  const otherRoot = mkdtempSync(join(tmpdir(), 'corev2-voice-other-'));
+  const voiceUploadRoot = mkdtempSync(join(tmpdir(), 'decision-os-voice-root-'));
+  const otherRoot = mkdtempSync(join(tmpdir(), 'decision-os-voice-other-'));
   const voiceFileRef = join(otherRoot, 'voice.webm');
   try {
     writeFileSync(voiceFileRef, Buffer.from('audio'));

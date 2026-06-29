@@ -8,7 +8,7 @@ function source(path: string): string {
   return readFileSync(new URL(path, root), 'utf8');
 }
 
-test('default tabs come only from real Blueprinttool ledgers', () => {
+test('default tabs come only from real decision-os ledgers', () => {
   const html = source('frontend/index.html');
   assert.doesNotMatch(html, /data-tab="surface"/);
   assert.doesNotMatch(html, /data-tab="runtime"/);

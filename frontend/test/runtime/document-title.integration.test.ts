@@ -11,7 +11,7 @@ test('browser title follows the selected ledger title', () => {
   const previousActiveTab = state.activeTab;
 
   (globalThis as unknown as { document: unknown }).document = {
-    title: 'Core Canvas',
+    title: 'decision-os',
     querySelector: () => null,
     querySelectorAll: () => []
   };
@@ -24,8 +24,8 @@ test('browser title follows the selected ledger title', () => {
   };
 
   state.ledgerTabs = [
-    { id: 'data', title: 'Data', ledgerFile: '.blueprinttool/data.json' },
-    { id: 'game', title: 'Game Design', ledgerFile: '.blueprinttool/game.json' }
+    { id: 'data', title: 'Data', ledgerFile: '.decision-os/data.json' },
+    { id: 'game', title: 'Game Design', ledgerFile: '.decision-os/game.json' }
   ];
   state.activeTab = 'game';
 

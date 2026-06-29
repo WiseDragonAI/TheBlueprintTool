@@ -1,6 +1,6 @@
 tmp/
-.blueprinttool/voice-uploads/
-.blueprinttool/.settings.json
+.decision-os/voice-uploads/
+.decision-os/.settings.json
 .worktrees/
 generator-cli/.worktrees/
 generator-cli/dist/

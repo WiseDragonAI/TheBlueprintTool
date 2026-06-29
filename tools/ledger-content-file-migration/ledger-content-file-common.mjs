@@ -24,14 +24,14 @@ export function optionValue(argv, option) {
 
 export function ledgerWorkspaceRoot(ledgerFile) {
   const dir = dirname(resolve(ledgerFile));
-  if (basename(dir) !== '.blueprinttool') {
-    throw new Error(`Ledger must live directly in a .blueprinttool directory: ${ledgerFile}`);
+  if (basename(dir) !== '.decision-os') {
+    throw new Error(`Ledger must live directly in a .decision-os directory: ${ledgerFile}`);
   }
   return dirname(dir);
 }
 
-export function blueprinttoolRoot(ledgerFile) {
-  return join(ledgerWorkspaceRoot(ledgerFile), '.blueprinttool');
+export function decisionOsRoot(ledgerFile) {
+  return join(ledgerWorkspaceRoot(ledgerFile), '.decision-os');
 }
 
 export function ledgerStem(ledgerFile) {
@@ -44,13 +44,13 @@ export function safeSegment(value) {
 
 export function cardContentRef(ledgerFile, card) {
   const id = safeSegment(card.id);
-  return `.blueprinttool/cards/${safeSegment(ledgerStem(ledgerFile))}/${id}.md`;
+  return `.decision-os/cards/${safeSegment(ledgerStem(ledgerFile))}/${id}.md`;
 }
 
 export function resolveContentRef(ledgerFile, contentRef) {
   const root = ledgerWorkspaceRoot(ledgerFile);
-  const normalized = String(contentRef).replace(/^\.blueprinttool\//, '');
-  return join(root, '.blueprinttool', normalized);
+  const normalized = String(contentRef).replace(/^\.decision-os\//, '');
+  return join(root, '.decision-os', normalized);
 }
 
 export async function readLedger(ledgerFile) {

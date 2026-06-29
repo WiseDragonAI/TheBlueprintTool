@@ -33,31 +33,31 @@ function commentFor(card: AnyRecord): AnyRecord {
 }
 
 export function cardContentFileRef(ledgerPath: string, card: AnyRecord): string {
-  return `.blueprinttool/cards/${safeSegment(ledgerStem(ledgerPath))}/${safeSegment(card.id)}.md`;
+  return `.decision-os/cards/${safeSegment(ledgerStem(ledgerPath))}/${safeSegment(card.id)}.md`;
 }
 
-export function resolveCardContentFile(blueprinttoolRoot: string, contentFile: unknown): string | null {
+export function resolveCardContentFile(decisionOsRoot: string, contentFile: unknown): string | null {
   if (typeof contentFile !== 'string' || !contentFile.endsWith('.md')) return null;
-  const relativePath = contentFile.replace(/^\.blueprinttool\//, '');
-  const file = resolve(blueprinttoolRoot, relativePath);
-  return isInside(blueprinttoolRoot, file) ? file : null;
+  const relativePath = contentFile.replace(/^\.decision-os\//, '');
+  const file = resolve(decisionOsRoot, relativePath);
+  return isInside(decisionOsRoot, file) ? file : null;
 }
 
-export function hydrateLedgerCardContent(ledger: AnyRecord, blueprinttoolRoot: string): AnyRecord {
+export function hydrateLedgerCardContent(ledger: AnyRecord, decisionOsRoot: string): AnyRecord {
   const cards = Array.isArray(ledger.cards) ? ledger.cards as AnyRecord[] : [];
   for (const card of cards) {
     const comment = commentFor(card);
-    const file = resolveCardContentFile(blueprinttoolRoot, comment.contentFile);
+    const file = resolveCardContentFile(decisionOsRoot, comment.contentFile);
     if (!file || !existsSync(file)) continue;
     card.comment = { ...comment, what: readFileSync(file, 'utf8') };
   }
   return ledger;
 }
 
-export function writeCardDescriptionFile(input: { blueprinttoolRoot: string; card: AnyRecord; description: string; ledgerPath: string }): void {
+export function writeCardDescriptionFile(input: { decisionOsRoot: string; card: AnyRecord; description: string; ledgerPath: string }): void {
   const comment = commentFor(input.card);
   const contentFile = typeof comment.contentFile === 'string' ? comment.contentFile : cardContentFileRef(input.ledgerPath, input.card);
-  const file = resolveCardContentFile(input.blueprinttoolRoot, contentFile);
+  const file = resolveCardContentFile(input.decisionOsRoot, contentFile);
   if (!file) throw new Error(`Invalid card content file for ${String(input.card.id ?? '')}`);
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, input.description, 'utf8');
@@ -66,9 +66,9 @@ export function writeCardDescriptionFile(input: { blueprinttoolRoot: string; car
   input.card.comment = nextComment;
 }
 
-function readCardDescription(input: { blueprinttoolRoot: string; card: AnyRecord }): string {
+function readCardDescription(input: { decisionOsRoot: string; card: AnyRecord }): string {
   const comment = commentFor(input.card);
-  const file = resolveCardContentFile(input.blueprinttoolRoot, comment.contentFile);
+  const file = resolveCardContentFile(input.decisionOsRoot, comment.contentFile);
   if (file && existsSync(file)) return readFileSync(file, 'utf8');
   return typeof comment.what === 'string' ? comment.what : '';
 }
@@ -94,8 +94,8 @@ function decodedImageSource(source: string): string {
 
 function canonicalWorkspaceImageSource(source: string): string {
   const decodedSource = decodedImageSource(source).split('#')[0]?.split('?')[0] ?? '';
-  if (decodedSource.startsWith('/.blueprinttool/')) return decodedSource.slice(1);
-  if (decodedSource.startsWith('.blueprinttool/')) return decodedSource;
+  if (decodedSource.startsWith('/.decision-os/')) return decodedSource.slice(1);
+  if (decodedSource.startsWith('.decision-os/')) return decodedSource;
   return decodedSource;
 }
 
@@ -118,41 +118,41 @@ export function removeMarkdownImage(markdown: string, imageSrc: string): { markd
   return { markdown: nextLines.join('\n').replace(/\n{3,}/g, '\n\n'), removed };
 }
 
-function resolveWorkspaceImageFile(blueprinttoolRoot: string, imageSrc: string): string | null {
+function resolveWorkspaceImageFile(decisionOsRoot: string, imageSrc: string): string | null {
   const sourcePath = canonicalWorkspaceImageSource(imageSrc);
-  const relativePath = sourcePath.startsWith('/.blueprinttool/')
-    ? sourcePath.slice('/.blueprinttool/'.length)
-    : sourcePath.startsWith('.blueprinttool/')
-      ? sourcePath.slice('.blueprinttool/'.length)
+  const relativePath = sourcePath.startsWith('/.decision-os/')
+    ? sourcePath.slice('/.decision-os/'.length)
+    : sourcePath.startsWith('.decision-os/')
+      ? sourcePath.slice('.decision-os/'.length)
       : '';
   if (!relativePath) return null;
-  const file = resolve(blueprinttoolRoot, relativePath);
-  return isInside(blueprinttoolRoot, file) && isAllowedImageAsset(file) ? file : null;
+  const file = resolve(decisionOsRoot, relativePath);
+  return isInside(decisionOsRoot, file) && isAllowedImageAsset(file) ? file : null;
 }
 
-export function deleteCardMarkdownImage(input: { blueprinttoolRoot: string; card: AnyRecord; imageSrc: string; ledgerPath: string }): { removedMarkdown: boolean; deletedFile: boolean } {
-  const description = readCardDescription({ blueprinttoolRoot: input.blueprinttoolRoot, card: input.card });
+export function deleteCardMarkdownImage(input: { decisionOsRoot: string; card: AnyRecord; imageSrc: string; ledgerPath: string }): { removedMarkdown: boolean; deletedFile: boolean } {
+  const description = readCardDescription({ decisionOsRoot: input.decisionOsRoot, card: input.card });
   const removal = removeMarkdownImage(description, input.imageSrc);
   if (!removal.removed) {
     return { removedMarkdown: false, deletedFile: false };
   }
   writeCardDescriptionFile({
-    blueprinttoolRoot: input.blueprinttoolRoot,
+    decisionOsRoot: input.decisionOsRoot,
     card: input.card,
     description: removal.markdown,
     ledgerPath: input.ledgerPath,
   });
-  const imageFile = resolveWorkspaceImageFile(input.blueprinttoolRoot, input.imageSrc);
+  const imageFile = resolveWorkspaceImageFile(input.decisionOsRoot, input.imageSrc);
   const deletedFile = Boolean(imageFile && existsSync(imageFile));
   if (imageFile && existsSync(imageFile)) unlinkSync(imageFile);
   return { removedMarkdown: removal.removed, deletedFile };
 }
 
-export function externalizeCardContent(input: { blueprinttoolRoot: string; card: AnyRecord; ledgerPath: string }): void {
+export function externalizeCardContent(input: { decisionOsRoot: string; card: AnyRecord; ledgerPath: string }): void {
   const comment = commentFor(input.card);
   if (typeof comment.what === 'string') {
     writeCardDescriptionFile({
-      blueprinttoolRoot: input.blueprinttoolRoot,
+      decisionOsRoot: input.decisionOsRoot,
       card: input.card,
       description: comment.what,
       ledgerPath: input.ledgerPath,
@@ -161,16 +161,16 @@ export function externalizeCardContent(input: { blueprinttoolRoot: string; card:
   }
 
   const contentFile = typeof comment.contentFile === 'string' ? comment.contentFile : cardContentFileRef(input.ledgerPath, input.card);
-  const file = resolveCardContentFile(input.blueprinttoolRoot, contentFile);
+  const file = resolveCardContentFile(input.decisionOsRoot, contentFile);
   if (!file) throw new Error(`Invalid card content file for ${String(input.card.id ?? '')}`);
   mkdirSync(dirname(file), { recursive: true });
   if (!existsSync(file)) writeFileSync(file, '', 'utf8');
   input.card.comment = { ...comment, contentFile };
 }
 
-export function duplicateCardContentFile(input: { blueprinttoolRoot: string; ledgerPath: string; sourceCard: AnyRecord; targetCard: AnyRecord }): void {
+export function duplicateCardContentFile(input: { decisionOsRoot: string; ledgerPath: string; sourceCard: AnyRecord; targetCard: AnyRecord }): void {
   const sourceComment = commentFor(input.sourceCard);
-  const sourceFile = resolveCardContentFile(input.blueprinttoolRoot, sourceComment.contentFile);
+  const sourceFile = resolveCardContentFile(input.decisionOsRoot, sourceComment.contentFile);
   const sourceBody = sourceFile && existsSync(sourceFile)
     ? readFileSync(sourceFile, 'utf8')
     : typeof sourceComment.what === 'string'
@@ -178,7 +178,7 @@ export function duplicateCardContentFile(input: { blueprinttoolRoot: string; led
       : undefined;
   if (sourceBody === undefined) return;
   writeCardDescriptionFile({
-    blueprinttoolRoot: input.blueprinttoolRoot,
+    decisionOsRoot: input.decisionOsRoot,
     card: input.targetCard,
     description: sourceBody,
     ledgerPath: input.ledgerPath,

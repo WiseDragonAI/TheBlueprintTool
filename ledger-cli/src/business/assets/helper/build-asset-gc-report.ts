@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import type { AssetGcReport, AssetReference, ClassifiedAsset } from '../../../lib/types.js';
 import { isManagedMediaPath, managedAssetRoots } from './asset-policy.js';
 import { collectAssetReferences } from './collect-asset-references.js';
-import { collectBlueprinttoolTextState } from './collect-blueprinttool-text-state.js';
+import { collectDecisionOsTextState } from './collect-decision-os-text-state.js';
 import { collectGitIgnoredPaths } from './collect-git-ignored-paths.js';
 import { collectGitTrackedPaths } from './collect-git-tracked-paths.js';
 import { matchesKeepRule, readAssetsKeep } from './read-assets-keep.js';
@@ -67,7 +67,7 @@ function summarize(report: Omit<AssetGcReport, 'summary'>): AssetGcReport['summa
 export async function buildAssetGcReport(input: { domain?: string; includeRisky?: string[]; workspaceRoot: string }): Promise<AssetGcReport> {
   const includeRisky = input.includeRisky ?? [];
   const roots = managedAssetRoots(includeRisky);
-  const textState = await collectBlueprinttoolTextState({ domain: input.domain, workspaceRoot: input.workspaceRoot });
+  const textState = await collectDecisionOsTextState({ domain: input.domain, workspaceRoot: input.workspaceRoot });
   const references = await collectAssetReferences({ domain: input.domain, workspaceRoot: input.workspaceRoot });
   const hardReferences = referenceByPath(references.hardReferences);
   const keepRules = await readAssetsKeep({ workspaceRoot: input.workspaceRoot });

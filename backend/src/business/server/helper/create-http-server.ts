@@ -9,7 +9,7 @@ import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 import { telemetry } from '@backend/telemetry/harness.js';
 import { transcribeVoiceController } from '@backend/business/transcription/controller/transcribe-voice-controller.js';
 import { persistUploadedVoiceAudio } from '@backend/business/transcription/effect/persist-uploaded-voice-audio.js';
-import { resolveBlueprinttoolRoot } from './resolve-blueprinttool-root.js';
+import { resolveDecisionOsRoot } from './resolve-decision-os-root.js';
 import { readRequestBuffer } from './read-request-buffer.js';
 import { contentTypeFor } from './content-type-for.js';
 import { normalizeLedgerNotes } from './normalize-ledger-notes.js';
@@ -21,9 +21,9 @@ import { watchCardContentFiles, type CardContentChange } from '../../refresh/hel
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
 
-const blueprinttoolAssetPrefix = '/.blueprinttool/';
-const allowedBlueprinttoolImageExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'];
-const allowedLedgerStaticAssetExtensions = ['.html', '.css', '.js', '.mjs', ...allowedBlueprinttoolImageExtensions];
+const decisionOsAssetPrefix = '/.decision-os/';
+const allowedDecisionOsImageExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'];
+const allowedLedgerStaticAssetExtensions = ['.html', '.css', '.js', '.mjs', ...allowedDecisionOsImageExtensions];
 
 function safeAssetSegment(value: unknown): string {
   return String(value || 'untitled').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled';
@@ -42,26 +42,26 @@ function imageExtensionForMimeType(mimeType: unknown): string {
   return '.png';
 }
 
-function isAllowedBlueprinttoolAsset(filePath: string, relativeAssetPath = ''): boolean {
+function isAllowedDecisionOsAsset(filePath: string, relativeAssetPath = ''): boolean {
   const normalized = filePath.toLowerCase();
-  if (allowedBlueprinttoolImageExtensions.some((extension) => normalized.endsWith(extension))) return true;
+  if (allowedDecisionOsImageExtensions.some((extension) => normalized.endsWith(extension))) return true;
   const normalizedRelative = relativeAssetPath.split('\\').join('/');
   return /^cards\/[^/]+\/assets\/.+/.test(normalizedRelative)
     && allowedLedgerStaticAssetExtensions.some((extension) => normalized.endsWith(extension));
 }
 
-function tryServeBlueprinttoolAsset(input: { url: string; blueprinttoolRoot: string; response: ServerResponse }): boolean {
+function tryServeDecisionOsAsset(input: { url: string; decisionOsRoot: string; response: ServerResponse }): boolean {
   let decodedUrl = '';
   try {
     decodedUrl = decodeURIComponent(input.url);
   } catch {
     decodedUrl = input.url;
   }
-  if (!decodedUrl.startsWith(blueprinttoolAssetPrefix)) return false;
-  const assetPath = resolve(input.blueprinttoolRoot, decodedUrl.slice(blueprinttoolAssetPrefix.length));
-  const relativeAssetPath = relative(input.blueprinttoolRoot, assetPath);
-  const isInsideBlueprinttool = relativeAssetPath && !relativeAssetPath.startsWith('..') && !isAbsolute(relativeAssetPath);
-  if (!isInsideBlueprinttool || !isAllowedBlueprinttoolAsset(assetPath, relativeAssetPath) || !existsSync(assetPath)) {
+  if (!decodedUrl.startsWith(decisionOsAssetPrefix)) return false;
+  const assetPath = resolve(input.decisionOsRoot, decodedUrl.slice(decisionOsAssetPrefix.length));
+  const relativeAssetPath = relative(input.decisionOsRoot, assetPath);
+  const isInsideDecisionOs = relativeAssetPath && !relativeAssetPath.startsWith('..') && !isAbsolute(relativeAssetPath);
+  if (!isInsideDecisionOs || !isAllowedDecisionOsAsset(assetPath, relativeAssetPath) || !existsSync(assetPath)) {
     input.response.statusCode = 404;
     input.response.setHeader('content-type', 'application/json');
     input.response.end(JSON.stringify({ ok: false, missing: decodedUrl }));
@@ -79,14 +79,14 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const payload = (envelope.action_payload ?? input) as AnyRecord;
   const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
   const port = Number(payload.port ?? runtime.port ?? 0);
-  const configuredFrontendRoot = payload.corev2FrontendRoot ?? payload.frontendRoot ?? process.env.COREV2_FRONTEND_ROOT ?? runtime.corev2FrontendRoot;
+  const configuredFrontendRoot = payload.decisionOsFrontendRoot ?? payload.frontendRoot ?? process.env.DECISION_OS_FRONTEND_ROOT ?? runtime.decisionOsFrontendRoot;
   const frontendRoot = configuredFrontendRoot
     ? resolve(String(configuredFrontendRoot))
     : existsSync(resolve(process.cwd(), 'frontend'))
       ? resolve(process.cwd(), 'frontend')
       : resolve(process.cwd(), '..', 'frontend');
-  const blueprinttoolRoot = resolveBlueprinttoolRoot({ action_payload: payload, runtime_state: runtime });
-  runtime.blueprinttoolRoot = blueprinttoolRoot;
+  const decisionOsRoot = resolveDecisionOsRoot({ action_payload: payload, runtime_state: runtime });
+  runtime.decisionOsRoot = decisionOsRoot;
   if (payload.mode === 'dry-run') {
     return { ok: true, port, server: { listening: false, port } };
   }
@@ -95,16 +95,16 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const message = `event: card-content-change\ndata: ${JSON.stringify(event)}\n\n`;
     for (const client of contentEventClients) client.write(message);
   };
-  const loadLedgerContentFiles = (ledger: AnyRecord): AnyRecord => hydrateLedgerCardContent(hydrateLedgerThreadNotes(ledger, blueprinttoolRoot), blueprinttoolRoot);
+  const loadLedgerContentFiles = (ledger: AnyRecord): AnyRecord => hydrateLedgerCardContent(hydrateLedgerThreadNotes(ledger, decisionOsRoot), decisionOsRoot);
   const persistLedgerAndRespond = (ledgerPath: string, ledger: AnyRecord, response: ServerResponse): void => {
     stripHydratedThreadNotes(ledger);
     writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
     response.end(JSON.stringify(loadLedgerContentFiles(ledger)));
   };
-  const cardContentWatcher = watchCardContentFiles({ blueprinttoolRoot, onChange: publishCardContentChange });
+  const cardContentWatcher = watchCardContentFiles({ decisionOsRoot, onChange: publishCardContentChange });
   const server = createServer(async (request, response) => {
     const url = (request.url ?? '/').split('?')[0];
-    if (tryServeBlueprinttoolAsset({ url, blueprinttoolRoot, response })) return;
+    if (tryServeDecisionOsAsset({ url, decisionOsRoot, response })) return;
     if (url === '/api/ledger-content-events' && request.method === 'GET') {
       response.writeHead(200, {
         'cache-control': 'no-store',
@@ -158,12 +158,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       }
       const threadId = safeAssetSegment(request.headers['x-thread-id'] ?? 'conversation-ledger');
       const extension = imageExtensionForMimeType(mimeType);
-      const directory = resolve(blueprinttoolRoot, 'thread-images', threadId);
+      const directory = resolve(decisionOsRoot, 'thread-images', threadId);
       mkdirSync(directory, { recursive: true });
       const fileName = `paste-${Date.now()}-${Math.random().toString(16).slice(2)}${extension}`;
       const filePath = resolve(directory, fileName);
       writeFileSync(filePath, imageBuffer);
-      const imageFileRef = `.blueprinttool/thread-images/${threadId}/${fileName}`;
+      const imageFileRef = `.decision-os/thread-images/${threadId}/${fileName}`;
       response.statusCode = 201;
       response.end(JSON.stringify({ ok: true, imageFileRef, markdown: `![Pasted image](${imageFileRef})` }));
       return;
@@ -189,7 +189,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       });
       return;
     }
-    if (url === '/blueprinttool/ledgers' && request.method === 'POST') {
+    if (url === '/decision-os/ledgers' && request.method === 'POST') {
       response.setHeader('content-type', 'application/json');
       const bodyBuffer = await readRequestBuffer(request);
       const createPayload = (() => {
@@ -200,21 +200,21 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         }
       })();
       const title = String(createPayload.title || 'New Ledger').trim() || 'New Ledger';
-      const statePath = resolve(blueprinttoolRoot, 'state.json');
+      const statePath = resolve(decisionOsRoot, 'state.json');
       const blueprintState = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) as { tabs?: Array<{ id?: string; title?: string; ledgerFile?: string }> } : { tabs: [] };
       const tabs = blueprintState.tabs ?? [];
       const baseId = ledgerSlug(title);
       const existingIds = new Set(tabs.map((entry) => String(entry.id ?? '')));
-      const existingFiles = new Set(tabs.map((entry) => String(entry.ledgerFile ?? '').replace(/^\.blueprinttool\//, '')));
+      const existingFiles = new Set(tabs.map((entry) => String(entry.ledgerFile ?? '').replace(/^\.decision-os\//, '')));
       let id = baseId;
       let ledgerFile = `${baseId}.json`;
       let suffix = 2;
-      while (existingIds.has(id) || existingFiles.has(ledgerFile) || existsSync(resolve(blueprinttoolRoot, ledgerFile))) {
+      while (existingIds.has(id) || existingFiles.has(ledgerFile) || existsSync(resolve(decisionOsRoot, ledgerFile))) {
         id = `${baseId}-${suffix}`;
         ledgerFile = `${baseId}-${suffix}.json`;
         suffix += 1;
       }
-      const tab = { id, title, ledgerFile: `.blueprinttool/${ledgerFile}` };
+      const tab = { id, title, ledgerFile: `.decision-os/${ledgerFile}` };
       const ledger = {
         modelName: id,
         diagramSize: { width: 5200, height: 2600 },
@@ -224,21 +224,21 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         relationships: [],
         notes: {}
       };
-      mkdirSync(blueprinttoolRoot, { recursive: true });
-      writeFileSync(resolve(blueprinttoolRoot, ledgerFile), JSON.stringify(ledger, null, 2));
+      mkdirSync(decisionOsRoot, { recursive: true });
+      writeFileSync(resolve(decisionOsRoot, ledgerFile), JSON.stringify(ledger, null, 2));
       const nextState = { ...blueprintState, tabs: tabs.concat(tab) };
       writeFileSync(statePath, JSON.stringify(nextState, null, 2));
       response.statusCode = 201;
       response.end(JSON.stringify({ ok: true, tab, state: nextState, ledger }));
       return;
     }
-    if (url.startsWith('/blueprinttool/')) {
+    if (url.startsWith('/decision-os/')) {
       const tabId = url.split('/').filter(Boolean)[1] ?? 'state';
-      const statePath = resolve(blueprinttoolRoot, 'state.json');
+      const statePath = resolve(decisionOsRoot, 'state.json');
       const blueprintState = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) as { tabs?: Array<{ id?: string; ledgerFile?: string }> } : { tabs: [] };
       const tab = tabId === 'state' ? undefined : blueprintState.tabs?.find((entry) => entry.id === tabId);
-      const ledgerFile = tabId === 'state' ? 'state.json' : String(tab?.ledgerFile ?? '').replace(/^\.blueprinttool\//, '');
-      const ledgerPath = resolve(blueprinttoolRoot, ledgerFile);
+      const ledgerFile = tabId === 'state' ? 'state.json' : String(tab?.ledgerFile ?? '').replace(/^\.decision-os\//, '');
+      const ledgerPath = resolve(decisionOsRoot, ledgerFile);
       response.setHeader('content-type', 'application/json');
       if (!ledgerFile) {
         response.statusCode = 404;
@@ -280,15 +280,15 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           threadFiles?: Record<string, string>;
         } & AnyRecord;
         let mutationError: MutationError | null = null;
-        hydrateLedgerThreadNotes(ledger, blueprinttoolRoot);
+        hydrateLedgerThreadNotes(ledger, decisionOsRoot);
         if ((mutation.action === 'create-zone' || mutation.action === 'create-group') && mutation.annotation?.id) {
           const id = String(mutation.annotation.id);
           ledger.annotations = (ledger.annotations ?? []).filter((entry) => String(entry.id ?? '') !== id).concat(mutation.annotation);
         }
         if (mutation.action === 'create-card' && mutation.card?.id) {
           const id = String(mutation.card.id);
-          externalizeCardContent({ blueprinttoolRoot, card: mutation.card, ledgerPath });
-          writeThreadNotesFile({ blueprinttoolRoot, ledger, ledgerPath, threadId: `thread-${id}`, notes: [] });
+          externalizeCardContent({ decisionOsRoot, card: mutation.card, ledgerPath });
+          writeThreadNotesFile({ decisionOsRoot, ledger, ledgerPath, threadId: `thread-${id}`, notes: [] });
           ledger.cards = (ledger.cards ?? []).filter((entry) => String(entry.id ?? '') !== id).concat(mutation.card);
         }
         if (mutation.action === 'create-relationship' && mutation.relationship?.id) {
@@ -300,7 +300,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           if (card && (mutation.cardPatch.status === 'todo' || mutation.cardPatch.status === 'done')) card.status = mutation.cardPatch.status;
           if (card && typeof mutation.cardPatch.title === 'string') card.title = mutation.cardPatch.title;
           if (card && typeof mutation.cardPatch.description === 'string') {
-            writeCardDescriptionFile({ blueprinttoolRoot, card, description: mutation.cardPatch.description, ledgerPath });
+            writeCardDescriptionFile({ decisionOsRoot, card, description: mutation.cardPatch.description, ledgerPath });
           }
           if (card && mutation.cardPatch.imageSizes && typeof mutation.cardPatch.imageSizes === 'object') card.imageSizes = mutation.cardPatch.imageSizes;
         }
@@ -319,7 +319,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           if (!card) {
             mutationError = { statusCode: 404, body: { ok: false, error: 'Card not found.', cardId: mutation.cardId } };
           } else {
-            const deletion = deleteCardMarkdownImage({ blueprinttoolRoot, card, imageSrc, ledgerPath });
+            const deletion = deleteCardMarkdownImage({ decisionOsRoot, card, imageSrc, ledgerPath });
             if (!deletion.removedMarkdown) {
               mutationError = { statusCode: 404, body: { ok: false, error: 'Image source not found in card markdown.', cardId: mutation.cardId, imageSrc } };
             }
@@ -380,7 +380,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           if (deletedNoteIds.map((id) => String(id)).includes(noteId)) {
             notesByThread[mutation.note.threadId] = notes.filter((entry) => String(entry.id ?? '') !== noteId);
             ledger.notes = notesByThread;
-            writeThreadNotesFile({ blueprinttoolRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes: notesByThread[mutation.note.threadId] });
+            writeThreadNotesFile({ decisionOsRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes: notesByThread[mutation.note.threadId] });
             persistLedgerAndRespond(ledgerPath, ledger, response);
             return;
           }
@@ -397,7 +397,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             existing.updatedAt = new Date().toISOString();
           } else notes.push(nextNote);
           notesByThread[mutation.note.threadId] = notes;
-          writeThreadNotesFile({ blueprinttoolRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes });
+          writeThreadNotesFile({ decisionOsRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes });
         }
         if (mutation.action === 'update-note' && mutation.note?.threadId) {
           const notesByThread = normalizeLedgerNotes(ledger);
@@ -407,7 +407,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           if (noteId && deletedNoteIds.map((id) => String(id)).includes(noteId)) {
             notesByThread[mutation.note.threadId] = notes.filter((entry) => String(entry.id ?? '') !== noteId);
             ledger.notes = notesByThread;
-            writeThreadNotesFile({ blueprinttoolRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes: notesByThread[mutation.note.threadId] });
+            writeThreadNotesFile({ decisionOsRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes: notesByThread[mutation.note.threadId] });
             persistLedgerAndRespond(ledgerPath, ledger, response);
             return;
           }
@@ -427,7 +427,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             note.updatedAt = new Date().toISOString();
           }
           notesByThread[mutation.note.threadId] = notes;
-          writeThreadNotesFile({ blueprinttoolRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes });
+          writeThreadNotesFile({ decisionOsRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes });
         }
         if (mutation.action === 'delete-note' && mutation.note?.threadId) {
           const notesByThread = normalizeLedgerNotes(ledger);
@@ -440,7 +440,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             ledger.deletedNoteIds = deletedNoteIds;
           }
           notesByThread[mutation.note.threadId] = noteId ? notes.filter((entry) => String(entry.id ?? '') !== noteId) : notes.slice(0, -1);
-          writeThreadNotesFile({ blueprinttoolRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes: notesByThread[mutation.note.threadId] });
+          writeThreadNotesFile({ decisionOsRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes: notesByThread[mutation.note.threadId] });
         }
         if (mutation.action === 'paste-selection' && mutation.selection) {
           const suffix = `copy-${Date.now()}`;
@@ -454,7 +454,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
               x: Number(card.x ?? 0) + 48,
               y: Number(card.y ?? 0) + 48
             };
-            duplicateCardContentFile({ blueprinttoolRoot, ledgerPath, sourceCard: card, targetCard: copiedCard });
+            duplicateCardContentFile({ decisionOsRoot, ledgerPath, sourceCard: card, targetCard: copiedCard });
             return copiedCard;
           });
           const copiedAnnotations = (ledger.annotations ?? []).filter((annotation) => zoneIds.has(String(annotation.id ?? '')) || groupIds.has(String(annotation.id ?? ''))).map((annotation) => ({
@@ -483,7 +483,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       return;
     }
     const isAssetRoute = url.startsWith('/assets/') || url.startsWith('/src/');
-    const statePath = resolve(blueprinttoolRoot, 'state.json');
+    const statePath = resolve(decisionOsRoot, 'state.json');
     const blueprintState = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) as { tabs?: Array<{ id?: string }> } : { tabs: [] };
     const routeTabId = url.split('/').filter(Boolean)[0] ?? '';
     const isLedgerRoute = Boolean(routeTabId && blueprintState.tabs?.some((tab) => tab.id === routeTabId));

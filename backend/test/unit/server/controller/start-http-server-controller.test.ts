@@ -22,15 +22,15 @@ test('start-http-server-controller executes implemented behavior and records tel
   assert.ok(result === undefined || typeof result === 'object');
 });
 
-test('start-http-server-controller applies .blueprinttool settings from workspace cwd', async () => {
+test('start-http-server-controller applies .decision-os settings from workspace cwd', async () => {
   traces.length = 0;
-  const workspace = mkdtempSync(join(tmpdir(), 'corev2-start-settings-'));
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-start-settings-'));
   const runtime_state: Record<string, unknown> = {};
   try {
-    mkdirSync(join(workspace, '.blueprinttool'), { recursive: true });
-    writeFileSync(join(workspace, '.blueprinttool', 'state.json'), JSON.stringify({ tabs: [] }));
-    writeFileSync(join(workspace, '.blueprinttool', '.settings.json'), JSON.stringify({
-      frontendRoot: '/tmp/corev2-frontend',
+    mkdirSync(join(workspace, '.decision-os'), { recursive: true });
+    writeFileSync(join(workspace, '.decision-os', 'state.json'), JSON.stringify({ tabs: [] }));
+    writeFileSync(join(workspace, '.decision-os', '.settings.json'), JSON.stringify({
+      frontendRoot: '/tmp/decision-os-frontend',
       openaiApiKey: 'settings-key',
       transcriptionModel: 'gpt-4o-mini-transcribe'
     }));
@@ -39,10 +39,10 @@ test('start-http-server-controller applies .blueprinttool settings from workspac
       runtime_state,
       data_model: {}
     });
-    const settings = result.settings as { blueprinttoolRoot: string };
+    const settings = result.settings as { decisionOsRoot: string };
     assert.equal(result.ok, true);
-    assert.equal(settings.blueprinttoolRoot, join(workspace, '.blueprinttool'));
-    assert.equal(runtime_state.corev2FrontendRoot, '/tmp/corev2-frontend');
+    assert.equal(settings.decisionOsRoot, join(workspace, '.decision-os'));
+    assert.equal(runtime_state.decisionOsFrontendRoot, '/tmp/decision-os-frontend');
     assert.equal(runtime_state.openaiApiKey, 'settings-key');
   } finally {
     rmSync(workspace, { recursive: true, force: true });

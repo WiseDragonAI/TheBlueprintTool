@@ -27,7 +27,7 @@ export async function readLiveAppState(send, url) {
   const corruptedGeometryRecovery = await send('Runtime.evaluate', {
     returnByValue: true,
     expression: `(function seedCorruptGeometry() {
-      localStorage.setItem('corev2.canvas.state', JSON.stringify({
+      localStorage.setItem('decision-os.canvas.state', JSON.stringify({
         viewport: { x: 0, y: 0, scale: 1 },
         selection: { cardIds: [], zoneIds: [], groupIds: [] },
         activeTab: 'surface',
@@ -89,9 +89,9 @@ export async function readLiveAppState(send, url) {
       return Promise.all([
         fetch('/specs').then(function specsText(response) { return response.text(); }),
         fetch('/data').then(function dataText(response) { return response.text(); }),
-        fetch('/blueprinttool/specs').then(function specsJson(response) { return response.json(); }),
-        fetch('/blueprinttool/data').then(function dataJson(response) { return response.json(); }),
-        fetch('/blueprinttool/state').then(function stateJson(response) { return response.json(); })
+        fetch('/decision-os/specs').then(function specsJson(response) { return response.json(); }),
+        fetch('/decision-os/data').then(function dataJson(response) { return response.json(); }),
+        fetch('/decision-os/state').then(function stateJson(response) { return response.json(); })
       ]).then(function honeycombReport(values) {
         const specsRoute = values[0];
         const dataRoute = values[1];
@@ -110,8 +110,8 @@ export async function readLiveAppState(send, url) {
         honeycombBackgroundSizeAfter: after,
         honeycombBackgroundPositionBefore: beforePosition,
         honeycombBackgroundPositionAfter: afterPosition,
-        specsUrlLoadsApp: specsRoute.includes('Core Canvas') && specsRoute.includes('data-tab="specs"'),
-        dataUrlLoadsApp: dataRoute.includes('Core Canvas') && dataRoute.includes('data-tab="data"'),
+        specsUrlLoadsApp: specsRoute.includes('decision-os') && specsRoute.includes('data-tab="specs"'),
+        dataUrlLoadsApp: dataRoute.includes('decision-os') && dataRoute.includes('data-tab="data"'),
         blueprintSpecsAvailable: Array.isArray(specsLedger.cards) && specsLedger.cards.length > 0,
         blueprintDataAvailable: Boolean(dataLedger.modelName || dataLedger.cards || dataLedger.positions),
         blueprintStateTabs: (blueprintState.tabs ?? []).map(function blueprintTabId(tab) { return tab.id; })
@@ -169,7 +169,7 @@ export async function readLiveAppState(send, url) {
       document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: bootCard.getBoundingClientRect().left + 92, clientY: bootCard.getBoundingClientRect().top + 77, pointerId: 10 }));
       document.querySelector('.canvas').dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: bootCard.getBoundingClientRect().left + 92, clientY: bootCard.getBoundingClientRect().top + 77, pointerId: 10 }));
       const afterCardMove = browserRect(bootCard);
-      const persistedCard = JSON.parse(localStorage.getItem('corev2.canvas.state')).geometry.cards['card-boot'];
+      const persistedCard = JSON.parse(localStorage.getItem('decision-os.canvas.state')).geometry.cards['card-boot'];
       bootCard.style.left = '33px';
       bootCard.style.top = '44px';
       document.querySelector('[data-action="refresh"]').click();
@@ -340,11 +340,11 @@ export async function readLiveAppState(send, url) {
   await waitLiveCanvasReady(send);
   await send('Runtime.evaluate', {
     expression: `(function seedViewportPersistence() {
-      const record = JSON.parse(localStorage.getItem('corev2.canvas.state') ?? '{}');
+      const record = JSON.parse(localStorage.getItem('decision-os.canvas.state') ?? '{}');
       record.viewport = { x: -438, y: 217, scale: 0.63 };
       record.viewports = { ...(record.viewports ?? {}), surface: record.viewport };
       record.activeTab = 'surface';
-      localStorage.setItem('corev2.canvas.state', JSON.stringify(record));
+      localStorage.setItem('decision-os.canvas.state', JSON.stringify(record));
       location.reload();
     })()`
   });

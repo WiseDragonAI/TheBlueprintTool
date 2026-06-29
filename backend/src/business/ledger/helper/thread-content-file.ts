@@ -7,7 +7,7 @@ import { dirname, extname, isAbsolute, relative, resolve, basename } from 'node:
 
 type AnyRecord = Record<string, unknown>;
 
-const metadataPrefix = '<!-- corev2:note ';
+const metadataPrefix = '<!-- decision-os:note ';
 const metadataSuffix = ' -->';
 
 function isRecord(value: unknown): value is AnyRecord {
@@ -69,14 +69,14 @@ function normalizeThreadFiles(ledger: AnyRecord): Record<string, string> {
 }
 
 export function threadContentFileRef(ledgerPath: string, threadId: string): string {
-  return `.blueprinttool/threads/${safeSegment(ledgerStem(ledgerPath))}/${safeSegment(threadId)}.md`;
+  return `.decision-os/threads/${safeSegment(ledgerStem(ledgerPath))}/${safeSegment(threadId)}.md`;
 }
 
-export function resolveThreadContentFile(blueprinttoolRoot: string, contentFile: unknown): string | null {
+export function resolveThreadContentFile(decisionOsRoot: string, contentFile: unknown): string | null {
   if (typeof contentFile !== 'string' || !contentFile.endsWith('.md')) return null;
-  const relativePath = contentFile.replace(/^\.blueprinttool\//, '');
-  const file = resolve(blueprinttoolRoot, relativePath);
-  return isInside(blueprinttoolRoot, file) ? file : null;
+  const relativePath = contentFile.replace(/^\.decision-os\//, '');
+  const file = resolve(decisionOsRoot, relativePath);
+  return isInside(decisionOsRoot, file) ? file : null;
 }
 
 export function parseThreadMarkdown(markdown: string): AnyRecord[] {
@@ -128,21 +128,21 @@ export function formatThreadMarkdown(notes: AnyRecord[]): string {
   }).join('\n\n')}\n`;
 }
 
-export function hydrateLedgerThreadNotes(ledger: AnyRecord, blueprinttoolRoot: string): AnyRecord {
+export function hydrateLedgerThreadNotes(ledger: AnyRecord, decisionOsRoot: string): AnyRecord {
   const threadFiles = isRecord(ledger.threadFiles) ? ledger.threadFiles as Record<string, unknown> : {};
   const notes = normalizeNotesMap(ledger);
   for (const [threadId, contentRef] of Object.entries(threadFiles)) {
-    const file = resolveThreadContentFile(blueprinttoolRoot, contentRef);
+    const file = resolveThreadContentFile(decisionOsRoot, contentRef);
     if (!file || !existsSync(file)) continue;
     notes[threadId] = parseThreadMarkdown(readFileSync(file, 'utf8'));
   }
   return ledger;
 }
 
-export function writeThreadNotesFile(input: { blueprinttoolRoot: string; ledger: AnyRecord; ledgerPath: string; threadId: string; notes: AnyRecord[] }): void {
+export function writeThreadNotesFile(input: { decisionOsRoot: string; ledger: AnyRecord; ledgerPath: string; threadId: string; notes: AnyRecord[] }): void {
   const threadFiles = normalizeThreadFiles(input.ledger);
   const contentFile = threadFiles[input.threadId] ?? threadContentFileRef(input.ledgerPath, input.threadId);
-  const file = resolveThreadContentFile(input.blueprinttoolRoot, contentFile);
+  const file = resolveThreadContentFile(input.decisionOsRoot, contentFile);
   if (!file) throw new Error(`Invalid thread content file for ${input.threadId}`);
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, formatThreadMarkdown(input.notes), 'utf8');

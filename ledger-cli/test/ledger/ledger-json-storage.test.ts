@@ -161,13 +161,13 @@ test('ledger-cli export writes a zone-grouped markdown file', async () => {
 
 test('ledger-cli export hydrates Markdown card content files', async () => {
   const workspace = await tempDir();
-  const blueprinttool = join(workspace, '.blueprinttool');
-  await mkdir(join(blueprinttool, 'cards', 'specs'), { recursive: true });
-  const file = join(blueprinttool, 'specs.json');
+  const decisionOs = join(workspace, '.decision-os');
+  await mkdir(join(decisionOs, 'cards', 'specs'), { recursive: true });
+  const file = join(decisionOs, 'specs.json');
   const outputFile = join(workspace, 'export.md');
-  await writeFile(join(blueprinttool, 'cards', 'specs', 'card-a.md'), 'Content file body for export.', 'utf8');
+  await writeFile(join(decisionOs, 'cards', 'specs', 'card-a.md'), 'Content file body for export.', 'utf8');
   await writeFile(file, JSON.stringify({
-    cards: [{ id: 'card-a', title: 'Card A', x: 0, y: 0, w: 100, h: 100, comment: { contentFile: '.blueprinttool/cards/specs/card-a.md' } }],
+    cards: [{ id: 'card-a', title: 'Card A', x: 0, y: 0, w: 100, h: 100, comment: { contentFile: '.decision-os/cards/specs/card-a.md' } }],
     annotations: [{ id: 'zone-a', label: 'Zone A', x: -10, y: -10, width: 200, height: 200 }],
   }, null, 2), 'utf8');
 
@@ -183,13 +183,13 @@ test('ledger-cli export hydrates Markdown card content files', async () => {
 
 test('ledger-cli mutate writes card comments to content files when present', async () => {
   const workspace = await tempDir();
-  const blueprinttool = join(workspace, '.blueprinttool');
-  await mkdir(join(blueprinttool, 'cards', 'specs'), { recursive: true });
-  const file = join(blueprinttool, 'specs.json');
-  const contentFile = join(blueprinttool, 'cards', 'specs', 'card-a.md');
+  const decisionOs = join(workspace, '.decision-os');
+  await mkdir(join(decisionOs, 'cards', 'specs'), { recursive: true });
+  const file = join(decisionOs, 'specs.json');
+  const contentFile = join(decisionOs, 'cards', 'specs', 'card-a.md');
   await writeFile(contentFile, 'Old body.', 'utf8');
   await writeFile(file, JSON.stringify({
-    cards: [{ id: 'card-a', title: 'Card A', comment: { contentFile: '.blueprinttool/cards/specs/card-a.md' } }],
+    cards: [{ id: 'card-a', title: 'Card A', comment: { contentFile: '.decision-os/cards/specs/card-a.md' } }],
   }, null, 2), 'utf8');
 
   const result = await manageLedgerJsonController({
@@ -207,7 +207,7 @@ test('ledger-cli mutate writes card comments to content files when present', asy
   assert.equal(result.ok, true);
   assert.equal(await readFile(contentFile, 'utf8'), 'New content file body.');
   const persisted = JSON.parse(await readFile(file, 'utf8')) as { cards: Array<{ comment?: { contentFile?: string; what?: string } }> };
-  assert.equal(persisted.cards[0].comment?.contentFile, '.blueprinttool/cards/specs/card-a.md');
+  assert.equal(persisted.cards[0].comment?.contentFile, '.decision-os/cards/specs/card-a.md');
   assert.equal(persisted.cards[0].comment?.what, undefined);
 });
 
@@ -232,7 +232,7 @@ test('ledger-cli unanswered lists threads whose latest note is not an agent answ
   assert.match(output, /Threads awaiting agent answer \(2\)/);
   assert.match(output, /Smith Repair Scaffold/);
   assert.match(output, /Mason Stone Sale/);
-  assert.match(output, /threadFile: \.blueprinttool\/threads\/ledger\/thread-smith_repair_scaffold\.md/);
+  assert.match(output, /threadFile: \.decision-os\/threads\/ledger\/thread-smith_repair_scaffold\.md/);
   assert.match(output, /Append one parsed answer section/);
   assert.match(output, /Only # OPERATOR and # AGENT are valid top-level message headings/);
   assert.match(output, /ledger-cli answer --ledger/);
@@ -269,7 +269,7 @@ test('ledger-cli unanswered reports existing thread markdown content file refs',
   const file = await createJsonFile({
     cards: [{ id: 'card-a', title: 'Card A' }],
     threadFiles: {
-      'thread-card-a': '.blueprinttool/threads/custom/thread-card-a.md',
+      'thread-card-a': '.decision-os/threads/custom/thread-card-a.md',
     },
     notes: {
       'thread-card-a': [{ role: 'operator', message: 'Question' }],
@@ -280,8 +280,8 @@ test('ledger-cli unanswered reports existing thread markdown content file refs',
 
   assert.equal(result.ok, true);
   const output = String(result.ok ? result.value : '');
-  assert.match(output, /threadFile: \.blueprinttool\/threads\/custom\/thread-card-a\.md/);
-  assert.match(output, /Patch \.blueprinttool\/threads\/custom\/thread-card-a\.md directly/);
+  assert.match(output, /threadFile: \.decision-os\/threads\/custom\/thread-card-a\.md/);
+  assert.match(output, /Patch \.decision-os\/threads\/custom\/thread-card-a\.md directly/);
 });
 
 test('ledger-cli answer appends an agent note to a thread', async () => {

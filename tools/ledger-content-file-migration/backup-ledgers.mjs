@@ -2,7 +2,7 @@
 import { join } from 'node:path';
 import { writeFile } from 'node:fs/promises';
 import {
-  blueprinttoolRoot,
+  decisionOsRoot,
   copyLedgerBackup,
   optionValue,
   parseLedgerFiles,
@@ -18,7 +18,7 @@ if (ledgerFiles.length === 0) {
 
 const backups = [];
 for (const ledgerFile of ledgerFiles) {
-  const backupDir = join(blueprinttoolRoot(ledgerFile), 'backups', label);
+  const backupDir = join(decisionOsRoot(ledgerFile), 'backups', label);
   backups.push(await copyLedgerBackup(ledgerFile, backupDir));
 }
 

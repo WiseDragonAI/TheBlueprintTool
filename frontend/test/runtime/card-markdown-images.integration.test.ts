@@ -99,7 +99,7 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   assert.match(mediaRenderer, /syncMediaCarousel\(shell, block\.images, track, persistedCarouselStateId\)/);
   assert.match(mediaRenderer, /syncMediaCarousel\(shell, block\.images, track, persistedCarouselStateId, \{ persist: false \}\)/);
   assert.match(mediaRenderer, /track\.scrollTo\(\{ left: nextIndex \* slideWidth, behavior \}\)/);
-  assert.match(mediaCarouselPersistence, /storageKey = 'corev2\.cardMedia\.carouselSlides'/);
+  assert.match(mediaCarouselPersistence, /storageKey = 'decision-os\.cardMedia\.carouselSlides'/);
   assert.match(mediaCarouselPersistence, /localStorage\.getItem\(storageKey\)/);
   assert.match(mediaCarouselPersistence, /localStorage\.setItem\(storageKey, JSON\.stringify\(states\)\)/);
   assert.match(mediaCarouselPersistence, /export function ledgerCardMediaCarouselStateId/);

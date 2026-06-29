@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Core Canvas</title>
+    <title>decision-os</title>
     <link rel="stylesheet" href="/assets/canvas.css">
     <link rel="stylesheet" href="/assets/vendor/highlight-atom-one-dark.css">
   </head>
@@ -28,8 +28,8 @@
       <section class="workspace">
         <header class="topbar">
           <div>
-            <p class="kicker">Blueprint canvas</p>
-            <h1>CoreV2</h1>
+            <p class="kicker">decision-os</p>
+            <h1>decision-os</h1>
           </div>
           <nav class="tabs" aria-label="Open ledgers" data-spec="12749dcd ac137fe2 51a6af83 e6a91d34 f2d6c8b1">
             <button class="tab tab-create" type="button" data-action="create-ledger" title="Create ledger" aria-label="Create ledger">+</button>
@@ -61,7 +61,7 @@
               <div class="resize-handle sw"></div>
               <div class="resize-handle se"></div>
               <div class="zone-title">Backend ledger</div>
-              <p>Routes, persistence, refresh events, transcription and Blueprinttool tab state.</p>
+              <p>Routes, persistence, refresh events, transcription and decision-os tab state.</p>
             </article>
             <article class="card" data-card-id="card-boot" data-thread-id="thread-card-boot" data-card-class="base-card" data-spec="60000001 60000002 60000003 60000004 60000005 60000006 60000009 60000010 a946fbe0 aa42ff94 4dfbf38c d0936729 30000008 30000009 a4f8d2c9 7b2e4c90 6e18b4d2">
               <div class="resize-handle nw" data-spec="60000006"></div>
@@ -146,17 +146,17 @@
         <div class="runbook-sections">
           <section>
             <h3>Workspace Server</h3>
-            <p>Start CoreV2 from the target workspace cwd so the active <code>.blueprinttool</code> directory resolves from that workspace.</p>
-            <code>env PORT=4174 /home/jbb/dev/EditorBP/CoreV2/bin/blueprinttool-server.mjs</code>
+            <p>Start decision-os from the target workspace cwd so the active <code>.decision-os</code> directory resolves from that workspace.</p>
+            <code>env PORT=4174 /home/jbb/dev/EditorBP/decision-os/bin/decision-os-server.mjs</code>
           </section>
           <section>
             <h3>Card Images</h3>
-            <p>Markdown image URLs under <code>.blueprinttool</code> render in cards. Adjacent standalone images become a carousel, and width resizing keeps the loaded image aspect ratio while persisting <code>card.imageSizes[src]</code>.</p>
-            <code>![Alt](.blueprinttool/ui-mockups/example.png)</code>
+            <p>Markdown image URLs under <code>.decision-os</code> render in cards. Adjacent standalone images become a carousel, and width resizing keeps the loaded image aspect ratio while persisting <code>card.imageSizes[src]</code>.</p>
+            <code>![Alt](.decision-os/ui-mockups/example.png)</code>
           </section>
           <section>
             <h3>Voice Notes</h3>
-            <p>Voice config stays workspace-local in <code>.blueprinttool/.settings.json</code>. Uploaded audio remains under <code>.blueprinttool/voice-uploads/</code>.</p>
+            <p>Voice config stays workspace-local in <code>.decision-os/.settings.json</code>. Uploaded audio remains under <code>.decision-os/voice-uploads/</code>.</p>
           </section>
         </div>
         <button type="button" data-action="close-runbook">Close</button>

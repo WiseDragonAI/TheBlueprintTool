@@ -29,7 +29,7 @@ export function formatAssetGcReport(report: AssetGcReport): string {
     `PINNED kept by policy: ${report.summary.pinnedAssets}`,
     ...assetLines(report.pinnedAssets),
     '',
-    `UNUSED BlueprintTool text files: ${report.summary.unusedTextFiles} (${formatBytes(report.summary.unusedTextBytes)})`,
+    `UNUSED decision-os text files: ${report.summary.unusedTextFiles} (${formatBytes(report.summary.unusedTextBytes)})`,
     ...report.unusedTextFiles.map((file) => `  ${file.path} (${formatBytes(file.bytes)}, ${file.kind})`),
   ];
 

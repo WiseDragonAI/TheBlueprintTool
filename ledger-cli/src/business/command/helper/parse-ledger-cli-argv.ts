@@ -58,13 +58,13 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
   const normalizedMode: LedgerCommand | 'assets' = argv.length === 0 || argv.includes('--help') || argv.includes('-h') || mode === 'help'
     ? 'help'
     : mode === 'assets' ? 'assets'
-    : mode === 'answer' || mode === 'done' || mode === 'export' || mode === 'mutate' || mode === 'overview' || mode === 'todo' || mode === 'unanswered' ? mode : 'inspect';
+    : mode === 'answer' || mode === 'done' || mode === 'export' || mode === 'migrate-decision-os' || mode === 'mutate' || mode === 'overview' || mode === 'todo' || mode === 'unanswered' ? mode : 'inspect';
   const assetAction = (argv[1] === 'apply-gc-plan' || argv[1] === 'gc' || argv[1] === 'list-orphans' || argv[1] === 'list-referenced' || argv[1] === 'prune-json' || argv[1] === 'stage-referenced'
     ? argv[1]
     : 'gc') as AssetCommand;
   return {
     mode: normalizedMode,
-    ledgerJsonFile: flagValue(argv, '--ledger') ?? argv[1] ?? '../.blueprinttool/specs.json',
+    ledgerJsonFile: flagValue(argv, '--ledger') ?? argv[1] ?? '../.decision-os/specs.json',
     answerOperation: {
       message: flagValue(argv, '--message'),
       messageFile: flagValue(argv, '--message-file'),
@@ -88,6 +88,15 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
       }
       : undefined,
     mutationFile: flagValue(argv, '--mutation'),
+    migrationOperation: normalizedMode === 'migrate-decision-os'
+      ? {
+        allowDirty: argv.includes('--allow-dirty'),
+        dryRun: argv.includes('--dry-run') || !argv.includes('--write'),
+        json: argv.includes('--json'),
+        root: flagValue(argv, '--root'),
+        write: argv.includes('--write'),
+      }
+      : undefined,
     mutationOperation: {
       addCardFile: flagValue(argv, '--add-card-file'),
       addRelationships: relationshipValues(argv),

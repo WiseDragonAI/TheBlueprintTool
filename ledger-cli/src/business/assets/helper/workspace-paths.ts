@@ -29,15 +29,15 @@ export function normalizeAssetReference(input: { rawReference: string; sourceFil
   const source = cleanAssetToken(input.rawReference);
   if (!source || /^https?:\/\//i.test(source) || /^data:/i.test(source) || source.startsWith('#')) return null;
 
-  if (source.startsWith('/.blueprinttool/')) return source.slice(1);
-  if (source.startsWith('.blueprinttool/')) return source;
-  if (source.startsWith('./.blueprinttool/')) return source.slice(2);
+  if (source.startsWith('/.decision-os/')) return source.slice(1);
+  if (source.startsWith('.decision-os/')) return source;
+  if (source.startsWith('./.decision-os/')) return source.slice(2);
 
   if ((source.startsWith('../') || source.startsWith('./')) && input.sourceFile) {
     const resolved = resolve(dirname(input.sourceFile), source);
     if (!isInsideWorkspace(input.workspaceRoot, resolved)) return null;
     const relativePath = workspaceRelativePath(input.workspaceRoot, resolved);
-    return relativePath.startsWith('.blueprinttool/') ? relativePath : null;
+    return relativePath.startsWith('.decision-os/') ? relativePath : null;
   }
 
   return null;
