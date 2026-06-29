@@ -15,6 +15,7 @@ test('default ledgers are real decision-os ledgers and are not rendered as heade
   assert.doesNotMatch(html, /data-tab="specs"/);
   assert.doesNotMatch(html, /data-tab="data"/);
   assert.match(html, /data-action="open-ledgers-canvas"/);
+  assert.match(html, /data-action="open-ledgers-canvas"[^>]*title="Ledgers"[\s\S]*<span>Ledgers<\/span>/);
   assert.doesNotMatch(html, /tab-ledgers/);
   assert.doesNotMatch(html, /tab-current/);
   assert.doesNotMatch(html, /tab-create/);

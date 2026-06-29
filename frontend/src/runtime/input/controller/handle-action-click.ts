@@ -40,6 +40,11 @@ function toggleRail(button: HTMLElement): void {
   telemetry('toggle-toolbox-rail', { collapsed });
 }
 
+function openLedgersCanvasInNewTab(): void {
+  window.open('/ledgers', '_blank', 'noopener');
+  telemetry('open-ledgers-canvas-new-tab', { url: '/ledgers' });
+}
+
 export async function handleActionClick(event: MouseEvent): Promise<void> {
   const targetElement = event.target as HTMLElement;
   const actionTarget = targetElement.closest('[data-action]') as HTMLElement | null;
@@ -47,6 +52,10 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
   if (!action) return;
   telemetry('tool-button-click', { action });
   if (action === 'open-ledgers-canvas') {
+    if (event.ctrlKey || event.metaKey) {
+      openLedgersCanvasInNewTab();
+      return;
+    }
     await enterLedgersCanvasController();
     return;
   }
