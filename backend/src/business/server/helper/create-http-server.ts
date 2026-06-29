@@ -4,7 +4,7 @@
  */
 import { createServer, type ServerResponse } from 'node:http';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 import { telemetry } from '@backend/telemetry/harness.js';
 import { transcribeVoiceController } from '@backend/business/transcription/controller/transcribe-voice-controller.js';
@@ -36,6 +36,10 @@ function safeAssetSegment(value: unknown): string {
 
 function ledgerSlug(value: unknown): string {
   return safeAssetSegment(String(value || 'New Ledger').toLowerCase()).slice(0, 80) || 'new-ledger';
+}
+
+function projectNameForDecisionOsRoot(decisionOsRoot: string): string {
+  return basename(dirname(decisionOsRoot)) || 'Project';
 }
 
 function imageExtensionForMimeType(mimeType: unknown): string {
@@ -286,7 +290,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       }
       if (existsSync(ledgerPath)) {
         const ledger = isLedgersCanvas ? ensureLedgersCanvasDocument({ decisionOsRoot }).document : JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord;
-        response.end(JSON.stringify(tabId === 'state' ? { ledgers: stateRead.ledgers } : loadLedgerContentFiles(ledger)));
+        response.end(JSON.stringify(tabId === 'state' ? { projectName: projectNameForDecisionOsRoot(decisionOsRoot), ledgers: stateRead.ledgers } : loadLedgerContentFiles(ledger)));
       } else {
         response.end(JSON.stringify({ ok: false, missing: ledgerPath }));
       }

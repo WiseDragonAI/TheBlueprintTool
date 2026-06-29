@@ -1,5 +1,6 @@
 export const state: any = {
   routePath: globalThis.window?.location?.pathname ?? '/',
+  projectName: 'Project',
   canvasMode: 'ledger',
   activeLedgerId: 'specs',
   activeTab: 'specs',

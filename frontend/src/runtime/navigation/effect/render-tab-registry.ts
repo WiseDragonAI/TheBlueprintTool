@@ -7,12 +7,24 @@ export function renderTabRegistry(): void {
     list.findIndex((candidate) => candidate.id === ledger.id) === index
   ));
   const activeLedgerTitle = ledgers.find((ledger: { id: string }) => ledger.id === state.activeTab)?.title;
-  document.title = state.canvasMode === 'ledgers' ? 'Ledgers' : typeof activeLedgerTitle === 'string' && activeLedgerTitle.trim() ? activeLedgerTitle : 'decision-os';
+  const projectName = String(state.projectName || 'Project').trim() || 'Project';
+  const ledgerTitle = state.canvasMode === 'ledgers'
+    ? 'Ledgers'
+    : typeof activeLedgerTitle === 'string' && activeLedgerTitle.trim()
+      ? activeLedgerTitle
+      : state.activeTab;
+  const identityTitle = `${projectName} | ${ledgerTitle}`;
+  document.title = identityTitle;
+
+  const titleAction = document.querySelector('.topbar-title-action') as HTMLElement | null;
+  if (titleAction) titleAction.textContent = identityTitle;
+  const kicker = document.querySelector('.topbar .kicker') as HTMLElement | null;
+  if (kicker) kicker.textContent = 'Workspace';
 
   const registry = document.querySelector('.tabs') as HTMLElement | null;
   if (registry) {
     registry.replaceChildren();
   }
   document.querySelectorAll('[data-tab]').forEach((tab) => tab.classList.toggle('active', state.canvasMode === 'ledger' && (tab as HTMLElement).dataset.tab === state.activeTab));
-  telemetry('render-tab-registry', { activeTab: state.activeTab, canvasMode: state.canvasMode, ledgers: ledgers.map((ledger: { id: string }) => ledger.id), source: 'decision-os-state' });
+  telemetry('render-tab-registry', { activeTab: state.activeTab, canvasMode: state.canvasMode, projectName, ledgers: ledgers.map((ledger: { id: string }) => ledger.id), source: 'decision-os-state' });
 }

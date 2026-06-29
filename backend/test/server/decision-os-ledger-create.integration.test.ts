@@ -38,6 +38,12 @@ test('decision-os ledger create endpoint writes a ledger and appends a tab', asy
     assert.deepEqual(body.ledger.cards, []);
     assert.equal(existsSync(join(workspace, '.decision-os', 'design-notes.json')), true);
 
+    const stateResponse = await fetch(`http://127.0.0.1:${address.port}/decision-os/state`);
+    assert.equal(stateResponse.ok, true);
+    const stateBody = await stateResponse.json() as { projectName: string; ledgers: Array<{ id: string }> };
+    assert.equal(stateBody.projectName, workspace.split('/').at(-1));
+    assert.equal(stateBody.ledgers.some((ledger) => ledger.id === 'design-notes'), true);
+
     const state = JSON.parse(readFileSync(join(workspace, '.decision-os', 'state.json'), 'utf8')) as { tabs?: unknown; ledgers: Array<{ id: string }> };
     assert.equal(state.tabs, undefined);
     assert.equal(state.ledgers.some((ledger) => ledger.id === 'design-notes'), true);
