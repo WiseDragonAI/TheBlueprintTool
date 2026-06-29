@@ -10,6 +10,7 @@ test('canvas wheel zoom supports wide overview scale', () => {
   const specs = readFileSync(new URL('documentation/specs.json', root), 'utf8');
   assert.match(constants, /minCanvasZoomScale = 0\.03/);
   assert.match(constants, /maxCanvasZoomScale = 6/);
+  assert.match(constants, /ledgerOpenZoomThreshold = 1\.1/);
   assert.match(wheel, /Math\.max\(minCanvasZoomScale, nextScale\)/);
   assert.match(specs, /down to 0\.03 scale/);
 });

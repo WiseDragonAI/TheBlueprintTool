@@ -47,7 +47,7 @@ export function ensureLedgersCanvasDocument(input: { decisionOsRoot: string }): 
   const document = isRecord(existing) ? existing : {};
   document.modelName = 'ledgers-canvas';
   document.diagramSize = isRecord(document.diagramSize) ? document.diagramSize : { width: 5200, height: 2600 };
-  document.viewport = isRecord(document.viewport) ? document.viewport : { x: 0, y: 0, scale: 0.18 };
+  document.viewport = isRecord(document.viewport) ? document.viewport : { x: 0, y: 0, scale: 0.42 };
   const cards = Array.isArray(document.cards) ? document.cards as AnyRecord[] : [];
   const annotations = Array.isArray(document.annotations) ? document.annotations as AnyRecord[] : [];
   const relationships = Array.isArray(document.relationships) ? document.relationships as AnyRecord[] : [];

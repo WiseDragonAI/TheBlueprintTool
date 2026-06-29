@@ -4,4 +4,4 @@
  */
 export const minCanvasZoomScale = 0.03;
 export const maxCanvasZoomScale = 6;
-export const ledgerOpenZoomThreshold = 0.35;
+export const ledgerOpenZoomThreshold = 1.1;

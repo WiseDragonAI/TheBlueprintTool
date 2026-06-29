@@ -14,8 +14,10 @@ test('default ledgers are real decision-os ledgers and are not rendered as heade
   assert.doesNotMatch(html, /data-tab="runtime"/);
   assert.doesNotMatch(html, /data-tab="specs"/);
   assert.doesNotMatch(html, /data-tab="data"/);
-  assert.match(html, /data-action="create-ledger"/);
   assert.match(html, /data-action="open-ledgers-canvas"/);
+  assert.doesNotMatch(html, /tab-ledgers/);
+  assert.doesNotMatch(html, /tab-current/);
+  assert.doesNotMatch(html, /tab-create/);
 
   const state = source('frontend/src/runtime/state.ts');
   assert.match(state, /ledgers:/);
@@ -26,8 +28,9 @@ test('default ledgers are real decision-os ledgers and are not rendered as heade
   assert.doesNotMatch(renderTabs, /id: 'surface'/);
   assert.doesNotMatch(renderTabs, /id: 'runtime'/);
   assert.match(renderTabs, /activeLedgers/);
-  assert.match(renderTabs, /create-ledger/);
-  assert.match(renderTabs, /open-ledgers-canvas/);
+  assert.doesNotMatch(renderTabs, /tab-ledgers/);
+  assert.doesNotMatch(renderTabs, /tab-current/);
+  assert.doesNotMatch(renderTabs, /tab-create/);
 
   const routeTab = source('frontend/src/runtime/navigation/helper/route-tab.ts');
   assert.doesNotMatch(routeTab, /'surface', 'specs', 'data', 'runtime'/);

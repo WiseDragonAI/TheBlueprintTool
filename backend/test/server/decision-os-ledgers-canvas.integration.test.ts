@@ -49,7 +49,8 @@ test('ledgers canvas migrates tabs to ledgers and persists overview edits', asyn
   try {
     const response = await fetch(`${baseUrl}/decision-os/ledgers-canvas`);
     assert.equal(response.ok, true);
-    const overview = await response.json() as { cards: Array<Record<string, unknown>> };
+    const overview = await response.json() as { viewport: { scale: number }; cards: Array<Record<string, unknown>> };
+    assert.equal(overview.viewport.scale, 0.42);
     assert.equal(overview.cards[0].id, 'ledger-card:specs');
     assert.equal(overview.cards[0].targetLedgerId, 'specs');
 
