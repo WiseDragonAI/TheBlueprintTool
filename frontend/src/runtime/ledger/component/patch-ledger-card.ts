@@ -28,8 +28,14 @@ export function patchLedgerCard(card: Record<string, unknown>, existing?: HTMLEl
   const persistedStatus = cardPersistedWorkStatus(card);
   const visibleStatus = resolveCardWorkStatus(card);
   const detailVisible = element.className.split(/\s+/).includes('detail-visible');
+  const targetLedgerId = String(card.targetLedgerId ?? '').trim();
+  const cardType = String(card.cardType ?? '').trim();
   element.className = `card ledger-node${detailVisible ? ' detail-visible' : ''}`;
   element.dataset.cardId = id;
+  if (cardType) element.dataset.cardType = cardType;
+  else delete element.dataset.cardType;
+  if (targetLedgerId) element.dataset.targetLedgerId = targetLedgerId;
+  else delete element.dataset.targetLedgerId;
   element.dataset.activeCardTab = activeTab;
   element.dataset.threadId = `thread-${id}`;
   element.dataset.ledgerNode = 'card';

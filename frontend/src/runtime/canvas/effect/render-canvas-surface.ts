@@ -1,4 +1,5 @@
 import { state } from '../../state.js';
+import { canvas } from '../../dom.js';
 import { renderCardZoneColors } from '../../card/effect/render-card-zone-colors.js';
 import { renderLedgerSurface } from '../../ledger/effect/render-ledger-surface.js';
 import { renderRelationshipLabelVisibility } from '../../relationship/effect/render-relationship-label-visibility.js';
@@ -14,6 +15,7 @@ import { renderCanvasControlOverlay } from './render-canvas-control-overlay.js';
 import { renderLedgersIndicator } from './render-ledgers-indicator.js';
 
 export function renderCanvasSurface(): void {
+  canvas.classList.toggle('ledgers-canvas-mode', state.canvasMode === 'ledgers');
   renderLedgerSurface();
   applyViewportTransform();
   renderSelectionState();

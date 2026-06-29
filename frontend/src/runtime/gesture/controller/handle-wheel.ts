@@ -9,7 +9,7 @@ import { scheduleViewportTransform } from '../../canvas/effect/schedule-viewport
 import { scheduleViewportPersistence } from '../../persistence/effect/schedule-viewport-persistence.js';
 import { enterLedgersCanvasController } from '../../navigation/controller/enter-ledgers-canvas-controller.js';
 import { enterLedgerController } from '../../navigation/controller/enter-ledger-controller.js';
-import { resolveOverviewTargetLedger } from '../../ledger/helper/resolve-overview-target-ledger.js';
+import { resolveHoveredOverviewTargetLedger } from '../../ledger/helper/resolve-overview-target-ledger.js';
 import { point } from '../helper/point.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { shouldCaptureWheelTarget } from '../helper/should-capture-wheel-target.js';
@@ -60,14 +60,11 @@ export function handleWheel(event: WheelEvent): void {
     };
     const nextScale = state.viewport.scale * Math.exp(-event.deltaY * 0.0015);
     if (state.canvasMode === 'ledgers' && oldScale < ledgerOpenZoomThreshold && nextScale >= ledgerOpenZoomThreshold) {
-      const rect = canvas?.getBoundingClientRect?.() ?? { width: window.innerWidth, height: window.innerHeight };
-      const viewportCenter = {
-        x: (rect.width / 2 - state.viewport.x) / oldScale,
-        y: (rect.height / 2 - state.viewport.y) / oldScale
-      };
-      const targetLedgerId = resolveOverviewTargetLedger({ ledger: state.activeLedger, viewportCenter });
-      if (targetLedgerId) void enterLedgerController(targetLedgerId, { canonicalMinScale: true });
-      return;
+      const targetLedgerId = resolveHoveredOverviewTargetLedger(event.target);
+      if (targetLedgerId) {
+        void enterLedgerController(targetLedgerId, { canonicalMinScale: true });
+        return;
+      }
     }
     state.viewport.scale = Math.min(maxCanvasZoomScale, Math.max(minCanvasZoomScale, nextScale));
     state.viewport.x = pointer.x - anchoredCanvasPoint.x * state.viewport.scale;

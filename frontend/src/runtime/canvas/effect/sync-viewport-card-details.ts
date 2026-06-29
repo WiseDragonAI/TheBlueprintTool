@@ -106,6 +106,10 @@ export function forceCardDetailsForMeasurement(cardIds: Iterable<string>): () =>
 }
 
 export function syncViewportCardDetails(): void {
+  if (state.canvasMode === 'ledgers') {
+    clearViewportCardDetails();
+    return;
+  }
   if (canvas.classList.contains('low-detail')) {
     clearViewportCardDetails();
     return;

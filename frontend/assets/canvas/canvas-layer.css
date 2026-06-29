@@ -247,6 +247,39 @@
   text-shadow: 0 0 10px color-mix(in srgb, var(--card-zone-color), transparent 64%);
 }
 
+.canvas.ledgers-canvas-mode .card[data-card-type="ledger"] {
+  cursor: zoom-in;
+  border-color: color-mix(in srgb, var(--card-zone-color), white 18%);
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    background-color 140ms ease;
+}
+
+.canvas.ledgers-canvas-mode .card[data-card-type="ledger"]:hover,
+.canvas.ledgers-canvas-mode .card[data-card-type="ledger"]:focus-visible {
+  border-color: color-mix(in srgb, var(--card-zone-color), white 68%);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--card-zone-color), white 36%),
+    0 0 38px color-mix(in srgb, var(--card-zone-color), transparent 52%),
+    0 18px 44px rgba(0, 0, 0, 0.58);
+}
+
+.canvas.ledgers-canvas-mode .card[data-card-type="ledger"] .card-status-indicator,
+.canvas.ledgers-canvas-mode .card[data-card-type="ledger"] .ledger-card-overview-status {
+  display: none;
+}
+
+.canvas.ledgers-canvas-mode .card[data-card-type="ledger"]:not(.detail-visible) .ledger-card-overview-title {
+  padding: 18px 18px 0;
+  font-size: 22px;
+  font-weight: 850;
+  line-height: 1.05;
+  text-shadow:
+    0 0 12px color-mix(in srgb, var(--card-zone-color), transparent 52%),
+    0 2px 16px rgba(0, 0, 0, 0.72);
+}
+
 .canvas.low-detail .card:not(.detail-visible) .ledger-card-overview-title,
 .canvas.low-detail .zone-title,
 .canvas.low-detail .zone-label-proxy {

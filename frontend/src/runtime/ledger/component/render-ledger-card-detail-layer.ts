@@ -38,7 +38,12 @@ export function resolveLedgerCardActiveTab(card: Record<string, unknown>, id = S
 export function renderLedgerCardOverviewLayer(card: Record<string, unknown>, id = String(card.id ?? ''), visibleStatus = resolveCardWorkStatus(card)): HTMLElement {
   const overview = document.createElement('div');
   overview.className = 'ledger-card-overview-layer';
-  overview.replaceChildren(createLedgerCardTitle(card, id, 'ledger-card-overview-title'), createCardStatusIndicator(visibleStatus, 'card-status-indicator ledger-card-overview-status'));
+  const isLinkedLedgerCard = String(card.cardType ?? '') === 'ledger' || String(card.targetLedgerId ?? '').trim() !== '';
+  if (isLinkedLedgerCard) overview.classList.add('ledger-card-overview-layer--ledger');
+  overview.replaceChildren(
+    createLedgerCardTitle(card, id, 'ledger-card-overview-title'),
+    ...(isLinkedLedgerCard ? [] : [createCardStatusIndicator(visibleStatus, 'card-status-indicator ledger-card-overview-status')])
+  );
   return overview;
 }
 
@@ -58,6 +63,7 @@ export function renderLedgerCardDetailLayer(card: Record<string, unknown>, exist
   const labelNodes = labels.length > 0 ? [renderLedgerCardLabels(labels)] : [];
   const tabs = fields.length > 0 ? [renderLedgerCardTabs(id, activeTab)] : [];
   detailLayer.className = 'ledger-card-detail-layer';
-  detailLayer.replaceChildren(createCardStatusIndicator(visibleStatus), ...labelNodes, createLedgerCardTitle(card, id), ...tabs, body);
+  const isLinkedLedgerCard = String(card.cardType ?? '') === 'ledger' || String(card.targetLedgerId ?? '').trim() !== '';
+  detailLayer.replaceChildren(...(isLinkedLedgerCard ? [] : [createCardStatusIndicator(visibleStatus)]), ...labelNodes, createLedgerCardTitle(card, id), ...tabs, body);
   return detailLayer;
 }

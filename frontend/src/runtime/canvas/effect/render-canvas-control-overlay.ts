@@ -130,7 +130,10 @@ function syncCardControls(group: HTMLElement, card: HTMLElement): boolean {
   group.dataset.cardId = cardId;
   if (cardZoneColor) group.style.setProperty('--card-zone-color', cardZoneColor);
   else group.style.removeProperty('--card-zone-color');
-  group.replaceChildren(renderLedgerCardStatusButton(cardId, persistedStatus, visibleStatus), renderLedgerCardDeleteButton(cardId));
+  const controls = card.dataset.targetLedgerId
+    ? [renderLedgerCardDeleteButton(cardId)]
+    : [renderLedgerCardStatusButton(cardId, persistedStatus, visibleStatus), renderLedgerCardDeleteButton(cardId)];
+  group.replaceChildren(...controls);
   return placeControlGroup(group, card, 'right');
 }
 

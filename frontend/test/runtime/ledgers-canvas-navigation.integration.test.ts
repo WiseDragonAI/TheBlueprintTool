@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ledgerEndpointForTab } from '../../src/runtime/ledger/helper/ledger-endpoint-for-tab.js';
 import { minScaleCenteredLedgerViewport } from '../../src/runtime/ledger/helper/min-scale-centered-ledger-viewport.js';
-import { resolveOverviewTargetLedger } from '../../src/runtime/ledger/helper/resolve-overview-target-ledger.js';
+import { resolveHoveredOverviewTargetLedger } from '../../src/runtime/ledger/helper/resolve-overview-target-ledger.js';
 import { routeCanvasMode } from '../../src/runtime/navigation/helper/route-canvas-mode.js';
 import { state } from '../../src/runtime/state.js';
 
@@ -26,15 +26,14 @@ test('ledgers canvas route and endpoint resolve separately from real ledgers', (
   }
 });
 
-test('overview target resolution uses full card geometry and viewport center', () => {
-  const ledger = {
-    cards: [
-      { id: 'ledger-card:specs', targetLedgerId: 'specs', x: 0, y: 0, w: 300, h: 200 },
-      { id: 'ledger-card:data', targetLedgerId: 'data', x: 600, y: 0, w: 300, h: 200 }
-    ]
+test('overview ledger entry is resolved from the hovered card element', () => {
+  const card = {
+    dataset: { targetLedgerId: 'ux' }
   };
-  assert.equal(resolveOverviewTargetLedger({ ledger, viewportCenter: { x: 250, y: 150 } }), 'specs');
-  assert.equal(resolveOverviewTargetLedger({ ledger, viewportCenter: { x: 520, y: 100 } }), 'data');
+  const child = {
+    closest: (selector: string) => selector === '.card[data-target-ledger-id]' ? card : null
+  } as unknown as EventTarget;
+  assert.equal(resolveHoveredOverviewTargetLedger(child), 'ux');
 });
 
 test('canonical ledger entry viewport uses min scale centered framing', () => {

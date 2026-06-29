@@ -480,6 +480,33 @@ test('ledger card shell stays overview-only unless detail is already mounted', (
   }
 });
 
+test('linked ledger overview cards expose target ledger id and omit status chrome', () => {
+  const previousDocument = globalThis.document;
+  (globalThis as unknown as { document: unknown }).document = {
+    createElement: (tagName: string) => new FakeElement(tagName),
+    createTextNode: (text: string) => new FakeText(text)
+  };
+
+  try {
+    const card = patchLedgerCard({
+      id: 'ledger-card:ux',
+      targetLedgerId: 'ux',
+      cardType: 'ledger',
+      title: 'UX',
+      comment: { what: 'Ledger: UX' }
+    }) as unknown as FakeElement;
+    const overview = findElementByClass(card, 'ledger-card-overview-layer') as FakeElement;
+
+    assert.equal(card.dataset.cardType, 'ledger');
+    assert.equal(card.dataset.targetLedgerId, 'ux');
+    assert.equal(overview.className.includes('ledger-card-overview-layer--ledger'), true);
+    assert.equal(Boolean(findElementByClass(card, 'ledger-card-overview-status')), false);
+    assert.equal(Boolean(findElementByClass(card, 'card-status-indicator')), false);
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+  }
+});
+
 test('ledger groups leave delete action to overlay controls', () => {
   const previousDocument = globalThis.document;
   (globalThis as unknown as { document: unknown }).document = {
