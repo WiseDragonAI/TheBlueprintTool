@@ -93,18 +93,83 @@ curl -sS -I http://127.0.0.1:4174/<tab>
 curl -sS -I http://127.0.0.1:4174/decision-os/state
 ```
 
-## 6. Browser State
+## 6. Registered Processes
+
+Migrating files is not enough. Any background process registry that still points to `CoreV2` or
+`blueprinttool` can relaunch the old command and reintroduce mixed state.
+
+Check multiterm and kit3c registrations:
+
+```bash
+/home/jbb/dev/multiterm/bin/multiwezterm-process list
+rg -n 'CoreV2|corev2|COREV2|blueprinttool|blueprinttool-server|\.blueprinttool|/home/jbb/dev/EditorBP/CoreV2' \
+  /home/jbb/.local/state/multiwezterm \
+  /home/jbb/.local/state/kit3c
+```
+
+No registered process may keep:
+
+```text
+CoreV2-docs
+/home/jbb/dev/EditorBP/CoreV2
+blueprinttool-server.mjs
+.blueprinttool paths
+```
+
+For each migrated workspace, register the replacement process from the target workspace cwd:
+
+```bash
+cd /path/to/workspace
+/home/jbb/dev/multiterm/bin/multiwezterm-process register \
+  --cwd "$PWD" \
+  --cmd "env PORT=4174 /home/jbb/dev/EditorBP/decision-os/bin/decision-os-server.mjs" \
+  --port 4174 \
+  --url "http://127.0.0.1:4174/<tab>" \
+  --name "<workspace>-decision-os-docs" \
+  --description "decision-os documentation server for <workspace>"
+```
+
+If the migrated workspace is decision-os itself, the cwd is:
+
+```text
+/home/jbb/dev/EditorBP/decision-os
+```
+
+Never keep `/home/jbb/dev/EditorBP/CoreV2` as the registered cwd after the repository rename.
+
+If `/home/jbb/.local/state/multiwezterm/state.json` or
+`/home/jbb/.local/state/multiwezterm/runtime.json` still contains stale labels after registration,
+restart the multiterm state watcher and rebuild the state:
+
+```bash
+watcher_pids="$(pgrep -f '^python3 /home/jbb/dev/multiterm/bin/multiwezterm-state --watch' || true)"
+if [ -n "$watcher_pids" ]; then
+  kill $watcher_pids
+fi
+setsid /home/jbb/dev/multiterm/bin/multiwezterm-state --watch --interval 30 --autosave-restore --quiet >/tmp/multiwezterm-state-decision-os.log 2>&1 &
+/home/jbb/dev/multiterm/bin/multiwezterm-state --autosave-restore --quiet
+```
+
+Then rerun the registry `rg` check. Treat stale matches in process names, commands, cwd, labels,
+paths, logs, or runtime workspace context as migration failures.
+
+## 7. Browser State
 
 The browser now stores state under `decision-os.*` keys. If old viewport or draft state causes confusion, clear local storage for the workspace origin.
 
-## 7. Acceptance Checks
+## 8. Acceptance Checks
 
 Run these checks after migration:
 
 ```bash
 rg -n 'CoreV2|corev2|COREV2|Blueprinttool|BlueprintTool|Blueprint Tool|blueprinttool|blueprint-tool|blueprint_tool|\\.blueprinttool|BLUEPRINTTOOL' /path/to/workspace
+rg -n 'CoreV2|corev2|COREV2|blueprinttool|blueprinttool-server|\\.blueprinttool|/home/jbb/dev/EditorBP/CoreV2' \
+  /home/jbb/.local/state/multiwezterm \
+  /home/jbb/.local/state/kit3c
 curl -sS -I http://127.0.0.1:4174/<tab>
 curl -sS -I http://127.0.0.1:4174/decision-os/state
 ```
 
-The `rg` command should return no matches except historical notes that the project owner explicitly decides to keep.
+The workspace `rg` command should return no matches except historical notes that the project owner
+explicitly decides to keep. The multiterm and kit3c registry `rg` command should return no stale
+registered process fields for the migrated workspace.
