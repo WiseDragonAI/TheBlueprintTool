@@ -42,12 +42,13 @@ test('browser title follows the selected ledger title', () => {
   try {
     renderTabRegistry();
     assert.equal(globalThis.document.title, 'MOH | Game Design');
-    assert.equal(titleAction.textContent, 'MOH | Game Design');
-    assert.equal(kicker.textContent, 'Workspace');
+    assert.equal(titleAction.textContent, 'Game Design');
+    assert.equal(kicker.textContent, 'MOH');
     state.canvasMode = 'ledgers';
     renderTabRegistry();
     assert.equal(globalThis.document.title, 'MOH | Ledgers');
-    assert.equal(titleAction.textContent, 'MOH | Ledgers');
+    assert.equal(titleAction.textContent, 'Ledgers');
+    assert.equal(kicker.textContent, 'MOH');
   } finally {
     state.ledgerTabs = previousTabs;
     state.activeTab = previousActiveTab;

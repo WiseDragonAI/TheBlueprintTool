@@ -17,9 +17,9 @@ export function renderTabRegistry(): void {
   document.title = identityTitle;
 
   const titleAction = document.querySelector('.topbar-title-action') as HTMLElement | null;
-  if (titleAction) titleAction.textContent = identityTitle;
+  if (titleAction) titleAction.textContent = ledgerTitle;
   const kicker = document.querySelector('.topbar .kicker') as HTMLElement | null;
-  if (kicker) kicker.textContent = 'Workspace';
+  if (kicker) kicker.textContent = projectName;
 
   const registry = document.querySelector('.tabs') as HTMLElement | null;
   if (registry) {
