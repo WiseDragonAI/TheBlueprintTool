@@ -53,9 +53,9 @@
       "variant": "zone",
       "color": "#4548b0",
       "x": 4731,
-      "y": 177,
+      "y": 176,
       "width": 2257,
-      "height": 2198
+      "height": 2649
     }
   ],
   "cards": [
@@ -342,7 +342,7 @@
       "x": 4827.740402316237,
       "y": 272.86879407041016,
       "w": 782,
-      "h": 1641,
+      "h": 2199,
       "comment": {
         "contentFile": ".blueprinttool/cards/next-features/card-tasks-legacy-factory-pipeline-baseline.md"
       },
@@ -357,7 +357,7 @@
       "x": 5659.403936508128,
       "y": 273.1145289365622,
       "w": 583,
-      "h": 2006,
+      "h": 2456,
       "comment": {
         "contentFile": ".blueprinttool/cards/next-features/card-tasks-unified-control-surface-requirements.md"
       },
@@ -372,7 +372,7 @@
       "x": 6295.015683075405,
       "y": 278.6527520298986,
       "w": 597,
-      "h": 1862,
+      "h": 1930,
       "comment": {
         "contentFile": ".blueprinttool/cards/next-features/card-tasks-core-problem-statement.md"
       },
