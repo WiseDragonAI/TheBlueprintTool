@@ -2,7 +2,6 @@ import { canvas } from '../../dom.js';
 import { state } from '../../state.js';
 import { finishPointer } from '../../gesture/effect/finish-pointer.js';
 import { handleActionClick } from '../controller/handle-action-click.js';
-import { handleCardDoubleClick } from '../controller/handle-card-double-click.js';
 import { handleRegionColorChange, handleRegionColorInput } from '../controller/handle-region-color-input.js';
 import { handleKeyboard } from '../controller/handle-keyboard.js';
 import { handlePointerDown } from '../../gesture/controller/handle-pointer-down.js';
@@ -83,7 +82,6 @@ export function bindInputs(): void {
     void pasteThreadImageController(event);
   });
   document.addEventListener('click', handleActionClick);
-  document.addEventListener('dblclick', handleCardDoubleClick);
   document.addEventListener('input', handleRegionColorInput);
   document.addEventListener('input', (event) => {
     if ((event.target as HTMLElement | null)?.closest('.thread-draft')) saveThreadDraft();

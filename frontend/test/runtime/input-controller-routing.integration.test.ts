@@ -40,6 +40,7 @@ test('browser inputs route ledger commands through runtime controllers before se
 
   const bindInputs = source('frontend/src/runtime/input/effect/bind-inputs.ts');
   assert.doesNotMatch(bindInputs, /state\.zoneColor\s*=\s*['"]#55b8ff['"]/);
+  assert.doesNotMatch(bindInputs, /dblclick/);
 
   const renderToolbox = source('frontend/src/runtime/toolbox/effect/render-toolbox.ts');
   assert.match(renderToolbox, /input\.value\s*=\s*state\.zoneColor/);
@@ -84,6 +85,8 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(actionClick, /createNoteController/);
   assert.match(actionClick, /deleteNoteController/);
   assert.match(actionClick, /confirmNoteDeletionController/);
+  assert.doesNotMatch(pointerDown, /beginLedgerCardDescriptionEdit/);
+  assert.doesNotMatch(pointerDown, /event\.detail >= 2/);
   assert.match(actionClick, /action === 'thread-file-picker'/);
   assert.match(actionClick, /querySelector\('\.thread-file-input'\)/);
   assert.doesNotMatch(actionClick, /beginZoneLabelEdit/);
@@ -190,11 +193,15 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(controlOverlay, /className = 'canvas-control canvas-control--card'/);
   assert.match(controlOverlay, /edit\.dataset\.action = 'edit-card-title'/);
   assert.match(controlOverlay, /edit\.title = card\.dataset\.targetLedgerId \? 'Edit ledger name' : 'Edit card title'/);
+  assert.match(controlOverlay, /editBody\.dataset\.action = 'edit-card-description'/);
+  assert.match(controlOverlay, /editBody\.textContent = 'edit'/);
   assert.match(controlOverlay, /\? \[edit, renderLedgerCardDeleteButton\(cardId\)\]/);
-  assert.match(controlOverlay, /renderLedgerCardStatusButton\(cardId, persistedStatus, visibleStatus\)/);
+  assert.match(controlOverlay, /\[renderLedgerCardStatusButton\(cardId, persistedStatus, visibleStatus\), editBody, renderLedgerCardDeleteButton\(cardId\)\]/);
   assert.match(controlOverlay, /renderLedgerCardDeleteButton\(cardId\)/);
   assert.match(actionClick, /if \(action === 'edit-card-title'\)/);
   assert.match(actionClick, /beginLedgerCardTitleEdit\(card\)/);
+  assert.match(actionClick, /if \(action === 'edit-card-description'\)/);
+  assert.match(actionClick, /beginLedgerCardDescriptionEdit\(card\)/);
   assert.doesNotMatch(controlOverlay, /selection\.cardIds/);
   assert.match(controlOverlay, /export function hideCanvasControlOverlay\(\): void \{[\s\S]*existingControlOverlay\(\)\?\.replaceChildren\(\);[\s\S]*\}/);
   assert.match(controlOverlay, /function controlsDisabled\(\): boolean \{[\s\S]*classList\?\.contains\('low-detail'\)/);
@@ -208,6 +215,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(canvasLayerCss, /\.canvas-control\s*{[^}]*position:\s*absolute;[^}]*opacity:\s*0;[^}]*transition:\s*opacity 140ms ease;/s);
   assert.match(canvasLayerCss, /\.canvas-control\.is-visible\s*{[^}]*opacity:\s*1;[^}]*pointer-events:\s*auto;/s);
   assert.match(canvasLayerCss, /\.canvas-control \.terminal-button,[\s\S]*transition:\s*none;/);
+  assert.match(canvasLayerCss, /\.canvas-control \.ledger-card-edit-toggle\s*{[^}]*min-width:\s*38px;[^}]*text-transform:\s*uppercase;/s);
   assert.match(canvasLayerCss, /\.canvas \.card:not\(\.detail-visible\) \.ledger-card-overview-title\s*{[^}]*padding:\s*4px 6px 0;/s);
   assert.match(canvasLayerCss, /\.canvas \.card:not\(\.detail-visible\) \.ledger-card-detail-layer\s*{[^}]*content-visibility:\s*hidden;/s);
   assert.match(canvasLayerCss, /\.canvas \.card:not\(\.detail-visible\)\[data-card-work-status="processing"\] \.ledger-card-overview-status\s*{[^}]*top:\s*50%;[^}]*left:\s*50%;[^}]*justify-content:\s*center;[^}]*transform:\s*translate\(-50%, -50%\) scale\(var\(--inverse-viewport-scale, 1\)\);/s);

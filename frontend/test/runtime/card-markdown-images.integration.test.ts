@@ -19,7 +19,6 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   const mediaLayout = source('frontend/src/runtime/ledger/helper/sync-ledger-card-media-layout.ts');
   const mediaCarouselPersistence = source('frontend/src/runtime/ledger/helper/persist-ledger-card-media-carousel.ts');
   const titleRenderer = source('frontend/src/runtime/ledger/component/append-title-text.ts');
-  const doubleClick = source('frontend/src/runtime/input/controller/handle-card-double-click.ts');
   const wheel = source('frontend/src/runtime/gesture/controller/handle-wheel.ts');
   const css = source('frontend/assets/canvas/objects.css');
 
@@ -107,7 +106,6 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   assert.match(mediaCarouselPersistence, /const nextSources = sources\.filter/);
   assert.match(mediaCarouselPersistence, /saveLedgerCardMediaCarouselSlide\(stateId, options\.slideIndex, nextSources\.length\)/);
   assert.match(renderer, /renderLedgerCardMarkdown\(markdown: string, options/);
-  assert.match(doubleClick, /target\.closest\('\[data-ledger-card-media\]'\)/);
   assert.match(wheel, /advanceCarouselFromWheel\(event\)/);
   assert.match(wheel, /event\.ctrlKey/);
   assert.match(wheel, /\.ledger-card-media-carousel/);

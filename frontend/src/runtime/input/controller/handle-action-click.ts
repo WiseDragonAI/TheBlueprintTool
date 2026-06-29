@@ -6,7 +6,7 @@ import { modal, runbookModal, shortcutModal } from '../../dom.js';
 import { state } from '../../state.js';
 import { switchCardTabController } from '../../card/controller/switch-card-tab-controller.js';
 import { resizeSelectedCardsController } from '../../card/controller/resize-selected-cards-controller.js';
-import { beginLedgerCardTitleEdit } from '../../card/effect/begin-ledger-card-edit.js';
+import { beginLedgerCardDescriptionEdit, beginLedgerCardTitleEdit } from '../../card/effect/begin-ledger-card-edit.js';
 import { toggleCardStatusController } from '../../card/controller/toggle-card-status-controller.js';
 import { deleteZoneController } from '../../zone/controller/delete-zone-controller.js';
 import { editRegionController } from '../../zone/controller/edit-region-controller.js';
@@ -121,6 +121,14 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
       ? document.querySelector(`[data-card-id="${CSS.escape(cardId)}"]`) as HTMLElement | null
       : targetElement.closest('[data-card-id]') as HTMLElement | null;
     if (card) beginLedgerCardTitleEdit(card);
+    return;
+  }
+  if (action === 'edit-card-description') {
+    const cardId = actionTarget.dataset.cardId ?? '';
+    const card = cardId
+      ? document.querySelector(`[data-card-id="${CSS.escape(cardId)}"]`) as HTMLElement | null
+      : targetElement.closest('[data-card-id]') as HTMLElement | null;
+    if (card) beginLedgerCardDescriptionEdit(card);
     return;
   }
   if (action === 'delete-card') {

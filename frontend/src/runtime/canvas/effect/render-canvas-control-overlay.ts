@@ -138,9 +138,17 @@ function syncCardControls(group: HTMLElement, card: HTMLElement): boolean {
   edit.title = card.dataset.targetLedgerId ? 'Edit ledger name' : 'Edit card title';
   edit.ariaLabel = edit.title;
   edit.textContent = '✎';
+  const editBody = document.createElement('button');
+  editBody.className = 'ledger-card-edit-toggle terminal-button terminal-button--compact';
+  editBody.type = 'button';
+  editBody.dataset.action = 'edit-card-description';
+  editBody.dataset.cardId = cardId;
+  editBody.title = 'Edit card content';
+  editBody.setAttribute('aria-label', editBody.title);
+  editBody.textContent = 'edit';
   const controls = card.dataset.targetLedgerId
     ? [edit, renderLedgerCardDeleteButton(cardId)]
-    : [renderLedgerCardStatusButton(cardId, persistedStatus, visibleStatus), renderLedgerCardDeleteButton(cardId)];
+    : [renderLedgerCardStatusButton(cardId, persistedStatus, visibleStatus), editBody, renderLedgerCardDeleteButton(cardId)];
   group.replaceChildren(...controls);
   return placeControlGroup(group, card, 'right');
 }
