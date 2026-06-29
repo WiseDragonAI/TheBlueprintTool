@@ -130,8 +130,16 @@ function syncCardControls(group: HTMLElement, card: HTMLElement): boolean {
   group.dataset.cardId = cardId;
   if (cardZoneColor) group.style.setProperty('--card-zone-color', cardZoneColor);
   else group.style.removeProperty('--card-zone-color');
+  const edit = document.createElement('button');
+  edit.className = 'icon-button terminal-button terminal-button--compact';
+  edit.type = 'button';
+  edit.dataset.action = 'edit-card-title';
+  edit.dataset.cardId = cardId;
+  edit.title = card.dataset.targetLedgerId ? 'Edit ledger name' : 'Edit card title';
+  edit.ariaLabel = edit.title;
+  edit.textContent = '✎';
   const controls = card.dataset.targetLedgerId
-    ? [renderLedgerCardDeleteButton(cardId)]
+    ? [edit, renderLedgerCardDeleteButton(cardId)]
     : [renderLedgerCardStatusButton(cardId, persistedStatus, visibleStatus), renderLedgerCardDeleteButton(cardId)];
   group.replaceChildren(...controls);
   return placeControlGroup(group, card, 'right');

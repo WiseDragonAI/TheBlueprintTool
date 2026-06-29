@@ -174,8 +174,13 @@ test('browser inputs route ledger commands through runtime controllers before se
   const canvasLayerCss = source('frontend/assets/canvas/canvas-layer.css');
   const controlOverlay = source('frontend/src/runtime/canvas/effect/render-canvas-control-overlay.ts');
   assert.match(controlOverlay, /className = 'canvas-control canvas-control--card'/);
+  assert.match(controlOverlay, /edit\.dataset\.action = 'edit-card-title'/);
+  assert.match(controlOverlay, /edit\.title = card\.dataset\.targetLedgerId \? 'Edit ledger name' : 'Edit card title'/);
+  assert.match(controlOverlay, /\? \[edit, renderLedgerCardDeleteButton\(cardId\)\]/);
   assert.match(controlOverlay, /renderLedgerCardStatusButton\(cardId, persistedStatus, visibleStatus\)/);
   assert.match(controlOverlay, /renderLedgerCardDeleteButton\(cardId\)/);
+  assert.match(actionClick, /if \(action === 'edit-card-title'\)/);
+  assert.match(actionClick, /beginLedgerCardTitleEdit\(card\)/);
   assert.doesNotMatch(controlOverlay, /selection\.cardIds/);
   assert.match(controlOverlay, /export function hideCanvasControlOverlay\(\): void \{[\s\S]*existingControlOverlay\(\)\?\.replaceChildren\(\);[\s\S]*\}/);
   assert.match(controlOverlay, /function controlsDisabled\(\): boolean \{[\s\S]*classList\?\.contains\('low-detail'\)/);
