@@ -73,6 +73,17 @@ function markdownForThreadFile(input: { fileRef: string; originalName: string; c
     : `[${label}](${input.fileRef})`;
 }
 
+function threadFileContentDisposition(filePath: string): string {
+  const filename = basename(filePath).replace(/"/g, '');
+  const type = contentTypeFor(filePath);
+  const previewable = type.startsWith('image/')
+    || type.startsWith('text/')
+    || type === 'application/pdf'
+    || type.startsWith('audio/')
+    || type.startsWith('video/');
+  return `${previewable ? 'inline' : 'attachment'}; filename="${filename}"`;
+}
+
 function isAllowedDecisionOsAsset(filePath: string, relativeAssetPath = ''): boolean {
   const normalized = filePath.toLowerCase();
   if (allowedDecisionOsImageExtensions.some((extension) => normalized.endsWith(extension))) return true;
@@ -101,7 +112,7 @@ function tryServeDecisionOsAsset(input: { url: string; decisionOsRoot: string; r
   }
   input.response.setHeader('content-type', contentTypeFor(assetPath));
   if (/^thread-files\/[^/]+\/.+/.test(relativeAssetPath.split('\\').join('/'))) {
-    input.response.setHeader('content-disposition', `inline; filename="${basename(assetPath).replace(/"/g, '')}"`);
+    input.response.setHeader('content-disposition', threadFileContentDisposition(assetPath));
   }
   input.response.setHeader('cache-control', 'no-store');
   input.response.end(readFileSync(assetPath));

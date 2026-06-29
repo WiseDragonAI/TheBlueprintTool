@@ -80,7 +80,33 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
     assert.equal(readFileSync(join(workspace, fileUpload.fileRef.replace(/^\/\.decision-os\//, '.decision-os/')), 'utf8'), 'attached context');
     const uploadedFileResponse = await fetch(`http://127.0.0.1:${address.port}${fileUpload.fileRef}`);
     assert.equal(uploadedFileResponse.ok, true);
+    assert.equal(uploadedFileResponse.headers.get('content-type'), 'text/plain; charset=utf-8');
+    assert.match(uploadedFileResponse.headers.get('content-disposition') ?? '', /^inline; filename="file-.*-Plan-Notes\.txt"$/);
     assert.equal(await uploadedFileResponse.text(), 'attached context');
+
+    const pdfUploadResponse = await fetch(fileUploadEndpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/pdf', 'x-thread-id': 'thread/card:a', 'x-file-name': encodeURIComponent('Vitals.pdf') },
+      body: Buffer.from('%PDF-1.7 test')
+    });
+    assert.equal(pdfUploadResponse.status, 201);
+    const pdfUpload = await pdfUploadResponse.json() as { fileRef: string; markdown: string };
+    assert.equal(pdfUpload.markdown, `[Vitals.pdf](${pdfUpload.fileRef})`);
+    const uploadedPdfResponse = await fetch(`http://127.0.0.1:${address.port}${pdfUpload.fileRef}`);
+    assert.equal(uploadedPdfResponse.ok, true);
+    assert.equal(uploadedPdfResponse.headers.get('content-type'), 'application/pdf');
+    assert.match(uploadedPdfResponse.headers.get('content-disposition') ?? '', /^inline; filename="file-.*-Vitals\.pdf"$/);
+
+    const binaryUploadResponse = await fetch(fileUploadEndpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/octet-stream', 'x-thread-id': 'thread/card:a', 'x-file-name': encodeURIComponent('archive.bin') },
+      body: Buffer.from([1, 2, 3])
+    });
+    assert.equal(binaryUploadResponse.status, 201);
+    const binaryUpload = await binaryUploadResponse.json() as { fileRef: string };
+    const uploadedBinaryResponse = await fetch(`http://127.0.0.1:${address.port}${binaryUpload.fileRef}`);
+    assert.equal(uploadedBinaryResponse.headers.get('content-type'), 'application/octet-stream');
+    assert.match(uploadedBinaryResponse.headers.get('content-disposition') ?? '', /^attachment; filename="file-.*-archive\.bin"$/);
 
     const invalidFileUploadResponse = await fetch(fileUploadEndpoint, {
       method: 'POST',
