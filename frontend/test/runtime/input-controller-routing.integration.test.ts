@@ -189,7 +189,14 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.doesNotMatch(openThreadPanel, /focusThreadDraft/);
 
   const canvasLayerCss = source('frontend/assets/canvas/canvas-layer.css');
+  const objectsCss = source('frontend/assets/canvas/objects.css');
+  const cardDetailRenderer = source('frontend/src/runtime/ledger/component/render-ledger-card-detail-layer.ts');
   const controlOverlay = source('frontend/src/runtime/canvas/effect/render-canvas-control-overlay.ts');
+  assert.match(cardDetailRenderer, /row\.className = 'ledger-card-title-row'/);
+  assert.match(cardDetailRenderer, /edit\.className = 'ledger-card-title-edit-button icon-button terminal-button terminal-button--compact'/);
+  assert.match(cardDetailRenderer, /edit\.dataset\.action = 'edit-card-title'/);
+  assert.match(cardDetailRenderer, /edit\.setAttribute\('aria-label', edit\.title\)/);
+  assert.match(cardDetailRenderer, /createLedgerCardTitleRow\(card, id\)/);
   assert.match(controlOverlay, /className = 'canvas-control canvas-control--card'/);
   assert.match(controlOverlay, /edit\.dataset\.action = 'edit-card-title'/);
   assert.match(controlOverlay, /edit\.title = card\.dataset\.targetLedgerId \? 'Edit ledger name' : 'Edit card title'/);
@@ -220,4 +227,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(canvasLayerCss, /\.canvas \.card:not\(\.detail-visible\) \.ledger-card-detail-layer\s*{[^}]*content-visibility:\s*hidden;/s);
   assert.match(canvasLayerCss, /\.canvas \.card:not\(\.detail-visible\)\[data-card-work-status="processing"\] \.ledger-card-overview-status\s*{[^}]*top:\s*50%;[^}]*left:\s*50%;[^}]*justify-content:\s*center;[^}]*transform:\s*translate\(-50%, -50%\) scale\(var\(--inverse-viewport-scale, 1\)\);/s);
   assert.doesNotMatch(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-status-toggle/);
+  assert.match(objectsCss, /\.ledger-card-title-row\s*{[^}]*display:\s*flex;[^}]*gap:\s*6px;[^}]*margin-bottom:\s*8px;/s);
+  assert.match(objectsCss, /\.card \.ledger-card-title-edit-button\s*{[^}]*flex:\s*0 0 24px;[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;/s);
+  assert.match(objectsCss, /\.card:hover \.ledger-card-title-edit-button,[\s\S]*pointer-events:\s*auto;/);
 });

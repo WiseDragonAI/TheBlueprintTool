@@ -36,6 +36,8 @@ class FakeElement {
   });
   textContent = '';
   innerHTML = '';
+  title = '';
+  type = '';
   children: Array<FakeElement | FakeText> = [];
   role = '';
 
@@ -421,6 +423,45 @@ test('ledger card titles render inline markdown without dropping title wrapping'
     assert.equal(title.children.some((child) => child instanceof FakeElement && child.tagName === 'strong' && child.textContent === 'Model'), true);
     assert.equal(title.children.some((child) => child instanceof FakeElement && child.tagName === 'wbr'), true);
     assert.equal(title.children.map((child) => child.textContent).join(''), 'RuneItem FInventoryItem::Buffs Model');
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+  }
+});
+
+test('ledger card detail title exposes a hover edit action beside the title', () => {
+  const previousDocument = globalThis.document;
+  (globalThis as unknown as { document: unknown }).document = {
+    createElement: (tagName: string) => new FakeElement(tagName),
+    createTextNode: (text: string) => new FakeText(text)
+  };
+
+  try {
+    const card = renderDetail({
+      id: 'card-title-edit',
+      title: 'Editable title',
+      comment: { what: 'Title edit target.' }
+    });
+    const row = findElementByClass(card, 'ledger-card-title-row') as FakeElement;
+    const title = findElementByClass(row, 'ledger-card-title') as FakeElement;
+    const button = findElementByClass(row, 'ledger-card-title-edit-button') as FakeElement;
+    const ledgerCard = renderDetail({
+      id: 'ledger-card:ops',
+      targetLedgerId: 'ops',
+      cardType: 'ledger',
+      title: 'Ops',
+      comment: { what: 'Ledger title edit target.' }
+    });
+    const ledgerButton = findElementByClass(ledgerCard, 'ledger-card-title-edit-button') as FakeElement;
+
+    assert.equal(row.children[0], title);
+    assert.equal(row.children[1], button);
+    assert.equal(button.tagName, 'button');
+    assert.equal(button.type, 'button');
+    assert.equal(button.dataset.action, 'edit-card-title');
+    assert.equal(button.dataset.cardId, 'card-title-edit');
+    assert.equal(button.attributes['aria-label'], 'Edit card title');
+    assert.equal(button.textContent, '✎');
+    assert.equal(ledgerButton.attributes['aria-label'], 'Edit ledger name');
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
   }

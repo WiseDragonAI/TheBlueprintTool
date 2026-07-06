@@ -2,6 +2,7 @@ import { content } from '../../dom.js';
 import { createCardResizeHandles } from '../component/create-card-resize-handles.js';
 import { commitActiveLedgerMutation } from '../../ledger/effect/commit-active-ledger-mutation.js';
 import { createLedgerObjectId } from '../../ledger/helper/create-ledger-object-id.js';
+import { createLedgerCardTitleRow } from '../../ledger/component/render-ledger-card-detail-layer.js';
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
@@ -39,7 +40,7 @@ export async function createCardFromRect(rect: { x: number; y: number; width: nu
   element.style.height = `${card.h}px`;
   element.replaceChildren(
     ...createCardResizeHandles(),
-    Object.assign(document.createElement('strong'), { className: 'ledger-card-title', textContent: 'New card' }),
+    createLedgerCardTitleRow(card, cardId),
     Object.assign(document.createElement('div'), { className: 'ledger-card-body', innerHTML: '<p>New description</p>' })
   );
   content.insertBefore(element, content.querySelector('.marquee'));
