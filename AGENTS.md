@@ -13,25 +13,27 @@ decision-os serves the active `.decision-os` workspace by resolving the workspac
 current working directory. Always start the server from the target project workspace, not from the
 decision-os repo, unless the operator explicitly wants to inspect the repo's own ledgers.
 
-For the MOH workspace:
+For this decision-os workspace:
 
 ```bash
-cd /home/jbb/dev/MOH
-setsid sh -c 'cd /home/jbb/dev/MOH && exec env PORT=4174 /home/jbb/dev/EditorBP/decision-os/bin/decision-os-server.mjs >> /tmp/moh-decision-os-4174.log 2>&1' </dev/null >/dev/null 2>&1 &
+cd /home/jbb/dev/EditorBP/decision-os
+setsid sh -c 'cd /home/jbb/dev/EditorBP/decision-os && exec env PORT=4174 /home/jbb/dev/EditorBP/decision-os/bin/decision-os-server.mjs >> /tmp/decision-os-4174.log 2>&1' </dev/null >/dev/null 2>&1 &
 ```
 
 Then verify both the process and HTTP route:
 
 ```bash
 ps -ef | rg 'decision-os-server|server.ts|4174' | rg -v rg
-curl -sS -I http://127.0.0.1:4174/ses
+curl -sS -I http://127.0.0.1:4174/specs
 ```
 
-Expected routes for MOH:
+Expected routes for decision-os:
 
 ```text
-http://127.0.0.1:4174/ses
-http://127.0.0.1:4174/s3
+http://127.0.0.1:4174/specs
+http://127.0.0.1:4174/data
+http://127.0.0.1:4174/performances
+http://127.0.0.1:4174/tasks-system
 ```
 
 ## Background Launch Rules

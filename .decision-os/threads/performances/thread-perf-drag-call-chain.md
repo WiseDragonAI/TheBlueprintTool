@@ -8,7 +8,7 @@ Non, c'est spéculatif, elle va pas du tout, cette carte. C'est tout à fait sp�
 
 Treated.
 
-I ran a fresh CDP drag trace on Ardaria Game Design with DOM read probes enabled:
+I ran a fresh CDP drag trace on a Decision OS large-ledger fixture with DOM read probes enabled:
 
 | Field | Value |
 | --- | --- |
@@ -25,7 +25,7 @@ I then rewrote `Drag Move Call Chain` so it no longer presents unmeasured claims
 | Pointermove cost | Baseline `EventDispatch:pointermove` total 102.937ms, max 11.948ms. |
 | Zone-label cost | `skip-zone-labels` drops pointermove dispatch total to 10.153ms, max 0.944ms. |
 | Hover-control cost | `no-hover-controls` keeps pointermove dispatch near baseline, so it is not the main offender in this run. |
-| Relationship cost | Runtime has 0 relationships, so relationship routing is not the cause in this Ardaria trace. |
+| Relationship cost | Runtime has 0 relationships, so relationship routing is not the cause in this Decision OS trace. |
 | Release jank | After-release frame reaches 844.4ms with `Document::UpdateStyleAndLayout` 212.921ms. |
 
 I also added an explicit “Required next measurement” row: exclusive `performance.mark()` timings are still needed before implementing the drag-preview refactor, because the current trace proves the A/B effects and frame costs but does not provide exclusive timings for every function.

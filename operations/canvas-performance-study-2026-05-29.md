@@ -6,30 +6,30 @@ Investigate why pan and zoom degrade when a ledger has many cards, including the
 
 Primary workspace sampled:
 
-- `/home/jbb/dev/MOH/.decision-os/ses.json`: 25 ledger cards, 0 ledger relationships, 8 annotations, image references.
-- `/home/jbb/dev/MOH/.decision-os/s3.json`: 21 ledger cards, 20 ledger relationships, 1 annotation.
+- `/home/jbb/dev/EditorBP/decision-os/.decision-os/specs.json`: 289 ledger cards, 0 ledger relationships, 19 annotations.
+- `/home/jbb/dev/EditorBP/decision-os/.decision-os/data.json`: 40 ledger cards, 39 ledger relationships, 17 annotations.
 
-The live browser sample was collected from `http://127.0.0.1:4174/ses` with a headless Chromium CDP session. Treat the numbers as directional, not final device-grade paint/compositor metrics, because headless Chromium is not the same as the operator's interactive browser GPU path.
+The live browser sample was collected from `http://127.0.0.1:4174/specs` with a headless Chromium CDP session. Treat the numbers as directional, not final device-grade paint/compositor metrics, because headless Chromium is not the same as the operator's interactive browser GPU path.
 
 ## Correction after burst testing
 
 The first sample understated the user-visible lag because it measured isolated synthetic events with frame waits between them. That is not representative of wheel/trackpad zoom. A real wheel burst can queue many events before the browser has painted the previous updates.
 
-Corrected burst sample on the same MOH workspace:
+Corrected burst sample on the same decision-os workspace:
 
-- `ses`, 80 wheel zoom-out events: `2395 ms` synchronous event handling.
-- `ses`, 80 wheel zoom-out events: average `30 ms`, p95 `40 ms`, max `50 ms` per event.
-- `s3`, 80 wheel zoom-out events: `1172 ms` synchronous event handling.
-- `s3`, 80 wheel zoom-out events: average `15 ms`, p95 `19 ms`, max `20 ms` per event.
+- `specs`, 80 wheel zoom-out events: `2395 ms` synchronous event handling.
+- `specs`, 80 wheel zoom-out events: average `30 ms`, p95 `40 ms`, max `50 ms` per event.
+- `data`, 80 wheel zoom-out events: `1172 ms` synchronous event handling.
+- `data`, 80 wheel zoom-out events: average `15 ms`, p95 `19 ms`, max `20 ms` per event.
 
 This matches the reported "hundreds of ms" feel. The relevant metric is cumulative queued input work, not a single p95 event.
 
 The deeper split points to a read/write layout feedback loop and zoom-detail CSS invalidation:
 
-- `ses`, 80 low-detail `applyViewportTransform()` calls: `1253 ms`.
-- `ses`, 80 low-detail `applyViewportTransform()` calls plus `canvas.getBoundingClientRect()` after each write: `2975 ms`.
-- `s3`, 80 low-detail `applyViewportTransform()` calls: `538 ms`.
-- `s3`, 80 low-detail `applyViewportTransform()` calls plus `canvas.getBoundingClientRect()` after each write: `1299 ms`.
+- `specs`, 80 low-detail `applyViewportTransform()` calls: `1253 ms`.
+- `specs`, 80 low-detail `applyViewportTransform()` calls plus `canvas.getBoundingClientRect()` after each write: `2975 ms`.
+- `data`, 80 low-detail `applyViewportTransform()` calls: `538 ms`.
+- `data`, 80 low-detail `applyViewportTransform()` calls plus `canvas.getBoundingClientRect()` after each write: `1299 ms`.
 
 The wheel path reads `canvas.getBoundingClientRect()` through `point(event)` on every event, then writes viewport CSS variables and transform. The next wheel event can force style/layout flush from the previous write. This is a much stronger explanation for multi-hundred-millisecond zoom lag than relationship routing.
 
@@ -56,11 +56,11 @@ The pan movement path is already cheap in JavaScript. The measurable hitch is th
 
 Initial isolated-event sample:
 
-- `ses` pan `pointermove`: average handler cost about `0.03 ms`.
-- `ses` pan `pointerup`: average handler cost about `64 ms`.
-- `s3` pan `pointerup`: average handler cost about `25 ms`.
-- `ses` zoom-in wheel: handler p95 about `13 ms`.
-- `ses` zoom-out wheel: handler p95 about `42 ms`.
+- `specs` pan `pointermove`: average handler cost about `0.03 ms`.
+- `specs` pan `pointerup`: average handler cost about `64 ms`.
+- `data` pan `pointerup`: average handler cost about `25 ms`.
+- `specs` zoom-in wheel: handler p95 about `13 ms`.
+- `specs` zoom-out wheel: handler p95 about `42 ms`.
 - `synthetic60` simple cards, no relationships: full render sync about `19 ms`; zoom-out handler p95 about `18 ms`.
 
 Updated interpretation:
@@ -145,13 +145,13 @@ Expected symptom:
 
 Live evidence:
 
-- `ses` zoom-out handler p95 was about `42 ms`.
-- `ses` zoom-in handler p95 was about `13 ms`.
+- `specs` zoom-out handler p95 was about `42 ms`.
+- `specs` zoom-in handler p95 was about `13 ms`.
 - The zoom-out case crosses low-detail thresholds and has many larger markdown/image cards.
-- `ses` 80-event zoom-out burst took about `2.4 seconds` of synchronous work.
-- `s3` 80-event zoom-out burst took about `1.17 seconds` of synchronous work.
-- `ses` low-detail viewport writes alone took about `1.25 seconds` for 80 updates.
-- `ses` low-detail viewport write plus layout read took about `2.97 seconds` for 80 updates.
+- `specs` 80-event zoom-out burst took about `2.4 seconds` of synchronous work.
+- `data` 80-event zoom-out burst took about `1.17 seconds` of synchronous work.
+- `specs` low-detail viewport writes alone took about `1.25 seconds` for 80 updates.
+- `specs` low-detail viewport write plus layout read took about `2.97 seconds` for 80 updates.
 
 How to measure precisely:
 
@@ -245,7 +245,7 @@ Optimization direction:
 
 ### 4. Relationship overlay scales with relationship count and uses repeated DOM lookups/layout reads
 
-This is not the primary issue for the no-relationship `ses` case, but it is a separate bottleneck for `s3`.
+This is not the primary issue for the no-relationship `specs` case, but it is a separate bottleneck for `data`.
 
 Relevant code:
 
@@ -308,8 +308,8 @@ How to measure precisely:
    - `replaceChildren` duration
 2. Add a card content hash and record whether a card was rebuilt despite unchanged content.
 3. Run against:
-   - real `ses`
-   - real `s3`
+   - real `specs`
+   - real `data`
    - synthetic 30/60/100 plain cards
    - synthetic 30 image cards
 
@@ -363,8 +363,8 @@ Create a benchmark command that starts the app from the target workspace and dri
 
 Scenarios:
 
-- Real `ses`: no ledger relationships, many document cards.
-- Real `s3`: relationship-heavy.
+- Real `specs`: no ledger relationships, many document cards.
+- Real `data`: relationship-heavy.
 - Synthetic 30/60/100 cards, no relationships, simple text.
 - Synthetic 30/60 cards with image/media markdown.
 - Synthetic 30 cards plus 100/500 relationships.
@@ -397,7 +397,7 @@ Metrics:
 
 Use real Chrome, not headless-only, for the final decision:
 
-1. Open `http://127.0.0.1:4174/ses?perf=1`.
+1. Open `http://127.0.0.1:4174/specs?perf=1`.
 2. Record a Performance trace while panning for 5 seconds.
 3. Repeat with `.grid { display: none; }`.
 4. Repeat with `.card { box-shadow: none; }`.
@@ -434,18 +434,18 @@ Use these thresholds before and after each optimization:
 
 ## Current provisional conclusion
 
-The first optimization effort should not start with relationship routing. The `ses` case has no ledger relationships and still shows high zoom and pan-release costs.
+The first optimization effort should not start with relationship routing. The `specs` case has no ledger relationships and still shows high zoom and pan-release costs.
 
 The highest-value first target is now the wheel zoom backlog: coalesce wheel events, remove per-event layout reads, and avoid continuous low-detail CSS invalidation. The second target is the unnecessary full render after plain panning. The third target depends on trace evidence: if manual panning is still choppy while JS remains cheap, the next bottleneck is likely CSS/compositor cost from transforming the huge grid plus many styled DOM cards.
 
-## Ardaria game-design follow-up
+## Decision OS large-ledger follow-up
 
-The operator asked to validate the far-away zoom case on the real Ardaria game-design ledger, where cards are already in minimal content mode.
+The operator asked to validate the far-away zoom case on a real decision-os large-ledger fixture, where cards are already in minimal content mode.
 
 Workspace and route:
 
-- Workspace: `/home/jbb/Ardaria_57`
-- Route: `http://127.0.0.1:4173/ardaria-game-design`
+- Workspace: `/home/jbb/dev/EditorBP/decision-os`
+- Route: `http://127.0.0.1:4174/specs`
 - Runtime DOM: 71 rendered cards, 18 zones/groups, 2 stale static relationship paths, 5705 DOM nodes, 7 images.
 - Active ledger data: 68 cards, 15 annotations, 0 ledger relationships.
 
@@ -474,7 +474,7 @@ Implemented fix:
 - Make detail mode idempotent: card-size measurement only runs after ledger DOM invalidation or low-detail entry; low/overview classes are only toggled when their boolean state changes.
 - Invalidate the detail card-size cache from `renderLedgerSurface()` because ledger DOM/card content can change there.
 
-After the fix on the same Ardaria route:
+After the fix on the same decision-os route:
 
 - Scale `0.12`, 10 wheel events zooming out: median `63 ms` sync burst, about `6.3 ms/event`.
 - Scale `0.12`, 15 wheel events zooming out: median `90 ms` sync burst, about `6.0 ms/event`.
@@ -491,19 +491,19 @@ Remaining optimization direction:
 - Keep avoiding layout reads in the hot wheel path.
 - Consider updating counter-scaled low-detail labels less frequently during active wheel if compositor/style traces still show frame drops in an interactive browser.
 
-## Ardaria zoom-pan stress follow-up
+## Decision OS zoom-pan stress follow-up
 
 The operator reported one remaining slow path: after a zoom change, the first pan can feel sluggish. A repeatable browser stress test now lives at:
 
 ```bash
-DECISION_OS_URL=http://127.0.0.1:4173/ardaria-game-design \
+DECISION_OS_URL=http://127.0.0.1:4174/specs \
 DECISION_OS_CDP_JSON=http://127.0.0.1:9223/json \
 node tools/live-verify/zoom-pan-stress.mjs
 ```
 
 Test shape:
 
-- Start the Ardaria game-design ledger at scale `0.12`.
+- Start the decision-os large-ledger route at scale `0.12`.
 - Run 12 cycles zooming out and 12 cycles zooming in.
 - Each cycle performs a random mixed zoom burst, an immediate short pan, a random multi-step directional zoom burst, then a large pan.
 - The test records wheel event sync cost, first pan pointermove sync cost, total pan sync cost, and time to the first animation frame after the first pan move.
@@ -526,12 +526,12 @@ Interpretation:
 - The remaining user-visible sluggishness is more likely frame/render/compositor debt after zoom than card-zone attribution or pan handler logic.
 - The next precision step should be CDP tracing around this script with `devtools.timeline`, `cc`, `blink`, and `gpu` categories, then compare paint/raster/composite time for the worst first-frame cases.
 
-## Ardaria overview pan trace
+## Decision OS overview pan trace
 
 The operator provided a screenshot at the overview/detail zoom level where pan feels slow. A trace collector now lives at:
 
 ```bash
-DECISION_OS_URL=http://127.0.0.1:4173/ardaria-game-design \
+DECISION_OS_URL=http://127.0.0.1:4174/specs \
 DECISION_OS_CDP_JSON=http://127.0.0.1:9223/json \
 DECISION_OS_TRACE_SCALE=0.12 \
 node tools/live-verify/zoom-pan-trace.mjs
@@ -539,7 +539,7 @@ node tools/live-verify/zoom-pan-trace.mjs
 
 Trace shape:
 
-- Force the Ardaria game-design ledger to scale `0.12`.
+- Force the decision-os large-ledger route to scale `0.12`.
 - Inject real CDP mouse input, not synthetic DOM dispatch.
 - Pan `760px x 180px` over `4200 ms` with 263 mouse moves.
 - Collect Chrome trace categories for input, timeline, Blink, compositor, and GPU.
@@ -563,7 +563,7 @@ Baseline trace:
 Grid-hidden A/B:
 
 ```bash
-DECISION_OS_URL=http://127.0.0.1:4173/ardaria-game-design \
+DECISION_OS_URL=http://127.0.0.1:4174/specs \
 DECISION_OS_CDP_JSON=http://127.0.0.1:9223/json \
 DECISION_OS_TRACE_SCALE=0.12 \
 DECISION_OS_TRACE_HIDE_GRID=1 \

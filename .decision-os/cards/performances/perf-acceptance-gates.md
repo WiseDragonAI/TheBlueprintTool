@@ -14,9 +14,9 @@ Hard gates:
 
 Regression ledgers:
 
-- Ardaria Game Design: many cards, zero relationships, large cards/images/tables.
+- Decision OS Specs: many cards, zero relationships, large cards/images/tables.
 - Relationship-heavy data ledger.
-- MOH `/s3`: medium relationship case.
+- Decision OS Data: medium relationship case.
 
 Required proof:
 

@@ -1,6 +1,6 @@
 # Relationship Boundary
 
-Ardaria Game Design has zero relationships, so relationships are not required to reproduce the current drag lag.
+Decision OS large-ledger fixtures can have zero relationships, so relationships are not required to reproduce the current drag lag.
 
 That does not mean relationships can be disabled during drag. Relationship rendering is part of the expected canvas feedback and must remain correct when relationships exist.
 

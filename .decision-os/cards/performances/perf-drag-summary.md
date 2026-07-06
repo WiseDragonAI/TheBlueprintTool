@@ -1,6 +1,6 @@
 # Drag Performance Summary
 
-Ardaria Game Design has zero relationships, yet drag can miss the frame budget by a large margin. The worst reproduced path is the image-heavy `Logo and naming` card at scale `0.35`.
+Decision OS large-ledger fixtures can have zero relationships, yet drag can miss the frame budget by a large margin. The worst reproduced path is the image-heavy `Logo and naming` card at scale `0.35`.
 
 Measured slow frame:
 

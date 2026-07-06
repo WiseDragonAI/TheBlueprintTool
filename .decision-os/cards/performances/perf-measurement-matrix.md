@@ -1,6 +1,6 @@
 # Measurement Matrix
 
-The CDP suite measured real Ardaria Game Design cards across zoom scales `0.35`, `0.5`, and `0.75`.
+The CDP suite measured real Decision OS large-ledger cards across zoom scales `0.35`, `0.5`, and `0.75`.
 
 Representative baseline results:
 

@@ -11,7 +11,7 @@ Per zone, it reads:
 - `zone.offsetWidth`
 - `getComputedStyle(title)`
 
-The DOM read probe measured baseline drag on the heavy Ardaria card at:
+The DOM read probe measured baseline drag on the heavy Decision OS card at:
 
 ```text
 pointermove:capture / offsetLeft: 576 reads

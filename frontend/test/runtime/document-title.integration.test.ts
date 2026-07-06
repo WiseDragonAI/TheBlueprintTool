@@ -36,19 +36,19 @@ test('browser title follows the selected ledger title', () => {
     { id: 'game', title: 'Game Design', ledgerFile: '.decision-os/game.json' }
   ];
   state.activeTab = 'game';
-  state.projectName = 'MOH';
+  state.projectName = 'Decision OS';
   state.canvasMode = 'ledger';
 
   try {
     renderTabRegistry();
-    assert.equal(globalThis.document.title, 'MOH | Game Design');
+    assert.equal(globalThis.document.title, 'Decision OS | Game Design');
     assert.equal(titleAction.textContent, 'Game Design');
-    assert.equal(kicker.textContent, 'MOH');
+    assert.equal(kicker.textContent, 'Decision OS');
     state.canvasMode = 'ledgers';
     renderTabRegistry();
-    assert.equal(globalThis.document.title, 'MOH | Ledgers');
+    assert.equal(globalThis.document.title, 'Decision OS | Ledgers');
     assert.equal(titleAction.textContent, 'Ledgers');
-    assert.equal(kicker.textContent, 'MOH');
+    assert.equal(kicker.textContent, 'Decision OS');
   } finally {
     state.ledgerTabs = previousTabs;
     state.activeTab = previousActiveTab;

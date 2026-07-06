@@ -53,25 +53,27 @@ npm run start:workspace
 For operator-facing document sessions, run the server as a detached background process from the
 target workspace cwd.
 
-Example for the MOH workspace:
+Example for this decision-os workspace:
 
 ```bash
-cd /home/jbb/dev/MOH
-setsid sh -c 'cd /home/jbb/dev/MOH && exec env PORT=4174 /home/jbb/dev/EditorBP/decision-os/bin/decision-os-server.mjs >> /tmp/moh-decision-os-4174.log 2>&1' </dev/null >/dev/null 2>&1 &
+cd /home/jbb/dev/EditorBP/decision-os
+setsid sh -c 'cd /home/jbb/dev/EditorBP/decision-os && exec env PORT=4174 /home/jbb/dev/EditorBP/decision-os/bin/decision-os-server.mjs >> /tmp/decision-os-4174.log 2>&1' </dev/null >/dev/null 2>&1 &
 ```
 
 Then verify the process and route before reporting the URL:
 
 ```bash
 ps -ef | rg 'decision-os-server|server.ts|4174' | rg -v rg
-curl -sS -I http://127.0.0.1:4174/ses
+curl -sS -I http://127.0.0.1:4174/specs
 ```
 
-MOH document routes:
+decision-os document routes:
 
 ```text
-http://127.0.0.1:4174/ses
-http://127.0.0.1:4174/s3
+http://127.0.0.1:4174/specs
+http://127.0.0.1:4174/data
+http://127.0.0.1:4174/performances
+http://127.0.0.1:4174/tasks-system
 ```
 
 Do not use a plain foreground command for operator-facing sessions. Do not assume a returned
