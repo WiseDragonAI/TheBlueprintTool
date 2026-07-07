@@ -12,6 +12,7 @@ import { hydrateLedgerCardContent, resolveCardContentFile } from '@backend/busin
 import { stripHydratedThreadNotes } from '@backend/business/ledger/helper/thread-content-file.js';
 import { scanCodexSkills } from '../helper/scan-codex-skills.js';
 import { buildCardSkillPrompt } from '../helper/build-card-skill-prompt.js';
+import { resolveCodexCommand } from '../helper/resolve-codex-command.js';
 
 type AnyRecord = Record<string, unknown>;
 type ProcessStatus = 'running' | 'complete' | 'failed';
@@ -57,34 +58,6 @@ function appendRunStatus(filePath: string, status: ProcessStatus, detail: string
   } catch {
     // The run log remains the fallback status record when the output file cannot be patched.
   }
-}
-
-function settingsRecord(runtime: AnyRecord): AnyRecord {
-  return runtime.decisionOsSettings && typeof runtime.decisionOsSettings === 'object'
-    ? runtime.decisionOsSettings as AnyRecord
-    : {};
-}
-
-function codexCommand(input: { workspaceRoot: string; runtime: AnyRecord }): { command: string; args: string[] } {
-  const settings = settingsRecord(input.runtime);
-  const command = String(process.env.CODEX_BIN || settings.codexBin || settings.CODEX_BIN || 'codex');
-  const model = String(process.env.CODEX_MODEL || settings.codexModel || settings.CODEX_MODEL || 'gpt-5.5');
-  const effort = String(process.env.CODEX_EFFORT || settings.codexReasoningEffort || settings.CODEX_EFFORT || 'high');
-  return {
-    command,
-    args: [
-      'exec',
-      '--dangerously-bypass-approvals-and-sandbox',
-      '--json',
-      '-C',
-      input.workspaceRoot,
-      '-c',
-      `model_reasoning_effort="${effort}"`,
-      '--model',
-      model,
-      '-',
-    ],
-  };
 }
 
 function updateRuntimeRun(runtime: AnyRecord, runId: string, patch: AnyRecord): void {
@@ -166,7 +139,7 @@ export async function startCardSkillProcessController(input: { action_payload?: 
   mkdirSync(runDirectory, { recursive: true });
   const stdoutFile = resolve(runDirectory, `${safeSegment(runId)}.jsonl`);
   const stderrFile = resolve(runDirectory, `${safeSegment(runId)}.log`);
-  const command = codexCommand({ workspaceRoot, runtime });
+  const command = resolveCodexCommand({ workspaceRoot, runtime });
   const prompt = buildCardSkillPrompt({
     skillName,
     sourceCardId: cardId,
