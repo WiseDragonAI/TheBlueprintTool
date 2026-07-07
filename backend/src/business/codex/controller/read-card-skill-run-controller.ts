@@ -10,7 +10,7 @@ import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/re
 import { hydrateLedgerThreadNotes, stripHydratedThreadNotes, writeThreadNotesFile } from '@backend/business/ledger/helper/thread-content-file.js';
 
 type AnyRecord = Record<string, unknown>;
-type RunStatus = 'running' | 'complete' | 'failed' | 'unknown';
+type RunStatus = 'running' | 'complete' | 'failed' | 'cancelled' | 'unknown';
 
 type ParsedRunLine = {
   line: number;
@@ -152,7 +152,7 @@ function runtimeRunStatus(runtime: AnyRecord, runId: string): RunStatus | null {
   const runs = runtime.codexSkillRuns && typeof runtime.codexSkillRuns === 'object' ? runtime.codexSkillRuns as Record<string, AnyRecord> : {};
   const run = runs[runId];
   const status = String(run?.status ?? '');
-  return status === 'running' || status === 'complete' || status === 'failed' ? status : null;
+  return status === 'running' || status === 'complete' || status === 'failed' || status === 'cancelled' ? status : null;
 }
 
 function inferredStatus(input: { runtime: AnyRecord; runId: string; events: NormalizedRunEvent[]; stdoutFile: string; stderrFile: string }): RunStatus {
@@ -160,6 +160,7 @@ function inferredStatus(input: { runtime: AnyRecord; runId: string; events: Norm
   if (runtimeStatus) return runtimeStatus;
   if (input.events.some((event) => event.type === 'turn.completed')) return 'complete';
   const log = existsSync(input.stderrFile) ? readFileSync(input.stderrFile, 'utf8') : '';
+  if (/cancelled|canceled|terminated by operator/i.test(log)) return 'cancelled';
   if (/(spawn|enoent|failed|exit code [1-9]|error:)/i.test(log)) return 'failed';
   if (!existsSync(input.stdoutFile)) return 'unknown';
   const newestWrite = Math.max(statSync(input.stdoutFile).mtimeMs, existsSync(input.stderrFile) ? statSync(input.stderrFile).mtimeMs : 0);

@@ -108,3 +108,99 @@ test('card skill process route creates a linked output card and launches codex',
     rmSync(workspace, { recursive: true, force: true });
   }
 });
+
+test('card skill run cancel route terminates the active codex process', async () => {
+  const originalCwd = process.cwd();
+  const previousCodexBin = process.env.CODEX_BIN;
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-card-skill-cancel-'));
+  const fakeCodex = join(workspace, 'fake-codex-slow.mjs');
+  mkdirSync(join(workspace, '.decision-os'), { recursive: true });
+  mkdirSync(join(workspace, '.skills', 'slow-skill'), { recursive: true });
+  writeFileSync(join(workspace, '.skills', 'slow-skill', 'SKILL.md'), [
+    '---',
+    'name: slow-skill',
+    'description: Slow skill description',
+    '---',
+    '',
+  ].join('\n'));
+  writeFileSync(join(workspace, '.decision-os', 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }]
+  }, null, 2));
+  writeFileSync(join(workspace, '.decision-os', 'specs.json'), JSON.stringify({
+    cards: [{
+      id: 'source-card',
+      title: 'Source Card',
+      x: 100,
+      y: 120,
+      w: 320,
+      h: 180,
+      comment: { what: 'Incoming card body' },
+      facts: [],
+      fields: []
+    }],
+    annotations: [],
+    relationships: [],
+    notes: {}
+  }, null, 2));
+  writeFileSync(fakeCodex, [
+    '#!/usr/bin/env node',
+    'import { writeFileSync } from "node:fs";',
+    'let input = "";',
+    'process.stdin.on("data", (chunk) => { input += chunk; });',
+    'process.stdin.on("end", () => {',
+    '  const match = input.match(/Write the final result to this Markdown file: (.+)/);',
+    '  if (!match) process.exit(2);',
+    '  writeFileSync(match[1].trim(), "# Slow Result\\n\\nstarted\\n");',
+    '  console.log(JSON.stringify({ type: "turn.started" }));',
+    '});',
+    'process.on("SIGTERM", () => {',
+    '  console.log(JSON.stringify({ type: "operator.cancelled" }));',
+    '  process.exit(0);',
+    '});',
+    'setInterval(() => undefined, 1000);',
+  ].join('\n'));
+  chmodSync(fakeCodex, 0o755);
+
+  process.chdir(workspace);
+  process.env.CODEX_BIN = fakeCodex;
+  const runtime: Record<string, unknown> = {};
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const address = server.address() as AddressInfo;
+
+  try {
+    const startResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/process`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ledgerId: 'specs', cardId: 'source-card', skillName: 'slow-skill' })
+    });
+    assert.equal(startResponse.status, 202);
+    const started = await startResponse.json() as { ok: boolean; run: { id: string; outputCardId: string; outputFile: string } };
+    assert.equal(started.ok, true);
+    await waitForText(started.run.outputFile, 'started');
+
+    const cancelResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${started.run.id}/cancel`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ledgerId: 'specs', cardId: started.run.outputCardId })
+    });
+    assert.equal(cancelResponse.status, 202);
+    const cancelled = await cancelResponse.json() as { ok: boolean; status: string };
+    assert.equal(cancelled.ok, true);
+    assert.equal(cancelled.status, 'cancelled');
+
+    await waitForText(started.run.outputFile, 'Codex run cancelled: terminated by operator');
+    const statusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${started.run.id}?ledgerId=specs&cardId=${started.run.outputCardId}&since=0`);
+    assert.equal(statusResponse.status, 200);
+    const status = await statusResponse.json() as { ok: boolean; status: string };
+    assert.equal(status.ok, true);
+    assert.equal(status.status, 'cancelled');
+  } finally {
+    server.close();
+    process.chdir(originalCwd);
+    if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
+    else process.env.CODEX_BIN = previousCodexBin;
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});

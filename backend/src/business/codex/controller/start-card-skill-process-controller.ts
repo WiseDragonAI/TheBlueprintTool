@@ -2,8 +2,8 @@
  * WHAT: Creates a linked output card and starts a headless Codex skill process for the source card.
  * WHY: Card-scoped skill processing must persist the result target before the asynchronous Codex run begins.
  */
-import { spawn } from 'node:child_process';
-import { createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync, type WriteStream } from 'node:fs';
+import { spawn, type ChildProcess } from 'node:child_process';
+import { appendFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync, type WriteStream } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { applyLedgerMutation } from '@backend/business/ledger/helper/apply-ledger-mutation.js';
@@ -16,7 +16,7 @@ import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand } from '
 import { readCardSkillRunController } from './read-card-skill-run-controller.js';
 
 type AnyRecord = Record<string, unknown>;
-type ProcessStatus = 'running' | 'complete' | 'failed';
+type ProcessStatus = 'running' | 'complete' | 'failed' | 'cancelled';
 
 function safeSegment(value: unknown): string {
   return String(value || 'untitled').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled';
@@ -52,7 +52,7 @@ function notifyLedgerChange(callback: unknown, event: AnyRecord): void {
 }
 
 function appendRunStatus(filePath: string, status: ProcessStatus, detail: string): void {
-  const heading = status === 'complete' ? 'Completed' : status === 'failed' ? 'Failed' : 'Running';
+  const heading = status === 'complete' ? 'Completed' : status === 'failed' ? 'Failed' : status === 'cancelled' ? 'Cancelled' : 'Running';
   const markdown = [``, `---`, ``, `Codex run ${heading.toLowerCase()}: ${detail}`].join('\n');
   try {
     writeFileSync(filePath, `${existsSync(filePath) ? readFileSync(filePath, 'utf8').replace(/\s+$/g, '') : ''}${markdown}\n`, 'utf8');
@@ -67,6 +67,18 @@ function updateRuntimeRun(runtime: AnyRecord, runId: string, patch: AnyRecord): 
     : {};
   runtime.codexSkillRuns = runs;
   runs[runId] = { ...(runs[runId] ?? {}), ...patch };
+}
+
+function attachRuntimeRunChild(runtime: AnyRecord, runId: string, child: ChildProcess): void {
+  const runs = runtime.codexSkillRuns && typeof runtime.codexSkillRuns === 'object' ? runtime.codexSkillRuns as Record<string, AnyRecord> : {};
+  const run = runs[runId];
+  if (!run) return;
+  Object.defineProperty(run, 'child', { value: child, writable: true, configurable: true, enumerable: false });
+}
+
+function runtimeRunStatus(runtime: AnyRecord, runId: string): string {
+  const runs = runtime.codexSkillRuns && typeof runtime.codexSkillRuns === 'object' ? runtime.codexSkillRuns as Record<string, AnyRecord> : {};
+  return String(runs[runId]?.status ?? '');
 }
 
 function finishRunStreams(stdout: WriteStream, stderr: WriteStream, callback: () => void): void {
@@ -194,6 +206,7 @@ export async function startCardSkillProcessController(input: { action_payload?: 
     startedAt: new Date().toISOString(),
   };
   updateRuntimeRun(runtime, runId, run);
+  attachRuntimeRunChild(runtime, runId, child);
   notifyLedgerChange(payload.onLedgerChange, { reason: 'codex-skill-started', ledgerId, sourceCardId: cardId, outputCardId, runId, codexModel: command.model, codexEffort: command.effort });
 
   let settled = false;
@@ -213,13 +226,15 @@ export async function startCardSkillProcessController(input: { action_payload?: 
     if (settled) return;
     settled = true;
     const finishedAt = new Date().toISOString();
-    const status: ProcessStatus = exitCode === 0 ? 'complete' : 'failed';
-    appendRunStatus(outputFile, status, `exit code ${exitCode ?? 'unknown'}`);
+    const status: ProcessStatus = runtimeRunStatus(runtime, runId) === 'cancelled' ? 'cancelled' : exitCode === 0 ? 'complete' : 'failed';
+    const detail = status === 'cancelled' ? 'terminated by operator' : `exit code ${exitCode ?? 'unknown'}`;
+    appendRunStatus(outputFile, status, detail);
     updateRuntimeRun(runtime, runId, { status, exitCode, finishedAt });
     finishRunStreams(stdout, stderr, () => {
+      if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
       void readCardSkillRunController({ action_payload: { ledgerId, cardId: outputCardId, runId }, runtime_state: runtime })
         .catch(() => undefined)
-        .finally(() => notifyLedgerChange(payload.onLedgerChange, { reason: 'codex-skill-finished', ledgerId, sourceCardId: cardId, outputCardId, runId, exitCode }));
+        .finally(() => notifyLedgerChange(payload.onLedgerChange, { reason: status === 'cancelled' ? 'codex-skill-cancelled' : 'codex-skill-finished', ledgerId, sourceCardId: cardId, outputCardId, runId, exitCode }));
     });
   });
 

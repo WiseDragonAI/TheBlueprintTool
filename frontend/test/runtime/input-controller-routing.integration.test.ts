@@ -226,8 +226,14 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(cardDetailRenderer, /renderCardSkillRunWidget\(card\)/);
   assert.match(cardDetailSkillRunWidget, /cardCodexRunId\(card\)/);
   assert.match(cardDetailSkillRunWidget, /body\.className = 'codex-run-body'/);
+  assert.match(cardDetailSkillRunWidget, /cancel\.className = 'codex-run-cancel terminal-button terminal-button--stop terminal-button--compact'/);
+  assert.match(cardDetailSkillRunWidget, /cancel\.dataset\.codexRunCancel = ''/);
   assert.match(cardDetailSkillRunWidget, /widget\.replaceChildren\(body, timer\)/);
   assert.match(cardDetailSkillRunPoller, /requestCardSkillRunStatus/);
+  assert.match(cardDetailSkillRunPoller, /requestCardSkillRunCancel/);
+  assert.match(cardDetailSkillRunPoller, /function bindCancelButton\(poller: Poller\): void \{[\s\S]*void cancelRun\(poller\);[\s\S]*\}/);
+  assert.match(cardDetailSkillRunPoller, /requestCardSkillRunCancel\(\{ ledgerId: poller\.ledgerId, cardId: poller\.cardId, runId: poller\.runId \}\)/);
+  assert.match(cardDetailSkillRunPoller, /removeCancelButton\(element\)/);
   assert.match(cardDetailSkillRunPoller, /requestAnimationFrame/);
   assert.match(cardDetailSkillRunPoller, /now - poller\.lastClockPaintMs >= 33/);
   assert.match(cardDetailSkillRunPoller, /terminalSummaries\.set\(key, summary\)/);
@@ -235,7 +241,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(cardDetailSkillRunPoller, /Turn Completed in \$\{durationLabel\(summary\.elapsedMs\)\}/);
   assert.match(cardDetailSkillRunPoller, /function removeTimer\(element: HTMLElement\): void \{[\s\S]*querySelector\('\[data-codex-run-timer\]'\)\?\.remove\(\);[\s\S]*\}/);
   assert.match(cardDetailSkillRunPoller, /if \(!summary\.ok\) \{[\s\S]*removeTimer\(poller\.element\);[\s\S]*\}/);
-  assert.match(cardDetailSkillRunPoller, /if \(summary\.status !== 'running'\) removeTimer\(element\)/);
+  assert.match(cardDetailSkillRunPoller, /if \(summary\.status !== 'running'\) \{[\s\S]*removeTimer\(element\);[\s\S]*removeCancelButton\(element\);[\s\S]*\}/);
   assert.doesNotMatch(cardDetailSkillRunPoller, /setInterval/);
   assert.match(cardDetailSkillRunPoller, /schedulePoll\(poller, 0\)/);
   assert.match(cardDetailSkillRunPoller, /summary\.status === 'running'/);
@@ -260,8 +266,10 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(canvasLayerCss, /\.canvas \.card:not\(\.detail-visible\)\[data-card-work-status="processing"\] \.ledger-card-overview-status\s*{[^}]*top:\s*50%;[^}]*left:\s*50%;[^}]*justify-content:\s*center;[^}]*transform:\s*translate\(-50%, -50%\) scale\(var\(--inverse-viewport-scale, 1\)\);/s);
   assert.doesNotMatch(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-status-toggle/);
   assert.match(objectsCss, /\.codex-run-widget\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(108px, max-content\);[^}]*min-height:\s*86px;/s);
+  assert.match(objectsCss, /\.codex-run-cancel\s*{[^}]*min-height:\s*22px;[^}]*font-size:\s*9px;/s);
   assert.match(objectsCss, /\.codex-run-timer\s*{[^}]*align-self:\s*stretch;[^}]*font-size:\s*30px;[^}]*font-variant-numeric:\s*tabular-nums;/s);
   assert.match(objectsCss, /\.codex-run-widget\[data-run-status="complete"\]\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*min-height:\s*auto;/s);
+  assert.match(objectsCss, /\.codex-run-widget\[data-run-status="cancelled"\]\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*min-height:\s*auto;/s);
   assert.match(objectsCss, /\.codex-run-widget:not\(\[data-run-status="running"\]\) \.codex-run-timer\s*{[^}]*display:\s*none;/s);
   assert.match(objectsCss, /\.ledger-card-title-row\s*{[^}]*display:\s*flex;[^}]*gap:\s*6px;[^}]*margin-bottom:\s*8px;/s);
   assert.match(objectsCss, /\.card \.ledger-card-title-edit-button\s*{[^}]*flex:\s*0 0 24px;[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;/s);

@@ -2,7 +2,7 @@
  * WHAT: Requests the derived status for one card-scoped Codex skill run.
  * WHY: The card widget polls server-parsed JSONL progress without owning run persistence.
  */
-export type CardSkillRunStatus = 'running' | 'complete' | 'failed' | 'unknown';
+export type CardSkillRunStatus = 'running' | 'complete' | 'failed' | 'cancelled' | 'unknown';
 
 export type CardSkillRunEvent = {
   line: number;

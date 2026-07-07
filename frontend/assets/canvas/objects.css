@@ -493,6 +493,19 @@
   min-width: 0;
 }
 
+.codex-run-cancel {
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 2px;
+  font-size: 9px;
+  letter-spacing: 0;
+}
+
+.codex-run-cancel:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
 .codex-run-status,
 .codex-run-timer,
 .codex-run-metric {
@@ -558,6 +571,12 @@
   grid-template-columns: minmax(0, 1fr);
   min-height: auto;
   border-color: color-mix(in srgb, #ff7f8a, transparent 28%);
+}
+
+.codex-run-widget[data-run-status="cancelled"] {
+  grid-template-columns: minmax(0, 1fr);
+  min-height: auto;
+  border-color: color-mix(in srgb, #e49b45, transparent 24%);
 }
 
 .codex-run-widget[data-run-status="unknown"] {
