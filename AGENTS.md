@@ -21,27 +21,28 @@ decision-os serves the active `.decision-os` workspace by resolving the workspac
 current working directory. Always start the server from the target project workspace, not from the
 decision-os repo, unless the operator explicitly wants to inspect the repo's own ledgers.
 
-For this decision-os workspace:
+For this decision-os repo workspace, use port `50150`. Port `4174` is registered to
+`Ardaria_57` in multiterm state; do not start this repo on `4174`.
 
 ```bash
 cd /home/jbb/dev/EditorBP/decision-os
-setsid sh -c 'cd /home/jbb/dev/EditorBP/decision-os && exec env PORT=4174 /home/jbb/dev/EditorBP/decision-os/bin/decision-os-server.mjs >> /tmp/decision-os-4174.log 2>&1' </dev/null >/dev/null 2>&1 &
+setsid sh -c 'cd /home/jbb/dev/EditorBP/decision-os && exec env PORT=50150 /home/jbb/dev/EditorBP/decision-os/bin/decision-os-server.mjs >> /tmp/decision-os-50150.log 2>&1' </dev/null >/dev/null 2>&1 &
 ```
 
 Then verify both the process and HTTP route:
 
 ```bash
-ps -ef | rg 'decision-os-server|server.ts|4174' | rg -v rg
-curl -sS -I http://127.0.0.1:4174/specs
+ps -ef | rg 'decision-os-server|server.ts|50150' | rg -v rg
+curl -sS -I http://127.0.0.1:50150/specs
 ```
 
 Expected routes for decision-os:
 
 ```text
-http://127.0.0.1:4174/specs
-http://127.0.0.1:4174/data
-http://127.0.0.1:4174/performances
-http://127.0.0.1:4174/tasks-system
+http://127.0.0.1:50150/specs
+http://127.0.0.1:50150/data
+http://127.0.0.1:50150/performances
+http://127.0.0.1:50150/tasks-system
 ```
 
 ## Background Launch Rules
