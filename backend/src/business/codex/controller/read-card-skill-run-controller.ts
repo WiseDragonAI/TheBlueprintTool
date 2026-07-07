@@ -166,12 +166,17 @@ function inferredStatus(input: { runtime: AnyRecord; runId: string; events: Norm
   return Date.now() - newestWrite < 120000 ? 'running' : 'unknown';
 }
 
-function elapsedMs(input: { runtime: AnyRecord; runId: string; status: RunStatus }): number {
+function fileMtimeMs(file: string): number {
+  return existsSync(file) ? statSync(file).mtimeMs : 0;
+}
+
+function elapsedMs(input: { runtime: AnyRecord; runId: string; status: RunStatus; stdoutFile: string; stderrFile: string }): number {
   const runs = input.runtime.codexSkillRuns && typeof input.runtime.codexSkillRuns === 'object' ? input.runtime.codexSkillRuns as Record<string, AnyRecord> : {};
   const run = runs[input.runId] ?? {};
   const started = Date.parse(String(run.startedAt ?? '')) || runTimestamp(input.runId);
   const finished = Date.parse(String(run.finishedAt ?? ''));
-  const end = finished || (input.status === 'running' ? Date.now() : Date.now());
+  const terminalFileWrite = Math.max(fileMtimeMs(input.stdoutFile), fileMtimeMs(input.stderrFile));
+  const end = finished || (input.status === 'running' ? Date.now() : terminalFileWrite || Date.now());
   return Math.max(0, end - started);
 }
 
@@ -270,7 +275,7 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     cardId,
     runId,
     status,
-    elapsedMs: elapsedMs({ runtime, runId, status }),
+    elapsedMs: elapsedMs({ runtime, runId, status, stdoutFile, stderrFile }),
     lineCount: parsedLines.at(-1)?.line ?? 0,
     nextSince: parsedLines.at(-1)?.line ?? 0,
     toolCallCount: events.filter((event) => event.kind === 'tool_call' && event.type === 'item.completed').length,

@@ -12,13 +12,19 @@ type Poller = {
   element: HTMLElement;
   since: number;
   timer: ReturnType<typeof setTimeout> | null;
-  clock: ReturnType<typeof setInterval> | null;
+  clock: ClockHandle | null;
+  lastClockPaintMs: number;
   inFlight: boolean;
   detachedChecks: number;
   terminal: boolean;
 };
 
+type ClockHandle =
+  | { kind: 'animation'; id: number }
+  | { kind: 'timeout'; id: ReturnType<typeof setTimeout> };
+
 const pollers = new Map<string, Poller>();
+const terminalSummaries = new Map<string, CardSkillRunSummary>();
 
 function pollerKey(input: { ledgerId: string; cardId: string; runId: string }): string {
   return `${input.ledgerId}:${input.cardId}:${input.runId}`;
@@ -32,11 +38,7 @@ function durationLabel(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-  return hours > 0
-    ? `${hours}:${String(remainingMinutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-    : `${remainingMinutes}:${String(seconds).padStart(2, '0')}`;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
 function runStartedAt(runId: string): number {
@@ -53,6 +55,7 @@ function setText(element: HTMLElement, selector: string, text: string): void {
 function latestEventLabel(summary: CardSkillRunSummary): string {
   const latest = summary.latestEvent;
   if (!latest) return summary.status === 'running' ? 'Waiting for output' : statusLabel(summary.status);
+  if (summary.status === 'complete' && latest.title.toLowerCase() === 'turn completed') return `Turn completed in ${durationLabel(summary.elapsedMs)}`;
   if (latest.tool) return latest.tool;
   return latest.title || latest.kind || latest.type || statusLabel(summary.status);
 }
@@ -72,13 +75,29 @@ function paintFrontendClock(poller: Poller): void {
   setText(poller.element, '[data-codex-run-timer]', durationLabel(Date.now() - runStartedAt(poller.runId)));
 }
 
+function scheduleClockFrame(poller: Poller): void {
+  if (poller.clock || poller.terminal) return;
+  const tick = (): void => {
+    poller.clock = null;
+    if (poller.terminal) return;
+    if (!globalThis.document?.contains(poller.element)) return;
+    const now = Date.now();
+    if (now - poller.lastClockPaintMs >= 33) {
+      poller.lastClockPaintMs = now;
+      paintFrontendClock(poller);
+    }
+    scheduleClockFrame(poller);
+  };
+  if (typeof globalThis.requestAnimationFrame === 'function') {
+    poller.clock = { kind: 'animation', id: globalThis.requestAnimationFrame(tick) };
+  } else {
+    poller.clock = { kind: 'timeout', id: setTimeout(tick, 33) };
+  }
+}
+
 function startFrontendClock(poller: Poller): void {
   paintFrontendClock(poller);
-  if (poller.clock) return;
-  poller.clock = setInterval(() => {
-    if (!globalThis.document?.contains(poller.element)) return;
-    paintFrontendClock(poller);
-  }, 1000);
+  scheduleClockFrame(poller);
 }
 
 function schedulePoll(poller: Poller, delayMs = 1000): void {
@@ -90,7 +109,9 @@ function stopPoller(key: string): void {
   const poller = pollers.get(key);
   if (!poller) return;
   if (poller.timer) clearTimeout(poller.timer);
-  if (poller.clock) clearInterval(poller.clock);
+  if (poller.clock?.kind === 'animation') globalThis.cancelAnimationFrame?.(poller.clock.id);
+  if (poller.clock?.kind === 'timeout') clearTimeout(poller.clock.id);
+  poller.clock = null;
   pollers.delete(key);
 }
 
@@ -129,12 +150,18 @@ async function poll(poller: Poller): Promise<void> {
   if (summary.status === 'running') schedulePoll(poller);
   else {
     poller.terminal = true;
+    terminalSummaries.set(key, summary);
     stopPoller(key);
   }
 }
 
 export function bindCardSkillRunWidget(input: { ledgerId: string; cardId: string; runId: string; element: HTMLElement }): void {
   const key = pollerKey(input);
+  const terminalSummary = terminalSummaries.get(key);
+  if (terminalSummary) {
+    paintWidget(input.element, terminalSummary);
+    return;
+  }
   const existing = pollers.get(key);
   if (existing) {
     existing.element = input.element;
@@ -146,7 +173,7 @@ export function bindCardSkillRunWidget(input: { ledgerId: string; cardId: string
     if (!existing.timer && !existing.inFlight) schedulePoll(existing, 0);
     return;
   }
-  const poller: Poller = { ...input, since: 0, timer: null, clock: null, inFlight: false, detachedChecks: 0, terminal: false };
+  const poller: Poller = { ...input, since: 0, timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, detachedChecks: 0, terminal: false };
   pollers.set(key, poller);
   startFrontendClock(poller);
   schedulePoll(poller, 0);

@@ -465,13 +465,23 @@
 
 .codex-run-widget {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(108px, max-content);
+  align-items: stretch;
   gap: 7px;
   margin: 8px 0 10px;
   padding: 8px 9px;
+  min-height: 86px;
   border: 1px solid color-mix(in srgb, var(--card-zone-color), transparent 34%);
   border-radius: 2px;
   background: rgba(4, 7, 10, 0.74);
   box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.52);
+}
+
+.codex-run-body {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
 }
 
 .codex-run-header,
@@ -496,8 +506,18 @@
 }
 
 .codex-run-timer {
-  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  min-width: 108px;
+  padding-left: 12px;
+  border-left: 1px solid color-mix(in srgb, var(--card-zone-color), transparent 56%);
   color: #f3f6fb;
+  font-size: 30px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .codex-run-metrics {

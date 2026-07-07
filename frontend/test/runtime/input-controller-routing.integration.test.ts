@@ -225,8 +225,13 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(skillModal, /className = 'skill-run-controls'/);
   assert.match(cardDetailRenderer, /renderCardSkillRunWidget\(card\)/);
   assert.match(cardDetailSkillRunWidget, /cardCodexRunId\(card\)/);
+  assert.match(cardDetailSkillRunWidget, /body\.className = 'codex-run-body'/);
+  assert.match(cardDetailSkillRunWidget, /widget\.replaceChildren\(body, timer\)/);
   assert.match(cardDetailSkillRunPoller, /requestCardSkillRunStatus/);
-  assert.match(cardDetailSkillRunPoller, /setInterval/);
+  assert.match(cardDetailSkillRunPoller, /requestAnimationFrame/);
+  assert.match(cardDetailSkillRunPoller, /now - poller\.lastClockPaintMs >= 33/);
+  assert.match(cardDetailSkillRunPoller, /terminalSummaries\.set\(key, summary\)/);
+  assert.doesNotMatch(cardDetailSkillRunPoller, /setInterval/);
   assert.match(cardDetailSkillRunPoller, /schedulePoll\(poller, 0\)/);
   assert.match(cardDetailSkillRunPoller, /summary\.status === 'running'/);
   assert.match(threadNotes, /codexNoteClass\(note\)/);
@@ -249,6 +254,8 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(canvasLayerCss, /\.canvas \.card:not\(\.detail-visible\) \.ledger-card-detail-layer\s*{[^}]*content-visibility:\s*hidden;/s);
   assert.match(canvasLayerCss, /\.canvas \.card:not\(\.detail-visible\)\[data-card-work-status="processing"\] \.ledger-card-overview-status\s*{[^}]*top:\s*50%;[^}]*left:\s*50%;[^}]*justify-content:\s*center;[^}]*transform:\s*translate\(-50%, -50%\) scale\(var\(--inverse-viewport-scale, 1\)\);/s);
   assert.doesNotMatch(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-status-toggle/);
+  assert.match(objectsCss, /\.codex-run-widget\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(108px, max-content\);[^}]*min-height:\s*86px;/s);
+  assert.match(objectsCss, /\.codex-run-timer\s*{[^}]*align-self:\s*stretch;[^}]*font-size:\s*30px;[^}]*font-variant-numeric:\s*tabular-nums;/s);
   assert.match(objectsCss, /\.ledger-card-title-row\s*{[^}]*display:\s*flex;[^}]*gap:\s*6px;[^}]*margin-bottom:\s*8px;/s);
   assert.match(objectsCss, /\.card \.ledger-card-title-edit-button\s*{[^}]*flex:\s*0 0 24px;[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;/s);
   assert.match(objectsCss, /\.card:hover \.ledger-card-title-edit-button,[\s\S]*pointer-events:\s*auto;/);

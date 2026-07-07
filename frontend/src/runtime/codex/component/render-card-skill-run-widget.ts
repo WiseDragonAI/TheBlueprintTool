@@ -30,17 +30,21 @@ export function renderCardSkillRunWidget(card: Record<string, unknown>): HTMLEle
   widget.dataset.runId = runId;
   widget.dataset.runStatus = 'running';
 
+  const body = document.createElement('div');
+  body.className = 'codex-run-body';
+
   const header = document.createElement('div');
   header.className = 'codex-run-header';
   const status = document.createElement('span');
   status.className = 'codex-run-status';
   status.dataset.codexRunStatus = '';
   status.textContent = 'RUNNING';
+  header.replaceChildren(status);
+
   const timer = document.createElement('time');
   timer.className = 'codex-run-timer';
   timer.dataset.codexRunTimer = '';
   timer.textContent = '0:00';
-  header.replaceChildren(status, timer);
 
   const metrics = document.createElement('div');
   metrics.className = 'codex-run-metrics';
@@ -55,7 +59,8 @@ export function renderCardSkillRunWidget(card: Record<string, unknown>): HTMLEle
   latest.dataset.codexRunLatest = '';
   latest.textContent = 'Waiting for output';
 
-  widget.replaceChildren(header, metrics, latest);
+  body.replaceChildren(header, metrics, latest);
+  widget.replaceChildren(body, timer);
   bindCardSkillRunWidget({ ledgerId, cardId, runId, element: widget });
   return widget;
 }

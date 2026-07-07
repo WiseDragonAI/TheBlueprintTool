@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
@@ -11,7 +11,9 @@ import { createHttpServer } from '@backend/business/server/helper/create-http-se
 test('card skill run route derives JSONL progress and persists thread notes', async () => {
   const originalCwd = process.cwd();
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-card-skill-run-'));
-  const runId = `codex-skill-${Date.now()}-feed1234`;
+  const startedAt = Date.now() - 600000;
+  const completedAt = new Date(startedAt + 90000);
+  const runId = `codex-skill-${startedAt}-feed1234`;
   const outputCardId = `card-${runId}`;
   mkdirSync(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs'), { recursive: true });
   mkdirSync(join(workspace, '.decision-os'), { recursive: true });
@@ -31,14 +33,18 @@ test('card skill run route derives JSONL progress and persists thread notes', as
     relationships: [],
     notes: {}
   }, null, 2));
-  writeFileSync(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.jsonl`), [
+  const jsonlPath = join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.jsonl`);
+  const logPath = join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.log`);
+  writeFileSync(jsonlPath, [
     JSON.stringify({ type: 'thread.started' }),
     JSON.stringify({ type: 'item.completed', item: { id: 'msg-1', type: 'agent_message', text: 'Thinking text persisted.' } }),
     JSON.stringify({ type: 'item.completed', item: { id: 'cmd-1', type: 'command_execution', command: 'rg TODO', aggregated_output: 'found TODO', exit_code: 0, status: 'completed' } }),
     JSON.stringify({ type: 'item.completed', item: { id: 'file-1', type: 'file_change', changes: [{ path: 'result.md', kind: 'updated' }], status: 'completed' } }),
     JSON.stringify({ type: 'turn.completed' }),
   ].join('\n'));
-  writeFileSync(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.log`), '');
+  writeFileSync(logPath, '');
+  utimesSync(jsonlPath, completedAt, completedAt);
+  utimesSync(logPath, completedAt, completedAt);
 
   process.chdir(workspace);
   const runtime: Record<string, unknown> = {};
@@ -54,6 +60,7 @@ test('card skill run route derives JSONL progress and persists thread notes', as
       ok: boolean;
       status: string;
       lineCount: number;
+      elapsedMs: number;
       toolCallCount: number;
       agentMessageCount: number;
       fileChangeCount: number;
@@ -62,6 +69,7 @@ test('card skill run route derives JSONL progress and persists thread notes', as
     assert.equal(body.ok, true);
     assert.equal(body.status, 'complete');
     assert.equal(body.lineCount, 5);
+    assert.ok(body.elapsedMs >= 89000 && body.elapsedMs <= 91000);
     assert.equal(body.toolCallCount, 1);
     assert.equal(body.agentMessageCount, 1);
     assert.equal(body.fileChangeCount, 1);
