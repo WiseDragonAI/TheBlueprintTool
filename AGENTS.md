@@ -7,6 +7,14 @@
 - decision-os `# AGENT` thread replies must be in English, even when the corresponding `# OPERATOR` note is French.
 - Do not write French acknowledgements such as `Traité`; use English equivalents such as `Treated`.
 
+## KNOWLEDGE
+
+### Anti Specs
+
+- **Rule.** Never write anti-specs: generic process claims that spend operator tokens and attention without adding a concrete requirement, constraint, decision, evidence, or action.
+- **Don't.** `Good PRDs do not exist to create paperwork. They align teams around the customer problem, goals, requirements, risks, constraints, dependencies, and success measures before execution.`
+- **Do.** `PRD purpose: capture the requested decision, user need, current technical context, current UX context, constraints, evidence, risks, options, recommendation, acceptance criteria, and next operator gate.`
+
 ## decision-os Server Procedure
 
 decision-os serves the active `.decision-os` workspace by resolving the workspace root from the process
