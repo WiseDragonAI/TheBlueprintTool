@@ -12,7 +12,10 @@ type Poller = {
   element: HTMLElement;
   since: number;
   timer: ReturnType<typeof setTimeout> | null;
+  clock: ReturnType<typeof setInterval> | null;
   inFlight: boolean;
+  detachedChecks: number;
+  terminal: boolean;
 };
 
 const pollers = new Map<string, Poller>();
@@ -36,6 +39,12 @@ function durationLabel(ms: number): string {
     : `${remainingMinutes}:${String(seconds).padStart(2, '0')}`;
 }
 
+function runStartedAt(runId: string): number {
+  const match = runId.match(/^codex-skill-(\d+)-/);
+  const timestamp = Number(match?.[1] ?? 0);
+  return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : Date.now();
+}
+
 function setText(element: HTMLElement, selector: string, text: string): void {
   const target = element.querySelector(selector);
   if (target) target.textContent = text;
@@ -51,31 +60,50 @@ function latestEventLabel(summary: CardSkillRunSummary): string {
 function paintWidget(element: HTMLElement, summary: CardSkillRunSummary): void {
   element.dataset.runStatus = summary.status;
   setText(element, '[data-codex-run-status]', statusLabel(summary.status));
-  setText(element, '[data-codex-run-timer]', durationLabel(summary.elapsedMs));
+  if (summary.status !== 'running') setText(element, '[data-codex-run-timer]', durationLabel(summary.elapsedMs));
   setText(element, '[data-codex-run-tools]', String(summary.toolCallCount));
   setText(element, '[data-codex-run-messages]', String(summary.agentMessageCount + summary.thinkingCount));
   setText(element, '[data-codex-run-files]', String(summary.fileChangeCount));
   setText(element, '[data-codex-run-latest]', latestEventLabel(summary));
 }
 
-function schedulePoll(poller: Poller): void {
+function paintFrontendClock(poller: Poller): void {
+  if (poller.terminal) return;
+  setText(poller.element, '[data-codex-run-timer]', durationLabel(Date.now() - runStartedAt(poller.runId)));
+}
+
+function startFrontendClock(poller: Poller): void {
+  paintFrontendClock(poller);
+  if (poller.clock) return;
+  poller.clock = setInterval(() => {
+    if (!globalThis.document?.contains(poller.element)) return;
+    paintFrontendClock(poller);
+  }, 1000);
+}
+
+function schedulePoll(poller: Poller, delayMs = 1000): void {
   if (poller.timer) clearTimeout(poller.timer);
-  poller.timer = setTimeout(() => void poll(poller), 1000);
+  poller.timer = setTimeout(() => void poll(poller), delayMs);
 }
 
 function stopPoller(key: string): void {
   const poller = pollers.get(key);
   if (!poller) return;
   if (poller.timer) clearTimeout(poller.timer);
+  if (poller.clock) clearInterval(poller.clock);
   pollers.delete(key);
 }
 
 async function poll(poller: Poller): Promise<void> {
   const key = pollerKey(poller);
   if (!globalThis.document?.contains(poller.element)) {
-    stopPoller(key);
+    poller.detachedChecks += 1;
+    if (poller.detachedChecks < 4) schedulePoll(poller, 250);
+    else stopPoller(key);
     return;
   }
+  poller.detachedChecks = 0;
+  startFrontendClock(poller);
   if (poller.inFlight) {
     schedulePoll(poller);
     return;
@@ -99,7 +127,10 @@ async function poll(poller: Poller): Promise<void> {
   paintWidget(poller.element, summary);
   telemetry('codex-skill-run-polled', { runId: poller.runId, status: summary.status, lineCount: summary.lineCount });
   if (summary.status === 'running') schedulePoll(poller);
-  else stopPoller(key);
+  else {
+    poller.terminal = true;
+    stopPoller(key);
+  }
 }
 
 export function bindCardSkillRunWidget(input: { ledgerId: string; cardId: string; runId: string; element: HTMLElement }): void {
@@ -110,10 +141,13 @@ export function bindCardSkillRunWidget(input: { ledgerId: string; cardId: string
     existing.ledgerId = input.ledgerId;
     existing.cardId = input.cardId;
     existing.runId = input.runId;
-    if (!existing.timer && !existing.inFlight) schedulePoll(existing);
+    existing.terminal = false;
+    startFrontendClock(existing);
+    if (!existing.timer && !existing.inFlight) schedulePoll(existing, 0);
     return;
   }
-  const poller: Poller = { ...input, since: 0, timer: null, inFlight: false };
+  const poller: Poller = { ...input, since: 0, timer: null, clock: null, inFlight: false, detachedChecks: 0, terminal: false };
   pollers.set(key, poller);
-  void poll(poller);
+  startFrontendClock(poller);
+  schedulePoll(poller, 0);
 }

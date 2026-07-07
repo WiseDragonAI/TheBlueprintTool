@@ -223,6 +223,8 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(cardDetailRenderer, /renderCardSkillRunWidget\(card\)/);
   assert.match(cardDetailSkillRunWidget, /cardCodexRunId\(card\)/);
   assert.match(cardDetailSkillRunPoller, /requestCardSkillRunStatus/);
+  assert.match(cardDetailSkillRunPoller, /setInterval/);
+  assert.match(cardDetailSkillRunPoller, /schedulePoll\(poller, 0\)/);
   assert.match(cardDetailSkillRunPoller, /summary\.status === 'running'/);
   assert.match(threadNotes, /codexNoteClass\(note\)/);
   assert.match(threadNotes, /is-codex-run-event/);

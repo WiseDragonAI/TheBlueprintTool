@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { loadCodexSkills } from '../../src/runtime/codex/effect/load-codex-skills.js';
 import { requestCardSkillProcess } from '../../src/runtime/codex/effect/request-card-skill-process.js';
 import { requestCardSkillRunStatus } from '../../src/runtime/codex/effect/request-card-skill-run-status.js';
+import { cardCodexRunId } from '../../src/runtime/codex/helper/card-codex-run-id.js';
 
 test('loadCodexSkills returns server skill summaries', async () => {
   const previousFetch = globalThis.fetch;
@@ -81,4 +82,15 @@ test('requestCardSkillRunStatus queries derived run progress', async () => {
   } finally {
     globalThis.fetch = previousFetch;
   }
+});
+
+test('cardCodexRunId falls back to the durable output card id', () => {
+  assert.equal(cardCodexRunId({
+    id: 'card-codex-skill-1000-abcd',
+    comment: { what: '# Finished result without run metadata' }
+  }), 'codex-skill-1000-abcd');
+  assert.equal(cardCodexRunId({
+    id: 'card-result',
+    comment: { what: 'Codex run: codex-skill-2000-efgh' }
+  }), 'codex-skill-2000-efgh');
 });

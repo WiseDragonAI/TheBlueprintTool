@@ -175,9 +175,11 @@ function elapsedMs(input: { runtime: AnyRecord; runId: string; status: RunStatus
   return Math.max(0, end - started);
 }
 
-function cardBodyContainsRun(input: { ledger: AnyRecord; decisionOsRoot: string; cardId: string; runId: string }): boolean {
+function cardReferencesRun(input: { ledger: AnyRecord; decisionOsRoot: string; cardId: string; runId: string }): boolean {
   const hydrated = hydrateLedgerCardContent(JSON.parse(JSON.stringify(input.ledger)), input.decisionOsRoot) as { cards?: AnyRecord[] };
   const card = (hydrated.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
+  if (!card) return false;
+  if (String(card.cardType ?? '') === 'codex-skill-run' && input.cardId === `card-${safeSegment(input.runId)}`) return true;
   const comment = card?.comment && typeof card.comment === 'object' ? card.comment as AnyRecord : {};
   const body = String(comment.what ?? comment.body ?? comment.description ?? '');
   return body.includes(`Codex run: ${input.runId}`);
@@ -251,7 +253,7 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
   if (!isInside(decisionOsRoot, ledgerPath) || !existsSync(ledgerPath)) return { ok: false, statusCode: 404, error: 'Ledger file not found.', ledgerId };
 
   const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord & { cards?: AnyRecord[] };
-  if (!cardBodyContainsRun({ ledger, decisionOsRoot, cardId, runId })) return { ok: false, statusCode: 404, error: 'Run not found on card.', cardId, runId };
+  if (!cardReferencesRun({ ledger, decisionOsRoot, cardId, runId })) return { ok: false, statusCode: 404, error: 'Run not found on card.', cardId, runId };
 
   const runDirectory = resolve(decisionOsRoot, 'runs', 'codex-skills', safeSegment(ledgerStem(ledgerPath)));
   const stdoutFile = resolve(runDirectory, `${safeSegment(runId)}.jsonl`);

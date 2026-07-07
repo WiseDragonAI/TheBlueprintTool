@@ -3,7 +3,7 @@
  * WHY: Card-scoped skill processing must persist the result target before the asynchronous Codex run begins.
  */
 import { spawn } from 'node:child_process';
-import { createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync, type WriteStream } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { applyLedgerMutation } from '@backend/business/ledger/helper/apply-ledger-mutation.js';
@@ -13,6 +13,7 @@ import { stripHydratedThreadNotes } from '@backend/business/ledger/helper/thread
 import { scanCodexSkills } from '../helper/scan-codex-skills.js';
 import { buildCardSkillPrompt } from '../helper/build-card-skill-prompt.js';
 import { resolveCodexCommand } from '../helper/resolve-codex-command.js';
+import { readCardSkillRunController } from './read-card-skill-run-controller.js';
 
 type AnyRecord = Record<string, unknown>;
 type ProcessStatus = 'running' | 'complete' | 'failed';
@@ -66,6 +67,18 @@ function updateRuntimeRun(runtime: AnyRecord, runId: string, patch: AnyRecord): 
     : {};
   runtime.codexSkillRuns = runs;
   runs[runId] = { ...(runs[runId] ?? {}), ...patch };
+}
+
+function finishRunStreams(stdout: WriteStream, stderr: WriteStream, callback: () => void): void {
+  let pending = 2;
+  const done = (): void => {
+    pending -= 1;
+    if (pending === 0) callback();
+  };
+  for (const stream of [stdout, stderr]) {
+    if (stream.destroyed || stream.writableEnded) done();
+    else stream.end(done);
+  }
 }
 
 export async function startCardSkillProcessController(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): Promise<AnyRecord> {
@@ -151,8 +164,8 @@ export async function startCardSkillProcessController(input: { action_payload?: 
   const child = spawn(command.command, command.args, { cwd: workspaceRoot, stdio: ['pipe', 'pipe', 'pipe'] });
   const stdout = createWriteStream(stdoutFile, { flags: 'a' });
   const stderr = createWriteStream(stderrFile, { flags: 'a' });
-  child.stdout.pipe(stdout);
-  child.stderr.pipe(stderr);
+  child.stdout.pipe(stdout, { end: false });
+  child.stderr.pipe(stderr, { end: false });
   child.stdin.end(prompt);
 
   const run = {
@@ -178,9 +191,11 @@ export async function startCardSkillProcessController(input: { action_payload?: 
     const finishedAt = new Date().toISOString();
     appendRunStatus(outputFile, 'failed', error.message);
     updateRuntimeRun(runtime, runId, { status: 'failed', error: error.message, finishedAt });
-    notifyLedgerChange(payload.onLedgerChange, { reason: 'codex-skill-failed', ledgerId, sourceCardId: cardId, outputCardId, runId });
-    stdout.end();
-    stderr.end();
+    finishRunStreams(stdout, stderr, () => {
+      void readCardSkillRunController({ action_payload: { ledgerId, cardId: outputCardId, runId }, runtime_state: runtime })
+        .catch(() => undefined)
+        .finally(() => notifyLedgerChange(payload.onLedgerChange, { reason: 'codex-skill-failed', ledgerId, sourceCardId: cardId, outputCardId, runId }));
+    });
   });
   child.on('close', (exitCode) => {
     if (settled) return;
@@ -189,9 +204,11 @@ export async function startCardSkillProcessController(input: { action_payload?: 
     const status: ProcessStatus = exitCode === 0 ? 'complete' : 'failed';
     appendRunStatus(outputFile, status, `exit code ${exitCode ?? 'unknown'}`);
     updateRuntimeRun(runtime, runId, { status, exitCode, finishedAt });
-    notifyLedgerChange(payload.onLedgerChange, { reason: 'codex-skill-finished', ledgerId, sourceCardId: cardId, outputCardId, runId, exitCode });
-    stdout.end();
-    stderr.end();
+    finishRunStreams(stdout, stderr, () => {
+      void readCardSkillRunController({ action_payload: { ledgerId, cardId: outputCardId, runId }, runtime_state: runtime })
+        .catch(() => undefined)
+        .finally(() => notifyLedgerChange(payload.onLedgerChange, { reason: 'codex-skill-finished', ledgerId, sourceCardId: cardId, outputCardId, runId, exitCode }));
+    });
   });
 
   return { ok: true, statusCode: 202, run };

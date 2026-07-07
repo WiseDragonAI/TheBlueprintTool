@@ -12,6 +12,7 @@ test('card skill run route derives JSONL progress and persists thread notes', as
   const originalCwd = process.cwd();
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-card-skill-run-'));
   const runId = `codex-skill-${Date.now()}-feed1234`;
+  const outputCardId = `card-${runId}`;
   mkdirSync(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs'), { recursive: true });
   mkdirSync(join(workspace, '.decision-os'), { recursive: true });
   writeFileSync(join(workspace, '.decision-os', 'state.json'), JSON.stringify({
@@ -19,10 +20,10 @@ test('card skill run route derives JSONL progress and persists thread notes', as
   }, null, 2));
   writeFileSync(join(workspace, '.decision-os', 'specs.json'), JSON.stringify({
     cards: [{
-      id: 'output-card',
+      id: outputCardId,
       title: 'Skill Result',
       cardType: 'codex-skill-run',
-      comment: { what: `# Skill Result\n\nStatus: processing\n\nCodex run: ${runId}` },
+      comment: { what: '# Finished Skill Result\n\nThe final card body replaced the initial run metadata.' },
       facts: [],
       fields: []
     }],
@@ -47,7 +48,7 @@ test('card skill run route derives JSONL progress and persists thread notes', as
   const address = server.address() as AddressInfo;
 
   try {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=output-card&since=2`);
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}&since=2`);
     assert.equal(response.status, 200);
     const body = await response.json() as {
       ok: boolean;
@@ -67,8 +68,8 @@ test('card skill run route derives JSONL progress and persists thread notes', as
     assert.deepEqual(body.events.map((event) => event.line), [3, 4, 5]);
 
     const ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { threadFiles?: Record<string, string> };
-    assert.equal(ledger.threadFiles?.['thread-output-card'], '.decision-os/threads/specs/thread-output-card.md');
-    const thread = readFileSync(join(workspace, '.decision-os', 'threads', 'specs', 'thread-output-card.md'), 'utf8');
+    assert.equal(ledger.threadFiles?.[`thread-${outputCardId}`], `.decision-os/threads/specs/thread-${outputCardId}.md`);
+    const thread = readFileSync(join(workspace, '.decision-os', 'threads', 'specs', `thread-${outputCardId}.md`), 'utf8');
     assert.match(thread, /"codexKind":"agent_message"/);
     assert.match(thread, /"codexKind":"tool_call"/);
     assert.match(thread, /Tool call/);
