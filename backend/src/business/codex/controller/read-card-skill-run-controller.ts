@@ -92,10 +92,10 @@ function normalizeRunEvent(line: ParsedRunLine): NormalizedRunEvent {
     return { line: line.line, type, kind: 'run_status', title: 'Turn completed', text: 'Codex turn completed.', status: 'complete', itemId, tool: '', exitCode: '', persist: true };
   }
   if (type === 'turn.started') {
-    return { line: line.line, type, kind: 'run_status', title: 'Turn started', text: 'Codex turn started.', status: 'running', itemId, tool: '', exitCode: '', persist: false };
+    return { line: line.line, type, kind: 'run_status', title: 'Turn started', text: 'Codex turn started.', status: 'running', itemId, tool: '', exitCode: '', persist: true };
   }
   if (type === 'thread.started') {
-    return { line: line.line, type, kind: 'run_status', title: 'Thread started', text: 'Codex thread started.', status: 'running', itemId, tool: '', exitCode: '', persist: false };
+    return { line: line.line, type, kind: 'run_status', title: 'Thread started', text: 'Codex thread started.', status: 'running', itemId, tool: '', exitCode: '', persist: true };
   }
   if (itemType === 'agent_message') {
     const text = textBlock(item.text ?? item.message ?? event.text);
@@ -190,6 +190,11 @@ function fileMtimeMs(file: string): number {
   return existsSync(file) ? statSync(file).mtimeMs : 0;
 }
 
+function noteCodexLine(note: AnyRecord): number {
+  const line = Number(note.codexLine ?? 0);
+  return Number.isFinite(line) && line > 0 ? line : 0;
+}
+
 function elapsedMs(input: { runtime: AnyRecord; runId: string; status: RunStatus; stdoutFile: string; stderrFile: string }): number {
   const runs = input.runtime.codexSkillRuns && typeof input.runtime.codexSkillRuns === 'object' ? input.runtime.codexSkillRuns as Record<string, AnyRecord> : {};
   const run = runs[input.runId] ?? {};
@@ -210,10 +215,6 @@ function cardReferencesRun(input: { ledger: AnyRecord; decisionOsRoot: string; c
   return body.includes(`Codex run: ${input.runId}`);
 }
 
-function eventTimestamp(runId: string, line: number): string {
-  return new Date(runTimestamp(runId) + line).toISOString();
-}
-
 function persistRunEvents(input: { decisionOsRoot: string; ledgerPath: string; ledger: AnyRecord; cardId: string; runId: string; events: NormalizedRunEvent[] }): number {
   hydrateLedgerThreadNotes(input.ledger, input.decisionOsRoot);
   const threadId = `thread-${input.cardId}`;
@@ -224,11 +225,12 @@ function persistRunEvents(input: { decisionOsRoot: string; ledgerPath: string; l
   for (const event of input.events) {
     if (!event.persist) continue;
     const id = `codex-${safeSegment(input.runId)}-line-${event.line}`;
+    const existing = byId.get(id);
     const nextNote: AnyRecord = {
       id,
       role: 'agent',
       message: event.text || event.title,
-      timestamp: eventTimestamp(input.runId, event.line),
+      timestamp: String(existing?.timestamp ?? '') || new Date().toISOString(),
       status: event.status || event.title,
       codexRunId: input.runId,
       codexLine: String(event.line),
@@ -238,13 +240,14 @@ function persistRunEvents(input: { decisionOsRoot: string; ledgerPath: string; l
       codexTool: event.tool,
       codexExitCode: event.exitCode,
     };
-    const existing = byId.get(id);
     if (existing) {
       const previous = JSON.stringify(existing);
       Object.assign(existing, nextNote);
       if (JSON.stringify(existing) !== previous) changed += 1;
     } else {
-      notes.push(nextNote);
+      const insertAt = notes.findIndex((note) => String(note.codexRunId ?? '') === input.runId && noteCodexLine(note) > event.line);
+      if (insertAt >= 0) notes.splice(insertAt, 0, nextNote);
+      else notes.push(nextNote);
       byId.set(id, nextNote);
       changed += 1;
     }

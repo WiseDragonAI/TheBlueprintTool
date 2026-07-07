@@ -123,32 +123,19 @@ function threadMessagesAfterLastSessionEnd(input: { ledger: AnyRecord; decisionO
   hydrateLedgerThreadNotes(input.ledger, input.decisionOsRoot);
   const threadId = `thread-${input.cardId}`;
   const notes = normalizeLedgerNotes(input.ledger)[threadId] ?? [];
-  let sessionEndIndex = -1;
-  let sessionEndTime = 0;
+  let latestCompletedIndex = -1;
+  let latestCodexIndex = -1;
   for (let index = 0; index < notes.length; index += 1) {
     const note = notes[index];
-    if (String(note.codexRunId ?? '') !== input.runId || String(note.codexEventType ?? '') !== 'turn.completed') continue;
-    const timestamp = Date.parse(String(note.timestamp ?? '')) || 0;
-    if (timestamp >= sessionEndTime) {
-      sessionEndIndex = index;
-      sessionEndTime = timestamp;
-    }
+    if (String(note.codexRunId ?? '') !== input.runId) continue;
+    latestCodexIndex = index;
+    if (String(note.codexEventType ?? '') === 'turn.completed') latestCompletedIndex = index;
   }
-  if (sessionEndIndex < 0) {
-    for (let index = 0; index < notes.length; index += 1) {
-      if (String(notes[index].codexRunId ?? '') !== input.runId) continue;
-      const timestamp = Date.parse(String(notes[index].timestamp ?? '')) || 0;
-      if (timestamp >= sessionEndTime) {
-        sessionEndIndex = index;
-        sessionEndTime = timestamp;
-      }
-    }
-  }
+  const boundaryIndex = latestCodexIndex > latestCompletedIndex ? latestCodexIndex : latestCompletedIndex;
   return notes.filter((note, index) => {
-    if (!String(note.message ?? note.body ?? '').trim() || index === sessionEndIndex) return false;
-    const timestamp = Date.parse(String(note.timestamp ?? '')) || 0;
-    if (sessionEndTime > 0 && timestamp > 0) return timestamp > sessionEndTime;
-    return index > sessionEndIndex;
+    if (String(note.codexRunId ?? '')) return false;
+    if (!String(note.message ?? note.body ?? '').trim()) return false;
+    return index > boundaryIndex;
   });
 }
 

@@ -78,6 +78,7 @@ test('card skill run route derives JSONL progress and persists thread notes', as
     const ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { threadFiles?: Record<string, string> };
     assert.equal(ledger.threadFiles?.[`thread-${outputCardId}`], `.decision-os/threads/specs/thread-${outputCardId}.md`);
     const thread = readFileSync(join(workspace, '.decision-os', 'threads', 'specs', `thread-${outputCardId}.md`), 'utf8');
+    assert.match(thread, /"codexEventType":"thread.started"/);
     assert.match(thread, /"codexKind":"agent_message"/);
     assert.match(thread, /"codexKind":"tool_call"/);
     assert.match(thread, /Tool call/);
@@ -142,6 +143,9 @@ test('card skill run route infers status from the latest continued JSONL segment
     assert.equal(running.ok, true);
     assert.equal(running.status, 'running');
     assert.equal(running.lineCount, 4);
+    const thread = readFileSync(join(workspace, '.decision-os', 'threads', 'specs', `thread-${outputCardId}.md`), 'utf8');
+    assert.match(thread, /"codexEventType":"turn.started"/);
+    assert.match(thread, /Codex turn started\./);
 
     writeFileSync(logPath, 'Codex run cancelled: terminated by operator\n');
     const cancelledAt = new Date();
