@@ -211,6 +211,12 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(actionClick, /beginLedgerCardTitleEdit\(card\)/);
   assert.match(actionClick, /if \(action === 'edit-card-description'\)/);
   assert.match(actionClick, /beginLedgerCardDescriptionEdit\(card\)/);
+
+  const skillModal = source('frontend/src/runtime/codex/effect/render-skill-modal.ts');
+  assert.match(skillModal, /resultsScrollTop/);
+  assert.match(skillModal, /querySelector<HTMLDivElement>\('\.skill-results'\)\?\.scrollTop/);
+  assert.match(skillModal, /className = 'skill-selected-name'/);
+  assert.match(skillModal, /selectedName\.textContent = skillModalState\.selectedSkillName/);
   assert.doesNotMatch(controlOverlay, /selection\.cardIds/);
   assert.match(controlOverlay, /export function hideCanvasControlOverlay\(\): void \{[\s\S]*existingControlOverlay\(\)\?\.replaceChildren\(\);[\s\S]*\}/);
   assert.match(controlOverlay, /function controlsDisabled\(\): boolean \{[\s\S]*classList\?\.contains\('low-detail'\)/);

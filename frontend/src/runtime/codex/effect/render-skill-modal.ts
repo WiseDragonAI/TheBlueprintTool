@@ -17,6 +17,10 @@ type SkillModalState = {
   error: string;
 };
 
+type RenderSkillModalOptions = {
+  resultsScrollTop?: number;
+};
+
 const skillModalState: SkillModalState = {
   cardId: '',
   query: '',
@@ -58,7 +62,7 @@ function renderSkillRow(skill: CodexSkillSummary): HTMLButtonElement {
   return button;
 }
 
-function renderSkillModal(): void {
+function renderSkillModal(options: RenderSkillModalOptions = {}): void {
   if (!skillModal) return;
   const title = document.createElement('h2');
   title.id = 'skill-modal-title';
@@ -104,6 +108,12 @@ function renderSkillModal(): void {
     actions.append(error);
   }
   if (skillModalState.selectedSkillName) {
+    const selectedName = document.createElement('span');
+    selectedName.className = 'skill-selected-name';
+    selectedName.title = skillModalState.selectedSkillName;
+    selectedName.textContent = skillModalState.selectedSkillName;
+    actions.append(selectedName);
+
     const process = document.createElement('button');
     process.className = 'skill-process-button';
     process.type = 'button';
@@ -120,6 +130,7 @@ function renderSkillModal(): void {
 
   skillModal.setAttribute('aria-labelledby', 'skill-modal-title');
   skillModal.replaceChildren(title, search, results, actions);
+  if (options.resultsScrollTop !== undefined) results.scrollTop = options.resultsScrollTop;
 }
 
 export async function openCardSkillModal(cardId: string): Promise<void> {
@@ -136,17 +147,19 @@ export async function openCardSkillModal(cardId: string): Promise<void> {
 }
 
 export function selectCardSkill(skillName: string): void {
+  const resultsScrollTop = skillModal?.querySelector<HTMLDivElement>('.skill-results')?.scrollTop;
   skillModalState.selectedSkillName = skillName;
   skillModalState.error = '';
-  renderSkillModal();
+  renderSkillModal({ resultsScrollTop });
   telemetry('codex-skill-selected', { cardId: skillModalState.cardId, skillName });
 }
 
 export async function processSelectedCardSkill(): Promise<void> {
   if (!skillModalState.cardId || !skillModalState.selectedSkillName || skillModalState.processing) return;
+  const resultsScrollTop = skillModal?.querySelector<HTMLDivElement>('.skill-results')?.scrollTop;
   skillModalState.processing = true;
   skillModalState.error = '';
-  renderSkillModal();
+  renderSkillModal({ resultsScrollTop });
   const ok = await processCardSkillController({ cardId: skillModalState.cardId, skillName: skillModalState.selectedSkillName });
   skillModalState.processing = false;
   if (ok) {
@@ -154,7 +167,7 @@ export async function processSelectedCardSkill(): Promise<void> {
     return;
   }
   skillModalState.error = 'Process failed';
-  renderSkillModal();
+  renderSkillModal({ resultsScrollTop });
 }
 
 export function closeCardSkillModal(): void {

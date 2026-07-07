@@ -151,6 +151,17 @@
   margin-right: auto;
 }
 
+.skill-selected-name {
+  max-width: min(280px, 40vw);
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .skill-process-button {
   min-width: 92px;
   font-weight: 800;
