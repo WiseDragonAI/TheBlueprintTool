@@ -64,6 +64,10 @@
   overflow: hidden;
 }
 
+.skill-modal:not([open]) {
+  display: none;
+}
+
 .skill-modal[open] {
   display: grid;
   grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
