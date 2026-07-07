@@ -463,6 +463,83 @@
   --terminal-button-gradient-shadow: linear-gradient(90deg, rgba(116, 214, 128, 0.56), rgba(62, 156, 84, 0.42));
 }
 
+.codex-run-widget {
+  display: grid;
+  gap: 7px;
+  margin: 8px 0 10px;
+  padding: 8px 9px;
+  border: 1px solid color-mix(in srgb, var(--card-zone-color), transparent 34%);
+  border-radius: 2px;
+  background: rgba(4, 7, 10, 0.74);
+  box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.52);
+}
+
+.codex-run-header,
+.codex-run-metrics {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.codex-run-status,
+.codex-run-timer,
+.codex-run-metric {
+  min-width: 0;
+  color: color-mix(in srgb, var(--card-zone-color), white 50%);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.codex-run-timer {
+  flex: 0 0 auto;
+  color: #f3f6fb;
+}
+
+.codex-run-metrics {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.codex-run-metric {
+  display: inline-flex;
+  gap: 4px;
+  color: var(--muted);
+}
+
+.codex-run-metric strong {
+  display: inline;
+  margin: 0;
+  color: #f3f6fb;
+}
+
+.codex-run-latest {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: #d7e4f2;
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.codex-run-widget[data-run-status="complete"] {
+  border-color: color-mix(in srgb, #74d680, transparent 32%);
+}
+
+.codex-run-widget[data-run-status="failed"] {
+  border-color: color-mix(in srgb, #ff7f8a, transparent 28%);
+}
+
+.codex-run-widget[data-run-status="unknown"] {
+  border-color: color-mix(in srgb, #a8b1bc, transparent 48%);
+}
+
 .ledger-card-tabs {
   position: absolute;
   left: 14px;

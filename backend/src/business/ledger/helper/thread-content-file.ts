@@ -51,7 +51,7 @@ function parseMetadata(line: string): AnyRecord | null {
 
 function metadataFor(note: AnyRecord): AnyRecord {
   const metadata: AnyRecord = {};
-  for (const key of ['id', 'timestamp', 'voiceFileRef', 'status', 'transcriptionStartedAt', 'error']) {
+  for (const key of ['id', 'timestamp', 'voiceFileRef', 'status', 'transcriptionStartedAt', 'error', 'codexRunId', 'codexLine', 'codexKind', 'codexEventType', 'codexItemId', 'codexTool', 'codexExitCode']) {
     if (typeof note[key] === 'string' && note[key]) metadata[key] = note[key];
   }
   if (isRecord(note.imageSizes) && Object.keys(note.imageSizes).length > 0) metadata.imageSizes = note.imageSizes;

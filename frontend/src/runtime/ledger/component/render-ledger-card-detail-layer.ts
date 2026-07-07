@@ -3,6 +3,7 @@
  * WHY: The canvas keeps low-detail cards cheap by hydrating this subtree only for visible cards.
  */
 import { state } from '../../state.js';
+import { renderCardSkillRunWidget } from '../../codex/component/render-card-skill-run-widget.js';
 import { cardFields } from '../helper/card-fields.js';
 import { cardLabels } from '../helper/card-labels.js';
 import { ledgerCardBody } from '../helper/ledger-card-body.js';
@@ -85,8 +86,9 @@ export function renderLedgerCardDetailLayer(card: Record<string, unknown>, exist
   const detailLayer = existing ?? document.createElement('div');
   const labelNodes = labels.length > 0 ? [renderLedgerCardLabels(labels)] : [];
   const tabs = fields.length > 0 ? [renderLedgerCardTabs(id, activeTab)] : [];
+  const codexRunWidget = renderCardSkillRunWidget(card);
   detailLayer.className = 'ledger-card-detail-layer';
   const linkedLedgerCard = isLinkedLedgerCard(card);
-  detailLayer.replaceChildren(...(linkedLedgerCard ? [] : [createCardStatusIndicator(visibleStatus)]), ...labelNodes, createLedgerCardTitleRow(card, id), ...tabs, body);
+  detailLayer.replaceChildren(...(linkedLedgerCard ? [] : [createCardStatusIndicator(visibleStatus)]), ...labelNodes, createLedgerCardTitleRow(card, id), ...(codexRunWidget ? [codexRunWidget] : []), ...tabs, body);
   return detailLayer;
 }

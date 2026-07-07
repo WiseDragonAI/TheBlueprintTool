@@ -12,6 +12,11 @@ type ThreadImageSizes = Record<string, { width?: number; height?: number }>;
 
 const pendingThreadImageSizeTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+function codexNoteClass(note: Record<string, unknown>): string {
+  const kind = String(note.codexKind ?? '').replace(/[^a-z0-9_-]+/gi, '-').toLowerCase();
+  return kind ? `is-codex-run-event is-codex-${kind}` : '';
+}
+
 function threadImageSizes(value: unknown): ThreadImageSizes {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const sizes: ThreadImageSizes = {};
@@ -67,7 +72,7 @@ export function renderThreadNotes(): void {
     const busy = /committing|uploading|transcribing|retrying/.test(normalizedStatus);
     const retryable = Boolean(note.voiceFileRef) && /failed|not configured|unavailable/.test(normalizedStatus);
     const item = document.createElement('li');
-    item.className = ['thread-note', note.voiceFileRef ? 'voice-note' : '', note.optimistic ? 'is-optimistic' : '', busy ? 'is-busy' : '', retryable ? 'is-retryable' : '', agentOwned ? 'is-agent' : 'is-operator'].filter(Boolean).join(' ');
+    item.className = ['thread-note', note.voiceFileRef ? 'voice-note' : '', note.optimistic ? 'is-optimistic' : '', busy ? 'is-busy' : '', retryable ? 'is-retryable' : '', codexNoteClass(note), agentOwned ? 'is-agent' : 'is-operator'].filter(Boolean).join(' ');
     const body = renderLedgerCardMarkdown(String(note.message ?? note.body ?? ''), {
       imageSizes: threadImageSizes(note.imageSizes),
       mediaSurface: 'thread',

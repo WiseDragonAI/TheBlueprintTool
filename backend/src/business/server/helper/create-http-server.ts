@@ -24,6 +24,7 @@ import { readCanonicalDecisionOsState } from '../../ledger/helper/read-canonical
 import { renameLinkedLedger } from '../../ledger/helper/rename-linked-ledger.js';
 import { scanCodexSkills } from '../../codex/helper/scan-codex-skills.js';
 import { startCardSkillProcessController } from '../../codex/controller/start-card-skill-process-controller.js';
+import { readCardSkillRunController } from '../../codex/controller/read-card-skill-run-controller.js';
 
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
@@ -195,6 +196,23 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       });
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));
+      response.end(JSON.stringify(result));
+      return;
+    }
+    if (url.startsWith('/api/codex/skills/runs/') && request.method === 'GET') {
+      const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
+      const runId = decodeURIComponent(url.slice('/api/codex/skills/runs/'.length));
+      const result = await readCardSkillRunController({
+        action_payload: {
+          runId,
+          ledgerId: requestUrl.searchParams.get('ledgerId') ?? '',
+          cardId: requestUrl.searchParams.get('cardId') ?? '',
+          since: requestUrl.searchParams.get('since') ?? '0'
+        },
+        runtime_state: runtime
+      });
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
       response.end(JSON.stringify(result));
       return;
     }
