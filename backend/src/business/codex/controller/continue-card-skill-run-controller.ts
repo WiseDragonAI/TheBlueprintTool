@@ -210,6 +210,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   child.stderr.pipe(stderr, { end: false });
   child.stdin.end(prompt);
 
+  const continuedAt = new Date().toISOString();
   const run = {
     id: runId,
     ledgerId,
@@ -223,7 +224,8 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     continuedMessageCount: messages.length,
     pid: child.pid ?? 0,
     status: 'running',
-    continuedAt: new Date().toISOString(),
+    startedAt: continuedAt,
+    continuedAt,
   };
   updateRuntimeRun(runtime, runId, run);
   attachRuntimeRunChild(runtime, runId, child);

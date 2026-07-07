@@ -292,11 +292,13 @@ test('card skill run continue route resumes the captured session with post-end t
       body: JSON.stringify({ ledgerId: 'specs', cardId: outputCardId, codexModel: 'gpt-5.4', codexEffort: 'medium' })
     });
     assert.equal(response.status, 202);
-    const body = await response.json() as { ok: boolean; run: { id: string; continuedMessageCount: number; resumeSessionId: string } };
+    const body = await response.json() as { ok: boolean; run: { id: string; continuedMessageCount: number; resumeSessionId: string; startedAt: string; continuedAt: string } };
     assert.equal(body.ok, true);
     assert.equal(body.run.id, runId);
     assert.equal(body.run.continuedMessageCount, 2);
     assert.equal(body.run.resumeSessionId, sessionId);
+    assert.match(body.run.startedAt, /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(body.run.startedAt, body.run.continuedAt);
 
     await waitForText(inputFile, 'Continue the session with the additional information:');
     const input = readFileSync(inputFile, 'utf8');

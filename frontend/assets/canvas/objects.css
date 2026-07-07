@@ -571,6 +571,10 @@
   white-space: nowrap;
 }
 
+.codex-run-widget[data-run-status="running"] {
+  border-color: color-mix(in srgb, #55b8ff, transparent 28%);
+}
+
 .codex-run-widget[data-run-status="complete"] {
   grid-template-columns: minmax(0, 1fr);
   min-height: auto;
