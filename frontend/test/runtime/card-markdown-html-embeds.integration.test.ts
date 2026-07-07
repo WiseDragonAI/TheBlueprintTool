@@ -41,6 +41,8 @@ test('card markdown html directives render as sandboxed ledger-scoped iframe med
   assert.match(htmlRenderer, /Card HTML embed carousel/);
   assert.match(htmlRenderer, /HTML embed must live under the active ledger card assets directory\./);
   assert.match(css, /\.ledger-card-html-frame,[\s\S]*\.ledger-card-html-invalid\s*{/);
+  assert.match(css, /\.ledger-card-html-frame,[\s\S]*\.ledger-card-html-invalid\s*{[\s\S]*background:\s*#030508;/);
+  assert.match(css, /\.ledger-card-html-frame\s*{[\s\S]*color-scheme:\s*dark;/);
   assert.match(css, /\.ledger-card-html-invalid\s*{[\s\S]*overflow-wrap:\s*anywhere;/);
   assert.match(css, /\.ledger-card-media-shell\s*{[^}]*resize:\s*horizontal;/s);
   assert.match(css, /\.ledger-card-media-shell::after\s*{/);
