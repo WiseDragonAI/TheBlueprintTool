@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1000, initial-scale=1">
+  <title>PO Report View 4 - Opportunity and Options</title>
+  <link rel="stylesheet" href="po-report-views.css">
+</head>
+<body>
+  <main class="board view-4">
+    <nav class="nav" aria-label="PO report views">
+      <a href="po-report-view-1-decision-snapshot.html">1</a>
+      <a href="po-report-view-2-context-map.html">2</a>
+      <a href="po-report-view-3-risks-constraints.html">3</a>
+      <a class="active" href="po-report-view-4-options.html">4</a>
+      <a href="po-report-view-5-delivery-validation.html">5</a>
+    </nav>
+    <header class="header">
+      <div>
+        <p class="eyebrow">PO Goal Report / View 4 of 5</p>
+        <h1>Opportunity and Options</h1>
+        <p class="subtitle">Shows the product need as an opportunity tree, then compares real solution shapes before a recommendation is accepted.</p>
+      </div>
+      <aside class="stamp">
+        <strong>3 paths</strong>
+        <span>Compare first</span>
+      </aside>
+    </header>
+
+    <section class="grid opportunity-grid">
+      <article class="panel">
+        <h2>Opportunity Tree</h2>
+        <div class="tree">
+          <div class="tree-row">
+            <div class="tree-label">Outcome</div>
+            <div class="mini"><strong>Stakeholders can decide from a PO report in under one screen.</strong><br>Report carries enough evidence without becoming the evidence archive.</div>
+          </div>
+          <div class="tree-row">
+            <div class="tree-label">Needs</div>
+            <div class="tree-items">
+              <div class="mini">Understand the current technical and UX context quickly.</div>
+              <div class="mini">See the recommendation, top risk, and next decision immediately.</div>
+              <div class="mini">Keep source evidence available without reading every source.</div>
+            </div>
+          </div>
+          <div class="tree-row">
+            <div class="tree-label">Solutions</div>
+            <div class="tree-items cols">
+              <div class="mini">Five HTML views</div>
+              <div class="mini">One dense card</div>
+              <div class="mini">Interactive app route</div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <h2>Options Comparison</h2>
+        <div class="option-table" role="table" aria-label="options comparison">
+          <div class="head">Option</div><div class="head">Value</div><div class="head">Effort</div><div class="head">Risk</div>
+          <div><strong>A. Five static HTML views</strong><br>Fast stakeholder mockups, auditable and easy to iterate.</div><div>High</div><div>Low</div><div>Low</div>
+          <div><strong>B. Keep one Markdown card</strong><br>Preserves research but overloads readers and hides decisions.</div><div>Low</div><div>Low</div><div>High</div>
+          <div><strong>C. Build app-native report route</strong><br>Best long-term surface, but premature before validating layout.</div><div>High</div><div>High</div><div>Med</div>
+          <div><strong>D. Split into many cards</strong><br>Good for storage, poor for one stakeholder decision moment.</div><div>Med</div><div>Med</div><div>Med</div>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid" style="grid-template-columns:1fr 1fr 1fr; margin-top:14px;">
+      <article class="panel">
+        <h2>Recommendation</h2>
+        <p>Use option A now. Treat it as the reviewable prototype before any app-native implementation.</p>
+      </article>
+      <article class="panel">
+        <h2>Rejected Default</h2>
+        <p>Do not use the research card as the stakeholder surface. It is an appendix, not the decision product.</p>
+      </article>
+      <article class="panel">
+        <h2>Validation</h2>
+        <p>Review screenshots, choose the default view, then decide whether the pack becomes a reusable report generator.</p>
+      </article>
+    </section>
+
+    <div class="footer-note">
+      <span>Use when there are multiple ways to satisfy the same goal.</span>
+      <span>Option map</span>
+    </div>
+  </main>
+</body>
+</html>

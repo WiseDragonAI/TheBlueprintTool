@@ -53,7 +53,7 @@
   I would implement this as a small launcher, not manual typing:
 
   codex --profile watchnotes \
-    "Watch decision-os open notes for this Ardaria workspace. When notes appear, use the
+    "Watch decision-os open notes for this decision-os workspace. When notes appear, use the
     decision-os-treat-open-notes skill to process them, update card content when required, answer the
     threads, verify unanswered notes are closed, then wait again."
 

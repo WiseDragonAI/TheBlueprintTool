@@ -1,7 +1,7 @@
 {
-  "modelName": "decision-os Next Features",
+  "modelName": "tasks-system",
   "source": "operator-request",
-  "updatedAt": "2026-06-24T04:10:38.042Z",
+  "updatedAt": "2026-07-06T15:45:00Z",
   "diagramSize": {
     "width": 2200,
     "height": 1300
@@ -55,7 +55,7 @@
       "x": 4731,
       "y": 176,
       "width": 2257,
-      "height": 2649
+      "height": 2672
     }
   ],
   "cards": [
@@ -200,12 +200,12 @@
       "cardType": "note",
       "domainId": "next-features",
       "status": "todo",
-      "x": 6436.559753183514,
-      "y": -3424.357630946078,
+      "x": 10082.144485770012,
+      "y": 344.08528110183306,
       "w": 958,
       "h": 1293,
       "comment": {
-        "contentFile": ".decision-os/cards/next-features/card-c294607d-7a4a-4631-bc0b-7e67f84f84e1.md"
+        "contentFile": ".decision-os/cards/tasks-system/card-c294607d-7a4a-4631-bc0b-7e67f84f84e1.md"
       }
     },
     {
@@ -219,7 +219,7 @@
       "w": 698,
       "h": 1054,
       "comment": {
-        "contentFile": ".decision-os/cards/next-features/card-3127edc3-a0b6-4f67-8bcb-380cfc6aa70a.md"
+        "contentFile": ".decision-os/cards/tasks-system/card-3127edc3-a0b6-4f67-8bcb-380cfc6aa70a.md"
       }
     },
     {
@@ -233,7 +233,7 @@
       "w": 710,
       "h": 871,
       "comment": {
-        "contentFile": ".decision-os/cards/next-features/card-1ac9374f-1591-422e-a0b2-7cccaec49e40.md"
+        "contentFile": ".decision-os/cards/tasks-system/card-1ac9374f-1591-422e-a0b2-7cccaec49e40.md"
       }
     },
     {
@@ -247,7 +247,7 @@
       "w": 711,
       "h": 2959,
       "comment": {
-        "contentFile": ".decision-os/cards/next-features/card-watchnotes-unanswered-context.md"
+        "contentFile": ".decision-os/cards/tasks-system/card-watchnotes-unanswered-context.md"
       }
     },
     {
@@ -261,7 +261,7 @@
       "w": 702.5083989320892,
       "h": 1154.0186222090376,
       "comment": {
-        "contentFile": ".decision-os/cards/next-features/card-watchnotes-runbook-checklist.md"
+        "contentFile": ".decision-os/cards/tasks-system/card-watchnotes-runbook-checklist.md"
       }
     },
     {
@@ -275,7 +275,7 @@
       "w": 710,
       "h": 1210,
       "comment": {
-        "contentFile": ".decision-os/cards/next-features/card-watchnotes-ledger-selection.md"
+        "contentFile": ".decision-os/cards/tasks-system/card-watchnotes-ledger-selection.md"
       }
     },
     {
@@ -289,7 +289,7 @@
       "w": 860,
       "h": 2351,
       "comment": {
-        "contentFile": ".decision-os/cards/next-features/card-watchnotes-lean-unanswered-model.md"
+        "contentFile": ".decision-os/cards/tasks-system/card-watchnotes-lean-unanswered-model.md"
       }
     },
     {
@@ -303,7 +303,7 @@
       "w": 609,
       "h": 900,
       "comment": {
-        "contentFile": ".decision-os/cards/next-features/card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6.md"
+        "contentFile": ".decision-os/cards/tasks-system/card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6.md"
       }
     },
     {
@@ -317,7 +317,7 @@
       "w": 790,
       "h": 1795,
       "comment": {
-        "contentFile": ".decision-os/cards/next-features/card-summary-data-model.md"
+        "contentFile": ".decision-os/cards/tasks-system/card-summary-data-model.md"
       }
     },
     {
@@ -331,7 +331,7 @@
       "w": 609,
       "h": 1490,
       "comment": {
-        "contentFile": ".decision-os/cards/next-features/card-summary-cli-maintenance.md"
+        "contentFile": ".decision-os/cards/tasks-system/card-summary-cli-maintenance.md"
       }
     },
     {
@@ -344,7 +344,7 @@
       "w": 782,
       "h": 2199,
       "comment": {
-        "contentFile": ".decision-os/cards/next-features/card-tasks-legacy-factory-pipeline-baseline.md"
+        "contentFile": ".decision-os/cards/tasks-system/card-tasks-legacy-factory-pipeline-baseline.md"
       },
       "facts": [],
       "fields": []
@@ -357,9 +357,9 @@
       "x": 5659.403936508128,
       "y": 273.1145289365622,
       "w": 583,
-      "h": 2456,
+      "h": 2479,
       "comment": {
-        "contentFile": ".decision-os/cards/next-features/card-tasks-unified-control-surface-requirements.md"
+        "contentFile": ".decision-os/cards/tasks-system/card-tasks-unified-control-surface-requirements.md"
       },
       "facts": [],
       "fields": []
@@ -374,7 +374,166 @@
       "w": 597,
       "h": 1930,
       "comment": {
-        "contentFile": ".decision-os/cards/next-features/card-tasks-core-problem-statement.md"
+        "contentFile": ".decision-os/cards/tasks-system/card-tasks-core-problem-statement.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-agent-autonomy-work-queue",
+      "title": "Agent Autonomy Work Queue",
+      "cardType": "note",
+      "domainId": "next-features",
+      "status": "todo",
+      "x": 11255.996681579705,
+      "y": 332.78132720463645,
+      "w": 995,
+      "h": 5056,
+      "comment": {
+        "contentFile": ".decision-os/cards/tasks-system/card-agent-autonomy-work-queue.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-905302cd-3cfa-41d7-8e0d-a3ffd55a5429",
+      "title": "Goal Object UX",
+      "cardType": "note",
+      "domainId": "next-features",
+      "status": "todo",
+      "x": 12828.480985889993,
+      "y": 2028.7435871581247,
+      "w": 986,
+      "h": 3440,
+      "comment": {
+        "contentFile": ".decision-os/cards/tasks-system/card-905302cd-3cfa-41d7-8e0d-a3ffd55a5429.md"
+      },
+      "imageSizes": {
+        ".decision-os/ui-mockups/goal-object-logs.png": {
+          "width": 730,
+          "height": 469
+        },
+        ".decision-os/ui-mockups/goal-object-global-goal.png": {
+          "width": 956,
+          "height": 615
+        },
+        ".decision-os/ui-mockups/goal-object-global-goal-style-01.png": {
+          "width": 956,
+          "height": 615
+        },
+        ".decision-os/ui-mockups/goal-object-global-goal-specs-tab.png": {
+          "width": 956,
+          "height": 615
+        }
+      }
+    },
+    {
+      "id": "card-2e4a6931-bd3d-4397-bf71-8ba21daa7e80",
+      "title": "New card",
+      "cardType": "note",
+      "domainId": "tasks-system",
+      "status": "todo",
+      "x": 13980.616123840055,
+      "y": 2017.3664634277043,
+      "w": 1187,
+      "h": 5031,
+      "comment": {
+        "contentFile": ".decision-os/cards/tasks-system/card-2e4a6931-bd3d-4397-bf71-8ba21daa7e80.md"
+      },
+      "imageSizes": {
+        ".decision-os/ui-mockups/po-report/screenshots/po-report-view-1.png": {
+          "width": 1157,
+          "height": 1157
+        }
+      }
+    },
+    {
+      "id": "card-2395850a-c528-4689-a138-73a30b684602",
+      "title": "PO Goal Analysis Format",
+      "cardType": "note",
+      "domainId": "tasks-system",
+      "status": "todo",
+      "x": 15247.616123840055,
+      "y": 2017.3664634277043,
+      "w": 1187,
+      "h": 5617,
+      "comment": {
+        "contentFile": ".decision-os/cards/tasks-system/card-2395850a-c528-4689-a138-73a30b684602.md"
+      },
+      "imageSizes": {
+        ".decision-os/cards/tasks-system/assets/po-goal-analysis-format/screenshots/report-ux-overview.png": {
+          "width": 1157,
+          "height": 771
+        }
+      }
+    },
+    {
+      "id": "card-0b144d6a-16a1-4cc2-9b9f-32aabafd5b4a",
+      "title": "Decision OS Context",
+      "cardType": "note",
+      "domainId": "tasks-system",
+      "status": "todo",
+      "x": 23076.021733098147,
+      "y": 1959.8571371829175,
+      "w": 1301,
+      "h": 3177,
+      "comment": {
+        "contentFile": ".decision-os/cards/tasks-system/card-0b144d6a-16a1-4cc2-9b9f-32aabafd5b4a.md"
+      }
+    },
+    {
+      "id": "card-9b19200f-2740-4f33-8455-63bac0870c12",
+      "title": "Goal Linked Specs",
+      "cardType": "note",
+      "domainId": "tasks-system",
+      "status": "todo",
+      "x": 18079.298498170538,
+      "y": 1988.3898950707473,
+      "w": 1376,
+      "h": 4118,
+      "comment": {
+        "contentFile": ".decision-os/cards/tasks-system/card-9b19200f-2740-4f33-8455-63bac0870c12.md"
+      }
+    },
+    {
+      "id": "card-operator-context-markdown",
+      "title": "Decision OS Operator Context",
+      "cardType": "note",
+      "domainId": "tasks-system",
+      "status": "todo",
+      "x": 19635.29849817054,
+      "y": 1988.3898950707473,
+      "w": 1301,
+      "h": 1610,
+      "comment": {
+        "contentFile": ".decision-os/cards/tasks-system/card-operator-context-markdown.md"
+      }
+    },
+    {
+      "id": "card-human-context-synthesis-skill",
+      "title": "Human Context Synthesis Skill",
+      "cardType": "note",
+      "domainId": "tasks-system",
+      "status": "todo",
+      "x": 21116.29849817054,
+      "y": 1993.1149818310703,
+      "w": 1096,
+      "h": 2331,
+      "comment": {
+        "contentFile": ".decision-os/cards/tasks-system/card-human-context-synthesis-skill.md"
+      }
+    },
+    {
+      "id": "card-codex-skill-1783429520950-bad8c87c",
+      "title": "human-context-synthesis result",
+      "cardType": "codex-skill-run",
+      "x": 24482.650611735393,
+      "y": 1970.2195448970706,
+      "w": 973,
+      "h": 2510,
+      "status": "todo",
+      "comment": {
+        "contentFile": ".decision-os/cards/tasks-system/card-codex-skill-1783429520950-bad8c87c.md"
       },
       "facts": [],
       "fields": []
@@ -428,22 +587,37 @@
       "source": "queue-process-tree",
       "target": "queue-tests",
       "label": "verifies"
+    },
+    {
+      "id": "rel-card-0b144d6a-16a1-4cc2-9b9f-32aabafd5b4a-card-codex-skill-1783429520950-bad8c87c",
+      "from": "card-0b144d6a-16a1-4cc2-9b9f-32aabafd5b4a",
+      "to": "card-codex-skill-1783429520950-bad8c87c",
+      "label": "human-context-synthesis"
     }
   ],
   "positions": {},
   "cardEdits": {},
   "notes": {},
   "threadFiles": {
-    "thread-card-c294607d-7a4a-4631-bc0b-7e67f84f84e1": ".decision-os/threads/next-features/thread-card-c294607d-7a4a-4631-bc0b-7e67f84f84e1.md",
-    "thread-card-3127edc3-a0b6-4f67-8bcb-380cfc6aa70a": ".decision-os/threads/next-features/thread-card-3127edc3-a0b6-4f67-8bcb-380cfc6aa70a.md",
-    "thread-card-1ac9374f-1591-422e-a0b2-7cccaec49e40": ".decision-os/threads/next-features/thread-card-1ac9374f-1591-422e-a0b2-7cccaec49e40.md",
-    "thread-card-watchnotes-unanswered-context": ".decision-os/threads/next-features/thread-card-watchnotes-unanswered-context.md",
-    "thread-card-watchnotes-lean-unanswered-model": ".decision-os/threads/next-features/thread-card-watchnotes-lean-unanswered-model.md",
-    "thread-card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6": ".decision-os/threads/next-features/thread-card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6.md",
-    "thread-card-summary-data-model": ".decision-os/threads/next-features/thread-card-summary-data-model.md",
-    "thread-card-summary-cli-maintenance": ".decision-os/threads/next-features/thread-card-summary-cli-maintenance.md",
-    "thread-zone-4a923aaa-1afb-46b2-8be5-32ead2c35a66": ".decision-os/threads/next-features/thread-zone-4a923aaa-1afb-46b2-8be5-32ead2c35a66.md",
-    "thread-card-tasks-legacy-factory-pipeline-baseline": ".decision-os/threads/next-features/thread-card-tasks-legacy-factory-pipeline-baseline.md",
-    "thread-card-tasks-core-problem-statement": ".decision-os/threads/next-features/thread-card-tasks-core-problem-statement.md"
+    "thread-card-c294607d-7a4a-4631-bc0b-7e67f84f84e1": ".decision-os/threads/tasks-system/thread-card-c294607d-7a4a-4631-bc0b-7e67f84f84e1.md",
+    "thread-card-3127edc3-a0b6-4f67-8bcb-380cfc6aa70a": ".decision-os/threads/tasks-system/thread-card-3127edc3-a0b6-4f67-8bcb-380cfc6aa70a.md",
+    "thread-card-1ac9374f-1591-422e-a0b2-7cccaec49e40": ".decision-os/threads/tasks-system/thread-card-1ac9374f-1591-422e-a0b2-7cccaec49e40.md",
+    "thread-card-watchnotes-unanswered-context": ".decision-os/threads/tasks-system/thread-card-watchnotes-unanswered-context.md",
+    "thread-card-watchnotes-lean-unanswered-model": ".decision-os/threads/tasks-system/thread-card-watchnotes-lean-unanswered-model.md",
+    "thread-card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6": ".decision-os/threads/tasks-system/thread-card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6.md",
+    "thread-card-summary-data-model": ".decision-os/threads/tasks-system/thread-card-summary-data-model.md",
+    "thread-card-summary-cli-maintenance": ".decision-os/threads/tasks-system/thread-card-summary-cli-maintenance.md",
+    "thread-zone-4a923aaa-1afb-46b2-8be5-32ead2c35a66": ".decision-os/threads/tasks-system/thread-zone-4a923aaa-1afb-46b2-8be5-32ead2c35a66.md",
+    "thread-card-tasks-legacy-factory-pipeline-baseline": ".decision-os/threads/tasks-system/thread-card-tasks-legacy-factory-pipeline-baseline.md",
+    "thread-card-tasks-core-problem-statement": ".decision-os/threads/tasks-system/thread-card-tasks-core-problem-statement.md",
+    "thread-card-agent-autonomy-work-queue": ".decision-os/threads/tasks-system/thread-card-agent-autonomy-work-queue.md",
+    "thread-card-905302cd-3cfa-41d7-8e0d-a3ffd55a5429": ".decision-os/threads/tasks-system/thread-card-905302cd-3cfa-41d7-8e0d-a3ffd55a5429.md",
+    "thread-card-2e4a6931-bd3d-4397-bf71-8ba21daa7e80": ".decision-os/threads/tasks-system/thread-card-2e4a6931-bd3d-4397-bf71-8ba21daa7e80.md",
+    "thread-card-2395850a-c528-4689-a138-73a30b684602": ".decision-os/threads/tasks-system/thread-card-2395850a-c528-4689-a138-73a30b684602.md",
+    "thread-card-0b144d6a-16a1-4cc2-9b9f-32aabafd5b4a": ".decision-os/threads/tasks-system/thread-card-0b144d6a-16a1-4cc2-9b9f-32aabafd5b4a.md",
+    "thread-card-9b19200f-2740-4f33-8455-63bac0870c12": ".decision-os/threads/tasks-system/thread-card-9b19200f-2740-4f33-8455-63bac0870c12.md",
+    "thread-card-operator-context-markdown": ".decision-os/threads/tasks-system/thread-card-operator-context-markdown.md",
+    "thread-card-human-context-synthesis-skill": ".decision-os/threads/tasks-system/thread-card-human-context-synthesis-skill.md",
+    "thread-card-codex-skill-1783429520950-bad8c87c": ".decision-os/threads/tasks-system/thread-card-codex-skill-1783429520950-bad8c87c.md"
   }
 }

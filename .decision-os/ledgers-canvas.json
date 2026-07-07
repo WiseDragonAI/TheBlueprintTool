@@ -1,0 +1,81 @@
+{
+  "modelName": "ledgers-canvas",
+  "diagramSize": {
+    "width": 5200,
+    "height": 2600
+  },
+  "viewport": {
+    "x": 770.7422978394432,
+    "y": 388.93828997247,
+    "scale": 0.2930240569498326
+  },
+  "cards": [
+    {
+      "id": "ledger-card:specs",
+      "targetLedgerId": "specs",
+      "cardType": "ledger",
+      "domainId": "ledgers",
+      "title": "Specs",
+      "ledgerFile": ".decision-os/specs.json",
+      "status": "todo",
+      "x": 0,
+      "y": 0,
+      "w": 360,
+      "h": 180,
+      "comment": {
+        "what": "Ledger: Specs"
+      }
+    },
+    {
+      "id": "ledger-card:data",
+      "targetLedgerId": "data",
+      "cardType": "ledger",
+      "domainId": "ledgers",
+      "title": "Data",
+      "ledgerFile": ".decision-os/data.json",
+      "status": "todo",
+      "x": 460,
+      "y": 0,
+      "w": 360,
+      "h": 180,
+      "comment": {
+        "what": "Ledger: Data"
+      }
+    },
+    {
+      "id": "ledger-card:performances",
+      "targetLedgerId": "performances",
+      "cardType": "ledger",
+      "domainId": "ledgers",
+      "title": "Performances",
+      "ledgerFile": ".decision-os/performances.json",
+      "status": "todo",
+      "x": 920,
+      "y": 0,
+      "w": 360,
+      "h": 180,
+      "comment": {
+        "what": "Ledger: Performances"
+      }
+    },
+    {
+      "id": "ledger-card:tasks-system",
+      "targetLedgerId": "tasks-system",
+      "cardType": "ledger",
+      "domainId": "ledgers",
+      "title": "Tasks System",
+      "ledgerFile": ".decision-os/tasks-system.json",
+      "status": "todo",
+      "x": 1380,
+      "y": 0,
+      "w": 360,
+      "h": 180,
+      "comment": {
+        "what": "Ledger: Next Features"
+      }
+    }
+  ],
+  "annotations": [],
+  "relationships": [],
+  "notes": {}
+}

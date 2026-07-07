@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Goal Linked Specs</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090b0d;
+      --panel: #101419;
+      --panel-2: #151a20;
+      --line: rgba(246, 240, 231, 0.15);
+      --line-strong: rgba(246, 240, 231, 0.28);
+      --text: #f6f0e7;
+      --muted: #a9b2be;
+      --cyan: #35d7e6;
+      --cyan-soft: rgba(53, 215, 230, 0.1);
+      --green: #7bdc8d;
+      --green-soft: rgba(123, 220, 141, 0.1);
+      --blue: #8eb7ff;
+      --blue-soft: rgba(142, 183, 255, 0.1);
+      --amber: #f4b94f;
+      --amber-soft: rgba(244, 185, 79, 0.11);
+      --shadow: 0 18px 50px rgba(0, 0, 0, 0.34);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Aptos, "Segoe UI", "Liberation Sans", sans-serif;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+      overflow-wrap: anywhere;
+    }
+
+    h1 {
+      margin-bottom: 8px;
+      font-size: 40px;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin-bottom: 0;
+      color: var(--text);
+      font-size: 16px;
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 0;
+      color: var(--text);
+      font-size: 18px;
+      line-height: 1.16;
+      letter-spacing: 0;
+    }
+
+    p,
+    li,
+    td {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    p {
+      margin-bottom: 0;
+    }
+
+    strong {
+      color: var(--text);
+      font-weight: 800;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    li + li {
+      margin-top: 8px;
+    }
+
+    .summary-shell {
+      width: min(1200px, calc(100vw - 36px));
+      margin: 0 auto;
+      padding: 28px 0 40px;
+    }
+
+    .hero,
+    .table-panel {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .hero {
+      padding: 22px 24px;
+      background:
+        linear-gradient(135deg, rgba(53, 215, 230, 0.08), transparent 42%),
+        var(--panel);
+    }
+
+    .context-label {
+      margin-bottom: 8px;
+      color: var(--cyan);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    .summary-band {
+      margin-top: 30px;
+    }
+
+    .band-heading {
+      display: grid;
+      grid-template-columns: auto minmax(120px, max-content) 1fr;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .band-heading::after {
+      content: "";
+      height: 1px;
+      background: linear-gradient(90deg, var(--line-strong), transparent);
+    }
+
+    .band-heading span {
+      display: inline-grid;
+      place-items: center;
+      width: 34px;
+      height: 26px;
+      border: 1px solid var(--line-strong);
+      border-radius: 4px;
+      color: var(--cyan);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .table-panel {
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    col.spec {
+      width: 28%;
+    }
+
+    col.behavior {
+      width: 45%;
+    }
+
+    col.fit {
+      width: 27%;
+    }
+
+    th,
+    td {
+      vertical-align: top;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+    }
+
+    th {
+      padding: 13px 18px;
+      background: rgba(246, 240, 231, 0.035);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    td {
+      padding: 20px 18px;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: 0;
+    }
+
+    tbody tr:nth-child(1) td {
+      background:
+        linear-gradient(135deg, var(--cyan-soft), transparent 45%),
+        var(--panel);
+    }
+
+    tbody tr:nth-child(2) td {
+      background:
+        linear-gradient(135deg, var(--green-soft), transparent 45%),
+        var(--panel);
+    }
+
+    tbody tr:nth-child(3) td {
+      background:
+        linear-gradient(135deg, var(--blue-soft), transparent 45%),
+        var(--panel);
+    }
+
+    tbody tr:nth-child(4) td,
+    tbody tr:nth-child(5) td {
+      background:
+        linear-gradient(135deg, var(--amber-soft), transparent 45%),
+        var(--panel);
+    }
+
+    .spec-name {
+      display: grid;
+      gap: 8px;
+    }
+
+    .spec-kind {
+      width: max-content;
+      max-width: 100%;
+      padding: 3px 7px;
+      border: 1px solid var(--line-strong);
+      border-radius: 4px;
+      color: var(--cyan);
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    tbody tr:nth-child(2) .spec-kind {
+      color: var(--green);
+    }
+
+    tbody tr:nth-child(3) .spec-kind {
+      color: var(--blue);
+    }
+
+    tbody tr:nth-child(4) .spec-kind,
+    tbody tr:nth-child(5) .spec-kind {
+      color: var(--amber);
+    }
+
+    .fit-copy {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 760px) {
+      table,
+      thead,
+      tbody,
+      tr,
+      th,
+      td {
+        display: block;
+      }
+
+      thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+
+      tr {
+        border-bottom: 1px solid var(--line);
+      }
+
+      tbody tr:last-child {
+        border-bottom: 0;
+      }
+
+      td {
+        border-bottom: 0;
+        padding: 14px;
+      }
+
+      td + td {
+        padding-top: 0;
+      }
+
+      td::before {
+        display: block;
+        margin-bottom: 7px;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 900;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      td:nth-child(1)::before {
+        content: "Spec";
+      }
+
+      td:nth-child(2)::before {
+        content: "What exists";
+      }
+
+      td:nth-child(3)::before {
+        content: "Goal fit";
+      }
+    }
+
+    @media (max-width: 560px) {
+      .summary-shell {
+        width: min(100vw - 20px, 1180px);
+        padding-top: 10px;
+      }
+
+      h1 {
+        font-size: 32px;
+      }
+
+      .hero {
+        padding: 14px;
+      }
+
+      .band-heading {
+        grid-template-columns: auto minmax(0, max-content) 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="summary-shell" aria-labelledby="page-title">
+    <header class="hero">
+      <p class="context-label">Goal Linked Specs</p>
+      <h1 id="page-title">Existing Specs</h1>
+      <p>Product behavior already related to the goal-analysis interface.</p>
+    </header>
+
+    <section class="summary-band" aria-label="Existing related specs">
+      <header class="band-heading">
+        <span>01</span>
+        <h2>Related specs</h2>
+      </header>
+
+      <div class="table-panel">
+        <table>
+          <colgroup>
+            <col class="spec">
+            <col class="behavior">
+            <col class="fit">
+          </colgroup>
+          <thead>
+            <tr>
+              <th scope="col">Spec</th>
+              <th scope="col">What exists</th>
+              <th scope="col">Goal fit</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <div class="spec-name">
+                  <h3>Ledger navigation and persistence</h3>
+                  <span class="spec-kind">exists</span>
+                </div>
+              </td>
+              <td>
+                <ul>
+                  <li><strong>Workspace ledgers appear as tabs.</strong></li>
+                  <li>Opening a tab loads its canvas.</li>
+                  <li>The backend serves and saves ledger state.</li>
+                </ul>
+              </td>
+              <td>
+                <p class="fit-copy">A goal report can live inside Decision OS as a normal ledger or card surface.</p>
+              </td>
+            </tr>
+
+            <tr>
+              <td>
+                <div class="spec-name">
+                  <h3>Card report rendering</h3>
+                  <span class="spec-kind">exists</span>
+                </div>
+              </td>
+              <td>
+                <ul>
+                  <li><strong>Card bodies render Markdown.</strong></li>
+                  <li>Tables and images render inside cards.</li>
+                  <li>HTML card assets render as iframes.</li>
+                </ul>
+              </td>
+              <td>
+                <p class="fit-copy">The linked-spec summary can be reviewed directly in the goal card.</p>
+              </td>
+            </tr>
+
+            <tr>
+              <td>
+                <div class="spec-name">
+                  <h3>Threaded operator review</h3>
+                  <span class="spec-kind">exists</span>
+                </div>
+              </td>
+              <td>
+                <ul>
+                  <li><strong>Cards have durable threads.</strong></li>
+                  <li>The thread panel shows the active target.</li>
+                  <li>Cards show when the latest answer is from the agent.</li>
+                </ul>
+              </td>
+              <td>
+                <p class="fit-copy">The operator can challenge a linked-spec reading without leaving the card.</p>
+              </td>
+            </tr>
+
+            <tr>
+              <td>
+                <div class="spec-name">
+                  <h3>Voice notes for review</h3>
+                  <span class="spec-kind">adjacent</span>
+                </div>
+              </td>
+              <td>
+                <ul>
+                  <li><strong>Keyboard shortcuts start and stop voice capture.</strong></li>
+                  <li>Voice uploads can be transcribed.</li>
+                  <li>Failed transcription can be retried.</li>
+                </ul>
+              </td>
+              <td>
+                <p class="fit-copy">Voice can support fast operator feedback on a goal-analysis card.</p>
+              </td>
+            </tr>
+
+            <tr>
+              <td>
+                <div class="spec-name">
+                  <h3>Refresh continuity</h3>
+                  <span class="spec-kind">constraint</span>
+                </div>
+              </td>
+              <td>
+                <ul>
+                  <li><strong>External edits refresh the canvas.</strong></li>
+                  <li>The operator keeps canvas continuity during work.</li>
+                  <li>Report card updates can arrive while the card stays inspectable.</li>
+                </ul>
+              </td>
+              <td>
+                <p class="fit-copy">Agent-written goal reports should update without breaking the operator's current inspection flow.</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

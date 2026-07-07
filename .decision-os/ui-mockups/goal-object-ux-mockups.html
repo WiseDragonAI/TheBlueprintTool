@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Goal Object UX Mockups</title>
+  <link rel="stylesheet" href="goal-object-ux-mockups.css">
+  <script>
+    const styleVariant = new URLSearchParams(window.location.search).get('style');
+    if (styleVariant) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = `goal-object-ux-style-${styleVariant}.css`;
+      document.head.appendChild(link);
+    }
+  </script>
+</head>
+<body>
+<main>
+  <section class="shot" data-shot="logs">
+    <header class="topbar">
+      <div><p class="kicker">Goal Object UX</p><h1>Logs: replayable execution evidence</h1></div>
+      <div class="tool"><span>></span><span>Trace</span></div>
+    </header>
+    <div class="logs-layout">
+      <div class="session-map zone">
+        <svg viewBox="0 0 330 560" aria-hidden="true">
+          <path d="M86 96 C210 112 250 160 244 216" stroke="#38d9e8" fill="none" stroke-width="2"/>
+          <path d="M234 212 C120 280 92 354 104 430" stroke="#ff7668" fill="none" stroke-width="2"/>
+        </svg>
+        <div class="node n1"><strong>Prompt</strong><span>operator goal</span></div>
+        <div class="node n2"><strong>Tool calls</strong><span>commands and outputs</span></div>
+        <div class="node n3"><strong>Proof</strong><span>tests, assets, diffs</span></div>
+      </div>
+      <div class="log-lines terminal">
+        <div class="log-line"><span>11:02:10</span><span>read</span><span>AGENTS.md and next-features ledger</span><span class="chip cyan">context</span></div>
+        <div class="log-line"><span>11:04:24</span><span>patch</span><span>card content replaced with object list and carousel</span><span class="chip green">write</span></div>
+        <div class="log-line"><span>11:05:33</span><span>operator</span><span>visual direction rejected as repetitive</span><span class="chip orange">decision</span></div>
+        <div class="log-line"><span>11:08:12</span><span>render</span><span>new purposeful object screens captured</span><span class="chip cyan">asset</span></div>
+        <div class="log-line"><span>11:09:40</span><span>verify</span><span>unanswered notes rechecked against ledger CLI</span><span class="chip green">done</span></div>
+      </div>
+    </div>
+    <div class="canvas-title">LOGS OBJECT - audit, replay, and debugging</div>
+  </section>
+
+  <section class="shot" data-shot="goal">
+    <header class="topbar">
+      <div><p class="kicker">Goal Creation</p><h1>Goal: one sentence that creates the work surface</h1></div>
+      <div class="tool"><span>+</span><span>Create Goal</span></div>
+    </header>
+    <div class="goal-layout">
+      <svg class="goal-lines" viewBox="0 0 1052 610" aria-hidden="true">
+        <path d="M526 280 L170 150 M526 280 L874 144 M526 310 L244 482 M526 310 L826 478" stroke="#38d9e8" stroke-width="2" fill="none"/>
+      </svg>
+      <article class="goal-core card">
+        <p class="kicker">Active Goal</p>
+        <h2>Build a durable operator cockpit for autonomous multi-thread work.</h2>
+        <p>Purpose: create the correct downstream objects, not just a chat transcript.</p>
+      </article>
+      <article class="goal-orbit tasks card"><p class="kicker">Creates</p><h3>Task Queue</h3><p>claimable sub-work</p></article>
+      <article class="goal-orbit ledger card"><p class="kicker">Creates</p><h3>Ledger</h3><p>visible decision surface</p></article>
+      <article class="goal-orbit report card"><p class="kicker">Closes With</p><h3>Report</h3><p>evidence and risk</p></article>
+      <article class="goal-orbit questions card"><p class="kicker">Pauses On</p><h3>Questions</h3><p>operator gates</p></article>
+    </div>
+    <div class="canvas-title">GOAL OBJECT - phrase, expand, and route</div>
+  </section>
+
+  <section class="shot" data-shot="tasks">
+    <header class="topbar">
+      <div><p class="kicker">Execution Queue</p><h1>Tasks: schedulable work with state and ownership</h1></div>
+      <div class="tool"><span>A</span><span>Assign</span></div>
+    </header>
+    <div class="task-layout">
+      <aside class="task-filter terminal">
+        <p class="kicker">Filters</p>
+        <p>Runnable only</p><br>
+        <p>Waiting operator</p><br>
+        <p>Lease expired</p><br>
+        <p>Depends on current goal</p>
+      </aside>
+      <section class="task-board">
+        <div class="lane"><span class="chip cyan">Ready</span><div class="task-ticket"><h3>Extract tasks from notes</h3><p>Dependency: goal accepted</p></div><div class="task-ticket"><h3>Define run schema</h3><p>No blocker</p></div></div>
+        <div class="lane"><span class="chip yellow">Leased</span><div class="task-ticket"><h3>Generate mockup assets</h3><p>Owner: codex-local</p></div></div>
+        <div class="lane"><span class="chip orange">Waiting</span><div class="task-ticket"><h3>Choose object split</h3><p>Needs operator answer</p></div></div>
+        <div class="lane"><span class="chip green">Done</span><div class="task-ticket"><h3>Read Senior question UX</h3><p>Evidence linked</p></div></div>
+      </section>
+      <aside class="task-details card">
+        <p class="kicker">Selected Task</p>
+        <h2>Generate mockup assets</h2>
+        <p>What matters: status, owner, lease expiry, blocker, dependency, and evidence. Not decorative text.</p>
+      </aside>
+    </div>
+    <div class="canvas-title">TASKS OBJECT - schedule and coordinate</div>
+  </section>
+
+  <section class="shot" data-shot="work">
+    <header class="topbar">
+      <div><p class="kicker">Changed State</p><h1>Work: concrete files, diffs, generated artifacts</h1></div>
+      <div class="tool"><span>D</span><span>Diff</span></div>
+    </header>
+    <div class="work-layout">
+      <aside class="file-tree terminal">
+        <p class="kicker">Work Packet</p>
+        <div class="file-row"><span>+</span><span>goal-object-questions.png</span></div>
+        <div class="file-row"><span>+</span><span>goal-object-ux-mockups.html</span></div>
+        <div class="file-row"><span>M</span><span>card-905302cd...md</span></div>
+        <div class="file-row"><span>M</span><span>next-features.json</span></div>
+      </aside>
+      <section class="diff-view card">
+        <div class="diff-pane">
+          <p class="kicker">Before</p>
+          <div class="del">- one repeated left title block</div>
+          <div class="del">- decorative sections with weak purpose</div>
+          <div class="del">- same layout reused eleven times</div>
+          <div class="del">- information not tied to operator decisions</div>
+        </div>
+        <div class="diff-pane">
+          <p class="kicker">After</p>
+          <div class="add">+ trace console for logs</div>
+          <div class="add">+ nucleus map for goals</div>
+          <div class="add">+ kanban for tasks</div>
+          <div class="add">+ evidence matrix for analyses</div>
+          <div class="add">+ operator gate for questions</div>
+        </div>
+      </section>
+    </div>
+    <div class="canvas-title">WORK OBJECT - inspect exact output</div>
+  </section>
+
+  <section class="shot" data-shot="mockups">
+    <header class="topbar">
+      <div><p class="kicker">Visual Artifacts</p><h1>Mockups: source, capture queue, screenshot gallery</h1></div>
+      <div class="tool"><span>C</span><span>Capture</span></div>
+    </header>
+    <div class="mockup-layout">
+      <section class="browser-frame card">
+        <div class="browser-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="chip cyan">file://goal-object-ux-mockups.html#questions</span></div>
+        <div class="mock-canvas">
+          <div class="mock-card a card"><p class="kicker">Questions</p><p>Operator gate mockup</p></div>
+          <div class="mock-card b card"><p class="kicker">Reports</p><p>Outcome packet</p></div>
+          <div class="mock-card c card"><p class="kicker">Specs</p><p>Contract editor</p></div>
+        </div>
+      </section>
+      <aside class="capture-stack terminal">
+        <p class="kicker">Capture Queue</p>
+        <div class="thumb"><span class="chip green">captured</span><p>questions.png</p></div>
+        <div class="thumb"><span class="chip green">captured</span><p>reports.png</p></div>
+        <div class="thumb"><span class="chip yellow">next</span><p>specs.png</p></div>
+        <div class="thumb"><span class="chip cyan">source</span><p>single HTML file</p></div>
+      </aside>
+    </div>
+    <div class="canvas-title">MOCKUPS OBJECT - review visual states</div>
+  </section>
+
+  <section class="shot" data-shot="analyses">
+    <header class="topbar">
+      <div><p class="kicker">Reasoning Artifact</p><h1>Analyses: hypotheses, evidence, tests, decisions</h1></div>
+      <div class="tool"><span>?</span><span>Evaluate</span></div>
+    </header>
+    <div class="analysis-layout">
+      <section class="matrix card">
+        <div class="cell head">Question</div><div class="cell head">Hypothesis</div><div class="cell head">Evidence</div><div class="cell head">Test</div>
+        <div class="cell">Why did the first design fail?</div><div class="cell">Repeated layout ignored object purpose.</div><div class="cell">All screens shared title-left/content-right shape.</div><div class="cell">Compare each object to its real workflow.</div>
+        <div class="cell">What should analyses show?</div><div class="cell">Decision-relevant proof, not a summary block.</div><div class="cell">Operator asked what the information is for.</div><div class="cell">Attach evidence and falsification path.</div>
+        <div class="cell">When is it done?</div><div class="cell">When operator can decide next action.</div><div class="cell">Risk and confidence are explicit.</div><div class="cell">Open question count reaches zero.</div>
+      </section>
+      <aside class="hypothesis terminal">
+        <p class="kicker">Selected Analysis</p>
+        <h2>Root cause: object purpose was not modeled.</h2>
+        <p>Useful analysis is a working table of claims, evidence, counterexamples, and next tests. It should reduce uncertainty.</p>
+        <span class="chip orange">needs evidence</span>
+        <span class="chip green">decision ready after tests</span>
+      </aside>
+    </div>
+    <div class="canvas-title">ANALYSES OBJECT - reduce uncertainty</div>
+  </section>
+
+  <section class="shot" data-shot="learning">
+    <header class="topbar">
+      <div><p class="kicker">Reusable Memory</p><h1>Learning: promote session lessons into future behavior</h1></div>
+      <div class="tool"><span>L</span><span>Promote</span></div>
+    </header>
+    <div class="learning-layout">
+      <section class="memory-column">
+        <article class="memory-card card"><p class="kicker">Keep</p><h3>Read the rejection precisely</h3><p>Do not treat style feedback as color-only feedback.</p></article>
+        <article class="memory-card card"><p class="kicker">Avoid</p><h3>Template repetition</h3><p>Object UX must follow object purpose.</p></article>
+        <article class="memory-card card"><p class="kicker">Promote</p><h3>Decision OS visual language</h3><p>Dark canvas, terminal panels, card/zones, cyan/orange accents.</p></article>
+      </section>
+      <section class="promotion-path zone">
+        <svg viewBox="0 0 700 520" width="100%" height="100%" aria-hidden="true">
+          <path d="M150 116 C300 150 305 260 360 278 C444 304 498 190 562 126 M360 278 C470 360 506 396 536 438" stroke="#38d9e8" stroke-width="2" fill="none"/>
+        </svg>
+        <div class="path-step s1 card"><p class="kicker">Session</p><p>Observed correction</p></div>
+        <div class="path-step s2 card"><p class="kicker">Learning</p><p>Reusable rule</p></div>
+        <div class="path-step s3 card"><p class="kicker">Skill</p><p>Workflow update</p></div>
+        <div class="path-step s4 card"><p class="kicker">Next Run</p><p>Behavior changes</p></div>
+      </section>
+    </div>
+    <div class="canvas-title">LEARNING OBJECT - make future runs better</div>
+  </section>
+
+  <section class="shot" data-shot="questions">
+    <header class="topbar">
+      <div><p class="kicker">Operator Gate</p><h1>Questions: structured decision prompts, not chat noise</h1></div>
+      <div class="tool"><span>A</span><span>Answer</span></div>
+    </header>
+    <div class="question-layout">
+      <section class="question-card card">
+        <div>
+          <p class="kicker">Current Question</p>
+          <h2>Should goal creation generate a ledger immediately, or first create a task queue?</h2>
+          <p>The answer changes persistence, navigation, and how agents resume long work.</p>
+        </div>
+        <div class="choice-grid">
+          <div class="choice"><span class="chip green">1</span><p>Create a task queue first, then generate ledgers from task groups.</p><span class="chip green">recommended</span></div>
+          <div class="choice"><span class="chip">2</span><p>Create one ledger immediately from every goal.</p><span class="chip">simple</span></div>
+          <div class="choice"><span class="chip yellow">3</span><p>Let the operator choose the target surface per goal.</p><span class="chip yellow">flexible</span></div>
+        </div>
+        <div class="terminal" style="padding:12px;"><p class="kicker">Free Text</p><p>Optional constraint from operator before resume.</p></div>
+      </section>
+      <aside class="question-side terminal">
+        <p class="kicker">Why This Exists</p>
+        <p>Questions are explicit gates. They stop autonomous work only when the answer changes architecture, cost, risk, or operator intent.</p>
+        <span class="chip orange">waiting operator</span>
+        <span class="chip cyan">linked to task T-003</span>
+      </aside>
+    </div>
+    <div class="canvas-title">QUESTIONS OBJECT - unblock with structured choice</div>
+  </section>
+
+  <section class="shot" data-shot="proposals">
+    <header class="topbar">
+      <div><p class="kicker">Agent Recommendation</p><h1>Proposals: compare possible corrections before approval</h1></div>
+      <div class="tool"><span>P</span><span>Approve</span></div>
+    </header>
+    <div class="proposal-layout">
+      <aside class="proposal-brief terminal">
+        <p class="kicker">Problem Found</p>
+        <h2>Thread notes are carrying execution state.</h2>
+        <p>Proposal object exists so an agent can recommend a correction with risk, cost, and alternatives before changing the system.</p>
+      </aside>
+      <section class="proposal-compare">
+        <article class="proposal-option card">
+          <div><span class="chip green">A</span><h2>Durable task queue</h2><p>Separate task/run state from thread conversation.</p></div>
+          <div class="score"><p>Impact</p><div class="bar"><span style="width:92%"></span></div><p>Risk</p><div class="bar"><span style="width:38%; background:var(--yellow)"></span></div></div>
+        </article>
+        <article class="proposal-option card">
+          <div><span class="chip yellow">B</span><h2>Extend notes</h2><p>Add status markers inside thread markdown.</p></div>
+          <div class="score"><p>Impact</p><div class="bar"><span style="width:54%; background:var(--yellow)"></span></div><p>Risk</p><div class="bar"><span style="width:58%; background:var(--orange)"></span></div></div>
+        </article>
+        <article class="proposal-option card">
+          <div><span class="chip red">C</span><h2>External runner only</h2><p>Keep decision-os unaware of autonomous state.</p></div>
+          <div class="score"><p>Impact</p><div class="bar"><span style="width:28%; background:var(--red)"></span></div><p>Risk</p><div class="bar"><span style="width:76%; background:var(--red)"></span></div></div>
+        </article>
+      </section>
+    </div>
+    <div class="canvas-title">PROPOSALS OBJECT - decide between options</div>
+  </section>
+
+  <section class="shot" data-shot="reports">
+    <header class="topbar">
+      <div><p class="kicker">Completion Packet</p><h1>Reports: what changed, what passed, what remains</h1></div>
+      <div class="tool"><span>R</span><span>Review</span></div>
+    </header>
+    <div class="report-layout">
+      <section class="report-main card">
+        <div class="report-strip">
+          <div class="report-stat"><p class="kicker">Changed</p><h2>15 files</h2></div>
+          <div class="report-stat"><p class="kicker">Checks</p><h2>4 passed</h2></div>
+          <div class="report-stat"><p class="kicker">Risk</p><h2>Medium</h2></div>
+          <div class="report-stat"><p class="kicker">Open</p><h2>1 note</h2></div>
+        </div>
+        <div class="report-timeline">
+          <div class="report-step" style="height:80px"><p>Context</p></div>
+          <div class="report-step" style="height:150px"><p>Build</p></div>
+          <div class="report-step" style="height:210px"><p>Capture</p></div>
+          <div class="report-step" style="height:126px"><p>Verify</p></div>
+          <div class="report-step" style="height:96px"><p>Answer</p></div>
+        </div>
+        <p>Report value: operator can see evidence, failures, residual risk, and next action without replaying the full thread.</p>
+      </section>
+      <aside class="report-side terminal">
+        <p class="kicker">Residual Risk</p>
+        <p>Visual direction depends on operator acceptance.</p>
+        <span class="chip orange">needs review</span>
+        <p class="kicker">Evidence</p>
+        <p>Screenshot assets, card diff, unanswered check, JSON parse.</p>
+      </aside>
+    </div>
+    <div class="canvas-title">REPORTS OBJECT - close the loop</div>
+  </section>
+
+  <section class="shot" data-shot="specs">
+    <header class="topbar">
+      <div><p class="kicker">Build Contract</p><h1>Specs: transform intent into implementation constraints</h1></div>
+      <div class="tool"><span>S</span><span>Compile</span></div>
+    </header>
+    <div class="spec-layout">
+      <aside class="spec-tree terminal">
+        <p class="kicker">Spec Sections</p>
+        <div class="tree-row"><span>A</span><span>Object contracts</span></div>
+        <div class="tree-row"><span>B</span><span>State transitions</span></div>
+        <div class="tree-row"><span>C</span><span>Routes and surfaces</span></div>
+        <div class="tree-row"><span>D</span><span>Acceptance checks</span></div>
+      </aside>
+      <section class="spec-editor card">
+        <p class="kicker">Contract Editor</p>
+        <div class="schema-line">Goal.sentence: non-empty single sentence</div>
+        <div class="schema-line">Task.status: triage | ready | leased | running | waiting-operator | done</div>
+        <div class="schema-line">Question.answer: choiceIndex + optional freeText + timestamp</div>
+        <div class="schema-line">Report.evidence: changedFiles[] + checks[] + residualRisk</div>
+      </section>
+      <aside class="spec-pipeline zone">
+        <p class="kicker">Master Ledger Flow</p>
+        <h2>Spec -> Ledger -> Scaffold -> Implementation</h2>
+        <p>Specs are useful when they are precise enough to drive generation and verification.</p>
+      </aside>
+    </div>
+    <div class="canvas-title">SPECS OBJECT - make work implementable</div>
+  </section>
+
+  <section class="shot" data-shot="global-goal">
+    <header class="topbar">
+      <div><p class="kicker">Global Goal View</p><h1>Goal cockpit</h1></div>
+      <div class="tool"><span>Z</span><span>Goal view</span></div>
+    </header>
+    <div class="goal-cockpit">
+      <section class="goal-title">
+        <h2>Create a decision-os UX for goal-created objects and autonomous multi-thread work.</h2>
+        <span class="chip cyan">goal-ledger: object-ux</span>
+      </section>
+
+      <nav class="goal-tabs" aria-label="Goal sections">
+        <span class="goal-tab active">Specs</span>
+        <span class="goal-tab">Reports</span>
+        <span class="goal-tab">Tasks</span>
+      </nav>
+
+      <section class="spec-worklist card">
+        <div class="spec-toolbar">
+          <div class="search">Search specs...</div>
+          <span class="chip cyan">All</span>
+          <span class="chip green">Approved</span>
+        </div>
+        <div class="spec-rows">
+          <article class="spec-row">
+            <div><strong>Object mockups use decision-os visual language.</strong></div>
+            <span class="mini-button approve">✓</span>
+            <span class="mini-button reject">×</span>
+          </article>
+          <article class="spec-row">
+            <div><strong>Each spec is a single operator-reviewable sentence.</strong></div>
+            <span class="mini-button approve">✓</span>
+            <span class="mini-button reject">×</span>
+          </article>
+          <article class="spec-row">
+            <div><strong>Spec wording changes happen inside the spec thread.</strong></div>
+            <span class="mini-button approve">✓</span>
+            <span class="mini-button reject">×</span>
+          </article>
+          <article class="spec-row">
+            <div><strong>Each spec can open its own thread.</strong></div>
+            <span class="mini-button approve">✓</span>
+            <span class="mini-button reject">×</span>
+          </article>
+          <article class="spec-row">
+            <div><strong>Reports open as ledgers and zoom back to the goal.</strong></div>
+            <span class="mini-button approve">✓</span>
+            <span class="mini-button reject">×</span>
+          </article>
+          <article class="spec-row">
+            <div><strong>Tasks are displayed as lists first, with graph view as a secondary mode.</strong></div>
+            <span class="mini-button approve">✓</span>
+            <span class="mini-button reject">×</span>
+          </article>
+        </div>
+      </section>
+    </div>
+    <div class="canvas-title">GLOBAL GOAL VIEW - SPECS TAB</div>
+  </section>
+
+  <section class="shot" data-shot="global-goal-reports">
+    <header class="topbar">
+      <div><p class="kicker">Global Goal View</p><h1>Goal cockpit</h1></div>
+      <div class="tool"><span>Z</span><span>Goal view</span></div>
+    </header>
+    <div class="goal-cockpit">
+      <section class="goal-title">
+        <h2>Create a decision-os UX for goal-created objects and autonomous multi-thread work.</h2>
+        <span class="chip cyan">goal-ledger: object-ux</span>
+      </section>
+
+      <nav class="goal-tabs" aria-label="Goal sections">
+        <span class="goal-tab">Specs</span>
+        <span class="goal-tab active">Reports</span>
+        <span class="goal-tab">Tasks</span>
+      </nav>
+
+      <section class="goal-report-panel card">
+        <div class="goal-report-list">
+          <article class="goal-report-card open">
+            <div class="goal-report-head">
+              <h3>Object UX report</h3>
+              <div class="goal-report-tags"><span class="chip cyan">ux</span><span class="chip green">current</span></div>
+            </div>
+            <div class="goal-report-summary">
+              <p>The goal needs three operator-facing surfaces: specs for approval, reports for analysis output, and tasks for executable work.</p>
+              <ul>
+                <li>Specs stay sentence-level and open their thread on row click.</li>
+                <li>Reports are analysis ledgers with expandable summaries.</li>
+                <li>Tasks are list-first, with graph mode as a secondary view.</li>
+              </ul>
+            </div>
+          </article>
+          <article class="goal-report-card">
+            <div class="goal-report-head">
+              <h3>UI correction report</h3>
+              <div class="goal-report-tags"><span class="chip orange">layout</span><span class="chip yellow">review</span></div>
+            </div>
+            <p>Tracks rejected controls, redundant buttons, and container issues from the operator notes.</p>
+          </article>
+          <article class="goal-report-card">
+            <div class="goal-report-head">
+              <h3>Autonomy report format</h3>
+              <div class="goal-report-tags"><span class="chip violet">prd</span></div>
+            </div>
+            <p>Defines how goal analysis should become a reusable report ledger.</p>
+          </article>
+        </div>
+        <aside class="goal-report-side terminal">
+          <p class="kicker">Report Ledger</p>
+          <h2>Object UX report</h2>
+          <p>The selected report has its own ledger with cards, relationships, evidence, and analysis notes. Zooming out from that ledger returns to this global goal view.</p>
+          <span class="chip green">open report ledger</span>
+        </aside>
+      </section>
+    </div>
+    <div class="canvas-title">GLOBAL GOAL VIEW - REPORTS TAB</div>
+  </section>
+
+  <section class="shot" data-shot="global-goal-tasks">
+    <header class="topbar">
+      <div><p class="kicker">Global Goal View</p><h1>Goal cockpit</h1></div>
+      <div class="tool"><span>Z</span><span>Goal view</span></div>
+    </header>
+    <div class="goal-cockpit">
+      <section class="goal-title">
+        <h2>Create a decision-os UX for goal-created objects and autonomous multi-thread work.</h2>
+        <span class="chip cyan">goal-ledger: object-ux</span>
+      </section>
+
+      <nav class="goal-tabs" aria-label="Goal sections">
+        <span class="goal-tab">Specs</span>
+        <span class="goal-tab">Reports</span>
+        <span class="goal-tab active">Tasks</span>
+      </nav>
+
+      <section class="goal-task-panel">
+        <aside class="goal-task-flows terminal">
+          <p class="kicker">Task Flows</p>
+          <div class="flow-row active"><span>Spec review</span><span class="chip cyan">list</span></div>
+          <div class="flow-row"><span>Report research</span><span class="chip yellow">todo</span></div>
+          <div class="flow-row"><span>Implementation</span><span class="chip">later</span></div>
+        </aside>
+        <section class="goal-task-main card">
+          <div class="goal-task-toolbar">
+            <div class="search">Search tasks...</div>
+            <span class="chip cyan">Graph mode</span>
+          </div>
+          <div class="goal-task-list">
+            <article class="goal-task-card">
+              <span class="chip green">done</span>
+              <div><h3>Split mockup HTML and CSS</h3><p>System prompt: frontend asset preparation.</p></div>
+              <div class="task-meta"><span>output: source files</span><span>owner: codex-local</span></div>
+            </article>
+            <article class="goal-task-card">
+              <span class="chip green">done</span>
+              <div><h3>Remove redundant row actions</h3><p>System prompt: UX correction from operator notes.</p></div>
+              <div class="task-meta"><span>output: updated renders</span><span>owner: codex-local</span></div>
+            </article>
+            <article class="goal-task-card">
+              <span class="chip yellow">todo</span>
+              <div><h3>Define report ledger format</h3><p>System prompt: product analysis and PRD research.</p></div>
+              <div class="task-meta"><span>output: report spec</span><span>owner: unassigned</span></div>
+            </article>
+            <article class="goal-task-card">
+              <span class="chip cyan">ready</span>
+              <div><h3>Model graph view as secondary mode</h3><p>System prompt: task flow visualization.</p></div>
+              <div class="task-meta"><span>output: graph affordance</span><span>owner: unassigned</span></div>
+            </article>
+          </div>
+        </section>
+      </section>
+    </div>
+    <div class="canvas-title">GLOBAL GOAL VIEW - TASKS TAB</div>
+  </section>
+</main>
+<script>
+  const shot = window.location.hash.slice(1);
+  if (shot) {
+    document.body.classList.add('capture');
+    document.querySelectorAll('.shot').forEach((node) => {
+      node.classList.toggle('active', node.dataset.shot === shot);
+    });
+  }
+</script>
+</body>
+</html>

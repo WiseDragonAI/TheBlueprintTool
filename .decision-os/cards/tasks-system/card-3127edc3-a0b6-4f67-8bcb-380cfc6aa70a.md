@@ -29,5 +29,5 @@
 ## D. Workspace Rules
 
 1. **Cwd-scoped workspace.** The watcher resolves the active decision-os workspace from the process cwd unless the operator explicitly names another workspace.
-2. **No workspace hardcoding.** The hook and launcher must not bake in decisionOs, MOH, Ardaria, or any other specific directory.
+2. **No workspace hardcoding.** The hook and launcher must not bake in any specific directory or external workspace name.
 3. **Durable verification.** Each triggered run must verify the relevant ledgers report no unanswered notes before the watcher returns to idle.

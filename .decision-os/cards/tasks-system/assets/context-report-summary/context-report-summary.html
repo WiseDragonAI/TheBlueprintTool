@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Decision OS Context Summary</title>
+  <link rel="stylesheet" href="context-report-summary.css">
+</head>
+<body>
+  <main class="summary-shell" aria-labelledby="page-title">
+    <header class="hero">
+      <p class="context-label">Decision OS Context</p>
+      <h1 id="page-title">Context Summary</h1>
+      <p>Current state, technical frame, UX constraints, and evidence limits.</p>
+    </header>
+
+    <section class="summary-band" aria-label="Quick context scan">
+      <header class="band-heading">
+        <span>01</span>
+        <h2>Quick scan</h2>
+      </header>
+
+      <div class="lead-grid">
+        <article class="lead-card first-read">
+          <h3>First read</h3>
+          <p><strong>Decision OS is being dogfooded as a local decision workspace.</strong> The active surface is the canvas, cards, zones, groups, threads, media, voice notes, CLI tooling, and report/mockup cards.</p>
+        </article>
+        <article class="lead-card stack">
+          <h3>Tech stack</h3>
+          <p><code>Node</code> and <code>TypeScript</code> backend through <code>tsx</code>, frameworkless <code>TypeScript</code> frontend, workspace-local <code>.decision-os</code> files as durable state.</p>
+        </article>
+        <article class="lead-card constraints">
+          <h3>Open constraints</h3>
+          <p><strong>Threads are overloaded</strong> and the report object boundary is still unresolved. Performance, accessibility, external adoption, and hosted deployment are not proven by this report.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="summary-band detail-band" aria-label="Context detail summary">
+      <header class="band-heading">
+        <span>02</span>
+        <h2>Context details</h2>
+      </header>
+
+      <div class="summary-grid">
+        <article class="summary-card product">
+          <h3>Product shape</h3>
+          <ul>
+            <li><strong>Surface:</strong> ledgers, cards, zones, groups, relationships, card Markdown, media carousels, HTML assets, threads, and voice notes.</li>
+            <li><strong>Workflow:</strong> inspect and edit canvas objects, review specs and performance evidence, paste files/images, record voice notes, treat unanswered notes, and review mockups.</li>
+            <li><strong>Active boundary work:</strong> watcher loops, summary maintenance, task queues, report UX, and goal-object UX live in <code>tasks-system</code>.</li>
+          </ul>
+        </article>
+
+        <article class="summary-card technical">
+          <h3>State model</h3>
+          <ul>
+            <li><strong>Canonical store:</strong> the filesystem; the backend hydrates and writes ledger JSON, card Markdown, and thread Markdown.</li>
+            <li><strong>Registry:</strong> <code>.decision-os/state.json</code> lists the active ledgers; each ledger JSON owns cards, relationships, viewport, and thread references.</li>
+            <li><strong>Asset rule:</strong> live HTML must stay under active card asset paths; images and thread files are served from constrained workspace paths.</li>
+          </ul>
+        </article>
+
+        <article class="summary-card ux">
+          <h3>Workspace use</h3>
+          <ul>
+            <li><strong>Main loop:</strong> open a ledger route, inspect the canvas, select cards/zones/groups, edit content or geometry, then review the result in card detail.</li>
+            <li><strong>Agent handoff:</strong> use threads, pasted files/images, and voice notes to pass work to agents; agent replies return through durable <code># AGENT</code> notes and card edits.</li>
+            <li><strong>Keyboard contract:</strong> <code>A</code>, <code>X</code>, <code>Esc</code>, <code>Del</code>, <code>Ctrl+C</code>, <code>Ctrl+V</code>, and <code>Ctrl+D</code> define the current operator controls.</li>
+          </ul>
+        </article>
+
+        <article class="summary-card boundaries">
+          <h3>Proof limits</h3>
+          <ul>
+            <li><strong>Grounded in:</strong> current repo files, active workspace ledgers, docs, source inspection, task cards, performance notes, CLI behavior, and local runtime behavior.</li>
+            <li><strong>Not proven:</strong> hosted deployment, multi-tenant permissions, billing, customer analytics, external adoption, assistive technology behavior, and current browser performance.</li>
+            <li><strong>External dependency:</strong> optional OpenAI transcription configuration is the only confirmed dependency outside the local repo.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
