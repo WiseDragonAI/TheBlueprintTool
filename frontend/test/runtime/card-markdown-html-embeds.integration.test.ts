@@ -23,6 +23,16 @@ test('card markdown html directives render as sandboxed ledger-scoped iframe med
   assert.match(htmlRenderer, /ledger-card-html-shell/);
   assert.match(htmlRenderer, /ledger-card-html-frame/);
   assert.doesNotMatch(htmlRenderer, /dataset\.imageSizeId/);
+  assert.match(htmlRenderer, /bindHtmlEmbedWheelBridge\(iframe\)/);
+  assert.match(htmlRenderer, /iframe\.addEventListener\('load', bind\)/);
+  assert.match(htmlRenderer, /doc\.addEventListener\('wheel', \(event\) => \{/);
+  assert.match(htmlRenderer, /\{ passive: false, capture: true \}/);
+  assert.match(htmlRenderer, /if \(event\.ctrlKey\) \{[\s\S]*scrollHtmlEmbedWheelTarget\(iframe, event\);[\s\S]*return;[\s\S]*\}/);
+  assert.match(htmlRenderer, /dispatchCanvasWheelFromHtmlEmbed\(iframe, event\)/);
+  assert.match(htmlRenderer, /iframe\.dispatchEvent\(new WheelEvent\('wheel'/);
+  assert.match(htmlRenderer, /clientX: rect\.left \+ event\.clientX \* \(rect\.width \/ frameWidth\)/);
+  assert.match(htmlRenderer, /clientY: rect\.top \+ event\.clientY \* \(rect\.height \/ frameHeight\)/);
+  assert.match(htmlRenderer, /ctrlKey: false/);
   assert.match(htmlRenderer, /iframe\.sandbox\.add\('allow-scripts', 'allow-same-origin'\)/);
   assert.match(htmlRenderer, /allowedPrefix = `\.decision-os\/cards\/\$\{ledgerStem\}\/assets\/`/);
   assert.match(htmlRenderer, /normalized\.toLowerCase\(\)\.endsWith\('\.html'\)/);

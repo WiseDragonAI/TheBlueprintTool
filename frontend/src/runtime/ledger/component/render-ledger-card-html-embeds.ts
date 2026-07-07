@@ -167,6 +167,97 @@ function renderSlideButton(embed: LedgerCardHtmlEmbed, index: number, shell: HTM
   return button;
 }
 
+function htmlEmbedDocument(iframe: HTMLIFrameElement): Document | null {
+  try {
+    return iframe.contentDocument ?? iframe.contentWindow?.document ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function htmlEmbedWheelDelta(event: WheelEvent, iframe: HTMLIFrameElement): { x: number; y: number } {
+  const lineDeltaMode = 1;
+  const pageDeltaMode = 2;
+  if (event.deltaMode === lineDeltaMode) return { x: event.deltaX * 16, y: event.deltaY * 16 };
+  if (event.deltaMode === pageDeltaMode) {
+    const view = iframe.contentWindow;
+    return {
+      x: event.deltaX * Math.max(1, view?.innerWidth ?? iframe.clientWidth ?? 1),
+      y: event.deltaY * Math.max(1, view?.innerHeight ?? iframe.clientHeight ?? 1)
+    };
+  }
+  return { x: event.deltaX, y: event.deltaY };
+}
+
+function canScrollWheelTarget(element: HTMLElement, delta: { x: number; y: number }): boolean {
+  if (delta.x < 0 && element.scrollLeft > 0) return true;
+  if (delta.x > 0 && element.scrollLeft + element.clientWidth < element.scrollWidth) return true;
+  if (delta.y < 0 && element.scrollTop > 0) return true;
+  if (delta.y > 0 && element.scrollTop + element.clientHeight < element.scrollHeight) return true;
+  return false;
+}
+
+function scrollableHtmlEmbedWheelTarget(event: WheelEvent, iframe: HTMLIFrameElement, delta: { x: number; y: number }): HTMLElement | null {
+  const doc = htmlEmbedDocument(iframe);
+  const target = event.target as { nodeType?: number; parentElement?: HTMLElement } | null;
+  let element = target?.nodeType === 1 ? target as HTMLElement : target?.parentElement ?? null;
+  while (element) {
+    if (canScrollWheelTarget(element, delta)) return element;
+    element = element.parentElement;
+  }
+  return doc?.scrollingElement as HTMLElement | null ?? doc?.documentElement ?? doc?.body ?? null;
+}
+
+function scrollHtmlEmbedWheelTarget(iframe: HTMLIFrameElement, event: WheelEvent): void {
+  const delta = htmlEmbedWheelDelta(event, iframe);
+  const target = scrollableHtmlEmbedWheelTarget(event, iframe, delta);
+  if (!target) return;
+  target.scrollBy?.({ left: delta.x, top: delta.y, behavior: 'auto' });
+  if (!target.scrollBy) {
+    target.scrollLeft += delta.x;
+    target.scrollTop += delta.y;
+  }
+}
+
+function dispatchCanvasWheelFromHtmlEmbed(iframe: HTMLIFrameElement, event: WheelEvent): void {
+  const rect = iframe.getBoundingClientRect();
+  const frameWidth = Math.max(1, iframe.contentWindow?.innerWidth ?? iframe.clientWidth ?? rect.width);
+  const frameHeight = Math.max(1, iframe.contentWindow?.innerHeight ?? iframe.clientHeight ?? rect.height);
+  iframe.dispatchEvent(new WheelEvent('wheel', {
+    bubbles: true,
+    cancelable: true,
+    deltaX: event.deltaX,
+    deltaY: event.deltaY,
+    deltaZ: event.deltaZ,
+    deltaMode: event.deltaMode,
+    clientX: rect.left + event.clientX * (rect.width / frameWidth),
+    clientY: rect.top + event.clientY * (rect.height / frameHeight),
+    altKey: event.altKey,
+    shiftKey: event.shiftKey,
+    metaKey: event.metaKey,
+    ctrlKey: false
+  }));
+}
+
+function bindHtmlEmbedWheelBridge(iframe: HTMLIFrameElement): void {
+  let boundDocument: Document | null = null;
+  const bind = () => {
+    const doc = htmlEmbedDocument(iframe);
+    if (!doc || doc === boundDocument) return;
+    boundDocument = doc;
+    doc.addEventListener('wheel', (event) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (event.ctrlKey) {
+        scrollHtmlEmbedWheelTarget(iframe, event);
+        return;
+      }
+      dispatchCanvasWheelFromHtmlEmbed(iframe, event);
+    }, { passive: false, capture: true });
+  };
+  iframe.addEventListener('load', bind);
+}
+
 function renderHtmlSlide(embed: LedgerCardHtmlEmbed, index: number): HTMLElement {
   const slide = document.createElement('figure');
   slide.className = 'ledger-card-media-slide ledger-card-html-slide';
@@ -181,6 +272,7 @@ function renderHtmlSlide(embed: LedgerCardHtmlEmbed, index: number): HTMLElement
     iframe.title = titleText || `HTML embed ${index + 1}`;
     iframe.sandbox.add('allow-scripts', 'allow-same-origin');
     iframe.loading = 'lazy';
+    bindHtmlEmbedWheelBridge(iframe);
     slide.appendChild(iframe);
   } else {
     const invalid = document.createElement('div');
