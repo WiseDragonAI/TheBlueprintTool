@@ -57,8 +57,13 @@
 }
 
 .skill-modal {
+  display: grid;
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
   width: min(720px, calc(100vw - 32px));
   max-width: min(720px, calc(100vw - 32px));
+  height: 60vh;
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
 }
 
 .skill-search {
@@ -154,8 +159,9 @@
 
 .skill-results {
   display: grid;
+  align-content: start;
   gap: 8px;
-  max-height: min(58vh, 520px);
+  min-height: 0;
   overflow: auto;
   padding-right: 4px;
 }
