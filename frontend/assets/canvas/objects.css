@@ -749,6 +749,7 @@
   min-height: 112px;
   margin: 8px 0 10px;
   overflow: hidden;
+  resize: horizontal;
   border: 1px solid color-mix(in srgb, var(--card-zone-color), rgba(255, 255, 255, 0.2) 34%);
   border-radius: 3px;
   background:
@@ -759,10 +760,6 @@
     0 10px 22px rgba(0, 0, 0, 0.32);
   pointer-events: auto;
   user-select: none;
-}
-
-.ledger-card-image-shell {
-  resize: horizontal;
 }
 
 .canvas-media-overlay .ledger-card-media-shell {
@@ -784,7 +781,7 @@
   visibility: hidden;
 }
 
-.ledger-card-image-shell::after {
+.ledger-card-media-shell::after {
   position: absolute;
   right: 5px;
   bottom: 5px;

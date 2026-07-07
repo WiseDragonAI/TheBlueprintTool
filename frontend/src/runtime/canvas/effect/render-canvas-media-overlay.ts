@@ -166,6 +166,10 @@ function shellForSlot(node: HTMLElement): HTMLElement | null {
   return promotion?.shell?.isConnected ? promotion.shell : null;
 }
 
+function isHtmlEmbedShell(shell: HTMLElement): boolean {
+  return shell.classList.contains('ledger-card-html-shell');
+}
+
 function aspectRatioForShell(shell: HTMLElement): string {
   const configured = shell.style.getPropertyValue('--ledger-card-media-aspect-ratio').trim();
   if (configured) return configured;
@@ -239,12 +243,13 @@ function demoteMediaShell(key: string, options: MediaOverlayDemotionOptions = {}
   const promotion = promotedMediaShells.get(key);
   if (!promotion) return;
   const reconcilePromotedGeometry = options.reconcilePromotedGeometry ?? true;
-  if (reconcilePromotedGeometry && !isLedgerCardMediaResizePersistenceSuppressed(promotion.shell)) {
+  if (reconcilePromotedGeometry && !isHtmlEmbedShell(promotion.shell) && !isLedgerCardMediaResizePersistenceSuppressed(promotion.shell)) {
     syncPlaceholderFromPromotedShell(promotion);
   }
   const handoffState = captureLedgerCardMediaHandoffState(promotion.shell);
   const transferredLocalWidth = Math.round(placeholderLocalWidth(promotion.placeholder));
-  const shouldTransferLocalWidth = Math.abs(transferredLocalWidth - promotion.originalLocalWidth) >= 1;
+  const shouldTransferLocalWidth = !isHtmlEmbedShell(promotion.shell)
+    && Math.abs(transferredLocalWidth - promotion.originalLocalWidth) >= 1;
   promotion.resizeObserver?.disconnect();
   withHiddenMediaHandoff(promotion.shell, () => {
     delete promotion.shell.dataset.mediaPromoted;
@@ -327,6 +332,7 @@ function createPlaceholder(shell: HTMLElement, key: string): HTMLElement {
 }
 
 function promoteMediaShell(overlay: HTMLElement, key: string, shell: HTMLElement, cardElement: HTMLElement): MediaPromotion | null {
+  if (isHtmlEmbedShell(shell)) return null;
   const existingKey = promotedShellKeys.get(shell);
   if (existingKey && existingKey !== key) demoteMediaShell(existingKey);
   const existing = promotedMediaShells.get(key);
@@ -433,6 +439,7 @@ export function renderCanvasMediaOverlay(): void {
     for (const [shellIndex, slotNode] of mediaSlotNodes(cardElement).entries()) {
       const shell = shellForSlot(slotNode);
       if (!shell) continue;
+      if (isHtmlEmbedShell(shell)) continue;
       const isPlaceholderSlot = slotNode.classList.contains('ledger-card-media-placeholder');
       if (isPlaceholderSlot) {
         const promotion = promotedMediaShells.get(slotNode.dataset.mediaPromotionKey ?? '');

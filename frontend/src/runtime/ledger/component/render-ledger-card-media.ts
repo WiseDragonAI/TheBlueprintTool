@@ -356,7 +356,6 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
   const shell = document.createElement('div');
   shell.className = [
     'ledger-card-media-shell',
-    'ledger-card-image-shell',
     isCarousel ? 'ledger-card-media-carousel' : 'ledger-card-media-single',
     mediaSurface === 'thread' ? 'ledger-card-media-thread' : ''
   ].filter(Boolean).join(' ');
