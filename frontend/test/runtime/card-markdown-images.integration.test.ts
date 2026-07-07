@@ -30,6 +30,7 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   assert.match(parser, /images\.images\.push\(\.\.\.standaloneImages\)/);
   assert.match(renderer, /renderLedgerCardMedia/);
   assert.match(mediaRenderer, /ledger-card-media-carousel/);
+  assert.match(mediaRenderer, /ledger-card-image-shell/);
   assert.match(mediaRenderer, /function imageTitleFromSource\(source: string\)/);
   assert.match(mediaRenderer, /decodeURIComponent\(filename\)/);
   assert.match(mediaRenderer, /const titleText = imageTitleFromSource\(image\.src\)\.trim\(\)/);
@@ -115,7 +116,9 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   assert.match(titleRenderer, /node\.kind === 'image'/);
   assert.match(source('frontend/src/runtime/ledger/component/append-inline-nodes.ts'), /Math\.round\(frame\.offsetWidth\)/);
   assert.doesNotMatch(source('frontend/src/runtime/ledger/component/append-inline-nodes.ts'), /getBoundingClientRect\(\)\.(width|height)/);
-  assert.match(css, /\.ledger-card-media-shell\s*{[^}]*--ledger-card-media-slider-row-height:\s*7px;[^}]*--ledger-card-media-slide-nav-height:\s*22px;[^}]*--ledger-card-media-title-row-min-height:\s*22px;[^}]*--ledger-card-media-title-slider-gap:\s*6px;[^}]*--ledger-card-media-bottom-inset:\s*8px;[^}]*max-width:\s*100%;[^}]*aspect-ratio:\s*var\(--ledger-card-media-aspect-ratio, 4 \/ 3\);[^}]*resize:\s*horizontal;/s);
+  assert.match(css, /\.ledger-card-media-shell\s*{[^}]*--ledger-card-media-slider-row-height:\s*7px;[^}]*--ledger-card-media-slide-nav-height:\s*22px;[^}]*--ledger-card-media-title-row-min-height:\s*22px;[^}]*--ledger-card-media-title-slider-gap:\s*6px;[^}]*--ledger-card-media-bottom-inset:\s*8px;[^}]*max-width:\s*100%;[^}]*aspect-ratio:\s*var\(--ledger-card-media-aspect-ratio, 4 \/ 3\);/s);
+  assert.match(css, /\.ledger-card-image-shell\s*{[^}]*resize:\s*horizontal;/s);
+  assert.match(css, /\.ledger-card-image-shell::after\s*{/);
   assert.match(css, /\.ledger-card-media-track\s*{[^}]*scroll-snap-type:\s*x mandatory;/s);
   assert.match(css, /\.ledger-card-media-carousel \.ledger-card-media-track\s*{[^}]*scrollbar-width:\s*none;/s);
   assert.match(css, /\.ledger-card-media-slide\s*{[^}]*grid-template-rows:\s*minmax\(0, 1fr\) auto;[^}]*padding:[^}]*var\(--ledger-card-media-slide-nav-height\)[^}]*var\(--ledger-card-media-title-slider-gap\)/s);
