@@ -78,6 +78,10 @@ function markdownForThreadFile(input: { fileRef: string; originalName: string; c
     : `[${label}](${input.fileRef})`;
 }
 
+function logCodexContinueDebug(phase: string, detail: AnyRecord): void {
+  console.log(JSON.stringify({ codexContinueDebug: true, source: 'backend', phase, at: new Date().toISOString(), ...detail }));
+}
+
 function threadFileContentDisposition(filePath: string): string {
   const filename = basename(filePath).replace(/"/g, '');
   const type = contentTypeFor(filePath);
@@ -160,6 +164,21 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const server = createServer(async (request, response) => {
     const url = (request.url ?? '/').split('?')[0];
     if (tryServeDecisionOsAsset({ url, decisionOsRoot, response })) return;
+    if (url === '/api/debug/codex-continue' && request.method === 'POST') {
+      const bodyBuffer = await readRequestBuffer(request);
+      const debugPayload = (() => {
+        try {
+          return JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
+        } catch {
+          return { parseError: true, rawLength: bodyBuffer.length };
+        }
+      })();
+      console.log(JSON.stringify({ codexContinueDebug: true, source: 'frontend', receivedAt: new Date().toISOString(), ...debugPayload }));
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = 204;
+      response.end();
+      return;
+    }
     if (url === '/api/ledger-content-events' && request.method === 'GET') {
       response.writeHead(200, {
         'cache-control': 'no-store',
@@ -204,14 +223,36 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     if (url.startsWith('/api/codex/skills/runs/') && request.method === 'GET') {
       const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
       const runId = decodeURIComponent(url.slice('/api/codex/skills/runs/'.length));
+      const traceId = requestUrl.searchParams.get('traceId') ?? '';
+      if (traceId) logCodexContinueDebug('status-route-entry', {
+        traceId,
+        runId,
+        ledgerId: requestUrl.searchParams.get('ledgerId') ?? '',
+        cardId: requestUrl.searchParams.get('cardId') ?? '',
+        since: requestUrl.searchParams.get('since') ?? '0'
+      });
       const result = await readCardSkillRunController({
         action_payload: {
           runId,
           ledgerId: requestUrl.searchParams.get('ledgerId') ?? '',
           cardId: requestUrl.searchParams.get('cardId') ?? '',
-          since: requestUrl.searchParams.get('since') ?? '0'
+          since: requestUrl.searchParams.get('since') ?? '0',
+          traceId
         },
         runtime_state: runtime
+      });
+      if (traceId) logCodexContinueDebug('status-route-response', {
+        traceId,
+        runId,
+        statusCode: Number(result.statusCode ?? (result.ok === false ? 400 : 200)),
+        ok: result.ok,
+        status: result.status,
+        lineCount: result.lineCount,
+        nextSince: result.nextSince,
+        persistedEventCount: result.persistedEventCount,
+        latestEventType: result.latestEvent && typeof result.latestEvent === 'object' ? String((result.latestEvent as AnyRecord).type ?? '') : '',
+        latestEventLine: result.latestEvent && typeof result.latestEvent === 'object' ? String((result.latestEvent as AnyRecord).line ?? '') : '',
+        error: result.error
       });
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
@@ -228,9 +269,26 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         }
       })();
       const runId = decodeURIComponent(url.slice('/api/codex/skills/runs/'.length, -'/continue'.length));
+      const traceId = String(continuePayload.traceId ?? '');
+      logCodexContinueDebug('continue-route-entry', {
+        traceId,
+        runId,
+        ledgerId: continuePayload.ledgerId,
+        cardId: continuePayload.cardId
+      });
       const result = await continueCardSkillRunController({
         action_payload: { ...continuePayload, runId, onLedgerChange: publishLedgerContentChange },
         runtime_state: runtime
+      });
+      logCodexContinueDebug('continue-route-response', {
+        traceId,
+        runId,
+        statusCode: Number(result.statusCode ?? (result.ok === false ? 400 : 202)),
+        ok: result.ok,
+        status: result.status,
+        error: result.error,
+        pid: result.run && typeof result.run === 'object' ? (result.run as AnyRecord).pid : undefined,
+        continuedMessageCount: result.run && typeof result.run === 'object' ? (result.run as AnyRecord).continuedMessageCount : undefined
       });
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));

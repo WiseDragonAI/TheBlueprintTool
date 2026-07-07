@@ -16,6 +16,12 @@ import { readCardSkillRunController } from './read-card-skill-run-controller.js'
 type AnyRecord = Record<string, unknown>;
 type ProcessStatus = 'running' | 'complete' | 'failed' | 'cancelled';
 
+function logCodexContinueDebug(phase: string, detail: AnyRecord): void {
+  const traceId = String(detail.traceId ?? '');
+  if (!traceId) return;
+  console.log(JSON.stringify({ codexContinueDebug: true, source: 'backend', phase, at: new Date().toISOString(), ...detail }));
+}
+
 function safeSegment(value: unknown): string {
   return String(value || 'untitled').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled';
 }
@@ -119,7 +125,15 @@ function outputFileForRunCard(input: { ledger: AnyRecord; decisionOsRoot: string
   return resolveCardContentFile(input.decisionOsRoot, comment.contentFile) ?? '';
 }
 
-function threadMessagesAfterLastSessionEnd(input: { ledger: AnyRecord; decisionOsRoot: string; cardId: string; runId: string }): AnyRecord[] {
+function textPreview(value: unknown): string {
+  return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, 220);
+}
+
+function runFileLineCount(file: string): number {
+  return existsSync(file) ? readFileSync(file, 'utf8').replace(/\r\n?/g, '\n').split('\n').filter((line) => line.trim()).length : 0;
+}
+
+function threadMessagesAfterLastSessionEnd(input: { ledger: AnyRecord; decisionOsRoot: string; cardId: string; runId: string; traceId?: string }): AnyRecord[] {
   hydrateLedgerThreadNotes(input.ledger, input.decisionOsRoot);
   const threadId = `thread-${input.cardId}`;
   const notes = normalizeLedgerNotes(input.ledger)[threadId] ?? [];
@@ -132,11 +146,34 @@ function threadMessagesAfterLastSessionEnd(input: { ledger: AnyRecord; decisionO
     if (String(note.codexEventType ?? '') === 'turn.completed') latestCompletedIndex = index;
   }
   const boundaryIndex = latestCodexIndex > latestCompletedIndex ? latestCodexIndex : latestCompletedIndex;
-  return notes.filter((note, index) => {
+  const messages = notes.filter((note, index) => {
     if (String(note.codexRunId ?? '')) return false;
     if (!String(note.message ?? note.body ?? '').trim()) return false;
     return index > boundaryIndex;
   });
+  logCodexContinueDebug('message-extraction', {
+    traceId: input.traceId,
+    runId: input.runId,
+    cardId: input.cardId,
+    threadId,
+    notesCount: notes.length,
+    latestCompletedIndex,
+    latestCodexIndex,
+    boundaryIndex,
+    messageCount: messages.length,
+    candidateIds: messages.map((note) => String(note.id ?? '')).slice(0, 12),
+    candidatePreviews: messages.map((note) => textPreview(note.message ?? note.body)).slice(0, 4),
+    lastNotes: notes.slice(-8).map((note, offset) => ({
+      index: notes.length - notes.slice(-8).length + offset,
+      id: String(note.id ?? ''),
+      role: String(note.role ?? ''),
+      codexRunId: String(note.codexRunId ?? ''),
+      codexEventType: String(note.codexEventType ?? ''),
+      status: String(note.status ?? ''),
+      preview: textPreview(note.message ?? note.body),
+    })),
+  });
+  return messages;
 }
 
 function publicRun(run: AnyRecord): AnyRecord {
@@ -153,46 +190,61 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   const ledgerId = String(payload.ledgerId ?? '').trim();
   const cardId = String(payload.cardId ?? '').trim();
   const runId = String(payload.runId ?? '').trim();
-  if (!ledgerId || !cardId || !runId) return { ok: false, statusCode: 400, error: 'Missing ledgerId, cardId, or runId.' };
-  if (runtimeRunStatus(runtime, runId) === 'running') return { ok: false, statusCode: 409, error: 'Run is already active.', runId };
+  const traceId = String(payload.traceId ?? '');
+  const fail = (statusCode: number, error: string, extra: AnyRecord = {}): AnyRecord => {
+    logCodexContinueDebug('continue-controller-fail', { traceId, ledgerId, cardId, runId, statusCode, error, ...extra });
+    return { ok: false, statusCode, error, runId, ...extra };
+  };
+  logCodexContinueDebug('continue-controller-entry', { traceId, ledgerId, cardId, runId, decisionOsRoot, workspaceRoot, runtimeStatus: runtimeRunStatus(runtime, runId) });
+  if (!ledgerId || !cardId || !runId) return fail(400, 'Missing ledgerId, cardId, or runId.');
+  if (runtimeRunStatus(runtime, runId) === 'running') return fail(409, 'Run is already active.');
 
   const requestedCodexModel = optionalText(payload.codexModel);
   const requestedCodexEffort = optionalText(payload.codexEffort);
-  if (requestedCodexModel && !isAllowedCodexModel(requestedCodexModel)) return { ok: false, statusCode: 400, error: 'Unsupported Codex model.', codexModel: requestedCodexModel };
-  if (requestedCodexEffort && !isAllowedCodexEffort(requestedCodexEffort)) return { ok: false, statusCode: 400, error: 'Unsupported Codex effort.', codexEffort: requestedCodexEffort };
+  if (requestedCodexModel && !isAllowedCodexModel(requestedCodexModel)) return fail(400, 'Unsupported Codex model.', { codexModel: requestedCodexModel });
+  if (requestedCodexEffort && !isAllowedCodexEffort(requestedCodexEffort)) return fail(400, 'Unsupported Codex effort.', { codexEffort: requestedCodexEffort });
 
   const state = readCanonicalDecisionOsState({ action_payload: { decisionOsFile: resolve(decisionOsRoot, 'state.json') }, runtime_state: runtime });
   const tab = state.ledgers.find((entry) => entry.id === ledgerId);
-  if (!tab) return { ok: false, statusCode: 404, error: 'Ledger not found.', ledgerId };
+  if (!tab) return fail(404, 'Ledger not found.', { ledgerId });
 
   const ledgerFile = String(tab.ledgerFile ?? '').replace(/^\.decision-os\//, '');
   const ledgerPath = resolve(decisionOsRoot, ledgerFile);
-  if (!isInside(decisionOsRoot, ledgerPath) || !existsSync(ledgerPath)) return { ok: false, statusCode: 404, error: 'Ledger file not found.', ledgerId };
+  if (!isInside(decisionOsRoot, ledgerPath) || !existsSync(ledgerPath)) return fail(404, 'Ledger file not found.', { ledgerId, ledgerPath });
 
   const runDirectory = resolve(decisionOsRoot, 'runs', 'codex-skills', safeSegment(ledgerStem(ledgerPath)));
   const stdoutFile = resolve(runDirectory, `${safeSegment(runId)}.jsonl`);
   const stderrFile = resolve(runDirectory, `${safeSegment(runId)}.log`);
   const sessionId = readRunSessionId(stdoutFile);
-  if (!sessionId) return { ok: false, statusCode: 409, error: 'Codex session id was not captured for this run.', runId };
+  logCodexContinueDebug('run-files-resolved', { traceId, ledgerId, cardId, runId, runDirectory, stdoutFile, stderrFile, stdoutLineCount: runFileLineCount(stdoutFile), stderrBytes: existsSync(stderrFile) ? readFileSync(stderrFile, 'utf8').length : 0, sessionId });
+  if (!sessionId) return fail(409, 'Codex session id was not captured for this run.');
 
-  const status = await readCardSkillRunController({ action_payload: { ledgerId, cardId, runId, since: 0 }, runtime_state: runtime });
+  const status = await readCardSkillRunController({ action_payload: { ledgerId, cardId, runId, since: 0, traceId }, runtime_state: runtime });
+  logCodexContinueDebug('preflight-status', { traceId, ledgerId, cardId, runId, ok: status.ok, status: status.status, lineCount: status.lineCount, persistedEventCount: status.persistedEventCount, latestEventType: status.latestEvent && typeof status.latestEvent === 'object' ? String((status.latestEvent as AnyRecord).type ?? '') : '', error: status.error });
   if (status.ok === false) return status;
-  if (status.status === 'running') return { ok: false, statusCode: 409, error: 'Run is already active.', runId };
+  if (status.status === 'running') return fail(409, 'Run is already active.', { status: status.status, lineCount: status.lineCount });
 
   const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord & { cards?: AnyRecord[] };
-  if (!cardReferencesRun({ ledger, decisionOsRoot, cardId, runId })) return { ok: false, statusCode: 404, error: 'Run not found on card.', cardId, runId };
-  const messages = threadMessagesAfterLastSessionEnd({ ledger, decisionOsRoot, cardId, runId });
-  if (messages.length === 0) return { ok: false, statusCode: 409, error: 'No thread messages were found after the last Codex session end.', runId };
+  if (!cardReferencesRun({ ledger, decisionOsRoot, cardId, runId })) return fail(404, 'Run not found on card.', { cardId });
+  const messages = threadMessagesAfterLastSessionEnd({ ledger, decisionOsRoot, cardId, runId, traceId });
+  if (messages.length === 0) return fail(409, 'No thread messages were found after the last Codex session end.');
 
   const outputFile = outputFileForRunCard({ ledger, decisionOsRoot, cardId });
-  if (!outputFile) return { ok: false, statusCode: 500, error: 'Run output card content file was not found.', cardId };
+  if (!outputFile) return fail(500, 'Run output card content file was not found.', { cardId });
 
   const command = resolveCodexResumeCommand({ workspaceRoot, runtime, sessionId, codexModel: requestedCodexModel, codexEffort: requestedCodexEffort });
   const prompt = buildCardSkillContinuePrompt({ messages });
+  logCodexContinueDebug('spawn-prep', { traceId, ledgerId, cardId, runId, command: command.command, args: command.args, model: command.model, effort: command.effort, sessionId, promptChars: prompt.length, messageCount: messages.length, outputFile });
   mkdirSync(runDirectory, { recursive: true });
   const child = spawn(command.command, command.args, { cwd: workspaceRoot, stdio: ['pipe', 'pipe', 'pipe'] });
   const stdout = createWriteStream(stdoutFile, { flags: 'a' });
   const stderr = createWriteStream(stderrFile, { flags: 'a' });
+  child.stdout.on('data', (chunk: Buffer) => {
+    logCodexContinueDebug('child-stdout-chunk', { traceId, runId, pid: child.pid ?? 0, bytes: chunk.length, preview: chunk.toString('utf8').slice(0, 500) });
+  });
+  child.stderr.on('data', (chunk: Buffer) => {
+    logCodexContinueDebug('child-stderr-chunk', { traceId, runId, pid: child.pid ?? 0, bytes: chunk.length, preview: chunk.toString('utf8').slice(0, 500) });
+  });
   child.stdout.pipe(stdout, { end: false });
   child.stderr.pipe(stderr, { end: false });
   child.stdin.end(prompt);
@@ -216,6 +268,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   };
   updateRuntimeRun(runtime, runId, run);
   attachRuntimeRunChild(runtime, runId, child);
+  logCodexContinueDebug('spawned', { traceId, ledgerId, cardId, runId, pid: child.pid ?? 0, continuedAt, continuedMessageCount: messages.length });
   notifyLedgerChange(payload.onLedgerChange, { reason: 'codex-skill-continue-started', ledgerId, outputCardId: cardId, runId, continuedMessageCount: messages.length, codexModel: command.model, codexEffort: command.effort });
 
   let settled = false;
@@ -223,6 +276,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     if (settled) return;
     settled = true;
     const finishedAt = new Date().toISOString();
+    logCodexContinueDebug('child-error', { traceId, ledgerId, cardId, runId, message: error.message, finishedAt });
     appendRunStatus(outputFile, 'failed', `resume failed: ${error.message}`);
     updateRuntimeRun(runtime, runId, { status: 'failed', error: error.message, finishedAt });
     finishRunStreams(stdout, stderr, () => {
@@ -237,6 +291,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     const finishedAt = new Date().toISOString();
     const status: ProcessStatus = runtimeRunStatus(runtime, runId) === 'cancelled' ? 'cancelled' : exitCode === 0 ? 'complete' : 'failed';
     const detail = status === 'cancelled' ? 'terminated by operator' : `resume exit code ${exitCode ?? 'unknown'}`;
+    logCodexContinueDebug('child-close', { traceId, ledgerId, cardId, runId, exitCode, status, detail, finishedAt });
     appendRunStatus(outputFile, status, detail);
     updateRuntimeRun(runtime, runId, { status, exitCode, finishedAt });
     finishRunStreams(stdout, stderr, () => {

@@ -33,12 +33,13 @@ export type CardSkillRunSummary = {
   error?: string;
 };
 
-export async function requestCardSkillRunStatus(input: { ledgerId: string; cardId: string; runId: string; since?: number }): Promise<CardSkillRunSummary> {
+export async function requestCardSkillRunStatus(input: { ledgerId: string; cardId: string; runId: string; since?: number; traceId?: string }): Promise<CardSkillRunSummary> {
   const params = new URLSearchParams({
     ledgerId: input.ledgerId,
     cardId: input.cardId,
     since: String(Math.max(0, Number(input.since ?? 0) || 0))
   });
+  if (input.traceId) params.set('traceId', input.traceId);
   const response = await fetch(`/api/codex/skills/runs/${encodeURIComponent(input.runId)}?${params.toString()}`).catch(() => undefined);
   if (!response) return { ok: false, status: 'unknown', elapsedMs: 0, lineCount: 0, nextSince: 0, toolCallCount: 0, agentMessageCount: 0, fileChangeCount: 0, thinkingCount: 0, persistedEventCount: 0, latestEvent: null, events: [], error: 'Request failed.' };
   const body = await response.json().catch(() => ({})) as Partial<CardSkillRunSummary>;

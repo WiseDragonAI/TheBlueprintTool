@@ -30,6 +30,12 @@ type NormalizedRunEvent = {
   persist: boolean;
 };
 
+function logCodexContinueDebug(phase: string, detail: AnyRecord): void {
+  const traceId = String(detail.traceId ?? '');
+  if (!traceId) return;
+  console.log(JSON.stringify({ codexContinueDebug: true, source: 'backend', phase, at: new Date().toISOString(), ...detail }));
+}
+
 function safeSegment(value: unknown): string {
   return String(value || 'untitled').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled';
 }
@@ -270,6 +276,8 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
   const cardId = String(payload.cardId ?? '').trim();
   const runId = String(payload.runId ?? '').trim();
   const since = Math.max(0, Number(payload.since ?? 0) || 0);
+  const traceId = String(payload.traceId ?? '');
+  logCodexContinueDebug('read-controller-entry', { traceId, ledgerId, cardId, runId, since });
   if (!ledgerId || !cardId || !runId) return { ok: false, statusCode: 400, error: 'Missing ledgerId, cardId, or runId.' };
 
   const state = readCanonicalDecisionOsState({ action_payload: { decisionOsFile: resolve(decisionOsRoot, 'state.json') }, runtime_state: runtime });
@@ -291,6 +299,22 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
   const status = inferredStatus({ runtime, runId, events, stdoutFile, stderrFile });
   const persistedEventCount = persistRunEvents({ decisionOsRoot, ledgerPath, ledger, cardId, runId, events });
   const returnedEvents = events.filter((event) => event.line > since);
+  logCodexContinueDebug('read-controller-result', {
+    traceId,
+    ledgerId,
+    cardId,
+    runId,
+    since,
+    status,
+    parsedLineCount: parsedLines.length,
+    lineCount: parsedLines.at(-1)?.line ?? 0,
+    returnedEventCount: returnedEvents.length,
+    persistedEventCount,
+    latestEventType: events.at(-1)?.type ?? '',
+    latestEventLine: events.at(-1)?.line ?? 0,
+    stdoutFile,
+    stderrFile,
+  });
   return {
     ok: true,
     statusCode: 200,

@@ -20,6 +20,7 @@ type Poller = {
   inFlight: boolean;
   cancelInFlight: boolean;
   continueInFlight: boolean;
+  continueTraceId: string;
   detachedChecks: number;
   terminal: boolean;
 };
@@ -30,6 +31,24 @@ type ClockHandle =
 
 const pollers = new Map<string, Poller>();
 const terminalSummaries = new Map<string, CardSkillRunSummary>();
+
+function continueTraceId(runId: string): string {
+  const randomId = typeof globalThis.crypto?.randomUUID === 'function'
+    ? globalThis.crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `continue-${runId}-${randomId}`;
+}
+
+function debugContinue(traceId: string, phase: string, detail: Record<string, unknown>): void {
+  if (!traceId) return;
+  const entry = { source: 'frontend', traceId, phase, at: new Date().toISOString(), ...detail };
+  console.info('[codex-continue-debug]', entry);
+  void fetch('/api/debug/codex-continue', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(entry),
+  }).catch(() => undefined);
+}
 
 function pollerKey(input: { ledgerId: string; cardId: string; runId: string }): string {
   return `${input.ledgerId}:${input.cardId}:${input.runId}`;
@@ -116,6 +135,19 @@ function paintWidget(element: HTMLElement, summary: CardSkillRunSummary): void {
   setText(element, '[data-codex-run-messages]', String(summary.agentMessageCount + summary.thinkingCount));
   setText(element, '[data-codex-run-files]', String(summary.fileChangeCount));
   setText(element, '[data-codex-run-latest]', latestEventLabel(summary));
+}
+
+function pollerDebugState(poller: Poller): Record<string, unknown> {
+  return {
+    ledgerId: poller.ledgerId,
+    cardId: poller.cardId,
+    runId: poller.runId,
+    since: poller.since,
+    terminal: poller.terminal,
+    inFlight: poller.inFlight,
+    continueInFlight: poller.continueInFlight,
+    datasetStatus: poller.element.dataset.runStatus ?? '',
+  };
 }
 
 function paintFrontendClock(poller: Poller): void {
@@ -219,6 +251,9 @@ async function continueRun(poller: Poller): Promise<void> {
   if (!button) return;
   const key = pollerKey(poller);
   const previousSummary = terminalSummaries.get(key);
+  const traceId = continueTraceId(poller.runId);
+  poller.continueTraceId = traceId;
+  debugContinue(traceId, 'click', { ...pollerDebugState(poller), previousSummaryStatus: previousSummary?.status ?? '', previousSummaryLineCount: previousSummary?.lineCount ?? 0 });
   poller.continueInFlight = true;
   poller.terminal = false;
   poller.since = 0;
@@ -236,8 +271,10 @@ async function continueRun(poller: Poller): Promise<void> {
   if (cancel) setCancelButtonState(cancel, 'ready');
   showTimer(poller.element);
   startFrontendClock(poller);
-  const result = await requestCardSkillRunContinue({ ledgerId: poller.ledgerId, cardId: poller.cardId, runId: poller.runId });
+  debugContinue(traceId, 'optimistic-running-painted', pollerDebugState(poller));
+  const result = await requestCardSkillRunContinue({ ledgerId: poller.ledgerId, cardId: poller.cardId, runId: poller.runId, traceId });
   poller.continueInFlight = false;
+  debugContinue(traceId, 'continue-response', { ...pollerDebugState(poller), ok: result.ok, status: result.status, error: result.error ?? '', pid: result.run?.pid ?? 0, continuedMessageCount: result.run?.continuedMessageCount ?? 0 });
   if (!result.ok) {
     poller.terminal = Boolean(previousSummary);
     stopPoller(key);
@@ -254,6 +291,7 @@ async function continueRun(poller: Poller): Promise<void> {
     const restoredButton = continueButton(poller.element);
     if (restoredButton) setContinueButtonState(restoredButton, 'ready');
     setText(poller.element, '[data-codex-run-latest]', result.error || 'Continue failed');
+    debugContinue(traceId, 'continue-response-restored-terminal', pollerDebugState(poller));
     return;
   }
   const startedAt = timestampMs(result.run?.startedAt) || timestampMs(result.run?.continuedAt);
@@ -261,6 +299,7 @@ async function continueRun(poller: Poller): Promise<void> {
   pollers.set(key, poller);
   setContinueButtonState(button, 'ready');
   startFrontendClock(poller);
+  debugContinue(traceId, 'continue-response-schedule-poll', pollerDebugState(poller));
   schedulePoll(poller, 0);
 }
 
@@ -279,13 +318,16 @@ async function poll(poller: Poller): Promise<void> {
     return;
   }
   poller.inFlight = true;
+  debugContinue(poller.continueTraceId, 'poll-request', pollerDebugState(poller));
   const summary = await requestCardSkillRunStatus({
     ledgerId: poller.ledgerId,
     cardId: poller.cardId,
     runId: poller.runId,
-    since: poller.since
+    since: poller.since,
+    traceId: poller.continueTraceId
   });
   poller.inFlight = false;
+  debugContinue(poller.continueTraceId, 'poll-response', { ...pollerDebugState(poller), ok: summary.ok, status: summary.status, lineCount: summary.lineCount, nextSince: summary.nextSince, persistedEventCount: summary.persistedEventCount, latestEventType: summary.latestEvent?.type ?? '', latestEventLine: summary.latestEvent?.line ?? 0, error: summary.error ?? '' });
   if (!summary.ok) {
     poller.element.dataset.runStatus = 'unknown';
     removeTimer(poller.element);
@@ -293,6 +335,7 @@ async function poll(poller: Poller): Promise<void> {
     setContinueButtonVisible(poller.element, false);
     setText(poller.element, '[data-codex-run-status]', 'UNKNOWN');
     setText(poller.element, '[data-codex-run-latest]', summary.error || 'Run unavailable');
+    debugContinue(poller.continueTraceId, 'poll-error-stopping', pollerDebugState(poller));
     stopPoller(key);
     return;
   }
@@ -306,6 +349,7 @@ async function poll(poller: Poller): Promise<void> {
     const button = continueButton(poller.element);
     if (button) setContinueButtonState(button, 'ready');
     terminalSummaries.set(key, summary);
+    debugContinue(poller.continueTraceId, 'poll-terminal-stopping', { ...pollerDebugState(poller), status: summary.status, lineCount: summary.lineCount, latestEventType: summary.latestEvent?.type ?? '', latestEventLine: summary.latestEvent?.line ?? 0 });
     stopPoller(key);
   }
 }
@@ -314,7 +358,7 @@ export function bindCardSkillRunWidget(input: { ledgerId: string; cardId: string
   const key = pollerKey(input);
   const terminalSummary = terminalSummaries.get(key);
   if (terminalSummary) {
-    const poller: Poller = { ...input, since: terminalSummary.lineCount, startedAtMs: runStartedAt(input.runId), timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, detachedChecks: 0, terminal: true };
+    const poller: Poller = { ...input, since: terminalSummary.lineCount, startedAtMs: runStartedAt(input.runId), timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, continueTraceId: '', detachedChecks: 0, terminal: true };
     paintWidget(input.element, terminalSummary);
     bindCancelButton(poller);
     bindContinueButton(poller);
@@ -333,7 +377,7 @@ export function bindCardSkillRunWidget(input: { ledgerId: string; cardId: string
     if (!existing.timer && !existing.inFlight) schedulePoll(existing, 0);
     return;
   }
-  const poller: Poller = { ...input, since: 0, startedAtMs: runStartedAt(input.runId), timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, detachedChecks: 0, terminal: false };
+  const poller: Poller = { ...input, since: 0, startedAtMs: runStartedAt(input.runId), timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, continueTraceId: '', detachedChecks: 0, terminal: false };
   pollers.set(key, poller);
   bindCancelButton(poller);
   bindContinueButton(poller);
