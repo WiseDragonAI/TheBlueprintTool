@@ -24,6 +24,21 @@ export const skillCategories = [
   'Platform',
 ] as const satisfies readonly SkillCategory[];
 
+const categoryColors: Record<SkillCategory | 'All', string> = {
+  All: '#cbd5e1',
+  Architecture: '#60a5fa',
+  Implementation: '#34d399',
+  Interface: '#f472b6',
+  Writing: '#fbbf24',
+  Marketing: '#fb7185',
+  Product: '#a78bfa',
+  Research: '#22d3ee',
+  Automation: '#f97316',
+  Artifacts: '#84cc16',
+  Platform: '#a3a3a3',
+  Uncategorized: '#94a3b8',
+};
+
 const categoryBySkillName: Record<string, SkillCategory> = {
   'accessibility-excellence': 'Interface',
   analysis: 'Architecture',
@@ -87,4 +102,8 @@ const categoryBySkillName: Record<string, SkillCategory> = {
 
 export function categoryForSkill(skillName: string): SkillCategory {
   return categoryBySkillName[skillName.trim()] ?? 'Uncategorized';
+}
+
+export function colorForSkillCategory(category: SkillCategory | 'All'): string {
+  return categoryColors[category];
 }

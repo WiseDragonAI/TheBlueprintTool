@@ -6,7 +6,7 @@ import { skillModal } from '../../dom.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { processCardSkillController } from '../controller/process-card-skill-controller.js';
 import { loadCodexSkills, type CodexSkillSummary } from './load-codex-skills.js';
-import { categoryForSkill, skillCategories, type SkillCategory } from '../helper/skill-category.js';
+import { categoryForSkill, colorForSkillCategory, skillCategories, type SkillCategory } from '../helper/skill-category.js';
 
 type SkillModalState = {
   cardId: string;
@@ -93,6 +93,7 @@ function renderCategoryFilters(): HTMLDivElement {
     button.className = `skill-category-filter${selected ? ' is-selected' : ''}`;
     button.type = 'button';
     button.dataset.skillCategory = category;
+    button.style.setProperty('--skill-category-color', colorForSkillCategory(category));
     button.setAttribute('aria-pressed', String(selected));
     button.textContent = category;
     button.addEventListener('click', () => {
@@ -114,6 +115,7 @@ function renderSkillRow(skill: CodexSkillSummary): HTMLButtonElement {
   button.type = 'button';
   button.dataset.action = 'select-card-skill';
   button.dataset.skillName = skill.name;
+  button.style.setProperty('--skill-category-color', colorForSkillCategory(category));
   button.setAttribute('aria-pressed', String(selected));
 
   const title = document.createElement('span');
@@ -121,6 +123,7 @@ function renderSkillRow(skill: CodexSkillSummary): HTMLButtonElement {
   title.textContent = skill.name;
   const categoryTag = document.createElement('span');
   categoryTag.className = 'skill-result-category';
+  categoryTag.style.setProperty('--skill-category-color', colorForSkillCategory(category));
   categoryTag.textContent = category;
   const description = document.createElement('span');
   description.className = 'skill-result-description';
