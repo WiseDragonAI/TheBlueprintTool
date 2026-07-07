@@ -12,7 +12,7 @@ import { hydrateLedgerCardContent, resolveCardContentFile } from '@backend/busin
 import { stripHydratedThreadNotes } from '@backend/business/ledger/helper/thread-content-file.js';
 import { scanCodexSkills } from '../helper/scan-codex-skills.js';
 import { buildCardSkillPrompt } from '../helper/build-card-skill-prompt.js';
-import { resolveCodexCommand } from '../helper/resolve-codex-command.js';
+import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand } from '../helper/resolve-codex-command.js';
 import { readCardSkillRunController } from './read-card-skill-run-controller.js';
 
 type AnyRecord = Record<string, unknown>;
@@ -81,6 +81,10 @@ function finishRunStreams(stdout: WriteStream, stderr: WriteStream, callback: ()
   }
 }
 
+function optionalText(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
 export async function startCardSkillProcessController(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): Promise<AnyRecord> {
   const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord };
   const payload = (envelope.action_payload ?? input) as AnyRecord;
@@ -91,6 +95,10 @@ export async function startCardSkillProcessController(input: { action_payload?: 
   const cardId = String(payload.cardId ?? '').trim();
   const skillName = String(payload.skillName ?? '').trim();
   if (!ledgerId || !cardId || !skillName) return { ok: false, statusCode: 400, error: 'Missing ledgerId, cardId, or skillName.' };
+  const requestedCodexModel = optionalText(payload.codexModel);
+  const requestedCodexEffort = optionalText(payload.codexEffort);
+  if (requestedCodexModel && !isAllowedCodexModel(requestedCodexModel)) return { ok: false, statusCode: 400, error: 'Unsupported Codex model.', codexModel: requestedCodexModel };
+  if (requestedCodexEffort && !isAllowedCodexEffort(requestedCodexEffort)) return { ok: false, statusCode: 400, error: 'Unsupported Codex effort.', codexEffort: requestedCodexEffort };
 
   const skill = scanCodexSkills({ workspaceRoot }).find((entry) => entry.name === skillName);
   if (!skill) return { ok: false, statusCode: 404, error: 'Skill not found.', skillName };
@@ -110,6 +118,7 @@ export async function startCardSkillProcessController(input: { action_payload?: 
   const runId = `codex-skill-${Date.now()}-${randomUUID().slice(0, 8)}`;
   const outputCardId = `card-${safeSegment(runId)}`;
   const outputTitle = `${skillName} result`;
+  const command = resolveCodexCommand({ workspaceRoot, runtime, codexModel: requestedCodexModel, codexEffort: requestedCodexEffort });
   const outputMarkdown = [
     `# ${outputTitle}`,
     '',
@@ -117,6 +126,8 @@ export async function startCardSkillProcessController(input: { action_payload?: 
     '',
     `Source card: ${String(source.title ?? cardId)}`,
     `Codex run: ${runId}`,
+    `Codex model: ${command.model}`,
+    `Codex effort: ${command.effort}`,
   ].join('\n');
   const outputCard = {
     id: outputCardId,
@@ -152,7 +163,6 @@ export async function startCardSkillProcessController(input: { action_payload?: 
   mkdirSync(runDirectory, { recursive: true });
   const stdoutFile = resolve(runDirectory, `${safeSegment(runId)}.jsonl`);
   const stderrFile = resolve(runDirectory, `${safeSegment(runId)}.log`);
-  const command = resolveCodexCommand({ workspaceRoot, runtime });
   const prompt = buildCardSkillPrompt({
     skillName,
     sourceCardId: cardId,
@@ -177,12 +187,14 @@ export async function startCardSkillProcessController(input: { action_payload?: 
     outputFile,
     stdoutFile,
     stderrFile,
+    codexModel: command.model,
+    codexEffort: command.effort,
     pid: child.pid ?? 0,
     status: 'running',
     startedAt: new Date().toISOString(),
   };
   updateRuntimeRun(runtime, runId, run);
-  notifyLedgerChange(payload.onLedgerChange, { reason: 'codex-skill-started', ledgerId, sourceCardId: cardId, outputCardId, runId });
+  notifyLedgerChange(payload.onLedgerChange, { reason: 'codex-skill-started', ledgerId, sourceCardId: cardId, outputCardId, runId, codexModel: command.model, codexEffort: command.effort });
 
   let settled = false;
   child.on('error', (error) => {

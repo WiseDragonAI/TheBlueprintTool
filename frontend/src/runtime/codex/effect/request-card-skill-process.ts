@@ -2,7 +2,15 @@
  * WHAT: Starts a backend Codex skill process for one card.
  * WHY: The UI should delegate output card creation and process ownership to the server.
  */
-export async function requestCardSkillProcess(input: { ledgerId: string; cardId: string; skillName: string }): Promise<{ ok: boolean; run?: Record<string, unknown>; error?: string }> {
+export type CardSkillProcessRequest = {
+  ledgerId: string;
+  cardId: string;
+  skillName: string;
+  codexModel?: string;
+  codexEffort?: string;
+};
+
+export async function requestCardSkillProcess(input: CardSkillProcessRequest): Promise<{ ok: boolean; run?: Record<string, unknown>; error?: string }> {
   const response = await fetch('/api/codex/skills/process', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

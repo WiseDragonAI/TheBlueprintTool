@@ -79,6 +79,41 @@
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent), transparent 52%);
 }
 
+.skill-run-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(140px, 0.42fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.skill-run-field {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.skill-run-field select {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: rgba(4, 6, 9, 0.92);
+  color: var(--text);
+  padding: 6px 8px;
+  font: 12px var(--mono);
+}
+
+.skill-run-field select:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent), transparent 52%);
+}
+
 .skill-results {
   display: grid;
   gap: 8px;
@@ -166,6 +201,12 @@
   min-width: 92px;
   font-weight: 800;
   text-transform: uppercase;
+}
+
+@media (max-width: 520px) {
+  .skill-run-controls {
+    grid-template-columns: 1fr;
+  }
 }
 
 .key-list {

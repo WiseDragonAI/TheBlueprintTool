@@ -17,11 +17,11 @@ test('resolveCodexCommand honors an explicit executable setting', () => {
     delete process.env.CODEX_EFFORT;
     writeFileSync(bin, '#!/bin/sh\nexit 0\n');
     chmodSync(bin, 0o755);
-    const command = resolveCodexCommand({ workspaceRoot: workspace, runtime: { decisionOsSettings: { codexBin: bin, codexModel: 'test-model', codexReasoningEffort: 'low' } } });
+    const command = resolveCodexCommand({ workspaceRoot: workspace, runtime: { decisionOsSettings: { codexBin: bin, codexModel: 'gpt-5.4', codexReasoningEffort: 'low' } } });
 
     assert.equal(command.command, bin);
     assert.deepEqual(command.args.slice(0, 5), ['exec', '--dangerously-bypass-approvals-and-sandbox', '--json', '-C', workspace]);
-    assert.equal(command.args.includes('test-model'), true);
+    assert.equal(command.args.includes('gpt-5.4'), true);
     assert.equal(command.args.includes('model_reasoning_effort="low"'), true);
   } finally {
     if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
@@ -30,6 +30,25 @@ test('resolveCodexCommand honors an explicit executable setting', () => {
     else process.env.CODEX_MODEL = previousCodexModel;
     if (previousCodexEffort === undefined) delete process.env.CODEX_EFFORT;
     else process.env.CODEX_EFFORT = previousCodexEffort;
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('resolveCodexCommand lets run payload override settings model and effort', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-codex-command-'));
+  try {
+    const command = resolveCodexCommand({
+      workspaceRoot: workspace,
+      runtime: { decisionOsSettings: { codexModel: 'gpt-5.4', codexReasoningEffort: 'low' } },
+      codexModel: 'gpt-5.5',
+      codexEffort: 'xhigh'
+    });
+
+    assert.equal(command.model, 'gpt-5.5');
+    assert.equal(command.effort, 'xhigh');
+    assert.equal(command.args.includes('gpt-5.5'), true);
+    assert.equal(command.args.includes('model_reasoning_effort="xhigh"'), true);
+  } finally {
     rmSync(workspace, { recursive: true, force: true });
   }
 });

@@ -11,6 +11,8 @@ type SkillModalState = {
   cardId: string;
   query: string;
   selectedSkillName: string;
+  codexModel: string;
+  codexEffort: string;
   skills: CodexSkillSummary[];
   loading: boolean;
   processing: boolean;
@@ -25,11 +27,40 @@ const skillModalState: SkillModalState = {
   cardId: '',
   query: '',
   selectedSkillName: '',
+  codexModel: 'gpt-5.5',
+  codexEffort: 'high',
   skills: [],
   loading: false,
   processing: false,
   error: '',
 };
+
+const codexModelOptions = ['gpt-5.5', 'gpt-5.4', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.2'];
+const codexEffortOptions = ['low', 'medium', 'high', 'xhigh'];
+
+function renderSelect(input: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}): HTMLLabelElement {
+  const label = document.createElement('label');
+  label.className = 'skill-run-field';
+  const labelText = document.createElement('span');
+  labelText.textContent = input.label;
+  const select = document.createElement('select');
+  select.setAttribute('aria-label', input.label);
+  for (const optionValue of input.options) {
+    const option = document.createElement('option');
+    option.value = optionValue;
+    option.textContent = optionValue;
+    select.append(option);
+  }
+  select.value = input.options.includes(input.value) ? input.value : input.options[0] ?? '';
+  select.addEventListener('change', () => input.onChange(select.value));
+  label.replaceChildren(labelText, select);
+  return label;
+}
 
 function filteredSkills(): CodexSkillSummary[] {
   const query = skillModalState.query.trim().toLowerCase();
@@ -81,6 +112,28 @@ function renderSkillModal(options: RenderSkillModalOptions = {}): void {
     skillModal.querySelector<HTMLInputElement>('.skill-search')?.focus();
   });
 
+  const runControls = document.createElement('div');
+  runControls.className = 'skill-run-controls';
+  const modelSelect = renderSelect({
+    label: 'Model',
+    value: skillModalState.codexModel,
+    options: codexModelOptions,
+    onChange: (value) => {
+      skillModalState.codexModel = value;
+      telemetry('codex-skill-model-selected', { cardId: skillModalState.cardId, codexModel: value });
+    },
+  });
+  const effortSelect = renderSelect({
+    label: 'Effort',
+    value: skillModalState.codexEffort,
+    options: codexEffortOptions,
+    onChange: (value) => {
+      skillModalState.codexEffort = value;
+      telemetry('codex-skill-effort-selected', { cardId: skillModalState.cardId, codexEffort: value });
+    },
+  });
+  runControls.replaceChildren(modelSelect, effortSelect);
+
   const results = document.createElement('div');
   results.className = 'skill-results';
   if (skillModalState.loading) {
@@ -129,7 +182,7 @@ function renderSkillModal(options: RenderSkillModalOptions = {}): void {
   actions.append(close);
 
   skillModal.setAttribute('aria-labelledby', 'skill-modal-title');
-  skillModal.replaceChildren(title, search, results, actions);
+  skillModal.replaceChildren(title, search, runControls, results, actions);
   if (options.resultsScrollTop !== undefined) results.scrollTop = options.resultsScrollTop;
 }
 
@@ -160,7 +213,12 @@ export async function processSelectedCardSkill(): Promise<void> {
   skillModalState.processing = true;
   skillModalState.error = '';
   renderSkillModal({ resultsScrollTop });
-  const ok = await processCardSkillController({ cardId: skillModalState.cardId, skillName: skillModalState.selectedSkillName });
+  const ok = await processCardSkillController({
+    cardId: skillModalState.cardId,
+    skillName: skillModalState.selectedSkillName,
+    codexModel: skillModalState.codexModel,
+    codexEffort: skillModalState.codexEffort,
+  });
   skillModalState.processing = false;
   if (ok) {
     skillModal?.close?.();

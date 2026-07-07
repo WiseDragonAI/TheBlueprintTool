@@ -34,7 +34,9 @@ test('requestCardSkillProcess posts active card skill payload', async () => {
       assert.deepEqual(JSON.parse(String(init?.body ?? '{}')), {
         ledgerId: 'specs',
         cardId: 'card-a',
-        skillName: 'analysis'
+        skillName: 'analysis',
+        codexModel: 'gpt-5.5',
+        codexEffort: 'xhigh'
       });
       return new Response(JSON.stringify({ ok: true, run: { id: 'run-a' } }), {
         status: 202,
@@ -42,7 +44,7 @@ test('requestCardSkillProcess posts active card skill payload', async () => {
       });
     }) as typeof fetch;
 
-    const result = await requestCardSkillProcess({ ledgerId: 'specs', cardId: 'card-a', skillName: 'analysis' });
+    const result = await requestCardSkillProcess({ ledgerId: 'specs', cardId: 'card-a', skillName: 'analysis', codexModel: 'gpt-5.5', codexEffort: 'xhigh' });
     assert.equal(result.ok, true);
     assert.equal(result.run?.id, 'run-a');
   } finally {

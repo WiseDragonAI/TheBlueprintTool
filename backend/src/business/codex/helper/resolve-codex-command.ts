@@ -8,9 +8,14 @@ import { delimiter, dirname, isAbsolute, resolve } from 'node:path';
 
 type AnyRecord = Record<string, unknown>;
 
+export const codexModelOptions = ['gpt-5.5', 'gpt-5.4', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.2'] as const;
+export const codexEffortOptions = ['low', 'medium', 'high', 'xhigh'] as const;
+
 export type CodexCommand = {
   command: string;
   args: string[];
+  model: string;
+  effort: string;
 };
 
 function settingsRecord(runtime: AnyRecord): AnyRecord {
@@ -65,11 +70,32 @@ function resolveExecutable(command: string, workspaceRoot: string): string {
   return command || 'codex';
 }
 
-export function resolveCodexCommand(input: { workspaceRoot: string; runtime: AnyRecord }): CodexCommand {
+function allowedValue(value: unknown, options: readonly string[]): string {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return options.includes(text) ? text : '';
+}
+
+function firstAllowed(values: unknown[], options: readonly string[], fallback: string): string {
+  for (const value of values) {
+    const allowed = allowedValue(value, options);
+    if (allowed) return allowed;
+  }
+  return fallback;
+}
+
+export function isAllowedCodexModel(value: unknown): boolean {
+  return Boolean(allowedValue(value, codexModelOptions));
+}
+
+export function isAllowedCodexEffort(value: unknown): boolean {
+  return Boolean(allowedValue(value, codexEffortOptions));
+}
+
+export function resolveCodexCommand(input: { workspaceRoot: string; runtime: AnyRecord; codexModel?: unknown; codexEffort?: unknown }): CodexCommand {
   const settings = settingsRecord(input.runtime);
   const configuredCommand = String(process.env.CODEX_BIN || settings.codexBin || settings.CODEX_BIN || 'codex');
-  const model = String(process.env.CODEX_MODEL || settings.codexModel || settings.CODEX_MODEL || 'gpt-5.5');
-  const effort = String(process.env.CODEX_EFFORT || settings.codexReasoningEffort || settings.CODEX_EFFORT || 'high');
+  const model = firstAllowed([input.codexModel, process.env.CODEX_MODEL, settings.codexModel, settings.CODEX_MODEL], codexModelOptions, 'gpt-5.5');
+  const effort = firstAllowed([input.codexEffort, process.env.CODEX_EFFORT, settings.codexEffort, settings.codexReasoningEffort, settings.CODEX_EFFORT], codexEffortOptions, 'high');
   return {
     command: resolveExecutable(configuredCommand, input.workspaceRoot),
     args: [
@@ -84,5 +110,7 @@ export function resolveCodexCommand(input: { workspaceRoot: string; runtime: Any
       model,
       '-',
     ],
+    model,
+    effort,
   };
 }

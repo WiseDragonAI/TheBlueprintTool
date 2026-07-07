@@ -58,7 +58,10 @@ test('card skill process route creates a linked output card and launches codex',
     'process.stdin.on("end", () => {',
     '  const match = input.match(/Write the final result to this Markdown file: (.+)/);',
     '  if (!match) process.exit(2);',
-    '  writeFileSync(match[1].trim(), "# Fake Result\\n\\n" + (input.includes("$test-skill") ? "skill seen" : "skill missing") + "\\n");',
+    '  const args = process.argv.slice(2);',
+    '  const model = args[args.indexOf("--model") + 1] || "";',
+    '  const effort = args[args.indexOf("-c") + 1] || "";',
+    '  writeFileSync(match[1].trim(), "# Fake Result\\n\\n" + (input.includes("$test-skill") ? "skill seen" : "skill missing") + "\\nmodel=" + model + "\\neffort=" + effort + "\\n");',
     '  console.log(JSON.stringify({ type: "fake-codex-done" }));',
     '});',
   ].join('\n'));
@@ -76,13 +79,15 @@ test('card skill process route creates a linked output card and launches codex',
     const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/process`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ledgerId: 'specs', cardId: 'source-card', skillName: 'test-skill' })
+      body: JSON.stringify({ ledgerId: 'specs', cardId: 'source-card', skillName: 'test-skill', codexModel: 'gpt-5.4', codexEffort: 'xhigh' })
     });
     assert.equal(response.status, 202);
-    const body = await response.json() as { ok: boolean; run: { outputCardId: string; outputFile: string } };
+    const body = await response.json() as { ok: boolean; run: { outputCardId: string; outputFile: string; codexModel: string; codexEffort: string } };
     assert.equal(body.ok, true);
     assert.ok(body.run.outputCardId);
     assert.ok(body.run.outputFile.endsWith(`${body.run.outputCardId}.md`));
+    assert.equal(body.run.codexModel, 'gpt-5.4');
+    assert.equal(body.run.codexEffort, 'xhigh');
 
     const ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as {
       cards: Array<{ id: string; x: number; comment?: { contentFile?: string } }>;
@@ -93,6 +98,8 @@ test('card skill process route creates a linked output card and launches codex',
     assert.equal(ledger.cards.find((card) => card.id === body.run.outputCardId)?.comment?.contentFile?.endsWith(`${body.run.outputCardId}.md`), true);
 
     await waitForText(body.run.outputFile, 'skill seen');
+    await waitForText(body.run.outputFile, 'model=gpt-5.4');
+    await waitForText(body.run.outputFile, 'effort=model_reasoning_effort="xhigh"');
   } finally {
     server.close();
     process.chdir(originalCwd);
