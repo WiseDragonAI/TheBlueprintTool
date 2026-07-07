@@ -90,3 +90,71 @@ test('card skill run route derives JSONL progress and persists thread notes', as
     rmSync(workspace, { recursive: true, force: true });
   }
 });
+
+test('card skill run route infers status from the latest continued JSONL segment', async () => {
+  const originalCwd = process.cwd();
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-card-skill-run-continued-'));
+  const startedAt = Date.now() - 600000;
+  const runId = `codex-skill-${startedAt}-feed9876`;
+  const outputCardId = `card-${runId}`;
+  mkdirSync(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs'), { recursive: true });
+  mkdirSync(join(workspace, '.decision-os'), { recursive: true });
+  writeFileSync(join(workspace, '.decision-os', 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }]
+  }, null, 2));
+  writeFileSync(join(workspace, '.decision-os', 'specs.json'), JSON.stringify({
+    cards: [{
+      id: outputCardId,
+      title: 'Skill Result',
+      cardType: 'codex-skill-run',
+      comment: { what: `Codex run: ${runId}` },
+      facts: [],
+      fields: []
+    }],
+    annotations: [],
+    relationships: [],
+    notes: {}
+  }, null, 2));
+  const jsonlPath = join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.jsonl`);
+  const logPath = join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.log`);
+  writeFileSync(jsonlPath, [
+    JSON.stringify({ type: 'thread.started' }),
+    JSON.stringify({ type: 'turn.completed' }),
+    JSON.stringify({ type: 'thread.started' }),
+    JSON.stringify({ type: 'turn.started' }),
+  ].join('\n'));
+  writeFileSync(logPath, '');
+  const fresh = new Date();
+  utimesSync(jsonlPath, fresh, fresh);
+  utimesSync(logPath, new Date(startedAt), new Date(startedAt));
+
+  process.chdir(workspace);
+  const runtime: Record<string, unknown> = {};
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const address = server.address() as AddressInfo;
+
+  try {
+    const runningResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}`);
+    assert.equal(runningResponse.status, 200);
+    const running = await runningResponse.json() as { ok: boolean; status: string; lineCount: number };
+    assert.equal(running.ok, true);
+    assert.equal(running.status, 'running');
+    assert.equal(running.lineCount, 4);
+
+    writeFileSync(logPath, 'Codex run cancelled: terminated by operator\n');
+    const cancelledAt = new Date();
+    utimesSync(logPath, cancelledAt, cancelledAt);
+    const cancelledResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}`);
+    assert.equal(cancelledResponse.status, 200);
+    const cancelled = await cancelledResponse.json() as { ok: boolean; status: string; lineCount: number };
+    assert.equal(cancelled.ok, true);
+    assert.equal(cancelled.status, 'cancelled');
+    assert.equal(cancelled.lineCount, 4);
+  } finally {
+    server.close();
+    process.chdir(originalCwd);
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});

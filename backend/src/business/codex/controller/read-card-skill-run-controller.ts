@@ -155,16 +155,35 @@ function runtimeRunStatus(runtime: AnyRecord, runId: string): RunStatus | null {
   return status === 'running' || status === 'complete' || status === 'failed' || status === 'cancelled' ? status : null;
 }
 
+function latestRunEventStatus(events: NormalizedRunEvent[]): RunStatus | null {
+  let status: RunStatus | null = null;
+  for (const event of events) {
+    if (event.type === 'thread.started' || event.type === 'turn.started') status = 'running';
+    if (event.type === 'turn.completed') status = 'complete';
+    if (/cancelled|canceled/i.test(event.type)) status = 'cancelled';
+    if (/failed|error/i.test(event.type)) status = 'failed';
+  }
+  return status;
+}
+
 function inferredStatus(input: { runtime: AnyRecord; runId: string; events: NormalizedRunEvent[]; stdoutFile: string; stderrFile: string }): RunStatus {
   const runtimeStatus = runtimeRunStatus(input.runtime, input.runId);
   if (runtimeStatus) return runtimeStatus;
-  if (input.events.some((event) => event.type === 'turn.completed')) return 'complete';
   const log = existsSync(input.stderrFile) ? readFileSync(input.stderrFile, 'utf8') : '';
-  if (/cancelled|canceled|terminated by operator/i.test(log)) return 'cancelled';
-  if (/(spawn|enoent|failed|exit code [1-9]|error:)/i.test(log)) return 'failed';
+  const logStatus: RunStatus | null = /cancelled|canceled|terminated by operator/i.test(log)
+    ? 'cancelled'
+    : /(spawn|enoent|failed|exit code [1-9]|error:)/i.test(log)
+      ? 'failed'
+      : null;
+  const latestStatus = latestRunEventStatus(input.events);
+  const stdoutMtime = fileMtimeMs(input.stdoutFile);
+  const stderrMtime = fileMtimeMs(input.stderrFile);
+  if (logStatus && stderrMtime >= stdoutMtime) return logStatus;
+  if (latestStatus === 'complete') return 'complete';
   if (!existsSync(input.stdoutFile)) return 'unknown';
-  const newestWrite = Math.max(statSync(input.stdoutFile).mtimeMs, existsSync(input.stderrFile) ? statSync(input.stderrFile).mtimeMs : 0);
-  return Date.now() - newestWrite < 120000 ? 'running' : 'unknown';
+  const newestWrite = Math.max(stdoutMtime, stderrMtime);
+  if (latestStatus === 'running') return Date.now() - newestWrite < 120000 ? 'running' : 'unknown';
+  return logStatus ?? (Date.now() - newestWrite < 120000 ? 'running' : 'unknown');
 }
 
 function fileMtimeMs(file: string): number {
