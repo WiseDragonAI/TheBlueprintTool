@@ -1,0 +1,473 @@
+{
+  "extractionCharter": {
+    "objective": "Extract operator-facing product context from the Decision OS Context card, then synthesize it into human-readable report data.",
+    "sourceBoundary": [
+      ".decision-os/cards/tasks-system/card-0b144d6a-16a1-4cc2-9b9f-32aabafd5b4a.md"
+    ],
+    "audience": "Operator",
+    "inclusionRules": [
+      "Include only facts stated in the source card.",
+      "Prioritize purpose, capabilities, workspace shape, surfaces, controls, workflows, and usable constraints.",
+      "Keep source references for extracted items."
+    ],
+    "exclusionRules": [
+      "Do not import adjacent repo knowledge.",
+      "Do not lead with implementation internals unless they explain an operator-visible feature.",
+      "Do not include caveats unless they affect how the operator uses the product."
+    ]
+  },
+  "featureRegister": [
+    {
+      "id": "FR-001",
+      "itemType": "purpose",
+      "statement": "Decision OS is a local browser canvas for working with decision ledgers in a repo-local workspace.",
+      "sourceRefs": [
+        "card:7"
+      ],
+      "importance": "primary"
+    },
+    {
+      "id": "FR-002",
+      "itemType": "spatial_model",
+      "statement": "The main workspace is a full-canvas ledger surface with pan, zoom, route mode, active ledger, viewport, and zoom/detail states.",
+      "sourceRefs": [
+        "card:8",
+        "card:34",
+        "card:35"
+      ],
+      "importance": "primary"
+    },
+    {
+      "id": "FR-003",
+      "itemType": "surface",
+      "statement": "The product exposes route-addressed ledger tabs and a ledgers overview canvas.",
+      "sourceRefs": [
+        "card:8",
+        "card:36"
+      ],
+      "importance": "primary"
+    },
+    {
+      "id": "FR-004",
+      "itemType": "feature",
+      "statement": "Operators work with cards, zones, groups, relationships, selection, clipboard copy/paste, and card resizing.",
+      "sourceRefs": [
+        "card:8",
+        "card:33"
+      ],
+      "importance": "primary"
+    },
+    {
+      "id": "FR-005",
+      "itemType": "operator_action",
+      "statement": "Operators can inspect and edit ledgers, create or move canvas objects, review evidence, and maintain summaries.",
+      "sourceRefs": [
+        "card:9"
+      ],
+      "importance": "primary"
+    },
+    {
+      "id": "FR-006",
+      "itemType": "content_type",
+      "statement": "Cards can contain Markdown, fields, image carousels, HTML card assets, media, and report or mockup material.",
+      "sourceRefs": [
+        "card:8",
+        "card:9",
+        "card:34"
+      ],
+      "importance": "primary"
+    },
+    {
+      "id": "FR-007",
+      "itemType": "surface",
+      "statement": "The right-side thread inspector contains the terminal-style composer, note history, upload flow, and voice dock.",
+      "sourceRefs": [
+        "card:34",
+        "card:36"
+      ],
+      "importance": "primary"
+    },
+    {
+      "id": "FR-008",
+      "itemType": "feature",
+      "statement": "Threads support pasted images and files, voice notes, transcription retry, and agent treatment of unanswered notes.",
+      "sourceRefs": [
+        "card:8",
+        "card:9",
+        "card:36",
+        "card:37"
+      ],
+      "importance": "primary"
+    },
+    {
+      "id": "FR-009",
+      "itemType": "control",
+      "statement": "The keyboard contract includes A, X, Esc, Del, Ctrl+C, Ctrl+V, and Ctrl+D.",
+      "sourceRefs": [
+        "card:39"
+      ],
+      "importance": "primary"
+    },
+    {
+      "id": "FR-010",
+      "itemType": "workflow",
+      "statement": "A normal journey starts by opening a ledger route, reviewing the canvas, selecting or creating objects, editing, then using the thread panel.",
+      "sourceRefs": [
+        "card:33"
+      ],
+      "importance": "primary"
+    },
+    {
+      "id": "FR-011",
+      "itemType": "handoff",
+      "statement": "Operator notes hand work to agents through thread files, and replies return through agent notes and durable card edits.",
+      "sourceRefs": [
+        "card:37"
+      ],
+      "importance": "supporting"
+    },
+    {
+      "id": "FR-012",
+      "itemType": "role",
+      "statement": "The operator owns decisions, notes, approvals, and workspace intent.",
+      "sourceRefs": [
+        "card:10"
+      ],
+      "importance": "primary"
+    },
+    {
+      "id": "FR-013",
+      "itemType": "role",
+      "statement": "The watcher concept monitors unanswered notes.",
+      "sourceRefs": [
+        "card:10"
+      ],
+      "importance": "supporting"
+    },
+    {
+      "id": "FR-014",
+      "itemType": "surface",
+      "statement": "The interface includes toolbox controls, canvas controls, card detail and overview layers, tab registry, relationship overlays, labels, modals, and status copy.",
+      "sourceRefs": [
+        "card:34"
+      ],
+      "importance": "supporting"
+    },
+    {
+      "id": "FR-015",
+      "itemType": "feature",
+      "statement": "Visible states include selection, grouped selection, open card tab, low-detail rendering, thread open or closed, draft restored, voice recording, transcription upload, failure, retry, modal open, and external refresh.",
+      "sourceRefs": [
+        "card:35"
+      ],
+      "importance": "supporting"
+    },
+    {
+      "id": "FR-016",
+      "itemType": "control",
+      "statement": "Primary entry points include /, /ledgers, /<ledgerId>, the tab registry, card and zone controls, the toolbox, keyboard shortcuts, thread buttons, voice controls, ledger-cli, and server launch commands.",
+      "sourceRefs": [
+        "card:36"
+      ],
+      "importance": "supporting"
+    },
+    {
+      "id": "FR-017",
+      "itemType": "use_constraint",
+      "statement": "Expensive card detail is hydrated only when detail is visible.",
+      "sourceRefs": [
+        "card:41"
+      ],
+      "importance": "supporting"
+    },
+    {
+      "id": "FR-018",
+      "itemType": "use_constraint",
+      "statement": "Pan, zoom, and drag must preserve responsive frame production.",
+      "sourceRefs": [
+        "card:41"
+      ],
+      "importance": "primary"
+    },
+    {
+      "id": "FR-019",
+      "itemType": "use_constraint",
+      "statement": "Delete actions require confirmation, and thread or voice tooling must not steal editing keystrokes.",
+      "sourceRefs": [
+        "card:41"
+      ],
+      "importance": "supporting"
+    },
+    {
+      "id": "FR-020",
+      "itemType": "use_constraint",
+      "statement": "Media dimensions persist independent of canvas zoom.",
+      "sourceRefs": [
+        "card:41"
+      ],
+      "importance": "supporting"
+    },
+    {
+      "id": "FR-021",
+      "itemType": "spatial_model",
+      "statement": "The workspace separates Specs, Data, Performances, and Tasks System; cards, zones, groups, relationships, and threads are the main navigable units.",
+      "sourceRefs": [
+        "card:38"
+      ],
+      "importance": "primary"
+    },
+    {
+      "id": "FR-022",
+      "itemType": "feature",
+      "statement": "Live refresh allows external filesystem edits to hand off to the client through server-sent refresh events.",
+      "sourceRefs": [
+        "card:37"
+      ],
+      "importance": "supporting"
+    }
+  ],
+  "humanReport": {
+    "title": "Decision OS Operator Context",
+    "subtitle": "A source-bound view of what the workspace is for, what operators can do, and how the product is controlled.",
+    "audience": "Operator",
+    "sourceBoundary": [
+      ".decision-os/cards/tasks-system/card-0b144d6a-16a1-4cc2-9b9f-32aabafd5b4a.md"
+    ],
+    "openingSnapshot": {
+      "title": "What this is for",
+      "bullets": [
+        "**Decision OS** is a local browser canvas for decision and ledger work.",
+        "The workspace is built around `cards`, `zones`, `groups`, `relationships`, and `threads`.",
+        "Operators use it to inspect ledgers, edit canvas objects, review evidence, and capture notes.",
+        "The active workspace separates `Specs`, `Data`, `Performances`, and `Tasks System`."
+      ],
+      "sourceRefs": [
+        "card:7",
+        "card:8",
+        "card:9",
+        "card:38"
+      ]
+    },
+    "sections": [
+      {
+        "id": "workspace-shape",
+        "title": "Workspace Shape",
+        "readerQuestion": "How should an operator imagine the product?",
+        "blocks": [
+          {
+            "title": "Canvas first",
+            "bullets": [
+              "**The main workspace is a canvas**, not a linear document.",
+              "Operators navigate it with `pan`, `zoom`, active ledger state, and viewport state.",
+              "The canvas contains cards, zones, groups, relationships, labels, and overlays.",
+              "Detail changes with zoom through low-detail and hydrated card states."
+            ],
+            "sourceRefs": [
+              "card:8",
+              "card:34",
+              "card:35",
+              "card:41"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "what-operators-can-do",
+        "title": "What Operators Can Do",
+        "readerQuestion": "What actions does the product support?",
+        "blocks": [
+          {
+            "title": "Canvas work",
+            "bullets": [
+              "Open a `ledger` route and review the canvas.",
+              "Create, move, select, resize, copy, paste, and delete canvas objects.",
+              "Arrange work with `cards`, `zones`, `groups`, and `relationships`.",
+              "Review specs, performance evidence, reports, and mockups."
+            ],
+            "sourceRefs": [
+              "card:8",
+              "card:9",
+              "card:33",
+              "card:34"
+            ]
+          },
+          {
+            "title": "Content work",
+            "bullets": [
+              "Edit card descriptions, fields, and Markdown content.",
+              "Inspect image carousels, HTML assets, media, and report cards.",
+              "Paste files or images into threads.",
+              "Record voice notes and retry transcription when needed."
+            ],
+            "sourceRefs": [
+              "card:8",
+              "card:9",
+              "card:34",
+              "card:36",
+              "card:37"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "main-surfaces",
+        "title": "Main Surfaces",
+        "readerQuestion": "Where does work happen?",
+        "blocks": [
+          {
+            "title": "Visible areas",
+            "bullets": [
+              "The `tab registry` and ledger routes choose the active workspace.",
+              "The full-canvas ledger surface holds the spatial work map.",
+              "The card detail layer shows descriptions, fields, Markdown, and media.",
+              "The right-side thread inspector holds notes, uploads, and voice flow."
+            ],
+            "sourceRefs": [
+              "card:34",
+              "card:36"
+            ]
+          },
+          {
+            "title": "Control areas",
+            "bullets": [
+              "The toolbox and canvas controls support editing and navigation.",
+              "Relationship overlays show links between objects.",
+              "Deletion confirmation modals protect destructive actions.",
+              "Telemetry and status copy expose local runtime feedback."
+            ],
+            "sourceRefs": [
+              "card:34",
+              "card:41"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "controls",
+        "title": "Controls That Matter",
+        "readerQuestion": "Which controls should an operator know first?",
+        "blocks": [
+          {
+            "title": "Keyboard contract",
+            "bullets": [
+              "`A` opens or focuses the thread panel.",
+              "`X` starts or stops the active voice note.",
+              "`Esc` cancels capture, closes tooling, or clears selection.",
+              "`Del`, `Ctrl+C`, `Ctrl+V`, and `Ctrl+D` handle deletion, copy, paste, and resize."
+            ],
+            "sourceRefs": [
+              "card:39"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "workflows",
+        "title": "Workflows",
+        "readerQuestion": "How does work move through the product?",
+        "blocks": [
+          {
+            "title": "Operator loop",
+            "bullets": [
+              "Open a ledger route, then review the canvas.",
+              "Select or create cards, zones, or groups.",
+              "Edit geometry or content, then open the thread panel.",
+              "Write or record notes, then review replies, media, reports, or mockups."
+            ],
+            "sourceRefs": [
+              "card:33"
+            ]
+          },
+          {
+            "title": "Handoffs",
+            "bullets": [
+              "Operator notes hand work to agents through thread files.",
+              "Voice capture moves through recording, upload, transcription, note update, and retry.",
+              "External filesystem edits refresh visible ledger content through server-sent events.",
+              "Card Markdown moves through hydration and frontend rendering."
+            ],
+            "sourceRefs": [
+              "card:37"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "useful-constraints",
+        "title": "Useful Constraints",
+        "readerQuestion": "Which rules affect actual use?",
+        "blocks": [
+          {
+            "title": "Interaction rules",
+            "bullets": [
+              "Rich card detail appears only when detail is visible.",
+              "Pan, zoom, and drag must stay responsive.",
+              "Delete actions require confirmation.",
+              "Thread and voice tooling must not steal editing keystrokes."
+            ],
+            "sourceRefs": [
+              "card:41"
+            ]
+          },
+          {
+            "title": "Content rules",
+            "bullets": [
+              "Media dimensions persist independently from canvas zoom.",
+              "HTML embeds must stay under allowed card asset paths.",
+              "Agent replies must be in English.",
+              "Durable card content should stay concrete and traceable."
+            ],
+            "sourceRefs": [
+              "card:40",
+              "card:41"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "evidenceIndex": [
+    {
+      "id": "EV-001",
+      "claim": "Decision OS is a local browser canvas with workspace-local data.",
+      "source": ".decision-os/cards/tasks-system/card-0b144d6a-16a1-4cc2-9b9f-32aabafd5b4a.md:7",
+      "sourceType": "card",
+      "confidence": "high"
+    },
+    {
+      "id": "EV-002",
+      "claim": "The surface includes ledger tabs, canvas, objects, pan/zoom, Markdown, media, HTML assets, threads, voice, and CLI tools.",
+      "source": ".decision-os/cards/tasks-system/card-0b144d6a-16a1-4cc2-9b9f-32aabafd5b4a.md:8",
+      "sourceType": "card",
+      "confidence": "high"
+    },
+    {
+      "id": "EV-003",
+      "claim": "Operators inspect/edit ledgers, manipulate canvas objects, review evidence, paste media, record voice, treat notes, maintain summaries, and use report cards.",
+      "source": ".decision-os/cards/tasks-system/card-0b144d6a-16a1-4cc2-9b9f-32aabafd5b4a.md:9",
+      "sourceType": "card",
+      "confidence": "high"
+    },
+    {
+      "id": "EV-004",
+      "claim": "The UX includes tab registry, full-canvas ledger surface, toolbox, canvas controls, card layers, overlays, labels, modals, thread inspector, composer, voice dock, and status copy.",
+      "source": ".decision-os/cards/tasks-system/card-0b144d6a-16a1-4cc2-9b9f-32aabafd5b4a.md:34",
+      "sourceType": "card",
+      "confidence": "high"
+    },
+    {
+      "id": "EV-005",
+      "claim": "The implemented keyboard contract includes A, X, Esc, Del, Ctrl+C, Ctrl+V, and Ctrl+D.",
+      "source": ".decision-os/cards/tasks-system/card-0b144d6a-16a1-4cc2-9b9f-32aabafd5b4a.md:39",
+      "sourceType": "card",
+      "confidence": "high"
+    },
+    {
+      "id": "EV-006",
+      "claim": "Interaction constraints include detail hydration, responsive pan/zoom/drag, deletion confirmation, editing key protection, media sizing, and HTML asset paths.",
+      "source": ".decision-os/cards/tasks-system/card-0b144d6a-16a1-4cc2-9b9f-32aabafd5b4a.md:41",
+      "sourceType": "card",
+      "confidence": "high"
+    }
+  ]
+}
