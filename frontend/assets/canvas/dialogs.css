@@ -13,7 +13,8 @@
 
 .confirm-modal button,
 .shortcut-modal button,
-.runbook-modal button {
+.runbook-modal button,
+.skill-modal button {
   border: 1px solid var(--line);
   border-radius: var(--button-radius);
   background: var(--button-bg);
@@ -28,14 +29,17 @@
 .shortcut-modal button:hover,
 .shortcut-modal button:focus-visible,
 .runbook-modal button:hover,
-.runbook-modal button:focus-visible {
+.runbook-modal button:focus-visible,
+.skill-modal button:hover,
+.skill-modal button:focus-visible {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent), transparent 90%);
   outline: none;
 }
 
 .shortcut-modal,
-.runbook-modal {
+.runbook-modal,
+.skill-modal {
   background: rgba(15, 17, 22, 0.98);
   color: var(--text);
   border: 1px solid var(--line);
@@ -46,9 +50,111 @@
 }
 
 .shortcut-modal h2,
-.runbook-modal h2 {
+.runbook-modal h2,
+.skill-modal h2 {
   margin: 0 0 12px;
   font-size: 16px;
+}
+
+.skill-modal {
+  width: min(720px, calc(100vw - 32px));
+  max-width: min(720px, calc(100vw - 32px));
+}
+
+.skill-search {
+  width: 100%;
+  min-height: 36px;
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: rgba(4, 6, 9, 0.92);
+  color: var(--text);
+  padding: 7px 9px;
+  font: inherit;
+}
+
+.skill-search:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent), transparent 52%);
+}
+
+.skill-results {
+  display: grid;
+  gap: 8px;
+  max-height: min(58vh, 520px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.skill-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  align-items: baseline;
+  width: 100%;
+  min-height: 0;
+  padding: 10px;
+  text-align: left;
+}
+
+.skill-result.is-selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent), transparent 88%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent), transparent 58%);
+}
+
+.skill-result-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-result-source {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.skill-result-description {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.skill-empty,
+.skill-error {
+  margin: 0;
+  color: var(--muted);
+}
+
+.skill-error {
+  color: #ff9a9a;
+}
+
+.skill-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.skill-actions .skill-error {
+  margin-right: auto;
+}
+
+.skill-process-button {
+  min-width: 92px;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .key-list {

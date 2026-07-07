@@ -22,6 +22,8 @@ import { deleteLinkedLedger } from '../../ledger/helper/delete-linked-ledger.js'
 import { ensureLedgersCanvasDocument } from '../../ledger/helper/ensure-ledgers-canvas-document.js';
 import { readCanonicalDecisionOsState } from '../../ledger/helper/read-canonical-decision-os-state.js';
 import { renameLinkedLedger } from '../../ledger/helper/rename-linked-ledger.js';
+import { scanCodexSkills } from '../../codex/helper/scan-codex-skills.js';
+import { startCardSkillProcessController } from '../../codex/controller/start-card-skill-process-controller.js';
 
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
@@ -141,6 +143,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const message = `event: card-content-change\ndata: ${JSON.stringify(event)}\n\n`;
     for (const client of contentEventClients) client.write(message);
   };
+  const publishLedgerContentChange = (event: AnyRecord): void => {
+    const message = `event: ledger-content-change\ndata: ${JSON.stringify(event)}\n\n`;
+    for (const client of contentEventClients) client.write(message);
+  };
   const loadLedgerContentFiles = (ledger: AnyRecord): AnyRecord => hydrateLedgerCardContent(hydrateLedgerThreadNotes(ledger, decisionOsRoot), decisionOsRoot);
   const persistLedgerAndRespond = (ledgerPath: string, ledger: AnyRecord, response: ServerResponse): void => {
     stripHydratedThreadNotes(ledger);
@@ -160,6 +166,36 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.write(': connected\n\n');
       contentEventClients.add(response);
       request.on('close', () => contentEventClients.delete(response));
+      return;
+    }
+    if (url === '/api/codex/skills' && request.method === 'GET') {
+      const workspaceRoot = dirname(decisionOsRoot);
+      const skills = scanCodexSkills({ workspaceRoot }).map((skill) => ({
+        name: skill.name,
+        description: skill.description,
+        source: skill.source
+      }));
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = 200;
+      response.end(JSON.stringify({ ok: true, skills }));
+      return;
+    }
+    if (url === '/api/codex/skills/process' && request.method === 'POST') {
+      const bodyBuffer = await readRequestBuffer(request);
+      const processPayload = (() => {
+        try {
+          return JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
+        } catch {
+          return {};
+        }
+      })();
+      const result = await startCardSkillProcessController({
+        action_payload: { ...processPayload, onLedgerChange: publishLedgerContentChange },
+        runtime_state: runtime
+      });
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));
+      response.end(JSON.stringify(result));
       return;
     }
     if (url === '/api/transcribe' && request.method === 'POST') {

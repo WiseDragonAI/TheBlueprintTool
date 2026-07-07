@@ -146,9 +146,17 @@ function syncCardControls(group: HTMLElement, card: HTMLElement): boolean {
   editBody.title = 'Edit card content';
   editBody.setAttribute('aria-label', editBody.title);
   editBody.textContent = 'edit';
+  const skill = document.createElement('button');
+  skill.className = 'ledger-card-skill-toggle terminal-button terminal-button--compact';
+  skill.type = 'button';
+  skill.dataset.action = 'open-card-skill-modal';
+  skill.dataset.cardId = cardId;
+  skill.title = 'Run Codex skill';
+  skill.setAttribute('aria-label', skill.title);
+  skill.textContent = 'fx';
   const controls = card.dataset.targetLedgerId
     ? [edit, renderLedgerCardDeleteButton(cardId)]
-    : [renderLedgerCardStatusButton(cardId, persistedStatus, visibleStatus), editBody, renderLedgerCardDeleteButton(cardId)];
+    : [skill, renderLedgerCardStatusButton(cardId, persistedStatus, visibleStatus), editBody, renderLedgerCardDeleteButton(cardId)];
   group.replaceChildren(...controls);
   return placeControlGroup(group, card, 'right');
 }

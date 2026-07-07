@@ -8,4 +8,5 @@ export const telemetryList = runtimeDocument?.querySelector('.telemetry-list') a
 export const modal = runtimeDocument?.querySelector('.confirm-modal') as HTMLDialogElement;
 export const shortcutModal = runtimeDocument?.querySelector('.shortcut-modal') as HTMLDialogElement;
 export const runbookModal = runtimeDocument?.querySelector('.runbook-modal') as HTMLDialogElement;
+export const skillModal = runtimeDocument?.querySelector('.skill-modal') as HTMLDialogElement;
 export const SVG_NS = 'http://www.w3.org/2000/svg';

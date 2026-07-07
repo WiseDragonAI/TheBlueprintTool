@@ -48,6 +48,9 @@ export function subscribeLedgerContentEvents(): void {
   events.addEventListener('card-content-change', () => {
     requestLedgerContentRefresh('card-content-change');
   });
+  events.addEventListener('ledger-content-change', () => {
+    requestLedgerContentRefresh('ledger-content-change');
+  });
   events.onerror = () => {
     telemetry('ledger-content-refresh-stream-error', {});
   };

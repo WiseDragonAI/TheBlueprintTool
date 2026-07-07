@@ -118,6 +118,14 @@
   text-transform: uppercase;
 }
 
+.canvas-control .ledger-card-skill-toggle {
+  width: auto;
+  min-width: 30px;
+  padding: 0 7px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
 .canvas-control .icon-button,
 .canvas-control .zone-color-edit {
   width: 28px;

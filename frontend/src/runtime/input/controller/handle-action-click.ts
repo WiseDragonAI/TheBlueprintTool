@@ -31,6 +31,7 @@ import { retryVoiceTranscription } from '../../voice/effect/retry-voice-transcri
 import { enterLedgersCanvasController } from '../../navigation/controller/enter-ledgers-canvas-controller.js';
 import { applyRailCollapsedState } from '../../toolbox/effect/apply-rail-collapsed-state.js';
 import { persistState } from '../../persistence/effect/persist-state.js';
+import { closeCardSkillModal, openCardSkillModal, processSelectedCardSkill, selectCardSkill } from '../../codex/effect/render-skill-modal.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 function toggleRail(button: HTMLElement): void {
@@ -113,6 +114,22 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
   if (action === 'toggle-card-status') {
     const status = actionTarget.dataset.nextStatus === 'todo' ? 'todo' : 'done';
     await toggleCardStatusController({ cardId: actionTarget.dataset.cardId ?? '', status });
+    return;
+  }
+  if (action === 'open-card-skill-modal') {
+    await openCardSkillModal(actionTarget.dataset.cardId ?? '');
+    return;
+  }
+  if (action === 'select-card-skill') {
+    selectCardSkill(actionTarget.dataset.skillName ?? '');
+    return;
+  }
+  if (action === 'process-card-skill') {
+    await processSelectedCardSkill();
+    return;
+  }
+  if (action === 'close-card-skill-modal') {
+    closeCardSkillModal();
     return;
   }
   if (action === 'edit-card-title') {

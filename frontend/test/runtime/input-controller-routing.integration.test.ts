@@ -202,8 +202,10 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(controlOverlay, /edit\.title = card\.dataset\.targetLedgerId \? 'Edit ledger name' : 'Edit card title'/);
   assert.match(controlOverlay, /editBody\.dataset\.action = 'edit-card-description'/);
   assert.match(controlOverlay, /editBody\.textContent = 'edit'/);
+  assert.match(controlOverlay, /skill\.dataset\.action = 'open-card-skill-modal'/);
+  assert.match(controlOverlay, /skill\.textContent = 'fx'/);
   assert.match(controlOverlay, /\? \[edit, renderLedgerCardDeleteButton\(cardId\)\]/);
-  assert.match(controlOverlay, /\[renderLedgerCardStatusButton\(cardId, persistedStatus, visibleStatus\), editBody, renderLedgerCardDeleteButton\(cardId\)\]/);
+  assert.match(controlOverlay, /\[skill, renderLedgerCardStatusButton\(cardId, persistedStatus, visibleStatus\), editBody, renderLedgerCardDeleteButton\(cardId\)\]/);
   assert.match(controlOverlay, /renderLedgerCardDeleteButton\(cardId\)/);
   assert.match(actionClick, /if \(action === 'edit-card-title'\)/);
   assert.match(actionClick, /beginLedgerCardTitleEdit\(card\)/);
