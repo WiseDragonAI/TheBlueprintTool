@@ -118,6 +118,8 @@ function renderSkillRow(skill: CodexSkillSummary): HTMLButtonElement {
   button.style.setProperty('--skill-category-color', colorForSkillCategory(category));
   button.setAttribute('aria-pressed', String(selected));
 
+  const header = document.createElement('span');
+  header.className = 'skill-result-header';
   const title = document.createElement('span');
   title.className = 'skill-result-name';
   title.textContent = skill.name;
@@ -125,10 +127,12 @@ function renderSkillRow(skill: CodexSkillSummary): HTMLButtonElement {
   categoryTag.className = 'skill-result-category';
   categoryTag.style.setProperty('--skill-category-color', colorForSkillCategory(category));
   categoryTag.textContent = category;
+  header.replaceChildren(title, categoryTag);
+
   const description = document.createElement('span');
   description.className = 'skill-result-description';
   description.textContent = skill.description || 'No description.';
-  button.replaceChildren(title, categoryTag, description);
+  button.replaceChildren(header, description);
   return button;
 }
 
