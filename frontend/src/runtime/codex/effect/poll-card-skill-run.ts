@@ -38,7 +38,7 @@ function durationLabel(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
 function runStartedAt(runId: string): number {
@@ -52,10 +52,14 @@ function setText(element: HTMLElement, selector: string, text: string): void {
   if (target) target.textContent = text;
 }
 
+function removeTimer(element: HTMLElement): void {
+  element.querySelector('[data-codex-run-timer]')?.remove();
+}
+
 function latestEventLabel(summary: CardSkillRunSummary): string {
   const latest = summary.latestEvent;
   if (!latest) return summary.status === 'running' ? 'Waiting for output' : statusLabel(summary.status);
-  if (summary.status === 'complete' && latest.title.toLowerCase() === 'turn completed') return `Turn completed in ${durationLabel(summary.elapsedMs)}`;
+  if (summary.status === 'complete' && latest.title.toLowerCase() === 'turn completed') return `Turn Completed in ${durationLabel(summary.elapsedMs)}`;
   if (latest.tool) return latest.tool;
   return latest.title || latest.kind || latest.type || statusLabel(summary.status);
 }
@@ -63,7 +67,7 @@ function latestEventLabel(summary: CardSkillRunSummary): string {
 function paintWidget(element: HTMLElement, summary: CardSkillRunSummary): void {
   element.dataset.runStatus = summary.status;
   setText(element, '[data-codex-run-status]', statusLabel(summary.status));
-  if (summary.status !== 'running') setText(element, '[data-codex-run-timer]', durationLabel(summary.elapsedMs));
+  if (summary.status !== 'running') removeTimer(element);
   setText(element, '[data-codex-run-tools]', String(summary.toolCallCount));
   setText(element, '[data-codex-run-messages]', String(summary.agentMessageCount + summary.thinkingCount));
   setText(element, '[data-codex-run-files]', String(summary.fileChangeCount));
@@ -139,6 +143,7 @@ async function poll(poller: Poller): Promise<void> {
   poller.inFlight = false;
   if (!summary.ok) {
     poller.element.dataset.runStatus = 'unknown';
+    removeTimer(poller.element);
     setText(poller.element, '[data-codex-run-status]', 'UNKNOWN');
     setText(poller.element, '[data-codex-run-latest]', summary.error || 'Run unavailable');
     stopPoller(key);

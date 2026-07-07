@@ -549,15 +549,25 @@
 }
 
 .codex-run-widget[data-run-status="complete"] {
+  grid-template-columns: minmax(0, 1fr);
+  min-height: auto;
   border-color: color-mix(in srgb, #74d680, transparent 32%);
 }
 
 .codex-run-widget[data-run-status="failed"] {
+  grid-template-columns: minmax(0, 1fr);
+  min-height: auto;
   border-color: color-mix(in srgb, #ff7f8a, transparent 28%);
 }
 
 .codex-run-widget[data-run-status="unknown"] {
+  grid-template-columns: minmax(0, 1fr);
+  min-height: auto;
   border-color: color-mix(in srgb, #a8b1bc, transparent 48%);
+}
+
+.codex-run-widget:not([data-run-status="running"]) .codex-run-timer {
+  display: none;
 }
 
 .ledger-card-tabs {
