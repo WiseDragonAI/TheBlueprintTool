@@ -57,13 +57,16 @@
 }
 
 .skill-modal {
-  display: grid;
-  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
   width: min(720px, calc(100vw - 32px));
   max-width: min(720px, calc(100vw - 32px));
   height: 60vh;
   max-height: calc(100vh - 32px);
   overflow: hidden;
+}
+
+.skill-modal[open] {
+  display: grid;
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
 }
 
 .skill-search {
