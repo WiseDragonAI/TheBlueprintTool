@@ -46,7 +46,18 @@ export function renderCardSkillRunWidget(card: Record<string, unknown>): HTMLEle
   cancel.title = 'Cancel Codex run';
   cancel.setAttribute('aria-label', cancel.title);
   cancel.textContent = 'Cancel';
-  header.replaceChildren(status, cancel);
+  const resume = document.createElement('button');
+  resume.type = 'button';
+  resume.className = 'codex-run-continue terminal-button terminal-button--compact';
+  resume.dataset.codexRunContinue = '';
+  resume.hidden = true;
+  resume.title = 'Continue Codex session';
+  resume.setAttribute('aria-label', resume.title);
+  resume.textContent = 'Continue';
+  const actions = document.createElement('div');
+  actions.className = 'codex-run-actions';
+  actions.replaceChildren(cancel, resume);
+  header.replaceChildren(status, actions);
 
   const timer = document.createElement('time');
   timer.className = 'codex-run-timer';

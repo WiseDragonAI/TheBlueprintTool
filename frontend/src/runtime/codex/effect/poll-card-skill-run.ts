@@ -5,6 +5,7 @@
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { requestCardSkillRunStatus, type CardSkillRunSummary } from './request-card-skill-run-status.js';
 import { requestCardSkillRunCancel } from './request-card-skill-run-cancel.js';
+import { requestCardSkillRunContinue } from './request-card-skill-run-continue.js';
 
 type Poller = {
   ledgerId: string;
@@ -17,6 +18,7 @@ type Poller = {
   lastClockPaintMs: number;
   inFlight: boolean;
   cancelInFlight: boolean;
+  continueInFlight: boolean;
   detachedChecks: number;
   terminal: boolean;
 };
@@ -55,15 +57,31 @@ function setText(element: HTMLElement, selector: string, text: string): void {
 }
 
 function removeTimer(element: HTMLElement): void {
-  element.querySelector('[data-codex-run-timer]')?.remove();
+  const timer = element.querySelector<HTMLElement>('[data-codex-run-timer]');
+  if (timer) timer.hidden = true;
+}
+
+function showTimer(element: HTMLElement): void {
+  const timer = element.querySelector<HTMLElement>('[data-codex-run-timer]');
+  if (timer) timer.hidden = false;
 }
 
 function cancelButton(element: HTMLElement): HTMLButtonElement | null {
   return element.querySelector<HTMLButtonElement>('[data-codex-run-cancel]');
 }
 
-function removeCancelButton(element: HTMLElement): void {
-  cancelButton(element)?.remove();
+function continueButton(element: HTMLElement): HTMLButtonElement | null {
+  return element.querySelector<HTMLButtonElement>('[data-codex-run-continue]');
+}
+
+function setCancelButtonVisible(element: HTMLElement, visible: boolean): void {
+  const button = cancelButton(element);
+  if (button) button.hidden = !visible;
+}
+
+function setContinueButtonVisible(element: HTMLElement, visible: boolean): void {
+  const button = continueButton(element);
+  if (button) button.hidden = !visible;
 }
 
 function latestEventLabel(summary: CardSkillRunSummary): string {
@@ -78,9 +96,14 @@ function latestEventLabel(summary: CardSkillRunSummary): string {
 function paintWidget(element: HTMLElement, summary: CardSkillRunSummary): void {
   element.dataset.runStatus = summary.status;
   setText(element, '[data-codex-run-status]', statusLabel(summary.status));
-  if (summary.status !== 'running') {
+  if (summary.status === 'running') {
+    showTimer(element);
+    setCancelButtonVisible(element, true);
+    setContinueButtonVisible(element, false);
+  } else {
     removeTimer(element);
-    removeCancelButton(element);
+    setCancelButtonVisible(element, false);
+    setContinueButtonVisible(element, summary.status !== 'unknown');
   }
   setText(element, '[data-codex-run-tools]', String(summary.toolCallCount));
   setText(element, '[data-codex-run-messages]', String(summary.agentMessageCount + summary.thinkingCount));
@@ -138,6 +161,11 @@ function setCancelButtonState(button: HTMLButtonElement, state: 'ready' | 'stopp
   button.textContent = state === 'stopping' ? 'Stopping' : 'Cancel';
 }
 
+function setContinueButtonState(button: HTMLButtonElement, state: 'ready' | 'starting'): void {
+  button.disabled = state === 'starting';
+  button.textContent = state === 'starting' ? 'Continuing' : 'Continue';
+}
+
 function bindCancelButton(poller: Poller): void {
   const button = cancelButton(poller.element);
   if (!button) return;
@@ -147,6 +175,17 @@ function bindCancelButton(poller: Poller): void {
     void cancelRun(poller);
   };
   setCancelButtonState(button, poller.cancelInFlight ? 'stopping' : 'ready');
+}
+
+function bindContinueButton(poller: Poller): void {
+  const button = continueButton(poller.element);
+  if (!button) return;
+  button.onclick = (event): void => {
+    event.preventDefault();
+    event.stopPropagation();
+    void continueRun(poller);
+  };
+  setContinueButtonState(button, poller.continueInFlight ? 'starting' : 'ready');
 }
 
 async function cancelRun(poller: Poller): Promise<void> {
@@ -164,6 +203,36 @@ async function cancelRun(poller: Poller): Promise<void> {
     return;
   }
   setCancelButtonState(button, 'stopping');
+  schedulePoll(poller, 0);
+}
+
+async function continueRun(poller: Poller): Promise<void> {
+  if (poller.continueInFlight || poller.inFlight) return;
+  const button = continueButton(poller.element);
+  if (!button) return;
+  poller.continueInFlight = true;
+  setContinueButtonState(button, 'starting');
+  setText(poller.element, '[data-codex-run-latest]', 'Continuing session');
+  const result = await requestCardSkillRunContinue({ ledgerId: poller.ledgerId, cardId: poller.cardId, runId: poller.runId });
+  poller.continueInFlight = false;
+  if (!result.ok) {
+    setContinueButtonState(button, 'ready');
+    setText(poller.element, '[data-codex-run-latest]', result.error || 'Continue failed');
+    return;
+  }
+  const key = pollerKey(poller);
+  terminalSummaries.delete(key);
+  poller.terminal = false;
+  poller.since = 0;
+  pollers.set(key, poller);
+  poller.element.dataset.runStatus = 'running';
+  setText(poller.element, '[data-codex-run-status]', 'RUNNING');
+  setCancelButtonVisible(poller.element, true);
+  setContinueButtonVisible(poller.element, false);
+  const cancel = cancelButton(poller.element);
+  if (cancel) setCancelButtonState(cancel, 'ready');
+  showTimer(poller.element);
+  startFrontendClock(poller);
   schedulePoll(poller, 0);
 }
 
@@ -192,7 +261,8 @@ async function poll(poller: Poller): Promise<void> {
   if (!summary.ok) {
     poller.element.dataset.runStatus = 'unknown';
     removeTimer(poller.element);
-    removeCancelButton(poller.element);
+    setCancelButtonVisible(poller.element, false);
+    setContinueButtonVisible(poller.element, false);
     setText(poller.element, '[data-codex-run-status]', 'UNKNOWN');
     setText(poller.element, '[data-codex-run-latest]', summary.error || 'Run unavailable');
     stopPoller(key);
@@ -213,7 +283,10 @@ export function bindCardSkillRunWidget(input: { ledgerId: string; cardId: string
   const key = pollerKey(input);
   const terminalSummary = terminalSummaries.get(key);
   if (terminalSummary) {
+    const poller: Poller = { ...input, since: terminalSummary.lineCount, timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, detachedChecks: 0, terminal: true };
     paintWidget(input.element, terminalSummary);
+    bindCancelButton(poller);
+    bindContinueButton(poller);
     return;
   }
   const existing = pollers.get(key);
@@ -224,13 +297,15 @@ export function bindCardSkillRunWidget(input: { ledgerId: string; cardId: string
     existing.runId = input.runId;
     existing.terminal = false;
     bindCancelButton(existing);
+    bindContinueButton(existing);
     startFrontendClock(existing);
     if (!existing.timer && !existing.inFlight) schedulePoll(existing, 0);
     return;
   }
-  const poller: Poller = { ...input, since: 0, timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, detachedChecks: 0, terminal: false };
+  const poller: Poller = { ...input, since: 0, timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, detachedChecks: 0, terminal: false };
   pollers.set(key, poller);
   bindCancelButton(poller);
+  bindContinueButton(poller);
   startFrontendClock(poller);
   schedulePoll(poller, 0);
 }

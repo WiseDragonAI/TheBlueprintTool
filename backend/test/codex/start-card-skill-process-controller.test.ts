@@ -204,3 +204,114 @@ test('card skill run cancel route terminates the active codex process', async ()
     rmSync(workspace, { recursive: true, force: true });
   }
 });
+
+test('card skill run continue route resumes the captured session with post-end thread messages', async () => {
+  const originalCwd = process.cwd();
+  const previousCodexBin = process.env.CODEX_BIN;
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-card-skill-continue-'));
+  const fakeCodex = join(workspace, 'fake-codex-resume.mjs');
+  const inputFile = join(workspace, 'resume-input.txt');
+  const argvFile = join(workspace, 'resume-argv.json');
+  const runId = 'codex-skill-1783425215516-e1916f75';
+  const sessionId = '019f3c6d-38a5-7e23-a238-904176322f0c';
+  const outputCardId = `card-${runId}`;
+  const threadId = `thread-${outputCardId}`;
+  mkdirSync(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs'), { recursive: true });
+  mkdirSync(join(workspace, '.decision-os', 'cards', 'specs'), { recursive: true });
+  mkdirSync(join(workspace, '.decision-os', 'threads', 'specs'), { recursive: true });
+  writeFileSync(join(workspace, '.decision-os', 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }]
+  }, null, 2));
+  writeFileSync(join(workspace, '.decision-os', 'specs.json'), JSON.stringify({
+    cards: [{
+      id: outputCardId,
+      title: 'Skill Result',
+      cardType: 'codex-skill-run',
+      comment: { contentFile: `.decision-os/cards/specs/${outputCardId}.md` },
+      facts: [],
+      fields: []
+    }],
+    annotations: [],
+    relationships: [],
+    notes: {},
+    threadFiles: { [threadId]: `.decision-os/threads/specs/${threadId}.md` }
+  }, null, 2));
+  writeFileSync(join(workspace, '.decision-os', 'cards', 'specs', `${outputCardId}.md`), [
+    '# Finished Skill Result',
+    '',
+    `Codex run: ${runId}`,
+  ].join('\n'));
+  writeFileSync(join(workspace, '.decision-os', 'threads', 'specs', `${threadId}.md`), [
+    '# AGENT',
+    `<!-- decision-os:note {"id":"codex-${runId}-line-2","timestamp":"2026-07-07T17:13:35.518Z","status":"complete","codexRunId":"${runId}","codexLine":"2","codexKind":"run_status","codexEventType":"turn.completed"} -->`,
+    '',
+    'Codex turn completed.',
+    '',
+    '# OPERATOR',
+    '<!-- decision-os:note {"id":"note-after-1","timestamp":"2026-07-07T17:14:00.000Z"} -->',
+    '',
+    'First follow-up message.',
+    '',
+    '# OPERATOR',
+    '<!-- decision-os:note {"id":"note-after-2","timestamp":"2026-07-07T17:15:00.000Z"} -->',
+    '',
+    'Second follow-up message.',
+  ].join('\n'));
+  writeFileSync(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.jsonl`), [
+    JSON.stringify({ type: 'thread.started', thread_id: sessionId }),
+    JSON.stringify({ type: 'turn.completed' }),
+  ].join('\n'));
+  writeFileSync(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.log`), '');
+  writeFileSync(fakeCodex, [
+    '#!/usr/bin/env node',
+    'import { writeFileSync } from "node:fs";',
+    'let input = "";',
+    'process.stdin.on("data", (chunk) => { input += chunk; });',
+    'process.stdin.on("end", () => {',
+    `  writeFileSync(${JSON.stringify(inputFile)}, input);`,
+    `  writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(2)));`,
+    '  console.log(JSON.stringify({ type: "turn.started" }));',
+    '  console.log(JSON.stringify({ type: "item.completed", item: { id: "resume-msg", type: "agent_message", text: "resumed response" } }));',
+    '  console.log(JSON.stringify({ type: "turn.completed" }));',
+    '});',
+  ].join('\n'));
+  chmodSync(fakeCodex, 0o755);
+
+  process.chdir(workspace);
+  process.env.CODEX_BIN = fakeCodex;
+  const runtime: Record<string, unknown> = {};
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const address = server.address() as AddressInfo;
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}/continue`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ledgerId: 'specs', cardId: outputCardId, codexModel: 'gpt-5.4', codexEffort: 'medium' })
+    });
+    assert.equal(response.status, 202);
+    const body = await response.json() as { ok: boolean; run: { id: string; continuedMessageCount: number; resumeSessionId: string } };
+    assert.equal(body.ok, true);
+    assert.equal(body.run.id, runId);
+    assert.equal(body.run.continuedMessageCount, 2);
+    assert.equal(body.run.resumeSessionId, sessionId);
+
+    await waitForText(inputFile, 'Continue the session with the additional information:');
+    const input = readFileSync(inputFile, 'utf8');
+    assert.match(input, /--- Message 1 of 2 ---[\s\S]*First follow-up message\./);
+    assert.match(input, /--- Message 2 of 2 ---[\s\S]*Second follow-up message\./);
+    const argv = JSON.parse(readFileSync(argvFile, 'utf8')) as string[];
+    assert.deepEqual(argv.slice(0, 4), ['exec', 'resume', '--dangerously-bypass-approvals-and-sandbox', '--json']);
+    assert.equal(argv.includes(sessionId), true);
+    assert.equal(argv.at(-1), '-');
+    await waitForText(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.jsonl`), 'resumed response');
+  } finally {
+    server.close();
+    process.chdir(originalCwd);
+    if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
+    else process.env.CODEX_BIN = previousCodexBin;
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});

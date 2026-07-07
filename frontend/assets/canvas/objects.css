@@ -493,7 +493,16 @@
   min-width: 0;
 }
 
-.codex-run-cancel {
+.codex-run-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+
+.codex-run-cancel,
+.codex-run-continue {
   min-height: 22px;
   padding: 0 8px;
   border-radius: 2px;
@@ -501,7 +510,8 @@
   letter-spacing: 0;
 }
 
-.codex-run-cancel:disabled {
+.codex-run-cancel:disabled,
+.codex-run-continue:disabled {
   cursor: default;
   opacity: 0.62;
 }

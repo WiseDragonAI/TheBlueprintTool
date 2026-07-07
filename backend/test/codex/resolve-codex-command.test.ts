@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { resolveCodexCommand } from '@backend/business/codex/helper/resolve-codex-command.js';
+import { resolveCodexCommand, resolveCodexResumeCommand } from '@backend/business/codex/helper/resolve-codex-command.js';
 
 test('resolveCodexCommand honors an explicit executable setting', () => {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-codex-command-'));
@@ -48,6 +48,25 @@ test('resolveCodexCommand lets run payload override settings model and effort', 
     assert.equal(command.effort, 'xhigh');
     assert.equal(command.args.includes('gpt-5.5'), true);
     assert.equal(command.args.includes('model_reasoning_effort="xhigh"'), true);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('resolveCodexResumeCommand builds an exec resume invocation with stdin prompt', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-codex-resume-command-'));
+  try {
+    const command = resolveCodexResumeCommand({
+      workspaceRoot: workspace,
+      runtime: { decisionOsSettings: { codexModel: 'gpt-5.4', codexReasoningEffort: 'medium' } },
+      sessionId: '019f3c6d-38a5-7e23-a238-904176322f0c'
+    });
+
+    assert.deepEqual(command.args.slice(0, 4), ['exec', 'resume', '--dangerously-bypass-approvals-and-sandbox', '--json']);
+    assert.equal(command.args.includes('019f3c6d-38a5-7e23-a238-904176322f0c'), true);
+    assert.equal(command.args.at(-1), '-');
+    assert.equal(command.args.includes('gpt-5.4'), true);
+    assert.equal(command.args.includes('model_reasoning_effort="medium"'), true);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }

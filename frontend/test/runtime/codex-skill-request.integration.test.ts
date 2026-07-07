@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { loadCodexSkills } from '../../src/runtime/codex/effect/load-codex-skills.js';
 import { requestCardSkillProcess } from '../../src/runtime/codex/effect/request-card-skill-process.js';
 import { requestCardSkillRunCancel } from '../../src/runtime/codex/effect/request-card-skill-run-cancel.js';
+import { requestCardSkillRunContinue } from '../../src/runtime/codex/effect/request-card-skill-run-continue.js';
 import { requestCardSkillRunStatus } from '../../src/runtime/codex/effect/request-card-skill-run-status.js';
 import { cardCodexRunId } from '../../src/runtime/codex/helper/card-codex-run-id.js';
 
@@ -105,6 +106,30 @@ test('requestCardSkillRunCancel posts active card run cancellation', async () =>
     const result = await requestCardSkillRunCancel({ ledgerId: 'specs', cardId: 'card-a', runId: 'codex-skill-1000-abcd' });
     assert.equal(result.ok, true);
     assert.equal(result.status, 'cancelled');
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('requestCardSkillRunContinue posts terminal card run continuation', async () => {
+  const previousFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      assert.equal(url, '/api/codex/skills/runs/codex-skill-1000-abcd/continue');
+      assert.equal(init?.method, 'POST');
+      const headers = init?.headers as Record<string, string>;
+      assert.equal(headers['content-type'], 'application/json');
+      assert.deepEqual(JSON.parse(String(init?.body ?? '{}')), { ledgerId: 'specs', cardId: 'card-a' });
+      return new Response(JSON.stringify({ ok: true, run: { id: 'codex-skill-1000-abcd', status: 'running' } }), {
+        status: 202,
+        headers: { 'content-type': 'application/json' }
+      });
+    }) as typeof fetch;
+
+    const result = await requestCardSkillRunContinue({ ledgerId: 'specs', cardId: 'card-a', runId: 'codex-skill-1000-abcd' });
+    assert.equal(result.ok, true);
+    assert.equal(result.status, 'running');
+    assert.equal(result.run?.id, 'codex-skill-1000-abcd');
   } finally {
     globalThis.fetch = previousFetch;
   }

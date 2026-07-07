@@ -18,6 +18,12 @@ export type CodexCommand = {
   effort: string;
 };
 
+type CodexSelection = {
+  command: string;
+  model: string;
+  effort: string;
+};
+
 function settingsRecord(runtime: AnyRecord): AnyRecord {
   return runtime.decisionOsSettings && typeof runtime.decisionOsSettings === 'object'
     ? runtime.decisionOsSettings as AnyRecord
@@ -83,6 +89,18 @@ function firstAllowed(values: unknown[], options: readonly string[], fallback: s
   return fallback;
 }
 
+function resolveCodexSelection(input: { workspaceRoot: string; runtime: AnyRecord; codexModel?: unknown; codexEffort?: unknown }): CodexSelection {
+  const settings = settingsRecord(input.runtime);
+  const configuredCommand = String(process.env.CODEX_BIN || settings.codexBin || settings.CODEX_BIN || 'codex');
+  const model = firstAllowed([input.codexModel, process.env.CODEX_MODEL, settings.codexModel, settings.CODEX_MODEL], codexModelOptions, 'gpt-5.5');
+  const effort = firstAllowed([input.codexEffort, process.env.CODEX_EFFORT, settings.codexEffort, settings.codexReasoningEffort, settings.CODEX_EFFORT], codexEffortOptions, 'high');
+  return {
+    command: resolveExecutable(configuredCommand, input.workspaceRoot),
+    model,
+    effort,
+  };
+}
+
 export function isAllowedCodexModel(value: unknown): boolean {
   return Boolean(allowedValue(value, codexModelOptions));
 }
@@ -92,12 +110,9 @@ export function isAllowedCodexEffort(value: unknown): boolean {
 }
 
 export function resolveCodexCommand(input: { workspaceRoot: string; runtime: AnyRecord; codexModel?: unknown; codexEffort?: unknown }): CodexCommand {
-  const settings = settingsRecord(input.runtime);
-  const configuredCommand = String(process.env.CODEX_BIN || settings.codexBin || settings.CODEX_BIN || 'codex');
-  const model = firstAllowed([input.codexModel, process.env.CODEX_MODEL, settings.codexModel, settings.CODEX_MODEL], codexModelOptions, 'gpt-5.5');
-  const effort = firstAllowed([input.codexEffort, process.env.CODEX_EFFORT, settings.codexEffort, settings.codexReasoningEffort, settings.CODEX_EFFORT], codexEffortOptions, 'high');
+  const selection = resolveCodexSelection(input);
   return {
-    command: resolveExecutable(configuredCommand, input.workspaceRoot),
+    command: selection.command,
     args: [
       'exec',
       '--dangerously-bypass-approvals-and-sandbox',
@@ -105,12 +120,33 @@ export function resolveCodexCommand(input: { workspaceRoot: string; runtime: Any
       '-C',
       input.workspaceRoot,
       '-c',
-      `model_reasoning_effort="${effort}"`,
+      `model_reasoning_effort="${selection.effort}"`,
       '--model',
-      model,
+      selection.model,
       '-',
     ],
-    model,
-    effort,
+    model: selection.model,
+    effort: selection.effort,
+  };
+}
+
+export function resolveCodexResumeCommand(input: { workspaceRoot: string; runtime: AnyRecord; sessionId: string; codexModel?: unknown; codexEffort?: unknown }): CodexCommand {
+  const selection = resolveCodexSelection(input);
+  return {
+    command: selection.command,
+    args: [
+      'exec',
+      'resume',
+      '--dangerously-bypass-approvals-and-sandbox',
+      '--json',
+      '-c',
+      `model_reasoning_effort="${selection.effort}"`,
+      '--model',
+      selection.model,
+      input.sessionId,
+      '-',
+    ],
+    model: selection.model,
+    effort: selection.effort,
   };
 }
