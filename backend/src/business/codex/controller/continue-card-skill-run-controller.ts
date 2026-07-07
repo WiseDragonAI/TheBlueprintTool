@@ -17,8 +17,6 @@ type AnyRecord = Record<string, unknown>;
 type ProcessStatus = 'running' | 'complete' | 'failed' | 'cancelled';
 
 function logCodexContinueDebug(phase: string, detail: AnyRecord): void {
-  const traceId = String(detail.traceId ?? '');
-  if (!traceId) return;
   console.log(JSON.stringify({ codexContinueDebug: true, source: 'backend', phase, at: new Date().toISOString(), ...detail }));
 }
 

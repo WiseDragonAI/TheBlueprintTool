@@ -31,8 +31,6 @@ type NormalizedRunEvent = {
 };
 
 function logCodexContinueDebug(phase: string, detail: AnyRecord): void {
-  const traceId = String(detail.traceId ?? '');
-  if (!traceId) return;
   console.log(JSON.stringify({ codexContinueDebug: true, source: 'backend', phase, at: new Date().toISOString(), ...detail }));
 }
 
