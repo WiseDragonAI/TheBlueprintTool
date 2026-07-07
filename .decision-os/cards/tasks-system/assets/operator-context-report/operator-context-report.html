@@ -67,11 +67,10 @@
     }
 
     .topbar {
-      display: flex;
-      gap: 14px;
-      align-items: flex-start;
-      justify-content: space-between;
-      padding: 18px 0 24px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 16px;
+      padding: 24px 0 26px;
       border-bottom: 1px solid var(--line);
     }
 
@@ -101,33 +100,11 @@
     }
 
     .subtitle {
-      max-width: 760px;
+      max-width: 840px;
       margin: 0;
       color: var(--muted);
       font-size: 15px;
       line-height: 1.45;
-    }
-
-    .meta {
-      min-width: 220px;
-      padding: 14px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: rgba(17, 20, 20, 0.7);
-    }
-
-    .meta div {
-      display: flex;
-      justify-content: space-between;
-      gap: 18px;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.6;
-    }
-
-    .meta span:last-child {
-      color: var(--text);
-      font-weight: 800;
     }
 
     .layout {
@@ -212,12 +189,6 @@
       line-height: 1.4;
     }
 
-    .snapshot {
-      display: grid;
-      grid-template-columns: 1.1fr 0.9fr;
-      gap: 18px;
-    }
-
     .panel,
     .feature,
     .evidence-row {
@@ -264,35 +235,6 @@
       height: 6px;
       border-radius: 50%;
       background: var(--mint);
-    }
-
-    .metric-strip {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 12px;
-      margin-top: 18px;
-    }
-
-    .metric {
-      min-height: 96px;
-      padding: 14px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: var(--surface-2);
-    }
-
-    .metric strong {
-      display: block;
-      margin-bottom: 8px;
-      color: var(--mint);
-      font-size: 26px;
-      line-height: 1;
-    }
-
-    .metric span {
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.35;
     }
 
     .block-grid {
@@ -361,6 +303,22 @@
       line-height: 1.35;
     }
 
+    .briefing-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 16px;
+    }
+
+    .reading-note {
+      margin: 0;
+      padding: 14px 16px;
+      border-left: 3px solid var(--mint);
+      background: rgba(98, 214, 164, 0.08);
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
     .evidence-list {
       display: grid;
       gap: 10px;
@@ -402,7 +360,7 @@
 
     @media (max-width: 1040px) {
       .layout,
-      .snapshot {
+      .briefing-grid {
         grid-template-columns: 1fr;
       }
 
@@ -422,15 +380,9 @@
         padding-top: 12px;
       }
 
-      .topbar,
       .block-grid,
-      .feature-grid,
-      .metric-strip {
+      .feature-grid {
         grid-template-columns: 1fr;
-      }
-
-      .topbar {
-        display: grid;
       }
 
       h1 {
@@ -835,20 +787,15 @@
   <main class="shell">
     <header class="topbar">
       <div>
-        <p class="eyebrow">Source-bound operator report</p>
+        <p class="eyebrow">Source-bound operator briefing</p>
         <h1 id="page-title"></h1>
         <p class="subtitle" id="subtitle"></p>
       </div>
-      <aside class="meta" aria-label="Report metadata">
-        <div><span>Audience</span><span id="audience"></span></div>
-        <div><span>Features</span><span id="feature-count"></span></div>
-        <div><span>Sources</span><span id="source-count"></span></div>
-      </aside>
     </header>
 
     <div class="layout">
       <nav class="nav" aria-label="Report sections">
-        <a href="#snapshot">Snapshot</a>
+        <a href="#snapshot">First Read</a>
         <a href="#sections">Report</a>
         <a href="#features">Feature Register</a>
         <a href="#evidence">Evidence</a>
@@ -863,19 +810,14 @@
               <p class="question">What should an operator understand first?</p>
             </div>
           </div>
-          <div class="snapshot">
+          <div class="briefing-grid">
             <article class="panel">
               <h3>First read</h3>
               <ul class="bullets" id="snapshot-bullets"></ul>
             </article>
             <article class="panel">
-              <h3>Extraction frame</h3>
+              <h3>How this page was built</h3>
               <ul class="bullets" id="charter-bullets"></ul>
-              <div class="metric-strip">
-                <div class="metric"><strong id="metric-primary"></strong><span>primary operator facts</span></div>
-                <div class="metric"><strong id="metric-controls"></strong><span>controls and entry points</span></div>
-                <div class="metric"><strong id="metric-surfaces"></strong><span>surfaces and spatial facts</span></div>
-              </div>
             </article>
           </div>
         </section>
@@ -885,9 +827,10 @@
             <span class="section-index">02</span>
             <div>
               <h2 id="sections-title">Human-readable report</h2>
-              <p class="question">Sections are built from the feature register, not from generic repo inventory.</p>
+              <p class="question">A reader path built from extracted features, surfaces, controls, and workflows.</p>
             </div>
           </div>
+          <p class="reading-note">Read this as an operator briefing first. Source trace stays available, but it does not drive the visual hierarchy.</p>
           <div class="block-grid" id="report-sections"></div>
         </section>
 
@@ -953,23 +896,14 @@
 
     document.getElementById("page-title").textContent = report.title;
     document.getElementById("subtitle").textContent = report.subtitle;
-    document.getElementById("audience").textContent = report.audience;
-    document.getElementById("feature-count").textContent = String(features.length);
-    document.getElementById("source-count").textContent = String(data.evidenceIndex.length);
     document.getElementById("snapshot-title").textContent = report.openingSnapshot.title;
     list(document.getElementById("snapshot-bullets"), report.openingSnapshot.bullets);
     list(document.getElementById("charter-bullets"), [
-      "Allowed source: `Decision OS Context` card only.",
-      "Extraction target: operator-facing features, surfaces, controls, workflows, and constraints.",
-      "Report target: short human-readable blocks with source trace."
+      "The source boundary is the `Decision OS Context` card.",
+      "The extraction pass captured operator-facing features before synthesis.",
+      "The report foregrounds workspace shape, actions, controls, workflows, and useful constraints.",
+      "Evidence remains available after the human-readable path."
     ]);
-
-    const primaryCount = features.filter((item) => item.importance === "primary").length;
-    const controlCount = features.filter((item) => item.itemType === "control" || item.itemType === "entry_point").length;
-    const surfaceCount = features.filter((item) => item.itemType === "surface" || item.itemType === "spatial_model").length;
-    document.getElementById("metric-primary").textContent = String(primaryCount);
-    document.getElementById("metric-controls").textContent = String(controlCount);
-    document.getElementById("metric-surfaces").textContent = String(surfaceCount);
 
     const reportSections = document.getElementById("report-sections");
     reportSections.innerHTML = report.sections.map((section) => section.blocks.map((block) => `
