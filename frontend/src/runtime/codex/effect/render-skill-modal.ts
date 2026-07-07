@@ -6,10 +6,12 @@ import { skillModal } from '../../dom.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { processCardSkillController } from '../controller/process-card-skill-controller.js';
 import { loadCodexSkills, type CodexSkillSummary } from './load-codex-skills.js';
+import { categoryForSkill, skillCategories, type SkillCategory } from '../helper/skill-category.js';
 
 type SkillModalState = {
   cardId: string;
   query: string;
+  selectedCategory: SkillCategory | 'All';
   selectedSkillName: string;
   codexModel: string;
   codexEffort: string;
@@ -26,6 +28,7 @@ type RenderSkillModalOptions = {
 const skillModalState: SkillModalState = {
   cardId: '',
   query: '',
+  selectedCategory: 'All',
   selectedSkillName: '',
   codexModel: 'gpt-5.5',
   codexEffort: 'high',
@@ -64,15 +67,48 @@ function renderSelect(input: {
 
 function filteredSkills(): CodexSkillSummary[] {
   const query = skillModalState.query.trim().toLowerCase();
-  if (!query) return skillModalState.skills;
   return skillModalState.skills.filter((skill) => {
-    const text = `${skill.name} ${skill.description} ${skill.source}`.toLowerCase();
+    const category = categoryForSkill(skill.name);
+    const categoryMatches = skillModalState.selectedCategory === 'All' || category === skillModalState.selectedCategory;
+    if (!categoryMatches) return false;
+    if (!query) return true;
+    const text = `${skill.name} ${skill.description} ${category}`.toLowerCase();
     return text.includes(query);
   });
 }
 
+function availableCategories(): Array<SkillCategory | 'All'> {
+  const categories = new Set(skillModalState.skills.map((skill) => categoryForSkill(skill.name)));
+  return ['All', ...skillCategories.filter((category) => categories.has(category)), ...(categories.has('Uncategorized') ? ['Uncategorized' as const] : [])];
+}
+
+function renderCategoryFilters(): HTMLDivElement {
+  const filters = document.createElement('div');
+  filters.className = 'skill-category-filters';
+  filters.setAttribute('role', 'group');
+  filters.setAttribute('aria-label', 'Filter skills by category');
+  for (const category of availableCategories()) {
+    const selected = category === skillModalState.selectedCategory;
+    const button = document.createElement('button');
+    button.className = `skill-category-filter${selected ? ' is-selected' : ''}`;
+    button.type = 'button';
+    button.dataset.skillCategory = category;
+    button.setAttribute('aria-pressed', String(selected));
+    button.textContent = category;
+    button.addEventListener('click', () => {
+      const restoreFocus = document.activeElement === button;
+      skillModalState.selectedCategory = category;
+      renderSkillModal();
+      if (restoreFocus) skillModal?.querySelector<HTMLButtonElement>(`.skill-category-filter[data-skill-category="${category}"]`)?.focus();
+    });
+    filters.append(button);
+  }
+  return filters;
+}
+
 function renderSkillRow(skill: CodexSkillSummary): HTMLButtonElement {
   const selected = skill.name === skillModalState.selectedSkillName;
+  const category = categoryForSkill(skill.name);
   const button = document.createElement('button');
   button.className = `skill-result${selected ? ' is-selected' : ''}`;
   button.type = 'button';
@@ -83,13 +119,13 @@ function renderSkillRow(skill: CodexSkillSummary): HTMLButtonElement {
   const title = document.createElement('span');
   title.className = 'skill-result-name';
   title.textContent = skill.name;
-  const source = document.createElement('span');
-  source.className = 'skill-result-source';
-  source.textContent = skill.source;
+  const categoryTag = document.createElement('span');
+  categoryTag.className = 'skill-result-category';
+  categoryTag.textContent = category;
   const description = document.createElement('span');
   description.className = 'skill-result-description';
   description.textContent = skill.description || 'No description.';
-  button.replaceChildren(title, source, description);
+  button.replaceChildren(title, categoryTag, description);
   return button;
 }
 
@@ -111,6 +147,7 @@ function renderSkillModal(options: RenderSkillModalOptions = {}): void {
     renderSkillModal();
     skillModal.querySelector<HTMLInputElement>('.skill-search')?.focus();
   });
+  const categoryFilters = renderCategoryFilters();
 
   const runControls = document.createElement('div');
   runControls.className = 'skill-run-controls';
@@ -182,13 +219,13 @@ function renderSkillModal(options: RenderSkillModalOptions = {}): void {
   actions.append(close);
 
   skillModal.setAttribute('aria-labelledby', 'skill-modal-title');
-  skillModal.replaceChildren(title, search, runControls, results, actions);
+  skillModal.replaceChildren(title, search, categoryFilters, runControls, results, actions);
   if (options.resultsScrollTop !== undefined) results.scrollTop = options.resultsScrollTop;
 }
 
 export async function openCardSkillModal(cardId: string): Promise<void> {
   if (!skillModal || !cardId) return;
-  Object.assign(skillModalState, { cardId, query: '', selectedSkillName: '', skills: [], loading: true, processing: false, error: '' });
+  Object.assign(skillModalState, { cardId, query: '', selectedCategory: 'All', selectedSkillName: '', skills: [], loading: true, processing: false, error: '' });
   renderSkillModal();
   skillModal.showModal?.();
   telemetry('codex-skill-modal-open', { cardId });

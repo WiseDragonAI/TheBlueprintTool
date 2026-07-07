@@ -63,14 +63,41 @@
 
 .skill-search {
   width: 100%;
-  min-height: 36px;
-  margin-bottom: 12px;
+  min-height: 34px;
+  margin-bottom: 10px;
   border: 1px solid var(--line);
   border-radius: 2px;
   background: rgba(4, 6, 9, 0.92);
   color: var(--text);
   padding: 7px 9px;
   font: inherit;
+}
+
+.skill-category-filters {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 12px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.skill-category-filter {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 4px 9px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.skill-category-filter.is-selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent), transparent 86%);
+  color: var(--text);
 }
 
 .skill-search:focus {
@@ -150,7 +177,7 @@
   white-space: nowrap;
 }
 
-.skill-result-source {
+.skill-result-category {
   color: var(--accent);
   font-family: var(--mono);
   font-size: 10px;
