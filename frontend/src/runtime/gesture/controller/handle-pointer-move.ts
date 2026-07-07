@@ -14,6 +14,7 @@ import { resizeSelectedCard } from '../../card/effect/resize-selected-card.js';
 import { resizeSelectedZone } from '../../zone/effect/resize-selected-zone.js';
 import { emitPanPerformanceTelemetry } from '../effect/emit-pan-performance-telemetry.js';
 import { schedulePanningEffects } from '../effect/schedule-panning-effects.js';
+import { isClickMovement, pointerDistancePx } from '../helper/click-movement.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export function handlePointerMove(event: PointerEvent): void {
@@ -23,6 +24,8 @@ export function handlePointerMove(event: PointerEvent): void {
   const dx = pointer.x - state.pointer.current.x;
   const dy = pointer.y - state.pointer.current.y;
   const isPan = state.pointer.intent === 'pan';
+  const isGeometryGesture = state.pointer.intent === 'drag' || state.pointer.intent === 'group' || state.pointer.intent === 'resize';
+  if (isGeometryGesture && isClickMovement(pointerDistancePx(state.pointer.start, pointer))) return;
   const canvasPointer = isPan ? state.pointer.currentCanvas : canvasPoint(pointer);
   const canvasDx = isPan ? 0 : canvasPointer.x - state.pointer.currentCanvas.x;
   const canvasDy = isPan ? 0 : canvasPointer.y - state.pointer.currentCanvas.y;

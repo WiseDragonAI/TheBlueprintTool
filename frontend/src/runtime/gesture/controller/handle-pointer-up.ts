@@ -18,6 +18,7 @@ import { selectTarget } from '../../selection/controller/select-target.js';
 import { moveSelected } from '../../selection/effect/move-selected.js';
 import { resizeSelectedCard } from '../../card/effect/resize-selected-card.js';
 import { resizeSelectedZone } from '../../zone/effect/resize-selected-zone.js';
+import { isClickMovement, pointerDistancePx } from '../helper/click-movement.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export async function handlePointerUp(event: PointerEvent): Promise<void> {
@@ -28,13 +29,13 @@ export async function handlePointerUp(event: PointerEvent): Promise<void> {
   telemetry('canvas-pointer-up', { intent: pointerIntent });
   const releasePoint = point(event);
   const releaseCanvas = canvasPoint(releasePoint);
-  const moved = Math.hypot(releasePoint.x - pointerSession.start.x, releasePoint.y - pointerSession.start.y);
+  const moved = pointerDistancePx(pointerSession.start, releasePoint);
   const isForcedPan = Boolean(pointerSession.forcedPan || pointerSession.ctrlPan);
-  if (!isForcedPan && pointerIntent === 'pan' && pointerSession.targetKind === 'zone' && moved < 4) {
+  if (!isForcedPan && pointerIntent === 'pan' && pointerSession.targetKind === 'zone' && isClickMovement(moved)) {
     selectTarget('zone', pointerSession.targetId, false);
     telemetry('resolve-selection-target', { kind: 'zone', id: pointerSession.targetId, clickSelect: true });
   }
-  if (!isForcedPan && pointerIntent === 'pan' && pointerSession.targetKind === 'group' && moved < 4) {
+  if (!isForcedPan && pointerIntent === 'pan' && pointerSession.targetKind === 'group' && isClickMovement(moved)) {
     selectTarget('group', pointerSession.targetId, false);
     telemetry('resolve-selection-target', { kind: 'group', id: pointerSession.targetId, clickSelect: true });
   }
@@ -61,6 +62,11 @@ export async function handlePointerUp(event: PointerEvent): Promise<void> {
     (document.querySelector('.marquee') as HTMLElement).hidden = true;
     finishPointer(event);
     await createGroupController(rect);
+  }
+  if ((pointerIntent === 'drag' || pointerIntent === 'group' || pointerIntent === 'resize') && isClickMovement(moved)) {
+    finishPointer(event);
+    persistState();
+    return;
   }
   if (pointerIntent === 'drag' || pointerIntent === 'group' || pointerIntent === 'resize') {
     const canvasDx = releaseCanvas.x - pointerSession.currentCanvas.x;

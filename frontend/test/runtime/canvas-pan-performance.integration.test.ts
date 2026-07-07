@@ -131,6 +131,7 @@ test('plain pan pointer up does not force a full canvas rerender', () => {
   const pointerUp = source('frontend/src/runtime/gesture/controller/handle-pointer-up.ts');
   assert.match(pointerUp, /const pointerIntent = pointerSession\.intent/);
   assert.match(pointerUp, /if \(pointerIntent !== 'pan'\) renderCanvasSurface\(\)/);
+  assert.match(pointerUp, /isClickMovement\(moved\)/);
 });
 
 test('wheel zoom stays transform-only and does not reroute relationships', () => {
