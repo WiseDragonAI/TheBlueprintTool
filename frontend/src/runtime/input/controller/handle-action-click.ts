@@ -96,7 +96,7 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     return;
   }
   if (action === 'jump-thread-bottom') {
-    pinThreadFeedToLastMessage({ behavior: 'smooth' });
+    pinThreadFeedToLastMessage();
     return;
   }
   if (action === 'voice-cancel') cancelVoiceRecording();
