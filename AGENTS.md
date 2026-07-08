@@ -15,6 +15,14 @@
 - **Don't.** `Good PRDs do not exist to create paperwork. They align teams around the customer problem, goals, requirements, risks, constraints, dependencies, and success measures before execution.`
 - **Do.** `PRD purpose: capture the requested decision, user need, current technical context, current UX context, constraints, evidence, risks, options, recommendation, acceptance criteria, and next operator gate.`
 
+### Formatting Contract
+
+1. **Headings:** use `H2` card sections with uppercase letters: `## A. Scope`, `## B. Contract`, `## C. Acceptance Criteria`.
+2. **Dividers:** put `---` between card sections.
+3. **Lists:** write section content as numbered list items: `1.`, `2.`, `3.`.
+4. **Bold:** use **bold** for the important words that carry the point.
+5. **Backticks:** use `backticks` for technical, secondary, exact, or literal terms: file paths, routes, config keys, commands, IDs, statuses, branch names, code symbols, and literal values.
+
 ## decision-os Server Procedure
 
 decision-os serves the active `.decision-os` workspace by resolving the workspace root from the process
