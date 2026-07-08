@@ -14,7 +14,7 @@ import { applyViewportTransform } from './apply-viewport-transform.js';
 import { renderCanvasControlOverlay } from './render-canvas-control-overlay.js';
 import { renderLedgersIndicator } from './render-ledgers-indicator.js';
 
-export function renderCanvasSurface(): void {
+export function renderCanvasSurface(options: { renderThreadPanel?: boolean } = {}): void {
   canvas.classList.toggle('ledgers-canvas-mode', state.canvasMode === 'ledgers');
   renderLedgerSurface();
   applyViewportTransform();
@@ -27,6 +27,6 @@ export function renderCanvasSurface(): void {
   renderLedgersIndicator();
   telemetry('render-canvas-surface', { viewport: state.viewport, selection: state.selection });
   renderTelemetry();
-  renderThreadPanel();
+  if (options.renderThreadPanel !== false) renderThreadPanel();
   renderCanvasDebugOverlay('surface');
 }

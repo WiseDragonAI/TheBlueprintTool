@@ -26,6 +26,7 @@ export async function handlePointerUp(event: PointerEvent): Promise<void> {
   event.preventDefault();
   const pointerSession = state.pointer;
   const pointerIntent = pointerSession.intent;
+  let releaseRendered = false;
   telemetry('canvas-pointer-up', { intent: pointerIntent });
   const releasePoint = point(event);
   const releaseCanvas = canvasPoint(releasePoint);
@@ -79,9 +80,9 @@ export async function handlePointerUp(event: PointerEvent): Promise<void> {
       }
     }
     finishPointer(event);
-    await commitSelectedLedgerGeometry();
+    releaseRendered = await commitSelectedLedgerGeometry();
   }
   if (pointerIntent === 'pan' || pointerIntent === 'marquee') finishPointer(event);
   persistState();
-  if (pointerIntent !== 'pan') renderCanvasSurface();
+  if (pointerIntent !== 'pan' && !releaseRendered) renderCanvasSurface();
 }

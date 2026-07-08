@@ -33,7 +33,7 @@ export function bootSurface(): void {
   bindInputs();
   subscribeLedgerContentEvents();
   renderTabRegistry();
-  void loadDecisionOsState().then(loadActiveLedgerState).then(renderCanvasSurface);
+  void loadDecisionOsState().then(loadActiveLedgerState).then(() => renderCanvasSurface());
   renderCanvasSurface();
   renderThreadPanel();
 }

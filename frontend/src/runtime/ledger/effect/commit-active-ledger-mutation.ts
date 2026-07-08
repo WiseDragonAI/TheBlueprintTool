@@ -74,6 +74,6 @@ export async function commitActiveLedgerMutation(mutation: ActiveLedgerMutation,
   state.activeLedger = mergeLocalThreadNotes(ledger);
   refreshZoneAttributionCache(`server-ledger-mutation:${mutation.action}`);
   telemetry('load-ledger-state', { activeTab: state.activeTab, source: 'server-ledger-mutation', action: mutation.action });
-  if (options.render) renderCanvasSurface();
+  if (options.render) renderCanvasSurface({ renderThreadPanel: mutation.action !== 'patch-geometry' });
   return true;
 }

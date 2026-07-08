@@ -12,6 +12,51 @@ type ThreadImageSizes = Record<string, { width?: number; height?: number }>;
 
 const pendingThreadImageSizeTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+function hashText(value: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function noteText(note: Record<string, unknown>): string {
+  return String(note.message ?? note.body ?? '');
+}
+
+function imageSizeSignature(note: Record<string, unknown>): string {
+  const sizes = threadImageSizes(note.imageSizes);
+  const entries = Object.entries(sizes).sort(([left], [right]) => left.localeCompare(right));
+  return entries.map(([source, dimensions]) => `${source}:${dimensions.width ?? ''}x${dimensions.height ?? ''}`).join(',');
+}
+
+function threadNotesSignature(threadId: string, notes: Array<Record<string, unknown>>): string {
+  const parts = [threadId, String(notes.length)];
+  for (const note of notes) {
+    const text = noteText(note);
+    parts.push([
+      String(note.id ?? ''),
+      String(note.role ?? 'operator'),
+      String(note.status ?? ''),
+      String(note.voiceFileRef ?? ''),
+      String(note.transcriptionStartedAt ?? ''),
+      String(note.optimistic ?? ''),
+      codexNoteClass(note),
+      imageSizeSignature(note),
+      String(text.length),
+      hashText(text)
+    ].join(':'));
+  }
+  return hashText(parts.join('|'));
+}
+
+function noteListDataset(list: HTMLElement): DOMStringMap {
+  const element = list as HTMLElement & { dataset?: DOMStringMap };
+  if (!element.dataset) element.dataset = {} as DOMStringMap;
+  return element.dataset;
+}
+
 function codexNoteClass(note: Record<string, unknown>): string {
   const kind = String(note.codexKind ?? '').replace(/[^a-z0-9_-]+/gi, '-').toLowerCase();
   return kind ? `is-codex-run-event is-codex-${kind}` : '';
@@ -61,9 +106,16 @@ export function renderThreadNotes(): void {
   if (!existing) feed?.append(list);
   const deletedIds = state.threadId && state.activeLedger ? deletedNoteIdSet(state.activeLedger, state.threadId) : new Set<string>();
   const notes = state.threadId ? (state.activeLedger?.notes?.[state.threadId] ?? []).filter((note: Record<string, unknown>) => !deletedIds.has(String(note.id ?? ''))) : [];
-  list.replaceChildren();
   for (const note of notes) {
     if (!expireStaleVoiceTranscription(note)) scheduleVoiceTranscriptionTimeout({ threadId: state.threadId, note });
+  }
+  const signature = threadNotesSignature(String(state.threadId ?? ''), notes);
+  const dataset = noteListDataset(list);
+  if (existing && dataset.threadId === String(state.threadId ?? '') && dataset.notesSignature === signature) return;
+  dataset.threadId = String(state.threadId ?? '');
+  dataset.notesSignature = signature;
+  list.replaceChildren();
+  for (const note of notes) {
     const status = String(note.status ?? '');
     const role = String(note.role ?? 'operator').toLowerCase();
     const agentOwned = role === 'agent' || role === 'assistant';
@@ -73,7 +125,7 @@ export function renderThreadNotes(): void {
     const retryable = Boolean(note.voiceFileRef) && /failed|not configured|unavailable/.test(normalizedStatus);
     const item = document.createElement('li');
     item.className = ['thread-note', note.voiceFileRef ? 'voice-note' : '', note.optimistic ? 'is-optimistic' : '', busy ? 'is-busy' : '', retryable ? 'is-retryable' : '', codexNoteClass(note), agentOwned ? 'is-agent' : 'is-operator'].filter(Boolean).join(' ');
-    const body = renderLedgerCardMarkdown(String(note.message ?? note.body ?? ''), {
+    const body = renderLedgerCardMarkdown(noteText(note), {
       imageSizes: threadImageSizes(note.imageSizes),
       mediaSurface: 'thread',
       onImageResize: (source, dimensions) => {

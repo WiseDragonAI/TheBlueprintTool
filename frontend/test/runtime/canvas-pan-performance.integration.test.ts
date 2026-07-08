@@ -130,7 +130,9 @@ test('direct canvas pointer down clears selection before pointer up', () => {
 test('plain pan pointer up does not force a full canvas rerender', () => {
   const pointerUp = source('frontend/src/runtime/gesture/controller/handle-pointer-up.ts');
   assert.match(pointerUp, /const pointerIntent = pointerSession\.intent/);
-  assert.match(pointerUp, /if \(pointerIntent !== 'pan'\) renderCanvasSurface\(\)/);
+  assert.match(pointerUp, /let releaseRendered = false/);
+  assert.match(pointerUp, /releaseRendered = await commitSelectedLedgerGeometry\(\)/);
+  assert.match(pointerUp, /if \(pointerIntent !== 'pan' && !releaseRendered\) renderCanvasSurface\(\)/);
   assert.match(pointerUp, /isClickMovement\(moved\)/);
 });
 
@@ -199,6 +201,8 @@ test('canvas debug overlay is URL-param gated and reports zoom density state', (
   assert.match(viewport, /renderCanvasDebugOverlay\(settled \? 'viewport-settled' : 'viewport-frame'\)/);
   assert.match(pan, /renderCanvasDebugOverlay\('pan'\)/);
   assert.match(surface, /renderCanvasDebugOverlay\('surface'\)/);
+  assert.match(surface, /options: \{ renderThreadPanel\?: boolean \} = \{\}/);
+  assert.match(surface, /if \(options\.renderThreadPanel !== false\) renderThreadPanel\(\)/);
   assert.match(debugCss, /\.canvas-debug-overlay\s*{[^}]*position:\s*fixed;[^}]*z-index:\s*10000;/s);
   assert.match(debugCss, /\.canvas-debug-overlay table\s*{[^}]*border-collapse:\s*collapse;/s);
 });
