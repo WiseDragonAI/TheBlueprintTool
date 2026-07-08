@@ -42,6 +42,7 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   assert.match(shellCss, /-34px 0 68px rgba\(0, 0, 0, 0\.86\)/);
   assert.match(threadCss, /voice-panel[\s\S]*--thread-accent/);
   assert.match(threadCss, /thread-panel \.chat[\s\S]*padding: 18px 20px 28px/);
+  assert.match(threadCss, /thread-chat-shell\s*{[\s\S]*position: relative;[\s\S]*overflow: hidden;/);
   assert.match(threadCss, /thread-note-list[\s\S]*padding: 0 62px 42px 0/);
   assert.match(threadCss, /thread-note p,[\s\S]*font-size: 14px/);
   assert.match(threadCss, /thread-note\.is-operator[\s\S]*border-left: 2px solid color-mix\(in srgb, var\(--thread-accent\)/);
@@ -51,7 +52,7 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   assert.match(threadCss, /thread-note-message \.ledger-card-heading[\s\S]*--thread-heading-color/);
   assert.match(threadCss, /thread-note-message \.ledger-card-hr[\s\S]*border-top-color: rgba\(255, 255, 255, 0\.18\)/);
   assert.match(threadCss, /thread-feed\s*{[\s\S]*min-width: 0;[\s\S]*min-height: 0;/);
-  assert.match(threadCss, /thread-jump-bottom-frame\s*{[\s\S]*position: sticky;[\s\S]*bottom: 16px;[\s\S]*width: 100%;[\s\S]*max-width: 100%;/);
+  assert.match(threadCss, /thread-jump-bottom-frame\s*{[\s\S]*position: absolute;[\s\S]*right: 18px;[\s\S]*bottom: 16px;/);
   assert.match(threadCss, /thread-jump-bottom\s*{[\s\S]*width: 34px;[\s\S]*height: 34px;/);
   assert.match(threadCss, /thread-jump-bottom:hover\s*{[\s\S]*transform: translateY\(-1px\)/);
   assert.match(threadCss, /thread-jump-bottom:focus-visible\s*{[\s\S]*outline: 1px solid/);

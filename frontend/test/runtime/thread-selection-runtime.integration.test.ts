@@ -277,19 +277,20 @@ test('render-thread-jump-button shows only when the thread viewport is away from
   let frame: TestElement | null = null;
   let button: TestElement | null = null;
   let scrollHandler: EventListener | null = null;
+  const shell = {
+    children: [] as TestElement[],
+    append(child: TestElement) {
+      this.children.push(child);
+      if (child.className === 'thread-jump-bottom-frame') frame = child;
+    }
+  };
   const chat = {
     scrollTop: 0,
     scrollHeight: 900,
     clientHeight: 300,
     children: [] as TestElement[],
-    querySelector(selector: string) {
-      if (selector === '.thread-jump-bottom-frame') return frame;
-      if (selector === '.thread-jump-bottom') return button;
-      return null;
-    },
     append(child: TestElement) {
       this.children.push(child);
-      if (child.className === 'thread-jump-bottom-frame') frame = child;
     },
     addEventListener(type: string, handler: EventListener) {
       if (type === 'scroll') scrollHandler = handler;
@@ -298,6 +299,9 @@ test('render-thread-jump-button shows only when the thread viewport is away from
   (globalThis as unknown as { document: unknown }).document = {
     querySelector(selector: string) {
       if (selector === '.thread-panel .chat') return chat;
+      if (selector === '.thread-panel .thread-chat-shell') return shell;
+      if (selector === '.thread-panel .thread-jump-bottom-frame') return frame;
+      if (selector === '.thread-panel .thread-jump-bottom') return button;
       return null;
     },
     createElement(tagName: string) {
@@ -318,6 +322,8 @@ test('render-thread-jump-button shows only when the thread viewport is away from
   };
   try {
     renderThreadJumpButton();
+    assert.equal(shell.children[0], frame);
+    assert.equal(chat.children.length, 0);
     assert.equal(button?.dataset.action, 'jump-thread-bottom');
     assert.equal(button?.attributes['aria-label'], 'Jump to bottom');
     assert.equal(button?.children[0].className, 'thread-jump-bottom-chevron');
