@@ -500,6 +500,69 @@ test('render-thread-notes separates operator and agent speaker ownership', () =>
   }
 });
 
+test('render-thread-notes summarizes codex tool calls without showing output by default', () => {
+  const previousDocument = globalThis.document;
+  const rendered: TestElement[] = [];
+  const list = {
+    className: '',
+    replaceChildren() {
+      rendered.length = 0;
+    },
+    append(item: TestElement) {
+      rendered.push(item);
+    }
+  };
+  (globalThis as unknown as { document: unknown }).document = {
+    querySelector(selector: string) {
+      if (selector === '.thread-note-list') return list;
+      return null;
+    },
+    createElement(tagName: string) {
+      return createTestElement('', tagName);
+    },
+    createTextNode(text: string) {
+      return createTestElement(text);
+    }
+  };
+  try {
+    const command = `/usr/bin/zsh -lc "sed -n '1,220p' /home/jbb/.codex/skills/screen-content-planner/SKILL.md"`;
+    state.threadId = 'thread-card-a';
+    state.activeLedger = {
+      notes: {
+        'thread-card-a': [{
+          id: 'codex-run-line-9',
+          role: 'agent',
+          message: `**Tool call** \`${command}\`\nStatus: completed\nExit code: 0\n\n\`\`\`text\nvery long output\n\`\`\``,
+          status: 'completed',
+          codexKind: 'tool_call',
+          codexTool: command,
+          codexExitCode: '0'
+        }]
+      }
+    };
+    renderThreadNotes();
+    assert.equal(rendered.length, 1);
+    assert.equal(rendered[0].className, 'thread-note is-codex-run-event is-codex-tool_call is-agent');
+    const details = rendered[0].children[0];
+    assert.equal(details.tagName, 'details');
+    assert.equal(details.className, 'codex-tool-call');
+    assert.equal(details.dataset.codexToolAction, 'read');
+    const summary = details.children[0];
+    assert.equal(summary.tagName, 'summary');
+    assert.equal(summary.className, 'codex-tool-call-summary');
+    assert.equal(summary.children[0].textContent, 'Read');
+    assert.match(summary.children[1].textContent, /^sed -n/);
+    assert.equal(summary.children[2].textContent, 'completed / code 0');
+    const rawBody = details.children[1];
+    assert.equal(rawBody.className, 'ledger-card-body thread-note-message codex-tool-call-details');
+    assert.equal(rawBody.children.some((child) => child.className === 'ledger-card-code-block'), true);
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+    state.threadId = '';
+    state.activeLedger = null;
+  }
+});
+
 test('render-thread-notes renders escaped newline agent answers as markdown blocks', () => {
   const previousDocument = globalThis.document;
   const rendered: TestElement[] = [];
