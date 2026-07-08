@@ -222,6 +222,7 @@ function cardReferencesRun(input: { ledger: AnyRecord; decisionOsRoot: string; c
   const hydrated = hydrateLedgerCardContent(JSON.parse(JSON.stringify(input.ledger)), input.decisionOsRoot) as { cards?: AnyRecord[] };
   const card = (hydrated.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
   if (!card) return false;
+  if (String(card.codexThreadRunId ?? '') === input.runId || String(card.codexRunId ?? '') === input.runId) return true;
   if (String(card.cardType ?? '') === 'codex-skill-run' && input.cardId === `card-${safeSegment(input.runId)}`) return true;
   const comment = card?.comment && typeof card.comment === 'object' ? card.comment as AnyRecord : {};
   const body = String(comment.what ?? comment.body ?? comment.description ?? '');

@@ -32,6 +32,7 @@ import { enterLedgersCanvasController } from '../../navigation/controller/enter-
 import { applyRailCollapsedState } from '../../toolbox/effect/apply-rail-collapsed-state.js';
 import { persistState } from '../../persistence/effect/persist-state.js';
 import { closeCardSkillModal, openCardSkillModal, processSelectedCardSkill, selectCardSkill } from '../../codex/effect/render-skill-modal.js';
+import { processThreadCodexController } from '../../codex/controller/process-thread-codex-controller.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 function toggleRail(button: HTMLElement): void {
@@ -118,6 +119,16 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
   }
   if (action === 'open-card-skill-modal') {
     await openCardSkillModal(actionTarget.dataset.cardId ?? '');
+    return;
+  }
+  if (action === 'process-thread-codex') {
+    const button = actionTarget as HTMLButtonElement;
+    button.disabled = true;
+    const ok = await processThreadCodexController({
+      threadId: actionTarget.dataset.threadId ?? state.threadId,
+      cardId: actionTarget.dataset.cardId ?? ''
+    });
+    if (!ok && button.isConnected) button.disabled = false;
     return;
   }
   if (action === 'select-card-skill') {

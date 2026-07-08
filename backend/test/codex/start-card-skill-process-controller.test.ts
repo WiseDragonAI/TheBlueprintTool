@@ -109,6 +109,109 @@ test('card skill process route creates a linked output card and launches codex',
   }
 });
 
+test('thread codex process route anchors the run widget on the source card and scopes the prompt', async () => {
+  const originalCwd = process.cwd();
+  const previousCodexBin = process.env.CODEX_BIN;
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-thread-codex-'));
+  const fakeCodex = join(workspace, 'fake-codex-thread.mjs');
+  const inputFile = join(workspace, 'thread-input.txt');
+  mkdirSync(join(workspace, '.decision-os'), { recursive: true });
+  writeFileSync(join(workspace, '.decision-os', 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }]
+  }, null, 2));
+  writeFileSync(join(workspace, '.decision-os', 'specs.json'), JSON.stringify({
+    cards: [{
+      id: 'card-a',
+      title: 'Thread Card',
+      x: 100,
+      y: 120,
+      w: 320,
+      h: 180,
+      comment: { what: 'Existing card body' },
+      facts: [],
+      fields: []
+    }],
+    annotations: [],
+    relationships: [],
+    notes: {
+      'thread-card-a': [{ id: 'note-operator-1', role: 'operator', message: 'Please update this exact card from the thread.', timestamp: '2026-07-08T01:00:00.000Z' }]
+    }
+  }, null, 2));
+  writeFileSync(fakeCodex, [
+    '#!/usr/bin/env node',
+    'import { writeFileSync } from "node:fs";',
+    'let input = "";',
+    'process.stdin.on("data", (chunk) => { input += chunk; });',
+    'process.stdin.on("end", () => {',
+    `  writeFileSync(${JSON.stringify(inputFile)}, input);`,
+    '  const match = input.match(/Run summary file: (.+)/);',
+    '  if (!match) process.exit(2);',
+    '  writeFileSync(match[1].trim(), "# Fake Thread Run\\n\\nscoped\\n");',
+    '  console.log(JSON.stringify({ type: "thread.started", thread_id: "session-thread-a" }));',
+    '  console.log(JSON.stringify({ type: "turn.completed" }));',
+    '});',
+  ].join('\n'));
+  chmodSync(fakeCodex, 0o755);
+
+  process.chdir(workspace);
+  process.env.CODEX_BIN = fakeCodex;
+  const runtime: Record<string, unknown> = {};
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const address = server.address() as AddressInfo;
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/threads/process`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ledgerId: 'specs', threadId: 'thread-card-a', cardId: 'card-a', codexModel: 'gpt-5.4', codexEffort: 'medium' })
+    });
+    assert.equal(response.status, 202);
+    const body = await response.json() as { ok: boolean; run: { id: string; outputCardId: string; sourceThreadId: string; outputFile: string; codexModel: string; codexEffort: string } };
+    assert.equal(body.ok, true);
+    assert.equal(body.run.outputCardId, 'card-a');
+    assert.equal(body.run.sourceThreadId, 'thread-card-a');
+    assert.equal(body.run.codexModel, 'gpt-5.4');
+    assert.equal(body.run.codexEffort, 'medium');
+
+    await waitForText(inputFile, 'You are treating one decision-os thread, not scanning all open notes.');
+    const input = readFileSync(inputFile, 'utf8');
+    assert.match(input, /Card markdown file: .*\.decision-os\/cards\/specs\/card-a\.md/);
+    assert.match(input, /Thread markdown file: .*\.decision-os\/threads\/specs\/thread-card-a\.md/);
+    assert.match(input, /Please update this exact card from the thread\./);
+    assert.match(input, /Existing card body/);
+    assert.match(input, /Do not query or treat unrelated open notes\./);
+    assert.doesNotMatch(input, /ledger-cli unanswered|Query Open Notes|For every pending operator note/);
+
+    const ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as {
+      cards: Array<{ id: string; codexThreadRunId?: string; codexThreadRunOutputFile?: string; comment?: { contentFile?: string } }>;
+      threadFiles: Record<string, string>;
+    };
+    const card = ledger.cards.find((entry) => entry.id === 'card-a');
+    assert.equal(ledger.cards.length, 1);
+    assert.equal(card?.codexThreadRunId, body.run.id);
+    assert.equal(card?.codexThreadRunOutputFile?.includes(body.run.id), true);
+    assert.equal(card?.comment?.contentFile, '.decision-os/cards/specs/card-a.md');
+    assert.equal(ledger.threadFiles['thread-card-a'], '.decision-os/threads/specs/thread-card-a.md');
+
+    await waitForText(body.run.outputFile, 'scoped');
+    await waitForText(body.run.outputFile, 'Codex run completed');
+    const statusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${body.run.id}?ledgerId=specs&cardId=card-a&since=0`);
+    assert.equal(statusResponse.status, 200);
+    const status = await statusResponse.json() as { ok: boolean; status: string };
+    assert.equal(status.ok, true);
+    assert.equal(status.status, 'complete');
+    await waitForText(join(workspace, '.decision-os', 'threads', 'specs', 'thread-card-a.md'), `codex-${body.run.id}-line-2`);
+  } finally {
+    server.close();
+    process.chdir(originalCwd);
+    if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
+    else process.env.CODEX_BIN = previousCodexBin;
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
 test('card skill run cancel route terminates the active codex process', async () => {
   const originalCwd = process.cwd();
   const previousCodexBin = process.env.CODEX_BIN;

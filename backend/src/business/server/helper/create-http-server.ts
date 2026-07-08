@@ -24,6 +24,7 @@ import { readCanonicalDecisionOsState } from '../../ledger/helper/read-canonical
 import { renameLinkedLedger } from '../../ledger/helper/rename-linked-ledger.js';
 import { scanCodexSkills } from '../../codex/helper/scan-codex-skills.js';
 import { startCardSkillProcessController } from '../../codex/controller/start-card-skill-process-controller.js';
+import { startThreadCodexProcessController } from '../../codex/controller/start-thread-codex-process-controller.js';
 import { readCardSkillRunController } from '../../codex/controller/read-card-skill-run-controller.js';
 import { cancelCardSkillRunController } from '../../codex/controller/cancel-card-skill-run-controller.js';
 import { continueCardSkillRunController } from '../../codex/controller/continue-card-skill-run-controller.js';
@@ -212,6 +213,24 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         }
       })();
       const result = await startCardSkillProcessController({
+        action_payload: { ...processPayload, onLedgerChange: publishLedgerContentChange },
+        runtime_state: runtime
+      });
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));
+      response.end(JSON.stringify(result));
+      return;
+    }
+    if (url === '/api/codex/threads/process' && request.method === 'POST') {
+      const bodyBuffer = await readRequestBuffer(request);
+      const processPayload = (() => {
+        try {
+          return JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
+        } catch {
+          return {};
+        }
+      })();
+      const result = await startThreadCodexProcessController({
         action_payload: { ...processPayload, onLedgerChange: publishLedgerContentChange },
         runtime_state: runtime
       });

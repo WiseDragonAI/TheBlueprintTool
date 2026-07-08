@@ -9,6 +9,37 @@ import { restoreThreadDraft } from './persist-thread-draft.js';
 import { restoreThreadScrollPosition, saveThreadScrollPosition } from './persist-thread-scroll.js';
 import { resolveThreadTargetTitle } from '../helper/resolve-thread-target-title.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { threadCodexCardId } from '../../codex/helper/thread-codex-card-id.js';
+
+function renderThreadActions(threadId: string): void {
+  const heading = document.querySelector('.thread-heading') as HTMLElement | null;
+  if (!heading) return;
+  let actions = heading.querySelector('.thread-actions') as HTMLElement | null;
+  if (!actions) {
+    actions = document.createElement('div');
+    actions.className = 'thread-actions';
+    heading.append(actions);
+  }
+  actions.replaceChildren();
+  const cardId = threadCodexCardId(state.activeLedger, threadId);
+  if (!cardId) return;
+  const button = document.createElement('button');
+  button.className = 'thread-codex-button terminal-button terminal-button--compact';
+  button.type = 'button';
+  button.dataset.action = 'process-thread-codex';
+  button.dataset.threadId = threadId;
+  button.dataset.cardId = cardId;
+  button.title = 'Start Codex from this thread';
+  button.setAttribute('aria-label', button.title);
+  const key = document.createElement('span');
+  key.className = 'terminal-button__key';
+  key.textContent = '>';
+  const label = document.createElement('span');
+  label.className = 'terminal-button__label';
+  label.textContent = 'Codex';
+  button.replaceChildren(key, label);
+  actions.append(button);
+}
 
 export function renderThreadPanel(): void {
   const panel = document.querySelector('.thread-panel') as HTMLElement;
@@ -36,6 +67,7 @@ export function renderThreadPanel(): void {
   } else {
     target.textContent = 'No thread selected';
   }
+  renderThreadActions(activeThreadId);
   applyThreadAccent();
   telemetry('render-thread-panel', { threadId: state.threadId });
   renderThreadNotes();

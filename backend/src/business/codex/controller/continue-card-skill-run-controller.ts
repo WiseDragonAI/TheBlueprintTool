@@ -111,6 +111,7 @@ function cardReferencesRun(input: { ledger: AnyRecord; decisionOsRoot: string; c
   const hydrated = hydrateLedgerCardContent(JSON.parse(JSON.stringify(input.ledger)), input.decisionOsRoot) as { cards?: AnyRecord[] };
   const card = (hydrated.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
   if (!card) return false;
+  if (String(card.codexThreadRunId ?? '') === input.runId || String(card.codexRunId ?? '') === input.runId) return true;
   if (String(card.cardType ?? '') === 'codex-skill-run' && input.cardId === `card-${safeSegment(input.runId)}`) return true;
   const comment = card?.comment && typeof card.comment === 'object' ? card.comment as AnyRecord : {};
   const body = String(comment.what ?? comment.body ?? comment.description ?? '');
@@ -120,6 +121,12 @@ function cardReferencesRun(input: { ledger: AnyRecord; decisionOsRoot: string; c
 function outputFileForRunCard(input: { ledger: AnyRecord; decisionOsRoot: string; cardId: string }): string {
   const cards = Array.isArray(input.ledger.cards) ? input.ledger.cards as AnyRecord[] : [];
   const card = cards.find((entry) => String(entry.id ?? '') === input.cardId);
+  const runOutputFile = String(card?.codexThreadRunOutputFile ?? card?.codexRunOutputFile ?? '').trim();
+  if (runOutputFile) {
+    const relativePath = runOutputFile.replace(/^\.decision-os\//, '');
+    const file = resolve(input.decisionOsRoot, relativePath);
+    if (isInside(input.decisionOsRoot, file)) return file;
+  }
   const comment = card?.comment && typeof card.comment === 'object' ? card.comment as AnyRecord : {};
   return resolveCardContentFile(input.decisionOsRoot, comment.contentFile) ?? '';
 }

@@ -5,7 +5,9 @@ import { requestCardSkillProcess } from '../../src/runtime/codex/effect/request-
 import { requestCardSkillRunCancel } from '../../src/runtime/codex/effect/request-card-skill-run-cancel.js';
 import { requestCardSkillRunContinue } from '../../src/runtime/codex/effect/request-card-skill-run-continue.js';
 import { requestCardSkillRunStatus } from '../../src/runtime/codex/effect/request-card-skill-run-status.js';
+import { requestThreadCodexProcess } from '../../src/runtime/codex/effect/request-thread-codex-process.js';
 import { cardCodexRunId } from '../../src/runtime/codex/helper/card-codex-run-id.js';
+import { threadCodexCardId } from '../../src/runtime/codex/helper/thread-codex-card-id.js';
 
 test('loadCodexSkills returns server skill summaries', async () => {
   const previousFetch = globalThis.fetch;
@@ -52,6 +54,42 @@ test('requestCardSkillProcess posts active card skill payload', async () => {
   } finally {
     globalThis.fetch = previousFetch;
   }
+});
+
+test('requestThreadCodexProcess posts active thread payload', async () => {
+  const previousFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      assert.equal(url, '/api/codex/threads/process');
+      assert.equal(init?.method, 'POST');
+      const headers = init?.headers as Record<string, string>;
+      assert.equal(headers['content-type'], 'application/json');
+      assert.deepEqual(JSON.parse(String(init?.body ?? '{}')), {
+        ledgerId: 'specs',
+        threadId: 'thread-card-a',
+        cardId: 'card-a',
+        codexModel: 'gpt-5.5',
+        codexEffort: 'high'
+      });
+      return new Response(JSON.stringify({ ok: true, run: { id: 'codex-skill-1000-abcd', outputCardId: 'card-a' } }), {
+        status: 202,
+        headers: { 'content-type': 'application/json' }
+      });
+    }) as typeof fetch;
+
+    const result = await requestThreadCodexProcess({ ledgerId: 'specs', threadId: 'thread-card-a', cardId: 'card-a', codexModel: 'gpt-5.5', codexEffort: 'high' });
+    assert.equal(result.ok, true);
+    assert.equal(result.run?.outputCardId, 'card-a');
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('threadCodexCardId only resolves card-backed threads', () => {
+  const ledger = { cards: [{ id: 'card-a' }] };
+  assert.equal(threadCodexCardId(ledger, 'thread-card-a'), 'card-a');
+  assert.equal(threadCodexCardId(ledger, 'thread-zone-a'), '');
+  assert.equal(threadCodexCardId(null, 'thread-card-a'), '');
 });
 
 test('requestCardSkillRunStatus queries derived run progress', async () => {
@@ -138,6 +176,10 @@ test('requestCardSkillRunContinue posts terminal card run continuation', async (
 });
 
 test('cardCodexRunId falls back to the durable output card id', () => {
+  assert.equal(cardCodexRunId({
+    id: 'card-a',
+    codexThreadRunId: 'codex-skill-9999-thread'
+  }), 'codex-skill-9999-thread');
   assert.equal(cardCodexRunId({
     id: 'card-codex-skill-1000-abcd',
     comment: { what: '# Finished result without run metadata' }

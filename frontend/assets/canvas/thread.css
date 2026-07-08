@@ -33,6 +33,20 @@
   gap: 16px;
 }
 
+.thread-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.thread-codex-button {
+  --terminal-button-background: linear-gradient(165deg, #18222d 0%, #121920 54%, #0c1117 100%);
+  --terminal-button-color: color-mix(in srgb, var(--thread-accent), white 52%);
+  --terminal-button-gradient-shadow: linear-gradient(90deg, color-mix(in srgb, var(--thread-accent), transparent 30%), rgba(87, 189, 255, 0.2));
+  flex: 0 0 auto;
+}
+
 .thread-heading .kicker {
   margin: 0;
 }
