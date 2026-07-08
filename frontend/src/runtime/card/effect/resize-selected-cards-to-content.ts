@@ -13,6 +13,10 @@ export type ResizeToContentGeometry = {
   cards: ResizedCardGeometry;
   zones: ResizedCardGeometry;
 };
+export type ResizeToContentTarget = {
+  cardIds?: string[];
+  zoneIds?: string[];
+};
 
 const zoneFitPadding = 96;
 
@@ -45,8 +49,12 @@ export function resizeZoneGeometryToContainedCards(cards: BoxGeometry[], options
   };
 }
 
-function selectedCardElements(): HTMLElement[] {
-  return Array.from(new Set(state.selection.cardIds))
+function targetIds(explicitIds: string[] | undefined, fallbackIds: string[]): string[] {
+  return Array.isArray(explicitIds) ? explicitIds : fallbackIds;
+}
+
+function selectedCardElements(target: ResizeToContentTarget = {}): HTMLElement[] {
+  return Array.from(new Set(targetIds(target.cardIds, state.selection.cardIds)))
     .map((id: string) => document.querySelector(`[data-card-id="${CSS.escape(id)}"]`) as HTMLElement | null)
     .filter((card): card is HTMLElement => Boolean(card && !card.hidden));
 }
@@ -153,8 +161,8 @@ function applyCardBox(card: HTMLElement, geometry: LedgerGeometry): void {
   card.style.setProperty('--card-size-cache-height', `${geometry.height}px`);
 }
 
-function selectedZoneElements(): HTMLElement[] {
-  return Array.from(new Set(state.selection.zoneIds))
+function selectedZoneElements(target: ResizeToContentTarget = {}): HTMLElement[] {
+  return Array.from(new Set(targetIds(target.zoneIds, state.selection.zoneIds)))
     .map((id: string) => document.querySelector(`[data-zone-id="${CSS.escape(id)}"]`) as HTMLElement | null)
     .filter((zone): zone is HTMLElement => Boolean(zone && !zone.hidden));
 }
@@ -204,9 +212,9 @@ function expandSelectedZonesToCards(cardsByZoneId: Map<string, HTMLElement[]>, z
   return geometry;
 }
 
-export function resizeSelectedCardsToContent(): ResizeToContentGeometry {
-  const selectedCards = selectedCardElements();
-  const zones = selectedZoneElements();
+export function resizeSelectedCardsToContent(target: ResizeToContentTarget = {}): ResizeToContentGeometry {
+  const selectedCards = selectedCardElements(target);
+  const zones = selectedZoneElements(target);
   if (selectedCards.length === 0 && zones.length === 0) {
     telemetry('resize-selected-cards', { count: 0 });
     return { cards: {}, zones: {} };
