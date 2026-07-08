@@ -181,7 +181,17 @@ export async function startThreadCodexProcessController(input: { action_payload?
   const stdout = createWriteStream(stdoutFile, { flags: 'a' });
   const stderr = createWriteStream(stderrFile, { flags: 'a' });
   const startedAt = new Date().toISOString();
-  appendFileSync(stderrFile, codexRunSegmentMarker({ runId, startedAt, segment: 'start' }), 'utf8');
+  appendFileSync(stderrFile, codexRunSegmentMarker({
+    runId,
+    startedAt,
+    segment: 'start',
+    metadata: {
+      sourceCardTitle: String(source.title ?? cardId),
+      sourceThreadId: threadId,
+      codexModel: command.model,
+      codexEffort: command.effort
+    }
+  }), 'utf8');
   child.stdout.pipe(stdout, { end: false });
   child.stderr.pipe(stderr, { end: false });
   child.stdin.end(prompt);
@@ -192,6 +202,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
     kind: 'thread',
     ledgerId,
     sourceCardId: cardId,
+    sourceCardTitle: String(source.title ?? cardId),
     sourceThreadId: threadId,
     outputCardId: cardId,
     outputFile: runSummaryFile,

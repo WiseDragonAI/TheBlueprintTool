@@ -247,7 +247,17 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   const stdout = createWriteStream(stdoutFile, { flags: 'a' });
   const stderr = createWriteStream(stderrFile, { flags: 'a' });
   const continuedAt = new Date().toISOString();
-  appendFileSync(stderrFile, codexRunSegmentMarker({ runId, startedAt: continuedAt, segment: 'continue' }), 'utf8');
+  const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
+  appendFileSync(stderrFile, codexRunSegmentMarker({
+    runId,
+    startedAt: continuedAt,
+    segment: 'continue',
+    metadata: {
+      sourceCardTitle: String(card?.title ?? cardId),
+      codexModel: command.model,
+      codexEffort: command.effort
+    }
+  }), 'utf8');
   child.stdout.on('data', (chunk: Buffer) => {
     logCodexContinueDebug('child-stdout-chunk', { traceId, runId, pid: child.pid ?? 0, bytes: chunk.length, preview: chunk.toString('utf8').slice(0, 500) });
   });
@@ -262,6 +272,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     id: runId,
     ledgerId,
     outputCardId: cardId,
+    sourceCardTitle: String(card?.title ?? cardId),
     outputFile,
     stdoutFile,
     stderrFile,

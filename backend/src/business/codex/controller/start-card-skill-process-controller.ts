@@ -132,16 +132,6 @@ export async function startCardSkillProcessController(input: { action_payload?: 
   const outputCardId = `card-${safeSegment(runId)}`;
   const outputTitle = `${skillName} result`;
   const command = resolveCodexCommand({ workspaceRoot, runtime, codexModel: requestedCodexModel, codexEffort: requestedCodexEffort });
-  const outputMarkdown = [
-    `# ${outputTitle}`,
-    '',
-    `Status: processing`,
-    '',
-    `Source card: ${String(source.title ?? cardId)}`,
-    `Codex run: ${runId}`,
-    `Codex model: ${command.model}`,
-    `Codex effort: ${command.effort}`,
-  ].join('\n');
   const outputCard = {
     id: outputCardId,
     title: outputTitle,
@@ -151,7 +141,7 @@ export async function startCardSkillProcessController(input: { action_payload?: 
     w: Math.max(360, Number(source.w ?? 360)),
     h: 260,
     status: 'todo',
-    comment: { what: outputMarkdown },
+    comment: { what: '\n' },
     facts: [],
     fields: [],
   };
@@ -188,7 +178,16 @@ export async function startCardSkillProcessController(input: { action_payload?: 
   const stdout = createWriteStream(stdoutFile, { flags: 'a' });
   const stderr = createWriteStream(stderrFile, { flags: 'a' });
   const startedAt = new Date().toISOString();
-  appendFileSync(stderrFile, codexRunSegmentMarker({ runId, startedAt, segment: 'start' }), 'utf8');
+  appendFileSync(stderrFile, codexRunSegmentMarker({
+    runId,
+    startedAt,
+    segment: 'start',
+    metadata: {
+      sourceCardTitle: String(source.title ?? cardId),
+      codexModel: command.model,
+      codexEffort: command.effort
+    }
+  }), 'utf8');
   child.stdout.pipe(stdout, { end: false });
   child.stderr.pipe(stderr, { end: false });
   child.stdin.end(prompt);
@@ -198,6 +197,7 @@ export async function startCardSkillProcessController(input: { action_payload?: 
     skillName,
     ledgerId,
     sourceCardId: cardId,
+    sourceCardTitle: String(source.title ?? cardId),
     outputCardId,
     outputFile,
     stdoutFile,

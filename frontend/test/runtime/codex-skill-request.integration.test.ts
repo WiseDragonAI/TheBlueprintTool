@@ -109,6 +109,7 @@ test('requestCardSkillRunStatus queries derived run progress', async () => {
         fileChangeCount: 0,
         thinkingCount: 1,
         persistedEventCount: 2,
+        metadata: { sourceCardTitle: 'Source Card', sourceThreadId: '', codexModel: 'gpt-5.5', codexEffort: 'xhigh' },
         latestEvent: { title: 'rg TODO' },
         events: []
       }), {
@@ -123,6 +124,7 @@ test('requestCardSkillRunStatus queries derived run progress', async () => {
     assert.equal(result.startedAt, '2026-07-08T00:00:00.000Z');
     assert.equal(result.toolCallCount, 2);
     assert.equal(result.nextSince, 8);
+    assert.deepEqual(result.metadata, { sourceCardTitle: 'Source Card', sourceThreadId: '', codexModel: 'gpt-5.5', codexEffort: 'xhigh' });
   } finally {
     globalThis.fetch = previousFetch;
   }

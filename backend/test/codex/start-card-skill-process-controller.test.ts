@@ -82,7 +82,7 @@ test('card skill process route creates a linked output card and launches codex',
       body: JSON.stringify({ ledgerId: 'specs', cardId: 'source-card', skillName: 'test-skill', codexModel: 'gpt-5.4', codexEffort: 'xhigh' })
     });
     assert.equal(response.status, 202);
-    const body = await response.json() as { ok: boolean; run: { outputCardId: string; outputFile: string; codexModel: string; codexEffort: string } };
+    const body = await response.json() as { ok: boolean; run: { id: string; outputCardId: string; outputFile: string; codexModel: string; codexEffort: string } };
     assert.equal(body.ok, true);
     assert.ok(body.run.outputCardId);
     assert.ok(body.run.outputFile.endsWith(`${body.run.outputCardId}.md`));
@@ -97,9 +97,21 @@ test('card skill process route creates a linked output card and launches codex',
     assert.equal(ledger.relationships.some((relationship) => relationship.from === 'source-card' && relationship.to === body.run.outputCardId && relationship.label === 'test-skill'), true);
     assert.equal(ledger.cards.find((card) => card.id === body.run.outputCardId)?.comment?.contentFile?.endsWith(`${body.run.outputCardId}.md`), true);
 
+    const statusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${body.run.id}?ledgerId=specs&cardId=${body.run.outputCardId}&since=0`);
+    assert.equal(statusResponse.status, 200);
+    const status = await statusResponse.json() as { ok: boolean; metadata: { sourceCardTitle: string; sourceThreadId: string; codexModel: string; codexEffort: string } };
+    assert.equal(status.ok, true);
+    assert.deepEqual(status.metadata, { sourceCardTitle: 'Source Card', sourceThreadId: '', codexModel: 'gpt-5.4', codexEffort: 'xhigh' });
+
     await waitForText(body.run.outputFile, 'skill seen');
     await waitForText(body.run.outputFile, 'model=gpt-5.4');
     await waitForText(body.run.outputFile, 'effort=model_reasoning_effort="xhigh"');
+    const output = readFileSync(body.run.outputFile, 'utf8');
+    assert.doesNotMatch(output, /^Status: processing$/m);
+    assert.doesNotMatch(output, /^Source card:/m);
+    assert.doesNotMatch(output, /^Codex run:/m);
+    assert.doesNotMatch(output, /^Codex model:/m);
+    assert.doesNotMatch(output, /^Codex effort:/m);
   } finally {
     server.close();
     process.chdir(originalCwd);

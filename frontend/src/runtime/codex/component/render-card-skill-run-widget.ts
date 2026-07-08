@@ -72,12 +72,22 @@ export function renderCardSkillRunWidget(card: Record<string, unknown>): HTMLEle
     metric('Files', '0', 'codexRunFiles')
   );
 
+  const metadata = document.createElement('div');
+  metadata.className = 'codex-run-metadata';
+  metadata.dataset.codexRunMetadata = '';
+  metadata.hidden = true;
+  metadata.replaceChildren(
+    metric('Source', '', 'codexRunSource'),
+    metric('Model', '', 'codexRunModel'),
+    metric('Effort', '', 'codexRunEffort')
+  );
+
   const latest = document.createElement('p');
   latest.className = 'codex-run-latest';
   latest.dataset.codexRunLatest = '';
   latest.textContent = 'Waiting for output';
 
-  body.replaceChildren(header, metrics, latest);
+  body.replaceChildren(header, metadata, metrics, latest);
   widget.replaceChildren(body, timer);
   bindCardSkillRunWidget({ ledgerId, cardId, runId, element: widget });
   return widget;

@@ -17,6 +17,13 @@ export type CardSkillRunEvent = {
   persist: boolean;
 };
 
+export type CardSkillRunMetadata = {
+  sourceCardTitle: string;
+  sourceThreadId: string;
+  codexModel: string;
+  codexEffort: string;
+};
+
 export type CardSkillRunSummary = {
   ok: boolean;
   status: CardSkillRunStatus;
@@ -29,6 +36,7 @@ export type CardSkillRunSummary = {
   fileChangeCount: number;
   thinkingCount: number;
   persistedEventCount: number;
+  metadata: CardSkillRunMetadata;
   latestEvent: CardSkillRunEvent | null;
   events: CardSkillRunEvent[];
   error?: string;
@@ -42,8 +50,10 @@ export async function requestCardSkillRunStatus(input: { ledgerId: string; cardI
   });
   if (input.traceId) params.set('traceId', input.traceId);
   const response = await fetch(`/api/codex/skills/runs/${encodeURIComponent(input.runId)}?${params.toString()}`).catch(() => undefined);
-  if (!response) return { ok: false, status: 'unknown', startedAt: '', elapsedMs: 0, lineCount: 0, nextSince: 0, toolCallCount: 0, agentMessageCount: 0, fileChangeCount: 0, thinkingCount: 0, persistedEventCount: 0, latestEvent: null, events: [], error: 'Request failed.' };
+  const emptyMetadata = { sourceCardTitle: '', sourceThreadId: '', codexModel: '', codexEffort: '' };
+  if (!response) return { ok: false, status: 'unknown', startedAt: '', elapsedMs: 0, lineCount: 0, nextSince: 0, toolCallCount: 0, agentMessageCount: 0, fileChangeCount: 0, thinkingCount: 0, persistedEventCount: 0, metadata: emptyMetadata, latestEvent: null, events: [], error: 'Request failed.' };
   const body = await response.json().catch(() => ({})) as Partial<CardSkillRunSummary>;
+  const metadata = body.metadata && typeof body.metadata === 'object' ? body.metadata : emptyMetadata;
   return {
     ok: response.ok && body.ok !== false,
     status: body.status ?? 'unknown',
@@ -56,6 +66,12 @@ export async function requestCardSkillRunStatus(input: { ledgerId: string; cardI
     fileChangeCount: Number(body.fileChangeCount ?? 0),
     thinkingCount: Number(body.thinkingCount ?? 0),
     persistedEventCount: Number(body.persistedEventCount ?? 0),
+    metadata: {
+      sourceCardTitle: String(metadata.sourceCardTitle ?? ''),
+      sourceThreadId: String(metadata.sourceThreadId ?? ''),
+      codexModel: String(metadata.codexModel ?? ''),
+      codexEffort: String(metadata.codexEffort ?? ''),
+    },
     latestEvent: body.latestEvent ?? null,
     events: Array.isArray(body.events) ? body.events : [],
     error: String(body.error ?? ''),

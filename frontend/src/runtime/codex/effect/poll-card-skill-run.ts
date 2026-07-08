@@ -84,6 +84,18 @@ function setText(element: HTMLElement, selector: string, text: string): void {
   if (target) target.textContent = text;
 }
 
+function setWidgetMetadata(element: HTMLElement, summary: CardSkillRunSummary): void {
+  const metadata = element.querySelector<HTMLElement>('[data-codex-run-metadata]');
+  if (!metadata) return;
+  const source = summary.metadata.sourceCardTitle.trim();
+  const model = summary.metadata.codexModel.trim();
+  const effort = summary.metadata.codexEffort.trim();
+  metadata.hidden = !source && !model && !effort;
+  setText(element, '[data-codex-run-source]', source);
+  setText(element, '[data-codex-run-model]', model);
+  setText(element, '[data-codex-run-effort]', effort);
+}
+
 function removeTimer(element: HTMLElement): void {
   const timer = element.querySelector<HTMLElement>('[data-codex-run-timer]');
   if (timer) timer.hidden = true;
@@ -136,6 +148,7 @@ function paintWidget(element: HTMLElement, summary: CardSkillRunSummary): void {
   setText(element, '[data-codex-run-tools]', String(summary.toolCallCount));
   setText(element, '[data-codex-run-messages]', String(summary.agentMessageCount + summary.thinkingCount));
   setText(element, '[data-codex-run-files]', String(summary.fileChangeCount));
+  setWidgetMetadata(element, summary);
   setText(element, '[data-codex-run-latest]', latestEventLabel(summary));
 }
 

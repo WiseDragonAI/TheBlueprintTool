@@ -8,7 +8,7 @@ import { hydrateLedgerCardContent } from '@backend/business/ledger/helper/card-c
 import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-ledger-notes.js';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
 import { hydrateLedgerThreadNotes, stripHydratedThreadNotes, writeThreadNotesFile } from '@backend/business/ledger/helper/thread-content-file.js';
-import { latestCodexRunSegmentStartedAtMs } from '../helper/codex-run-segment-marker.js';
+import { codexRunSegmentMetadata, latestCodexRunSegmentStartedAtMs, type CodexRunSegmentMetadata } from '../helper/codex-run-segment-marker.js';
 
 type AnyRecord = Record<string, unknown>;
 type RunStatus = 'running' | 'complete' | 'failed' | 'cancelled' | 'unknown';
@@ -166,6 +166,17 @@ function runtimeRunStatus(runtime: AnyRecord, runId: string): RunStatus | null {
   return status === 'running' || status === 'complete' || status === 'failed' || status === 'cancelled' ? status : null;
 }
 
+function runtimeRunMetadata(runtime: AnyRecord, runId: string): CodexRunSegmentMetadata {
+  const runs = runtime.codexSkillRuns && typeof runtime.codexSkillRuns === 'object' ? runtime.codexSkillRuns as Record<string, AnyRecord> : {};
+  const run = runs[runId] ?? {};
+  return {
+    sourceCardTitle: typeof run.sourceCardTitle === 'string' ? run.sourceCardTitle : '',
+    sourceThreadId: typeof run.sourceThreadId === 'string' ? run.sourceThreadId : '',
+    codexModel: typeof run.codexModel === 'string' ? run.codexModel : '',
+    codexEffort: typeof run.codexEffort === 'string' ? run.codexEffort : '',
+  };
+}
+
 function latestRunEventStatus(events: NormalizedRunEvent[]): RunStatus | null {
   let status: RunStatus | null = null;
   for (const event of events) {
@@ -308,11 +319,13 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
   const runDirectory = resolve(decisionOsRoot, 'runs', 'codex-skills', safeSegment(ledgerStem(ledgerPath)));
   const stdoutFile = resolve(runDirectory, `${safeSegment(runId)}.jsonl`);
   const stderrFile = resolve(runDirectory, `${safeSegment(runId)}.log`);
+  const stderrLog = existsSync(stderrFile) ? readFileSync(stderrFile, 'utf8') : '';
   const parsedLines = readJsonlLines(stdoutFile);
   const events = parsedLines.map(normalizeRunEvent);
   const status = inferredStatus({ runtime, runId, events, stdoutFile, stderrFile });
   const persistedEventCount = persistRunEvents({ decisionOsRoot, ledgerPath, ledger, cardId, runId, events });
   const returnedEvents = events.filter((event) => event.line > since);
+  const metadata = { ...runtimeRunMetadata(runtime, runId), ...codexRunSegmentMetadata({ log: stderrLog, runId }) };
   logCodexContinueDebug('read-controller-result', {
     traceId,
     ledgerId,
@@ -324,6 +337,7 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     lineCount: parsedLines.at(-1)?.line ?? 0,
     returnedEventCount: returnedEvents.length,
     persistedEventCount,
+    metadata,
     latestEventType: events.at(-1)?.type ?? '',
     latestEventLine: events.at(-1)?.line ?? 0,
     stdoutFile,
@@ -345,6 +359,7 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     fileChangeCount: events.filter((event) => event.kind === 'file_change').length,
     thinkingCount: events.filter((event) => event.kind === 'thinking').length,
     persistedEventCount,
+    metadata,
     latestEvent: events.at(-1) ?? null,
     events: returnedEvents,
   };

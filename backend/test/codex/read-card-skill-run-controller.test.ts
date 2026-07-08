@@ -52,7 +52,7 @@ test('card skill run route derives JSONL progress and persists thread notes', as
     JSON.stringify({ type: 'item.completed', item: { id: 'file-1', type: 'file_change', changes: [{ path: 'result.md', kind: 'updated' }], status: 'completed' } }),
     JSON.stringify({ type: 'turn.completed' }),
   ].join('\n'));
-  writeFileSync(logPath, '');
+  writeFileSync(logPath, `decision-os:codex-run-segment ${JSON.stringify({ runId, startedAt: new Date(startedAt).toISOString(), segment: 'start', metadata: { sourceCardTitle: 'Source Card', codexModel: 'gpt-5.5', codexEffort: 'xhigh' } })}\n`);
   utimesSync(jsonlPath, completedAt, completedAt);
   utimesSync(logPath, completedAt, completedAt);
 
@@ -74,6 +74,7 @@ test('card skill run route derives JSONL progress and persists thread notes', as
       toolCallCount: number;
       agentMessageCount: number;
       fileChangeCount: number;
+      metadata: { sourceCardTitle: string; sourceThreadId: string; codexModel: string; codexEffort: string };
       events: Array<{ line: number }>;
     };
     assert.equal(body.ok, true);
@@ -83,6 +84,7 @@ test('card skill run route derives JSONL progress and persists thread notes', as
     assert.equal(body.toolCallCount, 1);
     assert.equal(body.agentMessageCount, 1);
     assert.equal(body.fileChangeCount, 1);
+    assert.deepEqual(body.metadata, { sourceCardTitle: 'Source Card', sourceThreadId: '', codexModel: 'gpt-5.5', codexEffort: 'xhigh' });
     assert.deepEqual(body.events.map((event) => event.line), [3, 4, 5]);
 
     const ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { threadFiles?: Record<string, string> };
