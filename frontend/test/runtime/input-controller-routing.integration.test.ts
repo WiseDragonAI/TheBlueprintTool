@@ -227,6 +227,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(skillModal, /querySelector<HTMLDivElement>\('\.skill-results'\)\?\.scrollTop/);
   assert.match(skillModal, /className = 'skill-selected-name'/);
   assert.match(skillModal, /selectedName\.textContent = skillModalState\.selectedSkillName/);
+  assert.match(skillModal, /codexEffort: 'xhigh'/);
   assert.match(skillModal, /const codexModelOptions = \['gpt-5\.5', 'gpt-5\.4', 'gpt-5\.3-codex', 'gpt-5\.2-codex', 'gpt-5\.2'\]/);
   assert.match(skillModal, /const codexEffortOptions = \['low', 'medium', 'high', 'xhigh'\]/);
   assert.match(skillModal, /className = 'skill-run-controls'/);

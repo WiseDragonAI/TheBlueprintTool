@@ -31,7 +31,7 @@ const skillModalState: SkillModalState = {
   selectedCategory: 'All',
   selectedSkillName: '',
   codexModel: 'gpt-5.5',
-  codexEffort: 'high',
+  codexEffort: 'xhigh',
   skills: [],
   loading: false,
   processing: false,

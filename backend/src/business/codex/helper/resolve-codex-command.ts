@@ -93,7 +93,7 @@ function resolveCodexSelection(input: { workspaceRoot: string; runtime: AnyRecor
   const settings = settingsRecord(input.runtime);
   const configuredCommand = String(process.env.CODEX_BIN || settings.codexBin || settings.CODEX_BIN || 'codex');
   const model = firstAllowed([input.codexModel, process.env.CODEX_MODEL, settings.codexModel, settings.CODEX_MODEL], codexModelOptions, 'gpt-5.5');
-  const effort = firstAllowed([input.codexEffort, process.env.CODEX_EFFORT, settings.codexEffort, settings.codexReasoningEffort, settings.CODEX_EFFORT], codexEffortOptions, 'high');
+  const effort = firstAllowed([input.codexEffort, process.env.CODEX_EFFORT, settings.codexEffort, settings.codexReasoningEffort, settings.CODEX_EFFORT], codexEffortOptions, 'xhigh');
   return {
     command: resolveExecutable(configuredCommand, input.workspaceRoot),
     model,

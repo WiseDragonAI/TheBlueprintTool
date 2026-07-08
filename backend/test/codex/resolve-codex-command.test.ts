@@ -53,6 +53,22 @@ test('resolveCodexCommand lets run payload override settings model and effort', 
   }
 });
 
+test('resolveCodexCommand defaults to xhigh effort when no effort is configured', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-codex-command-'));
+  const previousCodexEffort = process.env.CODEX_EFFORT;
+  try {
+    delete process.env.CODEX_EFFORT;
+    const command = resolveCodexCommand({ workspaceRoot: workspace, runtime: {} });
+
+    assert.equal(command.effort, 'xhigh');
+    assert.equal(command.args.includes('model_reasoning_effort="xhigh"'), true);
+  } finally {
+    if (previousCodexEffort === undefined) delete process.env.CODEX_EFFORT;
+    else process.env.CODEX_EFFORT = previousCodexEffort;
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
 test('resolveCodexResumeCommand builds an exec resume invocation with stdin prompt', () => {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-codex-resume-command-'));
   try {
