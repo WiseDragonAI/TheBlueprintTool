@@ -167,6 +167,9 @@ test('browser inputs route ledger commands through runtime controllers before se
   const dialogsCss = source('frontend/assets/canvas/dialogs.css');
   assert.doesNotMatch(dialogsCss, /@media \(max-width: 900px\)[\s\S]*grid-template-columns:\s*56px minmax\(0, 1fr\)/);
   assert.match(dialogsCss, /@media \(max-width: 900px\)[\s\S]*\.rail\s*{[\s\S]*width:\s*56px/);
+  assert.match(dialogsCss, /\.skill-modal::backdrop\s*{[\s\S]*background:\s*rgba\(0,\s*0,\s*0,\s*0\.72\)/);
+  assert.match(dialogsCss, /\.skill-results\s*{[\s\S]*height:\s*100%;[\s\S]*max-height:\s*100%;[\s\S]*overflow:\s*auto/);
+  assert.match(dialogsCss, /\.skill-result\s*{[\s\S]*flex:\s*0 0 auto/);
 
   const stateSource = source('frontend/src/runtime/state.ts');
   const bootSurface = source('frontend/src/runtime/boot/controller/boot-surface.ts');
