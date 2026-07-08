@@ -43,7 +43,8 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   assert.match(threadCss, /voice-panel[\s\S]*--thread-accent/);
   assert.match(threadCss, /thread-panel \.chat[\s\S]*padding: 18px 20px 28px/);
   assert.match(threadCss, /thread-chat-shell\s*{[\s\S]*position: relative;[\s\S]*overflow: hidden;/);
-  assert.match(threadCss, /thread-note-list[\s\S]*padding: 0 62px 42px 0/);
+  assert.match(threadCss, /thread-note-list[\s\S]*padding: 0;/);
+  assert.doesNotMatch(threadCss, /thread-note-list[\s\S]*padding: 0 62px 42px 0/);
   assert.match(threadCss, /thread-note p,[\s\S]*font-size: 14px/);
   assert.match(threadCss, /thread-note\.is-operator[\s\S]*border-left: 2px solid color-mix\(in srgb, var\(--thread-accent\)/);
   assert.match(threadCss, /thread-note\.is-operator[\s\S]*background: #111315/);
