@@ -60,8 +60,10 @@ function statusLabel(status: string): string {
 
 function durationLabel(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}:${String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
@@ -339,6 +341,8 @@ async function poll(poller: Poller): Promise<void> {
     stopPoller(key);
     return;
   }
+  const summaryStartedAt = timestampMs(summary.startedAt);
+  if (summary.status === 'running' && summaryStartedAt) poller.startedAtMs = summaryStartedAt;
   poller.since = Math.max(poller.since, summary.nextSince, summary.lineCount);
   paintWidget(poller.element, summary);
   telemetry('codex-skill-run-polled', { runId: poller.runId, status: summary.status, lineCount: summary.lineCount });

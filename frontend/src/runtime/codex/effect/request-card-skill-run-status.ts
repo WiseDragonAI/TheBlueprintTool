@@ -20,6 +20,7 @@ export type CardSkillRunEvent = {
 export type CardSkillRunSummary = {
   ok: boolean;
   status: CardSkillRunStatus;
+  startedAt: string;
   elapsedMs: number;
   lineCount: number;
   nextSince: number;
@@ -41,11 +42,12 @@ export async function requestCardSkillRunStatus(input: { ledgerId: string; cardI
   });
   if (input.traceId) params.set('traceId', input.traceId);
   const response = await fetch(`/api/codex/skills/runs/${encodeURIComponent(input.runId)}?${params.toString()}`).catch(() => undefined);
-  if (!response) return { ok: false, status: 'unknown', elapsedMs: 0, lineCount: 0, nextSince: 0, toolCallCount: 0, agentMessageCount: 0, fileChangeCount: 0, thinkingCount: 0, persistedEventCount: 0, latestEvent: null, events: [], error: 'Request failed.' };
+  if (!response) return { ok: false, status: 'unknown', startedAt: '', elapsedMs: 0, lineCount: 0, nextSince: 0, toolCallCount: 0, agentMessageCount: 0, fileChangeCount: 0, thinkingCount: 0, persistedEventCount: 0, latestEvent: null, events: [], error: 'Request failed.' };
   const body = await response.json().catch(() => ({})) as Partial<CardSkillRunSummary>;
   return {
     ok: response.ok && body.ok !== false,
     status: body.status ?? 'unknown',
+    startedAt: String(body.startedAt ?? ''),
     elapsedMs: Number(body.elapsedMs ?? 0),
     lineCount: Number(body.lineCount ?? 0),
     nextSince: Number(body.nextSince ?? body.lineCount ?? 0),

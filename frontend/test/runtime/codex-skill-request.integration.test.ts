@@ -62,6 +62,7 @@ test('requestCardSkillRunStatus queries derived run progress', async () => {
       return new Response(JSON.stringify({
         ok: true,
         status: 'running',
+        startedAt: '2026-07-08T00:00:00.000Z',
         elapsedMs: 1200,
         lineCount: 8,
         nextSince: 8,
@@ -81,6 +82,7 @@ test('requestCardSkillRunStatus queries derived run progress', async () => {
     const result = await requestCardSkillRunStatus({ ledgerId: 'specs', cardId: 'card-a', runId: 'codex-skill-1000-abcd', since: 4 });
     assert.equal(result.ok, true);
     assert.equal(result.status, 'running');
+    assert.equal(result.startedAt, '2026-07-08T00:00:00.000Z');
     assert.equal(result.toolCallCount, 2);
     assert.equal(result.nextSince, 8);
   } finally {

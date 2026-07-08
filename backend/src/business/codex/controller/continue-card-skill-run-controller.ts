@@ -10,6 +10,7 @@ import { hydrateLedgerThreadNotes } from '@backend/business/ledger/helper/thread
 import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-ledger-notes.js';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
 import { buildCardSkillContinuePrompt } from '../helper/build-card-skill-continue-prompt.js';
+import { codexRunSegmentMarker } from '../helper/codex-run-segment-marker.js';
 import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexResumeCommand } from '../helper/resolve-codex-command.js';
 import { readCardSkillRunController } from './read-card-skill-run-controller.js';
 
@@ -237,6 +238,8 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   const child = spawn(command.command, command.args, { cwd: workspaceRoot, stdio: ['pipe', 'pipe', 'pipe'] });
   const stdout = createWriteStream(stdoutFile, { flags: 'a' });
   const stderr = createWriteStream(stderrFile, { flags: 'a' });
+  const continuedAt = new Date().toISOString();
+  appendFileSync(stderrFile, codexRunSegmentMarker({ runId, startedAt: continuedAt, segment: 'continue' }), 'utf8');
   child.stdout.on('data', (chunk: Buffer) => {
     logCodexContinueDebug('child-stdout-chunk', { traceId, runId, pid: child.pid ?? 0, bytes: chunk.length, preview: chunk.toString('utf8').slice(0, 500) });
   });
@@ -247,7 +250,6 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   child.stderr.pipe(stderr, { end: false });
   child.stdin.end(prompt);
 
-  const continuedAt = new Date().toISOString();
   const run = {
     id: runId,
     ledgerId,

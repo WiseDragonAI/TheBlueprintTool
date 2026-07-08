@@ -162,3 +162,63 @@ test('card skill run route infers status from the latest continued JSONL segment
     rmSync(workspace, { recursive: true, force: true });
   }
 });
+
+test('card skill run route measures active resumed segment from the latest persisted segment marker', async () => {
+  const originalCwd = process.cwd();
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-card-skill-run-resume-clock-'));
+  const firstStartedAt = Date.now() - 8 * 60 * 60 * 1000;
+  const resumedAt = Date.now() - 30000;
+  const resumedAtIso = new Date(resumedAt).toISOString();
+  const runId = `codex-skill-${firstStartedAt}-feedclock`;
+  const outputCardId = `card-${runId}`;
+  mkdirSync(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs'), { recursive: true });
+  mkdirSync(join(workspace, '.decision-os'), { recursive: true });
+  writeFileSync(join(workspace, '.decision-os', 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }]
+  }, null, 2));
+  writeFileSync(join(workspace, '.decision-os', 'specs.json'), JSON.stringify({
+    cards: [{
+      id: outputCardId,
+      title: 'Skill Result',
+      cardType: 'codex-skill-run',
+      comment: { what: `Codex run: ${runId}` },
+      facts: [],
+      fields: []
+    }],
+    annotations: [],
+    relationships: [],
+    notes: {}
+  }, null, 2));
+  const jsonlPath = join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.jsonl`);
+  const logPath = join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.log`);
+  writeFileSync(jsonlPath, [
+    JSON.stringify({ type: 'thread.started' }),
+    JSON.stringify({ type: 'turn.completed' }),
+    JSON.stringify({ type: 'turn.started' }),
+  ].join('\n'));
+  writeFileSync(logPath, `decision-os:codex-run-segment ${JSON.stringify({ runId, startedAt: resumedAtIso, segment: 'continue' })}\n`);
+  const fresh = new Date();
+  utimesSync(jsonlPath, fresh, fresh);
+  utimesSync(logPath, fresh, fresh);
+
+  process.chdir(workspace);
+  const runtime: Record<string, unknown> = {};
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const address = server.address() as AddressInfo;
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}`);
+    assert.equal(response.status, 200);
+    const body = await response.json() as { ok: boolean; status: string; startedAt: string; elapsedMs: number };
+    assert.equal(body.ok, true);
+    assert.equal(body.status, 'running');
+    assert.equal(body.startedAt, resumedAtIso);
+    assert.ok(body.elapsedMs >= 29000 && body.elapsedMs < 45000);
+  } finally {
+    server.close();
+    process.chdir(originalCwd);
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});

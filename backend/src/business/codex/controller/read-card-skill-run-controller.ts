@@ -8,6 +8,7 @@ import { hydrateLedgerCardContent } from '@backend/business/ledger/helper/card-c
 import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-ledger-notes.js';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
 import { hydrateLedgerThreadNotes, stripHydratedThreadNotes, writeThreadNotesFile } from '@backend/business/ledger/helper/thread-content-file.js';
+import { latestCodexRunSegmentStartedAtMs } from '../helper/codex-run-segment-marker.js';
 
 type AnyRecord = Record<string, unknown>;
 type RunStatus = 'running' | 'complete' | 'failed' | 'cancelled' | 'unknown';
@@ -199,10 +200,18 @@ function noteCodexLine(note: AnyRecord): number {
   return Number.isFinite(line) && line > 0 ? line : 0;
 }
 
+function runSegmentStartedAtMs(input: { runtime: AnyRecord; runId: string; stderrFile: string }): number {
+  const runs = input.runtime.codexSkillRuns && typeof input.runtime.codexSkillRuns === 'object' ? input.runtime.codexSkillRuns as Record<string, AnyRecord> : {};
+  const run = runs[input.runId] ?? {};
+  const runtimeStarted = Date.parse(String(run.startedAt ?? ''));
+  const log = existsSync(input.stderrFile) ? readFileSync(input.stderrFile, 'utf8') : '';
+  return runtimeStarted || latestCodexRunSegmentStartedAtMs({ log, runId: input.runId }) || runTimestamp(input.runId);
+}
+
 function elapsedMs(input: { runtime: AnyRecord; runId: string; status: RunStatus; stdoutFile: string; stderrFile: string }): number {
   const runs = input.runtime.codexSkillRuns && typeof input.runtime.codexSkillRuns === 'object' ? input.runtime.codexSkillRuns as Record<string, AnyRecord> : {};
   const run = runs[input.runId] ?? {};
-  const started = Date.parse(String(run.startedAt ?? '')) || runTimestamp(input.runId);
+  const started = runSegmentStartedAtMs({ runtime: input.runtime, runId: input.runId, stderrFile: input.stderrFile });
   const finished = Date.parse(String(run.finishedAt ?? ''));
   const terminalFileWrite = Math.max(fileMtimeMs(input.stdoutFile), fileMtimeMs(input.stderrFile));
   const end = finished || (input.status === 'running' ? Date.now() : terminalFileWrite || Date.now());
@@ -320,6 +329,7 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     cardId,
     runId,
     status,
+    startedAt: new Date(runSegmentStartedAtMs({ runtime, runId, stderrFile })).toISOString(),
     elapsedMs: elapsedMs({ runtime, runId, status, stdoutFile, stderrFile }),
     lineCount: parsedLines.at(-1)?.line ?? 0,
     nextSince: parsedLines.at(-1)?.line ?? 0,

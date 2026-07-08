@@ -12,6 +12,7 @@ import { hydrateLedgerCardContent, resolveCardContentFile } from '@backend/busin
 import { stripHydratedThreadNotes } from '@backend/business/ledger/helper/thread-content-file.js';
 import { scanCodexSkills } from '../helper/scan-codex-skills.js';
 import { buildCardSkillPrompt } from '../helper/build-card-skill-prompt.js';
+import { codexRunSegmentMarker } from '../helper/codex-run-segment-marker.js';
 import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand } from '../helper/resolve-codex-command.js';
 import { readCardSkillRunController } from './read-card-skill-run-controller.js';
 
@@ -186,6 +187,8 @@ export async function startCardSkillProcessController(input: { action_payload?: 
   const child = spawn(command.command, command.args, { cwd: workspaceRoot, stdio: ['pipe', 'pipe', 'pipe'] });
   const stdout = createWriteStream(stdoutFile, { flags: 'a' });
   const stderr = createWriteStream(stderrFile, { flags: 'a' });
+  const startedAt = new Date().toISOString();
+  appendFileSync(stderrFile, codexRunSegmentMarker({ runId, startedAt, segment: 'start' }), 'utf8');
   child.stdout.pipe(stdout, { end: false });
   child.stderr.pipe(stderr, { end: false });
   child.stdin.end(prompt);
@@ -203,7 +206,7 @@ export async function startCardSkillProcessController(input: { action_payload?: 
     codexEffort: command.effort,
     pid: child.pid ?? 0,
     status: 'running',
-    startedAt: new Date().toISOString(),
+    startedAt,
   };
   updateRuntimeRun(runtime, runId, run);
   attachRuntimeRunChild(runtime, runId, child);
