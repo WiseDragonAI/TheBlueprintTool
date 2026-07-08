@@ -17,6 +17,7 @@ const moveSteps = Math.max(1, Number(process.env.DECISION_OS_DRAG_TRACE_MOVES ??
 const moveIntervalMs = Math.max(0, Number(process.env.DECISION_OS_DRAG_TRACE_MOVE_INTERVAL_MS ?? 16));
 const dragDx = Number(process.env.DECISION_OS_DRAG_TRACE_DX ?? 144);
 const dragDy = Number(process.env.DECISION_OS_DRAG_TRACE_DY ?? 4);
+const afterReleaseWaitMs = Math.max(0, Number(process.env.DECISION_OS_DRAG_TRACE_AFTER_RELEASE_MS ?? 320));
 const longEventThresholdMs = Number(process.env.DECISION_OS_DRAG_TRACE_LONG_EVENT_MS ?? 8);
 const slowFrameThresholdMs = Number(process.env.DECISION_OS_DRAG_TRACE_SLOW_FRAME_MS ?? 16.7);
 const frameOffenderThresholdMs = Number(process.env.DECISION_OS_DRAG_TRACE_FRAME_OFFENDER_MS ?? 10);
@@ -776,7 +777,7 @@ async function runTraceCase({ socket, send, variant, hoverMode, runIndex, target
   }
   await wait(120);
   await dispatchMouse(send, 'mouseReleased', setup.startX + dragDx, setup.startY + dragDy);
-  await wait(320);
+  await wait(afterReleaseWaitMs);
   await evaluate(send, `window.__decisionOsDragTrace?.mark(${JSON.stringify('trace-input-end')})`);
   await send('Tracing.end');
   await tracingComplete;
@@ -793,7 +794,7 @@ async function runTraceCase({ socket, send, variant, hoverMode, runIndex, target
   const report = {
     case: { variant, hoverMode, runIndex, url, scale, targetCardId: setup.targetCardId },
     setup,
-    input: { moveSteps, moveIntervalMs, dragDx, dragDy },
+    input: { moveSteps, moveIntervalMs, dragDx, dragDy, afterReleaseWaitMs },
     tracePath,
     trace: traceSummary,
     page
@@ -965,7 +966,7 @@ try {
   const summaries = reports.map(summarizeCase);
   const suiteReport = {
     generatedAt: new Date().toISOString(),
-    config: { url, cdpJsonUrl, outputDir, targetCardIds, scales, variants, hoverModes, runsPerCase, moveSteps, moveIntervalMs, dragDx, dragDy, longEventThresholdMs, enableDomReadProbes, mockGeometryCommit },
+    config: { url, cdpJsonUrl, outputDir, targetCardIds, scales, variants, hoverModes, runsPerCase, moveSteps, moveIntervalMs, dragDx, dragDy, afterReleaseWaitMs, longEventThresholdMs, enableDomReadProbes, mockGeometryCommit },
     summaries,
     reports: reports.map((report) => report.reportPath)
   };
