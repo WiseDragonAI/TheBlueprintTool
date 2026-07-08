@@ -1,6 +1,7 @@
-import { relationshipTitlePortBounds } from './readable-horizontal-relationship-flow.js';
+import { relationshipTitlePortBounds } from './relationship-port-bounds.js';
 
 type CanvasRect = { left: number; top: number; right: number; bottom: number; width: number; height: number };
+export type RelationshipPortOffsetPolicy = 'projected' | 'title-band';
 
 export function relationshipPortForSide(
   rect: CanvasRect,
@@ -8,10 +9,11 @@ export function relationshipPortForSide(
   slotIndex = 0,
   slotCount = 1,
   target?: { x: number; y: number },
-  options: { preferTitleBand?: boolean } = {}
+  options: { offsetPolicy?: RelationshipPortOffsetPolicy } = {}
 ): { x: number; y: number } {
-  const titleBandSide = options.preferTitleBand && (side === 'left' || side === 'right');
-  const offset = titleBandSide || slotCount > 1
+  const offsetPolicy = options.offsetPolicy ?? 'projected';
+  const slottedSide = offsetPolicy !== 'projected' || slotCount > 1;
+  const offset = slottedSide
     ? sidePortSlot(rect, side, slotCount, slotIndex, options)
     : projectedSideOffset(rect, side, target);
   if (side === 'left') return { x: rect.left, y: offset };
@@ -40,7 +42,7 @@ function sidePortSlot(
   side: string,
   total: number,
   index: number,
-  options: { preferTitleBand?: boolean } = {}
+  options: { offsetPolicy?: RelationshipPortOffsetPolicy } = {}
 ): number {
   const bounds = sidePortBounds(rect, side, options);
   const fraction = (index + 1) / (total + 1);
@@ -59,10 +61,10 @@ function clampSideOffset(
 function sidePortBounds(
   rect: CanvasRect,
   side: string,
-  options: { preferTitleBand?: boolean } = {}
+  options: { offsetPolicy?: RelationshipPortOffsetPolicy } = {}
 ): { min: number; max: number } {
   const verticalSide = side === 'left' || side === 'right';
-  if (verticalSide && options.preferTitleBand) return relationshipTitlePortBounds(rect);
+  if (verticalSide && options.offsetPolicy === 'title-band') return relationshipTitlePortBounds(rect);
   const start = verticalSide ? rect.top : rect.left;
   const span = verticalSide ? rect.height : rect.width;
   const padding = Math.min(36, span / 4);

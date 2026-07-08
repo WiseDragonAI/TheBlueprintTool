@@ -10,6 +10,8 @@ test('calculate-relationship-ports uses side title-band ports for aligned staged
 
   assert.equal(ports.sourceSide, 'right');
   assert.equal(ports.targetSide, 'left');
+  assert.equal(ports.sourceOffsetPolicy, 'title-band');
+  assert.equal(ports.targetOffsetPolicy, 'title-band');
   assert.deepEqual(ports.sourceNormal, { x: 1, y: 0 });
   assert.deepEqual(ports.targetNormal, { x: -1, y: 0 });
   assert.deepEqual(ports.sourcePort, { x: 180, y: 88 });
@@ -24,6 +26,8 @@ test('calculate-relationship-ports avoids bottom-clamped target ports for vertic
 
   assert.equal(ports.sourceSide, 'right');
   assert.equal(ports.targetSide, 'left');
-  assert.deepEqual(ports.sourcePort, { x: 700, y: 88 });
-  assert.deepEqual(ports.targetPort, { x: 820, y: 388 });
+  assert.equal(ports.sourceOffsetPolicy, 'projected');
+  assert.equal(ports.targetOffsetPolicy, 'projected');
+  assert.deepEqual(ports.sourcePort, { x: 700, y: 656.7073170731708 });
+  assert.deepEqual(ports.targetPort, { x: 820, y: 693.2926829268292 });
 });
