@@ -20,3 +20,10 @@ test('choose-relationship-port-sides evaluates every target border instead of on
 
   assert.deepEqual(chooseRelationshipPortSides(source, target), { sourceSide: 'right', targetSide: 'right' });
 });
+
+test('choose-relationship-port-sides prefers side flow for aligned large stage cards even with a narrow readable gap', () => {
+  const source = { left: 0, top: 0, right: 180, bottom: 420, width: 180, height: 420 };
+  const target = { left: 240, top: 20, right: 940, bottom: 1620, width: 700, height: 1600 };
+
+  assert.deepEqual(chooseRelationshipPortSides(source, target), { sourceSide: 'right', targetSide: 'left' });
+});

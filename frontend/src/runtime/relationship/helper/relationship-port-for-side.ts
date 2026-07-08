@@ -1,12 +1,18 @@
+import { relationshipTitlePortBounds } from './readable-horizontal-relationship-flow.js';
+
+type CanvasRect = { left: number; top: number; right: number; bottom: number; width: number; height: number };
+
 export function relationshipPortForSide(
-  rect: { left: number; top: number; right: number; bottom: number; width: number; height: number },
+  rect: CanvasRect,
   side: string,
   slotIndex = 0,
   slotCount = 1,
-  target?: { x: number; y: number }
+  target?: { x: number; y: number },
+  options: { preferTitleBand?: boolean } = {}
 ): { x: number; y: number } {
-  const offset = slotCount > 1
-    ? sidePortSlot(rect, side, slotCount, slotIndex)
+  const titleBandSide = options.preferTitleBand && (side === 'left' || side === 'right');
+  const offset = titleBandSide || slotCount > 1
+    ? sidePortSlot(rect, side, slotCount, slotIndex, options)
     : projectedSideOffset(rect, side, target);
   if (side === 'left') return { x: rect.left, y: offset };
   if (side === 'right') return { x: rect.right, y: offset };
@@ -15,7 +21,7 @@ export function relationshipPortForSide(
 }
 
 function projectedSideOffset(
-  rect: { left: number; top: number; right: number; bottom: number; width: number; height: number },
+  rect: CanvasRect,
   side: string,
   target?: { x: number; y: number }
 ): number {
@@ -30,18 +36,19 @@ function projectedSideOffset(
 }
 
 function sidePortSlot(
-  rect: { left: number; top: number; right: number; bottom: number; width: number; height: number },
+  rect: CanvasRect,
   side: string,
   total: number,
-  index: number
+  index: number,
+  options: { preferTitleBand?: boolean } = {}
 ): number {
-  const bounds = sidePortBounds(rect, side);
+  const bounds = sidePortBounds(rect, side, options);
   const fraction = (index + 1) / (total + 1);
   return bounds.min + (bounds.max - bounds.min) * fraction;
 }
 
 function clampSideOffset(
-  rect: { left: number; top: number; right: number; bottom: number; width: number; height: number },
+  rect: CanvasRect,
   side: string,
   offset: number
 ): number {
@@ -50,10 +57,12 @@ function clampSideOffset(
 }
 
 function sidePortBounds(
-  rect: { left: number; top: number; right: number; bottom: number; width: number; height: number },
-  side: string
+  rect: CanvasRect,
+  side: string,
+  options: { preferTitleBand?: boolean } = {}
 ): { min: number; max: number } {
   const verticalSide = side === 'left' || side === 'right';
+  if (verticalSide && options.preferTitleBand) return relationshipTitlePortBounds(rect);
   const start = verticalSide ? rect.top : rect.left;
   const span = verticalSide ? rect.height : rect.width;
   const padding = Math.min(36, span / 4);
