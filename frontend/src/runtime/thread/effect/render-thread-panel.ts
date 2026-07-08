@@ -5,6 +5,7 @@ import { renderVoiceDock } from '../../voice/effect/render-voice-dock.js';
 import { renderThreadNotes } from './render-thread-notes.js';
 import { applyThreadAccent } from './apply-thread-accent.js';
 import { pinThreadFeedToLastMessage } from './pin-thread-feed-to-last-message.js';
+import { renderThreadJumpButton, syncThreadJumpButtonVisibility } from './render-thread-jump-button.js';
 import { restoreThreadDraft } from './persist-thread-draft.js';
 import { restoreThreadScrollPosition, saveThreadScrollPosition } from './persist-thread-scroll.js';
 import { resolveThreadTargetTitle } from '../helper/resolve-thread-target-title.js';
@@ -71,6 +72,7 @@ export function renderThreadPanel(): void {
   applyThreadAccent();
   telemetry('render-thread-panel', { threadId: state.threadId });
   renderThreadNotes();
+  renderThreadJumpButton();
   state.renderedThreadId = activeThreadId;
   renderVoiceDock();
   restoreThreadDraft();
@@ -82,4 +84,5 @@ export function renderThreadPanel(): void {
   } else if (shouldOpenThread) {
     restoreThreadScrollPosition(activeThreadId);
   }
+  syncThreadJumpButtonVisibility();
 }

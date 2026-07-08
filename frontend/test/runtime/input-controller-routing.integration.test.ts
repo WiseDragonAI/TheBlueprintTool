@@ -89,6 +89,8 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.doesNotMatch(pointerDown, /event\.detail >= 2/);
   assert.match(actionClick, /action === 'thread-file-picker'/);
   assert.match(actionClick, /querySelector\('\.thread-file-input'\)/);
+  assert.match(actionClick, /action === 'jump-thread-bottom'/);
+  assert.match(actionClick, /pinThreadFeedToLastMessage\(\{ behavior: 'smooth' \}\)/);
   assert.doesNotMatch(actionClick, /beginZoneLabelEdit/);
   assert.doesNotMatch(actionClick, /deleteSelectedZones/);
   assert.doesNotMatch(actionClick, /commitActiveLedgerMutation/);

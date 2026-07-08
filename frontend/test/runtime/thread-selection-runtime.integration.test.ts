@@ -10,6 +10,7 @@ import { closeThreadPanel } from '../../src/runtime/thread/effect/close-thread-p
 import { restoreThreadDraft, saveThreadDraft } from '../../src/runtime/thread/effect/persist-thread-draft.js';
 import { restoreThreadScrollPosition, saveThreadScrollPosition } from '../../src/runtime/thread/effect/persist-thread-scroll.js';
 import { pinThreadFeedToLastMessage } from '../../src/runtime/thread/effect/pin-thread-feed-to-last-message.js';
+import { renderThreadJumpButton } from '../../src/runtime/thread/effect/render-thread-jump-button.js';
 import { renderThreadNotes } from '../../src/runtime/thread/effect/render-thread-notes.js';
 import { state } from '../../src/runtime/state.js';
 
@@ -19,12 +20,14 @@ type TestElement = {
   textContent: string;
   type: string;
   title: string;
+  hidden: boolean;
   dataset: Record<string, string>;
   attributes: Record<string, string>;
   children: TestElement[];
   classList: { add: (...names: string[]) => void };
   append: (...children: TestElement[]) => void;
   appendChild: (child: TestElement) => TestElement;
+  replaceChildren: (...children: TestElement[]) => void;
   setAttribute: (name: string, value: string) => void;
 };
 
@@ -35,6 +38,7 @@ function createTestElement(textContent = '', tagName = ''): TestElement {
   element.textContent = textContent;
   element.type = '';
   element.title = '';
+  element.hidden = false;
   element.dataset = {};
   element.attributes = {};
   element.children = [];
@@ -49,6 +53,9 @@ function createTestElement(textContent = '', tagName = ''): TestElement {
   element.appendChild = (child: TestElement) => {
     element.children.push(child);
     return child;
+  };
+  element.replaceChildren = (...children: TestElement[]) => {
+    element.children = children;
   };
   element.setAttribute = (name: string, value: string) => {
     element.attributes[name] = value;
@@ -258,6 +265,69 @@ test('pin-thread-feed-to-last-message scrolls the thread viewport to the newest 
     chat.scrollTop = 0;
     deferredFrame?.(0);
     assert.equal(chat.scrollTop, 640);
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+    (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = previousRequestAnimationFrame;
+  }
+});
+
+test('render-thread-jump-button shows only when the thread viewport is away from the bottom', () => {
+  const previousDocument = globalThis.document;
+  const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
+  let frame: TestElement | null = null;
+  let button: TestElement | null = null;
+  let scrollHandler: EventListener | null = null;
+  const chat = {
+    scrollTop: 0,
+    scrollHeight: 900,
+    clientHeight: 300,
+    children: [] as TestElement[],
+    querySelector(selector: string) {
+      if (selector === '.thread-jump-bottom-frame') return frame;
+      if (selector === '.thread-jump-bottom') return button;
+      return null;
+    },
+    append(child: TestElement) {
+      this.children.push(child);
+      if (child.className === 'thread-jump-bottom-frame') frame = child;
+    },
+    addEventListener(type: string, handler: EventListener) {
+      if (type === 'scroll') scrollHandler = handler;
+    }
+  };
+  (globalThis as unknown as { document: unknown }).document = {
+    querySelector(selector: string) {
+      if (selector === '.thread-panel .chat') return chat;
+      return null;
+    },
+    createElement(tagName: string) {
+      const element = createTestElement('', tagName);
+      const append = element.append;
+      element.append = (...children: TestElement[]) => {
+        append(...children);
+        for (const child of children) {
+          if (child.className === 'thread-jump-bottom') button = child;
+        }
+      };
+      return element;
+    }
+  };
+  (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = (callback: FrameRequestCallback) => {
+    callback(0);
+    return 1;
+  };
+  try {
+    renderThreadJumpButton();
+    assert.equal(button?.dataset.action, 'jump-thread-bottom');
+    assert.equal(button?.attributes['aria-label'], 'Jump to bottom');
+    assert.equal(button?.children[0].className, 'thread-jump-bottom-chevron');
+    assert.equal((button as TestElement & { hidden: boolean }).hidden, false);
+    assert.equal(button?.attributes['aria-hidden'], 'false');
+
+    chat.scrollTop = 560;
+    scrollHandler?.(new Event('scroll'));
+    assert.equal((button as TestElement & { hidden: boolean }).hidden, true);
+    assert.equal(button?.attributes['aria-hidden'], 'true');
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
     (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = previousRequestAnimationFrame;

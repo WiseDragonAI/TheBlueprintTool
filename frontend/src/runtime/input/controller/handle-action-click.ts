@@ -20,6 +20,7 @@ import { createNoteController } from '../../thread/controller/create-note-contro
 import { deleteNoteController } from '../../thread/controller/delete-note-controller.js';
 import { confirmNoteDeletionController } from '../../thread/controller/confirm-note-deletion-controller.js';
 import { renderThreadPanel } from '../../thread/effect/render-thread-panel.js';
+import { pinThreadFeedToLastMessage } from '../../thread/effect/pin-thread-feed-to-last-message.js';
 import { refreshRuntimeState } from '../../refresh/controller/refresh-runtime-state.js';
 import { selectTarget } from '../../selection/controller/select-target.js';
 import { selectThread } from '../../thread/effect/select-thread.js';
@@ -92,6 +93,10 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
   if (action === 'thread-file-picker') {
     const input = actionTarget.closest('.terminal-composer')?.querySelector('.thread-file-input') as HTMLInputElement | null;
     input?.click();
+    return;
+  }
+  if (action === 'jump-thread-bottom') {
+    pinThreadFeedToLastMessage({ behavior: 'smooth' });
     return;
   }
   if (action === 'voice-cancel') cancelVoiceRecording();
