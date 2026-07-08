@@ -16,8 +16,8 @@
       "cardType": "note",
       "domainId": "skills",
       "status": "todo",
-      "x": -4694.482798145138,
-      "y": -1487.8334986625696,
+      "x": -4773.642277778585,
+      "y": -2516.906733897375,
       "w": 1009,
       "h": 2879,
       "comment": {
@@ -28,8 +28,8 @@
       "id": "card-codex-skill-1783448349580-e919e6f8",
       "title": "human-context-synthesis result",
       "cardType": "codex-skill-run",
-      "x": -3589.482798145138,
-      "y": -1487.8334986625696,
+      "x": -3668.6422777785847,
+      "y": -2516.906733897375,
       "w": 1009,
       "h": 1754,
       "status": "todo",
@@ -92,10 +92,10 @@
       "cardType": "note",
       "domainId": "skills",
       "status": "todo",
-      "x": -2503.81277034046,
-      "y": -1492.2148431360315,
+      "x": -2582.9722499739064,
+      "y": -2521.288078370837,
       "w": 1054,
-      "h": 195,
+      "h": 768,
       "comment": {
         "contentFile": ".decision-os/cards/skills/card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md"
       },
@@ -103,115 +103,17 @@
       "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783500587763-e734fec7.md"
     },
     {
-      "id": "card-skill-pipeline-best-existing-skill",
-      "title": "Best Skill / Technical Planning Pipeline",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -4960,
-      "y": -1240,
-      "w": 780,
-      "h": 860,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-pipeline-best-existing-skill.md"
-      }
-    },
-    {
-      "id": "card-skill-gap-orchestration",
-      "title": "Skill Gap / Orchestration",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -4140,
-      "y": -1240,
-      "w": 780,
-      "h": 430,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-gap-orchestration.md"
-      }
-    },
-    {
-      "id": "card-skill-openticket",
-      "title": "Skill Card / openticket",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -4960,
-      "y": -760,
-      "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-openticket.md"
-      }
-    },
-    {
-      "id": "card-skill-improveticket",
-      "title": "Skill Card / improveticket",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -4140,
-      "y": -760,
-      "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-improveticket.md"
-      }
-    },
-    {
-      "id": "card-skill-product-analysis",
-      "title": "Skill Card / product-analysis",
+      "id": "card-skill-ticket-solver",
+      "title": "Skill Card / ticket-solver",
       "cardType": "note",
       "domainId": "skills",
       "status": "todo",
       "x": -3320,
       "y": -760,
       "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-product-analysis.md"
-      }
-    },
-    {
-      "id": "card-skill-ticket-solver",
-      "title": "Skill Card / ticket-solver",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -2500,
-      "y": -760,
-      "w": 780,
-      "h": 360,
+      "h": 380,
       "comment": {
         "contentFile": ".decision-os/cards/skills/card-skill-ticket-solver.md"
-      }
-    },
-    {
-      "id": "card-skill-executor-precheck",
-      "title": "Skill Card / executor-precheck",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -4960,
-      "y": -360,
-      "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-executor-precheck.md"
-      }
-    },
-    {
-      "id": "card-skill-executor-stack",
-      "title": "Skill Card / executor-stack",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -4140,
-      "y": -360,
-      "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-executor-stack.md"
       }
     },
     {
@@ -220,10 +122,10 @@
       "cardType": "note",
       "domainId": "skills",
       "status": "todo",
-      "x": -3320,
-      "y": -360,
+      "x": -4960,
+      "y": -760,
       "w": 780,
-      "h": 360,
+      "h": 380,
       "comment": {
         "contentFile": ".decision-os/cards/skills/card-skill-executor-spec.md"
       }
@@ -234,250 +136,12 @@
       "cardType": "note",
       "domainId": "skills",
       "status": "todo",
-      "x": -2500,
-      "y": -360,
+      "x": -4140,
+      "y": -760,
       "w": 780,
-      "h": 360,
+      "h": 380,
       "comment": {
         "contentFile": ".decision-os/cards/skills/card-skill-executor-implement.md"
-      }
-    },
-    {
-      "id": "card-skill-decision-os-treat-open-notes",
-      "title": "Skill Card / decision-os-treat-open-notes",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -4960,
-      "y": 40,
-      "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-decision-os-treat-open-notes.md"
-      }
-    },
-    {
-      "id": "card-skill-openspec-explore",
-      "title": "Skill Card / openspec-explore",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -4140,
-      "y": 40,
-      "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-openspec-explore.md"
-      }
-    },
-    {
-      "id": "card-skill-openspec-new-change",
-      "title": "Skill Card / openspec-new-change",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -3320,
-      "y": 40,
-      "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-openspec-new-change.md"
-      }
-    },
-    {
-      "id": "card-skill-openspec-continue-change",
-      "title": "Skill Card / openspec-continue-change",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -2500,
-      "y": 40,
-      "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-openspec-continue-change.md"
-      }
-    },
-    {
-      "id": "card-skill-openspec-ff-change",
-      "title": "Skill Card / openspec-ff-change",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -4960,
-      "y": 440,
-      "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-openspec-ff-change.md"
-      }
-    },
-    {
-      "id": "card-skill-openspec-apply-change",
-      "title": "Skill Card / openspec-apply-change",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -4140,
-      "y": 440,
-      "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-openspec-apply-change.md"
-      }
-    },
-    {
-      "id": "card-skill-openspec-verify-change",
-      "title": "Skill Card / openspec-verify-change",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -3320,
-      "y": 440,
-      "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-openspec-verify-change.md"
-      }
-    },
-    {
-      "id": "card-skill-ticket-improver",
-      "title": "Skill Card / ticket-improver",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -2500,
-      "y": 440,
-      "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-ticket-improver.md"
-      }
-    },
-    {
-      "id": "card-skill-product-analyzer",
-      "title": "Skill Card / product-analyzer",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -4960,
-      "y": 840,
-      "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-product-analyzer.md"
-      }
-    },
-    {
-      "id": "card-skill-product-rfc-writer",
-      "title": "Skill Card / product-rfc-writer",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -4140,
-      "y": 840,
-      "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-product-rfc-writer.md"
-      }
-    },
-    {
-      "id": "card-skill-product-architect",
-      "title": "Skill Card / product-architect",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -3320,
-      "y": 840,
-      "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-product-architect.md"
-      }
-    },
-    {
-      "id": "card-skill-product-prd-writer",
-      "title": "Skill Card / product-prd-writer",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -2500,
-      "y": 840,
-      "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-product-prd-writer.md"
-      }
-    },
-    {
-      "id": "card-skill-product-decomposer",
-      "title": "Skill Card / product-decomposer",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -4960,
-      "y": 1240,
-      "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-product-decomposer.md"
-      }
-    },
-    {
-      "id": "card-skill-epic-analyzer",
-      "title": "Skill Card / epic-analyzer",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -4140,
-      "y": 1240,
-      "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-epic-analyzer.md"
-      }
-    },
-    {
-      "id": "card-skill-epic-architect",
-      "title": "Skill Card / epic-architect",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -3320,
-      "y": 1240,
-      "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-epic-architect.md"
-      }
-    },
-    {
-      "id": "card-skill-epic-quality-planner",
-      "title": "Skill Card / epic-quality-planner",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -2500,
-      "y": 1240,
-      "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-epic-quality-planner.md"
-      }
-    },
-    {
-      "id": "card-skill-epic-decomposer",
-      "title": "Skill Card / epic-decomposer",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -4960,
-      "y": 1640,
-      "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-epic-decomposer.md"
       }
     },
     {
@@ -486,10 +150,10 @@
       "cardType": "note",
       "domainId": "skills",
       "status": "todo",
-      "x": -4140,
-      "y": 1640,
+      "x": -4960,
+      "y": -340,
       "w": 780,
-      "h": 360,
+      "h": 380,
       "comment": {
         "contentFile": ".decision-os/cards/skills/card-skill-feature-analyzer.md"
       }
@@ -500,54 +164,12 @@
       "cardType": "note",
       "domainId": "skills",
       "status": "todo",
-      "x": -3320,
-      "y": 1640,
+      "x": -4140,
+      "y": -340,
       "w": 780,
-      "h": 360,
+      "h": 380,
       "comment": {
         "contentFile": ".decision-os/cards/skills/card-skill-feature-planner.md"
-      }
-    },
-    {
-      "id": "card-skill-bug-rca",
-      "title": "Skill Card / bug-rca",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -2500,
-      "y": 1640,
-      "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-bug-rca.md"
-      }
-    },
-    {
-      "id": "card-skill-refactor-analyzer",
-      "title": "Skill Card / refactor-analyzer",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -4960,
-      "y": 2040,
-      "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-refactor-analyzer.md"
-      }
-    },
-    {
-      "id": "card-skill-prototype-delivery-planner",
-      "title": "Skill Card / prototype-delivery-planner",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": -4140,
-      "y": 2040,
-      "w": 780,
-      "h": 360,
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-prototype-delivery-planner.md"
       }
     }
   ],
@@ -557,8 +179,8 @@
       "label": "IMPLEMENTER SKILL",
       "variant": "zone",
       "color": "#55b8ff",
-      "x": -5106.0012387509505,
-      "y": -1620.901876650046,
+      "x": -5185.160718384397,
+      "y": -2649.9751118848512,
       "width": 4837.450314664726,
       "height": 3204.761950031324
     },
@@ -587,52 +209,10 @@
       "label": "skill-creator"
     },
     {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-pipeline-best-existing-skill",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-pipeline-best-existing-skill",
-      "label": "best-skill"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-gap-orchestration",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-gap-orchestration",
-      "label": "gap"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-openticket",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-openticket",
-      "label": "openticket"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-improveticket",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-improveticket",
-      "label": "improveticket"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-product-analysis",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-product-analysis",
-      "label": "product-analysis"
-    },
-    {
       "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-ticket-solver",
       "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
       "to": "card-skill-ticket-solver",
       "label": "ticket-solver"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-executor-precheck",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-executor-precheck",
-      "label": "executor-precheck"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-executor-stack",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-executor-stack",
-      "label": "executor-stack"
     },
     {
       "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-executor-spec",
@@ -647,108 +227,6 @@
       "label": "executor-implement"
     },
     {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-decision-os-treat-open-notes",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-decision-os-treat-open-notes",
-      "label": "decision-os-treat-open-notes"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-openspec-explore",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-openspec-explore",
-      "label": "openspec-explore"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-openspec-new-change",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-openspec-new-change",
-      "label": "openspec-new-change"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-openspec-continue-change",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-openspec-continue-change",
-      "label": "openspec-continue-change"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-openspec-ff-change",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-openspec-ff-change",
-      "label": "openspec-ff-change"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-openspec-apply-change",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-openspec-apply-change",
-      "label": "openspec-apply-change"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-openspec-verify-change",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-openspec-verify-change",
-      "label": "openspec-verify-change"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-ticket-improver",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-ticket-improver",
-      "label": "ticket/improver"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-product-analyzer",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-product-analyzer",
-      "label": "product/analyzer"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-product-rfc-writer",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-product-rfc-writer",
-      "label": "product/rfc-writer"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-product-architect",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-product-architect",
-      "label": "product/architect"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-product-prd-writer",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-product-prd-writer",
-      "label": "product/prd-writer"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-product-decomposer",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-product-decomposer",
-      "label": "product/decomposer"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-epic-analyzer",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-epic-analyzer",
-      "label": "epic/analyzer"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-epic-architect",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-epic-architect",
-      "label": "epic/architect"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-epic-quality-planner",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-epic-quality-planner",
-      "label": "epic/quality-planner"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-epic-decomposer",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-epic-decomposer",
-      "label": "epic/decomposer"
-    },
-    {
       "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-feature-analyzer",
       "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
       "to": "card-skill-feature-analyzer",
@@ -759,24 +237,6 @@
       "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
       "to": "card-skill-feature-planner",
       "label": "feature/planner"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-bug-rca",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-bug-rca",
-      "label": "bug/rca"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-refactor-analyzer",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-refactor-analyzer",
-      "label": "refactor/analyzer"
-    },
-    {
-      "id": "rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-prototype-delivery-planner",
-      "from": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
-      "to": "card-skill-prototype-delivery-planner",
-      "label": "prototype/delivery-planner"
     }
   ],
   "notes": {},
@@ -788,38 +248,11 @@
     "thread-card-codex-skill-1783485668635-1989a1e2": ".decision-os/threads/skills/thread-card-codex-skill-1783485668635-1989a1e2.md",
     "thread-card-4b63370d-41b1-44e7-be0a-3f3980744bee": ".decision-os/threads/skills/thread-card-4b63370d-41b1-44e7-be0a-3f3980744bee.md",
     "thread-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a": ".decision-os/threads/skills/thread-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md",
-    "thread-card-skill-pipeline-best-existing-skill": ".decision-os/threads/skills/thread-card-skill-pipeline-best-existing-skill.md",
-    "thread-card-skill-gap-orchestration": ".decision-os/threads/skills/thread-card-skill-gap-orchestration.md",
-    "thread-card-skill-openticket": ".decision-os/threads/skills/thread-card-skill-openticket.md",
-    "thread-card-skill-improveticket": ".decision-os/threads/skills/thread-card-skill-improveticket.md",
-    "thread-card-skill-product-analysis": ".decision-os/threads/skills/thread-card-skill-product-analysis.md",
     "thread-card-skill-ticket-solver": ".decision-os/threads/skills/thread-card-skill-ticket-solver.md",
-    "thread-card-skill-executor-precheck": ".decision-os/threads/skills/thread-card-skill-executor-precheck.md",
-    "thread-card-skill-executor-stack": ".decision-os/threads/skills/thread-card-skill-executor-stack.md",
     "thread-card-skill-executor-spec": ".decision-os/threads/skills/thread-card-skill-executor-spec.md",
     "thread-card-skill-executor-implement": ".decision-os/threads/skills/thread-card-skill-executor-implement.md",
-    "thread-card-skill-decision-os-treat-open-notes": ".decision-os/threads/skills/thread-card-skill-decision-os-treat-open-notes.md",
-    "thread-card-skill-openspec-explore": ".decision-os/threads/skills/thread-card-skill-openspec-explore.md",
-    "thread-card-skill-openspec-new-change": ".decision-os/threads/skills/thread-card-skill-openspec-new-change.md",
-    "thread-card-skill-openspec-continue-change": ".decision-os/threads/skills/thread-card-skill-openspec-continue-change.md",
-    "thread-card-skill-openspec-ff-change": ".decision-os/threads/skills/thread-card-skill-openspec-ff-change.md",
-    "thread-card-skill-openspec-apply-change": ".decision-os/threads/skills/thread-card-skill-openspec-apply-change.md",
-    "thread-card-skill-openspec-verify-change": ".decision-os/threads/skills/thread-card-skill-openspec-verify-change.md",
-    "thread-card-skill-ticket-improver": ".decision-os/threads/skills/thread-card-skill-ticket-improver.md",
-    "thread-card-skill-product-analyzer": ".decision-os/threads/skills/thread-card-skill-product-analyzer.md",
-    "thread-card-skill-product-rfc-writer": ".decision-os/threads/skills/thread-card-skill-product-rfc-writer.md",
-    "thread-card-skill-product-architect": ".decision-os/threads/skills/thread-card-skill-product-architect.md",
-    "thread-card-skill-product-prd-writer": ".decision-os/threads/skills/thread-card-skill-product-prd-writer.md",
-    "thread-card-skill-product-decomposer": ".decision-os/threads/skills/thread-card-skill-product-decomposer.md",
-    "thread-card-skill-epic-analyzer": ".decision-os/threads/skills/thread-card-skill-epic-analyzer.md",
-    "thread-card-skill-epic-architect": ".decision-os/threads/skills/thread-card-skill-epic-architect.md",
-    "thread-card-skill-epic-quality-planner": ".decision-os/threads/skills/thread-card-skill-epic-quality-planner.md",
-    "thread-card-skill-epic-decomposer": ".decision-os/threads/skills/thread-card-skill-epic-decomposer.md",
     "thread-card-skill-feature-analyzer": ".decision-os/threads/skills/thread-card-skill-feature-analyzer.md",
-    "thread-card-skill-feature-planner": ".decision-os/threads/skills/thread-card-skill-feature-planner.md",
-    "thread-card-skill-bug-rca": ".decision-os/threads/skills/thread-card-skill-bug-rca.md",
-    "thread-card-skill-refactor-analyzer": ".decision-os/threads/skills/thread-card-skill-refactor-analyzer.md",
-    "thread-card-skill-prototype-delivery-planner": ".decision-os/threads/skills/thread-card-skill-prototype-delivery-planner.md"
+    "thread-card-skill-feature-planner": ".decision-os/threads/skills/thread-card-skill-feature-planner.md"
   },
   "deletedNoteIds": {
     "thread-card-codex-skill-1783485668635-1989a1e2": [

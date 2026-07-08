@@ -6474,3 +6474,836 @@ a723018 Unify relationship route scoring
 3d47490 Make thread bottom jump immediate
 e696f73 Fix thread jump button overlay
 ````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-115","timestamp":"2026-07-08T08:56:15.992Z","status":"Codex message","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"115","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_64"} -->
+
+The worktree already had unrelated `.decision-os` changes outside `skills`. I’m staging only the scoped `skills` ledger, card files, thread files, and run summary for a focused commit.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-116","timestamp":"2026-07-08T08:56:15.992Z","status":"in_progress","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"116","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_65","codexTool":"/usr/bin/zsh -lc 'git add .decision-os/skills.json .decision-os/cards/skills .decision-os/threads/skills .decision-os/runs/codex-skills/skills && git commit -m \"Add planning skill cards\"'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git add .decision-os/skills.json .decision-os/cards/skills .decision-os/threads/skills .decision-os/runs/codex-skills/skills && git commit -m "Add planning skill cards"'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-117","timestamp":"2026-07-08T08:56:15.992Z","status":"completed","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"117","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_65","codexTool":"/usr/bin/zsh -lc 'git add .decision-os/skills.json .decision-os/cards/skills .decision-os/threads/skills .decision-os/runs/codex-skills/skills && git commit -m \"Add planning skill cards\"'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git add .decision-os/skills.json .decision-os/cards/skills .decision-os/threads/skills .decision-os/runs/codex-skills/skills && git commit -m "Add planning skill cards"'`
+Status: completed
+Exit code: 0
+
+````text
+[main c5e6203] Add planning skill cards
+ 91 files changed, 19416 insertions(+)
+ create mode 100644 .decision-os/cards/skills/card-1ed7edae-2bff-4f0e-a922-1bb57a0b6e93.md
+ create mode 100644 .decision-os/cards/skills/card-4b63370d-41b1-44e7-be0a-3f3980744bee.md
+ create mode 100644 .decision-os/cards/skills/card-9a1d7843-0bf4-47e8-b6df-cbc4e5571e39.md
+ create mode 100644 .decision-os/cards/skills/card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md
+ create mode 100644 .decision-os/cards/skills/card-codex-skill-1783448349580-e919e6f8.md
+ create mode 100644 .decision-os/cards/skills/card-codex-skill-1783485668635-1989a1e2.md
+ create mode 100644 .decision-os/cards/skills/card-skill-bug-rca.md
+ create mode 100644 .decision-os/cards/skills/card-skill-decision-os-treat-open-notes.md
+ create mode 100644 .decision-os/cards/skills/card-skill-epic-analyzer.md
+ create mode 100644 .decision-os/cards/skills/card-skill-epic-architect.md
+ create mode 100644 .decision-os/cards/skills/card-skill-epic-decomposer.md
+ create mode 100644 .decision-os/cards/skills/card-skill-epic-quality-planner.md
+ create mode 100644 .decision-os/cards/skills/card-skill-executor-implement.md
+ create mode 100644 .decision-os/cards/skills/card-skill-executor-precheck.md
+ create mode 100644 .decision-os/cards/skills/card-skill-executor-spec.md
+ create mode 100644 .decision-os/cards/skills/card-skill-executor-stack.md
+ create mode 100644 .decision-os/cards/skills/card-skill-feature-analyzer.md
+ create mode 100644 .decision-os/cards/skills/card-skill-feature-planner.md
+ create mode 100644 .decision-os/cards/skills/card-skill-gap-orchestration.md
+ create mode 100644 .decision-os/cards/skills/card-skill-improveticket.md
+ create mode 100644 .decision-os/cards/skills/card-skill-openspec-apply-change.md
+ create mode 100644 .decision-os/cards/skills/card-skill-openspec-continue-change.md
+ create mode 100644 .decision-os/cards/skills/card-skill-openspec-explore.md
+ create mode 100644 .decision-os/cards/skills/card-skill-openspec-ff-change.md
+ create mode 100644 .decision-os/cards/skills/card-skill-openspec-new-change.md
+ create mode 100644 .decision-os/cards/skills/card-skill-openspec-verify-change.md
+ create mode 100644 .decision-os/cards/skills/card-skill-openticket.md
+ create mode 100644 .decision-os/cards/skills/card-skill-pipeline-best-existing-skill.md
+ create mode 100644 .decision-os/cards/skills/card-skill-product-analysis.md
+ create mode 100644 .decision-os/cards/skills/card-skill-product-analyzer.md
+ create mode 100644 .decision-os/cards/skills/card-skill-product-architect.md
+ create mode 100644 .decision-os/cards/skills/card-skill-product-decomposer.md
+ create mode 100644 .decision-os/cards/skills/card-skill-product-prd-writer.md
+ create mode 100644 .decision-os/cards/skills/card-skill-product-rfc-writer.md
+ create mode 100644 .decision-os/cards/skills/card-skill-prototype-delivery-planner.md
+ create mode 100644 .decision-os/cards/skills/card-skill-refactor-analyzer.md
+ create mode 100644 .decision-os/cards/skills/card-skill-ticket-improver.md
+ create mode 100644 .decision-os/cards/skills/card-skill-ticket-solver.md
+ create mode 100644 .decision-os/runs/codex-skills/skills/codex-skill-1783448349580-e919e6f8.jsonl
+ create mode 100644 .decision-os/runs/codex-skills/skills/codex-skill-1783448349580-e919e6f8.log
+ create mode 100644 .decision-os/runs/codex-skills/skills/codex-skill-1783484948226-1a5d65cd.jsonl
+ create mode 100644 .decision-os/runs/codex-skills/skills/codex-skill-1783484948226-1a5d65cd.log
+ create mode 100644 .decision-os/runs/codex-skills/skills/codex-skill-1783484948226-1a5d65cd.md
+ create mode 100644 .decision-os/runs/codex-skills/skills/codex-skill-1783485668635-1989a1e2.jsonl
+ create mode 100644 .decision-os/runs/codex-skills/skills/codex-skill-1783485668635-1989a1e2.log
+ create mode 100644 .decision-os/runs/codex-skills/skills/codex-skill-1783493766495-deea83eb.jsonl
+ create mode 100644 .decision-os/runs/codex-skills/skills/codex-skill-1783493766495-deea83eb.log
+ create mode 100644 .decision-os/runs/codex-skills/skills/codex-skill-1783493766495-deea83eb.md
+ create mode 100644 .decision-os/runs/codex-skills/skills/codex-skill-1783500587763-e734fec7.jsonl
+ create mode 100644 .decision-os/runs/codex-skills/skills/codex-skill-1783500587763-e734fec7.log
+ create mode 100644 .decision-os/runs/codex-skills/skills/codex-skill-1783500587763-e734fec7.md
+ create mode 100644 .decision-os/skills.json
+ create mode 100644 .decision-os/threads/skills/conversation-ledger.md
+ create mode 100644 .decision-os/threads/skills/thread-card-1ed7edae-2bff-4f0e-a922-1bb57a0b6e93.md
+ create mode 100644 .decision-os/threads/skills/thread-card-4b63370d-41b1-44e7-be0a-3f3980744bee.md
+ create mode 100644 .decision-os/threads/skills/thread-card-9a1d7843-0bf4-47e8-b6df-cbc4e5571e39.md
+ create mode 100644 .decision-os/threads/skills/thread-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md
+ create mode 100644 .decision-os/threads/skills/thread-card-codex-skill-1783448349580-e919e6f8.md
+ create mode 100644 .decision-os/threads/skills/thread-card-codex-skill-1783485668635-1989a1e2.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-bug-rca.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-decision-os-treat-open-notes.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-epic-analyzer.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-epic-architect.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-epic-decomposer.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-epic-quality-planner.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-executor-implement.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-executor-precheck.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-executor-spec.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-executor-stack.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-feature-analyzer.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-feature-planner.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-gap-orchestration.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-improveticket.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-openspec-apply-change.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-openspec-continue-change.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-openspec-explore.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-openspec-ff-change.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-openspec-new-change.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-openspec-verify-change.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-openticket.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-pipeline-best-existing-skill.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-product-analysis.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-product-analyzer.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-product-architect.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-product-decomposer.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-product-prd-writer.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-product-rfc-writer.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-prototype-delivery-planner.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-refactor-analyzer.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-ticket-improver.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-ticket-solver.md
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-118","timestamp":"2026-07-08T08:56:21.991Z","status":"Codex message","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"118","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_66"} -->
+
+The focused commit was created as `c5e6203`. I’m checking the remaining status only to separate the scoped commit from pre-existing unrelated `.decision-os` changes.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-119","timestamp":"2026-07-08T08:56:21.991Z","status":"in_progress","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"119","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_67","codexTool":"/usr/bin/zsh -lc 'git status --short'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git status --short'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-120","timestamp":"2026-07-08T08:56:21.991Z","status":"completed","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"120","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_67","codexTool":"/usr/bin/zsh -lc 'git status --short'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git status --short'`
+Status: completed
+Exit code: 0
+
+````text
+ M .decision-os/ledgers-canvas.json
+ M .decision-os/runs/codex-skills/skills/codex-skill-1783500587763-e734fec7.jsonl
+ M .decision-os/state.json
+ M .decision-os/tasks-system.json
+ M .decision-os/threads/skills/thread-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md
+ M .decision-os/threads/tasks-system/thread-card-codex-skill-1783429520950-bad8c87c.md
+?? .decision-os/cards/tasks-system/card-5483453a-172e-44cb-9f25-3d9ad69c36cf.md
+?? .decision-os/cards/tasks-system/card-83a2bf48-f8b7-4d7a-b566-b6133b1520c8.md
+?? .decision-os/cards/tasks-system/card-codex-skill-1783443352880-df6faf0b.md
+?? .decision-os/cards/tasks-system/card-codex-skill-1783443647691-91eae060.md
+?? .decision-os/cards/tasks-system/card-codex-skill-1783443977270-47f9133f.md
+?? .decision-os/cards/tasks-system/card-codex-skill-1783495869207-759e2295.md
+?? .decision-os/cards/tasks-system/card-codex-skill-1783496502245-a5e66232.md
+?? .decision-os/runs/codex-skills/tasks-system/codex-skill-1783443352880-df6faf0b.jsonl
+?? .decision-os/runs/codex-skills/tasks-system/codex-skill-1783443352880-df6faf0b.log
+?? .decision-os/runs/codex-skills/tasks-system/codex-skill-1783443647691-91eae060.jsonl
+?? .decision-os/runs/codex-skills/tasks-system/codex-skill-1783443647691-91eae060.log
+?? .decision-os/runs/codex-skills/tasks-system/codex-skill-1783443977270-47f9133f.jsonl
+?? .decision-os/runs/codex-skills/tasks-system/codex-skill-1783443977270-47f9133f.log
+?? .decision-os/runs/codex-skills/tasks-system/codex-skill-1783495869207-759e2295.jsonl
+?? .decision-os/runs/codex-skills/tasks-system/codex-skill-1783495869207-759e2295.log
+?? .decision-os/runs/codex-skills/tasks-system/codex-skill-1783496502245-a5e66232.jsonl
+?? .decision-os/runs/codex-skills/tasks-system/codex-skill-1783496502245-a5e66232.log
+?? .decision-os/threads/tasks-system/thread-card-5483453a-172e-44cb-9f25-3d9ad69c36cf.md
+?? .decision-os/threads/tasks-system/thread-card-83a2bf48-f8b7-4d7a-b566-b6133b1520c8.md
+?? .decision-os/threads/tasks-system/thread-card-codex-skill-1783443352880-df6faf0b.md
+?? .decision-os/threads/tasks-system/thread-card-codex-skill-1783443647691-91eae060.md
+?? .decision-os/threads/tasks-system/thread-card-codex-skill-1783443977270-47f9133f.md
+?? .decision-os/threads/tasks-system/thread-card-codex-skill-1783495869207-759e2295.md
+?? .decision-os/threads/tasks-system/thread-card-codex-skill-1783496502245-a5e66232.md
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-121","timestamp":"2026-07-08T08:56:31.647Z","status":"Codex message","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"121","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_68"} -->
+
+Treated the scoped thread.
+
+Created and committed the `skills` ledger card set in `c5e6203`:
+
+- Added 32 cards: best-skill recommendation, orchestration gap, and one readable card per listed skill/role.
+- Split `improveticket` and `ticket/improver` into separate cards.
+- Updated `Skill Building / Planning` as the index/recommendation card.
+- Appended one explicit final `# AGENT` reply with `note-agent-1783501920000-a6f3c91d`.
+- Verified no missing card files, no dangling relationships, and the source card status remains `todo`.
+
+I did not query or treat unrelated open notes. The worktree still has unrelated pre-existing `.decision-os` changes plus automatic Codex run telemetry written after the commit.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-122","timestamp":"2026-07-08T08:56:31.647Z","status":"complete","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"122","codexKind":"run_status","codexEventType":"turn.completed"} -->
+
+Codex turn completed.
+
+# OPERATOR
+<!-- decision-os:note {"id":"note-1783501077309-032f41281f638","timestamp":"2026-07-08T08:57:57.323Z","voiceFileRef":"/home/jbb/dev/EditorBP/decision-os/.decision-os/voice-uploads/voice-1783501077353-799efa26-3dc7-4535-b275-725045516b93.wav","status":"transcribed","transcriptionStartedAt":"2026-07-08T08:57:57.399Z"} -->
+
+Non mais je voulais pas avoir les 30 cartes avec tous les skills, c'est trop, c'est trop, je ne peux pas lire tout ça. Ce que je veux, et en plus tu m'as mis des trucs épic, des composers, tout ça, il y a plein de trucs dont on s'en fout. Non, non, on veut juste les cartes qui sont les meilleurs skills d'implémentation. Il faut que tu fasses un choix, mais pas plus de cinq cartes pour les skills.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-123","timestamp":"2026-07-08T08:58:03.679Z","status":"running","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"123","codexKind":"run_status","codexEventType":"thread.started"} -->
+
+Codex thread started.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-124","timestamp":"2026-07-08T08:58:04.740Z","status":"running","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"124","codexKind":"run_status","codexEventType":"turn.started"} -->
+
+Codex turn started.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-125","timestamp":"2026-07-08T08:58:18.220Z","status":"Codex message","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"125","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_0"} -->
+
+I’ll correct the card set down to a chosen shortlist: no epic/product decomposer cards, no broad inventory split, and no more than five skill cards. I’ll keep the source card as the index and remove the excess cards/files I created.
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1783501500000-b84d2f6a","timestamp":"2026-07-08T09:05:00.000Z"} -->
+
+Corrected.
+
+1. **Kept five skill cards only.** `executor-spec`, `executor-implement`, `ticket-solver`, `feature/analyzer`, and `feature/planner`.
+2. **Removed the noise.** Deleted the broad 30-card inventory split, including `product/*`, `epic/*`, `*decomposer`, issue improvers, inbox treatment, OpenSpec support cards, and the separate orchestration gap card.
+3. **Updated the source card.** `Skill Building / Planning` now explains the chosen shortlist and the recommended chains only.
+4. **Verified the ledger.** The `skills` ledger now has exactly five `card-skill-*` cards, no missing card files, and no dangling relationships.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-126","timestamp":"2026-07-08T08:58:25.519Z","status":"in_progress","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"126","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_1","codexTool":"/usr/bin/zsh -lc 'tail -140 .decision-os/threads/skills/thread-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'tail -140 .decision-os/threads/skills/thread-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-127","timestamp":"2026-07-08T08:58:25.519Z","status":"completed","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"127","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_1","codexTool":"/usr/bin/zsh -lc 'tail -140 .decision-os/threads/skills/thread-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'tail -140 .decision-os/threads/skills/thread-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md'`
+Status: completed
+Exit code: 0
+
+`````text
+ create mode 100644 .decision-os/runs/codex-skills/skills/codex-skill-1783485668635-1989a1e2.jsonl
+ create mode 100644 .decision-os/runs/codex-skills/skills/codex-skill-1783485668635-1989a1e2.log
+ create mode 100644 .decision-os/runs/codex-skills/skills/codex-skill-1783493766495-deea83eb.jsonl
+ create mode 100644 .decision-os/runs/codex-skills/skills/codex-skill-1783493766495-deea83eb.log
+ create mode 100644 .decision-os/runs/codex-skills/skills/codex-skill-1783493766495-deea83eb.md
+ create mode 100644 .decision-os/runs/codex-skills/skills/codex-skill-1783500587763-e734fec7.jsonl
+ create mode 100644 .decision-os/runs/codex-skills/skills/codex-skill-1783500587763-e734fec7.log
+ create mode 100644 .decision-os/runs/codex-skills/skills/codex-skill-1783500587763-e734fec7.md
+ create mode 100644 .decision-os/skills.json
+ create mode 100644 .decision-os/threads/skills/conversation-ledger.md
+ create mode 100644 .decision-os/threads/skills/thread-card-1ed7edae-2bff-4f0e-a922-1bb57a0b6e93.md
+ create mode 100644 .decision-os/threads/skills/thread-card-4b63370d-41b1-44e7-be0a-3f3980744bee.md
+ create mode 100644 .decision-os/threads/skills/thread-card-9a1d7843-0bf4-47e8-b6df-cbc4e5571e39.md
+ create mode 100644 .decision-os/threads/skills/thread-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md
+ create mode 100644 .decision-os/threads/skills/thread-card-codex-skill-1783448349580-e919e6f8.md
+ create mode 100644 .decision-os/threads/skills/thread-card-codex-skill-1783485668635-1989a1e2.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-bug-rca.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-decision-os-treat-open-notes.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-epic-analyzer.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-epic-architect.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-epic-decomposer.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-epic-quality-planner.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-executor-implement.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-executor-precheck.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-executor-spec.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-executor-stack.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-feature-analyzer.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-feature-planner.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-gap-orchestration.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-improveticket.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-openspec-apply-change.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-openspec-continue-change.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-openspec-explore.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-openspec-ff-change.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-openspec-new-change.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-openspec-verify-change.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-openticket.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-pipeline-best-existing-skill.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-product-analysis.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-product-analyzer.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-product-architect.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-product-decomposer.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-product-prd-writer.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-product-rfc-writer.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-prototype-delivery-planner.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-refactor-analyzer.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-ticket-improver.md
+ create mode 100644 .decision-os/threads/skills/thread-card-skill-ticket-solver.md
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-118","timestamp":"2026-07-08T08:56:21.991Z","status":"Codex message","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"118","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_66"} -->
+
+The focused commit was created as `c5e6203`. I’m checking the remaining status only to separate the scoped commit from pre-existing unrelated `.decision-os` changes.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-119","timestamp":"2026-07-08T08:56:21.991Z","status":"in_progress","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"119","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_67","codexTool":"/usr/bin/zsh -lc 'git status --short'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git status --short'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-120","timestamp":"2026-07-08T08:56:21.991Z","status":"completed","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"120","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_67","codexTool":"/usr/bin/zsh -lc 'git status --short'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git status --short'`
+Status: completed
+Exit code: 0
+
+````text
+ M .decision-os/ledgers-canvas.json
+ M .decision-os/runs/codex-skills/skills/codex-skill-1783500587763-e734fec7.jsonl
+ M .decision-os/state.json
+ M .decision-os/tasks-system.json
+ M .decision-os/threads/skills/thread-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md
+ M .decision-os/threads/tasks-system/thread-card-codex-skill-1783429520950-bad8c87c.md
+?? .decision-os/cards/tasks-system/card-5483453a-172e-44cb-9f25-3d9ad69c36cf.md
+?? .decision-os/cards/tasks-system/card-83a2bf48-f8b7-4d7a-b566-b6133b1520c8.md
+?? .decision-os/cards/tasks-system/card-codex-skill-1783443352880-df6faf0b.md
+?? .decision-os/cards/tasks-system/card-codex-skill-1783443647691-91eae060.md
+?? .decision-os/cards/tasks-system/card-codex-skill-1783443977270-47f9133f.md
+?? .decision-os/cards/tasks-system/card-codex-skill-1783495869207-759e2295.md
+?? .decision-os/cards/tasks-system/card-codex-skill-1783496502245-a5e66232.md
+?? .decision-os/runs/codex-skills/tasks-system/codex-skill-1783443352880-df6faf0b.jsonl
+?? .decision-os/runs/codex-skills/tasks-system/codex-skill-1783443352880-df6faf0b.log
+?? .decision-os/runs/codex-skills/tasks-system/codex-skill-1783443647691-91eae060.jsonl
+?? .decision-os/runs/codex-skills/tasks-system/codex-skill-1783443647691-91eae060.log
+?? .decision-os/runs/codex-skills/tasks-system/codex-skill-1783443977270-47f9133f.jsonl
+?? .decision-os/runs/codex-skills/tasks-system/codex-skill-1783443977270-47f9133f.log
+?? .decision-os/runs/codex-skills/tasks-system/codex-skill-1783495869207-759e2295.jsonl
+?? .decision-os/runs/codex-skills/tasks-system/codex-skill-1783495869207-759e2295.log
+?? .decision-os/runs/codex-skills/tasks-system/codex-skill-1783496502245-a5e66232.jsonl
+?? .decision-os/runs/codex-skills/tasks-system/codex-skill-1783496502245-a5e66232.log
+?? .decision-os/threads/tasks-system/thread-card-5483453a-172e-44cb-9f25-3d9ad69c36cf.md
+?? .decision-os/threads/tasks-system/thread-card-83a2bf48-f8b7-4d7a-b566-b6133b1520c8.md
+?? .decision-os/threads/tasks-system/thread-card-codex-skill-1783443352880-df6faf0b.md
+?? .decision-os/threads/tasks-system/thread-card-codex-skill-1783443647691-91eae060.md
+?? .decision-os/threads/tasks-system/thread-card-codex-skill-1783443977270-47f9133f.md
+?? .decision-os/threads/tasks-system/thread-card-codex-skill-1783495869207-759e2295.md
+?? .decision-os/threads/tasks-system/thread-card-codex-skill-1783496502245-a5e66232.md
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-121","timestamp":"2026-07-08T08:56:31.647Z","status":"Codex message","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"121","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_68"} -->
+
+Treated the scoped thread.
+
+Created and committed the `skills` ledger card set in `c5e6203`:
+
+- Added 32 cards: best-skill recommendation, orchestration gap, and one readable card per listed skill/role.
+- Split `improveticket` and `ticket/improver` into separate cards.
+- Updated `Skill Building / Planning` as the index/recommendation card.
+- Appended one explicit final `# AGENT` reply with `note-agent-1783501920000-a6f3c91d`.
+- Verified no missing card files, no dangling relationships, and the source card status remains `todo`.
+
+I did not query or treat unrelated open notes. The worktree still has unrelated pre-existing `.decision-os` changes plus automatic Codex run telemetry written after the commit.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-122","timestamp":"2026-07-08T08:56:31.647Z","status":"complete","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"122","codexKind":"run_status","codexEventType":"turn.completed"} -->
+
+Codex turn completed.
+
+# OPERATOR
+<!-- decision-os:note {"id":"note-1783501077309-032f41281f638","timestamp":"2026-07-08T08:57:57.323Z","voiceFileRef":"/home/jbb/dev/EditorBP/decision-os/.decision-os/voice-uploads/voice-1783501077353-799efa26-3dc7-4535-b275-725045516b93.wav","status":"transcribed","transcriptionStartedAt":"2026-07-08T08:57:57.399Z"} -->
+
+Non mais je voulais pas avoir les 30 cartes avec tous les skills, c'est trop, c'est trop, je ne peux pas lire tout ça. Ce que je veux, et en plus tu m'as mis des trucs épic, des composers, tout ça, il y a plein de trucs dont on s'en fout. Non, non, on veut juste les cartes qui sont les meilleurs skills d'implémentation. Il faut que tu fasses un choix, mais pas plus de cinq cartes pour les skills.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-123","timestamp":"2026-07-08T08:58:03.679Z","status":"running","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"123","codexKind":"run_status","codexEventType":"thread.started"} -->
+
+Codex thread started.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-124","timestamp":"2026-07-08T08:58:04.740Z","status":"running","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"124","codexKind":"run_status","codexEventType":"turn.started"} -->
+
+Codex turn started.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-125","timestamp":"2026-07-08T08:58:18.220Z","status":"Codex message","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"125","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_0"} -->
+
+I’ll correct the card set down to a chosen shortlist: no epic/product decomposer cards, no broad inventory split, and no more than five skill cards. I’ll keep the source card as the index and remove the excess cards/files I created.
+`````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-128","timestamp":"2026-07-08T08:58:25.519Z","status":"in_progress","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"128","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_2","codexTool":"/usr/bin/zsh -lc \"sed -n '1,220p' .decision-os/cards/skills/card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "sed -n '1,220p' .decision-os/cards/skills/card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md"`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-129","timestamp":"2026-07-08T08:58:25.519Z","status":"completed","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"129","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_2","codexTool":"/usr/bin/zsh -lc \"sed -n '1,220p' .decision-os/cards/skills/card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md\"","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc "sed -n '1,220p' .decision-os/cards/skills/card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md"`
+Status: completed
+Exit code: 0
+
+````text
+## A. Created Card Set
+
+1. **Best skill card.** `Best Skill / Technical Planning Pipeline` explains the recommended existing chain for code execution order: `executor-precheck -> executor-stack -> executor-spec -> executor-implement`.
+2. **Improver cards.** `Skill Card / improveticket` and `Skill Card / ticket-improver` are separate cards so the local Codex skill and DroidFactory role can be read independently.
+3. **Per-skill cards.** The prior inventory entries from `Local Codex`, `DroidFleet OpenSpec`, and `DroidFactory` were split into one card per skill or role.
+4. **Gap card.** `Skill Gap / Orchestration` captures the missing contract for launching one sub-agent per block of tasks while preserving the existing executor vocabulary.
+
+---
+
+## B. Recommendation
+
+1. **Planning base.** Start with `executor-precheck` to verify approved `Specs`, `Data Model`, `Runtime State`, repo facts, and scope boundary.
+2. **Stack analysis.** Continue with `executor-stack` to identify `Root Blocks`, validate stack choices, and create the agnostic directory scaffold.
+3. **Task structure.** Use `executor-spec` as the strongest executor-side `goal -> implementation structure` splitter because it creates the `Master Ledger`.
+4. **Implementation.** Use `executor-implement` after the `Master Ledger`; it consumes the generated scaffold and verifies code, tests, compile/launch, and screenshots when applicable.
+
+---
+
+## C. Source Boundary
+
+1. **Inventory source.** The split cards reuse wording from `.decision-os/cards/skills/card-9a1d7843-0bf4-47e8-b6df-cbc4e5571e39.md`.
+2. **Executor source.** The recommendation reuses wording from `.skills/executor-precheck/SKILL.md`, `.skills/executor-stack/SKILL.md`, `.skills/executor-spec/SKILL.md`, and `.skills/executor-implement/SKILL.md`.
+3. **No status change.** This card remains in its existing ledger status because the operator did not request a status change.
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-130","timestamp":"2026-07-08T08:58:25.519Z","status":"in_progress","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"130","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_3","codexTool":"/usr/bin/zsh -lc \"node -e \\\"const fs=require('fs'); const l=JSON.parse(fs.readFileSync('.decision-os/skills.json','utf8')); console.log(l.cards.filter(c=>String(c.id).startsWith('card-skill-')).map(c=>c.id+'\\\\t'+c.title).join('\\\\n'))\\\"\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "node -e \"const fs=require('fs'); const l=JSON.parse(fs.readFileSync('.decision-os/skills.json','utf8')); console.log(l.cards.filter(c=>String(c.id).startsWith('card-skill-')).map(c=>c.id+'\\t'+c.title).join('\\n'))\""`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-131","timestamp":"2026-07-08T08:58:25.519Z","status":"completed","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"131","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_3","codexTool":"/usr/bin/zsh -lc \"node -e \\\"const fs=require('fs'); const l=JSON.parse(fs.readFileSync('.decision-os/skills.json','utf8')); console.log(l.cards.filter(c=>String(c.id).startsWith('card-skill-')).map(c=>c.id+'\\\\t'+c.title).join('\\\\n'))\\\"\"","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc "node -e \"const fs=require('fs'); const l=JSON.parse(fs.readFileSync('.decision-os/skills.json','utf8')); console.log(l.cards.filter(c=>String(c.id).startsWith('card-skill-')).map(c=>c.id+'\\t'+c.title).join('\\n'))\""`
+Status: completed
+Exit code: 0
+
+````text
+card-skill-pipeline-best-existing-skill	Best Skill / Technical Planning Pipeline
+card-skill-gap-orchestration	Skill Gap / Orchestration
+card-skill-openticket	Skill Card / openticket
+card-skill-improveticket	Skill Card / improveticket
+card-skill-product-analysis	Skill Card / product-analysis
+card-skill-ticket-solver	Skill Card / ticket-solver
+card-skill-executor-precheck	Skill Card / executor-precheck
+card-skill-executor-stack	Skill Card / executor-stack
+card-skill-executor-spec	Skill Card / executor-spec
+card-skill-executor-implement	Skill Card / executor-implement
+card-skill-decision-os-treat-open-notes	Skill Card / decision-os-treat-open-notes
+card-skill-openspec-explore	Skill Card / openspec-explore
+card-skill-openspec-new-change	Skill Card / openspec-new-change
+card-skill-openspec-continue-change	Skill Card / openspec-continue-change
+card-skill-openspec-ff-change	Skill Card / openspec-ff-change
+card-skill-openspec-apply-change	Skill Card / openspec-apply-change
+card-skill-openspec-verify-change	Skill Card / openspec-verify-change
+card-skill-ticket-improver	Skill Card / ticket-improver
+card-skill-product-analyzer	Skill Card / product-analyzer
+card-skill-product-rfc-writer	Skill Card / product-rfc-writer
+card-skill-product-architect	Skill Card / product-architect
+card-skill-product-prd-writer	Skill Card / product-prd-writer
+card-skill-product-decomposer	Skill Card / product-decomposer
+card-skill-epic-analyzer	Skill Card / epic-analyzer
+card-skill-epic-architect	Skill Card / epic-architect
+card-skill-epic-quality-planner	Skill Card / epic-quality-planner
+card-skill-epic-decomposer	Skill Card / epic-decomposer
+card-skill-feature-analyzer	Skill Card / feature-analyzer
+card-skill-feature-planner	Skill Card / feature-planner
+card-skill-bug-rca	Skill Card / bug-rca
+card-skill-refactor-analyzer	Skill Card / refactor-analyzer
+card-skill-prototype-delivery-planner	Skill Card / prototype-delivery-planner
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-132","timestamp":"2026-07-08T08:58:25.519Z","status":"in_progress","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"132","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_4","codexTool":"/usr/bin/zsh -lc 'git status --short -- .decision-os/skills.json .decision-os/cards/skills .decision-os/threads/skills .decision-os/runs/codex-skills/skills'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git status --short -- .decision-os/skills.json .decision-os/cards/skills .decision-os/threads/skills .decision-os/runs/codex-skills/skills'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-133","timestamp":"2026-07-08T08:58:25.519Z","status":"completed","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"133","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_4","codexTool":"/usr/bin/zsh -lc 'git status --short -- .decision-os/skills.json .decision-os/cards/skills .decision-os/threads/skills .decision-os/runs/codex-skills/skills'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git status --short -- .decision-os/skills.json .decision-os/cards/skills .decision-os/threads/skills .decision-os/runs/codex-skills/skills'`
+Status: completed
+Exit code: 0
+
+````text
+ M .decision-os/runs/codex-skills/skills/codex-skill-1783500587763-e734fec7.jsonl
+ M .decision-os/runs/codex-skills/skills/codex-skill-1783500587763-e734fec7.log
+ M .decision-os/runs/codex-skills/skills/codex-skill-1783500587763-e734fec7.md
+ M .decision-os/skills.json
+ M .decision-os/threads/skills/thread-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-134","timestamp":"2026-07-08T08:58:48.384Z","status":"Codex message","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"134","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_5"} -->
+
+I’m reducing the ledger to five chosen skill cards: `executor-spec`, `executor-implement`, `ticket-solver`, `feature/analyzer`, and `feature/planner`. These are the highest-signal implementation-facing skills from the existing inventory; the issue improvers and epic/product decomposers will be removed from this card set.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-135","timestamp":"2026-07-08T08:59:32.069Z","status":"in_progress","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"135","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_6","codexTool":"/usr/bin/zsh -lc \"node <<'NODE'\nconst fs = require('fs');\nconst path = require('path');\nconst root = process.cwd();\nconst ledgerPath = path.join(root, '.decision-os/skills.json');\nconst ledger = JSON.parse(fs.readFileSync(ledgerPath, 'utf8'));\nconst keepSkillIds = new Set([\n  'card-skill-executor-spec',\n  'card-skill-executor-implement',\n  'card-skill-ticket-solver',\n  'card-skill-feature-analyzer',\n  'card-skill-feature-planner',\n]);\nconst removeSkillIds = (ledger.cards || [])\n  .map((card) => String(card.id || ''))\n  .filter((id) => id.startsWith('card-skill-') && \"'!keepSkillIds.has(id));\nconst removeSet = new Set(removeSkillIds);\nledger.cards = (ledger.cards || []).filter((card) => !removeSet.has(String(card.id || '\"'')));\nledger.relationships = (ledger.relationships || []).filter((relationship) => {\n  const from = String(relationship.from || '');\n  const to = String(relationship.to || '');\n  return \"'!removeSet.has(from) && !removeSet.has(to);\n});\nfor (const id of removeSkillIds) {\n  const cardFile = path.join(root, `.decision-os/cards/skills/${id}.md`);\n  const threadId = `thread-${id}`;\n  const threadFile = path.join(root, `.decision-os/threads/skills/thread-${id}.md`);\n  if (fs.existsSync(cardFile)) fs.unlinkSync(cardFile);\n  if (fs.existsSync(threadFile)) fs.unlinkSync(threadFile);\n  if (ledger.threadFiles) delete ledger.threadFiles[threadId];\n}\nconst layout = [\n  ['\"'card-skill-executor-spec', -4960, -760, 780, 380],\n  ['card-skill-executor-implement', -4140, -760, 780, 380],\n  ['card-skill-ticket-solver', -3320, -760, 780, 380],\n  ['card-skill-feature-analyzer', -4960, -340, 780, 380],\n  ['card-skill-feature-planner', -4140, -340, 780, 380],\n];\nfor (const [id, x, y, w, h] of layout) {\n  const card = ledger.cards.find((entry) => entry.id === id);\n  if (card) Object.assign(card, { x, y, w, h });\n}\nfunction writeCard(id, markdown) {\n  fs.writeFileSync(path.join(root, \"'`.decision-os/cards/skills/${id}.md`), `${markdown.trim()}'\"\\\\n\"'`, '\"'utf8');\n}\nwriteCard('card-skill-executor-spec', \"'`## A. Why Kept'\"\\\\n\\\\n1. **Best implementation planner.** \\\\\"'`executor-spec'\"\\\\\"'` is the strongest executor-side '\"\\\\\"'`goal -> implementation structure'\"\\\\\"'` splitter.'\"\\\\n2. **Output.** It builds the \\\\\"'`Master Ledger'\"\\\\\"'`: domains, one test suite per spec, inputs, effects, helpers, screens/pages, components, state, control-flow entries, unresolved questions, and spec candidates.'\"\\\\n3. **Use.** Use it after stack analysis when the operator needs code execution order and concrete implementation structure.\\\\n\\\\n---\\\\n\\\\n## B. Boundary\\\\n\\\\n1. **No architecture invention.** It must speak with words present in the \\\\\"'`Specs'\"\\\\\"'`, '\"\\\\\"'`Data Model'\"\\\\\"'`, '\"\\\\\"'`Runtime State'\"\\\\\"'`, existing codebase, references, or operator instruction.'\"\\\\n2. **No one-pass inference.** It creates the \\\\\"'`Master Ledger'\"\\\\\"'` section by section, then re-assesses each section.'\"\\\\n3. **Gate.** It is ready for \\\\\"'`executor-implement'\"\\\\\"'` only when there are no dangling references, unreachable control-flow entries, missing helpers/effects/components/state/domains, or blocking unresolved items.'\"\\\\n\"'`);\nwriteCard('\"'card-skill-executor-implement', \"'`## A. Why Kept'\"\\\\n\\\\n1. **Best direct implementation skill.** \\\\\"'`executor-implement'\"\\\\\"'` consumes the '\"\\\\\"'`Master Ledger'\"\\\\\"'` and turns the generated scaffold into complete implementation.'\"\\\\n2. **Scope.** It delivers real code with no placeholder code, no missing feature, and no bug from the prepared scaffold.\\\\n3. **Use.** Use it after \\\\\"'`executor-spec'\"\\\\\"'`, not before.'\"\\\\n\\\\n---\\\\n\\\\n## B. Boundary\\\\n\\\\n1. **No architecture inference.** It must use the \\\\\"'`Root Blocks'\"\\\\\"'`, domains, screens/pages, components, inputs, actions, controllers, helpers, effects, state, and tests from the '\"\\\\\"'`Master Ledger'\"\\\\\"'`.'\"\\\\n2. **Stop condition.** If implementation requires a missing \\\\\"'`Spec'\"\\\\\"'`, '\"\\\\\"'`Data Model'\"\\\\\"'`, '\"\\\\\"'`Runtime State'\"\\\\\"'`, domain, input, action, controller, helper, effect, screen/page, component, or test, stop and ask an operator question.'\"\\\\n3. **Verification.** Confirm each \\\\\"'`Master Ledger'\"\\\\\"'` item is implemented, each '\"\\\\\"'`Spec'\"\\\\\"'` still has a test suite, helper/effect unit tests pass, compile when applicable, launch app/site when applicable, screenshot every screen, and inspect the result.'\"\\\\n\"'`);\nwriteCard('\"'card-skill-ticket-solver', \"'`## A. Why Kept'\"\\\\n\\\\n1. **Best existing ticket implementer.** \\\\\"'`ticket-solver'\"\\\\\"'` solves an existing GitLab ticket end to end.'\"\\\\n2. **Planning before code.** It still creates a working document and full control-flow DAG before implementation.\\\\n3. **Use.** Use it after a ticket exists, not at the start of a broad goal.\\\\n\\\\n---\\\\n\\\\n## B. Boundary\\\\n\\\\n1. **Downstream role.** It should consume a prepared ticket, create the working DAG, implement, test, and report evidence.\\\\n2. **Not a broad splitter.** It should not replace \\\\\"'`executor-spec'\"\\\\\"'` for turning broad specs into implementation structure.'\"\\\\n3. **Best fit.** Use when the workflow state is already a GitLab issue and the requested outcome is a solved ticket.\\\\n\"'`);\nwriteCard('\"'card-skill-feature-analyzer', \"'`## A. Why Kept'\"\\\\n\\\\n1. **Best feature surface mapper.** \\\\\"'`feature/analyzer'\"\\\\\"'` maps feature intent to codebase surface area.'\"\\\\n2. **Output.** It produces evidence-backed task breakdown, risks, planner TODOs, planner decisions, and recommended implementation order.\\\\n3. **Use.** Use before \\\\\"'`feature/planner'\"\\\\\"'` when a feature needs grounded codebase surface mapping before the implementation DAG.'\"\\\\n\\\\n---\\\\n\\\\n## B. Boundary\\\\n\\\\n1. **Feature issue scope.** It is useful when the unit of work is one feature issue.\\\\n2. **Not an implementer.** It prepares the planner; it does not implement code.\\\\n3. **No epic/product decomposition.** It is kept because it is closer to implementation order than \\\\\"'`product/decomposer'\"\\\\\"'`, '\"\\\\\"'`epic/decomposer'\"\\\\\"'`, or other composer roles.'\"\\\\n\"'`);\nwriteCard('\"'card-skill-feature-planner', \"'`## A. Why Kept'\"\\\\n\\\\n1. **Best single-feature implementation planner.** \\\\\"'`feature/planner'\"\\\\\"'` produces the implementation plan for one feature issue.'\"\\\\n2. **Output.** It creates \\\\\"'`Spec'\"\\\\\"'`, '\"\\\\\"'`Codebase Impact Intent'\"\\\\\"'`, '\"\\\\\"'`Dependency Blockers'\"\\\\\"'`, and '\"\\\\\"'`Ideal Control-flow DAG'\"\\\\\"'`.'\"\\\\n3. **Use.** Use it after \\\\\"'`feature/analyzer'\"\\\\\"'` when the needed output is a feature-level implementation DAG.'\"\\\\n\\\\n---\\\\n\\\\n## B. Boundary\\\\n\\\\n1. **No child issues.** It does not create child issues.\\\\n2. **One feature.** It is for one feature issue, not a whole product or epic pipeline.\\\\n3. **Implementation handoff.** Its output should feed implementation, audit, and verification steps in the feature pipeline.\\\\n\"'`);\nconst sourceContent = `## A. Chosen Skill Cards'\"\\\\n\\\\n1. **\\\\\"'`executor-spec'\"\\\\\"'`.** Best implementation planner: turns approved '\"\\\\\"'`Specs'\"\\\\\"'`, '\"\\\\\"'`Data Model'\"\\\\\"'`, '\"\\\\\"'`Runtime State'\"\\\\\"'`, and stack analysis into the '\"\\\\\"'`Master Ledger'\"\\\\\"'`.'\"\\\\n2. **\\\\\"'`executor-implement'\"\\\\\"'`.** Best direct implementation skill: consumes the '\"\\\\\"'`Master Ledger'\"\\\\\"'` and implements the scaffold with tests and verification.'\"\\\\n3. **\\\\\"'`ticket-solver'\"\\\\\"'`.** Best existing-ticket implementer: solves a prepared GitLab ticket end to end after creating a working document and control-flow DAG.'\"\\\\n4. **\\\\\"'`feature/analyzer'\"\\\\\"'`.** Best feature surface mapper: produces evidence-backed task breakdown and recommended implementation order.'\"\\\\n5. **\\\\\"'`feature/planner'\"\\\\\"'`.** Best single-feature implementation planner: produces '\"\\\\\"'`Spec'\"\\\\\"'`, '\"\\\\\"'`Codebase Impact Intent'\"\\\\\"'`, '\"\\\\\"'`Dependency Blockers'\"\\\\\"'`, and '\"\\\\\"'`Ideal Control-flow DAG'\"\\\\\"'`.'\"\\\\n\\\\n---\\\\n\\\\n## B. What Was Removed\\\\n\\\\n1. **Removed broad inventory cards.** The previous 30-card split was too much to read and has been removed from the active \\\\\"'`skills'\"\\\\\"'` ledger.'\"\\\\n2. **Removed irrelevant roles.** \\\\\"'`product/*'\"\\\\\"'`, '\"\\\\\"'`epic/*'\"\\\\\"'`, '\"\\\\\"'`*decomposer'\"\\\\\"'`, issue improvers, inbox treatment, and OpenSpec support cards were removed from this card set because they are not the best implementation-skill shortlist.'\"\\\\n3. **No separate gap card.** The orchestration gap is not kept as a card because the operator asked for no more than five skill cards.\\\\n\\\\n---\\\\n\\\\n## C. Recommended Chain\\\\n\\\\n1. **Broad specs to implementation.** Use \\\\\"'`executor-spec -> executor-implement'\"\\\\\"'` after the necessary precheck and stack analysis exist.'\"\\\\n2. **Existing GitLab ticket.** Use \\\\\"'`ticket-solver'\"\\\\\"'` when there is already a prepared ticket.'\"\\\\n3. **Single feature issue.** Use \\\\\"'`feature/analyzer -> feature/planner'\"\\\\\"'` when the work needs codebase surface mapping and a feature-level implementation DAG.'\"\\\\n\"'`;\nfs.writeFileSync(path.join(root, '\"'.decision-os/cards/skills/card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md'), sourceContent, 'utf8');\nfs.writeFileSync(ledgerPath, \"'`${JSON.stringify(ledger, null, 2)}'\"\\\\n\"'`, '\"'utf8');\nconsole.log(\"'`kept=${Array.from(keepSkillIds).join('\"',')}\"'`);\nconsole.log(`removed=${removeSkillIds.length}`);\nNODE'"} -->
+
+**Tool call** `/usr/bin/zsh -lc "node <<'NODE'
+const fs = require('fs');
+const path = require('path');
+const root = process.cwd();
+const ledgerPath = path.join(root, '.decision-os/skills.json');
+const ledger = JSON.parse(fs.readFileSync(ledgerPath, 'utf8'));
+const keepSkillIds = new Set([
+  'card-skill-executor-spec',
+  'card-skill-executor-implement',
+  'card-skill-ticket-solver',
+  'card-skill-feature-analyzer',
+  'card-skill-feature-planner',
+]);
+const removeSkillIds = (ledger.cards || [])
+  .map((card) => String(card.id || ''))
+  .filter((id) => id.startsWith('card-skill-') && "'!keepSkillIds.has(id));
+const removeSet = new Set(removeSkillIds);
+ledger.cards = (ledger.cards || []).filter((card) => !removeSet.has(String(card.id || '"'')));
+ledger.relationships = (ledger.relationships || []).filter((relationship) => {
+  const from = String(relationship.from || '');
+  const to = String(relationship.to || '');
+  return "'!removeSet.has(from) && !removeSet.has(to);
+});
+for (const id of removeSkillIds) {
+  const cardFile = path.join(root, `.decision-os/cards/skills/${id}.md`);
+  const threadId = `thread-${id}`;
+  const threadFile = path.join(root, `.decision-os/threads/skills/thread-${id}.md`);
+  if (fs.existsSync(cardFile)) fs.unlinkSync(cardFile);
+  if (fs.existsSync(threadFile)) fs.unlinkSync(threadFile);
+  if (ledger.threadFiles) delete ledger.threadFiles[threadId];
+}
+const layout = [
+  ['"'card-skill-executor-spec', -4960, -760, 780, 380],
+  ['card-skill-executor-implement', -4140, -760, 780, 380],
+  ['card-skill-ticket-solver', -3320, -760, 780, 380],
+  ['card-skill-feature-analyzer', -4960, -340, 780, 380],
+  ['card-skill-feature-planner', -4140, -340, 780, 380],
+];
+for (const [id, x, y, w, h] of layout) {
+  const card = ledger.cards.find((entry) => entry.id === id);
+  if (card) Object.assign(card, { x, y, w, h });
+}
+function writeCard(id, markdown) {
+  fs.writeFileSync(path.join(root, "'`.decision-os/cards/skills/${id}.md`), `${markdown.trim()}'"\\n"'`, '"'utf8');
+}
+writeCard('card-skill-executor-spec', "'`## A. Why Kept'"\\n\\n1. **Best implementation planner.** \\"'`executor-spec'"\\"'` is the strongest executor-side '"\\"'`goal -> implementation structure'"\\"'` splitter.'"\\n2. **Output.** It builds the \\"'`Master Ledger'"\\"'`: domains, one test suite per spec, inputs, effects, helpers, screens/pages, components, state, control-flow entries, unresolved questions, and spec candidates.'"\\n3. **Use.** Use it after stack analysis when the operator needs code execution order and concrete implementation structure.\\n\\n---\\n\\n## B. Boundary\\n\\n1. **No architecture invention.** It must speak with words present in the \\"'`Specs'"\\"'`, '"\\"'`Data Model'"\\"'`, '"\\"'`Runtime State'"\\"'`, existing codebase, references, or operator instruction.'"\\n2. **No one-pass inference.** It creates the \\"'`Master Ledger'"\\"'` section by section, then re-assesses each section.'"\\n3. **Gate.** It is ready for \\"'`executor-implement'"\\"'` only when there are no dangling references, unreachable control-flow entries, missing helpers/effects/components/state/domains, or blocking unresolved items.'"\\n"'`);
+writeCard('"'card-skill-executor-implement', "'`## A. Why Kept'"\\n\\n1. **Best direct implementation skill.** \\"'`executor-implement'"\\"'` consumes the '"\\"'`Master Ledger'"\\"'` and turns the generated scaffold into complete implementation.'"\\n2. **Scope.** It delivers real code with no placeholder code, no missing feature, and no bug from the prepared scaffold.\\n3. **Use.** Use it after \\"'`executor-spec'"\\"'`, not before.'"\\n\\n---\\n\\n## B. Boundary\\n\\n1. **No architecture inference.** It must use the \\"'`Root Blocks'"\\"'`, domains, screens/pages, components, inputs, actions, controllers, helpers, effects, state, and tests from the '"\\"'`Master Ledger'"\\"'`.'"\\n2. **Stop condition.** If implementation requires a missing \\"'`Spec'"\\"'`, '"\\"'`Data Model'"\\"'`, '"\\"'`Runtime State'"\\"'`, domain, input, action, controller, helper, effect, screen/page, component, or test, stop and ask an operator question.'"\\n3. **Verification.** Confirm each \\"'`Master Ledger'"\\"'` item is implemented, each '"\\"'`Spec'"\\"'` still has a test suite, helper/effect unit tests pass, compile when applicable, launch app/site when applicable, screenshot every screen, and inspect the result.'"\\n"'`);
+writeCard('"'card-skill-ticket-solver', "'`## A. Why Kept'"\\n\\n1. **Best existing ticket implementer.** \\"'`ticket-solver'"\\"'` solves an existing GitLab ticket end to end.'"\\n2. **Planning before code.** It still creates a working document and full control-flow DAG before implementation.\\n3. **Use.** Use it after a ticket exists, not at the start of a broad goal.\\n\\n---\\n\\n## B. Boundary\\n\\n1. **Downstream role.** It should consume a prepared ticket, create the working DAG, implement, test, and report evidence.\\n2. **Not a broad splitter.** It should not replace \\"'`executor-spec'"\\"'` for turning broad specs into implementation structure.'"\\n3. **Best fit.** Use when the workflow state is already a GitLab issue and the requested outcome is a solved ticket.\\n"'`);
+writeCard('"'card-skill-feature-analyzer', "'`## A. Why Kept'"\\n\\n1. **Best feature surface mapper.** \\"'`feature/analyzer'"\\"'` maps feature intent to codebase surface area.'"\\n2. **Output.** It produces evidence-backed task breakdown, risks, planner TODOs, planner decisions, and recommended implementation order.\\n3. **Use.** Use before \\"'`feature/planner'"\\"'` when a feature needs grounded codebase surface mapping before the implementation DAG.'"\\n\\n---\\n\\n## B. Boundary\\n\\n1. **Feature issue scope.** It is useful when the unit of work is one feature issue.\\n2. **Not an implementer.** It prepares the planner; it does not implement code.\\n3. **No epic/product decomposition.** It is kept because it is closer to implementation order than \\"'`product/decomposer'"\\"'`, '"\\"'`epic/decomposer'"\\"'`, or other composer roles.'"\\n"'`);
+writeCard('"'card-skill-feature-planner', "'`## A. Why Kept'"\\n\\n1. **Best single-feature implementation planner.** \\"'`feature/planner'"\\"'` produces the implementation plan for one feature issue.'"\\n2. **Output.** It creates \\"'`Spec'"\\"'`, '"\\"'`Codebase Impact Intent'"\\"'`, '"\\"'`Dependency Blockers'"\\"'`, and '"\\"'`Ideal Control-flow DAG'"\\"'`.'"\\n3. **Use.** Use it after \\"'`feature/analyzer'"\\"'` when the needed output is a feature-level implementation DAG.'"\\n\\n---\\n\\n## B. Boundary\\n\\n1. **No child issues.** It does not create child issues.\\n2. **One feature.** It is for one feature issue, not a whole product or epic pipeline.\\n3. **Implementation handoff.** Its output should feed implementation, audit, and verification steps in the feature pipeline.\\n"'`);
+const sourceContent = `## A. Chosen Skill Cards'"\\n\\n1. **\\"'`executor-spec'"\\"'`.** Best implementation planner: turns approved '"\\"'`Specs'"\\"'`, '"\\"'`Data Model'"\\"'`, '"\\"'`Runtime State'"\\"'`, and stack analysis into the '"\\"'`Master Ledger'"\\"'`.'"\\n2. **\\"'`executor-implement'"\\"'`.** Best direct implementation skill: consumes the '"\\"'`Master Ledger'"\\"'` and implements the scaffold with tests and verification.'"\\n3. **\\"'`ticket-solver'"\\"'`.** Best existing-ticket implementer: solves a prepared GitLab ticket end to end after creating a working document and control-flow DAG.'"\\n4. **\\"'`feature/analyzer'"\\"'`.** Best feature surface mapper: produces evidence-backed task breakdown and recommended implementation order.'"\\n5. **\\"'`feature/planner'"\\"'`.** Best single-feature implementation planner: produces '"\\"'`Spec'"\\"'`, '"\\"'`Codebase Impact Intent'"\\"'`, '"\\"'`Dependency Blockers'"\\"'`, and '"\\"'`Ideal Control-flow DAG'"\\"'`.'"\\n\\n---\\n\\n## B. What Was Removed\\n\\n1. **Removed broad inventory cards.** The previous 30-card split was too much to read and has been removed from the active \\"'`skills'"\\"'` ledger.'"\\n2. **Removed irrelevant roles.** \\"'`product/*'"\\"'`, '"\\"'`epic/*'"\\"'`, '"\\"'`*decomposer'"\\"'`, issue improvers, inbox treatment, and OpenSpec support cards were removed from this card set because they are not the best implementation-skill shortlist.'"\\n3. **No separate gap card.** The orchestration gap is not kept as a card because the operator asked for no more than five skill cards.\\n\\n---\\n\\n## C. Recommended Chain\\n\\n1. **Broad specs to implementation.** Use \\"'`executor-spec -> executor-implement'"\\"'` after the necessary precheck and stack analysis exist.'"\\n2. **Existing GitLab ticket.** Use \\"'`ticket-solver'"\\"'` when there is already a prepared ticket.'"\\n3. **Single feature issue.** Use \\"'`feature/analyzer -> feature/planner'"\\"'` when the work needs codebase surface mapping and a feature-level implementation DAG.'"\\n"'`;
+fs.writeFileSync(path.join(root, '"'.decision-os/cards/skills/card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md'), sourceContent, 'utf8');
+fs.writeFileSync(ledgerPath, "'`${JSON.stringify(ledger, null, 2)}'"\\n"'`, '"'utf8');
+console.log("'`kept=${Array.from(keepSkillIds).join('"',')}"'`);
+console.log(`removed=${removeSkillIds.length}`);
+NODE'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-136","timestamp":"2026-07-08T08:59:32.069Z","status":"completed","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"136","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_6","codexTool":"/usr/bin/zsh -lc \"node <<'NODE'\nconst fs = require('fs');\nconst path = require('path');\nconst root = process.cwd();\nconst ledgerPath = path.join(root, '.decision-os/skills.json');\nconst ledger = JSON.parse(fs.readFileSync(ledgerPath, 'utf8'));\nconst keepSkillIds = new Set([\n  'card-skill-executor-spec',\n  'card-skill-executor-implement',\n  'card-skill-ticket-solver',\n  'card-skill-feature-analyzer',\n  'card-skill-feature-planner',\n]);\nconst removeSkillIds = (ledger.cards || [])\n  .map((card) => String(card.id || ''))\n  .filter((id) => id.startsWith('card-skill-') && \"'!keepSkillIds.has(id));\nconst removeSet = new Set(removeSkillIds);\nledger.cards = (ledger.cards || []).filter((card) => !removeSet.has(String(card.id || '\"'')));\nledger.relationships = (ledger.relationships || []).filter((relationship) => {\n  const from = String(relationship.from || '');\n  const to = String(relationship.to || '');\n  return \"'!removeSet.has(from) && !removeSet.has(to);\n});\nfor (const id of removeSkillIds) {\n  const cardFile = path.join(root, `.decision-os/cards/skills/${id}.md`);\n  const threadId = `thread-${id}`;\n  const threadFile = path.join(root, `.decision-os/threads/skills/thread-${id}.md`);\n  if (fs.existsSync(cardFile)) fs.unlinkSync(cardFile);\n  if (fs.existsSync(threadFile)) fs.unlinkSync(threadFile);\n  if (ledger.threadFiles) delete ledger.threadFiles[threadId];\n}\nconst layout = [\n  ['\"'card-skill-executor-spec', -4960, -760, 780, 380],\n  ['card-skill-executor-implement', -4140, -760, 780, 380],\n  ['card-skill-ticket-solver', -3320, -760, 780, 380],\n  ['card-skill-feature-analyzer', -4960, -340, 780, 380],\n  ['card-skill-feature-planner', -4140, -340, 780, 380],\n];\nfor (const [id, x, y, w, h] of layout) {\n  const card = ledger.cards.find((entry) => entry.id === id);\n  if (card) Object.assign(card, { x, y, w, h });\n}\nfunction writeCard(id, markdown) {\n  fs.writeFileSync(path.join(root, \"'`.decision-os/cards/skills/${id}.md`), `${markdown.trim()}'\"\\\\n\"'`, '\"'utf8');\n}\nwriteCard('card-skill-executor-spec', \"'`## A. Why Kept'\"\\\\n\\\\n1. **Best implementation planner.** \\\\\"'`executor-spec'\"\\\\\"'` is the strongest executor-side '\"\\\\\"'`goal -> implementation structure'\"\\\\\"'` splitter.'\"\\\\n2. **Output.** It builds the \\\\\"'`Master Ledger'\"\\\\\"'`: domains, one test suite per spec, inputs, effects, helpers, screens/pages, components, state, control-flow entries, unresolved questions, and spec candidates.'\"\\\\n3. **Use.** Use it after stack analysis when the operator needs code execution order and concrete implementation structure.\\\\n\\\\n---\\\\n\\\\n## B. Boundary\\\\n\\\\n1. **No architecture invention.** It must speak with words present in the \\\\\"'`Specs'\"\\\\\"'`, '\"\\\\\"'`Data Model'\"\\\\\"'`, '\"\\\\\"'`Runtime State'\"\\\\\"'`, existing codebase, references, or operator instruction.'\"\\\\n2. **No one-pass inference.** It creates the \\\\\"'`Master Ledger'\"\\\\\"'` section by section, then re-assesses each section.'\"\\\\n3. **Gate.** It is ready for \\\\\"'`executor-implement'\"\\\\\"'` only when there are no dangling references, unreachable control-flow entries, missing helpers/effects/components/state/domains, or blocking unresolved items.'\"\\\\n\"'`);\nwriteCard('\"'card-skill-executor-implement', \"'`## A. Why Kept'\"\\\\n\\\\n1. **Best direct implementation skill.** \\\\\"'`executor-implement'\"\\\\\"'` consumes the '\"\\\\\"'`Master Ledger'\"\\\\\"'` and turns the generated scaffold into complete implementation.'\"\\\\n2. **Scope.** It delivers real code with no placeholder code, no missing feature, and no bug from the prepared scaffold.\\\\n3. **Use.** Use it after \\\\\"'`executor-spec'\"\\\\\"'`, not before.'\"\\\\n\\\\n---\\\\n\\\\n## B. Boundary\\\\n\\\\n1. **No architecture inference.** It must use the \\\\\"'`Root Blocks'\"\\\\\"'`, domains, screens/pages, components, inputs, actions, controllers, helpers, effects, state, and tests from the '\"\\\\\"'`Master Ledger'\"\\\\\"'`.'\"\\\\n2. **Stop condition.** If implementation requires a missing \\\\\"'`Spec'\"\\\\\"'`, '\"\\\\\"'`Data Model'\"\\\\\"'`, '\"\\\\\"'`Runtime State'\"\\\\\"'`, domain, input, action, controller, helper, effect, screen/page, component, or test, stop and ask an operator question.'\"\\\\n3. **Verification.** Confirm each \\\\\"'`Master Ledger'\"\\\\\"'` item is implemented, each '\"\\\\\"'`Spec'\"\\\\\"'` still has a test suite, helper/effect unit tests pass, compile when applicable, launch app/site when applicable, screenshot every screen, and inspect the result.'\"\\\\n\"'`);\nwriteCard('\"'card-skill-ticket-solver', \"'`## A. Why Kept'\"\\\\n\\\\n1. **Best existing ticket implementer.** \\\\\"'`ticket-solver'\"\\\\\"'` solves an existing GitLab ticket end to end.'\"\\\\n2. **Planning before code.** It still creates a working document and full control-flow DAG before implementation.\\\\n3. **Use.** Use it after a ticket exists, not at the start of a broad goal.\\\\n\\\\n---\\\\n\\\\n## B. Boundary\\\\n\\\\n1. **Downstream role.** It should consume a prepared ticket, create the working DAG, implement, test, and report evidence.\\\\n2. **Not a broad splitter.** It should not replace \\\\\"'`executor-spec'\"\\\\\"'` for turning broad specs into implementation structure.'\"\\\\n3. **Best fit.** Use when the workflow state is already a GitLab issue and the requested outcome is a solved ticket.\\\\n\"'`);\nwriteCard('\"'card-skill-feature-analyzer', \"'`## A. Why Kept'\"\\\\n\\\\n1. **Best feature surface mapper.** \\\\\"'`feature/analyzer'\"\\\\\"'` maps feature intent to codebase surface area.'\"\\\\n2. **Output.** It produces evidence-backed task breakdown, risks, planner TODOs, planner decisions, and recommended implementation order.\\\\n3. **Use.** Use before \\\\\"'`feature/planner'\"\\\\\"'` when a feature needs grounded codebase surface mapping before the implementation DAG.'\"\\\\n\\\\n---\\\\n\\\\n## B. Boundary\\\\n\\\\n1. **Feature issue scope.** It is useful when the unit of work is one feature issue.\\\\n2. **Not an implementer.** It prepares the planner; it does not implement code.\\\\n3. **No epic/product decomposition.** It is kept because it is closer to implementation order than \\\\\"'`product/decomposer'\"\\\\\"'`, '\"\\\\\"'`epic/decomposer'\"\\\\\"'`, or other composer roles.'\"\\\\n\"'`);\nwriteCard('\"'card-skill-feature-planner', \"'`## A. Why Kept'\"\\\\n\\\\n1. **Best single-feature implementation planner.** \\\\\"'`feature/planner'\"\\\\\"'` produces the implementation plan for one feature issue.'\"\\\\n2. **Output.** It creates \\\\\"'`Spec'\"\\\\\"'`, '\"\\\\\"'`Codebase Impact Intent'\"\\\\\"'`, '\"\\\\\"'`Dependency Blockers'\"\\\\\"'`, and '\"\\\\\"'`Ideal Control-flow DAG'\"\\\\\"'`.'\"\\\\n3. **Use.** Use it after \\\\\"'`feature/analyzer'\"\\\\\"'` when the needed output is a feature-level implementation DAG.'\"\\\\n\\\\n---\\\\n\\\\n## B. Boundary\\\\n\\\\n1. **No child issues.** It does not create child issues.\\\\n2. **One feature.** It is for one feature issue, not a whole product or epic pipeline.\\\\n3. **Implementation handoff.** Its output should feed implementation, audit, and verification steps in the feature pipeline.\\\\n\"'`);\nconst sourceContent = `## A. Chosen Skill Cards'\"\\\\n\\\\n1. **\\\\\"'`executor-spec'\"\\\\\"'`.** Best implementation planner: turns approved '\"\\\\\"'`Specs'\"\\\\\"'`, '\"\\\\\"'`Data Model'\"\\\\\"'`, '\"\\\\\"'`Runtime State'\"\\\\\"'`, and stack analysis into the '\"\\\\\"'`Master Ledger'\"\\\\\"'`.'\"\\\\n2. **\\\\\"'`executor-implement'\"\\\\\"'`.** Best direct implementation skill: consumes the '\"\\\\\"'`Master Ledger'\"\\\\\"'` and implements the scaffold with tests and verification.'\"\\\\n3. **\\\\\"'`ticket-solver'\"\\\\\"'`.** Best existing-ticket implementer: solves a prepared GitLab ticket end to end after creating a working document and control-flow DAG.'\"\\\\n4. **\\\\\"'`feature/analyzer'\"\\\\\"'`.** Best feature surface mapper: produces evidence-backed task breakdown and recommended implementation order.'\"\\\\n5. **\\\\\"'`feature/planner'\"\\\\\"'`.** Best single-feature implementation planner: produces '\"\\\\\"'`Spec'\"\\\\\"'`, '\"\\\\\"'`Codebase Impact Intent'\"\\\\\"'`, '\"\\\\\"'`Dependency Blockers'\"\\\\\"'`, and '\"\\\\\"'`Ideal Control-flow DAG'\"\\\\\"'`.'\"\\\\n\\\\n---\\\\n\\\\n## B. What Was Removed\\\\n\\\\n1. **Removed broad inventory cards.** The previous 30-card split was too much to read and has been removed from the active \\\\\"'`skills'\"\\\\\"'` ledger.'\"\\\\n2. **Removed irrelevant roles.** \\\\\"'`product/*'\"\\\\\"'`, '\"\\\\\"'`epic/*'\"\\\\\"'`, '\"\\\\\"'`*decomposer'\"\\\\\"'`, issue improvers, inbox treatment, and OpenSpec support cards were removed from this card set because they are not the best implementation-skill shortlist.'\"\\\\n3. **No separate gap card.** The orchestration gap is not kept as a card because the operator asked for no more than five skill cards.\\\\n\\\\n---\\\\n\\\\n## C. Recommended Chain\\\\n\\\\n1. **Broad specs to implementation.** Use \\\\\"'`executor-spec -> executor-implement'\"\\\\\"'` after the necessary precheck and stack analysis exist.'\"\\\\n2. **Existing GitLab ticket.** Use \\\\\"'`ticket-solver'\"\\\\\"'` when there is already a prepared ticket.'\"\\\\n3. **Single feature issue.** Use \\\\\"'`feature/analyzer -> feature/planner'\"\\\\\"'` when the work needs codebase surface mapping and a feature-level implementation DAG.'\"\\\\n\"'`;\nfs.writeFileSync(path.join(root, '\"'.decision-os/cards/skills/card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md'), sourceContent, 'utf8');\nfs.writeFileSync(ledgerPath, \"'`${JSON.stringify(ledger, null, 2)}'\"\\\\n\"'`, '\"'utf8');\nconsole.log(\"'`kept=${Array.from(keepSkillIds).join('\"',')}\"'`);\nconsole.log(`removed=${removeSkillIds.length}`);\nNODE'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc "node <<'NODE'
+const fs = require('fs');
+const path = require('path');
+const root = process.cwd();
+const ledgerPath = path.join(root, '.decision-os/skills.json');
+const ledger = JSON.parse(fs.readFileSync(ledgerPath, 'utf8'));
+const keepSkillIds = new Set([
+  'card-skill-executor-spec',
+  'card-skill-executor-implement',
+  'card-skill-ticket-solver',
+  'card-skill-feature-analyzer',
+  'card-skill-feature-planner',
+]);
+const removeSkillIds = (ledger.cards || [])
+  .map((card) => String(card.id || ''))
+  .filter((id) => id.startsWith('card-skill-') && "'!keepSkillIds.has(id));
+const removeSet = new Set(removeSkillIds);
+ledger.cards = (ledger.cards || []).filter((card) => !removeSet.has(String(card.id || '"'')));
+ledger.relationships = (ledger.relationships || []).filter((relationship) => {
+  const from = String(relationship.from || '');
+  const to = String(relationship.to || '');
+  return "'!removeSet.has(from) && !removeSet.has(to);
+});
+for (const id of removeSkillIds) {
+  const cardFile = path.join(root, `.decision-os/cards/skills/${id}.md`);
+  const threadId = `thread-${id}`;
+  const threadFile = path.join(root, `.decision-os/threads/skills/thread-${id}.md`);
+  if (fs.existsSync(cardFile)) fs.unlinkSync(cardFile);
+  if (fs.existsSync(threadFile)) fs.unlinkSync(threadFile);
+  if (ledger.threadFiles) delete ledger.threadFiles[threadId];
+}
+const layout = [
+  ['"'card-skill-executor-spec', -4960, -760, 780, 380],
+  ['card-skill-executor-implement', -4140, -760, 780, 380],
+  ['card-skill-ticket-solver', -3320, -760, 780, 380],
+  ['card-skill-feature-analyzer', -4960, -340, 780, 380],
+  ['card-skill-feature-planner', -4140, -340, 780, 380],
+];
+for (const [id, x, y, w, h] of layout) {
+  const card = ledger.cards.find((entry) => entry.id === id);
+  if (card) Object.assign(card, { x, y, w, h });
+}
+function writeCard(id, markdown) {
+  fs.writeFileSync(path.join(root, "'`.decision-os/cards/skills/${id}.md`), `${markdown.trim()}'"\\n"'`, '"'utf8');
+}
+writeCard('card-skill-executor-spec', "'`## A. Why Kept'"\\n\\n1. **Best implementation planner.** \\"'`executor-spec'"\\"'` is the strongest executor-side '"\\"'`goal -> implementation structure'"\\"'` splitter.'"\\n2. **Output.** It builds the \\"'`Master Ledger'"\\"'`: domains, one test suite per spec, inputs, effects, helpers, screens/pages, components, state, control-flow entries, unresolved questions, and spec candidates.'"\\n3. **Use.** Use it after stack analysis when the operator needs code execution order and concrete implementation structure.\\n\\n---\\n\\n## B. Boundary\\n\\n1. **No architecture invention.** It must speak with words present in the \\"'`Specs'"\\"'`, '"\\"'`Data Model'"\\"'`, '"\\"'`Runtime State'"\\"'`, existing codebase, references, or operator instruction.'"\\n2. **No one-pass inference.** It creates the \\"'`Master Ledger'"\\"'` section by section, then re-assesses each section.'"\\n3. **Gate.** It is ready for \\"'`executor-implement'"\\"'` only when there are no dangling references, unreachable control-flow entries, missing helpers/effects/components/state/domains, or blocking unresolved items.'"\\n"'`);
+writeCard('"'card-skill-executor-implement', "'`## A. Why Kept'"\\n\\n1. **Best direct implementation skill.** \\"'`executor-implement'"\\"'` consumes the '"\\"'`Master Ledger'"\\"'` and turns the generated scaffold into complete implementation.'"\\n2. **Scope.** It delivers real code with no placeholder code, no missing feature, and no bug from the prepared scaffold.\\n3. **Use.** Use it after \\"'`executor-spec'"\\"'`, not before.'"\\n\\n---\\n\\n## B. Boundary\\n\\n1. **No architecture inference.** It must use the \\"'`Root Blocks'"\\"'`, domains, screens/pages, components, inputs, actions, controllers, helpers, effects, state, and tests from the '"\\"'`Master Ledger'"\\"'`.'"\\n2. **Stop condition.** If implementation requires a missing \\"'`Spec'"\\"'`, '"\\"'`Data Model'"\\"'`, '"\\"'`Runtime State'"\\"'`, domain, input, action, controller, helper, effect, screen/page, component, or test, stop and ask an operator question.'"\\n3. **Verification.** Confirm each \\"'`Master Ledger'"\\"'` item is implemented, each '"\\"'`Spec'"\\"'` still has a test suite, helper/effect unit tests pass, compile when applicable, launch app/site when applicable, screenshot every screen, and inspect the result.'"\\n"'`);
+writeCard('"'card-skill-ticket-solver', "'`## A. Why Kept'"\\n\\n1. **Best existing ticket implementer.** \\"'`ticket-solver'"\\"'` solves an existing GitLab ticket end to end.'"\\n2. **Planning before code.** It still creates a working document and full control-flow DAG before implementation.\\n3. **Use.** Use it after a ticket exists, not at the start of a broad goal.\\n\\n---\\n\\n## B. Boundary\\n\\n1. **Downstream role.** It should consume a prepared ticket, create the working DAG, implement, test, and report evidence.\\n2. **Not a broad splitter.** It should not replace \\"'`executor-spec'"\\"'` for turning broad specs into implementation structure.'"\\n3. **Best fit.** Use when the workflow state is already a GitLab issue and the requested outcome is a solved ticket.\\n"'`);
+writeCard('"'card-skill-feature-analyzer', "'`## A. Why Kept'"\\n\\n1. **Best feature surface mapper.** \\"'`feature/analyzer'"\\"'` maps feature intent to codebase surface area.'"\\n2. **Output.** It produces evidence-backed task breakdown, risks, planner TODOs, planner decisions, and recommended implementation order.\\n3. **Use.** Use before \\"'`feature/planner'"\\"'` when a feature needs grounded codebase surface mapping before the implementation DAG.'"\\n\\n---\\n\\n## B. Boundary\\n\\n1. **Feature issue scope.** It is useful when the unit of work is one feature issue.\\n2. **Not an implementer.** It prepares the planner; it does not implement code.\\n3. **No epic/product decomposition.** It is kept because it is closer to implementation order than \\"'`product/decomposer'"\\"'`, '"\\"'`epic/decomposer'"\\"'`, or other composer roles.'"\\n"'`);
+writeCard('"'card-skill-feature-planner', "'`## A. Why Kept'"\\n\\n1. **Best single-feature implementation planner.** \\"'`feature/planner'"\\"'` produces the implementation plan for one feature issue.'"\\n2. **Output.** It creates \\"'`Spec'"\\"'`, '"\\"'`Codebase Impact Intent'"\\"'`, '"\\"'`Dependency Blockers'"\\"'`, and '"\\"'`Ideal Control-flow DAG'"\\"'`.'"\\n3. **Use.** Use it after \\"'`feature/analyzer'"\\"'` when the needed output is a feature-level implementation DAG.'"\\n\\n---\\n\\n## B. Boundary\\n\\n1. **No child issues.** It does not create child issues.\\n2. **One feature.** It is for one feature issue, not a whole product or epic pipeline.\\n3. **Implementation handoff.** Its output should feed implementation, audit, and verification steps in the feature pipeline.\\n"'`);
+const sourceContent = `## A. Chosen Skill Cards'"\\n\\n1. **\\"'`executor-spec'"\\"'`.** Best implementation planner: turns approved '"\\"'`Specs'"\\"'`, '"\\"'`Data Model'"\\"'`, '"\\"'`Runtime State'"\\"'`, and stack analysis into the '"\\"'`Master Ledger'"\\"'`.'"\\n2. **\\"'`executor-implement'"\\"'`.** Best direct implementation skill: consumes the '"\\"'`Master Ledger'"\\"'` and implements the scaffold with tests and verification.'"\\n3. **\\"'`ticket-solver'"\\"'`.** Best existing-ticket implementer: solves a prepared GitLab ticket end to end after creating a working document and control-flow DAG.'"\\n4. **\\"'`feature/analyzer'"\\"'`.** Best feature surface mapper: produces evidence-backed task breakdown and recommended implementation order.'"\\n5. **\\"'`feature/planner'"\\"'`.** Best single-feature implementation planner: produces '"\\"'`Spec'"\\"'`, '"\\"'`Codebase Impact Intent'"\\"'`, '"\\"'`Dependency Blockers'"\\"'`, and '"\\"'`Ideal Control-flow DAG'"\\"'`.'"\\n\\n---\\n\\n## B. What Was Removed\\n\\n1. **Removed broad inventory cards.** The previous 30-card split was too much to read and has been removed from the active \\"'`skills'"\\"'` ledger.'"\\n2. **Removed irrelevant roles.** \\"'`product/*'"\\"'`, '"\\"'`epic/*'"\\"'`, '"\\"'`*decomposer'"\\"'`, issue improvers, inbox treatment, and OpenSpec support cards were removed from this card set because they are not the best implementation-skill shortlist.'"\\n3. **No separate gap card.** The orchestration gap is not kept as a card because the operator asked for no more than five skill cards.\\n\\n---\\n\\n## C. Recommended Chain\\n\\n1. **Broad specs to implementation.** Use \\"'`executor-spec -> executor-implement'"\\"'` after the necessary precheck and stack analysis exist.'"\\n2. **Existing GitLab ticket.** Use \\"'`ticket-solver'"\\"'` when there is already a prepared ticket.'"\\n3. **Single feature issue.** Use \\"'`feature/analyzer -> feature/planner'"\\"'` when the work needs codebase surface mapping and a feature-level implementation DAG.'"\\n"'`;
+fs.writeFileSync(path.join(root, '"'.decision-os/cards/skills/card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md'), sourceContent, 'utf8');
+fs.writeFileSync(ledgerPath, "'`${JSON.stringify(ledger, null, 2)}'"\\n"'`, '"'utf8');
+console.log("'`kept=${Array.from(keepSkillIds).join('"',')}"'`);
+console.log(`removed=${removeSkillIds.length}`);
+NODE'`
+Status: completed
+Exit code: 0
+
+````text
+kept=card-skill-executor-spec,card-skill-executor-implement,card-skill-ticket-solver,card-skill-feature-analyzer,card-skill-feature-planner
+removed=27
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-137","timestamp":"2026-07-08T08:59:44.568Z","status":"Codex message","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"137","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_7"} -->
+
+The excess 27 generated skill cards are removed from the active ledger. I’m verifying that only five `card-skill-*` cards remain and that there are no broken card-file or relationship references.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-138","timestamp":"2026-07-08T08:59:44.568Z","status":"in_progress","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"138","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_8","codexTool":"/usr/bin/zsh -lc \"sed -n '1,220p' .decision-os/cards/skills/card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "sed -n '1,220p' .decision-os/cards/skills/card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md"`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-139","timestamp":"2026-07-08T08:59:44.568Z","status":"completed","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"139","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_8","codexTool":"/usr/bin/zsh -lc \"sed -n '1,220p' .decision-os/cards/skills/card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md\"","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc "sed -n '1,220p' .decision-os/cards/skills/card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md"`
+Status: completed
+Exit code: 0
+
+````text
+## A. Chosen Skill Cards
+
+1. **`executor-spec`.** Best implementation planner: turns approved `Specs`, `Data Model`, `Runtime State`, and stack analysis into the `Master Ledger`.
+2. **`executor-implement`.** Best direct implementation skill: consumes the `Master Ledger` and implements the scaffold with tests and verification.
+3. **`ticket-solver`.** Best existing-ticket implementer: solves a prepared GitLab ticket end to end after creating a working document and control-flow DAG.
+4. **`feature/analyzer`.** Best feature surface mapper: produces evidence-backed task breakdown and recommended implementation order.
+5. **`feature/planner`.** Best single-feature implementation planner: produces `Spec`, `Codebase Impact Intent`, `Dependency Blockers`, and `Ideal Control-flow DAG`.
+
+---
+
+## B. What Was Removed
+
+1. **Removed broad inventory cards.** The previous 30-card split was too much to read and has been removed from the active `skills` ledger.
+2. **Removed irrelevant roles.** `product/*`, `epic/*`, `*decomposer`, issue improvers, inbox treatment, and OpenSpec support cards were removed from this card set because they are not the best implementation-skill shortlist.
+3. **No separate gap card.** The orchestration gap is not kept as a card because the operator asked for no more than five skill cards.
+
+---
+
+## C. Recommended Chain
+
+1. **Broad specs to implementation.** Use `executor-spec -> executor-implement` after the necessary precheck and stack analysis exist.
+2. **Existing GitLab ticket.** Use `ticket-solver` when there is already a prepared ticket.
+3. **Single feature issue.** Use `feature/analyzer -> feature/planner` when the work needs codebase surface mapping and a feature-level implementation DAG.
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-140","timestamp":"2026-07-08T08:59:44.568Z","status":"in_progress","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"140","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_9","codexTool":"/usr/bin/zsh -lc 'git status --short -- .decision-os/skills.json .decision-os/cards/skills .decision-os/threads/skills .decision-os/runs/codex-skills/skills'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git status --short -- .decision-os/skills.json .decision-os/cards/skills .decision-os/threads/skills .decision-os/runs/codex-skills/skills'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-141","timestamp":"2026-07-08T08:59:44.568Z","status":"completed","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"141","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_9","codexTool":"/usr/bin/zsh -lc 'git status --short -- .decision-os/skills.json .decision-os/cards/skills .decision-os/threads/skills .decision-os/runs/codex-skills/skills'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git status --short -- .decision-os/skills.json .decision-os/cards/skills .decision-os/threads/skills .decision-os/runs/codex-skills/skills'`
+Status: completed
+Exit code: 0
+
+````text
+ M .decision-os/cards/skills/card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md
+ D .decision-os/cards/skills/card-skill-bug-rca.md
+ D .decision-os/cards/skills/card-skill-decision-os-treat-open-notes.md
+ D .decision-os/cards/skills/card-skill-epic-analyzer.md
+ D .decision-os/cards/skills/card-skill-epic-architect.md
+ D .decision-os/cards/skills/card-skill-epic-decomposer.md
+ D .decision-os/cards/skills/card-skill-epic-quality-planner.md
+ M .decision-os/cards/skills/card-skill-executor-implement.md
+ D .decision-os/cards/skills/card-skill-executor-precheck.md
+ M .decision-os/cards/skills/card-skill-executor-spec.md
+ D .decision-os/cards/skills/card-skill-executor-stack.md
+ M .decision-os/cards/skills/card-skill-feature-analyzer.md
+ M .decision-os/cards/skills/card-skill-feature-planner.md
+ D .decision-os/cards/skills/card-skill-gap-orchestration.md
+ D .decision-os/cards/skills/card-skill-improveticket.md
+ D .decision-os/cards/skills/card-skill-openspec-apply-change.md
+ D .decision-os/cards/skills/card-skill-openspec-continue-change.md
+ D .decision-os/cards/skills/card-skill-openspec-explore.md
+ D .decision-os/cards/skills/card-skill-openspec-ff-change.md
+ D .decision-os/cards/skills/card-skill-openspec-new-change.md
+ D .decision-os/cards/skills/card-skill-openspec-verify-change.md
+ D .decision-os/cards/skills/card-skill-openticket.md
+ D .decision-os/cards/skills/card-skill-pipeline-best-existing-skill.md
+ D .decision-os/cards/skills/card-skill-product-analysis.md
+ D .decision-os/cards/skills/card-skill-product-analyzer.md
+ D .decision-os/cards/skills/card-skill-product-architect.md
+ D .decision-os/cards/skills/card-skill-product-decomposer.md
+ D .decision-os/cards/skills/card-skill-product-prd-writer.md
+ D .decision-os/cards/skills/card-skill-product-rfc-writer.md
+ D .decision-os/cards/skills/card-skill-prototype-delivery-planner.md
+ D .decision-os/cards/skills/card-skill-refactor-analyzer.md
+ D .decision-os/cards/skills/card-skill-ticket-improver.md
+ M .decision-os/cards/skills/card-skill-ticket-solver.md
+ M .decision-os/runs/codex-skills/skills/codex-skill-1783500587763-e734fec7.jsonl
+ M .decision-os/runs/codex-skills/skills/codex-skill-1783500587763-e734fec7.log
+ M .decision-os/runs/codex-skills/skills/codex-skill-1783500587763-e734fec7.md
+ M .decision-os/skills.json
+ M .decision-os/threads/skills/thread-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md
+ D .decision-os/threads/skills/thread-card-skill-bug-rca.md
+ D .decision-os/threads/skills/thread-card-skill-decision-os-treat-open-notes.md
+ D .decision-os/threads/skills/thread-card-skill-epic-analyzer.md
+ D .decision-os/threads/skills/thread-card-skill-epic-architect.md
+ D .decision-os/threads/skills/thread-card-skill-epic-decomposer.md
+ D .decision-os/threads/skills/thread-card-skill-epic-quality-planner.md
+ D .decision-os/threads/skills/thread-card-skill-executor-precheck.md
+ D .decision-os/threads/skills/thread-card-skill-executor-stack.md
+ D .decision-os/threads/skills/thread-card-skill-gap-orchestration.md
+ D .decision-os/threads/skills/thread-card-skill-improveticket.md
+ D .decision-os/threads/skills/thread-card-skill-openspec-apply-change.md
+ D .decision-os/threads/skills/thread-card-skill-openspec-continue-change.md
+ D .decision-os/threads/skills/thread-card-skill-openspec-explore.md
+ D .decision-os/threads/skills/thread-card-skill-openspec-ff-change.md
+ D .decision-os/threads/skills/thread-card-skill-openspec-new-change.md
+ D .decision-os/threads/skills/thread-card-skill-openspec-verify-change.md
+ D .decision-os/threads/skills/thread-card-skill-openticket.md
+ D .decision-os/threads/skills/thread-card-skill-pipeline-best-existing-skill.md
+ D .decision-os/threads/skills/thread-card-skill-product-analysis.md
+ D .decision-os/threads/skills/thread-card-skill-product-analyzer.md
+ D .decision-os/threads/skills/thread-card-skill-product-architect.md
+ D .decision-os/threads/skills/thread-card-skill-product-decomposer.md
+ D .decision-os/threads/skills/thread-card-skill-product-prd-writer.md
+ D .decision-os/threads/skills/thread-card-skill-product-rfc-writer.md
+ D .decision-os/threads/skills/thread-card-skill-prototype-delivery-planner.md
+ D .decision-os/threads/skills/thread-card-skill-refactor-analyzer.md
+ D .decision-os/threads/skills/thread-card-skill-ticket-improver.md
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-142","timestamp":"2026-07-08T08:59:44.568Z","status":"in_progress","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"142","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_10","codexTool":"/usr/bin/zsh -lc \"node -e \\\"const fs=require('fs'); const l=JSON.parse(fs.readFileSync('.decision-os/skills.json','utf8')); const skillCards=l.cards.filter(c=>String(c.id).startsWith('card-skill-')); console.log(skillCards.map(c=>c.id+'\\\\t'+c.title).join('\\\\n')); console.log('skillCardCount=' + skillCards.length); const missing=l.cards.filter(c=>c.comment&&c.comment.contentFile&&\"'!fs.existsSync(c.comment.contentFile)); console.log('\"'missingCardFiles=' + missing.length); const relMissing=(l.relationships||[]).filter(r=>\"'!l.cards.some(c=>c.id===r.from)||!l.cards.some(c=>c.id===r.to)); console.log('\"'danglingRelationships=' + relMissing.length);\\\"\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "node -e \"const fs=require('fs'); const l=JSON.parse(fs.readFileSync('.decision-os/skills.json','utf8')); const skillCards=l.cards.filter(c=>String(c.id).startsWith('card-skill-')); console.log(skillCards.map(c=>c.id+'\\t'+c.title).join('\\n')); console.log('skillCardCount=' + skillCards.length); const missing=l.cards.filter(c=>c.comment&&c.comment.contentFile&&"'!fs.existsSync(c.comment.contentFile)); console.log('"'missingCardFiles=' + missing.length); const relMissing=(l.relationships||[]).filter(r=>"'!l.cards.some(c=>c.id===r.from)||!l.cards.some(c=>c.id===r.to)); console.log('"'danglingRelationships=' + relMissing.length);\""`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-143","timestamp":"2026-07-08T08:59:44.568Z","status":"completed","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"143","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_10","codexTool":"/usr/bin/zsh -lc \"node -e \\\"const fs=require('fs'); const l=JSON.parse(fs.readFileSync('.decision-os/skills.json','utf8')); const skillCards=l.cards.filter(c=>String(c.id).startsWith('card-skill-')); console.log(skillCards.map(c=>c.id+'\\\\t'+c.title).join('\\\\n')); console.log('skillCardCount=' + skillCards.length); const missing=l.cards.filter(c=>c.comment&&c.comment.contentFile&&\"'!fs.existsSync(c.comment.contentFile)); console.log('\"'missingCardFiles=' + missing.length); const relMissing=(l.relationships||[]).filter(r=>\"'!l.cards.some(c=>c.id===r.from)||!l.cards.some(c=>c.id===r.to)); console.log('\"'danglingRelationships=' + relMissing.length);\\\"\"","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc "node -e \"const fs=require('fs'); const l=JSON.parse(fs.readFileSync('.decision-os/skills.json','utf8')); const skillCards=l.cards.filter(c=>String(c.id).startsWith('card-skill-')); console.log(skillCards.map(c=>c.id+'\\t'+c.title).join('\\n')); console.log('skillCardCount=' + skillCards.length); const missing=l.cards.filter(c=>c.comment&&c.comment.contentFile&&"'!fs.existsSync(c.comment.contentFile)); console.log('"'missingCardFiles=' + missing.length); const relMissing=(l.relationships||[]).filter(r=>"'!l.cards.some(c=>c.id===r.from)||!l.cards.some(c=>c.id===r.to)); console.log('"'danglingRelationships=' + relMissing.length);\""`
+Status: completed
+Exit code: 0
+
+````text
+card-skill-ticket-solver	Skill Card / ticket-solver
+card-skill-executor-spec	Skill Card / executor-spec
+card-skill-executor-implement	Skill Card / executor-implement
+card-skill-feature-analyzer	Skill Card / feature-analyzer
+card-skill-feature-planner	Skill Card / feature-planner
+skillCardCount=5
+missingCardFiles=0
+danglingRelationships=0
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-144","timestamp":"2026-07-08T08:59:44.568Z","status":"in_progress","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"144","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_11","codexTool":"/usr/bin/zsh -lc \"node bin/ledger-cli.mjs overview --ledger .decision-os/skills.json | sed -n '1,120p'\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "node bin/ledger-cli.mjs overview --ledger .decision-os/skills.json | sed -n '1,120p'"`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-145","timestamp":"2026-07-08T08:59:44.568Z","status":"completed","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"145","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_11","codexTool":"/usr/bin/zsh -lc \"node bin/ledger-cli.mjs overview --ledger .decision-os/skills.json | sed -n '1,120p'\"","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc "node bin/ledger-cli.mjs overview --ledger .decision-os/skills.json | sed -n '1,120p'"`
+Status: completed
+Exit code: 0
+
+````text
+Cards (11)
+- card-9a1d7843-0bf4-47e8-b6df-cbc4e5571e39 :: Planning Skill Inventory [note]
+- card-codex-skill-1783448349580-e919e6f8 :: human-context-synthesis result [codex-skill-run]
+- card-1ed7edae-2bff-4f0e-a922-1bb57a0b6e93 :: New card [note]
+- card-codex-skill-1783485668635-1989a1e2 :: skill-creator result [codex-skill-run]
+- card-4b63370d-41b1-44e7-be0a-3f3980744bee :: Visual Mock Up Skill [note]
+- card-c48369dc-1d97-4c6c-ab36-fd01d819d03a :: Skill Building / Planning [note]
+- card-skill-ticket-solver :: Skill Card / ticket-solver [note]
+- card-skill-executor-spec :: Skill Card / executor-spec [note]
+- card-skill-executor-implement :: Skill Card / executor-implement [note]
+- card-skill-feature-analyzer :: Skill Card / feature-analyzer [note]
+- card-skill-feature-planner :: Skill Card / feature-planner [note]
+
+Relationships (7)
+- rel-card-9a1d7843-0bf4-47e8-b6df-cbc4e5571e39-card-codex-skill-1783448349580-e919e6f8: Planning Skill Inventory (card-9a1d7843-0bf4-47e8-b6df-cbc4e5571e39) --human-context-synthesis--> human-context-synthesis result (card-codex-skill-1783448349580-e919e6f8)
+- rel-card-1ed7edae-2bff-4f0e-a922-1bb57a0b6e93-card-codex-skill-1783485668635-1989a1e2: New card (card-1ed7edae-2bff-4f0e-a922-1bb57a0b6e93) --skill-creator--> skill-creator result (card-codex-skill-1783485668635-1989a1e2)
+- rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-ticket-solver: Skill Building / Planning (card-c48369dc-1d97-4c6c-ab36-fd01d819d03a) --ticket-solver--> Skill Card / ticket-solver (card-skill-ticket-solver)
+- rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-executor-spec: Skill Building / Planning (card-c48369dc-1d97-4c6c-ab36-fd01d819d03a) --executor-spec--> Skill Card / executor-spec (card-skill-executor-spec)
+- rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-executor-implement: Skill Building / Planning (card-c48369dc-1d97-4c6c-ab36-fd01d819d03a) --executor-implement--> Skill Card / executor-implement (card-skill-executor-implement)
+- rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-feature-analyzer: Skill Building / Planning (card-c48369dc-1d97-4c6c-ab36-fd01d819d03a) --feature/analyzer--> Skill Card / feature-analyzer (card-skill-feature-analyzer)
+- rel-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a-card-skill-feature-planner: Skill Building / Planning (card-c48369dc-1d97-4c6c-ab36-fd01d819d03a) --feature/planner--> Skill Card / feature-planner (card-skill-feature-planner)
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-146","timestamp":"2026-07-08T08:59:50.814Z","status":"Codex message","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"146","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_12"} -->
+
+The active ledger now has exactly five `card-skill-*` cards and seven relationships total, with no missing card files or dangling relationships. I’m updating the run summary and adding the scoped reply for the correction.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-147","timestamp":"2026-07-08T08:59:56.005Z","status":"in_progress","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"147","codexKind":"file_change","codexEventType":"item.started","codexItemId":"item_13"} -->
+
+- /home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/skills/codex-skill-1783500587763-e734fec7.md: update
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-148","timestamp":"2026-07-08T08:59:56.005Z","status":"completed","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"148","codexKind":"file_change","codexEventType":"item.completed","codexItemId":"item_13"} -->
+
+- /home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/skills/codex-skill-1783500587763-e734fec7.md: update
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-149","timestamp":"2026-07-08T09:00:01.199Z","status":"Codex message","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"149","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_14"} -->
+
+I’m appending the final answer for this new operator note now, then I’ll commit the cleanup as a focused follow-up to the prior card-split commit.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-150","timestamp":"2026-07-08T09:00:08.526Z","status":"in_progress","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"150","codexKind":"file_change","codexEventType":"item.started","codexItemId":"item_15"} -->
+
+- /home/jbb/dev/EditorBP/decision-os/.decision-os/threads/skills/thread-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md: update
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-151","timestamp":"2026-07-08T09:00:08.526Z","status":"completed","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"151","codexKind":"file_change","codexEventType":"item.completed","codexItemId":"item_15"} -->
+
+- /home/jbb/dev/EditorBP/decision-os/.decision-os/threads/skills/thread-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md: update
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-152","timestamp":"2026-07-08T09:00:15.831Z","status":"Codex message","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"152","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_16"} -->
+
+I’m staging only the `skills` ledger/card/thread/run files for the cleanup commit. Unrelated `tasks-system`, `state`, and canvas changes stay untouched.

@@ -1,19 +1,13 @@
-## A. Source Wording
+## A. Why Kept
 
-1. **Skill.** `ticket-solver`.
-2. **Source group.** `Local Codex`.
-3. **Source wording.** Execution-first DroidFleet skill. It solves an existing GitLab ticket end to end, but it still creates a working document and full control-flow DAG before implementation. It belongs after a ticket exists, not at the start of a broad goal.
-
----
-
-## B. Pipeline Fit
-
-1. **Role.** Execution-first DroidFleet skill.
-2. **Best use.** `ticket-solver` remains a downstream solver for an existing ticket. It should consume a prepared ticket, create the working DAG, implement, test, and report evidence.
+1. **Best existing ticket implementer.** `ticket-solver` solves an existing GitLab ticket end to end.
+2. **Planning before code.** It still creates a working document and full control-flow DAG before implementation.
+3. **Use.** Use it after a ticket exists, not at the start of a broad goal.
 
 ---
 
-## C. Evidence Boundary
+## B. Boundary
 
-1. **Inventory source.** Reused from `.decision-os/cards/skills/card-9a1d7843-0bf4-47e8-b6df-cbc4e5571e39.md`.
-2. **Terminology rule.** Keep the skill name, body structure names, labels, and pipeline stage names exactly as listed above when using this card.
+1. **Downstream role.** It should consume a prepared ticket, create the working DAG, implement, test, and report evidence.
+2. **Not a broad splitter.** It should not replace `executor-spec` for turning broad specs into implementation structure.
+3. **Best fit.** Use when the workflow state is already a GitLab issue and the requested outcome is a solved ticket.

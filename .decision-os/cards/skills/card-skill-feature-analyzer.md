@@ -1,19 +1,13 @@
-## A. Source Wording
+## A. Why Kept
 
-1. **Skill.** `feature/analyzer`.
-2. **Source group.** `DroidFactory`.
-3. **Source wording.** Maps feature intent to codebase surface area and produces evidence-backed task breakdown, risks, planner TODOs, planner decisions, and recommended implementation order.
-
----
-
-## B. Pipeline Fit
-
-1. **Role.** Single-feature codebase surface mapper.
-2. **Best use.** Use before `feature/planner` when the feature needs grounded codebase surface mapping before the implementation DAG.
+1. **Best feature surface mapper.** `feature/analyzer` maps feature intent to codebase surface area.
+2. **Output.** It produces evidence-backed task breakdown, risks, planner TODOs, planner decisions, and recommended implementation order.
+3. **Use.** Use before `feature/planner` when a feature needs grounded codebase surface mapping before the implementation DAG.
 
 ---
 
-## C. Evidence Boundary
+## B. Boundary
 
-1. **Inventory source.** Reused from `.decision-os/cards/skills/card-9a1d7843-0bf4-47e8-b6df-cbc4e5571e39.md`.
-2. **Terminology rule.** Keep the skill name, body structure names, labels, and pipeline stage names exactly as listed above when using this card.
+1. **Feature issue scope.** It is useful when the unit of work is one feature issue.
+2. **Not an implementer.** It prepares the planner; it does not implement code.
+3. **No epic/product decomposition.** It is kept because it is closer to implementation order than `product/decomposer`, `epic/decomposer`, or other composer roles.

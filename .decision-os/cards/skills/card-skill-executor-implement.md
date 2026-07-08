@@ -1,19 +1,13 @@
-## A. Source Wording
+## A. Why Kept
 
-1. **Skill.** `executor-implement`.
-2. **Source group.** `Local Codex`.
-3. **Source wording.** Implementation skill that consumes the `Master Ledger`. It should not infer architecture or split a broad goal by itself.
-
----
-
-## B. Pipeline Fit
-
-1. **Role.** Implementation skill that consumes the `Master Ledger`.
-2. **Best use.** Use the `Root Blocks`, domains, screens/pages, components, inputs, actions, controllers, helpers, effects, state, and tests from the `Master Ledger`. If any required item is missing, stop and ask an operator question.
+1. **Best direct implementation skill.** `executor-implement` consumes the `Master Ledger` and turns the generated scaffold into complete implementation.
+2. **Scope.** It delivers real code with no placeholder code, no missing feature, and no bug from the prepared scaffold.
+3. **Use.** Use it after `executor-spec`, not before.
 
 ---
 
-## C. Evidence Boundary
+## B. Boundary
 
-1. **Inventory source.** Reused from `.decision-os/cards/skills/card-9a1d7843-0bf4-47e8-b6df-cbc4e5571e39.md`.
-2. **Terminology rule.** Keep the skill name, body structure names, labels, and pipeline stage names exactly as listed above when using this card.
+1. **No architecture inference.** It must use the `Root Blocks`, domains, screens/pages, components, inputs, actions, controllers, helpers, effects, state, and tests from the `Master Ledger`.
+2. **Stop condition.** If implementation requires a missing `Spec`, `Data Model`, `Runtime State`, domain, input, action, controller, helper, effect, screen/page, component, or test, stop and ask an operator question.
+3. **Verification.** Confirm each `Master Ledger` item is implemented, each `Spec` still has a test suite, helper/effect unit tests pass, compile when applicable, launch app/site when applicable, screenshot every screen, and inspect the result.
