@@ -11,6 +11,7 @@ import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
 import { buildCardSkillContinuePrompt } from '../helper/build-card-skill-continue-prompt.js';
 import { codexRunSegmentMarker } from '../helper/codex-run-segment-marker.js';
+import { isCodexThreadArtifactNote } from '../helper/is-codex-thread-artifact-note.js';
 import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexResumeCommand } from '../helper/resolve-codex-command.js';
 import { readCardSkillRunController } from './read-card-skill-run-controller.js';
 
@@ -153,7 +154,7 @@ function threadMessagesAfterLastSessionEnd(input: { ledger: AnyRecord; decisionO
   }
   const boundaryIndex = latestCodexIndex > latestCompletedIndex ? latestCodexIndex : latestCompletedIndex;
   const messages = notes.filter((note, index) => {
-    if (String(note.codexRunId ?? '')) return false;
+    if (isCodexThreadArtifactNote(note)) return false;
     if (!String(note.message ?? note.body ?? '').trim()) return false;
     return index > boundaryIndex;
   });

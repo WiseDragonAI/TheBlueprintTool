@@ -134,7 +134,18 @@ test('thread codex process route anchors the run widget on the source card and s
     annotations: [],
     relationships: [],
     notes: {
-      'thread-card-a': [{ id: 'note-operator-1', role: 'operator', message: 'Please update this exact card from the thread.', timestamp: '2026-07-08T01:00:00.000Z' }]
+      'thread-card-a': [
+        { id: 'note-operator-1', role: 'operator', message: 'Please update this exact card from the thread.', timestamp: '2026-07-08T01:00:00.000Z' },
+        {
+          id: 'codex-old-run-line-2',
+          role: 'agent',
+          message: 'Codex internal output should not be prompt context.',
+          timestamp: '2026-07-08T01:01:00.000Z',
+          codexRunId: 'codex-skill-old-run',
+          codexKind: 'tool_call',
+          codexEventType: 'item.completed'
+        }
+      ]
     }
   }, null, 2));
   writeFileSync(fakeCodex, [
@@ -180,6 +191,7 @@ test('thread codex process route anchors the run widget on the source card and s
     assert.match(input, /Card markdown file: .*\.decision-os\/cards\/specs\/card-a\.md/);
     assert.match(input, /Thread markdown file: .*\.decision-os\/threads\/specs\/thread-card-a\.md/);
     assert.match(input, /Please update this exact card from the thread\./);
+    assert.doesNotMatch(input, /Codex internal output should not be prompt context\./);
     assert.match(input, /Existing card body/);
     assert.match(input, /Do not query or treat unrelated open notes\./);
     assert.doesNotMatch(input, /ledger-cli unanswered|Query Open Notes|For every pending operator note/);

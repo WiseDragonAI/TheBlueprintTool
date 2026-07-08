@@ -49,6 +49,13 @@ function parseMetadata(line: string): AnyRecord | null {
   }
 }
 
+function codeFenceMarker(line: string): { marker: '`' | '~'; length: number } | null {
+  const match = line.match(/^ {0,3}(`{3,}|~{3,})/);
+  if (!match) return null;
+  const marker = match[1];
+  return { marker: marker[0] as '`' | '~', length: marker.length };
+}
+
 function metadataFor(note: AnyRecord): AnyRecord {
   const metadata: AnyRecord = {};
   for (const key of ['id', 'timestamp', 'voiceFileRef', 'status', 'transcriptionStartedAt', 'error', 'codexRunId', 'codexLine', 'codexKind', 'codexEventType', 'codexItemId', 'codexTool', 'codexExitCode']) {
@@ -84,6 +91,7 @@ export function parseThreadMarkdown(markdown: string): AnyRecord[] {
   const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
   let current: AnyRecord | null = null;
   let body: string[] = [];
+  let fence: { marker: '`' | '~'; length: number } | null = null;
 
   function flush(): void {
     if (!current) return;
@@ -93,6 +101,17 @@ export function parseThreadMarkdown(markdown: string): AnyRecord[] {
   }
 
   for (const line of lines) {
+    const marker = codeFenceMarker(line);
+    if (fence) {
+      if (current) body.push(line);
+      if (marker && marker.marker === fence.marker && marker.length >= fence.length) fence = null;
+      continue;
+    }
+    if (marker && current) {
+      fence = marker;
+      body.push(line);
+      continue;
+    }
     const heading = line.match(/^#\s+(OPERATOR|AGENT)\s*$/i);
     if (heading) {
       flush();

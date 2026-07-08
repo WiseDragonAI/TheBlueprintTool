@@ -8,10 +8,11 @@ import { basename, dirname, extname, isAbsolute, relative, resolve } from 'node:
 import { randomUUID } from 'node:crypto';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
 import { externalizeCardContent, resolveCardContentFile } from '@backend/business/ledger/helper/card-content-file.js';
-import { hydrateLedgerThreadNotes, resolveThreadContentFile, stripHydratedThreadNotes, writeThreadNotesFile } from '@backend/business/ledger/helper/thread-content-file.js';
+import { formatThreadMarkdown, hydrateLedgerThreadNotes, resolveThreadContentFile, stripHydratedThreadNotes, writeThreadNotesFile } from '@backend/business/ledger/helper/thread-content-file.js';
 import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-ledger-notes.js';
 import { buildThreadCodexPrompt } from '../helper/build-thread-codex-prompt.js';
 import { codexRunSegmentMarker } from '../helper/codex-run-segment-marker.js';
+import { isCodexThreadArtifactNote } from '../helper/is-codex-thread-artifact-note.js';
 import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand } from '../helper/resolve-codex-command.js';
 import { readCardSkillRunController } from './read-card-skill-run-controller.js';
 
@@ -102,6 +103,12 @@ function threadContentFile(input: { decisionOsRoot: string; ledger: AnyRecord; l
   return resolveThreadContentFile(input.decisionOsRoot, threadFiles[input.threadId]) ?? '';
 }
 
+function threadMarkdownForPrompt(input: { decisionOsRoot: string; ledger: AnyRecord; threadId: string }): string {
+  hydrateLedgerThreadNotes(input.ledger, input.decisionOsRoot);
+  const notes = normalizeLedgerNotes(input.ledger)[input.threadId] ?? [];
+  return formatThreadMarkdown(notes.filter((note) => !isCodexThreadArtifactNote(note)));
+}
+
 function publicRun(run: AnyRecord): AnyRecord {
   const { child: _child, ...rest } = run;
   return rest;
@@ -166,7 +173,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
     cardMarkdown: readFileSync(sourceCardFile, 'utf8'),
     threadId,
     threadMarkdownFile: sourceThreadFile,
-    threadMarkdown: readFileSync(sourceThreadFile, 'utf8'),
+    threadMarkdown: threadMarkdownForPrompt({ decisionOsRoot, ledger, threadId }),
     runSummaryFile,
   });
 

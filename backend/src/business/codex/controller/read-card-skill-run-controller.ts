@@ -71,6 +71,12 @@ function textBlock(value: unknown): string {
   return String(value ?? '').replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '');
 }
 
+function fencedTextBlock(output: string, language = 'text'): string {
+  const runs = Array.from(output.matchAll(/`+/g), (match) => match[0].length);
+  const fence = '`'.repeat(Math.max(3, ...runs) + 1);
+  return `${fence}${language}\n${output}\n${fence}`;
+}
+
 function itemRecord(event: AnyRecord): AnyRecord {
   return event.item && typeof event.item === 'object' && !Array.isArray(event.item) ? event.item as AnyRecord : {};
 }
@@ -118,7 +124,7 @@ function normalizeRunEvent(line: ParsedRunLine): NormalizedRunEvent {
     const parts = [`**Tool call** ${command}`];
     if (status) parts.push(`Status: ${status}`);
     if (exitCode) parts.push(`Exit code: ${exitCode}`);
-    if (output) parts.push('', '```text', output, '```');
+    if (output) parts.push('', fencedTextBlock(output));
     return { line: line.line, type, kind: 'tool_call', title: tool || 'Tool call', text: parts.join('\n'), status, itemId, tool, exitCode, persist: true };
   }
   if (itemType === 'file_change') {
