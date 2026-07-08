@@ -239,6 +239,8 @@ test('active ledger load keeps server geometry authoritative over stale browser 
   const { loadActiveLedgerState } = await import('../../src/runtime/ledger/effect/load-active-ledger-state.js');
 
   state.activeTab = 'specs';
+  state.activeLedger = null;
+  state.activeLedgerId = '';
   state.ledgerTabs = [
     { id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' },
     { id: 'data', title: 'Data', ledgerFile: '.decision-os/data.json' }
@@ -286,4 +288,115 @@ test('active ledger load keeps server geometry authoritative over stale browser 
     width: 180,
     height: 140
   });
+});
+
+test('active ledger refresh keeps local canvas geometry and viewport while accepting server content', async () => {
+  (globalThis as any).CustomEvent = class CustomEvent {
+    detail: unknown;
+    constructor(_type: string, init: { detail?: unknown } = {}) {
+      this.detail = init.detail;
+    }
+  };
+  (globalThis as any).window = {
+    location: { pathname: '/specs' },
+    dispatchEvent() {},
+    __coreTelemetry: []
+  };
+  const { state } = await import('../../src/runtime/state.js');
+  const { loadActiveLedgerState } = await import('../../src/runtime/ledger/effect/load-active-ledger-state.js');
+
+  state.canvasMode = 'ledger';
+  state.activeTab = 'specs';
+  state.activeLedgerId = 'specs';
+  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
+  state.viewport = { x: 321, y: -654, scale: 0.42 };
+  state.viewports = { specs: { x: 0, y: 0, scale: 1 } };
+  state.activeLedger = {
+    cards: [
+      { id: 'card-a', title: 'Local title', x: 100, y: 200, w: 300, h: 180 },
+      { id: 'local-only-card', x: 900, y: 900, w: 220, h: 132 }
+    ],
+    annotations: [
+      { id: 'zone-a', variant: 'zone', label: 'Local zone', color: '#111111', x: 10, y: 20, width: 400, height: 220 },
+      { id: 'group-a', variant: 'group', label: 'Local group', x: -50, y: -60, width: 500, height: 260 }
+    ],
+    notes: { 'thread-card-a': [{ id: 'local-note', role: 'operator', message: 'Old local note' }] }
+  };
+
+  (globalThis as any).fetch = async (url: string) => {
+    assert.equal(url, '/decision-os/specs');
+    return {
+      ok: true,
+      async json() {
+        return {
+          cards: [
+            { id: 'card-a', title: 'Server title', status: 'done', x: 1, y: 2, w: 111, h: 112 },
+            { id: 'server-only-card', title: 'New server card', x: 50, y: 60, w: 240, h: 140 }
+          ],
+          annotations: [
+            { id: 'zone-a', variant: 'zone', label: 'Server zone', color: '#55b8ff', x: 3, y: 4, width: 180, height: 140 },
+            { id: 'group-a', variant: 'group', label: 'Server group', x: 5, y: 6, width: 220, height: 160 }
+          ],
+          notes: { 'thread-card-a': [{ id: 'server-note', role: 'agent', message: 'New server note' }] }
+        };
+      }
+    };
+  };
+
+  await loadActiveLedgerState();
+
+  assert.deepEqual(state.activeLedger.cards.map((card: Record<string, unknown>) => card.id), ['card-a', 'server-only-card']);
+  assert.deepEqual(state.activeLedger.cards[0], { id: 'card-a', title: 'Server title', status: 'done', x: 100, y: 200, w: 300, h: 180 });
+  assert.deepEqual(state.activeLedger.annotations[0], { id: 'zone-a', variant: 'zone', label: 'Server zone', color: '#55b8ff', x: 10, y: 20, width: 400, height: 220 });
+  assert.deepEqual(state.activeLedger.annotations[1], { id: 'group-a', variant: 'group', label: 'Server group', x: -50, y: -60, width: 500, height: 260 });
+  assert.deepEqual(state.activeLedger.notes['thread-card-a'], [{ id: 'server-note', role: 'agent', message: 'New server note' }]);
+  assert.deepEqual(state.viewport, { x: 321, y: -654, scale: 0.42 });
+  assert.deepEqual(state.viewports.specs, { x: 321, y: -654, scale: 0.42 });
+});
+
+test('non-geometry mutation responses keep newer local canvas geometry', async () => {
+  (globalThis as any).CustomEvent = class CustomEvent {
+    detail: unknown;
+    constructor(_type: string, init: { detail?: unknown } = {}) {
+      this.detail = init.detail;
+    }
+  };
+  (globalThis as any).window = {
+    location: { pathname: '/specs' },
+    dispatchEvent() {},
+    __coreTelemetry: []
+  };
+  const { state } = await import('../../src/runtime/state.js');
+  const { commitActiveLedgerMutation } = await import('../../src/runtime/ledger/effect/commit-active-ledger-mutation.js');
+
+  state.canvasMode = 'ledger';
+  state.activeTab = 'specs';
+  state.activeLedgerId = 'specs';
+  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
+  state.activeLedger = {
+    cards: [{ id: 'card-a', title: 'Local', x: 700, y: 800, w: 360, h: 210 }],
+    annotations: [{ id: 'zone-a', variant: 'zone', label: 'Local zone', x: 70, y: 80, width: 420, height: 240 }],
+    notes: {}
+  };
+
+  (globalThis as any).fetch = async (_url: string, init: RequestInit) => {
+    const body = JSON.parse(String(init.body ?? '{}'));
+    assert.equal(body.action, 'patch-card');
+    return {
+      ok: true,
+      async json() {
+        return {
+          cards: [{ id: 'card-a', title: 'Server', status: 'done', x: 1, y: 2, w: 220, h: 132 }],
+          annotations: [{ id: 'zone-a', variant: 'zone', label: 'Server zone', x: 3, y: 4, width: 180, height: 140 }],
+          notes: {}
+        };
+      }
+    };
+  };
+
+  const committed = await commitActiveLedgerMutation({ action: 'patch-card', cardPatch: { id: 'card-a', status: 'done' } });
+
+  assert.equal(committed, true);
+  assert.deepEqual(state.activeLedger.cards[0], { id: 'card-a', title: 'Server', status: 'done', x: 700, y: 800, w: 360, h: 210 });
+  assert.deepEqual(state.activeLedger.annotations[0], { id: 'zone-a', variant: 'zone', label: 'Server zone', x: 70, y: 80, width: 420, height: 240 });
 });

@@ -6,6 +6,7 @@ import { state } from '../../state.js';
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { ledgerEndpointForTab } from '../helper/ledger-endpoint-for-tab.js';
+import { mergeLocalCanvasStateIntoLedger } from '../helper/merge-local-canvas-state.js';
 import { mergeLocalThreadNotes } from '../helper/merge-local-thread-notes.js';
 import { refreshZoneAttributionCache } from '../helper/zone-attribution-cache.js';
 
@@ -59,6 +60,9 @@ export type ActiveLedgerMutation = {
 export async function commitActiveLedgerMutation(mutation: ActiveLedgerMutation, options: { render?: boolean } = {}): Promise<boolean> {
   const endpoint = ledgerEndpointForTab(state.activeTab);
   if (!endpoint) return false;
+  const ledgerStateId = state.canvasMode === 'ledgers' ? 'ledgers-canvas' : state.activeTab;
+  const canMergeLocalCanvas = mutation.action !== 'patch-geometry' && Boolean(state.activeLedger && state.activeLedgerId === ledgerStateId);
+  const localLedger = canMergeLocalCanvas ? state.activeLedger : null;
   telemetry('commit-ledger-edit', { activeTab: state.activeTab, action: mutation.action, authority: 'server' });
   const response = await fetch(endpoint, {
     method: 'PATCH',
@@ -71,7 +75,8 @@ export async function commitActiveLedgerMutation(mutation: ActiveLedgerMutation,
   }
   const ledger = await response.json().catch(() => null);
   if (!ledger || typeof ledger !== 'object') return false;
-  state.activeLedger = mergeLocalThreadNotes(ledger);
+  state.activeLedger = mergeLocalThreadNotes(canMergeLocalCanvas ? mergeLocalCanvasStateIntoLedger(ledger, localLedger) : ledger);
+  state.activeLedgerId = ledgerStateId;
   refreshZoneAttributionCache(`server-ledger-mutation:${mutation.action}`);
   telemetry('load-ledger-state', { activeTab: state.activeTab, source: 'server-ledger-mutation', action: mutation.action });
   if (options.render) renderCanvasSurface({ renderThreadPanel: mutation.action !== 'patch-geometry' });

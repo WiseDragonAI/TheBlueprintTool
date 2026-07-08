@@ -130,7 +130,8 @@ test('browser inputs route ledger commands through runtime controllers before se
   const serverMutation = source('frontend/src/runtime/ledger/effect/commit-active-ledger-mutation.ts');
   assert.match(serverMutation, /fetch\(endpoint/);
   assert.match(serverMutation, /method: 'PATCH'/);
-  assert.match(serverMutation, /state\.activeLedger = mergeLocalThreadNotes\(ledger\)/);
+  assert.match(serverMutation, /mergeLocalCanvasStateIntoLedger/);
+  assert.match(serverMutation, /state\.activeLedger = mergeLocalThreadNotes\(canMergeLocalCanvas \? mergeLocalCanvasStateIntoLedger\(ledger, localLedger\) : ledger\)/);
 
   const runtimeSources = [
     'frontend/src/runtime/gesture/controller/handle-pointer-move.ts',

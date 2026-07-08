@@ -12,11 +12,18 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 export async function refreshRuntimeState(): Promise<void> {
   telemetry('subscribe-server-refresh', { specId: '50000006', source: 'refresh-button' });
   await fetch('/decision-os/data').catch(() => undefined);
+  const nextCanvasMode = routeCanvasMode(window.location.pathname);
+  const nextActiveTab = nextCanvasMode === 'ledger' ? routeTab(window.location.pathname) : state.activeTab;
+  const nextLedgerStateId = nextCanvasMode === 'ledgers' ? 'ledgers-canvas' : nextActiveTab;
+  const localViewport = state.activeLedger && state.activeLedgerId === nextLedgerStateId ? { ...state.viewport } : null;
   const persisted = readPersistedState();
-  state.canvasMode = routeCanvasMode(window.location.pathname);
-  if (state.canvasMode === 'ledger') state.activeTab = routeTab(window.location.pathname);
+  state.canvasMode = nextCanvasMode;
+  if (state.canvasMode === 'ledger') state.activeTab = nextActiveTab;
   state.viewports = persisted.viewports && typeof persisted.viewports === 'object' ? persisted.viewports : state.viewports;
-  if (state.canvasMode === 'ledger') Object.assign(state.viewport, state.viewports?.[state.activeTab] ?? persisted.viewport ?? { x: 0, y: 0, scale: 1 });
+  if (localViewport) {
+    Object.assign(state.viewport, localViewport);
+    if (state.canvasMode === 'ledger') state.viewports = { ...(state.viewports ?? {}), [state.activeTab]: { ...localViewport } };
+  } else if (state.canvasMode === 'ledger') Object.assign(state.viewport, state.viewports?.[state.activeTab] ?? persisted.viewport ?? { x: 0, y: 0, scale: 1 });
   applyRailCollapsedState(persisted.railCollapsed === true);
   state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
   hydratePersistedGeometry(persisted.geometry);
