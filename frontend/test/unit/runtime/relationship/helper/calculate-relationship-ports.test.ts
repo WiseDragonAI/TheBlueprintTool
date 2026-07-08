@@ -15,3 +15,15 @@ test('calculate-relationship-ports uses side title-band ports for aligned staged
   assert.deepEqual(ports.sourcePort, { x: 180, y: 88 });
   assert.deepEqual(ports.targetPort, { x: 240, y: 108 });
 });
+
+test('calculate-relationship-ports avoids bottom-clamped target ports for vertically offset tall cards', () => {
+  (globalThis as any).window = { location: { pathname: '/tasks-system' }, dispatchEvent() {}, __coreTelemetry: [] };
+  const sourceRect = { left: 0, top: 0, right: 700, bottom: 1100, width: 700, height: 1100 };
+  const targetRect = { left: 820, top: 300, right: 1520, bottom: 1300, width: 700, height: 1000 };
+  const ports = calculateRelationshipPorts(sourceRect, targetRect);
+
+  assert.equal(ports.sourceSide, 'right');
+  assert.equal(ports.targetSide, 'left');
+  assert.deepEqual(ports.sourcePort, { x: 700, y: 88 });
+  assert.deepEqual(ports.targetPort, { x: 820, y: 388 });
+});

@@ -5,13 +5,13 @@
 type CanvasRect = { left: number; top: number; right: number; bottom: number; width: number; height: number };
 
 const MIN_READABLE_HORIZONTAL_GAP = 28;
-const TITLE_ALIGNMENT_TOLERANCE = 180;
+const VERTICAL_OVERLAP_TOLERANCE = 96;
 const TITLE_BAND_START = 48;
 const TITLE_BAND_END = 128;
 const TITLE_BAND_MIN_SPAN = 24;
 
 export function readableHorizontalRelationshipFlow(sourceRect: CanvasRect, targetRect: CanvasRect): { sourceSide: 'left' | 'right'; targetSide: 'left' | 'right' } | null {
-  if (!titleBandsAlign(sourceRect, targetRect)) return null;
+  if (!verticalSpansOverlap(sourceRect, targetRect)) return null;
   if (targetRect.left - sourceRect.right >= MIN_READABLE_HORIZONTAL_GAP) {
     return { sourceSide: 'right', targetSide: 'left' };
   }
@@ -30,9 +30,7 @@ export function relationshipTitlePortBounds(rect: CanvasRect): { min: number; ma
   return { min, max: Math.max(min, max) };
 }
 
-function titleBandsAlign(sourceRect: CanvasRect, targetRect: CanvasRect): boolean {
-  const sourceBand = relationshipTitlePortBounds(sourceRect);
-  const targetBand = relationshipTitlePortBounds(targetRect);
-  const bandsOverlap = sourceBand.min <= targetBand.max && targetBand.min <= sourceBand.max;
-  return bandsOverlap || Math.abs(sourceRect.top - targetRect.top) <= TITLE_ALIGNMENT_TOLERANCE;
+function verticalSpansOverlap(sourceRect: CanvasRect, targetRect: CanvasRect): boolean {
+  return sourceRect.top <= targetRect.bottom + VERTICAL_OVERLAP_TOLERANCE
+    && targetRect.top <= sourceRect.bottom + VERTICAL_OVERLAP_TOLERANCE;
 }

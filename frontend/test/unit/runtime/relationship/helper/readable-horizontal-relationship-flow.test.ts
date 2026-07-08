@@ -12,6 +12,13 @@ test('readable-horizontal-relationship-flow detects horizontally staged aligned 
   assert.deepEqual(readableHorizontalRelationshipFlow(source, target), { sourceSide: 'right', targetSide: 'left' });
 });
 
+test('readable-horizontal-relationship-flow keeps side flow when tall cards overlap but title bands do not', () => {
+  const source = { left: 0, top: 0, right: 700, bottom: 1100, width: 700, height: 1100 };
+  const target = { left: 820, top: 300, right: 1520, bottom: 1300, width: 700, height: 1000 };
+
+  assert.deepEqual(readableHorizontalRelationshipFlow(source, target), { sourceSide: 'right', targetSide: 'left' });
+});
+
 test('readable-horizontal-relationship-flow rejects vertical stacks and overlapping horizontal cards', () => {
   const source = { left: 0, top: 0, right: 180, bottom: 420, width: 180, height: 420 };
   const lowerTarget = { left: 40, top: 620, right: 740, bottom: 1620, width: 700, height: 1000 };
