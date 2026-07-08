@@ -18,6 +18,7 @@
     "verify:live": "node tools/live-verify/cli.mjs",
     "verify:live:summary": "node tools/live-verify/summary.mjs",
     "verify:live:drag-trace": "node tools/live-verify/card-drag-trace-suite.mjs",
+    "verify:live:manual-trace": "node tools/live-verify/manual-commit-trace.mjs",
     "coverage:frontend": "cd frontend && node --test --experimental-test-coverage --import tsx \"test/**/*.test.ts\"",
     "coverage:functions:frontend": "node tools/unit-coverage/frontend-summary.mjs",
     "test:front-back": "npm run typecheck:frontend && npm run typecheck:backend && npm test --prefix frontend && npm test --prefix backend && npm run test:browser"
