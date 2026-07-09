@@ -44,7 +44,6 @@ export async function stopVoiceRecording(input: { queueCodex?: boolean } = {}): 
   renderVoiceStatus();
   flushPendingLedgerContentRefresh();
   await requestTranscription(audio, {
-    ledgerId: String(state.activeTab ?? ''),
     threadId,
     cardId: threadCodexCardId(state.activeLedger, threadId),
     queueCodex: input.queueCodex

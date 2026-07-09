@@ -52,7 +52,9 @@ function noteId(value: unknown): string {
 }
 
 function cardIdForThread(threadId: string, cardId: unknown): string {
-  return optionalText(cardId) || threadId.replace(/^thread-/, '');
+  const explicit = optionalText(cardId);
+  if (explicit) return explicit;
+  return threadId.startsWith('thread-') ? threadId.replace(/^thread-/, '').trim() : '';
 }
 
 function resolveLedgerContext(input: { runtime: AnyRecord; ledgerId: string }): LedgerContext {
@@ -252,12 +254,13 @@ async function finishVoiceUploadOrchestration(input: {
         voiceFileRef: input.voiceFileRef,
         status: 'transcribed',
         error: '',
-        codexQueueStatus: input.queueCodex ? 'pending' : ''
+        codexQueueStatus: input.queueCodex ? input.cardId ? 'pending' : 'failed' : '',
+        codexQueueError: input.queueCodex && !input.cardId ? 'Thread target card not found.' : ''
       },
       onCardContentChange: input.onCardContentChange,
       reason: 'voice-transcribed'
     });
-    if (input.queueCodex) {
+    if (input.queueCodex && input.cardId) {
       await runQueuedThreadCodex(input);
     }
     return;
@@ -291,12 +294,15 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
   const threadId = optionalText(payload.threadId) || 'conversation-ledger';
   const cardId = cardIdForThread(threadId, payload.cardId);
   const id = noteId(payload.noteId);
-  if (!ledgerId || !threadId || !cardId) return { ok: false, statusCode: 400, error: 'Missing ledgerId, threadId, or cardId.' };
   const audioBuffer = payload.audioBuffer as Buffer | undefined;
   if (!audioBuffer?.byteLength) return { ok: false, statusCode: 400, error: 'No audio was uploaded.' };
   const mimeType = String(payload.mimeType ?? 'audio/webm');
   const upload = persistUploadedVoiceAudio({ action_payload: { ...payload, audioBuffer, mimeType, threadId }, runtime_state: runtime, data_model: data });
   if (upload.ok === false || !upload.voiceFileRef) return { ok: false, statusCode: 400, error: upload.error ?? 'Voice upload failed.' };
+  const voiceFileRef = String(upload.voiceFileRef);
+  if (!ledgerId || !threadId) {
+    return { ok: false, statusCode: 400, uploaded: true, configured: true, noteId: id, voiceFileRef, error: 'Missing ledgerId or threadId.' };
+  }
   const queueCodex = bool(payload.queueCodex);
   const startedAt = new Date().toISOString();
   const patch = applyNotePatch({
@@ -306,7 +312,7 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
     note: {
       id,
       body: 'Voice uploaded.',
-      voiceFileRef: String(upload.voiceFileRef),
+      voiceFileRef,
       status: 'transcribing',
       transcriptionStartedAt: startedAt,
       error: '',
@@ -316,7 +322,7 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
     onCardContentChange: payload.onCardContentChange,
     reason: 'voice-uploaded'
   });
-  if (!patch.ok) return { ok: false, statusCode: 500, error: patch.error ?? 'Voice note commit failed.' };
+  if (!patch.ok) return { ok: false, statusCode: 500, uploaded: true, configured: true, noteId: id, voiceFileRef, error: patch.error ?? 'Voice note commit failed.' };
   const completion = finishVoiceUploadOrchestration({
     payload,
     runtime,
@@ -325,7 +331,7 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
     threadId,
     cardId,
     noteId: id,
-    voiceFileRef: String(upload.voiceFileRef),
+    voiceFileRef,
     audioBuffer,
     mimeType,
     queueCodex,
@@ -339,7 +345,7 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
       note: {
         id,
         body: 'Voice uploaded; transcription failed.',
-        voiceFileRef: String(upload.voiceFileRef),
+        voiceFileRef,
         status: 'transcription failed',
         error: error instanceof Error ? error.message : String(error),
         codexQueueStatus: queueCodex ? 'failed' : '',
@@ -350,5 +356,5 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
     });
   });
   if (bool(payload.awaitCompletion)) await completion;
-  return { ok: true, statusCode: 202, uploaded: true, configured: true, noteId: id, voiceFileRef: String(upload.voiceFileRef), status: 'transcribing', queueCodex };
+  return { ok: true, statusCode: 202, uploaded: true, configured: true, noteId: id, voiceFileRef, status: 'transcribing', queueCodex };
 }

@@ -123,6 +123,43 @@ test('upload-voice-audio preserves wav content type for provider-safe transcript
   }
 });
 
+test('upload-voice-audio falls back to the current route ledger and thread card id', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousWindow = globalThis.window;
+  const previousCustomEvent = globalThis.CustomEvent;
+  const previousActiveTab = state.activeTab;
+  const previousLedgers = state.ledgers;
+  const previousLedgerTabs = state.ledgerTabs;
+  let requested: { url?: string; init?: RequestInit } = {};
+  state.activeTab = 'specs';
+  state.ledgers = [{ id: 'skills', title: 'Skills', ledgerFile: '.decision-os/skills.json' }, { id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
+  state.ledgerTabs = state.ledgers;
+  (globalThis as unknown as { window: unknown }).window = { location: { pathname: '/skills' }, __coreTelemetry: [], dispatchEvent() {} };
+  (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
+    constructor(_name: string, public options: Record<string, unknown> = {}) {}
+  };
+  (globalThis as unknown as { fetch: unknown }).fetch = async (url: string, init: RequestInit) => {
+    requested = { url, init };
+    return { ok: true, status: 202, json: async () => ({ body: { ok: true, uploaded: true, configured: true, voiceFileRef: '/tmp/voice.webm', text: '' } }) };
+  };
+
+  try {
+    await uploadVoiceAudio(new Blob(['abc'], { type: 'audio/webm' }), { threadId: 'thread-card-a' });
+    const body = requested.init?.body as FormData;
+    assert.equal(requested.url, '/api/voice-upload');
+    assert.equal(body.get('ledgerId'), 'skills');
+    assert.equal(body.get('threadId'), 'thread-card-a');
+    assert.equal(body.get('cardId'), 'card-a');
+  } finally {
+    (globalThis as unknown as { fetch: unknown }).fetch = previousFetch;
+    (globalThis as unknown as { window: unknown }).window = previousWindow;
+    (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
+    state.activeTab = previousActiveTab;
+    state.ledgers = previousLedgers;
+    state.ledgerTabs = previousLedgerTabs;
+  }
+});
+
 test('upload-voice-audio reports accepted upload before transcription provider runs', async () => {
   const previousFetch = globalThis.fetch;
   const previousWindow = globalThis.window;
@@ -148,6 +185,68 @@ test('upload-voice-audio reports accepted upload before transcription provider r
     (globalThis as unknown as { fetch: unknown }).fetch = previousFetch;
     (globalThis as unknown as { window: unknown }).window = previousWindow;
     (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
+  }
+});
+
+test('request-transcription keeps preserved upload retryable when metadata commit fails', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousDocument = globalThis.document;
+  const previousWindow = globalThis.window;
+  const previousCustomEvent = globalThis.CustomEvent;
+  const status = { textContent: '' };
+  const meter = { style: { transform: '' } };
+  const panel = { classList: { toggle() {} } };
+  const shell = { classList: { toggle() {} } };
+  const threadTarget = { textContent: '' };
+  const noteList = { className: '', replaceChildren() {}, append() {} };
+  const draft = { before() {} };
+  const telemetryList = { replaceChildren() {}, append() {} };
+  (globalThis as unknown as { document: unknown }).document = {
+    querySelector(selector: string) {
+      if (selector === '.thread-panel') return panel;
+      if (selector === '.panel') return panel;
+      if (selector === '.shell') return shell;
+      if (selector === '.thread-target') return threadTarget;
+      if (selector === '.thread-note-list') return noteList;
+      if (selector === '.thread-draft') return draft;
+      if (selector === '.voice-status') return status;
+      if (selector === '.voice-meter-value') return meter;
+      if (selector === '.voice-panel') return panel;
+      if (selector === '.telemetry-list') return telemetryList;
+      return null;
+    },
+    createElement() {
+      return { className: '', textContent: '', type: '', dataset: {}, append() {}, replaceChildren() {} };
+    }
+  };
+  (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
+  (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
+    constructor(_name: string, public options: Record<string, unknown> = {}) {}
+  };
+  (globalThis as unknown as { fetch: unknown }).fetch = async () => ({
+    ok: false,
+    status: 500,
+    json: async () => ({ body: { ok: false, uploaded: true, configured: true, noteId: 'note-voice-1', voiceFileRef: '/tmp/preserved.webm', error: 'Voice note commit failed.' } })
+  });
+
+  try {
+    state.threadId = 'thread-card-a';
+    state.activeLedger = { notes: { 'thread-card-a': [] } };
+    await requestTranscription(new Blob(['abc'], { type: 'audio/webm' }));
+    const note = state.activeLedger.notes['thread-card-a'][0];
+    assert.equal(note.status, 'upload failed');
+    assert.equal(note.voiceFileRef, '/tmp/preserved.webm');
+    assert.equal(note.message, 'Voice uploaded; transcription unavailable.');
+    assert.equal(state.voice.voiceFileRef, '/tmp/preserved.webm');
+    assert.match(state.voice.transcriptionStatus, /^voice upload failed/);
+  } finally {
+    (globalThis as unknown as { fetch: unknown }).fetch = previousFetch;
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+    (globalThis as unknown as { window: unknown }).window = previousWindow;
+    (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
+    state.threadId = '';
+    state.activeLedger = null;
+    state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
   }
 });
 

@@ -17,18 +17,92 @@ async function waitForText(file: string, text: string): Promise<void> {
   assert.fail(`Timed out waiting for ${text} in ${file}`);
 }
 
-function voiceUploadForm(input: { transcript: string; queueCodex?: boolean; noteId?: string }): FormData {
+function voiceUploadForm(input: { transcript: string; queueCodex?: boolean; noteId?: string; ledgerId?: string | null; threadId?: string | null; cardId?: string | null }): FormData {
   const form = new FormData();
+  const ledgerId = input.ledgerId === undefined ? 'specs' : input.ledgerId;
+  const threadId = input.threadId === undefined ? 'thread-card-a' : input.threadId;
+  const cardId = input.cardId === undefined ? 'card-a' : input.cardId;
   form.append('audio', new Blob(['voice-bytes'], { type: 'audio/webm' }), 'voice.webm');
-  form.append('ledgerId', 'specs');
-  form.append('threadId', 'thread-card-a');
-  form.append('cardId', 'card-a');
+  if (ledgerId !== null) form.append('ledgerId', ledgerId);
+  if (threadId !== null) form.append('threadId', threadId);
+  if (cardId !== null) form.append('cardId', cardId);
   form.append('noteId', input.noteId ?? 'note-voice-1');
   form.append('queueCodex', input.queueCodex ? 'true' : 'false');
   form.append('transcriptionText', input.transcript);
   form.append('awaitCompletion', 'true');
   return form;
 }
+
+test('voice upload transcribes on the backend without requiring a card id', async () => {
+  const originalCwd = process.cwd();
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-voice-no-card-'));
+  mkdirSync(join(workspace, '.decision-os'), { recursive: true });
+  writeFileSync(join(workspace, '.decision-os', 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }]
+  }, null, 2));
+  writeFileSync(join(workspace, '.decision-os', 'specs.json'), JSON.stringify({
+    cards: [],
+    annotations: [],
+    relationships: [],
+    notes: {}
+  }, null, 2));
+
+  process.chdir(workspace);
+  const runtime: Record<string, unknown> = {};
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const address = server.address() as AddressInfo;
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/voice-upload`, {
+      method: 'POST',
+      body: voiceUploadForm({ transcript: 'No-card transcript.', cardId: null, noteId: 'note-no-card' })
+    });
+    assert.equal(response.status, 202);
+    const body = await response.json() as { body: { ok: boolean; voiceFileRef: string } };
+    assert.equal(body.body.ok, true);
+    assert.ok(body.body.voiceFileRef);
+    await waitForText(join(workspace, '.decision-os', 'threads', 'specs', 'thread-card-a.md'), 'No-card transcript.');
+  } finally {
+    server.close();
+    process.chdir(originalCwd);
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('voice upload preserves audio when ledger metadata is missing', async () => {
+  const originalCwd = process.cwd();
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-voice-preserve-metadata-fail-'));
+  mkdirSync(join(workspace, '.decision-os'), { recursive: true });
+  writeFileSync(join(workspace, '.decision-os', 'state.json'), JSON.stringify({ ledgers: [] }, null, 2));
+
+  process.chdir(workspace);
+  const runtime: Record<string, unknown> = {};
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const address = server.address() as AddressInfo;
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/voice-upload`, {
+      method: 'POST',
+      body: voiceUploadForm({ transcript: 'Preserved transcript.', ledgerId: null, cardId: null, noteId: 'note-preserved' })
+    });
+    assert.equal(response.status, 400);
+    const body = await response.json() as { body: { ok: boolean; uploaded: boolean; noteId: string; voiceFileRef: string; error: string } };
+    assert.equal(body.body.ok, false);
+    assert.equal(body.body.uploaded, true);
+    assert.equal(body.body.noteId, 'note-preserved');
+    assert.equal(body.body.error, 'Missing ledgerId or threadId.');
+    assert.ok(body.body.voiceFileRef);
+    assert.equal(existsSync(body.body.voiceFileRef), true);
+  } finally {
+    server.close();
+    process.chdir(originalCwd);
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
 
 test('voice upload transcribes on the backend and starts Codex when the card has no session', async () => {
   const originalCwd = process.cwd();

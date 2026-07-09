@@ -4,6 +4,7 @@
  */
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { state } from '../../state.js';
+import { routeTab } from '../../navigation/helper/route-tab.js';
 
 export type VoiceTranscriptionResult = {
   ok: boolean;
@@ -29,14 +30,34 @@ function uploadOptions(input: VoiceUploadOptions | string | undefined): VoiceUpl
   return typeof input === 'string' ? { threadId: input } : input ?? {};
 }
 
+function currentPathname(): string {
+  const windowPath = (globalThis as { window?: { location?: { pathname?: string } } }).window?.location?.pathname;
+  const locationPath = (globalThis as { location?: { pathname?: string } }).location?.pathname;
+  return typeof windowPath === 'string' ? windowPath : typeof locationPath === 'string' ? locationPath : '/';
+}
+
+function activeLedgerId(fallback?: string): string {
+  const explicit = String(fallback ?? '').trim();
+  if (explicit) return explicit;
+  const pathname = currentPathname();
+  if (pathname && pathname !== '/') return String(routeTab(pathname) || '').trim();
+  return String(state.activeTab || routeTab(pathname) || '').trim();
+}
+
+function cardIdFromThread(threadId: string, fallback?: string): string {
+  const explicit = String(fallback ?? '').trim();
+  if (explicit) return explicit;
+  return threadId.startsWith('thread-') ? threadId.replace(/^thread-/, '').trim() : '';
+}
+
 export async function uploadVoiceAudio(audio: Blob, input: VoiceUploadOptions | string = {}): Promise<VoiceTranscriptionResult> {
   const options = uploadOptions(input);
   const threadId = options.threadId || state.threadId || '';
   const form = new FormData();
   form.append('audio', audio, audio.type.includes('wav') ? 'voice.wav' : 'voice.webm');
-  form.append('ledgerId', options.ledgerId || String(state.activeTab ?? ''));
+  form.append('ledgerId', activeLedgerId(options.ledgerId));
   form.append('threadId', threadId);
-  form.append('cardId', options.cardId ?? '');
+  form.append('cardId', cardIdFromThread(threadId, options.cardId));
   form.append('noteId', options.noteId ?? '');
   form.append('queueCodex', options.queueCodex ? 'true' : 'false');
   telemetry('upload-voice-audio', { optimistic: true, preserved: true, size: audio.size, type: audio.type, threadId, queueCodex: Boolean(options.queueCodex) });

@@ -36,13 +36,27 @@ export async function requestTranscription(audio: Blob | null, input: VoiceTrans
   renderVoiceStatus();
   const noteId = appendOptimisticThreadNote({ threadId, body: 'Voice note captured. Uploading audio...', status: 'uploading', source: 'voice' });
   const upload = await uploadVoiceAudio(audio, {
-    ledgerId: options.ledgerId || String(state.activeTab ?? ''),
+    ledgerId: options.ledgerId,
     threadId,
     cardId: options.cardId ?? '',
     noteId,
     queueCodex: options.queueCodex
   });
-  if (!upload.ok || !upload.voiceFileRef) {
+  if (!upload.ok) {
+    patchOptimisticThreadNote({
+      threadId,
+      noteId,
+      body: upload.voiceFileRef ? 'Voice uploaded; transcription unavailable.' : 'Voice upload failed before transcription.',
+      voiceFileRef: upload.voiceFileRef,
+      status: 'upload failed',
+      error: upload.error ?? ''
+    });
+    state.voice.transcriptionStatus = `voice upload failed${upload.error ? `: ${upload.error}` : ''}`;
+    if (upload.voiceFileRef) state.voice.voiceFileRef = upload.voiceFileRef;
+    renderVoiceStatus();
+    return;
+  }
+  if (!upload.voiceFileRef) {
     patchOptimisticThreadNote({ threadId, noteId, body: 'Voice upload failed before transcription.', status: 'upload failed', error: upload.error ?? '' });
     state.voice.transcriptionStatus = `voice upload failed${upload.error ? `: ${upload.error}` : ''}`;
     renderVoiceStatus();
