@@ -29018,3 +29018,114 @@ description: Launch implementation subagents from a current task grouping card, 
 <!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-605","timestamp":"2026-07-09T16:45:40.334Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"605","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_38"} -->
 
 The staged repo work will be the card update plus the Decision OS thread/summary. The installed user skill and metadata are already updated outside git, and the direct discovery check confirms the active skill source is `user`.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-606","timestamp":"2026-07-09T16:45:42.150Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"606","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_39","codexTool":"/usr/bin/zsh -lc 'git add .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md && git commit -m \"Require full task group completion in orchestrator\"'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git add .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md && git commit -m "Require full task group completion in orchestrator"'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-607","timestamp":"2026-07-09T16:45:42.150Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"607","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_39","codexTool":"/usr/bin/zsh -lc 'git add .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md && git commit -m \"Require full task group completion in orchestrator\"'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git add .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md && git commit -m "Require full task group completion in orchestrator"'`
+Status: completed
+Exit code: 0
+
+````text
+[main 17cadf5] Require full task group completion in orchestrator
+ 3 files changed, 1574 insertions(+), 7 deletions(-)
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-608","timestamp":"2026-07-09T16:45:54.940Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"608","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_40"} -->
+
+Committed as `17cadf5`. I’m doing one final scoped status and installed-skill check, then I’ll report the exact result.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-609","timestamp":"2026-07-09T16:45:54.941Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"609","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_41","codexTool":"/usr/bin/zsh -lc 'git status --short .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md && git log -3 --oneline'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git status --short .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md && git log -3 --oneline'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-610","timestamp":"2026-07-09T16:45:54.941Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"610","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_41","codexTool":"/usr/bin/zsh -lc 'git status --short .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md && git log -3 --oneline'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git status --short .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md && git log -3 --oneline'`
+Status: completed
+Exit code: 0
+
+````text
+ M .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md
+17cadf5 Require full task group completion in orchestrator
+604ad87 Move implementation orchestrator skill to user install
+db61636 Add implementation orchestrator skill library entry
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-611","timestamp":"2026-07-09T16:45:54.941Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"611","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_42","codexTool":"/usr/bin/zsh -lc 'python3 /home/jbb/.codex/skills/.system/skill-creator/scripts/quick_validate.py /home/jbb/.codex/skills/implementation-orchestrator'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'python3 /home/jbb/.codex/skills/.system/skill-creator/scripts/quick_validate.py /home/jbb/.codex/skills/implementation-orchestrator'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-612","timestamp":"2026-07-09T16:45:54.941Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"612","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_42","codexTool":"/usr/bin/zsh -lc 'python3 /home/jbb/.codex/skills/.system/skill-creator/scripts/quick_validate.py /home/jbb/.codex/skills/implementation-orchestrator'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'python3 /home/jbb/.codex/skills/.system/skill-creator/scripts/quick_validate.py /home/jbb/.codex/skills/implementation-orchestrator'`
+Status: completed
+Exit code: 0
+
+````text
+Skill is valid!
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-613","timestamp":"2026-07-09T16:45:54.941Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"613","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_43","codexTool":"/usr/bin/zsh -lc \"cd backend && node --import tsx -e \\\"import { scanCodexSkills } from './src/business/codex/helper/scan-codex-skills.ts'; const skill = scanCodexSkills({ workspaceRoot: '..' }).find((entry) => entry.name === 'implementation-orchestrator'); console.log(JSON.stringify(skill, null, 2)); if (\"'!skill || skill.source !== '\"'user' || \"'!skill.description.includes('\"'100%')) process.exit(1);\\\"\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "cd backend && node --import tsx -e \"import { scanCodexSkills } from './src/business/codex/helper/scan-codex-skills.ts'; const skill = scanCodexSkills({ workspaceRoot: '..' }).find((entry) => entry.name === 'implementation-orchestrator'); console.log(JSON.stringify(skill, null, 2)); if ("'!skill || skill.source !== '"'user' || "'!skill.description.includes('"'100%')) process.exit(1);\""`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-614","timestamp":"2026-07-09T16:45:54.941Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"614","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_43","codexTool":"/usr/bin/zsh -lc \"cd backend && node --import tsx -e \\\"import { scanCodexSkills } from './src/business/codex/helper/scan-codex-skills.ts'; const skill = scanCodexSkills({ workspaceRoot: '..' }).find((entry) => entry.name === 'implementation-orchestrator'); console.log(JSON.stringify(skill, null, 2)); if (\"'!skill || skill.source !== '\"'user' || \"'!skill.description.includes('\"'100%')) process.exit(1);\\\"\"","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc "cd backend && node --import tsx -e \"import { scanCodexSkills } from './src/business/codex/helper/scan-codex-skills.ts'; const skill = scanCodexSkills({ workspaceRoot: '..' }).find((entry) => entry.name === 'implementation-orchestrator'); console.log(JSON.stringify(skill, null, 2)); if ("'!skill || skill.source !== '"'user' || "'!skill.description.includes('"'100%')) process.exit(1);\""`
+Status: completed
+Exit code: 0
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-615","timestamp":"2026-07-09T16:46:04.732Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"615","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_44"} -->
+
+Updated the orchestrator contract and committed the repo-side change as `17cadf5 Require full task group completion in orchestrator`.
+
+What changed:
+- Card now requires **100% of `Independent Task Groups`** to return completed `Worker Results`.
+- Workflow now advances `Sequential Gates` after each completed wave and keeps dispatching next ready groups.
+- `Implementation Batch Handoff` is only valid after **100% group completion**.
+- Installed user skill at `/home/jbb/.codex/skills/implementation-orchestrator/SKILL.md` was synced with the same contract.
+- `agents/openai.yaml` prompt now says to execute every task group.
+
+Verified:
+- `quick_validate.py` passed.
+- `scanCodexSkills` returns source `user`.
+- Scanned description includes `100%`.
+
+The scoped thread file is dirty again only because live Decision OS telemetry was appended after the commit.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-616","timestamp":"2026-07-09T16:46:04.732Z","status":"complete","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"616","codexKind":"run_status","codexEventType":"turn.completed"} -->
+
+Codex turn completed.
+
+# OPERATOR
+<!-- decision-os:note {"id":"note-1783616173884-5dff8d02d37ed","timestamp":"2026-07-09T16:56:14.365Z","voiceFileRef":"/home/jbb/dev/EditorBP/decision-os/.decision-os/voice-uploads/voice-1783616174243-94052c33-f7d8-4921-b18d-743eb64597e6.wav","status":"transcribed","transcriptionStartedAt":"2026-07-09T16:56:14.244Z","codexQueueStatus":"started","codexQueueRequestedAt":"2026-07-09T16:56:14.244Z","codexQueueRunId":"codex-skill-1783596089570-85eceea5"} -->
+
+Il faut modifier le prompt, le skill, on n'a pas du tout besoin que l'orchestrateur vienne rajouter à la carte de résultats le prompt qu'il a donné au silvagent, ça ne sert complètement à rien. Il faut juste avoir dans la carte d'output quels ont été les résultats.
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1783616264756-f9bbdcaa","timestamp":"2026-07-09T16:57:44.756Z"} -->
+
+Updated the card and installed user skill so the output contract no longer includes `Subagent Prompts`.
+
+The output card is now limited to `Worker Results`, `Group Completion Map`, `Implementation Batch Handoff`, and `Operator Blockers`. The orchestrator can still create subagent prompts internally for dispatch, but it must exclude subagent prompt text and stored prompt references from the output card.
+
+Verification passed: `quick_validate.py`, direct `scanCodexSkills` source `user` check, and a stale-output search confirming the `Subagent Prompts` section was removed.

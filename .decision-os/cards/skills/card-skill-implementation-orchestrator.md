@@ -48,11 +48,10 @@ description: Launch implementation subagents from the current task grouping card
 
 ## E. Output Contract
 
-1. **`Dispatch Plan`:** List launched `group_id` values, assigned `task_ids`, referenced card paths, and subagent identifiers.
-2. **`Subagent Prompts`:** Record the exact prompt sent to each subagent and any stored prompt reference.
-3. **`Worker Results`:** Collect each subagent return with `completedTasks`, `changedFiles`, `blockers`, `assumptions`, and worker notes.
-4. **`Implementation Batch Handoff`:** Provide the collected `Worker Results` for **100% of `Independent Task Groups`**, the referenced `task-dependency` card, the referenced `task-list` card, and the final `group_id` completion map.
-5. **`Operator Blockers`:** Report only blockers that prevent **100% group completion**, including a missing `task-list` reference, unreadable card file, unavailable subagent tooling, ambiguous group mapping, blocked `group_id` values, and blocked `task_ids`.
+1. **`Worker Results`:** Collect each subagent return with `group_id`, `task_ids`, `completedTasks`, `changedFiles`, `blockers`, `assumptions`, and worker notes.
+2. **`Group Completion Map`:** List every `group_id` from `Independent Task Groups` with assigned `task_ids`, returned `completedTasks`, and final `status`.
+3. **`Implementation Batch Handoff`:** Provide the collected `Worker Results`, the final `Group Completion Map`, the referenced `task-dependency` card, and the referenced `task-list` card.
+4. **`Operator Blockers`:** Report only blockers that prevent **100% group completion**, including a missing `task-list` reference, unreadable card file, unavailable subagent tooling, ambiguous group mapping, blocked `group_id` values, and blocked `task_ids`.
 
 ---
 
@@ -66,3 +65,4 @@ description: Launch implementation subagents from the current task grouping card
 6. **Completion target:** Continue dispatch until **100% of `Independent Task Groups`** have returned completed `Worker Results`.
 7. **Stop point:** End with `Implementation Batch Handoff` only after **100% group completion**.
 8. **Incomplete output:** When `Operator Blockers` prevent **100% group completion**, name each blocked `group_id`, blocked `task_ids`, and exact missing condition.
+9. **Result-only output:** Keep the output card to `Worker Results`, `Group Completion Map`, `Implementation Batch Handoff`, and `Operator Blockers`; exclude subagent prompt text and stored prompt references.
