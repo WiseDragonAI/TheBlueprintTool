@@ -23,7 +23,6 @@ test('card skill process route creates a linked output card and launches codex',
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-card-skill-'));
   const fakeCodex = join(workspace, 'fake-codex.mjs');
   mkdirSync(join(workspace, '.decision-os'), { recursive: true });
-  mkdirSync(join(workspace, '.decision-os', 'cards', 'specs'), { recursive: true });
   mkdirSync(join(workspace, '.skills', 'test-skill'), { recursive: true });
   writeFileSync(join(workspace, '.skills', 'test-skill', 'SKILL.md'), [
     '---',
@@ -36,48 +35,21 @@ test('card skill process route creates a linked output card and launches codex',
     ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }]
   }, null, 2));
   writeFileSync(join(workspace, '.decision-os', 'specs.json'), JSON.stringify({
-    cards: [
-      {
-        id: 'source-card',
-        title: 'Source Card',
-        x: 100,
-        y: 120,
-        w: 320,
-        h: 180,
-        comment: { what: 'Incoming card body' },
-        facts: [],
-        fields: []
-      },
-      {
-        id: 'sibling-card',
-        title: 'Sibling Card',
-        x: 540,
-        y: 160,
-        w: 220,
-        h: 150,
-        status: 'done',
-        comment: { contentFile: '.decision-os/cards/specs/sibling-card.md' },
-        facts: [],
-        fields: []
-      },
-      {
-        id: 'outside-card',
-        title: 'Outside Card',
-        x: 1600,
-        y: 120,
-        w: 220,
-        h: 150,
-        comment: { contentFile: '.decision-os/cards/specs/outside-card.md' },
-        facts: [],
-        fields: []
-      }
-    ],
-    annotations: [{ id: 'zone-a', label: 'Launch Zone', variant: 'zone', color: '#55b8ff', x: 50, y: 80, width: 920, height: 360 }],
+    cards: [{
+      id: 'source-card',
+      title: 'Source Card',
+      x: 100,
+      y: 120,
+      w: 320,
+      h: 180,
+      comment: { what: 'Incoming card body' },
+      facts: [],
+      fields: []
+    }],
+    annotations: [],
     relationships: [],
     notes: {}
   }, null, 2));
-  writeFileSync(join(workspace, '.decision-os', 'cards', 'specs', 'sibling-card.md'), 'Sibling card body');
-  writeFileSync(join(workspace, '.decision-os', 'cards', 'specs', 'outside-card.md'), 'Outside card body');
   writeFileSync(fakeCodex, [
     '#!/usr/bin/env node',
     'import { writeFileSync } from "node:fs";',
@@ -89,7 +61,7 @@ test('card skill process route creates a linked output card and launches codex',
     '  const args = process.argv.slice(2);',
     '  const model = args[args.indexOf("--model") + 1] || "";',
     '  const effort = args[args.indexOf("-c") + 1] || "";',
-    '  writeFileSync(match[1].trim(), "# Fake Result\\n\\n" + (input.includes("$test-skill") ? "skill seen" : "skill missing") + "\\n" + (input.includes("Launch zone id: zone-a") ? "zone seen" : "zone missing") + "\\n" + (input.includes("sibling-card | title: Sibling Card") ? "sibling seen" : "sibling missing") + "\\n" + (input.includes("outside-card | title: Outside Card") ? "outside leaked" : "outside excluded") + "\\nmodel=" + model + "\\neffort=" + effort + "\\n");',
+    '  writeFileSync(match[1].trim(), "# Fake Result\\n\\n" + (input.includes("$test-skill") ? "skill seen" : "skill missing") + "\\nmodel=" + model + "\\neffort=" + effort + "\\n");',
     '  console.log(JSON.stringify({ type: "fake-codex-done" }));',
     '});',
   ].join('\n'));
@@ -132,9 +104,6 @@ test('card skill process route creates a linked output card and launches codex',
     assert.deepEqual(status.metadata, { sourceCardTitle: 'Source Card', sourceThreadId: '', codexModel: 'gpt-5.4', codexEffort: 'xhigh' });
 
     await waitForText(body.run.outputFile, 'skill seen');
-    await waitForText(body.run.outputFile, 'zone seen');
-    await waitForText(body.run.outputFile, 'sibling seen');
-    await waitForText(body.run.outputFile, 'outside excluded');
     await waitForText(body.run.outputFile, 'model=gpt-5.4');
     await waitForText(body.run.outputFile, 'effort=model_reasoning_effort="xhigh"');
     const output = readFileSync(body.run.outputFile, 'utf8');
@@ -159,48 +128,22 @@ test('thread codex process route anchors the run widget on the source card and s
   const fakeCodex = join(workspace, 'fake-codex-thread.mjs');
   const inputFile = join(workspace, 'thread-input.txt');
   mkdirSync(join(workspace, '.decision-os'), { recursive: true });
-  mkdirSync(join(workspace, '.decision-os', 'cards', 'specs'), { recursive: true });
   writeFileSync(join(workspace, '.decision-os', 'state.json'), JSON.stringify({
     ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }]
   }, null, 2));
   writeFileSync(join(workspace, '.decision-os', 'specs.json'), JSON.stringify({
-    cards: [
-      {
-        id: 'card-a',
-        title: 'Thread Card',
-        x: 100,
-        y: 120,
-        w: 320,
-        h: 180,
-        comment: { what: 'Existing card body' },
-        facts: [],
-        fields: []
-      },
-      {
-        id: 'card-b',
-        title: 'Zone Neighbor',
-        x: 540,
-        y: 160,
-        w: 220,
-        h: 150,
-        status: 'ready',
-        comment: { contentFile: '.decision-os/cards/specs/card-b.md' },
-        facts: [],
-        fields: []
-      },
-      {
-        id: 'card-c',
-        title: 'Outside Neighbor',
-        x: 1600,
-        y: 120,
-        w: 220,
-        h: 150,
-        comment: { contentFile: '.decision-os/cards/specs/card-c.md' },
-        facts: [],
-        fields: []
-      }
-    ],
-    annotations: [{ id: 'zone-thread', label: 'Thread Zone', variant: 'zone', color: '#55b8ff', x: 50, y: 80, width: 920, height: 360 }],
+    cards: [{
+      id: 'card-a',
+      title: 'Thread Card',
+      x: 100,
+      y: 120,
+      w: 320,
+      h: 180,
+      comment: { what: 'Existing card body' },
+      facts: [],
+      fields: []
+    }],
+    annotations: [],
     relationships: [],
     notes: {
       'thread-card-a': [
@@ -217,8 +160,6 @@ test('thread codex process route anchors the run widget on the source card and s
       ]
     }
   }, null, 2));
-  writeFileSync(join(workspace, '.decision-os', 'cards', 'specs', 'card-b.md'), 'Zone neighbor body');
-  writeFileSync(join(workspace, '.decision-os', 'cards', 'specs', 'card-c.md'), 'Outside neighbor body');
   writeFileSync(fakeCodex, [
     '#!/usr/bin/env node',
     'import { writeFileSync } from "node:fs";',
@@ -264,9 +205,6 @@ test('thread codex process route anchors the run widget on the source card and s
     assert.match(input, /Please update this exact card from the thread\./);
     assert.doesNotMatch(input, /Codex internal output should not be prompt context\./);
     assert.match(input, /Existing card body/);
-    assert.match(input, /Launch zone id: zone-thread/);
-    assert.match(input, /card-b \| title: Zone Neighbor \| status: ready \| contentFile: \.decision-os\/cards\/specs\/card-b\.md/);
-    assert.doesNotMatch(input, /card-c \| title: Outside Neighbor/);
     assert.match(input, /Do not query or treat unrelated open notes\./);
     assert.doesNotMatch(input, /ledger-cli unanswered|Query Open Notes|For every pending operator note/);
 
@@ -275,7 +213,7 @@ test('thread codex process route anchors the run widget on the source card and s
       threadFiles: Record<string, string>;
     };
     const card = ledger.cards.find((entry) => entry.id === 'card-a');
-    assert.equal(ledger.cards.length, 3);
+    assert.equal(ledger.cards.length, 1);
     assert.equal(card?.codexThreadRunId, body.run.id);
     assert.equal(card?.codexThreadRunOutputFile?.includes(body.run.id), true);
     assert.equal(card?.comment?.contentFile, '.decision-os/cards/specs/card-a.md');

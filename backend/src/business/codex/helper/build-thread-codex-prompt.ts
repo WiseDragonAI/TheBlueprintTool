@@ -13,7 +13,6 @@ export function buildThreadCodexPrompt(input: {
   threadMarkdownFile: string;
   threadMarkdown: string;
   runSummaryFile: string;
-  launchZoneContext: string;
 }): string {
   return [
     'You are treating one decision-os thread, not scanning all open notes.',
@@ -27,11 +26,6 @@ export function buildThreadCodexPrompt(input: {
     `Thread id: ${input.threadId}`,
     `Thread markdown file: ${input.threadMarkdownFile}`,
     `Run summary file: ${input.runSummaryFile}`,
-    '',
-    'Resolved launch zone context:',
-    '```text',
-    input.launchZoneContext,
-    '```',
     '',
     'Scoped treatment rules adapted from the decision-os treat-open-notes workflow:',
     '1. Read the full thread markdown and card markdown before acting.',

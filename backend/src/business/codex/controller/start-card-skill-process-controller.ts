@@ -13,7 +13,6 @@ import { stripHydratedThreadNotes } from '@backend/business/ledger/helper/thread
 import { scanCodexSkills } from '../helper/scan-codex-skills.js';
 import { buildCardSkillPrompt } from '../helper/build-card-skill-prompt.js';
 import { codexRunSegmentMarker } from '../helper/codex-run-segment-marker.js';
-import { formatCodexLaunchZoneContext, resolveCodexLaunchZoneContext } from '../helper/resolve-codex-launch-zone-context.js';
 import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand } from '../helper/resolve-codex-command.js';
 import { readCardSkillRunController } from './read-card-skill-run-controller.js';
 
@@ -162,9 +161,6 @@ export async function startCardSkillProcessController(input: { action_payload?: 
   const outputComment = outputCard.comment && typeof outputCard.comment === 'object' ? outputCard.comment as AnyRecord : {};
   const outputFile = resolveCardContentFile(decisionOsRoot, outputComment.contentFile);
   if (!outputFile) return { ok: false, statusCode: 500, error: 'Output card content file was not created.' };
-  const sourceComment = source.comment && typeof source.comment === 'object' ? source.comment as AnyRecord : {};
-  const sourceCardMarkdownFile = resolveCardContentFile(decisionOsRoot, sourceComment.contentFile) ?? '';
-  const launchZoneContext = formatCodexLaunchZoneContext(resolveCodexLaunchZoneContext({ ledger, sourceCardId: cardId, excludeCardIds: [outputCardId] }));
 
   const runDirectory = resolve(decisionOsRoot, 'runs', 'codex-skills', safeSegment(ledgerStem(ledgerPath)));
   mkdirSync(runDirectory, { recursive: true });
@@ -172,15 +168,10 @@ export async function startCardSkillProcessController(input: { action_payload?: 
   const stderrFile = resolve(runDirectory, `${safeSegment(runId)}.log`);
   const prompt = buildCardSkillPrompt({
     skillName,
-    workspaceRoot,
-    ledgerFile: ledgerPath,
     sourceCardId: cardId,
     sourceCardTitle: String(source.title ?? cardId),
-    sourceCardMarkdownFile,
     sourceCardContent: sourceCardContent({ rawLedger: ledger, decisionOsRoot, cardId }),
-    outputCardId,
     outputMarkdownFile: outputFile,
-    launchZoneContext,
   });
 
   const child = spawn(command.command, command.args, { cwd: workspaceRoot, stdio: ['pipe', 'pipe', 'pipe'] });
