@@ -57,12 +57,24 @@ export type ActiveLedgerMutation = {
   };
 };
 
+function localCanvasMergeOptionsForMutation(mutation: ActiveLedgerMutation): { skipCardIds: Set<string>; skipAnnotationIds: Set<string> } | undefined {
+  if (mutation.action !== 'patch-geometry') return undefined;
+  return {
+    skipCardIds: new Set(Object.keys(mutation.geometry?.cards ?? {})),
+    skipAnnotationIds: new Set([
+      ...Object.keys(mutation.geometry?.zones ?? {}),
+      ...Object.keys(mutation.geometry?.groups ?? {})
+    ])
+  };
+}
+
 export async function commitActiveLedgerMutation(mutation: ActiveLedgerMutation, options: { render?: boolean } = {}): Promise<boolean> {
   const endpoint = ledgerEndpointForTab(state.activeTab);
   if (!endpoint) return false;
   const ledgerStateId = state.canvasMode === 'ledgers' ? 'ledgers-canvas' : state.activeTab;
-  const canMergeLocalCanvas = mutation.action !== 'patch-geometry' && Boolean(state.activeLedger && state.activeLedgerId === ledgerStateId);
+  const canMergeLocalCanvas = Boolean(state.activeLedger && state.activeLedgerId === ledgerStateId);
   const localLedger = canMergeLocalCanvas ? state.activeLedger : null;
+  const mergeOptions = localCanvasMergeOptionsForMutation(mutation);
   telemetry('commit-ledger-edit', { activeTab: state.activeTab, action: mutation.action, authority: 'server' });
   const response = await fetch(endpoint, {
     method: 'PATCH',
@@ -75,7 +87,7 @@ export async function commitActiveLedgerMutation(mutation: ActiveLedgerMutation,
   }
   const ledger = await response.json().catch(() => null);
   if (!ledger || typeof ledger !== 'object') return false;
-  state.activeLedger = mergeLocalThreadNotes(canMergeLocalCanvas ? mergeLocalCanvasStateIntoLedger(ledger, localLedger) : ledger);
+  state.activeLedger = mergeLocalThreadNotes(canMergeLocalCanvas ? mergeLocalCanvasStateIntoLedger(ledger, localLedger, mergeOptions) : ledger);
   state.activeLedgerId = ledgerStateId;
   refreshZoneAttributionCache(`server-ledger-mutation:${mutation.action}`);
   telemetry('load-ledger-state', { activeTab: state.activeTab, source: 'server-ledger-mutation', action: mutation.action });

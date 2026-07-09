@@ -400,3 +400,77 @@ test('non-geometry mutation responses keep newer local canvas geometry', async (
   assert.deepEqual(state.activeLedger.cards[0], { id: 'card-a', title: 'Server', status: 'done', x: 700, y: 800, w: 360, h: 210 });
   assert.deepEqual(state.activeLedger.annotations[0], { id: 'zone-a', variant: 'zone', label: 'Server zone', x: 70, y: 80, width: 420, height: 240 });
 });
+
+test('patch-geometry mutation responses keep unrelated newer local canvas geometry', async () => {
+  (globalThis as any).CustomEvent = class CustomEvent {
+    detail: unknown;
+    constructor(_type: string, init: { detail?: unknown } = {}) {
+      this.detail = init.detail;
+    }
+  };
+  (globalThis as any).window = {
+    location: { pathname: '/specs' },
+    dispatchEvent() {},
+    __coreTelemetry: []
+  };
+  const { state } = await import('../../src/runtime/state.js');
+  const { commitActiveLedgerMutation } = await import('../../src/runtime/ledger/effect/commit-active-ledger-mutation.js');
+
+  state.canvasMode = 'ledger';
+  state.activeTab = 'specs';
+  state.activeLedgerId = 'specs';
+  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
+  state.activeLedger = {
+    cards: [
+      { id: 'card-a', title: 'Local A', x: 1000, y: 1100, w: 360, h: 210 },
+      { id: 'card-b', title: 'Local B', x: 2000, y: 2100, w: 380, h: 230 }
+    ],
+    annotations: [
+      { id: 'zone-a', variant: 'zone', label: 'Local zone A', x: 70, y: 80, width: 420, height: 240 },
+      { id: 'zone-b', variant: 'zone', label: 'Local zone B', x: 170, y: 180, width: 520, height: 340 },
+      { id: 'group-a', variant: 'group', label: 'Local group A', x: -70, y: -80, width: 620, height: 440 }
+    ],
+    notes: {}
+  };
+
+  (globalThis as any).fetch = async (_url: string, init: RequestInit) => {
+    const body = JSON.parse(String(init.body ?? '{}'));
+    assert.equal(body.action, 'patch-geometry');
+    assert.deepEqual(Object.keys(body.geometry.cards), ['card-b']);
+    assert.deepEqual(Object.keys(body.geometry.zones), ['zone-b']);
+    assert.deepEqual(Object.keys(body.geometry.groups), []);
+    return {
+      ok: true,
+      async json() {
+        return {
+          cards: [
+            { id: 'card-a', title: 'Server A', x: 1, y: 2, w: 220, h: 132 },
+            { id: 'card-b', title: 'Server B', x: 2222, y: 2333, w: 444, h: 255 }
+          ],
+          annotations: [
+            { id: 'zone-a', variant: 'zone', label: 'Server zone A', x: 3, y: 4, width: 180, height: 140 },
+            { id: 'zone-b', variant: 'zone', label: 'Server zone B', x: 333, y: 444, width: 555, height: 222 },
+            { id: 'group-a', variant: 'group', label: 'Server group A', x: 5, y: 6, width: 220, height: 160 }
+          ],
+          notes: {}
+        };
+      }
+    };
+  };
+
+  const committed = await commitActiveLedgerMutation({
+    action: 'patch-geometry',
+    geometry: {
+      cards: { 'card-b': { x: 2222, y: 2333, width: 444, height: 255 } },
+      zones: { 'zone-b': { x: 333, y: 444, width: 555, height: 222 } },
+      groups: {}
+    }
+  });
+
+  assert.equal(committed, true);
+  assert.deepEqual(state.activeLedger.cards[0], { id: 'card-a', title: 'Server A', x: 1000, y: 1100, w: 360, h: 210 });
+  assert.deepEqual(state.activeLedger.cards[1], { id: 'card-b', title: 'Server B', x: 2222, y: 2333, w: 444, h: 255 });
+  assert.deepEqual(state.activeLedger.annotations[0], { id: 'zone-a', variant: 'zone', label: 'Server zone A', x: 70, y: 80, width: 420, height: 240 });
+  assert.deepEqual(state.activeLedger.annotations[1], { id: 'zone-b', variant: 'zone', label: 'Server zone B', x: 333, y: 444, width: 555, height: 222 });
+  assert.deepEqual(state.activeLedger.annotations[2], { id: 'group-a', variant: 'group', label: 'Server group A', x: -70, y: -80, width: 620, height: 440 });
+});
