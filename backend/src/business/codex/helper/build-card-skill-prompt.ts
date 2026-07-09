@@ -4,20 +4,36 @@
  */
 export function buildCardSkillPrompt(input: {
   skillName: string;
+  workspaceRoot: string;
+  ledgerFile: string;
   sourceCardId: string;
   sourceCardTitle: string;
+  sourceCardMarkdownFile: string;
   sourceCardContent: string;
+  outputCardId: string;
   outputMarkdownFile: string;
+  launchZoneContext: string;
 }): string {
   return [
     `$${input.skillName}`,
     '',
     'You are processing one decision-os card from the active workspace.',
     '',
-    'Treat the following source card as the complete incoming card content for this run.',
-    '',
+    'Scope:',
+    `Workspace root: ${input.workspaceRoot}`,
+    `Ledger file: ${input.ledgerFile}`,
     `Source card id: ${input.sourceCardId}`,
     `Source card title: ${input.sourceCardTitle}`,
+    `Source card markdown file: ${input.sourceCardMarkdownFile || '(inline ledger content)'}`,
+    `Output card id: ${input.outputCardId}`,
+    `Output markdown file: ${input.outputMarkdownFile}`,
+    '',
+    'Resolved launch zone context:',
+    '```text',
+    input.launchZoneContext,
+    '```',
+    '',
+    'Treat the following source card as the complete incoming card content for this run.',
     '',
     'Source card content:',
     '```markdown',

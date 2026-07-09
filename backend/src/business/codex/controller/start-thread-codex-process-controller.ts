@@ -13,6 +13,7 @@ import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-
 import { buildThreadCodexPrompt } from '../helper/build-thread-codex-prompt.js';
 import { codexRunSegmentMarker } from '../helper/codex-run-segment-marker.js';
 import { isCodexThreadArtifactNote } from '../helper/is-codex-thread-artifact-note.js';
+import { formatCodexLaunchZoneContext, resolveCodexLaunchZoneContext } from '../helper/resolve-codex-launch-zone-context.js';
 import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand } from '../helper/resolve-codex-command.js';
 import { readCardSkillRunController } from './read-card-skill-run-controller.js';
 
@@ -147,6 +148,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
   const sourceCardFile = cardContentFile({ decisionOsRoot, card: source, ledgerPath });
   const sourceThreadFile = threadContentFile({ decisionOsRoot, ledger, ledgerPath, threadId });
   if (!sourceCardFile || !sourceThreadFile) return { ok: false, statusCode: 500, error: 'Could not resolve card or thread markdown file.', cardId, threadId };
+  const launchZoneContext = formatCodexLaunchZoneContext(resolveCodexLaunchZoneContext({ ledger, sourceCardId: cardId }));
 
   const runId = `codex-skill-${Date.now()}-${randomUUID().slice(0, 8)}`;
   const runDirectoryRef = `.decision-os/runs/codex-skills/${safeSegment(ledgerStem(ledgerPath))}`;
@@ -175,6 +177,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
     threadMarkdownFile: sourceThreadFile,
     threadMarkdown: threadMarkdownForPrompt({ decisionOsRoot, ledger, threadId }),
     runSummaryFile,
+    launchZoneContext,
   });
 
   const child = spawn(command.command, command.args, { cwd: workspaceRoot, stdio: ['pipe', 'pipe', 'pipe'] });
