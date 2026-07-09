@@ -21,7 +21,7 @@ export type LedgerMutation = {
   geometry?: Record<string, Record<string, { x: number; y: number; width: number; height: number }>>;
   viewport?: { x?: number; y?: number; scale?: number };
   region?: { id?: string; kind?: string; label?: string; color?: string };
-  note?: { id?: string; threadId?: string; body?: string; voiceFileRef?: string; status?: string; transcriptionStartedAt?: string; source?: string; error?: string; imageSizes?: Record<string, { width?: number; height?: number }> };
+  note?: { id?: string; threadId?: string; body?: string; voiceFileRef?: string; status?: string; transcriptionStartedAt?: string; source?: string; error?: string; codexQueueStatus?: string; codexQueueRequestedAt?: string; codexQueueRunId?: string; codexQueueError?: string; imageSizes?: Record<string, { width?: number; height?: number }> };
   selection?: { cardIds?: string[]; zoneIds?: string[]; groupIds?: string[] };
 };
 
@@ -48,6 +48,23 @@ export function applyLedgerMutation(input: {
   const { decisionOsRoot, ledgerPath, ledger, mutation } = input;
   hydrateLedgerThreadNotes(ledger, decisionOsRoot);
   let mutationError: MutationError | undefined;
+
+  const voiceMetadata = (note: Record<string, unknown> | undefined): Record<string, unknown> => ({
+    voiceFileRef: note?.voiceFileRef ?? '',
+    status: note?.status ?? '',
+    transcriptionStartedAt: note?.transcriptionStartedAt ?? '',
+    error: note?.error ?? '',
+    codexQueueStatus: note?.codexQueueStatus ?? '',
+    codexQueueRequestedAt: note?.codexQueueRequestedAt ?? '',
+    codexQueueRunId: note?.codexQueueRunId ?? '',
+    codexQueueError: note?.codexQueueError ?? ''
+  });
+
+  const patchVoiceMetadata = (target: Record<string, unknown>, note: Record<string, unknown> | undefined, options: { overwrite: boolean }): void => {
+    for (const key of ['voiceFileRef', 'status', 'transcriptionStartedAt', 'error', 'codexQueueStatus', 'codexQueueRequestedAt', 'codexQueueRunId', 'codexQueueError']) {
+      if (typeof note?.[key] === 'string' && (options.overwrite || !target[key])) target[key] = note[key];
+    }
+  };
 
   if ((mutation.action === 'create-zone' || mutation.action === 'create-group') && mutation.annotation?.id) {
     const id = String(mutation.annotation.id);
@@ -159,14 +176,11 @@ export function applyLedgerMutation(input: {
       return { ok: true, ledger };
     }
     const existing = notes.find((entry) => String(entry.id ?? '') === noteId);
-    const nextNote: Record<string, unknown> = { id: noteId, role: 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), voiceFileRef: mutation.note.voiceFileRef ?? '', status: mutation.note.status ?? '', transcriptionStartedAt: mutation.note.transcriptionStartedAt ?? '', error: mutation.note.error ?? '' };
+    const nextNote: Record<string, unknown> = { id: noteId, role: 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), ...voiceMetadata(mutation.note) };
     if (mutation.note.imageSizes && typeof mutation.note.imageSizes === 'object') nextNote.imageSizes = mutation.note.imageSizes;
     if (existing) {
       if (!existing.message && nextNote.message) existing.message = nextNote.message;
-      if (!existing.voiceFileRef && nextNote.voiceFileRef) existing.voiceFileRef = nextNote.voiceFileRef;
-      if (!existing.status && nextNote.status) existing.status = nextNote.status;
-      if (!existing.transcriptionStartedAt && nextNote.transcriptionStartedAt) existing.transcriptionStartedAt = nextNote.transcriptionStartedAt;
-      if (!existing.error && nextNote.error) existing.error = nextNote.error;
+      patchVoiceMetadata(existing, mutation.note, { overwrite: false });
       if (mutation.note.imageSizes && typeof mutation.note.imageSizes === 'object') existing.imageSizes = mutation.note.imageSizes;
       existing.updatedAt = new Date().toISOString();
     } else notes.push(nextNote);
@@ -186,16 +200,13 @@ export function applyLedgerMutation(input: {
     }
     let note = notes.find((entry) => String(entry.id ?? '') === noteId || String(entry.voiceFileRef ?? '') === mutation.note?.voiceFileRef);
     if (!note && noteId) {
-      note = { id: noteId, role: 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), voiceFileRef: mutation.note.voiceFileRef ?? '', status: mutation.note.status ?? '', transcriptionStartedAt: mutation.note.transcriptionStartedAt ?? '', error: mutation.note.error ?? '' };
+      note = { id: noteId, role: 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), ...voiceMetadata(mutation.note) };
       if (mutation.note.imageSizes && typeof mutation.note.imageSizes === 'object') note.imageSizes = mutation.note.imageSizes;
       notes.push(note);
     }
     if (note) {
       if (typeof mutation.note.body === 'string') note.message = mutation.note.body;
-      if (typeof mutation.note.voiceFileRef === 'string') note.voiceFileRef = mutation.note.voiceFileRef;
-      if (typeof mutation.note.status === 'string') note.status = mutation.note.status;
-      if (typeof mutation.note.transcriptionStartedAt === 'string') note.transcriptionStartedAt = mutation.note.transcriptionStartedAt;
-      if (typeof mutation.note.error === 'string') note.error = mutation.note.error;
+      patchVoiceMetadata(note, mutation.note, { overwrite: true });
       if (mutation.note.imageSizes && typeof mutation.note.imageSizes === 'object') note.imageSizes = mutation.note.imageSizes;
       note.updatedAt = new Date().toISOString();
     }

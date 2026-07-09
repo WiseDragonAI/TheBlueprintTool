@@ -44,6 +44,10 @@ function notifyLedgerChange(callback: unknown, event: AnyRecord): void {
   if (typeof callback === 'function') callback(event);
 }
 
+function notifyRunSettled(callback: unknown, event: AnyRecord): void {
+  if (typeof callback === 'function') callback(event);
+}
+
 function runtimeRuns(runtime: AnyRecord): Record<string, AnyRecord> {
   const runs = runtime.codexSkillRuns && typeof runtime.codexSkillRuns === 'object'
     ? runtime.codexSkillRuns as Record<string, AnyRecord>
@@ -228,7 +232,10 @@ export async function startThreadCodexProcessController(input: { action_payload?
     finishRunStreams(stdout, stderr, () => {
       void readCardSkillRunController({ action_payload: { ledgerId, cardId, runId }, runtime_state: runtime })
         .catch(() => undefined)
-        .finally(() => notifyLedgerChange(payload.onLedgerChange, { reason: 'codex-thread-failed', ledgerId, cardId, threadId, runId }));
+        .finally(() => {
+          notifyLedgerChange(payload.onLedgerChange, { reason: 'codex-thread-failed', ledgerId, cardId, threadId, runId });
+          notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, status: 'failed' });
+        });
     });
   });
   child.on('close', (exitCode) => {
@@ -243,7 +250,10 @@ export async function startThreadCodexProcessController(input: { action_payload?
       if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
       void readCardSkillRunController({ action_payload: { ledgerId, cardId, runId }, runtime_state: runtime })
         .catch(() => undefined)
-        .finally(() => notifyLedgerChange(payload.onLedgerChange, { reason: status === 'cancelled' ? 'codex-thread-cancelled' : 'codex-thread-finished', ledgerId, cardId, threadId, runId, exitCode }));
+        .finally(() => {
+          notifyLedgerChange(payload.onLedgerChange, { reason: status === 'cancelled' ? 'codex-thread-cancelled' : 'codex-thread-finished', ledgerId, cardId, threadId, runId, exitCode });
+          notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, status, exitCode });
+        });
     });
   });
 

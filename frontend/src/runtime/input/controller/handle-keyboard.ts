@@ -74,7 +74,7 @@ export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
   if (key === 'x') {
     event.preventDefault();
     if (!state.threadPanelOpen) openThreadPanel();
-    if (state.voice.recording) await stopVoiceRecording();
+    if (state.voice.recording) await stopVoiceRecording({ queueCodex: event.shiftKey });
     else void startVoiceRecording();
     return;
   }

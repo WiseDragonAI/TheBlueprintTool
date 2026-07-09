@@ -6,56 +6,51 @@ import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { renderVoiceStatus } from './render-voice-status.js';
 import { uploadVoiceAudio } from './upload-voice-audio.js';
-import { appendVoiceNote } from './append-voice-note.js';
-import { updateVoiceNote } from './update-voice-note.js';
-import { transcribeUploadedVoiceAudio } from './transcribe-uploaded-voice-audio.js';
+import { appendOptimisticThreadNote } from '../../thread/effect/append-optimistic-thread-note.js';
+import { patchOptimisticThreadNote } from '../../thread/effect/patch-optimistic-thread-note.js';
 
-export async function requestTranscription(audio: Blob | null, threadId = state.threadId || 'conversation-ledger'): Promise<void> {
+export type VoiceTranscriptionRequest = {
+  ledgerId?: string;
+  threadId?: string;
+  cardId?: string;
+  queueCodex?: boolean;
+};
+
+function requestOptions(input: VoiceTranscriptionRequest | string | undefined): VoiceTranscriptionRequest {
+  return typeof input === 'string' ? { threadId: input } : input ?? {};
+}
+
+export async function requestTranscription(audio: Blob | null, input: VoiceTranscriptionRequest | string = {}): Promise<void> {
+  const options = requestOptions(input);
+  const threadId = options.threadId || state.threadId || 'conversation-ledger';
   if (!state.threadId) state.threadId = threadId;
   if (!audio || audio.size <= 0) {
     state.voice.transcriptionStatus = 'no audio captured';
-    appendVoiceNote({ threadId, body: 'Voice recording produced no audio.', status: 'capture failed', error: 'No audio captured' });
+    appendOptimisticThreadNote({ threadId, body: 'Voice recording produced no audio.', status: 'capture failed', error: 'No audio captured' });
     telemetry('request-transcription', { configured: false, reason: 'empty-audio', threadId });
     renderVoiceStatus();
     return;
   }
   state.voice.transcriptionStatus = 'uploading voice';
-  telemetry('request-transcription', { configured: true, model: 'gpt-4o-mini-transcribe', threadId });
+  telemetry('request-transcription', { configured: true, model: 'gpt-4o-mini-transcribe', threadId, queueCodex: Boolean(options.queueCodex) });
   renderVoiceStatus();
-  const note = appendVoiceNote({ threadId, body: 'Voice note captured. Uploading audio...', status: 'uploading' });
-  if (!note.ok) {
-    state.voice.transcriptionStatus = 'voice note commit failed';
-    renderVoiceStatus();
-    return;
-  }
-  const upload = await uploadVoiceAudio(audio, threadId);
+  const noteId = appendOptimisticThreadNote({ threadId, body: 'Voice note captured. Uploading audio...', status: 'uploading', source: 'voice' });
+  const upload = await uploadVoiceAudio(audio, {
+    ledgerId: options.ledgerId || String(state.activeTab ?? ''),
+    threadId,
+    cardId: options.cardId ?? '',
+    noteId,
+    queueCodex: options.queueCodex
+  });
   if (!upload.ok || !upload.voiceFileRef) {
-    void updateVoiceNote({ threadId, noteId: note.noteId, body: 'Voice upload failed before transcription.', status: 'upload failed', error: upload.error ?? '' });
+    patchOptimisticThreadNote({ threadId, noteId, body: 'Voice upload failed before transcription.', status: 'upload failed', error: upload.error ?? '' });
     state.voice.transcriptionStatus = `voice upload failed${upload.error ? `: ${upload.error}` : ''}`;
     renderVoiceStatus();
     return;
   }
   state.voice.voiceFileRef = upload.voiceFileRef;
   state.voice.transcriptionStatus = 'transcribing';
-  void updateVoiceNote({ threadId, noteId: note.noteId, body: 'Voice uploaded.', voiceFileRef: upload.voiceFileRef, status: 'transcribing', error: '', transcriptionStartedAt: new Date().toISOString() });
-  renderVoiceStatus();
-  const result = await transcribeUploadedVoiceAudio(upload.voiceFileRef, threadId);
-  if (result.ok && result.text.trim()) {
-    state.voice.voiceFileRef = result.voiceFileRef;
-    void updateVoiceNote({ threadId, noteId: note.noteId, body: result.text.trim(), voiceFileRef: result.voiceFileRef, status: 'transcribed', error: '' });
-    state.voice.transcriptionStatus = 'transcribed';
-  } else if (result.uploaded && !result.configured) {
-    state.voice.voiceFileRef = result.voiceFileRef;
-    void updateVoiceNote({ threadId, noteId: note.noteId, body: 'Voice uploaded; transcription not configured.', voiceFileRef: result.voiceFileRef, status: 'transcription not configured', error: result.error ?? '' });
-    state.voice.transcriptionStatus = 'voice uploaded; transcription not configured';
-  } else if (result.uploaded) {
-    state.voice.voiceFileRef = result.voiceFileRef;
-    void updateVoiceNote({ threadId, noteId: note.noteId, body: 'Voice uploaded; transcription failed.', voiceFileRef: result.voiceFileRef, status: 'transcription failed', error: result.error ?? '' });
-    state.voice.transcriptionStatus = `transcription failed${result.error ? `: ${result.error}` : ''}`;
-  } else {
-    void updateVoiceNote({ threadId, noteId: note.noteId, body: 'Voice uploaded; transcription failed.', voiceFileRef: upload.voiceFileRef, status: 'transcription failed', error: result.error ?? '' });
-    state.voice.transcriptionStatus = `transcription failed${result.error ? `: ${result.error}` : ''}`;
-  }
+  patchOptimisticThreadNote({ threadId, noteId, body: 'Voice uploaded.', voiceFileRef: upload.voiceFileRef, status: 'transcribing', error: '', transcriptionStartedAt: new Date().toISOString(), optimistic: false });
   telemetry('render-voice-status', { status: state.voice.transcriptionStatus, durationMs: state.voice.durationMs });
   renderVoiceStatus();
 }

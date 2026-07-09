@@ -8,9 +8,10 @@ import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 import { telemetry } from '@backend/telemetry/harness.js';
 import { transcribeVoiceController } from '@backend/business/transcription/controller/transcribe-voice-controller.js';
-import { persistUploadedVoiceAudio } from '@backend/business/transcription/effect/persist-uploaded-voice-audio.js';
+import { continueQueuedVoiceCodexAfterRun, startVoiceUploadOrchestrationController } from '@backend/business/transcription/controller/start-voice-upload-orchestration-controller.js';
 import { resolveDecisionOsRoot } from './resolve-decision-os-root.js';
 import { readRequestBuffer } from './read-request-buffer.js';
+import { parseMultipartFormData } from './parse-multipart-form-data.js';
 import { contentTypeFor } from './content-type-for.js';
 import { normalizeLedgerNotes } from './normalize-ledger-notes.js';
 import { hydrateLedgerCardContent } from '../../ledger/helper/card-content-file.js';
@@ -154,6 +155,17 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const publishLedgerContentChange = (event: AnyRecord): void => {
     const message = `event: ledger-content-change\ndata: ${JSON.stringify(event)}\n\n`;
     for (const client of contentEventClients) client.write(message);
+  };
+  runtime.onCodexRunSettled = (event: AnyRecord): void => {
+    void continueQueuedVoiceCodexAfterRun({
+      runtime,
+      ledgerId: String(event.ledgerId ?? ''),
+      cardId: String(event.cardId ?? event.outputCardId ?? ''),
+      threadId: String(event.threadId ?? ''),
+      runId: String(event.runId ?? ''),
+      onCardContentChange: publishCardContentChange,
+      onLedgerChange: publishLedgerContentChange
+    });
   };
   const loadLedgerContentFiles = (ledger: AnyRecord): AnyRecord => hydrateLedgerCardContent(hydrateLedgerThreadNotes(ledger, decisionOsRoot), decisionOsRoot);
   const persistLedgerAndRespond = (ledgerPath: string, ledger: AnyRecord, response: ServerResponse): void => {
@@ -349,18 +361,24 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       return;
     }
     if (url === '/api/voice-upload' && request.method === 'POST') {
-      const audioBuffer = await readRequestBuffer(request);
-      const upload = persistUploadedVoiceAudio({
+      const bodyBuffer = await readRequestBuffer(request);
+      const contentType = String(request.headers['content-type'] ?? '');
+      const form = contentType.includes('multipart/form-data') ? parseMultipartFormData(bodyBuffer, contentType) : { fields: {}, files: {} };
+      const audio = form.files.audio ?? Object.values(form.files)[0];
+      const fields = form.fields as AnyRecord;
+      const result = await startVoiceUploadOrchestrationController({
         action_payload: {
-          audioBuffer,
-          mimeType: request.headers['content-type'] ?? 'audio/webm',
-          threadId: request.headers['x-thread-id'] ?? ''
+          ...fields,
+          audioBuffer: audio?.buffer ?? bodyBuffer,
+          mimeType: audio?.mimeType ?? (contentType || 'audio/webm'),
+          onCardContentChange: publishCardContentChange,
+          onLedgerChange: publishLedgerContentChange
         },
         runtime_state: runtime
       });
       response.setHeader('content-type', 'application/json');
-      response.statusCode = upload.ok === false ? 400 : 202;
-      response.end(JSON.stringify({ body: { ok: upload.ok !== false, uploaded: upload.ok !== false, configured: true, voiceFileRef: upload.voiceFileRef ?? '', text: '', error: upload.error } }));
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));
+      response.end(JSON.stringify({ body: result }));
       return;
     }
     if (url === '/api/thread-image-upload' && request.method === 'POST') {

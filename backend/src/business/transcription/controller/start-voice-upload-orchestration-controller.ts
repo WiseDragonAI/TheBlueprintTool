@@ -1,0 +1,354 @@
+/**
+ * WHAT: Owns voice upload, transcription, thread note updates, and optional Codex queueing.
+ * WHY: The browser should issue one upload command while the backend preserves ordering.
+ */
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { isAbsolute, relative, resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { applyLedgerMutation, type LedgerMutation } from '@backend/business/ledger/helper/apply-ledger-mutation.js';
+import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
+import { stripHydratedThreadNotes } from '@backend/business/ledger/helper/thread-content-file.js';
+import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-ledger-notes.js';
+import { callOpenaiTranscription } from '@backend/business/transcription/effect/call-openai-transcription.js';
+import { persistUploadedVoiceAudio } from '@backend/business/transcription/effect/persist-uploaded-voice-audio.js';
+import { persistTranscribedText } from '@backend/business/transcription/effect/persist-transcribed-text.js';
+import { resolveTranscriptionConfig } from '@backend/business/transcription/helper/resolve-transcription-config.js';
+import { continueCardSkillRunController } from '../../codex/controller/continue-card-skill-run-controller.js';
+import { readCardSkillRunController } from '../../codex/controller/read-card-skill-run-controller.js';
+import { startThreadCodexProcessController } from '../../codex/controller/start-thread-codex-process-controller.js';
+
+type AnyRecord = Record<string, unknown>;
+
+type LedgerContext = {
+  ok: boolean;
+  error?: string;
+  statusCode?: number;
+  decisionOsRoot: string;
+  ledgerId: string;
+  ledgerPath: string;
+  ledger: AnyRecord & {
+    cards?: AnyRecord[];
+    notes?: Record<string, AnyRecord[]>;
+    threadFiles?: Record<string, string>;
+  };
+};
+
+function isInside(parent: string, child: string): boolean {
+  const inner = relative(parent, child);
+  return Boolean(inner) && !inner.startsWith('..') && !isAbsolute(inner);
+}
+
+function bool(value: unknown): boolean {
+  return value === true || String(value ?? '').toLowerCase() === 'true' || String(value ?? '') === '1';
+}
+
+function optionalText(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function noteId(value: unknown): string {
+  const text = optionalText(value);
+  return text || `note-${Date.now()}-${randomUUID().slice(0, 8)}`;
+}
+
+function cardIdForThread(threadId: string, cardId: unknown): string {
+  return optionalText(cardId) || threadId.replace(/^thread-/, '');
+}
+
+function resolveLedgerContext(input: { runtime: AnyRecord; ledgerId: string }): LedgerContext {
+  const decisionOsRoot = resolve(String(input.runtime.decisionOsRoot ?? resolve(process.cwd(), '.decision-os')));
+  const state = readCanonicalDecisionOsState({ action_payload: { decisionOsFile: resolve(decisionOsRoot, 'state.json'), writeBack: true }, runtime_state: input.runtime });
+  const tab = state.ledgers.find((entry) => entry.id === input.ledgerId);
+  if (!tab) return { ok: false, statusCode: 404, error: 'Ledger not found.', decisionOsRoot, ledgerId: input.ledgerId, ledgerPath: '', ledger: {} };
+  const ledgerFile = String(tab.ledgerFile ?? '').replace(/^\.decision-os\//, '');
+  const ledgerPath = resolve(decisionOsRoot, ledgerFile);
+  if (!isInside(decisionOsRoot, ledgerPath) || !existsSync(ledgerPath)) return { ok: false, statusCode: 404, error: 'Ledger file not found.', decisionOsRoot, ledgerId: input.ledgerId, ledgerPath, ledger: {} };
+  const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as LedgerContext['ledger'];
+  return { ok: true, decisionOsRoot, ledgerId: input.ledgerId, ledgerPath, ledger };
+}
+
+function writeLedger(context: LedgerContext): void {
+  stripHydratedThreadNotes(context.ledger);
+  writeFileSync(context.ledgerPath, JSON.stringify(context.ledger, null, 2), 'utf8');
+}
+
+function notify(callback: unknown, event: AnyRecord): void {
+  if (typeof callback === 'function') callback(event);
+}
+
+function notifyThreadChange(context: LedgerContext, threadId: string, callback: unknown, reason: string): void {
+  const contentFile = String(context.ledger.threadFiles?.[threadId] ?? '');
+  notify(callback, { reason, kind: 'thread-content', contentFile });
+}
+
+function applyNotePatch(input: {
+  runtime: AnyRecord;
+  ledgerId: string;
+  threadId: string;
+  note: NonNullable<LedgerMutation['note']>;
+  onCardContentChange?: unknown;
+  reason: string;
+}): { ok: boolean; error?: string } {
+  const context = resolveLedgerContext({ runtime: input.runtime, ledgerId: input.ledgerId });
+  if (!context.ok) return { ok: false, error: context.error };
+  const mutationResult = applyLedgerMutation({
+    decisionOsRoot: context.decisionOsRoot,
+    ledgerPath: context.ledgerPath,
+    ledger: context.ledger,
+    mutation: { action: 'update-note', note: { ...input.note, threadId: input.threadId } }
+  });
+  if (mutationResult.error) return { ok: false, error: String(mutationResult.error.body.error ?? 'Ledger mutation failed.') };
+  writeLedger(context);
+  notifyThreadChange(context, input.threadId, input.onCardContentChange, input.reason);
+  return { ok: true };
+}
+
+function cardRunId(card: AnyRecord | undefined): string {
+  return optionalText(card?.codexThreadRunId) || optionalText(card?.codexRunId);
+}
+
+async function updateQueueStatus(input: {
+  runtime: AnyRecord;
+  ledgerId: string;
+  threadId: string;
+  noteId: string;
+  status: string;
+  runId?: string;
+  error?: string;
+  onCardContentChange?: unknown;
+}): Promise<void> {
+  applyNotePatch({
+    runtime: input.runtime,
+    ledgerId: input.ledgerId,
+    threadId: input.threadId,
+    note: {
+      id: input.noteId,
+      codexQueueStatus: input.status,
+      codexQueueRunId: input.runId ?? '',
+      codexQueueError: input.error ?? ''
+    },
+    onCardContentChange: input.onCardContentChange,
+    reason: 'voice-codex-queue-status'
+  });
+}
+
+export async function runQueuedThreadCodex(input: {
+  runtime: AnyRecord;
+  ledgerId: string;
+  threadId: string;
+  cardId: string;
+  noteId: string;
+  onCardContentChange?: unknown;
+  onLedgerChange?: unknown;
+}): Promise<AnyRecord> {
+  const context = resolveLedgerContext({ runtime: input.runtime, ledgerId: input.ledgerId });
+  if (!context.ok) {
+    await updateQueueStatus({ ...input, status: 'failed', error: context.error ?? 'Ledger unavailable.' });
+    return { ok: false, error: context.error };
+  }
+  const card = (context.ledger.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
+  if (!card) {
+    await updateQueueStatus({ ...input, status: 'failed', error: 'Thread target card not found.' });
+    return { ok: false, error: 'Thread target card not found.' };
+  }
+  const runId = cardRunId(card);
+  if (!runId) {
+    await updateQueueStatus({ ...input, status: 'starting' });
+    const result = await startThreadCodexProcessController({
+      action_payload: { ledgerId: input.ledgerId, threadId: input.threadId, cardId: input.cardId, onLedgerChange: input.onLedgerChange },
+      runtime_state: input.runtime
+    });
+    await updateQueueStatus({ ...input, status: result.ok === false ? 'failed' : 'started', runId: String((result.run as AnyRecord | undefined)?.id ?? ''), error: result.ok === false ? String(result.error ?? 'Codex launch failed.') : '' });
+    return result;
+  }
+
+  const status = await readCardSkillRunController({
+    action_payload: { ledgerId: input.ledgerId, cardId: input.cardId, runId, since: 0 },
+    runtime_state: input.runtime
+  });
+  if (String(status.status ?? '') === 'running') {
+    await updateQueueStatus({ ...input, status: 'waiting', runId });
+    return { ok: true, queued: true, runId, status: 'waiting' };
+  }
+  await updateQueueStatus({ ...input, status: 'starting', runId });
+  const result = await continueCardSkillRunController({
+    action_payload: { ledgerId: input.ledgerId, cardId: input.cardId, runId, onLedgerChange: input.onLedgerChange },
+    runtime_state: input.runtime
+  });
+  await updateQueueStatus({ ...input, status: result.ok === false ? 'failed' : 'started', runId, error: result.ok === false ? String(result.error ?? 'Codex continue failed.') : '' });
+  return result;
+}
+
+export async function continueQueuedVoiceCodexAfterRun(input: {
+  runtime: AnyRecord;
+  ledgerId: string;
+  cardId: string;
+  threadId?: string;
+  runId: string;
+  onCardContentChange?: unknown;
+  onLedgerChange?: unknown;
+}): Promise<AnyRecord> {
+  const threadId = optionalText(input.threadId) || `thread-${input.cardId}`;
+  const context = resolveLedgerContext({ runtime: input.runtime, ledgerId: input.ledgerId });
+  if (!context.ok) return { ok: false, error: context.error };
+  const waiting = (normalizeLedgerNotes(context.ledger)[threadId] ?? []).filter((note) => String(note.codexQueueStatus ?? '') === 'waiting');
+  if (waiting.length === 0) return { ok: true, queued: false };
+  for (const note of waiting) {
+    await updateQueueStatus({ ...input, threadId, noteId: String(note.id ?? ''), status: 'starting', runId: input.runId });
+  }
+  const result = await continueCardSkillRunController({
+    action_payload: { ledgerId: input.ledgerId, cardId: input.cardId, runId: input.runId, onLedgerChange: input.onLedgerChange },
+    runtime_state: input.runtime
+  });
+  for (const note of waiting) {
+    await updateQueueStatus({
+      ...input,
+      threadId,
+      noteId: String(note.id ?? ''),
+      status: result.ok === false ? 'failed' : 'started',
+      runId: input.runId,
+      error: result.ok === false ? String(result.error ?? 'Codex continue failed.') : ''
+    });
+  }
+  return result;
+}
+
+async function finishVoiceUploadOrchestration(input: {
+  payload: AnyRecord;
+  runtime: AnyRecord;
+  data: AnyRecord;
+  ledgerId: string;
+  threadId: string;
+  cardId: string;
+  noteId: string;
+  voiceFileRef: string;
+  audioBuffer: Buffer;
+  mimeType: string;
+  queueCodex: boolean;
+  onCardContentChange?: unknown;
+  onLedgerChange?: unknown;
+}): Promise<void> {
+  const config = resolveTranscriptionConfig({ action_payload: input.payload, runtime_state: input.runtime, data_model: input.data });
+  let transcription: AnyRecord = { ok: false, error: 'transcription not configured' };
+  if (config.ok !== false) {
+    transcription = await callOpenaiTranscription({
+      action_payload: { ...input.payload, config, audioBuffer: input.audioBuffer, mimeType: input.mimeType },
+      runtime_state: input.runtime,
+      data_model: input.data
+    });
+    if (transcription.ok !== false) {
+      persistTranscribedText({ action_payload: { ...input.payload, text: input.runtime.transcriptionText }, runtime_state: input.runtime, data_model: input.data });
+    }
+  }
+  const text = optionalText(input.runtime.transcriptionText);
+  if (config.ok !== false && transcription.ok !== false && text) {
+    applyNotePatch({
+      runtime: input.runtime,
+      ledgerId: input.ledgerId,
+      threadId: input.threadId,
+      note: {
+        id: input.noteId,
+        body: text,
+        voiceFileRef: input.voiceFileRef,
+        status: 'transcribed',
+        error: '',
+        codexQueueStatus: input.queueCodex ? 'pending' : ''
+      },
+      onCardContentChange: input.onCardContentChange,
+      reason: 'voice-transcribed'
+    });
+    if (input.queueCodex) {
+      await runQueuedThreadCodex(input);
+    }
+    return;
+  }
+  const status = config.ok === false ? 'transcription not configured' : 'transcription failed';
+  const error = String(transcription.error ?? status);
+  applyNotePatch({
+    runtime: input.runtime,
+    ledgerId: input.ledgerId,
+    threadId: input.threadId,
+    note: {
+      id: input.noteId,
+      body: `Voice uploaded; ${status}.`,
+      voiceFileRef: input.voiceFileRef,
+      status,
+      error,
+      codexQueueStatus: input.queueCodex ? 'failed' : '',
+      codexQueueError: input.queueCodex ? error : ''
+    },
+    onCardContentChange: input.onCardContentChange,
+    reason: 'voice-transcription-failed'
+  });
+}
+
+export async function startVoiceUploadOrchestrationController(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): Promise<AnyRecord> {
+  const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord };
+  const payload = (envelope.action_payload ?? input) as AnyRecord;
+  const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
+  const data = (envelope.data_model ?? {}) as AnyRecord;
+  const ledgerId = optionalText(payload.ledgerId);
+  const threadId = optionalText(payload.threadId) || 'conversation-ledger';
+  const cardId = cardIdForThread(threadId, payload.cardId);
+  const id = noteId(payload.noteId);
+  if (!ledgerId || !threadId || !cardId) return { ok: false, statusCode: 400, error: 'Missing ledgerId, threadId, or cardId.' };
+  const audioBuffer = payload.audioBuffer as Buffer | undefined;
+  if (!audioBuffer?.byteLength) return { ok: false, statusCode: 400, error: 'No audio was uploaded.' };
+  const mimeType = String(payload.mimeType ?? 'audio/webm');
+  const upload = persistUploadedVoiceAudio({ action_payload: { ...payload, audioBuffer, mimeType, threadId }, runtime_state: runtime, data_model: data });
+  if (upload.ok === false || !upload.voiceFileRef) return { ok: false, statusCode: 400, error: upload.error ?? 'Voice upload failed.' };
+  const queueCodex = bool(payload.queueCodex);
+  const startedAt = new Date().toISOString();
+  const patch = applyNotePatch({
+    runtime,
+    ledgerId,
+    threadId,
+    note: {
+      id,
+      body: 'Voice uploaded.',
+      voiceFileRef: String(upload.voiceFileRef),
+      status: 'transcribing',
+      transcriptionStartedAt: startedAt,
+      error: '',
+      codexQueueStatus: queueCodex ? 'requested' : '',
+      codexQueueRequestedAt: queueCodex ? startedAt : ''
+    },
+    onCardContentChange: payload.onCardContentChange,
+    reason: 'voice-uploaded'
+  });
+  if (!patch.ok) return { ok: false, statusCode: 500, error: patch.error ?? 'Voice note commit failed.' };
+  const completion = finishVoiceUploadOrchestration({
+    payload,
+    runtime,
+    data,
+    ledgerId,
+    threadId,
+    cardId,
+    noteId: id,
+    voiceFileRef: String(upload.voiceFileRef),
+    audioBuffer,
+    mimeType,
+    queueCodex,
+    onCardContentChange: payload.onCardContentChange,
+    onLedgerChange: payload.onLedgerChange
+  }).catch((error) => {
+    applyNotePatch({
+      runtime,
+      ledgerId,
+      threadId,
+      note: {
+        id,
+        body: 'Voice uploaded; transcription failed.',
+        voiceFileRef: String(upload.voiceFileRef),
+        status: 'transcription failed',
+        error: error instanceof Error ? error.message : String(error),
+        codexQueueStatus: queueCodex ? 'failed' : '',
+        codexQueueError: queueCodex ? error instanceof Error ? error.message : String(error) : ''
+      },
+      onCardContentChange: payload.onCardContentChange,
+      reason: 'voice-orchestration-failed'
+    });
+  });
+  if (bool(payload.awaitCompletion)) await completion;
+  return { ok: true, statusCode: 202, uploaded: true, configured: true, noteId: id, voiceFileRef: String(upload.voiceFileRef), status: 'transcribing', queueCodex };
+}

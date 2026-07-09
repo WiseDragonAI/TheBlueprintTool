@@ -9,8 +9,9 @@ import { requestTranscription } from '../effect/request-transcription.js';
 import { collectVoiceRecordingBlob } from '../helper/collect-voice-recording-blob.js';
 import { encodeWavBlob } from '../helper/encode-wav-blob.js';
 import { flushPendingLedgerContentRefresh } from '../../refresh/effect/subscribe-ledger-content-events.js';
+import { threadCodexCardId } from '../../codex/helper/thread-codex-card-id.js';
 
-export async function stopVoiceRecording(): Promise<void> {
+export async function stopVoiceRecording(input: { queueCodex?: boolean } = {}): Promise<void> {
   if (state.voice.animationFrameId) cancelAnimationFrame(state.voice.animationFrameId);
   const threadId = String(state.voice.threadId || state.threadId || 'conversation-ledger');
   const recorder = state.voice.recorder as MediaRecorder | undefined;
@@ -42,5 +43,10 @@ export async function stopVoiceRecording(): Promise<void> {
   telemetry('render-voice-status', { status: state.voice.transcriptionStatus, durationMs: state.voice.durationMs });
   renderVoiceStatus();
   flushPendingLedgerContentRefresh();
-  await requestTranscription(audio, threadId);
+  await requestTranscription(audio, {
+    ledgerId: String(state.activeTab ?? ''),
+    threadId,
+    cardId: threadCodexCardId(state.activeLedger, threadId),
+    queueCodex: input.queueCodex
+  });
 }

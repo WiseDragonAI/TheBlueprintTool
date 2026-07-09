@@ -70,6 +70,10 @@ function notifyLedgerChange(callback: unknown, event: AnyRecord): void {
   if (typeof callback === 'function') callback(event);
 }
 
+function notifyRunSettled(callback: unknown, event: AnyRecord): void {
+  if (typeof callback === 'function') callback(event);
+}
+
 function appendRunStatus(filePath: string, status: ProcessStatus, detail: string): void {
   const heading = status === 'complete' ? 'Completed' : status === 'failed' ? 'Failed' : status === 'cancelled' ? 'Cancelled' : 'Running';
   const markdown = [``, `---`, ``, `Codex run ${heading.toLowerCase()}: ${detail}`].join('\n');
@@ -301,7 +305,10 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     finishRunStreams(stdout, stderr, () => {
       void readCardSkillRunController({ action_payload: { ledgerId, cardId, runId }, runtime_state: runtime })
         .catch(() => undefined)
-        .finally(() => notifyLedgerChange(payload.onLedgerChange, { reason: 'codex-skill-continue-failed', ledgerId, outputCardId: cardId, runId }));
+        .finally(() => {
+          notifyLedgerChange(payload.onLedgerChange, { reason: 'codex-skill-continue-failed', ledgerId, outputCardId: cardId, runId });
+          notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, status: 'failed' });
+        });
     });
   });
   child.on('close', (exitCode) => {
@@ -317,7 +324,10 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
       void readCardSkillRunController({ action_payload: { ledgerId, cardId, runId }, runtime_state: runtime })
         .catch(() => undefined)
-        .finally(() => notifyLedgerChange(payload.onLedgerChange, { reason: status === 'cancelled' ? 'codex-skill-continue-cancelled' : 'codex-skill-continue-finished', ledgerId, outputCardId: cardId, runId, exitCode }));
+        .finally(() => {
+          notifyLedgerChange(payload.onLedgerChange, { reason: status === 'cancelled' ? 'codex-skill-continue-cancelled' : 'codex-skill-continue-finished', ledgerId, outputCardId: cardId, runId, exitCode });
+          notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, status, exitCode });
+        });
     });
   });
 

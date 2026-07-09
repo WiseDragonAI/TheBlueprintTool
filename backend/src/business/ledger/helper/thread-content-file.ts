@@ -58,7 +58,7 @@ function codeFenceMarker(line: string): { marker: '`' | '~'; length: number } | 
 
 function metadataFor(note: AnyRecord): AnyRecord {
   const metadata: AnyRecord = {};
-  for (const key of ['id', 'timestamp', 'voiceFileRef', 'status', 'transcriptionStartedAt', 'error', 'codexRunId', 'codexLine', 'codexKind', 'codexEventType', 'codexItemId', 'codexTool', 'codexExitCode']) {
+  for (const key of ['id', 'timestamp', 'voiceFileRef', 'status', 'transcriptionStartedAt', 'error', 'codexQueueStatus', 'codexQueueRequestedAt', 'codexQueueRunId', 'codexQueueError', 'codexRunId', 'codexLine', 'codexKind', 'codexEventType', 'codexItemId', 'codexTool', 'codexExitCode']) {
     if (typeof note[key] === 'string' && note[key]) metadata[key] = note[key];
   }
   if (isRecord(note.imageSizes) && Object.keys(note.imageSizes).length > 0) metadata.imageSizes = note.imageSizes;

@@ -73,12 +73,20 @@ test('upload-voice-audio posts captured audio to backend upload route', async ()
   };
 
   try {
-    const result = await uploadVoiceAudio(new Blob(['abc'], { type: 'audio/webm' }));
+    state.activeTab = 'specs';
+    const result = await uploadVoiceAudio(new Blob(['abc'], { type: 'audio/webm' }), { ledgerId: 'specs', threadId: 'thread-card-a', cardId: 'card-a', noteId: 'note-voice-1', queueCodex: true });
     assert.deepEqual(result, { ok: true, uploaded: true, configured: true, voiceFileRef: '/tmp/voice.webm', text: '', error: undefined, status: 202 });
     assert.equal(requested.url, '/api/voice-upload');
     assert.equal(requested.init?.method, 'POST');
-    assert.equal((requested.init?.headers as Record<string, string>)['x-thread-id'], 'thread-card-a');
-    assert.equal(requested.init?.body instanceof Blob, true);
+    assert.equal(requested.init?.headers, undefined);
+    const body = requested.init?.body as FormData;
+    assert.equal(body instanceof FormData, true);
+    assert.equal(body.get('ledgerId'), 'specs');
+    assert.equal(body.get('threadId'), 'thread-card-a');
+    assert.equal(body.get('cardId'), 'card-a');
+    assert.equal(body.get('noteId'), 'note-voice-1');
+    assert.equal(body.get('queueCodex'), 'true');
+    assert.equal(body.get('audio') instanceof Blob, true);
   } finally {
     (globalThis as unknown as { fetch: unknown }).fetch = previousFetch;
     (globalThis as unknown as { window: unknown }).window = previousWindow;
@@ -103,9 +111,10 @@ test('upload-voice-audio preserves wav content type for provider-safe transcript
   };
 
   try {
-    const result = await uploadVoiceAudio(new Blob(['abc'], { type: 'audio/wav' }));
+    const result = await uploadVoiceAudio(new Blob(['abc'], { type: 'audio/wav' }), { threadId: 'thread-card-a' });
     assert.equal(result.voiceFileRef, '/tmp/voice.wav');
-    assert.equal((requested.init?.headers as Record<string, string>)['content-type'], 'audio/wav');
+    const audio = (requested.init?.body as FormData).get('audio') as Blob;
+    assert.equal(audio.type, 'audio/wav');
   } finally {
     (globalThis as unknown as { fetch: unknown }).fetch = previousFetch;
     (globalThis as unknown as { window: unknown }).window = previousWindow;
@@ -185,13 +194,6 @@ test('request-transcription keeps optimistic upload status separate from provide
         json: async () => ({ body: { ok: true, uploaded: true, configured: true, voiceFileRef: '/tmp/voice.webm', text: '' } })
       };
     }
-    if (url === '/api/transcribe/retry') {
-      return {
-        ok: true,
-        status: 202,
-        json: async () => ({ body: { ok: false, uploaded: true, configured: false, voiceFileRef: '/tmp/voice.webm', text: '', error: 'transcription not configured' } })
-      };
-    }
     const mutation = JSON.parse(String(init?.body ?? '{}'));
     const statusValue = mutation.action === 'append-note' ? 'uploading' : mutation.note.status;
     const message = mutation.action === 'append-note' ? mutation.note.body : mutation.note.body;
@@ -205,9 +207,9 @@ test('request-transcription keeps optimistic upload status separate from provide
   try {
     state.threadId = 'thread-card-a';
     await requestTranscription(new Blob(['abc'], { type: 'audio/webm' }));
-    assert.equal(state.voice.transcriptionStatus, 'voice uploaded; transcription not configured');
+    assert.equal(state.voice.transcriptionStatus, 'transcribing');
     assert.equal(state.voice.voiceFileRef, '/tmp/voice.webm');
-    assert.equal(status.textContent, 'voice uploaded; transcription not configured');
+    assert.equal(status.textContent, 'transcribing');
     assert.equal(state.activeLedger.notes['thread-card-a'][0].role, 'operator');
   } finally {
     (globalThis as unknown as { fetch: unknown }).fetch = previousFetch;
@@ -277,20 +279,12 @@ test('request-transcription updates the captured thread after selection changes'
   };
   (globalThis as unknown as { fetch: unknown }).fetch = async (url: string, init?: RequestInit) => {
     if (url === '/api/voice-upload') {
-      uploadThreadId = (init?.headers as Record<string, string>)['x-thread-id'];
+      uploadThreadId = String((init?.body as FormData).get('threadId') ?? '');
       state.threadId = 'thread-card-b';
       return {
         ok: true,
         status: 202,
         json: async () => ({ body: { ok: true, uploaded: true, configured: true, voiceFileRef: '/tmp/voice-owned.webm', text: '' } })
-      };
-    }
-    if (url === '/api/transcribe/retry') {
-      transcribeThreadId = JSON.parse(String(init?.body ?? '{}')).threadId;
-      return {
-        ok: true,
-        status: 202,
-        json: async () => ({ body: { ok: true, uploaded: true, configured: true, voiceFileRef: '/tmp/voice-owned.webm', text: 'Captured-thread transcript.' } })
       };
     }
     const mutation = JSON.parse(String(init?.body ?? '{}'));
@@ -303,11 +297,12 @@ test('request-transcription updates the captured thread after selection changes'
     state.activeLedger = { notes: { 'thread-card-a': [], 'thread-card-b': [] } };
     await requestTranscription(new Blob(['abc'], { type: 'audio/webm' }));
     assert.equal(uploadThreadId, 'thread-card-a');
-    assert.equal(transcribeThreadId, 'thread-card-a');
-    assert.deepEqual([...new Set(patchThreadIds)], ['thread-card-a']);
+    assert.equal(transcribeThreadId, '');
+    assert.deepEqual([...new Set(patchThreadIds)], []);
     assert.equal(state.threadId, 'thread-card-b');
-    assert.equal(state.activeLedger.notes['thread-card-a'][0].message, 'Captured-thread transcript.');
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].message, 'Voice uploaded.');
     assert.equal(state.activeLedger.notes['thread-card-a'][0].voiceFileRef, '/tmp/voice-owned.webm');
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].status, 'transcribing');
     assert.equal(state.activeLedger.notes['thread-card-b'].length, 0);
   } finally {
     (globalThis as unknown as { fetch: unknown }).fetch = previousFetch;
