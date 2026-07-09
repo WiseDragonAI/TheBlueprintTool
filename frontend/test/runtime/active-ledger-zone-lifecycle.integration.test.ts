@@ -354,6 +354,67 @@ test('active ledger refresh keeps local canvas geometry and viewport while accep
   assert.deepEqual(state.viewports.specs, { x: 321, y: -654, scale: 0.42 });
 });
 
+test('active ledger refresh keeps viewport moves made while the server load is in flight', async () => {
+  (globalThis as any).CustomEvent = class CustomEvent {
+    detail: unknown;
+    constructor(_type: string, init: { detail?: unknown } = {}) {
+      this.detail = init.detail;
+    }
+  };
+  (globalThis as any).window = {
+    location: { pathname: '/specs' },
+    dispatchEvent() {},
+    __coreTelemetry: []
+  };
+  const { state } = await import('../../src/runtime/state.js');
+  const { loadActiveLedgerState } = await import('../../src/runtime/ledger/effect/load-active-ledger-state.js');
+
+  state.canvasMode = 'ledger';
+  state.activeTab = 'specs';
+  state.activeLedgerId = 'specs';
+  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
+  state.viewport = { x: 10, y: 20, scale: 1 };
+  state.viewports = { specs: { x: 10, y: 20, scale: 1 } };
+  state.activeLedger = {
+    cards: [{ id: 'card-a', title: 'Local title', x: 100, y: 200, w: 300, h: 180 }],
+    annotations: [],
+    notes: {}
+  };
+
+  let resolveFetch!: (response: { ok: boolean; json(): Promise<Record<string, unknown>> }) => void;
+  const fetchStarted = new Promise<void>((resolveStarted) => {
+    (globalThis as any).fetch = async (url: string) => {
+      assert.equal(url, '/decision-os/specs');
+      resolveStarted();
+      return new Promise((resolve) => {
+        resolveFetch = resolve;
+      });
+    };
+  });
+
+  const load = loadActiveLedgerState();
+  await fetchStarted;
+  state.viewport = { x: 444, y: -555, scale: 0.5 };
+  state.viewports = { specs: { x: 444, y: -555, scale: 0.5 } };
+  resolveFetch({
+    ok: true,
+    async json() {
+      return {
+        viewport: { x: 10, y: 20, scale: 1 },
+        cards: [{ id: 'card-a', title: 'Server title', x: 1, y: 2, w: 111, h: 112 }],
+        annotations: [],
+        notes: {}
+      };
+    }
+  });
+
+  await load;
+
+  assert.deepEqual(state.viewport, { x: 444, y: -555, scale: 0.5 });
+  assert.deepEqual(state.viewports.specs, { x: 444, y: -555, scale: 0.5 });
+  assert.deepEqual(state.activeLedger.cards[0], { id: 'card-a', title: 'Server title', x: 100, y: 200, w: 300, h: 180 });
+});
+
 test('non-geometry mutation responses keep newer local canvas geometry', async () => {
   (globalThis as any).CustomEvent = class CustomEvent {
     detail: unknown;

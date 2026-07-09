@@ -14,7 +14,6 @@ export async function loadActiveLedgerState(): Promise<void> {
   const ledgerStateId = state.canvasMode === 'ledgers' ? 'ledgers-canvas' : state.activeTab;
   const canMergeLocalCanvas = Boolean(state.activeLedger && state.activeLedgerId === ledgerStateId);
   const localLedger = canMergeLocalCanvas ? state.activeLedger : null;
-  const localViewport = canMergeLocalCanvas ? { ...state.viewport } : null;
   if (!endpoint) {
     state.activeLedger = null;
     state.activeLedgerId = '';
@@ -31,6 +30,8 @@ export async function loadActiveLedgerState(): Promise<void> {
     return;
   }
   const ledger = await response.json().catch(() => null);
+  const canKeepCurrentViewport = Boolean(state.activeLedger && state.activeLedgerId === ledgerStateId);
+  const localViewport = canKeepCurrentViewport ? { ...state.viewport } : null;
   state.activeLedger = mergeLocalThreadNotes(canMergeLocalCanvas ? mergeLocalCanvasStateIntoLedger(ledger, localLedger) : ledger);
   state.activeLedgerId = ledgerStateId;
   refreshZoneAttributionCache('load-active-ledger-state');
