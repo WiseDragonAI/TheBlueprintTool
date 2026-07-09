@@ -283,12 +283,15 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(canvasLayerCss, /\.canvas \.card:not\(\.detail-visible\) \.ledger-card-detail-layer\s*{[^}]*content-visibility:\s*hidden;/s);
   assert.match(canvasLayerCss, /\.canvas \.card:not\(\.detail-visible\)\[data-card-work-status="processing"\] \.ledger-card-overview-status\s*{[^}]*top:\s*50%;[^}]*left:\s*50%;[^}]*justify-content:\s*center;[^}]*transform:\s*translate\(-50%, -50%\) scale\(var\(--inverse-viewport-scale, 1\)\);/s);
   assert.doesNotMatch(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-status-toggle/);
-  assert.match(objectsCss, /\.codex-run-widget\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(108px, max-content\);[^}]*min-height:\s*86px;/s);
+  assert.match(objectsCss, /\.codex-run-widget\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(108px, max-content\);[^}]*height:\s*112px;[^}]*overflow:\s*hidden;/s);
+  assert.match(objectsCss, /\.codex-run-metadata\s*{[^}]*flex-wrap:\s*nowrap;[^}]*overflow:\s*hidden;/s);
   assert.match(objectsCss, /\.codex-run-cancel,\s*\.codex-run-continue\s*{[^}]*min-height:\s*22px;[^}]*font-size:\s*9px;/s);
   assert.match(objectsCss, /\.codex-run-timer\s*{[^}]*align-self:\s*stretch;[^}]*font-size:\s*30px;[^}]*font-variant-numeric:\s*tabular-nums;/s);
   assert.match(objectsCss, /\.codex-run-widget\[data-run-status="running"\]\s*{[^}]*border-color:\s*color-mix\(in srgb, #55b8ff, transparent 28%\);/s);
-  assert.match(objectsCss, /\.codex-run-widget\[data-run-status="complete"\]\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*min-height:\s*auto;/s);
-  assert.match(objectsCss, /\.codex-run-widget\[data-run-status="cancelled"\]\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*min-height:\s*auto;/s);
+  for (const status of ['complete', 'failed', 'cancelled', 'unknown']) {
+    assert.doesNotMatch(objectsCss, new RegExp(`\\\\.codex-run-widget\\\\[data-run-status="${status}"\\\\]\\\\s*{[^}]*grid-template-columns:`));
+    assert.doesNotMatch(objectsCss, new RegExp(`\\\\.codex-run-widget\\\\[data-run-status="${status}"\\\\]\\\\s*{[^}]*min-height:\\\\s*auto;`));
+  }
   assert.match(objectsCss, /\.codex-run-widget:not\(\[data-run-status="running"\]\) \.codex-run-timer\s*{[^}]*display:\s*none;/s);
   assert.match(objectsCss, /\.ledger-card-title-row\s*{[^}]*display:\s*flex;[^}]*gap:\s*6px;[^}]*margin-bottom:\s*8px;/s);
   assert.match(objectsCss, /\.card \.ledger-card-title-edit-button\s*{[^}]*flex:\s*0 0 24px;[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;/s);
