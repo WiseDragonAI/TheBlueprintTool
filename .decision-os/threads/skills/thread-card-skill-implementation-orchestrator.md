@@ -7556,3 +7556,910 @@ Exit code: 0
 <!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-225","timestamp":"2026-07-09T15:54:32.420Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"225","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_43"} -->
 
 The scoped checks passed: no unlettered sections, no unordered requirement lines, no `or` alternatives in the card, no old `Repair Loop` output, and no conditional commit rule. I’m staging only the scoped card, thread, and run summary.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-226","timestamp":"2026-07-09T15:54:39.077Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"226","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_44","codexTool":"/usr/bin/zsh -lc 'git status --short -- .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md && git add -- .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git status --short -- .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md && git add -- .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-227","timestamp":"2026-07-09T15:54:39.077Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"227","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_44","codexTool":"/usr/bin/zsh -lc 'git status --short -- .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md && git add -- .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git status --short -- .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md && git add -- .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md'`
+Status: completed
+Exit code: 0
+
+````text
+ M .decision-os/cards/skills/card-skill-implementation-orchestrator.md
+ M .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md
+ M .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-228","timestamp":"2026-07-09T15:54:45.077Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"228","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_45"} -->
+
+The three scoped files are staged. I’m checking the staged summary before committing this rewrite.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-229","timestamp":"2026-07-09T15:54:45.077Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"229","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_46","codexTool":"/usr/bin/zsh -lc 'git diff --cached --name-only'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git diff --cached --name-only'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-230","timestamp":"2026-07-09T15:54:45.077Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"230","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_46","codexTool":"/usr/bin/zsh -lc 'git diff --cached --name-only'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git diff --cached --name-only'`
+Status: completed
+Exit code: 0
+
+````text
+.decision-os/cards/skills/card-skill-implementation-orchestrator.md
+.decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md
+.decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-231","timestamp":"2026-07-09T15:54:45.077Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"231","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_47","codexTool":"/usr/bin/zsh -lc 'git diff --cached --stat'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git diff --cached --stat'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-232","timestamp":"2026-07-09T15:54:45.077Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"232","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_47","codexTool":"/usr/bin/zsh -lc 'git diff --cached --stat'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git diff --cached --stat'`
+Status: completed
+Exit code: 0
+
+````text
+ .../card-skill-implementation-orchestrator.md      |   71 +-
+ .../skills/codex-skill-1783596089570-85eceea5.md   |    5 +
+ ...hread-card-skill-implementation-orchestrator.md | 4534 ++++++++++++++++++++
+ 3 files changed, 4582 insertions(+), 28 deletions(-)
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-233","timestamp":"2026-07-09T15:54:45.077Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"233","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_48","codexTool":"/usr/bin/zsh -lc 'git diff --cached -- .decision-os/cards/skills/card-skill-implementation-orchestrator.md'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git diff --cached -- .decision-os/cards/skills/card-skill-implementation-orchestrator.md'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-234","timestamp":"2026-07-09T15:54:45.077Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"234","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_48","codexTool":"/usr/bin/zsh -lc 'git diff --cached -- .decision-os/cards/skills/card-skill-implementation-orchestrator.md'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git diff --cached -- .decision-os/cards/skills/card-skill-implementation-orchestrator.md'`
+Status: completed
+Exit code: 0
+
+````text
+diff --git a/.decision-os/cards/skills/card-skill-implementation-orchestrator.md b/.decision-os/cards/skills/card-skill-implementation-orchestrator.md
+index 72531bc..975a769 100644
+--- a/.decision-os/cards/skills/card-skill-implementation-orchestrator.md
++++ b/.decision-os/cards/skills/card-skill-implementation-orchestrator.md
+@@ -1,54 +1,69 @@
+ ---
+ name: implementation-orchestrator
+-description: Orchestrate parallel implementation workers from complete independent task groups, collect their results, then coordinate test attribution, RCA, and repair loops. Use after task groups pass task-group-completeness and before any global test run.
++description: Launch implementation subagents from the current task grouping card, reference the linked task-list card, collect worker returns, and stop before implementation judgment. No code implementation. No commits. No regrouping. No tests. No repair stages.
+ ---
+ 
+ # Implementation Orchestrator
+ 
+ ## A. Scope
+ 
+-1. Launch implementation workers from **approved independent task groups** and coordinate the batch until every group has returned a result.
+-2. Own `dispatch`, `worker result collection`, `test attribution handoff`, `root-cause routing`, and `repair-loop coordination`.
+-3. Do not implement code directly unless the orchestrator is explicitly assigned an `implementation-worker` role for one group.
++1. **Purpose:** Launch **implementation subagents** from the current task grouping output and collect their returned results.
++2. **Coordination-only role:** The orchestrator is not an `implementation-worker`; it never implements product code and never receives an `implementation-worker` role.
++3. **Current naming:** Treat `task-dependency` as the current card name for the **task grouping** output. The intended concept is `task grouping`.
++4. **Stage boundary:** Stop after launched subagents return their `Worker Results`. The next stage owns `verification`, `repair`, `test attribution`, and `commit` decisions.
+ 
+ ---
+ 
+ ## B. Required Inputs
+ 
+-1. Read approved independent groups from `task-group-completeness`.
+-2. Read group ordering and blocking edges from `task-dependency`.
+-3. Read source `taskIds`, `targetPaths`, `acceptanceChecks`, and evidence links from `task-list`.
+-4. Identify the implementation worker skill used for each `dispatch`.
+-5. Identify the `test-failure-attribution` input format that receives the completed batch.
++1. **Task grouping card:** Read the injected `task-dependency` card as the **task grouping** source for `Independent Task Groups`, `Sequential Gates`, `Collision Risks`, `Ambiguities`, `Readiness`, and `dispatch_notes`.
++2. **Task list card:** Locate the linked `task-list` card from the `task-dependency` card and read the full `Task Inventory`.
++3. **Source references:** Preserve the source card paths, task ids, group ids, and file references already present in `task-dependency` and `task-list`.
++4. **Subagent launcher:** Use available agent tooling that can launch one scoped implementation subagent per ready group.
++5. **Non-input:** Do not require `task-group-completeness`; it is a separate audit task and is not part of this orchestrator contract.
+ 
+ ---
+ 
+ ## C. Dispatch Workflow
+ 
+-1. Create one `dispatch package` per ready group with `groupId`, `taskIds`, `targetPaths`, `acceptanceChecks`, `sourceReferences`, and `forbiddenScopes`.
+-2. Start **one implementation worker per independent group** using available agent tooling.
+-3. Do not run `global tests` while implementation workers are active.
+-4. Track `worker status` with `pending`, `running`, `returned`, `blocked`, and `needs-repair`.
+-5. After every worker returns, collect `changedFiles`, `completedTaskIds`, `blockers`, and `assumptions`.
+-6. Send the completed batch to `test-failure-attribution` with `testCommands`, `changedFiles`, `completedTaskIds`, and worker notes.
+-7. For **clear group-owned failures**, create fix-worker `dispatch` entries and send ambiguous failures to `root-cause-analysis`.
+-8. Continue `repair dispatch` and `failure attribution` until all known failures are resolved. Stop when a blocker requires operator input.
++1. **Read grouping:** Read `Independent Task Groups` and `Sequential Gates` from the `task-dependency` card. Do not regroup tasks.
++2. **Resolve task list:** Follow the `task-list` reference from the `task-dependency` card and read the `Task Inventory`.
++3. **Select groups:** Dispatch only groups that are ready under the current `Sequential Gates`.
++4. **Create prompt:** Build one subagent prompt per ready group with `group_id`, `task_ids`, the `task-dependency` card path, the `task-list` card path, and the group `dispatch_notes`.
++5. **Reference source cards:** Tell the subagent that it must read the referenced cards before editing. Do not duplicate and do not reinterpret `target_files`, `target_symbols`, `done_when`, `acceptance checks`, `source references`, and `forbidden scopes` in the orchestrator prompt.
++6. **Launch subagents:** Launch **one implementation subagent per ready group** and keep each subagent scoped to its assigned group.
++7. **Collect returns:** Collect each returned `Worker Results` payload with `completedTasks`, `changedFiles`, `blockers`, `assumptions`, and worker notes.
++8. **Stop cleanly:** When launched subagents have returned, produce the orchestrator handoff and stop. Do not decide whether the implementation is finished.
+ 
+ ---
+ 
+-## D. Output Contract
++## D. Subagent Prompt Contract
+ 
+-1. Produce `Dispatch Plan` with `groupIds`, `workerAssignments`, `taskIds`, and `targetPaths`.
+-2. Produce `Worker Results` with `returned` status, `changedFiles`, `completedTasks`, `blockers`, and `assumptions`.
+-3. Produce `Post-Batch Handoff` with `test-failure-attribution` input and `testCommands`.
+-4. Produce `Repair Loop` with `failureId`, `ownerGroup`, `actionTaken`, and `currentStatus`.
+-5. Produce `Operator Blockers` with only blockers that require **operator input** after `worker repair` and `root-cause-analysis` triage.
++1. **Context:** Include `group_id`, `task_ids`, `task-dependency` card path, `task-list` card path, and any upstream `dispatch_notes`.
++2. **Reading instruction:** Tell the subagent that it must read both referenced card files before editing code.
++3. **Scope instruction:** Tell the subagent to implement only the assigned group tasks from the `Task Inventory`.
++4. **Return instruction:** Tell the subagent to return `Worker Results` with `completedTasks`, `changedFiles`, `blockers`, `assumptions`, and worker notes.
++5. **No field reconstruction:** Do not restate full `target_files`, `target_symbols`, `done_when`, `acceptance checks`, `source references`, and `forbidden scopes` when those fields already live in the referenced task grouping and task list cards.
+ 
+ ---
+ 
+-## E. Hard Rules
++## E. Output Contract
+ 
+-1. Do not run `global tests` while parallel workers are active.
+-2. Do not create `commits` while workers are active.
+-3. Keep each `dispatch` limited to one independent group; do not mix unrelated scopes.
+-4. Do not ask a worker to infer missing requirements that should have been handled by `task-group-completeness`.
++1. **`Dispatch Plan`:** List launched `group_id` values, assigned `task_ids`, referenced card paths, and subagent identifiers.
++2. **`Subagent Prompts`:** Record the exact prompt sent to each subagent and any stored prompt reference.
++3. **`Worker Results`:** Collect each subagent return with `completedTasks`, `changedFiles`, `blockers`, `assumptions`, and worker notes.
++4. **`Implementation Batch Handoff`:** Provide the collected `Worker Results`, the referenced `task-dependency` card, the referenced `task-list` card, and any gated groups not launched in this stage.
++5. **`Operator Blockers`:** Report only blockers that prevent launch and collection, including a missing `task-list` reference, unreadable card file, unavailable subagent tooling, and ambiguous group mapping.
++
++---
++
++## F. Hard Rules
++
++1. **No implementation:** Do not implement product code.
++2. **No commits:** Do not create commits.
++3. **No regrouping:** Do not alter task groups, infer new groups, and do not move tasks between groups.
++4. **No task-field reconstruction:** Do not rebuild `target_files`, `target_symbols`, `done_when`, `acceptance checks`, `source references`, and `forbidden scopes` inside the orchestrator output.
++5. **No repair loop:** Do not launch fix workers, run `root-cause-analysis`, run `test-failure-attribution`, and do not decide failure ownership.
++6. **No global tests:** Do not run `global tests`.
++7. **No completion judgment:** Do not decide whether the implementation is finished; collect returns and hand off to the next stage.
++8. **No `task-group-completeness` dependency:** Do not require `task-group-completeness` as an input.
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-235","timestamp":"2026-07-09T15:54:51.077Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"235","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_49"} -->
+
+The staged card diff is the intended full rewrite, and only the scoped files are staged. The thread diff is large again because generated telemetry is persisted in the scoped thread file. I’m committing the rewrite now.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-236","timestamp":"2026-07-09T15:54:51.078Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"236","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_50","codexTool":"/usr/bin/zsh -lc 'git commit -m \"Rewrite implementation orchestrator contract\"'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git commit -m "Rewrite implementation orchestrator contract"'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-237","timestamp":"2026-07-09T15:54:51.078Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"237","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_50","codexTool":"/usr/bin/zsh -lc 'git commit -m \"Rewrite implementation orchestrator contract\"'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git commit -m "Rewrite implementation orchestrator contract"'`
+Status: completed
+Exit code: 0
+
+````text
+[main 48b1dc0] Rewrite implementation orchestrator contract
+ 3 files changed, 4582 insertions(+), 28 deletions(-)
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-238","timestamp":"2026-07-09T15:54:59.089Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"238","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_51"} -->
+
+The rewrite commit is complete. I’m checking the scoped status and commit hash once more before closing.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-239","timestamp":"2026-07-09T15:54:59.089Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"239","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_52","codexTool":"/usr/bin/zsh -lc 'git status --short -- .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git status --short -- .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-240","timestamp":"2026-07-09T15:54:59.089Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"240","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_52","codexTool":"/usr/bin/zsh -lc 'git status --short -- .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git status --short -- .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md'`
+Status: completed
+Exit code: 0
+
+````text
+ M .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-241","timestamp":"2026-07-09T15:54:59.089Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"241","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_53","codexTool":"/usr/bin/zsh -lc 'git rev-parse --short HEAD'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git rev-parse --short HEAD'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-242","timestamp":"2026-07-09T15:54:59.089Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"242","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_53","codexTool":"/usr/bin/zsh -lc 'git rev-parse --short HEAD'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git rev-parse --short HEAD'`
+Status: completed
+Exit code: 0
+
+````text
+48b1dc0
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-243","timestamp":"2026-07-09T15:55:06.328Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"243","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_54"} -->
+
+Done. Rewrote [card-skill-implementation-orchestrator.md](/home/jbb/dev/EditorBP/decision-os/.decision-os/cards/skills/card-skill-implementation-orchestrator.md) around the corrected contract:
+
+- `task-dependency` is treated as the current **task grouping** card.
+- The orchestrator resolves the linked `task-list`.
+- It launches scoped implementation subagents with card references.
+- It collects `Worker Results` and stops.
+- It does not implement code, create commits, regroup tasks, run tests, judge completion, or run repair stages.
+
+I appended the scoped `# AGENT` reply, updated the run summary, and committed the scoped rewrite as `48b1dc0` with message `Rewrite implementation orchestrator contract`.
+
+As before, the runner appended telemetry after the commit, so the thread file is modified again by generated run history.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-244","timestamp":"2026-07-09T15:55:06.328Z","status":"complete","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"244","codexKind":"run_status","codexEventType":"turn.completed"} -->
+
+Codex turn completed.
+
+# OPERATOR
+<!-- decision-os:note {"id":"note-1783612798842-d7669497f5eeb8","timestamp":"2026-07-09T15:59:59.243Z","voiceFileRef":"/home/jbb/dev/EditorBP/decision-os/.decision-os/voice-uploads/voice-1783612799138-fb0bb2d9-25a2-4b61-90cf-30cdf6c99a65.wav","status":"transcribed","transcriptionStartedAt":"2026-07-09T15:59:59.139Z","codexQueueStatus":"started","codexQueueRequestedAt":"2026-07-09T15:59:59.139Z","codexQueueRunId":"codex-skill-1783596089570-85eceea5"} -->
+
+Là, tu enlèves la section B5, tu enlèves la section A3, tu enlèves la section A2. Tu enlèves la section A4. En fait, t'es en train de, au lieu d'enlever ce que je t'ai dit d'enlever, tu as mis l'inverse en disant « c'est pas ça, c'est pas ça, c'est pas ça ». Ça veut dire que t'as pas lu la règle dans le agents.md de pas mettre d'antispec dans nos specs et tu n'as pas proprement lu le agents-agents.md, sinon t'aurais su qu'il fallait pas faire ça.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-245","timestamp":"2026-07-09T16:00:05.004Z","status":"running","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"245","codexKind":"run_status","codexEventType":"thread.started"} -->
+
+Codex thread started.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-246","timestamp":"2026-07-09T16:00:05.004Z","status":"running","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"246","codexKind":"run_status","codexEventType":"turn.started"} -->
+
+Codex turn started.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-247","timestamp":"2026-07-09T16:00:47.903Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"247","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_0"} -->
+
+I’ll treat this as another scoped correction to the same card. The operator is pointing out anti-spec bloat, so I’m removing the named inverse/negative items rather than restating them elsewhere.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-248","timestamp":"2026-07-09T16:00:47.903Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"248","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_1","codexTool":"/usr/bin/zsh -lc \"sed -n '1,220p' .decision-os/cards/skills/card-skill-implementation-orchestrator.md\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "sed -n '1,220p' .decision-os/cards/skills/card-skill-implementation-orchestrator.md"`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-249","timestamp":"2026-07-09T16:00:47.903Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"249","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_1","codexTool":"/usr/bin/zsh -lc \"sed -n '1,220p' .decision-os/cards/skills/card-skill-implementation-orchestrator.md\"","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc "sed -n '1,220p' .decision-os/cards/skills/card-skill-implementation-orchestrator.md"`
+Status: completed
+Exit code: 0
+
+````text
+---
+name: implementation-orchestrator
+description: Launch implementation subagents from the current task grouping card, reference the linked task-list card, collect worker returns, and stop before implementation judgment. No code implementation. No commits. No regrouping. No tests. No repair stages.
+---
+
+# Implementation Orchestrator
+
+## A. Scope
+
+1. **Purpose:** Launch **implementation subagents** from the current task grouping output and collect their returned results.
+2. **Coordination-only role:** The orchestrator is not an `implementation-worker`; it never implements product code and never receives an `implementation-worker` role.
+3. **Current naming:** Treat `task-dependency` as the current card name for the **task grouping** output. The intended concept is `task grouping`.
+4. **Stage boundary:** Stop after launched subagents return their `Worker Results`. The next stage owns `verification`, `repair`, `test attribution`, and `commit` decisions.
+
+---
+
+## B. Required Inputs
+
+1. **Task grouping card:** Read the injected `task-dependency` card as the **task grouping** source for `Independent Task Groups`, `Sequential Gates`, `Collision Risks`, `Ambiguities`, `Readiness`, and `dispatch_notes`.
+2. **Task list card:** Locate the linked `task-list` card from the `task-dependency` card and read the full `Task Inventory`.
+3. **Source references:** Preserve the source card paths, task ids, group ids, and file references already present in `task-dependency` and `task-list`.
+4. **Subagent launcher:** Use available agent tooling that can launch one scoped implementation subagent per ready group.
+5. **Non-input:** Do not require `task-group-completeness`; it is a separate audit task and is not part of this orchestrator contract.
+
+---
+
+## C. Dispatch Workflow
+
+1. **Read grouping:** Read `Independent Task Groups` and `Sequential Gates` from the `task-dependency` card. Do not regroup tasks.
+2. **Resolve task list:** Follow the `task-list` reference from the `task-dependency` card and read the `Task Inventory`.
+3. **Select groups:** Dispatch only groups that are ready under the current `Sequential Gates`.
+4. **Create prompt:** Build one subagent prompt per ready group with `group_id`, `task_ids`, the `task-dependency` card path, the `task-list` card path, and the group `dispatch_notes`.
+5. **Reference source cards:** Tell the subagent that it must read the referenced cards before editing. Do not duplicate and do not reinterpret `target_files`, `target_symbols`, `done_when`, `acceptance checks`, `source references`, and `forbidden scopes` in the orchestrator prompt.
+6. **Launch subagents:** Launch **one implementation subagent per ready group** and keep each subagent scoped to its assigned group.
+7. **Collect returns:** Collect each returned `Worker Results` payload with `completedTasks`, `changedFiles`, `blockers`, `assumptions`, and worker notes.
+8. **Stop cleanly:** When launched subagents have returned, produce the orchestrator handoff and stop. Do not decide whether the implementation is finished.
+
+---
+
+## D. Subagent Prompt Contract
+
+1. **Context:** Include `group_id`, `task_ids`, `task-dependency` card path, `task-list` card path, and any upstream `dispatch_notes`.
+2. **Reading instruction:** Tell the subagent that it must read both referenced card files before editing code.
+3. **Scope instruction:** Tell the subagent to implement only the assigned group tasks from the `Task Inventory`.
+4. **Return instruction:** Tell the subagent to return `Worker Results` with `completedTasks`, `changedFiles`, `blockers`, `assumptions`, and worker notes.
+5. **No field reconstruction:** Do not restate full `target_files`, `target_symbols`, `done_when`, `acceptance checks`, `source references`, and `forbidden scopes` when those fields already live in the referenced task grouping and task list cards.
+
+---
+
+## E. Output Contract
+
+1. **`Dispatch Plan`:** List launched `group_id` values, assigned `task_ids`, referenced card paths, and subagent identifiers.
+2. **`Subagent Prompts`:** Record the exact prompt sent to each subagent and any stored prompt reference.
+3. **`Worker Results`:** Collect each subagent return with `completedTasks`, `changedFiles`, `blockers`, `assumptions`, and worker notes.
+4. **`Implementation Batch Handoff`:** Provide the collected `Worker Results`, the referenced `task-dependency` card, the referenced `task-list` card, and any gated groups not launched in this stage.
+5. **`Operator Blockers`:** Report only blockers that prevent launch and collection, including a missing `task-list` reference, unreadable card file, unavailable subagent tooling, and ambiguous group mapping.
+
+---
+
+## F. Hard Rules
+
+1. **No implementation:** Do not implement product code.
+2. **No commits:** Do not create commits.
+3. **No regrouping:** Do not alter task groups, infer new groups, and do not move tasks between groups.
+4. **No task-field reconstruction:** Do not rebuild `target_files`, `target_symbols`, `done_when`, `acceptance checks`, `source references`, and `forbidden scopes` inside the orchestrator output.
+5. **No repair loop:** Do not launch fix workers, run `root-cause-analysis`, run `test-failure-attribution`, and do not decide failure ownership.
+6. **No global tests:** Do not run `global tests`.
+7. **No completion judgment:** Do not decide whether the implementation is finished; collect returns and hand off to the next stage.
+8. **No `task-group-completeness` dependency:** Do not require `task-group-completeness` as an input.
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-250","timestamp":"2026-07-09T16:00:49.034Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"250","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_2","codexTool":"/usr/bin/zsh -lc 'git status --short -- .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git status --short -- .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-251","timestamp":"2026-07-09T16:00:49.034Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"251","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_2","codexTool":"/usr/bin/zsh -lc 'git status --short -- .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git status --short -- .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md'`
+Status: completed
+Exit code: 0
+
+````text
+ M .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md
+ M .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-252","timestamp":"2026-07-09T16:00:49.034Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"252","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_3","codexTool":"/usr/bin/zsh -lc \"sed -n '1,180p' .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "sed -n '1,180p' .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md"`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-253","timestamp":"2026-07-09T16:00:49.034Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"253","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_3","codexTool":"/usr/bin/zsh -lc \"sed -n '1,180p' .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md\"","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc "sed -n '1,180p' .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md"`
+Status: completed
+Exit code: 0
+
+````text
+# Thread Codex Run
+
+Status: complete
+Source card: Skill 4 / implementation-orchestrator
+Source thread: thread-card-skill-implementation-orchestrator
+Codex run: codex-skill-1783596089570-85eceea5
+
+Summary: Reformatted `.decision-os/cards/skills/card-skill-implementation-orchestrator.md` to the decision-os card formatting contract and appended the scoped thread reply.
+
+Follow-up: Adjusted the card prose so exact `workflow`, `status`, and `output` terms use backticks first, with bold limited to load-bearing conceptual ideas.
+
+Follow-up: Rewrote the card contract so `implementation-orchestrator` reads `task-dependency` as the current task grouping card, resolves the linked `task-list`, launches scoped implementation subagents, collects `Worker Results`, and stops before verification, repair, and commit decisions.
+---
+
+Codex run completed: exit code 0
+---
+
+Codex run completed: resume exit code 0
+---
+
+Codex run completed: resume exit code 0
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-254","timestamp":"2026-07-09T16:00:49.034Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"254","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_4","codexTool":"/usr/bin/zsh -lc \"rg -n 'note-1783612798842-d7669497f5eeb8|Là, tu enlèves|antispec|anti' .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md -C 4\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "rg -n 'note-1783612798842-d7669497f5eeb8|Là, tu enlèves|antispec|anti' .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md -C 4"`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-255","timestamp":"2026-07-09T16:00:49.034Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"255","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_4","codexTool":"/usr/bin/zsh -lc \"rg -n 'note-1783612798842-d7669497f5eeb8|Là, tu enlèves|antispec|anti' .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md -C 4\"","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc "rg -n 'note-1783612798842-d7669497f5eeb8|Là, tu enlèves|antispec|anti' .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md -C 4"`
+Status: completed
+Exit code: 0
+
+````text
+3272-
+3273-# AGENT
+3274-<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-151","timestamp":"2026-07-09T15:50:57.947Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"151","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_0"} -->
+3275-
+3276:I’ll treat this as a new follow-up on the same scoped thread. I’m going to read the current card and thread state first, then rewrite the card substantially to match the clarified orchestrator contract.
+3277-
+3278-# AGENT
+3279-<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-152","timestamp":"2026-07-09T15:50:57.947Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"152","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_1","codexTool":"/usr/bin/zsh -lc 'wc -l .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md'"} -->
+3280-
+--
+6537-
+6538-# AGENT
+6539-<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-151","timestamp":"2026-07-09T15:50:57.947Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"151","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_0"} -->
+6540-
+6541:I’ll treat this as a new follow-up on the same scoped thread. I’m going to read the current card and thread state first, then rewrite the card substantially to match the clarified orchestrator contract.
+6542-
+6543-# AGENT
+6544-<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-152","timestamp":"2026-07-09T15:50:57.947Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"152","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_1","codexTool":"/usr/bin/zsh -lc 'wc -l .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md'"} -->
+6545-
+--
+7820-
+7821-Codex turn completed.
+7822-
+7823-# OPERATOR
+7824:<!-- decision-os:note {"id":"note-1783612798842-d7669497f5eeb8","timestamp":"2026-07-09T15:59:59.243Z","voiceFileRef":"/home/jbb/dev/EditorBP/decision-os/.decision-os/voice-uploads/voice-1783612799138-fb0bb2d9-25a2-4b61-90cf-30cdf6c99a65.wav","status":"transcribed","transcriptionStartedAt":"2026-07-09T15:59:59.139Z","codexQueueStatus":"started","codexQueueRequestedAt":"2026-07-09T15:59:59.139Z","codexQueueRunId":"codex-skill-1783596089570-85eceea5"} -->
+7825-
+7826:Là, tu enlèves la section B5, tu enlèves la section A3, tu enlèves la section A2. Tu enlèves la section A4. En fait, t'es en train de, au lieu d'enlever ce que je t'ai dit d'enlever, tu as mis l'inverse en disant « c'est pas ça, c'est pas ça, c'est pas ça ». Ça veut dire que t'as pas lu la règle dans le agents.md de pas mettre d'antispec dans nos specs et tu n'as pas proprement lu le agents-agents.md, sinon t'aurais su qu'il fallait pas faire ça.
+7827-
+7828-# AGENT
+7829-<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-245","timestamp":"2026-07-09T16:00:05.004Z","status":"running","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"245","codexKind":"run_status","codexEventType":"thread.started"} -->
+7830-
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-256","timestamp":"2026-07-09T16:01:02.633Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"256","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_5"} -->
+
+I’m patching the card now: removing `A2`, `A3`, `A4`, and `B5`, and trimming the repeated inverse statements so the card carries the actual workflow instead of anti-spec prose.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-257","timestamp":"2026-07-09T16:01:22.273Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"257","codexKind":"file_change","codexEventType":"item.started","codexItemId":"item_6"} -->
+
+- /home/jbb/dev/EditorBP/decision-os/.decision-os/cards/skills/card-skill-implementation-orchestrator.md: update
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-258","timestamp":"2026-07-09T16:01:22.273Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"258","codexKind":"file_change","codexEventType":"item.completed","codexItemId":"item_6"} -->
+
+- /home/jbb/dev/EditorBP/decision-os/.decision-os/cards/skills/card-skill-implementation-orchestrator.md: update
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-259","timestamp":"2026-07-09T16:01:31.481Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"259","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_7"} -->
+
+The named items are removed and the remaining prose is more direct. I’m verifying the card now for leftover anti-spec phrasing and formatting issues.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-260","timestamp":"2026-07-09T16:01:31.481Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"260","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_8","codexTool":"/usr/bin/zsh -lc \"sed -n '1,220p' .decision-os/cards/skills/card-skill-implementation-orchestrator.md\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "sed -n '1,220p' .decision-os/cards/skills/card-skill-implementation-orchestrator.md"`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-261","timestamp":"2026-07-09T16:01:31.481Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"261","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_8","codexTool":"/usr/bin/zsh -lc \"sed -n '1,220p' .decision-os/cards/skills/card-skill-implementation-orchestrator.md\"","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc "sed -n '1,220p' .decision-os/cards/skills/card-skill-implementation-orchestrator.md"`
+Status: completed
+Exit code: 0
+
+````text
+---
+name: implementation-orchestrator
+description: Launch implementation subagents from the current task grouping card, reference the linked task-list card, collect worker returns, and produce the implementation batch handoff.
+---
+
+# Implementation Orchestrator
+
+## A. Scope
+
+1. **Purpose:** Launch **implementation subagents** from the current task grouping output, collect returned `Worker Results`, and produce `Implementation Batch Handoff`.
+
+---
+
+## B. Required Inputs
+
+1. **Task grouping card:** Read the injected `task-dependency` card as the **task grouping** source for `Independent Task Groups`, `Sequential Gates`, `Collision Risks`, `Ambiguities`, `Readiness`, and `dispatch_notes`.
+2. **Task list card:** Locate the linked `task-list` card from the `task-dependency` card and read the full `Task Inventory`.
+3. **Source references:** Preserve the source card paths, task ids, group ids, and file references already present in `task-dependency` and `task-list`.
+4. **Subagent launcher:** Use available agent tooling that can launch one scoped implementation subagent per ready group.
+
+---
+
+## C. Dispatch Workflow
+
+1. **Read grouping:** Read `Independent Task Groups` and `Sequential Gates` from the `task-dependency` card. Do not regroup tasks.
+2. **Resolve task list:** Follow the `task-list` reference from the `task-dependency` card and read the `Task Inventory`.
+3. **Select groups:** Dispatch only groups that are ready under the current `Sequential Gates`.
+4. **Create prompt:** Build one subagent prompt per ready group with `group_id`, `task_ids`, the `task-dependency` card path, the `task-list` card path, and the group `dispatch_notes`.
+5. **Reference source cards:** Tell the subagent that it must read the referenced cards before editing and use those cards as the source of truth for `target_files`, `target_symbols`, `done_when`, `acceptance checks`, `source references`, and `forbidden scopes`.
+6. **Launch subagents:** Launch **one implementation subagent per ready group** and keep each subagent scoped to its assigned group.
+7. **Collect returns:** Collect each returned `Worker Results` payload with `completedTasks`, `changedFiles`, `blockers`, `assumptions`, and worker notes.
+8. **Produce handoff:** When launched subagents have returned, produce `Implementation Batch Handoff`.
+
+---
+
+## D. Subagent Prompt Contract
+
+1. **Context:** Include `group_id`, `task_ids`, `task-dependency` card path, `task-list` card path, and any upstream `dispatch_notes`.
+2. **Reading instruction:** Tell the subagent that it must read both referenced card files before editing code.
+3. **Scope instruction:** Tell the subagent to implement only the assigned group tasks from the `Task Inventory`.
+4. **Return instruction:** Tell the subagent to return `Worker Results` with `completedTasks`, `changedFiles`, `blockers`, `assumptions`, and worker notes.
+5. **Task field source:** Use the referenced task grouping and task list cards as the source of truth for `target_files`, `target_symbols`, `done_when`, `acceptance checks`, `source references`, and `forbidden scopes`.
+
+---
+
+## E. Output Contract
+
+1. **`Dispatch Plan`:** List launched `group_id` values, assigned `task_ids`, referenced card paths, and subagent identifiers.
+2. **`Subagent Prompts`:** Record the exact prompt sent to each subagent and any stored prompt reference.
+3. **`Worker Results`:** Collect each subagent return with `completedTasks`, `changedFiles`, `blockers`, `assumptions`, and worker notes.
+4. **`Implementation Batch Handoff`:** Provide the collected `Worker Results`, the referenced `task-dependency` card, the referenced `task-list` card, and any gated groups not launched in this stage.
+5. **`Operator Blockers`:** Report only blockers that prevent launch and collection, including a missing `task-list` reference, unreadable card file, unavailable subagent tooling, and ambiguous group mapping.
+
+---
+
+## F. Hard Rules
+
+1. **No implementation:** Do not implement product code.
+2. **No commits:** Do not create commits.
+3. **Existing groups:** Use existing `Independent Task Groups`; do not infer new groups and do not move tasks between groups.
+4. **Worker scope:** Keep each subagent scoped to its assigned `group_id` and `task_ids`.
+5. **No global tests:** Do not run `global tests`.
+6. **Stop point:** End with `Implementation Batch Handoff` after `Worker Results` collection.
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-262","timestamp":"2026-07-09T16:01:31.481Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"262","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_9","codexTool":"/usr/bin/zsh -lc \"rg -n 'implementation-worker|task-group-completeness|root-cause-analysis|test-failure-attribution|repair|No code implementation|No regrouping|No tests|No repair|Non-input|Current naming|Coordination-only|Stage boundary|completion judgment|finished' .decision-os/cards/skills/card-skill-implementation-orchestrator.md\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "rg -n 'implementation-worker|task-group-completeness|root-cause-analysis|test-failure-attribution|repair|No code implementation|No regrouping|No tests|No repair|Non-input|Current naming|Coordination-only|Stage boundary|completion judgment|finished' .decision-os/cards/skills/card-skill-implementation-orchestrator.md"`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-263","timestamp":"2026-07-09T16:01:31.481Z","status":"failed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"263","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_9","codexTool":"/usr/bin/zsh -lc \"rg -n 'implementation-worker|task-group-completeness|root-cause-analysis|test-failure-attribution|repair|No code implementation|No regrouping|No tests|No repair|Non-input|Current naming|Coordination-only|Stage boundary|completion judgment|finished' .decision-os/cards/skills/card-skill-implementation-orchestrator.md\"","codexExitCode":"1"} -->
+
+**Tool call** `/usr/bin/zsh -lc "rg -n 'implementation-worker|task-group-completeness|root-cause-analysis|test-failure-attribution|repair|No code implementation|No regrouping|No tests|No repair|Non-input|Current naming|Coordination-only|Stage boundary|completion judgment|finished' .decision-os/cards/skills/card-skill-implementation-orchestrator.md"`
+Status: failed
+Exit code: 1
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-264","timestamp":"2026-07-09T16:01:31.481Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"264","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_10","codexTool":"/usr/bin/zsh -lc \"rg -n '\"'^## (?![A-Z]'\"\\\\. )|\"'^- '\"' .decision-os/cards/skills/card-skill-implementation-orchestrator.md -P\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "rg -n '"'^## (?![A-Z]'"\\. )|"'^- '"' .decision-os/cards/skills/card-skill-implementation-orchestrator.md -P"`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-265","timestamp":"2026-07-09T16:01:31.481Z","status":"failed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"265","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_10","codexTool":"/usr/bin/zsh -lc \"rg -n '\"'^## (?![A-Z]'\"\\\\. )|\"'^- '\"' .decision-os/cards/skills/card-skill-implementation-orchestrator.md -P\"","codexExitCode":"1"} -->
+
+**Tool call** `/usr/bin/zsh -lc "rg -n '"'^## (?![A-Z]'"\\. )|"'^- '"' .decision-os/cards/skills/card-skill-implementation-orchestrator.md -P"`
+Status: failed
+Exit code: 1
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-266","timestamp":"2026-07-09T16:01:31.481Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"266","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_11","codexTool":"/usr/bin/zsh -lc \"rg -n '\\\\bor\\\\b' .decision-os/cards/skills/card-skill-implementation-orchestrator.md\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "rg -n '\\bor\\b' .decision-os/cards/skills/card-skill-implementation-orchestrator.md"`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-267","timestamp":"2026-07-09T16:01:31.481Z","status":"failed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"267","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_11","codexTool":"/usr/bin/zsh -lc \"rg -n '\\\\bor\\\\b' .decision-os/cards/skills/card-skill-implementation-orchestrator.md\"","codexExitCode":"1"} -->
+
+**Tool call** `/usr/bin/zsh -lc "rg -n '\\bor\\b' .decision-os/cards/skills/card-skill-implementation-orchestrator.md"`
+Status: failed
+Exit code: 1
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-268","timestamp":"2026-07-09T16:01:38.218Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"268","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_12"} -->
+
+The card now has only one `A. Scope` item and four `B. Required Inputs` items; the removed sections are gone. I’m generating metadata for the scoped reply and updating the run summary.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-269","timestamp":"2026-07-09T16:01:39.349Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"269","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_13","codexTool":"/usr/bin/zsh -lc \"node -e \\\"const crypto=require('crypto'); const d=new Date(); console.log(JSON.stringify({epochMs:d.getTime(), iso:d.toISOString(), hex:crypto.randomBytes(4).toString('hex')}))\\\"\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "node -e \"const crypto=require('crypto'); const d=new Date(); console.log(JSON.stringify({epochMs:d.getTime(), iso:d.toISOString(), hex:crypto.randomBytes(4).toString('hex')}))\""`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-270","timestamp":"2026-07-09T16:01:39.349Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"270","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_13","codexTool":"/usr/bin/zsh -lc \"node -e \\\"const crypto=require('crypto'); const d=new Date(); console.log(JSON.stringify({epochMs:d.getTime(), iso:d.toISOString(), hex:crypto.randomBytes(4).toString('hex')}))\\\"\"","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc "node -e \"const crypto=require('crypto'); const d=new Date(); console.log(JSON.stringify({epochMs:d.getTime(), iso:d.toISOString(), hex:crypto.randomBytes(4).toString('hex')}))\""`
+Status: completed
+Exit code: 0
+
+````text
+{"epochMs":1783612899205,"iso":"2026-07-09T16:01:39.205Z","hex":"2026ab5f"}
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-271","timestamp":"2026-07-09T16:01:43.883Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"271","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_14"} -->
+
+I’m checking the current thread tail, then I’ll append the single manual treatment reply for this note.
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1783612899205-2026ab5f","timestamp":"2026-07-09T16:01:39.205Z"} -->
+
+Treated.
+
+1. **Removed anti-spec items:** Removed `A2`, `A3`, `A4`, and `B5` from `.decision-os/cards/skills/card-skill-implementation-orchestrator.md`.
+2. **Trimmed inverse prose:** Removed the frontmatter anti-spec sentences and the repeated inverse statements around `implementation-worker`, `task-group-completeness`, repair stages, tests, and completion judgment.
+3. **Kept the actual contract:** The card now states the direct flow: `task-dependency`, linked `task-list`, scoped subagent prompts, `Worker Results`, and `Implementation Batch Handoff`.
+4. **Ledger data:** No card status change was made. `ledger JSON` was not edited.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-272","timestamp":"2026-07-09T16:01:46.149Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"272","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_15","codexTool":"/usr/bin/zsh -lc 'tail -60 .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'tail -60 .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-273","timestamp":"2026-07-09T16:01:46.149Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"273","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_15","codexTool":"/usr/bin/zsh -lc 'tail -60 .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'tail -60 .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md'`
+Status: completed
+Exit code: 0
+
+`````text
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-263","timestamp":"2026-07-09T16:01:31.481Z","status":"failed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"263","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_9","codexTool":"/usr/bin/zsh -lc \"rg -n 'implementation-worker|task-group-completeness|root-cause-analysis|test-failure-attribution|repair|No code implementation|No regrouping|No tests|No repair|Non-input|Current naming|Coordination-only|Stage boundary|completion judgment|finished' .decision-os/cards/skills/card-skill-implementation-orchestrator.md\"","codexExitCode":"1"} -->
+
+**Tool call** `/usr/bin/zsh -lc "rg -n 'implementation-worker|task-group-completeness|root-cause-analysis|test-failure-attribution|repair|No code implementation|No regrouping|No tests|No repair|Non-input|Current naming|Coordination-only|Stage boundary|completion judgment|finished' .decision-os/cards/skills/card-skill-implementation-orchestrator.md"`
+Status: failed
+Exit code: 1
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-264","timestamp":"2026-07-09T16:01:31.481Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"264","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_10","codexTool":"/usr/bin/zsh -lc \"rg -n '\"'^## (?![A-Z]'\"\\\\. )|\"'^- '\"' .decision-os/cards/skills/card-skill-implementation-orchestrator.md -P\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "rg -n '"'^## (?![A-Z]'"\\. )|"'^- '"' .decision-os/cards/skills/card-skill-implementation-orchestrator.md -P"`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-265","timestamp":"2026-07-09T16:01:31.481Z","status":"failed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"265","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_10","codexTool":"/usr/bin/zsh -lc \"rg -n '\"'^## (?![A-Z]'\"\\\\. )|\"'^- '\"' .decision-os/cards/skills/card-skill-implementation-orchestrator.md -P\"","codexExitCode":"1"} -->
+
+**Tool call** `/usr/bin/zsh -lc "rg -n '"'^## (?![A-Z]'"\\. )|"'^- '"' .decision-os/cards/skills/card-skill-implementation-orchestrator.md -P"`
+Status: failed
+Exit code: 1
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-266","timestamp":"2026-07-09T16:01:31.481Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"266","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_11","codexTool":"/usr/bin/zsh -lc \"rg -n '\\\\bor\\\\b' .decision-os/cards/skills/card-skill-implementation-orchestrator.md\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "rg -n '\\bor\\b' .decision-os/cards/skills/card-skill-implementation-orchestrator.md"`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-267","timestamp":"2026-07-09T16:01:31.481Z","status":"failed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"267","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_11","codexTool":"/usr/bin/zsh -lc \"rg -n '\\\\bor\\\\b' .decision-os/cards/skills/card-skill-implementation-orchestrator.md\"","codexExitCode":"1"} -->
+
+**Tool call** `/usr/bin/zsh -lc "rg -n '\\bor\\b' .decision-os/cards/skills/card-skill-implementation-orchestrator.md"`
+Status: failed
+Exit code: 1
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-268","timestamp":"2026-07-09T16:01:38.218Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"268","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_12"} -->
+
+The card now has only one `A. Scope` item and four `B. Required Inputs` items; the removed sections are gone. I’m generating metadata for the scoped reply and updating the run summary.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-269","timestamp":"2026-07-09T16:01:39.349Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"269","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_13","codexTool":"/usr/bin/zsh -lc \"node -e \\\"const crypto=require('crypto'); const d=new Date(); console.log(JSON.stringify({epochMs:d.getTime(), iso:d.toISOString(), hex:crypto.randomBytes(4).toString('hex')}))\\\"\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "node -e \"const crypto=require('crypto'); const d=new Date(); console.log(JSON.stringify({epochMs:d.getTime(), iso:d.toISOString(), hex:crypto.randomBytes(4).toString('hex')}))\""`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-270","timestamp":"2026-07-09T16:01:39.349Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"270","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_13","codexTool":"/usr/bin/zsh -lc \"node -e \\\"const crypto=require('crypto'); const d=new Date(); console.log(JSON.stringify({epochMs:d.getTime(), iso:d.toISOString(), hex:crypto.randomBytes(4).toString('hex')}))\\\"\"","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc "node -e \"const crypto=require('crypto'); const d=new Date(); console.log(JSON.stringify({epochMs:d.getTime(), iso:d.toISOString(), hex:crypto.randomBytes(4).toString('hex')}))\""`
+Status: completed
+Exit code: 0
+
+````text
+{"epochMs":1783612899205,"iso":"2026-07-09T16:01:39.205Z","hex":"2026ab5f"}
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-271","timestamp":"2026-07-09T16:01:43.883Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"271","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_14"} -->
+
+I’m checking the current thread tail, then I’ll append the single manual treatment reply for this note.
+`````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-274","timestamp":"2026-07-09T16:01:49.531Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"274","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_16"} -->
+
+I’m appending the treatment reply now with a concise record of the removals.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-275","timestamp":"2026-07-09T16:01:54.199Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"275","codexKind":"file_change","codexEventType":"item.started","codexItemId":"item_17"} -->
+
+- /home/jbb/dev/EditorBP/decision-os/.decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md: update
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-276","timestamp":"2026-07-09T16:01:54.199Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"276","codexKind":"file_change","codexEventType":"item.completed","codexItemId":"item_17"} -->
+
+- /home/jbb/dev/EditorBP/decision-os/.decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md: update
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-277","timestamp":"2026-07-09T16:01:56.449Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"277","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_18"} -->
+
+The thread reply is in place. I’m adding a short run summary line for this anti-spec cleanup.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-278","timestamp":"2026-07-09T16:01:59.831Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"278","codexKind":"file_change","codexEventType":"item.started","codexItemId":"item_19"} -->
+
+- /home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md: update
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-279","timestamp":"2026-07-09T16:01:59.832Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"279","codexKind":"file_change","codexEventType":"item.completed","codexItemId":"item_19"} -->
+
+- /home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md: update
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-280","timestamp":"2026-07-09T16:02:10.055Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"280","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_20"} -->
+
+I’m verifying the scoped edits: removed items, card formatting, thread note, and run summary.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-281","timestamp":"2026-07-09T16:02:12.295Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"281","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_21","codexTool":"/usr/bin/zsh -lc \"sed -n '1,180p' .decision-os/cards/skills/card-skill-implementation-orchestrator.md\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "sed -n '1,180p' .decision-os/cards/skills/card-skill-implementation-orchestrator.md"`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-282","timestamp":"2026-07-09T16:02:12.295Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"282","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_21","codexTool":"/usr/bin/zsh -lc \"sed -n '1,180p' .decision-os/cards/skills/card-skill-implementation-orchestrator.md\"","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc "sed -n '1,180p' .decision-os/cards/skills/card-skill-implementation-orchestrator.md"`
+Status: completed
+Exit code: 0
+
+````text
+---
+name: implementation-orchestrator
+description: Launch implementation subagents from the current task grouping card, reference the linked task-list card, collect worker returns, and produce the implementation batch handoff.
+---
+
+# Implementation Orchestrator
+
+## A. Scope
+
+1. **Purpose:** Launch **implementation subagents** from the current task grouping output, collect returned `Worker Results`, and produce `Implementation Batch Handoff`.
+
+---
+
+## B. Required Inputs
+
+1. **Task grouping card:** Read the injected `task-dependency` card as the **task grouping** source for `Independent Task Groups`, `Sequential Gates`, `Collision Risks`, `Ambiguities`, `Readiness`, and `dispatch_notes`.
+2. **Task list card:** Locate the linked `task-list` card from the `task-dependency` card and read the full `Task Inventory`.
+3. **Source references:** Preserve the source card paths, task ids, group ids, and file references already present in `task-dependency` and `task-list`.
+4. **Subagent launcher:** Use available agent tooling that can launch one scoped implementation subagent per ready group.
+
+---
+
+## C. Dispatch Workflow
+
+1. **Read grouping:** Read `Independent Task Groups` and `Sequential Gates` from the `task-dependency` card. Do not regroup tasks.
+2. **Resolve task list:** Follow the `task-list` reference from the `task-dependency` card and read the `Task Inventory`.
+3. **Select groups:** Dispatch only groups that are ready under the current `Sequential Gates`.
+4. **Create prompt:** Build one subagent prompt per ready group with `group_id`, `task_ids`, the `task-dependency` card path, the `task-list` card path, and the group `dispatch_notes`.
+5. **Reference source cards:** Tell the subagent that it must read the referenced cards before editing and use those cards as the source of truth for `target_files`, `target_symbols`, `done_when`, `acceptance checks`, `source references`, and `forbidden scopes`.
+6. **Launch subagents:** Launch **one implementation subagent per ready group** and keep each subagent scoped to its assigned group.
+7. **Collect returns:** Collect each returned `Worker Results` payload with `completedTasks`, `changedFiles`, `blockers`, `assumptions`, and worker notes.
+8. **Produce handoff:** When launched subagents have returned, produce `Implementation Batch Handoff`.
+
+---
+
+## D. Subagent Prompt Contract
+
+1. **Context:** Include `group_id`, `task_ids`, `task-dependency` card path, `task-list` card path, and any upstream `dispatch_notes`.
+2. **Reading instruction:** Tell the subagent that it must read both referenced card files before editing code.
+3. **Scope instruction:** Tell the subagent to implement only the assigned group tasks from the `Task Inventory`.
+4. **Return instruction:** Tell the subagent to return `Worker Results` with `completedTasks`, `changedFiles`, `blockers`, `assumptions`, and worker notes.
+5. **Task field source:** Use the referenced task grouping and task list cards as the source of truth for `target_files`, `target_symbols`, `done_when`, `acceptance checks`, `source references`, and `forbidden scopes`.
+
+---
+
+## E. Output Contract
+
+1. **`Dispatch Plan`:** List launched `group_id` values, assigned `task_ids`, referenced card paths, and subagent identifiers.
+2. **`Subagent Prompts`:** Record the exact prompt sent to each subagent and any stored prompt reference.
+3. **`Worker Results`:** Collect each subagent return with `completedTasks`, `changedFiles`, `blockers`, `assumptions`, and worker notes.
+4. **`Implementation Batch Handoff`:** Provide the collected `Worker Results`, the referenced `task-dependency` card, the referenced `task-list` card, and any gated groups not launched in this stage.
+5. **`Operator Blockers`:** Report only blockers that prevent launch and collection, including a missing `task-list` reference, unreadable card file, unavailable subagent tooling, and ambiguous group mapping.
+
+---
+
+## F. Hard Rules
+
+1. **No implementation:** Do not implement product code.
+2. **No commits:** Do not create commits.
+3. **Existing groups:** Use existing `Independent Task Groups`; do not infer new groups and do not move tasks between groups.
+4. **Worker scope:** Keep each subagent scoped to its assigned `group_id` and `task_ids`.
+5. **No global tests:** Do not run `global tests`.
+6. **Stop point:** End with `Implementation Batch Handoff` after `Worker Results` collection.
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-283","timestamp":"2026-07-09T16:02:12.295Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"283","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_22","codexTool":"/usr/bin/zsh -lc \"rg -n 'implementation-worker|task-group-completeness|root-cause-analysis|test-failure-attribution|repair|No code implementation|No regrouping|No tests|No repair|Non-input|Current naming|Coordination-only|Stage boundary|completion judgment|finished|\\\\bor\\\\b' .decision-os/cards/skills/card-skill-implementation-orchestrator.md\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "rg -n 'implementation-worker|task-group-completeness|root-cause-analysis|test-failure-attribution|repair|No code implementation|No regrouping|No tests|No repair|Non-input|Current naming|Coordination-only|Stage boundary|completion judgment|finished|\\bor\\b' .decision-os/cards/skills/card-skill-implementation-orchestrator.md"`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-284","timestamp":"2026-07-09T16:02:12.295Z","status":"failed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"284","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_22","codexTool":"/usr/bin/zsh -lc \"rg -n 'implementation-worker|task-group-completeness|root-cause-analysis|test-failure-attribution|repair|No code implementation|No regrouping|No tests|No repair|Non-input|Current naming|Coordination-only|Stage boundary|completion judgment|finished|\\\\bor\\\\b' .decision-os/cards/skills/card-skill-implementation-orchestrator.md\"","codexExitCode":"1"} -->
+
+**Tool call** `/usr/bin/zsh -lc "rg -n 'implementation-worker|task-group-completeness|root-cause-analysis|test-failure-attribution|repair|No code implementation|No regrouping|No tests|No repair|Non-input|Current naming|Coordination-only|Stage boundary|completion judgment|finished|\\bor\\b' .decision-os/cards/skills/card-skill-implementation-orchestrator.md"`
+Status: failed
+Exit code: 1
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-285","timestamp":"2026-07-09T16:02:12.295Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"285","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_23","codexTool":"/usr/bin/zsh -lc \"rg -n '\"'^## (?![A-Z]'\"\\\\. )|\"'^- '\"' .decision-os/cards/skills/card-skill-implementation-orchestrator.md -P\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "rg -n '"'^## (?![A-Z]'"\\. )|"'^- '"' .decision-os/cards/skills/card-skill-implementation-orchestrator.md -P"`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-286","timestamp":"2026-07-09T16:02:12.295Z","status":"failed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"286","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_23","codexTool":"/usr/bin/zsh -lc \"rg -n '\"'^## (?![A-Z]'\"\\\\. )|\"'^- '\"' .decision-os/cards/skills/card-skill-implementation-orchestrator.md -P\"","codexExitCode":"1"} -->
+
+**Tool call** `/usr/bin/zsh -lc "rg -n '"'^## (?![A-Z]'"\\. )|"'^- '"' .decision-os/cards/skills/card-skill-implementation-orchestrator.md -P"`
+Status: failed
+Exit code: 1
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-287","timestamp":"2026-07-09T16:02:12.295Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"287","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_24","codexTool":"/usr/bin/zsh -lc \"rg -n 'note-agent-1783612899205-2026ab5f|Removed anti-spec items \"'`A2`'\"' .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "rg -n 'note-agent-1783612899205-2026ab5f|Removed anti-spec items "'`A2`'"' .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md"`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-288","timestamp":"2026-07-09T16:02:12.295Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"288","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_24","codexTool":"/usr/bin/zsh -lc \"rg -n 'note-agent-1783612899205-2026ab5f|Removed anti-spec items \"'`A2`'\"' .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md\"","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc "rg -n 'note-agent-1783612899205-2026ab5f|Removed anti-spec items "'`A2`'"' .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md"`
+Status: completed
+Exit code: 0
+
+````text
+.decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md:14:Follow-up: Removed anti-spec items `A2`, `A3`, `A4`, and `B5`; trimmed inverse prose while keeping the direct `task-dependency` to `task-list` to subagent dispatch contract.
+.decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md:8196:<!-- decision-os:note {"id":"note-agent-1783612899205-2026ab5f","timestamp":"2026-07-09T16:01:39.205Z"} -->
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-289","timestamp":"2026-07-09T16:02:15.680Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"289","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_25"} -->
+
+The checks passed: the named anti-spec items are gone, and the card has no leftover references to `implementation-worker`, `task-group-completeness`, repair, test attribution, or completion judgment. I’m staging only the scoped files.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-290","timestamp":"2026-07-09T16:02:17.958Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"290","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_26","codexTool":"/usr/bin/zsh -lc 'git status --short -- .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git status --short -- .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-291","timestamp":"2026-07-09T16:02:17.958Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"291","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_26","codexTool":"/usr/bin/zsh -lc 'git status --short -- .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git status --short -- .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md'`
+Status: completed
+Exit code: 0
+
+````text
+ M .decision-os/cards/skills/card-skill-implementation-orchestrator.md
+ M .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md
+ M .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-292","timestamp":"2026-07-09T16:02:21.328Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"292","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_27"} -->
+
+The scoped files are the only target changes. I’m staging them and checking the staged diff before committing.
