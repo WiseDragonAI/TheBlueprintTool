@@ -168,6 +168,7 @@ export async function startCardSkillProcessController(input: { action_payload?: 
   const stderrFile = resolve(runDirectory, `${safeSegment(runId)}.log`);
   const prompt = buildCardSkillPrompt({
     skillName,
+    ledgerFile: ledgerPath,
     sourceCardId: cardId,
     sourceCardTitle: String(source.title ?? cardId),
     sourceCardContent: sourceCardContent({ rawLedger: ledger, decisionOsRoot, cardId }),

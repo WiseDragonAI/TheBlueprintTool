@@ -11,6 +11,7 @@ import { formatLedgerMarkdownExport } from '../helper/format-ledger-markdown-exp
 import { appendThreadAnswer } from '../helper/append-thread-answer.js';
 import { findUnansweredThreads } from '../helper/find-unanswered-threads.js';
 import { formatUnansweredThreads } from '../helper/format-unanswered-threads.js';
+import { resolveLedgerCardContext, resolveLedgerZoneCardsContext } from '../helper/resolve-ledger-zone-context.js';
 import { hydrateLedgerCardContent, writeCardCommentContent } from '../helper/card-content-file.js';
 import { hydrateLedgerThreadNotes, stripHydratedThreadNotes } from '../helper/thread-content-file.js';
 
@@ -174,8 +175,9 @@ function setLedgerCardStatus(ledger: unknown, operation: { cardId?: string; stat
 
 export async function manageLedgerJsonController(
   actionPayload: {
-    ledgerCommand: 'answer' | 'done' | 'export' | 'inspect' | 'mutate' | 'overview' | 'todo' | 'unanswered';
+    ledgerCommand: 'answer' | 'card-context' | 'done' | 'export' | 'inspect' | 'mutate' | 'overview' | 'todo' | 'unanswered' | 'zone-cards';
     answerOperation?: { message?: string; messageFile?: string; threadId?: string };
+    cardOperation?: { cardId?: string };
     exportOperation?: { outputFile?: string };
     json?: boolean;
     ledgerJsonFile: string;
@@ -202,6 +204,7 @@ export async function manageLedgerJsonController(
       removeRelationshipIds?: string[];
     };
     statusOperation?: { cardId?: string; status: 'todo' | 'done' };
+    zoneOperation?: { zoneId?: string };
   },
   fs?: FileSystemPort,
 ): Promise<Result<unknown>> {
@@ -215,6 +218,26 @@ export async function manageLedgerJsonController(
     return ledger;
   }
   await hydrateLedgerThreadNotes(ledger.value, actionPayload.ledgerJsonFile, fs);
+
+  if (actionPayload.ledgerCommand === 'card-context') {
+    const context = resolveLedgerCardContext({ ledger: ledger.value, ledgerJsonFile: actionPayload.ledgerJsonFile, cardId: actionPayload.cardOperation?.cardId });
+    if (!context.ok) {
+      telemetry('manage-ledger-json-rejected', { error: context.error });
+      return context;
+    }
+    telemetry('manage-ledger-json-completed');
+    return { ok: true, value: JSON.stringify(context.value, null, 2) };
+  }
+
+  if (actionPayload.ledgerCommand === 'zone-cards') {
+    const context = resolveLedgerZoneCardsContext({ ledger: ledger.value, ledgerJsonFile: actionPayload.ledgerJsonFile, zoneId: actionPayload.zoneOperation?.zoneId });
+    if (!context.ok) {
+      telemetry('manage-ledger-json-rejected', { error: context.error });
+      return context;
+    }
+    telemetry('manage-ledger-json-completed');
+    return { ok: true, value: JSON.stringify(context.value, null, 2) };
+  }
 
   if (actionPayload.ledgerCommand === 'overview') {
     telemetry('manage-ledger-json-completed');

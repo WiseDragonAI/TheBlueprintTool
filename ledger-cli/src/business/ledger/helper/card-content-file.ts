@@ -11,11 +11,11 @@ function isRecord(value: unknown): value is JsonObject {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function workspaceRootForLedger(ledgerJsonFile: string): string {
+export function workspaceRootForLedger(ledgerJsonFile: string): string {
   return dirname(dirname(resolve(ledgerJsonFile)));
 }
 
-function resolveContentFile(ledgerJsonFile: string, contentFile: unknown): string | null {
+export function resolveCardContentFile(ledgerJsonFile: string, contentFile: unknown): string | null {
   if (typeof contentFile !== 'string' || !contentFile.endsWith('.md')) return null;
   const workspaceRoot = workspaceRootForLedger(ledgerJsonFile);
   const file = resolve(workspaceRoot, contentFile.replace(/^\.\//, ''));
@@ -48,7 +48,7 @@ export async function hydrateLedgerCardContent(ledger: unknown, ledgerJsonFile: 
   const cards = ledger.cards.filter(isRecord);
   for (const card of cards) {
     const comment = isRecord(card.comment) ? card.comment : {};
-    const file = resolveContentFile(ledgerJsonFile, comment.contentFile);
+    const file = resolveCardContentFile(ledgerJsonFile, comment.contentFile);
     if (!file) continue;
     try {
       card.comment = { ...comment, what: await readText(file, fs) };
@@ -61,7 +61,7 @@ export async function hydrateLedgerCardContent(ledger: unknown, ledgerJsonFile: 
 
 export async function writeCardCommentContent(input: { card: JsonObject; content: string; fs?: FileSystemPort; ledgerJsonFile: string }): Promise<void> {
   const comment = isRecord(input.card.comment) ? { ...input.card.comment } : {};
-  const file = resolveContentFile(input.ledgerJsonFile, comment.contentFile);
+  const file = resolveCardContentFile(input.ledgerJsonFile, comment.contentFile);
   if (!file) {
     comment.what = input.content.trimEnd();
     input.card.comment = comment;

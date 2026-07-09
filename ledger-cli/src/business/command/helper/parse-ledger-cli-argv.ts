@@ -58,7 +58,7 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
   const normalizedMode: LedgerCommand | 'assets' = argv.length === 0 || argv.includes('--help') || argv.includes('-h') || mode === 'help'
     ? 'help'
     : mode === 'assets' ? 'assets'
-    : mode === 'answer' || mode === 'done' || mode === 'export' || mode === 'migrate-decision-os' || mode === 'mutate' || mode === 'overview' || mode === 'todo' || mode === 'unanswered' ? mode : 'inspect';
+    : mode === 'answer' || mode === 'card-context' || mode === 'done' || mode === 'export' || mode === 'migrate-decision-os' || mode === 'mutate' || mode === 'overview' || mode === 'todo' || mode === 'unanswered' || mode === 'zone-cards' ? mode : 'inspect';
   const assetAction = (argv[1] === 'apply-gc-plan' || argv[1] === 'gc' || argv[1] === 'list-orphans' || argv[1] === 'list-referenced' || argv[1] === 'prune-json' || argv[1] === 'stage-referenced'
     ? argv[1]
     : 'gc') as AssetCommand;
@@ -70,6 +70,9 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
       messageFile: flagValue(argv, '--message-file'),
       threadId: flagValue(argv, '--thread-id'),
     },
+    cardOperation: normalizedMode === 'card-context'
+      ? { cardId: flagValue(argv, '--card-id') }
+      : undefined,
     json: argv.includes('--json'),
     exportOperation: {
       outputFile: flagValue(argv, '--output') ?? flagValue(argv, '--out'),
@@ -114,6 +117,9 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
     },
     statusOperation: normalizedMode === 'todo' || normalizedMode === 'done'
       ? { cardId: flagValue(argv, '--card-id'), status: normalizedMode }
+      : undefined,
+    zoneOperation: normalizedMode === 'zone-cards'
+      ? { zoneId: flagValue(argv, '--zone-id') }
       : undefined,
   };
 }

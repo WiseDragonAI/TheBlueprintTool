@@ -20,6 +20,8 @@ test('ledger-cli command emits help without reading a ledger', async () => {
   assert.equal(result.ok, true);
   assert.match(messages.join('\n'), /Usage: ledger-cli <command> \[options\]/);
   assert.match(messages.join('\n'), /unanswered --ledger <file> \[--json\]/);
+  assert.match(messages.join('\n'), /card-context --ledger <file> --card-id <id> --json/);
+  assert.match(messages.join('\n'), /zone-cards --ledger <file> --zone-id <id> --json/);
   assert.match(messages.join('\n'), /answer --ledger <file> --thread-id <id>/);
   assert.match(messages.join('\n'), /--message-file <file>/);
 });
@@ -86,6 +88,31 @@ test('ledger-cli command exports a markdown file', async () => {
   assert.equal(result.ok, true);
   assert.match(messages.join('\n'), /Exported markdown/);
   assert.match(await readFile(outputFile, 'utf8'), /# Zone A\n\n## Card A/);
+});
+
+test('ledger-cli command emits card and zone context JSON', async () => {
+  const root = await tempDir('decision-os-zone-command-');
+  const decisionOs = join(root, '.decision-os');
+  await mkdir(join(decisionOs, 'cards', 'skills'), { recursive: true });
+  const ledgerFile = join(decisionOs, 'skills.json');
+  await writeFile(join(decisionOs, 'cards', 'skills', 'card-a.md'), 'Card A body.', 'utf8');
+  await writeFile(ledgerFile, JSON.stringify({
+    cards: [
+      { id: 'card-a', title: 'Card A', x: 10, y: 10, w: 80, h: 80, comment: { contentFile: '.decision-os/cards/skills/card-a.md' } },
+    ],
+    annotations: [{ id: 'zone-a', label: 'Zone A', variant: 'zone', x: 0, y: 0, width: 100, height: 100 }],
+    relationships: [],
+  }, null, 2));
+  const messages: string[] = [];
+
+  const card = await dispatchLedgerCliCommandController(['card-context', '--ledger', ledgerFile, '--card-id', 'card-a', '--json'], { emit: (message) => messages.push(message) });
+  const zone = await dispatchLedgerCliCommandController(['zone-cards', '--ledger', ledgerFile, '--zone-id', 'zone-a', '--json'], { emit: (message) => messages.push(message) });
+
+  assert.equal(card.ok, true);
+  assert.equal(zone.ok, true);
+  assert.match(messages.join('\n'), /"zone":/);
+  assert.match(messages.join('\n'), /"id": "card-a"/);
+  assert.match(messages.join('\n'), /"contentFile": "\.decision-os\/cards\/skills\/card-a\.md"/);
 });
 
 test('ledger-cli migration dry-run reports changes without moving workspace state', async () => {

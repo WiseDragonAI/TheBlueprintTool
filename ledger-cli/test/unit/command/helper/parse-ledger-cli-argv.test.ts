@@ -77,6 +77,34 @@ test('parse-ledger-cli-argv parses ledger overview command', () => {
   assert.equal(command.ledgerJsonFile, '.decision-os/data.json');
 });
 
+test('parse-ledger-cli-argv parses card and zone context commands', () => {
+  const card = parseLedgerCliArgv([
+    'card-context',
+    '--ledger',
+    '.decision-os/skills.json',
+    '--card-id',
+    'card-a',
+    '--json',
+  ]);
+  const zone = parseLedgerCliArgv([
+    'zone-cards',
+    '--ledger',
+    '.decision-os/skills.json',
+    '--zone-id',
+    'zone-a',
+    '--json',
+  ]);
+
+  assert.equal(card.mode, 'card-context');
+  assert.equal(card.ledgerJsonFile, '.decision-os/skills.json');
+  assert.equal(card.cardOperation?.cardId, 'card-a');
+  assert.equal(card.json, true);
+  assert.equal(zone.mode, 'zone-cards');
+  assert.equal(zone.ledgerJsonFile, '.decision-os/skills.json');
+  assert.equal(zone.zoneOperation?.zoneId, 'zone-a');
+  assert.equal(zone.json, true);
+});
+
 test('parse-ledger-cli-argv parses ledger export command', () => {
   const command = parseLedgerCliArgv([
     'export',

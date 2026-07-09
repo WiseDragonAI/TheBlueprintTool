@@ -4,6 +4,7 @@
  */
 export function buildCardSkillPrompt(input: {
   skillName: string;
+  ledgerFile: string;
   sourceCardId: string;
   sourceCardTitle: string;
   sourceCardContent: string;
@@ -16,6 +17,7 @@ export function buildCardSkillPrompt(input: {
     '',
     'Treat the following source card as the complete incoming card content for this run.',
     '',
+    `Ledger file: ${input.ledgerFile}`,
     `Source card id: ${input.sourceCardId}`,
     `Source card title: ${input.sourceCardTitle}`,
     '',

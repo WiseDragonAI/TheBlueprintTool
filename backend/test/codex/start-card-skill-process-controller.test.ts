@@ -61,7 +61,8 @@ test('card skill process route creates a linked output card and launches codex',
     '  const args = process.argv.slice(2);',
     '  const model = args[args.indexOf("--model") + 1] || "";',
     '  const effort = args[args.indexOf("-c") + 1] || "";',
-    '  writeFileSync(match[1].trim(), "# Fake Result\\n\\n" + (input.includes("$test-skill") ? "skill seen" : "skill missing") + "\\nmodel=" + model + "\\neffort=" + effort + "\\n");',
+    '  const ledgerFile = (input.match(/Ledger file: (.+)/) || [])[1] || "";',
+    '  writeFileSync(match[1].trim(), "# Fake Result\\n\\n" + (input.includes("$test-skill") ? "skill seen" : "skill missing") + "\\nmodel=" + model + "\\neffort=" + effort + "\\nledgerFile=" + ledgerFile + "\\n");',
     '  console.log(JSON.stringify({ type: "fake-codex-done" }));',
     '});',
   ].join('\n'));
@@ -106,7 +107,9 @@ test('card skill process route creates a linked output card and launches codex',
     await waitForText(body.run.outputFile, 'skill seen');
     await waitForText(body.run.outputFile, 'model=gpt-5.4');
     await waitForText(body.run.outputFile, 'effort=model_reasoning_effort="xhigh"');
+    await waitForText(body.run.outputFile, 'ledgerFile=');
     const output = readFileSync(body.run.outputFile, 'utf8');
+    assert.match(output, /ledgerFile=.*\.decision-os\/specs\.json/);
     assert.doesNotMatch(output, /^Status: processing$/m);
     assert.doesNotMatch(output, /^Source card:/m);
     assert.doesNotMatch(output, /^Codex run:/m);

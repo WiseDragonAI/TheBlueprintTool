@@ -50,6 +50,7 @@ export async function dispatchLedgerCliCommandController(
 
   const result = await manageLedgerJsonController({
     answerOperation: command.answerOperation,
+    cardOperation: command.cardOperation,
     exportOperation: command.exportOperation,
     json: command.json,
     ledgerCommand: command.mode,
@@ -57,8 +58,9 @@ export async function dispatchLedgerCliCommandController(
     mutationFile: command.mutationFile,
     mutationOperation: command.mutationOperation,
     statusOperation: command.statusOperation,
+    zoneOperation: command.zoneOperation,
   }, ports.fs);
-  if (result.ok && (command.mode === 'export' || command.mode === 'overview' || command.mode === 'unanswered') && typeof result.value === 'string') {
+  if (result.ok && (command.mode === 'card-context' || command.mode === 'export' || command.mode === 'overview' || command.mode === 'unanswered' || command.mode === 'zone-cards') && typeof result.value === 'string') {
     ports.emit ? ports.emit(result.value) : console.log(result.value);
   }
   return result;

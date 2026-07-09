@@ -6,7 +6,7 @@ import type { Stats } from 'node:fs';
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
-export type LedgerCommand = 'answer' | 'done' | 'export' | 'help' | 'inspect' | 'migrate-decision-os' | 'mutate' | 'overview' | 'todo' | 'unanswered';
+export type LedgerCommand = 'answer' | 'card-context' | 'done' | 'export' | 'help' | 'inspect' | 'migrate-decision-os' | 'mutate' | 'overview' | 'todo' | 'unanswered' | 'zone-cards';
 
 export type AssetCommand = 'apply-gc-plan' | 'gc' | 'list-orphans' | 'list-referenced' | 'prune-json' | 'stage-referenced';
 
@@ -40,6 +40,9 @@ export type LedgerCliCommand = {
     messageFile?: string;
     threadId?: string;
   };
+  cardOperation?: {
+    cardId?: string;
+  };
   json: boolean;
   exportOperation?: {
     outputFile?: string;
@@ -50,6 +53,9 @@ export type LedgerCliCommand = {
   statusOperation?: {
     cardId?: string;
     status: 'todo' | 'done';
+  };
+  zoneOperation?: {
+    zoneId?: string;
   };
 };
 

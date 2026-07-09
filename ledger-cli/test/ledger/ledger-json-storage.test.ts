@@ -159,6 +159,67 @@ test('ledger-cli export writes a zone-grouped markdown file', async () => {
   assert.match(markdown, /## Outside Card/);
 });
 
+test('ledger-cli card-context and zone-cards expose bridge-skill context', async () => {
+  const workspace = await tempDir();
+  const decisionOs = join(workspace, '.decision-os');
+  await mkdir(join(decisionOs, 'cards', 'skills'), { recursive: true });
+  const file = join(decisionOs, 'skills.json');
+  await writeFile(join(decisionOs, 'cards', 'skills', 'card-a.md'), 'Card A body.', 'utf8');
+  await writeFile(join(decisionOs, 'cards', 'skills', 'card-b.md'), 'Card B body.', 'utf8');
+  await writeFile(file, JSON.stringify({
+    cards: [
+      { id: 'card-a', title: 'Card A', status: 'todo', cardType: 'note', x: 10, y: 10, w: 80, h: 80, comment: { contentFile: '.decision-os/cards/skills/card-a.md' } },
+      { id: 'card-b', title: 'Card B', status: 'done', x: 120, y: 10, w: 80, h: 80, comment: { contentFile: '.decision-os/cards/skills/card-b.md' } },
+      { id: 'card-outside', title: 'Outside', x: 500, y: 500, w: 80, h: 80, comment: { what: 'Outside body.' } },
+    ],
+    relationships: [
+      { id: 'rel-a-b', from: 'card-a', to: 'card-b', label: 'feeds' },
+      { id: 'rel-out-a', from: 'card-outside', to: 'card-a', label: 'mentions' },
+    ],
+    annotations: [
+      { id: 'zone-a', label: 'Zone A', variant: 'zone', x: 0, y: 0, width: 240, height: 140 },
+      { id: 'group-hidden', label: 'Hidden Group', variant: 'group', x: 0, y: 0, width: 900, height: 900 },
+    ],
+  }, null, 2), 'utf8');
+
+  const cardContext = await manageLedgerJsonController({
+    cardOperation: { cardId: 'card-a' },
+    ledgerCommand: 'card-context',
+    ledgerJsonFile: file,
+    json: true,
+  });
+  const zoneCards = await manageLedgerJsonController({
+    ledgerCommand: 'zone-cards',
+    ledgerJsonFile: file,
+    json: true,
+    zoneOperation: { zoneId: 'zone-a' },
+  });
+
+  assert.equal(cardContext.ok, true);
+  assert.equal(zoneCards.ok, true);
+  const card = JSON.parse(String(cardContext.ok ? cardContext.value : '{}')) as {
+    card: { id: string };
+    contentFile: string;
+    absoluteContentFile: string;
+    relationships: { inbound: Array<{ id: string }>; outbound: Array<{ id: string }> };
+    zone: { id: string; label: string };
+  };
+  const zone = JSON.parse(String(zoneCards.ok ? zoneCards.value : '{}')) as {
+    zone: { id: string; label: string };
+    cards: Array<{ id: string; title: string; status: string; cardType: string; contentFile: string; absoluteContentFile: string }>;
+  };
+  assert.equal(card.card.id, 'card-a');
+  assert.equal(card.zone.id, 'zone-a');
+  assert.equal(card.contentFile, '.decision-os/cards/skills/card-a.md');
+  assert.equal(card.absoluteContentFile.endsWith('/.decision-os/cards/skills/card-a.md'), true);
+  assert.deepEqual(card.relationships.inbound.map((relationship) => relationship.id), ['rel-out-a']);
+  assert.deepEqual(card.relationships.outbound.map((relationship) => relationship.id), ['rel-a-b']);
+  assert.equal(zone.zone.label, 'Zone A');
+  assert.deepEqual(zone.cards.map((entry) => entry.id), ['card-a', 'card-b']);
+  assert.equal(zone.cards[0].contentFile, '.decision-os/cards/skills/card-a.md');
+  assert.equal(zone.cards[1].absoluteContentFile.endsWith('/.decision-os/cards/skills/card-b.md'), true);
+});
+
 test('ledger-cli export hydrates Markdown card content files', async () => {
   const workspace = await tempDir();
   const decisionOs = join(workspace, '.decision-os');

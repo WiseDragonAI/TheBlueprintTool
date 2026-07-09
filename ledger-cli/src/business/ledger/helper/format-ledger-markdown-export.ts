@@ -2,15 +2,9 @@
  * WHAT: Complete ledger Markdown export grouped by canvas zones.
  * WHY: operators need a readable whole-ledger artifact ordered like the spatial ledger.
  */
-type JsonObject = Record<string, unknown>;
+import { resolveCardZone, sortByCanvasPosition, zoneTitle } from './resolve-ledger-zone-context.js';
 
-type Rect = {
-  id: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-};
+type JsonObject = Record<string, unknown>;
 
 function isRecord(value: unknown): value is JsonObject {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -20,48 +14,12 @@ function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value : undefined;
 }
 
-function numberValue(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-}
-
-function rectFor(entry: JsonObject): Rect | undefined {
-  const id = stringValue(entry.id);
-  const x = numberValue(entry.x);
-  const y = numberValue(entry.y);
-  const w = numberValue(entry.w) ?? numberValue(entry.width);
-  const h = numberValue(entry.h) ?? numberValue(entry.height);
-
-  if (!id || x === undefined || y === undefined || w === undefined || h === undefined || w <= 0 || h <= 0) {
-    return undefined;
-  }
-
-  return { id, x, y, w, h };
-}
-
-function sortByCanvasPosition<T extends JsonObject>(left: T, right: T): number {
-  const leftX = numberValue(left.x) ?? 0;
-  const rightX = numberValue(right.x) ?? 0;
-  const leftY = numberValue(left.y) ?? 0;
-  const rightY = numberValue(right.y) ?? 0;
-  return leftX - rightX || leftY - rightY || String(left.id ?? '').localeCompare(String(right.id ?? ''));
-}
-
-function zoneTitle(zone: JsonObject): string {
-  return stringValue(zone.label) ?? stringValue(zone.title) ?? stringValue(zone.name) ?? stringValue(zone.id) ?? 'Untitled zone';
-}
-
 function cardTitle(card: JsonObject): string {
   return stringValue(card.title) ?? stringValue(card.label) ?? stringValue(card.id) ?? 'Untitled card';
 }
 
 function cleanHeading(value: string): string {
   return value.replace(/\s+/g, ' ').trim() || 'Untitled';
-}
-
-function overlapArea(left: Rect, right: Rect): number {
-  const x = Math.max(0, Math.min(left.x + left.w, right.x + right.w) - Math.max(left.x, right.x));
-  const y = Math.max(0, Math.min(left.y + left.h, right.y + right.h) - Math.max(left.y, right.y));
-  return x * y;
 }
 
 function markdownJson(value: unknown): string {
@@ -170,26 +128,6 @@ function renderCard(card: JsonObject): string[] {
   return lines;
 }
 
-function zoneOwner(card: JsonObject, zones: JsonObject[]): string | undefined {
-  const cardRect = rectFor(card);
-  if (!cardRect) return undefined;
-
-  let bestZone: string | undefined;
-  let bestArea = 0;
-  for (const zone of zones) {
-    const zoneRect = rectFor(zone);
-    if (!zoneRect) continue;
-
-    const area = overlapArea(cardRect, zoneRect);
-    if (area > bestArea) {
-      bestArea = area;
-      bestZone = zoneRect.id;
-    }
-  }
-
-  return bestArea > 0 ? bestZone : undefined;
-}
-
 export function formatLedgerMarkdownExport(ledger: unknown): string {
   if (!isRecord(ledger)) return '# Invalid ledger\n';
 
@@ -201,7 +139,7 @@ export function formatLedgerMarkdownExport(ledger: unknown): string {
   const cardsByZone = new Map<string, JsonObject[]>();
   const unzonedCards: JsonObject[] = [];
   for (const card of cards) {
-    const ownerId = zoneOwner(card, zones);
+    const ownerId = String(resolveCardZone(card, zones)?.id ?? '');
     if (!ownerId) {
       unzonedCards.push(card);
       continue;
