@@ -4,6 +4,7 @@
  */
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
 import { resizeSelectedCardsToContent } from '../../card/effect/resize-selected-cards-to-content.js';
+import { resumeExternallyStartedCardSkillRun } from '../../codex/effect/poll-card-skill-run.js';
 import { commitActiveLedgerMutation } from '../../ledger/effect/commit-active-ledger-mutation.js';
 import { loadActiveLedgerState } from '../../ledger/effect/load-active-ledger-state.js';
 import { persistState } from '../../persistence/effect/persist-state.js';
@@ -16,8 +17,13 @@ let refreshInFlight = false;
 let threadRefreshInFlight = false;
 
 type ContentChangeEvent = {
+  cardId?: string;
   contentFile?: string;
   kind?: string;
+  ledgerId?: string;
+  outputCardId?: string;
+  reason?: string;
+  runId?: string;
 };
 
 type LedgerRefreshOptions = {
@@ -27,14 +33,29 @@ type LedgerRefreshOptions = {
 function contentEventPayload(event: Event): ContentChangeEvent {
   const data = String((event as MessageEvent).data ?? '');
   try {
-    const parsed = JSON.parse(data) as { contentFile?: unknown; kind?: unknown };
+    const parsed = JSON.parse(data) as Record<string, unknown>;
     return {
+      cardId: typeof parsed.cardId === 'string' ? parsed.cardId : '',
       contentFile: typeof parsed.contentFile === 'string' ? parsed.contentFile : '',
-      kind: typeof parsed.kind === 'string' ? parsed.kind : ''
+      kind: typeof parsed.kind === 'string' ? parsed.kind : '',
+      ledgerId: typeof parsed.ledgerId === 'string' ? parsed.ledgerId : '',
+      outputCardId: typeof parsed.outputCardId === 'string' ? parsed.outputCardId : '',
+      reason: typeof parsed.reason === 'string' ? parsed.reason : '',
+      runId: typeof parsed.runId === 'string' ? parsed.runId : ''
     };
   } catch {
     return {};
   }
+}
+
+function maybeResumeCodexRunWidget(payload: ContentChangeEvent): void {
+  const reason = String(payload.reason ?? '');
+  if (!reason.startsWith('codex-') || !reason.endsWith('-started')) return;
+  const ledgerId = String(payload.ledgerId ?? '').trim();
+  const cardId = String(payload.outputCardId || payload.cardId || '').trim();
+  const runId = String(payload.runId ?? '').trim();
+  if (!ledgerId || !cardId || !runId) return;
+  resumeExternallyStartedCardSkillRun({ ledgerId, cardId, runId });
 }
 
 function normalizedContentFile(value: unknown): string {
@@ -150,8 +171,10 @@ export function subscribeLedgerContentEvents(): void {
     }
     requestLedgerContentRefresh('card-content-change', { contentFile: payload.contentFile });
   });
-  events.addEventListener('ledger-content-change', () => {
-    requestLedgerContentRefresh('ledger-content-change');
+  events.addEventListener('ledger-content-change', (event) => {
+    const payload = contentEventPayload(event);
+    maybeResumeCodexRunWidget(payload);
+    requestLedgerContentRefresh(payload.reason || 'ledger-content-change');
   });
   events.onerror = () => {
     telemetry('ledger-content-refresh-stream-error', {});

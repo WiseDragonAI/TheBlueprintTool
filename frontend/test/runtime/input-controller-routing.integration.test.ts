@@ -223,6 +223,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   const skillModal = source('frontend/src/runtime/codex/effect/render-skill-modal.ts');
   const cardDetailSkillRunWidget = source('frontend/src/runtime/codex/component/render-card-skill-run-widget.ts');
   const cardDetailSkillRunPoller = source('frontend/src/runtime/codex/effect/poll-card-skill-run.ts');
+  const ledgerContentEvents = source('frontend/src/runtime/refresh/effect/subscribe-ledger-content-events.ts');
   const threadNotes = source('frontend/src/runtime/thread/effect/render-thread-notes.ts');
   assert.match(skillModal, /resultsScrollTop/);
   assert.match(skillModal, /querySelector<HTMLDivElement>\('\.skill-results'\)\?\.scrollTop/);
@@ -246,6 +247,8 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(cardDetailSkillRunPoller, /requestAnimationFrame/);
   assert.match(cardDetailSkillRunPoller, /now - poller\.lastClockPaintMs >= 33/);
   assert.match(cardDetailSkillRunPoller, /terminalSummaries\.set\(key, summary\)/);
+  assert.match(cardDetailSkillRunPoller, /export function resumeExternallyStartedCardSkillRun/);
+  assert.match(cardDetailSkillRunPoller, /terminalSummaries\.delete\(key\)/);
   assert.match(cardDetailSkillRunPoller, /String\(minutes\)\.padStart\(2, '0'\)/);
   assert.match(cardDetailSkillRunPoller, /Turn Completed in \$\{durationLabel\(summary\.elapsedMs\)\}/);
   assert.match(cardDetailSkillRunPoller, /startedAtMs: number/);
@@ -255,7 +258,11 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.doesNotMatch(cardDetailSkillRunPoller, /setInterval/);
   assert.match(cardDetailSkillRunPoller, /schedulePoll\(poller, 0\)/);
   assert.match(cardDetailSkillRunPoller, /summary\.status === 'running'/);
-  assert.match(cardDetailSkillRunPoller, /async function continueRun\(poller: Poller\): Promise<void> \{[\s\S]*poller\.startedAtMs = Date\.now\(\);[\s\S]*poller\.element\.dataset\.runStatus = 'running';[\s\S]*requestCardSkillRunContinue/);
+  assert.match(cardDetailSkillRunPoller, /async function continueRun\(poller: Poller\): Promise<void> \{[\s\S]*paintExternallyStartedRun\(poller\);[\s\S]*requestCardSkillRunContinue/);
+  assert.match(cardDetailSkillRunPoller, /function paintExternallyStartedRun\(poller: Poller\): void \{[\s\S]*poller\.startedAtMs = Date\.now\(\);[\s\S]*poller\.element\.dataset\.runStatus = 'running';/);
+  assert.match(ledgerContentEvents, /resumeExternallyStartedCardSkillRun/);
+  assert.match(ledgerContentEvents, /reason\.startsWith\('codex-'\)/);
+  assert.match(ledgerContentEvents, /reason\.endsWith\('-started'\)/);
   assert.match(threadNotes, /codexNoteClass\(note\)/);
   assert.match(threadNotes, /is-codex-run-event/);
   assert.doesNotMatch(controlOverlay, /selection\.cardIds/);

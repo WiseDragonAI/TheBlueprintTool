@@ -220,6 +220,23 @@ function setContinueButtonState(button: HTMLButtonElement, state: 'ready' | 'sta
   button.textContent = state === 'starting' ? 'Continuing' : 'Continue';
 }
 
+function paintExternallyStartedRun(poller: Poller): void {
+  poller.terminal = false;
+  poller.continueInFlight = false;
+  poller.since = 0;
+  poller.detachedChecks = 0;
+  poller.startedAtMs = Date.now();
+  poller.element.dataset.runStatus = 'running';
+  setText(poller.element, '[data-codex-run-status]', 'RUNNING');
+  setText(poller.element, '[data-codex-run-latest]', 'Continuing session');
+  setCancelButtonVisible(poller.element, true);
+  setContinueButtonVisible(poller.element, false);
+  const cancel = cancelButton(poller.element);
+  if (cancel) setCancelButtonState(cancel, 'ready');
+  showTimer(poller.element);
+  startFrontendClock(poller);
+}
+
 function bindCancelButton(poller: Poller): void {
   const button = cancelButton(poller.element);
   if (!button) return;
@@ -277,15 +294,7 @@ async function continueRun(poller: Poller): Promise<void> {
   terminalSummaries.delete(key);
   pollers.set(key, poller);
   setContinueButtonState(button, 'starting');
-  poller.element.dataset.runStatus = 'running';
-  setText(poller.element, '[data-codex-run-status]', 'RUNNING');
-  setText(poller.element, '[data-codex-run-latest]', 'Continuing session');
-  setCancelButtonVisible(poller.element, true);
-  setContinueButtonVisible(poller.element, false);
-  const cancel = cancelButton(poller.element);
-  if (cancel) setCancelButtonState(cancel, 'ready');
-  showTimer(poller.element);
-  startFrontendClock(poller);
+  paintExternallyStartedRun(poller);
   debugContinue(traceId, 'optimistic-running-painted', pollerDebugState(poller));
   const result = await requestCardSkillRunContinue({ ledgerId: poller.ledgerId, cardId: poller.cardId, runId: poller.runId, traceId });
   poller.continueInFlight = false;
@@ -371,11 +380,23 @@ async function poll(poller: Poller): Promise<void> {
   }
 }
 
+export function resumeExternallyStartedCardSkillRun(input: { ledgerId: string; cardId: string; runId: string }): boolean {
+  const key = pollerKey(input);
+  terminalSummaries.delete(key);
+  const poller = pollers.get(key);
+  if (!poller) return false;
+  paintExternallyStartedRun(poller);
+  pollers.set(key, poller);
+  schedulePoll(poller, 0);
+  return true;
+}
+
 export function bindCardSkillRunWidget(input: { ledgerId: string; cardId: string; runId: string; element: HTMLElement }): void {
   const key = pollerKey(input);
   const terminalSummary = terminalSummaries.get(key);
   if (terminalSummary) {
     const poller: Poller = { ...input, since: terminalSummary.lineCount, startedAtMs: runStartedAt(input.runId), timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, continueTraceId: '', detachedChecks: 0, terminal: true };
+    pollers.set(key, poller);
     paintWidget(input.element, terminalSummary);
     bindCancelButton(poller);
     bindContinueButton(poller);

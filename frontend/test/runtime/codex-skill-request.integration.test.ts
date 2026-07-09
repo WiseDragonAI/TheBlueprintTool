@@ -6,8 +6,62 @@ import { requestCardSkillRunCancel } from '../../src/runtime/codex/effect/reques
 import { requestCardSkillRunContinue } from '../../src/runtime/codex/effect/request-card-skill-run-continue.js';
 import { requestCardSkillRunStatus } from '../../src/runtime/codex/effect/request-card-skill-run-status.js';
 import { requestThreadCodexProcess } from '../../src/runtime/codex/effect/request-thread-codex-process.js';
+import { bindCardSkillRunWidget, resumeExternallyStartedCardSkillRun } from '../../src/runtime/codex/effect/poll-card-skill-run.js';
 import { cardCodexRunId } from '../../src/runtime/codex/helper/card-codex-run-id.js';
 import { threadCodexCardId } from '../../src/runtime/codex/helper/thread-codex-card-id.js';
+
+type FakeNode = {
+  dataset: Record<string, string>;
+  disabled: boolean;
+  hidden: boolean;
+  onclick?: (event: Event) => void;
+  setAttribute: () => void;
+  textContent: string;
+};
+
+function fakeNode(): FakeNode {
+  return {
+    dataset: {},
+    disabled: false,
+    hidden: false,
+    setAttribute() {},
+    textContent: ''
+  };
+}
+
+function fakeCodexRunWidget(): HTMLElement & { nodes: Record<string, FakeNode> } {
+  const selectors = [
+    '[data-codex-run-cancel]',
+    '[data-codex-run-continue]',
+    '[data-codex-run-effort]',
+    '[data-codex-run-files]',
+    '[data-codex-run-latest]',
+    '[data-codex-run-messages]',
+    '[data-codex-run-metadata]',
+    '[data-codex-run-model]',
+    '[data-codex-run-source]',
+    '[data-codex-run-status]',
+    '[data-codex-run-timer]',
+    '[data-codex-run-tools]'
+  ];
+  const nodes = Object.fromEntries(selectors.map((selector) => [selector, fakeNode()])) as Record<string, FakeNode>;
+  return {
+    dataset: {},
+    nodes,
+    querySelector(selector: string) {
+      return nodes[selector] ?? null;
+    }
+  } as unknown as HTMLElement & { nodes: Record<string, FakeNode> };
+}
+
+async function waitFor(predicate: () => boolean): Promise<void> {
+  const deadline = Date.now() + 1000;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.fail('Timed out waiting for condition.');
+}
 
 test('loadCodexSkills returns server skill summaries', async () => {
   const previousFetch = globalThis.fetch;
@@ -126,6 +180,69 @@ test('requestCardSkillRunStatus queries derived run progress', async () => {
     assert.equal(result.nextSince, 8);
     assert.deepEqual(result.metadata, { sourceCardTitle: 'Source Card', sourceThreadId: '', codexModel: 'gpt-5.5', codexEffort: 'xhigh' });
   } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('externally started Codex runs clear terminal widget cache and restart polling', async () => {
+  const previousDocument = (globalThis as unknown as { document?: unknown }).document;
+  const previousFetch = globalThis.fetch;
+  const previousWindow = (globalThis as unknown as { window?: unknown }).window;
+  const previousCustomEvent = (globalThis as unknown as { CustomEvent?: unknown }).CustomEvent;
+  const requests: string[] = [];
+  try {
+    (globalThis as unknown as { document: unknown }).document = { contains: () => true };
+    (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
+    (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
+      detail: unknown;
+      constructor(_name: string, init?: { detail?: unknown }) {
+        this.detail = init?.detail;
+      }
+    };
+    globalThis.fetch = (async (url: string) => {
+      requests.push(url);
+      return new Response(JSON.stringify({
+        ok: true,
+        status: 'complete',
+        startedAt: '2026-07-08T00:00:00.000Z',
+        elapsedMs: 1000,
+        lineCount: requests.length === 1 ? 8 : 12,
+        nextSince: requests.length === 1 ? 8 : 12,
+        toolCallCount: 0,
+        agentMessageCount: 1,
+        fileChangeCount: 0,
+        thinkingCount: 0,
+        persistedEventCount: 1,
+        metadata: { sourceCardTitle: 'Source Card', sourceThreadId: '', codexModel: 'gpt-5.5', codexEffort: 'xhigh' },
+        latestEvent: { title: 'Turn completed' },
+        events: []
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      });
+    }) as typeof fetch;
+
+    const firstWidget = fakeCodexRunWidget();
+    bindCardSkillRunWidget({ ledgerId: 'specs', cardId: 'card-a', runId: 'codex-skill-3000-cache', element: firstWidget });
+    await waitFor(() => requests.length === 1);
+    await waitFor(() => firstWidget.nodes['[data-codex-run-status]'].textContent === 'COMPLETE');
+
+    const cachedWidget = fakeCodexRunWidget();
+    bindCardSkillRunWidget({ ledgerId: 'specs', cardId: 'card-a', runId: 'codex-skill-3000-cache', element: cachedWidget });
+    assert.equal(cachedWidget.nodes['[data-codex-run-status]'].textContent, 'COMPLETE');
+
+    const resumed = resumeExternallyStartedCardSkillRun({ ledgerId: 'specs', cardId: 'card-a', runId: 'codex-skill-3000-cache' });
+    assert.equal(resumed, true);
+    assert.equal(cachedWidget.nodes['[data-codex-run-status]'].textContent, 'RUNNING');
+    assert.equal(cachedWidget.nodes['[data-codex-run-latest]'].textContent, 'Continuing session');
+    assert.equal(cachedWidget.nodes['[data-codex-run-cancel]'].hidden, false);
+    assert.equal(cachedWidget.nodes['[data-codex-run-continue]'].hidden, true);
+    await waitFor(() => requests.length === 2);
+    assert.equal(requests[1], '/api/codex/skills/runs/codex-skill-3000-cache?ledgerId=specs&cardId=card-a&since=0');
+  } finally {
+    (globalThis as unknown as { document?: unknown }).document = previousDocument;
+    (globalThis as unknown as { window?: unknown }).window = previousWindow;
+    (globalThis as unknown as { CustomEvent?: unknown }).CustomEvent = previousCustomEvent;
     globalThis.fetch = previousFetch;
   }
 });
