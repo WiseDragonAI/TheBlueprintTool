@@ -92,6 +92,7 @@ const categoryBySkillName: Record<string, SkillCategory> = {
   spreadsheets: 'Artifacts',
   'strategic-narrative': 'Marketing',
   'task-dependency': 'Implementation',
+  'task-group-completeness': 'Implementation',
   'ticket-solver': 'Implementation',
   'typography-system': 'Interface',
   'ui-audit': 'Interface',
