@@ -1,13 +1,13 @@
 ---
 name: implementation-orchestrator
-description: Launch implementation subagents from the current task grouping card, reference the linked task-list card, continue until 100% of task groups have returned completed worker results, and produce the implementation batch handoff.
+description: Launch implementation subagents from the current task grouping card, reference the linked task-list card, append each worker result as markdown when it returns, continue until 100% of task groups have returned completed worker results, and produce the implementation batch handoff.
 ---
 
 # Implementation Orchestrator
 
 ## A. Scope
 
-1. **Purpose:** Launch **implementation subagents** from the current task grouping output, continue until **100% of task groups** have returned completed `Worker Results`, and produce `Implementation Batch Handoff`.
+1. **Purpose:** Launch **implementation subagents** from the current task grouping output, append each returned `Worker Results` report as **markdown result sections**, continue until **100% of task groups** have returned completed `Worker Results`, and produce `Implementation Batch Handoff`.
 
 ---
 
@@ -29,10 +29,11 @@ description: Launch implementation subagents from the current task grouping card
 4. **Create prompt:** Build one subagent prompt per ready group with `group_id`, `task_ids`, the `task-dependency` card path, the `task-list` card path, and the group `dispatch_notes`.
 5. **Reference source cards:** Tell the subagent that it must read the referenced cards before editing and use those cards as the source of truth for `target_files`, `target_symbols`, `done_when`, `acceptance checks`, `source references`, and `forbidden scopes`.
 6. **Launch subagents:** Launch **one implementation subagent per ready group** and keep each subagent scoped to its assigned group.
-7. **Collect returns:** Collect each returned `Worker Results` payload with `completedTasks`, `changedFiles`, `blockers`, `assumptions`, and worker notes.
-8. **Advance gates:** After a dispatch wave returns, mark completed `group_id` values, re-read `Sequential Gates`, and select the next ready groups.
-9. **Continue dispatch:** Repeat `Select groups`, `Create prompt`, `Launch subagents`, `Collect returns`, and `Advance gates` until **100% of `Independent Task Groups`** have returned completed `Worker Results`.
-10. **Produce handoff:** Produce `Implementation Batch Handoff` only after every `group_id` in `Independent Task Groups` has completed.
+7. **Collect return:** When a subagent returns, collect its `Worker Results` payload with `completedTasks`, `changedFiles`, `blockers`, `assumptions`, and worker notes.
+8. **Write result section:** Immediately append the returned `Worker Results` as a normal **markdown section** in the output card before dispatching later gated groups.
+9. **Advance gates:** After returned results are written to the output card, mark completed `group_id` values, re-read `Sequential Gates`, and select the next ready groups.
+10. **Continue dispatch:** Repeat `Select groups`, `Create prompt`, `Launch subagents`, `Collect return`, `Write result section`, and `Advance gates` until **100% of `Independent Task Groups`** have returned completed `Worker Results`.
+11. **Produce handoff:** Produce `Implementation Batch Handoff` only after every `group_id` in `Independent Task Groups` has completed.
 
 ---
 
@@ -55,7 +56,16 @@ description: Launch implementation subagents from the current task grouping card
 
 ---
 
-## F. Hard Rules
+## F. Result Card Writing
+
+1. **Incremental write:** Append each returned `Worker Results` report to the output card as soon as that subagent finishes its assigned `group_id`.
+2. **Markdown section:** Write each worker report as normal markdown under a new section for that `group_id`; do not wrap the report in a fenced code block.
+3. **Result content:** Preserve the worker report content that matters for implementation handoff: `group_id`, `task_ids`, `completedTasks`, `changedFiles`, `blockers`, `assumptions`, and worker notes.
+4. **Gate ordering:** Write the completed group result section before dispatching any later group that becomes ready from that completion.
+
+---
+
+## G. Hard Rules
 
 1. **No implementation:** Do not implement product code.
 2. **No commits:** Do not create commits.
@@ -66,3 +76,4 @@ description: Launch implementation subagents from the current task grouping card
 7. **Stop point:** End with `Implementation Batch Handoff` only after **100% group completion**.
 8. **Incomplete output:** When `Operator Blockers` prevent **100% group completion**, name each blocked `group_id`, blocked `task_ids`, and exact missing condition.
 9. **Result-only output:** Keep the output card to `Worker Results`, `Group Completion Map`, `Implementation Batch Handoff`, and `Operator Blockers`; exclude subagent prompt text and stored prompt references.
+10. **No result code blocks:** Do not put worker result reports inside fenced code blocks.
