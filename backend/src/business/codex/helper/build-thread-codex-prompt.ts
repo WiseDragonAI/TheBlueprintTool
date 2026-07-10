@@ -1,6 +1,6 @@
 /**
- * WHAT: Builds the first-run prompt for a Codex session scoped to one decision-os thread.
- * WHY: The thread-panel action needs a direct execution contract scoped to the selected card thread.
+ * WHAT: Builds launch-scoped developer instructions and stdin context for one decision-os thread.
+ * WHY: Stable execution rules belong in Codex configuration while the current task bodies belong on stdin.
  */
 export function buildThreadCodexPrompt(input: {
   workspaceRoot: string;
@@ -13,48 +13,57 @@ export function buildThreadCodexPrompt(input: {
   threadMarkdownFile: string;
   threadMarkdown: string;
   runSummaryFile: string;
-}): string {
-  return [
+  operatorNoteTimestamp: string;
+}): { developerInstructions: string; taskContext: string } {
+  const developerInstructions = [
+    '## A. Scope',
+    '',
+    '1. **Task type:** Treat the supplied `decision-os` thread only.',
+    `2. **Workspace root:** \`${input.workspaceRoot}\`.`,
+    `3. **Ledger file:** \`${input.ledgerFile}\`.`,
+    `4. **Card id:** \`${input.cardId}\`.`,
+    `5. **Prompt card title at launch:** ${input.cardTitle}.`,
+    `6. **Card markdown file:** \`${input.cardMarkdownFile}\`.`,
+    `7. **Thread id:** \`${input.threadId}\`.`,
+    `8. **Thread markdown file:** \`${input.threadMarkdownFile}\`.`,
+    `9. **Run summary file:** \`${input.runSummaryFile}\`.`,
+    `10. **Operator timestamp:** \`${input.operatorNoteTimestamp}\`.`,
+    '11. **Runtime placeholders:** All launch values are resolved for the current workspace, card, thread, note, and run.',
+    '',
+    '---',
+    '',
+    '## B. Scoped Treatment Rules',
+    '',
+    '1. **Required reads:** Read the full thread markdown and card markdown before acting.',
+    '2. **Request source:** Treat the thread markdown as the operator request source for this run.',
+    '3. **Durable edits:** Apply requested durable edits to the card markdown and repo files with targeted patches; never delete the full card body to rewrite it.',
+    '4. **Completion reply:** Append exactly one `# AGENT` reply to the thread markdown when you finish your turn.',
+    '5. **Patch rule:** Patch the thread markdown file directly for multi-paragraph replies.',
+    '6. **Ledger guard:** Do not edit the ledger JSON unless the operator explicitly asks for it.',
+    '',
+    '---',
+    '',
+    '## C. Thread Reply Contract',
+    '',
+    '1. **Reply heading:** Start the agent reply with `# AGENT`.',
+    '2. **Metadata comment:** Add `<!-- decision-os:note {"id":"note-agent-{epoch-ms}-{8-hex}","timestamp":"{ISO-8601}"} -->` with newly generated values.',
+    '3. **Reply body:** Put the concrete answer markdown after the metadata comment.',
+    '4. **Allowed roles:** Keep top-level thread messages limited to `# OPERATOR` and `# AGENT`.',
+    '',
+    '---',
+    '',
+    '## D. Card Markdown Formatting Rules',
+    '',
+    '1. **Section headings:** Use `H2` headings prefixed with uppercase section letters, for example `## A. Scope`.',
+    '2. **Section dividers:** Put `---` between sections.',
+    '3. **Requirement lists:** Use numbered lists for normal card requirements.',
+    '4. **Important labels:** Start important requirement items with bold labels.',
+    '5. **Exact values:** Use backticks for exact file paths, config keys, API routes, statuses, and literal values.',
+    '6. **Implementation prose:** Keep prose concrete and implementation-ready.',
+  ].join('\n');
+
+  const taskContext = [
     'Execute the operator request from one decision-os card thread.',
-    '',
-    'Scope:',
-    `Workspace root: ${input.workspaceRoot}`,
-    `Ledger file: ${input.ledgerFile}`,
-    `Card id: ${input.cardId}`,
-    `Card title: ${input.cardTitle}`,
-    `Card markdown file: ${input.cardMarkdownFile}`,
-    `Thread id: ${input.threadId}`,
-    `Thread markdown file: ${input.threadMarkdownFile}`,
-    `Run summary file: ${input.runSummaryFile}`,
-    '',
-    'Thread execution contract:',
-    '1. Read the full thread markdown and card markdown before acting.',
-    '2. Use the thread markdown as the operator request source for this run.',
-    '3. Apply requested durable edits to the card markdown or repo files as needed.',
-    '4. Append exactly one # AGENT reply to the thread markdown when the work is complete or blocked.',
-    '5. Use only # OPERATOR and # AGENT as top-level thread message headings.',
-    '6. For multi-paragraph replies, patch the thread markdown file directly.',
-    '7. Do not inspect or modify unrelated threads.',
-    '8. Do not change card status unless the operator explicitly asks.',
-    '9. Do not manually edit ledger JSON unless changing structured card data is explicitly required.',
-    '10. Keep unrelated files unchanged.',
-    '',
-    'Thread reply metadata format:',
-    '```markdown',
-    '# AGENT',
-    '<!-- decision-os:note {"id":"note-agent-<epoch-ms>-<8-hex>","timestamp":"<ISO-8601>"} -->',
-    '',
-    'Concrete answer markdown here.',
-    '```',
-    '',
-    'Card content formatting rules when rewriting durable card prose:',
-    '1. Use H2 section headings.',
-    '2. Prefix H2 headings with an uppercase section letter, for example ## A. Scope.',
-    '3. Put --- horizontal rules between sections.',
-    '4. Use numbered lists for normal card requirements.',
-    '5. Use bold labels at the start of important requirement items.',
-    '6. Use backticks for exact file paths, config keys, API routes, statuses, and literal values.',
-    '7. Keep prose concrete and implementation-ready.',
     '',
     'Current thread markdown:',
     '```markdown',
@@ -65,8 +74,7 @@ export function buildThreadCodexPrompt(input: {
     '```markdown',
     input.cardMarkdown,
     '```',
-    '',
-    'Use English only.',
-    'When finished, update the run summary file with a concise summary if it helps the operator inspect the run card.',
   ].join('\n');
+
+  return { developerInstructions, taskContext };
 }

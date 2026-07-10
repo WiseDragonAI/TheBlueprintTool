@@ -104,10 +104,20 @@ function threadContentFile(input: { decisionOsRoot: string; ledger: AnyRecord; l
   return resolveThreadContentFile(input.decisionOsRoot, threadFiles[input.threadId]) ?? '';
 }
 
-function threadMarkdownForPrompt(input: { decisionOsRoot: string; ledger: AnyRecord; threadId: string }): string {
+function threadMarkdownForPrompt(input: { decisionOsRoot: string; ledger: AnyRecord; threadId: string }): { markdown: string; operatorNoteTimestamp: string } | null {
   hydrateLedgerThreadNotes(input.ledger, input.decisionOsRoot);
-  const notes = normalizeLedgerNotes(input.ledger)[input.threadId] ?? [];
-  return formatThreadMarkdown(notes.filter((note) => !isCodexThreadArtifactNote(note)));
+  const notes = (normalizeLedgerNotes(input.ledger)[input.threadId] ?? [])
+    .filter((note) => !isCodexThreadArtifactNote(note));
+  let operatorNote: AnyRecord | undefined;
+  for (let index = notes.length - 1; index >= 0; index -= 1) {
+    if (String(notes[index].role ?? '').toLowerCase() !== 'operator') continue;
+    operatorNote = notes[index];
+    break;
+  }
+  const operatorNoteTimestamp = typeof operatorNote?.timestamp === 'string' ? operatorNote.timestamp : '';
+  const parsedTimestamp = new Date(operatorNoteTimestamp);
+  if (!operatorNoteTimestamp || Number.isNaN(parsedTimestamp.getTime()) || parsedTimestamp.toISOString() !== operatorNoteTimestamp) return null;
+  return { markdown: formatThreadMarkdown(notes), operatorNoteTimestamp };
 }
 
 function publicRun(run: AnyRecord): AnyRecord {
@@ -148,6 +158,14 @@ export async function startThreadCodexProcessController(input: { action_payload?
   const sourceCardFile = cardContentFile({ decisionOsRoot, card: source, ledgerPath });
   const sourceThreadFile = threadContentFile({ decisionOsRoot, ledger, ledgerPath, threadId });
   if (!sourceCardFile || !sourceThreadFile) return { ok: false, statusCode: 500, error: 'Could not resolve card or thread markdown file.', cardId, threadId };
+  const threadPrompt = threadMarkdownForPrompt({ decisionOsRoot, ledger, threadId });
+  if (!threadPrompt) return {
+    ok: false,
+    statusCode: 400,
+    error: 'The latest operator note must have an exact ISO timestamp before Codex can start.',
+    cardId,
+    threadId,
+  };
 
   const runId = `codex-skill-${Date.now()}-${randomUUID().slice(0, 8)}`;
   const runDirectoryRef = `.decision-os/runs/codex-skills/${safeSegment(ledgerStem(ledgerPath))}`;
@@ -159,14 +177,6 @@ export async function startThreadCodexProcessController(input: { action_payload?
   const runSummaryFile = resolve(decisionOsRoot, runSummaryRef.replace(/^\.decision-os\//, ''));
   writeFileSync(runSummaryFile, [`# Thread Codex Run`, '', `Status: processing`, `Source card: ${String(source.title ?? cardId)}`, `Source thread: ${threadId}`, `Codex run: ${runId}`].join('\n'), 'utf8');
 
-  const command = resolveCodexCommand({ workspaceRoot, runtime, codexModel: requestedCodexModel, codexEffort: requestedCodexEffort });
-  source.codexThreadRunId = runId;
-  source.codexThreadRunOutputFile = runSummaryRef;
-  source.codexRunModel = command.model;
-  source.codexRunEffort = command.effort;
-  stripHydratedThreadNotes(ledger);
-  writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2), 'utf8');
-
   const prompt = buildThreadCodexPrompt({
     workspaceRoot,
     ledgerFile: ledgerPath,
@@ -176,9 +186,23 @@ export async function startThreadCodexProcessController(input: { action_payload?
     cardMarkdown: readFileSync(sourceCardFile, 'utf8'),
     threadId,
     threadMarkdownFile: sourceThreadFile,
-    threadMarkdown: threadMarkdownForPrompt({ decisionOsRoot, ledger, threadId }),
+    threadMarkdown: threadPrompt.markdown,
     runSummaryFile,
+    operatorNoteTimestamp: threadPrompt.operatorNoteTimestamp,
   });
+  const command = resolveCodexCommand({
+    workspaceRoot,
+    runtime,
+    codexModel: requestedCodexModel,
+    codexEffort: requestedCodexEffort,
+    developerInstructions: prompt.developerInstructions,
+  });
+  source.codexThreadRunId = runId;
+  source.codexThreadRunOutputFile = runSummaryRef;
+  source.codexRunModel = command.model;
+  source.codexRunEffort = command.effort;
+  stripHydratedThreadNotes(ledger);
+  writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2), 'utf8');
 
   const child = spawn(command.command, command.args, { cwd: workspaceRoot, stdio: ['pipe', 'pipe', 'pipe'] });
   const stdout = createWriteStream(stdoutFile, { flags: 'a' });
@@ -200,7 +224,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
   child.stdout.on('data', (chunk: Buffer) => runEventIngestor.ingest(chunk));
   child.stdout.pipe(stdout, { end: false });
   child.stderr.pipe(stderr, { end: false });
-  child.stdin.end(prompt);
+  child.stdin.end(prompt.taskContext);
 
   const run = {
     id: runId,

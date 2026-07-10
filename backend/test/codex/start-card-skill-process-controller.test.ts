@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
@@ -240,6 +240,8 @@ test('thread codex process route anchors the run widget on the source card and s
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-thread-codex-'));
   const fakeCodex = join(workspace, 'fake-codex-thread.mjs');
   const inputFile = join(workspace, 'thread-input.txt');
+  const argsFile = join(workspace, 'thread-args.json');
+  const launchesFile = join(workspace, 'thread-launches.txt');
   mkdirSync(join(workspace, '.decision-os'), { recursive: true });
   writeFileSync(join(workspace, '.decision-os', 'state.json'), JSON.stringify({
     ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }]
@@ -280,11 +282,16 @@ test('thread codex process route anchors the run widget on the source card and s
     'process.stdin.on("data", (chunk) => { input += chunk; });',
     'process.stdin.on("end", () => {',
     `  writeFileSync(${JSON.stringify(inputFile)}, input);`,
-    '  const match = input.match(/Run summary file: (.+)/);',
-    '  const threadMatch = input.match(/Thread markdown file: (.+)/);',
+    `  writeFileSync(${JSON.stringify(argsFile)}, JSON.stringify(process.argv.slice(2)));`,
+    `  appendFileSync(${JSON.stringify(launchesFile)}, "launch\\n");`,
+    '  const args = process.argv.slice(2);',
+    '  const developerArgument = args.find((argument) => argument.startsWith("developer_instructions=")) || "";',
+    '  const developerInstructions = JSON.parse(developerArgument.slice("developer_instructions=".length));',
+    '  const match = developerInstructions.match(/\\*\\*Run summary file:\\*\\* `([^`]+)`/);',
+    '  const threadMatch = developerInstructions.match(/\\*\\*Thread markdown file:\\*\\* `([^`]+)`/);',
     '  if (!match || !threadMatch) process.exit(2);',
-    '  writeFileSync(match[1].trim(), "# Fake Thread Run\\n\\nscoped\\n");',
-    '  appendFileSync(threadMatch[1].trim(), "\\n\\n# AGENT\\n<!-- decision-os:note {\\"id\\":\\"note-agent-scoped-final\\",\\"timestamp\\":\\"2026-07-10T01:02:00.000Z\\"} -->\\n\\nScoped final answer.\\n");',
+    '  writeFileSync(match[1], "# Fake Thread Run\\n\\nscoped\\n");',
+    '  appendFileSync(threadMatch[1], "\\n\\n# AGENT\\n<!-- decision-os:note {\\"id\\":\\"note-agent-scoped-final\\",\\"timestamp\\":\\"2026-07-10T01:02:00.000Z\\"} -->\\n\\nScoped final answer.\\n");',
     '  console.log(JSON.stringify({ type: "thread.started", thread_id: "session-thread-a" }));',
     '  console.log(JSON.stringify({ type: "turn.started" }));',
     '  console.log(JSON.stringify({ type: "item.completed", item: { id: "thinking-1", type: "reasoning", text: "Thinking remains in the run log." } }));',
@@ -328,13 +335,31 @@ test('thread codex process route anchors the run widget on the source card and s
 
     await waitForText(inputFile, 'Execute the operator request from one decision-os card thread.');
     const input = readFileSync(inputFile, 'utf8');
-    assert.match(input, /Card markdown file: .*\.decision-os\/cards\/specs\/card-a\.md/);
-    assert.match(input, /Thread markdown file: .*\.decision-os\/threads\/specs\/thread-card-a\.md/);
     assert.match(input, /Please update this exact card from the thread\./);
     assert.doesNotMatch(input, /Codex internal output should not be prompt context\./);
     assert.match(input, /Existing card body/);
-    assert.match(input, /Do not inspect or modify unrelated threads\./);
+    assert.doesNotMatch(input, /^## A\. Scope/m);
+    assert.doesNotMatch(input, /Run summary file:/);
     assert.doesNotMatch(input, /treat-open-notes|open notes|ledger-cli unanswered|Query Open Notes|For every pending operator note/i);
+
+    await waitForText(argsFile, 'developer_instructions=');
+    const args = JSON.parse(readFileSync(argsFile, 'utf8')) as string[];
+    const developerArgument = args.find((argument) => argument.startsWith('developer_instructions='));
+    assert.ok(developerArgument);
+    const developerInstructions = JSON.parse(developerArgument.slice('developer_instructions='.length)) as string;
+    assert.match(developerInstructions, /^## A\. Scope/m);
+    assert.match(developerInstructions, /^## D\. Card Markdown Formatting Rules/m);
+    assert.match(developerInstructions, /\*\*Workspace root:\*\* `[^`]+`/);
+    assert.match(developerInstructions, /\*\*Ledger file:\*\* `.*\.decision-os\/specs\.json`/);
+    assert.match(developerInstructions, /\*\*Card id:\*\* `card-a`/);
+    assert.match(developerInstructions, /\*\*Prompt card title at launch:\*\* Thread Card/);
+    assert.match(developerInstructions, /\*\*Card markdown file:\*\* `.*\.decision-os\/cards\/specs\/card-a\.md`/);
+    assert.match(developerInstructions, /\*\*Thread id:\*\* `thread-card-a`/);
+    assert.match(developerInstructions, /\*\*Thread markdown file:\*\* `.*\.decision-os\/threads\/specs\/thread-card-a\.md`/);
+    assert.match(developerInstructions, /\*\*Run summary file:\*\* `.*\.decision-os\/runs\/codex-skills\/specs\/codex-skill-/);
+    assert.match(developerInstructions, /\*\*Operator timestamp:\*\* `2026-07-08T01:00:00\.000Z`/);
+    assert.doesNotMatch(developerInstructions, /Please update this exact card|Codex internal output|Existing card body/);
+    assert.doesNotMatch(developerInstructions, /<(?:workspaceRoot|ledgerFile|cardId|cardTitle|cardMarkdownFile|threadId|threadMarkdownFile|runSummaryFile|operatorNoteTimestamp)>/);
 
     const ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as {
       cards: Array<{ id: string; codexThreadRunId?: string; codexThreadRunOutputFile?: string; codexRunModel?: string; codexRunEffort?: string; comment?: { contentFile?: string } }>;
@@ -398,6 +423,21 @@ test('thread codex process route anchors the run widget on the source card and s
     assert.equal(statSync(ledgerPath).mtimeMs, ledgerMtimeBeforePolling);
     assert.equal(statSync(threadPath).mtimeMs, threadMtimeBeforePolling);
     assert.equal(eventCollector.events.length, eventCountBeforePolling);
+
+    appendFileSync(threadPath, '\n# OPERATOR\n<!-- decision-os:note {"id":"note-operator-missing-timestamp"} -->\n\nThis request has no timestamp.\n', 'utf8');
+    const launchCountBeforeRejection = readFileSync(launchesFile, 'utf8').trim().split('\n').length;
+    const runCountBeforeRejection = Object.keys(runtime.codexSkillRuns as Record<string, unknown>).length;
+    const rejectedResponse = await fetch(`${baseUrl}/api/codex/threads/process`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ledgerId: 'specs', threadId: 'thread-card-a', cardId: 'card-a' })
+    });
+    assert.equal(rejectedResponse.status, 400);
+    const rejected = await rejectedResponse.json() as { ok: boolean; error: string };
+    assert.equal(rejected.ok, false);
+    assert.match(rejected.error, /latest operator note must have an exact ISO timestamp/i);
+    assert.equal(readFileSync(launchesFile, 'utf8').trim().split('\n').length, launchCountBeforeRejection);
+    assert.equal(Object.keys(runtime.codexSkillRuns as Record<string, unknown>).length, runCountBeforeRejection);
   } finally {
     await eventCollector?.close();
     server.close();

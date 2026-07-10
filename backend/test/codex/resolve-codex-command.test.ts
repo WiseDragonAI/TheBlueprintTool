@@ -23,6 +23,18 @@ test('resolveCodexCommand honors an explicit executable setting', () => {
     assert.deepEqual(command.args.slice(0, 5), ['exec', '--dangerously-bypass-approvals-and-sandbox', '--json', '-C', workspace]);
     assert.equal(command.args.includes('gpt-5.4'), true);
     assert.equal(command.args.includes('model_reasoning_effort="low"'), true);
+    assert.equal(command.args.some((argument) => argument.startsWith('developer_instructions=')), false);
+
+    const developerInstructions = 'Line one\n"quoted" and C:\\workspace\\card';
+    const scopedCommand = resolveCodexCommand({
+      workspaceRoot: workspace,
+      runtime: { decisionOsSettings: { codexBin: bin, codexModel: 'gpt-5.4', codexReasoningEffort: 'low' } },
+      developerInstructions,
+    });
+    const encodedInstructions = scopedCommand.args.find((argument) => argument.startsWith('developer_instructions='));
+    assert.ok(encodedInstructions);
+    assert.equal(JSON.parse(encodedInstructions.slice('developer_instructions='.length)), developerInstructions);
+    assert.equal(scopedCommand.args.filter((argument) => argument === '-c').length, 2);
   } finally {
     if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
     else process.env.CODEX_BIN = previousCodexBin;

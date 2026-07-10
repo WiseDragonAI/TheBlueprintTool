@@ -109,8 +109,11 @@ export function isAllowedCodexEffort(value: unknown): boolean {
   return Boolean(allowedValue(value, codexEffortOptions));
 }
 
-export function resolveCodexCommand(input: { workspaceRoot: string; runtime: AnyRecord; codexModel?: unknown; codexEffort?: unknown }): CodexCommand {
+export function resolveCodexCommand(input: { workspaceRoot: string; runtime: AnyRecord; codexModel?: unknown; codexEffort?: unknown; developerInstructions?: string }): CodexCommand {
   const selection = resolveCodexSelection(input);
+  const developerInstructionArgs = input.developerInstructions === undefined
+    ? []
+    : ['-c', `developer_instructions=${JSON.stringify(input.developerInstructions)}`];
   return {
     command: selection.command,
     args: [
@@ -121,6 +124,7 @@ export function resolveCodexCommand(input: { workspaceRoot: string; runtime: Any
       input.workspaceRoot,
       '-c',
       `model_reasoning_effort="${selection.effort}"`,
+      ...developerInstructionArgs,
       '--model',
       selection.model,
       '-',
