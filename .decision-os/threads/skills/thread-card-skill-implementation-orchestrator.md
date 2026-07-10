@@ -31653,3 +31653,158 @@ description: Launch implementation subagents from a current task grouping card, 
 <!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-720","timestamp":"2026-07-09T18:05:29.176Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"720","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_25"} -->
 
 The diff is scoped to the card, run summary, and thread reply. I’m committing those repo-side changes now; the installed user skill and its metadata are already updated outside the repository.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-721","timestamp":"2026-07-09T18:05:33.177Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"721","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_26","codexTool":"/usr/bin/zsh -lc 'git add .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md && git commit -m \"Append worker results as markdown sections\"'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git add .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md && git commit -m "Append worker results as markdown sections"'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-722","timestamp":"2026-07-09T18:05:33.177Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"722","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_26","codexTool":"/usr/bin/zsh -lc 'git add .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md && git commit -m \"Append worker results as markdown sections\"'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git add .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md && git commit -m "Append worker results as markdown sections"'`
+Status: completed
+Exit code: 0
+
+````text
+[main 0611ad7] Append worker results as markdown sections
+ 3 files changed, 2547 insertions(+), 7 deletions(-)
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-723","timestamp":"2026-07-09T18:05:43.290Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"723","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_27"} -->
+
+Committed as `0611ad7`. I’m doing a final scoped status and skill validation check before closing.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-724","timestamp":"2026-07-09T18:05:43.290Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"724","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_28","codexTool":"/usr/bin/zsh -lc 'git status --short .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md && git log -5 --oneline'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git status --short .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md && git log -5 --oneline'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-725","timestamp":"2026-07-09T18:05:43.290Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"725","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_28","codexTool":"/usr/bin/zsh -lc 'git status --short .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md && git log -5 --oneline'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git status --short .decision-os/cards/skills/card-skill-implementation-orchestrator.md .decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md && git log -5 --oneline'`
+Status: completed
+Exit code: 0
+
+````text
+ M .decision-os/threads/skills/thread-card-skill-implementation-orchestrator.md
+0611ad7 Append worker results as markdown sections
+0d50677 Remove subagent prompts from orchestrator output
+17cadf5 Require full task group completion in orchestrator
+604ad87 Move implementation orchestrator skill to user install
+db61636 Add implementation orchestrator skill library entry
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-726","timestamp":"2026-07-09T18:05:43.290Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"726","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_29","codexTool":"/usr/bin/zsh -lc \"rg -n 'Subagent Prompts|Record the exact prompt|\"'```'\"' .decision-os/cards/skills/card-skill-implementation-orchestrator.md /home/jbb/.codex/skills/implementation-orchestrator/SKILL.md || true\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "rg -n 'Subagent Prompts|Record the exact prompt|"'```'"' .decision-os/cards/skills/card-skill-implementation-orchestrator.md /home/jbb/.codex/skills/implementation-orchestrator/SKILL.md || true"`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-727","timestamp":"2026-07-09T18:05:43.290Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"727","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_29","codexTool":"/usr/bin/zsh -lc \"rg -n 'Subagent Prompts|Record the exact prompt|\"'```'\"' .decision-os/cards/skills/card-skill-implementation-orchestrator.md /home/jbb/.codex/skills/implementation-orchestrator/SKILL.md || true\"","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc "rg -n 'Subagent Prompts|Record the exact prompt|"'```'"' .decision-os/cards/skills/card-skill-implementation-orchestrator.md /home/jbb/.codex/skills/implementation-orchestrator/SKILL.md || true"`
+Status: completed
+Exit code: 0
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-728","timestamp":"2026-07-09T18:05:43.290Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"728","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_30","codexTool":"/usr/bin/zsh -lc 'python3 /home/jbb/.codex/skills/.system/skill-creator/scripts/quick_validate.py /home/jbb/.codex/skills/implementation-orchestrator'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'python3 /home/jbb/.codex/skills/.system/skill-creator/scripts/quick_validate.py /home/jbb/.codex/skills/implementation-orchestrator'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-729","timestamp":"2026-07-09T18:05:43.290Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"729","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_30","codexTool":"/usr/bin/zsh -lc 'python3 /home/jbb/.codex/skills/.system/skill-creator/scripts/quick_validate.py /home/jbb/.codex/skills/implementation-orchestrator'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'python3 /home/jbb/.codex/skills/.system/skill-creator/scripts/quick_validate.py /home/jbb/.codex/skills/implementation-orchestrator'`
+Status: completed
+Exit code: 0
+
+````text
+Skill is valid!
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-730","timestamp":"2026-07-09T18:05:43.290Z","status":"in_progress","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"730","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_31","codexTool":"/usr/bin/zsh -lc \"cd backend && node --import tsx -e \\\"import { scanCodexSkills } from './src/business/codex/helper/scan-codex-skills.ts'; const skill = scanCodexSkills({ workspaceRoot: '..' }).find((entry) => entry.name === 'implementation-orchestrator'); console.log(JSON.stringify(skill, null, 2)); if (\"'!skill || skill.source !== '\"'user' || \"'!skill.description.includes('\"'append each worker result as markdown')) process.exit(1);\\\"\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "cd backend && node --import tsx -e \"import { scanCodexSkills } from './src/business/codex/helper/scan-codex-skills.ts'; const skill = scanCodexSkills({ workspaceRoot: '..' }).find((entry) => entry.name === 'implementation-orchestrator'); console.log(JSON.stringify(skill, null, 2)); if ("'!skill || skill.source !== '"'user' || "'!skill.description.includes('"'append each worker result as markdown')) process.exit(1);\""`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-731","timestamp":"2026-07-09T18:05:43.290Z","status":"completed","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"731","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_31","codexTool":"/usr/bin/zsh -lc \"cd backend && node --import tsx -e \\\"import { scanCodexSkills } from './src/business/codex/helper/scan-codex-skills.ts'; const skill = scanCodexSkills({ workspaceRoot: '..' }).find((entry) => entry.name === 'implementation-orchestrator'); console.log(JSON.stringify(skill, null, 2)); if (\"'!skill || skill.source !== '\"'user' || \"'!skill.description.includes('\"'append each worker result as markdown')) process.exit(1);\\\"\"","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc "cd backend && node --import tsx -e \"import { scanCodexSkills } from './src/business/codex/helper/scan-codex-skills.ts'; const skill = scanCodexSkills({ workspaceRoot: '..' }).find((entry) => entry.name === 'implementation-orchestrator'); console.log(JSON.stringify(skill, null, 2)); if ("'!skill || skill.source !== '"'user' || "'!skill.description.includes('"'append each worker result as markdown')) process.exit(1);\""`
+Status: completed
+Exit code: 0
+
+````text
+{
+  "name": "implementation-orchestrator",
+  "description": "Launch implementation subagents from a current task grouping card, reference the linked task-list card, append each worker result as markdown when it returns, continue until 100% of task groups have returned completed worker results, and produce the implementation batch handoff. Use after task grouping is ready and Codex needs to dispatch scoped implementation work through every group without directly editing product code.",
+  "source": "user",
+  "skillFile": "/home/jbb/.codex/skills/implementation-orchestrator/SKILL.md"
+}
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-732","timestamp":"2026-07-09T18:05:50.226Z","status":"Codex message","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"732","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_32"} -->
+
+Updated and committed as `0611ad7 Append worker results as markdown sections`.
+
+Changes:
+- Added `Result Card Writing` to the card and installed user skill.
+- Worker results must now be appended immediately as normal markdown under a new `group_id` section.
+- Worker result reports must not be wrapped in fenced code blocks.
+- Results must be written before later gated groups are dispatched.
+- Updated `agents/openai.yaml` default prompt to mention appending worker results as markdown sections.
+
+Verified:
+- `quick_validate.py` passed.
+- `scanCodexSkills` resolves `implementation-orchestrator` from source `user`.
+- Stale search found no `Subagent Prompts`, old exact-prompt output requirement, or code fences in the card/skill.
+
+The scoped thread file is dirty again only from live Decision OS telemetry after the commit.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-733","timestamp":"2026-07-09T18:05:50.226Z","status":"complete","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"733","codexKind":"run_status","codexEventType":"turn.completed"} -->
+
+Codex turn completed.
+
+# OPERATOR
+<!-- decision-os:note {"id":"note-1783668371848-56fd9d1767107","timestamp":"2026-07-10T07:26:12.802Z"} -->
+
+![Pasted image](.decision-os/thread-images/thread-card-skill-implementation-orchestrator/paste-1783668372067-47437e2e3bae3.png)
+
+# OPERATOR
+<!-- decision-os:note {"id":"note-1783668424977-1b4659430f245","timestamp":"2026-07-10T07:27:05.566Z","voiceFileRef":"/home/jbb/dev/EditorBP/decision-os/.decision-os/voice-uploads/voice-1783668425389-7928e98e-6e68-4451-a55a-9e339a13ba9e.wav","status":"transcribed","transcriptionStartedAt":"2026-07-10T07:27:05.398Z"} -->
+
+Tu vas analyser l'image que je viens de poster dans le thread et tu vas constater que c'est très clair qu'on a un problème important au niveau du prompt de l'orchestrateur, c'est-à-dire qu'il devrait commencer par écrire dans la carte tous les groupes et tous les sous-agents qu'il va lancer, et il faut vraiment que ce soit très clair dans la carte qu'à chaque fois qu'il y a un agent qui returne un résultat, il doit modifier le contenu de la carte immédiatement. J'ai l'impression que ce n'est pas encore assez clair et il faut vraiment que ce soit probablement dans les rules, dans la section G.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-734","timestamp":"2026-07-10T07:27:21.893Z","status":"running","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"734","codexKind":"run_status","codexEventType":"thread.started"} -->
+
+Codex thread started.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783596089570-85eceea5-line-735","timestamp":"2026-07-10T07:27:21.893Z","status":"running","codexRunId":"codex-skill-1783596089570-85eceea5","codexLine":"735","codexKind":"run_status","codexEventType":"turn.started"} -->
+
+Codex turn started.
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1783668736926-192d9295","timestamp":"2026-07-10T07:32:16.899Z"} -->
+
+Analyzed the screenshot. It shows the output card with one `Worker Results` section while the side status stream mentions `G04` and `G02` progress, which confirms the missing upfront card registry and the weak return-write rule.
+
+Updated the durable card and installed user skill:
+
+1. Added `Group Launch Registry` as the first required output-card write before any subagent launch.
+2. Required the registry to list every `group_id`, assigned `task_ids`, planned subagent label, launched subagent label, gate readiness, and current `status`.
+3. Strengthened `G. Hard Rules` with `First visible output`, `Immediate card mutation`, and `No chat-only status`.
+4. Updated `/home/jbb/.codex/skills/implementation-orchestrator/agents/openai.yaml` so the default prompt names `Group Launch Registry`.
+
+Verified `quick_validate.py` passes and `scanCodexSkills` resolves `implementation-orchestrator` from source `user`.
