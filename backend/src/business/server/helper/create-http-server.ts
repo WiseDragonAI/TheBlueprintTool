@@ -578,14 +578,25 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       }
       return;
     }
-    const isAssetRoute = url.startsWith('/assets/') || url.startsWith('/src/');
+    const isFrontendModuleRoute = url.startsWith('/assets/') || url.startsWith('/src/');
+    // WHAT: Serve `/shared/*` imports from the source tree beside the configured frontend root.
+    // WHY: Browser modules consume authoritative shared schemas whose `.js` URLs must resolve to sibling `.ts` sources.
+    const isSharedModuleRoute = url.startsWith('/shared/');
+    const isStaticModuleRoute = isFrontendModuleRoute || isSharedModuleRoute;
     const blueprintState = readCanonicalDecisionOsState({ action_payload: { decisionOsFile: resolve(decisionOsRoot, 'state.json'), writeBack: true } });
     const routeTabId = url.split('/').filter(Boolean)[0] ?? '';
     const isLedgerRoute = Boolean(routeTabId && blueprintState.ledgers.some((ledger) => ledger.id === routeTabId));
     const isAppRoute = url === '/' || url === '/ledgers' || isLedgerRoute;
-    const requestedPath = isAssetRoute ? resolve(frontendRoot, url.slice(1)) : resolve(frontendRoot, 'index.html');
+    const staticModuleRoot = isSharedModuleRoute ? resolve(frontendRoot, '..', 'shared') : frontendRoot;
+    const staticModuleRequest = isSharedModuleRoute ? url.slice('/shared/'.length) : url.slice(1);
+    const requestedPath = isStaticModuleRoute ? resolve(staticModuleRoot, staticModuleRequest) : resolve(frontendRoot, 'index.html');
+    const relativeStaticModulePath = relative(staticModuleRoot, requestedPath);
+    // WHAT: Accept a static module path only when it remains below its selected source root.
+    // WHY: Adding the sibling shared tree must not expose parent files through traversal segments.
+    const isSafeStaticModulePath = !isStaticModuleRoute
+      || Boolean(relativeStaticModulePath && !relativeStaticModulePath.startsWith('..') && !isAbsolute(relativeStaticModulePath));
     const assetPath = existsSync(requestedPath) ? requestedPath : requestedPath.replace(/\.js$/, '.ts');
-    if ((isAppRoute || isAssetRoute) && existsSync(assetPath)) {
+    if ((isAppRoute || isStaticModuleRoute) && isSafeStaticModulePath && existsSync(assetPath)) {
       response.setHeader('content-type', contentTypeFor(assetPath));
       response.setHeader('cache-control', 'no-store');
       const source = readFileSync(assetPath, 'utf8');
