@@ -1,3 +1,7 @@
+/**
+ * WHAT: Covers viewport-derived card visibility and zoomed media promotion contracts.
+ * WHY: Rendering quality work must include every overlapping card without broad canvas rerenders.
+ */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -15,10 +19,11 @@ test('visible card quality refresh computes viewport card candidates from ledger
   const visible = visibleLedgerCards([
     { id: 'left', x: 0, y: 0, w: 80, h: 80 },
     { id: 'inside', x: 120, y: 80, w: 100, h: 100 },
+    { id: 'contains-viewport', x: 0, y: 0, w: 1000, h: 1000 },
     { id: 'edge', x: 490, y: 330, w: 40, h: 40 },
     { id: 'right', x: 540, y: 80, w: 100, h: 100 }
   ], bounds);
-  assert.deepEqual(visible.map((card) => card.id), ['inside', 'edge']);
+  assert.deepEqual(visible.map((card) => card.id), ['inside', 'contains-viewport', 'edge']);
 });
 
 test('zoomed card media promotes the native carousel into an untransformed overlay', () => {

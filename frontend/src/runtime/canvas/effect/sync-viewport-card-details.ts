@@ -1,3 +1,7 @@
+/**
+ * WHAT: Reconciles viewport-local ledger card detail DOM with canvas detail mode.
+ * WHY: Visible cards must recover when cached detail membership diverges from mounted or revealed DOM state.
+ */
 import { canvas, content } from '../../dom.js';
 import { state } from '../../state.js';
 import { activeLedgerCardMap } from '../../ledger/helper/active-ledger-geometry.js';
@@ -34,6 +38,13 @@ function directChildByClass(element: HTMLElement, className: string): HTMLElemen
     if (child.className.split(/\s+/).includes(className)) return child;
   }
   return null;
+}
+
+function hasCompleteDetailState(cardId: string): boolean {
+  const card = cardElement(cardId);
+  return detailedCardIds.has(cardId)
+    && Boolean(card?.classList.contains('detail-visible'))
+    && Boolean(card && directChildByClass(card, 'ledger-card-detail-layer'));
 }
 
 function removeDetail(cardId: string): void {
@@ -126,6 +137,8 @@ export function syncViewportCardDetails(): void {
   }
   for (const cardId of nextDetailedCardIds) {
     const ledgerCard = ledgerCards.get(cardId);
-    if (ledgerCard && !detailedCardIds.has(cardId)) addDetail(cardId, ledgerCard);
+    // WHAT: Repair every incomplete visible-card detail state, including an already tracked card.
+    // WHY: Cache membership alone cannot prove that the detail subtree is mounted and revealed.
+    if (ledgerCard && !hasCompleteDetailState(cardId)) addDetail(cardId, ledgerCard);
   }
 }
