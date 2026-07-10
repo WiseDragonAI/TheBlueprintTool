@@ -1,7 +1,11 @@
+/**
+ * WHAT: Renders contextual card, zone, and group controls for hovered and selected canvas targets.
+ * WHY: Control placement must follow current geometry and may use an explicit gesture selection.
+ */
 import { canvas, content, controlOverlay as initialControlOverlay } from '../../dom.js';
 import { renderLedgerCardDeleteButton } from '../../ledger/component/render-ledger-card-delete-button.js';
 import { renderLedgerCardStatusButton } from '../../ledger/component/render-ledger-card-status-button.js';
-import { state } from '../../state.js';
+import { state, type SelectionState } from '../../state.js';
 
 type ControlTarget = {
   kind: 'card' | 'zone' | 'group';
@@ -72,16 +76,16 @@ function sourceElement(target: ControlTarget): HTMLElement | null {
   return content.querySelector(`:scope > .zone[data-group-id="${CSS.escape(target.id)}"]`) as HTMLElement | null;
 }
 
-function selectedTargets(): ControlTarget[] {
+function selectedTargets(selection: Partial<SelectionState>): ControlTarget[] {
   const targets: ControlTarget[] = [];
-  for (const id of new Set(state.selection.zoneIds as string[])) targets.push({ kind: 'zone', id });
-  for (const id of new Set(state.selection.groupIds as string[])) targets.push({ kind: 'group', id });
+  for (const id of new Set(selection.zoneIds ?? [])) targets.push({ kind: 'zone', id });
+  for (const id of new Set(selection.groupIds ?? [])) targets.push({ kind: 'group', id });
   return targets;
 }
 
-function visibleTargets(): ControlTarget[] {
+function visibleTargets(selection: Partial<SelectionState>): ControlTarget[] {
   const byKey = new Map<string, ControlTarget>();
-  for (const target of selectedTargets()) byKey.set(targetKey(target), target);
+  for (const target of selectedTargets(selection)) byKey.set(targetKey(target), target);
   if (hoveredTarget) byKey.set(targetKey(hoveredTarget), hoveredTarget);
   return [...byKey.values()];
 }
@@ -204,7 +208,7 @@ function syncZoneControls(group: HTMLElement, zone: HTMLElement, kind: 'zone' | 
   return placeControlGroup(group, zone, kind === 'group' ? 'right' : 'left', 32);
 }
 
-export function renderCanvasControlOverlay(): void {
+export function renderCanvasControlOverlay(selection: Partial<SelectionState> = state.selection): void {
   if (controlsDisabled()) {
     clearCanvasControlOverlay();
     return;
@@ -212,7 +216,7 @@ export function renderCanvasControlOverlay(): void {
   const overlay = resolveControlOverlay();
   if (!overlay || !canvas || !content) return;
   const activeKeys = new Set<string>();
-  for (const target of visibleTargets()) {
+  for (const target of visibleTargets(selection)) {
     const source = sourceElement(target);
     if (!source || source.hidden || source.style.display === 'none') continue;
     const key = targetKey(target);

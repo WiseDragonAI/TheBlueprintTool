@@ -1,3 +1,7 @@
+/**
+ * WHAT: Integration coverage for active-ledger loading, mutation, geometry, selection, and refresh lifecycle.
+ * WHY: Server authority and local interaction continuity must remain consistent across same-ledger reloads.
+ */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -413,6 +417,71 @@ test('active ledger refresh keeps viewport moves made while the server load is i
   assert.deepEqual(state.viewport, { x: 444, y: -555, scale: 0.5 });
   assert.deepEqual(state.viewports.specs, { x: 444, y: -555, scale: 0.5 });
   assert.deepEqual(state.activeLedger.cards[0], { id: 'card-a', title: 'Server title', x: 100, y: 200, w: 300, h: 180 });
+});
+
+test('same-ledger active load preserves selected records and prunes missing records', async () => {
+  (globalThis as any).CustomEvent = class CustomEvent {
+    detail: unknown;
+    constructor(_type: string, init: { detail?: unknown } = {}) {
+      this.detail = init.detail;
+    }
+  };
+  (globalThis as any).window = {
+    location: { pathname: '/specs' },
+    dispatchEvent() {},
+    __coreTelemetry: []
+  };
+  const { state } = await import('../../src/runtime/state.js');
+  const { loadActiveLedgerState } = await import('../../src/runtime/ledger/effect/load-active-ledger-state.js');
+
+  state.canvasMode = 'ledger';
+  state.activeTab = 'specs';
+  state.activeLedgerId = 'specs';
+  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
+  state.pointer = null;
+  state.selection = {
+    cardIds: ['card-a', 'missing-card'],
+    zoneIds: ['zone-a', 'missing-zone', 'group-a'],
+    groupIds: ['group-a', 'missing-group', 'zone-a']
+  };
+  state.activeLedger = {
+    cards: [
+      { id: 'card-a', title: 'Local A', x: 10, y: 20, w: 240, h: 132 },
+      { id: 'missing-card', title: 'Local missing', x: 100, y: 120, w: 240, h: 132 }
+    ],
+    annotations: [
+      { id: 'zone-a', variant: 'zone', label: 'Local zone', x: 0, y: 0, width: 200, height: 140 },
+      { id: 'group-a', variant: 'group', label: 'Local group', x: 20, y: 30, width: 260, height: 180 },
+      { id: 'missing-zone', variant: 'zone', label: 'Local missing zone', x: 60, y: 70, width: 200, height: 140 },
+      { id: 'missing-group', variant: 'group', label: 'Local missing group', x: 80, y: 90, width: 260, height: 180 }
+    ],
+    notes: {}
+  };
+
+  (globalThis as any).fetch = async (url: string) => {
+    assert.equal(url, '/decision-os/specs');
+    return {
+      ok: true,
+      async json() {
+        return {
+          cards: [{ id: 'card-a', title: 'Server A', x: 1, y: 2, w: 220, h: 132 }],
+          annotations: [
+            { id: 'zone-a', variant: 'zone', label: 'Server zone', x: 3, y: 4, width: 180, height: 140 },
+            { id: 'group-a', variant: 'group', label: 'Server group', x: 5, y: 6, width: 220, height: 160 }
+          ],
+          notes: {}
+        };
+      }
+    };
+  };
+
+  await loadActiveLedgerState();
+
+  assert.deepEqual(state.selection, {
+    cardIds: ['card-a'],
+    zoneIds: ['zone-a'],
+    groupIds: ['group-a']
+  });
 });
 
 test('non-geometry mutation responses keep newer local canvas geometry', async () => {

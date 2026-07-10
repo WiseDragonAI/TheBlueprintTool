@@ -1,3 +1,15 @@
+/**
+ * WHAT: Defines and initializes mutable client runtime state.
+ * WHY: Controllers and effects need one canonical store for the active workspace session.
+ */
+export type SelectionState = { cardIds: string[]; zoneIds: string[]; groupIds: string[] };
+
+export type PointerSelectionSnapshot = SelectionState & {
+  targetKind: string;
+  targetId: string;
+  ledgerStateId: string;
+};
+
 export const state: any = {
   routePath: globalThis.window?.location?.pathname ?? '/',
   projectName: 'Project',

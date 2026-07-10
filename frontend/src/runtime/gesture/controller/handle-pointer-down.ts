@@ -15,6 +15,8 @@ import { renderSelectionState } from '../../selection/effect/render-selection-st
 import { selectThread } from '../../thread/effect/select-thread.js';
 import { closeThreadPanel } from '../../thread/effect/close-thread-panel.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { createPointerSelectionSnapshot } from '../helper/create-pointer-selection-snapshot.js';
+import { currentLedgerStateId } from '../../ledger/helper/current-ledger-state-id.js';
 
 export function handlePointerDown(event: PointerEvent): void {
   const rawTarget = event.target as HTMLElement;
@@ -43,6 +45,16 @@ export function handlePointerDown(event: PointerEvent): void {
   const preserveSelection = shouldPreservePointerSelection(state.selection, targetKind, targetId, event.shiftKey);
   if ((intent === 'drag' || intent === 'group') && !preserveSelection) selectTarget(targetKind, targetId, event.shiftKey);
   if (intent === 'resize') selectTarget(targetKind, targetId, false);
+  if (state.pointer && (intent === 'drag' || intent === 'group' || intent === 'resize')) {
+    // WHAT: Freeze gesture identity after pointer-down selection has settled.
+    // WHY: Async refresh and later selection changes must not redirect movement or commit payloads.
+    state.pointer.selectionSnapshot = createPointerSelectionSnapshot({
+      selection: state.selection,
+      targetKind,
+      targetId,
+      ledgerStateId: currentLedgerStateId()
+    });
+  }
   if (intent === 'marquee' || intent === 'draw-card' || intent === 'draw-zone' || intent === 'draw-group') {
     const marquee = document.querySelector('.marquee') as HTMLElement;
     marquee.hidden = false;

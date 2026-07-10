@@ -1,4 +1,9 @@
-import { state } from '../../state.js';
+/**
+ * WHAT: Reads, normalizes, and patches active-ledger canvas geometry.
+ * WHY: Canvas effects need one geometry contract across cards, zones, and groups.
+ */
+import { state, type SelectionState } from '../../state.js';
+import { cloneSelectionState } from '../../selection/helper/clone-selection-state.js';
 
 export type CanvasRect = { left: number; top: number; right: number; bottom: number; width: number; height: number };
 export type LedgerGeometry = { x: number; y: number; width: number; height: number };
@@ -106,11 +111,12 @@ export function patchLedgerAnnotationGeometry(annotation: LedgerRecord, geometry
   return ledgerAnnotationGeometry(annotation);
 }
 
-export function selectedLedgerGeometryPayload(selection = state.selection): {
+export function selectedLedgerGeometryPayload(selection: Partial<SelectionState> = state.selection): {
   cards: Record<string, LedgerGeometry>;
   zones: Record<string, LedgerGeometry>;
   groups: Record<string, LedgerGeometry>;
 } {
+  const current = cloneSelectionState(selection);
   const cards = activeLedgerCardMap();
   const annotations = activeLedgerAnnotationMap();
   const payload = { cards: {}, zones: {}, groups: {} } as {
@@ -118,15 +124,15 @@ export function selectedLedgerGeometryPayload(selection = state.selection): {
     zones: Record<string, LedgerGeometry>;
     groups: Record<string, LedgerGeometry>;
   };
-  for (const id of selection.cardIds as string[]) {
+  for (const id of current.cardIds) {
     const card = cards.get(id);
     if (card) payload.cards[id] = ledgerCardGeometry(card);
   }
-  for (const id of selection.zoneIds as string[]) {
+  for (const id of current.zoneIds) {
     const annotation = annotations.get(id);
     if (annotation) payload.zones[id] = ledgerAnnotationGeometry(annotation);
   }
-  for (const id of selection.groupIds as string[]) {
+  for (const id of current.groupIds) {
     const annotation = annotations.get(id);
     if (annotation) payload.groups[id] = ledgerAnnotationGeometry(annotation);
   }

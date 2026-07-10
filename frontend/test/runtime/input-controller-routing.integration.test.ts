@@ -286,7 +286,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.doesNotMatch(controlOverlay, /selection\.cardIds/);
   assert.match(controlOverlay, /export function hideCanvasControlOverlay\(\): void \{[\s\S]*existingControlOverlay\(\)\?\.replaceChildren\(\);[\s\S]*\}/);
   assert.match(controlOverlay, /function controlsDisabled\(\): boolean \{[\s\S]*classList\?\.contains\('low-detail'\)/);
-  assert.match(controlOverlay, /export function renderCanvasControlOverlay\(\): void \{\s*if \(controlsDisabled\(\)\) \{[\s\S]*clearCanvasControlOverlay\(\);[\s\S]*return;/);
+  assert.match(controlOverlay, /export function renderCanvasControlOverlay\(selection: Partial<SelectionState> = state\.selection\): void \{\s*if \(controlsDisabled\(\)\) \{[\s\S]*clearCanvasControlOverlay\(\);[\s\S]*return;/);
   assert.match(controlOverlay, /canvas\.addEventListener\('mouseover', \(event\) => \{\s*if \(controlsDisabled\(\)\) \{[\s\S]*clearCanvasControlOverlay\(\);[\s\S]*return;/);
   assert.match(controlOverlay, /if \(hoveredTarget\) byKey\.set\(targetKey\(hoveredTarget\), hoveredTarget\)/);
   assert.match(controlOverlay, /deleteButton\.dataset\.action = 'confirm-delete-group'/);

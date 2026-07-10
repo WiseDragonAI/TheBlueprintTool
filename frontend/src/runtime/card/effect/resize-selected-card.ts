@@ -1,17 +1,28 @@
+/**
+ * WHAT: Applies pointer resize deltas to the selected card and its active-ledger geometry.
+ * WHY: Resizing must survive canvas remounts by resolving the live node from pointer identity.
+ */
 import { renderRelationshipOverlay } from '../../relationship/effect/render-relationship-overlay.js';
 import { renderCanvasControlOverlay } from '../../canvas/effect/render-canvas-control-overlay.js';
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { activeLedgerCardMap, ledgerCardGeometry, patchLedgerCardGeometry, type LedgerGeometry } from '../../ledger/helper/active-ledger-geometry.js';
 import { renderGeometry } from '../../canvas/helper/render-density.js';
+import { resolveCurrentPointerTarget } from '../../gesture/helper/resolve-current-pointer-target.js';
 
 export function resizeSelectedCard(dx: number, dy: number): void {
-  const card = state.pointer?.target as HTMLElement | null;
-  if (!card) return;
-  const current = state.activeLedger && card.dataset.cardId
-    ? ledgerCardGeometry(activeLedgerCardMap().get(card.dataset.cardId) ?? {})
-    : { x: card.offsetLeft, y: card.offsetTop, width: card.offsetWidth, height: card.offsetHeight };
-  const handle = state.pointer.resizeHandle as HTMLElement | null;
+  const pointer = state.pointer;
+  const savedCard = pointer?.target as HTMLElement | null;
+  const cardId = String(pointer?.targetId || savedCard?.dataset.cardId || '');
+  const card = resolveCurrentPointerTarget('card', cardId, savedCard);
+  const ledgerCard = state.activeLedger && cardId ? activeLedgerCardMap().get(cardId) : undefined;
+  // WHAT: Stop only when neither persisted geometry nor a live target remains.
+  // WHY: A remounted canvas can invalidate either representation independently.
+  if (!card && !ledgerCard) return;
+  const current = ledgerCard
+    ? ledgerCardGeometry(ledgerCard)
+    : { x: card?.offsetLeft ?? 0, y: card?.offsetTop ?? 0, width: card?.offsetWidth ?? 0, height: card?.offsetHeight ?? 0 };
+  const handle = pointer?.resizeHandle as HTMLElement | null;
   const west = Boolean(handle?.classList.contains('nw') || handle?.classList.contains('sw'));
   const east = Boolean(handle?.classList.contains('ne') || handle?.classList.contains('se'));
   const north = Boolean(handle?.classList.contains('nw') || handle?.classList.contains('ne'));
@@ -22,6 +33,8 @@ export function resizeSelectedCard(dx: number, dy: number): void {
   let nextTop = current.y;
   let nextWidth = current.width;
   let nextHeight = current.height;
+  // WHAT: Clamp west and north movement while preserving the opposite edge.
+  // WHY: Resizing must honor the card minimum without shifting the anchored edge.
   if (west) {
     const clampedDx = Math.min(dx, current.width - minWidth);
     nextLeft = current.x + clampedDx;
@@ -35,14 +48,11 @@ export function resizeSelectedCard(dx: number, dy: number): void {
   }
   if (south) nextHeight = Math.max(minHeight, current.height + dy);
   const geometry = { x: nextLeft, y: nextTop, width: nextWidth, height: nextHeight };
-  if (state.activeLedger && card.dataset.cardId) {
-    const ledgerCard = activeLedgerCardMap().get(card.dataset.cardId);
-    if (ledgerCard) patchLedgerCardGeometry(ledgerCard, geometry);
-  }
-  patchCardBox(card, geometry);
+  if (ledgerCard) patchLedgerCardGeometry(ledgerCard, geometry);
+  if (card) patchCardBox(card, geometry);
   renderRelationshipOverlay();
   renderCanvasControlOverlay();
-  telemetry('render-card-layer', { spec: '60000006', resized: card.dataset.cardId, geometry });
+  telemetry('render-card-layer', { spec: '60000006', resized: cardId, geometry });
 }
 
 function patchCardBox(card: HTMLElement, geometry: LedgerGeometry): void {

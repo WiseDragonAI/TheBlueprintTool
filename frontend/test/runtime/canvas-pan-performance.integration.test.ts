@@ -14,6 +14,494 @@ function source(path: string): string {
   return readFileSync(new URL(path, root), 'utf8');
 }
 
+type CanvasFakeStyle = Record<string, string> & {
+  setProperty(name: string, value: string): void;
+  getPropertyValue(name: string): string;
+  removeProperty(name: string): void;
+};
+
+type CanvasFakeElement = {
+  tagName: string;
+  id: string;
+  className: string;
+  dataset: Record<string, string>;
+  style: CanvasFakeStyle;
+  hidden: boolean;
+  textContent: string;
+  innerHTML: string;
+  type: string;
+  title: string;
+  ariaLabel: string;
+  value: string;
+  disabled: boolean;
+  scrollTop: number;
+  scrollLeft: number;
+  scrollHeight: number;
+  scrollWidth: number;
+  clientWidth: number;
+  clientHeight: number;
+  children: CanvasFakeElement[];
+  parentElement: CanvasFakeElement | null;
+  isConnected: boolean;
+  childElementCount: number;
+  offsetLeft: number;
+  offsetTop: number;
+  offsetWidth: number;
+  offsetHeight: number;
+  classList: { toggle(name: string, force?: boolean): boolean; add(...names: string[]): void; remove(...names: string[]): void; contains(name: string): boolean };
+  querySelector(selector: string): CanvasFakeElement | null;
+  querySelectorAll(selector: string): CanvasFakeElement[];
+  matches(selector: string): boolean;
+  closest(selector: string): CanvasFakeElement | null;
+  append(...nodes: CanvasFakeElement[]): void;
+  appendChild(node: CanvasFakeElement): CanvasFakeElement;
+  insertBefore(node: CanvasFakeElement, before: CanvasFakeElement | null): void;
+  replaceChildren(...nodes: CanvasFakeElement[]): void;
+  remove(): void;
+  setAttribute(name: string, value: string): void;
+  getAttribute(name: string): string | null;
+  hasAttribute(name: string): boolean;
+  removeAttribute(name: string): void;
+  addEventListener(): void;
+  removeEventListener(): void;
+  scrollTo(options?: unknown): void;
+  getBoundingClientRect(): { left: number; top: number; right: number; bottom: number; width: number; height: number };
+};
+
+const canvasStorage = new Map<string, string>();
+const canvasDom = createCanvasRuntimeDom();
+
+function canvasElement(dataset: Record<string, string> = {}, tagName = 'div'): CanvasFakeElement {
+  const customProperties = new Map<string, string>();
+  const attributes = new Map<string, string>();
+  const style = {
+    left: '0px',
+    top: '0px',
+    width: '120px',
+    height: '80px',
+    minHeight: '',
+    display: '',
+    transition: '',
+    transform: '',
+    visibility: '',
+    right: '',
+    bottom: '',
+    maxWidth: '',
+    position: '',
+    zIndex: '',
+    boxSizing: '',
+    setProperty(name: string, value: string) {
+      customProperties.set(name, value);
+      style[name] = value;
+    },
+    getPropertyValue(name: string) {
+      return customProperties.get(name) ?? style[name] ?? '';
+    },
+    removeProperty(name: string) {
+      customProperties.delete(name);
+      delete style[name];
+    }
+  } as unknown as CanvasFakeStyle;
+  const element: CanvasFakeElement = {
+    tagName: tagName.toUpperCase(),
+    id: '',
+    className: '',
+    dataset,
+    style,
+    hidden: false,
+    textContent: '',
+    innerHTML: '',
+    type: '',
+    title: '',
+    ariaLabel: '',
+    value: '',
+    disabled: false,
+    scrollTop: 0,
+    scrollLeft: 0,
+    scrollHeight: 0,
+    scrollWidth: 0,
+    clientWidth: 120,
+    clientHeight: 80,
+    children: [],
+    parentElement: null,
+    isConnected: true,
+    get childElementCount() { return element.children.length; },
+    get offsetLeft() { return Number.parseFloat(element.style.left) || 0; },
+    get offsetTop() { return Number.parseFloat(element.style.top) || 0; },
+    get offsetWidth() { return Number.parseFloat(element.style.width) || 0; },
+    get offsetHeight() { return Number.parseFloat(element.style.height) || 0; },
+    classList: {
+      toggle(name: string, force?: boolean) {
+        const classes = canvasClassSet(element);
+        const shouldAdd = force ?? !classes.has(name);
+        if (shouldAdd) classes.add(name);
+        else classes.delete(name);
+        element.className = [...classes].join(' ');
+        return shouldAdd;
+      },
+      add(...names: string[]) {
+        const classes = canvasClassSet(element);
+        for (const name of names) classes.add(name);
+        element.className = [...classes].join(' ');
+      },
+      remove(...names: string[]) {
+        const classes = canvasClassSet(element);
+        for (const name of names) classes.delete(name);
+        element.className = [...classes].join(' ');
+      },
+      contains(name: string) {
+        return canvasClassSet(element).has(name);
+      }
+    },
+    querySelector(selector: string) {
+      return element.querySelectorAll(selector)[0] ?? null;
+    },
+    querySelectorAll(selector: string) {
+      return canvasQueryAll(element, selector);
+    },
+    matches(selector: string) {
+      return canvasMatchesSelectorList(element, selector);
+    },
+    closest(selector: string) {
+      let current: CanvasFakeElement | null = element;
+      while (current) {
+        if (canvasMatchesSelectorList(current, selector)) return current;
+        current = current.parentElement;
+      }
+      return null;
+    },
+    append(...nodes: CanvasFakeElement[]) {
+      for (const node of nodes) canvasAppendChild(element, node);
+    },
+    appendChild(node: CanvasFakeElement) {
+      canvasAppendChild(element, node);
+      return node;
+    },
+    insertBefore(node: CanvasFakeElement, before: CanvasFakeElement | null) {
+      canvasDetach(node);
+      const index = before ? element.children.indexOf(before) : -1;
+      if (index >= 0) element.children.splice(index, 0, node);
+      else element.children.push(node);
+      node.parentElement = element;
+      canvasMarkConnected(node, true);
+    },
+    replaceChildren(...nodes: CanvasFakeElement[]) {
+      for (const child of element.children) {
+        child.parentElement = null;
+        canvasMarkConnected(child, false);
+      }
+      element.children = [];
+      element.append(...nodes);
+    },
+    remove() {
+      canvasDetach(element);
+      canvasMarkConnected(element, false);
+    },
+    setAttribute(name: string, value: string) {
+      attributes.set(name, value);
+      if (name === 'id') element.id = value;
+      if (name === 'class') element.className = value;
+      if (name.startsWith('data-')) element.dataset[canvasDataKey(name.slice(5))] = value;
+    },
+    getAttribute(name: string) {
+      if (name === 'id') return element.id || null;
+      if (name === 'class') return element.className || null;
+      if (name.startsWith('data-')) return element.dataset[canvasDataKey(name.slice(5))] ?? null;
+      return attributes.get(name) ?? null;
+    },
+    hasAttribute(name: string) {
+      if (name === 'id') return Boolean(element.id);
+      if (name === 'class') return Boolean(element.className);
+      if (name.startsWith('data-')) return element.dataset[canvasDataKey(name.slice(5))] !== undefined;
+      return attributes.has(name);
+    },
+    removeAttribute(name: string) {
+      attributes.delete(name);
+      if (name === 'id') element.id = '';
+      if (name === 'class') element.className = '';
+      if (name.startsWith('data-')) delete element.dataset[canvasDataKey(name.slice(5))];
+    },
+    addEventListener() {},
+    removeEventListener() {},
+    scrollTo(options?: unknown) {
+      const scroll = options as { left?: number; top?: number } | undefined;
+      if (Number.isFinite(scroll?.left)) element.scrollLeft = Number(scroll?.left);
+      if (Number.isFinite(scroll?.top)) element.scrollTop = Number(scroll?.top);
+    },
+    getBoundingClientRect() {
+      return {
+        left: element.offsetLeft,
+        top: element.offsetTop,
+        right: element.offsetLeft + element.offsetWidth,
+        bottom: element.offsetTop + element.offsetHeight,
+        width: element.offsetWidth,
+        height: element.offsetHeight
+      };
+    }
+  };
+  return element;
+}
+
+function createCanvasRuntimeDom() {
+  const root = canvasElement({}, 'document');
+  const canvas = canvasElement({}, 'div');
+  const content = canvasElement({}, 'div');
+  const controlOverlay = canvasElement({}, 'div');
+  const mediaOverlay = canvasElement({}, 'div');
+  const telemetryList = canvasElement({}, 'ol');
+  const marquee = canvasElement({}, 'div');
+  const panel = canvasElement({}, 'aside');
+  const threadPanel = canvasElement({}, 'aside');
+  const shell = canvasElement({}, 'div');
+  const threadTarget = canvasElement({}, 'div');
+  const threadHeading = canvasElement({}, 'div');
+  const tabs = canvasElement({}, 'nav');
+  const topbarTitle = canvasElement({}, 'button');
+  const kicker = canvasElement({}, 'span');
+  canvas.className = 'canvas';
+  content.className = 'canvas-content';
+  controlOverlay.className = 'canvas-control-overlay';
+  mediaOverlay.className = 'canvas-media-overlay';
+  telemetryList.className = 'telemetry-list';
+  marquee.className = 'marquee';
+  panel.className = 'panel';
+  threadPanel.className = 'thread-panel';
+  shell.className = 'shell';
+  threadTarget.className = 'thread-target';
+  threadHeading.className = 'thread-heading';
+  tabs.className = 'tabs';
+  topbarTitle.className = 'topbar-title-action';
+  kicker.className = 'kicker';
+  root.append(canvas, telemetryList, panel, threadPanel, shell, threadTarget, threadHeading, tabs, topbarTitle, kicker);
+  canvas.append(content, controlOverlay, mediaOverlay);
+  content.append(marquee);
+  return { root, canvas, content, controlOverlay, mediaOverlay, telemetryList, marquee, panel, threadPanel, shell, threadTarget, threadHeading, tabs, topbarTitle, kicker };
+}
+
+function installCanvasRuntimeDom(): void {
+  canvasStorage.clear();
+  for (const element of Object.values(canvasDom)) {
+    element.children = [];
+    element.parentElement = null;
+    element.isConnected = true;
+    element.hidden = false;
+    element.textContent = '';
+    element.innerHTML = '';
+    element.style.left = '0px';
+    element.style.top = '0px';
+    element.style.width = '120px';
+    element.style.height = '80px';
+    element.style.minHeight = '';
+    element.style.display = '';
+    element.style.transition = '';
+    element.style.transform = '';
+    element.style.visibility = '';
+  }
+  canvasDom.canvas.className = 'canvas';
+  canvasDom.canvas.style.width = '1000px';
+  canvasDom.canvas.style.height = '800px';
+  canvasDom.content.className = 'canvas-content';
+  canvasDom.controlOverlay.className = 'canvas-control-overlay';
+  canvasDom.mediaOverlay.className = 'canvas-media-overlay';
+  canvasDom.telemetryList.className = 'telemetry-list';
+  canvasDom.marquee.className = 'marquee';
+  canvasDom.marquee.hidden = true;
+  canvasDom.panel.className = 'panel';
+  canvasDom.threadPanel.className = 'thread-panel';
+  canvasDom.shell.className = 'shell';
+  canvasDom.threadTarget.className = 'thread-target';
+  canvasDom.threadHeading.className = 'thread-heading';
+  canvasDom.tabs.className = 'tabs';
+  canvasDom.topbarTitle.className = 'topbar-title-action';
+  canvasDom.kicker.className = 'kicker';
+  canvasDom.root.append(canvasDom.canvas, canvasDom.telemetryList, canvasDom.panel, canvasDom.threadPanel, canvasDom.shell, canvasDom.threadTarget, canvasDom.threadHeading, canvasDom.tabs, canvasDom.topbarTitle, canvasDom.kicker);
+  canvasDom.canvas.append(canvasDom.content, canvasDom.controlOverlay, canvasDom.mediaOverlay);
+  canvasDom.content.append(canvasDom.marquee);
+
+  (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
+    detail: unknown;
+    constructor(_type: string, init: { detail?: unknown } = {}) {
+      this.detail = init.detail;
+    }
+  };
+  (globalThis as unknown as { window: unknown }).window = {
+    innerWidth: 1000,
+    innerHeight: 800,
+    devicePixelRatio: 1,
+    __coreTelemetry: [],
+    location: { pathname: '/specs' },
+    addEventListener() {},
+    dispatchEvent() {},
+    visualViewport: { addEventListener() {} }
+  };
+  (globalThis as unknown as { document: unknown }).document = {
+    title: '',
+    fonts: { ready: Promise.resolve() },
+    activeElement: canvasElement(),
+    querySelector(selector: string) {
+      return canvasDom.root.querySelector(selector);
+    },
+    querySelectorAll(selector: string) {
+      return canvasDom.root.querySelectorAll(selector);
+    },
+    createElement(tagName: string) {
+      return canvasElement({}, tagName);
+    },
+    createTextNode(text: string) {
+      const node = canvasElement({}, '#text');
+      node.textContent = text;
+      return node;
+    },
+    createElementNS(_namespace: string, tagName: string) {
+      return canvasElement({}, tagName);
+    }
+  };
+  (globalThis as unknown as { getComputedStyle: unknown }).getComputedStyle = (node: CanvasFakeElement) => ({
+    display: node.style.display || 'block',
+    color: node.style.color || '',
+    textShadow: node.style.textShadow || '',
+    getPropertyValue: (name: string) => node.style.getPropertyValue(name)
+  });
+  (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = (callback: FrameRequestCallback) => {
+    callback(performance.now());
+    return 0;
+  };
+  (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class ResizeObserver {
+    observe() {}
+    disconnect() {}
+  };
+  (globalThis as unknown as { HTMLElement: unknown }).HTMLElement = class HTMLElement {};
+  (globalThis as unknown as { SVGElement: unknown }).SVGElement = class SVGElement {};
+  (globalThis as unknown as { CSS: unknown }).CSS = { escape: (value: string) => value.replace(/"/g, '\\"') };
+  (globalThis as unknown as { localStorage: unknown }).localStorage = {
+    getItem(key: string) {
+      return canvasStorage.get(key) ?? null;
+    },
+    setItem(key: string, value: string) {
+      canvasStorage.set(key, String(value));
+    },
+    removeItem(key: string) {
+      canvasStorage.delete(key);
+    }
+  };
+}
+
+function canvasClassSet(element: CanvasFakeElement): Set<string> {
+  return new Set(element.className.split(/\s+/).filter(Boolean));
+}
+
+function canvasAppendChild(parent: CanvasFakeElement, child: CanvasFakeElement): void {
+  canvasDetach(child);
+  parent.children.push(child);
+  child.parentElement = parent;
+  canvasMarkConnected(child, true);
+}
+
+function canvasDetach(element: CanvasFakeElement): void {
+  const parent = element.parentElement;
+  if (!parent) return;
+  parent.children = parent.children.filter((child) => child !== element);
+  element.parentElement = null;
+}
+
+function canvasMarkConnected(element: CanvasFakeElement, connected: boolean): void {
+  element.isConnected = connected;
+  for (const child of element.children) canvasMarkConnected(child, connected);
+}
+
+function canvasDataKey(attribute: string): string {
+  return attribute.replace(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase());
+}
+
+function canvasDescendants(element: CanvasFakeElement): CanvasFakeElement[] {
+  return element.children.flatMap((child) => [child, ...canvasDescendants(child)]);
+}
+
+function canvasQueryAll(rootElement: CanvasFakeElement, selector: string): CanvasFakeElement[] {
+  const matches: CanvasFakeElement[] = [];
+  const seen = new Set<CanvasFakeElement>();
+  for (const rawPart of selector.split(',')) {
+    const part = rawPart.trim();
+    if (!part) continue;
+    const direct = part.startsWith(':scope > ');
+    const normalized = part.replace(/^:scope\s*>\s*/, '').trim();
+    const candidates = direct ? rootElement.children : canvasDescendants(rootElement);
+    for (const candidate of candidates) {
+      if (seen.has(candidate)) continue;
+      if (canvasMatchesSelector(candidate, normalized)) {
+        seen.add(candidate);
+        matches.push(candidate);
+      }
+    }
+  }
+  return matches;
+}
+
+function canvasMatchesSelectorList(element: CanvasFakeElement, selector: string): boolean {
+  return selector.split(',').some((part) => canvasMatchesSelector(element, part.trim()));
+}
+
+function canvasMatchesSelector(element: CanvasFakeElement, selector: string): boolean {
+  if (!selector) return false;
+  let remaining = selector.replace(/^:scope\s*>\s*/, '').replace(/:first-child/g, '').trim();
+  const notMatches = [...remaining.matchAll(/:not\(([^)]+)\)/g)].map((match) => match[1]);
+  remaining = remaining.replace(/:not\([^)]+\)/g, '');
+  if (notMatches.some((notSelector) => canvasMatchesSelector(element, notSelector))) return false;
+
+  const idMatch = remaining.match(/#([a-zA-Z0-9_-]+)/);
+  if (idMatch && element.id !== idMatch[1]) return false;
+  remaining = remaining.replace(/#[a-zA-Z0-9_-]+/g, '');
+
+  const classMatches = [...remaining.matchAll(/\.([a-zA-Z0-9_-]+)/g)].map((match) => match[1]);
+  const classes = canvasClassSet(element);
+  if (classMatches.some((className) => !classes.has(className))) return false;
+  remaining = remaining.replace(/\.[a-zA-Z0-9_-]+/g, '');
+
+  const attributeMatches = [...remaining.matchAll(/\[([^=\]]+)(?:="([^"]*)")?\]/g)];
+  for (const [, attribute, expected] of attributeMatches) {
+    const actual = attribute.startsWith('data-') ? element.dataset[canvasDataKey(attribute.slice(5))] : element.getAttribute(attribute);
+    if (expected === undefined) {
+      if (actual === undefined || actual === null) return false;
+    } else if (actual !== expected) return false;
+  }
+  remaining = remaining.replace(/\[[^\]]+\]/g, '').trim();
+
+  if (remaining && remaining !== '*' && element.tagName.toLowerCase() !== remaining.toLowerCase()) return false;
+  return true;
+}
+
+function canvasPointerEvent(clientX: number, clientY: number, pointerId = 1): PointerEvent {
+  return {
+    target: canvasDom.canvas,
+    clientX,
+    clientY,
+    pointerId,
+    button: 0,
+    buttons: 1,
+    shiftKey: false,
+    ctrlKey: false,
+    preventDefault() {},
+    stopPropagation() {}
+  } as unknown as PointerEvent;
+}
+
+function canvasWheelEvent(input: { clientX: number; clientY: number; deltaX?: number; deltaY: number; ctrlKey?: boolean }): WheelEvent {
+  return {
+    target: canvasDom.canvas,
+    clientX: input.clientX,
+    clientY: input.clientY,
+    deltaX: input.deltaX ?? 0,
+    deltaY: input.deltaY,
+    ctrlKey: input.ctrlKey ?? false,
+    preventDefault() {},
+    stopPropagation() {}
+  } as unknown as WheelEvent;
+}
+
+async function waitForTimer(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 test('canvas pan uses a transform-only path with sampled performance telemetry', () => {
   const pointerMove = source('frontend/src/runtime/gesture/controller/handle-pointer-move.ts');
   const panTransform = source('frontend/src/runtime/canvas/effect/apply-pan-viewport-transform.ts');
@@ -131,9 +619,132 @@ test('plain pan pointer up does not force a full canvas rerender', () => {
   const pointerUp = source('frontend/src/runtime/gesture/controller/handle-pointer-up.ts');
   assert.match(pointerUp, /const pointerIntent = pointerSession\.intent/);
   assert.match(pointerUp, /let releaseRendered = false/);
-  assert.match(pointerUp, /releaseRendered = await commitSelectedLedgerGeometry\(\)/);
+  assert.match(pointerUp, /releaseRendered = await commitSelectedLedgerGeometry\(gestureSelection\)/);
   assert.match(pointerUp, /if \(pointerIntent !== 'pan' && !releaseRendered\) renderCanvasSurface\(\)/);
   assert.match(pointerUp, /isClickMovement\(moved\)/);
+});
+
+test('manual runtime refresh preserves an active pan pointer and allows pan to continue', async () => {
+  installCanvasRuntimeDom();
+  const { refreshRuntimeState } = await import('../../src/runtime/refresh/controller/refresh-runtime-state.js');
+  const { handlePointerMove } = await import('../../src/runtime/gesture/controller/handle-pointer-move.js');
+  const { handlePointerUp } = await import('../../src/runtime/gesture/controller/handle-pointer-up.js');
+
+  state.canvasMode = 'ledger';
+  state.activeTab = 'specs';
+  state.activeLedgerId = 'specs';
+  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
+  state.ledgers = state.ledgerTabs;
+  state.activeTool = 'select';
+  state.threadPanelOpen = false;
+  state.viewport = { x: 10, y: 20, scale: 1 };
+  state.viewports = { specs: { x: 10, y: 20, scale: 1 } };
+  state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
+  state.activeLedger = { cards: [], annotations: [], relationships: [], notes: {} };
+  state.pointer = {
+    intent: 'pan',
+    targetKind: 'canvas',
+    targetId: '',
+    target: canvasDom.canvas,
+    resizeHandle: null,
+    start: { x: 100, y: 100 },
+    current: { x: 100, y: 100 },
+    startCanvas: { x: 100, y: 100 },
+    currentCanvas: { x: 100, y: 100 },
+    startedAt: 0
+  };
+
+  let resolveLedger!: (response: { ok: boolean; json(): Promise<Record<string, unknown>> }) => void;
+  const ledgerFetchStarted = new Promise<void>((resolveStarted) => {
+    (globalThis as unknown as { fetch: unknown }).fetch = async (url: string) => {
+      if (url === '/decision-os/data') return { ok: true, async json() { return {}; } };
+      assert.equal(url, '/decision-os/specs');
+      resolveStarted();
+      return new Promise((resolve) => {
+        resolveLedger = resolve;
+      });
+    };
+  });
+
+  const refresh = refreshRuntimeState();
+  await ledgerFetchStarted;
+  resolveLedger({
+    ok: true,
+    async json() {
+      return { cards: [], annotations: [], relationships: [], notes: {} };
+    }
+  });
+  await refresh;
+
+  assert.equal(state.pointer.intent, 'pan');
+  handlePointerMove(canvasPointerEvent(130, 90));
+
+  assert.deepEqual(state.viewport, { x: 40, y: 10, scale: 1 });
+  assert.equal(canvasDom.content.style.transform, 'translate(40px, 10px) scale(1)');
+
+  await handlePointerUp(canvasPointerEvent(130, 90));
+
+  assert.equal(state.pointer, null);
+  assert.deepEqual(JSON.parse(canvasStorage.get('decision-os.canvas.state') ?? '{}').viewport, { x: 40, y: 10, scale: 1 });
+});
+
+test('wheel zoom racing same-ledger load keeps latest viewport in memory and delayed persistence', async () => {
+  installCanvasRuntimeDom();
+  const { loadActiveLedgerState } = await import('../../src/runtime/ledger/effect/load-active-ledger-state.js');
+  const { handleWheel } = await import('../../src/runtime/gesture/controller/handle-wheel.js');
+
+  state.canvasMode = 'ledger';
+  state.activeTab = 'specs';
+  state.activeLedgerId = 'specs';
+  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
+  state.ledgers = state.ledgerTabs;
+  state.activeTool = 'select';
+  state.threadPanelOpen = false;
+  state.viewport = { x: 0, y: 0, scale: 1 };
+  state.viewports = { specs: { x: 0, y: 0, scale: 1 } };
+  state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
+  state.pointer = null;
+  state.activeLedger = { cards: [], annotations: [], relationships: [], notes: {} };
+
+  let resolveLedger!: (response: { ok: boolean; json(): Promise<Record<string, unknown>> }) => void;
+  const ledgerFetchStarted = new Promise<void>((resolveStarted) => {
+    (globalThis as unknown as { fetch: unknown }).fetch = async (url: string) => {
+      assert.equal(url, '/decision-os/specs');
+      resolveStarted();
+      return new Promise((resolve) => {
+        resolveLedger = resolve;
+      });
+    };
+  });
+
+  const load = loadActiveLedgerState();
+  await ledgerFetchStarted;
+
+  handleWheel(canvasWheelEvent({ clientX: 100, clientY: 80, deltaY: -120 }));
+  const latestViewport = { ...state.viewport };
+  assert.ok(latestViewport.scale > 1);
+
+  resolveLedger({
+    ok: true,
+    async json() {
+      return {
+        viewport: { x: 999, y: 999, scale: 0.25 },
+        cards: [],
+        annotations: [],
+        relationships: [],
+        notes: {}
+      };
+    }
+  });
+  await load;
+
+  assert.deepEqual(state.viewport, latestViewport);
+  assert.deepEqual(state.viewports.specs, latestViewport);
+
+  await waitForTimer(170);
+  const persisted = JSON.parse(canvasStorage.get('decision-os.canvas.state') ?? '{}');
+  assert.deepEqual(persisted.viewport, latestViewport);
+  assert.deepEqual(persisted.viewports.specs, latestViewport);
 });
 
 test('wheel zoom stays transform-only and does not reroute relationships', () => {

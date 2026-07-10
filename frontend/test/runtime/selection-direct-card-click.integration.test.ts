@@ -37,11 +37,11 @@ test('card focus click does not enter the geometry commit or full canvas render 
   const pointerUp = readFileSync(new URL('frontend/src/runtime/gesture/controller/handle-pointer-up.ts', root), 'utf8');
   const pointerMove = readFileSync(new URL('frontend/src/runtime/gesture/controller/handle-pointer-move.ts', root), 'utf8');
   const clickReturnIndex = pointerUp.indexOf('isClickMovement(moved)');
-  const geometryCommitIndex = pointerUp.indexOf('await commitSelectedLedgerGeometry()');
+  const geometryCommitIndex = pointerUp.indexOf('await commitSelectedLedgerGeometry(gestureSelection)');
   assert.match(pointerUp, /pointerIntent === 'drag' \|\| pointerIntent === 'group' \|\| pointerIntent === 'resize'/);
   assert.match(pointerUp, /isClickMovement\(moved\)/);
   assert.match(pointerUp, /finishPointer\(event\);[\s\S]*persistState\(\);[\s\S]*return;/);
-  assert.match(pointerUp, /await commitSelectedLedgerGeometry\(\)/);
+  assert.match(pointerUp, /await commitSelectedLedgerGeometry\(gestureSelection\)/);
   assert.ok(clickReturnIndex > -1);
   assert.ok(geometryCommitIndex > clickReturnIndex);
   assert.match(pointerMove, /isGeometryGesture && isClickMovement\(pointerDistancePx\(state\.pointer\.start, pointer\)\)/);

@@ -1,3 +1,7 @@
+/**
+ * WHAT: Reloads persisted runtime and authoritative ledger state for the active route.
+ * WHY: Manual refresh must preserve live viewport and pointer continuity while accepting server data.
+ */
 import { state } from '../../state.js';
 import { hydratePersistedGeometry } from '../../persistence/effect/hydrate-persisted-geometry.js';
 import { loadActiveLedgerState } from '../../ledger/effect/load-active-ledger-state.js';
@@ -25,7 +29,6 @@ export async function refreshRuntimeState(): Promise<void> {
     if (state.canvasMode === 'ledger') state.viewports = { ...(state.viewports ?? {}), [state.activeTab]: { ...localViewport } };
   } else if (state.canvasMode === 'ledger') Object.assign(state.viewport, state.viewports?.[state.activeTab] ?? persisted.viewport ?? { x: 0, y: 0, scale: 1 });
   applyRailCollapsedState(persisted.railCollapsed === true);
-  state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
   hydratePersistedGeometry(persisted.geometry);
   await loadActiveLedgerState();
   telemetry('load-ledger-state', { specId: '50000006', restored: Boolean(persisted.geometry || persisted.viewport) });

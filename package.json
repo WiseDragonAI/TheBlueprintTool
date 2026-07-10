@@ -23,5 +23,7 @@
     "coverage:functions:frontend": "node tools/unit-coverage/frontend-summary.mjs",
     "test:front-back": "npm run typecheck:frontend && npm run typecheck:backend && npm test --prefix frontend && npm test --prefix backend && npm run test:browser"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@playwright/test": "^1.61.1"
+  }
 }

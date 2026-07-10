@@ -42,7 +42,7 @@ export function handlePointerMove(event: PointerEvent): void {
   }
   telemetry('canvas-pointer-move', { intent: state.pointer.intent, dx, dy, canvasDx, canvasDy });
   if (state.pointer.intent === 'drag' || state.pointer.intent === 'group') {
-    moveSelected(canvasDx, canvasDy);
+    moveSelected(canvasDx, canvasDy, state.pointer.selectionSnapshot ?? state.selection);
     telemetry('calculate-drag-delta', { dx, dy, canvasDx, canvasDy });
   }
   if (state.pointer.intent === 'resize') {

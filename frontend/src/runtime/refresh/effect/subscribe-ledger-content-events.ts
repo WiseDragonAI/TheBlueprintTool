@@ -9,6 +9,8 @@ import { commitActiveLedgerMutation } from '../../ledger/effect/commit-active-le
 import { loadActiveLedgerState } from '../../ledger/effect/load-active-ledger-state.js';
 import { persistState } from '../../persistence/effect/persist-state.js';
 import { state } from '../../state.js';
+import { cloneSelectionState } from '../../selection/helper/clone-selection-state.js';
+import { selectionStatesEqual } from '../../selection/helper/selection-states-equal.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { renderThreadPanel } from '../../thread/effect/render-thread-panel.js';
 
@@ -116,10 +118,14 @@ async function reloadThreadContent(reason: string): Promise<void> {
     return;
   }
   threadRefreshInFlight = true;
-  const selection = state.selection;
+  const selectionAtRefreshStart = cloneSelectionState(state.selection);
   try {
     await loadActiveLedgerState();
-    state.selection = selection;
+    // WHAT: Restore a detached clone only when the awaited load did not observe newer operator state.
+    // WHY: A stale thread refresh must never overwrite a selection made while its request was in flight.
+    if (!state.pointer && selectionStatesEqual(state.selection, selectionAtRefreshStart)) {
+      state.selection = cloneSelectionState(selectionAtRefreshStart);
+    }
     renderThreadPanel();
     telemetry('thread-content-refresh', { reason });
   } finally {

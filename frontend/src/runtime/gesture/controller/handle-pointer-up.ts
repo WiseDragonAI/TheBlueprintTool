@@ -70,17 +70,18 @@ export async function handlePointerUp(event: PointerEvent): Promise<void> {
     return;
   }
   if (pointerIntent === 'drag' || pointerIntent === 'group' || pointerIntent === 'resize') {
+    const gestureSelection = pointerSession.selectionSnapshot ?? state.selection;
     const canvasDx = releaseCanvas.x - pointerSession.currentCanvas.x;
     const canvasDy = releaseCanvas.y - pointerSession.currentCanvas.y;
     if (canvasDx || canvasDy) {
-      if (pointerIntent === 'drag' || pointerIntent === 'group') moveSelected(canvasDx, canvasDy);
+      if (pointerIntent === 'drag' || pointerIntent === 'group') moveSelected(canvasDx, canvasDy, gestureSelection);
       if (pointerIntent === 'resize') {
         if (pointerSession.targetKind === 'card') resizeSelectedCard(canvasDx, canvasDy);
         else resizeSelectedZone(canvasDx, canvasDy);
       }
     }
     finishPointer(event);
-    releaseRendered = await commitSelectedLedgerGeometry();
+    releaseRendered = await commitSelectedLedgerGeometry(gestureSelection);
   }
   if (pointerIntent === 'pan' || pointerIntent === 'marquee') finishPointer(event);
   persistState();
