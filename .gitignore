@@ -1,7 +1,14 @@
 tmp/
+/node_modules/
 .decision-os/runs/
 .decision-os/voice-uploads/
 .decision-os/.settings.json
+.decision-os/**/*.png
+.decision-os/**/*.jpg
+.decision-os/**/*.jpeg
+.decision-os/**/*.gif
+.decision-os/**/*.webp
+.decision-os/**/*.avif
 .worktrees/
 generator-cli/.worktrees/
 generator-cli/dist/
