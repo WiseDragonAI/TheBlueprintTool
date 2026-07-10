@@ -344,8 +344,10 @@ test('card skill run continue route resumes the captured session with post-end t
   const argvFile = join(workspace, 'resume-argv.json');
   const runId = 'codex-skill-1783425215516-e1916f75';
   const sessionId = '019f3c6d-38a5-7e23-a238-904176322f0c';
+  const freshSessionId = '019f3c6d-38a5-7e23-a238-904176322f0d';
   const outputCardId = `card-${runId}`;
   const threadId = `thread-${outputCardId}`;
+  const threadFile = join(workspace, '.decision-os', 'threads', 'specs', `${threadId}.md`);
   mkdirSync(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs'), { recursive: true });
   mkdirSync(join(workspace, '.decision-os', 'cards', 'specs'), { recursive: true });
   mkdirSync(join(workspace, '.decision-os', 'threads', 'specs'), { recursive: true });
@@ -371,7 +373,7 @@ test('card skill run continue route resumes the captured session with post-end t
     '',
     `Codex run: ${runId}`,
   ].join('\n'));
-  writeFileSync(join(workspace, '.decision-os', 'threads', 'specs', `${threadId}.md`), [
+  writeFileSync(threadFile, [
     '# AGENT',
     `<!-- decision-os:note {"id":"codex-${runId}-line-2","timestamp":"2026-07-07T17:13:35.518Z","status":"complete","codexRunId":"${runId}","codexLine":"2","codexKind":"run_status","codexEventType":"turn.completed"} -->`,
     '',
@@ -398,10 +400,14 @@ test('card skill run continue route resumes the captured session with post-end t
     'let input = "";',
     'process.stdin.on("data", (chunk) => { input += chunk; });',
     'process.stdin.on("end", () => {',
+    '  const args = process.argv.slice(2);',
+    '  const fresh = !args.includes("resume");',
     `  writeFileSync(${JSON.stringify(inputFile)}, input);`,
-    `  writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(2)));`,
+    `  writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(args));`,
+    `  if (fresh) console.log(JSON.stringify({ type: "thread.started", thread_id: ${JSON.stringify(freshSessionId)} }));`,
+    `  const responseText = fresh ? "fresh response" : args.includes(${JSON.stringify(freshSessionId)}) ? "latest session response" : "resumed response";`,
     '  console.log(JSON.stringify({ type: "turn.started" }));',
-    '  console.log(JSON.stringify({ type: "item.completed", item: { id: "resume-msg", type: "agent_message", text: "resumed response" } }));',
+    '  console.log(JSON.stringify({ type: "item.completed", item: { id: "resume-msg", type: "agent_message", text: responseText } }));',
     '  console.log(JSON.stringify({ type: "turn.completed" }));',
     '});',
   ].join('\n'));
@@ -439,6 +445,42 @@ test('card skill run continue route resumes the captured session with post-end t
     assert.equal(argv.includes(sessionId), true);
     assert.equal(argv.at(-1), '-');
     await waitForText(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.jsonl`), 'resumed response');
+
+    await waitForText(threadFile, 'resumed response');
+    writeFileSync(threadFile, `${readFileSync(threadFile, 'utf8').trimEnd()}\n\n# OPERATOR\n<!-- decision-os:note {"id":"note-fresh","timestamp":"2026-07-07T17:16:00.000Z"} -->\n\nStart without the previous session context.\n`);
+    const freshResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}/continue`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ledgerId: 'specs', cardId: outputCardId, codexModel: 'gpt-5.5', codexEffort: 'high', newSession: true })
+    });
+    assert.equal(freshResponse.status, 202);
+    const freshBody = await freshResponse.json() as { ok: boolean; run: { newSession: boolean; resumeSessionId: string } };
+    assert.equal(freshBody.ok, true);
+    assert.equal(freshBody.run.newSession, true);
+    assert.equal(freshBody.run.resumeSessionId, '');
+    await waitForText(inputFile, 'Start a new Codex session for an existing decision-os run.');
+    const freshInput = readFileSync(inputFile, 'utf8');
+    assert.match(freshInput, /The previous Codex session is intentionally unavailable/);
+    assert.match(freshInput, /Start without the previous session context\./);
+    assert.match(freshInput, /# Finished Skill Result/);
+    const freshArgs = JSON.parse(readFileSync(argvFile, 'utf8')) as string[];
+    assert.deepEqual(freshArgs.slice(0, 4), ['exec', '--dangerously-bypass-approvals-and-sandbox', '--json', '-C']);
+    assert.equal(freshArgs.includes('resume'), false);
+    assert.equal(freshArgs.includes(sessionId), false);
+
+    await waitForText(threadFile, 'fresh response');
+    writeFileSync(threadFile, `${readFileSync(threadFile, 'utf8').trimEnd()}\n\n# OPERATOR\n<!-- decision-os:note {"id":"note-after-fresh","timestamp":"2026-07-07T17:17:00.000Z"} -->\n\nContinue the fresh session.\n`);
+    const resumedFreshResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}/continue`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ledgerId: 'specs', cardId: outputCardId, codexModel: 'gpt-5.5', codexEffort: 'high' })
+    });
+    assert.equal(resumedFreshResponse.status, 202);
+    await waitForText(inputFile, 'Continue the fresh session.');
+    const resumedFreshArgs = JSON.parse(readFileSync(argvFile, 'utf8')) as string[];
+    assert.deepEqual(resumedFreshArgs.slice(0, 4), ['exec', 'resume', '--dangerously-bypass-approvals-and-sandbox', '--json']);
+    assert.equal(resumedFreshArgs.includes(freshSessionId), true);
+    await waitForText(threadFile, 'latest session response');
   } finally {
     server.close();
     process.chdir(originalCwd);

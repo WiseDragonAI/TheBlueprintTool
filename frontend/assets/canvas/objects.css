@@ -504,8 +504,13 @@
   min-width: 0;
 }
 
+.codex-run-actions .terminal-button[hidden] {
+  display: none;
+}
+
 .codex-run-cancel,
-.codex-run-continue {
+.codex-run-continue,
+.codex-run-new-session {
   min-height: 22px;
   padding: 0 8px;
   border-radius: 2px;
@@ -514,7 +519,8 @@
 }
 
 .codex-run-cancel:disabled,
-.codex-run-continue:disabled {
+.codex-run-continue:disabled,
+.codex-run-new-session:disabled {
   cursor: default;
   opacity: 0.62;
 }

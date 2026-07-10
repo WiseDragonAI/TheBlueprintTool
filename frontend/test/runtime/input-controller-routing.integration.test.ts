@@ -240,12 +240,15 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(cardDetailSkillRunWidget, /body\.className = 'codex-run-body'/);
   assert.match(cardDetailSkillRunWidget, /cancel\.className = 'codex-run-cancel terminal-button terminal-button--stop terminal-button--compact'/);
   assert.match(cardDetailSkillRunWidget, /cancel\.dataset\.codexRunCancel = ''/);
+  assert.match(cardDetailSkillRunWidget, /newSession\.dataset\.codexRunNewSession = ''/);
+  assert.match(cardDetailSkillRunWidget, /newSession\.textContent = 'New session'/);
   assert.match(cardDetailSkillRunWidget, /selectionMetric\('Model', 'codexRunModel', codexModelOptions\)/);
   assert.match(cardDetailSkillRunWidget, /selectionMetric\('Effort', 'codexRunEffort', codexEffortOptions\)/);
   assert.match(cardDetailSkillRunWidget, /widget\.replaceChildren\(body, timer\)/);
   assert.match(cardDetailSkillRunPoller, /requestCardSkillRunStatus/);
   assert.match(cardDetailSkillRunPoller, /requestCardSkillRunCancel/);
-  assert.match(cardDetailSkillRunPoller, /requestCardSkillRunContinue\(\{ ledgerId: poller\.ledgerId, cardId: poller\.cardId, runId: poller\.runId, traceId, codexModel, codexEffort \}\)/);
+  assert.match(cardDetailSkillRunPoller, /requestCardSkillRunContinue\(\{ ledgerId: poller\.ledgerId, cardId: poller\.cardId, runId: poller\.runId, traceId, codexModel, codexEffort, newSession \}\)/);
+  assert.match(cardDetailSkillRunPoller, /function bindNewSessionButton\(poller: Poller\): void \{[\s\S]*void continueRun\(poller, true\);[\s\S]*\}/);
   assert.match(cardDetailSkillRunPoller, /function bindCancelButton\(poller: Poller\): void \{[\s\S]*void cancelRun\(poller\);[\s\S]*\}/);
   assert.match(cardDetailSkillRunPoller, /requestCardSkillRunCancel\(\{ ledgerId: poller\.ledgerId, cardId: poller\.cardId, runId: poller\.runId \}\)/);
   assert.match(cardDetailSkillRunPoller, /setCancelButtonVisible\(element: HTMLElement, visible: boolean\)/);
@@ -263,8 +266,8 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.doesNotMatch(cardDetailSkillRunPoller, /setInterval/);
   assert.match(cardDetailSkillRunPoller, /schedulePoll\(poller, 0\)/);
   assert.match(cardDetailSkillRunPoller, /summary\.status === 'running'/);
-  assert.match(cardDetailSkillRunPoller, /async function continueRun\(poller: Poller\): Promise<void> \{[\s\S]*paintExternallyStartedRun\(poller\);[\s\S]*requestCardSkillRunContinue/);
-  assert.match(cardDetailSkillRunPoller, /function paintExternallyStartedRun\(poller: Poller\): void \{[\s\S]*poller\.startedAtMs = Date\.now\(\);[\s\S]*poller\.element\.dataset\.runStatus = 'running';/);
+  assert.match(cardDetailSkillRunPoller, /async function continueRun\(poller: Poller, newSession: boolean\): Promise<void> \{[\s\S]*paintExternallyStartedRun\(poller,[\s\S]*requestCardSkillRunContinue/);
+  assert.match(cardDetailSkillRunPoller, /function paintExternallyStartedRun\(poller: Poller, latestLabel = 'Continuing session'\): void \{[\s\S]*poller\.startedAtMs = Date\.now\(\);[\s\S]*poller\.element\.dataset\.runStatus = 'running';/);
   assert.match(ledgerContentEvents, /resumeExternallyStartedCardSkillRun/);
   assert.match(ledgerContentEvents, /reason\.startsWith\('codex-'\)/);
   assert.match(ledgerContentEvents, /reason\.endsWith\('-started'\)/);
@@ -290,7 +293,8 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.doesNotMatch(canvasLayerCss, /\.canvas\.low-detail \.ledger-card-status-toggle/);
   assert.match(objectsCss, /\.codex-run-widget\s*{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(108px, max-content\);[^}]*height:\s*112px;[^}]*overflow:\s*hidden;/s);
   assert.match(objectsCss, /\.codex-run-metadata\s*{[^}]*flex-wrap:\s*nowrap;[^}]*overflow:\s*hidden;/s);
-  assert.match(objectsCss, /\.codex-run-cancel,\s*\.codex-run-continue\s*{[^}]*min-height:\s*22px;[^}]*font-size:\s*9px;/s);
+  assert.match(objectsCss, /\.codex-run-cancel,\s*\.codex-run-continue,\s*\.codex-run-new-session\s*{[^}]*min-height:\s*22px;[^}]*font-size:\s*9px;/s);
+  assert.match(objectsCss, /\.codex-run-actions \.terminal-button\[hidden\]\s*{[^}]*display:\s*none;/s);
   assert.match(objectsCss, /\.codex-run-timer\s*{[^}]*align-self:\s*stretch;[^}]*font-size:\s*30px;[^}]*font-variant-numeric:\s*tabular-nums;/s);
   assert.match(objectsCss, /\.codex-run-widget\[data-run-status="running"\]\s*{[^}]*border-color:\s*color-mix\(in srgb, #55b8ff, transparent 28%\);/s);
   for (const status of ['complete', 'failed', 'cancelled', 'unknown']) {

@@ -41,6 +41,7 @@ function fakeCodexRunWidget(): HTMLElement & { nodes: Record<string, FakeNode> }
     '[data-codex-run-messages]',
     '[data-codex-run-metadata]',
     '[data-codex-run-model]',
+    '[data-codex-run-new-session]',
     '[data-codex-run-source]',
     '[data-codex-run-status]',
     '[data-codex-run-timer]',
@@ -192,6 +193,7 @@ test('externally started Codex runs clear terminal widget cache and restart poll
   const previousWindow = (globalThis as unknown as { window?: unknown }).window;
   const previousCustomEvent = (globalThis as unknown as { CustomEvent?: unknown }).CustomEvent;
   const requests: string[] = [];
+  const continuationBodies: Array<Record<string, unknown>> = [];
   try {
     (globalThis as unknown as { document: unknown }).document = { contains: () => true };
     (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
@@ -201,7 +203,15 @@ test('externally started Codex runs clear terminal widget cache and restart poll
         this.detail = init?.detail;
       }
     };
-    globalThis.fetch = (async (url: string) => {
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST' && url.endsWith('/continue')) {
+        continuationBodies.push(JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>);
+        return new Response(JSON.stringify({ ok: true, run: { id: 'codex-skill-3000-cache', status: 'running' } }), {
+          status: 202,
+          headers: { 'content-type': 'application/json' }
+        });
+      }
+      if (init?.method === 'POST') return new Response('', { status: 204 });
       requests.push(url);
       return new Response(JSON.stringify({
         ok: true,
@@ -232,6 +242,7 @@ test('externally started Codex runs clear terminal widget cache and restart poll
     assert.equal(firstWidget.nodes['[data-codex-run-effort]'].value, 'xhigh');
     assert.equal(firstWidget.nodes['[data-codex-run-model]'].disabled, false);
     assert.equal(firstWidget.nodes['[data-codex-run-effort]'].disabled, false);
+    assert.equal(firstWidget.nodes['[data-codex-run-new-session]'].hidden, false);
 
     const cachedWidget = fakeCodexRunWidget();
     bindCardSkillRunWidget({ ledgerId: 'specs', cardId: 'card-a', runId: 'codex-skill-3000-cache', element: cachedWidget });
@@ -243,10 +254,17 @@ test('externally started Codex runs clear terminal widget cache and restart poll
     assert.equal(cachedWidget.nodes['[data-codex-run-latest]'].textContent, 'Continuing session');
     assert.equal(cachedWidget.nodes['[data-codex-run-cancel]'].hidden, false);
     assert.equal(cachedWidget.nodes['[data-codex-run-continue]'].hidden, true);
+    assert.equal(cachedWidget.nodes['[data-codex-run-new-session]'].hidden, true);
     assert.equal(cachedWidget.nodes['[data-codex-run-model]'].disabled, true);
     assert.equal(cachedWidget.nodes['[data-codex-run-effort]'].disabled, true);
     await waitFor(() => requests.length === 2);
     assert.equal(requests[1], '/api/codex/skills/runs/codex-skill-3000-cache?ledgerId=specs&cardId=card-a&since=0');
+    await waitFor(() => cachedWidget.nodes['[data-codex-run-status]'].textContent === 'COMPLETE');
+    cachedWidget.nodes['[data-codex-run-new-session]'].onclick?.(new Event('click'));
+    await waitFor(() => continuationBodies.length === 1);
+    assert.equal(continuationBodies[0].newSession, true);
+    assert.equal(continuationBodies[0].codexModel, 'gpt-5.5');
+    assert.equal(continuationBodies[0].codexEffort, 'xhigh');
   } finally {
     (globalThis as unknown as { document?: unknown }).document = previousDocument;
     (globalThis as unknown as { window?: unknown }).window = previousWindow;
@@ -278,7 +296,7 @@ test('requestCardSkillRunCancel posts active card run cancellation', async () =>
   }
 });
 
-test('requestCardSkillRunContinue posts terminal card run continuation with the selected model and effort', async () => {
+test('requestCardSkillRunContinue can start a new session with the selected model and effort', async () => {
   const previousFetch = globalThis.fetch;
   try {
     globalThis.fetch = (async (url: string, init?: RequestInit) => {
@@ -290,7 +308,8 @@ test('requestCardSkillRunContinue posts terminal card run continuation with the 
         ledgerId: 'specs',
         cardId: 'card-a',
         codexModel: 'gpt-5.4',
-        codexEffort: 'high'
+        codexEffort: 'high',
+        newSession: true
       });
       return new Response(JSON.stringify({ ok: true, run: { id: 'codex-skill-1000-abcd', status: 'running' } }), {
         status: 202,
@@ -303,7 +322,8 @@ test('requestCardSkillRunContinue posts terminal card run continuation with the 
       cardId: 'card-a',
       runId: 'codex-skill-1000-abcd',
       codexModel: 'gpt-5.4',
-      codexEffort: 'high'
+      codexEffort: 'high',
+      newSession: true
     });
     assert.equal(result.ok, true);
     assert.equal(result.status, 'running');

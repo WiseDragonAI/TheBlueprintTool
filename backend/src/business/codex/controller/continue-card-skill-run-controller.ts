@@ -1,6 +1,6 @@
 /**
- * WHAT: Resumes an existing card-scoped Codex skill run with newer thread messages.
- * WHY: Operators need to continue the original Codex session from the output card widget.
+ * WHAT: Continues an existing card-scoped Codex skill run with newer thread messages.
+ * WHY: Operators need to resume the current session or start a fresh session from the output card widget.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { appendFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync, type WriteStream } from 'node:fs';
@@ -12,7 +12,7 @@ import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/re
 import { buildCardSkillContinuePrompt } from '../helper/build-card-skill-continue-prompt.js';
 import { codexRunSegmentMarker } from '../helper/codex-run-segment-marker.js';
 import { isCodexThreadArtifactNote } from '../helper/is-codex-thread-artifact-note.js';
-import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexResumeCommand } from '../helper/resolve-codex-command.js';
+import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand, resolveCodexResumeCommand } from '../helper/resolve-codex-command.js';
 import { readCardSkillRunController } from './read-card-skill-run-controller.js';
 
 type AnyRecord = Record<string, unknown>;
@@ -98,18 +98,19 @@ function finishRunStreams(stdout: WriteStream, stderr: WriteStream, callback: ()
 
 function readRunSessionId(stdoutFile: string): string {
   if (!existsSync(stdoutFile)) return '';
+  let sessionId = '';
   for (const line of readFileSync(stdoutFile, 'utf8').replace(/\r\n?/g, '\n').split('\n')) {
     if (!line.trim()) continue;
     try {
       const event = JSON.parse(line) as AnyRecord;
       const nestedPayload = event.payload && typeof event.payload === 'object' && !Array.isArray(event.payload) ? event.payload as AnyRecord : {};
-      const sessionId = String(event.thread_id ?? event.session_id ?? nestedPayload.session_id ?? '').trim();
-      if (sessionId) return sessionId;
+      const capturedSessionId = String(event.thread_id ?? event.session_id ?? nestedPayload.session_id ?? '').trim();
+      if (capturedSessionId) sessionId = capturedSessionId;
     } catch {
       // Ignore malformed run lines; later valid lines can still identify the session.
     }
   }
-  return '';
+  return sessionId;
 }
 
 function cardReferencesRun(input: { ledger: AnyRecord; decisionOsRoot: string; cardId: string; runId: string }): boolean {
@@ -202,11 +203,12 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   const cardId = String(payload.cardId ?? '').trim();
   const runId = String(payload.runId ?? '').trim();
   const traceId = String(payload.traceId ?? '');
+  const newSession = payload.newSession === true;
   const fail = (statusCode: number, error: string, extra: AnyRecord = {}): AnyRecord => {
     logCodexContinueDebug('continue-controller-fail', { traceId, ledgerId, cardId, runId, statusCode, error, ...extra });
     return { ok: false, statusCode, error, runId, ...extra };
   };
-  logCodexContinueDebug('continue-controller-entry', { traceId, ledgerId, cardId, runId, decisionOsRoot, workspaceRoot, runtimeStatus: runtimeRunStatus(runtime, runId) });
+  logCodexContinueDebug('continue-controller-entry', { traceId, ledgerId, cardId, runId, newSession, decisionOsRoot, workspaceRoot, runtimeStatus: runtimeRunStatus(runtime, runId) });
   if (!ledgerId || !cardId || !runId) return fail(400, 'Missing ledgerId, cardId, or runId.');
   if (runtimeRunStatus(runtime, runId) === 'running') return fail(409, 'Run is already active.');
 
@@ -227,8 +229,8 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   const stdoutFile = resolve(runDirectory, `${safeSegment(runId)}.jsonl`);
   const stderrFile = resolve(runDirectory, `${safeSegment(runId)}.log`);
   const sessionId = readRunSessionId(stdoutFile);
-  logCodexContinueDebug('run-files-resolved', { traceId, ledgerId, cardId, runId, runDirectory, stdoutFile, stderrFile, stdoutLineCount: runFileLineCount(stdoutFile), stderrBytes: existsSync(stderrFile) ? readFileSync(stderrFile, 'utf8').length : 0, sessionId });
-  if (!sessionId) return fail(409, 'Codex session id was not captured for this run.');
+  logCodexContinueDebug('run-files-resolved', { traceId, ledgerId, cardId, runId, newSession, runDirectory, stdoutFile, stderrFile, stdoutLineCount: runFileLineCount(stdoutFile), stderrBytes: existsSync(stderrFile) ? readFileSync(stderrFile, 'utf8').length : 0, sessionId });
+  if (!newSession && !sessionId) return fail(409, 'Codex session id was not captured for this run.');
 
   const status = await readCardSkillRunController({ action_payload: { ledgerId, cardId, runId, since: 0, traceId }, runtime_state: runtime });
   logCodexContinueDebug('preflight-status', { traceId, ledgerId, cardId, runId, ok: status.ok, status: status.status, lineCount: status.lineCount, persistedEventCount: status.persistedEventCount, latestEventType: status.latestEvent && typeof status.latestEvent === 'object' ? String((status.latestEvent as AnyRecord).type ?? '') : '', error: status.error });
@@ -242,20 +244,35 @@ export async function continueCardSkillRunController(input: { action_payload?: A
 
   const outputFile = outputFileForRunCard({ ledger, decisionOsRoot, cardId });
   if (!outputFile) return fail(500, 'Run output card content file was not found.', { cardId });
+  if (newSession && !existsSync(outputFile)) return fail(500, 'Run output card content file was not found.', { cardId, outputFile });
+  const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
 
-  const command = resolveCodexResumeCommand({ workspaceRoot, runtime, sessionId, codexModel: requestedCodexModel, codexEffort: requestedCodexEffort });
-  const prompt = buildCardSkillContinuePrompt({ messages });
-  logCodexContinueDebug('spawn-prep', { traceId, ledgerId, cardId, runId, command: command.command, args: command.args, model: command.model, effort: command.effort, sessionId, promptChars: prompt.length, messageCount: messages.length, outputFile });
+  const command = newSession
+    ? resolveCodexCommand({ workspaceRoot, runtime, codexModel: requestedCodexModel, codexEffort: requestedCodexEffort })
+    : resolveCodexResumeCommand({ workspaceRoot, runtime, sessionId, codexModel: requestedCodexModel, codexEffort: requestedCodexEffort });
+  const prompt = buildCardSkillContinuePrompt({
+    messages,
+    newSessionContext: newSession ? {
+      workspaceRoot,
+      ledgerFile: ledgerPath,
+      runId,
+      cardId,
+      cardTitle: String(card?.title ?? cardId),
+      outputFile,
+      outputMarkdown: readFileSync(outputFile, 'utf8'),
+    } : undefined,
+  });
+  const lifecycleReason = newSession ? 'codex-skill-new-session' : 'codex-skill-continue';
+  logCodexContinueDebug('spawn-prep', { traceId, ledgerId, cardId, runId, newSession, command: command.command, args: command.args, model: command.model, effort: command.effort, sessionId, promptChars: prompt.length, messageCount: messages.length, outputFile });
   mkdirSync(runDirectory, { recursive: true });
   const child = spawn(command.command, command.args, { cwd: workspaceRoot, stdio: ['pipe', 'pipe', 'pipe'] });
   const stdout = createWriteStream(stdoutFile, { flags: 'a' });
   const stderr = createWriteStream(stderrFile, { flags: 'a' });
   const continuedAt = new Date().toISOString();
-  const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
   appendFileSync(stderrFile, codexRunSegmentMarker({
     runId,
     startedAt: continuedAt,
-    segment: 'continue',
+    segment: newSession ? 'restart' : 'continue',
     metadata: {
       sourceCardTitle: String(card?.title ?? cardId),
       codexModel: command.model,
@@ -282,7 +299,8 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     stderrFile,
     codexModel: command.model,
     codexEffort: command.effort,
-    resumeSessionId: sessionId,
+    newSession,
+    resumeSessionId: newSession ? '' : sessionId,
     continuedMessageCount: messages.length,
     pid: child.pid ?? 0,
     status: 'running',
@@ -291,8 +309,8 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   };
   updateRuntimeRun(runtime, runId, run);
   attachRuntimeRunChild(runtime, runId, child);
-  logCodexContinueDebug('spawned', { traceId, ledgerId, cardId, runId, pid: child.pid ?? 0, continuedAt, continuedMessageCount: messages.length });
-  notifyLedgerChange(payload.onLedgerChange, { reason: 'codex-skill-continue-started', ledgerId, outputCardId: cardId, runId, continuedMessageCount: messages.length, codexModel: command.model, codexEffort: command.effort });
+  logCodexContinueDebug('spawned', { traceId, ledgerId, cardId, runId, newSession, pid: child.pid ?? 0, continuedAt, continuedMessageCount: messages.length });
+  notifyLedgerChange(payload.onLedgerChange, { reason: `${lifecycleReason}-started`, ledgerId, outputCardId: cardId, runId, continuedMessageCount: messages.length, codexModel: command.model, codexEffort: command.effort });
 
   let settled = false;
   child.on('error', (error) => {
@@ -300,13 +318,13 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     settled = true;
     const finishedAt = new Date().toISOString();
     logCodexContinueDebug('child-error', { traceId, ledgerId, cardId, runId, message: error.message, finishedAt });
-    appendRunStatus(outputFile, 'failed', `resume failed: ${error.message}`);
+    appendRunStatus(outputFile, 'failed', `${newSession ? 'new session' : 'resume'} failed: ${error.message}`);
     updateRuntimeRun(runtime, runId, { status: 'failed', error: error.message, finishedAt });
     finishRunStreams(stdout, stderr, () => {
       void readCardSkillRunController({ action_payload: { ledgerId, cardId, runId }, runtime_state: runtime })
         .catch(() => undefined)
         .finally(() => {
-          notifyLedgerChange(payload.onLedgerChange, { reason: 'codex-skill-continue-failed', ledgerId, outputCardId: cardId, runId });
+          notifyLedgerChange(payload.onLedgerChange, { reason: `${lifecycleReason}-failed`, ledgerId, outputCardId: cardId, runId });
           notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, status: 'failed' });
         });
     });
@@ -316,7 +334,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     settled = true;
     const finishedAt = new Date().toISOString();
     const status: ProcessStatus = runtimeRunStatus(runtime, runId) === 'cancelled' ? 'cancelled' : exitCode === 0 ? 'complete' : 'failed';
-    const detail = status === 'cancelled' ? 'terminated by operator' : `resume exit code ${exitCode ?? 'unknown'}`;
+    const detail = status === 'cancelled' ? 'terminated by operator' : `${newSession ? 'new session' : 'resume'} exit code ${exitCode ?? 'unknown'}`;
     logCodexContinueDebug('child-close', { traceId, ledgerId, cardId, runId, exitCode, status, detail, finishedAt });
     appendRunStatus(outputFile, status, detail);
     updateRuntimeRun(runtime, runId, { status, exitCode, finishedAt });
@@ -325,7 +343,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       void readCardSkillRunController({ action_payload: { ledgerId, cardId, runId }, runtime_state: runtime })
         .catch(() => undefined)
         .finally(() => {
-          notifyLedgerChange(payload.onLedgerChange, { reason: status === 'cancelled' ? 'codex-skill-continue-cancelled' : 'codex-skill-continue-finished', ledgerId, outputCardId: cardId, runId, exitCode });
+          notifyLedgerChange(payload.onLedgerChange, { reason: status === 'cancelled' ? `${lifecycleReason}-cancelled` : `${lifecycleReason}-finished`, ledgerId, outputCardId: cardId, runId, exitCode });
           notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, status, exitCode });
         });
     });

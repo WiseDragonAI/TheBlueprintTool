@@ -1,4 +1,4 @@
-type CodexRunSegment = 'start' | 'continue';
+type CodexRunSegment = 'start' | 'continue' | 'restart';
 
 const markerPrefix = 'decision-os:codex-run-segment ';
 

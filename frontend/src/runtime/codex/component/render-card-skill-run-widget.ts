@@ -30,7 +30,7 @@ function selectionMetric(label: string, key: string, options: readonly string[])
   select.className = 'codex-run-select';
   select.dataset[key] = '';
   select.disabled = true;
-  select.setAttribute('aria-label', `${label} for next Codex continuation`);
+  select.setAttribute('aria-label', `${label} for next Codex turn`);
   for (const value of options) {
     const option = document.createElement('option');
     option.value = value;
@@ -78,9 +78,17 @@ export function renderCardSkillRunWidget(card: Record<string, unknown>): HTMLEle
   resume.title = 'Continue Codex session';
   resume.setAttribute('aria-label', resume.title);
   resume.textContent = 'Continue';
+  const newSession = document.createElement('button');
+  newSession.type = 'button';
+  newSession.className = 'codex-run-new-session terminal-button terminal-button--compact';
+  newSession.dataset.codexRunNewSession = '';
+  newSession.hidden = true;
+  newSession.title = 'Start a new Codex session';
+  newSession.setAttribute('aria-label', newSession.title);
+  newSession.textContent = 'New session';
   const actions = document.createElement('div');
   actions.className = 'codex-run-actions';
-  actions.replaceChildren(cancel, resume);
+  actions.replaceChildren(cancel, resume, newSession);
   header.replaceChildren(status, actions);
 
   const timer = document.createElement('time');
