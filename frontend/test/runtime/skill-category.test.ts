@@ -23,7 +23,7 @@ test('categoryForSkill maps known skills and leaves custom skills explicit', () 
   assert.equal(categoryForSkill('implementation-orchestrator'), 'Implementation');
   assert.equal(categoryForSkill('task-dependency'), 'Implementation');
   assert.equal(categoryForSkill('task-group-completeness'), 'Implementation');
-  assert.equal(categoryForSkill('test-failure-attribution'), 'Implementation');
+  assert.equal(categoryForSkill('run-test-and-fix'), 'Implementation');
   assert.equal(categoryForSkill('ui-audit'), 'Interface');
   assert.equal(categoryForSkill('copywriting'), 'Writing');
   assert.equal(categoryForSkill('page-cro'), 'Marketing');
