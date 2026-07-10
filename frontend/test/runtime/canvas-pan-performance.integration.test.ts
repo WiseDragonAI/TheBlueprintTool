@@ -684,6 +684,7 @@ test('created cards prepare their thread while the panel stays closed for A and 
     assert.equal(standaloneCard.style.left, `${standaloneRect.x}px`);
     assert.equal(standaloneCard.style.top, `${standaloneRect.y}px`);
     assert.deepEqual(state.selection, { cardIds: [standaloneCardId], zoneIds: [], groupIds: [] });
+    assert.equal(standaloneCard.classList.contains('selected'), true);
     assert.equal(state.threadId, `thread-${standaloneCardId}`);
     assert.equal(state.threadPanelOpen, false);
   } finally {

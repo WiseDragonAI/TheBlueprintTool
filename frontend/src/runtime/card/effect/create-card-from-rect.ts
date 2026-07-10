@@ -36,13 +36,17 @@ export async function createCardFromRect(rect: { x: number; y: number; width: nu
     refreshZoneAttributionCache('optimistic-create-card');
     telemetry('render-card-layer', { created: cardId, activeTab: state.activeTab, authority: 'optimistic-client' });
     renderCanvasSurface({ renderThreadPanel: false });
+    // WHAT: Select only after the ledger renderer has materialized the created card.
+    // WHY: selectTarget owns thread preparation and visible selection state.
     selectTarget('card', cardId, false);
     await commitActiveLedgerMutation({ action: 'create-card', card });
     return;
   }
 
+  // WHAT: Build a standalone DOM card when no active ledger state owns the canvas.
+  // WHY: Static canvas mode has no ledger render pass to materialize the drawn card.
   const element = document.createElement('article');
-  element.className = 'card selected';
+  element.className = 'card';
   element.dataset.cardId = cardId;
   element.dataset.threadId = `thread-${cardId}`;
   element.style.left = `${card.x}px`;
@@ -55,6 +59,8 @@ export async function createCardFromRect(rect: { x: number; y: number; width: nu
     Object.assign(document.createElement('div'), { className: 'ledger-card-body', innerHTML: '<p>New description</p>' })
   );
   content.insertBefore(element, content.querySelector('.marquee'));
+  // WHAT: Select after insertion so the selection renderer can update the new DOM node.
+  // WHY: selectTarget is the single owner of thread preparation and selected classes.
   selectTarget('card', cardId, false);
   telemetry('commit-static-surface-edit', { createCard: cardId, geometry: rect });
   telemetry('render-card-layer', { created: cardId });
