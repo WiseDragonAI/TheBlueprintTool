@@ -4,6 +4,7 @@
  */
 import { cardCodexRunId } from '../../codex/helper/card-codex-run-id.js';
 import { groupSequentialToolCalls, type ThreadRunLogEvent, type ThreadRunToolGroup } from '../../codex/helper/thread-run-log.js';
+import { codexRunDurationLabel, liveCodexRunElapsedMs } from '../../codex/helper/live-codex-run-elapsed-ms.js';
 import type { CardSkillRunSummary } from '../../codex/effect/request-card-skill-run-status.js';
 import { threadCodexCardId } from '../../codex/helper/thread-codex-card-id.js';
 import { renderLedgerCardMarkdown } from '../../ledger/component/render-ledger-card-markdown.js';
@@ -20,16 +21,6 @@ function disclosureState(name: string, threadId: string): Record<string, boolean
   const byThread = recordState(name) as DisclosureByThread;
   if (!byThread[threadId] || typeof byThread[threadId] !== 'object') byThread[threadId] = {};
   return byThread[threadId];
-}
-
-function durationLabel(ms: number): string {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return hours > 0
-    ? `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-    : `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
 function compactText(value: string, maxLength = 108): string {
@@ -174,19 +165,21 @@ function renderStatus(input: { summary: CardSkillRunSummary | null; card: Record
   const strip = document.createElement('dl');
   strip.className = 'codex-log-status';
   strip.dataset.runStatus = status;
-  const values: Array<[string, string]> = [
+  strip.dataset.runId = input.runId;
+  const values: Array<[string, string, string?]> = [
     ['Status', status],
     ['Model', summary?.metadata.codexModel || String(input.card.codexRunModel ?? '') || '—'],
     ['Effort', summary?.metadata.codexEffort || String(input.card.codexRunEffort ?? '') || '—'],
-    ['Elapsed', durationLabel(summary?.elapsedMs ?? 0)],
+    ['Elapsed', codexRunDurationLabel(summary ? liveCodexRunElapsedMs(summary) : 0), 'codex-log-elapsed'],
     ['Tools', String(summary?.toolCallCount ?? 0)],
   ];
-  for (const [label, value] of values) {
+  for (const [label, value, dataName] of values) {
     const item = document.createElement('div');
     const term = document.createElement('dt');
     const description = document.createElement('dd');
     term.textContent = label;
     description.textContent = value;
+    if (dataName) description.setAttribute(`data-${dataName}`, '');
     item.append(term, description);
     strip.append(item);
   }

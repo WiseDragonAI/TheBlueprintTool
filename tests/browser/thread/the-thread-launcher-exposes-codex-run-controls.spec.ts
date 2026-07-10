@@ -217,6 +217,34 @@ test('The thread launcher exposes Codex model and effort controls.', async () =>
     assert.equal(await page.locator('.codex-log-announcer').getAttribute('aria-live'), 'polite');
     assert.equal(await page.locator('.codex-log-announcer').innerText(), 'Search completed.');
 
+    const firstLiveElapsed = await page.evaluate(async ({ threadId }) => {
+      const state = window.__coreState;
+      const runId = String(state.threadRunIdByThreadId[threadId]);
+      const summary = state.threadRunSummaryByThreadId[threadId];
+      summary.status = 'running';
+      summary.startedAt = '';
+      summary.elapsedMs = 2200;
+      const { renderThreadCodexLog } = await import('/src/runtime/thread/effect/render-thread-codex-log.js');
+      const { syncThreadCodexRunClock } = await import('/src/runtime/codex/effect/bind-thread-codex-run-log.js');
+      renderThreadCodexLog();
+      syncThreadCodexRunClock({ threadId, runId, summary });
+      return document.querySelector<HTMLElement>('[data-codex-log-elapsed]')?.textContent ?? '';
+    }, { threadId: seededLog.threadId });
+    assert.equal(firstLiveElapsed, '00:02');
+    await delay(1100);
+    assert.equal(await page.locator('[data-codex-log-elapsed]').innerText(), '00:03');
+    await page.evaluate(async ({ threadId }) => {
+      const state = window.__coreState;
+      const runId = String(state.threadRunIdByThreadId[threadId]);
+      const summary = state.threadRunSummaryByThreadId[threadId];
+      summary.status = 'complete';
+      summary.elapsedMs = 3200;
+      const { renderThreadCodexLog } = await import('/src/runtime/thread/effect/render-thread-codex-log.js');
+      const { syncThreadCodexRunClock } = await import('/src/runtime/codex/effect/bind-thread-codex-run-log.js');
+      syncThreadCodexRunClock({ threadId, runId, summary });
+      renderThreadCodexLog();
+    }, { threadId: seededLog.threadId });
+
     await page.locator('.codex-tool-group-summary').focus();
     await page.keyboard.press('Enter');
     assert.equal(await page.locator('.codex-tool-group').getAttribute('open'), '');
