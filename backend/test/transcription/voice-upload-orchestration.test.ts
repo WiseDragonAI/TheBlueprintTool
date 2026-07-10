@@ -171,6 +171,7 @@ test('voice upload continues the existing Codex session when the card has a run 
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-voice-continue-codex-'));
   const fakeCodex = join(workspace, 'fake-codex-resume.mjs');
   const inputFile = join(workspace, 'codex-resume-input.txt');
+  const argvFile = join(workspace, 'codex-resume-argv.json');
   const runId = 'codex-skill-1783587000000-existing';
   mkdirSync(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs'), { recursive: true });
   mkdirSync(join(workspace, '.decision-os'), { recursive: true });
@@ -201,7 +202,7 @@ test('voice upload continues the existing Codex session when the card has a run 
     JSON.stringify({ type: 'turn.completed' }),
     ''
   ].join('\n'));
-  writeFileSync(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.log`), '');
+  writeFileSync(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.log`), `decision-os:codex-run-segment ${JSON.stringify({ runId, startedAt: new Date().toISOString(), segment: 'start', startLine: 0, metadata: { codexModel: 'gpt-5.4', codexEffort: 'medium' } })}\n`);
   writeFileSync(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.md`), '# Existing Run\n');
   writeFileSync(fakeCodex, [
     '#!/usr/bin/env node',
@@ -210,6 +211,7 @@ test('voice upload continues the existing Codex session when the card has a run 
     'process.stdin.on("data", (chunk) => { input += chunk; });',
     'process.stdin.on("end", () => {',
     `  writeFileSync(${JSON.stringify(inputFile)}, input);`,
+    `  writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(2)));`,
     '  console.log(JSON.stringify({ type: "turn.started" }));',
     '  console.log(JSON.stringify({ type: "turn.completed" }));',
     '});',
@@ -233,8 +235,14 @@ test('voice upload continues the existing Codex session when the card has a run 
 
     await waitForText(join(workspace, '.decision-os', 'threads', 'specs', 'thread-card-a.md'), 'Existing-session transcript.');
     await waitForText(inputFile, 'Existing-session transcript.');
-    const ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { cards: Array<{ id: string; codexThreadRunId?: string }> };
+    await waitForText(argvFile, 'gpt-5.4');
+    const argv = JSON.parse(readFileSync(argvFile, 'utf8')) as string[];
+    assert.equal(argv.includes('gpt-5.4'), true);
+    assert.equal(argv.includes('model_reasoning_effort="medium"'), true);
+    const ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { cards: Array<{ id: string; codexThreadRunId?: string; codexRunModel?: string; codexRunEffort?: string }> };
     assert.equal(ledger.cards.find((card) => card.id === 'card-a')?.codexThreadRunId, runId);
+    assert.equal(ledger.cards.find((card) => card.id === 'card-a')?.codexRunModel, 'gpt-5.4');
+    assert.equal(ledger.cards.find((card) => card.id === 'card-a')?.codexRunEffort, 'medium');
   } finally {
     server.close();
     process.chdir(originalCwd);

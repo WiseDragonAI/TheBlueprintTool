@@ -1,6 +1,6 @@
 /**
  * WHAT: Builds the first-run prompt for a Codex session scoped to one decision-os thread.
- * WHY: The thread-panel action must reuse treatment rules without asking Codex to scan every open note.
+ * WHY: The thread-panel action needs a direct execution contract scoped to the selected card thread.
  */
 export function buildThreadCodexPrompt(input: {
   workspaceRoot: string;
@@ -15,7 +15,7 @@ export function buildThreadCodexPrompt(input: {
   runSummaryFile: string;
 }): string {
   return [
-    'You are treating one decision-os thread, not scanning all open notes.',
+    'Execute the operator request from one decision-os card thread.',
     '',
     'Scope:',
     `Workspace root: ${input.workspaceRoot}`,
@@ -27,14 +27,14 @@ export function buildThreadCodexPrompt(input: {
     `Thread markdown file: ${input.threadMarkdownFile}`,
     `Run summary file: ${input.runSummaryFile}`,
     '',
-    'Scoped treatment rules adapted from the decision-os treat-open-notes workflow:',
+    'Thread execution contract:',
     '1. Read the full thread markdown and card markdown before acting.',
-    '2. Treat the thread markdown as the operator request source for this run.',
+    '2. Use the thread markdown as the operator request source for this run.',
     '3. Apply requested durable edits to the card markdown or repo files as needed.',
     '4. Append exactly one # AGENT reply to the thread markdown when the work is complete or blocked.',
     '5. Use only # OPERATOR and # AGENT as top-level thread message headings.',
     '6. For multi-paragraph replies, patch the thread markdown file directly.',
-    '7. Do not query or treat unrelated open notes.',
+    '7. Do not inspect or modify unrelated threads.',
     '8. Do not change card status unless the operator explicitly asks.',
     '9. Do not manually edit ledger JSON unless changing structured card data is explicitly required.',
     '10. Keep unrelated files unchanged.',

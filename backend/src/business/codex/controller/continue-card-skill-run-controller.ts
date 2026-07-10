@@ -7,6 +7,7 @@ import { appendFileSync, createWriteStream, existsSync, mkdirSync, readFileSync,
 import { basename, dirname, extname, isAbsolute, relative, resolve } from 'node:path';
 import { hydrateLedgerCardContent, resolveCardContentFile } from '@backend/business/ledger/helper/card-content-file.js';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
+import { stripHydratedThreadNotes } from '@backend/business/ledger/helper/thread-content-file.js';
 import { flushCardSkillRunEventIngestor } from '../effect/flush-card-skill-run-event-ingestor.js';
 import { createCardSkillRunEventIngestor } from '../effect/ingest-card-skill-run-events.js';
 import { prepareCardSkillRunEventAppend } from '../effect/prepare-card-skill-run-event-append.js';
@@ -198,10 +199,19 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   if (!outputFile) return fail(500, 'Run output card content file was not found.', { cardId });
   if (newSession && !existsSync(outputFile)) return fail(500, 'Run output card content file was not found.', { cardId, outputFile });
   const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
+  const statusMetadata = status.metadata && typeof status.metadata === 'object' && !Array.isArray(status.metadata) ? status.metadata as AnyRecord : {};
+  const codexModel = requestedCodexModel || optionalText(card?.codexRunModel) || optionalText(statusMetadata.codexModel);
+  const codexEffort = requestedCodexEffort || optionalText(card?.codexRunEffort) || optionalText(statusMetadata.codexEffort);
 
   const command = newSession
-    ? resolveCodexCommand({ workspaceRoot, runtime, codexModel: requestedCodexModel, codexEffort: requestedCodexEffort })
-    : resolveCodexResumeCommand({ workspaceRoot, runtime, sessionId, codexModel: requestedCodexModel, codexEffort: requestedCodexEffort });
+    ? resolveCodexCommand({ workspaceRoot, runtime, codexModel, codexEffort })
+    : resolveCodexResumeCommand({ workspaceRoot, runtime, sessionId, codexModel, codexEffort });
+  if (card) {
+    card.codexRunModel = command.model;
+    card.codexRunEffort = command.effort;
+    stripHydratedThreadNotes(ledger);
+    writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2), 'utf8');
+  }
   const prompt = buildCardSkillContinuePrompt({
     messages,
     newSessionContext: newSession ? {

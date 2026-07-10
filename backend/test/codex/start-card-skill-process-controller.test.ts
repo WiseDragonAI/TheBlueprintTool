@@ -165,12 +165,15 @@ test('card skill process route creates a linked output card and launches codex',
     assert.equal(body.run.codexEffort, 'xhigh');
 
     const ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as {
-      cards: Array<{ id: string; x: number; comment?: { contentFile?: string } }>;
+      cards: Array<{ id: string; x: number; codexRunModel?: string; codexRunEffort?: string; comment?: { contentFile?: string } }>;
       relationships: Array<{ from: string; to: string; label: string }>;
     };
     assert.equal(ledger.cards.some((card) => card.id === body.run.outputCardId && card.x > 420), true);
     assert.equal(ledger.relationships.some((relationship) => relationship.from === 'source-card' && relationship.to === body.run.outputCardId && relationship.label === 'test-skill'), true);
-    assert.equal(ledger.cards.find((card) => card.id === body.run.outputCardId)?.comment?.contentFile?.endsWith(`${body.run.outputCardId}.md`), true);
+    const outputCard = ledger.cards.find((card) => card.id === body.run.outputCardId);
+    assert.equal(outputCard?.comment?.contentFile?.endsWith(`${body.run.outputCardId}.md`), true);
+    assert.equal(outputCard?.codexRunModel, 'gpt-5.4');
+    assert.equal(outputCard?.codexRunEffort, 'xhigh');
 
     const statusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${body.run.id}?ledgerId=specs&cardId=${body.run.outputCardId}&since=0`);
     assert.equal(statusResponse.status, 200);
@@ -278,24 +281,26 @@ test('thread codex process route anchors the run widget on the source card and s
     assert.equal(body.run.codexModel, 'gpt-5.4');
     assert.equal(body.run.codexEffort, 'medium');
 
-    await waitForText(inputFile, 'You are treating one decision-os thread, not scanning all open notes.');
+    await waitForText(inputFile, 'Execute the operator request from one decision-os card thread.');
     const input = readFileSync(inputFile, 'utf8');
     assert.match(input, /Card markdown file: .*\.decision-os\/cards\/specs\/card-a\.md/);
     assert.match(input, /Thread markdown file: .*\.decision-os\/threads\/specs\/thread-card-a\.md/);
     assert.match(input, /Please update this exact card from the thread\./);
     assert.doesNotMatch(input, /Codex internal output should not be prompt context\./);
     assert.match(input, /Existing card body/);
-    assert.match(input, /Do not query or treat unrelated open notes\./);
-    assert.doesNotMatch(input, /ledger-cli unanswered|Query Open Notes|For every pending operator note/);
+    assert.match(input, /Do not inspect or modify unrelated threads\./);
+    assert.doesNotMatch(input, /treat-open-notes|open notes|ledger-cli unanswered|Query Open Notes|For every pending operator note/i);
 
     const ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as {
-      cards: Array<{ id: string; codexThreadRunId?: string; codexThreadRunOutputFile?: string; comment?: { contentFile?: string } }>;
+      cards: Array<{ id: string; codexThreadRunId?: string; codexThreadRunOutputFile?: string; codexRunModel?: string; codexRunEffort?: string; comment?: { contentFile?: string } }>;
       threadFiles: Record<string, string>;
     };
     const card = ledger.cards.find((entry) => entry.id === 'card-a');
     assert.equal(ledger.cards.length, 1);
     assert.equal(card?.codexThreadRunId, body.run.id);
     assert.equal(card?.codexThreadRunOutputFile?.includes(body.run.id), true);
+    assert.equal(card?.codexRunModel, 'gpt-5.4');
+    assert.equal(card?.codexRunEffort, 'medium');
     assert.equal(card?.comment?.contentFile, '.decision-os/cards/specs/card-a.md');
     assert.equal(ledger.threadFiles['thread-card-a'], '.decision-os/threads/specs/thread-card-a.md');
 
@@ -325,10 +330,12 @@ test('thread codex process route anchors the run widget on the source card and s
     for (let requestIndex = 0; requestIndex < 3; requestIndex += 1) {
       const statusResponse = await fetch(`${baseUrl}/api/codex/skills/runs/${body.run.id}?ledgerId=specs&cardId=card-a&since=0`);
       assert.equal(statusResponse.status, 200);
-      const status = await statusResponse.json() as { ok: boolean; status: string; persistedEventCount: number };
+      const status = await statusResponse.json() as { ok: boolean; status: string; persistedEventCount: number; metadata: { codexModel: string; codexEffort: string } };
       assert.equal(status.ok, true);
       assert.equal(status.status, 'complete');
       assert.equal(status.persistedEventCount, 0);
+      assert.equal(status.metadata.codexModel, 'gpt-5.4');
+      assert.equal(status.metadata.codexEffort, 'medium');
     }
     await waitForStableEventCount(eventCollector.events);
     assert.equal(readFileSync(threadPath, 'utf8'), threadBeforePolling);

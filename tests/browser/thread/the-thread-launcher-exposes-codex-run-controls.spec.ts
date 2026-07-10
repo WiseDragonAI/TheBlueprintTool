@@ -52,6 +52,21 @@ test('The thread launcher exposes Codex model and effort controls.', async () =>
     assert.equal(await button.getAttribute('data-codex-model'), 'gpt-5.4');
     assert.equal(await button.getAttribute('data-codex-effort'), 'high');
 
+    const persistedWidgetSelection = await page.evaluate(async () => {
+      const { renderCardSkillRunWidget } = await import('/src/runtime/codex/component/render-card-skill-run-widget.js');
+      const widget = renderCardSkillRunWidget({
+        id: 'card-a',
+        codexThreadRunId: 'codex-skill-1000-widget',
+        codexRunModel: 'gpt-5.4',
+        codexRunEffort: 'high'
+      });
+      return {
+        model: widget?.querySelector<HTMLSelectElement>('[data-codex-run-model]')?.value ?? '',
+        effort: widget?.querySelector<HTMLSelectElement>('[data-codex-run-effort]')?.value ?? ''
+      };
+    });
+    assert.deepEqual(persistedWidgetSelection, { model: 'gpt-5.4', effort: 'high' });
+
     const launcherFitsPanel = await page.evaluate(() => {
       const panel = document.querySelector('.thread-panel')?.getBoundingClientRect();
       const controls = [...document.querySelectorAll('.thread-actions > *')].map((element) => element.getBoundingClientRect());

@@ -159,12 +159,14 @@ export async function startThreadCodexProcessController(input: { action_payload?
   const runSummaryFile = resolve(decisionOsRoot, runSummaryRef.replace(/^\.decision-os\//, ''));
   writeFileSync(runSummaryFile, [`# Thread Codex Run`, '', `Status: processing`, `Source card: ${String(source.title ?? cardId)}`, `Source thread: ${threadId}`, `Codex run: ${runId}`].join('\n'), 'utf8');
 
+  const command = resolveCodexCommand({ workspaceRoot, runtime, codexModel: requestedCodexModel, codexEffort: requestedCodexEffort });
   source.codexThreadRunId = runId;
   source.codexThreadRunOutputFile = runSummaryRef;
+  source.codexRunModel = command.model;
+  source.codexRunEffort = command.effort;
   stripHydratedThreadNotes(ledger);
   writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2), 'utf8');
 
-  const command = resolveCodexCommand({ workspaceRoot, runtime, codexModel: requestedCodexModel, codexEffort: requestedCodexEffort });
   const prompt = buildThreadCodexPrompt({
     workspaceRoot,
     ledgerFile: ledgerPath,

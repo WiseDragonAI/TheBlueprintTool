@@ -138,6 +138,8 @@ export async function startCardSkillProcessController(input: { action_payload?: 
     w: Math.max(360, Number(source.w ?? 360)),
     h: 260,
     status: 'todo',
+    codexRunModel: command.model,
+    codexRunEffort: command.effort,
     comment: { what: '\n' },
     facts: [],
     fields: [],

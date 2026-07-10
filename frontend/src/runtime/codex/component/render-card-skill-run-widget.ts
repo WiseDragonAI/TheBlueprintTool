@@ -20,7 +20,7 @@ function metric(label: string, value: string, key: string): HTMLElement {
   return item;
 }
 
-function selectionMetric(label: string, key: string, options: readonly string[]): HTMLElement {
+function selectionMetric(label: string, key: string, options: readonly string[], selectedValue: string): HTMLElement {
   const item = document.createElement('label');
   item.className = 'codex-run-metric codex-run-metric--control';
   const name = document.createElement('span');
@@ -37,6 +37,7 @@ function selectionMetric(label: string, key: string, options: readonly string[])
     option.textContent = value;
     select.append(option);
   }
+  if (options.includes(selectedValue)) select.value = selectedValue;
   select.addEventListener('pointerdown', (event) => event.stopPropagation());
   select.addEventListener('click', (event) => event.stopPropagation());
   item.replaceChildren(name, select);
@@ -110,8 +111,8 @@ export function renderCardSkillRunWidget(card: Record<string, unknown>): HTMLEle
   metadata.hidden = true;
   metadata.replaceChildren(
     metric('Source', '', 'codexRunSource'),
-    selectionMetric('Model', 'codexRunModel', codexModelOptions),
-    selectionMetric('Effort', 'codexRunEffort', codexEffortOptions)
+    selectionMetric('Model', 'codexRunModel', codexModelOptions, String(card.codexRunModel ?? '')),
+    selectionMetric('Effort', 'codexRunEffort', codexEffortOptions, String(card.codexRunEffort ?? ''))
   );
 
   const latest = document.createElement('p');

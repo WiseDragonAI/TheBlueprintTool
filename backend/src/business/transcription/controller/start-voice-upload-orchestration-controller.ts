@@ -109,6 +109,13 @@ function cardRunId(card: AnyRecord | undefined): string {
   return optionalText(card?.codexThreadRunId) || optionalText(card?.codexRunId);
 }
 
+function cardRunSelection(card: AnyRecord | undefined): { codexModel: string; codexEffort: string } {
+  return {
+    codexModel: optionalText(card?.codexRunModel),
+    codexEffort: optionalText(card?.codexRunEffort),
+  };
+}
+
 async function updateQueueStatus(input: {
   runtime: AnyRecord;
   ledgerId: string;
@@ -154,10 +161,11 @@ export async function runQueuedThreadCodex(input: {
     return { ok: false, error: 'Thread target card not found.' };
   }
   const runId = cardRunId(card);
+  const selection = cardRunSelection(card);
   if (!runId) {
     await updateQueueStatus({ ...input, status: 'starting' });
     const result = await startThreadCodexProcessController({
-      action_payload: { ledgerId: input.ledgerId, threadId: input.threadId, cardId: input.cardId, onLedgerChange: input.onLedgerChange },
+      action_payload: { ledgerId: input.ledgerId, threadId: input.threadId, cardId: input.cardId, ...selection, onLedgerChange: input.onLedgerChange },
       runtime_state: input.runtime
     });
     await updateQueueStatus({ ...input, status: result.ok === false ? 'failed' : 'started', runId: String((result.run as AnyRecord | undefined)?.id ?? ''), error: result.ok === false ? String(result.error ?? 'Codex launch failed.') : '' });
