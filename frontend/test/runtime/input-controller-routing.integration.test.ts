@@ -129,11 +129,17 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(paste, /commitActiveLedgerMutation/);
 
   const serverMutation = source('frontend/src/runtime/ledger/effect/commit-active-ledger-mutation.ts');
+  const serverLoad = source('frontend/src/runtime/ledger/effect/load-active-ledger-state.ts');
+  const activeLedgerReconciliation = source('frontend/src/runtime/ledger/effect/reconcile-active-ledger-state.ts');
   assert.match(serverMutation, /fetch\(endpoint/);
   assert.match(serverMutation, /method: 'PATCH'/);
-  assert.match(serverMutation, /mergeLocalCanvasStateIntoLedger/);
-  assert.match(serverMutation, /localCanvasMergeOptionsForMutation\(mutation\)/);
-  assert.match(serverMutation, /state\.activeLedger = mergeLocalThreadNotes\(canMergeLocalCanvas \? mergeLocalCanvasStateIntoLedger\(ledger, localLedger, mergeOptions\) : ledger\)/);
+  assert.match(serverMutation, /reconcileActiveLedgerState\(\{/);
+  assert.match(serverLoad, /reconcileActiveLedgerState\(\{/);
+  assert.doesNotMatch(`${serverMutation}\n${serverLoad}`, /mergeLocalCanvasStateIntoLedger|mergeLocalThreadNotes|state\.activeLedger\s*=/);
+  assert.match(activeLedgerReconciliation, /const withLocalNotes = sameLedger \? mergeLocalThreadNotes\(input\.ledger\) : input\.ledger/);
+  assert.match(activeLedgerReconciliation, /mergeLocalCanvasStateIntoLedger\(withLocalNotes, localLedger, \{/);
+  assert.match(activeLedgerReconciliation, /function replaceActiveLedger\(ledger: AnyRecord, ledgerStateId: string\): void \{[\s\S]*state\.activeLedger = ledger;[\s\S]*state\.activeLedgerId = ledgerStateId;[\s\S]*\}/);
+  assert.match(activeLedgerReconciliation, /replaceActiveLedger\(reconciledLedger, input\.request\.ledgerStateId\)/);
 
   const runtimeSources = [
     'frontend/src/runtime/gesture/controller/handle-pointer-move.ts',
