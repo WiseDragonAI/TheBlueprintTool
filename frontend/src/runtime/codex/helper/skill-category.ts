@@ -94,6 +94,7 @@ const categoryBySkillName: Record<string, SkillCategory> = {
   'strategic-narrative': 'Marketing',
   'task-dependency': 'Implementation',
   'task-group-completeness': 'Implementation',
+  'test-failure-attribution': 'Implementation',
   'ticket-solver': 'Implementation',
   'typography-system': 'Interface',
   'ui-audit': 'Interface',
