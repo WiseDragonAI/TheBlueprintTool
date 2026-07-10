@@ -1,50 +1,62 @@
 /**
- * WHAT: Discovers Codex skills available to the workspace.
- * WHY: The browser should list skill names and descriptions without accepting filesystem paths from the client.
+ * WHAT: Discovers Codex skills available to the workspace with server-owned source and editability metadata.
+ * WHY: Clients select skills by identity while filesystem paths and write boundaries remain on the server.
  */
-import { existsSync, readdirSync, readFileSync, statSync, type Dirent } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync, type Dirent } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 
-export type CodexSkillSource = 'workspace' | 'user' | 'plugin';
+export type CodexSkillSource = 'workspace' | 'user' | 'system' | 'plugin';
 
 export type CodexSkillSummary = {
   name: string;
   description: string;
   source: CodexSkillSource;
+  editable: boolean;
+  readOnlyReason: string | null;
+  revision: string;
   skillFile: string;
 };
 
-type SkillRoot = {
+export type ParsedSkillFrontmatter = {
+  name: string;
+  description: string;
+  body: string;
+  closingLine: number;
+};
+
+export type SkillRoot = {
   directory: string;
   source: CodexSkillSource;
   maxDepth: number;
+  excludedDirectories?: readonly string[];
 };
-
-function uniqueValues(values: string[]): string[] {
-  return Array.from(new Set(values.filter(Boolean)));
-}
 
 function codexHome(): string {
   return resolve(process.env.CODEX_HOME || join(homedir(), '.codex'));
 }
 
-function candidateSkillRoots(workspaceRoot: string): SkillRoot[] {
+export function candidateSkillRoots(workspaceRoot: string): SkillRoot[] {
   const home = codexHome();
-  const workspaceSkills = resolve(workspaceRoot, '.skills');
-  const cwdSkills = resolve(process.cwd(), '.skills');
+  const userSkills = resolve(home, 'skills');
+  const systemSkills = resolve(userSkills, '.system');
   return [
-    ...uniqueValues([workspaceSkills, cwdSkills]).map((directory) => ({ directory, source: 'workspace' as const, maxDepth: 5 })),
-    { directory: resolve(home, 'skills'), source: 'user' as const, maxDepth: 6 },
-    { directory: resolve(home, 'plugins', 'cache'), source: 'plugin' as const, maxDepth: 10 },
+    { directory: resolve(workspaceRoot, '.skills'), source: 'workspace', maxDepth: 5 },
+    { directory: userSkills, source: 'user', maxDepth: 6, excludedDirectories: [systemSkills] },
+    { directory: systemSkills, source: 'system', maxDepth: 5 },
+    { directory: resolve(home, 'plugins', 'cache'), source: 'plugin', maxDepth: 10 },
   ];
 }
 
-function collectSkillFiles(directory: string, maxDepth: number, depth = 0): string[] {
-  if (depth > maxDepth || !existsSync(directory)) return [];
+function collectSkillFiles(root: SkillRoot, directory = root.directory, depth = 0): string[] {
+  if (depth > root.maxDepth || !existsSync(directory)) return [];
+  const excluded = new Set((root.excludedDirectories ?? []).map((entry) => resolve(entry)));
+  if (excluded.has(resolve(directory))) return [];
   let entries: Dirent[];
   try {
-    entries = readdirSync(directory, { withFileTypes: true });
+    entries = readdirSync(directory, { withFileTypes: true })
+      .sort((left, right) => left.name.localeCompare(right.name));
   } catch {
     return [];
   }
@@ -52,7 +64,7 @@ function collectSkillFiles(directory: string, maxDepth: number, depth = 0): stri
   for (const entry of entries) {
     const child = resolve(directory, entry.name);
     if (entry.isFile() && entry.name === 'SKILL.md') files.push(child);
-    if (entry.isDirectory()) files.push(...collectSkillFiles(child, maxDepth, depth + 1));
+    if (entry.isDirectory()) files.push(...collectSkillFiles(root, child, depth + 1));
   }
   return files;
 }
@@ -65,28 +77,95 @@ function unquote(value: string): string {
     : trimmed;
 }
 
-function parseSkillFrontmatter(markdown: string): { name: string; description: string } | null {
-  const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
-  if (lines[0]?.trim() !== '---') return null;
-  const metadata: Record<string, string> = {};
-  for (let index = 1; index < lines.length; index += 1) {
+function metadataValue(lines: string[], startIndex: number, inlineValue: string): { value: string; nextIndex: number } {
+  const continuation: string[] = [];
+  let index = startIndex + 1;
+  while (index < lines.length) {
     const line = lines[index];
-    if (line.trim() === '---') break;
-    const match = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
-    if (!match) continue;
-    metadata[match[1]] = unquote(match[2] ?? '');
+    if (line.trim() === '---' || /^[A-Za-z0-9_-]+:\s*/.test(line)) break;
+    if (/^\s+\S/.test(line)) continuation.push(line.trim());
+    index += 1;
   }
-  const name = String(metadata.name ?? '').trim();
-  if (!name) return null;
-  return { name, description: String(metadata.description ?? '').trim() };
+  const marker = inlineValue.trim();
+  if (/^[>|][-+]?$/u.test(marker)) {
+    const separator = marker.startsWith('|') ? '\n' : ' ';
+    return { value: continuation.join(separator).trim(), nextIndex: index };
+  }
+  return {
+    value: [unquote(inlineValue), ...continuation].filter(Boolean).join(' ').trim(),
+    nextIndex: index,
+  };
 }
 
-function readSkillSummary(skillFile: string, source: CodexSkillSource): CodexSkillSummary | null {
+export function parseSkillFrontmatter(markdown: string): ParsedSkillFrontmatter | null {
+  const normalized = markdown.replace(/\r\n?/g, '\n');
+  const lines = normalized.split('\n');
+  if (lines[0]?.trim() !== '---') return null;
+  const metadata: Record<string, string> = {};
+  let closingLine = -1;
+  let index = 1;
+  while (index < lines.length) {
+    const line = lines[index];
+    if (line.trim() === '---') {
+      closingLine = index;
+      break;
+    }
+    const match = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+    if (!match) {
+      index += 1;
+      continue;
+    }
+    const parsed = metadataValue(lines, index, match[2] ?? '');
+    metadata[match[1]] = parsed.value;
+    index = parsed.nextIndex;
+  }
+  if (closingLine < 0) return null;
+  const name = String(metadata.name ?? '').trim();
+  if (!name) return null;
+  return {
+    name,
+    description: String(metadata.description ?? '').trim(),
+    body: lines.slice(closingLine + 1).join('\n'),
+    closingLine,
+  };
+}
+
+export function skillRevision(markdown: string): string {
+  return createHash('sha256').update(markdown).digest('hex');
+}
+
+function isInside(parent: string, child: string): boolean {
+  const inner = relative(parent, child);
+  return inner === '' || (!inner.startsWith('..') && !isAbsolute(inner));
+}
+
+function sourceEditability(skillFile: string, root: SkillRoot): { editable: boolean; readOnlyReason: string | null } {
+  if (root.source === 'system') return { editable: false, readOnlyReason: 'System skills are read-only.' };
+  if (root.source === 'plugin') return { editable: false, readOnlyReason: 'Plugin skills are read-only.' };
+  try {
+    const canonicalRoot = realpathSync(root.directory);
+    const canonicalFile = realpathSync(skillFile);
+    if (isInside(canonicalRoot, canonicalFile)) return { editable: true, readOnlyReason: null };
+  } catch {
+    // The skill remains visible but cannot cross the verified write boundary.
+  }
+  return { editable: false, readOnlyReason: 'Skill path resolves outside an editable root.' };
+}
+
+function readSkillSummary(skillFile: string, root: SkillRoot): CodexSkillSummary | null {
   try {
     if (!statSync(skillFile).isFile()) return null;
-    const metadata = parseSkillFrontmatter(readFileSync(skillFile, 'utf8'));
+    const markdown = readFileSync(skillFile, 'utf8');
+    const metadata = parseSkillFrontmatter(markdown);
     if (!metadata) return null;
-    return { ...metadata, source, skillFile };
+    return {
+      name: metadata.name,
+      description: metadata.description,
+      source: root.source,
+      ...sourceEditability(skillFile, root),
+      revision: skillRevision(markdown),
+      skillFile,
+    };
   } catch {
     return null;
   }
@@ -95,8 +174,8 @@ function readSkillSummary(skillFile: string, source: CodexSkillSource): CodexSki
 export function scanCodexSkills(input: { workspaceRoot: string }): CodexSkillSummary[] {
   const byName = new Map<string, CodexSkillSummary>();
   for (const root of candidateSkillRoots(input.workspaceRoot)) {
-    for (const skillFile of collectSkillFiles(root.directory, root.maxDepth)) {
-      const summary = readSkillSummary(skillFile, root.source);
+    for (const skillFile of collectSkillFiles(root)) {
+      const summary = readSkillSummary(skillFile, root);
       if (!summary || byName.has(summary.name)) continue;
       byName.set(summary.name, summary);
     }

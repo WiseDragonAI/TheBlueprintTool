@@ -9,10 +9,19 @@ import { type NormalizedRunEvent } from '../helper/card-skill-run-event-types.js
 import { normalizeCardSkillRunDiagnostic, normalizeCardSkillRunEvent } from '../helper/normalize-card-skill-run-event.js';
 import { readCardSkillRunEventLines } from '../helper/read-card-skill-run-event-lines.js';
 import { codexRunSegmentMetadata, latestCodexRunSegmentLog, latestCodexRunSegmentStartedAtMs, latestCodexRunSegmentStartLine, type CodexRunSegmentMetadata } from '../helper/codex-run-segment-marker.js';
+import { readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import { resolveCardSkillRunOwnership } from '../helper/resolve-card-skill-run-ownership.js';
 
 type AnyRecord = Record<string, unknown>;
 type RunStatus = 'running' | 'complete' | 'failed' | 'cancelled' | 'unknown';
+
+const NON_FATAL_CODEX_MODEL_REFRESH_DIAGNOSTIC = /\bcodex_models_manager::manager:\s*failed to refresh available models:\s*timeout waiting for child process to exit\b/i;
+
+function isNonFatalCodexDiagnostic(text: string): boolean {
+  // WHAT: Recognize the Codex model-catalog refresh timeout that does not terminate the active run.
+  // WHY: The line must remain in the raw log without becoming an actionable error or failed run status.
+  return NON_FATAL_CODEX_MODEL_REFRESH_DIAGNOSTIC.test(text);
+}
 
 function logCodexContinueDebug(phase: string, detail: AnyRecord): void {
   console.log(JSON.stringify({ codexContinueDebug: true, source: 'backend', phase, at: new Date().toISOString(), ...detail }));
@@ -69,9 +78,14 @@ function latestRunEventStatus(events: NormalizedRunEvent[]): RunStatus | null {
 function inferredStatus(input: { runtime: AnyRecord; runId: string; events: NormalizedRunEvent[]; stdoutFile: string; stderrFile: string; stderrLog: string }): RunStatus {
   const runtimeStatus = runtimeRunStatus(input.runtime, input.runId);
   if (runtimeStatus) return runtimeStatus;
-  const logStatus: RunStatus | null = /cancelled|canceled|terminated by operator/i.test(input.stderrLog)
+  const actionableStderrLog = input.stderrLog
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .filter((line) => !isNonFatalCodexDiagnostic(line))
+    .join('\n');
+  const logStatus: RunStatus | null = /cancelled|canceled|terminated by operator/i.test(actionableStderrLog)
     ? 'cancelled'
-    : /(spawn|enoent|failed|exit code [1-9]|error:)/i.test(input.stderrLog)
+    : /(spawn|enoent|failed|exit code [1-9]|error:)/i.test(actionableStderrLog)
       ? 'failed'
       : null;
   const latestStatus = latestRunEventStatus(input.events);
@@ -109,7 +123,7 @@ function elapsedMs(input: { runtime: AnyRecord; runId: string; status: RunStatus
 
 function normalizedRunDiagnostics(log: string): NormalizedRunEvent[] {
   return log.replace(/\r\n?/g, '\n').split('\n').flatMap((text, index) => {
-    if (!text.trim()) return [];
+    if (!text.trim() || isNonFatalCodexDiagnostic(text)) return [];
     return [normalizeCardSkillRunDiagnostic({ line: index + 1, text })];
   });
 }
@@ -148,9 +162,13 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
   const runReference = resolveCardSkillRunOwnership({ ledger, decisionOsRoot, cardId, runId });
   if (!runReference.found) return { ok: false, statusCode: 404, error: 'Run not found on card.', cardId, runId };
 
+  const persistedPipelineRun = readCodexPipelineStore({ decisionOsRoot }).store.runs
+    .find((entry) => entry.steps.some((step) => step.skills.some((skill) => skill.runId === runId)));
+  const persistedStep = persistedPipelineRun?.steps.find((step) => step.skills.some((skill) => skill.runId === runId));
+  const persistedSkill = persistedStep?.skills.find((skill) => skill.runId === runId);
   const runDirectory = resolve(decisionOsRoot, 'runs', 'codex-skills', safeSegment(ledgerStem(ledgerPath)));
-  const stdoutFile = resolve(runDirectory, `${safeSegment(runId)}.jsonl`);
-  const stderrFile = resolve(runDirectory, `${safeSegment(runId)}.log`);
+  const stdoutFile = persistedSkill?.stdoutFile || resolve(runDirectory, `${safeSegment(runId)}.jsonl`);
+  const stderrFile = persistedSkill?.stderrFile || resolve(runDirectory, `${safeSegment(runId)}.log`);
   const stderrLog = existsSync(stderrFile) ? readFileSync(stderrFile, 'utf8') : '';
   const parsedLines = readCardSkillRunEventLines(stdoutFile);
   const events = parsedLines.map(normalizeCardSkillRunEvent);
@@ -158,11 +176,20 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
   const segmentEvents = events.filter((event) => event.line > segmentStartLine);
   const segmentLog = latestCodexRunSegmentLog({ log: stderrLog, runId });
   const diagnostics = normalizedRunDiagnostics(segmentLog);
-  const status = inferredStatus({ runtime, runId, events: segmentEvents, stdoutFile, stderrFile, stderrLog: segmentLog });
+  const inferred = inferredStatus({ runtime, runId, events: segmentEvents, stdoutFile, stderrFile, stderrLog: segmentLog });
+  const inMemoryStatus = runtimeRunStatus(runtime, runId);
+  const status = inMemoryStatus
+    ?? (persistedSkill && (persistedSkill.status === 'complete' || persistedSkill.status === 'failed' || persistedSkill.status === 'cancelled')
+      ? persistedSkill.status
+      : inferred);
   // Retain the response field for clients while making explicit that status reads persist nothing.
   const persistedEventCount = 0;
   const returnedEvents = segmentEvents.filter((event) => event.line > since);
-  const metadata = { ...runtimeRunMetadata(runtime, runId), ...codexRunSegmentMetadata({ log: stderrLog, runId }) };
+  const metadata = {
+    ...runtimeRunMetadata(runtime, runId),
+    ...codexRunSegmentMetadata({ log: stderrLog, runId }),
+    ...(persistedSkill ? { codexModel: persistedSkill.codexModel, codexEffort: persistedSkill.codexEffort } : {}),
+  };
   logCodexContinueDebug('read-controller-result', {
     traceId,
     ledgerId,
@@ -190,6 +217,12 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     cardId,
     runId,
     runKind: runReference.threadLaunched ? 'thread' : 'card',
+    pipelineRunId: persistedPipelineRun?.id ?? null,
+    pipelineId: persistedPipelineRun?.pipelineId ?? null,
+    pipelineName: persistedPipelineRun?.pipelineName ?? '',
+    pipelineStepId: persistedStep?.stepId ?? '',
+    pipelineStepName: persistedStep?.name ?? '',
+    skillName: persistedSkill?.skillName ?? '',
     status,
     startedAt: new Date(runSegmentStartedAtMs({ runtime, runId, stderrFile })).toISOString(),
     elapsedMs: elapsedMs({ runtime, runId, status, stdoutFile, stderrFile }),

@@ -155,7 +155,7 @@ function syncCardControls(group: HTMLElement, card: HTMLElement): boolean {
   skill.type = 'button';
   skill.dataset.action = 'open-card-process-modal';
   skill.dataset.cardId = cardId;
-  skill.title = 'Run Codex skill';
+  skill.title = 'Process card';
   skill.setAttribute('aria-label', skill.title);
   skill.textContent = 'fx';
   const controls = card.dataset.targetLedgerId

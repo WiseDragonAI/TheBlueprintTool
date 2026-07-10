@@ -24,12 +24,21 @@ import { createLedgerRevisionTracker } from './create-ledger-revision-tracker.js
 import { ensureLedgersCanvasDocument } from '../../ledger/helper/ensure-ledgers-canvas-document.js';
 import { readCanonicalDecisionOsState } from '../../ledger/helper/read-canonical-decision-os-state.js';
 import { renameLinkedLedger } from '../../ledger/helper/rename-linked-ledger.js';
-import { scanCodexSkills } from '../../codex/helper/scan-codex-skills.js';
 import { startCardSkillProcessController } from '../../codex/controller/start-card-skill-process-controller.js';
 import { startThreadCodexProcessController } from '../../codex/controller/start-thread-codex-process-controller.js';
 import { readCardSkillRunController } from '../../codex/controller/read-card-skill-run-controller.js';
 import { cancelCardSkillRunController } from '../../codex/controller/cancel-card-skill-run-controller.js';
 import { continueCardSkillRunController } from '../../codex/controller/continue-card-skill-run-controller.js';
+import { listCodexPipelinesController } from '../../codex/controller/list-codex-pipelines-controller.js';
+import { saveCodexPipelineController } from '../../codex/controller/save-codex-pipeline-controller.js';
+import { readCodexSkillLibraryController } from '../../codex/controller/read-codex-skill-library-controller.js';
+import { saveCodexSkillLibraryController } from '../../codex/controller/save-codex-skill-library-controller.js';
+import { readCodexSkillCatalog } from '../../codex/helper/codex-skill-library.js';
+import { startCodexPipelineRunController } from '../../codex/controller/start-codex-pipeline-run-controller.js';
+import { readCodexPipelineRunController } from '../../codex/controller/read-codex-pipeline-run-controller.js';
+import { cancelCodexPipelineRunController } from '../../codex/controller/cancel-codex-pipeline-run-controller.js';
+import { restartCodexPipelineRunController } from '../../codex/controller/restart-codex-pipeline-run-controller.js';
+import { resumeCodexPipelineRuns } from '../../codex/helper/resume-codex-pipeline-runs.js';
 
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
@@ -41,6 +50,14 @@ const allowedLedgerStaticAssetExtensions = ['.html', '.css', '.js', '.mjs', ...a
 
 function safeAssetSegment(value: unknown): string {
   return String(value || 'untitled').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled';
+}
+
+function decodeRouteSegment(value: string): string {
+  try {
+    return decodeURIComponent(value).trim();
+  } catch {
+    return '';
+  }
 }
 
 function ledgerSlug(value: unknown): string {
@@ -180,17 +197,43 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const message = `event: ledger-content-change\ndata: ${JSON.stringify(event)}\n\n`;
     for (const client of contentEventClients) client.write(message);
   };
+  runtime.onPipelineLedgerChange = publishLedgerContentChange;
   runtime.onCodexRunSettled = (event: AnyRecord): void => {
-    void continueQueuedVoiceCodexAfterRun({
-      runtime,
-      ledgerId: String(event.ledgerId ?? ''),
-      cardId: String(event.cardId ?? event.outputCardId ?? ''),
-      threadId: String(event.threadId ?? ''),
-      runId: String(event.runId ?? ''),
-      onCardContentChange: publishCardContentChange,
-      onLedgerChange: publishLedgerContentChange
-    });
+    if (event.pipelineRunId && event.pipelineTerminal === true) {
+      const pipelineStatus = String(event.pipelineStatus ?? event.status ?? 'complete');
+      const reason = pipelineStatus === 'complete'
+        ? 'pipeline-completed'
+        : pipelineStatus === 'cancelled'
+          ? 'pipeline-cancelled'
+          : 'pipeline-failed';
+      publishLedgerContentChange({
+        reason,
+        ledgerId: String(event.ledgerId ?? ''),
+        pipelineRunId: String(event.pipelineRunId),
+        pipelineStatus,
+        status: String(event.status ?? pipelineStatus),
+        runId: String(event.runId ?? ''),
+        cardId: String(event.cardId ?? event.outputCardId ?? ''),
+        outputCardId: String(event.outputCardId ?? event.cardId ?? ''),
+        threadId: String(event.threadId ?? '')
+      });
+    }
+    if (event.pipelineRunId) {
+      void resumeCodexPipelineRuns({ decisionOsRoot, runtime }).catch(() => undefined);
+    }
+    if (!event.pipelineRunId || event.pipelineTerminal === true) {
+      void continueQueuedVoiceCodexAfterRun({
+        runtime,
+        ledgerId: String(event.ledgerId ?? ''),
+        cardId: String(event.cardId ?? event.outputCardId ?? ''),
+        threadId: String(event.threadId ?? ''),
+        runId: String(event.runId ?? ''),
+        onCardContentChange: publishCardContentChange,
+        onLedgerChange: publishLedgerContentChange
+      });
+    }
   };
+  void resumeCodexPipelineRuns({ decisionOsRoot, runtime }).catch(() => undefined);
   const loadLedgerContentFiles = (ledger: AnyRecord): AnyRecord => hydrateLedgerCardContent(hydrateLedgerThreadNotes(ledger, decisionOsRoot), decisionOsRoot);
   const persistLedgerAndRespond = (ledgerId: string, ledgerPath: string, ledger: AnyRecord, response: ServerResponse): void => {
     stripHydratedThreadNotes(ledger);
@@ -228,13 +271,112 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       request.on('close', () => contentEventClients.delete(response));
       return;
     }
+    if (url === '/api/codex/pipelines' && request.method === 'GET') {
+      const result = listCodexPipelinesController({ runtime_state: runtime });
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
+      response.end(JSON.stringify(result));
+      return;
+    }
+    if (url === '/api/codex/pipelines' && request.method === 'POST') {
+      const bodyBuffer = await readRequestBuffer(request);
+      const savePayload = (() => {
+        try {
+          return JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
+        } catch {
+          return {};
+        }
+      })();
+      const result = saveCodexPipelineController({ action_payload: { ...savePayload, operation: 'create' }, runtime_state: runtime });
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 201));
+      response.end(JSON.stringify(result));
+      return;
+    }
+    if (url === '/api/codex/pipelines/runs' && request.method === 'POST') {
+      const bodyBuffer = await readRequestBuffer(request);
+      const runPayload = (() => {
+        try {
+          return JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
+        } catch {
+          return {};
+        }
+      })();
+      const result = await startCodexPipelineRunController({
+        action_payload: { ...runPayload, onLedgerChange: publishLedgerContentChange },
+        runtime_state: runtime,
+      });
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));
+      response.end(JSON.stringify(result));
+      return;
+    }
+    if (url.startsWith('/api/codex/pipelines/runs/') && url.endsWith('/cancel') && request.method === 'POST') {
+      const runId = decodeRouteSegment(url.slice('/api/codex/pipelines/runs/'.length, -'/cancel'.length));
+      const result = await cancelCodexPipelineRunController({ action_payload: { runId }, runtime_state: runtime });
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));
+      response.end(JSON.stringify(result));
+      return;
+    }
+    if (url.startsWith('/api/codex/pipelines/runs/') && url.endsWith('/restart') && request.method === 'POST') {
+      const runId = decodeRouteSegment(url.slice('/api/codex/pipelines/runs/'.length, -'/restart'.length));
+      const result = await restartCodexPipelineRunController({ action_payload: { runId }, runtime_state: runtime });
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));
+      response.end(JSON.stringify(result));
+      return;
+    }
+    if (url.startsWith('/api/codex/pipelines/runs/') && request.method === 'GET') {
+      const runId = decodeRouteSegment(url.slice('/api/codex/pipelines/runs/'.length));
+      const result = await readCodexPipelineRunController({ action_payload: { runId }, runtime_state: runtime });
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
+      response.end(JSON.stringify(result));
+      return;
+    }
+    if (url.startsWith('/api/codex/pipelines/') && request.method === 'PUT') {
+      const pipelineId = decodeRouteSegment(url.slice('/api/codex/pipelines/'.length));
+      const bodyBuffer = await readRequestBuffer(request);
+      const savePayload = (() => {
+        try {
+          return JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
+        } catch {
+          return {};
+        }
+      })();
+      const result = saveCodexPipelineController({ action_payload: { ...savePayload, pipelineId, operation: 'update' }, runtime_state: runtime });
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
+      response.end(JSON.stringify(result));
+      return;
+    }
+    if (url.startsWith('/api/codex/skill-library/') && request.method === 'GET') {
+      const skillName = decodeRouteSegment(url.slice('/api/codex/skill-library/'.length));
+      const result = readCodexSkillLibraryController({ action_payload: { skillName }, runtime_state: runtime });
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
+      response.end(JSON.stringify(result));
+      return;
+    }
+    if (url.startsWith('/api/codex/skill-library/') && request.method === 'PUT') {
+      const skillName = decodeRouteSegment(url.slice('/api/codex/skill-library/'.length));
+      const bodyBuffer = await readRequestBuffer(request);
+      const savePayload = (() => {
+        try {
+          return JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
+        } catch {
+          return {};
+        }
+      })();
+      const result = saveCodexSkillLibraryController({ action_payload: { ...savePayload, skillName }, runtime_state: runtime });
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
+      response.end(JSON.stringify(result));
+      return;
+    }
     if (url === '/api/codex/skills' && request.method === 'GET') {
-      const workspaceRoot = dirname(decisionOsRoot);
-      const skills = scanCodexSkills({ workspaceRoot }).map((skill) => ({
-        name: skill.name,
-        description: skill.description,
-        source: skill.source
-      }));
+      const skills = readCodexSkillCatalog({ decisionOsRoot, runtime }).skills;
       response.setHeader('content-type', 'application/json');
       response.statusCode = 200;
       response.end(JSON.stringify({ ok: true, skills }));

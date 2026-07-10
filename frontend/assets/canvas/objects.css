@@ -504,6 +504,24 @@
   min-width: 0;
 }
 
+.codex-run-context {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--text), transparent 24%);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.codex-run-context[hidden] {
+  display: none;
+}
+
 .codex-run-actions .terminal-button[hidden] {
   display: none;
 }
@@ -518,9 +536,24 @@
   letter-spacing: 0;
 }
 
+.codex-run-restart,
+.codex-run-retry {
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 2px;
+  font-size: 9px;
+  letter-spacing: 0;
+}
+
 .codex-run-cancel:disabled,
 .codex-run-continue:disabled,
 .codex-run-new-session:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
+.codex-run-restart:disabled,
+.codex-run-retry:disabled {
   cursor: default;
   opacity: 0.62;
 }
@@ -643,6 +676,10 @@
 
 .codex-run-widget[data-run-status="running"] {
   border-color: color-mix(in srgb, #55b8ff, transparent 28%);
+}
+
+.codex-run-widget[data-run-status="pending"] {
+  border-color: color-mix(in srgb, #a9b7ca, transparent 44%);
 }
 
 .codex-run-widget[data-run-status="complete"] {

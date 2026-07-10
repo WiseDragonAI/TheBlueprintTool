@@ -3,6 +3,7 @@
  * WHY: The canvas widget needs a direct stop control for the server-owned child process.
  */
 import type { ChildProcess } from 'node:child_process';
+import { cancelCodexPipelineRunController } from './cancel-codex-pipeline-run-controller.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -30,6 +31,10 @@ export async function cancelCardSkillRunController(input: { action_payload?: Any
   }
   if (String(run.status ?? '') !== 'running') {
     return { ok: true, statusCode: 200, status: String(run.status ?? 'unknown'), run: publicRun(run) };
+  }
+  const pipelineRunId = String(run.pipelineRunId ?? '').trim();
+  if (pipelineRunId) {
+    return cancelCodexPipelineRunController({ action_payload: { runId: pipelineRunId }, runtime_state: runtime });
   }
 
   const child = (run as { child?: ChildProcess }).child;

@@ -3,6 +3,8 @@
  * WHY: Both root blocks must execute against the same TypeScript truth instead of duplicating loose JSON shapes.
  */
 
+export * from './codex-pipeline-types.js';
+
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | readonly JsonValue[];
 export type JsonObject = { readonly [key: string]: JsonValue };

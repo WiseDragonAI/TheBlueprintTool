@@ -3,7 +3,7 @@
  * WHY: Refresh branching, deferral, draining, and recovery belong in one controller outside the SSE transport effect.
  */
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
-import { resizeSelectedCardsToContent } from '../../card/effect/resize-selected-cards-to-content.js';
+import { resizeChangedCardToContent as measureChangedCardToContent } from '../../card/effect/resize-selected-cards-to-content.js';
 import { commitActiveLedgerMutation } from '../../ledger/effect/commit-active-ledger-mutation.js';
 import { loadActiveLedgerState } from '../../ledger/effect/load-active-ledger-state.js';
 import { persistState } from '../../persistence/effect/persist-state.js';
@@ -23,11 +23,13 @@ import { changedCardIdForContentFile } from '../helper/changed-card-id-for-conte
 
 type LedgerRefreshOptions = {
   contentFile?: string;
+  cardIds?: readonly string[];
 };
 
 type RefreshBatch = {
   ledgerReasons: string[];
   changedContentFiles: string[];
+  changedCardIds: string[];
   threadReasons: string[];
   threadScope: ThreadContentRefreshScope | null;
 };
@@ -43,6 +45,7 @@ function contentRefreshState(): LedgerContentRefreshState {
     inFlight: false,
     ledgerReasons: [],
     changedContentFiles: [],
+    changedCardIds: [],
     threadReasons: [],
     threadScope: null
   } satisfies LedgerContentRefreshState;
@@ -59,12 +62,15 @@ function addUnique(values: string[], value: string): void {
 function hasQueuedRefresh(refresh = contentRefreshState()): boolean {
   return refresh.ledgerReasons.length > 0
     || refresh.changedContentFiles.length > 0
+    || (refresh.changedCardIds?.length ?? 0) > 0
     || refresh.threadReasons.length > 0
     || Boolean(refresh.threadScope);
 }
 
 function syncPendingRefreshFlags(refresh = contentRefreshState()): void {
-  state.pendingLedgerContentRefresh = refresh.ledgerReasons.length > 0 || refresh.changedContentFiles.length > 0;
+  state.pendingLedgerContentRefresh = refresh.ledgerReasons.length > 0
+    || refresh.changedContentFiles.length > 0
+    || (refresh.changedCardIds?.length ?? 0) > 0;
   state.pendingThreadContentRefresh = refresh.threadReasons.length > 0 || Boolean(refresh.threadScope);
 }
 
@@ -74,6 +80,10 @@ function enqueueLedgerRefresh(reason: string, options: LedgerRefreshOptions): vo
   // WHAT: Track changed card files independently from refresh reasons.
   // WHY: One ledger load can resize every card file accumulated while it was in flight.
   if (options.contentFile) addUnique(refresh.changedContentFiles, normalizeContentFileReference(options.contentFile));
+  if (options.cardIds?.length) {
+    const changedCardIds = refresh.changedCardIds ?? (refresh.changedCardIds = []);
+    for (const cardId of options.cardIds) addUnique(changedCardIds, cardId);
+  }
   syncPendingRefreshFlags(refresh);
 }
 
@@ -88,30 +98,25 @@ function takeRefreshBatch(refresh: LedgerContentRefreshState): RefreshBatch {
   const batch: RefreshBatch = {
     ledgerReasons: [...refresh.ledgerReasons],
     changedContentFiles: [...refresh.changedContentFiles],
+    changedCardIds: [...(refresh.changedCardIds ?? [])],
     threadReasons: [...refresh.threadReasons],
     threadScope: refresh.threadScope ? { ...refresh.threadScope } : null
   };
   refresh.ledgerReasons = [];
   refresh.changedContentFiles = [];
+  if (refresh.changedCardIds) refresh.changedCardIds = [];
   refresh.threadReasons = [];
   refresh.threadScope = null;
   syncPendingRefreshFlags(refresh);
   return batch;
 }
 
-async function resizeChangedCardToContent(contentFile: string): Promise<void> {
-  const cardId = changedCardIdForContentFile(contentFile);
-  // WHAT: Skip geometry work when the refreshed ledger has no exact content-file owner.
-  // WHY: A stale file event must not resize a different card.
-  if (!cardId) {
-    telemetry('ledger-content-refresh-resize-skipped', { reason: 'card-not-found', contentFile });
-    return;
-  }
-  const geometry = resizeSelectedCardsToContent({ cardIds: [cardId], zoneIds: [] });
+async function persistChangedCardSize(cardId: string, detail: Record<string, unknown>): Promise<void> {
+  const geometry = measureChangedCardToContent(cardId);
   // WHAT: Avoid persistence and mutation when DOM measurement produced no geometry.
   // WHY: Missing rendered card detail is an expected no-op during route transitions.
   if (Object.keys(geometry.cards).length === 0 && Object.keys(geometry.zones).length === 0) {
-    telemetry('ledger-content-refresh-resize-skipped', { reason: 'empty-geometry', contentFile, cardId });
+    telemetry('ledger-content-refresh-resize-skipped', { reason: 'empty-geometry', cardId, ...detail });
     return;
   }
 
@@ -119,20 +124,36 @@ async function resizeChangedCardToContent(contentFile: string): Promise<void> {
   const committed = state.activeLedger
     ? await commitActiveLedgerMutation({ action: 'patch-geometry', geometry }, { render: true })
     : false;
-  telemetry('ledger-content-refresh-resize', { contentFile, cardId, committed });
+  telemetry('ledger-content-refresh-resize', { cardId, committed, ...detail });
 }
 
-async function reloadLedgerContent(batch: Pick<RefreshBatch, 'ledgerReasons' | 'changedContentFiles'>): Promise<void> {
+async function resizeChangedContentFileToContent(contentFile: string): Promise<void> {
+  const cardId = changedCardIdForContentFile(contentFile);
+  // WHAT: Skip geometry work when the refreshed ledger has no exact content-file owner.
+  // WHY: A stale file event must not resize a different card.
+  if (!cardId) {
+    telemetry('ledger-content-refresh-resize-skipped', { reason: 'card-not-found', contentFile });
+    return;
+  }
+  await persistChangedCardSize(cardId, { contentFile });
+}
+
+async function reloadLedgerContent(batch: Pick<RefreshBatch, 'ledgerReasons' | 'changedContentFiles' | 'changedCardIds'>): Promise<void> {
   const applied = await loadActiveLedgerState();
   // WHAT: Render and resize only after the authoritative response wins reconciliation.
   // WHY: Rejected stale responses must not trigger DOM or geometry side effects.
   if (applied) {
     renderCanvasSurface();
-    for (const contentFile of batch.changedContentFiles) await resizeChangedCardToContent(contentFile);
+    for (const contentFile of batch.changedContentFiles) await resizeChangedContentFileToContent(contentFile);
+    const contentFileCardIds = new Set(batch.changedContentFiles.map(changedCardIdForContentFile).filter(Boolean));
+    for (const cardId of batch.changedCardIds) {
+      if (!contentFileCardIds.has(cardId)) await persistChangedCardSize(cardId, { reason: 'pipeline-lifecycle' });
+    }
   }
   telemetry('ledger-content-refresh', {
     reasons: batch.ledgerReasons,
     changedContentFiles: batch.changedContentFiles,
+    changedCardIds: batch.changedCardIds,
     applied
   });
 }
@@ -160,7 +181,7 @@ async function drainPendingLedgerContentRefresh(): Promise<void> {
       const batch = takeRefreshBatch(refresh);
       // WHAT: Reload the ledger once for every accumulated ledger/file batch.
       // WHY: Changed files share the same authoritative ledger response.
-      if (batch.ledgerReasons.length > 0 || batch.changedContentFiles.length > 0) {
+      if (batch.ledgerReasons.length > 0 || batch.changedContentFiles.length > 0 || batch.changedCardIds.length > 0) {
         try {
           await reloadLedgerContent(batch);
         } catch (error) {

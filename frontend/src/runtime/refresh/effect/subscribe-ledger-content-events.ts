@@ -2,7 +2,10 @@
  * WHAT: Subscribes to backend ledger and content-file change events.
  * WHY: The transport boundary must scope each SSE event before handing it to the refresh controller.
  */
-import { resumeExternallyStartedCardSkillRun } from '../../codex/effect/poll-card-skill-run.js';
+import {
+  resumeExternallyStartedCardSkillRun,
+  resumeExternallyStartedPipelineRun
+} from '../../codex/effect/poll-card-skill-run.js';
 import { currentLedgerStateId } from '../../ledger/helper/current-ledger-state-id.js';
 import { state, type ThreadContentRefreshScope } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
@@ -33,10 +36,21 @@ let subscribed = false;
 
 function maybeResumeCodexRunWidget(payload: ContentChangeEvent): void {
   const reason = String(payload.reason ?? '');
+  const ledgerId = String(payload.ledgerId ?? '').trim();
+  const pipelineRunId = String(payload.pipelineRunId ?? '').trim();
+  if (reason.startsWith('pipeline-') && ledgerId && pipelineRunId) {
+    resumeExternallyStartedPipelineRun({
+      ledgerId,
+      pipelineRunId,
+      cardId: String(payload.outputCardId || payload.cardId || '').trim(),
+      cardIds: payload.cardIds ?? [],
+      runId: String(payload.runId ?? '').trim()
+    });
+    return;
+  }
   // WHAT: Resume widgets only for explicit Codex start lifecycle events.
   // WHY: Ordinary ledger writes must not create polling loops.
   if (!reason.startsWith('codex-') || !reason.endsWith('-started')) return;
-  const ledgerId = String(payload.ledgerId ?? '').trim();
   const cardId = String(payload.outputCardId || payload.cardId || '').trim();
   const runId = String(payload.runId ?? '').trim();
   // WHAT: Require the complete run identity before starting polling.
@@ -92,7 +106,16 @@ export function subscribeLedgerContentEvents(): void {
       return;
     }
     maybeResumeCodexRunWidget(payload);
-    requestLedgerContentRefresh(payload.reason || 'ledger-content-change');
+    const reason = payload.reason || 'ledger-content-change';
+    const resizeCardIds = reason === 'pipeline-completed'
+      ? (payload.cardIds?.length ? payload.cardIds : [String(payload.cardId ?? '').trim()].filter(Boolean))
+      : reason === 'pipeline-skill-settled' && payload.status === 'complete'
+        ? [String(payload.cardId ?? '').trim()].filter(Boolean)
+        : [];
+    requestLedgerContentRefresh(reason, { cardIds: resizeCardIds });
+    if (payload.threadId && (reason === 'pipeline-skill-settled' || reason.startsWith('pipeline-complete'))) {
+      requestThreadContentRefresh(reason);
+    }
   });
   events.onerror = () => {
     telemetry('ledger-content-refresh-stream-error', {});

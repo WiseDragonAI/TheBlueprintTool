@@ -4,12 +4,18 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { loadCodexSkills } from '../../src/runtime/codex/effect/load-codex-skills.js';
+import { loadCodexSkills, loadCodexSkillsResult } from '../../src/runtime/codex/effect/load-codex-skills.js';
+import { loadCodexPipelines } from '../../src/runtime/codex/effect/load-codex-pipelines.js';
+import { loadCodexSkillLibrary } from '../../src/runtime/codex/effect/load-codex-skill-library.js';
 import { requestCardSkillProcess } from '../../src/runtime/codex/effect/request-card-skill-process.js';
 import { requestCardSkillRunCancel } from '../../src/runtime/codex/effect/request-card-skill-run-cancel.js';
 import { requestCardSkillRunContinue } from '../../src/runtime/codex/effect/request-card-skill-run-continue.js';
 import { requestCardSkillRunStatus } from '../../src/runtime/codex/effect/request-card-skill-run-status.js';
 import { requestThreadCodexProcess } from '../../src/runtime/codex/effect/request-thread-codex-process.js';
+import { requestCodexPipelineSave } from '../../src/runtime/codex/effect/request-codex-pipeline-save.js';
+import { requestCodexPipelineRun } from '../../src/runtime/codex/effect/request-codex-pipeline-run.js';
+import { requestCodexPipelineRunCancel, requestCodexPipelineRunRestart, requestCodexPipelineRunStatus } from '../../src/runtime/codex/effect/request-codex-pipeline-run-status.js';
+import { requestCodexSkillLibrarySave } from '../../src/runtime/codex/effect/request-codex-skill-library-save.js';
 import { bindCardSkillRunLogConsumer, bindCardSkillRunWidget, resumeExternallyStartedCardSkillRun } from '../../src/runtime/codex/effect/poll-card-skill-run.js';
 import type { CardSkillRunEvent, CardSkillRunStatus, CardSkillRunSummary } from '../../src/runtime/codex/effect/request-card-skill-run-status.js';
 import { cardCodexRunId, cardCodexThreadRunId } from '../../src/runtime/codex/helper/card-codex-run-id.js';
@@ -96,16 +102,177 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 test('loadCodexSkills returns server skill summaries', async () => {
   const previousFetch = globalThis.fetch;
   try {
+    const summary = {
+      name: 'analysis',
+      description: 'Analyze code',
+      source: 'workspace',
+      editable: true,
+      readOnlyReason: null,
+      revision: 'revision-a',
+      defaultCodexModel: 'gpt-5.5',
+      defaultCodexEffort: 'high',
+      effectiveCodexModel: 'gpt-5.5',
+      effectiveCodexEffort: 'high'
+    };
     globalThis.fetch = (async (url: string) => {
       assert.equal(url, '/api/codex/skills');
-      return new Response(JSON.stringify({ ok: true, skills: [{ name: 'analysis', description: 'Analyze code', source: 'workspace' }] }), {
+      return new Response(JSON.stringify({ ok: true, skills: [summary] }), {
         status: 200,
         headers: { 'content-type': 'application/json' }
       });
     }) as typeof fetch;
 
     const skills = await loadCodexSkills();
-    assert.deepEqual(skills, [{ name: 'analysis', description: 'Analyze code', source: 'workspace' }]);
+    assert.deepEqual(skills, [summary]);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('loadCodexSkillsResult distinguishes catalog failure from a valid empty catalog', async () => {
+  const previousFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (async () => new Response(JSON.stringify({ ok: false, error: 'Catalog unavailable.' }), { status: 503 })) as typeof fetch;
+    const failed = await loadCodexSkillsResult();
+    assert.equal(failed.ok, false);
+    assert.equal(failed.statusCode, 503);
+    assert.equal(failed.error, 'Catalog unavailable.');
+    assert.deepEqual(failed.skills, []);
+    globalThis.fetch = (async () => new Response(JSON.stringify({ ok: true, skills: [] }), { status: 200 })) as typeof fetch;
+    const empty = await loadCodexSkillsResult();
+    assert.equal(empty.ok, true);
+    assert.deepEqual(empty.skills, []);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('pipeline clients preserve ordered reusable definitions and lifecycle request contracts', async () => {
+  const previousFetch = globalThis.fetch;
+  const pipeline = {
+    id: 'delivery/path',
+    name: 'Delivery path',
+    purpose: 'Run ordered work.',
+    stepIds: ['step-a'],
+    createdAt: '2026-07-10T00:00:00.000Z',
+    updatedAt: '2026-07-10T00:00:00.000Z'
+  };
+  const step = {
+    id: 'step-a',
+    name: 'Analyze',
+    purpose: 'Read the source.',
+    skills: [{ id: 'skill-a', skillName: 'analysis', codexModel: null, codexEffort: 'high' as const }],
+    createdAt: '2026-07-10T00:00:00.000Z',
+    updatedAt: '2026-07-10T00:00:00.000Z'
+  };
+  let requestIndex = 0;
+  try {
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      requestIndex += 1;
+      if (requestIndex === 1) {
+        assert.equal(url, '/api/codex/pipelines');
+        assert.equal(init, undefined);
+        return new Response(JSON.stringify({ ok: true, pipelines: [pipeline], steps: [step], empty: false, invalidReferences: [], issues: [] }), { status: 200 });
+      }
+      if (requestIndex === 2 || requestIndex === 3) {
+        assert.equal(url, requestIndex === 2 ? '/api/codex/pipelines' : '/api/codex/pipelines/delivery%2Fpath');
+        assert.equal(init?.method, requestIndex === 2 ? 'POST' : 'PUT');
+        assert.deepEqual(JSON.parse(String(init?.body)), {
+          pipeline: { id: pipeline.id, name: pipeline.name, purpose: pipeline.purpose, stepIds: ['step-a'] },
+          steps: [{ id: step.id, name: step.name, purpose: step.purpose, skills: step.skills }]
+        });
+        return new Response(JSON.stringify({ ok: true, pipeline, pipelines: [pipeline], steps: [step], invalidReferences: [], issues: [] }), { status: requestIndex === 2 ? 201 : 200 });
+      }
+      if (requestIndex === 4) {
+        assert.equal(url, '/api/codex/pipelines/runs');
+        assert.equal(init?.method, 'POST');
+        assert.deepEqual(JSON.parse(String(init?.body)), { ledgerId: 'specs', sourceCardId: 'card-a', pipelineId: pipeline.id });
+        return new Response(JSON.stringify({ ok: true, run: { id: 'run-a', status: 'running' }, invalidReferences: [] }), { status: 202 });
+      }
+      if (requestIndex === 5) {
+        assert.equal(url, '/api/codex/pipelines/runs/run%2Fa');
+        assert.equal(init, undefined);
+        return new Response(JSON.stringify({ ok: true, status: 'running', canCancel: true, canRestart: false, canContinue: false }), { status: 200 });
+      }
+      if (requestIndex === 6) {
+        assert.equal(url, '/api/codex/pipelines/runs/run%2Fa/cancel');
+        assert.equal(init?.method, 'POST');
+        return new Response(JSON.stringify({ ok: true, status: 'cancelled', canCancel: false, canRestart: true, canContinue: false }), { status: 200 });
+      }
+      assert.equal(url, '/api/codex/pipelines/runs/run%2Fa/restart');
+      assert.equal(init?.method, 'POST');
+      return new Response(JSON.stringify({ ok: true, run: { id: 'run/a', status: 'running' } }), { status: 202 });
+    }) as typeof fetch;
+
+    const library = await loadCodexPipelines();
+    assert.equal(library.ok, true);
+    assert.deepEqual(library.pipelines[0].stepIds, ['step-a']);
+    assert.equal(library.steps[0].skills[0].codexModel, null);
+    const saveDraft = {
+      pipeline: { id: pipeline.id, name: pipeline.name, purpose: pipeline.purpose, stepIds: ['step-a'] },
+      steps: [{ id: step.id, name: step.name, purpose: step.purpose, skills: step.skills }]
+    };
+    assert.equal((await requestCodexPipelineSave(saveDraft)).ok, true);
+    assert.equal((await requestCodexPipelineSave({ ...saveDraft, operation: 'update', pipelineId: pipeline.id })).ok, true);
+    assert.equal((await requestCodexPipelineRun({ ledgerId: 'specs', sourceCardId: 'card-a', pipelineId: pipeline.id })).statusCode, 202);
+    assert.equal((await requestCodexPipelineRunStatus({ runId: 'run/a' })).canCancel, true);
+    assert.equal((await requestCodexPipelineRunCancel({ runId: 'run/a' })).status, 'cancelled');
+    assert.equal((await requestCodexPipelineRunRestart({ runId: 'run/a' })).ok, true);
+    assert.equal(requestIndex, 7);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('skill-library clients encode identity, exclude paths, and surface revision conflicts', async () => {
+  const previousFetch = globalThis.fetch;
+  const skill = {
+    name: 'workspace/skill',
+    description: 'Editable skill',
+    source: 'workspace',
+    editable: true,
+    readOnlyReason: null,
+    revision: 'revision-a',
+    defaultCodexModel: null,
+    defaultCodexEffort: 'high',
+    effectiveCodexModel: 'gpt-5.5',
+    effectiveCodexEffort: 'high',
+    markdown: '---\nname: workspace/skill\ndescription: Editable skill\n---\n'
+  };
+  let requestIndex = 0;
+  try {
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      requestIndex += 1;
+      assert.equal(url, '/api/codex/skill-library/workspace%2Fskill');
+      if (requestIndex === 1) {
+        assert.equal(init, undefined);
+        return new Response(JSON.stringify({ ok: true, skill }), { status: 200 });
+      }
+      assert.equal(init?.method, 'PUT');
+      const body = JSON.parse(String(init?.body));
+      assert.deepEqual(body, {
+        markdown: skill.markdown,
+        revision: 'revision-a',
+        defaultCodexModel: null,
+        defaultCodexEffort: 'high'
+      });
+      assert.equal('skillName' in body, false);
+      assert.equal('path' in body, false);
+      return new Response(JSON.stringify({ ok: false, error: 'Revision conflict.', currentRevision: 'revision-b' }), { status: 409 });
+    }) as typeof fetch;
+
+    const detail = await loadCodexSkillLibrary(skill.name);
+    assert.equal(detail.skill?.editable, true);
+    const save = await requestCodexSkillLibrarySave({
+      skillName: skill.name,
+      markdown: skill.markdown,
+      revision: skill.revision,
+      defaultCodexModel: null,
+      defaultCodexEffort: 'high'
+    });
+    assert.equal(save.ok, false);
+    assert.equal(save.conflict, true);
+    assert.equal(save.currentRevision, 'revision-b');
   } finally {
     globalThis.fetch = previousFetch;
   }

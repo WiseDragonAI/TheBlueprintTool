@@ -271,3 +271,9 @@ export function resizeSelectedCardsToContent(target: ResizeToContentTarget = {})
   telemetry('resize-selected-cards', { count: Object.keys(result.cards).length, cardIds: Object.keys(result.cards), zoneIds: Object.keys(result.zones) });
   return result;
 }
+
+export function resizeChangedCardToContent(cardId: string): ResizeToContentGeometry {
+  const normalizedCardId = String(cardId ?? '').trim();
+  if (!normalizedCardId) return { cards: {}, zones: {} };
+  return resizeSelectedCardsToContent({ cardIds: [normalizedCardId], zoneIds: [] });
+}

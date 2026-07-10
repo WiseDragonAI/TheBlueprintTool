@@ -1,0 +1,251 @@
+/**
+ * WHAT: Orchestrates validation, durable setup, event publication, and first-skill launch for one Codex pipeline.
+ * WHY: The full pending pipeline must be visible and durable before asynchronous execution begins.
+ */
+import { dirname, resolve } from 'node:path';
+import type {
+  CodexEffort,
+  CodexModel,
+  CodexPipeline,
+  CodexPipelineRun,
+  CodexPipelineStep,
+  CodexPipelineStore,
+} from '../../../../../shared/schemas/codex-pipeline-types.js';
+import { createCodexPipelineStepCards } from '../effect/create-codex-pipeline-step-cards.js';
+import {
+  createCodexPipelineRunManifest,
+  type PipelineDefinition,
+} from '../helper/create-codex-pipeline-run-manifest.js';
+import { readCodexPipelineStore, writeCodexPipelineStore } from '../helper/codex-pipeline-store.js';
+import { scanCodexSkills } from '../helper/scan-codex-skills.js';
+import {
+  resolvePipelineLedgerContext,
+  runNextPipelineSkill,
+  type PipelineLedgerContext,
+} from '../helper/codex-pipeline-runner.js';
+
+type AnyRecord = Record<string, unknown>;
+
+function text(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function safeSegment(value: unknown): string {
+  return String(value || 'untitled').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled';
+}
+
+function sourceCard(context: PipelineLedgerContext, sourceCardId: string): AnyRecord | null {
+  return (context.ledger.cards ?? []).find((entry) => String(entry.id ?? '') === sourceCardId) ?? null;
+}
+
+export function assertNoActivePipelineRun(store: CodexPipelineStore): AnyRecord | null {
+  // WHAT: Allow starts when the workspace has no recorded lock.
+  // WHY: A missing active run is the normal idle state.
+  if (!store.activeWorkspaceRun) return null;
+  const active = store.runs.find((run) => run.id === store.activeWorkspaceRun);
+  // WHAT: Ignore stale locks whose run is absent or terminal.
+  // WHY: Only an in-progress run may block a new workspace pipeline.
+  if (!active || active.status === 'complete' || active.status === 'failed' || active.status === 'cancelled') return null;
+  return {
+    ok: false,
+    statusCode: 409,
+    error: 'Another Codex pipeline is already active in this workspace.',
+    activeRunId: active.id,
+  };
+}
+
+export async function startPipelineRun(input: {
+  decisionOsRoot: string;
+  runtime: AnyRecord;
+  ledgerId: string;
+  sourceCardId: string;
+  definition: PipelineDefinition;
+  onLedgerChange?: unknown;
+}): Promise<AnyRecord> {
+  const workspaceRoot = dirname(input.decisionOsRoot);
+  const availableSkills = scanCodexSkills({ workspaceRoot });
+  const availableSkillNames = availableSkills.map((skill) => skill.name);
+  const normalized = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot, availableSkillNames });
+  const activeError = assertNoActivePipelineRun(normalized.store);
+  // WHAT: Reject a second non-terminal workspace run.
+  // WHY: Pipeline execution uses one durable workspace lock.
+  if (activeError) return activeError;
+  const unavailableSkill = input.definition.steps
+    .flatMap((step) => step.skills)
+    .find((skill) => !availableSkillNames.includes(skill.skillName));
+  // WHAT: Reject definitions containing a skill that discovery cannot resolve.
+  // WHY: Persisting pending work that cannot launch would strand the pipeline.
+  if (unavailableSkill) return { ok: false, statusCode: 400, error: 'Pipeline references an unavailable skill.', skillName: unavailableSkill.skillName };
+  const invalidDefault = normalized.issues.find((issue) =>
+    (issue.code === 'unsupported-default-model' || issue.code === 'unsupported-default-effort')
+    && input.definition.steps.some((step) => step.skills.some((skill) => skill.skillName === issue.skillName))
+  );
+  // WHAT: Stop before snapshotting an invalid library default.
+  // WHY: Every persisted skill run must contain executable model and effort values.
+  if (invalidDefault) return { ok: false, statusCode: 400, error: invalidDefault.message, skillName: invalidDefault.skillName };
+
+  const context = resolvePipelineLedgerContext({
+    decisionOsRoot: input.decisionOsRoot,
+    runtime: input.runtime,
+    ledgerId: input.ledgerId,
+  });
+  // WHAT: Require the requested ledger and source card before creating output cards.
+  // WHY: Generated cards and relationships must be anchored to an existing source.
+  if (!context) return { ok: false, statusCode: 404, error: 'Ledger not found.', ledgerId: input.ledgerId };
+  const source = sourceCard(context, input.sourceCardId);
+  if (!source) return { ok: false, statusCode: 404, error: 'Source card not found.', cardId: input.sourceCardId };
+  // WHAT: Reject empty pipeline shapes at the runtime boundary.
+  // WHY: A run with no executable stage cannot make progress or settle correctly.
+  if (input.definition.steps.length === 0) return { ok: false, statusCode: 400, error: 'A pipeline run requires at least one step.' };
+  // WHAT: Require at least one executable skill in every stage.
+  // WHY: An empty stage would leave the sequential runner without a next transition.
+  if (input.definition.steps.some((step) => step.skills.length === 0)) {
+    return { ok: false, statusCode: 400, error: 'Every pipeline step must contain at least one skill.' };
+  }
+
+  let run: CodexPipelineRun;
+  try {
+    run = createCodexPipelineRunManifest({
+      decisionOsRoot: input.decisionOsRoot,
+      definition: input.definition,
+      store: normalized.store,
+      workspaceRoot,
+      runtime: input.runtime,
+      ledgerId: input.ledgerId,
+      sourceCardId: input.sourceCardId,
+      sourceCardTitle: String(source.title ?? input.sourceCardId),
+      ledgerPath: context.ledgerPath,
+    });
+  } catch (error) {
+    // WHAT: Surface option-resolution errors as request failures.
+    // WHY: Invalid model and effort inputs are operator-correctable, not server faults.
+    return { ok: false, statusCode: 400, error: error instanceof Error ? error.message : String(error) };
+  }
+  const cardError = createCodexPipelineStepCards({ decisionOsRoot: input.decisionOsRoot, context, source, run });
+  // WHAT: Stop when the ledger rejects a generated card or relationship.
+  // WHY: The manifest must not start unless its complete visual chain exists.
+  if (cardError) return { ok: false, statusCode: 400, error: String(cardError.error ?? 'Could not create pipeline step cards.') };
+  try {
+    writeCodexPipelineStore({
+      decisionOsRoot: input.decisionOsRoot,
+      availableSkillNames,
+      store: { ...normalized.store, runs: [...normalized.store.runs, run], activeWorkspaceRun: run.id },
+    });
+  } catch {
+    // WHAT: Report manifest persistence failure before launching Codex.
+    // WHY: An untracked child process could not be resumed or cancelled safely.
+    return { ok: false, statusCode: 500, error: 'Could not persist the pipeline run manifest.' };
+  }
+  // WHAT: Retain and invoke the request-scoped ledger callback when one is supplied.
+  // WHY: Pipeline runner transitions must publish through the same server event boundary as startup.
+  if (typeof input.onLedgerChange === 'function') input.runtime.onPipelineLedgerChange = input.onLedgerChange;
+  if (typeof input.onLedgerChange === 'function') {
+    (input.onLedgerChange as (event: AnyRecord) => void)({
+      reason: 'pipeline-started',
+      ledgerId: input.ledgerId,
+      pipelineRunId: run.id,
+      cardIds: run.steps.map((step) => step.outputCardId),
+    });
+  }
+  const launch = runNextPipelineSkill({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, pipelineRunId: run.id });
+  // WHAT: Preserve the runner's actionable launch failure.
+  // WHY: The start route must expose the exact terminal state persisted by the runner.
+  if (launch.ok === false) return launch;
+  return { ok: true, statusCode: 202, run: launch.run ?? run, skillRun: launch.skillRun ?? null };
+}
+
+export async function startTemporaryPipelineRun(input: {
+  decisionOsRoot: string;
+  runtime: AnyRecord;
+  ledgerId: string;
+  sourceCardId: string;
+  skillName: string;
+  codexModel?: CodexModel | null;
+  codexEffort?: CodexEffort | null;
+  onLedgerChange?: unknown;
+}): Promise<AnyRecord> {
+  const now = new Date().toISOString();
+  return startPipelineRun({
+    decisionOsRoot: input.decisionOsRoot,
+    runtime: input.runtime,
+    ledgerId: input.ledgerId,
+    sourceCardId: input.sourceCardId,
+    onLedgerChange: input.onLedgerChange,
+    definition: {
+      pipelineId: null,
+      pipelineName: `${input.skillName} run`,
+      temporary: true,
+      steps: [{
+        id: `temporary-step-${safeSegment(input.skillName)}`,
+        name: input.skillName,
+        purpose: `Run ${input.skillName} once.`,
+        skills: [{
+          id: `temporary-skill-${safeSegment(input.skillName)}`,
+          skillName: input.skillName,
+          codexModel: input.codexModel ?? null,
+          codexEffort: input.codexEffort ?? null,
+        }],
+        createdAt: now,
+        updatedAt: now,
+      }],
+    },
+  });
+}
+
+function pipelineDefinition(input: {
+  pipeline: CodexPipeline;
+  steps: readonly CodexPipelineStep[];
+}): PipelineDefinition | null {
+  const stepsById = new Map(input.steps.map((step) => [step.id, step]));
+  const ordered = input.pipeline.stepIds.map((stepId) => stepsById.get(stepId));
+  // WHAT: Reject a saved pipeline whose ordered step reference is missing.
+  // WHY: Runtime order must come entirely from the persisted pipeline definition.
+  if (ordered.some((step) => !step)) return null;
+  return {
+    pipelineId: input.pipeline.id,
+    pipelineName: input.pipeline.name,
+    temporary: false,
+    steps: ordered as CodexPipelineStep[],
+  };
+}
+
+export async function startCodexPipelineRunController(
+  input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {},
+): Promise<AnyRecord> {
+  const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord };
+  const payload = (envelope.action_payload ?? input) as AnyRecord;
+  const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
+  const decisionOsRoot = resolve(String(runtime.decisionOsRoot ?? resolve(process.cwd(), '.decision-os')));
+  const ledgerId = text(payload.ledgerId);
+  const sourceCardId = text(payload.sourceCardId ?? payload.cardId);
+  const pipelineId = text(payload.pipelineId);
+  // WHAT: Require all identifiers needed to resolve and anchor the saved pipeline.
+  // WHY: The controller cannot infer a workspace ledger, source card, or definition.
+  if (!ledgerId || !sourceCardId || !pipelineId) {
+    return { ok: false, statusCode: 400, error: 'Missing ledgerId, sourceCardId, or pipelineId.' };
+  }
+  const availableSkillNames = scanCodexSkills({ workspaceRoot: dirname(decisionOsRoot) }).map((skill) => skill.name);
+  const normalized = readCodexPipelineStore({ decisionOsRoot, availableSkillNames });
+  const pipeline = normalized.store.pipelines.find((entry) => entry.id === pipelineId);
+  // WHAT: Return a distinct missing-definition response.
+  // WHY: Operators can repair a deleted pipeline separately from invalid references.
+  if (!pipeline) return { ok: false, statusCode: 404, error: 'Pipeline not found.', pipelineId };
+  const invalidReferences = normalized.invalidReferences.filter((entry) => entry.pipelineId === pipelineId);
+  // WHAT: Return every invalid saved reference before constructing the runtime definition.
+  // WHY: The editor needs the complete repair set and the runner cannot resolve partial definitions.
+  if (invalidReferences.length > 0) {
+    return { ok: false, statusCode: 400, error: 'Pipeline contains invalid references.', pipelineId, invalidReferences };
+  }
+  const definition = pipelineDefinition({ pipeline, steps: normalized.store.steps });
+  // WHAT: Reject an incomplete ordered definition before the shared start lifecycle.
+  // WHY: The runner requires every saved step to be present and ordered.
+  if (!definition) return { ok: false, statusCode: 400, error: 'Pipeline contains a missing saved step.', pipelineId };
+  return startPipelineRun({
+    decisionOsRoot,
+    runtime,
+    ledgerId,
+    sourceCardId,
+    definition,
+    onLedgerChange: payload.onLedgerChange,
+  });
+}

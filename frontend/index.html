@@ -18,6 +18,7 @@
         <button class="tool" type="button" data-tool="relationship" title="Relationship" data-spec="61bea65c 9bd42e71"><span>↗</span><span>Link</span></button>
         <button class="tool" type="button" data-action="resize" title="Resize selected cards"><span>↕</span><span>Resize</span></button>
         <button class="tool" type="button" data-action="open-ledgers-canvas" title="Ledgers"><span>▦</span><span>Ledgers</span></button>
+        <button class="tool" type="button" data-action="open-pipelines-modal" title="Pipelines"><span>⌁</span><span>Pipelines</span></button>
         <button class="tool" type="button" data-action="refresh" title="Refresh" data-spec="cfed85d3 50000006"><span>⟳</span><span>Refresh</span></button>
         <button class="tool" type="button" data-tool="thread" data-action="conversation" title="Conversation ledger" data-spec="7abd939e 667ae9a9 2b67c924"><span>☰</span><span>Threads</span></button>
         <button class="tool" type="button" data-action="shortcut-help" title="Shortcut help" data-spec="33c20993"><span>⌘</span><span>Keys</span></button>
@@ -174,10 +175,18 @@
             <h3>Voice Notes</h3>
             <p>Voice config stays workspace-local in <code>.decision-os/.settings.json</code>. Uploaded audio remains under <code>.decision-os/voice-uploads/</code>.</p>
           </section>
+          <section>
+            <h3>Reusable Pipelines</h3>
+            <p>Saved pipelines, reusable steps, run manifests, and skill defaults stay local in <code>.decision-os/codex-pipelines.json</code>. One pipeline can be active per workspace. Restart clears every generated step card body and its <code>thread-card-*</code> notes before the first skill runs again.</p>
+          </section>
         </div>
         <button type="button" data-action="close-runbook">Close</button>
       </dialog>
-      <dialog class="skill-modal" aria-labelledby="skill-modal-title"></dialog>
+      <dialog class="skill-modal process-modal" aria-labelledby="card-process-modal-title"></dialog>
+      <dialog class="pipelines-modal codex-admin-modal" aria-labelledby="pipelines-modal-title"></dialog>
+      <dialog class="pipeline-editor-modal codex-editor-modal" aria-labelledby="pipeline-editor-modal-title"></dialog>
+      <dialog class="pipeline-skill-picker-modal skill-modal" aria-labelledby="pipeline-skill-picker-modal-title"></dialog>
+      <dialog class="skill-library-editor-modal codex-editor-modal" aria-labelledby="skill-library-editor-modal-title"></dialog>
     </main>
     <script src="/assets/vendor/highlight.min.js"></script>
     <script type="module" src="/src/runtime/canvas-runtime.ts"></script>

@@ -237,7 +237,7 @@ test('card skill run route returns command output containing thread markdown as 
   }
 });
 
-test('card skill run route infers status from the latest continued JSONL segment', async () => {
+test('card skill run route infers status from the latest continued JSONL segment and ignores a non-fatal model refresh timeout', async () => {
   const originalCwd = process.cwd();
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-card-skill-run-continued-'));
   const startedAt = Date.now() - 600000;
@@ -307,6 +307,24 @@ test('card skill run route infers status from the latest continued JSONL segment
     });
     const threadPath = join(workspace, '.decision-os', 'threads', 'specs', `thread-${outputCardId}.md`);
     assert.equal(existsSync(threadPath), false);
+
+    const modelRefreshDiagnostic = '2026-07-10T13:03:18.970080Z ERROR codex_models_manager::manager: failed to refresh available models: timeout waiting for child process to exit';
+    writeFileSync(logPath, `${modelRefreshDiagnostic}\n`);
+    const diagnosticAt = new Date(Date.now() + 5);
+    utimesSync(logPath, diagnosticAt, diagnosticAt);
+    const nonFatalDiagnosticResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}`);
+    assert.equal(nonFatalDiagnosticResponse.status, 200);
+    const nonFatalDiagnostic = await nonFatalDiagnosticResponse.json() as {
+      ok: boolean;
+      status: string;
+      errorCount: number;
+      diagnostics: Array<{ kind: string; text: string }>;
+    };
+    assert.equal(nonFatalDiagnostic.ok, true);
+    assert.equal(nonFatalDiagnostic.status, 'running');
+    assert.equal(nonFatalDiagnostic.errorCount, 0);
+    assert.deepEqual(nonFatalDiagnostic.diagnostics, []);
+    assert.match(readFileSync(logPath, 'utf8'), /codex_models_manager::manager: failed to refresh available models/);
 
     writeFileSync(logPath, 'Codex run cancelled: terminated by operator\n');
     const cancelledAt = new Date();

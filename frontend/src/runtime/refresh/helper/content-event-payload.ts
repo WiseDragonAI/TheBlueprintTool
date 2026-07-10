@@ -4,12 +4,16 @@
  */
 export type ContentChangeEvent = {
   cardId?: string;
+  cardIds?: string[];
   contentFile?: string;
   kind?: string;
   ledgerId?: string;
   outputCardId?: string;
+  pipelineRunId?: string;
+  pipelineStatus?: string;
   reason?: string;
   runId?: string;
+  status?: string;
   threadId?: string;
 };
 
@@ -19,12 +23,16 @@ export function contentEventPayload(event: Event): ContentChangeEvent {
     const parsed = JSON.parse(data) as Record<string, unknown>;
     return {
       cardId: typeof parsed.cardId === 'string' ? parsed.cardId : '',
+      cardIds: Array.isArray(parsed.cardIds) ? parsed.cardIds.map((value) => String(value ?? '').trim()).filter(Boolean) : [],
       contentFile: typeof parsed.contentFile === 'string' ? parsed.contentFile : '',
       kind: typeof parsed.kind === 'string' ? parsed.kind : '',
       ledgerId: typeof parsed.ledgerId === 'string' ? parsed.ledgerId : '',
       outputCardId: typeof parsed.outputCardId === 'string' ? parsed.outputCardId : '',
+      pipelineRunId: typeof parsed.pipelineRunId === 'string' ? parsed.pipelineRunId : '',
+      pipelineStatus: typeof parsed.pipelineStatus === 'string' ? parsed.pipelineStatus : '',
       reason: typeof parsed.reason === 'string' ? parsed.reason : '',
       runId: typeof parsed.runId === 'string' ? parsed.runId : '',
+      status: typeof parsed.status === 'string' ? parsed.status : '',
       threadId: typeof parsed.threadId === 'string' ? parsed.threadId : ''
     };
   } catch {

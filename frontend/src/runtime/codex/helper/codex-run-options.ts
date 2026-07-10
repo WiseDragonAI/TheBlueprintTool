@@ -1,6 +1,21 @@
 /**
- * WHAT: Defines the Codex model and reasoning-effort choices exposed by frontend run controls.
- * WHY: Skill launch and session continuation must submit the same backend-supported values.
+ * WHAT: Re-exports and validates the shared Codex run-option catalog for frontend controls.
+ * WHY: Browser controls and backend command resolution must consume one authoritative option list.
  */
-export const codexModelOptions = ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.2'] as const;
-export const codexEffortOptions = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'] as const;
+import {
+  codexEffortOptions,
+  codexModelOptions,
+  type CodexEffort,
+  type CodexModel,
+} from '../../../../../shared/schemas/codex-pipeline-types.js';
+
+export { codexEffortOptions, codexModelOptions };
+export type { CodexEffort, CodexModel };
+
+export function isCodexModel(value: unknown): value is CodexModel {
+  return typeof value === 'string' && (codexModelOptions as readonly string[]).includes(value);
+}
+
+export function isCodexEffort(value: unknown): value is CodexEffort {
+  return typeof value === 'string' && (codexEffortOptions as readonly string[]).includes(value);
+}

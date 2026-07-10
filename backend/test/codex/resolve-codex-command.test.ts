@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { resolveCodexCommand, resolveCodexResumeCommand } from '@backend/business/codex/helper/resolve-codex-command.js';
+import { resolveCodexCommand, resolveCodexResumeCommand, resolveSkillRunOptions } from '@backend/business/codex/helper/resolve-codex-command.js';
 
 test('resolveCodexCommand honors an explicit executable setting', () => {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-codex-command-'));
@@ -134,5 +134,32 @@ test('resolveCodexCommand can find Codex beside the running Node executable when
     else process.env.PATH = previousPath;
     if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
     else process.env.CODEX_BIN = previousCodexBin;
+  }
+});
+
+test('resolveSkillRunOptions applies explicit, library-default, and fallback precedence', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-skill-options-'));
+  try {
+    assert.deepEqual(resolveSkillRunOptions({
+      workspaceRoot: workspace,
+      runtime: { decisionOsSettings: { codexModel: 'gpt-5.2', codexReasoningEffort: 'medium' } },
+      defaultCodexModel: 'gpt-5.4',
+      defaultCodexEffort: 'high',
+    }), { codexModel: 'gpt-5.4', codexEffort: 'high' });
+    assert.deepEqual(resolveSkillRunOptions({
+      workspaceRoot: workspace,
+      runtime: { decisionOsSettings: { codexModel: 'gpt-5.2', codexReasoningEffort: 'medium' } },
+      explicitCodexModel: 'gpt-5.6-sol',
+      explicitCodexEffort: 'ultra',
+      defaultCodexModel: 'gpt-5.4',
+      defaultCodexEffort: 'high',
+    }), { codexModel: 'gpt-5.6-sol', codexEffort: 'ultra' });
+    assert.throws(() => resolveSkillRunOptions({
+      workspaceRoot: workspace,
+      runtime: {},
+      defaultCodexModel: 'unsupported',
+    }), /Unsupported skill-library Codex model/);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
   }
 });

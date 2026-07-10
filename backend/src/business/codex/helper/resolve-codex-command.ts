@@ -5,17 +5,27 @@
 import { accessSync, constants, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, dirname, isAbsolute, resolve } from 'node:path';
+import {
+  codexEffortOptions,
+  codexModelOptions,
+  type CodexEffort,
+  type CodexModel,
+} from '../../../../../shared/schemas/codex-pipeline-types.js';
 
 type AnyRecord = Record<string, unknown>;
 
-export const codexModelOptions = ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.2'] as const;
-export const codexEffortOptions = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'] as const;
+export { codexEffortOptions, codexModelOptions };
 
 export type CodexCommand = {
   command: string;
   args: string[];
   model: string;
   effort: string;
+};
+
+export type ResolvedSkillRunOptions = {
+  codexModel: string;
+  codexEffort: string;
 };
 
 type CodexSelection = {
@@ -101,12 +111,46 @@ function resolveCodexSelection(input: { workspaceRoot: string; runtime: AnyRecor
   };
 }
 
-export function isAllowedCodexModel(value: unknown): boolean {
+export function isAllowedCodexModel(value: unknown): value is CodexModel {
   return Boolean(allowedValue(value, codexModelOptions));
 }
 
-export function isAllowedCodexEffort(value: unknown): boolean {
+export function isAllowedCodexEffort(value: unknown): value is CodexEffort {
   return Boolean(allowedValue(value, codexEffortOptions));
+}
+
+/**
+ * Resolves the immutable model and effort snapshot stored on one pipeline skill run.
+ * Explicit run or step values win over the skill-library defaults; the ordinary
+ * workspace/environment/built-in command selection remains the final fallback.
+ */
+export function resolveSkillRunOptions(input: {
+  workspaceRoot: string;
+  runtime: AnyRecord;
+  explicitCodexModel?: unknown;
+  explicitCodexEffort?: unknown;
+  defaultCodexModel?: unknown;
+  defaultCodexEffort?: unknown;
+}): ResolvedSkillRunOptions {
+  if (input.explicitCodexModel !== null && input.explicitCodexModel !== undefined && !isAllowedCodexModel(input.explicitCodexModel)) {
+    throw new RangeError('Unsupported explicit Codex model.');
+  }
+  if (input.explicitCodexEffort !== null && input.explicitCodexEffort !== undefined && !isAllowedCodexEffort(input.explicitCodexEffort)) {
+    throw new RangeError('Unsupported explicit Codex effort.');
+  }
+  if (input.defaultCodexModel !== null && input.defaultCodexModel !== undefined && !isAllowedCodexModel(input.defaultCodexModel)) {
+    throw new RangeError('Unsupported skill-library Codex model.');
+  }
+  if (input.defaultCodexEffort !== null && input.defaultCodexEffort !== undefined && !isAllowedCodexEffort(input.defaultCodexEffort)) {
+    throw new RangeError('Unsupported skill-library Codex effort.');
+  }
+  const command = resolveCodexCommand({
+    workspaceRoot: input.workspaceRoot,
+    runtime: input.runtime,
+    codexModel: input.explicitCodexModel ?? input.defaultCodexModel,
+    codexEffort: input.explicitCodexEffort ?? input.defaultCodexEffort,
+  });
+  return { codexModel: command.model, codexEffort: command.effort };
 }
 
 export function resolveCodexCommand(input: { workspaceRoot: string; runtime: AnyRecord; codexModel?: unknown; codexEffort?: unknown; developerInstructions?: string }): CodexCommand {

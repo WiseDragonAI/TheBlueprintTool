@@ -38,6 +38,7 @@ export type LedgerContentRefreshState = {
   inFlight: boolean;
   ledgerReasons: string[];
   changedContentFiles: string[];
+  changedCardIds?: string[];
   threadReasons: string[];
   threadScope: ThreadContentRefreshScope | null;
 };
@@ -109,6 +110,7 @@ export const state: any = {
     inFlight: false,
     ledgerReasons: [],
     changedContentFiles: [],
+    changedCardIds: [],
     threadReasons: [],
     threadScope: null
   } satisfies LedgerContentRefreshState,

@@ -6,6 +6,14 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { requestCardSkillRunStatus, type CardSkillRunSummary } from './request-card-skill-run-status.js';
 import { requestCardSkillRunCancel } from './request-card-skill-run-cancel.js';
 import { requestCardSkillRunContinue } from './request-card-skill-run-continue.js';
+import {
+  requestCodexPipelineRunCancel,
+  requestCodexPipelineRunRestart,
+  requestCodexPipelineRunStatus,
+  type CodexPipelineRunSkillDetail,
+  type CodexPipelineRunStatusResult,
+  type CodexPipelineRunStepDetail,
+} from './request-codex-pipeline-run-status.js';
 
 type Poller = {
   ledgerId: string;
@@ -34,6 +42,33 @@ type ClockHandle =
 const pollers = new Map<string, Poller>();
 const terminalSummaries = new Map<string, CardSkillRunSummary>();
 const runConsumers = new Map<string, Map<string, (summary: CardSkillRunSummary) => void>>();
+
+type PipelineWidgetStatus = 'pending' | 'running' | 'complete' | 'failed' | 'cancelled' | 'unknown';
+
+type PipelineStepPoller = {
+  ledgerId: string;
+  cardId: string;
+  runId: string;
+  pipelineRunId: string;
+  pipelineStepId: string;
+  element: HTMLElement;
+  timer: ReturnType<typeof setTimeout> | null;
+  clock: ClockHandle | null;
+  lastClockPaintMs: number;
+  startedAtMs: number;
+  since: number;
+  inFlight: boolean;
+  cancelInFlight: boolean;
+  restartInFlight: boolean;
+  continueInFlight: boolean;
+  detachedChecks: number;
+  terminal: boolean;
+  continuationMode: boolean;
+  activeSkillRunId: string;
+  lastStatus: CodexPipelineRunStatusResult | null;
+};
+
+const pipelineStepPollers = new Map<string, PipelineStepPoller>();
 
 function consumersFor(key: string): Map<string, (summary: CardSkillRunSummary) => void> {
   let consumers = runConsumers.get(key);
@@ -590,4 +625,509 @@ export function bindCardSkillRunWidget(input: { ledgerId: string; cardId: string
   bindNewSessionButton(poller);
   startFrontendClock(poller);
   schedulePoll(poller, 0);
+}
+
+function pipelineStepPollerKey(input: { ledgerId: string; cardId: string; pipelineRunId: string }): string {
+  return `${input.ledgerId}:${input.cardId}:${input.pipelineRunId}`;
+}
+
+function restartButton(element: HTMLElement): HTMLButtonElement | null {
+  return element.querySelector<HTMLButtonElement>('[data-codex-run-restart]');
+}
+
+function retryButton(element: HTMLElement): HTMLButtonElement | null {
+  return element.querySelector<HTMLButtonElement>('[data-codex-run-retry]');
+}
+
+function setRestartButtonVisible(element: HTMLElement, visible: boolean): void {
+  const button = restartButton(element);
+  if (button) button.hidden = !visible;
+}
+
+function setRetryButtonVisible(element: HTMLElement, visible: boolean): void {
+  const button = retryButton(element);
+  if (button) button.hidden = !visible;
+}
+
+function setPipelineButtonState(button: HTMLButtonElement | null, busy: boolean, idleLabel: string, busyLabel: string): void {
+  if (!button) return;
+  button.disabled = busy;
+  button.textContent = busy ? busyLabel : idleLabel;
+}
+
+function pipelineStepFor(result: CodexPipelineRunStatusResult, poller: PipelineStepPoller): CodexPipelineRunStepDetail | null {
+  return result.run?.steps.find((step) => step.outputCard.id === poller.cardId || step.stepId === poller.pipelineStepId) ?? null;
+}
+
+function displayedPipelineSkill(step: CodexPipelineRunStepDetail): CodexPipelineRunSkillDetail | null {
+  return step.skills.find((skill) => skill.status === 'running')
+    ?? step.skills.find((skill) => skill.status === 'failed' || skill.status === 'cancelled')
+    ?? step.skills.find((skill) => skill.status === 'pending')
+    ?? [...step.skills].reverse().find((skill) => skill.status === 'complete')
+    ?? null;
+}
+
+function effectivePipelineStepStatus(result: CodexPipelineRunStatusResult, step: CodexPipelineRunStepDetail): PipelineWidgetStatus {
+  if (step.status !== 'pending') return step.status;
+  if (result.run?.status === 'failed') return 'failed';
+  if (result.run?.status === 'cancelled') return 'cancelled';
+  return 'pending';
+}
+
+function pipelineLatestLabel(
+  result: CodexPipelineRunStatusResult,
+  step: CodexPipelineRunStepDetail,
+  skill: CodexPipelineRunSkillDetail | null,
+  status: PipelineWidgetStatus,
+): string {
+  if (status === 'pending') return `Waiting for ${skill?.skillName || 'the previous pipeline step'}`;
+  if (status === 'running') return `Running ${skill?.skillName || step.name}`;
+  if (status === 'complete') return result.run?.status === 'complete' ? 'Pipeline complete' : 'Step complete · pipeline continues';
+  if (status === 'cancelled') return skill?.error || step.error || result.run?.error || 'Pipeline cancelled';
+  if (status === 'failed') {
+    if (step.status === 'pending') return 'Blocked after an earlier pipeline failure';
+    return skill?.error || step.error || result.run?.error || 'Pipeline failed';
+  }
+  return result.error || 'Pipeline status is unavailable';
+}
+
+function paintPipelineContext(
+  element: HTMLElement,
+  result: CodexPipelineRunStatusResult,
+  step: CodexPipelineRunStepDetail,
+  skill: CodexPipelineRunSkillDetail | null,
+): void {
+  const context = element.querySelector<HTMLElement>('[data-codex-run-context]');
+  if (context) {
+    context.hidden = false;
+    context.textContent = [result.run?.pipelineName, step.name, skill?.skillName].filter(Boolean).join(' › ');
+    context.title = context.textContent;
+  }
+  const metadata = element.querySelector<HTMLElement>('[data-codex-run-metadata]');
+  if (metadata) metadata.hidden = false;
+  setText(element, '[data-codex-run-source]', result.run?.sourceCardTitle ?? '');
+  setSelectValue(element, '[data-codex-run-model]', String(skill?.codexModel ?? ''));
+  setSelectValue(element, '[data-codex-run-effort]', String(skill?.codexEffort ?? ''));
+}
+
+function setPipelineControls(
+  poller: PipelineStepPoller,
+  status: PipelineWidgetStatus,
+  result: CodexPipelineRunStatusResult,
+  skill: CodexPipelineRunSkillDetail | null,
+): void {
+  const running = status === 'running';
+  const pipelineTerminal = result.run?.status === 'complete' || result.run?.status === 'failed' || result.run?.status === 'cancelled';
+  setCancelButtonVisible(poller.element, running && Boolean(result.canCancel));
+  setContinueButtonVisible(poller.element, pipelineTerminal && Boolean(result.canContinue) && Boolean(skill?.runId));
+  setNewSessionButtonVisible(poller.element, false);
+  setRestartButtonVisible(poller.element, pipelineTerminal && Boolean(result.canRestart));
+  setRetryButtonVisible(poller.element, false);
+  setSelectionEnabled(poller.element, pipelineTerminal);
+  setPipelineButtonState(cancelButton(poller.element), poller.cancelInFlight, 'Cancel', 'Stopping');
+  setPipelineButtonState(continueButton(poller.element), poller.continueInFlight, 'Continue', 'Continuing');
+  setPipelineButtonState(restartButton(poller.element), poller.restartInFlight, 'Restart', 'Restarting');
+}
+
+function paintPipelineStep(
+  poller: PipelineStepPoller,
+  result: CodexPipelineRunStatusResult,
+  step: CodexPipelineRunStepDetail,
+  skill: CodexPipelineRunSkillDetail | null,
+): PipelineWidgetStatus {
+  const status = effectivePipelineStepStatus(result, step);
+  poller.element.dataset.runStatus = status;
+  setText(poller.element, '[data-codex-run-status]', statusLabel(status));
+  paintPipelineContext(poller.element, result, step, skill);
+  setPipelineControls(poller, status, result, skill);
+  setText(poller.element, '[data-codex-run-latest]', pipelineLatestLabel(result, step, skill, status));
+  if (status === 'running') showTimer(poller.element);
+  else removeTimer(poller.element);
+  if (status === 'pending') {
+    setText(poller.element, '[data-codex-run-tools]', '0');
+    setText(poller.element, '[data-codex-run-messages]', '0');
+    setText(poller.element, '[data-codex-run-files]', '0');
+  }
+  return status;
+}
+
+function paintPipelineError(poller: PipelineStepPoller, message: string, options: { keepCancel?: boolean } = {}): void {
+  poller.element.dataset.runStatus = 'unknown';
+  setText(poller.element, '[data-codex-run-status]', 'NEEDS ATTENTION');
+  setText(poller.element, '[data-codex-run-latest]', `${message || 'Pipeline status is unavailable.'} Retry status.`);
+  removeTimer(poller.element);
+  setCancelButtonVisible(poller.element, Boolean(options.keepCancel));
+  setContinueButtonVisible(poller.element, false);
+  setNewSessionButtonVisible(poller.element, false);
+  setRestartButtonVisible(poller.element, false);
+  setRetryButtonVisible(poller.element, true);
+  setSelectionEnabled(poller.element, false);
+}
+
+function paintPipelineClock(poller: PipelineStepPoller): void {
+  if (poller.terminal || poller.element.dataset.runStatus !== 'running') return;
+  setText(poller.element, '[data-codex-run-timer]', durationLabel(Date.now() - poller.startedAtMs));
+}
+
+function schedulePipelineClock(poller: PipelineStepPoller): void {
+  if (poller.clock || poller.terminal || poller.element.dataset.runStatus !== 'running') return;
+  const tick = (): void => {
+    poller.clock = null;
+    if (poller.terminal || poller.element.dataset.runStatus !== 'running' || !globalThis.document?.contains(poller.element)) return;
+    const now = Date.now();
+    if (now - poller.lastClockPaintMs >= 33) {
+      poller.lastClockPaintMs = now;
+      paintPipelineClock(poller);
+    }
+    schedulePipelineClock(poller);
+  };
+  if (typeof globalThis.requestAnimationFrame === 'function') {
+    poller.clock = { kind: 'animation', id: globalThis.requestAnimationFrame(tick) };
+  } else {
+    poller.clock = { kind: 'timeout', id: setTimeout(tick, 33) };
+  }
+}
+
+function stopPipelineClock(poller: PipelineStepPoller): void {
+  if (poller.clock?.kind === 'animation') globalThis.cancelAnimationFrame?.(poller.clock.id);
+  if (poller.clock?.kind === 'timeout') clearTimeout(poller.clock.id);
+  poller.clock = null;
+}
+
+function schedulePipelinePoll(poller: PipelineStepPoller, delayMs = 1000): void {
+  if (poller.timer) clearTimeout(poller.timer);
+  poller.timer = setTimeout(() => runPipelinePoll(poller), delayMs);
+}
+
+function runPipelinePoll(poller: PipelineStepPoller): void {
+  void pollPipelineStep(poller).catch((error) => {
+    poller.inFlight = false;
+    poller.terminal = true;
+    const message = error instanceof Error ? error.message : String(error ?? 'Pipeline status failed.');
+    paintPipelineError(poller, message);
+    telemetry('codex-pipeline-widget-status-failed', { pipelineRunId: poller.pipelineRunId, cardId: poller.cardId, error: message });
+  });
+}
+
+function triggerPipelinePoll(poller: PipelineStepPoller): void {
+  if (poller.timer) clearTimeout(poller.timer);
+  poller.timer = null;
+  if (!poller.inFlight) runPipelinePoll(poller);
+}
+
+function removePipelinePoller(poller: PipelineStepPoller): void {
+  if (poller.timer) clearTimeout(poller.timer);
+  poller.timer = null;
+  stopPipelineClock(poller);
+  pipelineStepPollers.delete(pipelineStepPollerKey(poller));
+}
+
+function bindPipelineButtons(poller: PipelineStepPoller): void {
+  const cancel = cancelButton(poller.element);
+  if (cancel) cancel.onclick = (event): void => {
+    event.preventDefault();
+    event.stopPropagation();
+    void cancelPipelineStepRun(poller);
+  };
+  const resume = continueButton(poller.element);
+  if (resume) resume.onclick = (event): void => {
+    event.preventDefault();
+    event.stopPropagation();
+    void continuePipelineStepRun(poller);
+  };
+  const restart = restartButton(poller.element);
+  if (restart) restart.onclick = (event): void => {
+    event.preventDefault();
+    event.stopPropagation();
+    void restartPipelineRun(poller);
+  };
+  const retry = retryButton(poller.element);
+  if (retry) retry.onclick = (event): void => {
+    event.preventDefault();
+    event.stopPropagation();
+    poller.terminal = false;
+    setPipelineButtonState(retry, true, 'Retry status', 'Checking');
+    setText(poller.element, '[data-codex-run-latest]', 'Checking pipeline status');
+    triggerPipelinePoll(poller);
+  };
+}
+
+async function cancelPipelineStepRun(poller: PipelineStepPoller): Promise<void> {
+  if (poller.cancelInFlight || poller.inFlight) return;
+  poller.cancelInFlight = true;
+  setPipelineButtonState(cancelButton(poller.element), true, 'Cancel', 'Stopping');
+  setText(poller.element, '[data-codex-run-latest]', poller.continuationMode ? 'Cancelling continuation' : 'Cancelling pipeline');
+  const result = poller.continuationMode
+    ? await requestCardSkillRunCancel({ ledgerId: poller.ledgerId, cardId: poller.cardId, runId: poller.activeSkillRunId || poller.runId })
+    : await requestCodexPipelineRunCancel({ runId: poller.pipelineRunId });
+  poller.cancelInFlight = false;
+  if (!result.ok) {
+    paintPipelineError(poller, result.error || 'Cancellation failed.');
+    return;
+  }
+  poller.terminal = false;
+  triggerPipelinePoll(poller);
+}
+
+async function restartPipelineRun(poller: PipelineStepPoller): Promise<void> {
+  if (poller.restartInFlight || poller.inFlight) return;
+  poller.restartInFlight = true;
+  setPipelineButtonState(restartButton(poller.element), true, 'Restart', 'Restarting');
+  setText(poller.element, '[data-codex-run-latest]', 'Clearing generated results and restarting pipeline');
+  const result = await requestCodexPipelineRunRestart({ runId: poller.pipelineRunId });
+  poller.restartInFlight = false;
+  if (!result.ok) {
+    paintPipelineError(poller, result.error || 'Pipeline restart failed.');
+    return;
+  }
+  poller.continuationMode = false;
+  poller.activeSkillRunId = '';
+  poller.since = 0;
+  poller.terminal = false;
+  poller.startedAtMs = Date.now();
+  poller.element.dataset.runStatus = 'pending';
+  setText(poller.element, '[data-codex-run-status]', 'PENDING');
+  setText(poller.element, '[data-codex-run-latest]', 'Pipeline restarted');
+  setContinueButtonVisible(poller.element, false);
+  setRestartButtonVisible(poller.element, false);
+  triggerPipelinePoll(poller);
+}
+
+async function continuePipelineStepRun(poller: PipelineStepPoller): Promise<void> {
+  if (poller.continueInFlight || poller.inFlight) return;
+  const skillRunId = poller.activeSkillRunId || poller.runId;
+  if (!skillRunId) {
+    paintPipelineError(poller, 'No completed skill session is available.');
+    return;
+  }
+  poller.continueInFlight = true;
+  setPipelineButtonState(continueButton(poller.element), true, 'Continue', 'Continuing');
+  setText(poller.element, '[data-codex-run-latest]', 'Continuing skill session');
+  const result = await requestCardSkillRunContinue({
+    ledgerId: poller.ledgerId,
+    cardId: poller.cardId,
+    runId: skillRunId,
+    codexModel: selectedValue(poller.element, '[data-codex-run-model]'),
+    codexEffort: selectedValue(poller.element, '[data-codex-run-effort]'),
+    newSession: false,
+  });
+  poller.continueInFlight = false;
+  if (!result.ok) {
+    setPipelineButtonState(continueButton(poller.element), false, 'Continue', 'Continuing');
+    setText(poller.element, '[data-codex-run-latest]', result.error || 'Continue failed');
+    return;
+  }
+  poller.continuationMode = true;
+  poller.activeSkillRunId = skillRunId;
+  poller.since = 0;
+  poller.terminal = false;
+  poller.startedAtMs = timestampMs(result.run?.startedAt) || timestampMs(result.run?.continuedAt) || Date.now();
+  poller.element.dataset.runStatus = 'running';
+  setText(poller.element, '[data-codex-run-status]', 'RUNNING');
+  setText(poller.element, '[data-codex-run-latest]', 'Continuing skill session');
+  setCancelButtonVisible(poller.element, true);
+  setContinueButtonVisible(poller.element, false);
+  setRestartButtonVisible(poller.element, false);
+  showTimer(poller.element);
+  schedulePipelineClock(poller);
+  schedulePipelinePoll(poller, 0);
+}
+
+async function pollPipelineContinuation(poller: PipelineStepPoller): Promise<void> {
+  const summary = await requestCardSkillRunStatus({
+    ledgerId: poller.ledgerId,
+    cardId: poller.cardId,
+    runId: poller.activeSkillRunId || poller.runId,
+    since: poller.since,
+  });
+  if (!summary.ok) {
+    paintPipelineError(poller, summary.error || 'Continuation log could not be read.', { keepCancel: true });
+    schedulePipelinePoll(poller);
+    return;
+  }
+  poller.since = Math.max(poller.since, summary.nextSince, summary.lineCount);
+  const startedAt = timestampMs(summary.startedAt);
+  if (startedAt) poller.startedAtMs = startedAt;
+  poller.element.dataset.runStatus = summary.status;
+  setText(poller.element, '[data-codex-run-status]', statusLabel(summary.status));
+  setText(poller.element, '[data-codex-run-tools]', String(summary.toolCallCount));
+  setText(poller.element, '[data-codex-run-messages]', String(summary.agentMessageCount + summary.thinkingCount));
+  setText(poller.element, '[data-codex-run-files]', String(summary.fileChangeCount));
+  setText(poller.element, '[data-codex-run-latest]', latestEventLabel(summary));
+  setWidgetMetadata(poller.element, summary);
+  if (summary.status === 'running') {
+    showTimer(poller.element);
+    setCancelButtonVisible(poller.element, true);
+    setContinueButtonVisible(poller.element, false);
+    setRestartButtonVisible(poller.element, false);
+    setRetryButtonVisible(poller.element, false);
+    schedulePipelineClock(poller);
+    schedulePipelinePoll(poller);
+    return;
+  }
+  poller.terminal = isTerminalStatus(summary.status);
+  stopPipelineClock(poller);
+  removeTimer(poller.element);
+  setCancelButtonVisible(poller.element, false);
+  setContinueButtonVisible(poller.element, poller.terminal);
+  setRestartButtonVisible(poller.element, Boolean(poller.lastStatus?.canRestart));
+  setSelectionEnabled(poller.element, poller.terminal);
+}
+
+async function pollPipelineStep(poller: PipelineStepPoller): Promise<void> {
+  poller.timer = null;
+  if (!globalThis.document?.contains(poller.element)) {
+    poller.detachedChecks += 1;
+    if (poller.detachedChecks >= 4) {
+      removePipelinePoller(poller);
+      return;
+    }
+  } else poller.detachedChecks = 0;
+  if (poller.inFlight) {
+    schedulePipelinePoll(poller);
+    return;
+  }
+  poller.inFlight = true;
+  if (poller.continuationMode) {
+    await pollPipelineContinuation(poller);
+    poller.inFlight = false;
+    return;
+  }
+  const result = await requestCodexPipelineRunStatus({ runId: poller.pipelineRunId });
+  poller.inFlight = false;
+  setPipelineButtonState(retryButton(poller.element), false, 'Retry status', 'Checking');
+  if (!result.ok || !result.run) {
+    poller.terminal = true;
+    paintPipelineError(poller, result.error || 'Pipeline status could not be loaded.');
+    telemetry('codex-pipeline-widget-status-failed', { pipelineRunId: poller.pipelineRunId, cardId: poller.cardId, error: result.error ?? '' });
+    return;
+  }
+  const step = pipelineStepFor(result, poller);
+  if (!step) {
+    poller.terminal = true;
+    paintPipelineError(poller, 'This generated card is no longer present in the pipeline run.');
+    return;
+  }
+  poller.lastStatus = result;
+  const skill = displayedPipelineSkill(step);
+  const status = paintPipelineStep(poller, result, step, skill);
+  const skillRunId = skill?.runId ?? '';
+  if (skillRunId && skillRunId !== poller.activeSkillRunId) {
+    poller.activeSkillRunId = skillRunId;
+    poller.runId = skillRunId;
+    poller.since = 0;
+    setText(poller.element, '[data-codex-run-tools]', '0');
+    setText(poller.element, '[data-codex-run-messages]', '0');
+    setText(poller.element, '[data-codex-run-files]', '0');
+  }
+  if (status === 'running' && skill?.status === 'running') {
+    poller.startedAtMs = timestampMs(skill.startedAt) || poller.startedAtMs || Date.now();
+    schedulePipelineClock(poller);
+    if (!skill.logAvailable) {
+      paintPipelineError(poller, 'The active skill log is not available yet.', { keepCancel: result.canCancel });
+      schedulePipelinePoll(poller, 500);
+      return;
+    }
+    const summary = await requestCardSkillRunStatus({
+      ledgerId: poller.ledgerId,
+      cardId: poller.cardId,
+      runId: skill.runId,
+      since: poller.since,
+    });
+    if (!summary.ok) {
+      paintPipelineError(poller, summary.error || 'The active skill log could not be read.', { keepCancel: result.canCancel });
+      schedulePipelinePoll(poller);
+      return;
+    }
+    poller.since = Math.max(poller.since, summary.nextSince, summary.lineCount);
+    setText(poller.element, '[data-codex-run-tools]', String(summary.toolCallCount));
+    setText(poller.element, '[data-codex-run-messages]', String(summary.agentMessageCount + summary.thinkingCount));
+    setText(poller.element, '[data-codex-run-files]', String(summary.fileChangeCount));
+    setText(poller.element, '[data-codex-run-latest]', latestEventLabel(summary));
+  }
+  const pipelineTerminal = result.run.status === 'complete' || result.run.status === 'failed' || result.run.status === 'cancelled';
+  poller.terminal = pipelineTerminal;
+  telemetry('codex-pipeline-widget-polled', {
+    pipelineRunId: poller.pipelineRunId,
+    cardId: poller.cardId,
+    stepId: step.stepId,
+    stepStatus: status,
+    skillRunId,
+    pipelineStatus: result.run.status,
+  });
+  if (pipelineTerminal) stopPipelineClock(poller);
+  else schedulePipelinePoll(poller);
+}
+
+export function bindPipelineStepRunWidget(input: {
+  ledgerId: string;
+  cardId: string;
+  runId: string;
+  pipelineRunId: string;
+  pipelineStepId: string;
+  element: HTMLElement;
+}): void {
+  const key = pipelineStepPollerKey(input);
+  const existing = pipelineStepPollers.get(key);
+  if (existing) {
+    existing.element = input.element;
+    existing.runId = input.runId;
+    existing.pipelineStepId = input.pipelineStepId;
+    existing.detachedChecks = 0;
+    bindPipelineButtons(existing);
+    if (!existing.continuationMode && existing.lastStatus?.run) {
+      const step = pipelineStepFor(existing.lastStatus, existing);
+      if (step) paintPipelineStep(existing, existing.lastStatus, step, displayedPipelineSkill(step));
+    }
+    if (!existing.timer && !existing.inFlight && !existing.terminal) triggerPipelinePoll(existing);
+    return;
+  }
+  const poller: PipelineStepPoller = {
+    ...input,
+    timer: null,
+    clock: null,
+    lastClockPaintMs: 0,
+    startedAtMs: runStartedAt(input.runId),
+    since: 0,
+    inFlight: false,
+    cancelInFlight: false,
+    restartInFlight: false,
+    continueInFlight: false,
+    detachedChecks: 0,
+    terminal: false,
+    continuationMode: false,
+    activeSkillRunId: '',
+    lastStatus: null,
+  };
+  pipelineStepPollers.set(key, poller);
+  bindPipelineButtons(poller);
+  triggerPipelinePoll(poller);
+}
+
+export function resumeExternallyStartedPipelineRun(input: {
+  ledgerId: string;
+  pipelineRunId: string;
+  cardId?: string;
+  cardIds?: readonly string[];
+  runId?: string;
+}): boolean {
+  const targetCardIds = new Set([input.cardId ?? '', ...(input.cardIds ?? [])].filter(Boolean));
+  let resumed = false;
+  for (const poller of pipelineStepPollers.values()) {
+    if (poller.ledgerId !== input.ledgerId || poller.pipelineRunId !== input.pipelineRunId) continue;
+    if (targetCardIds.size > 0 && !targetCardIds.has(poller.cardId)) continue;
+    if (input.runId) {
+      poller.runId = input.runId;
+      poller.activeSkillRunId = input.runId;
+    }
+    poller.continuationMode = false;
+    poller.terminal = false;
+    poller.inFlight = false;
+    poller.since = 0;
+    poller.startedAtMs = Date.now();
+    poller.detachedChecks = 0;
+    triggerPipelinePoll(poller);
+    resumed = true;
+  }
+  return resumed;
 }

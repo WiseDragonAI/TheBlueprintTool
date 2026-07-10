@@ -32,7 +32,8 @@ import { retryVoiceTranscription } from '../../voice/effect/retry-voice-transcri
 import { enterLedgersCanvasController } from '../../navigation/controller/enter-ledgers-canvas-controller.js';
 import { applyRailCollapsedState } from '../../toolbox/effect/apply-rail-collapsed-state.js';
 import { persistState } from '../../persistence/effect/persist-state.js';
-import { closeCardSkillModal, openCardSkillModal, processSelectedCardSkill, selectCardSkill } from '../../codex/effect/render-skill-modal.js';
+import { openCardProcessModal } from '../../codex/effect/render-card-process-modal.js';
+import { openPipelinesModal } from '../../codex/effect/render-pipelines-modal.js';
 import { processThreadCodexController } from '../../codex/controller/process-thread-codex-controller.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
@@ -123,7 +124,11 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     return;
   }
   if (action === 'open-card-process-modal') {
-    await openCardSkillModal(actionTarget.dataset.cardId ?? '');
+    await openCardProcessModal(actionTarget.dataset.cardId ?? '');
+    return;
+  }
+  if (action === 'open-pipelines-modal') {
+    await openPipelinesModal();
     return;
   }
   if (action === 'process-thread-codex') {
@@ -136,18 +141,6 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
       codexEffort: actionTarget.dataset.codexEffort ?? ''
     });
     if (!ok && button.isConnected) button.disabled = false;
-    return;
-  }
-  if (action === 'select-card-skill') {
-    selectCardSkill(actionTarget.dataset.skillName ?? '');
-    return;
-  }
-  if (action === 'process-card-skill') {
-    await processSelectedCardSkill();
-    return;
-  }
-  if (action === 'close-card-skill-modal') {
-    closeCardSkillModal();
     return;
   }
   if (action === 'edit-card-title') {
@@ -235,7 +228,7 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     return;
   }
   if (action === 'runbook') {
-    telemetry('open-runbook', { sections: ['workspace-server', 'card-images', 'voice-notes'] });
+    telemetry('open-runbook', { sections: ['workspace-server', 'card-images', 'voice-notes', 'reusable-pipelines'] });
     runbookModal.showModal?.();
     return;
   }
