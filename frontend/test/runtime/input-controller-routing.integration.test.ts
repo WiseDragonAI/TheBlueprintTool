@@ -221,6 +221,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(actionClick, /beginLedgerCardDescriptionEdit\(card\)/);
 
   const skillModal = source('frontend/src/runtime/codex/effect/render-skill-modal.ts');
+  const codexRunOptions = source('frontend/src/runtime/codex/helper/codex-run-options.ts');
   const cardDetailSkillRunWidget = source('frontend/src/runtime/codex/component/render-card-skill-run-widget.ts');
   const cardDetailSkillRunPoller = source('frontend/src/runtime/codex/effect/poll-card-skill-run.ts');
   const ledgerContentEvents = source('frontend/src/runtime/refresh/effect/subscribe-ledger-content-events.ts');
@@ -230,17 +231,21 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(skillModal, /className = 'skill-selected-name'/);
   assert.match(skillModal, /selectedName\.textContent = skillModalState\.selectedSkillName/);
   assert.match(skillModal, /codexEffort: 'xhigh'/);
-  assert.match(skillModal, /const codexModelOptions = \['gpt-5\.5', 'gpt-5\.4', 'gpt-5\.3-codex', 'gpt-5\.2-codex', 'gpt-5\.2'\]/);
-  assert.match(skillModal, /const codexEffortOptions = \['low', 'medium', 'high', 'xhigh'\]/);
+  assert.match(skillModal, /import \{ codexEffortOptions, codexModelOptions \} from '\.\.\/helper\/codex-run-options\.js'/);
+  assert.match(codexRunOptions, /codexModelOptions = \['gpt-5\.6-sol', 'gpt-5\.6-terra', 'gpt-5\.6-luna', 'gpt-5\.5', 'gpt-5\.4', 'gpt-5\.3-codex', 'gpt-5\.2-codex', 'gpt-5\.2'\]/);
+  assert.match(codexRunOptions, /codexEffortOptions = \['low', 'medium', 'high', 'xhigh', 'max', 'ultra'\]/);
   assert.match(skillModal, /className = 'skill-run-controls'/);
   assert.match(cardDetailRenderer, /renderCardSkillRunWidget\(card\)/);
   assert.match(cardDetailSkillRunWidget, /cardCodexRunId\(card\)/);
   assert.match(cardDetailSkillRunWidget, /body\.className = 'codex-run-body'/);
   assert.match(cardDetailSkillRunWidget, /cancel\.className = 'codex-run-cancel terminal-button terminal-button--stop terminal-button--compact'/);
   assert.match(cardDetailSkillRunWidget, /cancel\.dataset\.codexRunCancel = ''/);
+  assert.match(cardDetailSkillRunWidget, /selectionMetric\('Model', 'codexRunModel', codexModelOptions\)/);
+  assert.match(cardDetailSkillRunWidget, /selectionMetric\('Effort', 'codexRunEffort', codexEffortOptions\)/);
   assert.match(cardDetailSkillRunWidget, /widget\.replaceChildren\(body, timer\)/);
   assert.match(cardDetailSkillRunPoller, /requestCardSkillRunStatus/);
   assert.match(cardDetailSkillRunPoller, /requestCardSkillRunCancel/);
+  assert.match(cardDetailSkillRunPoller, /requestCardSkillRunContinue\(\{ ledgerId: poller\.ledgerId, cardId: poller\.cardId, runId: poller\.runId, traceId, codexModel, codexEffort \}\)/);
   assert.match(cardDetailSkillRunPoller, /function bindCancelButton\(poller: Poller\): void \{[\s\S]*void cancelRun\(poller\);[\s\S]*\}/);
   assert.match(cardDetailSkillRunPoller, /requestCardSkillRunCancel\(\{ ledgerId: poller\.ledgerId, cardId: poller\.cardId, runId: poller\.runId \}\)/);
   assert.match(cardDetailSkillRunPoller, /setCancelButtonVisible\(element: HTMLElement, visible: boolean\)/);

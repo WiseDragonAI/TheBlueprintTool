@@ -53,6 +53,25 @@ test('resolveCodexCommand lets run payload override settings model and effort', 
   }
 });
 
+test('resolveCodexCommand supports GPT-5.6 with ultra reasoning', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-codex-command-'));
+  try {
+    const command = resolveCodexCommand({
+      workspaceRoot: workspace,
+      runtime: {},
+      codexModel: 'gpt-5.6-sol',
+      codexEffort: 'ultra'
+    });
+
+    assert.equal(command.model, 'gpt-5.6-sol');
+    assert.equal(command.effort, 'ultra');
+    assert.equal(command.args.includes('gpt-5.6-sol'), true);
+    assert.equal(command.args.includes('model_reasoning_effort="ultra"'), true);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
 test('resolveCodexCommand defaults to xhigh effort when no effort is configured', () => {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-codex-command-'));
   const previousCodexEffort = process.env.CODEX_EFFORT;

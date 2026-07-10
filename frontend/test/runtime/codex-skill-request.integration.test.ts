@@ -17,6 +17,7 @@ type FakeNode = {
   onclick?: (event: Event) => void;
   setAttribute: () => void;
   textContent: string;
+  value: string;
 };
 
 function fakeNode(): FakeNode {
@@ -25,7 +26,8 @@ function fakeNode(): FakeNode {
     disabled: false,
     hidden: false,
     setAttribute() {},
-    textContent: ''
+    textContent: '',
+    value: ''
   };
 }
 
@@ -226,6 +228,10 @@ test('externally started Codex runs clear terminal widget cache and restart poll
     bindCardSkillRunWidget({ ledgerId: 'specs', cardId: 'card-a', runId: 'codex-skill-3000-cache', element: firstWidget });
     await waitFor(() => requests.length === 1);
     await waitFor(() => firstWidget.nodes['[data-codex-run-status]'].textContent === 'COMPLETE');
+    assert.equal(firstWidget.nodes['[data-codex-run-model]'].value, 'gpt-5.5');
+    assert.equal(firstWidget.nodes['[data-codex-run-effort]'].value, 'xhigh');
+    assert.equal(firstWidget.nodes['[data-codex-run-model]'].disabled, false);
+    assert.equal(firstWidget.nodes['[data-codex-run-effort]'].disabled, false);
 
     const cachedWidget = fakeCodexRunWidget();
     bindCardSkillRunWidget({ ledgerId: 'specs', cardId: 'card-a', runId: 'codex-skill-3000-cache', element: cachedWidget });
@@ -237,6 +243,8 @@ test('externally started Codex runs clear terminal widget cache and restart poll
     assert.equal(cachedWidget.nodes['[data-codex-run-latest]'].textContent, 'Continuing session');
     assert.equal(cachedWidget.nodes['[data-codex-run-cancel]'].hidden, false);
     assert.equal(cachedWidget.nodes['[data-codex-run-continue]'].hidden, true);
+    assert.equal(cachedWidget.nodes['[data-codex-run-model]'].disabled, true);
+    assert.equal(cachedWidget.nodes['[data-codex-run-effort]'].disabled, true);
     await waitFor(() => requests.length === 2);
     assert.equal(requests[1], '/api/codex/skills/runs/codex-skill-3000-cache?ledgerId=specs&cardId=card-a&since=0');
   } finally {
@@ -270,7 +278,7 @@ test('requestCardSkillRunCancel posts active card run cancellation', async () =>
   }
 });
 
-test('requestCardSkillRunContinue posts terminal card run continuation', async () => {
+test('requestCardSkillRunContinue posts terminal card run continuation with the selected model and effort', async () => {
   const previousFetch = globalThis.fetch;
   try {
     globalThis.fetch = (async (url: string, init?: RequestInit) => {
@@ -278,14 +286,25 @@ test('requestCardSkillRunContinue posts terminal card run continuation', async (
       assert.equal(init?.method, 'POST');
       const headers = init?.headers as Record<string, string>;
       assert.equal(headers['content-type'], 'application/json');
-      assert.deepEqual(JSON.parse(String(init?.body ?? '{}')), { ledgerId: 'specs', cardId: 'card-a' });
+      assert.deepEqual(JSON.parse(String(init?.body ?? '{}')), {
+        ledgerId: 'specs',
+        cardId: 'card-a',
+        codexModel: 'gpt-5.4',
+        codexEffort: 'high'
+      });
       return new Response(JSON.stringify({ ok: true, run: { id: 'codex-skill-1000-abcd', status: 'running' } }), {
         status: 202,
         headers: { 'content-type': 'application/json' }
       });
     }) as typeof fetch;
 
-    const result = await requestCardSkillRunContinue({ ledgerId: 'specs', cardId: 'card-a', runId: 'codex-skill-1000-abcd' });
+    const result = await requestCardSkillRunContinue({
+      ledgerId: 'specs',
+      cardId: 'card-a',
+      runId: 'codex-skill-1000-abcd',
+      codexModel: 'gpt-5.4',
+      codexEffort: 'high'
+    });
     assert.equal(result.ok, true);
     assert.equal(result.status, 'running');
     assert.equal(result.run?.id, 'codex-skill-1000-abcd');

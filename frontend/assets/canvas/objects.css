@@ -587,6 +587,43 @@
   white-space: nowrap;
 }
 
+.codex-run-metric--control {
+  align-items: center;
+}
+
+.codex-run-select {
+  min-width: 0;
+  height: 20px;
+  padding: 0 18px 0 5px;
+  border: 1px solid color-mix(in srgb, var(--card-zone-color), transparent 48%);
+  border-radius: 2px;
+  background: #0c1117;
+  color: #f3f6fb;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: none;
+}
+
+.codex-run-select[data-codex-run-model] {
+  width: 126px;
+}
+
+.codex-run-select[data-codex-run-effort] {
+  width: 68px;
+}
+
+.codex-run-select:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--card-zone-color), white 28%);
+  outline-offset: 1px;
+}
+
+.codex-run-select:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
 .codex-run-latest {
   min-width: 0;
   margin: 0;

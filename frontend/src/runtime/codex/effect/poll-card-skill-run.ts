@@ -84,6 +84,22 @@ function setText(element: HTMLElement, selector: string, text: string): void {
   if (target) target.textContent = text;
 }
 
+function setSelectValue(element: HTMLElement, selector: string, value: string): void {
+  const target = element.querySelector<HTMLSelectElement>(selector);
+  if (target && value) target.value = value;
+}
+
+function selectedValue(element: HTMLElement, selector: string): string {
+  return element.querySelector<HTMLSelectElement>(selector)?.value.trim() ?? '';
+}
+
+function setSelectionEnabled(element: HTMLElement, enabled: boolean): void {
+  const model = element.querySelector<HTMLSelectElement>('[data-codex-run-model]');
+  const effort = element.querySelector<HTMLSelectElement>('[data-codex-run-effort]');
+  if (model) model.disabled = !enabled;
+  if (effort) effort.disabled = !enabled;
+}
+
 function setWidgetMetadata(element: HTMLElement, summary: CardSkillRunSummary): void {
   const metadata = element.querySelector<HTMLElement>('[data-codex-run-metadata]');
   if (!metadata) return;
@@ -92,8 +108,8 @@ function setWidgetMetadata(element: HTMLElement, summary: CardSkillRunSummary): 
   const effort = summary.metadata.codexEffort.trim();
   metadata.hidden = !source && !model && !effort;
   setText(element, '[data-codex-run-source]', source);
-  setText(element, '[data-codex-run-model]', model);
-  setText(element, '[data-codex-run-effort]', effort);
+  setSelectValue(element, '[data-codex-run-model]', model);
+  setSelectValue(element, '[data-codex-run-effort]', effort);
 }
 
 function removeTimer(element: HTMLElement): void {
@@ -140,10 +156,12 @@ function paintWidget(element: HTMLElement, summary: CardSkillRunSummary): void {
     showTimer(element);
     setCancelButtonVisible(element, true);
     setContinueButtonVisible(element, false);
+    setSelectionEnabled(element, false);
   } else {
     removeTimer(element);
     setCancelButtonVisible(element, false);
     setContinueButtonVisible(element, summary.status !== 'unknown');
+    setSelectionEnabled(element, summary.status !== 'unknown');
   }
   setText(element, '[data-codex-run-tools]', String(summary.toolCallCount));
   setText(element, '[data-codex-run-messages]', String(summary.agentMessageCount + summary.thinkingCount));
@@ -231,6 +249,7 @@ function paintExternallyStartedRun(poller: Poller): void {
   setText(poller.element, '[data-codex-run-latest]', 'Continuing session');
   setCancelButtonVisible(poller.element, true);
   setContinueButtonVisible(poller.element, false);
+  setSelectionEnabled(poller.element, false);
   const cancel = cancelButton(poller.element);
   if (cancel) setCancelButtonState(cancel, 'ready');
   showTimer(poller.element);
@@ -283,6 +302,8 @@ async function continueRun(poller: Poller): Promise<void> {
   if (!button) return;
   const key = pollerKey(poller);
   const previousSummary = terminalSummaries.get(key);
+  const codexModel = selectedValue(poller.element, '[data-codex-run-model]');
+  const codexEffort = selectedValue(poller.element, '[data-codex-run-effort]');
   const traceId = continueTraceId(poller.runId);
   poller.continueTraceId = traceId;
   debugContinue(traceId, 'click', { ...pollerDebugState(poller), previousSummaryStatus: previousSummary?.status ?? '', previousSummaryLineCount: previousSummary?.lineCount ?? 0 });
@@ -296,7 +317,7 @@ async function continueRun(poller: Poller): Promise<void> {
   setContinueButtonState(button, 'starting');
   paintExternallyStartedRun(poller);
   debugContinue(traceId, 'optimistic-running-painted', pollerDebugState(poller));
-  const result = await requestCardSkillRunContinue({ ledgerId: poller.ledgerId, cardId: poller.cardId, runId: poller.runId, traceId });
+  const result = await requestCardSkillRunContinue({ ledgerId: poller.ledgerId, cardId: poller.cardId, runId: poller.runId, traceId, codexModel, codexEffort });
   poller.continueInFlight = false;
   debugContinue(traceId, 'continue-response', { ...pollerDebugState(poller), ok: result.ok, status: result.status, error: result.error ?? '', pid: result.run?.pid ?? 0, continuedMessageCount: result.run?.continuedMessageCount ?? 0 });
   if (!result.ok) {
@@ -305,11 +326,14 @@ async function continueRun(poller: Poller): Promise<void> {
     if (previousSummary) {
       terminalSummaries.set(key, previousSummary);
       paintWidget(poller.element, previousSummary);
+      setSelectValue(poller.element, '[data-codex-run-model]', codexModel);
+      setSelectValue(poller.element, '[data-codex-run-effort]', codexEffort);
     } else {
       poller.element.dataset.runStatus = 'unknown';
       removeTimer(poller.element);
       setCancelButtonVisible(poller.element, false);
       setContinueButtonVisible(poller.element, true);
+      setSelectionEnabled(poller.element, true);
       setText(poller.element, '[data-codex-run-status]', 'UNKNOWN');
     }
     const restoredButton = continueButton(poller.element);

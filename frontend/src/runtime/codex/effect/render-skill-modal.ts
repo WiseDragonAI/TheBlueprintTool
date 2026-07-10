@@ -6,6 +6,7 @@ import { skillModal } from '../../dom.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { processCardSkillController } from '../controller/process-card-skill-controller.js';
 import { loadCodexSkills, type CodexSkillSummary } from './load-codex-skills.js';
+import { codexEffortOptions, codexModelOptions } from '../helper/codex-run-options.js';
 import { categoryForSkill, colorForSkillCategory, skillCategories, type SkillCategory } from '../helper/skill-category.js';
 
 type SkillModalState = {
@@ -38,13 +39,10 @@ const skillModalState: SkillModalState = {
   error: '',
 };
 
-const codexModelOptions = ['gpt-5.5', 'gpt-5.4', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.2'];
-const codexEffortOptions = ['low', 'medium', 'high', 'xhigh'];
-
 function renderSelect(input: {
   label: string;
   value: string;
-  options: string[];
+  options: readonly string[];
   onChange: (value: string) => void;
 }): HTMLLabelElement {
   const label = document.createElement('label');

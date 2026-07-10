@@ -4,6 +4,7 @@
  */
 import { state } from '../../state.js';
 import { cardCodexRunId } from '../helper/card-codex-run-id.js';
+import { codexEffortOptions, codexModelOptions } from '../helper/codex-run-options.js';
 import { bindCardSkillRunWidget } from '../effect/poll-card-skill-run.js';
 
 function metric(label: string, value: string, key: string): HTMLElement {
@@ -16,6 +17,29 @@ function metric(label: string, value: string, key: string): HTMLElement {
   count.dataset[key] = '';
   count.textContent = value;
   item.replaceChildren(name, count);
+  return item;
+}
+
+function selectionMetric(label: string, key: string, options: readonly string[]): HTMLElement {
+  const item = document.createElement('label');
+  item.className = 'codex-run-metric codex-run-metric--control';
+  const name = document.createElement('span');
+  name.className = 'codex-run-metric-label';
+  name.textContent = label;
+  const select = document.createElement('select');
+  select.className = 'codex-run-select';
+  select.dataset[key] = '';
+  select.disabled = true;
+  select.setAttribute('aria-label', `${label} for next Codex continuation`);
+  for (const value of options) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = value;
+    select.append(option);
+  }
+  select.addEventListener('pointerdown', (event) => event.stopPropagation());
+  select.addEventListener('click', (event) => event.stopPropagation());
+  item.replaceChildren(name, select);
   return item;
 }
 
@@ -78,8 +102,8 @@ export function renderCardSkillRunWidget(card: Record<string, unknown>): HTMLEle
   metadata.hidden = true;
   metadata.replaceChildren(
     metric('Source', '', 'codexRunSource'),
-    metric('Model', '', 'codexRunModel'),
-    metric('Effort', '', 'codexRunEffort')
+    selectionMetric('Model', 'codexRunModel', codexModelOptions),
+    selectionMetric('Effort', 'codexRunEffort', codexEffortOptions)
   );
 
   const latest = document.createElement('p');
