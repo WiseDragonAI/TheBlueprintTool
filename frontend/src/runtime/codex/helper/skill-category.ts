@@ -92,6 +92,7 @@ const categoryBySkillName: Record<string, SkillCategory> = {
   'skill-installer': 'Platform',
   spreadsheets: 'Artifacts',
   'strategic-narrative': 'Marketing',
+  'task-list': 'Implementation',
   'task-dependency': 'Implementation',
   'task-group-completeness': 'Implementation',
   'run-test-and-fix': 'Implementation',
