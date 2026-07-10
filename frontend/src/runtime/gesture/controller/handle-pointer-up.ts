@@ -70,6 +70,7 @@ export async function handlePointerUp(event: PointerEvent): Promise<void> {
     return;
   }
   if (pointerIntent === 'drag' || pointerIntent === 'group' || pointerIntent === 'resize') {
+    // Normal pointer-down captures these operands; the fallback supports restored legacy sessions.
     const gestureSelection = pointerSession.selectionSnapshot ?? state.selection;
     const canvasDx = releaseCanvas.x - pointerSession.currentCanvas.x;
     const canvasDy = releaseCanvas.y - pointerSession.currentCanvas.y;

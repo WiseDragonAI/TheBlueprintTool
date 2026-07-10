@@ -1,3 +1,7 @@
+/**
+ * WHAT: Integration coverage for frontend Codex skill start, poll, continue, and cancellation requests.
+ * WHY: Widget request routing must preserve run identity while lifecycle notes arrive independently.
+ */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadCodexSkills } from '../../src/runtime/codex/effect/load-codex-skills.js';
@@ -9,6 +13,7 @@ import { requestThreadCodexProcess } from '../../src/runtime/codex/effect/reques
 import { bindCardSkillRunWidget, resumeExternallyStartedCardSkillRun } from '../../src/runtime/codex/effect/poll-card-skill-run.js';
 import { cardCodexRunId } from '../../src/runtime/codex/helper/card-codex-run-id.js';
 import { threadCodexCardId } from '../../src/runtime/codex/helper/thread-codex-card-id.js';
+import { state } from '../../src/runtime/state.js';
 
 type FakeNode = {
   dataset: Record<string, string>;
@@ -183,6 +188,74 @@ test('requestCardSkillRunStatus queries derived run progress', async () => {
     assert.equal(result.nextSince, 8);
     assert.deepEqual(result.metadata, { sourceCardTitle: 'Source Card', sourceThreadId: '', codexModel: 'gpt-5.5', codexEffort: 'xhigh' });
   } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('status polling updates only the run widget and never queues a ledger refresh', async () => {
+  const previousDocument = (globalThis as unknown as { document?: unknown }).document;
+  const previousFetch = globalThis.fetch;
+  const previousWindow = (globalThis as unknown as { window?: unknown }).window;
+  const previousCustomEvent = (globalThis as unknown as { CustomEvent?: unknown }).CustomEvent;
+  const requests: Array<{ url: string; method: string }> = [];
+  const activeLedger = {
+    cards: [{ id: 'card-poll', title: 'Unchanged' }],
+    annotations: [], relationships: [], notes: {}
+  };
+  try {
+    (globalThis as unknown as { document: unknown }).document = { contains: () => true };
+    (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
+    (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
+      detail: unknown;
+      constructor(_name: string, init?: { detail?: unknown }) { this.detail = init?.detail; }
+    };
+    state.activeLedger = activeLedger;
+    state.ledgerContentRefresh = { inFlight: false, ledgerReasons: [], changedContentFiles: [], threadReasons: [], threadScope: null };
+    state.pendingLedgerContentRefresh = false;
+    state.pendingThreadContentRefresh = false;
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      requests.push({ url, method: String(init?.method ?? 'GET') });
+      return new Response(JSON.stringify({
+        ok: true,
+        status: 'complete',
+        startedAt: '2026-07-08T00:00:00.000Z',
+        elapsedMs: 2500,
+        lineCount: 5,
+        nextSince: 5,
+        toolCallCount: 1,
+        agentMessageCount: 1,
+        fileChangeCount: 0,
+        thinkingCount: 0,
+        persistedEventCount: 1,
+        metadata: { sourceCardTitle: 'Polling proof', sourceThreadId: 'thread-card-poll', codexModel: 'gpt-5.5', codexEffort: 'xhigh' },
+        latestEvent: { title: 'Turn completed' },
+        events: []
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+
+    const widget = fakeCodexRunWidget();
+    bindCardSkillRunWidget({ ledgerId: 'specs', cardId: 'card-poll', runId: 'codex-skill-4000-poll-only', element: widget });
+    await waitFor(() => widget.nodes['[data-codex-run-status]'].textContent === 'COMPLETE');
+
+    assert.deepEqual(requests, [{
+      url: '/api/codex/skills/runs/codex-skill-4000-poll-only?ledgerId=specs&cardId=card-poll&since=0',
+      method: 'GET'
+    }]);
+    assert.equal(state.activeLedger, activeLedger);
+    assert.equal(state.pendingLedgerContentRefresh, false);
+    assert.equal(state.pendingThreadContentRefresh, false);
+    assert.deepEqual(state.ledgerContentRefresh, {
+      inFlight: false,
+      ledgerReasons: [],
+      changedContentFiles: [],
+      threadReasons: [],
+      threadScope: null
+    });
+    assert.equal(widget.nodes['[data-codex-run-latest]'].textContent, 'Turn Completed in 00:02');
+  } finally {
+    (globalThis as unknown as { document?: unknown }).document = previousDocument;
+    (globalThis as unknown as { window?: unknown }).window = previousWindow;
+    (globalThis as unknown as { CustomEvent?: unknown }).CustomEvent = previousCustomEvent;
     globalThis.fetch = previousFetch;
   }
 });

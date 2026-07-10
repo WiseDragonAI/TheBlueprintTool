@@ -514,6 +514,29 @@ async function flushAsync(): Promise<void> {
   await Promise.resolve();
 }
 
+function responseWithRevision(ledger: Record<string, unknown>, revision: number): Response {
+  return new Response(JSON.stringify(ledger), {
+    status: 200,
+    headers: {
+      'content-type': 'application/json',
+      'x-decision-os-ledger-revision': String(revision)
+    }
+  });
+}
+
+function resetReconciliation(runtimeState: Record<string, any>): void {
+  runtimeState.ledgerReconciliation = {
+    routeEpoch: 1,
+    routeLedgerStateId: 'specs',
+    nextRequestSequence: 1,
+    lastAppliedServerRevision: -1,
+    lastAppliedSequence: 0,
+    localGeometryRevisions: {},
+    failedLoadCount: 0,
+    lastFailedLoad: null
+  };
+}
+
 test('card drag release clears pointer before slow geometry commit can accept later cursor movement', async () => {
   const { canvas, content } = installRuntimeDom();
   const card = appendLedgerCard('card-a', 20, 20, 120, 80);
@@ -563,10 +586,10 @@ test('card drag release clears pointer before slow geometry commit can accept la
   assert.ok(content.childElementCount >= 1);
 });
 
-test('active card drag keeps pointer snapshot through same-ledger load and commits the original target', async () => {
+test('active card drag keeps its private pointer snapshot while reconciliation preserves newer visible selection', async () => {
   installRuntimeDom();
   const cardA = appendLedgerCard('card-a', 20, 20);
-  appendLedgerCard('card-b', 200, 20);
+  const cardB = appendLedgerCard('card-b', 200, 20);
   const patchBodies: Array<Record<string, any>> = [];
 
   const { state } = await import('../../src/runtime/state.js');
@@ -628,8 +651,10 @@ test('active card drag keeps pointer snapshot through same-ledger load and commi
   state.selection = { cardIds: ['card-b'], zoneIds: [], groupIds: [] };
   await loadActiveLedgerState();
 
-  assert.deepEqual(state.selection.cardIds, ['card-a']);
+  assert.deepEqual(state.selection.cardIds, ['card-b']);
   assert.deepEqual(state.pointer.selectionSnapshot.cardIds, ['card-a']);
+  assert.equal(cardA.classList.contains('selected'), false);
+  assert.equal(cardB.classList.contains('selected'), true);
 
   handlePointerMove(pointerEvent({ target: cardA, clientX: 50, clientY: 0 }));
   state.selection = { cardIds: ['card-b'], zoneIds: [], groupIds: [] };
@@ -638,9 +663,15 @@ test('active card drag keeps pointer snapshot through same-ledger load and commi
   assert.deepEqual(Object.keys(patchBodies[0].geometry.cards), ['card-a']);
   assert.equal(patchBodies[0].geometry.cards['card-a'].x, 80);
   assert.equal(patchBodies[0].geometry.cards['card-b'], undefined);
+
+  handlePointerDown(pointerEvent({ target: cardB, clientX: 210, clientY: 30 }));
+  assert.equal(state.pointer.targetId, 'card-b');
+  assert.deepEqual(state.pointer.selectionSnapshot.cardIds, ['card-b']);
+  await handlePointerUp(pointerEvent({ target: cardB, clientX: 210, clientY: 30 }));
+  assert.deepEqual(state.selection.cardIds, ['card-b']);
 });
 
-test('multi-selection drag survives ledger content refresh and commits only the pointer snapshot', async () => {
+test('multi-selection drag commits its pointer snapshot without replacing newer visible selection', async () => {
   installRuntimeDom();
   const cardA = appendLedgerCard('card-a', 10, 10);
   appendLedgerCard('card-b', 100, 10);
@@ -717,7 +748,8 @@ test('multi-selection drag survives ledger content refresh and commits only the 
   });
   await flushAsync();
 
-  assert.deepEqual(state.selection.cardIds, ['card-a', 'card-b']);
+  assert.deepEqual(state.selection.cardIds, ['card-c']);
+  assert.deepEqual(state.pointer.selectionSnapshot.cardIds, ['card-a', 'card-b']);
   handlePointerMove(pointerEvent({ target: cardA, clientX: 50, clientY: 0 }));
   state.selection = { cardIds: ['card-c'], zoneIds: [], groupIds: [] };
   await handlePointerUp(pointerEvent({ target: cardA, clientX: 60, clientY: 0 }));
@@ -782,4 +814,320 @@ test('card resize resolves the current remounted node and commits pointer target
   assert.deepEqual(Object.keys(patchBodies[0].geometry.cards), ['card-a']);
   assert.equal(patchBodies[0].geometry.cards['card-a'].width, 280);
   assert.equal(patchBodies[0].geometry.cards['card-a'].height, 170);
+});
+
+test('a drag PATCH wins when an older pre-drag GET resolves last', async () => {
+  installRuntimeDom();
+  const card = appendLedgerCard('card-a', 20, 30, 240, 150);
+  const { state } = await import('../../src/runtime/state.js');
+  const { loadActiveLedgerState } = await import('../../src/runtime/ledger/effect/load-active-ledger-state.js');
+  const { handlePointerDown } = await import('../../src/runtime/gesture/controller/handle-pointer-down.js');
+  const { handlePointerMove } = await import('../../src/runtime/gesture/controller/handle-pointer-move.js');
+  const { handlePointerUp } = await import('../../src/runtime/gesture/controller/handle-pointer-up.js');
+
+  state.canvasMode = 'ledger';
+  state.activeTool = 'select';
+  state.activeTab = 'specs';
+  state.activeLedgerId = 'specs';
+  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
+  state.viewport = { x: 0, y: 0, scale: 1 };
+  state.viewports = { specs: { ...state.viewport } };
+  state.selection = { cardIds: ['card-a'], zoneIds: [], groupIds: [] };
+  state.pointer = null;
+  state.activeLedger = {
+    cards: [{ id: 'card-a', title: 'Card A', x: 20, y: 30, w: 240, h: 150 }],
+    annotations: [], relationships: [], notes: {}
+  };
+  resetReconciliation(state);
+
+  const staleLedger = structuredClone(state.activeLedger);
+  const durableLedger = structuredClone(state.activeLedger);
+  const submitted: Array<Record<string, any>> = [];
+  let resolveOldGet!: (response: Response) => void;
+  let markGetStarted!: () => void;
+  const getStarted = new Promise<void>((resolve) => { markGetStarted = resolve; });
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+    if (!init?.method) {
+      markGetStarted();
+      return new Promise<Response>((resolve) => { resolveOldGet = resolve; });
+    }
+    const body = JSON.parse(String(init.body ?? '{}'));
+    submitted.push(body);
+    Object.assign(durableLedger.cards[0], {
+      x: body.geometry.cards['card-a'].x,
+      y: body.geometry.cards['card-a'].y,
+      w: body.geometry.cards['card-a'].width,
+      h: body.geometry.cards['card-a'].height
+    });
+    return responseWithRevision(durableLedger, 2);
+  }) as typeof fetch;
+
+  const oldLoad = loadActiveLedgerState();
+  await getStarted;
+  handlePointerDown(pointerEvent({ target: card, clientX: 0, clientY: 0 }));
+  handlePointerMove(pointerEvent({ target: card, clientX: 35, clientY: 10 }));
+  await handlePointerUp(pointerEvent({ target: card, clientX: 35, clientY: 10 }));
+
+  const patch = submitted[0].geometry.cards['card-a'];
+  assert.deepEqual(patch, { x: 55, y: 40, width: 240, height: 150 });
+  assert.deepEqual(
+    { x: state.activeLedger.cards[0].x, y: state.activeLedger.cards[0].y, width: state.activeLedger.cards[0].w, height: state.activeLedger.cards[0].h },
+    patch
+  );
+  const renderedBeforeStaleGet = runtimeDom.content.querySelector('[data-card-id="card-a"]') as FakeElement;
+  assert.deepEqual(
+    { x: renderedBeforeStaleGet.offsetLeft, y: renderedBeforeStaleGet.offsetTop, width: renderedBeforeStaleGet.offsetWidth, height: renderedBeforeStaleGet.offsetHeight },
+    patch
+  );
+
+  resolveOldGet(responseWithRevision(staleLedger, 1));
+  assert.equal(await oldLoad, false);
+  assert.deepEqual(
+    { x: state.activeLedger.cards[0].x, y: state.activeLedger.cards[0].y, width: state.activeLedger.cards[0].w, height: state.activeLedger.cards[0].h },
+    patch
+  );
+  assert.deepEqual(
+    { x: durableLedger.cards[0].x, y: durableLedger.cards[0].y, width: durableLedger.cards[0].w, height: durableLedger.cards[0].h },
+    patch
+  );
+  assert.equal(state.pointer, null);
+  assert.equal(state.ledgerReconciliation.lastAppliedServerRevision, 2);
+});
+
+test('a resize PATCH wins when an older pre-resize GET resolves last', async () => {
+  installRuntimeDom();
+  const card = appendLedgerCard('card-a', 40, 50, 240, 150);
+  const handle = fakeElement({}, 'div');
+  handle.className = 'resize-handle se';
+  card.append(handle);
+  const { state } = await import('../../src/runtime/state.js');
+  const { loadActiveLedgerState } = await import('../../src/runtime/ledger/effect/load-active-ledger-state.js');
+  const { handlePointerDown } = await import('../../src/runtime/gesture/controller/handle-pointer-down.js');
+  const { handlePointerMove } = await import('../../src/runtime/gesture/controller/handle-pointer-move.js');
+  const { handlePointerUp } = await import('../../src/runtime/gesture/controller/handle-pointer-up.js');
+
+  state.canvasMode = 'ledger';
+  state.activeTool = 'select';
+  state.activeTab = 'specs';
+  state.activeLedgerId = 'specs';
+  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
+  state.viewport = { x: 0, y: 0, scale: 1 };
+  state.viewports = { specs: { ...state.viewport } };
+  state.selection = { cardIds: ['card-a'], zoneIds: [], groupIds: [] };
+  state.pointer = null;
+  state.activeLedger = {
+    cards: [{ id: 'card-a', title: 'Card A', x: 40, y: 50, w: 240, h: 150 }],
+    annotations: [], relationships: [], notes: {}
+  };
+  resetReconciliation(state);
+
+  const staleLedger = structuredClone(state.activeLedger);
+  const durableLedger = structuredClone(state.activeLedger);
+  let submitted!: Record<string, any>;
+  let resolveOldGet!: (response: Response) => void;
+  let markGetStarted!: () => void;
+  const getStarted = new Promise<void>((resolve) => { markGetStarted = resolve; });
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+    if (!init?.method) {
+      markGetStarted();
+      return new Promise<Response>((resolve) => { resolveOldGet = resolve; });
+    }
+    submitted = JSON.parse(String(init.body ?? '{}'));
+    const geometry = submitted.geometry.cards['card-a'];
+    Object.assign(durableLedger.cards[0], { x: geometry.x, y: geometry.y, w: geometry.width, h: geometry.height });
+    return responseWithRevision(durableLedger, 4);
+  }) as typeof fetch;
+
+  const oldLoad = loadActiveLedgerState();
+  await getStarted;
+  handlePointerDown(pointerEvent({ target: handle, clientX: 0, clientY: 0 }));
+  handlePointerMove(pointerEvent({ target: card, clientX: 60, clientY: 35 }));
+  await handlePointerUp(pointerEvent({ target: card, clientX: 60, clientY: 35 }));
+
+  const patch = submitted.geometry.cards['card-a'];
+  assert.deepEqual(patch, { x: 40, y: 50, width: 300, height: 185 });
+  assert.deepEqual(
+    { x: state.activeLedger.cards[0].x, y: state.activeLedger.cards[0].y, width: state.activeLedger.cards[0].w, height: state.activeLedger.cards[0].h },
+    patch
+  );
+  const rendered = runtimeDom.content.querySelector('[data-card-id="card-a"]') as FakeElement;
+  assert.equal(rendered.offsetWidth, 300);
+  assert.equal(rendered.offsetHeight, 185);
+
+  resolveOldGet(responseWithRevision(staleLedger, 3));
+  assert.equal(await oldLoad, false);
+  assert.equal(state.activeLedger.cards[0].w, 300);
+  assert.equal(state.activeLedger.cards[0].h, 185);
+  assert.equal(durableLedger.cards[0].w, 300);
+  assert.equal(durableLedger.cards[0].h, 185);
+  assert.equal(state.pointer, null);
+  assert.equal(state.ledgerReconciliation.lastAppliedServerRevision, 4);
+});
+
+test('Ctrl+D patches runtime and rendered geometry before its request and rejects an older GET', async () => {
+  installRuntimeDom();
+  const card = appendLedgerCard('card-a', 70, 80, 240, 150);
+  const detail = fakeElement({}, 'div');
+  detail.className = 'ledger-card-detail-layer';
+  detail.scrollHeight = 226;
+  detail.style.height = '226px';
+  card.append(detail);
+  const { state } = await import('../../src/runtime/state.js');
+  const { loadActiveLedgerState } = await import('../../src/runtime/ledger/effect/load-active-ledger-state.js');
+  const { resizeSelectedCardsController } = await import('../../src/runtime/card/controller/resize-selected-cards-controller.js');
+
+  state.canvasMode = 'ledger';
+  state.activeTool = 'select';
+  state.activeTab = 'specs';
+  state.activeLedgerId = 'specs';
+  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
+  state.viewport = { x: 0, y: 0, scale: 1 };
+  state.viewports = { specs: { ...state.viewport } };
+  state.selection = { cardIds: ['card-a'], zoneIds: [], groupIds: [] };
+  state.pointer = null;
+  state.activeLedger = {
+    cards: [{ id: 'card-a', title: 'Card A', x: 70, y: 80, w: 240, h: 150 }],
+    annotations: [], relationships: [], notes: {}
+  };
+  resetReconciliation(state);
+
+  const staleLedger = structuredClone(state.activeLedger);
+  const durableLedger = structuredClone(state.activeLedger);
+  let submitted!: Record<string, any>;
+  let runtimeAtRequest!: Record<string, number>;
+  let renderedAtRequest!: Record<string, number>;
+  let resolveOldGet!: (response: Response) => void;
+  let markGetStarted!: () => void;
+  const getStarted = new Promise<void>((resolve) => { markGetStarted = resolve; });
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+    if (!init?.method) {
+      markGetStarted();
+      return new Promise<Response>((resolve) => { resolveOldGet = resolve; });
+    }
+    submitted = JSON.parse(String(init.body ?? '{}'));
+    const currentCard = runtimeDom.content.querySelector('[data-card-id="card-a"]') as FakeElement;
+    runtimeAtRequest = {
+      x: state.activeLedger.cards[0].x,
+      y: state.activeLedger.cards[0].y,
+      width: state.activeLedger.cards[0].w,
+      height: state.activeLedger.cards[0].h
+    };
+    renderedAtRequest = {
+      x: currentCard.offsetLeft,
+      y: currentCard.offsetTop,
+      width: currentCard.offsetWidth,
+      height: currentCard.offsetHeight
+    };
+    const geometry = submitted.geometry.cards['card-a'];
+    Object.assign(durableLedger.cards[0], { x: geometry.x, y: geometry.y, w: geometry.width, h: geometry.height });
+    return responseWithRevision(durableLedger, 6);
+  }) as typeof fetch;
+
+  const oldLoad = loadActiveLedgerState();
+  await getStarted;
+  await resizeSelectedCardsController();
+  const patch = submitted.geometry.cards['card-a'];
+  assert.deepEqual(runtimeAtRequest, patch);
+  assert.deepEqual(renderedAtRequest, patch);
+  assert.equal(patch.height, 226);
+  assert.ok(state.ledgerReconciliation.localGeometryRevisions['card:card-a'] > 0);
+
+  resolveOldGet(responseWithRevision(staleLedger, 5));
+  assert.equal(await oldLoad, false);
+  assert.equal(state.activeLedger.cards[0].h, 226);
+  assert.equal(durableLedger.cards[0].h, 226);
+  assert.equal(state.ledgerReconciliation.lastAppliedServerRevision, 6);
+});
+
+test('a failed ledger load cannot interrupt an active drag or its later local commit', async () => {
+  installRuntimeDom();
+  const card = appendLedgerCard('card-a', 20, 30, 240, 150);
+  const { state } = await import('../../src/runtime/state.js');
+  const { loadActiveLedgerState } = await import('../../src/runtime/ledger/effect/load-active-ledger-state.js');
+  const { handlePointerDown } = await import('../../src/runtime/gesture/controller/handle-pointer-down.js');
+  const { handlePointerMove } = await import('../../src/runtime/gesture/controller/handle-pointer-move.js');
+  const { handlePointerUp } = await import('../../src/runtime/gesture/controller/handle-pointer-up.js');
+
+  state.canvasMode = 'ledger';
+  state.activeTool = 'select';
+  state.activeTab = 'specs';
+  state.activeLedgerId = 'specs';
+  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
+  state.viewport = { x: 0, y: 0, scale: 1 };
+  state.viewports = { specs: { ...state.viewport } };
+  state.selection = { cardIds: ['card-a'], zoneIds: [], groupIds: [] };
+  state.pointer = null;
+  state.activeLedger = {
+    cards: [{ id: 'card-a', title: 'Card A', x: 20, y: 30, w: 240, h: 150 }],
+    annotations: [], relationships: [], notes: {}
+  };
+  resetReconciliation(state);
+  globalThis.fetch = (async () => { throw new Error('network unavailable'); }) as typeof fetch;
+
+  handlePointerDown(pointerEvent({ target: card, clientX: 0, clientY: 0 }));
+  handlePointerMove(pointerEvent({ target: card, clientX: 20, clientY: 5 }));
+  const pointerDuringFailure = state.pointer;
+  const ledgerDuringFailure = state.activeLedger;
+  assert.equal(await loadActiveLedgerState(), false);
+  assert.equal(state.pointer, pointerDuringFailure);
+  assert.equal(state.activeLedger, ledgerDuringFailure);
+  assert.deepEqual(state.selection.cardIds, ['card-a']);
+
+  handlePointerMove(pointerEvent({ target: card, clientX: 45, clientY: 15 }));
+  await handlePointerUp(pointerEvent({ target: card, clientX: 45, clientY: 15 }));
+  assert.equal(state.pointer, null);
+  assert.equal(state.activeLedger.cards[0].x, 65);
+  assert.equal(state.activeLedger.cards[0].y, 45);
+  const rendered = runtimeDom.content.querySelector('[data-card-id="card-a"]') as FakeElement;
+  assert.equal(rendered.offsetLeft, 65);
+  assert.equal(rendered.offsetTop, 45);
+  assert.ok(state.ledgerReconciliation.failedLoadCount >= 2);
+});
+
+test('a failed ledger load cannot interrupt an active resize or its later local commit', async () => {
+  installRuntimeDom();
+  const card = appendLedgerCard('card-a', 40, 50, 240, 150);
+  const handle = fakeElement({}, 'div');
+  handle.className = 'resize-handle se';
+  card.append(handle);
+  const { state } = await import('../../src/runtime/state.js');
+  const { loadActiveLedgerState } = await import('../../src/runtime/ledger/effect/load-active-ledger-state.js');
+  const { handlePointerDown } = await import('../../src/runtime/gesture/controller/handle-pointer-down.js');
+  const { handlePointerMove } = await import('../../src/runtime/gesture/controller/handle-pointer-move.js');
+  const { handlePointerUp } = await import('../../src/runtime/gesture/controller/handle-pointer-up.js');
+
+  state.canvasMode = 'ledger';
+  state.activeTool = 'select';
+  state.activeTab = 'specs';
+  state.activeLedgerId = 'specs';
+  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
+  state.viewport = { x: 0, y: 0, scale: 1 };
+  state.viewports = { specs: { ...state.viewport } };
+  state.selection = { cardIds: ['card-a'], zoneIds: [], groupIds: [] };
+  state.pointer = null;
+  state.activeLedger = {
+    cards: [{ id: 'card-a', title: 'Card A', x: 40, y: 50, w: 240, h: 150 }],
+    annotations: [], relationships: [], notes: {}
+  };
+  resetReconciliation(state);
+  globalThis.fetch = (async () => { throw new Error('network unavailable'); }) as typeof fetch;
+
+  handlePointerDown(pointerEvent({ target: handle, clientX: 0, clientY: 0 }));
+  handlePointerMove(pointerEvent({ target: card, clientX: 25, clientY: 15 }));
+  const pointerDuringFailure = state.pointer;
+  const ledgerDuringFailure = state.activeLedger;
+  assert.equal(await loadActiveLedgerState(), false);
+  assert.equal(state.pointer, pointerDuringFailure);
+  assert.equal(state.activeLedger, ledgerDuringFailure);
+  assert.deepEqual(state.selection.cardIds, ['card-a']);
+
+  handlePointerMove(pointerEvent({ target: card, clientX: 55, clientY: 35 }));
+  await handlePointerUp(pointerEvent({ target: card, clientX: 55, clientY: 35 }));
+  assert.equal(state.pointer, null);
+  assert.equal(state.activeLedger.cards[0].w, 295);
+  assert.equal(state.activeLedger.cards[0].h, 185);
+  const rendered = runtimeDom.content.querySelector('[data-card-id="card-a"]') as FakeElement;
+  assert.equal(rendered.offsetWidth, 295);
+  assert.equal(rendered.offsetHeight, 185);
+  assert.ok(state.ledgerReconciliation.failedLoadCount >= 2);
 });

@@ -1,14 +1,18 @@
 /**
- * WHAT: Commits a ledger mutation and replaces active state with the reconciled server ledger.
- * WHY: Canvas edits are server-authoritative, but optimistic thread notes must be merged through ledger ownership.
+ * WHAT: Commits a ledger mutation and submits its response to active-ledger reconciliation.
+ * WHY: A successful server response must not replace newer route or local geometry state.
  */
 import { state } from '../../state.js';
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { geometryRevisionSnapshot } from '../helper/active-ledger-geometry.js';
 import { ledgerEndpointForTab } from '../helper/ledger-endpoint-for-tab.js';
-import { mergeLocalCanvasStateIntoLedger } from '../helper/merge-local-canvas-state.js';
-import { mergeLocalThreadNotes } from '../helper/merge-local-thread-notes.js';
-import { refreshZoneAttributionCache } from '../helper/zone-attribution-cache.js';
+import {
+  beginActiveLedgerRequest,
+  ledgerRevisionFromResponse,
+  reconcileActiveLedgerState,
+  recordActiveLedgerLoadFailure
+} from './reconcile-active-ledger-state.js';
 
 export type ActiveLedgerMutation = {
   action: 'create-card' | 'patch-card' | 'delete-card' | 'delete-card-image' | 'create-zone' | 'create-group' | 'create-relationship' | 'delete-zones' | 'delete-relationships' | 'patch-geometry' | 'patch-viewport' | 'patch-region' | 'append-note' | 'update-note' | 'delete-note' | 'paste-selection';
@@ -55,26 +59,25 @@ export type ActiveLedgerMutation = {
     zoneIds: string[];
     groupIds: string[];
   };
+  pasteSuffix?: string;
 };
 
-function localCanvasMergeOptionsForMutation(mutation: ActiveLedgerMutation): { skipCardIds: Set<string>; skipAnnotationIds: Set<string> } | undefined {
-  if (mutation.action !== 'patch-geometry') return undefined;
-  return {
-    skipCardIds: new Set(Object.keys(mutation.geometry?.cards ?? {})),
-    skipAnnotationIds: new Set([
-      ...Object.keys(mutation.geometry?.zones ?? {}),
-      ...Object.keys(mutation.geometry?.groups ?? {})
-    ])
-  };
-}
+export type CommitActiveLedgerMutationOptions = {
+  render?: boolean;
+  submittedGeometryRevisions?: Record<string, number>;
+};
 
-export async function commitActiveLedgerMutation(mutation: ActiveLedgerMutation, options: { render?: boolean } = {}): Promise<boolean> {
+export async function commitActiveLedgerMutation(mutation: ActiveLedgerMutation, options: CommitActiveLedgerMutationOptions = {}): Promise<boolean> {
   const endpoint = ledgerEndpointForTab(state.activeTab);
-  if (!endpoint) return false;
   const ledgerStateId = state.canvasMode === 'ledgers' ? 'ledgers-canvas' : state.activeTab;
-  const canMergeLocalCanvas = Boolean(state.activeLedger && state.activeLedgerId === ledgerStateId);
-  const localLedger = canMergeLocalCanvas ? state.activeLedger : null;
-  const mergeOptions = localCanvasMergeOptionsForMutation(mutation);
+  const request = beginActiveLedgerRequest(ledgerStateId);
+  if (!endpoint) {
+    recordActiveLedgerLoadFailure({ request, source: `server-ledger-mutation:${mutation.action}`, reason: 'missing-ledger-tab' });
+    return false;
+  }
+  const submittedGeometryRevisions = mutation.action === 'patch-geometry'
+    ? options.submittedGeometryRevisions ?? geometryRevisionSnapshot(mutation.geometry)
+    : undefined;
   telemetry('commit-ledger-edit', { activeTab: state.activeTab, action: mutation.action, authority: 'server' });
   const response = await fetch(endpoint, {
     method: 'PATCH',
@@ -82,15 +85,25 @@ export async function commitActiveLedgerMutation(mutation: ActiveLedgerMutation,
     body: JSON.stringify(mutation)
   }).catch(() => undefined);
   if (!response?.ok) {
+    recordActiveLedgerLoadFailure({ request, source: `server-ledger-mutation:${mutation.action}`, reason: `http-${response?.status ?? 0}` });
     telemetry('commit-ledger-edit-failed', { activeTab: state.activeTab, action: mutation.action, authority: 'server' });
     return false;
   }
   const ledger = await response.json().catch(() => null);
-  if (!ledger || typeof ledger !== 'object') return false;
-  state.activeLedger = mergeLocalThreadNotes(canMergeLocalCanvas ? mergeLocalCanvasStateIntoLedger(ledger, localLedger, mergeOptions) : ledger);
-  state.activeLedgerId = ledgerStateId;
-  refreshZoneAttributionCache(`server-ledger-mutation:${mutation.action}`);
-  telemetry('load-ledger-state', { activeTab: state.activeTab, source: 'server-ledger-mutation', action: mutation.action });
-  if (options.render) renderCanvasSurface({ renderThreadPanel: mutation.action !== 'patch-geometry' });
-  return true;
+  if (!ledger || typeof ledger !== 'object' || Array.isArray(ledger)) {
+    recordActiveLedgerLoadFailure({ request, source: `server-ledger-mutation:${mutation.action}`, reason: 'invalid-ledger' });
+    return false;
+  }
+  const applied = reconcileActiveLedgerState({
+    ledger,
+    request,
+    serverRevision: ledgerRevisionFromResponse(response),
+    source: `server-ledger-mutation:${mutation.action}`,
+    submittedGeometryRevisions
+  });
+  if (applied) {
+    telemetry('load-ledger-state', { activeTab: state.activeTab, source: 'server-ledger-mutation', action: mutation.action });
+    if (options.render) renderCanvasSurface({ renderThreadPanel: mutation.action !== 'patch-geometry' });
+  }
+  return applied;
 }

@@ -1,4 +1,8 @@
-import { state } from '../../state.js';
+/**
+ * WHAT: Renders the active thread panel while preserving same-thread Codex control identity.
+ * WHY: Thread note refreshes must not reset focused model and effort controls or their committed preferences.
+ */
+import { state, type ThreadCodexPreference } from '../../state.js';
 import { renderTelemetry } from '../../telemetry/effect/render-telemetry.js';
 import { renderVoiceStatus } from '../../voice/effect/render-voice-status.js';
 import { renderVoiceDock } from '../../voice/effect/render-voice-dock.js';
@@ -13,16 +17,32 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { codexEffortOptions, codexModelOptions } from '../../codex/helper/codex-run-options.js';
 import { threadCodexCardId } from '../../codex/helper/thread-codex-card-id.js';
 
-let threadCodexModel = 'gpt-5.5';
-let threadCodexEffort = 'xhigh';
+const defaultThreadCodexPreference: ThreadCodexPreference = { model: 'gpt-5.5', effort: 'xhigh' };
 
-function renderThreadCodexSelect(input: { label: string; value: string; options: readonly string[]; onChange: (value: string) => void }): HTMLLabelElement {
+function threadCodexPreference(threadId: string): ThreadCodexPreference {
+  // WHAT: Repair absent or invalid preference storage at its access boundary.
+  // WHY: Restored runtime state may predate per-thread preferences.
+  if (!state.threadCodexPreferencesByThreadId || typeof state.threadCodexPreferencesByThreadId !== 'object' || Array.isArray(state.threadCodexPreferencesByThreadId)) {
+    state.threadCodexPreferencesByThreadId = {};
+  }
+  const preferences = state.threadCodexPreferencesByThreadId as Record<string, ThreadCodexPreference>;
+  const existing = preferences[threadId];
+  // WHAT: Reuse a complete preference object for the active thread.
+  // WHY: Control remounts must preserve the operator's committed values.
+  if (existing && typeof existing.model === 'string' && typeof existing.effort === 'string') return existing;
+  const preference = { ...defaultThreadCodexPreference };
+  preferences[threadId] = preference;
+  return preference;
+}
+
+function renderThreadCodexSelect(input: { preference: 'model' | 'effort'; label: string; value: string; options: readonly string[]; onChange: (value: string) => void }): HTMLLabelElement {
   const field = document.createElement('label');
   field.className = 'thread-codex-field';
   const label = document.createElement('span');
   label.textContent = input.label;
   const select = document.createElement('select');
   select.className = 'thread-codex-select';
+  select.dataset.codexPreference = input.preference;
   select.setAttribute('aria-label', `${input.label} for thread Codex`);
   for (const value of input.options) {
     const option = document.createElement('option');
@@ -38,15 +58,39 @@ function renderThreadCodexSelect(input: { label: string; value: string; options:
 
 function renderThreadActions(threadId: string): void {
   const heading = document.querySelector('.thread-heading') as HTMLElement | null;
+  // WHAT: Skip action rendering when the thread heading is absent.
+  // WHY: Headless and partially mounted surfaces may render notes independently.
   if (!heading) return;
   let actions = heading.querySelector('.thread-actions') as HTMLElement | null;
+  // WHAT: Create the stable actions host once for the thread panel.
+  // WHY: Subsequent same-thread renders must retain descendant control identity.
   if (!actions) {
     actions = document.createElement('div');
     actions.className = 'thread-actions';
     heading.append(actions);
   }
+  const preference = threadCodexPreference(threadId);
+  const threadCodexModel = preference.model;
+  const threadCodexEffort = preference.effort;
+  // WHAT: Update button metadata in place for the same rendered thread.
+  // WHY: Replacing controls would lose focus, listeners, and current select values.
+  if (actions.dataset.threadId === threadId) {
+    const button = actions.querySelector('.thread-codex-button') as HTMLButtonElement | null;
+    // WHAT: Refresh the retained button's request operands when it exists.
+    // WHY: Card ownership can change without requiring control remounting.
+    if (button) {
+      button.dataset.threadId = threadId;
+      button.dataset.cardId = threadCodexCardId(state.activeLedger, threadId);
+      button.dataset.codexModel = threadCodexModel;
+      button.dataset.codexEffort = threadCodexEffort;
+    }
+    return;
+  }
   actions.replaceChildren();
+  actions.dataset.threadId = threadId;
   const cardId = threadCodexCardId(state.activeLedger, threadId);
+  // WHAT: Leave actions empty when the thread has no owning card.
+  // WHY: Codex requests require a card-scoped output target.
   if (!cardId) return;
   const button = document.createElement('button');
   button.className = 'thread-codex-button terminal-button terminal-button--compact';
@@ -66,20 +110,22 @@ function renderThreadActions(threadId: string): void {
   label.textContent = 'Codex';
   button.replaceChildren(key, label);
   const model = renderThreadCodexSelect({
+    preference: 'model',
     label: 'Model',
     value: threadCodexModel,
     options: codexModelOptions,
     onChange: (value) => {
-      threadCodexModel = value;
+      preference.model = value;
       button.dataset.codexModel = value;
     },
   });
   const effort = renderThreadCodexSelect({
+    preference: 'effort',
     label: 'Effort',
     value: threadCodexEffort,
     options: codexEffortOptions,
     onChange: (value) => {
-      threadCodexEffort = value;
+      preference.effort = value;
       button.dataset.codexEffort = value;
     },
   });

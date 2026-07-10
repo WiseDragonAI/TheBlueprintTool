@@ -5,6 +5,7 @@
 import { state } from '../../state.js';
 import { hydratePersistedGeometry } from '../../persistence/effect/hydrate-persisted-geometry.js';
 import { loadActiveLedgerState } from '../../ledger/effect/load-active-ledger-state.js';
+import { advanceLedgerRouteEpoch } from '../../ledger/effect/reconcile-active-ledger-state.js';
 import { readPersistedState } from '../../persistence/helper/read-persisted-state.js';
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
 import { renderTabRegistry } from '../../navigation/effect/render-tab-registry.js';
@@ -15,7 +16,6 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export async function refreshRuntimeState(): Promise<void> {
   telemetry('subscribe-server-refresh', { specId: '50000006', source: 'refresh-button' });
-  await fetch('/decision-os/data').catch(() => undefined);
   const nextCanvasMode = routeCanvasMode(window.location.pathname);
   const nextActiveTab = nextCanvasMode === 'ledger' ? routeTab(window.location.pathname) : state.activeTab;
   const nextLedgerStateId = nextCanvasMode === 'ledgers' ? 'ledgers-canvas' : nextActiveTab;
@@ -23,6 +23,7 @@ export async function refreshRuntimeState(): Promise<void> {
   const persisted = readPersistedState();
   state.canvasMode = nextCanvasMode;
   if (state.canvasMode === 'ledger') state.activeTab = nextActiveTab;
+  if (state.ledgerReconciliation.routeLedgerStateId !== nextLedgerStateId) advanceLedgerRouteEpoch(nextLedgerStateId);
   state.viewports = persisted.viewports && typeof persisted.viewports === 'object' ? persisted.viewports : state.viewports;
   if (localViewport) {
     Object.assign(state.viewport, localViewport);
@@ -30,8 +31,9 @@ export async function refreshRuntimeState(): Promise<void> {
   } else if (state.canvasMode === 'ledger') Object.assign(state.viewport, state.viewports?.[state.activeTab] ?? persisted.viewport ?? { x: 0, y: 0, scale: 1 });
   applyRailCollapsedState(persisted.railCollapsed === true);
   hydratePersistedGeometry(persisted.geometry);
-  await loadActiveLedgerState();
-  telemetry('load-ledger-state', { specId: '50000006', restored: Boolean(persisted.geometry || persisted.viewport) });
+  const applied = await loadActiveLedgerState({ activeTab: nextActiveTab, canvasMode: nextCanvasMode, ledgerStateId: nextLedgerStateId });
+  telemetry('load-ledger-state', { specId: '50000006', restored: Boolean(persisted.geometry || persisted.viewport), applied });
+  if (!applied) return;
   telemetry('merge-refresh-state', { specId: '50000006', source: 'refresh-button' });
   renderTabRegistry();
   renderCanvasSurface();

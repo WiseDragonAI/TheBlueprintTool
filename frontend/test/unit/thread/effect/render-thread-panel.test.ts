@@ -1,20 +1,245 @@
 /**
- * WHAT: Unit test for implemented function render-thread-panel.
- * WHY: each generated function must have one dedicated unit test file after implementation.
+ * WHAT: Behavioral coverage for same-thread action control continuity.
+ * WHY: Note refreshes must not remount focused model/effort controls or lose committed preferences.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { traces } from '@frontend/telemetry/harness.js';
-import { renderThreadPanel } from '@frontend/business/thread/effect/render-thread-panel.js';
 
-test('render-thread-panel executes implemented behavior and records telemetry', async () => {
-  traces.length = 0;
-  const runtime_state: Record<string, unknown> = {};
-  const result = await renderThreadPanel({
-    action_payload: { ok: true, mode: 'dry-run', name: 'Implemented', color: '#5b7cfa', markdown: '# Title #label', url: '/ledgers/default' },
-    runtime_state,
-    data_model: { cards: [{ id: 'card-1' }], document: {} }
+type Listener = (event: Event) => void;
+
+type FakeElement = {
+  tagName: string;
+  className: string;
+  dataset: Record<string, string>;
+  style: { setProperty(name: string, value: string): void; getPropertyValue(name: string): string };
+  hidden: boolean;
+  textContent: string;
+  innerHTML: string;
+  value: string;
+  type: string;
+  title: string;
+  disabled: boolean;
+  scrollTop: number;
+  scrollHeight: number;
+  clientHeight: number;
+  parentElement: FakeElement | null;
+  children: FakeElement[];
+  classList: { toggle(name: string, force?: boolean): boolean; add(...names: string[]): void; remove(...names: string[]): void; contains(name: string): boolean };
+  append(...nodes: FakeElement[]): void;
+  replaceChildren(...nodes: FakeElement[]): void;
+  querySelector(selector: string): FakeElement | null;
+  querySelectorAll(selector: string): FakeElement[];
+  setAttribute(name: string, value: string): void;
+  addEventListener(type: string, listener: Listener): void;
+  removeEventListener(type: string, listener: Listener): void;
+  dispatchEvent(event: Event): boolean;
+  focus(): void;
+  blur(): void;
+};
+
+const listeners = new WeakMap<FakeElement, Map<string, Listener[]>>();
+let activeElement: FakeElement | null = null;
+
+function classes(element: FakeElement): Set<string> {
+  return new Set(element.className.split(/\s+/).filter(Boolean));
+}
+
+function descendants(element: FakeElement): FakeElement[] {
+  return element.children.flatMap((child) => [child, ...descendants(child)]);
+}
+
+function matches(element: FakeElement, selector: string): boolean {
+  const normalized = selector.trim();
+  if (!normalized) return false;
+  const classNames = [...normalized.matchAll(/\.([a-zA-Z0-9_-]+)/g)].map((match) => match[1]);
+  if (classNames.some((className) => !classes(element).has(className))) return false;
+  const attributes = [...normalized.matchAll(/\[data-([^=\]]+)(?:="([^"]*)")?\]/g)];
+  for (const [, rawName, expected] of attributes) {
+    const key = rawName.replace(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase());
+    const actual = element.dataset[key];
+    if (expected === undefined ? actual === undefined : actual !== expected) return false;
+  }
+  const tag = normalized.replace(/\.[a-zA-Z0-9_-]+/g, '').replace(/\[[^\]]+\]/g, '').trim();
+  return !tag || tag === '*' || element.tagName.toLowerCase() === tag.toLowerCase();
+}
+
+function queryAll(root: FakeElement, selector: string): FakeElement[] {
+  const selectors = selector.split(',').map((entry) => entry.trim()).filter(Boolean);
+  return descendants(root).filter((element) => selectors.some((entry) => matches(element, entry.split(/\s+/).at(-1) ?? entry)));
+}
+
+function fakeElement(tagName = 'div', className = ''): FakeElement {
+  const properties = new Map<string, string>();
+  const element: FakeElement = {
+    tagName: tagName.toUpperCase(),
+    className,
+    dataset: {},
+    style: {
+      setProperty(name: string, value: string) { properties.set(name, value); },
+      getPropertyValue(name: string) { return properties.get(name) ?? ''; }
+    },
+    hidden: false,
+    textContent: '',
+    innerHTML: '',
+    value: '',
+    type: '',
+    title: '',
+    disabled: false,
+    scrollTop: 0,
+    scrollHeight: 0,
+    clientHeight: 0,
+    parentElement: null,
+    children: [],
+    classList: {
+      toggle(name: string, force?: boolean) {
+        const next = classes(element);
+        const add = force ?? !next.has(name);
+        if (add) next.add(name);
+        else next.delete(name);
+        element.className = [...next].join(' ');
+        return add;
+      },
+      add(...names: string[]) {
+        const next = classes(element);
+        for (const name of names) next.add(name);
+        element.className = [...next].join(' ');
+      },
+      remove(...names: string[]) {
+        const next = classes(element);
+        for (const name of names) next.delete(name);
+        element.className = [...next].join(' ');
+      },
+      contains(name: string) { return classes(element).has(name); }
+    },
+    append(...nodes: FakeElement[]) {
+      for (const node of nodes) {
+        if (node.parentElement) node.parentElement.children = node.parentElement.children.filter((child) => child !== node);
+        node.parentElement = element;
+        element.children.push(node);
+      }
+    },
+    replaceChildren(...nodes: FakeElement[]) {
+      for (const child of element.children) child.parentElement = null;
+      element.children = [];
+      element.append(...nodes);
+    },
+    querySelector(selector: string) { return queryAll(element, selector)[0] ?? null; },
+    querySelectorAll(selector: string) { return queryAll(element, selector); },
+    setAttribute(name: string, value: string) {
+      if (name.startsWith('data-')) {
+        const key = name.slice(5).replace(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase());
+        element.dataset[key] = value;
+      }
+    },
+    addEventListener(type: string, listener: Listener) {
+      const byType = listeners.get(element) ?? new Map<string, Listener[]>();
+      byType.set(type, [...(byType.get(type) ?? []), listener]);
+      listeners.set(element, byType);
+    },
+    removeEventListener(type: string, listener: Listener) {
+      const byType = listeners.get(element);
+      if (byType) byType.set(type, (byType.get(type) ?? []).filter((entry) => entry !== listener));
+    },
+    dispatchEvent(event: Event) {
+      for (const listener of listeners.get(element)?.get(event.type) ?? []) listener.call(element, event);
+      return true;
+    },
+    focus() { activeElement = element; },
+    blur() { if (activeElement === element) activeElement = null; }
+  };
+  return element;
+}
+
+function installDom(): { root: FakeElement; heading: FakeElement } {
+  const root = fakeElement('document');
+  const panel = fakeElement('aside', 'thread-panel');
+  const inspector = fakeElement('aside', 'panel');
+  const shell = fakeElement('main', 'shell');
+  const target = fakeElement('div', 'thread-target');
+  const heading = fakeElement('div', 'thread-heading');
+  const telemetry = fakeElement('ol', 'telemetry-list');
+  root.append(panel, inspector, shell, target, heading, telemetry);
+  activeElement = null;
+
+  (globalThis as unknown as { document: unknown }).document = {
+    get activeElement() { return activeElement; },
+    querySelector(selector: string) { return queryAll(root, selector)[0] ?? null; },
+    querySelectorAll(selector: string) { return queryAll(root, selector); },
+    createElement(tagName: string) { return fakeElement(tagName); }
+  };
+  (globalThis as unknown as { window: unknown }).window = {
+    __coreTelemetry: [],
+    location: { pathname: '/specs' },
+    dispatchEvent() {}
+  };
+  (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
+    detail: unknown;
+    constructor(_type: string, init: { detail?: unknown } = {}) { this.detail = init.detail; }
+  };
+  (globalThis as unknown as { CSS: unknown }).CSS = { escape: (value: string) => value };
+  (globalThis as unknown as { getComputedStyle: unknown }).getComputedStyle = (element: FakeElement) => ({
+    borderTopColor: '',
+    getPropertyValue(name: string) { return element.style.getPropertyValue(name); }
   });
-  assert.ok(traces.length > 0);
-  assert.ok(result === undefined || typeof result === 'object');
+  (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = (callback: FrameRequestCallback) => {
+    callback(performance.now());
+    return 0;
+  };
+  (globalThis as unknown as { localStorage: unknown }).localStorage = {
+    getItem() { return null; },
+    setItem() {}
+  };
+  return { root, heading };
+}
+
+test('same-thread note renders retain focused Codex controls and commit the next model selection', async () => {
+  const { heading } = installDom();
+  const { state } = await import('../../../../src/runtime/state.js');
+  const { renderThreadPanel } = await import('../../../../src/runtime/thread/effect/render-thread-panel.js');
+  state.activeLedger = {
+    cards: [{ id: 'card-a', title: 'Card A' }],
+    annotations: [],
+    relationships: [],
+    notes: { 'thread-card-a': [{ id: 'note-1', role: 'operator', message: 'First' }] }
+  };
+  state.threadId = 'thread-card-a';
+  state.renderedThreadId = '';
+  state.threadPanelOpen = true;
+  state.activeTool = 'select';
+  state.threadPinOnRender = false;
+  state.threadScrollTopByThreadId = {};
+  state.threadCodexPreferencesByThreadId = {};
+  state.telemetry = [];
+  state.voice = { recording: false, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
+
+  renderThreadPanel();
+  const actions = heading.querySelector('.thread-actions') as FakeElement;
+  const model = actions.querySelector('[data-codex-preference="model"]') as FakeElement;
+  const effort = actions.querySelector('[data-codex-preference="effort"]') as FakeElement;
+  const button = actions.querySelector('.thread-codex-button') as FakeElement;
+  assert.ok(actions);
+  assert.equal(model.value, 'gpt-5.5');
+  assert.equal(effort.value, 'xhigh');
+  model.focus();
+  assert.equal((globalThis.document as unknown as { activeElement: FakeElement }).activeElement, model);
+
+  state.activeLedger.notes['thread-card-a'].push({ id: 'note-2', role: 'agent', message: 'Lifecycle update' });
+  renderThreadPanel();
+  assert.equal(heading.querySelector('.thread-actions'), actions);
+  assert.equal(actions.querySelector('[data-codex-preference="model"]'), model);
+  assert.equal(actions.querySelector('[data-codex-preference="effort"]'), effort);
+  assert.equal(actions.querySelector('.thread-codex-button'), button);
+  assert.equal((globalThis.document as unknown as { activeElement: FakeElement }).activeElement, model);
+
+  model.value = 'gpt-5.4';
+  model.dispatchEvent(new Event('change'));
+  assert.equal(state.threadCodexPreferencesByThreadId['thread-card-a'].model, 'gpt-5.4');
+  assert.equal(button.dataset.codexModel, 'gpt-5.4');
+
+  renderThreadPanel();
+  assert.equal(heading.querySelector('.thread-actions'), actions);
+  assert.equal(actions.querySelector('[data-codex-preference="model"]'), model);
+  assert.equal(model.value, 'gpt-5.4');
+  assert.equal(button.dataset.codexModel, 'gpt-5.4');
+  assert.equal((globalThis.document as unknown as { activeElement: FakeElement }).activeElement, model);
 });

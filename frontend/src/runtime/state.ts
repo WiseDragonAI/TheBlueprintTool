@@ -10,6 +10,43 @@ export type PointerSelectionSnapshot = SelectionState & {
   ledgerStateId: string;
 };
 
+export type LedgerReconciliationState = {
+  routeEpoch: number;
+  routeLedgerStateId: string;
+  nextRequestSequence: number;
+  lastAppliedServerRevision: number;
+  lastAppliedSequence: number;
+  localGeometryRevisions: Record<string, number>;
+  failedLoadCount: number;
+  lastFailedLoad: null | {
+    at: string;
+    ledgerStateId: string;
+    routeEpoch: number;
+    sequence: number;
+    source: string;
+    reason: string;
+  };
+};
+
+export type ThreadContentRefreshScope = {
+  ledgerId: string;
+  threadId: string;
+  contentFile: string;
+};
+
+export type LedgerContentRefreshState = {
+  inFlight: boolean;
+  ledgerReasons: string[];
+  changedContentFiles: string[];
+  threadReasons: string[];
+  threadScope: ThreadContentRefreshScope | null;
+};
+
+export type ThreadCodexPreference = {
+  model: string;
+  effort: string;
+};
+
 export const state: any = {
   routePath: globalThis.window?.location?.pathname ?? '/',
   projectName: 'Project',
@@ -25,6 +62,16 @@ export const state: any = {
     { id: 'data', title: 'Data', ledgerFile: '.decision-os/data.json' }
   ],
   activeLedger: null,
+  ledgerReconciliation: {
+    routeEpoch: 0,
+    routeLedgerStateId: 'specs',
+    nextRequestSequence: 1,
+    lastAppliedServerRevision: -1,
+    lastAppliedSequence: 0,
+    localGeometryRevisions: {},
+    failedLoadCount: 0,
+    lastFailedLoad: null
+  } satisfies LedgerReconciliationState,
   activeTool: 'select',
   railCollapsed: false,
   zoneColor: '#55b8ff',
@@ -42,7 +89,17 @@ export const state: any = {
   threadId: '',
   renderedThreadId: '',
   threadScrollTopByThreadId: {},
+  threadCodexPreferencesByThreadId: {} as Record<string, ThreadCodexPreference>,
   threadPanelOpen: false,
+  ledgerContentRefresh: {
+    inFlight: false,
+    ledgerReasons: [],
+    changedContentFiles: [],
+    threadReasons: [],
+    threadScope: null
+  } satisfies LedgerContentRefreshState,
+  pendingLedgerContentRefresh: false,
+  pendingThreadContentRefresh: false,
   voice: { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'idle' },
   telemetry: []
 };

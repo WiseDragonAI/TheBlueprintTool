@@ -4,7 +4,7 @@
  */
 import { state, type SelectionState } from '../../state.js';
 import { commitActiveLedgerMutation } from './commit-active-ledger-mutation.js';
-import { selectedLedgerGeometryPayload } from '../helper/active-ledger-geometry.js';
+import { geometryRevisionSnapshot, selectedLedgerGeometryPayload } from '../helper/active-ledger-geometry.js';
 
 export async function commitSelectedLedgerGeometry(selection: Partial<SelectionState> = state.selection): Promise<boolean> {
   // WHAT: Skip static canvases that have no active ledger mutation endpoint.
@@ -15,5 +15,9 @@ export async function commitSelectedLedgerGeometry(selection: Partial<SelectionS
   // WHAT: Avoid an empty mutation when every selected id disappeared from the ledger.
   // WHY: A no-op request would trigger unnecessary refresh and rendering work.
   if (!hasGeometry) return false;
-  return commitActiveLedgerMutation({ action: 'patch-geometry', geometry }, { render: true });
+  const submittedGeometryRevisions = geometryRevisionSnapshot(geometry);
+  return commitActiveLedgerMutation(
+    { action: 'patch-geometry', geometry },
+    { render: true, submittedGeometryRevisions }
+  );
 }

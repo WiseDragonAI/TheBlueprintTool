@@ -1,65 +1,71 @@
 /**
- * WHAT: Loads the active route ledger from the backend.
- * WHY: Server ledgers are authoritative, while optimistic thread notes must survive stale refreshes.
+ * WHAT: Loads the active route ledger through the response-time reconciliation coordinator.
+ * WHY: Server ledgers can resolve out of order while the operator keeps editing the canvas.
  */
 import { state } from '../../state.js';
-import { cloneSelectionState } from '../../selection/helper/clone-selection-state.js';
-import { pruneSelectionToActiveLedger } from '../../selection/helper/prune-selection-to-active-ledger.js';
-import { ledgerEndpointForTab } from '../helper/ledger-endpoint-for-tab.js';
-import { mergeLocalCanvasStateIntoLedger } from '../helper/merge-local-canvas-state.js';
-import { mergeLocalThreadNotes } from '../helper/merge-local-thread-notes.js';
-import { refreshZoneAttributionCache } from '../helper/zone-attribution-cache.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import {
+  beginActiveLedgerRequest,
+  ledgerRevisionFromResponse,
+  reconcileActiveLedgerState,
+  recordActiveLedgerLoadFailure
+} from './reconcile-active-ledger-state.js';
+import { ledgerEndpointForTab } from '../helper/ledger-endpoint-for-tab.js';
 
-export async function loadActiveLedgerState(): Promise<void> {
-  const endpoint = ledgerEndpointForTab(state.activeTab);
-  const ledgerStateId = state.canvasMode === 'ledgers' ? 'ledgers-canvas' : state.activeTab;
-  const canMergeLocalCanvas = Boolean(state.activeLedger && state.activeLedgerId === ledgerStateId);
-  const localLedger = canMergeLocalCanvas ? state.activeLedger : null;
+type LoadActiveLedgerStateOptions = {
+  activeTab?: string;
+  canvasMode?: 'ledger' | 'ledgers';
+  endpoint?: string;
+  ledgerStateId?: string;
+};
+
+export async function loadActiveLedgerState(options?: LoadActiveLedgerStateOptions | void): Promise<boolean> {
+  const loadOptions = (options ?? {}) as LoadActiveLedgerStateOptions;
+  const canvasMode = loadOptions.canvasMode ?? state.canvasMode;
+  const activeTab = loadOptions.activeTab ?? state.activeTab;
+  const ledgerStateId = loadOptions.ledgerStateId ?? (canvasMode === 'ledgers' ? 'ledgers-canvas' : activeTab);
+  const endpoint = loadOptions.endpoint ?? (canvasMode === 'ledgers' ? '/decision-os/ledgers-canvas' : ledgerEndpointForTab(activeTab));
+  const request = beginActiveLedgerRequest(ledgerStateId);
   if (!endpoint) {
-    // WHAT: Clear state that cannot belong to an unresolved route ledger.
-    // WHY: Retaining either ledger data or selection would expose stale targets.
-    state.activeLedger = null;
-    state.activeLedgerId = '';
-    state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
-    refreshZoneAttributionCache('missing-ledger-tab');
-    telemetry('load-ledger-state', { activeTab: state.activeTab, ok: false, source: 'missing-ledger-tab' });
-    return;
+    recordActiveLedgerLoadFailure({ request, source: 'load-active-ledger-state', reason: 'missing-ledger-tab' });
+    return false;
   }
+
   const response = await fetch(endpoint).catch(() => undefined);
   if (!response?.ok) {
-    // WHAT: Clear state when the authoritative ledger cannot be loaded.
-    // WHY: Selection cannot remain valid without its owning ledger.
-    state.activeLedger = null;
-    state.activeLedgerId = '';
-    state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
-    refreshZoneAttributionCache('load-failed');
-    telemetry('load-ledger-state', { activeTab: state.activeTab, ok: false });
-    return;
+    recordActiveLedgerLoadFailure({ request, source: 'load-active-ledger-state', reason: `http-${response?.status ?? 0}` });
+    return false;
   }
   const ledger = await response.json().catch(() => null);
-  const canKeepCurrentViewport = Boolean(state.activeLedger && state.activeLedgerId === ledgerStateId);
-  const localViewport = canKeepCurrentViewport ? { ...state.viewport } : null;
-  state.activeLedger = mergeLocalThreadNotes(canMergeLocalCanvas ? mergeLocalCanvasStateIntoLedger(ledger, localLedger) : ledger);
-  state.activeLedgerId = ledgerStateId;
-  refreshZoneAttributionCache('load-active-ledger-state');
+  if (!ledger || typeof ledger !== 'object' || Array.isArray(ledger)) {
+    recordActiveLedgerLoadFailure({ request, source: 'load-active-ledger-state', reason: 'invalid-ledger' });
+    return false;
+  }
+
+  const sameLedgerAtResponse = Boolean(state.activeLedger && state.activeLedgerId === ledgerStateId);
+  const localViewport = sameLedgerAtResponse ? { ...state.viewport } : null;
+  const applied = reconcileActiveLedgerState({
+    ledger,
+    request,
+    serverRevision: ledgerRevisionFromResponse(response),
+    source: 'load-active-ledger-state'
+  });
+  if (!applied) return false;
+
   if (localViewport) {
     Object.assign(state.viewport, localViewport);
-    if (state.canvasMode === 'ledger') state.viewports = { ...(state.viewports ?? {}), [state.activeTab]: { ...localViewport } };
-  } else if (state.canvasMode === 'ledgers') Object.assign(state.viewport, ledger?.viewport ?? state.viewport);
-  else Object.assign(state.viewport, state.viewports?.[state.activeTab] ?? ledger?.viewport ?? state.viewport);
-  if (canMergeLocalCanvas) {
-    const prunedSelection = pruneSelectionToActiveLedger(state.selection);
-    const pointerSnapshot = state.pointer?.selectionSnapshot;
-    // WHAT: Prefer the active pointer operand for the same ledger; otherwise keep only refreshed ids.
-    // WHY: A live gesture must remain stable while an idle selection must drop deleted records.
-    state.selection = pointerSnapshot?.ledgerStateId === ledgerStateId
-      ? cloneSelectionState(pointerSnapshot)
-      : prunedSelection;
+    if (canvasMode === 'ledger') state.viewports = { ...(state.viewports ?? {}), [activeTab]: { ...localViewport } };
+  } else if (canvasMode === 'ledgers') {
+    Object.assign(state.viewport, (ledger as Record<string, any>).viewport ?? state.viewport);
   } else {
-    // WHAT: Reset selection across ledger identity changes.
-    // WHY: Selection ids are scoped to their owning ledger.
-    state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
+    Object.assign(state.viewport, state.viewports?.[activeTab] ?? (ledger as Record<string, any>).viewport ?? state.viewport);
   }
-  telemetry('load-ledger-state', { activeTab: state.activeTab, canvasMode: state.canvasMode, ok: Boolean(ledger), cards: ledger?.cards?.length ?? 0, relationships: ledger?.relationships?.length ?? 0 });
+  telemetry('load-ledger-state', {
+    activeTab,
+    canvasMode,
+    ok: true,
+    cards: Array.isArray((ledger as Record<string, any>).cards) ? (ledger as Record<string, any>).cards.length : 0,
+    relationships: Array.isArray((ledger as Record<string, any>).relationships) ? (ledger as Record<string, any>).relationships.length : 0
+  });
+  return true;
 }

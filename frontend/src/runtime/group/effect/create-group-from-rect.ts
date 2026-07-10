@@ -1,18 +1,29 @@
+/**
+ * WHAT: Creates a group annotation from a drawn rectangle in active-ledger or standalone DOM mode.
+ * WHY: Draw gestures need immediate local feedback while active-ledger persistence reconciles asynchronously.
+ */
 import { content } from '../../dom.js';
 import { commitActiveLedgerMutation } from '../../ledger/effect/commit-active-ledger-mutation.js';
 import { createLedgerGroupAnnotation } from '../../ledger/helper/create-ledger-group-annotation.js';
 import { createLedgerObjectId } from '../../ledger/helper/create-ledger-object-id.js';
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { insertActiveLedgerAnnotation } from '../../ledger/helper/active-ledger-geometry.js';
+import { refreshZoneAttributionCache } from '../../ledger/helper/zone-attribution-cache.js';
+import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
 
 export async function createGroupFromRect(rect: { x: number; y: number; width: number; height: number }): Promise<void> {
   const groupId = createLedgerObjectId('group');
+  // WHAT: Insert and render the group immediately when ledger state owns the canvas.
+  // WHY: The operator should not wait for a server round trip before seeing the drawn record.
   if (state.activeLedger) {
-    const committed = await commitActiveLedgerMutation({ action: 'create-group', annotation: createLedgerGroupAnnotation({ id: groupId, rect }) });
-    if (committed) {
-      state.selection = { cardIds: [], zoneIds: [], groupIds: [groupId] };
-      telemetry('render-group-layer', { created: groupId, authority: 'server' });
-    }
+    const annotation = createLedgerGroupAnnotation({ id: groupId, rect });
+    insertActiveLedgerAnnotation(annotation);
+    refreshZoneAttributionCache('optimistic-create-group');
+    state.selection = { cardIds: [], zoneIds: [], groupIds: [groupId] };
+    telemetry('render-group-layer', { created: groupId, authority: 'optimistic-client' });
+    renderCanvasSurface({ renderThreadPanel: false });
+    await commitActiveLedgerMutation({ action: 'create-group', annotation });
     return;
   }
   const group = document.createElement('article');

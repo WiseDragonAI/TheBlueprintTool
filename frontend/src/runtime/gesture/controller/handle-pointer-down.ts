@@ -48,12 +48,13 @@ export function handlePointerDown(event: PointerEvent): void {
   if (state.pointer && (intent === 'drag' || intent === 'group' || intent === 'resize')) {
     // WHAT: Freeze gesture identity after pointer-down selection has settled.
     // WHY: Async refresh and later selection changes must not redirect movement or commit payloads.
-    state.pointer.selectionSnapshot = createPointerSelectionSnapshot({
+    const selectionSnapshot = createPointerSelectionSnapshot({
       selection: state.selection,
       targetKind,
       targetId,
       ledgerStateId: currentLedgerStateId()
     });
+    state.pointer.selectionSnapshot = selectionSnapshot;
   }
   if (intent === 'marquee' || intent === 'draw-card' || intent === 'draw-zone' || intent === 'draw-group') {
     const marquee = document.querySelector('.marquee') as HTMLElement;

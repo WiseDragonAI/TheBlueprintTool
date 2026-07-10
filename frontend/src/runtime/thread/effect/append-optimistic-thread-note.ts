@@ -4,6 +4,8 @@
  */
 import { state } from '../../state.js';
 import { normalizeLedgerNotes } from '../../ledger/helper/normalize-ledger-notes.js';
+import { ensureCoordinatorOwnedActiveLedger } from '../../ledger/effect/reconcile-active-ledger-state.js';
+import { currentLedgerStateId } from '../../ledger/helper/current-ledger-state-id.js';
 
 export type OptimisticThreadNoteInput = {
   threadId: string;
@@ -16,7 +18,7 @@ export type OptimisticThreadNoteInput = {
 };
 
 export function appendOptimisticThreadNote(input: OptimisticThreadNoteInput): string {
-  const ledger = state.activeLedger ?? { notes: {} };
+  const ledger = ensureCoordinatorOwnedActiveLedger(currentLedgerStateId());
   const notesByThread = normalizeLedgerNotes(ledger);
   const notes = notesByThread[input.threadId] ?? [];
   const noteId = `note-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -32,7 +34,6 @@ export function appendOptimisticThreadNote(input: OptimisticThreadNoteInput): st
     optimistic: true
   });
   notesByThread[input.threadId] = notes;
-  state.activeLedger = ledger;
   void import('./render-thread-panel.js').then(({ renderThreadPanel }) => {
     if (globalThis.document) renderThreadPanel();
   }).catch(() => undefined);

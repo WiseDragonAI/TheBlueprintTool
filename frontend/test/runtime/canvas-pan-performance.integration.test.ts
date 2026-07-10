@@ -502,6 +502,19 @@ async function waitForTimer(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function resetCanvasReconciliation(): void {
+  state.ledgerReconciliation = {
+    routeEpoch: 1,
+    routeLedgerStateId: 'specs',
+    nextRequestSequence: 1,
+    lastAppliedServerRevision: -1,
+    lastAppliedSequence: 0,
+    localGeometryRevisions: {},
+    failedLoadCount: 0,
+    lastFailedLoad: null
+  };
+}
+
 test('canvas pan uses a transform-only path with sampled performance telemetry', () => {
   const pointerMove = source('frontend/src/runtime/gesture/controller/handle-pointer-move.ts');
   const panTransform = source('frontend/src/runtime/canvas/effect/apply-pan-viewport-transform.ts');
@@ -745,6 +758,94 @@ test('wheel zoom racing same-ledger load keeps latest viewport in memory and del
   const persisted = JSON.parse(canvasStorage.get('decision-os.canvas.state') ?? '{}');
   assert.deepEqual(persisted.viewport, latestViewport);
   assert.deepEqual(persisted.viewports.specs, latestViewport);
+});
+
+test('a failed ledger load preserves an active pan pointer and the pan remains usable', async () => {
+  installCanvasRuntimeDom();
+  const { loadActiveLedgerState } = await import('../../src/runtime/ledger/effect/load-active-ledger-state.js');
+  const { handlePointerMove } = await import('../../src/runtime/gesture/controller/handle-pointer-move.js');
+  const { handlePointerUp } = await import('../../src/runtime/gesture/controller/handle-pointer-up.js');
+
+  state.canvasMode = 'ledger';
+  state.activeTab = 'specs';
+  state.activeLedgerId = 'specs';
+  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
+  state.viewport = { x: 10, y: 20, scale: 1 };
+  state.viewports = { specs: { ...state.viewport } };
+  state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
+  state.activeLedger = { cards: [], annotations: [], relationships: [], notes: {} };
+  const ledgerBeforeFailure = state.activeLedger;
+  state.pointer = {
+    intent: 'pan',
+    targetKind: 'canvas',
+    targetId: '',
+    target: canvasDom.canvas,
+    resizeHandle: null,
+    start: { x: 100, y: 100 },
+    current: { x: 100, y: 100 },
+    startCanvas: { x: 100, y: 100 },
+    currentCanvas: { x: 100, y: 100 },
+    startedAt: 0
+  };
+  resetCanvasReconciliation();
+  globalThis.fetch = (async () => { throw new Error('network unavailable'); }) as typeof fetch;
+
+  const pointerBeforeFailure = state.pointer;
+  assert.equal(await loadActiveLedgerState(), false);
+  assert.equal(state.activeLedger, ledgerBeforeFailure);
+  assert.equal(state.pointer, pointerBeforeFailure);
+  assert.deepEqual(state.viewport, { x: 10, y: 20, scale: 1 });
+
+  handlePointerMove(canvasPointerEvent(135, 88));
+  assert.deepEqual(state.viewport, { x: 45, y: 8, scale: 1 });
+  assert.equal(canvasDom.content.style.transform, 'translate(45px, 8px) scale(1)');
+  await handlePointerUp(canvasPointerEvent(135, 88));
+  assert.equal(state.pointer, null);
+  assert.deepEqual(JSON.parse(canvasStorage.get('decision-os.canvas.state') ?? '{}').viewport, { x: 45, y: 8, scale: 1 });
+  assert.equal(state.ledgerReconciliation.failedLoadCount, 1);
+});
+
+test('a failed in-flight ledger load preserves wheel zoom state and delayed persistence', async () => {
+  installCanvasRuntimeDom();
+  const { loadActiveLedgerState } = await import('../../src/runtime/ledger/effect/load-active-ledger-state.js');
+  const { handleWheel } = await import('../../src/runtime/gesture/controller/handle-wheel.js');
+
+  state.canvasMode = 'ledger';
+  state.activeTab = 'specs';
+  state.activeLedgerId = 'specs';
+  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
+  state.viewport = { x: 0, y: 0, scale: 1 };
+  state.viewports = { specs: { ...state.viewport } };
+  state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
+  state.pointer = null;
+  state.activeLedger = { cards: [], annotations: [], relationships: [], notes: {} };
+  const ledgerBeforeFailure = state.activeLedger;
+  resetCanvasReconciliation();
+
+  let rejectLoad!: (reason: Error) => void;
+  let markStarted!: () => void;
+  const started = new Promise<void>((resolve) => { markStarted = resolve; });
+  globalThis.fetch = (() => {
+    markStarted();
+    return new Promise<Response>((_resolve, reject) => { rejectLoad = reject; });
+  }) as typeof fetch;
+
+  const load = loadActiveLedgerState();
+  await started;
+  handleWheel(canvasWheelEvent({ clientX: 120, clientY: 90, deltaY: -120 }));
+  const viewportAfterWheel = { ...state.viewport };
+  assert.ok(viewportAfterWheel.scale > 1);
+  rejectLoad(new Error('network unavailable'));
+
+  assert.equal(await load, false);
+  assert.equal(state.activeLedger, ledgerBeforeFailure);
+  assert.deepEqual(state.viewport, viewportAfterWheel);
+  assert.deepEqual(state.viewports.specs, viewportAfterWheel);
+  await waitForTimer(170);
+  const persisted = JSON.parse(canvasStorage.get('decision-os.canvas.state') ?? '{}');
+  assert.deepEqual(persisted.viewport, viewportAfterWheel);
+  assert.deepEqual(persisted.viewports.specs, viewportAfterWheel);
+  assert.equal(state.ledgerReconciliation.failedLoadCount, 1);
 });
 
 test('wheel zoom stays transform-only and does not reroute relationships', () => {

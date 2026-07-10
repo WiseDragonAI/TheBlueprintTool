@@ -1,7 +1,11 @@
+/**
+ * WHAT: Measures selected cards, arranges their content geometry, and expands selected owning zones.
+ * WHY: Content-fit geometry must update the DOM and active-ledger records through the same calculation.
+ */
 import { canvas } from '../../dom.js';
 import { renderGeometry } from '../../canvas/helper/render-density.js';
 import { forceCardDetailsForMeasurement } from '../../canvas/effect/sync-viewport-card-details.js';
-import { activeLedgerAnnotationMap, activeLedgerCardMap, ledgerAnnotationGeometry, ledgerCardGeometry, type LedgerGeometry } from '../../ledger/helper/active-ledger-geometry.js';
+import { activeLedgerAnnotationMap, activeLedgerCardMap, ledgerAnnotationGeometry, ledgerCardGeometry, patchLedgerAnnotationGeometry, patchLedgerCardGeometry, type LedgerGeometry } from '../../ledger/helper/active-ledger-geometry.js';
 import { renderRelationshipOverlay } from '../../relationship/effect/render-relationship-overlay.js';
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
@@ -190,6 +194,7 @@ function selectedZoneCardMap(cards: HTMLElement[], zones: HTMLElement[], sourceB
 function expandSelectedZonesToCards(cardsByZoneId: Map<string, HTMLElement[]>, zones: HTMLElement[], sourceByCardId: Map<string, LedgerGeometry>, measuredGeometry: ResizedCardGeometry): ResizedCardGeometry {
   if (zones.length === 0 || cardsByZoneId.size === 0) return {};
   const geometry: ResizedCardGeometry = {};
+  const ledgerAnnotations = activeLedgerAnnotationMap();
 
   for (const zone of zones) {
     const zoneId = zone.dataset.zoneId ?? '';
@@ -200,6 +205,8 @@ function expandSelectedZonesToCards(cardsByZoneId: Map<string, HTMLElement[]>, z
       return measuredGeometry[cardId] ?? sourceByCardId.get(cardId) ?? sourceCardGeometry(card);
     }));
     if (!next) continue;
+    const ledgerAnnotation = ledgerAnnotations.get(zoneId);
+    if (state.activeLedger && ledgerAnnotation) patchLedgerAnnotationGeometry(ledgerAnnotation, next);
     const renderedGeometry = state.activeLedger ? renderGeometry(next) : next;
     zone.style.left = `${renderedGeometry.x}px`;
     zone.style.top = `${renderedGeometry.y}px`;
@@ -247,8 +254,11 @@ export function resizeSelectedCardsToContent(target: ResizeToContentTarget = {})
     for (const record of arranged) {
       const card = byId.get(record.id);
       if (!card) continue;
-      applyCardBox(card, { x: record.left, y: record.top, width: record.width, height: record.height });
-      geometry[record.id] = { x: record.left, y: record.top, width: record.width, height: record.height };
+      const next = { x: record.left, y: record.top, width: record.width, height: record.height };
+      const ledgerCard = ledgerCards.get(record.id);
+      if (state.activeLedger && ledgerCard) patchLedgerCardGeometry(ledgerCard, next);
+      applyCardBox(card, next);
+      geometry[record.id] = next;
     }
     const resizedZones = expandSelectedZonesToCards(cardsByZoneId, zones, sourceByCardId, geometry);
     result = { cards: geometry, zones: resizedZones };

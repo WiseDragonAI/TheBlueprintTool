@@ -11,23 +11,39 @@ function imageSizesRecord(value: unknown): Record<string, unknown> | null {
   return Object.keys(value).length > 0 ? value as Record<string, unknown> : null;
 }
 
-export function mergeLocalThreadNotes(ledger: Record<string, any> | null): Record<string, any> | null {
+type MergeLocalThreadNotesOptions = {
+  localLedger?: Record<string, any> | null;
+  threadId?: string;
+};
+
+function includesThread(threadId: string, selectedThreadId: string | undefined): boolean {
+  return selectedThreadId === undefined || threadId === selectedThreadId;
+}
+
+export function mergeLocalThreadNotes(
+  ledger: Record<string, any> | null,
+  options: MergeLocalThreadNotesOptions = {}
+): Record<string, any> | null {
   if (!ledger || typeof ledger !== 'object') return ledger;
-  const localNotes = state.activeLedger ? normalizeLedgerNotes(state.activeLedger) : undefined;
-  const localDeleted = state.activeLedger ? normalizeDeletedNoteIds(state.activeLedger) : {};
+  const localLedger = Object.prototype.hasOwnProperty.call(options, 'localLedger') ? options.localLedger : state.activeLedger;
+  const localNotes = localLedger ? normalizeLedgerNotes(localLedger) : undefined;
+  const localDeleted = localLedger ? normalizeDeletedNoteIds(localLedger) : {};
   if (!localNotes || typeof localNotes !== 'object') return ledger;
   const nextNotes = { ...normalizeLedgerNotes(ledger) } as Record<string, Array<Record<string, any>>>;
   const nextDeleted = { ...normalizeDeletedNoteIds(ledger) } as Record<string, string[]>;
   for (const [threadId, deletedIds] of Object.entries(localDeleted)) {
+    if (!includesThread(threadId, options.threadId)) continue;
     const mergedDeleted = new Set([...(nextDeleted[threadId] ?? []), ...(Array.isArray(deletedIds) ? deletedIds : [])].map((id) => String(id)));
     if (mergedDeleted.size > 0) nextDeleted[threadId] = Array.from(mergedDeleted);
   }
   for (const [threadId, deletedIds] of Object.entries(nextDeleted)) {
+    if (!includesThread(threadId, options.threadId)) continue;
     const deletedSet = new Set((Array.isArray(deletedIds) ? deletedIds : []).map((id) => String(id)));
     if (!deletedSet.size || !Array.isArray(nextNotes[threadId])) continue;
     nextNotes[threadId] = nextNotes[threadId].filter((note) => !deletedSet.has(String(note.id ?? '')));
   }
   for (const [threadId, notes] of Object.entries(localNotes as Record<string, Array<Record<string, any>>>)) {
+    if (!includesThread(threadId, options.threadId)) continue;
     if (!Array.isArray(notes)) continue;
     const deletedSet = new Set((nextDeleted[threadId] ?? []).map((id) => String(id)));
     const merged = Array.isArray(nextNotes[threadId]) ? [...nextNotes[threadId]] : [];

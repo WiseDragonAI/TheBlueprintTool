@@ -5,6 +5,40 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+function deferredResponse(): {
+  promise: Promise<Response>;
+  resolve(response: Response): void;
+} {
+  let resolve!: (response: Response) => void;
+  const promise = new Promise<Response>((next) => {
+    resolve = next;
+  });
+  return { promise, resolve };
+}
+
+function ledgerResponse(ledger: Record<string, unknown>, revision: number): Response {
+  return new Response(JSON.stringify(ledger), {
+    status: 200,
+    headers: {
+      'content-type': 'application/json',
+      'x-decision-os-ledger-revision': String(revision)
+    }
+  });
+}
+
+function resetLedgerReconciliation(runtimeState: Record<string, any>, ledgerStateId: string): void {
+  runtimeState.ledgerReconciliation = {
+    routeEpoch: 1,
+    routeLedgerStateId: ledgerStateId,
+    nextRequestSequence: 1,
+    lastAppliedServerRevision: -1,
+    lastAppliedSequence: 0,
+    localGeometryRevisions: {},
+    failedLoadCount: 0,
+    lastFailedLoad: null
+  };
+}
+
 test('specs and data ledger tabs commit canvas mutations through the server ledger endpoint', async () => {
   (globalThis as any).CustomEvent = class CustomEvent {
     detail: unknown;
@@ -603,4 +637,147 @@ test('patch-geometry mutation responses keep unrelated newer local canvas geomet
   assert.deepEqual(state.activeLedger.annotations[0], { id: 'zone-a', variant: 'zone', label: 'Server zone A', x: 70, y: 80, width: 420, height: 240 });
   assert.deepEqual(state.activeLedger.annotations[1], { id: 'zone-b', variant: 'zone', label: 'Server zone B', x: 333, y: 444, width: 555, height: 222 });
   assert.deepEqual(state.activeLedger.annotations[2], { id: 'group-a', variant: 'group', label: 'Server group A', x: -70, y: -80, width: 620, height: 440 });
+});
+
+test('reverse-order concurrent loads retain the highest server revision', async () => {
+  const { state } = await import('../../src/runtime/state.js');
+  const { loadActiveLedgerState } = await import('../../src/runtime/ledger/effect/load-active-ledger-state.js');
+  state.canvasMode = 'ledger';
+  state.activeTab = 'specs';
+  state.activeLedgerId = 'specs';
+  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
+  state.viewport = { x: 14, y: 28, scale: 0.8 };
+  state.viewports = { specs: { ...state.viewport } };
+  state.selection = { cardIds: ['card-a'], zoneIds: [], groupIds: [] };
+  state.pointer = null;
+  state.activeLedger = {
+    cards: [{ id: 'card-a', title: 'Initial', x: 10, y: 20, w: 240, h: 132 }],
+    annotations: [],
+    relationships: [],
+    notes: {}
+  };
+  resetLedgerReconciliation(state, 'specs');
+
+  const responses = [deferredResponse(), deferredResponse()];
+  let requestIndex = 0;
+  globalThis.fetch = (() => responses[requestIndex++].promise) as typeof fetch;
+
+  const olderLoad = loadActiveLedgerState();
+  const newerLoad = loadActiveLedgerState();
+  responses[1].resolve(ledgerResponse({
+    cards: [{ id: 'card-a', title: 'Revision 12', x: 12, y: 24, w: 260, h: 140 }],
+    annotations: [], relationships: [], notes: {}
+  }, 12));
+  assert.equal(await newerLoad, true);
+  responses[0].resolve(ledgerResponse({
+    cards: [{ id: 'card-a', title: 'Revision 11', x: 11, y: 22, w: 250, h: 136 }],
+    annotations: [], relationships: [], notes: {}
+  }, 11));
+
+  assert.equal(await olderLoad, false);
+  assert.equal(state.activeLedger.cards[0].title, 'Revision 12');
+  assert.equal(state.ledgerReconciliation.lastAppliedServerRevision, 12);
+  assert.deepEqual(state.viewport, { x: 14, y: 28, scale: 0.8 });
+  assert.deepEqual(state.selection.cardIds, ['card-a']);
+});
+
+test('a response from the previous route epoch cannot replace the newly entered ledger', async () => {
+  const { state } = await import('../../src/runtime/state.js');
+  const { loadActiveLedgerState } = await import('../../src/runtime/ledger/effect/load-active-ledger-state.js');
+  state.canvasMode = 'ledger';
+  state.activeTab = 'specs';
+  state.activeLedgerId = 'specs';
+  state.ledgerTabs = [
+    { id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' },
+    { id: 'data', title: 'Data', ledgerFile: '.decision-os/data.json' }
+  ];
+  state.viewport = { x: 0, y: 0, scale: 1 };
+  state.viewports = { specs: { x: 0, y: 0, scale: 1 }, data: { x: 40, y: 50, scale: 0.7 } };
+  state.selection = { cardIds: ['spec-card'], zoneIds: [], groupIds: [] };
+  state.pointer = null;
+  state.activeLedger = { cards: [{ id: 'spec-card', title: 'Specs' }], annotations: [], relationships: [], notes: {} };
+  resetLedgerReconciliation(state, 'specs');
+
+  const specsResponse = deferredResponse();
+  const dataResponse = deferredResponse();
+  globalThis.fetch = ((url: string) => {
+    if (url === '/decision-os/specs') return specsResponse.promise;
+    if (url === '/decision-os/data') return dataResponse.promise;
+    throw new Error(`Unexpected URL: ${url}`);
+  }) as typeof fetch;
+
+  const oldRouteLoad = loadActiveLedgerState();
+  const newRouteLoad = loadActiveLedgerState({
+    activeTab: 'data',
+    canvasMode: 'ledger',
+    endpoint: '/decision-os/data',
+    ledgerStateId: 'data'
+  });
+  dataResponse.resolve(ledgerResponse({
+    cards: [{ id: 'data-card', title: 'Data revision 3' }], annotations: [], relationships: [], notes: {}
+  }, 3));
+  assert.equal(await newRouteLoad, true);
+  specsResponse.resolve(ledgerResponse({
+    cards: [{ id: 'spec-card', title: 'Late specs revision 99' }], annotations: [], relationships: [], notes: {}
+  }, 99));
+
+  assert.equal(await oldRouteLoad, false);
+  assert.equal(state.activeLedgerId, 'data');
+  assert.deepEqual(state.activeLedger.cards.map((card: Record<string, unknown>) => card.id), ['data-card']);
+  assert.equal(state.ledgerReconciliation.routeLedgerStateId, 'data');
+  assert.equal(state.ledgerReconciliation.lastAppliedServerRevision, 3);
+  assert.deepEqual(state.viewport, { x: 40, y: 50, scale: 0.7 });
+  assert.deepEqual(state.selection, { cardIds: [], zoneIds: [], groupIds: [] });
+});
+
+test('a geometry acknowledgement cannot overwrite a later edit to the same record', async () => {
+  const { state } = await import('../../src/runtime/state.js');
+  const { commitActiveLedgerMutation } = await import('../../src/runtime/ledger/effect/commit-active-ledger-mutation.js');
+  const { patchLedgerCardGeometry } = await import('../../src/runtime/ledger/helper/active-ledger-geometry.js');
+  state.canvasMode = 'ledger';
+  state.activeTab = 'specs';
+  state.activeLedgerId = 'specs';
+  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
+  state.viewport = { x: 0, y: 0, scale: 1 };
+  state.viewports = { specs: { ...state.viewport } };
+  state.selection = { cardIds: ['card-a'], zoneIds: [], groupIds: [] };
+  state.pointer = null;
+  state.activeLedger = {
+    cards: [{ id: 'card-a', title: 'Card A', x: 10, y: 20, w: 240, h: 132 }],
+    annotations: [], relationships: [], notes: {}
+  };
+  resetLedgerReconciliation(state, 'specs');
+
+  patchLedgerCardGeometry(state.activeLedger.cards[0], { x: 100, y: 120, width: 260, height: 150 });
+  const submittedRevision = state.ledgerReconciliation.localGeometryRevisions['card:card-a'];
+  let resolveMutation!: (response: Response) => void;
+  let markMutationStarted!: () => void;
+  const mutationStarted = new Promise<void>((resolve) => { markMutationStarted = resolve; });
+  let submittedBody!: Record<string, any>;
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+    submittedBody = JSON.parse(String(init?.body ?? '{}'));
+    markMutationStarted();
+    return new Promise<Response>((resolve) => { resolveMutation = resolve; });
+  }) as typeof fetch;
+
+  const commit = commitActiveLedgerMutation({
+    action: 'patch-geometry',
+    geometry: { cards: { 'card-a': { x: 100, y: 120, width: 260, height: 150 } }, zones: {}, groups: {} }
+  });
+  await mutationStarted;
+  patchLedgerCardGeometry(state.activeLedger.cards[0], { x: 300, y: 320, width: 340, height: 210 });
+  const laterRevision = state.ledgerReconciliation.localGeometryRevisions['card:card-a'];
+  assert.ok(laterRevision > submittedRevision);
+  resolveMutation(ledgerResponse({
+    cards: [{ id: 'card-a', title: 'Server Card A', x: 100, y: 120, w: 260, h: 150 }],
+    annotations: [], relationships: [], notes: {}
+  }, 20));
+
+  assert.equal(await commit, true);
+  assert.deepEqual(submittedBody.geometry.cards['card-a'], { x: 100, y: 120, width: 260, height: 150 });
+  assert.deepEqual(state.activeLedger.cards[0], {
+    id: 'card-a', title: 'Server Card A', x: 300, y: 320, w: 340, h: 210
+  });
+  assert.equal(state.ledgerReconciliation.localGeometryRevisions['card:card-a'], laterRevision);
+  assert.equal(state.ledgerReconciliation.lastAppliedServerRevision, 20);
 });

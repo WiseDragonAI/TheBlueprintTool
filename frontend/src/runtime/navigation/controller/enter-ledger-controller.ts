@@ -4,9 +4,13 @@
  */
 import { canvas } from '../../dom.js';
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
-import { mergeLocalThreadNotes } from '../../ledger/helper/merge-local-thread-notes.js';
+import { loadActiveLedgerState } from '../../ledger/effect/load-active-ledger-state.js';
+import {
+  advanceLedgerRouteEpoch,
+  restoreLedgerReconciliationRoute,
+  snapshotLedgerReconciliationRoute
+} from '../../ledger/effect/reconcile-active-ledger-state.js';
 import { minScaleCenteredLedgerViewport } from '../../ledger/helper/min-scale-centered-ledger-viewport.js';
-import { refreshZoneAttributionCache } from '../../ledger/helper/zone-attribution-cache.js';
 import { activeLedgers } from '../../ledger/helper/active-ledgers.js';
 import { renderTabRegistry } from '../effect/render-tab-registry.js';
 import { state } from '../../state.js';
@@ -14,23 +18,33 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 export async function enterLedgerController(ledgerId: string, options: { replace?: boolean; canonicalMinScale?: boolean } = {}): Promise<void> {
   if (!activeLedgers().some((ledger) => ledger.id === ledgerId)) return;
-  const response = await fetch(`/decision-os/${ledgerId}`).catch(() => undefined);
-  if (!response?.ok) return;
-  const ledger = await response.json().catch(() => null);
+  const previousRoute = { canvasMode: state.canvasMode, activeTab: state.activeTab };
+  const reconciliationSnapshot = snapshotLedgerReconciliationRoute();
+  const navigationEpoch = advanceLedgerRouteEpoch(ledgerId);
   state.canvasMode = 'ledger';
   state.activeTab = ledgerId;
-  state.activeLedgerId = ledgerId;
-  state.activeLedger = mergeLocalThreadNotes(ledger);
-  refreshZoneAttributionCache('enter-ledger-controller');
+  const loaded = await loadActiveLedgerState({
+    activeTab: ledgerId,
+    canvasMode: 'ledger',
+    endpoint: `/decision-os/${ledgerId}`,
+    ledgerStateId: ledgerId
+  });
+  if (!loaded) {
+    const navigationIsCurrent = state.ledgerReconciliation.routeEpoch === navigationEpoch
+      && state.ledgerReconciliation.routeLedgerStateId === ledgerId;
+    if (navigationIsCurrent) {
+      state.canvasMode = previousRoute.canvasMode;
+      state.activeTab = previousRoute.activeTab;
+      restoreLedgerReconciliationRoute(reconciliationSnapshot);
+    }
+    return;
+  }
   if (options.canonicalMinScale !== false) {
     const rect = canvas?.getBoundingClientRect?.() ?? { width: window.innerWidth, height: window.innerHeight };
     const viewport = minScaleCenteredLedgerViewport({ ledger: state.activeLedger, canvasSize: { width: rect.width, height: rect.height }, scale: 0.03 });
     Object.assign(state.viewport, viewport);
     state.viewports = { ...(state.viewports ?? {}), [ledgerId]: { ...viewport } };
-  } else {
-    Object.assign(state.viewport, state.viewports?.[ledgerId] ?? ledger?.viewport ?? state.viewport);
   }
-  state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
   if (options.replace) history.replaceState?.({}, '', `/${ledgerId}`);
   else if (window.location.pathname !== `/${ledgerId}`) history.pushState?.({}, '', `/${ledgerId}`);
   canvas.classList.remove('ledgers-canvas-mode');
