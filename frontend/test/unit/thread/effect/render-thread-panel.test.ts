@@ -197,10 +197,22 @@ function installDom(): { root: FakeElement; heading: FakeElement; codexLog: Fake
   return { root, heading, codexLog };
 }
 
-test('same-thread note renders retain focused Codex controls and commit the next model selection', async () => {
-  const { heading } = installDom();
+async function waitFor(predicate: () => boolean): Promise<void> {
+  const deadline = Date.now() + 1000;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.fail('Timed out waiting for condition.');
+}
+
+test('thread selection persists the complete default pair and synchronizes a mounted widget', async () => {
+  const previousFetch = globalThis.fetch;
+  const { root, heading } = installDom();
   const { state } = await import('../../../../src/runtime/state.js');
   const { renderThreadPanel } = await import('../../../../src/runtime/thread/effect/render-thread-panel.js');
+  const { persistCardCodexRunPreference } = await import('../../../../src/runtime/codex/effect/persist-card-codex-run-preference.js');
+  const requests: Array<Record<string, unknown>> = [];
   state.activeLedger = {
     cards: [{ id: 'card-a', title: 'Card A' }],
     annotations: [],
@@ -211,44 +223,163 @@ test('same-thread note renders retain focused Codex controls and commit the next
   state.renderedThreadId = '';
   state.threadPanelOpen = true;
   state.activeTool = 'select';
+  state.activeTab = 'specs';
+  state.activeLedgerId = 'specs';
+  state.canvasMode = 'ledger';
+  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
+  state.ledgerReconciliation = {
+    routeEpoch: 1,
+    routeLedgerStateId: 'specs',
+    nextRequestSequence: 1,
+    lastAppliedServerRevision: -1,
+    lastAppliedSequence: 0,
+    localGeometryRevisions: {},
+    failedLoadCount: 0,
+    lastFailedLoad: null
+  };
   state.threadPinOnRender = false;
   state.threadScrollTopByThreadId = {};
-  state.threadCodexPreferencesByThreadId = {};
   state.telemetry = [];
   state.voice = { recording: false, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
 
-  renderThreadPanel();
-  const actions = heading.querySelector('.thread-actions') as FakeElement;
-  const model = actions.querySelector('[data-codex-preference="model"]') as FakeElement;
-  const effort = actions.querySelector('[data-codex-preference="effort"]') as FakeElement;
-  const button = actions.querySelector('.thread-codex-button') as FakeElement;
-  assert.ok(actions);
-  assert.equal(model.value, 'gpt-5.5');
-  assert.equal(effort.value, 'xhigh');
-  assert.equal(button.dataset.codexCardId, 'card-a');
-  assert.equal(button.dataset.cardId, undefined);
-  model.focus();
-  assert.equal((globalThis.document as unknown as { activeElement: FakeElement }).activeElement, model);
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+    const mutation = JSON.parse(String(init?.body ?? '{}')) as { cardPatch: Record<string, unknown> };
+    requests.push(mutation);
+    return new Response(JSON.stringify({
+      ...state.activeLedger,
+      cards: state.activeLedger.cards.map((card: Record<string, unknown>) => card.id === mutation.cardPatch.id
+        ? { ...card, codexRunModel: mutation.cardPatch.codexRunModel, codexRunEffort: mutation.cardPatch.codexRunEffort }
+        : card)
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json', 'x-decision-os-ledger-revision': '1' }
+    });
+  }) as typeof fetch;
 
-  state.activeLedger.notes['thread-card-a'].push({ id: 'note-2', role: 'agent', message: 'Lifecycle update' });
-  renderThreadPanel();
-  assert.equal(heading.querySelector('.thread-actions'), actions);
-  assert.equal(actions.querySelector('[data-codex-preference="model"]'), model);
-  assert.equal(actions.querySelector('[data-codex-preference="effort"]'), effort);
-  assert.equal(actions.querySelector('.thread-codex-button'), button);
-  assert.equal((globalThis.document as unknown as { activeElement: FakeElement }).activeElement, model);
+  const widget = fakeElement('section', 'codex-run-widget');
+  widget.dataset.codexCardId = 'card-a';
+  const widgetModel = fakeElement('select');
+  widgetModel.dataset.codexRunModel = '';
+  widgetModel.value = 'gpt-5.6-sol';
+  const widgetEffort = fakeElement('select');
+  widgetEffort.dataset.codexRunEffort = '';
+  widgetEffort.value = 'high';
+  widget.append(widgetModel, widgetEffort);
+  root.append(widget);
 
-  model.value = 'gpt-5.4';
-  model.dispatchEvent(new Event('change'));
-  assert.equal(state.threadCodexPreferencesByThreadId['thread-card-a'].model, 'gpt-5.4');
-  assert.equal(button.dataset.codexModel, 'gpt-5.4');
+  try {
+    renderThreadPanel();
+    const actions = heading.querySelector('.thread-actions') as FakeElement;
+    const model = actions.querySelector('[data-codex-preference="model"]') as FakeElement;
+    const effort = actions.querySelector('[data-codex-preference="effort"]') as FakeElement;
+    const button = actions.querySelector('.thread-codex-button') as FakeElement;
+    assert.ok(actions);
+    assert.equal(model.value, 'gpt-5.6-sol');
+    assert.equal(effort.value, 'high');
+    assert.equal(button.dataset.codexCardId, 'card-a');
+    assert.equal(button.dataset.codexModel, 'gpt-5.6-sol');
+    assert.equal(button.dataset.codexEffort, 'high');
 
-  renderThreadPanel();
-  assert.equal(heading.querySelector('.thread-actions'), actions);
-  assert.equal(actions.querySelector('[data-codex-preference="model"]'), model);
-  assert.equal(model.value, 'gpt-5.4');
-  assert.equal(button.dataset.codexModel, 'gpt-5.4');
-  assert.equal((globalThis.document as unknown as { activeElement: FakeElement }).activeElement, model);
+    model.focus();
+    model.value = 'gpt-5.4';
+    model.dispatchEvent(new Event('change'));
+    assert.equal(button.dataset.codexModel, 'gpt-5.6-sol');
+    await waitFor(() => requests.length === 1 && state.activeLedger.cards[0].codexRunModel === 'gpt-5.4');
+
+    assert.deepEqual(requests[0], {
+      action: 'patch-card',
+      cardPatch: { id: 'card-a', codexRunModel: 'gpt-5.4', codexRunEffort: 'high' }
+    });
+    assert.equal(button.dataset.codexModel, 'gpt-5.4');
+    assert.equal(widgetModel.value, 'gpt-5.4');
+    assert.equal(widgetEffort.value, 'high');
+
+    widgetEffort.value = 'ultra';
+    await persistCardCodexRunPreference({ cardId: 'card-a', model: widgetModel.value, effort: widgetEffort.value });
+    assert.deepEqual(requests[1], {
+      action: 'patch-card',
+      cardPatch: { id: 'card-a', codexRunModel: 'gpt-5.4', codexRunEffort: 'ultra' }
+    });
+    assert.equal(effort.value, 'ultra');
+    assert.equal(button.dataset.codexEffort, 'ultra');
+    assert.equal(state.activeLedger.cards[0].codexRunEffort, 'ultra');
+
+    state.activeLedger.notes['thread-card-a'].push({ id: 'note-2', role: 'agent', message: 'Lifecycle update' });
+    renderThreadPanel();
+    assert.equal(heading.querySelector('.thread-actions'), actions);
+    assert.equal(actions.querySelector('[data-codex-preference="model"]'), model);
+    assert.equal(model.value, 'gpt-5.4');
+    assert.equal((globalThis.document as unknown as { activeElement: FakeElement }).activeElement, model);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('rejected Codex preference mutation restores both surfaces to the durable pair', async () => {
+  const previousFetch = globalThis.fetch;
+  const { root, heading } = installDom();
+  const { state } = await import('../../../../src/runtime/state.js');
+  const { renderThreadPanel } = await import('../../../../src/runtime/thread/effect/render-thread-panel.js');
+  state.activeLedger = {
+    cards: [{ id: 'card-a', title: 'Card A', codexRunModel: 'gpt-5.4', codexRunEffort: 'medium' }],
+    annotations: [],
+    relationships: [],
+    notes: { 'thread-card-a': [] }
+  };
+  state.activeTab = 'specs';
+  state.activeLedgerId = 'specs';
+  state.canvasMode = 'ledger';
+  state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
+  state.ledgerReconciliation = {
+    routeEpoch: 1,
+    routeLedgerStateId: 'specs',
+    nextRequestSequence: 1,
+    lastAppliedServerRevision: -1,
+    lastAppliedSequence: 0,
+    localGeometryRevisions: {},
+    failedLoadCount: 0,
+    lastFailedLoad: null
+  };
+  state.threadId = 'thread-card-a';
+  state.renderedThreadId = '';
+  state.threadPanelOpen = true;
+  state.activeTool = 'select';
+  state.threadPinOnRender = false;
+  state.threadScrollTopByThreadId = {};
+  state.telemetry = [];
+  state.voice = { recording: false, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
+
+  const widget = fakeElement('section', 'codex-run-widget');
+  widget.dataset.codexCardId = 'card-a';
+  const widgetModel = fakeElement('select');
+  widgetModel.dataset.codexRunModel = '';
+  widgetModel.value = 'gpt-5.4';
+  const widgetEffort = fakeElement('select');
+  widgetEffort.dataset.codexRunEffort = '';
+  widgetEffort.value = 'medium';
+  widget.append(widgetModel, widgetEffort);
+  root.append(widget);
+  globalThis.fetch = (async () => new Response(JSON.stringify({ ok: false }), { status: 500 })) as typeof fetch;
+
+  try {
+    renderThreadPanel();
+    const actions = heading.querySelector('.thread-actions') as FakeElement;
+    const effort = actions.querySelector('[data-codex-preference="effort"]') as FakeElement;
+    const button = actions.querySelector('.thread-codex-button') as FakeElement;
+    effort.value = 'ultra';
+    effort.dispatchEvent(new Event('change'));
+    await waitFor(() => state.ledgerReconciliation.failedLoadCount === 1);
+
+    assert.equal(effort.value, 'medium');
+    assert.equal(widgetEffort.value, 'medium');
+    assert.equal(button.dataset.codexModel, 'gpt-5.4');
+    assert.equal(button.dataset.codexEffort, 'medium');
+    assert.equal(state.activeLedger.cards[0].codexRunEffort, 'medium');
+    assert.equal(state.ledgerReconciliation.lastFailedLoad.reason, 'http-500');
+    assert.ok(state.telemetry.some((entry: Record<string, unknown>) => entry.name === 'commit-ledger-edit-failed'));
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
 });
 
 test('generated skill-result threads bind and render their durable card run id', async () => {
@@ -303,7 +434,6 @@ test('generated skill-result threads bind and render their durable card run id',
     state.threadRunSummaryByThreadId = {};
     state.threadRunEventsByThreadId = {};
     state.threadCoalescedToolsByThreadId = {};
-    state.threadCodexPreferencesByThreadId = {};
     state.telemetry = [];
     state.voice = { recording: false, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
 

@@ -286,8 +286,11 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(cardDetailSkillRunWidget, /cancel\.dataset\.codexRunCancel = ''/);
   assert.match(cardDetailSkillRunWidget, /newSession\.dataset\.codexRunNewSession = ''/);
   assert.match(cardDetailSkillRunWidget, /newSession\.textContent = 'New session'/);
-  assert.match(cardDetailSkillRunWidget, /selectionMetric\('Model', 'codexRunModel', codexModelOptions, String\(card\.codexRunModel/);
-  assert.match(cardDetailSkillRunWidget, /selectionMetric\('Effort', 'codexRunEffort', codexEffortOptions, String\(card\.codexRunEffort/);
+  assert.match(cardDetailSkillRunWidget, /const preference = cardCodexRunPreference\(card\)/);
+  assert.match(cardDetailSkillRunWidget, /selectionMetric\('Model', 'codexRunModel', codexModelOptions, preference\.model\)/);
+  assert.match(cardDetailSkillRunWidget, /selectionMetric\('Effort', 'codexRunEffort', codexEffortOptions, preference\.effort\)/);
+  assert.match(cardDetailSkillRunWidget, /modelSelect\?\.addEventListener\('change', persistSelection\)/);
+  assert.match(cardDetailSkillRunWidget, /effortSelect\?\.addEventListener\('change', persistSelection\)/);
   assert.match(cardDetailSkillRunWidget, /widget\.replaceChildren\(body, timer\)/);
   assert.match(cardDetailSkillRunPoller, /requestCardSkillRunStatus/);
   assert.match(cardDetailSkillRunPoller, /requestCardSkillRunCancel/);

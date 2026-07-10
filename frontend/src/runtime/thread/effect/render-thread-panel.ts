@@ -5,8 +5,10 @@
 import { bindThreadCodexRunLog } from '../../codex/effect/bind-thread-codex-run-log.js';
 import { cardCodexRunId } from '../../codex/helper/card-codex-run-id.js';
 import { codexEffortOptions, codexModelOptions } from '../../codex/helper/codex-run-options.js';
+import { cardCodexRunPreference, type CardCodexRunPreference } from '../../codex/helper/card-codex-run-preference.js';
+import { persistCardCodexRunPreference } from '../../codex/effect/persist-card-codex-run-preference.js';
 import { threadCodexCardId } from '../../codex/helper/thread-codex-card-id.js';
-import { state, type ThreadCodexPreference, type ThreadPanelTab } from '../../state.js';
+import { state, type ThreadPanelTab } from '../../state.js';
 import { renderTelemetry } from '../../telemetry/effect/render-telemetry.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { renderVoiceDock } from '../../voice/effect/render-voice-dock.js';
@@ -20,19 +22,14 @@ import { renderThreadCodexLog } from './render-thread-codex-log.js';
 import { renderThreadJumpButton, syncThreadJumpButtonVisibility } from './render-thread-jump-button.js';
 import { renderThreadNotes } from './render-thread-notes.js';
 
-const defaultThreadCodexPreference: ThreadCodexPreference = { model: 'gpt-5.5', effort: 'xhigh' };
 const threadTabOrder: ThreadPanelTab[] = ['thread', 'codex-log'];
 
-function threadCodexPreference(threadId: string): ThreadCodexPreference {
-  if (!state.threadCodexPreferencesByThreadId || typeof state.threadCodexPreferencesByThreadId !== 'object' || Array.isArray(state.threadCodexPreferencesByThreadId)) {
-    state.threadCodexPreferencesByThreadId = {};
-  }
-  const preferences = state.threadCodexPreferencesByThreadId as Record<string, ThreadCodexPreference>;
-  const existing = preferences[threadId];
-  if (existing && typeof existing.model === 'string' && typeof existing.effort === 'string') return existing;
-  const preference = { ...defaultThreadCodexPreference };
-  preferences[threadId] = preference;
-  return preference;
+function threadCodexPreference(threadId: string): CardCodexRunPreference {
+  const cardId = threadCodexCardId(state.activeLedger, threadId);
+  const card = cardId
+    ? state.activeLedger?.cards?.find((entry: Record<string, unknown>) => String(entry.id ?? '') === cardId)
+    : null;
+  return cardCodexRunPreference(card);
 }
 
 function activeTabState(): Record<string, ThreadPanelTab> {
@@ -95,6 +92,16 @@ function renderThreadActions(threadId: string): void {
       button.dataset.codexModel = threadCodexModel;
       button.dataset.codexEffort = threadCodexEffort;
     }
+    const model = actions.querySelector('[data-codex-preference="model"]') as HTMLSelectElement | null;
+    const effort = actions.querySelector('[data-codex-preference="effort"]') as HTMLSelectElement | null;
+    if (model) {
+      model.value = threadCodexModel;
+      model.title = `Model: ${threadCodexModel}`;
+    }
+    if (effort) {
+      effort.value = threadCodexEffort;
+      effort.title = `Effort: ${threadCodexEffort}`;
+    }
     return;
   }
   actions.replaceChildren();
@@ -126,20 +133,20 @@ function renderThreadActions(threadId: string): void {
     value: threadCodexModel,
     options: codexModelOptions,
     onChange: (value) => {
-      preference.model = value;
-      button.dataset.codexModel = value;
+      void persistCardCodexRunPreference({ cardId, model: value, effort: effortSelect.value });
     },
   });
+  const modelSelect = model.querySelector('select') as HTMLSelectElement;
   const effort = renderThreadCodexSelect({
     preference: 'effort',
     label: 'Effort',
     value: threadCodexEffort,
     options: codexEffortOptions,
     onChange: (value) => {
-      preference.effort = value;
-      button.dataset.codexEffort = value;
+      void persistCardCodexRunPreference({ cardId, model: modelSelect.value, effort: value });
     },
   });
+  const effortSelect = effort.querySelector('select') as HTMLSelectElement;
   actions.append(model, effort, button);
 }
 

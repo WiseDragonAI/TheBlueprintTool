@@ -6,13 +6,14 @@ import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-
 import { relationshipReferencesCard } from './relationship-references-card.js';
 import { deleteCardMarkdownImage, duplicateCardContentFile, externalizeCardContent, sameMarkdownImageSource, writeCardDescriptionFile } from './card-content-file.js';
 import { hydrateLedgerThreadNotes, writeThreadNotesFile } from './thread-content-file.js';
+import { codexEffortOptions, codexModelOptions, type CodexEffort, type CodexModel } from '../../../../../shared/schemas/codex-pipeline-types.js';
 
 export type LedgerMutation = {
   action?: string;
   card?: Record<string, unknown>;
   cardId?: string;
   imageSrc?: string;
-  cardPatch?: { id?: string; status?: string; title?: string; description?: string; imageSizes?: Record<string, { width?: number; height?: number }> };
+  cardPatch?: { id?: string; status?: string; title?: string; description?: string; imageSizes?: Record<string, { width?: number; height?: number }>; codexRunModel?: CodexModel; codexRunEffort?: CodexEffort };
   annotation?: Record<string, unknown>;
   relationship?: Record<string, unknown>;
   zoneIds?: string[];
@@ -83,12 +84,29 @@ export function applyLedgerMutation(input: {
   }
   if (mutation.action === 'patch-card' && mutation.cardPatch?.id) {
     const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === mutation.cardPatch?.id);
-    if (card && (mutation.cardPatch.status === 'todo' || mutation.cardPatch.status === 'done')) card.status = mutation.cardPatch.status;
-    if (card && typeof mutation.cardPatch.title === 'string') card.title = mutation.cardPatch.title;
-    if (card && typeof mutation.cardPatch.description === 'string') {
-      writeCardDescriptionFile({ decisionOsRoot, card, description: mutation.cardPatch.description, ledgerPath });
+    const includesCodexPreference = mutation.cardPatch.codexRunModel !== undefined || mutation.cardPatch.codexRunEffort !== undefined;
+    const validCodexPreference = typeof mutation.cardPatch.codexRunModel === 'string'
+      && (codexModelOptions as readonly string[]).includes(mutation.cardPatch.codexRunModel)
+      && typeof mutation.cardPatch.codexRunEffort === 'string'
+      && (codexEffortOptions as readonly string[]).includes(mutation.cardPatch.codexRunEffort);
+    if (includesCodexPreference && !validCodexPreference) {
+      mutationError = {
+        statusCode: 400,
+        body: { ok: false, error: 'Codex model and effort must be submitted together with allowed values.' },
+      };
     }
-    if (card && mutation.cardPatch.imageSizes && typeof mutation.cardPatch.imageSizes === 'object') card.imageSizes = mutation.cardPatch.imageSizes;
+    if (!mutationError) {
+      if (card && (mutation.cardPatch.status === 'todo' || mutation.cardPatch.status === 'done')) card.status = mutation.cardPatch.status;
+      if (card && typeof mutation.cardPatch.title === 'string') card.title = mutation.cardPatch.title;
+      if (card && typeof mutation.cardPatch.description === 'string') {
+        writeCardDescriptionFile({ decisionOsRoot, card, description: mutation.cardPatch.description, ledgerPath });
+      }
+      if (card && mutation.cardPatch.imageSizes && typeof mutation.cardPatch.imageSizes === 'object') card.imageSizes = mutation.cardPatch.imageSizes;
+      if (card && validCodexPreference) {
+        card.codexRunModel = mutation.cardPatch.codexRunModel;
+        card.codexRunEffort = mutation.cardPatch.codexRunEffort;
+      }
+    }
   }
   if (mutation.action === 'delete-card' && mutation.cardId) {
     const cardId = String(mutation.cardId);

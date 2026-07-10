@@ -6,6 +6,7 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { requestCardSkillRunStatus, type CardSkillRunSummary } from './request-card-skill-run-status.js';
 import { requestCardSkillRunCancel } from './request-card-skill-run-cancel.js';
 import { requestCardSkillRunContinue } from './request-card-skill-run-continue.js';
+import { activeCardCodexRunPreference } from '../helper/card-codex-run-preference.js';
 import {
   requestCodexPipelineRunCancel,
   requestCodexPipelineRunRestart,
@@ -161,8 +162,9 @@ function setSelectValue(element: HTMLElement, selector: string, value: string): 
   if (target && value) target.value = value;
 }
 
-function selectedValue(element: HTMLElement, selector: string): string {
-  return element.querySelector<HTMLSelectElement>(selector)?.value.trim() ?? '';
+function setSelectValueIfUnset(element: HTMLElement, selector: string, value: string): void {
+  const target = element.querySelector<HTMLSelectElement>(selector);
+  if (target && value && !target.value) target.value = value;
 }
 
 function setSelectionEnabled(element: HTMLElement, enabled: boolean): void {
@@ -180,8 +182,8 @@ function setWidgetMetadata(element: HTMLElement, summary: CardSkillRunSummary): 
   const effort = summary.metadata.codexEffort.trim();
   metadata.hidden = !source && !model && !effort;
   setText(element, '[data-codex-run-source]', source);
-  setSelectValue(element, '[data-codex-run-model]', model);
-  setSelectValue(element, '[data-codex-run-effort]', effort);
+  setSelectValueIfUnset(element, '[data-codex-run-model]', model);
+  setSelectValueIfUnset(element, '[data-codex-run-effort]', effort);
 }
 
 function removeTimer(element: HTMLElement): void {
@@ -409,8 +411,9 @@ async function continueRun(poller: Poller, newSession: boolean): Promise<void> {
   if (!button) return;
   const key = pollerKey(poller);
   const previousSummary = terminalSummaries.get(key);
-  const codexModel = selectedValue(poller.element, '[data-codex-run-model]');
-  const codexEffort = selectedValue(poller.element, '[data-codex-run-effort]');
+  const preference = activeCardCodexRunPreference(poller.cardId);
+  const codexModel = preference.model;
+  const codexEffort = preference.effort;
   const traceId = continueTraceId(poller.runId);
   poller.continueTraceId = traceId;
   debugContinue(traceId, 'click', { ...pollerDebugState(poller), newSession, previousSummaryStatus: previousSummary?.status ?? '', previousSummaryLineCount: previousSummary?.lineCount ?? 0 });
@@ -706,8 +709,8 @@ function paintPipelineContext(
   const metadata = element.querySelector<HTMLElement>('[data-codex-run-metadata]');
   if (metadata) metadata.hidden = false;
   setText(element, '[data-codex-run-source]', result.run?.sourceCardTitle ?? '');
-  setSelectValue(element, '[data-codex-run-model]', String(skill?.codexModel ?? ''));
-  setSelectValue(element, '[data-codex-run-effort]', String(skill?.codexEffort ?? ''));
+  setSelectValueIfUnset(element, '[data-codex-run-model]', String(skill?.codexModel ?? ''));
+  setSelectValueIfUnset(element, '[data-codex-run-effort]', String(skill?.codexEffort ?? ''));
 }
 
 function setPipelineControls(
@@ -903,12 +906,13 @@ async function continuePipelineStepRun(poller: PipelineStepPoller): Promise<void
   poller.continueInFlight = true;
   setPipelineButtonState(continueButton(poller.element), true, 'Continue', 'Continuing');
   setText(poller.element, '[data-codex-run-latest]', 'Continuing skill session');
+  const preference = activeCardCodexRunPreference(poller.cardId);
   const result = await requestCardSkillRunContinue({
     ledgerId: poller.ledgerId,
     cardId: poller.cardId,
     runId: skillRunId,
-    codexModel: selectedValue(poller.element, '[data-codex-run-model]'),
-    codexEffort: selectedValue(poller.element, '[data-codex-run-effort]'),
+    codexModel: preference.model,
+    codexEffort: preference.effort,
     newSession: false,
   });
   poller.continueInFlight = false;

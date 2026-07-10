@@ -196,6 +196,42 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
     const cardStatusLedger = await cardStatusResponse.json() as { cards: Array<Record<string, unknown>> };
     assert.equal(cardStatusLedger.cards.find((entry) => entry.id === 'card-a')?.status, 'done');
 
+    const codexPreferenceResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'card-a', codexRunModel: 'gpt-5.6-terra', codexRunEffort: 'max' } })
+    });
+    assert.equal(codexPreferenceResponse.ok, true);
+    const codexPreferenceLedger = await codexPreferenceResponse.json() as { cards: Array<Record<string, unknown>> };
+    assert.deepEqual(codexPreferenceLedger.cards.find((entry) => entry.id === 'card-a'), {
+      id: 'card-a',
+      x: 111,
+      y: 122,
+      w: 333,
+      h: 99,
+      status: 'done',
+      imageSizes: { '/.decision-os/ui-mockups/mock.png': { width: 320, height: 180 } },
+      codexRunModel: 'gpt-5.6-terra',
+      codexRunEffort: 'max'
+    });
+
+    const partialCodexPreferenceResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'card-a', codexRunModel: 'gpt-5.4' } })
+    });
+    assert.equal(partialCodexPreferenceResponse.status, 400);
+
+    const invalidCodexPreferenceResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'card-a', codexRunModel: 'unsupported', codexRunEffort: 'max' } })
+    });
+    assert.equal(invalidCodexPreferenceResponse.status, 400);
+    const persistedAfterRejections = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { cards: Array<Record<string, unknown>> };
+    assert.equal(persistedAfterRejections.cards.find((entry) => entry.id === 'card-a')?.codexRunModel, 'gpt-5.6-terra');
+    assert.equal(persistedAfterRejections.cards.find((entry) => entry.id === 'card-a')?.codexRunEffort, 'max');
+
     const appendNoteResponse = await fetch(endpoint, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },

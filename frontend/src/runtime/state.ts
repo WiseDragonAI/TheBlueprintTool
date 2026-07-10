@@ -43,11 +43,6 @@ export type LedgerContentRefreshState = {
   threadScope: ThreadContentRefreshScope | null;
 };
 
-export type ThreadCodexPreference = {
-  model: string;
-  effort: string;
-};
-
 export type ThreadPanelTab = 'thread' | 'codex-log';
 
 export type ThreadRunDisclosureState = Record<string, boolean>;
@@ -104,7 +99,6 @@ export const state: any = {
   threadToolRowDisclosureByThreadId: {} as Record<string, ThreadRunDisclosureState>,
   threadRunAnnouncementByThreadId: {},
   threadRunAnnouncedSequenceByThreadId: {},
-  threadCodexPreferencesByThreadId: {} as Record<string, ThreadCodexPreference>,
   threadPanelOpen: false,
   ledgerContentRefresh: {
     inFlight: false,

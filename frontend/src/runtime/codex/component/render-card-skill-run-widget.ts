@@ -5,6 +5,8 @@
 import { state } from '../../state.js';
 import { cardCodexRunId } from '../helper/card-codex-run-id.js';
 import { codexEffortOptions, codexModelOptions } from '../helper/codex-run-options.js';
+import { cardCodexRunPreference } from '../helper/card-codex-run-preference.js';
+import { persistCardCodexRunPreference } from '../effect/persist-card-codex-run-preference.js';
 import { bindCardSkillRunWidget, bindPipelineStepRunWidget } from '../effect/poll-card-skill-run.js';
 
 function metric(label: string, value: string, key: string): HTMLElement {
@@ -55,6 +57,7 @@ export function renderCardSkillRunWidget(card: Record<string, unknown>): HTMLEle
   const widget = document.createElement('section');
   widget.className = 'codex-run-widget';
   widget.dataset.runId = runId;
+  widget.dataset.codexCardId = cardId;
   widget.dataset.runStatus = pipelineRunId ? 'pending' : 'running';
   if (pipelineRunId) widget.dataset.pipelineRunId = pipelineRunId;
   if (pipelineStepId) widget.dataset.pipelineStepId = pipelineStepId;
@@ -139,11 +142,23 @@ export function renderCardSkillRunWidget(card: Record<string, unknown>): HTMLEle
   metadata.className = 'codex-run-metadata';
   metadata.dataset.codexRunMetadata = '';
   metadata.hidden = true;
+  const preference = cardCodexRunPreference(card);
   metadata.replaceChildren(
     metric('Source', '', 'codexRunSource'),
-    selectionMetric('Model', 'codexRunModel', codexModelOptions, String(card.codexRunModel ?? '')),
-    selectionMetric('Effort', 'codexRunEffort', codexEffortOptions, String(card.codexRunEffort ?? ''))
+    selectionMetric('Model', 'codexRunModel', codexModelOptions, preference.model),
+    selectionMetric('Effort', 'codexRunEffort', codexEffortOptions, preference.effort)
   );
+  const modelSelect = metadata.querySelector<HTMLSelectElement>('[data-codex-run-model]');
+  const effortSelect = metadata.querySelector<HTMLSelectElement>('[data-codex-run-effort]');
+  const persistSelection = (): void => {
+    void persistCardCodexRunPreference({
+      cardId,
+      model: modelSelect?.value ?? preference.model,
+      effort: effortSelect?.value ?? preference.effort,
+    });
+  };
+  modelSelect?.addEventListener('change', persistSelection);
+  effortSelect?.addEventListener('change', persistSelection);
 
   const latest = document.createElement('p');
   latest.className = 'codex-run-latest';
