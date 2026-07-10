@@ -96,6 +96,7 @@ const categoryBySkillName: Record<string, SkillCategory> = {
   'task-dependency': 'Implementation',
   'task-group-completeness': 'Implementation',
   'run-test-and-fix': 'Implementation',
+  'simply-execute': 'Implementation',
   'ticket-solver': 'Implementation',
   'typography-system': 'Interface',
   'ui-audit': 'Interface',
