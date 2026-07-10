@@ -153,7 +153,7 @@ function syncCardControls(group: HTMLElement, card: HTMLElement): boolean {
   const skill = document.createElement('button');
   skill.className = 'ledger-card-skill-toggle terminal-button terminal-button--compact';
   skill.type = 'button';
-  skill.dataset.action = 'open-card-skill-modal';
+  skill.dataset.action = 'open-card-process-modal';
   skill.dataset.cardId = cardId;
   skill.title = 'Run Codex skill';
   skill.setAttribute('aria-label', skill.title);

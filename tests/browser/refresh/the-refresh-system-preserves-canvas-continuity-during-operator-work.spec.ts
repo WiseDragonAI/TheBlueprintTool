@@ -186,7 +186,7 @@ test('The refresh system preserves canvas continuity during operator work.', { t
     }, targetCardId);
     writeFileSync(fixture.lifecycleSignalFile, 'release lifecycle events\n', 'utf8');
 
-    await page.getByText('Browser lifecycle note.', { exact: true }).waitFor({ state: 'visible' });
+    await page.locator('.thread-note-list').getByText('Browser lifecycle note.', { exact: true }).waitFor({ state: 'visible' });
     await page.waitForFunction(() => {
       const telemetry = (window as Window & { __coreTelemetry?: Array<{ name?: string }> }).__coreTelemetry ?? [];
       return telemetry.some((entry) => entry.name === 'thread-content-refresh-applied');
@@ -311,7 +311,7 @@ test('The refresh system preserves canvas continuity during operator work.', { t
     await modelSelect.waitFor({ state: 'visible' });
     assert.equal(await controlsMatchCapturedReferences(page), true, 'Reopening the unchanged thread remounted its controls');
     assert.equal(await modelSelect.inputValue(), 'gpt-5.3-codex');
-    assert.equal(await page.getByText('Browser lifecycle note.', { exact: true }).count(), 1);
+    assert.equal(await page.locator('.thread-note-list').getByText('Browser lifecycle note.', { exact: true }).count(), 1);
 
     const persistedLedger = JSON.parse(readFileSync(fixture.ledgerFile, 'utf8')) as LedgerDocument;
     const persistedTarget = persistedLedger.cards?.find((card) => card.id === targetCardId);
@@ -320,7 +320,7 @@ test('The refresh system preserves canvas continuity during operator work.', { t
     assert.equal(persistedTarget.codexThreadRunId, runId);
     const persistedThread = readFileSync(fixture.threadFile, 'utf8');
     assert.match(persistedThread, /Browser lifecycle note\./);
-    assert.match(persistedThread, new RegExp(escapeRegExp(runId)));
+    assert.equal((persistedThread.match(/^# AGENT$/gm) ?? []).length, 1);
     const prompt = readFileSync(fixture.promptFile, 'utf8');
     assert.match(prompt, new RegExp(escapeRegExp(fixture.ledgerFile)));
     assert.match(prompt, new RegExp(escapeRegExp(fixture.threadFile)));
@@ -392,7 +392,7 @@ function createTemporaryWorkspace(): TemporaryWorkspace {
   }, null, 2));
   writeFileSync(fakeCodexFile, [
     '#!/usr/bin/env node',
-    'import { existsSync, writeFileSync } from "node:fs";',
+    'import { appendFileSync, existsSync, writeFileSync } from "node:fs";',
     'let prompt = "";',
     'process.stdin.on("data", (chunk) => { prompt += String(chunk); });',
     'process.stdin.on("end", () => {',
@@ -400,6 +400,7 @@ function createTemporaryWorkspace(): TemporaryWorkspace {
     '  const timer = setInterval(() => {',
     `    if (!existsSync(${JSON.stringify(lifecycleSignalFile)})) return;`,
     '    clearInterval(timer);',
+    `    appendFileSync(${JSON.stringify(threadFile)}, "\\n# AGENT\\n<!-- decision-os:note {\\"id\\":\\"note-agent-1783680838228-1c5bee79\\",\\"timestamp\\":\\"2026-07-10T02:00:00.000Z\\"} -->\\n\\nBrowser lifecycle note.\\n", "utf8");`,
     '    console.log(JSON.stringify({ type: "thread.started", thread_id: "browser-thread-session" }));',
     '    console.log(JSON.stringify({ type: "item.completed", item: { id: "browser-message", type: "agent_message", status: "completed", text: "Browser lifecycle note." } }));',
     '    console.log(JSON.stringify({ type: "turn.completed" }));',

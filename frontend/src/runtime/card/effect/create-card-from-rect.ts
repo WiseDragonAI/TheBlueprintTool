@@ -12,6 +12,7 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { insertActiveLedgerCard } from '../../ledger/helper/active-ledger-geometry.js';
 import { refreshZoneAttributionCache } from '../../ledger/helper/zone-attribution-cache.js';
 import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
+import { selectTarget } from '../../selection/controller/select-target.js';
 
 export async function createCardFromRect(rect: { x: number; y: number; width: number; height: number }): Promise<void> {
   const cardId = createLedgerObjectId('card');
@@ -33,9 +34,9 @@ export async function createCardFromRect(rect: { x: number; y: number; width: nu
   if (state.activeLedger) {
     insertActiveLedgerCard(card);
     refreshZoneAttributionCache('optimistic-create-card');
-    state.selection = { cardIds: [cardId], zoneIds: [], groupIds: [] };
     telemetry('render-card-layer', { created: cardId, activeTab: state.activeTab, authority: 'optimistic-client' });
     renderCanvasSurface({ renderThreadPanel: false });
+    selectTarget('card', cardId, false);
     await commitActiveLedgerMutation({ action: 'create-card', card });
     return;
   }
@@ -54,7 +55,7 @@ export async function createCardFromRect(rect: { x: number; y: number; width: nu
     Object.assign(document.createElement('div'), { className: 'ledger-card-body', innerHTML: '<p>New description</p>' })
   );
   content.insertBefore(element, content.querySelector('.marquee'));
-  state.selection = { cardIds: [cardId], zoneIds: [], groupIds: [] };
+  selectTarget('card', cardId, false);
   telemetry('commit-static-surface-edit', { createCard: cardId, geometry: rect });
   telemetry('render-card-layer', { created: cardId });
 }

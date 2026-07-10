@@ -226,7 +226,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(controlOverlay, /edit\.title = card\.dataset\.targetLedgerId \? 'Edit ledger name' : 'Edit card title'/);
   assert.match(controlOverlay, /editBody\.dataset\.action = 'edit-card-description'/);
   assert.match(controlOverlay, /editBody\.textContent = 'edit'/);
-  assert.match(controlOverlay, /skill\.dataset\.action = 'open-card-skill-modal'/);
+  assert.match(controlOverlay, /skill\.dataset\.action = 'open-card-process-modal'/);
   assert.match(controlOverlay, /skill\.textContent = 'fx'/);
   assert.match(controlOverlay, /\? \[edit, renderLedgerCardDeleteButton\(cardId\)\]/);
   assert.match(controlOverlay, /\[skill, renderLedgerCardStatusButton\(cardId, persistedStatus, visibleStatus\), editBody, renderLedgerCardDeleteButton\(cardId\)\]/);
@@ -235,6 +235,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(actionClick, /beginLedgerCardTitleEdit\(card\)/);
   assert.match(actionClick, /if \(action === 'edit-card-description'\)/);
   assert.match(actionClick, /beginLedgerCardDescriptionEdit\(card\)/);
+  assert.match(actionClick, /if \(action === 'open-card-process-modal'\)[\s\S]*await openCardSkillModal\(actionTarget\.dataset\.cardId \?\? ''\)/);
 
   const skillModal = source('frontend/src/runtime/codex/effect/render-skill-modal.ts');
   const codexRunOptions = source('frontend/src/runtime/codex/helper/codex-run-options.ts');

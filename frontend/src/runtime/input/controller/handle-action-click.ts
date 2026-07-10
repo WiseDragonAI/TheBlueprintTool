@@ -122,7 +122,7 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     await toggleCardStatusController({ cardId: actionTarget.dataset.cardId ?? '', status });
     return;
   }
-  if (action === 'open-card-skill-modal') {
+  if (action === 'open-card-process-modal') {
     await openCardSkillModal(actionTarget.dataset.cardId ?? '');
     return;
   }

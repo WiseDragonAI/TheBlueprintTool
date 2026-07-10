@@ -615,6 +615,83 @@ test('card creation preserves canvas x and y instead of clamping to positive spa
   assert.doesNotMatch(createCard, /y:\s*Math\.max\(0,\s*rect\.y\)/);
 });
 
+test('created cards prepare their thread while the panel stays closed for A and X shortcuts', async () => {
+  installCanvasRuntimeDom();
+  const { createCardFromRect } = await import('../../src/runtime/card/effect/create-card-from-rect.js');
+  const previousFetch = globalThis.fetch;
+  const previousState = {
+    activeLedger: state.activeLedger,
+    activeLedgerId: state.activeLedgerId,
+    activeTab: state.activeTab,
+    activeTool: state.activeTool,
+    canvasMode: state.canvasMode,
+    ledgerReconciliation: state.ledgerReconciliation,
+    ledgerTabs: state.ledgerTabs,
+    ledgers: state.ledgers,
+    selection: state.selection,
+    threadId: state.threadId,
+    threadPanelOpen: state.threadPanelOpen
+  };
+  const activeLedgerRect = { x: -180, y: -95, width: 320, height: 170 };
+  const standaloneRect = { x: -75, y: -40, width: 280, height: 150 };
+
+  try {
+    state.canvasMode = 'ledger';
+    state.activeTab = 'specs';
+    state.activeLedgerId = 'specs';
+    state.ledgerTabs = [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
+    state.ledgers = state.ledgerTabs;
+    state.activeTool = 'select';
+    state.threadPanelOpen = false;
+    state.threadId = 'thread-previous';
+    state.selection = { cardIds: ['card-previous'], zoneIds: ['zone-previous'], groupIds: ['group-previous'] };
+    state.activeLedger = { cards: [], annotations: [], relationships: [], notes: {} };
+    resetCanvasReconciliation();
+    (globalThis as unknown as { fetch: unknown }).fetch = async (url: string, init: { body?: string } = {}) => {
+      assert.equal(url, '/decision-os/specs');
+      const mutation = JSON.parse(String(init.body ?? '{}')) as { action?: string; card?: Record<string, unknown> };
+      assert.equal(mutation.action, 'create-card');
+      assert.ok(mutation.card);
+      return {
+        ok: true,
+        async json() {
+          return { cards: [mutation.card], annotations: [], relationships: [], notes: {} };
+        }
+      };
+    };
+
+    await createCardFromRect(activeLedgerRect);
+
+    const activeLedgerCard = state.activeLedger.cards[0] as Record<string, unknown>;
+    const activeLedgerCardId = String(activeLedgerCard.id);
+    assert.equal(activeLedgerCard.x, activeLedgerRect.x);
+    assert.equal(activeLedgerCard.y, activeLedgerRect.y);
+    assert.deepEqual(state.selection, { cardIds: [activeLedgerCardId], zoneIds: [], groupIds: [] });
+    assert.equal(state.threadId, `thread-${activeLedgerCardId}`);
+    assert.equal(state.threadPanelOpen, false);
+
+    installCanvasRuntimeDom();
+    state.activeLedger = null;
+    state.threadPanelOpen = false;
+    state.threadId = 'thread-previous';
+    state.selection = { cardIds: ['card-previous'], zoneIds: ['zone-previous'], groupIds: ['group-previous'] };
+
+    await createCardFromRect(standaloneRect);
+
+    const standaloneCard = canvasDom.content.querySelector('.card[data-card-id]');
+    assert.ok(standaloneCard);
+    const standaloneCardId = String(standaloneCard.dataset.cardId);
+    assert.equal(standaloneCard.style.left, `${standaloneRect.x}px`);
+    assert.equal(standaloneCard.style.top, `${standaloneRect.y}px`);
+    assert.deepEqual(state.selection, { cardIds: [standaloneCardId], zoneIds: [], groupIds: [] });
+    assert.equal(state.threadId, `thread-${standaloneCardId}`);
+    assert.equal(state.threadPanelOpen, false);
+  } finally {
+    (globalThis as unknown as { fetch: unknown }).fetch = previousFetch;
+    Object.assign(state, previousState);
+  }
+});
+
 test('direct canvas pointer down clears selection before pointer up', () => {
   const pointerDown = source('frontend/src/runtime/gesture/controller/handle-pointer-down.ts');
   const pointerUp = source('frontend/src/runtime/gesture/controller/handle-pointer-up.ts');
