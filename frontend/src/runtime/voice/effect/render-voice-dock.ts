@@ -5,9 +5,11 @@
 import { voiceDockSurface } from '../component/voice-dock-surface.js';
 import { setupDecisionVoiceWaves } from './setup-decision-voice-waves.js';
 
-export function renderVoiceDock(): void {
+export function renderVoiceDock(options: { visible?: boolean } = {}): void {
   const dock = document.querySelector('.voice-panel') as HTMLElement | null;
   if (!dock) return;
+  dock.hidden = options.visible === false;
+  if (options.visible === false) return;
   if (!('dataset' in dock)) return;
   if (dock.dataset.voiceDockMounted !== 'true') {
     dock.innerHTML = voiceDockSurface();

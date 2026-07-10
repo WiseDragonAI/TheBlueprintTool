@@ -6,6 +6,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { hydrateLedgerThreadNotes, stripHydratedThreadNotes, writeThreadNotesFile } from '@backend/business/ledger/helper/thread-content-file.js';
 import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-ledger-notes.js';
 import { type NormalizedRunEvent } from '../helper/card-skill-run-event-types.js';
+import { resolveCardSkillRunOwnership } from '../helper/resolve-card-skill-run-ownership.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -29,6 +30,14 @@ export function persistCardSkillRunEvents(input: {
   // WHY: Falling back to a different ledger could leak lifecycle notes across scopes.
   if (!existsSync(input.ledgerPath)) throw new Error(`Ledger file not found: ${input.ledgerPath}`);
   const ledger = JSON.parse(readFileSync(input.ledgerPath, 'utf8')) as AnyRecord;
+  // WHAT: Keep lifecycle events for every card-owned run exclusively in its run artifacts.
+  // WHY: Conversation threads contain operator messages and direct final replies, not synthetic diagnostics.
+  if (resolveCardSkillRunOwnership({
+    ledger,
+    decisionOsRoot: input.decisionOsRoot,
+    cardId: input.cardId,
+    runId: input.runId,
+  }).found) return 0;
   const threadId = `thread-${input.cardId}`;
   const existingThreadFiles = ledger.threadFiles && typeof ledger.threadFiles === 'object' && !Array.isArray(ledger.threadFiles)
     ? ledger.threadFiles as Record<string, unknown>

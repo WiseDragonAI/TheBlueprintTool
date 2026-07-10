@@ -5,7 +5,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { appendFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync, type WriteStream } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, relative, resolve } from 'node:path';
-import { hydrateLedgerCardContent, resolveCardContentFile } from '@backend/business/ledger/helper/card-content-file.js';
+import { resolveCardContentFile } from '@backend/business/ledger/helper/card-content-file.js';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
 import { stripHydratedThreadNotes } from '@backend/business/ledger/helper/thread-content-file.js';
 import { flushCardSkillRunEventIngestor } from '../effect/flush-card-skill-run-event-ingestor.js';
@@ -13,6 +13,7 @@ import { createCardSkillRunEventIngestor } from '../effect/ingest-card-skill-run
 import { prepareCardSkillRunEventAppend } from '../effect/prepare-card-skill-run-event-append.js';
 import { buildCardSkillContinuePrompt } from '../helper/build-card-skill-continue-prompt.js';
 import { codexRunSegmentMarker } from '../helper/codex-run-segment-marker.js';
+import { resolveCardSkillRunOwnership } from '../helper/resolve-card-skill-run-ownership.js';
 import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand, resolveCodexResumeCommand } from '../helper/resolve-codex-command.js';
 import { threadMessagesAfterLastCodexEvent } from '../helper/thread-messages-after-last-codex-event.js';
 import { readCardSkillRunController } from './read-card-skill-run-controller.js';
@@ -111,17 +112,6 @@ function readRunSessionId(stdoutFile: string): string {
   return sessionId;
 }
 
-function cardReferencesRun(input: { ledger: AnyRecord; decisionOsRoot: string; cardId: string; runId: string }): boolean {
-  const hydrated = hydrateLedgerCardContent(JSON.parse(JSON.stringify(input.ledger)), input.decisionOsRoot) as { cards?: AnyRecord[] };
-  const card = (hydrated.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
-  if (!card) return false;
-  if (String(card.codexThreadRunId ?? '') === input.runId || String(card.codexRunId ?? '') === input.runId) return true;
-  if (String(card.cardType ?? '') === 'codex-skill-run' && input.cardId === `card-${safeSegment(input.runId)}`) return true;
-  const comment = card?.comment && typeof card.comment === 'object' ? card.comment as AnyRecord : {};
-  const body = String(comment.what ?? comment.body ?? comment.description ?? '');
-  return body.includes(`Codex run: ${input.runId}`);
-}
-
 function outputFileForRunCard(input: { ledger: AnyRecord; decisionOsRoot: string; cardId: string }): string {
   const cards = Array.isArray(input.ledger.cards) ? input.ledger.cards as AnyRecord[] : [];
   const card = cards.find((entry) => String(entry.id ?? '') === input.cardId);
@@ -189,7 +179,9 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   if (status.status === 'running') return fail(409, 'Run is already active.', { status: status.status, lineCount: status.lineCount });
 
   const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord & { cards?: AnyRecord[] };
-  if (!cardReferencesRun({ ledger, decisionOsRoot, cardId, runId })) return fail(404, 'Run not found on card.', { cardId });
+  if (!resolveCardSkillRunOwnership({ ledger, decisionOsRoot, cardId, runId }).found) {
+    return fail(404, 'Run not found on card.', { cardId });
+  }
   const continuation = threadMessagesAfterLastCodexEvent({ ledger, decisionOsRoot, cardId, runId, traceId });
   const messages = continuation.messages;
   logCodexContinueDebug('message-extraction', continuation.debug);

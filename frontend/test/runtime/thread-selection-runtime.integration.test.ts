@@ -235,6 +235,61 @@ test('thread scroll position persists per thread and restores after layout settl
   }
 });
 
+test('thread selection remembers tabs and keeps conversation and log scroll positions independent', () => {
+  const previousDocument = globalThis.document;
+  const previousWindow = globalThis.window;
+  const previousCustomEvent = globalThis.CustomEvent;
+  const conversation = { scrollTop: 120, scrollHeight: 900, clientHeight: 300 };
+  const log = { scrollTop: 360, scrollHeight: 1200, clientHeight: 300 };
+  (globalThis as unknown as { document: unknown }).document = {
+    querySelector(selector: string) {
+      if (selector === '.thread-panel .thread-conversation-scroll') return conversation;
+      if (selector === '.thread-panel .thread-log-scroll') return log;
+      return null;
+    }
+  };
+  (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
+  (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
+    constructor(_name: string, public options: Record<string, unknown> = {}) {}
+  };
+  try {
+    state.threadId = 'thread-card-a';
+    state.threadActiveTabByThreadId = { 'thread-card-a': 'codex-log' };
+    state.threadScrollTopByThreadId = {};
+    state.threadLogScrollTopByThreadId = {};
+    state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
+    selectThread('thread-card-b');
+    assert.equal(state.threadActiveTabByThreadId['thread-card-a'], 'codex-log');
+    assert.equal(state.threadActiveTabByThreadId['thread-card-b'], 'thread');
+    assert.equal(state.threadScrollTopByThreadId['thread-card-a'], 120);
+    assert.equal(state.threadLogScrollTopByThreadId['thread-card-a'], 360);
+
+    conversation.scrollTop = 42;
+    log.scrollTop = 88;
+    state.threadActiveTabByThreadId['thread-card-b'] = 'codex-log';
+    selectThread('thread-card-a');
+    assert.equal(state.threadActiveTabByThreadId['thread-card-a'], 'codex-log');
+    assert.equal(state.threadScrollTopByThreadId['thread-card-b'], 42);
+    assert.equal(state.threadLogScrollTopByThreadId['thread-card-b'], 88);
+
+    conversation.scrollTop = 0;
+    log.scrollTop = 0;
+    assert.equal(restoreThreadScrollPosition('thread-card-b', 'thread'), true);
+    assert.equal(restoreThreadScrollPosition('thread-card-b', 'codex-log'), true);
+    assert.equal(conversation.scrollTop, 42);
+    assert.equal(log.scrollTop, 88);
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+    (globalThis as unknown as { window: unknown }).window = previousWindow;
+    (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
+    state.threadId = '';
+    state.threadActiveTabByThreadId = {};
+    state.threadScrollTopByThreadId = {};
+    state.threadLogScrollTopByThreadId = {};
+    state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
+  }
+});
+
 test('pin-thread-feed-to-last-message scrolls the thread viewport to the newest note', () => {
   const previousDocument = globalThis.document;
   const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
@@ -576,7 +631,7 @@ test('render-thread-notes separates operator and agent speaker ownership', () =>
   }
 });
 
-test('render-thread-notes summarizes codex tool calls without showing output by default', () => {
+test('render-thread-notes projects direct conversation and excludes Codex lifecycle artifacts', () => {
   const previousDocument = globalThis.document;
   const rendered: TestElement[] = [];
   const list = {
@@ -601,37 +656,27 @@ test('render-thread-notes summarizes codex tool calls without showing output by 
     }
   };
   try {
-    const command = `/usr/bin/zsh -lc "sed -n '1,220p' /home/jbb/.codex/skills/screen-content-planner/SKILL.md"`;
     state.threadId = 'thread-card-a';
     state.activeLedger = {
       notes: {
-        'thread-card-a': [{
-          id: 'codex-run-line-9',
-          role: 'agent',
-          message: `**Tool call** \`${command}\`\nStatus: completed\nExit code: 0\n\n\`\`\`text\nvery long output\n\`\`\``,
-          status: 'completed',
-          codexKind: 'tool_call',
-          codexTool: command,
-          codexExitCode: '0'
-        }]
+        'thread-card-a': [
+          { id: 'note-operator', role: 'operator', message: 'Please inspect this card.' },
+          { id: 'note-agent', role: 'agent', message: 'Direct agent answer mentioning Codex.' },
+          { id: 'artifact-run', role: 'agent', message: 'Run artifact', codexRunId: 'codex-skill-1-run' },
+          { id: 'artifact-kind', role: 'agent', message: 'Kind artifact', codexKind: 'tool_call' },
+          { id: 'artifact-event', role: 'agent', message: 'Event artifact', codexEventType: 'item.completed' },
+          { id: 'artifact-line', role: 'agent', message: 'Line artifact', codexLine: '4' },
+          { id: 'artifact-tool', role: 'agent', message: 'Tool artifact', codexTool: 'rg TODO' },
+          { id: 'artifact-exit', role: 'agent', message: 'Exit artifact', codexExitCode: '0' },
+          { id: 'codex-skill-1-run-line-9', role: 'agent', message: 'Deterministic id artifact' },
+        ]
       }
     };
     renderThreadNotes();
-    assert.equal(rendered.length, 1);
-    assert.equal(rendered[0].className, 'thread-note is-codex-run-event is-codex-tool_call is-agent');
-    const details = rendered[0].children[0];
-    assert.equal(details.tagName, 'details');
-    assert.equal(details.className, 'codex-tool-call');
-    assert.equal(details.dataset.codexToolAction, 'read');
-    const summary = details.children[0];
-    assert.equal(summary.tagName, 'summary');
-    assert.equal(summary.className, 'codex-tool-call-summary');
-    assert.equal(summary.children[0].textContent, 'Read');
-    assert.match(summary.children[1].textContent, /^sed -n/);
-    assert.equal(summary.children[2].textContent, 'completed / code 0');
-    const rawBody = details.children[1];
-    assert.equal(rawBody.className, 'ledger-card-body thread-note-message codex-tool-call-details');
-    assert.equal(rawBody.children.some((child) => child.className === 'ledger-card-code-block'), true);
+    assert.equal(rendered.length, 2);
+    assert.deepEqual(rendered.map((item) => item.className), ['thread-note is-operator', 'thread-note is-agent']);
+    assert.equal(rendered[0].children[0].children[0].children[0].textContent, 'Please inspect this card.');
+    assert.equal(rendered[1].children[0].children[0].children[0].textContent, 'Direct agent answer mentioning Codex.');
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
     state.threadId = '';

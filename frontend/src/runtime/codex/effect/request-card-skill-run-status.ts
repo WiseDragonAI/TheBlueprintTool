@@ -1,11 +1,16 @@
 /**
- * WHAT: Requests the derived status for one card-scoped Codex skill run.
- * WHY: The card widget polls server-parsed JSONL progress without owning run persistence.
+ * WHAT: Requests and normalizes derived status for one card-scoped Codex run.
+ * WHY: Widgets and thread logs need the same stable incremental JSONL and diagnostic contract.
  */
 export type CardSkillRunStatus = 'running' | 'complete' | 'failed' | 'cancelled' | 'unknown';
+export type CardSkillRunEventSource = 'jsonl' | 'stderr';
+export type CardSkillRunEventSeverity = 'info' | 'warning' | 'error';
 
 export type CardSkillRunEvent = {
+  runId: string;
   line: number;
+  source: CardSkillRunEventSource;
+  sourceLine: number;
   type: string;
   kind: string;
   title: string;
@@ -13,7 +18,9 @@ export type CardSkillRunEvent = {
   status: string;
   itemId: string;
   tool: string;
+  output: string;
   exitCode: string;
+  severity: CardSkillRunEventSeverity;
   persist: boolean;
 };
 
@@ -26,6 +33,8 @@ export type CardSkillRunMetadata = {
 
 export type CardSkillRunSummary = {
   ok: boolean;
+  runId: string;
+  runKind: 'thread' | 'card' | 'unknown';
   status: CardSkillRunStatus;
   startedAt: string;
   elapsedMs: number;
@@ -35,36 +44,107 @@ export type CardSkillRunSummary = {
   agentMessageCount: number;
   fileChangeCount: number;
   thinkingCount: number;
+  warningCount: number;
+  errorCount: number;
+  transportStatus: 'ok' | 'degraded' | 'unknown';
   persistedEventCount: number;
   metadata: CardSkillRunMetadata;
   latestEvent: CardSkillRunEvent | null;
   events: CardSkillRunEvent[];
+  diagnostics: CardSkillRunEvent[];
   error?: string;
 };
 
+const emptyMetadata: CardSkillRunMetadata = {
+  sourceCardTitle: '',
+  sourceThreadId: '',
+  codexModel: '',
+  codexEffort: ''
+};
+
+function normalizedEvent(value: unknown, runId: string): CardSkillRunEvent | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const event = value as Partial<CardSkillRunEvent>;
+  const source = event.source === 'stderr' ? 'stderr' : 'jsonl';
+  const sourceLine = Math.max(0, Number(event.sourceLine ?? event.line ?? 0) || 0);
+  const line = Math.max(0, Number(event.line ?? sourceLine) || 0);
+  return {
+    runId: String(event.runId ?? runId),
+    line,
+    source,
+    sourceLine,
+    type: String(event.type ?? ''),
+    kind: String(event.kind ?? ''),
+    title: String(event.title ?? ''),
+    text: String(event.text ?? ''),
+    status: String(event.status ?? ''),
+    itemId: String(event.itemId ?? ''),
+    tool: String(event.tool ?? ''),
+    output: String(event.output ?? ''),
+    exitCode: String(event.exitCode ?? ''),
+    severity: event.severity === 'error' ? 'error' : event.severity === 'warning' ? 'warning' : 'info',
+    persist: Boolean(event.persist),
+  };
+}
+
+function normalizedEvents(value: unknown, runId: string): CardSkillRunEvent[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((event) => normalizedEvent(event, runId)).filter((event): event is CardSkillRunEvent => Boolean(event));
+}
+
+function unavailableSummary(runId: string, since: number, error: string): CardSkillRunSummary {
+  return {
+    ok: false,
+    runId,
+    runKind: 'unknown',
+    status: 'unknown',
+    startedAt: '',
+    elapsedMs: 0,
+    lineCount: since,
+    nextSince: since,
+    toolCallCount: 0,
+    agentMessageCount: 0,
+    fileChangeCount: 0,
+    thinkingCount: 0,
+    warningCount: 0,
+    errorCount: 0,
+    transportStatus: 'unknown',
+    persistedEventCount: 0,
+    metadata: emptyMetadata,
+    latestEvent: null,
+    events: [],
+    diagnostics: [],
+    error,
+  };
+}
+
 export async function requestCardSkillRunStatus(input: { ledgerId: string; cardId: string; runId: string; since?: number; traceId?: string }): Promise<CardSkillRunSummary> {
-  const params = new URLSearchParams({
-    ledgerId: input.ledgerId,
-    cardId: input.cardId,
-    since: String(Math.max(0, Number(input.since ?? 0) || 0))
-  });
+  const since = Math.max(0, Number(input.since ?? 0) || 0);
+  const params = new URLSearchParams({ ledgerId: input.ledgerId, cardId: input.cardId, since: String(since) });
   if (input.traceId) params.set('traceId', input.traceId);
   const response = await fetch(`/api/codex/skills/runs/${encodeURIComponent(input.runId)}?${params.toString()}`).catch(() => undefined);
-  const emptyMetadata = { sourceCardTitle: '', sourceThreadId: '', codexModel: '', codexEffort: '' };
-  if (!response) return { ok: false, status: 'unknown', startedAt: '', elapsedMs: 0, lineCount: 0, nextSince: 0, toolCallCount: 0, agentMessageCount: 0, fileChangeCount: 0, thinkingCount: 0, persistedEventCount: 0, metadata: emptyMetadata, latestEvent: null, events: [], error: 'Request failed.' };
+  if (!response) return unavailableSummary(input.runId, since, 'Request failed.');
   const body = await response.json().catch(() => ({})) as Partial<CardSkillRunSummary>;
+  const runId = String(body.runId ?? input.runId);
   const metadata = body.metadata && typeof body.metadata === 'object' ? body.metadata : emptyMetadata;
+  const events = normalizedEvents(body.events, runId);
+  const diagnostics = normalizedEvents(body.diagnostics, runId);
   return {
     ok: response.ok && body.ok !== false,
+    runId,
+    runKind: body.runKind === 'thread' ? 'thread' : body.runKind === 'card' ? 'card' : 'unknown',
     status: body.status ?? 'unknown',
     startedAt: String(body.startedAt ?? ''),
     elapsedMs: Number(body.elapsedMs ?? 0),
     lineCount: Number(body.lineCount ?? 0),
-    nextSince: Number(body.nextSince ?? body.lineCount ?? 0),
+    nextSince: Number(body.nextSince ?? body.lineCount ?? since),
     toolCallCount: Number(body.toolCallCount ?? 0),
     agentMessageCount: Number(body.agentMessageCount ?? 0),
     fileChangeCount: Number(body.fileChangeCount ?? 0),
     thinkingCount: Number(body.thinkingCount ?? 0),
+    warningCount: Number(body.warningCount ?? 0),
+    errorCount: Number(body.errorCount ?? 0),
+    transportStatus: body.transportStatus === 'degraded' ? 'degraded' : body.transportStatus === 'ok' ? 'ok' : 'unknown',
     persistedEventCount: Number(body.persistedEventCount ?? 0),
     metadata: {
       sourceCardTitle: String(metadata.sourceCardTitle ?? ''),
@@ -72,8 +152,9 @@ export async function requestCardSkillRunStatus(input: { ledgerId: string; cardI
       codexModel: String(metadata.codexModel ?? ''),
       codexEffort: String(metadata.codexEffort ?? ''),
     },
-    latestEvent: body.latestEvent ?? null,
-    events: Array.isArray(body.events) ? body.events : [],
+    latestEvent: normalizedEvent(body.latestEvent, runId),
+    events,
+    diagnostics,
     error: String(body.error ?? ''),
   };
 }

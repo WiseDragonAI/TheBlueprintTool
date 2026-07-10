@@ -6,7 +6,8 @@ const threadJumpScrollHandlers = new WeakMap<HTMLElement, EventListener>();
 
 function threadChatElement(): HTMLElement | null {
   if (typeof document === 'undefined') return null;
-  return document.querySelector('.thread-panel .chat') as HTMLElement | null;
+  return (document.querySelector('.thread-panel .thread-conversation-scroll')
+    ?? document.querySelector('.thread-panel .chat')) as HTMLElement | null;
 }
 
 function threadJumpFrameHost(chat = threadChatElement()): HTMLElement | null {
@@ -28,6 +29,12 @@ export function syncThreadJumpButtonVisibility(): void {
   const chat = threadChatElement();
   const button = threadJumpButton();
   if (!chat || !button) return;
+  const conversationPanel = document.querySelector('.thread-conversation-panel') as HTMLElement | null;
+  if (conversationPanel?.hidden) {
+    button.hidden = true;
+    button.setAttribute('aria-hidden', 'true');
+    return;
+  }
   const scrollTop = Math.max(0, Number(chat.scrollTop ?? 0));
   const scrollHeight = Math.max(0, Number(chat.scrollHeight ?? 0));
   const clientHeight = Math.max(0, Number(chat.clientHeight ?? 0));
@@ -38,12 +45,18 @@ export function syncThreadJumpButtonVisibility(): void {
   button.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
 }
 
-export function renderThreadJumpButton(): void {
+export function renderThreadJumpButton(visible = true): void {
   const chat = threadChatElement();
   const host = threadJumpFrameHost(chat);
   if (!chat || !host) return;
   let frame = threadJumpFrame();
   let button = threadJumpButton();
+  if (!visible && frame) frame.hidden = true;
+  if (!visible && button) {
+    button.hidden = true;
+    button.setAttribute('aria-hidden', 'true');
+    return;
+  }
   if (!frame) {
     frame = document.createElement('div');
     frame.className = 'thread-jump-bottom-frame';
@@ -51,6 +64,7 @@ export function renderThreadJumpButton(): void {
   if (frame.parentElement !== host) {
     host.append(frame);
   }
+  frame.hidden = false;
   if (!button) {
     button = document.createElement('button');
     button.className = 'thread-jump-bottom';

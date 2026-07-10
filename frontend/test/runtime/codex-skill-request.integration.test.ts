@@ -10,8 +10,10 @@ import { requestCardSkillRunCancel } from '../../src/runtime/codex/effect/reques
 import { requestCardSkillRunContinue } from '../../src/runtime/codex/effect/request-card-skill-run-continue.js';
 import { requestCardSkillRunStatus } from '../../src/runtime/codex/effect/request-card-skill-run-status.js';
 import { requestThreadCodexProcess } from '../../src/runtime/codex/effect/request-thread-codex-process.js';
-import { bindCardSkillRunWidget, resumeExternallyStartedCardSkillRun } from '../../src/runtime/codex/effect/poll-card-skill-run.js';
-import { cardCodexRunId } from '../../src/runtime/codex/helper/card-codex-run-id.js';
+import { bindCardSkillRunLogConsumer, bindCardSkillRunWidget, resumeExternallyStartedCardSkillRun } from '../../src/runtime/codex/effect/poll-card-skill-run.js';
+import type { CardSkillRunEvent, CardSkillRunStatus, CardSkillRunSummary } from '../../src/runtime/codex/effect/request-card-skill-run-status.js';
+import { cardCodexRunId, cardCodexThreadRunId } from '../../src/runtime/codex/helper/card-codex-run-id.js';
+import { groupSequentialToolCalls, mergeThreadRunEvents } from '../../src/runtime/codex/helper/thread-run-log.js';
 import { threadCodexCardId } from '../../src/runtime/codex/helper/thread-codex-card-id.js';
 import { state } from '../../src/runtime/state.js';
 
@@ -60,6 +62,26 @@ function fakeCodexRunWidget(): HTMLElement & { nodes: Record<string, FakeNode> }
       return nodes[selector] ?? null;
     }
   } as unknown as HTMLElement & { nodes: Record<string, FakeNode> };
+}
+
+function runEvent(input: Partial<CardSkillRunEvent> & { line: number; kind: string }): CardSkillRunEvent {
+  return {
+    runId: input.runId ?? 'codex-skill-5000-log',
+    line: input.line,
+    source: input.source ?? 'jsonl',
+    sourceLine: input.sourceLine ?? input.line,
+    type: input.type ?? 'item.completed',
+    kind: input.kind,
+    title: input.title ?? input.tool ?? input.kind,
+    text: input.text ?? '',
+    status: input.status ?? '',
+    itemId: input.itemId ?? '',
+    tool: input.tool ?? '',
+    output: input.output ?? '',
+    exitCode: input.exitCode ?? '',
+    severity: input.severity ?? 'info',
+    persist: input.persist ?? false,
+  };
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {
@@ -161,6 +183,8 @@ test('requestCardSkillRunStatus queries derived run progress', async () => {
       assert.equal(url, '/api/codex/skills/runs/codex-skill-1000-abcd?ledgerId=specs&cardId=card-a&since=4');
       return new Response(JSON.stringify({
         ok: true,
+        runId: 'codex-skill-1000-abcd',
+        runKind: 'thread',
         status: 'running',
         startedAt: '2026-07-08T00:00:00.000Z',
         elapsedMs: 1200,
@@ -170,10 +194,14 @@ test('requestCardSkillRunStatus queries derived run progress', async () => {
         agentMessageCount: 1,
         fileChangeCount: 0,
         thinkingCount: 1,
+        warningCount: 1,
+        errorCount: 2,
+        transportStatus: 'degraded',
         persistedEventCount: 2,
         metadata: { sourceCardTitle: 'Source Card', sourceThreadId: '', codexModel: 'gpt-5.5', codexEffort: 'xhigh' },
-        latestEvent: { title: 'rg TODO' },
-        events: []
+        latestEvent: { line: 8, source: 'jsonl', sourceLine: 8, kind: 'tool_call', title: 'rg TODO', output: 'match', severity: 'info' },
+        events: [{ line: 8, source: 'jsonl', sourceLine: 8, kind: 'tool_call', title: 'rg TODO', output: 'match', severity: 'info' }],
+        diagnostics: [{ line: 2, source: 'stderr', sourceLine: 2, kind: 'transport', title: 'Transport degraded', text: 'connection lost', severity: 'warning' }]
       }), {
         status: 200,
         headers: { 'content-type': 'application/json' }
@@ -186,7 +214,170 @@ test('requestCardSkillRunStatus queries derived run progress', async () => {
     assert.equal(result.startedAt, '2026-07-08T00:00:00.000Z');
     assert.equal(result.toolCallCount, 2);
     assert.equal(result.nextSince, 8);
+    assert.equal(result.runKind, 'thread');
+    assert.equal(result.warningCount, 1);
+    assert.equal(result.errorCount, 2);
+    assert.equal(result.transportStatus, 'degraded');
+    assert.equal(result.events[0].runId, 'codex-skill-1000-abcd');
+    assert.equal(result.events[0].output, 'match');
+    assert.equal(result.diagnostics[0].source, 'stderr');
     assert.deepEqual(result.metadata, { sourceCardTitle: 'Source Card', sourceThreadId: '', codexModel: 'gpt-5.5', codexEffort: 'xhigh' });
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('thread run reducer coalesces tool lifecycles, deduplicates diagnostics, and preserves group keys', () => {
+  const tool = (itemId: string, line: number, status: string, output = '') => runEvent({
+    line,
+    kind: 'tool_call',
+    itemId,
+    type: status === 'started' ? 'item.started' : 'item.completed',
+    status: status === 'started' ? 'in_progress' : status,
+    tool: `rg ${itemId}`,
+    output,
+  });
+  const lifecycle: CardSkillRunEvent[] = [];
+  for (let index = 1; index <= 4; index += 1) {
+    lifecycle.push(tool(`tool-${index}`, index * 2 - 1, 'started'));
+    lifecycle.push(tool(`tool-${index}`, index * 2, 'completed', `output-${index}`));
+  }
+  lifecycle.push(runEvent({ line: 9, kind: 'thinking', itemId: 'thought-1', title: 'Codex thinking', text: 'Check the result.' }));
+  for (let index = 5; index <= 6; index += 1) {
+    lifecycle.push(tool(`tool-${index}`, index * 2, 'started'));
+    lifecycle.push(tool(`tool-${index}`, index * 2 + 1, 'completed', `output-${index}`));
+  }
+  const diagnostic = runEvent({ line: 1, source: 'stderr', sourceLine: 1, kind: 'transport', title: 'Transport degraded', text: 'connection lost', severity: 'warning' });
+  const first = mergeThreadRunEvents([], [...lifecycle, diagnostic], 'codex-skill-5000-log');
+  assert.equal(first.events.filter((event) => event.kind === 'tool_call').length, 6);
+  assert.equal(Object.keys(first.tools).length, 6);
+  assert.equal(first.events[0].line, 1);
+  assert.equal(first.events[0].status, 'completed');
+  assert.equal(first.events[0].output, 'output-1');
+  const firstGroups = groupSequentialToolCalls(first.events).filter((block) => block.kind === 'tool-group');
+  assert.deepEqual(firstGroups.map((group) => group.tools.length), [4, 2]);
+
+  const replay = mergeThreadRunEvents(first.events, [lifecycle[1], diagnostic], 'codex-skill-5000-log');
+  assert.equal(replay.changedEventKeys.length, 0);
+  assert.deepEqual(replay.events, first.events);
+  assert.deepEqual(
+    groupSequentialToolCalls(replay.events).filter((block) => block.kind === 'tool-group').map((group) => group.key),
+    firstGroups.map((group) => group.key)
+  );
+
+  const missingIds = mergeThreadRunEvents([], [
+    runEvent({ line: 30, kind: 'tool_call', type: 'item.started', status: 'in_progress', tool: 'one' }),
+    runEvent({ line: 31, kind: 'tool_call', type: 'item.completed', status: 'completed', tool: 'two' }),
+  ], 'codex-skill-5000-log');
+  assert.equal(Object.keys(missingIds.tools).length, 2);
+  assert.notEqual(missingIds.events[0].eventKey, missingIds.events[1].eventKey);
+});
+
+test('thread log consumer shares one advancing poller across rerenders and stops on every terminal state', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousSetTimeout = globalThis.setTimeout;
+  const previousClearTimeout = globalThis.clearTimeout;
+  const previousWindow = (globalThis as unknown as { window?: unknown }).window;
+  const previousCustomEvent = (globalThis as unknown as { CustomEvent?: unknown }).CustomEvent;
+  let timerId = 0;
+  const timers = new Map<number, { callback: () => void; delay: number }>();
+  const requests: string[] = [];
+  const received: string[] = [];
+  let responseStatuses: CardSkillRunStatus[] = ['running', 'complete'];
+  let responseIndex = 0;
+  const flush = async () => {
+    for (let index = 0; index < 12; index += 1) await Promise.resolve();
+  };
+  const runNextTimer = async (delay: number) => {
+    const entry = [...timers.entries()].find(([, timer]) => timer.delay === delay);
+    assert.ok(entry, `Expected a scheduled ${delay} ms timer.`);
+    timers.delete(entry[0]);
+    entry[1].callback();
+    await flush();
+  };
+  try {
+    (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
+    (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
+      constructor(_name: string, public detail: unknown = undefined) {}
+    };
+    globalThis.setTimeout = ((callback: () => void, delay = 0) => {
+      const id = ++timerId;
+      timers.set(id, { callback, delay: Number(delay) });
+      return id as unknown as ReturnType<typeof setTimeout>;
+    }) as typeof setTimeout;
+    globalThis.clearTimeout = ((id: ReturnType<typeof setTimeout>) => {
+      timers.delete(Number(id));
+    }) as typeof clearTimeout;
+    globalThis.fetch = (async (url: string) => {
+      requests.push(url);
+      const status = responseStatuses[Math.min(responseIndex, responseStatuses.length - 1)];
+      responseIndex += 1;
+      const lineCount = responseIndex * 2;
+      return new Response(JSON.stringify({
+        ok: true,
+        runId: 'codex-skill-6000-shared',
+        runKind: 'thread',
+        status,
+        lineCount,
+        nextSince: lineCount,
+        events: [runEvent({ runId: 'codex-skill-6000-shared', line: lineCount, kind: 'run_status', status })],
+        diagnostics: [],
+        metadata: {}
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+
+    const input = { ledgerId: 'specs', cardId: 'card-shared', runId: 'codex-skill-6000-shared', consumerId: 'thread-log:thread-card-shared' };
+    bindCardSkillRunLogConsumer({ ...input, onSummary: (summary) => received.push(`stale:${summary.status}`) });
+    bindCardSkillRunLogConsumer({ ...input, onSummary: (summary) => received.push(`current:${summary.status}`) });
+    assert.deepEqual([...timers.values()].map((timer) => timer.delay), [0]);
+    await runNextTimer(0);
+    assert.deepEqual(received, ['current:running']);
+    assert.equal(requests[0], '/api/codex/skills/runs/codex-skill-6000-shared?ledgerId=specs&cardId=card-shared&since=0');
+    assert.deepEqual([...timers.values()].map((timer) => timer.delay), [1000]);
+    await runNextTimer(1000);
+    assert.deepEqual(received, ['current:running', 'current:complete']);
+    assert.equal(requests[1], '/api/codex/skills/runs/codex-skill-6000-shared?ledgerId=specs&cardId=card-shared&since=2');
+    assert.equal(timers.size, 0);
+
+    for (const status of ['failed', 'cancelled'] as CardSkillRunStatus[]) {
+      responseStatuses = [status];
+      responseIndex = 0;
+      const runId = `codex-skill-6001-${status}`;
+      bindCardSkillRunLogConsumer({
+        ledgerId: 'specs', cardId: `card-${status}`, runId, consumerId: `thread-log:${status}`,
+        onSummary: (summary) => received.push(`${status}:${summary.status}`)
+      });
+      await runNextTimer(0);
+      assert.equal(received.at(-1), `${status}:${status}`);
+      assert.equal(timers.size, 0);
+    }
+  } finally {
+    globalThis.fetch = previousFetch;
+    globalThis.setTimeout = previousSetTimeout;
+    globalThis.clearTimeout = previousClearTimeout;
+    (globalThis as unknown as { window?: unknown }).window = previousWindow;
+    (globalThis as unknown as { CustomEvent?: unknown }).CustomEvent = previousCustomEvent;
+  }
+});
+
+test('thread log consumer delivers unavailable state before stopping its timer', async () => {
+  const previousFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (async () => new Response(JSON.stringify({ ok: false, error: 'Run unavailable.' }), {
+      status: 503,
+      headers: { 'content-type': 'application/json' }
+    })) as typeof fetch;
+    let summary: CardSkillRunSummary | undefined;
+    bindCardSkillRunLogConsumer({
+      ledgerId: 'specs', cardId: 'card-unavailable', runId: 'codex-skill-7000-unavailable', consumerId: 'thread-log:unavailable',
+      onSummary: (value) => { summary = value; }
+    });
+    await waitFor(() => Boolean(summary));
+    assert.equal(summary?.ok, false);
+    assert.equal(summary?.status, 'unknown');
+    assert.equal(summary?.error, 'Run unavailable.');
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    assert.equal(summary?.status, 'unknown');
   } finally {
     globalThis.fetch = previousFetch;
   }
@@ -427,4 +618,6 @@ test('cardCodexRunId falls back to the durable output card id', () => {
     id: 'card-result',
     comment: { what: 'Codex run: codex-skill-2000-efgh' }
   }), 'codex-skill-2000-efgh');
+  assert.equal(cardCodexThreadRunId({ codexThreadRunId: 'codex-skill-9999-thread' }), 'codex-skill-9999-thread');
+  assert.equal(cardCodexThreadRunId({ codexRunId: 'codex-skill-9999-card' }), '');
 });

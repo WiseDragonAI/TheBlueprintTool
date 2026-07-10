@@ -116,7 +116,7 @@
   margin-top: 12px;
 }
 
-.zone-color-edit, .card button, .thread-panel button {
+.zone-color-edit, .card button, .thread-panel button:not(.thread-tab):not(.terminal-button) {
   position: relative;
   z-index: 2;
   border: 1px solid var(--line);
@@ -154,8 +154,8 @@
 .zone-color-edit:focus-visible,
 .card button:hover,
 .card button:focus-visible,
-.thread-panel button:hover,
-.thread-panel button:focus-visible,
+.thread-panel button:not(.thread-tab):not(.terminal-button):hover,
+.thread-panel button:not(.thread-tab):not(.terminal-button):focus-visible,
 .card-actions button:focus-visible {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent), transparent 90%);
@@ -165,7 +165,7 @@
 
 .zone-color-edit:hover,
 .card button:hover,
-.thread-panel button:hover {
+.thread-panel button:not(.thread-tab):not(.terminal-button):hover {
   transform: translateY(-1px);
 }
 

@@ -38,6 +38,9 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   const controlsCss = readFileSync(new URL('frontend/assets/canvas/terminal-chat-controls.css', root), 'utf8');
   const accentEffect = readFileSync(new URL('frontend/src/runtime/thread/effect/apply-thread-accent.ts', root), 'utf8');
   const threadNotesRenderer = readFileSync(new URL('frontend/src/runtime/thread/effect/render-thread-notes.ts', root), 'utf8');
+  const threadPanelRenderer = readFileSync(new URL('frontend/src/runtime/thread/effect/render-thread-panel.ts', root), 'utf8');
+  const threadLogRenderer = readFileSync(new URL('frontend/src/runtime/thread/effect/render-thread-codex-log.ts', root), 'utf8');
+  const indexHtml = readFileSync(new URL('frontend/index.html', root), 'utf8');
   const mediaRenderer = readFileSync(new URL('frontend/src/runtime/ledger/component/render-ledger-card-media.ts', root), 'utf8');
   assert.match(shellCss, /-34px 0 68px rgba\(0, 0, 0, 0\.86\)/);
   assert.match(threadCss, /voice-panel[\s\S]*--thread-accent/);
@@ -53,6 +56,14 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   assert.match(threadCss, /thread-note-message \.ledger-card-heading[\s\S]*--thread-heading-color/);
   assert.match(threadCss, /thread-note-message \.ledger-card-hr[\s\S]*border-top-color: rgba\(255, 255, 255, 0\.18\)/);
   assert.match(threadCss, /thread-feed\s*{[\s\S]*min-width: 0;[\s\S]*min-height: 0;/);
+  assert.match(threadCss, /thread-heading\s*{[\s\S]*position: sticky;[\s\S]*grid-template-rows: minmax\(22px, auto\) auto;/);
+  assert.match(threadCss, /thread-toolbar\s*{[\s\S]*flex-wrap: wrap;[\s\S]*white-space: nowrap;/);
+  assert.match(threadCss, /thread-actions\s*{[\s\S]*grid-template-columns: minmax\(112px, 1fr\) 84px auto;/);
+  assert.match(threadCss, /thread-tab\[aria-selected="true"\][\s\S]*box-shadow:/);
+  assert.match(threadCss, /thread-conversation-scroll,[\s\S]*thread-log-scroll[\s\S]*overflow: auto;/);
+  assert.match(threadCss, /codex-log-status\[data-run-status="failed"\],[\s\S]*border-left-color: #ff6473/);
+  assert.match(threadCss, /codex-tool-group-summary:focus-visible,[\s\S]*outline: 2px solid/);
+  assert.doesNotMatch(threadCss, /thread-note\.is-codex-run-event/);
   assert.match(threadCss, /thread-jump-bottom-frame\s*{[\s\S]*position: absolute;[\s\S]*right: 18px;[\s\S]*bottom: 16px;/);
   assert.match(threadCss, /thread-jump-bottom\s*{[\s\S]*width: 34px;[\s\S]*height: 34px;/);
   assert.match(threadCss, /thread-jump-bottom:hover\s*{[\s\S]*transform: translateY\(-1px\)/);
@@ -83,6 +94,12 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   assert.match(threadNotesRenderer, /imageSizes: threadImageSizes\(note\.imageSizes\)/);
   assert.match(threadNotesRenderer, /sendActiveLedgerMutation\(\{[\s\S]*action: 'update-note'[\s\S]*imageSizes/);
   assert.doesNotMatch(threadNotesRenderer, /input\.note\.optimistic\)\s*return/);
+  assert.doesNotMatch(threadNotesRenderer, /codexKind|renderCodexToolCallNote/);
+  assert.match(threadPanelRenderer, /threadTabOrder: ThreadPanelTab\[\] = \['thread', 'codex-log'\]/);
+  assert.match(threadPanelRenderer, /event\.key === 'ArrowRight'[\s\S]*event\.key === 'ArrowLeft'[\s\S]*event\.key === 'Home'[\s\S]*event\.key === 'End'/);
+  assert.match(threadLogRenderer, /No Codex run for this thread\./);
+  assert.match(threadLogRenderer, /document\.createElement\('details'\)/);
+  assert.match(indexHtml, /role="tablist"[\s\S]*role="tab"[\s\S]*role="tabpanel"/);
   assert.match(mediaRenderer, /mediaSurface !== 'thread'[\s\S]*watchContainedImageSizing\(shell\)/);
   assert.match(mediaRenderer, /renderThreadImageResizeHandle\(shell, options, sizeSource\)/);
 });

@@ -11,7 +11,9 @@ type Poller = {
   ledgerId: string;
   cardId: string;
   runId: string;
-  element: HTMLElement;
+  element: HTMLElement | null;
+  consumers: Map<string, (summary: CardSkillRunSummary) => void>;
+  historyEvents: CardSkillRunSummary['events'];
   since: number;
   startedAtMs: number;
   timer: ReturnType<typeof setTimeout> | null;
@@ -31,6 +33,41 @@ type ClockHandle =
 
 const pollers = new Map<string, Poller>();
 const terminalSummaries = new Map<string, CardSkillRunSummary>();
+const runConsumers = new Map<string, Map<string, (summary: CardSkillRunSummary) => void>>();
+
+function consumersFor(key: string): Map<string, (summary: CardSkillRunSummary) => void> {
+  let consumers = runConsumers.get(key);
+  if (!consumers) {
+    consumers = new Map();
+    runConsumers.set(key, consumers);
+  }
+  return consumers;
+}
+
+function isTerminalStatus(status: CardSkillRunSummary['status']): boolean {
+  return status === 'complete' || status === 'failed' || status === 'cancelled';
+}
+
+function eventPhysicalKey(event: CardSkillRunSummary['events'][number]): string {
+  return `${event.runId}:${event.source}:${event.sourceLine}`;
+}
+
+function accumulateRunEvents(poller: Poller, events: CardSkillRunSummary['events']): void {
+  const known = new Map(poller.historyEvents.map((event, index) => [eventPhysicalKey(event), index]));
+  for (const event of events) {
+    const index = known.get(eventPhysicalKey(event));
+    if (index === undefined) {
+      known.set(eventPhysicalKey(event), poller.historyEvents.length);
+      poller.historyEvents.push(event);
+    } else {
+      poller.historyEvents[index] = event;
+    }
+  }
+}
+
+function notifyConsumers(poller: Poller, summary: CardSkillRunSummary): void {
+  for (const consumer of poller.consumers.values()) consumer(summary);
+}
 
 function continueTraceId(runId: string): string {
   const randomId = typeof globalThis.crypto?.randomUUID === 'function'
@@ -190,12 +227,13 @@ function pollerDebugState(poller: Poller): Record<string, unknown> {
     terminal: poller.terminal,
     inFlight: poller.inFlight,
     continueInFlight: poller.continueInFlight,
-    datasetStatus: poller.element.dataset.runStatus ?? '',
+    datasetStatus: poller.element?.dataset.runStatus ?? '',
+    consumerCount: poller.consumers.size,
   };
 }
 
 function paintFrontendClock(poller: Poller): void {
-  if (poller.terminal) return;
+  if (poller.terminal || !poller.element) return;
   setText(poller.element, '[data-codex-run-timer]', durationLabel(Date.now() - poller.startedAtMs));
 }
 
@@ -204,7 +242,7 @@ function scheduleClockFrame(poller: Poller): void {
   const tick = (): void => {
     poller.clock = null;
     if (poller.terminal) return;
-    if (!globalThis.document?.contains(poller.element)) return;
+    if (!poller.element || !globalThis.document?.contains(poller.element)) return;
     const now = Date.now();
     if (now - poller.lastClockPaintMs >= 33) {
       poller.lastClockPaintMs = now;
@@ -255,6 +293,7 @@ function setNewSessionButtonState(button: HTMLButtonElement, state: 'ready' | 's
 }
 
 function paintExternallyStartedRun(poller: Poller, latestLabel = 'Continuing session'): void {
+  if (!poller.element) return;
   poller.terminal = false;
   poller.since = 0;
   poller.detachedChecks = 0;
@@ -276,6 +315,7 @@ function paintExternallyStartedRun(poller: Poller, latestLabel = 'Continuing ses
 }
 
 function bindCancelButton(poller: Poller): void {
+  if (!poller.element) return;
   const button = cancelButton(poller.element);
   if (!button) return;
   button.onclick = (event): void => {
@@ -287,6 +327,7 @@ function bindCancelButton(poller: Poller): void {
 }
 
 function bindContinueButton(poller: Poller): void {
+  if (!poller.element) return;
   const button = continueButton(poller.element);
   if (!button) return;
   button.onclick = (event): void => {
@@ -298,6 +339,7 @@ function bindContinueButton(poller: Poller): void {
 }
 
 function bindNewSessionButton(poller: Poller): void {
+  if (!poller.element) return;
   const button = newSessionButton(poller.element);
   if (!button) return;
   button.onclick = (event): void => {
@@ -309,7 +351,7 @@ function bindNewSessionButton(poller: Poller): void {
 }
 
 async function cancelRun(poller: Poller): Promise<void> {
-  if (poller.terminal || poller.cancelInFlight) return;
+  if (!poller.element || poller.terminal || poller.cancelInFlight) return;
   const button = cancelButton(poller.element);
   if (!button) return;
   poller.cancelInFlight = true;
@@ -327,7 +369,7 @@ async function cancelRun(poller: Poller): Promise<void> {
 }
 
 async function continueRun(poller: Poller, newSession: boolean): Promise<void> {
-  if (poller.continueInFlight || poller.inFlight) return;
+  if (!poller.element || poller.continueInFlight || poller.inFlight) return;
   const button = newSession ? newSessionButton(poller.element) : continueButton(poller.element);
   if (!button) return;
   const key = pollerKey(poller);
@@ -340,6 +382,7 @@ async function continueRun(poller: Poller, newSession: boolean): Promise<void> {
   poller.continueInFlight = true;
   poller.terminal = false;
   poller.since = 0;
+  poller.historyEvents = [];
   poller.detachedChecks = 0;
   poller.startedAtMs = Date.now();
   terminalSummaries.delete(key);
@@ -388,14 +431,21 @@ async function continueRun(poller: Poller, newSession: boolean): Promise<void> {
 
 async function poll(poller: Poller): Promise<void> {
   const key = pollerKey(poller);
-  if (!globalThis.document?.contains(poller.element)) {
-    poller.detachedChecks += 1;
-    if (poller.detachedChecks < 4) schedulePoll(poller, 250);
-    else stopPoller(key);
+  if (poller.element && !globalThis.document?.contains(poller.element)) {
+    if (poller.consumers.size > 0) poller.element = null;
+    else {
+      poller.detachedChecks += 1;
+      if (poller.detachedChecks < 4) schedulePoll(poller, 250);
+      else stopPoller(key);
+      return;
+    }
+  }
+  if (!poller.element && poller.consumers.size === 0) {
+    stopPoller(key);
     return;
   }
   poller.detachedChecks = 0;
-  startFrontendClock(poller);
+  if (poller.element) startFrontendClock(poller);
   if (poller.inFlight) {
     schedulePoll(poller);
     return;
@@ -412,13 +462,17 @@ async function poll(poller: Poller): Promise<void> {
   poller.inFlight = false;
   debugContinue(poller.continueTraceId, 'poll-response', { ...pollerDebugState(poller), ok: summary.ok, status: summary.status, lineCount: summary.lineCount, nextSince: summary.nextSince, persistedEventCount: summary.persistedEventCount, latestEventType: summary.latestEvent?.type ?? '', latestEventLine: summary.latestEvent?.line ?? 0, error: summary.error ?? '' });
   if (!summary.ok) {
-    poller.element.dataset.runStatus = 'unknown';
-    removeTimer(poller.element);
-    setCancelButtonVisible(poller.element, false);
-    setContinueButtonVisible(poller.element, false);
-    setNewSessionButtonVisible(poller.element, false);
-    setText(poller.element, '[data-codex-run-status]', 'UNKNOWN');
-    setText(poller.element, '[data-codex-run-latest]', summary.error || 'Run unavailable');
+    if (poller.element) {
+      poller.element.dataset.runStatus = 'unknown';
+      removeTimer(poller.element);
+      setCancelButtonVisible(poller.element, false);
+      setContinueButtonVisible(poller.element, false);
+      setNewSessionButtonVisible(poller.element, false);
+      setText(poller.element, '[data-codex-run-status]', 'UNKNOWN');
+      setText(poller.element, '[data-codex-run-latest]', summary.error || 'Run unavailable');
+    }
+    terminalSummaries.set(key, summary);
+    notifyConsumers(poller, summary);
     debugContinue(poller.continueTraceId, 'poll-error-stopping', pollerDebugState(poller));
     stopPoller(key);
     return;
@@ -426,17 +480,21 @@ async function poll(poller: Poller): Promise<void> {
   const summaryStartedAt = timestampMs(summary.startedAt);
   if (summary.status === 'running' && summaryStartedAt) poller.startedAtMs = summaryStartedAt;
   poller.since = Math.max(poller.since, summary.nextSince, summary.lineCount);
-  paintWidget(poller.element, summary);
+  accumulateRunEvents(poller, summary.events);
+  if (poller.element) paintWidget(poller.element, summary);
+  notifyConsumers(poller, summary);
   telemetry('codex-skill-run-polled', { runId: poller.runId, status: summary.status, lineCount: summary.lineCount });
-  if (summary.status === 'running') schedulePoll(poller);
+  if (!isTerminalStatus(summary.status)) schedulePoll(poller);
   else {
     poller.terminal = true;
     poller.continueInFlight = false;
-    const button = continueButton(poller.element);
-    if (button) setContinueButtonState(button, 'ready');
-    const freshButton = newSessionButton(poller.element);
-    if (freshButton) setNewSessionButtonState(freshButton, 'ready');
-    terminalSummaries.set(key, summary);
+    if (poller.element) {
+      const button = continueButton(poller.element);
+      if (button) setContinueButtonState(button, 'ready');
+      const freshButton = newSessionButton(poller.element);
+      if (freshButton) setNewSessionButtonState(freshButton, 'ready');
+    }
+    terminalSummaries.set(key, { ...summary, events: [...poller.historyEvents] });
     debugContinue(poller.continueTraceId, 'poll-terminal-stopping', { ...pollerDebugState(poller), status: summary.status, lineCount: summary.lineCount, latestEventType: summary.latestEvent?.type ?? '', latestEventLine: summary.latestEvent?.line ?? 0 });
     stopPoller(key);
   }
@@ -448,17 +506,62 @@ export function resumeExternallyStartedCardSkillRun(input: { ledgerId: string; c
   const poller = pollers.get(key);
   if (!poller) return false;
   poller.continueInFlight = false;
+  poller.historyEvents = [];
   paintExternallyStartedRun(poller);
   pollers.set(key, poller);
   schedulePoll(poller, 0);
   return true;
 }
 
+export function bindCardSkillRunLogConsumer(input: {
+  ledgerId: string;
+  cardId: string;
+  runId: string;
+  consumerId: string;
+  onSummary: (summary: CardSkillRunSummary) => void;
+}): void {
+  const key = pollerKey(input);
+  const consumers = consumersFor(key);
+  consumers.set(input.consumerId, input.onSummary);
+  const terminalSummary = terminalSummaries.get(key);
+  if (terminalSummary) {
+    input.onSummary(terminalSummary);
+    return;
+  }
+  const existing = pollers.get(key);
+  if (existing) {
+    existing.consumers = consumers;
+    if (!existing.timer && !existing.inFlight) schedulePoll(existing, 0);
+    return;
+  }
+  const poller: Poller = {
+    ledgerId: input.ledgerId,
+    cardId: input.cardId,
+    runId: input.runId,
+    element: null,
+    consumers,
+    historyEvents: [],
+    since: 0,
+    startedAtMs: runStartedAt(input.runId),
+    timer: null,
+    clock: null,
+    lastClockPaintMs: 0,
+    inFlight: false,
+    cancelInFlight: false,
+    continueInFlight: false,
+    continueTraceId: '',
+    detachedChecks: 0,
+    terminal: false,
+  };
+  pollers.set(key, poller);
+  schedulePoll(poller, 0);
+}
+
 export function bindCardSkillRunWidget(input: { ledgerId: string; cardId: string; runId: string; element: HTMLElement }): void {
   const key = pollerKey(input);
   const terminalSummary = terminalSummaries.get(key);
   if (terminalSummary) {
-    const poller: Poller = { ...input, since: terminalSummary.lineCount, startedAtMs: runStartedAt(input.runId), timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, continueTraceId: '', detachedChecks: 0, terminal: true };
+    const poller: Poller = { ...input, consumers: consumersFor(key), historyEvents: [...terminalSummary.events], since: terminalSummary.lineCount, startedAtMs: runStartedAt(input.runId), timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, continueTraceId: '', detachedChecks: 0, terminal: true };
     pollers.set(key, poller);
     paintWidget(input.element, terminalSummary);
     bindCancelButton(poller);
@@ -480,7 +583,7 @@ export function bindCardSkillRunWidget(input: { ledgerId: string; cardId: string
     if (!existing.timer && !existing.inFlight) schedulePoll(existing, 0);
     return;
   }
-  const poller: Poller = { ...input, since: 0, startedAtMs: runStartedAt(input.runId), timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, continueTraceId: '', detachedChecks: 0, terminal: false };
+  const poller: Poller = { ...input, consumers: consumersFor(key), historyEvents: [], since: 0, startedAtMs: runStartedAt(input.runId), timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, continueTraceId: '', detachedChecks: 0, terminal: false };
   pollers.set(key, poller);
   bindCancelButton(poller);
   bindContinueButton(poller);

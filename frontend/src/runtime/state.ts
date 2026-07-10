@@ -47,6 +47,10 @@ export type ThreadCodexPreference = {
   effort: string;
 };
 
+export type ThreadPanelTab = 'thread' | 'codex-log';
+
+export type ThreadRunDisclosureState = Record<string, boolean>;
+
 export const state: any = {
   routePath: globalThis.window?.location?.pathname ?? '/',
   projectName: 'Project',
@@ -89,6 +93,16 @@ export const state: any = {
   threadId: '',
   renderedThreadId: '',
   threadScrollTopByThreadId: {},
+  threadLogScrollTopByThreadId: {},
+  threadActiveTabByThreadId: {} as Record<string, ThreadPanelTab>,
+  threadRunIdByThreadId: {} as Record<string, string>,
+  threadRunSummaryByThreadId: {},
+  threadRunEventsByThreadId: {},
+  threadCoalescedToolsByThreadId: {},
+  threadToolGroupDisclosureByThreadId: {} as Record<string, ThreadRunDisclosureState>,
+  threadToolRowDisclosureByThreadId: {} as Record<string, ThreadRunDisclosureState>,
+  threadRunAnnouncementByThreadId: {},
+  threadRunAnnouncedSequenceByThreadId: {},
   threadCodexPreferencesByThreadId: {} as Record<string, ThreadCodexPreference>,
   threadPanelOpen: false,
   ledgerContentRefresh: {

@@ -1,39 +1,53 @@
-import { state } from '../../state.js';
+/**
+ * WHAT: Saves and restores the independent conversation and Codex Log viewports.
+ * WHY: Switching threads or tabs must not move the operator's reading position in either surface.
+ */
+import { state, type ThreadPanelTab } from '../../state.js';
 
-function threadScrollState(): Record<string, number> {
-  if (!state.threadScrollTopByThreadId || typeof state.threadScrollTopByThreadId !== 'object') {
-    state.threadScrollTopByThreadId = {};
-  }
-  return state.threadScrollTopByThreadId;
+type ThreadScrollSurface = ThreadPanelTab;
+
+function threadScrollState(surface: ThreadScrollSurface): Record<string, number> {
+  const key = surface === 'codex-log' ? 'threadLogScrollTopByThreadId' : 'threadScrollTopByThreadId';
+  if (!state[key] || typeof state[key] !== 'object' || Array.isArray(state[key])) state[key] = {};
+  return state[key] as Record<string, number>;
 }
 
-function threadScrollElement(): HTMLElement | null {
+export function threadScrollElement(surface: ThreadScrollSurface = 'thread'): HTMLElement | null {
   if (typeof document === 'undefined') return null;
-  return document.querySelector('.thread-panel .chat') as HTMLElement | null;
+  if (surface === 'codex-log') {
+    return document.querySelector('.thread-panel .thread-log-scroll') as HTMLElement | null;
+  }
+  return (document.querySelector('.thread-panel .thread-conversation-scroll')
+    ?? document.querySelector('.thread-panel .chat')) as HTMLElement | null;
 }
 
-export function hasSavedThreadScrollPosition(threadId = String(state.threadId ?? '')): boolean {
+export function hasSavedThreadScrollPosition(threadId = String(state.threadId ?? ''), surface: ThreadScrollSurface = 'thread'): boolean {
   if (!threadId) return false;
-  return Object.prototype.hasOwnProperty.call(threadScrollState(), threadId);
+  return Object.prototype.hasOwnProperty.call(threadScrollState(surface), threadId);
 }
 
-export function saveThreadScrollPosition(threadId = String(state.threadId ?? '')): void {
+export function saveThreadScrollPosition(threadId = String(state.threadId ?? ''), surface: ThreadScrollSurface = 'thread'): void {
   if (!threadId) return;
-  const chat = threadScrollElement();
-  if (!chat) return;
-  const scrollTop = Number(chat.scrollTop);
+  const viewport = threadScrollElement(surface);
+  if (!viewport) return;
+  const scrollTop = Number(viewport.scrollTop);
   if (!Number.isFinite(scrollTop)) return;
-  threadScrollState()[threadId] = Math.max(0, scrollTop);
+  threadScrollState(surface)[threadId] = Math.max(0, scrollTop);
 }
 
-export function restoreThreadScrollPosition(threadId = String(state.threadId ?? '')): boolean {
-  if (!hasSavedThreadScrollPosition(threadId)) return false;
-  const chat = threadScrollElement();
-  if (!chat) return false;
-  const savedScrollTop = threadScrollState()[threadId];
+export function saveThreadPanelScrollPositions(threadId = String(state.threadId ?? '')): void {
+  saveThreadScrollPosition(threadId, 'thread');
+  saveThreadScrollPosition(threadId, 'codex-log');
+}
+
+export function restoreThreadScrollPosition(threadId = String(state.threadId ?? ''), surface: ThreadScrollSurface = 'thread'): boolean {
+  if (!hasSavedThreadScrollPosition(threadId, surface)) return false;
+  const viewport = threadScrollElement(surface);
+  if (!viewport) return false;
+  const savedScrollTop = threadScrollState(surface)[threadId];
   const restore = () => {
-    const maxScrollTop = Math.max(0, Number(chat.scrollHeight ?? 0) - Number(chat.clientHeight ?? 0));
-    chat.scrollTop = Math.min(savedScrollTop, maxScrollTop || savedScrollTop);
+    const maxScrollTop = Math.max(0, Number(viewport.scrollHeight ?? 0) - Number(viewport.clientHeight ?? 0));
+    viewport.scrollTop = Math.min(savedScrollTop, maxScrollTop || savedScrollTop);
   };
   restore();
   globalThis.requestAnimationFrame?.(() => restore());

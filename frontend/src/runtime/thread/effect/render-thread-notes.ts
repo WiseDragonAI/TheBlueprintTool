@@ -3,6 +3,7 @@
  * WHY: Voice and text notes must appear as conversation ledger entries, not only draft text.
  */
 import { state } from '../../state.js';
+import { isCodexThreadArtifactNote } from '../../codex/helper/is-codex-thread-artifact-note.js';
 import { renderLedgerCardMarkdown } from '../../ledger/component/render-ledger-card-markdown.js';
 import { sendActiveLedgerMutation } from '../../ledger/effect/send-active-ledger-mutation.js';
 import { deletedNoteIdSet } from '../../ledger/helper/normalize-deleted-note-ids.js';
@@ -25,10 +26,6 @@ function noteText(note: Record<string, unknown>): string {
   return String(note.message ?? note.body ?? '');
 }
 
-function normalizeCodexKind(note: Record<string, unknown>): string {
-  return String(note.codexKind ?? '').replace(/[^a-z0-9_-]+/gi, '-').toLowerCase();
-}
-
 function imageSizeSignature(note: Record<string, unknown>): string {
   const sizes = threadImageSizes(note.imageSizes);
   const entries = Object.entries(sizes).sort(([left], [right]) => left.localeCompare(right));
@@ -46,9 +43,6 @@ function threadNotesSignature(threadId: string, notes: Array<Record<string, unkn
       String(note.voiceFileRef ?? ''),
       String(note.transcriptionStartedAt ?? ''),
       String(note.optimistic ?? ''),
-      codexNoteClass(note),
-      String(note.codexTool ?? ''),
-      String(note.codexExitCode ?? ''),
       imageSizeSignature(note),
       String(text.length),
       hashText(text)
@@ -61,98 +55,6 @@ function noteListDataset(list: HTMLElement): DOMStringMap {
   const element = list as HTMLElement & { dataset?: DOMStringMap };
   if (!element.dataset) element.dataset = {} as DOMStringMap;
   return element.dataset;
-}
-
-function codexNoteClass(note: Record<string, unknown>): string {
-  const kind = normalizeCodexKind(note);
-  return kind ? `is-codex-run-event is-codex-${kind}` : '';
-}
-
-function isCodexToolCallNote(note: Record<string, unknown>): boolean {
-  return normalizeCodexKind(note) === 'tool_call';
-}
-
-function stripOuterQuotes(value: string): string {
-  const trimmed = value.trim();
-  const quote = trimmed[0];
-  if ((quote === '"' || quote === "'") && trimmed.endsWith(quote)) return trimmed.slice(1, -1).trim();
-  return trimmed;
-}
-
-function stripShellWrapper(command: string): string {
-  const normalized = command.replace(/\s+/g, ' ').trim();
-  const shell = normalized.match(/^(?:\/usr\/bin\/env\s+)?(?:\/[^\s]+\/)?(?:zsh|bash|sh)\s+-lc\s+(.+)$/);
-  return shell?.[1] ? stripOuterQuotes(shell[1]) : normalized;
-}
-
-function commandFromToolCallMessage(message: string): string {
-  return message.match(/\*\*Tool call\*\*\s+`([^`]+)`/)?.[1]?.trim() ?? '';
-}
-
-function codexToolCommand(note: Record<string, unknown>): string {
-  return stripShellWrapper(String(note.codexTool ?? '').trim() || commandFromToolCallMessage(noteText(note)) || 'command');
-}
-
-function commandHasToken(command: string, tokens: string[]): boolean {
-  const escaped = tokens.map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-  return new RegExp(`(^|[\\s;&|()])(?:${escaped})(?=\\s|$)`, 'i').test(command);
-}
-
-function codexToolAction(command: string): string {
-  if (commandHasToken(command, ['git', 'gh'])) return 'Git';
-  if (commandHasToken(command, ['rg', 'grep', 'find', 'fd'])) return 'Search';
-  if (commandHasToken(command, ['apply_patch', 'tee', 'touch', 'mkdir', 'rm', 'mv', 'cp', 'chmod', 'chown'])) return 'Write';
-  if (/(^|[\s;&|()])(?:cat|sed|nl|head|tail|less|wc)(?=\s|$)/i.test(command)) return 'Read';
-  if (/(^|[\s;&|()])(?:npm|pnpm|yarn|node|tsx|tsc|vitest|jest|playwright|pytest)(?=\s|$)/i.test(command)) return 'Ran';
-  return 'Ran';
-}
-
-function shortenText(value: string, maxLength: number): string {
-  const compact = value.replace(/\s+/g, ' ').trim();
-  if (compact.length <= maxLength) return compact;
-  const headLength = Math.max(24, Math.floor(maxLength * 0.62));
-  const tailLength = Math.max(12, maxLength - headLength - 5);
-  return `${compact.slice(0, headLength).trimEnd()} ... ${compact.slice(-tailLength).trimStart()}`;
-}
-
-function codexToolStatus(note: Record<string, unknown>): string {
-  const status = String(note.status ?? '').trim();
-  const exitCode = String(note.codexExitCode ?? '').trim();
-  if (status && exitCode) return `${status} / code ${exitCode}`;
-  if (status) return status;
-  if (exitCode) return `code ${exitCode}`;
-  return '';
-}
-
-function renderCodexToolCallNote(note: Record<string, unknown>, body: HTMLElement): HTMLElement {
-  const command = codexToolCommand(note);
-  const action = codexToolAction(command);
-  const details = document.createElement('details');
-  details.className = 'codex-tool-call';
-  details.dataset.codexToolAction = action.toLowerCase();
-
-  const summary = document.createElement('summary');
-  summary.className = 'codex-tool-call-summary';
-  summary.title = command;
-
-  const actionLabel = document.createElement('span');
-  actionLabel.className = 'codex-tool-call-action';
-  actionLabel.textContent = action;
-
-  const commandLabel = document.createElement('span');
-  commandLabel.className = 'codex-tool-call-command';
-  commandLabel.textContent = shortenText(command, 118);
-
-  const status = codexToolStatus(note);
-  const statusLabel = document.createElement('span');
-  statusLabel.className = 'codex-tool-call-status';
-  statusLabel.textContent = status;
-  statusLabel.setAttribute('aria-hidden', status ? 'false' : 'true');
-
-  summary.append(actionLabel, commandLabel, statusLabel);
-  body.classList.add('codex-tool-call-details');
-  details.append(summary, body);
-  return details;
 }
 
 function threadImageSizes(value: unknown): ThreadImageSizes {
@@ -198,7 +100,11 @@ export function renderThreadNotes(): void {
   list.className = 'thread-note-list';
   if (!existing) feed?.append(list);
   const deletedIds = state.threadId && state.activeLedger ? deletedNoteIdSet(state.activeLedger, state.threadId) : new Set<string>();
-  const notes = state.threadId ? (state.activeLedger?.notes?.[state.threadId] ?? []).filter((note: Record<string, unknown>) => !deletedIds.has(String(note.id ?? ''))) : [];
+  const notes = state.threadId
+    ? (state.activeLedger?.notes?.[state.threadId] ?? []).filter((note: Record<string, unknown>) => (
+        !deletedIds.has(String(note.id ?? '')) && !isCodexThreadArtifactNote(note)
+      ))
+    : [];
   for (const note of notes) {
     if (!expireStaleVoiceTranscription(note)) scheduleVoiceTranscriptionTimeout({ threadId: state.threadId, note });
   }
@@ -217,7 +123,7 @@ export function renderThreadNotes(): void {
     const busy = /committing|uploading|transcribing|retrying/.test(normalizedStatus);
     const retryable = Boolean(note.voiceFileRef) && /failed|not configured|unavailable/.test(normalizedStatus);
     const item = document.createElement('li');
-    item.className = ['thread-note', note.voiceFileRef ? 'voice-note' : '', note.optimistic ? 'is-optimistic' : '', busy ? 'is-busy' : '', retryable ? 'is-retryable' : '', codexNoteClass(note), agentOwned ? 'is-agent' : 'is-operator'].filter(Boolean).join(' ');
+    item.className = ['thread-note', note.voiceFileRef ? 'voice-note' : '', note.optimistic ? 'is-optimistic' : '', busy ? 'is-busy' : '', retryable ? 'is-retryable' : '', agentOwned ? 'is-agent' : 'is-operator'].filter(Boolean).join(' ');
     const body = renderLedgerCardMarkdown(noteText(note), {
       imageSizes: threadImageSizes(note.imageSizes),
       mediaSurface: 'thread',
@@ -232,7 +138,6 @@ export function renderThreadNotes(): void {
       }
     });
     body.classList.add('thread-note-message');
-    const noteBody = isCodexToolCallNote(note) ? renderCodexToolCallNote(note, body) : body;
     const meta = document.createElement('span');
     meta.className = 'thread-note-meta';
     meta.textContent = status;
@@ -245,7 +150,7 @@ export function renderThreadNotes(): void {
     deleteButton.title = 'Delete note';
     deleteButton.setAttribute('aria-label', 'Delete note');
     deleteButton.textContent = 'X';
-    item.append(noteBody);
+    item.append(body);
     if (status && !busy) item.append(meta);
     if (noteId) item.append(deleteButton);
     if (busy) {

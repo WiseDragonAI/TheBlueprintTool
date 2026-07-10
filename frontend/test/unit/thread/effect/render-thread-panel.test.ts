@@ -150,15 +150,20 @@ function fakeElement(tagName = 'div', className = ''): FakeElement {
   return element;
 }
 
-function installDom(): { root: FakeElement; heading: FakeElement } {
+function installDom(): { root: FakeElement; heading: FakeElement; codexLog: FakeElement } {
   const root = fakeElement('document');
   const panel = fakeElement('aside', 'thread-panel');
   const inspector = fakeElement('aside', 'panel');
   const shell = fakeElement('main', 'shell');
   const target = fakeElement('div', 'thread-target');
   const heading = fakeElement('div', 'thread-heading');
+  const logPanel = fakeElement('section', 'thread-log-panel');
+  const logScroll = fakeElement('div', 'thread-log-scroll');
+  const codexLog = fakeElement('div', 'thread-codex-log');
   const telemetry = fakeElement('ol', 'telemetry-list');
-  root.append(panel, inspector, shell, target, heading, telemetry);
+  logScroll.append(codexLog);
+  logPanel.append(logScroll);
+  root.append(panel, inspector, shell, target, heading, logPanel, telemetry);
   activeElement = null;
 
   (globalThis as unknown as { document: unknown }).document = {
@@ -189,7 +194,7 @@ function installDom(): { root: FakeElement; heading: FakeElement } {
     getItem() { return null; },
     setItem() {}
   };
-  return { root, heading };
+  return { root, heading, codexLog };
 }
 
 test('same-thread note renders retain focused Codex controls and commit the next model selection', async () => {
@@ -242,4 +247,85 @@ test('same-thread note renders retain focused Codex controls and commit the next
   assert.equal(model.value, 'gpt-5.4');
   assert.equal(button.dataset.codexModel, 'gpt-5.4');
   assert.equal((globalThis.document as unknown as { activeElement: FakeElement }).activeElement, model);
+});
+
+test('generated skill-result threads bind and render their durable card run id', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousSetTimeout = globalThis.setTimeout;
+  const previousClearTimeout = globalThis.clearTimeout;
+  const { codexLog } = installDom();
+  const { state } = await import('../../../../src/runtime/state.js');
+  const { renderThreadPanel } = await import('../../../../src/runtime/thread/effect/render-thread-panel.js');
+  const runId = 'codex-skill-1783682000000-generated';
+  const cardId = `card-${runId}`;
+  const threadId = `thread-${cardId}`;
+  const requests: string[] = [];
+  let scheduledPoll: (() => void) | null = null;
+
+  try {
+    globalThis.setTimeout = ((callback: () => void) => {
+      scheduledPoll = callback;
+      return 1 as unknown as ReturnType<typeof setTimeout>;
+    }) as typeof setTimeout;
+    globalThis.clearTimeout = (() => undefined) as typeof clearTimeout;
+    globalThis.fetch = (async (url: string) => {
+      requests.push(url);
+      return new Response(JSON.stringify({
+        ok: true,
+        runId,
+        runKind: 'card',
+        status: 'complete',
+        lineCount: 1,
+        nextSince: 1,
+        events: [],
+        diagnostics: [],
+        metadata: {},
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    state.activeTab = 'ux';
+    state.activeLedger = {
+      cards: [{ id: cardId, title: 'Generated skill result', cardType: 'codex-skill-run' }],
+      annotations: [],
+      relationships: [],
+      notes: { [threadId]: [] },
+    };
+    state.threadId = threadId;
+    state.renderedThreadId = '';
+    state.threadPanelOpen = true;
+    state.activeTool = 'select';
+    state.threadPinOnRender = false;
+    state.threadScrollTopByThreadId = {};
+    state.threadLogScrollTopByThreadId = {};
+    state.threadActiveTabByThreadId = { [threadId]: 'codex-log' };
+    state.threadRunIdByThreadId = {};
+    state.threadRunSummaryByThreadId = {};
+    state.threadRunEventsByThreadId = {};
+    state.threadCoalescedToolsByThreadId = {};
+    state.threadCodexPreferencesByThreadId = {};
+    state.telemetry = [];
+    state.voice = { recording: false, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
+
+    renderThreadPanel();
+
+    assert.equal(state.threadRunIdByThreadId[threadId], runId);
+    assert.ok(codexLog.querySelector('.codex-log-status'));
+    assert.equal(codexLog.querySelector('.codex-log-empty'), null);
+    assert.ok(scheduledPoll);
+    (scheduledPoll as () => void)();
+    assert.deepEqual(requests, [
+      `/api/codex/skills/runs/${runId}?ledgerId=ux&cardId=${cardId}&since=0`,
+    ]);
+    for (let index = 0; index < 12; index += 1) await Promise.resolve();
+  } finally {
+    globalThis.fetch = previousFetch;
+    globalThis.setTimeout = previousSetTimeout;
+    globalThis.clearTimeout = previousClearTimeout;
+    state.threadId = '';
+    state.activeLedger = null;
+    state.threadActiveTabByThreadId = {};
+    state.threadRunIdByThreadId = {};
+    state.threadRunSummaryByThreadId = {};
+    state.threadRunEventsByThreadId = {};
+    state.threadCoalescedToolsByThreadId = {};
+  }
 });

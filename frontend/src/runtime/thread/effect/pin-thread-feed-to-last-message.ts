@@ -5,7 +5,8 @@
 import { syncThreadJumpButtonVisibility } from './render-thread-jump-button.js';
 
 export function pinThreadFeedToLastMessage(options: { behavior?: ScrollBehavior } = {}): void {
-  const chat = document.querySelector('.thread-panel .chat') as HTMLElement | null;
+  const chat = (document.querySelector('.thread-panel .thread-conversation-scroll')
+    ?? document.querySelector('.thread-panel .chat')) as HTMLElement | null;
   const list = document.querySelector('.thread-note-list') as HTMLElement | null;
   if (!chat) return;
   const scrollOptions: ScrollIntoViewOptions = options.behavior === 'smooth'

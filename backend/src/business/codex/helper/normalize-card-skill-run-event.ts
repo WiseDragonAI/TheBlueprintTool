@@ -59,6 +59,44 @@ function changesText(changes: unknown): string {
   }).join('\n');
 }
 
+function normalizedJsonlEvent(line: number, event: Omit<NormalizedRunEvent, 'line' | 'source' | 'sourceLine'>): NormalizedRunEvent {
+  return { line, source: 'jsonl', sourceLine: line, ...event };
+}
+
+function diagnosticKind(text: string, declaredKind = ''): 'diagnostic' | 'warning' | 'error' | 'transport' {
+  if (/reconnect|websocket|https transport|transport degraded|request timed out|connection (?:closed|lost|failed)/i.test(text)) return 'transport';
+  if (/warn(?:ing)?/i.test(declaredKind) || /\bwarn(?:ing)?\b/i.test(text)) return 'warning';
+  if (/error|failed/i.test(declaredKind) || /\berror\b|\bfailed\b|\benoent\b|exit code [1-9]/i.test(text)) return 'error';
+  return 'diagnostic';
+}
+
+function normalizedDiagnostic(input: { line: number; source: 'jsonl' | 'stderr'; type: string; text: string; declaredKind?: string; itemId?: string; persist?: boolean }): NormalizedRunEvent {
+  const kind = diagnosticKind(input.text, input.declaredKind);
+  const severity = kind === 'error' ? 'error' : kind === 'warning' || kind === 'transport' ? 'warning' : 'info';
+  const title = kind === 'transport' ? 'Transport degraded' : kind === 'warning' ? 'Warning' : kind === 'error' ? 'Error' : 'Diagnostic';
+  const status = kind === 'transport' ? 'degraded' : kind === 'warning' ? 'warning' : kind === 'error' ? 'error' : '';
+  return {
+    line: input.line,
+    source: input.source,
+    sourceLine: input.line,
+    type: input.type,
+    kind,
+    title,
+    text: input.text,
+    status,
+    itemId: input.itemId ?? '',
+    tool: '',
+    output: '',
+    exitCode: '',
+    severity,
+    persist: input.persist ?? false,
+  };
+}
+
+export function normalizeCardSkillRunDiagnostic(input: { line: number; text: string }): NormalizedRunEvent {
+  return normalizedDiagnostic({ line: input.line, source: 'stderr', type: 'stderr', text: input.text });
+}
+
 export function normalizeCardSkillRunEvent(line: ParsedRunLine): NormalizedRunEvent {
   const event = line.event;
   const type = String(event.type ?? '');
@@ -69,34 +107,42 @@ export function normalizeCardSkillRunEvent(line: ParsedRunLine): NormalizedRunEv
   // WHAT: Map terminal turn lifecycle events to a stable run-status note.
   // WHY: Consumers should not depend on producer-specific fields for completion state.
   if (type === 'turn.completed') {
-    return { line: line.line, type, kind: 'run_status', title: 'Turn completed', text: 'Codex turn completed.', status: 'complete', itemId, tool: '', exitCode: '', persist: true };
+    return normalizedJsonlEvent(line.line, { type, kind: 'run_status', title: 'Turn completed', text: 'Codex turn completed.', status: 'complete', itemId, tool: '', output: '', exitCode: '', severity: 'info', persist: true });
   }
   // WHAT: Map turn start lifecycle events to a stable running note.
   // WHY: The thread should show progress before agent content arrives.
   if (type === 'turn.started') {
-    return { line: line.line, type, kind: 'run_status', title: 'Turn started', text: 'Codex turn started.', status: 'running', itemId, tool: '', exitCode: '', persist: true };
+    return normalizedJsonlEvent(line.line, { type, kind: 'run_status', title: 'Turn started', text: 'Codex turn started.', status: 'running', itemId, tool: '', output: '', exitCode: '', severity: 'info', persist: true });
   }
   // WHAT: Map thread start lifecycle events to the same stable status vocabulary.
   // WHY: New sessions must surface their lifecycle even before a turn begins.
   if (type === 'thread.started') {
-    return { line: line.line, type, kind: 'run_status', title: 'Thread started', text: 'Codex thread started.', status: 'running', itemId, tool: '', exitCode: '', persist: true };
+    return normalizedJsonlEvent(line.line, { type, kind: 'run_status', title: 'Thread started', text: 'Codex thread started.', status: 'running', itemId, tool: '', output: '', exitCode: '', severity: 'info', persist: true });
+  }
+  if (/^(?:thread|turn|run)\.failed$/i.test(type)) {
+    const text = textBlock(item.text ?? item.message ?? event.message ?? event.text) || 'Codex run failed.';
+    return normalizedJsonlEvent(line.line, { type, kind: 'run_status', title: 'Run failed', text, status: 'failed', itemId, tool: '', output: '', exitCode: '', severity: 'error', persist: true });
+  }
+  if (/cancelled|canceled/i.test(type)) {
+    const text = textBlock(item.text ?? item.message ?? event.message ?? event.text) || 'Codex run cancelled.';
+    return normalizedJsonlEvent(line.line, { type, kind: 'run_status', title: 'Run cancelled', text, status: 'cancelled', itemId, tool: '', output: '', exitCode: '', severity: 'warning', persist: true });
   }
   // WHAT: Normalize agent output into a durable agent-message event.
   // WHY: Message payload shape varies across Codex versions.
   if (itemType === 'agent_message') {
     const text = textBlock(item.text ?? item.message ?? event.text);
-    return { line: line.line, type, kind: 'agent_message', title: 'Codex message', text, status, itemId, tool: '', exitCode: '', persist: Boolean(text) };
+    return normalizedJsonlEvent(line.line, { type, kind: 'agent_message', title: 'Codex message', text, status, itemId, tool: '', output: '', exitCode: '', severity: 'info', persist: Boolean(text) });
   }
   // WHAT: Normalize reasoning-like producer item names into one thinking event kind.
   // WHY: Producer vocabulary has used multiple names for the same operator-facing content.
   if (/reason|thinking|thought/i.test(itemType)) {
     const text = textBlock(item.text ?? item.summary ?? item.message ?? event.text);
-    return { line: line.line, type, kind: 'thinking', title: 'Codex thinking', text, status, itemId, tool: '', exitCode: '', persist: Boolean(text) };
+    return normalizedJsonlEvent(line.line, { type, kind: 'thinking', title: 'Codex thinking', text, status, itemId, tool: '', output: '', exitCode: '', severity: 'info', persist: Boolean(text) });
   }
   // WHAT: Format command execution details as one Markdown tool-call note.
   // WHY: Commands, status, exit code, and output must remain readable without raw JSON inspection.
-  if (itemType === 'command_execution') {
-    const tool = commandText(item.command);
+  if (itemType === 'command_execution' || itemType === 'web_search' || /tool_call/i.test(itemType)) {
+    const tool = commandText(item.command ?? item.query ?? item.name);
     const output = textBlock(item.aggregated_output ?? item.output ?? item.stderr ?? item.stdout);
     const exitCode = item.exit_code === undefined || item.exit_code === null ? '' : String(item.exit_code);
     const command = tool ? `\`${tool}\`` : 'command';
@@ -104,25 +150,17 @@ export function normalizeCardSkillRunEvent(line: ParsedRunLine): NormalizedRunEv
     if (status) parts.push(`Status: ${status}`);
     if (exitCode) parts.push(`Exit code: ${exitCode}`);
     if (output) parts.push('', fencedTextBlock(output));
-    return { line: line.line, type, kind: 'tool_call', title: tool || 'Tool call', text: parts.join('\n'), status, itemId, tool, exitCode, persist: true };
+    return normalizedJsonlEvent(line.line, { type, kind: 'tool_call', title: tool || (itemType === 'web_search' ? 'Web search' : 'Tool call'), text: parts.join('\n'), status, itemId, tool, output, exitCode, severity: status === 'failed' ? 'error' : 'info', persist: true });
   }
   // WHAT: Format file-change records as a stable change list.
   // WHY: Durable thread history should show what the run modified.
   if (itemType === 'file_change') {
     const text = changesText(item.changes);
-    return { line: line.line, type, kind: 'file_change', title: 'File changes', text, status, itemId, tool: '', exitCode: '', persist: true };
+    return normalizedJsonlEvent(line.line, { type, kind: 'file_change', title: 'File changes', text, status, itemId, tool: '', output: '', exitCode: '', severity: status === 'failed' ? 'error' : 'info', persist: true });
   }
-  const text = textBlock(item.text ?? item.message ?? event.text);
-  return {
-    line: line.line,
-    type,
-    kind: itemType || type || 'event',
-    title: itemType || type || 'Codex event',
-    text,
-    status,
-    itemId,
-    tool: '',
-    exitCode: '',
-    persist: Boolean(text),
-  };
+  const text = textBlock(item.text ?? item.message ?? event.message ?? event.text);
+  if (/warn(?:ing)?|error|failed/i.test(itemType || type) || diagnosticKind(text) !== 'diagnostic') {
+    return normalizedDiagnostic({ line: line.line, source: 'jsonl', type, text, declaredKind: itemType || type, itemId, persist: Boolean(text) });
+  }
+  return normalizedJsonlEvent(line.line, { type, kind: itemType || type || 'event', title: itemType || type || 'Codex event', text, status, itemId, tool: '', output: '', exitCode: '', severity: 'info', persist: Boolean(text) });
 }

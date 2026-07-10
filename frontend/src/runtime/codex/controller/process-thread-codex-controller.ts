@@ -6,6 +6,7 @@ import { state } from '../../state.js';
 import { refreshRuntimeState } from '../../refresh/controller/refresh-runtime-state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { requestThreadCodexProcess } from '../effect/request-thread-codex-process.js';
+import { bindThreadCodexRunLog } from '../effect/bind-thread-codex-run-log.js';
 import { threadCodexCardId } from '../helper/thread-codex-card-id.js';
 
 export async function processThreadCodexController(input: { threadId?: string; cardId?: string; codexModel?: string; codexEffort?: string } = {}): Promise<boolean> {
@@ -20,6 +21,8 @@ export async function processThreadCodexController(input: { threadId?: string; c
     return false;
   }
   await refreshRuntimeState();
-  telemetry('codex-thread-process-created-widget', { ledgerId, threadId, cardId, codexModel: input.codexModel ?? '', codexEffort: input.codexEffort ?? '', run: result.run?.id ?? '' });
+  const runId = String(result.run?.id ?? '').trim();
+  bindThreadCodexRunLog({ ledgerId, threadId, cardId, runId });
+  telemetry('codex-thread-process-created-widget', { ledgerId, threadId, cardId, codexModel: input.codexModel ?? '', codexEffort: input.codexEffort ?? '', run: runId });
   return true;
 }

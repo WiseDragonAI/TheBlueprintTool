@@ -9,6 +9,8 @@ import { hasSavedThreadScrollPosition } from './persist-thread-scroll.js';
 export function openThreadPanel(): void {
   state.threadPanelOpen = true;
   if (!state.threadId) state.threadId = 'conversation-ledger';
+  if (!state.threadActiveTabByThreadId || typeof state.threadActiveTabByThreadId !== 'object') state.threadActiveTabByThreadId = {};
+  if (!state.threadActiveTabByThreadId[state.threadId]) state.threadActiveTabByThreadId[state.threadId] = 'thread';
   state.threadPinOnRender = !hasSavedThreadScrollPosition(state.threadId);
   renderThreadPanel();
 }

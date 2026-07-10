@@ -7,8 +7,13 @@ export type ParsedRunLine = {
   event: Record<string, unknown>;
 };
 
+export type RunEventSource = 'jsonl' | 'stderr';
+export type RunEventSeverity = 'info' | 'warning' | 'error';
+
 export type NormalizedRunEvent = {
   line: number;
+  source: RunEventSource;
+  sourceLine: number;
   type: string;
   kind: string;
   title: string;
@@ -16,7 +21,9 @@ export type NormalizedRunEvent = {
   status: string;
   itemId: string;
   tool: string;
+  output: string;
   exitCode: string;
+  severity: RunEventSeverity;
   persist: boolean;
 };
 

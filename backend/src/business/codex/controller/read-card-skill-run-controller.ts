@@ -4,12 +4,12 @@
  */
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { basename, extname, isAbsolute, relative, resolve } from 'node:path';
-import { hydrateLedgerCardContent } from '@backend/business/ledger/helper/card-content-file.js';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
 import { type NormalizedRunEvent } from '../helper/card-skill-run-event-types.js';
-import { normalizeCardSkillRunEvent } from '../helper/normalize-card-skill-run-event.js';
+import { normalizeCardSkillRunDiagnostic, normalizeCardSkillRunEvent } from '../helper/normalize-card-skill-run-event.js';
 import { readCardSkillRunEventLines } from '../helper/read-card-skill-run-event-lines.js';
 import { codexRunSegmentMetadata, latestCodexRunSegmentLog, latestCodexRunSegmentStartedAtMs, latestCodexRunSegmentStartLine, type CodexRunSegmentMetadata } from '../helper/codex-run-segment-marker.js';
+import { resolveCardSkillRunOwnership } from '../helper/resolve-card-skill-run-ownership.js';
 
 type AnyRecord = Record<string, unknown>;
 type RunStatus = 'running' | 'complete' | 'failed' | 'cancelled' | 'unknown';
@@ -61,7 +61,7 @@ function latestRunEventStatus(events: NormalizedRunEvent[]): RunStatus | null {
     if (event.type === 'thread.started' || event.type === 'turn.started') status = 'running';
     if (event.type === 'turn.completed') status = 'complete';
     if (/cancelled|canceled/i.test(event.type)) status = 'cancelled';
-    if (/failed|error/i.test(event.type)) status = 'failed';
+    if (/^(?:thread|turn|run)\.failed$/i.test(event.type) || (event.kind === 'run_status' && event.status === 'failed')) status = 'failed';
   }
   return status;
 }
@@ -107,15 +107,20 @@ function elapsedMs(input: { runtime: AnyRecord; runId: string; status: RunStatus
   return Math.max(0, end - started);
 }
 
-function cardReferencesRun(input: { ledger: AnyRecord; decisionOsRoot: string; cardId: string; runId: string }): boolean {
-  const hydrated = hydrateLedgerCardContent(JSON.parse(JSON.stringify(input.ledger)), input.decisionOsRoot) as { cards?: AnyRecord[] };
-  const card = (hydrated.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
-  if (!card) return false;
-  if (String(card.codexThreadRunId ?? '') === input.runId || String(card.codexRunId ?? '') === input.runId) return true;
-  if (String(card.cardType ?? '') === 'codex-skill-run' && input.cardId === `card-${safeSegment(input.runId)}`) return true;
-  const comment = card?.comment && typeof card.comment === 'object' ? card.comment as AnyRecord : {};
-  const body = String(comment.what ?? comment.body ?? comment.description ?? '');
-  return body.includes(`Codex run: ${input.runId}`);
+function normalizedRunDiagnostics(log: string): NormalizedRunEvent[] {
+  return log.replace(/\r\n?/g, '\n').split('\n').flatMap((text, index) => {
+    if (!text.trim()) return [];
+    return [normalizeCardSkillRunDiagnostic({ line: index + 1, text })];
+  });
+}
+
+function uniqueToolCallCount(runId: string, events: NormalizedRunEvent[]): number {
+  const identities = new Set<string>();
+  for (const event of events) {
+    if (event.kind !== 'tool_call') continue;
+    identities.add(event.itemId ? `${runId}:item:${event.itemId}` : `${runId}:line:${event.line}`);
+  }
+  return identities.size;
 }
 
 export async function readCardSkillRunController(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): Promise<AnyRecord> {
@@ -140,7 +145,8 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
   if (!isInside(decisionOsRoot, ledgerPath) || !existsSync(ledgerPath)) return { ok: false, statusCode: 404, error: 'Ledger file not found.', ledgerId };
 
   const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord & { cards?: AnyRecord[] };
-  if (!cardReferencesRun({ ledger, decisionOsRoot, cardId, runId })) return { ok: false, statusCode: 404, error: 'Run not found on card.', cardId, runId };
+  const runReference = resolveCardSkillRunOwnership({ ledger, decisionOsRoot, cardId, runId });
+  if (!runReference.found) return { ok: false, statusCode: 404, error: 'Run not found on card.', cardId, runId };
 
   const runDirectory = resolve(decisionOsRoot, 'runs', 'codex-skills', safeSegment(ledgerStem(ledgerPath)));
   const stdoutFile = resolve(runDirectory, `${safeSegment(runId)}.jsonl`);
@@ -151,6 +157,7 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
   const segmentStartLine = latestCodexRunSegmentStartLine({ log: stderrLog, runId });
   const segmentEvents = events.filter((event) => event.line > segmentStartLine);
   const segmentLog = latestCodexRunSegmentLog({ log: stderrLog, runId });
+  const diagnostics = normalizedRunDiagnostics(segmentLog);
   const status = inferredStatus({ runtime, runId, events: segmentEvents, stdoutFile, stderrFile, stderrLog: segmentLog });
   // Retain the response field for clients while making explicit that status reads persist nothing.
   const persistedEventCount = 0;
@@ -168,6 +175,7 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     segmentEventCount: segmentEvents.length,
     lineCount: parsedLines.at(-1)?.line ?? 0,
     returnedEventCount: returnedEvents.length,
+    diagnosticCount: diagnostics.length,
     persistedEventCount,
     metadata,
     latestEventType: segmentEvents.at(-1)?.type ?? '',
@@ -181,18 +189,23 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     ledgerId,
     cardId,
     runId,
+    runKind: runReference.threadLaunched ? 'thread' : 'card',
     status,
     startedAt: new Date(runSegmentStartedAtMs({ runtime, runId, stderrFile })).toISOString(),
     elapsedMs: elapsedMs({ runtime, runId, status, stdoutFile, stderrFile }),
     lineCount: parsedLines.at(-1)?.line ?? 0,
     nextSince: parsedLines.at(-1)?.line ?? 0,
-    toolCallCount: segmentEvents.filter((event) => event.kind === 'tool_call' && event.type === 'item.completed').length,
+    toolCallCount: uniqueToolCallCount(runId, segmentEvents),
     agentMessageCount: segmentEvents.filter((event) => event.kind === 'agent_message').length,
     fileChangeCount: segmentEvents.filter((event) => event.kind === 'file_change').length,
     thinkingCount: segmentEvents.filter((event) => event.kind === 'thinking').length,
+    warningCount: segmentEvents.filter((event) => event.kind === 'warning').length + diagnostics.filter((event) => event.kind === 'warning').length,
+    errorCount: segmentEvents.filter((event) => event.kind === 'error').length + diagnostics.filter((event) => event.kind === 'error').length,
+    transportStatus: segmentEvents.some((event) => event.kind === 'transport') || diagnostics.some((event) => event.kind === 'transport') ? 'degraded' : 'ok',
     persistedEventCount,
     metadata,
     latestEvent: segmentEvents.at(-1) ?? null,
     events: returnedEvents,
+    diagnostics,
   };
 }

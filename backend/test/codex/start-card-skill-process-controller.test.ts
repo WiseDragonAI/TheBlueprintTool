@@ -1,6 +1,6 @@
 /**
- * WHAT: Process-route coverage for live Codex lifecycle ingestion and scoped thread publication.
- * WHY: Each JSONL event must persist exactly once before status polling observes the run.
+ * WHAT: Process-route coverage for card-owned lifecycle log isolation.
+ * WHY: Codex diagnostics belong in run artifacts while conversation threads retain only human-facing messages.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,6 +12,8 @@ import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
 import { parseThreadMarkdown } from '@backend/business/ledger/helper/thread-content-file.js';
+import { persistCardSkillRunEvents } from '@backend/business/codex/effect/persist-card-skill-run-events.js';
+import { normalizeCardSkillRunEvent } from '@backend/business/codex/helper/normalize-card-skill-run-event.js';
 
 type ContentChangeEvent = {
   contentFile: string;
@@ -137,7 +139,10 @@ test('card skill process route creates a linked output card and launches codex',
     '  const effort = args[args.indexOf("-c") + 1] || "";',
     '  const ledgerFile = (input.match(/Ledger file: (.+)/) || [])[1] || "";',
     '  writeFileSync(match[1].trim(), "# Fake Result\\n\\n" + (input.includes("$test-skill") ? "skill seen" : "skill missing") + "\\nmodel=" + model + "\\neffort=" + effort + "\\nledgerFile=" + ledgerFile + "\\n");',
-    '  console.log(JSON.stringify({ type: "fake-codex-done" }));',
+    '  console.log(JSON.stringify({ type: "thread.started", thread_id: "ordinary-card-skill" }));',
+    '  console.log(JSON.stringify({ type: "item.started", item: { id: "ordinary-tool", type: "command_execution", command: "rg TODO", status: "in_progress" } }));',
+    '  console.log(JSON.stringify({ type: "item.completed", item: { id: "ordinary-tool", type: "command_execution", command: "rg TODO", aggregated_output: "done", exit_code: 0, status: "completed" } }));',
+    '  console.log(JSON.stringify({ type: "turn.completed" }));',
     '});',
   ].join('\n'));
   chmodSync(fakeCodex, 0o755);
@@ -157,7 +162,7 @@ test('card skill process route creates a linked output card and launches codex',
       body: JSON.stringify({ ledgerId: 'specs', cardId: 'source-card', skillName: 'test-skill', codexModel: 'gpt-5.4', codexEffort: 'xhigh' })
     });
     assert.equal(response.status, 202);
-    const body = await response.json() as { ok: boolean; run: { id: string; outputCardId: string; outputFile: string; codexModel: string; codexEffort: string } };
+    const body = await response.json() as { ok: boolean; run: { id: string; outputCardId: string; outputFile: string; stdoutFile: string; codexModel: string; codexEffort: string } };
     assert.equal(body.ok, true);
     assert.ok(body.run.outputCardId);
     assert.ok(body.run.outputFile.endsWith(`${body.run.outputCardId}.md`));
@@ -185,6 +190,11 @@ test('card skill process route creates a linked output card and launches codex',
     await waitForText(body.run.outputFile, 'model=gpt-5.4');
     await waitForText(body.run.outputFile, 'effort=model_reasoning_effort="xhigh"');
     await waitForText(body.run.outputFile, 'ledgerFile=');
+    await waitForText(body.run.stdoutFile, '"type":"turn.completed"');
+    await waitForCondition(() => {
+      const runs = runtime.codexSkillRuns as Record<string, { status?: string }> | undefined;
+      return runs?.[body.run.id]?.status === 'complete';
+    }, 'the generated card-skill run to complete');
     const output = readFileSync(body.run.outputFile, 'utf8');
     assert.match(output, /ledgerFile=.*\.decision-os\/specs\.json/);
     assert.doesNotMatch(output, /^Status: processing$/m);
@@ -192,6 +202,29 @@ test('card skill process route creates a linked output card and launches codex',
     assert.doesNotMatch(output, /^Codex run:/m);
     assert.doesNotMatch(output, /^Codex model:/m);
     assert.doesNotMatch(output, /^Codex effort:/m);
+
+    const completedResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${body.run.id}?ledgerId=specs&cardId=${body.run.outputCardId}&since=0`);
+    assert.equal(completedResponse.status, 200);
+    const completed = await completedResponse.json() as {
+      runKind: string;
+      status: string;
+      lineCount: number;
+      persistedEventCount: number;
+      toolCallCount: number;
+      events: Array<{ line: number; type: string; kind: string; itemId: string }>;
+    };
+    assert.equal(completed.runKind, 'card');
+    assert.equal(completed.status, 'complete');
+    assert.equal(completed.lineCount, 4);
+    assert.equal(completed.persistedEventCount, 0);
+    assert.equal(completed.toolCallCount, 1);
+    assert.deepEqual(completed.events.map((event) => event.type), ['thread.started', 'item.started', 'item.completed', 'turn.completed']);
+    assert.deepEqual(completed.events.filter((event) => event.itemId === 'ordinary-tool').map((event) => event.line), [2, 3]);
+
+    const threadFile = join(workspace, '.decision-os', 'threads', 'specs', `thread-${body.run.outputCardId}.md`);
+    const thread = existsSync(threadFile) ? readFileSync(threadFile, 'utf8') : '';
+    assert.deepEqual(parseThreadMarkdown(thread).filter((note) => note.codexRunId === body.run.id), []);
+    assert.doesNotMatch(thread, new RegExp(`codex-${body.run.id}-line-`));
   } finally {
     server.close();
     process.chdir(originalCwd);
@@ -242,16 +275,28 @@ test('thread codex process route anchors the run widget on the source card and s
   }, null, 2));
   writeFileSync(fakeCodex, [
     '#!/usr/bin/env node',
-    'import { writeFileSync } from "node:fs";',
+    'import { appendFileSync, writeFileSync } from "node:fs";',
     'let input = "";',
     'process.stdin.on("data", (chunk) => { input += chunk; });',
     'process.stdin.on("end", () => {',
     `  writeFileSync(${JSON.stringify(inputFile)}, input);`,
     '  const match = input.match(/Run summary file: (.+)/);',
-    '  if (!match) process.exit(2);',
+    '  const threadMatch = input.match(/Thread markdown file: (.+)/);',
+    '  if (!match || !threadMatch) process.exit(2);',
     '  writeFileSync(match[1].trim(), "# Fake Thread Run\\n\\nscoped\\n");',
+    '  appendFileSync(threadMatch[1].trim(), "\\n\\n# AGENT\\n<!-- decision-os:note {\\"id\\":\\"note-agent-scoped-final\\",\\"timestamp\\":\\"2026-07-10T01:02:00.000Z\\"} -->\\n\\nScoped final answer.\\n");',
     '  console.log(JSON.stringify({ type: "thread.started", thread_id: "session-thread-a" }));',
+    '  console.log(JSON.stringify({ type: "turn.started" }));',
+    '  console.log(JSON.stringify({ type: "item.completed", item: { id: "thinking-1", type: "reasoning", text: "Thinking remains in the run log." } }));',
+    '  console.log(JSON.stringify({ type: "item.completed", item: { id: "message-1", type: "agent_message", text: "Interim progress remains in the run log." } }));',
+    '  console.log(JSON.stringify({ type: "item.started", item: { id: "tool-1", type: "command_execution", command: "rg TODO", status: "in_progress" } }));',
+    '  console.log(JSON.stringify({ type: "item.completed", item: { id: "tool-1", type: "command_execution", command: "rg TODO", aggregated_output: "done", exit_code: 0, status: "completed" } }));',
+    '  console.log(JSON.stringify({ type: "item.completed", item: { id: "file-1", type: "file_change", changes: [{ path: "card-a.md", kind: "updated" }], status: "completed" } }));',
+    '  console.log(JSON.stringify({ type: "item.completed", item: { id: "warning-1", type: "warning", message: "Recoverable warning." } }));',
+    '  console.log(JSON.stringify({ type: "error", message: "Reconnecting... 2/5 (request timed out)" }));',
     '  console.log(JSON.stringify({ type: "turn.completed" }));',
+    '  console.error("WARNING stderr retry budget is low");',
+    '  console.error("Reconnecting transport after request timed out");',
     '});',
   ].join('\n'));
   chmodSync(fakeCodex, 0o755);
@@ -308,10 +353,10 @@ test('thread codex process route anchors the run widget on the source card and s
     await waitForText(body.run.outputFile, 'Codex run completed');
     const ledgerPath = join(workspace, '.decision-os', 'specs.json');
     const threadPath = join(workspace, '.decision-os', 'threads', 'specs', 'thread-card-a.md');
-    await waitForText(threadPath, `codex-${body.run.id}-line-2`);
+    await waitForText(threadPath, 'Scoped final answer.');
     await waitForCondition(
       () => eventCollector?.events.some((event) => event.kind === 'thread-content' && event.ledgerId === 'specs' && event.threadId === 'thread-card-a') === true,
-      'the scoped lifecycle thread-content event',
+      'the scoped final-answer thread-content event',
     );
     await waitForStableEventCount(eventCollector.events);
 
@@ -319,10 +364,14 @@ test('thread codex process route anchors the run widget on the source card and s
     assert.equal(lifecycleEvent?.contentFile, '.decision-os/threads/specs/thread-card-a.md');
     const threadBeforePolling = readFileSync(threadPath, 'utf8');
     const lifecycleNotes = parseThreadMarkdown(threadBeforePolling).filter((note) => note.codexRunId === body.run.id);
-    assert.deepEqual(lifecycleNotes.map((note) => note.codexLine), ['1', '2']);
-    assert.equal(new Set(lifecycleNotes.map((note) => note.id)).size, 2);
-    assert.equal(lifecycleNotes.filter((note) => note.codexEventType === 'thread.started').length, 1);
-    assert.equal(lifecycleNotes.filter((note) => note.codexEventType === 'turn.completed').length, 1);
+    assert.deepEqual(lifecycleNotes, []);
+    const notes = parseThreadMarkdown(threadBeforePolling);
+    assert.equal(notes.at(-1)?.id, 'note-agent-scoped-final');
+    assert.equal(notes.at(-1)?.role, 'agent');
+    assert.equal(notes.at(-1)?.message, 'Scoped final answer.');
+    assert.equal(notes.filter((note) => note.id === 'note-agent-scoped-final').length, 1);
+    assert.match(threadBeforePolling, /Please update this exact card from the thread\.[\s\S]*Scoped final answer\./);
+    assert.doesNotMatch(threadBeforePolling, new RegExp(`codex-${body.run.id}-line-`));
 
     const ledgerMtimeBeforePolling = statSync(ledgerPath).mtimeMs;
     const threadMtimeBeforePolling = statSync(threadPath).mtimeMs;
@@ -330,10 +379,17 @@ test('thread codex process route anchors the run widget on the source card and s
     for (let requestIndex = 0; requestIndex < 3; requestIndex += 1) {
       const statusResponse = await fetch(`${baseUrl}/api/codex/skills/runs/${body.run.id}?ledgerId=specs&cardId=card-a&since=0`);
       assert.equal(statusResponse.status, 200);
-      const status = await statusResponse.json() as { ok: boolean; status: string; persistedEventCount: number; metadata: { codexModel: string; codexEffort: string } };
+      const status = await statusResponse.json() as { ok: boolean; runKind: string; status: string; persistedEventCount: number; toolCallCount: number; thinkingCount: number; warningCount: number; transportStatus: string; events: Array<{ kind: string }>; diagnostics: Array<{ kind: string }>; metadata: { codexModel: string; codexEffort: string } };
       assert.equal(status.ok, true);
+      assert.equal(status.runKind, 'thread');
       assert.equal(status.status, 'complete');
       assert.equal(status.persistedEventCount, 0);
+      assert.equal(status.toolCallCount, 1);
+      assert.equal(status.thinkingCount, 1);
+      assert.equal(status.warningCount, 2);
+      assert.equal(status.transportStatus, 'degraded');
+      assert.deepEqual(status.events.map((event) => event.kind), ['run_status', 'run_status', 'thinking', 'agent_message', 'tool_call', 'tool_call', 'file_change', 'warning', 'transport', 'run_status']);
+      assert.deepEqual(status.diagnostics.map((event) => event.kind), ['warning', 'transport']);
       assert.equal(status.metadata.codexModel, 'gpt-5.4');
       assert.equal(status.metadata.codexEffort, 'medium');
     }
@@ -349,6 +405,74 @@ test('thread codex process route anchors the run widget on the source card and s
     if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
     else process.env.CODEX_BIN = previousCodexBin;
     rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('all card-owned terminal lifecycle batches leave ledger and conversation bytes unchanged', () => {
+  for (const terminal of [
+    { type: 'turn.completed' },
+    { type: 'turn.failed', message: 'Codex process failed.' },
+    { type: 'operator.cancelled', message: 'Codex process cancelled.' },
+  ]) {
+    for (const ownershipKind of ['thread-run-id', 'run-id', 'generated-card-id', 'body-marker'] as const) {
+      const workspace = mkdtempSync(join(tmpdir(), `decision-os-owned-${ownershipKind}-`));
+      const decisionOsRoot = join(workspace, '.decision-os');
+      const ledgerPath = join(decisionOsRoot, 'specs.json');
+      const runId = `codex-skill-1783670000000-${ownershipKind}-${terminal.type.replace(/\W+/g, '').slice(0, 8)}`;
+      const cardId = ownershipKind === 'generated-card-id' ? `card-${runId}` : `card-${ownershipKind}`;
+      const threadId = `thread-${cardId}`;
+      const threadPath = join(decisionOsRoot, 'threads', 'specs', `${threadId}.md`);
+      const card: Record<string, unknown> = { id: cardId, comment: { what: 'Card body.' }, facts: [], fields: [] };
+      if (ownershipKind === 'thread-run-id') card.codexThreadRunId = runId;
+      if (ownershipKind === 'run-id') card.codexRunId = runId;
+      if (ownershipKind === 'body-marker') {
+        const contentFile = `.decision-os/cards/specs/${cardId}.md`;
+        card.comment = { contentFile };
+        mkdirSync(join(decisionOsRoot, 'cards', 'specs'), { recursive: true });
+        writeFileSync(join(workspace, contentFile), `# Historical run\n\nCodex run: ${runId}\n`);
+      }
+      mkdirSync(join(decisionOsRoot, 'threads', 'specs'), { recursive: true });
+      writeFileSync(ledgerPath, JSON.stringify({
+        cards: [card],
+        annotations: [],
+        relationships: [],
+        notes: {},
+        threadFiles: { [threadId]: `.decision-os/threads/specs/${threadId}.md` },
+      }, null, 2));
+      writeFileSync(threadPath, [
+        '# OPERATOR',
+        '<!-- decision-os:note {"id":"note-operator","timestamp":"2026-07-10T00:00:00.000Z"} -->',
+        '',
+        'Run Codex for this thread.',
+        '',
+        '# AGENT',
+        '<!-- decision-os:note {"id":"note-agent-final","timestamp":"2026-07-10T00:01:00.000Z"} -->',
+        '',
+        'The direct scoped answer.',
+      ].join('\n'));
+      const ledgerBefore = readFileSync(ledgerPath, 'utf8');
+      const threadBefore = readFileSync(threadPath, 'utf8');
+      const ledgerMtimeBefore = statSync(ledgerPath).mtimeMs;
+      const threadMtimeBefore = statSync(threadPath).mtimeMs;
+
+      try {
+        const events = [
+          normalizeCardSkillRunEvent({ line: 1, event: { type: 'thread.started' } }),
+          normalizeCardSkillRunEvent({ line: 2, event: { type: 'item.started', item: { id: 'tool-1', type: 'command_execution', command: 'rg TODO', status: 'in_progress' } } }),
+          normalizeCardSkillRunEvent({ line: 3, event: { type: 'item.completed', item: { id: 'tool-1', type: 'command_execution', command: 'rg TODO', status: 'completed' } } }),
+          normalizeCardSkillRunEvent({ line: 4, event: terminal }),
+        ];
+        const persisted = persistCardSkillRunEvents({ decisionOsRoot, ledgerPath, cardId, runId, events });
+        const assertionLabel = `${ownershipKind}: ${terminal.type}`;
+        assert.equal(persisted, 0, assertionLabel);
+        assert.equal(readFileSync(ledgerPath, 'utf8'), ledgerBefore, assertionLabel);
+        assert.equal(readFileSync(threadPath, 'utf8'), threadBefore, assertionLabel);
+        assert.equal(statSync(ledgerPath).mtimeMs, ledgerMtimeBefore, assertionLabel);
+        assert.equal(statSync(threadPath).mtimeMs, threadMtimeBefore, assertionLabel);
+      } finally {
+        rmSync(workspace, { recursive: true, force: true });
+      }
+    }
   }
 });
 
@@ -461,6 +585,7 @@ test('card skill run continue route resumes the captured session with post-end t
   const outputCardId = `card-${runId}`;
   const threadId = `thread-${outputCardId}`;
   const threadFile = join(workspace, '.decision-os', 'threads', 'specs', `${threadId}.md`);
+  const jsonlFile = join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.jsonl`);
   mkdirSync(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs'), { recursive: true });
   mkdirSync(join(workspace, '.decision-os', 'cards', 'specs'), { recursive: true });
   mkdirSync(join(workspace, '.decision-os', 'threads', 'specs'), { recursive: true });
@@ -502,7 +627,7 @@ test('card skill run continue route resumes the captured session with post-end t
     '',
     'Second follow-up message.',
   ].join('\n'));
-  writeFileSync(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.jsonl`), [
+  writeFileSync(jsonlFile, [
     JSON.stringify({ type: 'thread.started', thread_id: sessionId }),
     JSON.stringify({ type: 'turn.completed' }),
   ].join('\n'));
@@ -535,6 +660,7 @@ test('card skill run continue route resumes the captured session with post-end t
   const address = server.address() as AddressInfo;
 
   try {
+    const threadBeforeResume = readFileSync(threadFile, 'utf8');
     const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}/continue`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -557,10 +683,20 @@ test('card skill run continue route resumes the captured session with post-end t
     assert.deepEqual(argv.slice(0, 4), ['exec', 'resume', '--dangerously-bypass-approvals-and-sandbox', '--json']);
     assert.equal(argv.includes(sessionId), true);
     assert.equal(argv.at(-1), '-');
-    await waitForText(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.jsonl`), 'resumed response');
+    await waitForText(jsonlFile, 'resumed response');
+    await waitForCondition(() => {
+      const runs = runtime.codexSkillRuns as Record<string, { status?: string }> | undefined;
+      return runs?.[runId]?.status === 'complete';
+    }, 'the resumed card-skill run to complete');
+    const resumedStatusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}&since=0`);
+    assert.equal(resumedStatusResponse.status, 200);
+    const resumedStatus = await resumedStatusResponse.json() as { persistedEventCount: number; events: Array<{ type: string }> };
+    assert.equal(resumedStatus.persistedEventCount, 0);
+    assert.deepEqual(resumedStatus.events.map((event) => event.type), ['turn.started', 'item.completed', 'turn.completed']);
+    assert.equal(readFileSync(threadFile, 'utf8'), threadBeforeResume);
 
-    await waitForText(threadFile, 'resumed response');
-    writeFileSync(threadFile, `${readFileSync(threadFile, 'utf8').trimEnd()}\n\n# OPERATOR\n<!-- decision-os:note {"id":"note-fresh","timestamp":"2026-07-07T17:16:00.000Z"} -->\n\nStart without the previous session context.\n`);
+    const threadBeforeFresh = `${threadBeforeResume.trimEnd()}\n\n# OPERATOR\n<!-- decision-os:note {"id":"note-fresh","timestamp":"2026-07-07T17:16:00.000Z"} -->\n\nStart without the previous session context.\n`;
+    writeFileSync(threadFile, threadBeforeFresh);
     const freshResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}/continue`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -581,8 +717,20 @@ test('card skill run continue route resumes the captured session with post-end t
     assert.equal(freshArgs.includes('resume'), false);
     assert.equal(freshArgs.includes(sessionId), false);
 
-    await waitForText(threadFile, 'fresh response');
-    writeFileSync(threadFile, `${readFileSync(threadFile, 'utf8').trimEnd()}\n\n# OPERATOR\n<!-- decision-os:note {"id":"note-after-fresh","timestamp":"2026-07-07T17:17:00.000Z"} -->\n\nContinue the fresh session.\n`);
+    await waitForText(jsonlFile, 'fresh response');
+    await waitForCondition(() => {
+      const runs = runtime.codexSkillRuns as Record<string, { status?: string }> | undefined;
+      return runs?.[runId]?.status === 'complete';
+    }, 'the fresh card-skill session to complete');
+    const freshStatusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}&since=0`);
+    assert.equal(freshStatusResponse.status, 200);
+    const freshStatus = await freshStatusResponse.json() as { persistedEventCount: number; events: Array<{ type: string }> };
+    assert.equal(freshStatus.persistedEventCount, 0);
+    assert.deepEqual(freshStatus.events.map((event) => event.type), ['thread.started', 'turn.started', 'item.completed', 'turn.completed']);
+    assert.equal(readFileSync(threadFile, 'utf8'), threadBeforeFresh);
+
+    const threadBeforeLatestResume = `${threadBeforeFresh.trimEnd()}\n\n# OPERATOR\n<!-- decision-os:note {"id":"note-after-fresh","timestamp":"2026-07-07T17:17:00.000Z"} -->\n\nContinue the fresh session.\n`;
+    writeFileSync(threadFile, threadBeforeLatestResume);
     const resumedFreshResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}/continue`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -593,7 +741,17 @@ test('card skill run continue route resumes the captured session with post-end t
     const resumedFreshArgs = JSON.parse(readFileSync(argvFile, 'utf8')) as string[];
     assert.deepEqual(resumedFreshArgs.slice(0, 4), ['exec', 'resume', '--dangerously-bypass-approvals-and-sandbox', '--json']);
     assert.equal(resumedFreshArgs.includes(freshSessionId), true);
-    await waitForText(threadFile, 'latest session response');
+    await waitForText(jsonlFile, 'latest session response');
+    await waitForCondition(() => {
+      const runs = runtime.codexSkillRuns as Record<string, { status?: string }> | undefined;
+      return runs?.[runId]?.status === 'complete';
+    }, 'the latest resumed card-skill session to complete');
+    const latestStatusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}&since=0`);
+    assert.equal(latestStatusResponse.status, 200);
+    const latestStatus = await latestStatusResponse.json() as { persistedEventCount: number; events: Array<{ type: string }> };
+    assert.equal(latestStatus.persistedEventCount, 0);
+    assert.deepEqual(latestStatus.events.map((event) => event.type), ['turn.started', 'item.completed', 'turn.completed']);
+    assert.equal(readFileSync(threadFile, 'utf8'), threadBeforeLatestResume);
   } finally {
     server.close();
     process.chdir(originalCwd);

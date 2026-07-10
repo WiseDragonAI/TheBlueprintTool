@@ -21,41 +21,67 @@ async function waitForText(file: string, text: string): Promise<void> {
   assert.fail(`Timed out waiting for ${text} in ${file}`);
 }
 
-test('card skill run route derives JSONL progress without persisting thread notes', async () => {
+test('thread-launched run reads return chronological diagnostics without changing the conversation', async () => {
   const originalCwd = process.cwd();
-  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-card-skill-run-'));
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-thread-skill-run-'));
   const startedAt = Date.now() - 600000;
   const completedAt = new Date(startedAt + 90000);
   const runId = `codex-skill-${startedAt}-feed1234`;
-  const outputCardId = `card-${runId}`;
+  const cardId = 'card-thread-run';
+  const threadId = `thread-${cardId}`;
   mkdirSync(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs'), { recursive: true });
+  mkdirSync(join(workspace, '.decision-os', 'threads', 'specs'), { recursive: true });
   mkdirSync(join(workspace, '.decision-os'), { recursive: true });
   writeFileSync(join(workspace, '.decision-os', 'state.json'), JSON.stringify({
     ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }]
   }, null, 2));
   writeFileSync(join(workspace, '.decision-os', 'specs.json'), JSON.stringify({
     cards: [{
-      id: outputCardId,
-      title: 'Skill Result',
-      cardType: 'codex-skill-run',
-      comment: { what: '# Finished Skill Result\n\nThe final card body replaced the initial run metadata.' },
+      id: cardId,
+      title: 'Thread target',
+      codexThreadRunId: runId,
+      comment: { what: 'Thread target body.' },
       facts: [],
       fields: []
     }],
     annotations: [],
     relationships: [],
-    notes: {}
+    notes: {},
+    threadFiles: { [threadId]: `.decision-os/threads/specs/${threadId}.md` }
   }, null, 2));
+  const threadPath = join(workspace, '.decision-os', 'threads', 'specs', `${threadId}.md`);
+  writeFileSync(threadPath, [
+    '# OPERATOR',
+    '<!-- decision-os:note {"id":"note-operator-1","timestamp":"2026-07-10T00:00:00.000Z"} -->',
+    '',
+    'Please inspect this thread.',
+    '',
+    '# AGENT',
+    '<!-- decision-os:note {"id":"note-agent-final","timestamp":"2026-07-10T00:01:00.000Z"} -->',
+    '',
+    'The scoped final answer remains the only agent reply.',
+  ].join('\n'));
   const jsonlPath = join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.jsonl`);
   const logPath = join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.log`);
   writeFileSync(jsonlPath, [
     JSON.stringify({ type: 'thread.started' }),
-    JSON.stringify({ type: 'item.completed', item: { id: 'msg-1', type: 'agent_message', text: 'Thinking text persisted.' } }),
+    JSON.stringify({ type: 'turn.started' }),
+    JSON.stringify({ type: 'item.completed', item: { id: 'think-1', type: 'reasoning', text: 'Inspecting the scoped files.' } }),
+    JSON.stringify({ type: 'item.completed', item: { id: 'msg-1', type: 'agent_message', text: 'Interim progress remains log data.' } }),
+    JSON.stringify({ type: 'item.started', item: { id: 'cmd-1', type: 'command_execution', command: 'rg TODO', aggregated_output: '', exit_code: null, status: 'in_progress' } }),
     JSON.stringify({ type: 'item.completed', item: { id: 'cmd-1', type: 'command_execution', command: 'rg TODO', aggregated_output: 'found TODO', exit_code: 0, status: 'completed' } }),
+    JSON.stringify({ type: 'item.completed', item: { type: 'command_execution', command: 'pwd', aggregated_output: workspace, exit_code: 0, status: 'completed' } }),
     JSON.stringify({ type: 'item.completed', item: { id: 'file-1', type: 'file_change', changes: [{ path: 'result.md', kind: 'updated' }], status: 'completed' } }),
+    JSON.stringify({ type: 'item.completed', item: { id: 'warn-1', type: 'warning', message: 'A recoverable warning.' } }),
+    JSON.stringify({ type: 'error', message: 'Reconnecting... 2/5 (request timed out)' }),
+    JSON.stringify({ type: 'item.completed', item: { id: 'error-1', type: 'error', message: 'A non-terminal tool error.' } }),
     JSON.stringify({ type: 'turn.completed' }),
   ].join('\n'));
-  writeFileSync(logPath, `decision-os:codex-run-segment ${JSON.stringify({ runId, startedAt: new Date(startedAt).toISOString(), segment: 'start', metadata: { sourceCardTitle: 'Source Card', codexModel: 'gpt-5.5', codexEffort: 'xhigh' } })}\n`);
+  writeFileSync(logPath, [
+    `decision-os:codex-run-segment ${JSON.stringify({ runId, startedAt: new Date(startedAt).toISOString(), segment: 'start', metadata: { sourceCardTitle: 'Thread target', sourceThreadId: threadId, codexModel: 'gpt-5.5', codexEffort: 'xhigh' } })}`,
+    'WARNING retry budget is low',
+    'Reconnecting transport after request timed out',
+  ].join('\n'));
   utimesSync(jsonlPath, completedAt, completedAt);
   utimesSync(logPath, completedAt, completedAt);
 
@@ -66,45 +92,72 @@ test('card skill run route derives JSONL progress without persisting thread note
   await once(server, 'listening');
   const address = server.address() as AddressInfo;
   const ledgerPath = join(workspace, '.decision-os', 'specs.json');
-  const threadPath = join(workspace, '.decision-os', 'threads', 'specs', `thread-${outputCardId}.md`);
 
   try {
     const ledgerBefore = readFileSync(ledgerPath, 'utf8');
+    const threadBefore = readFileSync(threadPath, 'utf8');
     const ledgerMtimeBefore = statSync(ledgerPath).mtimeMs;
-    assert.equal(existsSync(threadPath), false);
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}&since=2`);
+    const threadMtimeBefore = statSync(threadPath).mtimeMs;
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${cardId}&since=2`);
     assert.equal(response.status, 200);
     const body = await response.json() as {
       ok: boolean;
+      runKind: string;
       status: string;
       lineCount: number;
+      nextSince: number;
       elapsedMs: number;
       toolCallCount: number;
       agentMessageCount: number;
       fileChangeCount: number;
+      thinkingCount: number;
+      warningCount: number;
+      errorCount: number;
+      transportStatus: string;
       metadata: { sourceCardTitle: string; sourceThreadId: string; codexModel: string; codexEffort: string };
-      events: Array<{ line: number }>;
+      events: Array<{ line: number; source: string; sourceLine: number; kind: string; itemId: string; output: string; severity: string }>;
+      diagnostics: Array<{ source: string; sourceLine: number; kind: string; text: string; status: string }>;
       persistedEventCount: number;
     };
     assert.equal(body.ok, true);
+    assert.equal(body.runKind, 'thread');
     assert.equal(body.status, 'complete');
-    assert.equal(body.lineCount, 5);
+    assert.equal(body.lineCount, 12);
+    assert.equal(body.nextSince, 12);
     assert.ok(body.elapsedMs >= 89000 && body.elapsedMs <= 91000);
-    assert.equal(body.toolCallCount, 1);
+    assert.equal(body.toolCallCount, 2);
     assert.equal(body.agentMessageCount, 1);
     assert.equal(body.fileChangeCount, 1);
+    assert.equal(body.thinkingCount, 1);
+    assert.equal(body.warningCount, 2);
+    assert.deepEqual({
+      errorCount: body.errorCount,
+      eventErrors: body.events.filter((event) => event.kind === 'error').map((event) => `${event.source}:${event.sourceLine}`),
+      diagnosticErrors: body.diagnostics.filter((event) => event.kind === 'error').map((event) => `${event.source}:${event.sourceLine}`),
+    }, { errorCount: 1, eventErrors: ['jsonl:11'], diagnosticErrors: [] });
+    assert.equal(body.transportStatus, 'degraded');
     assert.equal(body.persistedEventCount, 0);
-    assert.deepEqual(body.metadata, { sourceCardTitle: 'Source Card', sourceThreadId: '', codexModel: 'gpt-5.5', codexEffort: 'xhigh' });
-    assert.deepEqual(body.events.map((event) => event.line), [3, 4, 5]);
+    assert.deepEqual(body.metadata, { sourceCardTitle: 'Thread target', sourceThreadId: threadId, codexModel: 'gpt-5.5', codexEffort: 'xhigh' });
+    assert.deepEqual(body.events.map((event) => event.line), [3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    assert.deepEqual(body.events.map((event) => event.kind), ['thinking', 'agent_message', 'tool_call', 'tool_call', 'tool_call', 'file_change', 'warning', 'transport', 'error', 'run_status']);
+    assert.deepEqual(body.events.filter((event) => event.itemId === 'cmd-1').map((event) => event.line), [5, 6]);
+    assert.equal(body.events.find((event) => event.line === 6)?.output, 'found TODO');
+    assert.equal(body.events.every((event) => event.source === 'jsonl' && event.sourceLine === event.line), true);
+    assert.deepEqual(body.diagnostics.map((event) => event.kind), ['warning', 'transport']);
+    assert.equal(body.diagnostics.every((event) => event.source === 'stderr'), true);
 
-    const repeatedResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}&since=5`);
+    const repeatedResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${cardId}&since=12`);
     assert.equal(repeatedResponse.status, 200);
-    const repeated = await repeatedResponse.json() as { persistedEventCount: number; events: unknown[] };
+    const repeated = await repeatedResponse.json() as { nextSince: number; persistedEventCount: number; events: unknown[] };
+    assert.equal(repeated.nextSince, 12);
     assert.equal(repeated.persistedEventCount, 0);
     assert.deepEqual(repeated.events, []);
     assert.equal(readFileSync(ledgerPath, 'utf8'), ledgerBefore);
+    assert.equal(readFileSync(threadPath, 'utf8'), threadBefore);
     assert.equal(statSync(ledgerPath).mtimeMs, ledgerMtimeBefore);
-    assert.equal(existsSync(threadPath), false);
+    assert.equal(statSync(threadPath).mtimeMs, threadMtimeBefore);
+    assert.match(threadBefore, /# OPERATOR[\s\S]*# AGENT[\s\S]*The scoped final answer/);
+    assert.doesNotMatch(threadBefore, /codexRunId|Codex turn completed|Tool call/);
   } finally {
     server.close();
     process.chdir(originalCwd);
@@ -238,6 +291,8 @@ test('card skill run route infers status from the latest continued JSONL segment
     assert.equal(running.persistedEventCount, 0);
     assert.deepEqual(running.events.at(-1), {
       line: 4,
+      source: 'jsonl',
+      sourceLine: 4,
       type: 'turn.started',
       kind: 'run_status',
       title: 'Turn started',
@@ -245,7 +300,9 @@ test('card skill run route infers status from the latest continued JSONL segment
       status: 'running',
       itemId: '',
       tool: '',
+      output: '',
       exitCode: '',
+      severity: 'info',
       persist: true,
     });
     const threadPath = join(workspace, '.decision-os', 'threads', 'specs', `thread-${outputCardId}.md`);
@@ -260,6 +317,19 @@ test('card skill run route infers status from the latest continued JSONL segment
     assert.equal(cancelled.ok, true);
     assert.equal(cancelled.status, 'cancelled');
     assert.equal(cancelled.lineCount, 4);
+    assert.equal(existsSync(threadPath), false);
+
+    writeFileSync(logPath, 'spawn failed: ENOENT while starting Codex\n');
+    const failedAt = new Date(Date.now() + 10);
+    utimesSync(logPath, failedAt, failedAt);
+    const failedResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}`);
+    assert.equal(failedResponse.status, 200);
+    const failed = await failedResponse.json() as { ok: boolean; status: string; errorCount: number; diagnostics: Array<{ kind: string; text: string }> };
+    assert.equal(failed.ok, true);
+    assert.equal(failed.status, 'failed');
+    assert.equal(failed.errorCount, 1);
+    assert.deepEqual(failed.diagnostics.map((event) => event.kind), ['error']);
+    assert.match(failed.diagnostics[0]?.text ?? '', /ENOENT/);
     assert.equal(existsSync(threadPath), false);
   } finally {
     server.close();
