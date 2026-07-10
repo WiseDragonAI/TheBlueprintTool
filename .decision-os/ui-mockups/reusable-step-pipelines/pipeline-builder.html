@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pipeline List Modal</title>
+    <link rel="stylesheet" href="./pipeline-builder.css">
+  </head>
+  <body>
+    <main class="modal-stage" aria-label="Pipeline list modal mockup">
+      <dialog class="admin-modal" open aria-labelledby="pipelines-title">
+        <header class="admin-head">
+          <div>
+            <p class="kicker">Reusable automation</p>
+            <h2 id="pipelines-title">Pipelines</h2>
+            <p class="modal-subtitle">Create a pipeline, expand one to inspect its steps, or edit it.</p>
+          </div>
+          <div class="head-actions">
+            <button class="primary-action" type="button">New pipeline</button>
+            <button class="plain-close" type="button" aria-label="Close">x</button>
+          </div>
+        </header>
+
+        <section class="pipeline-list" aria-label="Saved pipelines">
+          <article class="pipeline-row is-expanded">
+            <div class="pipeline-summary">
+              <button class="expand-button" type="button" aria-label="Collapse pipeline">⌄</button>
+              <div class="row-copy">
+                <h3>Codex skill delivery</h3>
+                <p>Create step cards, run saved steps in order, and continue after interruption.</p>
+              </div>
+              <button class="ghost-button" type="button">Edit pipeline</button>
+            </div>
+            <ol class="step-preview" aria-label="Codex skill delivery steps">
+              <li>
+                <span class="step-name">Extract current contract</span>
+                <span class="step-skills">product-analysis · corpus-data-extraction</span>
+              </li>
+              <li>
+                <span class="step-name">Plan screens</span>
+                <span class="step-skills">screen-content-planner</span>
+              </li>
+              <li>
+                <span class="step-name">Generate mockups</span>
+                <span class="step-skills">visual-mockup-generator</span>
+              </li>
+              <li>
+                <span class="step-name">Prepare implementation</span>
+                <span class="step-skills">executor-spec · executor-implement</span>
+              </li>
+            </ol>
+          </article>
+
+          <article class="pipeline-row">
+            <div class="pipeline-summary">
+              <button class="expand-button" type="button" aria-label="Expand pipeline">›</button>
+              <div class="row-copy">
+                <h3>Ticket solve path</h3>
+                <p>Investigate the source card, apply code changes, verify, and report the result.</p>
+              </div>
+              <button class="ghost-button" type="button">Edit pipeline</button>
+            </div>
+          </article>
+
+          <article class="pipeline-row">
+            <div class="pipeline-summary">
+              <button class="expand-button" type="button" aria-label="Expand pipeline">›</button>
+              <div class="row-copy">
+                <h3>Product spec builder</h3>
+                <p>Turn evidence into requirements, risks, options, and acceptance criteria.</p>
+              </div>
+              <button class="ghost-button" type="button">Edit pipeline</button>
+            </div>
+          </article>
+        </section>
+      </dialog>
+    </main>
+  </body>
+</html>

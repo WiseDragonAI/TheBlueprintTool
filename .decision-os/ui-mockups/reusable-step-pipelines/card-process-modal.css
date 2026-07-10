@@ -1,0 +1,208 @@
+@import url("./pipeline-base.css");
+
+.modal-stage {
+  display: grid;
+  place-items: center;
+  width: 1440px;
+  height: 900px;
+  background: #090a0c;
+}
+
+.skill-modal {
+  display: grid;
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+  width: min(720px, calc(100vw - 32px));
+  height: 60vh;
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: rgba(15, 17, 22, 0.98);
+  color: var(--text);
+  box-shadow: var(--shadow-panel);
+  padding: 16px;
+}
+
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+}
+
+.modal-subtitle {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.plain-close {
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: var(--button-radius);
+  background: var(--button-bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.mode-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 12px 0 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.mode-tab {
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 2px 2px 0 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 7px 12px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.mode-tab.is-selected {
+  border-color: var(--line);
+  background: rgba(4, 6, 9, 0.92);
+  color: var(--text);
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.skill-category-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 8px;
+}
+
+.skill-category-filter {
+  min-height: 22px;
+  border: 1px solid color-mix(in srgb, var(--accent), var(--line) 58%);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--accent), transparent 94%);
+  color: color-mix(in srgb, var(--accent), var(--text) 24%);
+  padding: 2px 6px;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.skill-category-filter.is-selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent), transparent 78%);
+  color: var(--text);
+}
+
+.skill-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.skill-result {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--button-bg);
+  color: var(--text);
+  padding: 10px;
+  text-align: left;
+}
+
+.skill-result.is-selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent), transparent 90%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent), transparent 56%);
+}
+
+.skill-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.skill-result-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-result-category {
+  border: 1px solid color-mix(in srgb, var(--accent), transparent 42%);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent), transparent 88%);
+  color: color-mix(in srgb, var(--accent), var(--text) 20%);
+  padding: 2px 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.skill-result-description {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.skill-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 12px;
+}
+
+.skill-selected-name {
+  min-width: 0;
+  margin-right: auto;
+  overflow: hidden;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-actions button {
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: var(--button-radius);
+  background: var(--button-bg);
+  color: var(--text);
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.skill-actions .primary-action {
+  border-color: color-mix(in srgb, var(--accent), transparent 28%);
+  background: color-mix(in srgb, var(--accent), transparent 88%);
+  color: color-mix(in srgb, var(--accent), white 46%);
+}

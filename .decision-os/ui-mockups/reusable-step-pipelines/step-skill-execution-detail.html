@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Step skill execution detail mockup</title>
+    <link rel="stylesheet" href="./step-skill-execution-detail.css">
+  </head>
+  <body>
+    <main class="mockup-frame" aria-label="Step skill execution detail mockup">
+      <section class="shell has-inspector">
+        <aside class="rail" aria-label="Toolbox">
+          <button class="tool" type="button"><span>&lsaquo;</span><span>Collapse</span></button>
+          <button class="tool active" type="button"><span>&#8598;</span><span>Select</span></button>
+          <button class="tool" type="button"><span>&#9636;</span><span>Card</span></button>
+          <button class="tool" type="button"><span>&#8599;</span><span>Link</span></button>
+          <button class="tool" type="button"><span>&#8634;</span><span>Resize</span></button>
+          <button class="tool focused" type="button"><span>&#9776;</span><span>Threads</span></button>
+        </aside>
+        <section class="workspace">
+          <header class="topbar">
+            <div>
+              <p class="kicker">Decision OS</p>
+              <h1>Tasks System</h1>
+            </div>
+            <nav class="tabs" aria-label="Open ledgers">
+              <button class="tab active" type="button">Tasks System</button>
+            </nav>
+          </header>
+          <section class="canvas" aria-label="Canvas">
+            <div class="canvas-content">
+              <svg class="relationships" viewBox="0 0 808 838" aria-label="Step relationship">
+                <defs>
+                  <marker id="arrow" viewBox="0 -5 10 10" refX="9" refY="0" markerWidth="8" markerHeight="8" orient="auto">
+                    <path d="M 0 -4 L 10 0 L 0 4 z" fill="#38d9e8"></path>
+                  </marker>
+                </defs>
+                <path d="M 260 190 C 364 210, 430 265, 512 326" marker-end="url(#arrow)"></path>
+                <path d="M 512 520 C 420 585, 350 630, 252 682" marker-end="url(#arrow)"></path>
+              </svg>
+              <article class="card detail-source">
+                <span class="ledger-card-label">Source</span>
+                <strong>Reusable step pipelines</strong>
+                <p>Original source card used to start the pipeline.</p>
+              </article>
+              <article class="card detail-card selected">
+                <span class="status-pill status-paused">Execution paused</span>
+                <strong>3. Generate mockups</strong>
+                <p>The active skill stopped before the pipeline advanced. Continue resumes from the latest workspace state.</p>
+                <section class="codex-run-widget compact">
+                  <div class="codex-run-body">
+                    <div class="codex-run-header"><span class="codex-run-status">Paused</span><span class="chip amber">run-3b9f</span></div>
+                    <p class="codex-run-latest">Last event saved to the run log.</p>
+                  </div>
+                </section>
+                <div class="card-actions">
+                  <button class="terminal-button warning" type="button">Continue pipeline</button>
+                  <button class="ghost-button" type="button">Run log</button>
+                </div>
+              </article>
+              <article class="card detail-next">
+                <span class="status-pill status-pending">Pending</span>
+                <strong>4. Implementation scaffold</strong>
+                <p>Blocked until the paused step is continued or cancelled.</p>
+              </article>
+            </div>
+          </section>
+        </section>
+        <aside class="thread-panel" aria-label="Inspector">
+          <main class="chat">
+            <header class="thread-heading">
+              <div>
+                <p class="kicker">Step detail</p>
+                <h2>Skill runs</h2>
+              </div>
+              <button class="thread-codex-button terminal-button primary" type="button">Refresh</button>
+            </header>
+            <p class="thread-target">
+              <span class="thread-target-title">3. Generate mockups</span>
+              <span>Pipeline run <code>run-pipe-1842</code> · saved step <code>step-generate-mockups</code></span>
+            </p>
+            <section class="panel-box detail-summary">
+              <div class="panel-title">
+                <h3>Current skill</h3>
+                <span class="status-pill status-paused">Paused</span>
+              </div>
+              <p class="subtle">visual-mockup-generator · run <code>run-3b9f</code> · waiting for continuation</p>
+              <div class="button-row compact-actions">
+                <button class="terminal-button warning" type="button">Continue pipeline</button>
+                <button class="terminal-button stop" type="button">Cancel run</button>
+              </div>
+            </section>
+            <ol class="thread-note-list">
+              <li class="thread-note event">
+                <span class="thread-note-meta">Skill · complete · run-3a01</span>
+                <p>Prepared the screen contract used by this step.</p>
+              </li>
+              <li class="thread-note event paused-event">
+                <span class="thread-note-meta">Skill · paused · run-3b9f</span>
+                <p>Execution paused before the next pipeline step became eligible.</p>
+              </li>
+              <li class="thread-note event pending-event">
+                <span class="thread-note-meta">Next step · pending</span>
+                <p>Implementation work stays blocked until this step is continued or cancelled.</p>
+              </li>
+            </ol>
+            <section class="panel-box logs">
+              <div class="panel-title">
+                <h3>Run evidence</h3>
+                <button class="ghost-button" type="button">Copy run id</button>
+              </div>
+              <div class="log-line">JSONL .decision-os/runs/codex-skills/tasks-system/run-3b9f.jsonl</div>
+              <div class="log-line">stderr .decision-os/runs/codex-skills/tasks-system/run-3b9f.log</div>
+              <div class="log-line">last event: pipeline continuation required</div>
+            </section>
+            <section class="panel-box step-nav">
+              <div class="panel-title">
+                <h3>Navigation</h3>
+                <span class="chip gray">Pipeline step</span>
+              </div>
+              <div class="button-row nav-row">
+                <button class="ghost-button" type="button">Previous step</button>
+                <button class="ghost-button" type="button">Source card</button>
+                <button class="ghost-button" type="button">Next step</button>
+              </div>
+            </section>
+          </main>
+        </aside>
+      </section>
+    </main>
+  </body>
+</html>

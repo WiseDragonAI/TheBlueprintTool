@@ -1,0 +1,55 @@
+@import url("./pipeline-base.css");
+
+.detail-source {
+  left: 86px;
+  top: 130px;
+  width: 300px;
+  --card-zone-color: var(--accent);
+}
+
+.detail-card {
+  left: 390px;
+  top: 270px;
+  width: 348px;
+  min-height: 250px;
+  --card-zone-color: var(--red);
+}
+
+.detail-card .status-pill {
+  float: right;
+  margin-left: 8px;
+}
+
+.detail-next {
+  left: 110px;
+  top: 620px;
+  width: 310px;
+  --card-zone-color: #a8b1bc;
+}
+
+.thread-target code,
+.detail-summary code,
+.failed-event code {
+  color: color-mix(in srgb, var(--accent), white 28%);
+  font-family: var(--mono);
+}
+
+.detail-summary,
+.logs,
+.step-nav {
+  background: rgba(7, 9, 12, 0.74);
+}
+
+.compact-actions,
+.nav-row {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.paused-event {
+  border-left-color: var(--amber);
+}
+
+.pending-event {
+  border-left-color: #a8b1bc;
+}

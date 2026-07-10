@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Process Card Modal</title>
+    <link rel="stylesheet" href="./card-process-modal.css">
+  </head>
+  <body>
+    <main class="modal-stage" aria-label="Process card modal mockup">
+      <dialog class="skill-modal process-modal" open aria-labelledby="process-title">
+        <header class="modal-head">
+          <div>
+            <p class="kicker">Codex processing</p>
+            <h2 id="process-title">Process card</h2>
+            <p class="modal-subtitle">Reusable step pipelines</p>
+          </div>
+          <button class="plain-close" type="button" aria-label="Close">x</button>
+        </header>
+
+        <nav class="mode-tabs" aria-label="Process mode">
+          <button class="mode-tab is-selected" type="button">Pipelines</button>
+          <button class="mode-tab" type="button">Skills</button>
+        </nav>
+
+        <input class="skill-search" type="search" placeholder="Search pipelines" aria-label="Search pipelines">
+
+        <div class="skill-category-filters" role="group" aria-label="Filter pipelines">
+          <button class="skill-category-filter is-selected" type="button">All</button>
+          <button class="skill-category-filter" type="button">Planning</button>
+          <button class="skill-category-filter" type="button">Design</button>
+          <button class="skill-category-filter" type="button">Build</button>
+          <button class="skill-category-filter" type="button">Recovery</button>
+        </div>
+
+        <section class="skill-results" aria-label="Pipeline results">
+          <button class="skill-result is-selected" type="button">
+            <span class="skill-result-header">
+              <span class="skill-result-name">Codex skill delivery</span>
+              <span class="skill-result-category">Build</span>
+            </span>
+            <span class="skill-result-description">Create one card per step, run configured skills in order, and continue after interruption.</span>
+          </button>
+          <button class="skill-result" type="button">
+            <span class="skill-result-header">
+              <span class="skill-result-name">Product analysis to screen plan</span>
+              <span class="skill-result-category">Planning</span>
+            </span>
+            <span class="skill-result-description">Turn source evidence into screen content before visual design work starts.</span>
+          </button>
+          <button class="skill-result" type="button">
+            <span class="skill-result-header">
+              <span class="skill-result-name">Implementation handoff</span>
+              <span class="skill-result-category">Build</span>
+            </span>
+            <span class="skill-result-description">Prepare executor-ready implementation context from approved cards.</span>
+          </button>
+        </section>
+
+        <footer class="skill-actions">
+          <span class="skill-selected-name">Codex skill delivery</span>
+          <button type="button">Edit pipeline</button>
+          <button class="primary-action" type="button">Run pipeline</button>
+        </footer>
+      </dialog>
+    </main>
+  </body>
+</html>
