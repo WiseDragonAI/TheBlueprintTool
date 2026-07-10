@@ -183,6 +183,7 @@ export async function startCardSkillProcessController(input: { action_payload?: 
     runId,
     startedAt,
     segment: 'start',
+    startLine: 0,
     metadata: {
       sourceCardTitle: String(source.title ?? cardId),
       codexModel: command.model,

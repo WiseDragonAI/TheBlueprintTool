@@ -389,10 +389,14 @@ test('card skill run route measures active resumed segment from the latest persi
   const logPath = join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.log`);
   writeFileSync(jsonlPath, [
     JSON.stringify({ type: 'thread.started' }),
+    JSON.stringify({ type: 'item.completed', item: { id: 'old-command', type: 'command_execution', command: 'old command', status: 'completed' } }),
     JSON.stringify({ type: 'turn.completed' }),
-    JSON.stringify({ type: 'turn.started' }),
   ].join('\n'));
-  writeFileSync(logPath, `decision-os:codex-run-segment ${JSON.stringify({ runId, startedAt: resumedAtIso, segment: 'continue' })}\n`);
+  writeFileSync(logPath, [
+    `decision-os:codex-run-segment ${JSON.stringify({ runId, startedAt: new Date(firstStartedAt).toISOString(), segment: 'start', startLine: 0 })}`,
+    'error: stale failure from the previous session',
+    `decision-os:codex-run-segment ${JSON.stringify({ runId, startedAt: resumedAtIso, segment: 'restart', startLine: 3 })}`,
+  ].join('\n'));
   const fresh = new Date();
   utimesSync(jsonlPath, fresh, fresh);
   utimesSync(logPath, fresh, fresh);
@@ -407,11 +411,16 @@ test('card skill run route measures active resumed segment from the latest persi
   try {
     const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}`);
     assert.equal(response.status, 200);
-    const body = await response.json() as { ok: boolean; status: string; startedAt: string; elapsedMs: number };
+    const body = await response.json() as { ok: boolean; status: string; startedAt: string; elapsedMs: number; toolCallCount: number; agentMessageCount: number; fileChangeCount: number; latestEvent: unknown; events: unknown[] };
     assert.equal(body.ok, true);
     assert.equal(body.status, 'running');
     assert.equal(body.startedAt, resumedAtIso);
     assert.ok(body.elapsedMs >= 29000 && body.elapsedMs < 45000);
+    assert.equal(body.toolCallCount, 0);
+    assert.equal(body.agentMessageCount, 0);
+    assert.equal(body.fileChangeCount, 0);
+    assert.equal(body.latestEvent, null);
+    assert.deepEqual(body.events, []);
   } finally {
     server.close();
     process.chdir(originalCwd);

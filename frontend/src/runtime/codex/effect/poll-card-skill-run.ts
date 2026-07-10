@@ -262,6 +262,9 @@ function paintExternallyStartedRun(poller: Poller, latestLabel = 'Continuing ses
   poller.element.dataset.runStatus = 'running';
   setText(poller.element, '[data-codex-run-status]', 'RUNNING');
   setText(poller.element, '[data-codex-run-latest]', latestLabel);
+  setText(poller.element, '[data-codex-run-tools]', '0');
+  setText(poller.element, '[data-codex-run-messages]', '0');
+  setText(poller.element, '[data-codex-run-files]', '0');
   setCancelButtonVisible(poller.element, true);
   setContinueButtonVisible(poller.element, false);
   setNewSessionButtonVisible(poller.element, false);

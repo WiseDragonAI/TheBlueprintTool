@@ -260,7 +260,15 @@ test('externally started Codex runs clear terminal widget cache and restart poll
     await waitFor(() => requests.length === 2);
     assert.equal(requests[1], '/api/codex/skills/runs/codex-skill-3000-cache?ledgerId=specs&cardId=card-a&since=0');
     await waitFor(() => cachedWidget.nodes['[data-codex-run-status]'].textContent === 'COMPLETE');
+    cachedWidget.nodes['[data-codex-run-tools]'].textContent = '7';
+    cachedWidget.nodes['[data-codex-run-messages]'].textContent = '2';
+    cachedWidget.nodes['[data-codex-run-files]'].textContent = '1';
     cachedWidget.nodes['[data-codex-run-new-session]'].onclick?.(new Event('click'));
+    assert.equal(cachedWidget.nodes['[data-codex-run-status]'].textContent, 'RUNNING');
+    assert.equal(cachedWidget.nodes['[data-codex-run-latest]'].textContent, 'Starting new session');
+    assert.equal(cachedWidget.nodes['[data-codex-run-tools]'].textContent, '0');
+    assert.equal(cachedWidget.nodes['[data-codex-run-messages]'].textContent, '0');
+    assert.equal(cachedWidget.nodes['[data-codex-run-files]'].textContent, '0');
     await waitFor(() => continuationBodies.length === 1);
     assert.equal(continuationBodies[0].newSession, true);
     assert.equal(continuationBodies[0].codexModel, 'gpt-5.5');

@@ -10,7 +10,31 @@ import { restoreThreadDraft } from './persist-thread-draft.js';
 import { restoreThreadScrollPosition, saveThreadScrollPosition } from './persist-thread-scroll.js';
 import { resolveThreadTargetTitle } from '../helper/resolve-thread-target-title.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { codexEffortOptions, codexModelOptions } from '../../codex/helper/codex-run-options.js';
 import { threadCodexCardId } from '../../codex/helper/thread-codex-card-id.js';
+
+let threadCodexModel = 'gpt-5.5';
+let threadCodexEffort = 'xhigh';
+
+function renderThreadCodexSelect(input: { label: string; value: string; options: readonly string[]; onChange: (value: string) => void }): HTMLLabelElement {
+  const field = document.createElement('label');
+  field.className = 'thread-codex-field';
+  const label = document.createElement('span');
+  label.textContent = input.label;
+  const select = document.createElement('select');
+  select.className = 'thread-codex-select';
+  select.setAttribute('aria-label', `${input.label} for thread Codex`);
+  for (const value of input.options) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = value;
+    select.append(option);
+  }
+  select.value = input.value;
+  select.addEventListener('change', () => input.onChange(select.value));
+  field.replaceChildren(label, select);
+  return field;
+}
 
 function renderThreadActions(threadId: string): void {
   const heading = document.querySelector('.thread-heading') as HTMLElement | null;
@@ -30,6 +54,8 @@ function renderThreadActions(threadId: string): void {
   button.dataset.action = 'process-thread-codex';
   button.dataset.threadId = threadId;
   button.dataset.cardId = cardId;
+  button.dataset.codexModel = threadCodexModel;
+  button.dataset.codexEffort = threadCodexEffort;
   button.title = 'Start Codex from this thread';
   button.setAttribute('aria-label', button.title);
   const key = document.createElement('span');
@@ -39,7 +65,25 @@ function renderThreadActions(threadId: string): void {
   label.className = 'terminal-button__label';
   label.textContent = 'Codex';
   button.replaceChildren(key, label);
-  actions.append(button);
+  const model = renderThreadCodexSelect({
+    label: 'Model',
+    value: threadCodexModel,
+    options: codexModelOptions,
+    onChange: (value) => {
+      threadCodexModel = value;
+      button.dataset.codexModel = value;
+    },
+  });
+  const effort = renderThreadCodexSelect({
+    label: 'Effort',
+    value: threadCodexEffort,
+    options: codexEffortOptions,
+    onChange: (value) => {
+      threadCodexEffort = value;
+      button.dataset.codexEffort = value;
+    },
+  });
+  actions.append(model, effort, button);
 }
 
 export function renderThreadPanel(): void {

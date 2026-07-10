@@ -131,7 +131,9 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     button.disabled = true;
     const ok = await processThreadCodexController({
       threadId: actionTarget.dataset.threadId ?? state.threadId,
-      cardId: actionTarget.dataset.cardId ?? ''
+      cardId: actionTarget.dataset.cardId ?? '',
+      codexModel: actionTarget.dataset.codexModel ?? '',
+      codexEffort: actionTarget.dataset.codexEffort ?? ''
     });
     if (!ok && button.isConnected) button.disabled = false;
     return;

@@ -273,6 +273,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     runId,
     startedAt: continuedAt,
     segment: newSession ? 'restart' : 'continue',
+    startLine: runFileLineCount(stdoutFile),
     metadata: {
       sourceCardTitle: String(card?.title ?? cardId),
       codexModel: command.model,

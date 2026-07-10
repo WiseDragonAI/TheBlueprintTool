@@ -189,6 +189,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
     runId,
     startedAt,
     segment: 'start',
+    startLine: 0,
     metadata: {
       sourceCardTitle: String(source.title ?? cardId),
       sourceThreadId: threadId,

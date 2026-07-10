@@ -8,7 +8,7 @@ import { hydrateLedgerCardContent } from '@backend/business/ledger/helper/card-c
 import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-ledger-notes.js';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
 import { hydrateLedgerThreadNotes, stripHydratedThreadNotes, writeThreadNotesFile } from '@backend/business/ledger/helper/thread-content-file.js';
-import { codexRunSegmentMetadata, latestCodexRunSegmentStartedAtMs, type CodexRunSegmentMetadata } from '../helper/codex-run-segment-marker.js';
+import { codexRunSegmentMetadata, latestCodexRunSegmentLog, latestCodexRunSegmentStartedAtMs, latestCodexRunSegmentStartLine, type CodexRunSegmentMetadata } from '../helper/codex-run-segment-marker.js';
 
 type AnyRecord = Record<string, unknown>;
 type RunStatus = 'running' | 'complete' | 'failed' | 'cancelled' | 'unknown';
@@ -188,13 +188,12 @@ function latestRunEventStatus(events: NormalizedRunEvent[]): RunStatus | null {
   return status;
 }
 
-function inferredStatus(input: { runtime: AnyRecord; runId: string; events: NormalizedRunEvent[]; stdoutFile: string; stderrFile: string }): RunStatus {
+function inferredStatus(input: { runtime: AnyRecord; runId: string; events: NormalizedRunEvent[]; stdoutFile: string; stderrFile: string; stderrLog: string }): RunStatus {
   const runtimeStatus = runtimeRunStatus(input.runtime, input.runId);
   if (runtimeStatus) return runtimeStatus;
-  const log = existsSync(input.stderrFile) ? readFileSync(input.stderrFile, 'utf8') : '';
-  const logStatus: RunStatus | null = /cancelled|canceled|terminated by operator/i.test(log)
+  const logStatus: RunStatus | null = /cancelled|canceled|terminated by operator/i.test(input.stderrLog)
     ? 'cancelled'
-    : /(spawn|enoent|failed|exit code [1-9]|error:)/i.test(log)
+    : /(spawn|enoent|failed|exit code [1-9]|error:)/i.test(input.stderrLog)
       ? 'failed'
       : null;
   const latestStatus = latestRunEventStatus(input.events);
@@ -322,9 +321,12 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
   const stderrLog = existsSync(stderrFile) ? readFileSync(stderrFile, 'utf8') : '';
   const parsedLines = readJsonlLines(stdoutFile);
   const events = parsedLines.map(normalizeRunEvent);
-  const status = inferredStatus({ runtime, runId, events, stdoutFile, stderrFile });
+  const segmentStartLine = latestCodexRunSegmentStartLine({ log: stderrLog, runId });
+  const segmentEvents = events.filter((event) => event.line > segmentStartLine);
+  const segmentLog = latestCodexRunSegmentLog({ log: stderrLog, runId });
+  const status = inferredStatus({ runtime, runId, events: segmentEvents, stdoutFile, stderrFile, stderrLog: segmentLog });
   const persistedEventCount = persistRunEvents({ decisionOsRoot, ledgerPath, ledger, cardId, runId, events });
-  const returnedEvents = events.filter((event) => event.line > since);
+  const returnedEvents = segmentEvents.filter((event) => event.line > since);
   const metadata = { ...runtimeRunMetadata(runtime, runId), ...codexRunSegmentMetadata({ log: stderrLog, runId }) };
   logCodexContinueDebug('read-controller-result', {
     traceId,
@@ -334,12 +336,14 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     since,
     status,
     parsedLineCount: parsedLines.length,
+    segmentStartLine,
+    segmentEventCount: segmentEvents.length,
     lineCount: parsedLines.at(-1)?.line ?? 0,
     returnedEventCount: returnedEvents.length,
     persistedEventCount,
     metadata,
-    latestEventType: events.at(-1)?.type ?? '',
-    latestEventLine: events.at(-1)?.line ?? 0,
+    latestEventType: segmentEvents.at(-1)?.type ?? '',
+    latestEventLine: segmentEvents.at(-1)?.line ?? 0,
     stdoutFile,
     stderrFile,
   });
@@ -354,13 +358,13 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     elapsedMs: elapsedMs({ runtime, runId, status, stdoutFile, stderrFile }),
     lineCount: parsedLines.at(-1)?.line ?? 0,
     nextSince: parsedLines.at(-1)?.line ?? 0,
-    toolCallCount: events.filter((event) => event.kind === 'tool_call' && event.type === 'item.completed').length,
-    agentMessageCount: events.filter((event) => event.kind === 'agent_message').length,
-    fileChangeCount: events.filter((event) => event.kind === 'file_change').length,
-    thinkingCount: events.filter((event) => event.kind === 'thinking').length,
+    toolCallCount: segmentEvents.filter((event) => event.kind === 'tool_call' && event.type === 'item.completed').length,
+    agentMessageCount: segmentEvents.filter((event) => event.kind === 'agent_message').length,
+    fileChangeCount: segmentEvents.filter((event) => event.kind === 'file_change').length,
+    thinkingCount: segmentEvents.filter((event) => event.kind === 'thinking').length,
     persistedEventCount,
     metadata,
-    latestEvent: events.at(-1) ?? null,
+    latestEvent: segmentEvents.at(-1) ?? null,
     events: returnedEvents,
   };
 }

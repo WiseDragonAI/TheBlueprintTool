@@ -91,6 +91,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(actionClick, /querySelector\('\.thread-file-input'\)/);
   assert.match(actionClick, /action === 'jump-thread-bottom'/);
   assert.match(actionClick, /pinThreadFeedToLastMessage\(\)/);
+  assert.match(actionClick, /action === 'process-thread-codex'[\s\S]*codexModel: actionTarget\.dataset\.codexModel[\s\S]*codexEffort: actionTarget\.dataset\.codexEffort/);
   assert.doesNotMatch(actionClick, /pinThreadFeedToLastMessage\(\{ behavior: 'smooth' \}\)/);
   assert.doesNotMatch(actionClick, /beginZoneLabelEdit/);
   assert.doesNotMatch(actionClick, /deleteSelectedZones/);
@@ -195,6 +196,15 @@ test('browser inputs route ledger commands through runtime controllers before se
 
   const openThreadPanel = source('frontend/src/runtime/thread/effect/open-thread-panel.ts');
   assert.doesNotMatch(openThreadPanel, /focusThreadDraft/);
+
+  const renderThreadPanel = source('frontend/src/runtime/thread/effect/render-thread-panel.ts');
+  const processThreadCodex = source('frontend/src/runtime/codex/controller/process-thread-codex-controller.ts');
+  const threadCss = source('frontend/assets/canvas/thread.css');
+  assert.match(renderThreadPanel, /renderThreadCodexSelect/);
+  assert.match(renderThreadPanel, /button\.dataset\.codexModel = threadCodexModel/);
+  assert.match(renderThreadPanel, /button\.dataset\.codexEffort = threadCodexEffort/);
+  assert.match(processThreadCodex, /requestThreadCodexProcess\(\{ ledgerId, threadId, cardId, codexModel: input\.codexModel, codexEffort: input\.codexEffort \}\)/);
+  assert.match(threadCss, /\.thread-codex-select\s*{[^}]*height:\s*28px;[^}]*font-family:\s*var\(--mono\);/s);
 
   const canvasLayerCss = source('frontend/assets/canvas/canvas-layer.css');
   const objectsCss = source('frontend/assets/canvas/objects.css');

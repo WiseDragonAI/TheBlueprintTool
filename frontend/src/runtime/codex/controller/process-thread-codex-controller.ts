@@ -8,18 +8,18 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { requestThreadCodexProcess } from '../effect/request-thread-codex-process.js';
 import { threadCodexCardId } from '../helper/thread-codex-card-id.js';
 
-export async function processThreadCodexController(input: { threadId?: string; cardId?: string } = {}): Promise<boolean> {
+export async function processThreadCodexController(input: { threadId?: string; cardId?: string; codexModel?: string; codexEffort?: string } = {}): Promise<boolean> {
   const ledgerId = String(state.activeTab ?? '').trim();
   const threadId = String(input.threadId ?? state.threadId ?? '').trim();
   const cardId = String(input.cardId ?? '').trim() || threadCodexCardId(state.activeLedger, threadId);
   if (!ledgerId || !threadId || !cardId) return false;
-  telemetry('codex-thread-process-start', { ledgerId, threadId, cardId });
-  const result = await requestThreadCodexProcess({ ledgerId, threadId, cardId });
+  telemetry('codex-thread-process-start', { ledgerId, threadId, cardId, codexModel: input.codexModel ?? '', codexEffort: input.codexEffort ?? '' });
+  const result = await requestThreadCodexProcess({ ledgerId, threadId, cardId, codexModel: input.codexModel, codexEffort: input.codexEffort });
   if (!result.ok) {
-    telemetry('codex-thread-process-failed', { ledgerId, threadId, cardId, error: result.error ?? '' });
+    telemetry('codex-thread-process-failed', { ledgerId, threadId, cardId, codexModel: input.codexModel ?? '', codexEffort: input.codexEffort ?? '', error: result.error ?? '' });
     return false;
   }
   await refreshRuntimeState();
-  telemetry('codex-thread-process-created-widget', { ledgerId, threadId, cardId, run: result.run?.id ?? '' });
+  telemetry('codex-thread-process-created-widget', { ledgerId, threadId, cardId, codexModel: input.codexModel ?? '', codexEffort: input.codexEffort ?? '', run: result.run?.id ?? '' });
   return true;
 }

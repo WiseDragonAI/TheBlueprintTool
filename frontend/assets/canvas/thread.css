@@ -50,7 +50,47 @@
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
   min-width: 0;
+}
+
+.thread-codex-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.thread-codex-select {
+  height: 28px;
+  min-width: 0;
+  padding: 0 20px 0 6px;
+  border: 1px solid color-mix(in srgb, var(--thread-accent), transparent 52%);
+  border-radius: 2px;
+  background: #0c1117;
+  color: #f3f6fb;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: none;
+}
+
+.thread-codex-field:first-child .thread-codex-select {
+  width: 112px;
+}
+
+.thread-codex-field:nth-child(2) .thread-codex-select {
+  width: 72px;
+}
+
+.thread-codex-select:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--thread-accent), white 24%);
+  outline-offset: 1px;
 }
 
 .thread-codex-button {

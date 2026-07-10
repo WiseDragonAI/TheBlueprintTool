@@ -17,9 +17,10 @@ function cleanMetadata(input: CodexRunSegmentMetadata = {}): CodexRunSegmentMeta
   return metadata;
 }
 
-export function codexRunSegmentMarker(input: { runId: string; startedAt: string; segment: CodexRunSegment; metadata?: CodexRunSegmentMetadata }): string {
+export function codexRunSegmentMarker(input: { runId: string; startedAt: string; segment: CodexRunSegment; startLine?: number; metadata?: CodexRunSegmentMetadata }): string {
   const metadata = cleanMetadata(input.metadata);
-  return `${markerPrefix}${JSON.stringify({ runId: input.runId, startedAt: input.startedAt, segment: input.segment, ...(Object.keys(metadata).length > 0 ? { metadata } : {}) })}\n`;
+  const startLine = Number.isFinite(input.startLine) ? Math.max(0, Math.floor(Number(input.startLine))) : undefined;
+  return `${markerPrefix}${JSON.stringify({ runId: input.runId, startedAt: input.startedAt, segment: input.segment, ...(startLine === undefined ? {} : { startLine }), ...(Object.keys(metadata).length > 0 ? { metadata } : {}) })}\n`;
 }
 
 export function codexRunSegmentMetadata(input: { log: string; runId: string }): CodexRunSegmentMetadata {
@@ -51,4 +52,36 @@ export function latestCodexRunSegmentStartedAtMs(input: { log: string; runId: st
     }
   }
   return latest;
+}
+
+export function latestCodexRunSegmentStartLine(input: { log: string; runId: string }): number {
+  let latest = 0;
+  for (const line of input.log.replace(/\r\n?/g, '\n').split('\n')) {
+    if (!line.startsWith(markerPrefix)) continue;
+    try {
+      const parsed = JSON.parse(line.slice(markerPrefix.length)) as { runId?: unknown; startLine?: unknown };
+      if (String(parsed.runId ?? '') !== input.runId) continue;
+      const startLine = Number(parsed.startLine ?? 0);
+      if (Number.isFinite(startLine) && startLine >= 0) latest = Math.floor(startLine);
+    } catch {
+      // Ignore malformed marker lines; older and later valid markers remain usable.
+    }
+  }
+  return latest;
+}
+
+export function latestCodexRunSegmentLog(input: { log: string; runId: string }): string {
+  const lines = input.log.replace(/\r\n?/g, '\n').split('\n');
+  let latestMarkerIndex = -1;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!line.startsWith(markerPrefix)) continue;
+    try {
+      const parsed = JSON.parse(line.slice(markerPrefix.length)) as { runId?: unknown };
+      if (String(parsed.runId ?? '') === input.runId) latestMarkerIndex = index;
+    } catch {
+      // Ignore malformed marker lines; older and later valid markers remain usable.
+    }
+  }
+  return latestMarkerIndex >= 0 ? lines.slice(latestMarkerIndex + 1).join('\n') : input.log;
 }
