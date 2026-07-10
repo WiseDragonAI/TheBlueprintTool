@@ -1,13 +1,16 @@
+/**
+ * WHAT: Behavioral coverage for observational Codex run status reads.
+ * WHY: Repeated polling must report progress without rewriting ledger, thread, or event-stream state.
+ */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
-import { parseThreadMarkdown } from '@backend/business/ledger/helper/thread-content-file.js';
 
 async function waitForText(file: string, text: string): Promise<void> {
   const started = Date.now();
@@ -18,7 +21,7 @@ async function waitForText(file: string, text: string): Promise<void> {
   assert.fail(`Timed out waiting for ${text} in ${file}`);
 }
 
-test('card skill run route derives JSONL progress and persists thread notes', async () => {
+test('card skill run route derives JSONL progress without persisting thread notes', async () => {
   const originalCwd = process.cwd();
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-card-skill-run-'));
   const startedAt = Date.now() - 600000;
@@ -62,8 +65,13 @@ test('card skill run route derives JSONL progress and persists thread notes', as
   const server = runtime.server as Server;
   await once(server, 'listening');
   const address = server.address() as AddressInfo;
+  const ledgerPath = join(workspace, '.decision-os', 'specs.json');
+  const threadPath = join(workspace, '.decision-os', 'threads', 'specs', `thread-${outputCardId}.md`);
 
   try {
+    const ledgerBefore = readFileSync(ledgerPath, 'utf8');
+    const ledgerMtimeBefore = statSync(ledgerPath).mtimeMs;
+    assert.equal(existsSync(threadPath), false);
     const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}&since=2`);
     assert.equal(response.status, 200);
     const body = await response.json() as {
@@ -76,6 +84,7 @@ test('card skill run route derives JSONL progress and persists thread notes', as
       fileChangeCount: number;
       metadata: { sourceCardTitle: string; sourceThreadId: string; codexModel: string; codexEffort: string };
       events: Array<{ line: number }>;
+      persistedEventCount: number;
     };
     assert.equal(body.ok, true);
     assert.equal(body.status, 'complete');
@@ -84,19 +93,18 @@ test('card skill run route derives JSONL progress and persists thread notes', as
     assert.equal(body.toolCallCount, 1);
     assert.equal(body.agentMessageCount, 1);
     assert.equal(body.fileChangeCount, 1);
+    assert.equal(body.persistedEventCount, 0);
     assert.deepEqual(body.metadata, { sourceCardTitle: 'Source Card', sourceThreadId: '', codexModel: 'gpt-5.5', codexEffort: 'xhigh' });
     assert.deepEqual(body.events.map((event) => event.line), [3, 4, 5]);
 
-    const ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { threadFiles?: Record<string, string> };
-    assert.equal(ledger.threadFiles?.[`thread-${outputCardId}`], `.decision-os/threads/specs/thread-${outputCardId}.md`);
-    const thread = readFileSync(join(workspace, '.decision-os', 'threads', 'specs', `thread-${outputCardId}.md`), 'utf8');
-    assert.match(thread, /"codexEventType":"thread.started"/);
-    assert.match(thread, /"codexKind":"agent_message"/);
-    assert.match(thread, /"codexKind":"tool_call"/);
-    assert.match(thread, /Tool call/);
-    assert.match(thread, /found TODO/);
-    assert.match(thread, /"codexKind":"file_change"/);
-    assert.match(thread, /Codex turn completed\./);
+    const repeatedResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}&since=5`);
+    assert.equal(repeatedResponse.status, 200);
+    const repeated = await repeatedResponse.json() as { persistedEventCount: number; events: unknown[] };
+    assert.equal(repeated.persistedEventCount, 0);
+    assert.deepEqual(repeated.events, []);
+    assert.equal(readFileSync(ledgerPath, 'utf8'), ledgerBefore);
+    assert.equal(statSync(ledgerPath).mtimeMs, ledgerMtimeBefore);
+    assert.equal(existsSync(threadPath), false);
   } finally {
     server.close();
     process.chdir(originalCwd);
@@ -104,7 +112,7 @@ test('card skill run route derives JSONL progress and persists thread notes', as
   }
 });
 
-test('card skill run route keeps command output containing thread markdown as one artifact note', async () => {
+test('card skill run route returns command output containing thread markdown as one event without writing a thread artifact', async () => {
   const originalCwd = process.cwd();
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-card-skill-run-fenced-output-'));
   const startedAt = Date.now() - 600000;
@@ -158,17 +166,17 @@ test('card skill run route keeps command output containing thread markdown as on
   try {
     const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}`);
     assert.equal(response.status, 200);
+    const body = await response.json() as {
+      persistedEventCount: number;
+      events: Array<{ line: number; kind: string; text: string }>;
+    };
+    assert.equal(body.persistedEventCount, 0);
+    const commandEvent = body.events.find((event) => event.line === 2);
+    assert.equal(commandEvent?.kind, 'tool_call');
+    assert.match(String(commandEvent?.text ?? ''), /````text\n# OPERATOR/);
+    assert.match(String(commandEvent?.text ?? ''), /```markdown\n# AGENT/);
     const threadPath = join(workspace, '.decision-os', 'threads', 'specs', `thread-${outputCardId}.md`);
-    const thread = readFileSync(threadPath, 'utf8');
-    assert.match(thread, /````text\n# OPERATOR/);
-    assert.match(thread, /```markdown\n# AGENT/);
-
-    const notes = parseThreadMarkdown(thread);
-    assert.equal(notes.length, 3);
-    assert.equal(notes[1]?.id, `codex-${runId}-line-2`);
-    assert.equal(notes[1]?.codexKind, 'tool_call');
-    assert.match(String(notes[1]?.message ?? ''), /# OPERATOR/);
-    assert.match(String(notes[1]?.message ?? ''), /# AGENT/);
+    assert.equal(existsSync(threadPath), false);
   } finally {
     server.close();
     process.chdir(originalCwd);
@@ -223,13 +231,25 @@ test('card skill run route infers status from the latest continued JSONL segment
   try {
     const runningResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}`);
     assert.equal(runningResponse.status, 200);
-    const running = await runningResponse.json() as { ok: boolean; status: string; lineCount: number };
+    const running = await runningResponse.json() as { ok: boolean; status: string; lineCount: number; persistedEventCount: number; events: Array<{ line: number; type: string; text: string }> };
     assert.equal(running.ok, true);
     assert.equal(running.status, 'running');
     assert.equal(running.lineCount, 4);
-    const thread = readFileSync(join(workspace, '.decision-os', 'threads', 'specs', `thread-${outputCardId}.md`), 'utf8');
-    assert.match(thread, /"codexEventType":"turn.started"/);
-    assert.match(thread, /Codex turn started\./);
+    assert.equal(running.persistedEventCount, 0);
+    assert.deepEqual(running.events.at(-1), {
+      line: 4,
+      type: 'turn.started',
+      kind: 'run_status',
+      title: 'Turn started',
+      text: 'Codex turn started.',
+      status: 'running',
+      itemId: '',
+      tool: '',
+      exitCode: '',
+      persist: true,
+    });
+    const threadPath = join(workspace, '.decision-os', 'threads', 'specs', `thread-${outputCardId}.md`);
+    assert.equal(existsSync(threadPath), false);
 
     writeFileSync(logPath, 'Codex run cancelled: terminated by operator\n');
     const cancelledAt = new Date();
@@ -240,6 +260,7 @@ test('card skill run route infers status from the latest continued JSONL segment
     assert.equal(cancelled.ok, true);
     assert.equal(cancelled.status, 'cancelled');
     assert.equal(cancelled.lineCount, 4);
+    assert.equal(existsSync(threadPath), false);
   } finally {
     server.close();
     process.chdir(originalCwd);

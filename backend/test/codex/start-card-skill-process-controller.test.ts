@@ -1,12 +1,86 @@
+/**
+ * WHAT: Process-route coverage for live Codex lifecycle ingestion and scoped thread publication.
+ * WHY: Each JSONL event must persist exactly once before status polling observes the run.
+ */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
+import { parseThreadMarkdown } from '@backend/business/ledger/helper/thread-content-file.js';
+
+type ContentChangeEvent = {
+  contentFile: string;
+  kind: 'card-content' | 'thread-content';
+  ledgerId: string;
+  threadId?: string;
+};
+
+async function startContentEventCollector(endpoint: string): Promise<{ events: ContentChangeEvent[]; close(): Promise<void> }> {
+  const controller = new AbortController();
+  const response = await fetch(endpoint, { signal: controller.signal });
+  assert.equal(response.ok, true);
+  const reader = response.body?.getReader();
+  assert.ok(reader);
+  const events: ContentChangeEvent[] = [];
+  const done = (async () => {
+    const decoder = new TextDecoder();
+    let buffer = '';
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) return;
+      buffer += decoder.decode(chunk.value, { stream: true }).replace(/\r\n?/g, '\n');
+      for (;;) {
+        const boundary = buffer.indexOf('\n\n');
+        if (boundary < 0) break;
+        const frame = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        const lines = frame.split('\n');
+        if (!lines.includes('event: card-content-change')) continue;
+        const data = lines.filter((line) => line.startsWith('data: ')).map((line) => line.slice(6)).join('\n');
+        events.push(JSON.parse(data) as ContentChangeEvent);
+      }
+    }
+  })().catch((error: unknown) => {
+    if (!(error instanceof Error) || error.name !== 'AbortError') throw error;
+  });
+  return {
+    events,
+    async close() {
+      controller.abort();
+      await done;
+    },
+  };
+}
+
+async function waitForCondition(predicate: () => boolean, description: string): Promise<void> {
+  const started = Date.now();
+  while (Date.now() - started < 3000) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.fail(`Timed out waiting for ${description}`);
+}
+
+async function waitForStableEventCount(events: ContentChangeEvent[]): Promise<void> {
+  const started = Date.now();
+  let lastCount = events.length;
+  let unchangedSince = Date.now();
+  while (Date.now() - started < 3000) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    if (events.length !== lastCount) {
+      lastCount = events.length;
+      unchangedSince = Date.now();
+      continue;
+    }
+    if (Date.now() - unchangedSince >= 120) return;
+  }
+  assert.fail('Timed out waiting for the content-event stream to settle.');
+}
 
 async function waitForText(file: string, text: string): Promise<void> {
   const started = Date.now();
@@ -186,9 +260,12 @@ test('thread codex process route anchors the run widget on the source card and s
   const server = runtime.server as Server;
   await once(server, 'listening');
   const address = server.address() as AddressInfo;
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  let eventCollector: Awaited<ReturnType<typeof startContentEventCollector>> | undefined;
 
   try {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/threads/process`, {
+    eventCollector = await startContentEventCollector(`${baseUrl}/api/ledger-content-events`);
+    const response = await fetch(`${baseUrl}/api/codex/threads/process`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ ledgerId: 'specs', threadId: 'thread-card-a', cardId: 'card-a', codexModel: 'gpt-5.4', codexEffort: 'medium' })
@@ -224,13 +301,42 @@ test('thread codex process route anchors the run widget on the source card and s
 
     await waitForText(body.run.outputFile, 'scoped');
     await waitForText(body.run.outputFile, 'Codex run completed');
-    const statusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${body.run.id}?ledgerId=specs&cardId=card-a&since=0`);
-    assert.equal(statusResponse.status, 200);
-    const status = await statusResponse.json() as { ok: boolean; status: string };
-    assert.equal(status.ok, true);
-    assert.equal(status.status, 'complete');
-    await waitForText(join(workspace, '.decision-os', 'threads', 'specs', 'thread-card-a.md'), `codex-${body.run.id}-line-2`);
+    const ledgerPath = join(workspace, '.decision-os', 'specs.json');
+    const threadPath = join(workspace, '.decision-os', 'threads', 'specs', 'thread-card-a.md');
+    await waitForText(threadPath, `codex-${body.run.id}-line-2`);
+    await waitForCondition(
+      () => eventCollector?.events.some((event) => event.kind === 'thread-content' && event.ledgerId === 'specs' && event.threadId === 'thread-card-a') === true,
+      'the scoped lifecycle thread-content event',
+    );
+    await waitForStableEventCount(eventCollector.events);
+
+    const lifecycleEvent = eventCollector.events.find((event) => event.kind === 'thread-content' && event.ledgerId === 'specs' && event.threadId === 'thread-card-a');
+    assert.equal(lifecycleEvent?.contentFile, '.decision-os/threads/specs/thread-card-a.md');
+    const threadBeforePolling = readFileSync(threadPath, 'utf8');
+    const lifecycleNotes = parseThreadMarkdown(threadBeforePolling).filter((note) => note.codexRunId === body.run.id);
+    assert.deepEqual(lifecycleNotes.map((note) => note.codexLine), ['1', '2']);
+    assert.equal(new Set(lifecycleNotes.map((note) => note.id)).size, 2);
+    assert.equal(lifecycleNotes.filter((note) => note.codexEventType === 'thread.started').length, 1);
+    assert.equal(lifecycleNotes.filter((note) => note.codexEventType === 'turn.completed').length, 1);
+
+    const ledgerMtimeBeforePolling = statSync(ledgerPath).mtimeMs;
+    const threadMtimeBeforePolling = statSync(threadPath).mtimeMs;
+    const eventCountBeforePolling = eventCollector.events.length;
+    for (let requestIndex = 0; requestIndex < 3; requestIndex += 1) {
+      const statusResponse = await fetch(`${baseUrl}/api/codex/skills/runs/${body.run.id}?ledgerId=specs&cardId=card-a&since=0`);
+      assert.equal(statusResponse.status, 200);
+      const status = await statusResponse.json() as { ok: boolean; status: string; persistedEventCount: number };
+      assert.equal(status.ok, true);
+      assert.equal(status.status, 'complete');
+      assert.equal(status.persistedEventCount, 0);
+    }
+    await waitForStableEventCount(eventCollector.events);
+    assert.equal(readFileSync(threadPath, 'utf8'), threadBeforePolling);
+    assert.equal(statSync(ledgerPath).mtimeMs, ledgerMtimeBeforePolling);
+    assert.equal(statSync(threadPath).mtimeMs, threadMtimeBeforePolling);
+    assert.equal(eventCollector.events.length, eventCountBeforePolling);
   } finally {
+    await eventCollector?.close();
     server.close();
     process.chdir(originalCwd);
     if (previousCodexBin === undefined) delete process.env.CODEX_BIN;

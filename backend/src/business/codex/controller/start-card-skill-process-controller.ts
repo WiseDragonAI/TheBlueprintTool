@@ -10,11 +10,12 @@ import { applyLedgerMutation } from '@backend/business/ledger/helper/apply-ledge
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
 import { hydrateLedgerCardContent, resolveCardContentFile } from '@backend/business/ledger/helper/card-content-file.js';
 import { stripHydratedThreadNotes } from '@backend/business/ledger/helper/thread-content-file.js';
+import { flushCardSkillRunEventIngestor } from '../effect/flush-card-skill-run-event-ingestor.js';
+import { createCardSkillRunEventIngestor } from '../effect/ingest-card-skill-run-events.js';
 import { scanCodexSkills } from '../helper/scan-codex-skills.js';
 import { buildCardSkillPrompt } from '../helper/build-card-skill-prompt.js';
 import { codexRunSegmentMarker } from '../helper/codex-run-segment-marker.js';
 import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand } from '../helper/resolve-codex-command.js';
-import { readCardSkillRunController } from './read-card-skill-run-controller.js';
 
 type AnyRecord = Record<string, unknown>;
 type ProcessStatus = 'running' | 'complete' | 'failed' | 'cancelled';
@@ -46,10 +47,6 @@ function sourceCardContent(input: { rawLedger: AnyRecord; decisionOsRoot: string
 function persistLedger(ledgerPath: string, ledger: AnyRecord): void {
   stripHydratedThreadNotes(ledger);
   writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2), 'utf8');
-}
-
-function notifyLedgerChange(callback: unknown, event: AnyRecord): void {
-  if (typeof callback === 'function') callback(event);
 }
 
 function appendRunStatus(filePath: string, status: ProcessStatus, detail: string): void {
@@ -178,6 +175,7 @@ export async function startCardSkillProcessController(input: { action_payload?: 
   const child = spawn(command.command, command.args, { cwd: workspaceRoot, stdio: ['pipe', 'pipe', 'pipe'] });
   const stdout = createWriteStream(stdoutFile, { flags: 'a' });
   const stderr = createWriteStream(stderrFile, { flags: 'a' });
+  const runEventIngestor = createCardSkillRunEventIngestor({ decisionOsRoot, ledgerPath, cardId: outputCardId, runId });
   const startedAt = new Date().toISOString();
   appendFileSync(stderrFile, codexRunSegmentMarker({
     runId,
@@ -190,6 +188,7 @@ export async function startCardSkillProcessController(input: { action_payload?: 
       codexEffort: command.effort
     }
   }), 'utf8');
+  child.stdout.on('data', (chunk: Buffer) => runEventIngestor.ingest(chunk));
   child.stdout.pipe(stdout, { end: false });
   child.stderr.pipe(stderr, { end: false });
   child.stdin.end(prompt);
@@ -212,7 +211,6 @@ export async function startCardSkillProcessController(input: { action_payload?: 
   };
   updateRuntimeRun(runtime, runId, run);
   attachRuntimeRunChild(runtime, runId, child);
-  notifyLedgerChange(payload.onLedgerChange, { reason: 'codex-skill-started', ledgerId, sourceCardId: cardId, outputCardId, runId, codexModel: command.model, codexEffort: command.effort });
 
   let settled = false;
   child.on('error', (error) => {
@@ -222,9 +220,7 @@ export async function startCardSkillProcessController(input: { action_payload?: 
     appendRunStatus(outputFile, 'failed', error.message);
     updateRuntimeRun(runtime, runId, { status: 'failed', error: error.message, finishedAt });
     finishRunStreams(stdout, stderr, () => {
-      void readCardSkillRunController({ action_payload: { ledgerId, cardId: outputCardId, runId }, runtime_state: runtime })
-        .catch(() => undefined)
-        .finally(() => notifyLedgerChange(payload.onLedgerChange, { reason: 'codex-skill-failed', ledgerId, sourceCardId: cardId, outputCardId, runId }));
+      flushCardSkillRunEventIngestor(runEventIngestor, runId);
     });
   });
   child.on('close', (exitCode) => {
@@ -237,9 +233,7 @@ export async function startCardSkillProcessController(input: { action_payload?: 
     updateRuntimeRun(runtime, runId, { status, exitCode, finishedAt });
     finishRunStreams(stdout, stderr, () => {
       if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
-      void readCardSkillRunController({ action_payload: { ledgerId, cardId: outputCardId, runId }, runtime_state: runtime })
-        .catch(() => undefined)
-        .finally(() => notifyLedgerChange(payload.onLedgerChange, { reason: status === 'cancelled' ? 'codex-skill-cancelled' : 'codex-skill-finished', ledgerId, sourceCardId: cardId, outputCardId, runId, exitCode }));
+      flushCardSkillRunEventIngestor(runEventIngestor, runId);
     });
   });
 

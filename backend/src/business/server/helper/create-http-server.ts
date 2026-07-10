@@ -1,6 +1,6 @@
 /**
- * WHAT: Implements the create-http-server helper from the front/back master ledger.
- * WHY: The generated scaffold needs executable behavior while preserving one function per file.
+ * WHAT: Creates the Decision OS HTTP server, workspace routes, and scoped content event stream.
+ * WHY: Ledger IO, SSE publication, and Codex process callbacks share one server lifecycle for the active workspace.
  */
 import { createServer, type ServerResponse } from 'node:http';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -16,10 +16,11 @@ import { contentTypeFor } from './content-type-for.js';
 import { normalizeLedgerNotes } from './normalize-ledger-notes.js';
 import { hydrateLedgerCardContent } from '../../ledger/helper/card-content-file.js';
 import { hydrateLedgerThreadNotes, stripHydratedThreadNotes, writeThreadNotesFile } from '../../ledger/helper/thread-content-file.js';
-import { watchCardContentFiles, type CardContentChange } from '../../refresh/helper/watch-card-content-files.js';
+import { resolveCardContentChange, watchCardContentFiles, type CardContentChange } from '../../refresh/helper/watch-card-content-files.js';
 import { applyLedgerMutation, type LedgerMutation } from '../../ledger/helper/apply-ledger-mutation.js';
 import { createLinkedLedger } from '../../ledger/helper/create-linked-ledger.js';
 import { deleteLinkedLedger } from '../../ledger/helper/delete-linked-ledger.js';
+import { createLedgerRevisionTracker } from './create-ledger-revision-tracker.js';
 import { ensureLedgersCanvasDocument } from '../../ledger/helper/ensure-ledgers-canvas-document.js';
 import { readCanonicalDecisionOsState } from '../../ledger/helper/read-canonical-decision-os-state.js';
 import { renameLinkedLedger } from '../../ledger/helper/rename-linked-ledger.js';
@@ -34,6 +35,7 @@ type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
 
 const decisionOsAssetPrefix = '/.decision-os/';
+const ledgerRevisionHeader = 'x-decision-os-ledger-revision';
 const allowedDecisionOsImageExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'];
 const allowedLedgerStaticAssetExtensions = ['.html', '.css', '.js', '.mjs', ...allowedDecisionOsImageExtensions];
 
@@ -148,11 +150,33 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     return { ok: true, port, server: { listening: false, port } };
   }
   const contentEventClients = new Set<ServerResponse>();
-  const publishCardContentChange = (event: CardContentChange): void => {
-    const message = `event: card-content-change\ndata: ${JSON.stringify(event)}\n\n`;
+  const ledgerRevisions = createLedgerRevisionTracker();
+  const publishCardContentChange = (event: CardContentChange | AnyRecord): void => {
+    const ledgerId = String(event.ledgerId ?? '');
+    const hasCompleteScope = Boolean(ledgerId && (event.kind !== 'thread-content' || String(event.threadId ?? '')));
+    const resolvedEvent = hasCompleteScope
+      ? null
+      : resolveCardContentChange({
+        decisionOsRoot,
+        change: {
+          contentFile: String(event.contentFile ?? ''),
+          file: String(event.file ?? resolve(decisionOsRoot, String(event.contentFile ?? '').replace(/^\/?\.decision-os\//, ''))),
+          kind: event.kind === 'thread-content' ? 'thread-content' : 'card-content'
+        }
+      });
+    const scopedEvent = hasCompleteScope ? event : resolvedEvent ? { ...event, ...resolvedEvent } : null;
+    // WHAT: Suppress content events without one verified owning ledger and thread when applicable.
+    // WHY: Unscoped events would make frontend reconciliation fetch the wrong active surface.
+    if (!scopedEvent) return;
+    ledgerRevisions.advance(String(scopedEvent.ledgerId));
+    const message = `event: card-content-change\ndata: ${JSON.stringify(scopedEvent)}\n\n`;
     for (const client of contentEventClients) client.write(message);
   };
   const publishLedgerContentChange = (event: AnyRecord): void => {
+    const ledgerId = String(event.ledgerId ?? '');
+    // WHAT: Advance only lifecycle events that declare their owning ledger.
+    // WHY: Process-local revisions must remain isolated per ledger.
+    if (ledgerId) ledgerRevisions.advance(ledgerId);
     const message = `event: ledger-content-change\ndata: ${JSON.stringify(event)}\n\n`;
     for (const client of contentEventClients) client.write(message);
   };
@@ -168,9 +192,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     });
   };
   const loadLedgerContentFiles = (ledger: AnyRecord): AnyRecord => hydrateLedgerCardContent(hydrateLedgerThreadNotes(ledger, decisionOsRoot), decisionOsRoot);
-  const persistLedgerAndRespond = (ledgerPath: string, ledger: AnyRecord, response: ServerResponse): void => {
+  const persistLedgerAndRespond = (ledgerId: string, ledgerPath: string, ledger: AnyRecord, response: ServerResponse): void => {
     stripHydratedThreadNotes(ledger);
     writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
+    response.setHeader(ledgerRevisionHeader, String(ledgerRevisions.advance(ledgerId)));
     response.end(JSON.stringify(loadLedgerContentFiles(ledger)));
   };
   const cardContentWatcher = watchCardContentFiles({ decisionOsRoot, onChange: publishCardContentChange });
@@ -509,6 +534,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             }
           });
           const overview = ensureLedgersCanvasDocument({ decisionOsRoot });
+          response.setHeader(ledgerRevisionHeader, String(ledgerRevisions.advance(tabId)));
           response.end(JSON.stringify(loadLedgerContentFiles(overview.document)));
           return;
         }
@@ -519,7 +545,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             response.end(JSON.stringify({ ok: false, error: rename.error }));
             return;
           }
-          persistLedgerAndRespond(ledgerPath, ledger, response);
+          persistLedgerAndRespond(tabId, ledgerPath, ledger, response);
           return;
         }
         if (isLedgersCanvas && mutation.action === 'delete-card' && mutation.cardId) {
@@ -529,7 +555,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             response.end(JSON.stringify({ ok: false, error: deletion.error }));
             return;
           }
-          persistLedgerAndRespond(ledgerPath, ledger, response);
+          persistLedgerAndRespond(tabId, ledgerPath, ledger, response);
           return;
         }
         const mutationResult = applyLedgerMutation({ decisionOsRoot, ledgerPath, ledger, mutation });
@@ -538,11 +564,14 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           response.end(JSON.stringify(mutationResult.error.body));
           return;
         }
-        persistLedgerAndRespond(ledgerPath, ledger, response);
+        persistLedgerAndRespond(tabId, ledgerPath, ledger, response);
         return;
       }
       if (existsSync(ledgerPath)) {
         const ledger = isLedgersCanvas ? ensureLedgersCanvasDocument({ decisionOsRoot }).document : JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord;
+        // WHAT: Expose reconciliation revisions only for ledger documents.
+        // WHY: The project-state response is not an active canvas ledger.
+        if (tabId !== 'state') response.setHeader(ledgerRevisionHeader, String(ledgerRevisions.current(tabId)));
         response.end(JSON.stringify(tabId === 'state' ? { projectName: projectNameForDecisionOsRoot(decisionOsRoot), ledgers: stateRead.ledgers } : loadLedgerContentFiles(ledger)));
       } else {
         response.end(JSON.stringify({ ok: false, missing: ledgerPath }));

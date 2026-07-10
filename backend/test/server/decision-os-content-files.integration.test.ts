@@ -1,3 +1,7 @@
+/**
+ * WHAT: Integration coverage for scoped content-file events and per-ledger revision ordering.
+ * WHY: Backend ownership and revision contracts must remain deterministic across multiple ledgers.
+ */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
@@ -8,19 +12,83 @@ import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
 
-async function startContentFileServer(): Promise<{ endpoint: string; eventsEndpoint: string; server: Server; workspace: string }> {
+type ContentChangeEvent = {
+  contentFile: string;
+  file: string;
+  kind: 'card-content' | 'thread-content';
+  ledgerId: string;
+  threadId?: string;
+};
+
+async function readNextContentChange(response: Response): Promise<ContentChangeEvent> {
+  const reader = response.body?.getReader();
+  assert.ok(reader);
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let timeout: NodeJS.Timeout | undefined;
+  const event = (async () => {
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) assert.fail('SSE connection closed before a card content event arrived.');
+      buffer += decoder.decode(chunk.value, { stream: true }).replace(/\r\n?/g, '\n');
+      for (;;) {
+        const boundary = buffer.indexOf('\n\n');
+        if (boundary < 0) break;
+        const frame = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        const lines = frame.split('\n');
+        if (!lines.includes('event: card-content-change')) continue;
+        const data = lines.filter((line) => line.startsWith('data: ')).map((line) => line.slice(6)).join('\n');
+        return JSON.parse(data) as ContentChangeEvent;
+      }
+    }
+  })();
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => reject(new Error('Timed out waiting for card-content-change SSE.')), 3000);
+  });
+  try {
+    return await Promise.race([event, deadline]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+function ledgerRevision(response: Response): number {
+  const value = response.headers.get('x-decision-os-ledger-revision');
+  assert.match(String(value), /^\d+$/);
+  return Number(value);
+}
+
+async function startContentFileServer(): Promise<{ endpoint: string; archiveEndpoint: string; eventsEndpoint: string; server: Server; workspace: string }> {
   const originalCwd = process.cwd();
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-card-content-file-'));
   mkdirSync(join(workspace, '.decision-os', 'cards', 'specs'), { recursive: true });
+  mkdirSync(join(workspace, '.decision-os', 'cards', 'archive'), { recursive: true });
+  mkdirSync(join(workspace, '.decision-os', 'threads', 'specs'), { recursive: true });
+  mkdirSync(join(workspace, '.decision-os', 'threads', 'archive'), { recursive: true });
   writeFileSync(join(workspace, '.decision-os', 'state.json'), JSON.stringify({
-    tabs: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }]
+    tabs: [
+      { id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' },
+      { id: 'archive', title: 'Archive', ledgerFile: '.decision-os/archive.json' },
+    ]
   }));
   writeFileSync(join(workspace, '.decision-os', 'cards', 'specs', 'card-a.md'), 'Content file body.');
+  writeFileSync(join(workspace, '.decision-os', 'cards', 'archive', 'card-z.md'), 'Archived card body.');
+  writeFileSync(join(workspace, '.decision-os', 'threads', 'specs', 'thread-card-a.md'), '\n');
+  writeFileSync(join(workspace, '.decision-os', 'threads', 'archive', 'thread-card-z.md'), 'Archived thread body.');
   writeFileSync(join(workspace, '.decision-os', 'specs.json'), JSON.stringify({
     cards: [{ id: 'card-a', title: 'Card A', comment: { contentFile: '.decision-os/cards/specs/card-a.md' }, x: 10, y: 20, w: 240 }],
     annotations: [],
     relationships: [],
-    notes: {}
+    notes: {},
+    threadFiles: { 'thread-card-a': '.decision-os/threads/specs/thread-card-a.md' }
+  }));
+  writeFileSync(join(workspace, '.decision-os', 'archive.json'), JSON.stringify({
+    cards: [{ id: 'card-z', title: 'Card Z', comment: { contentFile: '.decision-os/cards/archive/card-z.md' }, x: 10, y: 20, w: 240 }],
+    annotations: [],
+    relationships: [],
+    notes: {},
+    threadFiles: { 'thread-card-z': '.decision-os/threads/archive/thread-card-z.md' }
   }));
 
   process.chdir(workspace);
@@ -30,13 +98,44 @@ async function startContentFileServer(): Promise<{ endpoint: string; eventsEndpo
   await once(server, 'listening');
   process.chdir(originalCwd);
   const address = server.address() as AddressInfo;
+  const baseUrl = `http://127.0.0.1:${address.port}`;
   return {
-    endpoint: `http://127.0.0.1:${address.port}/decision-os/specs`,
-    eventsEndpoint: `http://127.0.0.1:${address.port}/api/ledger-content-events`,
+    endpoint: `${baseUrl}/decision-os/specs`,
+    archiveEndpoint: `${baseUrl}/decision-os/archive`,
+    eventsEndpoint: `${baseUrl}/api/ledger-content-events`,
     server,
     workspace,
   };
 }
+
+test('decision-os server orders ledger GET and mutation responses with monotonic revisions', async () => {
+  const { endpoint, server, workspace } = await startContentFileServer();
+
+  try {
+    const initialResponse = await fetch(endpoint);
+    assert.equal(initialResponse.ok, true);
+    const initialRevision = ledgerRevision(initialResponse);
+    await initialResponse.json();
+
+    const mutationResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'patch-viewport', viewport: { x: 12, y: 34, scale: 1.25 } }),
+    });
+    assert.equal(mutationResponse.ok, true);
+    const mutationRevision = ledgerRevision(mutationResponse);
+    await mutationResponse.json();
+    assert.ok(mutationRevision > initialRevision);
+
+    const laterResponse = await fetch(endpoint);
+    assert.equal(laterResponse.ok, true);
+    assert.equal(ledgerRevision(laterResponse), mutationRevision);
+    await laterResponse.json();
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
 
 test('decision-os server hydrates card Markdown content files and keeps JSON lean on edit', async () => {
   const { endpoint, server, workspace } = await startContentFileServer();
@@ -197,22 +296,54 @@ test('decision-os server emits card content change events for direct markdown ed
   try {
     const response = await fetch(eventsEndpoint, { signal: controller.signal });
     assert.equal(response.ok, true);
-    const reader = response.body?.getReader();
-    assert.ok(reader);
-    const decoder = new TextDecoder();
-    let buffer = '';
-    const eventPromise = (async () => {
-      for (;;) {
-        const chunk = await reader.read();
-        if (chunk.done) return buffer;
-        buffer += decoder.decode(chunk.value, { stream: true });
-        if (buffer.includes('event: card-content-change')) return buffer;
-      }
-    })();
+    const eventPromise = readNextContentChange(response);
 
     writeFileSync(join(workspace, '.decision-os', 'cards', 'specs', 'card-a.md'), 'Direct file edit.');
-    const eventText = await eventPromise;
-    assert.match(eventText, /"contentFile":"\.decision-os\/cards\/specs\/card-a\.md"/);
+    const event = await eventPromise;
+    assert.equal(event.kind, 'card-content');
+    assert.equal(event.ledgerId, 'specs');
+    assert.equal(event.threadId, undefined);
+    assert.equal(event.contentFile, '.decision-os/cards/specs/card-a.md');
+  } finally {
+    controller.abort();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('decision-os server scopes inactive-ledger thread events and advances only their ledger revision', async () => {
+  const { endpoint, archiveEndpoint, eventsEndpoint, server, workspace } = await startContentFileServer();
+  const controller = new AbortController();
+
+  try {
+    const initialActiveResponse = await fetch(endpoint);
+    assert.equal(initialActiveResponse.ok, true);
+    const initialActiveRevision = ledgerRevision(initialActiveResponse);
+    await initialActiveResponse.json();
+    const initialArchiveResponse = await fetch(archiveEndpoint);
+    assert.equal(initialArchiveResponse.ok, true);
+    const initialArchiveRevision = ledgerRevision(initialArchiveResponse);
+    await initialArchiveResponse.json();
+
+    const eventsResponse = await fetch(eventsEndpoint, { signal: controller.signal });
+    assert.equal(eventsResponse.ok, true);
+    const eventPromise = readNextContentChange(eventsResponse);
+    writeFileSync(join(workspace, '.decision-os', 'threads', 'archive', 'thread-card-z.md'), 'Inactive ledger thread edit.');
+
+    const event = await eventPromise;
+    assert.equal(event.kind, 'thread-content');
+    assert.equal(event.ledgerId, 'archive');
+    assert.equal(event.threadId, 'thread-card-z');
+    assert.equal(event.contentFile, '.decision-os/threads/archive/thread-card-z.md');
+
+    const laterArchiveResponse = await fetch(archiveEndpoint);
+    assert.equal(laterArchiveResponse.ok, true);
+    assert.ok(ledgerRevision(laterArchiveResponse) > initialArchiveRevision);
+    await laterArchiveResponse.json();
+    const laterActiveResponse = await fetch(endpoint);
+    assert.equal(laterActiveResponse.ok, true);
+    assert.equal(ledgerRevision(laterActiveResponse), initialActiveRevision);
+    await laterActiveResponse.json();
   } finally {
     controller.abort();
     await new Promise<void>((resolve) => server.close(() => resolve()));

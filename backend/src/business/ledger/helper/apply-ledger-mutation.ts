@@ -23,6 +23,7 @@ export type LedgerMutation = {
   region?: { id?: string; kind?: string; label?: string; color?: string };
   note?: { id?: string; threadId?: string; body?: string; voiceFileRef?: string; status?: string; transcriptionStartedAt?: string; source?: string; error?: string; codexQueueStatus?: string; codexQueueRequestedAt?: string; codexQueueRunId?: string; codexQueueError?: string; imageSizes?: Record<string, { width?: number; height?: number }> };
   selection?: { cardIds?: string[]; zoneIds?: string[]; groupIds?: string[] };
+  pasteSuffix?: string;
 };
 
 type MutationError = { statusCode: number; body: Record<string, unknown> };
@@ -227,17 +228,30 @@ export function applyLedgerMutation(input: {
     writeThreadNotesFile({ decisionOsRoot, ledger, ledgerPath, threadId: mutation.note.threadId, notes: notesByThread[mutation.note.threadId] });
   }
   if (mutation.action === 'paste-selection' && mutation.selection) {
-    const suffix = `copy-${Date.now()}`;
+    const requestedSuffix = String(mutation.pasteSuffix ?? '').trim();
+    // WHAT: Accept the frontend suffix only when it is a bounded safe ID segment.
+    // WHY: Optimistic and server IDs must agree without admitting arbitrary path-like content.
+    const suffix = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(requestedSuffix)
+      ? requestedSuffix
+      : `copy-${Date.now()}`;
     const cardIds = new Set(mutation.selection.cardIds ?? []);
     const zoneIds = new Set(mutation.selection.zoneIds ?? []);
     const groupIds = new Set(mutation.selection.groupIds ?? []);
     const copiedCards = (ledger.cards ?? []).filter((card) => cardIds.has(String(card.id ?? ''))).map((card) => {
       const copiedCard = {
         ...card,
+        comment: card.comment && typeof card.comment === 'object' && !Array.isArray(card.comment)
+          ? { ...card.comment as Record<string, unknown> }
+          : card.comment,
         id: `${String(card.id ?? 'card')}-${suffix}`,
         x: Number(card.x ?? 0) + 48,
         y: Number(card.y ?? 0) + 48
       };
+      // WHAT: Remove the source Markdown ownership reference from the copied card.
+      // WHY: Content duplication must assign a distinct externalized file to the copy.
+      if (copiedCard.comment && typeof copiedCard.comment === 'object' && !Array.isArray(copiedCard.comment)) {
+        delete (copiedCard.comment as Record<string, unknown>).contentFile;
+      }
       duplicateCardContentFile({ decisionOsRoot, ledgerPath, sourceCard: card, targetCard: copiedCard });
       return copiedCard;
     });

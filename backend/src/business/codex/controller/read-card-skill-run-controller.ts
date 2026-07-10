@@ -2,34 +2,17 @@
  * WHAT: Reads one card-scoped Codex skill run from its derived JSONL/log files.
  * WHY: The output card and run id are enough to hydrate live progress without a persisted run manifest.
  */
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { basename, extname, isAbsolute, relative, resolve } from 'node:path';
 import { hydrateLedgerCardContent } from '@backend/business/ledger/helper/card-content-file.js';
-import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-ledger-notes.js';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
-import { hydrateLedgerThreadNotes, stripHydratedThreadNotes, writeThreadNotesFile } from '@backend/business/ledger/helper/thread-content-file.js';
+import { type NormalizedRunEvent } from '../helper/card-skill-run-event-types.js';
+import { normalizeCardSkillRunEvent } from '../helper/normalize-card-skill-run-event.js';
+import { readCardSkillRunEventLines } from '../helper/read-card-skill-run-event-lines.js';
 import { codexRunSegmentMetadata, latestCodexRunSegmentLog, latestCodexRunSegmentStartedAtMs, latestCodexRunSegmentStartLine, type CodexRunSegmentMetadata } from '../helper/codex-run-segment-marker.js';
 
 type AnyRecord = Record<string, unknown>;
 type RunStatus = 'running' | 'complete' | 'failed' | 'cancelled' | 'unknown';
-
-type ParsedRunLine = {
-  line: number;
-  event: AnyRecord;
-};
-
-type NormalizedRunEvent = {
-  line: number;
-  type: string;
-  kind: string;
-  title: string;
-  text: string;
-  status: string;
-  itemId: string;
-  tool: string;
-  exitCode: string;
-  persist: boolean;
-};
 
 function logCodexContinueDebug(phase: string, detail: AnyRecord): void {
   console.log(JSON.stringify({ codexContinueDebug: true, source: 'backend', phase, at: new Date().toISOString(), ...detail }));
@@ -52,111 +35,6 @@ function runTimestamp(runId: string): number {
   const match = runId.match(/^codex-skill-(\d+)-/);
   const timestamp = Number(match?.[1] ?? 0);
   return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : Date.now();
-}
-
-function commandText(command: unknown): string {
-  if (Array.isArray(command)) return command.map((entry) => String(entry)).join(' ');
-  return String(command ?? '').trim();
-}
-
-function textBlock(value: unknown): string {
-  if (Array.isArray(value)) {
-    return value.map((entry) => {
-      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return String(entry ?? '');
-      const record = entry as AnyRecord;
-      return String(record.text ?? record.summary ?? record.message ?? JSON.stringify(record));
-    }).join('\n').replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '');
-  }
-  if (value && typeof value === 'object') return JSON.stringify(value, null, 2).replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '');
-  return String(value ?? '').replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '');
-}
-
-function fencedTextBlock(output: string, language = 'text'): string {
-  const runs = Array.from(output.matchAll(/`+/g), (match) => match[0].length);
-  const fence = '`'.repeat(Math.max(3, ...runs) + 1);
-  return `${fence}${language}\n${output}\n${fence}`;
-}
-
-function itemRecord(event: AnyRecord): AnyRecord {
-  return event.item && typeof event.item === 'object' && !Array.isArray(event.item) ? event.item as AnyRecord : {};
-}
-
-function changesText(changes: unknown): string {
-  if (!Array.isArray(changes)) return textBlock(changes) || 'File changes recorded.';
-  return changes.map((change) => {
-    if (!change || typeof change !== 'object' || Array.isArray(change)) return `- ${String(change)}`;
-    const record = change as AnyRecord;
-    const path = String(record.path ?? record.file ?? record.name ?? 'file');
-    const action = String(record.kind ?? record.type ?? record.action ?? record.status ?? 'changed');
-    return `- ${path}: ${action}`;
-  }).join('\n');
-}
-
-function normalizeRunEvent(line: ParsedRunLine): NormalizedRunEvent {
-  const event = line.event;
-  const type = String(event.type ?? '');
-  const item = itemRecord(event);
-  const itemType = String(item.type ?? '');
-  const itemId = String(item.id ?? event.id ?? '');
-  const status = String(item.status ?? event.status ?? '');
-  if (type === 'turn.completed') {
-    return { line: line.line, type, kind: 'run_status', title: 'Turn completed', text: 'Codex turn completed.', status: 'complete', itemId, tool: '', exitCode: '', persist: true };
-  }
-  if (type === 'turn.started') {
-    return { line: line.line, type, kind: 'run_status', title: 'Turn started', text: 'Codex turn started.', status: 'running', itemId, tool: '', exitCode: '', persist: true };
-  }
-  if (type === 'thread.started') {
-    return { line: line.line, type, kind: 'run_status', title: 'Thread started', text: 'Codex thread started.', status: 'running', itemId, tool: '', exitCode: '', persist: true };
-  }
-  if (itemType === 'agent_message') {
-    const text = textBlock(item.text ?? item.message ?? event.text);
-    return { line: line.line, type, kind: 'agent_message', title: 'Codex message', text, status, itemId, tool: '', exitCode: '', persist: Boolean(text) };
-  }
-  if (/reason|thinking|thought/i.test(itemType)) {
-    const text = textBlock(item.text ?? item.summary ?? item.message ?? event.text);
-    return { line: line.line, type, kind: 'thinking', title: 'Codex thinking', text, status, itemId, tool: '', exitCode: '', persist: Boolean(text) };
-  }
-  if (itemType === 'command_execution') {
-    const tool = commandText(item.command);
-    const output = textBlock(item.aggregated_output ?? item.output ?? item.stderr ?? item.stdout);
-    const exitCode = item.exit_code === undefined || item.exit_code === null ? '' : String(item.exit_code);
-    const command = tool ? `\`${tool}\`` : 'command';
-    const parts = [`**Tool call** ${command}`];
-    if (status) parts.push(`Status: ${status}`);
-    if (exitCode) parts.push(`Exit code: ${exitCode}`);
-    if (output) parts.push('', fencedTextBlock(output));
-    return { line: line.line, type, kind: 'tool_call', title: tool || 'Tool call', text: parts.join('\n'), status, itemId, tool, exitCode, persist: true };
-  }
-  if (itemType === 'file_change') {
-    const text = changesText(item.changes);
-    return { line: line.line, type, kind: 'file_change', title: 'File changes', text, status, itemId, tool: '', exitCode: '', persist: true };
-  }
-  const text = textBlock(item.text ?? item.message ?? event.text);
-  return {
-    line: line.line,
-    type,
-    kind: itemType || type || 'event',
-    title: itemType || type || 'Codex event',
-    text,
-    status,
-    itemId,
-    tool: '',
-    exitCode: '',
-    persist: Boolean(text),
-  };
-}
-
-function readJsonlLines(file: string): ParsedRunLine[] {
-  if (!existsSync(file)) return [];
-  return readFileSync(file, 'utf8').replace(/\r\n?/g, '\n').split('\n').flatMap((line, index) => {
-    if (!line.trim()) return [];
-    try {
-      const parsed = JSON.parse(line) as unknown;
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? [{ line: index + 1, event: parsed as AnyRecord }] : [];
-    } catch {
-      return [];
-    }
-  });
 }
 
 function runtimeRunStatus(runtime: AnyRecord, runId: string): RunStatus | null {
@@ -211,11 +89,6 @@ function fileMtimeMs(file: string): number {
   return existsSync(file) ? statSync(file).mtimeMs : 0;
 }
 
-function noteCodexLine(note: AnyRecord): number {
-  const line = Number(note.codexLine ?? 0);
-  return Number.isFinite(line) && line > 0 ? line : 0;
-}
-
 function runSegmentStartedAtMs(input: { runtime: AnyRecord; runId: string; stderrFile: string }): number {
   const runs = input.runtime.codexSkillRuns && typeof input.runtime.codexSkillRuns === 'object' ? input.runtime.codexSkillRuns as Record<string, AnyRecord> : {};
   const run = runs[input.runId] ?? {};
@@ -243,52 +116,6 @@ function cardReferencesRun(input: { ledger: AnyRecord; decisionOsRoot: string; c
   const comment = card?.comment && typeof card.comment === 'object' ? card.comment as AnyRecord : {};
   const body = String(comment.what ?? comment.body ?? comment.description ?? '');
   return body.includes(`Codex run: ${input.runId}`);
-}
-
-function persistRunEvents(input: { decisionOsRoot: string; ledgerPath: string; ledger: AnyRecord; cardId: string; runId: string; events: NormalizedRunEvent[] }): number {
-  hydrateLedgerThreadNotes(input.ledger, input.decisionOsRoot);
-  const threadId = `thread-${input.cardId}`;
-  const notesByThread = normalizeLedgerNotes(input.ledger);
-  const notes = notesByThread[threadId] ?? [];
-  const byId = new Map(notes.map((note) => [String(note.id ?? ''), note]));
-  let changed = 0;
-  for (const event of input.events) {
-    if (!event.persist) continue;
-    const id = `codex-${safeSegment(input.runId)}-line-${event.line}`;
-    const existing = byId.get(id);
-    const nextNote: AnyRecord = {
-      id,
-      role: 'agent',
-      message: event.text || event.title,
-      timestamp: String(existing?.timestamp ?? '') || new Date().toISOString(),
-      status: event.status || event.title,
-      codexRunId: input.runId,
-      codexLine: String(event.line),
-      codexKind: event.kind,
-      codexEventType: event.type,
-      codexItemId: event.itemId,
-      codexTool: event.tool,
-      codexExitCode: event.exitCode,
-    };
-    if (existing) {
-      const previous = JSON.stringify(existing);
-      Object.assign(existing, nextNote);
-      if (JSON.stringify(existing) !== previous) changed += 1;
-    } else {
-      const insertAt = notes.findIndex((note) => String(note.codexRunId ?? '') === input.runId && noteCodexLine(note) > event.line);
-      if (insertAt >= 0) notes.splice(insertAt, 0, nextNote);
-      else notes.push(nextNote);
-      byId.set(id, nextNote);
-      changed += 1;
-    }
-  }
-  if (changed > 0) {
-    notesByThread[threadId] = notes;
-    writeThreadNotesFile({ decisionOsRoot: input.decisionOsRoot, ledger: input.ledger, ledgerPath: input.ledgerPath, threadId, notes });
-    stripHydratedThreadNotes(input.ledger);
-    writeFileSync(input.ledgerPath, JSON.stringify(input.ledger, null, 2), 'utf8');
-  }
-  return changed;
 }
 
 export async function readCardSkillRunController(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): Promise<AnyRecord> {
@@ -319,13 +146,14 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
   const stdoutFile = resolve(runDirectory, `${safeSegment(runId)}.jsonl`);
   const stderrFile = resolve(runDirectory, `${safeSegment(runId)}.log`);
   const stderrLog = existsSync(stderrFile) ? readFileSync(stderrFile, 'utf8') : '';
-  const parsedLines = readJsonlLines(stdoutFile);
-  const events = parsedLines.map(normalizeRunEvent);
+  const parsedLines = readCardSkillRunEventLines(stdoutFile);
+  const events = parsedLines.map(normalizeCardSkillRunEvent);
   const segmentStartLine = latestCodexRunSegmentStartLine({ log: stderrLog, runId });
   const segmentEvents = events.filter((event) => event.line > segmentStartLine);
   const segmentLog = latestCodexRunSegmentLog({ log: stderrLog, runId });
   const status = inferredStatus({ runtime, runId, events: segmentEvents, stdoutFile, stderrFile, stderrLog: segmentLog });
-  const persistedEventCount = persistRunEvents({ decisionOsRoot, ledgerPath, ledger, cardId, runId, events });
+  // Retain the response field for clients while making explicit that status reads persist nothing.
+  const persistedEventCount = 0;
   const returnedEvents = segmentEvents.filter((event) => event.line > since);
   const metadata = { ...runtimeRunMetadata(runtime, runId), ...codexRunSegmentMetadata({ log: stderrLog, runId }) };
   logCodexContinueDebug('read-controller-result', {
