@@ -64,8 +64,14 @@ function normalizedJsonlEvent(line: number, event: Omit<NormalizedRunEvent, 'lin
 }
 
 function diagnosticKind(text: string, declaredKind = ''): 'diagnostic' | 'warning' | 'error' | 'transport' {
+  // WHAT: Classify connectivity failures as transport degradation before generic errors.
+  // WHY: Operators need to distinguish producer failures from delivery instability.
   if (/reconnect|websocket|https transport|transport degraded|request timed out|connection (?:closed|lost|failed)/i.test(text)) return 'transport';
+  // WHAT: Preserve producer-declared and textual warning signals.
+  // WHY: Warning counts must include both structured and stderr-shaped records.
   if (/warn(?:ing)?/i.test(declaredKind) || /\bwarn(?:ing)?\b/i.test(text)) return 'warning';
+  // WHAT: Classify explicit failures and non-zero exit evidence as errors.
+  // WHY: Error counts must not depend on one producer event vocabulary.
   if (/error|failed/i.test(declaredKind) || /\berror\b|\bfailed\b|\benoent\b|exit code [1-9]/i.test(text)) return 'error';
   return 'diagnostic';
 }
@@ -119,10 +125,14 @@ export function normalizeCardSkillRunEvent(line: ParsedRunLine): NormalizedRunEv
   if (type === 'thread.started') {
     return normalizedJsonlEvent(line.line, { type, kind: 'run_status', title: 'Thread started', text: 'Codex thread started.', status: 'running', itemId, tool: '', output: '', exitCode: '', severity: 'info', persist: true });
   }
+  // WHAT: Normalize terminal producer failures into the run-status vocabulary.
+  // WHY: Failure state must not depend on incidental error words inside ordinary messages.
   if (/^(?:thread|turn|run)\.failed$/i.test(type)) {
     const text = textBlock(item.text ?? item.message ?? event.message ?? event.text) || 'Codex run failed.';
     return normalizedJsonlEvent(line.line, { type, kind: 'run_status', title: 'Run failed', text, status: 'failed', itemId, tool: '', output: '', exitCode: '', severity: 'error', persist: true });
   }
+  // WHAT: Normalize both producer spellings of cancelled lifecycle records.
+  // WHY: Clients consume one stable cancellation status.
   if (/cancelled|canceled/i.test(type)) {
     const text = textBlock(item.text ?? item.message ?? event.message ?? event.text) || 'Codex run cancelled.';
     return normalizedJsonlEvent(line.line, { type, kind: 'run_status', title: 'Run cancelled', text, status: 'cancelled', itemId, tool: '', output: '', exitCode: '', severity: 'warning', persist: true });
@@ -159,6 +169,8 @@ export function normalizeCardSkillRunEvent(line: ParsedRunLine): NormalizedRunEv
     return normalizedJsonlEvent(line.line, { type, kind: 'file_change', title: 'File changes', text, status, itemId, tool: '', output: '', exitCode: '', severity: status === 'failed' ? 'error' : 'info', persist: true });
   }
   const text = textBlock(item.text ?? item.message ?? event.message ?? event.text);
+  // WHAT: Promote diagnostic-shaped fallback records into the diagnostic contract.
+  // WHY: Unknown producer item types must still surface warning, error, and transport evidence.
   if (/warn(?:ing)?|error|failed/i.test(itemType || type) || diagnosticKind(text) !== 'diagnostic') {
     return normalizedDiagnostic({ line: line.line, source: 'jsonl', type, text, declaredKind: itemType || type, itemId, persist: Boolean(text) });
   }

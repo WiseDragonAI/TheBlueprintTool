@@ -8,20 +8,16 @@ export type CodexRunTiming = {
   elapsedMs: number;
 };
 
+export { codexRunDurationLabel } from './codex-run-duration-label.js';
+
 export function liveCodexRunElapsedMs(timing: CodexRunTiming, nowMs = Date.now()): number {
   const sampledElapsedMs = Math.max(0, Number(timing.elapsedMs) || 0);
+  // WHAT: Freeze the displayed duration after the server reports a terminal state.
+  // WHY: Local wall-clock time must not extend a completed run.
   if (timing.status !== 'running') return sampledElapsedMs;
   const startedAtMs = Date.parse(timing.startedAt);
+  // WHAT: Retain the latest server sample when no valid wall-clock anchor exists.
+  // WHY: A missing producer timestamp must not manufacture elapsed time from the Unix epoch.
   if (!Number.isFinite(startedAtMs) || startedAtMs <= 0) return sampledElapsedMs;
   return Math.max(sampledElapsedMs, nowMs - startedAtMs);
-}
-
-export function codexRunDurationLabel(ms: number): string {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return hours > 0
-    ? `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-    : `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }

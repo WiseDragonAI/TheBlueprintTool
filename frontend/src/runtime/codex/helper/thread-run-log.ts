@@ -3,6 +3,15 @@
  * WHY: The thread log must remain chronological and replay-safe while polling JSONL and stderr.
  */
 import type { CardSkillRunEvent } from '../effect/request-card-skill-run-status.js';
+import {
+  threadRunEventKey,
+  threadRunEventRunId,
+  threadRunEventSourceIdentity,
+  threadRunToolKey,
+} from './thread-run-event-identity.js';
+
+export { groupSequentialToolCalls } from './group-sequential-tool-calls.js';
+export { threadRunEventKey, threadRunToolKey } from './thread-run-event-identity.js';
 
 export type ThreadRunLogEvent = CardSkillRunEvent & {
   eventKey: string;
@@ -30,31 +39,8 @@ export type ThreadRunMergeResult = {
   changedEventKeys: string[];
 };
 
-function eventRunId(event: Partial<CardSkillRunEvent>, fallbackRunId: string): string {
-  return String(event.runId ?? fallbackRunId).trim();
-}
-
-function sourceIdentity(event: Partial<CardSkillRunEvent>): string {
-  const source = event.source === 'stderr' ? 'stderr' : 'jsonl';
-  const sourceLine = Math.max(0, Number(event.sourceLine ?? event.line ?? 0) || 0);
-  return `${source}:${sourceLine}`;
-}
-
-export function threadRunToolKey(event: Partial<CardSkillRunEvent>, fallbackRunId = ''): string {
-  if (String(event.kind ?? '') !== 'tool_call') return '';
-  const runId = eventRunId(event, fallbackRunId);
-  const itemId = String(event.itemId ?? '').trim();
-  return itemId ? `${runId}:item:${itemId}` : `${runId}:line:${sourceIdentity(event)}`;
-}
-
-export function threadRunEventKey(event: Partial<CardSkillRunEvent>, fallbackRunId = ''): string {
-  const runId = eventRunId(event, fallbackRunId);
-  const toolKey = threadRunToolKey(event, fallbackRunId);
-  return toolKey || `${runId}:event:${sourceIdentity(event)}`;
-}
-
 function normalizedLogEvent(event: CardSkillRunEvent, fallbackRunId: string): ThreadRunLogEvent {
-  const runId = eventRunId(event, fallbackRunId);
+  const runId = threadRunEventRunId(event, fallbackRunId);
   const normalized = { ...event, runId } as ThreadRunLogEvent;
   normalized.toolKey = threadRunToolKey(normalized, runId);
   normalized.eventKey = threadRunEventKey(normalized, runId);
@@ -88,14 +74,18 @@ export function mergeThreadRunEvents(
 ): ThreadRunMergeResult {
   const events = previousEvents.map((event) => normalizedLogEvent(event as CardSkillRunEvent, fallbackRunId));
   const indexByEventKey = new Map(events.map((event, index) => [event.eventKey, index]));
-  const physicalLines = new Set(events.map((event) => `${event.runId}:${sourceIdentity(event)}`));
+  const physicalLines = new Set(events.map((event) => `${event.runId}:${threadRunEventSourceIdentity(event)}`));
   const changedEventKeys: string[] = [];
 
   for (const input of incrementalEvents) {
     const incoming = normalizedLogEvent(input, fallbackRunId);
-    const physicalKey = `${incoming.runId}:${sourceIdentity(incoming)}`;
+    const physicalKey = `${incoming.runId}:${threadRunEventSourceIdentity(incoming)}`;
     const existingIndex = indexByEventKey.get(incoming.eventKey);
+    // WHAT: Append a previously unseen logical event unless its source line was already consumed.
+    // WHY: Missing item ids can change logical keys, but one physical producer line must render once.
     if (existingIndex === undefined) {
+      // WHAT: Ignore replayed physical lines that arrived under a different fallback identity.
+      // WHY: Cursor retries must not duplicate chronological output.
       if (physicalLines.has(physicalKey)) continue;
       indexByEventKey.set(incoming.eventKey, events.length);
       physicalLines.add(physicalKey);
@@ -105,6 +95,8 @@ export function mergeThreadRunEvents(
     }
 
     const existing = events[existingIndex];
+    // WHAT: Update only active tool lifecycles and reject regressions from terminal states.
+    // WHY: Non-tool events are immutable observations and late start records must not overwrite completion.
     if (!incoming.toolKey || (terminalToolEvent(existing) && !terminalToolEvent(incoming))) continue;
     const updated: ThreadRunLogEvent = {
       ...existing,
@@ -118,6 +110,8 @@ export function mergeThreadRunEvents(
       eventKey: existing.eventKey,
       toolKey: existing.toolKey,
     };
+    // WHAT: Skip byte-equivalent lifecycle replays.
+    // WHY: Consumers announce only material event changes.
     if (eventFingerprint(updated) === eventFingerprint(existing)) continue;
     events[existingIndex] = updated;
     physicalLines.add(physicalKey);
@@ -126,24 +120,9 @@ export function mergeThreadRunEvents(
 
   const tools: Record<string, ThreadRunLogEvent> = {};
   for (const event of events) {
+    // WHAT: Index only coalesced tool events for disclosure consumers.
+    // WHY: Ordinary log events do not have tool lifecycle identity.
     if (event.toolKey) tools[event.toolKey] = event;
   }
   return { events, tools, changedEventKeys };
-}
-
-export function groupSequentialToolCalls(events: ReadonlyArray<ThreadRunLogEvent>): ThreadRunLogBlock[] {
-  const blocks: ThreadRunLogBlock[] = [];
-  for (const event of events) {
-    const previous = blocks.at(-1);
-    if (event.kind === 'tool_call') {
-      if (previous?.kind === 'tool-group' && previous.runId === event.runId) {
-        previous.tools.push(event);
-      } else {
-        blocks.push({ kind: 'tool-group', key: `${event.runId}:tool-group:${event.eventKey}`, runId: event.runId, tools: [event] });
-      }
-      continue;
-    }
-    blocks.push({ kind: 'event', key: event.eventKey, event });
-  }
-  return blocks;
 }

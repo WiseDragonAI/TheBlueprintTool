@@ -23,11 +23,19 @@ export function resolveCardSkillRunOwnership(input: {
 }): CardSkillRunOwnership {
   const cards = Array.isArray(input.ledger.cards) ? input.ledger.cards as AnyRecord[] : [];
   const storedCard = cards.find((entry) => String(entry.id ?? '') === input.cardId);
+  // WHAT: Reject ownership before hydration when the requested card is absent.
+  // WHY: Hydrating unrelated cards performs unnecessary file IO and cannot establish ownership.
   if (!storedCard) return { found: false, threadLaunched: false };
   const hydrated = hydrateLedgerCardContent({ cards: [JSON.parse(JSON.stringify(storedCard)) as AnyRecord] }, input.decisionOsRoot) as { cards?: AnyRecord[] };
   const card = hydrated.cards?.[0] ?? storedCard;
+  // WHAT: Classify an explicit thread-run field as thread-launched ownership.
+  // WHY: Consumers use this classification to keep lifecycle artifacts out of conversation notes.
   if (String(card.codexThreadRunId ?? '') === input.runId) return { found: true, threadLaunched: true };
+  // WHAT: Accept the ordinary card-run field without the thread-launched classification.
+  // WHY: Generated skill cards share run artifacts but retain card-owned presentation.
   if (String(card.codexRunId ?? '') === input.runId) return { found: true, threadLaunched: false };
+  // WHAT: Recover ownership from the deterministic generated-card identity.
+  // WHY: Older generated cards may predate explicit run fields.
   if (input.cardId === `card-${safeSegment(input.runId)}`) return { found: true, threadLaunched: false };
   const comment = card.comment && typeof card.comment === 'object' && !Array.isArray(card.comment)
     ? card.comment as AnyRecord

@@ -12,6 +12,8 @@ const codexLifecycleFields = [
 ] as const;
 
 export function isCodexThreadArtifactNote(note: Record<string, unknown>): boolean {
+  // WHAT: Recognize deterministic lifecycle note ids before scanning optional metadata.
+  // WHY: Legacy persisted artifacts may not carry the newer structured Codex fields.
   if (String(note.id ?? '').startsWith('codex-')) return true;
   return codexLifecycleFields.some((field) => String(note[field] ?? '').trim() !== '');
 }

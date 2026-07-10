@@ -4,67 +4,33 @@
  */
 import { cardCodexRunId } from '../../codex/helper/card-codex-run-id.js';
 import { groupSequentialToolCalls, type ThreadRunLogEvent, type ThreadRunToolGroup } from '../../codex/helper/thread-run-log.js';
-import { codexRunDurationLabel, liveCodexRunElapsedMs } from '../../codex/helper/live-codex-run-elapsed-ms.js';
+import { threadRunToolGroupSummary } from '../../codex/helper/thread-run-tool-group-summary.js';
+import { threadRunToolPresentation } from '../../codex/helper/thread-run-tool-presentation.js';
 import type { CardSkillRunSummary } from '../../codex/effect/request-card-skill-run-status.js';
 import { threadCodexCardId } from '../../codex/helper/thread-codex-card-id.js';
-import { renderLedgerCardMarkdown } from '../../ledger/component/render-ledger-card-markdown.js';
 import { state, type ThreadPanelTab } from '../../state.js';
+import { renderThreadCodexLogEvent } from '../component/render-thread-codex-log-event.js';
+import { renderThreadCodexLogStatus } from '../component/render-thread-codex-log-status.js';
 
 type DisclosureByThread = Record<string, Record<string, boolean>>;
 
 function recordState(name: string): Record<string, any> {
+  // WHAT: Repair absent session-only run state at its access boundary.
+  // WHY: Restored browser sessions may predate the Codex Log state maps.
   if (!state[name] || typeof state[name] !== 'object' || Array.isArray(state[name])) state[name] = {};
   return state[name] as Record<string, any>;
 }
 
 function disclosureState(name: string, threadId: string): Record<string, boolean> {
   const byThread = recordState(name) as DisclosureByThread;
+  // WHAT: Allocate disclosure state only for the active thread on first access.
+  // WHY: Disclosure identity is thread-scoped and must not leak across selected cards.
   if (!byThread[threadId] || typeof byThread[threadId] !== 'object') byThread[threadId] = {};
   return byThread[threadId];
 }
 
-function compactText(value: string, maxLength = 108): string {
-  const text = value.replace(/\s+/g, ' ').trim();
-  if (text.length <= maxLength) return text;
-  const head = Math.max(22, Math.floor(maxLength * 0.64));
-  const tail = Math.max(12, maxLength - head - 5);
-  return `${text.slice(0, head).trimEnd()} ... ${text.slice(-tail).trimStart()}`;
-}
-
-function stripOuterQuotes(value: string): string {
-  const text = value.trim();
-  const quote = text[0];
-  return (quote === '"' || quote === "'") && text.endsWith(quote) ? text.slice(1, -1).trim() : text;
-}
-
-function displayCommand(value: string): string {
-  const command = value.replace(/\s+/g, ' ').trim();
-  const shell = command.match(/^(?:\/usr\/bin\/env\s+)?(?:\/[^\s]+\/)?(?:zsh|bash|sh)\s+-lc\s+(.+)$/);
-  return shell?.[1] ? stripOuterQuotes(shell[1]) : command || 'command';
-}
-
-function commandHasToken(command: string, tokens: string[]): boolean {
-  const escaped = tokens.map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-  return new RegExp(`(^|[\\s;&|()])(?:${escaped})(?=\\s|$)`, 'i').test(command);
-}
-
-function toolAction(command: string): string {
-  if (commandHasToken(command, ['git', 'gh'])) return 'Git';
-  if (commandHasToken(command, ['rg', 'grep', 'find', 'fd'])) return 'Search';
-  if (commandHasToken(command, ['apply_patch', 'tee', 'touch', 'mkdir', 'rm', 'mv', 'cp', 'chmod', 'chown'])) return 'Write';
-  if (commandHasToken(command, ['cat', 'sed', 'nl', 'head', 'tail', 'less', 'wc'])) return 'Read';
-  return 'Ran';
-}
-
-function statusText(event: ThreadRunLogEvent): string {
-  const parts = [event.status];
-  if (event.exitCode) parts.push(`code ${event.exitCode}`);
-  return parts.filter(Boolean).join(' / ') || 'pending';
-}
-
 function renderTool(event: ThreadRunLogEvent, threadId: string): HTMLDetailsElement {
-  const command = displayCommand(event.tool || event.title);
-  const action = toolAction(command);
+  const presentation = threadRunToolPresentation(event);
   const rows = disclosureState('threadToolRowDisclosureByThreadId', threadId);
   const details = document.createElement('details');
   details.className = 'codex-tool-call';
@@ -75,25 +41,27 @@ function renderTool(event: ThreadRunLogEvent, threadId: string): HTMLDetailsElem
 
   const summary = document.createElement('summary');
   summary.className = 'codex-tool-call-summary';
-  summary.title = command;
+  summary.title = presentation.command;
   const actionLabel = document.createElement('span');
   actionLabel.className = 'codex-tool-call-action';
-  actionLabel.textContent = action;
+  actionLabel.textContent = presentation.action;
   const commandLabel = document.createElement('span');
   commandLabel.className = 'codex-tool-call-command';
-  commandLabel.textContent = compactText(command);
+  commandLabel.textContent = presentation.compactCommand;
   const status = document.createElement('span');
   status.className = 'codex-tool-call-status';
-  status.textContent = statusText(event);
+  status.textContent = presentation.status;
   summary.append(actionLabel, commandLabel, status);
 
   const body = document.createElement('div');
   body.className = 'codex-tool-call-details';
   const fullCommand = document.createElement('code');
   fullCommand.className = 'codex-tool-call-full-command';
-  fullCommand.textContent = command;
+  fullCommand.textContent = presentation.command;
   body.append(fullCommand);
   const outputText = event.output || event.text;
+  // WHAT: Append raw tool output only when the lifecycle exposes readable content.
+  // WHY: Empty command starts should retain a compact disclosure body.
   if (outputText) {
     const output = document.createElement('pre');
     output.className = 'codex-tool-call-output';
@@ -102,17 +70,6 @@ function renderTool(event: ThreadRunLogEvent, threadId: string): HTMLDetailsElem
   }
   details.append(summary, body);
   return details;
-}
-
-function groupSummary(group: ThreadRunToolGroup): string {
-  const count = group.tools.length;
-  const statuses = new Map<string, number>();
-  for (const tool of group.tools) {
-    const status = tool.status || 'pending';
-    statuses.set(status, (statuses.get(status) ?? 0) + 1);
-  }
-  const counts = [...statuses.entries()].map(([status, value]) => `${value} ${status}`).join(' · ');
-  return `${count} ${count === 1 ? 'tool' : 'tools'}${counts ? ` · ${counts}` : ''}`;
 }
 
 function renderToolGroup(group: ThreadRunToolGroup, threadId: string): HTMLDetailsElement {
@@ -124,7 +81,7 @@ function renderToolGroup(group: ThreadRunToolGroup, threadId: string): HTMLDetai
   details.addEventListener('toggle', () => { groups[group.key] = details.open; });
   const summary = document.createElement('summary');
   summary.className = 'codex-tool-group-summary';
-  summary.textContent = groupSummary(group);
+  summary.textContent = threadRunToolGroupSummary(group);
   const list = document.createElement('div');
   list.className = 'codex-tool-group-list';
   list.append(...group.tools.map((tool) => renderTool(tool, threadId)));
@@ -132,72 +89,12 @@ function renderToolGroup(group: ThreadRunToolGroup, threadId: string): HTMLDetai
   return details;
 }
 
-function renderEvent(event: ThreadRunLogEvent): HTMLElement {
-  const article = document.createElement('article');
-  article.className = `codex-log-event is-${event.kind.replace(/[^a-z0-9_-]+/gi, '-')} is-${event.severity}`;
-  article.dataset.eventKey = event.eventKey;
-  const heading = document.createElement('div');
-  heading.className = 'codex-log-event-heading';
-  const title = document.createElement('strong');
-  title.textContent = event.title || event.kind || event.type || 'Codex event';
-  const status = document.createElement('span');
-  status.textContent = event.status;
-  status.hidden = !event.status;
-  heading.append(title, status);
-  article.append(heading);
-  if (event.text) {
-    const body = renderLedgerCardMarkdown(event.text);
-    body.classList.add('codex-log-event-body');
-    article.append(body);
-  }
-  return article;
-}
-
 function selectedThreadCard(threadId: string): Record<string, unknown> | null {
   const cardId = threadCodexCardId(state.activeLedger, threadId);
+  // WHAT: Stop card resolution when the thread has no owning card id.
+  // WHY: Searching every card cannot recover ownership without the thread-to-card mapping.
   if (!cardId) return null;
   return state.activeLedger?.cards?.find((card: Record<string, unknown>) => String(card.id ?? '') === cardId) ?? null;
-}
-
-function renderStatus(input: { summary: CardSkillRunSummary | null; card: Record<string, unknown>; runId: string }): HTMLElement {
-  const summary = input.summary;
-  const status = summary?.ok === false ? 'unavailable' : summary?.status ?? 'running';
-  const strip = document.createElement('dl');
-  strip.className = 'codex-log-status';
-  strip.dataset.runStatus = status;
-  strip.dataset.runId = input.runId;
-  const values: Array<[string, string, string?]> = [
-    ['Status', status],
-    ['Model', summary?.metadata.codexModel || String(input.card.codexRunModel ?? '') || '—'],
-    ['Effort', summary?.metadata.codexEffort || String(input.card.codexRunEffort ?? '') || '—'],
-    ['Elapsed', codexRunDurationLabel(summary ? liveCodexRunElapsedMs(summary) : 0), 'codex-log-elapsed'],
-    ['Tools', String(summary?.toolCallCount ?? 0)],
-  ];
-  for (const [label, value, dataName] of values) {
-    const item = document.createElement('div');
-    const term = document.createElement('dt');
-    const description = document.createElement('dd');
-    term.textContent = label;
-    description.textContent = value;
-    if (dataName) description.setAttribute(`data-${dataName}`, '');
-    item.append(term, description);
-    strip.append(item);
-  }
-  if ((summary?.warningCount ?? 0) > 0 || (summary?.errorCount ?? 0) > 0 || summary?.transportStatus === 'degraded') {
-    const diagnostics = document.createElement('div');
-    diagnostics.className = 'codex-log-diagnostic-summary';
-    const term = document.createElement('dt');
-    term.textContent = 'Diagnostics';
-    const description = document.createElement('dd');
-    description.textContent = [
-      summary.warningCount ? `${summary.warningCount} warning${summary.warningCount === 1 ? '' : 's'}` : '',
-      summary.errorCount ? `${summary.errorCount} error${summary.errorCount === 1 ? '' : 's'}` : '',
-      summary.transportStatus === 'degraded' ? 'transport degraded' : '',
-    ].filter(Boolean).join(' · ');
-    diagnostics.append(term, description);
-    strip.append(diagnostics);
-  }
-  return strip;
 }
 
 function renderAnnouncement(threadId: string): HTMLElement {
@@ -214,12 +111,16 @@ function renderAnnouncement(threadId: string): HTMLElement {
   live.setAttribute('aria-live', logIsActive ? 'polite' : 'off');
   live.setAttribute('aria-atomic', 'true');
   live.textContent = logIsActive && isNew ? String(announcement?.text ?? '') : '';
+  // WHAT: Advance the consumed sequence after constructing the active-panel announcement.
+  // WHY: Rerenders must not repeat the same assistive-technology message.
   if (sequence > 0) announced[threadId] = sequence;
   return live;
 }
 
 export function renderThreadCodexLog(): void {
   const root = document.querySelector('.thread-codex-log') as HTMLElement | null;
+  // WHAT: Skip the final DOM effect when the thread log surface is not mounted.
+  // WHY: Headless and partially rendered callers may invoke the shared thread renderer.
   if (!root) return;
   const viewport = document.querySelector('.thread-log-scroll') as HTMLElement | null;
   const previousTop = Number(viewport?.scrollTop ?? 0);
@@ -229,6 +130,8 @@ export function renderThreadCodexLog(): void {
   const card = selectedThreadCard(threadId);
   const runId = card ? cardCodexRunId(card) : '';
   root.replaceChildren();
+  // WHAT: Render the exact empty state when the selected thread owns no Codex run.
+  // WHY: Missing ownership is distinct from an unavailable run response.
   if (!runId || !card) {
     const empty = document.createElement('p');
     empty.className = 'codex-log-empty';
@@ -244,7 +147,9 @@ export function renderThreadCodexLog(): void {
     && Array.isArray(recordState('threadRunEventsByThreadId')[threadId])
     ? recordState('threadRunEventsByThreadId')[threadId] as ThreadRunLogEvent[]
     : [];
-  root.append(renderAnnouncement(threadId), renderStatus({ summary: summary ?? null, card, runId }));
+  root.append(renderAnnouncement(threadId), renderThreadCodexLogStatus({ summary: summary ?? null, card, runId }));
+  // WHAT: Surface an unavailable response separately from chronological run events.
+  // WHY: Transport and ownership failures are not producer log records.
   if (summary?.ok === false) {
     const unavailable = document.createElement('p');
     unavailable.className = 'codex-log-unavailable';
@@ -254,8 +159,10 @@ export function renderThreadCodexLog(): void {
   const stream = document.createElement('div');
   stream.className = 'codex-log-stream';
   for (const block of groupSequentialToolCalls(events)) {
-    stream.append(block.kind === 'tool-group' ? renderToolGroup(block, threadId) : renderEvent(block.event));
+    stream.append(block.kind === 'tool-group' ? renderToolGroup(block, threadId) : renderThreadCodexLogEvent(block.event));
   }
+  // WHAT: Render a waiting state only for an available run without received events.
+  // WHY: An unavailable response already provides its actionable failure message.
   if (events.length === 0 && summary?.ok !== false) {
     const waiting = document.createElement('p');
     waiting.className = 'codex-log-waiting';
@@ -265,6 +172,8 @@ export function renderThreadCodexLog(): void {
   root.append(stream);
 
   const restore = () => {
+    // WHAT: Skip scroll restoration when the independent log viewport is absent.
+    // WHY: The log content can render in isolated test and partial-DOM surfaces.
     if (!viewport) return;
     viewport.scrollTop = wasPinned ? Number(viewport.scrollHeight ?? 0) : previousTop;
     recordState('threadLogScrollTopByThreadId')[threadId] = Math.max(0, Number(viewport.scrollTop ?? 0));
