@@ -225,6 +225,8 @@ test('same-thread note renders retain focused Codex controls and commit the next
   assert.ok(actions);
   assert.equal(model.value, 'gpt-5.5');
   assert.equal(effort.value, 'xhigh');
+  assert.equal(button.dataset.codexCardId, 'card-a');
+  assert.equal(button.dataset.cardId, undefined);
   model.focus();
   assert.equal((globalThis.document as unknown as { activeElement: FakeElement }).activeElement, model);
 

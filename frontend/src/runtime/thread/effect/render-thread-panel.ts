@@ -91,7 +91,7 @@ function renderThreadActions(threadId: string): void {
     const button = actions.querySelector('.thread-codex-button') as HTMLButtonElement | null;
     if (button) {
       button.dataset.threadId = threadId;
-      button.dataset.cardId = threadCodexCardId(state.activeLedger, threadId);
+      button.dataset.codexCardId = threadCodexCardId(state.activeLedger, threadId);
       button.dataset.codexModel = threadCodexModel;
       button.dataset.codexEffort = threadCodexEffort;
     }
@@ -107,7 +107,7 @@ function renderThreadActions(threadId: string): void {
   button.type = 'button';
   button.dataset.action = 'process-thread-codex';
   button.dataset.threadId = threadId;
-  button.dataset.cardId = cardId;
+  button.dataset.codexCardId = cardId;
   button.dataset.codexModel = threadCodexModel;
   button.dataset.codexEffort = threadCodexEffort;
   button.title = 'Start Codex from this thread';

@@ -65,7 +65,6 @@ type DeferredSignal = {
 };
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-const repositoryDecisionOsRoot = resolve(repoRoot, '.decision-os');
 const targetCardId = 'card-continuity';
 const alternateCardId = 'card-direct-selection';
 const targetThreadId = `thread-${targetCardId}`;
@@ -146,6 +145,7 @@ test('The refresh system preserves canvas continuity during operator work.', { t
         card: null,
       };
     });
+    const threadHeaderBeforeLaunch = await threadHeaderGeometry(page);
 
     holdNextLedgerGet = true;
     await page.locator('[data-action="refresh"]').click();
@@ -156,7 +156,7 @@ test('The refresh system preserves canvas continuity during operator work.', { t
     const startResponsePromise = page.waitForResponse((response) => response.url() === `${server?.url}/api/codex/threads/process` && response.request().method() === 'POST');
     await page.locator('[data-action="process-thread-codex"]').click();
     const [startRequest, startResponse] = await Promise.all([startRequestPromise, startResponsePromise]);
-    assert.equal(startResponse.status(), 202);
+    assert.equal(startResponse.status(), 202, await startResponse.text());
     assert.deepEqual(startRequest.postDataJSON(), {
       ledgerId: 'specs',
       threadId: targetThreadId,
@@ -173,6 +173,8 @@ test('The refresh system preserves canvas continuity during operator work.', { t
       const telemetry = (window as Window & { __coreTelemetry?: Array<{ name?: string }> }).__coreTelemetry ?? [];
       return telemetry.some((entry) => entry.name === 'codex-thread-process-created-widget');
     });
+    const threadHeaderAfterLaunch = await threadHeaderGeometry(page);
+    assert.deepEqual(threadHeaderAfterLaunch, threadHeaderBeforeLaunch, 'Thread-run refresh changed the launcher geometry');
     assert.equal(await controlsMatchCapturedReferences(page), true, 'Thread-run refresh replaced an unchanged thread control');
 
     await page.evaluate((cardId) => {
@@ -322,9 +324,9 @@ test('The refresh system preserves canvas continuity during operator work.', { t
     assert.match(persistedThread, /Browser lifecycle note\./);
     assert.equal((persistedThread.match(/^# AGENT$/gm) ?? []).length, 1);
     const prompt = readFileSync(fixture.promptFile, 'utf8');
-    assert.match(prompt, new RegExp(escapeRegExp(fixture.ledgerFile)));
-    assert.match(prompt, new RegExp(escapeRegExp(fixture.threadFile)));
-    assert.doesNotMatch(prompt, new RegExp(escapeRegExp(repositoryDecisionOsRoot)));
+    assert.match(prompt, /Launch Codex from this thread\./);
+    assert.match(prompt, /Continuity target body\./);
+    assert.doesNotMatch(prompt, new RegExp(escapeRegExp(fixture.workspace)));
     assert.equal(committedMutations.length, 3);
   } finally {
     releaseStaleResponse.resolve();
@@ -351,7 +353,7 @@ function createTemporaryWorkspace(): TemporaryWorkspace {
   }, null, 2));
   writeFileSync(join(cardDirectory, `${targetCardId}.md`), 'Continuity target body.\n', 'utf8');
   writeFileSync(join(cardDirectory, `${alternateCardId}.md`), 'Direct selection target body.\n', 'utf8');
-  writeFileSync(threadFile, '\n', 'utf8');
+  writeFileSync(threadFile, '# OPERATOR\n<!-- decision-os:note {"id":"note-browser-launch","timestamp":"2026-07-10T01:59:00.000Z"} -->\n\nLaunch Codex from this thread.\n', 'utf8');
   writeFileSync(join(threadDirectory, `thread-${alternateCardId}.md`), '\n', 'utf8');
   writeFileSync(ledgerFile, JSON.stringify({
     cards: [
@@ -508,6 +510,38 @@ async function controlsMatchCapturedReferences(page: Page): Promise<boolean> {
       && refs.effort === document.querySelector('[data-codex-preference="effort"]')
       && refs.model === document.querySelector('[data-codex-preference="model"]')
     );
+  });
+}
+
+async function threadHeaderGeometry(page: Page): Promise<{
+  headingHeight: number;
+  toolbarHeight: number;
+  actionsHeight: number;
+  modelWidth: number;
+  effortWidth: number;
+  buttonWidth: number;
+  buttonHeight: number;
+  buttonCardId: string | undefined;
+  buttonCodexCardId: string | undefined;
+}> {
+  return page.evaluate(() => {
+    const heading = document.querySelector<HTMLElement>('.thread-heading');
+    const toolbar = document.querySelector<HTMLElement>('.thread-toolbar');
+    const actions = document.querySelector<HTMLElement>('.thread-actions');
+    const model = document.querySelector<HTMLElement>('[data-codex-preference="model"]');
+    const effort = document.querySelector<HTMLElement>('[data-codex-preference="effort"]');
+    const button = document.querySelector<HTMLElement>('[data-action="process-thread-codex"]');
+    return {
+      headingHeight: heading?.getBoundingClientRect().height ?? 0,
+      toolbarHeight: toolbar?.getBoundingClientRect().height ?? 0,
+      actionsHeight: actions?.getBoundingClientRect().height ?? 0,
+      modelWidth: model?.getBoundingClientRect().width ?? 0,
+      effortWidth: effort?.getBoundingClientRect().width ?? 0,
+      buttonWidth: button?.getBoundingClientRect().width ?? 0,
+      buttonHeight: button?.getBoundingClientRect().height ?? 0,
+      buttonCardId: button?.dataset.cardId,
+      buttonCodexCardId: button?.dataset.codexCardId,
+    };
   });
 }
 
