@@ -1,4 +1,5 @@
 tmp/
+.decision-os/runs/
 .decision-os/voice-uploads/
 .decision-os/.settings.json
 .worktrees/
