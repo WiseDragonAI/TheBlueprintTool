@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#101513" />
+    <title>decision-os mobile</title>
+    <link rel="stylesheet" href="/assets/mobile.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <button class="icon-button menu-button" type="button" aria-label="Open ledgers" aria-expanded="false">☰</button>
+        <a class="brand" href="/" aria-label="Ledger home">
+          <span class="brand-mark">D</span>
+          <span><strong id="project-name">decision-os</strong><small>Ledger reader</small></span>
+        </a>
+        <button class="icon-button refresh-button" type="button" aria-label="Refresh ledger">↻</button>
+      </header>
+
+      <div class="layout">
+        <nav class="ledger-nav" aria-label="Ledgers">
+          <div class="nav-heading">
+            <span>Ledgers</span>
+            <button class="icon-button close-menu-button" type="button" aria-label="Close ledgers">×</button>
+          </div>
+          <div id="ledger-links" class="ledger-links"></div>
+        </nav>
+        <button class="nav-scrim" type="button" aria-label="Close ledgers"></button>
+
+        <main class="content" tabindex="-1">
+          <section id="loading-view" class="state-view">
+            <span class="spinner" aria-hidden="true"></span>
+            <p>Loading ledgers…</p>
+          </section>
+
+          <section id="error-view" class="state-view" hidden>
+            <div class="state-icon">!</div>
+            <h1>Could not load this ledger</h1>
+            <p id="error-message"></p>
+            <button class="primary-button retry-button" type="button">Try again</button>
+          </section>
+
+          <section id="empty-view" class="state-view" hidden>
+            <div class="state-icon">◇</div>
+            <h1>No ledgers found</h1>
+            <p>Add a ledger to <code>.decision-os/state.json</code> to begin.</p>
+          </section>
+
+          <section id="ledger-view" hidden>
+            <div class="ledger-header">
+              <div>
+                <p class="eyebrow">Ledger</p>
+                <h1 id="ledger-title"></h1>
+                <p id="ledger-summary" class="muted"></p>
+              </div>
+              <label class="search-field">
+                <span aria-hidden="true">⌕</span>
+                <input id="card-search" type="search" inputmode="search" placeholder="Search cards" autocomplete="off" />
+              </label>
+              <div id="type-filters" class="type-filters" aria-label="Filter by card type"></div>
+            </div>
+            <div id="card-list" class="card-list"></div>
+            <p id="no-results" class="no-results" hidden>No cards match this search.</p>
+          </section>
+
+          <article id="card-view" class="card-detail" hidden>
+            <button class="back-button" type="button">← Back to ledger</button>
+            <div class="card-detail-header">
+              <div id="card-type" class="card-type"></div>
+              <h1 id="card-title"></h1>
+              <p id="card-id" class="muted"></p>
+            </div>
+            <div id="card-body" class="card-body"></div>
+          </article>
+        </main>
+      </div>
+    </div>
+    <script type="module" src="/src/mobile.js"></script>
+  </body>
+</html>
