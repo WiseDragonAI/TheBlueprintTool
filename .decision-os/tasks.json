@@ -1,0 +1,108 @@
+{
+  "modelName": "tasks",
+  "diagramSize": {
+    "width": 5200,
+    "height": 2600
+  },
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "scale": 1
+  },
+  "cards": [
+    {
+      "id": "card-d4df7793-0cb8-4a6f-aee6-4a6c7366200c",
+      "title": "Skill lib and pipeline",
+      "cardType": "note",
+      "domainId": "tasks",
+      "status": "todo",
+      "x": 60,
+      "y": 60,
+      "w": 320,
+      "h": 180,
+      "comment": {
+        "contentFile": ".decision-os/cards/tasks/card-d4df7793-0cb8-4a6f-aee6-4a6c7366200c.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783752164230-62f1e4ce",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/tasks/codex-skill-1783752164230-62f1e4ce.md"
+    },
+    {
+      "id": "card-5e339462-a3db-43d9-acda-f7c3708e51ef",
+      "title": "General Specs control room",
+      "cardType": "note",
+      "domainId": "tasks",
+      "status": "todo",
+      "x": 60,
+      "y": 1080,
+      "w": 320,
+      "h": 180,
+      "comment": {
+        "contentFile": ".decision-os/cards/tasks/card-5e339462-a3db-43d9-acda-f7c3708e51ef.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783752506848-800c2197",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/tasks/codex-skill-1783752506848-800c2197.md"
+    },
+    {
+      "id": "card-f70126f4-8f8f-4d97-a0f9-34301119ca26",
+      "title": "Mobile Control Room — Task Queue and Intake",
+      "cardType": "note",
+      "domainId": "tasks",
+      "status": "todo",
+      "x": 420,
+      "y": 1080,
+      "w": 320,
+      "h": 180,
+      "comment": {
+        "contentFile": ".decision-os/cards/tasks/card-f70126f4-8f8f-4d97-a0f9-34301119ca26.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783771669423-a8462031",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/tasks/codex-skill-1783771669423-a8462031.md"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "zone-89e0132b-425c-48ec-9c81-d0d49b585386",
+      "x": 0,
+      "y": 0,
+      "width": 1200,
+      "height": 900,
+      "color": "#4632c2",
+      "label": "Mobile",
+      "comments": []
+    },
+    {
+      "id": "zone-a2a4da6f-5499-4598-8e6d-c4950e2378fb",
+      "x": 0,
+      "y": 1020,
+      "width": 1200,
+      "height": 900,
+      "color": "#333db0",
+      "label": "ControlRoom",
+      "comments": []
+    }
+  ],
+  "relationships": [],
+  "notes": {},
+  "threadFiles": {
+    "thread-card-d4df7793-0cb8-4a6f-aee6-4a6c7366200c": ".decision-os/threads/tasks/thread-card-d4df7793-0cb8-4a6f-aee6-4a6c7366200c.md",
+    "thread-card-5e339462-a3db-43d9-acda-f7c3708e51ef": ".decision-os/threads/tasks/thread-card-5e339462-a3db-43d9-acda-f7c3708e51ef.md",
+    "thread-card-f70126f4-8f8f-4d97-a0f9-34301119ca26": ".decision-os/threads/tasks/thread-card-f70126f4-8f8f-4d97-a0f9-34301119ca26.md"
+  },
+  "deletedNoteIds": {
+    "thread-card-d4df7793-0cb8-4a6f-aee6-4a6c7366200c": [
+      "note-1783751618743-78ea6036730aa"
+    ]
+  }
+}
