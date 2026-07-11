@@ -10,6 +10,7 @@ import { collectVoiceRecordingBlob } from '../helper/collect-voice-recording-blo
 import { encodeWavBlob } from '../helper/encode-wav-blob.js';
 import { flushPendingLedgerContentRefresh } from '../../refresh/effect/subscribe-ledger-content-events.js';
 import { threadCodexCardId } from '../../codex/helper/thread-codex-card-id.js';
+import { releaseVoiceRecordingWakeLock } from '../effect/hold-voice-recording-wake-lock.js';
 
 export async function stopVoiceRecording(input: { queueCodex?: boolean } = {}): Promise<void> {
   if (state.voice.animationFrameId) cancelAnimationFrame(state.voice.animationFrameId);
@@ -37,6 +38,7 @@ export async function stopVoiceRecording(input: { queueCodex?: boolean } = {}): 
   const audioContext = state.voice.audioContext as AudioContext | undefined;
   void audioContext?.close();
   state.voice.recording = false;
+  releaseVoiceRecordingWakeLock();
   state.voice.durationMs = state.voice.startedAt ? Date.now() - state.voice.startedAt : state.voice.durationMs;
   state.voice.level = 0;
   state.voice.transcriptionStatus = 'uploading voice';

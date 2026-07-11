@@ -8,6 +8,26 @@ import { renderVoiceStatus } from './render-voice-status.js';
 import { uploadVoiceAudio } from './upload-voice-audio.js';
 import { appendOptimisticThreadNote } from '../../thread/effect/append-optimistic-thread-note.js';
 import { patchOptimisticThreadNote } from '../../thread/effect/patch-optimistic-thread-note.js';
+import { activeThreadContentScope, loadActiveThreadSlice } from '../../thread/effect/load-active-thread-slice.js';
+import { ledgerEndpointForTab } from '../../ledger/helper/ledger-endpoint-for-tab.js';
+import { normalizeLedgerNotes } from '../../ledger/helper/normalize-ledger-notes.js';
+
+async function reconcileAcceptedVoiceNote(threadId: string, noteId: string): Promise<void> {
+  const scope = activeThreadContentScope();
+  if (scope && scope.threadId === threadId) {
+    await loadActiveThreadSlice(scope);
+    return;
+  }
+  const endpoint = ledgerEndpointForTab(String(state.activeTab ?? ''));
+  if (!endpoint || !state.activeLedger) return;
+  const response = await fetch(endpoint, { cache: 'no-store' }).catch(() => undefined);
+  const ledger = response?.ok ? await response.json().catch(() => null) : null;
+  const serverNote = ledger && normalizeLedgerNotes(ledger)[threadId]?.find((note) => String(note.id ?? '') === noteId);
+  const localNote = normalizeLedgerNotes(state.activeLedger)[threadId]?.find((note) => String(note.id ?? '') === noteId);
+  if (!serverNote || !localNote) return;
+  Object.assign(localNote, serverNote, { optimistic: false });
+  void import('../../thread/effect/render-thread-panel.js').then(({ renderThreadPanel }) => renderThreadPanel()).catch(() => undefined);
+}
 
 export type VoiceTranscriptionRequest = {
   ledgerId?: string;
@@ -65,6 +85,10 @@ export async function requestTranscription(audio: Blob | null, input: VoiceTrans
   state.voice.voiceFileRef = upload.voiceFileRef;
   state.voice.transcriptionStatus = 'transcribing';
   patchOptimisticThreadNote({ threadId, noteId, body: 'Voice uploaded.', voiceFileRef: upload.voiceFileRef, status: 'transcribing', error: '', transcriptionStartedAt: new Date().toISOString(), optimistic: false });
+  // The server owns transcription after accepting the upload. Clear the recorder-level
+  // busy state so another note can start while this note reports its own progress.
+  state.voice.transcriptionStatus = 'idle';
+  await reconcileAcceptedVoiceNote(threadId, noteId);
   telemetry('render-voice-status', { status: state.voice.transcriptionStatus, durationMs: state.voice.durationMs });
   renderVoiceStatus();
 }

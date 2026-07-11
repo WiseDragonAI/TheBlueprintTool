@@ -27,6 +27,10 @@ test('transcribing voice status hides recorder and keeps text composer visible',
       return null;
     }
   };
+  const voiceButton = {
+    disabled: true,
+    querySelector() { return { textContent: '' }; }
+  };
   (globalThis as unknown as { document: unknown }).document = {
     querySelector(selector: string) {
       if (selector === '.voice-status') return status;
@@ -37,8 +41,8 @@ test('transcribing voice status hides recorder and keeps text composer visible',
       if (selector === '.terminal-composer') return composer;
       return null;
     },
-    querySelectorAll() {
-      return [];
+    querySelectorAll(selector: string) {
+      return selector === '[data-action="voice-toggle"]' ? [voiceButton] : [];
     }
   };
   (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
@@ -49,6 +53,7 @@ test('transcribing voice status hides recorder and keeps text composer visible',
     assert.equal(recorder.hidden, true);
     assert.equal(status.textContent, 'transcribing');
     assert.equal(panel.classList.values.get('busy'), true);
+    assert.equal(voiceButton.disabled, false);
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
     (globalThis as unknown as { window: unknown }).window = previousWindow;

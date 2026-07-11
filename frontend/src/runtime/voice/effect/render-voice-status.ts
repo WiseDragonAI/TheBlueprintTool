@@ -44,8 +44,8 @@ export function renderVoiceStatus(): void {
     });
     document.querySelectorAll('[data-action="voice-toggle"]').forEach((button) => {
       const label = button.querySelector('.terminal-button__label');
-      (button as HTMLButtonElement).disabled = busy;
-      if (label) label.textContent = busy ? 'WAIT' : state.voice.recording ? 'SEND' : 'REC';
+      (button as HTMLButtonElement).disabled = false;
+      if (label) label.textContent = state.voice.recording ? 'SEND' : 'REC';
     });
   }
   const telemetryNow = Date.now();
