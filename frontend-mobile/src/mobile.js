@@ -215,7 +215,7 @@ async function loadRoute() {
     const response = await fetch('/decision-os/state', { cache: 'no-store' });
     if (!response.ok) throw new Error(`The server returned HTTP ${response.status}.`);
     const project = await response.json();
-    state.projectName = asText(project.projectName).trim() || 'decision-os';
+    state.projectName = 'decision-os';
     state.ledgers = Array.isArray(project.ledgers) ? project.ledgers.filter((ledger) => ledger?.id && ledger?.title) : [];
     elements['project-name'].textContent = state.projectName;
     if (!state.ledgers.length) {
