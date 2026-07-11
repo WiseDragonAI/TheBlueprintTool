@@ -1,26 +1,33 @@
+import { renderLedgerCardMarkdown } from '/canvas-src/runtime/ledger/component/render-ledger-card-markdown.js';
+import { ledgerCardBody } from '/canvas-src/runtime/ledger/helper/ledger-card-body.js';
+import { initializeMobileThread, setMobileThreadCard, syncMobileThreadContext } from './mobile-thread.js';
+
 const state = {
   projectName: 'decision-os',
   ledgers: [],
   ledger: null,
   activeLedgerId: '',
+  activeZoneId: '',
+  activeZoneColor: '',
   activeCardId: '',
-  query: '',
-  type: 'all'
+  query: ''
 };
 
 const elements = Object.fromEntries([
   'project-name', 'ledger-links', 'loading-view', 'error-view', 'error-message', 'empty-view',
-  'ledger-view', 'ledger-title', 'ledger-summary', 'card-search', 'type-filters', 'card-list',
-  'no-results', 'card-view', 'card-type', 'card-title', 'card-id', 'card-body'
+  'overview-view', 'overview-summary', 'overview-ledgers', 'ledger-view', 'ledger-title', 'ledger-summary',
+  'zone-list', 'zone-view', 'zone-title', 'zone-summary', 'card-search', 'card-list',
+  'no-results', 'card-view', 'card-title', 'card-body'
 ].map((id) => [id, document.getElementById(id)]));
 
 const asText = (value) => value == null ? '' : typeof value === 'string' ? value : JSON.stringify(value, null, 2);
-const cardSummary = (card) => asText(card?.comment?.what ?? card?.comment?.description ?? card?.description ?? '').trim();
-const cardType = (card) => asText(card?.cardType ?? card?.type ?? 'Card').trim() || 'Card';
 const routeParts = () => location.pathname.split('/').filter(Boolean).map(decodeURIComponent);
+const creationModal = document.querySelector('.creation-modal');
+const creationForm = document.querySelector('.creation-form');
+let creationKind = '';
 
 function setView(name) {
-  for (const id of ['loading-view', 'error-view', 'empty-view', 'ledger-view', 'card-view']) {
+  for (const id of ['loading-view', 'error-view', 'empty-view', 'overview-view', 'ledger-view', 'zone-view', 'card-view']) {
     elements[id].hidden = id !== name;
   }
 }
@@ -39,8 +46,12 @@ function ledgerPath(ledgerId) {
   return `/${encodeURIComponent(ledgerId)}`;
 }
 
-function cardPath(ledgerId, cardId) {
-  return `${ledgerPath(ledgerId)}/card/${encodeURIComponent(cardId)}`;
+function zonePath(ledgerId, zoneId) {
+  return `${ledgerPath(ledgerId)}/zone/${encodeURIComponent(zoneId)}`;
+}
+
+function cardPath(ledgerId, zoneId, cardId) {
+  return `${zonePath(ledgerId, zoneId)}/card/${encodeURIComponent(cardId)}`;
 }
 
 function navigate(path, replace = false) {
@@ -49,8 +60,172 @@ function navigate(path, replace = false) {
   void loadRoute();
 }
 
+function objectId(prefix) {
+  const suffix = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `${prefix}-${suffix}`;
+}
+
+function openCreationModal(kind) {
+  creationKind = kind;
+  const labels = {
+    ledger: ['New ledger', 'Ledger name', 'Create ledger'],
+    zone: ['New zone', 'Zone name', 'Create zone'],
+    card: ['New card', 'Card title', 'Create card']
+  };
+  const [title, placeholder, submit] = labels[kind];
+  document.querySelector('#creation-title').textContent = title;
+  document.querySelector('#creation-kind').textContent = `Create ${kind}`;
+  const name = document.querySelector('#creation-name');
+  name.value = '';
+  name.placeholder = placeholder;
+  document.querySelector('#creation-description').value = '';
+  document.querySelector('.creation-description-field').hidden = kind !== 'card';
+  document.querySelector('.creation-color-field').hidden = kind !== 'zone';
+  document.querySelector('.creation-submit').textContent = submit;
+  document.querySelector('.creation-error').hidden = true;
+  creationModal.showModal();
+  name.focus();
+}
+
+async function ledgerMutation(ledgerId, mutation) {
+  const response = await fetch(`/decision-os/${encodeURIComponent(ledgerId)}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(mutation)
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || payload?.ok === false) throw new Error(payload?.error || `Request failed with HTTP ${response.status}.`);
+  return payload;
+}
+
+function nextZoneRect() {
+  const zones = (state.ledger?.annotations ?? []).filter((zone) => zone?.variant !== 'group' && typeof zone?.color === 'string');
+  if (!zones.length) return { x: 0, y: 0, width: 1200, height: 900 };
+  const left = Math.min(...zones.map((zone) => Number(zone.x ?? 0)).filter(Number.isFinite));
+  const bottom = Math.max(...zones.map((zone) => Number(zone.y ?? 0) + Number(zone.height ?? zone.h ?? 0)).filter(Number.isFinite));
+  return { x: Number.isFinite(left) ? left : 0, y: Number.isFinite(bottom) ? bottom + 120 : 0, width: 1200, height: 900 };
+}
+
+function nextCardRect(zone) {
+  const zoneWidth = Math.max(340, Number(zone.width ?? zone.w ?? 1200));
+  const zoneHeight = Math.max(260, Number(zone.height ?? zone.h ?? 900));
+  const padding = 60;
+  const gap = 40;
+  const width = Math.max(220, Math.min(320, zoneWidth - padding * 2));
+  const height = 180;
+  const columns = Math.max(1, Math.floor((zoneWidth - padding * 2 + gap) / (width + gap)));
+  const existing = Array.isArray(zone.cards) ? zone.cards : [];
+  let index = 0;
+  let column = 0;
+  let row = 0;
+  for (; index < existing.length + 200; index += 1) {
+    column = index % columns;
+    row = Math.floor(index / columns);
+    const candidate = {
+      x: Number(zone.x ?? 0) + padding + column * (width + gap),
+      y: Number(zone.y ?? 0) + padding + row * (height + gap),
+      w: width,
+      h: height
+    };
+    const occupied = existing.some((card) => {
+      const cardX = Number(card.x ?? 0);
+      const cardY = Number(card.y ?? 0);
+      const cardWidth = Number(card.w ?? card.width ?? 280);
+      const cardHeight = Number(card.h ?? card.height ?? 132);
+      return candidate.x < cardX + cardWidth + gap && candidate.x + candidate.w + gap > cardX
+        && candidate.y < cardY + cardHeight + gap && candidate.y + candidate.h + gap > cardY;
+    });
+    if (!occupied) break;
+  }
+  const rect = {
+    x: Number(zone.x ?? 0) + padding + column * (width + gap),
+    y: Number(zone.y ?? 0) + padding + row * (height + gap),
+    width,
+    height
+  };
+  const requiredHeight = padding + (row + 1) * height + row * gap + padding;
+  return { rect, requiredZoneHeight: Math.max(zoneHeight, requiredHeight) };
+}
+
+async function createLedger(name) {
+  const response = await fetch('/decision-os/ledgers', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ title: name })
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || payload?.ok === false || !payload?.tab?.id) throw new Error(payload?.error || 'Could not create ledger.');
+  state.ledger = null;
+  navigate(ledgerPath(payload.tab.id));
+}
+
+async function createZone(name, color) {
+  const rect = nextZoneRect();
+  const annotation = { id: objectId('zone'), ...rect, color, label: name, comments: [] };
+  state.ledger = await ledgerMutation(state.activeLedgerId, { action: 'create-zone', annotation });
+  navigate(zonePath(state.activeLedgerId, annotation.id));
+}
+
+async function createCard(name, description) {
+  const zone = ledgerZones().find((entry) => String(entry.id) === state.activeZoneId);
+  if (!zone || zone.id === 'ungrouped') throw new Error('Choose a canvas zone before creating a card.');
+  const { rect, requiredZoneHeight } = nextCardRect(zone);
+  const currentHeight = Number(zone.height ?? zone.h ?? 0);
+  if (requiredZoneHeight > currentHeight) {
+    state.ledger = await ledgerMutation(state.activeLedgerId, {
+      action: 'patch-geometry',
+      geometry: { zones: { [zone.id]: { x: Number(zone.x ?? 0), y: Number(zone.y ?? 0), width: Number(zone.width ?? zone.w ?? 1200), height: requiredZoneHeight } } }
+    });
+  }
+  const card = {
+    id: objectId('card'),
+    title: name,
+    cardType: 'note',
+    domainId: state.activeLedgerId,
+    status: 'todo',
+    x: rect.x,
+    y: rect.y,
+    w: rect.width,
+    h: rect.height,
+    comment: { what: description || 'New description' },
+    facts: [],
+    fields: []
+  };
+  state.ledger = await ledgerMutation(state.activeLedgerId, { action: 'create-card', card });
+  syncMobileThreadContext({ ledgerId: state.activeLedgerId, ledger: state.ledger, ledgers: state.ledgers });
+  navigate(cardPath(state.activeLedgerId, state.activeZoneId, card.id));
+}
+
+async function submitCreation() {
+  const name = document.querySelector('#creation-name').value.trim();
+  if (!name) return;
+  const submit = document.querySelector('.creation-submit');
+  const error = document.querySelector('.creation-error');
+  submit.disabled = true;
+  error.hidden = true;
+  try {
+    if (creationKind === 'ledger') await createLedger(name);
+    if (creationKind === 'zone') await createZone(name, document.querySelector('#creation-color').value);
+    if (creationKind === 'card') await createCard(name, document.querySelector('#creation-description').value.trim());
+    creationModal.close();
+  } catch (cause) {
+    error.textContent = cause instanceof Error ? cause.message : 'Creation failed.';
+    error.hidden = false;
+  } finally {
+    submit.disabled = false;
+  }
+}
+
 function renderLedgerLinks() {
-  elements['ledger-links'].replaceChildren(...state.ledgers.map((ledger) => {
+  const overviewLink = document.createElement('a');
+  overviewLink.className = `ledger-link${state.activeLedgerId ? '' : ' active'}`;
+  overviewLink.href = '/';
+  overviewLink.textContent = 'All ledgers';
+  overviewLink.addEventListener('click', (event) => {
+    event.preventDefault();
+    navigate('/');
+  });
+  elements['ledger-links'].replaceChildren(overviewLink, ...state.ledgers.map((ledger) => {
     const link = document.createElement('a');
     link.className = `ledger-link${ledger.id === state.activeLedgerId ? ' active' : ''}`;
     link.href = ledgerPath(ledger.id);
@@ -63,31 +238,77 @@ function renderLedgerLinks() {
   }));
 }
 
-function renderFilters(cards) {
-  const types = [...new Set(cards.map(cardType))].sort((a, b) => a.localeCompare(b));
-  if (state.type !== 'all' && !types.includes(state.type)) state.type = 'all';
-  const options = [['all', 'All'], ...types.map((type) => [type, type])];
-  elements['type-filters'].replaceChildren(...options.map(([value, label]) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = `filter-button${state.type === value ? ' active' : ''}`;
-    button.textContent = label;
-    button.setAttribute('aria-pressed', String(state.type === value));
-    button.addEventListener('click', () => {
-      state.type = value;
-      renderFilters(cards);
-      renderCards(cards);
+function renderOverview() {
+  state.activeLedgerId = '';
+  state.activeZoneId = '';
+  renderLedgerLinks();
+  elements['overview-summary'].textContent = `${state.ledgers.length} ${state.ledgers.length === 1 ? 'ledger' : 'ledgers'}`;
+  elements['overview-ledgers'].replaceChildren(...state.ledgers.map((ledger) => {
+    const link = document.createElement('a');
+    link.className = 'overview-ledger';
+    link.href = ledgerPath(ledger.id);
+    const copy = document.createElement('span');
+    const title = document.createElement('h2');
+    title.textContent = ledger.title;
+    const detail = document.createElement('p');
+    detail.textContent = ledger.id;
+    copy.append(title, detail);
+    const arrow = document.createElement('span');
+    arrow.className = 'row-arrow';
+    arrow.textContent = '›';
+    link.append(copy, arrow);
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      navigate(link.getAttribute('href'));
     });
-    return button;
+    return link;
   }));
+  setView('overview-view');
+  document.title = `Ledgers · ${state.projectName}`;
+}
+
+function cardOverlapArea(card, zone) {
+  const cardLeft = Number(card.x ?? 0);
+  const cardTop = Number(card.y ?? 0);
+  const cardWidth = Math.max(0, Number(card.w ?? card.width ?? 280));
+  const cardHeight = Math.max(0, Number(card.h ?? card.height ?? 132));
+  const zoneLeft = Number(zone.x ?? 0);
+  const zoneTop = Number(zone.y ?? 0);
+  const zoneWidth = Math.max(0, Number(zone.width ?? zone.w ?? 0));
+  const zoneHeight = Math.max(0, Number(zone.height ?? zone.h ?? 0));
+  if (![cardLeft, cardTop, cardWidth, cardHeight, zoneLeft, zoneTop, zoneWidth, zoneHeight].every(Number.isFinite)) return 0;
+  const width = Math.max(0, Math.min(cardLeft + cardWidth, zoneLeft + zoneWidth) - Math.max(cardLeft, zoneLeft));
+  const height = Math.max(0, Math.min(cardTop + cardHeight, zoneTop + zoneHeight) - Math.max(cardTop, zoneTop));
+  return width * height;
+}
+
+function ledgerZones() {
+  const cards = Array.isArray(state.ledger?.cards) ? state.ledger.cards : [];
+  const annotations = Array.isArray(state.ledger?.annotations) ? state.ledger.annotations : [];
+  const zones = annotations
+    .filter((zone) => zone?.variant !== 'group' && typeof zone?.color === 'string' && zone.id)
+    .map((zone) => ({ ...zone, cards: [] }));
+  const ungrouped = { id: 'ungrouped', label: 'Ungrouped', color: '#9ba3ad', cards: [] };
+  for (const card of cards) {
+    let bestZone = null;
+    let bestArea = 0;
+    for (const zone of zones) {
+      const area = cardOverlapArea(card, zone);
+      if (area <= bestArea) continue;
+      bestArea = area;
+      bestZone = zone;
+    }
+    (bestZone ?? ungrouped).cards.push(card);
+  }
+  if (ungrouped.cards.length) zones.push(ungrouped);
+  return zones;
 }
 
 function renderCards(cards) {
   const query = state.query.trim().toLocaleLowerCase();
   const filtered = cards.filter((card) => {
-    if (state.type !== 'all' && cardType(card) !== state.type) return false;
     if (!query) return true;
-    return [card.id, card.title, cardType(card), card.domainId, cardSummary(card)]
+    return [card.title, ledgerCardBody(card)]
       .some((value) => asText(value).toLocaleLowerCase().includes(query));
   });
   const rows = filtered.map((card) => {
@@ -95,108 +316,72 @@ function renderCards(cards) {
     button.type = 'button';
     button.className = 'card-row';
     const copy = document.createElement('span');
-    const type = document.createElement('span');
-    type.className = 'card-type';
-    type.textContent = cardType(card);
     const title = document.createElement('h2');
     title.textContent = asText(card.title).trim() || `Card ${card.id}`;
-    copy.append(type, title);
-    const summary = cardSummary(card);
-    if (summary) {
-      const paragraph = document.createElement('p');
-      paragraph.textContent = summary;
-      copy.append(paragraph);
-    }
+    copy.append(title);
+    button.style.setProperty('--zone-color', state.activeZoneColor || 'var(--accent)');
     const arrow = document.createElement('span');
     arrow.className = 'card-row-arrow';
     arrow.setAttribute('aria-hidden', 'true');
     arrow.textContent = '›';
     button.append(copy, arrow);
-    button.addEventListener('click', () => navigate(cardPath(state.activeLedgerId, card.id)));
+    button.addEventListener('click', () => navigate(cardPath(state.activeLedgerId, state.activeZoneId, card.id)));
     return button;
   });
   elements['card-list'].replaceChildren(...rows);
   elements['no-results'].hidden = rows.length > 0;
-  elements['ledger-summary'].textContent = `${filtered.length === cards.length ? cards.length : `${filtered.length} of ${cards.length}`} cards`;
-}
-
-function appendSection(title, content) {
-  if (content == null || content === '' || (Array.isArray(content) && content.length === 0)) return;
-  const section = document.createElement('section');
-  section.className = 'detail-section';
-  const heading = document.createElement('h2');
-  heading.textContent = title;
-  section.append(heading);
-
-  if (Array.isArray(content)) {
-    const list = document.createElement('ul');
-    for (const item of content) {
-      const row = document.createElement('li');
-      row.textContent = asText(item?.text ?? item?.value ?? item?.label ?? item);
-      list.append(row);
-    }
-    section.append(list);
-  } else if (typeof content === 'object') {
-    const entries = Object.entries(content).filter(([key, value]) => key !== 'contentFile' && value != null && value !== '');
-    if (!entries.length) return;
-    const list = document.createElement('dl');
-    for (const [key, value] of entries) {
-      const term = document.createElement('dt');
-      term.textContent = key.replace(/([a-z])([A-Z])/g, '$1 $2');
-      const definition = document.createElement('dd');
-      definition.textContent = asText(value);
-      list.append(term, definition);
-    }
-    section.append(list);
-  } else {
-    const paragraph = document.createElement('p');
-    paragraph.textContent = asText(content);
-    section.append(paragraph);
-    appendMarkdownImages(section, asText(content));
-  }
-  elements['card-body'].append(section);
-}
-
-function appendMarkdownImages(container, markdown) {
-  const pattern = /!\[([^\]]*)\]\(([^)]+)\)/g;
-  for (const match of markdown.matchAll(pattern)) {
-    const image = document.createElement('img');
-    image.className = 'card-image';
-    image.alt = match[1] || 'Card image';
-    image.loading = 'lazy';
-    image.src = match[2].startsWith('.decision-os/') ? `/${match[2]}` : match[2];
-    container.append(image);
-  }
+  elements['zone-summary'].textContent = `${filtered.length === cards.length ? cards.length : `${filtered.length} of ${cards.length}`} cards`;
 }
 
 function renderCard(card) {
   state.activeCardId = asText(card.id);
-  elements['card-type'].textContent = cardType(card);
   elements['card-title'].textContent = asText(card.title).trim() || `Card ${card.id}`;
-  elements['card-id'].textContent = `#${card.id}${card.domainId ? ` · ${card.domainId}` : ''}`;
-  elements['card-body'].replaceChildren();
-  appendSection('Description', cardSummary(card));
-  appendSection('Facts', card.facts);
-  appendSection('Fields', card.fields);
-  const extra = Object.fromEntries(Object.entries(card).filter(([key, value]) =>
-    !['id', 'title', 'cardType', 'type', 'domainId', 'comment', 'facts', 'fields', 'x', 'y', 'w', 'h', 'width', 'height', 'imageSizes'].includes(key)
-      && value != null && value !== '' && !(Array.isArray(value) && value.length === 0)
-  ));
-  appendSection('Additional details', extra);
-  if (!elements['card-body'].childElementCount) appendSection('Details', 'This card has no text content.');
+  const imageSizes = card.imageSizes && typeof card.imageSizes === 'object' ? card.imageSizes : {};
+  elements['card-body'].replaceChildren(renderLedgerCardMarkdown(ledgerCardBody(card), { imageSizes, mediaSurface: 'thread' }));
+  elements['card-view'].style.setProperty('--zone-color', state.activeZoneColor || 'var(--accent)');
+  setMobileThreadCard(card);
   setView('card-view');
   document.title = `${elements['card-title'].textContent} · ${state.projectName}`;
 }
 
 function renderLedger() {
-  const cards = Array.isArray(state.ledger?.cards) ? state.ledger.cards : [];
   const active = state.ledgers.find((ledger) => ledger.id === state.activeLedgerId);
+  const zones = ledgerZones();
   elements['ledger-title'].textContent = active?.title ?? state.activeLedgerId;
-  elements['card-search'].value = state.query;
-  renderFilters(cards);
-  renderCards(cards);
+  elements['ledger-summary'].textContent = `${zones.length} ${zones.length === 1 ? 'zone' : 'zones'}`;
+  elements['zone-list'].replaceChildren(...zones.map((zone) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'zone-row';
+    button.style.setProperty('--zone-color', zone.color);
+    const copy = document.createElement('span');
+    const title = document.createElement('h2');
+    title.textContent = asText(zone.label).trim() || 'Untitled zone';
+    const detail = document.createElement('p');
+    detail.textContent = `${zone.cards.length} ${zone.cards.length === 1 ? 'card' : 'cards'}`;
+    copy.append(title, detail);
+    const arrow = document.createElement('span');
+    arrow.className = 'row-arrow';
+    arrow.textContent = '›';
+    button.append(copy, arrow);
+    button.addEventListener('click', () => navigate(zonePath(state.activeLedgerId, zone.id)));
+    return button;
+  }));
   setView('ledger-view');
   document.title = `${active?.title ?? state.activeLedgerId} · ${state.projectName}`;
+}
+
+function renderZone(zone) {
+  state.activeZoneId = asText(zone.id);
+  state.activeZoneColor = asText(zone.color);
+  state.query = '';
+  elements['zone-title'].textContent = asText(zone.label).trim() || 'Untitled zone';
+  elements['zone-summary'].textContent = `${zone.cards.length} ${zone.cards.length === 1 ? 'card' : 'cards'}`;
+  elements['card-search'].value = '';
+  document.querySelector('.create-card-button').disabled = zone.id === 'ungrouped';
+  renderCards(zone.cards);
+  setView('zone-view');
+  document.title = `${elements['zone-title'].textContent} · ${state.projectName}`;
 }
 
 async function loadLedger(ledgerId) {
@@ -207,6 +392,16 @@ async function loadLedger(ledgerId) {
   state.ledger = ledger;
   state.activeLedgerId = ledgerId;
   renderLedgerLinks();
+  syncMobileThreadContext({
+    ledgerId,
+    ledger,
+    ledgers: state.ledgers,
+    onLedgerRefresh: async (activeLedgerId) => {
+      const refreshed = await fetch(`/decision-os/${encodeURIComponent(activeLedgerId)}`, { cache: 'no-store' }).then((result) => result.ok ? result.json() : null);
+      if (refreshed && activeLedgerId === state.activeLedgerId) state.ledger = refreshed;
+      return refreshed;
+    }
+  });
 }
 
 async function loadRoute() {
@@ -224,19 +419,28 @@ async function loadRoute() {
       return;
     }
 
-    const [requestedLedger, marker, requestedCard] = routeParts();
-    const ledgerId = state.ledgers.some((ledger) => ledger.id === requestedLedger) ? requestedLedger : state.ledgers[0].id;
-    if (requestedLedger !== ledgerId) {
-      navigate(ledgerPath(ledgerId), true);
+    const [requestedLedger, zoneMarker, requestedZone, cardMarker, requestedCard] = routeParts();
+    if (!requestedLedger) {
+      renderOverview();
+      return;
+    }
+    const ledgerId = state.ledgers.some((ledger) => ledger.id === requestedLedger) ? requestedLedger : '';
+    if (!ledgerId) {
+      navigate('/', true);
       return;
     }
     if (state.activeLedgerId !== ledgerId || !state.ledger) await loadLedger(ledgerId);
-    if (marker === 'card' && requestedCard) {
-      const card = state.ledger.cards.find((entry) => String(entry.id) === requestedCard);
+    const zones = ledgerZones();
+    const zone = zoneMarker === 'zone' ? zones.find((entry) => String(entry.id) === requestedZone) : null;
+    if (zone && cardMarker === 'card' && requestedCard) {
+      const card = zone.cards.find((entry) => String(entry.id) === requestedCard);
       if (card) renderCard(card);
-      else navigate(ledgerPath(ledgerId), true);
+      else navigate(zonePath(ledgerId, zone.id), true);
+    } else if (zone) {
+      renderZone(zone);
     } else {
       state.activeCardId = '';
+      state.activeZoneId = '';
       renderLedger();
     }
   } catch (error) {
@@ -253,7 +457,16 @@ document.querySelector('.refresh-button').addEventListener('click', () => {
   void loadRoute();
 });
 document.querySelector('.retry-button').addEventListener('click', () => loadRoute());
-document.querySelector('.back-button').addEventListener('click', () => navigate(ledgerPath(state.activeLedgerId)));
+document.querySelector('.back-to-ledger-button').addEventListener('click', () => navigate(ledgerPath(state.activeLedgerId)));
+document.querySelector('.back-to-zone-button').addEventListener('click', () => navigate(zonePath(state.activeLedgerId, state.activeZoneId)));
+document.querySelector('.create-ledger-button').addEventListener('click', () => openCreationModal('ledger'));
+document.querySelector('.create-zone-button').addEventListener('click', () => openCreationModal('zone'));
+document.querySelector('.create-card-button').addEventListener('click', () => openCreationModal('card'));
+document.querySelector('.creation-cancel').addEventListener('click', () => creationModal.close());
+creationForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  void submitCreation();
+});
 elements['card-search'].addEventListener('input', (event) => {
   state.query = event.target.value;
   renderCards(state.ledger?.cards ?? []);
@@ -263,4 +476,5 @@ window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && document.body.classList.contains('menu-open')) closeMenu();
 });
 
+initializeMobileThread();
 void loadRoute();

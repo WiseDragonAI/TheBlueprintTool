@@ -720,17 +720,31 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       }
       return;
     }
+    const isCanvasSourceRoute = url.startsWith('/canvas-src/');
+    const isCanvasAssetRoute = url.startsWith('/canvas-assets/');
     const isFrontendModuleRoute = url.startsWith('/assets/') || url.startsWith('/src/');
     // WHAT: Serve `/shared/*` imports from the source tree beside the configured frontend root.
     // WHY: Browser modules consume authoritative shared schemas whose `.js` URLs must resolve to sibling `.ts` sources.
     const isSharedModuleRoute = url.startsWith('/shared/');
-    const isStaticModuleRoute = isFrontendModuleRoute || isSharedModuleRoute;
+    const isStaticModuleRoute = isFrontendModuleRoute || isSharedModuleRoute || isCanvasSourceRoute || isCanvasAssetRoute;
     const blueprintState = readCanonicalDecisionOsState({ action_payload: { decisionOsFile: resolve(decisionOsRoot, 'state.json'), writeBack: true } });
     const routeTabId = url.split('/').filter(Boolean)[0] ?? '';
     const isLedgerRoute = Boolean(routeTabId && blueprintState.ledgers.some((ledger) => ledger.id === routeTabId));
     const isAppRoute = url === '/' || url === '/ledgers' || isLedgerRoute;
-    const staticModuleRoot = isSharedModuleRoute ? resolve(frontendRoot, '..', 'shared') : frontendRoot;
-    const staticModuleRequest = isSharedModuleRoute ? url.slice('/shared/'.length) : url.slice(1);
+    const staticModuleRoot = isSharedModuleRoute
+      ? resolve(frontendRoot, '..', 'shared')
+      : isCanvasSourceRoute
+        ? resolve(frontendRoot, '..', 'frontend', 'src')
+        : isCanvasAssetRoute
+          ? resolve(frontendRoot, '..', 'frontend', 'assets')
+          : frontendRoot;
+    const staticModuleRequest = isSharedModuleRoute
+      ? url.slice('/shared/'.length)
+      : isCanvasSourceRoute
+        ? url.slice('/canvas-src/'.length)
+        : isCanvasAssetRoute
+          ? url.slice('/canvas-assets/'.length)
+          : url.slice(1);
     const requestedPath = isStaticModuleRoute ? resolve(staticModuleRoot, staticModuleRequest) : resolve(frontendRoot, 'index.html');
     const relativeStaticModulePath = relative(staticModuleRoot, requestedPath);
     // WHAT: Accept a static module path only when it remains below its selected source root.

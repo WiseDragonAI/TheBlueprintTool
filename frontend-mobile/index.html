@@ -3,12 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#101513" />
+    <meta name="theme-color" content="#090a0c" />
     <title>decision-os mobile</title>
+    <link rel="stylesheet" href="/canvas-assets/canvas/terminal-button.css" />
+    <link rel="stylesheet" href="/canvas-assets/canvas/terminal-chat.css" />
+    <link rel="stylesheet" href="/canvas-assets/canvas/terminal-chat-controls.css" />
+    <link rel="stylesheet" href="/canvas-assets/canvas/thread.css" />
     <link rel="stylesheet" href="/assets/mobile.css" />
   </head>
   <body>
-    <div class="app-shell">
+    <div class="app-shell shell">
       <header class="topbar">
         <button class="icon-button menu-button" type="button" aria-label="Open ledgers" aria-expanded="false">☰</button>
         <a class="brand" href="/" aria-label="Ledger home">
@@ -47,6 +51,18 @@
             <p>Add a ledger to <code>.decision-os/state.json</code> to begin.</p>
           </section>
 
+          <section id="overview-view" hidden>
+            <div class="ledger-header">
+              <div>
+                <p class="eyebrow">Workspace</p>
+                <h1>Ledgers</h1>
+                <p id="overview-summary" class="muted"></p>
+              </div>
+              <button class="create-button create-ledger-button" type="button">+ Ledger</button>
+            </div>
+            <div id="overview-ledgers" class="overview-ledgers"></div>
+          </section>
+
           <section id="ledger-view" hidden>
             <div class="ledger-header">
               <div>
@@ -54,28 +70,104 @@
                 <h1 id="ledger-title"></h1>
                 <p id="ledger-summary" class="muted"></p>
               </div>
+              <button class="create-button create-zone-button" type="button">+ Zone</button>
+            </div>
+            <div id="zone-list" class="zone-list"></div>
+          </section>
+
+          <section id="zone-view" hidden>
+            <button class="back-to-ledger-button back-button" type="button">← Back to zones</button>
+            <div class="ledger-header">
+              <div>
+                <p class="eyebrow">Zone</p>
+                <h1 id="zone-title"></h1>
+                <p id="zone-summary" class="muted"></p>
+              </div>
+              <button class="create-button create-card-button" type="button">+ Card</button>
               <label class="search-field">
                 <span aria-hidden="true">⌕</span>
                 <input id="card-search" type="search" inputmode="search" placeholder="Search cards" autocomplete="off" />
               </label>
-              <div id="type-filters" class="type-filters" aria-label="Filter by card type"></div>
             </div>
             <div id="card-list" class="card-list"></div>
             <p id="no-results" class="no-results" hidden>No cards match this search.</p>
           </section>
 
           <article id="card-view" class="card-detail" hidden>
-            <button class="back-button" type="button">← Back to ledger</button>
+            <button class="back-to-zone-button back-button" type="button">← Back to zone</button>
             <div class="card-detail-header">
-              <div id="card-type" class="card-type"></div>
               <h1 id="card-title"></h1>
-              <p id="card-id" class="muted"></p>
+              <button class="thread-open-button" type="button">Thread</button>
             </div>
             <div id="card-body" class="card-body"></div>
           </article>
         </main>
       </div>
+
+      <aside class="panel mobile-thread-inspector" aria-label="Card thread" hidden>
+        <section class="thread-panel agent-chat phone" hidden>
+          <div class="thread-chat-shell">
+            <main class="chat">
+              <header class="thread-heading">
+                <div class="thread-title-row">
+                  <p class="thread-target" title="No thread selected">No thread selected</p>
+                  <button class="thread-close-button" type="button" aria-label="Close thread">×</button>
+                </div>
+                <div class="thread-toolbar">
+                  <div class="thread-tabs" role="tablist" aria-label="Thread views">
+                    <button id="thread-tab-thread" class="thread-tab" type="button" role="tab" aria-selected="true" aria-controls="thread-panel-thread" tabindex="0">Thread</button>
+                    <button id="thread-tab-codex-log" class="thread-tab" type="button" role="tab" aria-selected="false" aria-controls="thread-panel-codex-log" tabindex="-1">Codex Log</button>
+                  </div>
+                  <div class="thread-actions"></div>
+                </div>
+              </header>
+              <div class="thread-tab-panels">
+                <section id="thread-panel-thread" class="thread-tab-panel thread-conversation-panel" role="tabpanel" aria-labelledby="thread-tab-thread">
+                  <div class="thread-conversation-scroll"><section class="thread-feed" aria-live="polite"></section></div>
+                </section>
+                <section id="thread-panel-codex-log" class="thread-tab-panel thread-log-panel" role="tabpanel" aria-labelledby="thread-tab-codex-log" hidden>
+                  <div class="thread-log-scroll"><section class="thread-codex-log"></section></div>
+                </section>
+              </div>
+            </main>
+          </div>
+          <footer class="io voice-panel"></footer>
+        </section>
+      </aside>
+
+      <dialog class="confirm-modal mobile-confirm-modal">
+        <p>Delete this note?</p>
+        <button type="button" data-action="delete-note">Delete note</button>
+        <button type="button" data-action="cancel-delete">Cancel</button>
+      </dialog>
+
+      <dialog class="creation-modal" aria-labelledby="creation-title">
+        <form method="dialog" class="creation-form">
+          <header>
+            <p class="eyebrow" id="creation-kind">Create</p>
+            <h2 id="creation-title"></h2>
+          </header>
+          <label class="creation-field">
+            <span>Name</span>
+            <input id="creation-name" name="name" required maxlength="120" autocomplete="off" />
+          </label>
+          <label class="creation-field creation-description-field" hidden>
+            <span>Description</span>
+            <textarea id="creation-description" name="description" rows="6" placeholder="Markdown is supported"></textarea>
+          </label>
+          <label class="creation-field creation-color-field" hidden>
+            <span>Color</span>
+            <input id="creation-color" name="color" type="color" value="#38d9e8" />
+          </label>
+          <p class="creation-error" role="alert" hidden></p>
+          <footer>
+            <button class="creation-cancel" type="button">Cancel</button>
+            <button class="creation-submit primary-button" type="submit">Create</button>
+          </footer>
+        </form>
+      </dialog>
     </div>
+    <script src="/canvas-assets/vendor/highlight.min.js"></script>
     <script type="module" src="/src/mobile.js"></script>
   </body>
 </html>
