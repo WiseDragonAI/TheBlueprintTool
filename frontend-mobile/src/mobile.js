@@ -1,6 +1,7 @@
 import { renderLedgerCardMarkdown } from '/canvas-src/runtime/ledger/component/render-ledger-card-markdown.js';
 import { ledgerCardBody } from '/canvas-src/runtime/ledger/helper/ledger-card-body.js';
 import { initializeMobileThread, setMobileThreadCard, syncMobileThreadContext } from './mobile-thread.js';
+import { initializeMobileCodex, setMobileCodexContext } from './mobile-codex.js';
 
 const state = {
   projectName: 'decision-os',
@@ -340,6 +341,7 @@ function renderCard(card) {
   elements['card-body'].replaceChildren(renderLedgerCardMarkdown(ledgerCardBody(card), { imageSizes, mediaSurface: 'thread' }));
   elements['card-view'].style.setProperty('--zone-color', state.activeZoneColor || 'var(--accent)');
   setMobileThreadCard(card);
+  setMobileCodexContext({ ledgerId: state.activeLedgerId, cardId: state.activeCardId });
   setView('card-view');
   document.title = `${elements['card-title'].textContent} · ${state.projectName}`;
 }
@@ -440,6 +442,7 @@ async function loadRoute() {
       renderZone(zone);
     } else {
       state.activeCardId = '';
+      setMobileCodexContext({ ledgerId: state.activeLedgerId, cardId: '' });
       state.activeZoneId = '';
       renderLedger();
     }
@@ -477,4 +480,5 @@ window.addEventListener('keydown', (event) => {
 });
 
 initializeMobileThread();
+initializeMobileCodex();
 void loadRoute();
