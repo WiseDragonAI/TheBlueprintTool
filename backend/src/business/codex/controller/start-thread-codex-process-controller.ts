@@ -154,7 +154,6 @@ export async function startThreadCodexProcessController(input: { action_payload?
   const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord & { cards?: AnyRecord[] };
   const source = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
   if (!source) return { ok: false, statusCode: 404, error: 'Thread target card not found.', cardId, threadId };
-
   const sourceCardFile = cardContentFile({ decisionOsRoot, card: source, ledgerPath });
   const sourceThreadFile = threadContentFile({ decisionOsRoot, ledger, ledgerPath, threadId });
   if (!sourceCardFile || !sourceThreadFile) return { ok: false, statusCode: 500, error: 'Could not resolve card or thread markdown file.', cardId, threadId };
@@ -165,6 +164,15 @@ export async function startThreadCodexProcessController(input: { action_payload?
     error: 'The latest operator note must have an exact ISO timestamp before Codex can start.',
     cardId,
     threadId,
+  };
+  const existingRunId = String(source.codexThreadRunId ?? '').trim();
+  if (existingRunId) return {
+    ok: false,
+    statusCode: 409,
+    error: 'Thread already owns a Codex run. Continue the existing run or explicitly start a new session.',
+    cardId,
+    threadId,
+    runId: existingRunId,
   };
 
   const runId = `codex-skill-${Date.now()}-${randomUUID().slice(0, 8)}`;

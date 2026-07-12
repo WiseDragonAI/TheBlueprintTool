@@ -438,6 +438,19 @@ test('thread codex process route anchors the run widget on the source card and s
     assert.match(rejected.error, /latest operator note must have an exact ISO timestamp/i);
     assert.equal(readFileSync(launchesFile, 'utf8').trim().split('\n').length, launchCountBeforeRejection);
     assert.equal(Object.keys(runtime.codexSkillRuns as Record<string, unknown>).length, runCountBeforeRejection);
+
+    appendFileSync(threadPath, '\n# OPERATOR\n<!-- decision-os:note {"id":"note-operator-duplicate","timestamp":"2026-07-08T01:05:00.000Z"} -->\n\nContinue the existing session.\n', 'utf8');
+    const duplicateResponse = await fetch(`${baseUrl}/api/codex/threads/process`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ledgerId: 'specs', threadId: 'thread-card-a', cardId: 'card-a' })
+    });
+    assert.equal(duplicateResponse.status, 409);
+    const duplicate = await duplicateResponse.json() as { ok: boolean; error: string; runId: string };
+    assert.equal(duplicate.ok, false);
+    assert.equal(duplicate.runId, body.run.id);
+    assert.match(duplicate.error, /continue the existing run/i);
+    assert.equal(readFileSync(launchesFile, 'utf8').trim().split('\n').length, launchCountBeforeRejection);
   } finally {
     await eventCollector?.close();
     server.close();
