@@ -33,13 +33,25 @@ test('derives waiting, active, and done tabs with FIFO and ranked priority', () 
     task({ cardId: 'newer', markdown: task().markdown.replace('10T10', '11T10') }),
     task({ cardId: 'oldest' }),
     task({ cardId: 'ranked', markdown: `${task().markdown.replace('10T10', '12T10')}\nQueue rank: 1` }),
-    task({ cardId: 'active', markdown: task().markdown.replace('#task-waiting', '#task-active').replace('Waiting since:', 'Active since: 2026-07-10T10:30:00.000Z\nWaiting since:') }),
+    task({ cardId: 'active', codexRunId: 'run-active', codexStatus: 'processing', markdown: task().markdown.replace('#task-waiting', '#task-active').replace('Waiting since:', 'Active since: 2026-07-10T10:30:00.000Z\nWaiting since:') }),
     task({ cardId: 'done', cardStatus: 'done', markdown: task().markdown.replace('#task-waiting', '#task-complete') })
   ]);
   assert.deepEqual(result.queue.map((entry) => entry.cardId), ['ranked', 'oldest', 'newer']);
   assert.deepEqual(result.active.map((entry) => entry.cardId), ['active']);
   assert.deepEqual(result.done.map((entry) => entry.cardId), ['done']);
   assert.deepEqual(result.ledgers, ['Tasks']);
+});
+
+test('shows task-active only while its Codex process is running', () => {
+  const markdown = task().markdown.replace('#task-waiting', '#task-active').replace('Waiting since:', 'Active since: 2026-07-10T10:30:00.000Z\nWaiting since:');
+  const result = deriveControlRoom([
+    task({ cardId: 'running', markdown, codexRunId: 'run-123', codexStatus: 'processing' }),
+    task({ cardId: 'stopped', markdown, codexRunId: 'run-456', codexStatus: 'complete' })
+  ]);
+  assert.deepEqual(result.active.map((entry) => entry.cardId), ['running']);
+  assert.deepEqual(result.queue.map((entry) => entry.cardId), ['stopped']);
+  assert.equal(result.active[0].codexRunId, 'run-123');
+  assert.match(mobile, /Codex \$\{task\.codexRunId\}/);
 });
 
 test('ignores task tag examples in ordinary Markdown prose', () => {
@@ -113,4 +125,6 @@ test('uses global application destinations and keeps new task as the fourth cont
   assert.doesNotMatch(html, /class="control-heading"|class="live-dot"/);
   assert.match(html, /data-control-tab="done"[\s\S]*class="new-task-button"/);
   assert.match(styles, /grid-template-columns: repeat\(4, 1fr\)/);
+  assert.match(html, /class="nav-server-restart-button"/);
+  assert.match(mobile, /fetch\('\/api\/server\/restart', \{ method: 'POST' \}\)/);
 });

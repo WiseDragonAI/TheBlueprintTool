@@ -245,6 +245,16 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const server = createServer(async (request, response) => {
     const url = (request.url ?? '/').split('?')[0];
     if (tryServeDecisionOsAsset({ url, decisionOsRoot, response })) return;
+    if (url === '/api/server/restart' && request.method === 'POST') {
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ ok: true, restarting: true }));
+      setTimeout(() => {
+        const restartServer = runtime.restartServer;
+        if (typeof restartServer === 'function') restartServer();
+        else process.exit(0);
+      }, 25);
+      return;
+    }
     if (url === '/api/debug/codex-continue' && request.method === 'POST') {
       const bodyBuffer = await readRequestBuffer(request);
       const debugPayload = (() => {
