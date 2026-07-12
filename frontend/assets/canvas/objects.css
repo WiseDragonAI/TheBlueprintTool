@@ -1048,6 +1048,7 @@
 
 .ledger-card-media-carousel .ledger-card-media-track {
   scrollbar-width: none;
+  touch-action: pan-y;
 }
 
 .ledger-card-media-carousel .ledger-card-media-track::-webkit-scrollbar {
@@ -1172,9 +1173,9 @@
   min-height: var(--ledger-card-media-title-row-min-height);
   padding: 4px 7px;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--card-zone-color), white 18%);
-  border-radius: 2px;
-  background: rgba(3, 5, 8, 0.72);
+  border: 0;
+  border-radius: 999px;
+  background: rgba(3, 5, 8, 0.78);
   color: var(--text);
   font-size: 11px;
   font-weight: 700;
@@ -1246,7 +1247,7 @@
   min-height: 20px;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--card-zone-color), white 16%);
-  border-radius: 2px;
+  border-radius: 999px;
   background: rgba(3, 5, 8, 0.72);
   color: color-mix(in srgb, var(--text), transparent 22%);
   cursor: pointer;
@@ -1294,17 +1295,17 @@
 .ledger-card-media-button {
   display: grid;
   place-items: center;
-  width: 26px;
-  min-width: 26px;
-  height: 34px;
-  min-height: 34px;
+  width: 34px;
+  min-width: 34px;
+  height: 44px;
+  min-height: 44px;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--card-zone-color), white 20%);
   border-radius: var(--button-radius);
-  background: rgba(3, 5, 8, 0.68);
+  background: rgba(3, 5, 8, 0.8);
   color: var(--text);
   cursor: pointer;
-  font-size: 15px;
+  font-size: 28px;
   font-weight: 900;
   line-height: 1;
   pointer-events: auto;
