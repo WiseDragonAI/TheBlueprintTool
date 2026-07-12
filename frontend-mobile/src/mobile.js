@@ -2,7 +2,7 @@ import { renderLedgerCardMarkdown } from '/canvas-src/runtime/ledger/component/r
 import { ledgerCardBody } from '/canvas-src/runtime/ledger/helper/ledger-card-body.js';
 import { initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './mobile-thread.js';
 import { initializeMobileCodex, setMobileCodexContext } from './mobile-codex.js';
-import { activeAge, deriveControlRoom, waitingAge, withActiveStatus, withQueueRank } from './mobile-control-room.js';
+import { activeAge, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from './mobile-control-room.js';
 
 const state = {
   projectName: 'decision-os',
@@ -456,7 +456,8 @@ async function loadControlRoom() {
   })));
   const allTasks = documents.flatMap(({ ledgerId, document }) => {
     const ledgerTitle = state.ledgers.find((entry) => entry.id === ledgerId)?.title ?? ledgerId;
-    return (document.cards ?? []).map((card) => ({ cardId: card.id, title: card.title, ledgerId, ledgerTitle, markdown: ledgerCardBody(card) }));
+    const cards = document.cards ?? [];
+    return cards.map((card) => ({ cardId: card.id, title: card.title, ledgerId, ledgerTitle, markdown: ledgerCardBody(card), cardStatus: card.status, cards }));
   });
   state.controlRoom = { ...deriveControlRoom(allTasks), allTasks, documents };
 }
@@ -582,7 +583,34 @@ function renderCard(card) {
   state.activeCardId = asText(card.id);
   elements['card-title'].textContent = asText(card.title).trim() || `Card ${card.id}`;
   const imageSizes = card.imageSizes && typeof card.imageSizes === 'object' ? card.imageSizes : {};
-  elements['card-body'].replaceChildren(renderLedgerCardMarkdown(ledgerCardBody(card), { imageSizes, mediaSurface: 'thread' }));
+  const markdown = ledgerCardBody(card);
+  const parsedTask = parseMasterTaskMarkdown({
+    cardId: card.id,
+    title: card.title,
+    ledgerId: state.activeLedgerId,
+    ledgerTitle: state.ledgers.find((entry) => entry.id === state.activeLedgerId)?.title ?? state.activeLedgerId,
+    markdown,
+    cardStatus: card.status,
+    cards: state.ledger?.cards ?? []
+  });
+  const content = renderLedgerCardMarkdown(parsedTask.masterTask ? visibleMasterTaskMarkdown(markdown) : markdown, { imageSizes, mediaSurface: 'thread' });
+  if (parsedTask.masterTask) {
+    const metadata = document.createElement('dl');
+    metadata.className = 'task-metadata';
+    for (const [label, value] of [
+      ['Type', 'Master task'],
+      ['Status', parsedTask.status.replace('task-', '')],
+      ['Ledger', parsedTask.ledger],
+      ['Progress', `${parsedTask.complete}/${parsedTask.subtasks.length}`]
+    ]) {
+      const term = document.createElement('dt');
+      term.textContent = label;
+      const detail = document.createElement('dd');
+      detail.textContent = value;
+      metadata.append(term, detail);
+    }
+    elements['card-body'].replaceChildren(metadata, content);
+  } else elements['card-body'].replaceChildren(content);
   elements['card-view'].style.setProperty('--zone-color', state.activeZoneColor || 'var(--accent)');
   setMobileThreadCard(card);
   setMobileCodexContext({ ledgerId: state.activeLedgerId, cardId: state.activeCardId });

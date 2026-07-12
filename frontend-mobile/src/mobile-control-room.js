@@ -1,6 +1,6 @@
 const STATUS_LABELS = ['task-waiting', 'task-active', 'task-complete'];
 
-export function parseMasterTaskMarkdown({ cardId, title, ledgerId, ledgerTitle, markdown }) {
+export function parseMasterTaskMarkdown({ cardId, title, ledgerId, ledgerTitle, markdown, cardStatus = 'todo', cards = [] }) {
   const source = String(markdown ?? '').replace(/\r\n?/g, '\n');
   const labelLines = source.split('\n').filter((line) => /^\s*(?:#[a-z][a-z0-9-]*\s*)+$/i.test(line));
   const labels = new Set(Array.from(labelLines.join('\n').matchAll(/#([a-z][a-z0-9-]*)\b/gi), (match) => match[1].toLowerCase()));
@@ -26,7 +26,16 @@ export function parseMasterTaskMarkdown({ cardId, title, ledgerId, ledgerTitle, 
   const section = afterHeading.split(/^##\s+/m, 1)[0];
   for (const line of section.split('\n')) {
     const match = line.match(/^\s*\d+[.)]\s+\[([^\]]+)]\(card:([^)]+)\)\s+[—-]\s+Status:\s*(.+?)\s*$/i);
-    if (match) subtasks.push({ title: match[1].trim(), cardId: match[2].trim(), status: match[3].trim() });
+    if (match) {
+      const linked = cards.find((card) => String(card.id) === match[2].trim());
+      subtasks.push({ title: match[1].trim(), cardId: match[2].trim(), status: linked?.status === 'done' ? 'complete' : 'waiting' });
+      continue;
+    }
+    const link = line.match(/^\s*\d+[.)]\s+\[([^\]]+)]\(card:([^)]+)\)\s*$/i);
+    if (link) {
+      const linked = cards.find((card) => String(card.id) === link[2].trim());
+      subtasks.push({ title: link[1].trim(), cardId: link[2].trim(), status: linked?.status === 'done' ? 'complete' : 'waiting' });
+    }
   }
   const complete = subtasks.filter((task) => /^(?:complete|completed|done)$/i.test(task.status)).length;
   return {
@@ -38,7 +47,7 @@ export function parseMasterTaskMarkdown({ cardId, title, ledgerId, ledgerTitle, 
     ledgerId: String(ledgerId),
     ledgerTitle: String(ledgerTitle),
     ledger,
-    status: statuses[0] ?? '',
+    status: cardStatus === 'done' ? 'task-complete' : (statuses[0] === 'task-active' ? 'task-active' : 'task-waiting'),
     waitingSince: waitingText,
     waitingTime,
     activeSince: activeText,
@@ -84,6 +93,15 @@ export function deriveControlRoom(cards) {
     ledgers: Array.from(new Set(eligible.map((task) => task.ledger))).sort((a, b) => a.localeCompare(b)),
     diagnostics: parsed.filter((task) => !task.valid && task.masterTask)
   };
+}
+
+export function visibleMasterTaskMarkdown(markdown) {
+  const source = String(markdown ?? '').replace(/\r\n?/g, '\n');
+  const lines = source.split('\n');
+  while (lines.length && !lines[0].trim()) lines.shift();
+  if (/^\s*(?:#[a-z][a-z0-9-]*\s*)+$/i.test(lines[0] ?? '') && /#master-task\b/i.test(lines[0])) lines.shift();
+  while (lines.length && (!lines[0].trim() || /^\s*(?:Ledger|Waiting since|Active since|Queue rank)\s*:/i.test(lines[0]))) lines.shift();
+  return lines.join('\n').replace(/(\]\(card:[^)]+\))\s+[—-]\s+Status:\s*[^\n]+/gi, '$1').trim();
 }
 
 export function withQueueRank(markdown, rank) {

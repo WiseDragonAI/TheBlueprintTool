@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { activeAge, deriveControlRoom, parseMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from '../src/mobile-control-room.js';
+import { activeAge, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from '../src/mobile-control-room.js';
 
 const task = (overrides = {}) => ({
   cardId: 'card-a',
   title: 'Master A',
   ledgerId: 'tasks',
   ledgerTitle: 'Tasks',
+  cardStatus: 'todo',
+  cards: [{ id: 'card-r', status: 'done' }, { id: 'card-b', status: 'todo' }],
   markdown: '#master-task #task-waiting\n\nLedger: Tasks\nWaiting since: 2026-07-10T10:00:00.000Z\n\n## Subtasks\n\n1. [Research](card:card-r) — Status: complete\n2. [Build](card:card-b) — Status: active',
   ...overrides
 });
@@ -25,7 +27,7 @@ test('derives tabs, filters, completed exclusion, FIFO, and ranked priority', ()
     task({ cardId: 'oldest' }),
     task({ cardId: 'ranked', markdown: `${task().markdown.replace('10T10', '12T10')}\nQueue rank: 1` }),
     task({ cardId: 'active', markdown: task().markdown.replace('#task-waiting', '#task-active').replace('Waiting since:', 'Active since: 2026-07-10T10:30:00.000Z\nWaiting since:') }),
-    task({ cardId: 'done', markdown: task().markdown.replace('#task-waiting', '#task-complete') })
+    task({ cardId: 'done', cardStatus: 'done', markdown: task().markdown.replace('#task-waiting', '#task-complete') })
   ]);
   assert.deepEqual(result.queue.map((entry) => entry.cardId), ['ranked', 'oldest', 'newer']);
   assert.deepEqual(result.active.map((entry) => entry.cardId), ['active']);
@@ -61,4 +63,10 @@ test('reports invalid canonical markdown and rewrites queue rank in place', () =
 
 test('formats a stable waiting age', () => {
   assert.equal(waitingAge('2026-07-10T10:00:00.000Z', Date.parse('2026-07-12T10:00:00.000Z')), '2d waiting');
+});
+
+test('keeps task metadata in Markdown but removes it from the visible card body', () => {
+  const visible = visibleMasterTaskMarkdown(task().markdown);
+  assert.doesNotMatch(visible, /#master-task|Ledger:|Waiting since:|Status:/);
+  assert.match(visible, /\[Research\]\(card:card-r\)/);
 });
