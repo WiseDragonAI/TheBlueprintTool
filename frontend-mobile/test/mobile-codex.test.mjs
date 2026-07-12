@@ -19,6 +19,12 @@ test('mobile card detail exposes processing and both process libraries', () => {
   assert.match(script, /ledgerId: state\.ledgerId, sourceCardId: state\.cardId, pipelineId: pipeline\.id/);
 });
 
+test('dynamic navigation library actions use delegated event handling', () => {
+  assert.match(script, /document\.addEventListener\('click', \(event\) => \{/);
+  assert.match(script, /event\.target\.closest\('\.nav-pipelines-button, \.nav-skills-button'\)/);
+  assert.doesNotMatch(script, /el\('\.nav-(?:pipelines|skills)-button'\)\.addEventListener/);
+});
+
 test('mobile processing guards duplicate submissions and polls terminal states', () => {
   assert.match(script, /setBusy\(submit, true\)/);
   assert.match(script, /setAttribute\('aria-busy', 'true'\)/);
