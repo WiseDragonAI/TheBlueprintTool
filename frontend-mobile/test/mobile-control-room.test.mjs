@@ -31,6 +31,24 @@ test('parses the canonical master-task markdown without another data model', () 
   assert.equal(parsed.nextSubtask.cardId, 'card-b');
 });
 
+test('restarts waiting age from the latest timestamped thread message', () => {
+  const parsed = parseMasterTaskMarkdown(task({
+    threadNotes: [
+      { role: 'operator', timestamp: '2026-07-10T10:05:00.000Z' },
+      { role: 'agent', timestamp: '2026-07-10T11:15:00.000Z' }
+    ]
+  }));
+  assert.equal(parsed.waitingSince, '2026-07-10T11:15:00.000Z');
+  assert.equal(parsed.waitingTime, Date.parse('2026-07-10T11:15:00.000Z'));
+  assert.equal(waitingAge(parsed.waitingSince, Date.parse('2026-07-10T11:45:00.000Z')), '30m waiting');
+});
+
+test('ignores malformed thread timestamps and retains the card waiting timestamp', () => {
+  const parsed = parseMasterTaskMarkdown(task({ threadNotes: [{ role: 'agent', timestamp: 'not-a-date' }] }));
+  assert.equal(parsed.waitingSince, '2026-07-10T10:00:00.000Z');
+  assert.equal(parsed.waitingTime, Date.parse('2026-07-10T10:00:00.000Z'));
+});
+
 test('derives waiting, active, and done tabs with FIFO and ranked priority', () => {
   const result = deriveControlRoom([
     task({ cardId: 'newer', markdown: task().markdown.replace('10T10', '11T10') }),
