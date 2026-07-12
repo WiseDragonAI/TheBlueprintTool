@@ -48,7 +48,7 @@ export function parseMasterTaskMarkdown({ cardId, title, ledgerId, ledgerTitle, 
     ledgerId: String(ledgerId),
     ledgerTitle: String(ledgerTitle),
     ledger,
-    status: cardStatus === 'done' && diagnostics.length === 0 ? 'task-complete' : (labels.has('task-active') ? 'task-active' : 'task-waiting'),
+    status: cardStatus === 'done' ? 'task-complete' : (labels.has('task-active') ? 'task-active' : 'task-waiting'),
     waitingSince: waitingText,
     waitingTime,
     activeSince: activeText,
@@ -79,8 +79,8 @@ export function withActiveStatus(markdown, timestamp) {
 
 export function deriveControlRoom(cards) {
   const parsed = cards.map(parseMasterTaskMarkdown);
-  // Keep malformed master tasks visible so operators can open and repair them.
-  const eligible = parsed.filter((task) => task.masterTask && task.status !== 'task-complete');
+  // Keep every master task visible, including completed and malformed cards.
+  const eligible = parsed.filter((task) => task.masterTask);
   const compare = (left, right) => {
     if (left.queueRank !== null || right.queueRank !== null) {
       if (left.queueRank === null) return 1;
@@ -94,6 +94,7 @@ export function deriveControlRoom(cards) {
   return {
     queue: eligible.filter((task) => task.status === 'task-waiting').sort(compare),
     active: eligible.filter((task) => task.status === 'task-active').sort(compare),
+    done: eligible.filter((task) => task.status === 'task-complete').sort(compare),
     ledgers: Array.from(new Set(eligible.map((task) => task.ledger))).sort((a, b) => a.localeCompare(b)),
     diagnostics: parsed.filter((task) => !task.valid && task.masterTask)
   };

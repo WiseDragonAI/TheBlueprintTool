@@ -21,7 +21,7 @@ test('parses the canonical master-task markdown without another data model', () 
   assert.equal(parsed.nextSubtask.cardId, 'card-b');
 });
 
-test('derives tabs, filters, completed exclusion, FIFO, and ranked priority', () => {
+test('derives waiting, active, and done tabs with FIFO and ranked priority', () => {
   const result = deriveControlRoom([
     task({ cardId: 'newer', markdown: task().markdown.replace('10T10', '11T10') }),
     task({ cardId: 'oldest' }),
@@ -31,6 +31,7 @@ test('derives tabs, filters, completed exclusion, FIFO, and ranked priority', ()
   ]);
   assert.deepEqual(result.queue.map((entry) => entry.cardId), ['ranked', 'oldest', 'newer']);
   assert.deepEqual(result.active.map((entry) => entry.cardId), ['active']);
+  assert.deepEqual(result.done.map((entry) => entry.cardId), ['done']);
   assert.deepEqual(result.ledgers, ['Tasks']);
 });
 
@@ -68,7 +69,7 @@ test('keeps malformed master tasks visible in the control room with diagnostics'
     markdown: '#master-task #task-waiting #task-active\n\nLedger: Tasks\n\n## Subtasks\n'
   });
   const result = deriveControlRoom([malformed]);
-  assert.deepEqual(result.active.map((entry) => entry.cardId), ['malformed']);
+  assert.deepEqual(result.done.map((entry) => entry.cardId), ['malformed']);
   assert.deepEqual(result.diagnostics.map((entry) => entry.cardId), ['malformed']);
 });
 

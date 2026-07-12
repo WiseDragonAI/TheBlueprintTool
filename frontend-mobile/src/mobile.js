@@ -300,7 +300,7 @@ function taskRow(task, index) {
   const next = task.nextSubtask ? `Next: ${task.nextSubtask.title}` : 'No actionable subtask';
   summary.innerHTML = `<span class="task-copy"><strong></strong><span class="task-meta"></span><span class="task-next"></span></span><span class="task-chevron">⌄</span>`;
   summary.querySelector('strong').textContent = task.title;
-  const age = task.status === 'task-active' ? activeAge(task.activeSince) : waitingAge(task.waitingSince);
+  const age = task.status === 'task-complete' ? 'completed' : task.status === 'task-active' ? activeAge(task.activeSince) : waitingAge(task.waitingSince);
   summary.querySelector('.task-meta').textContent = `${task.ledger} · ${age} · ${task.complete}/${task.subtasks.length} complete`;
   summary.querySelector('.task-next').textContent = next;
   if (task.diagnostics.length) {
@@ -438,7 +438,11 @@ function renderControlRoom() {
   const tasks = filteredControlTasks();
   elements['control-task-list'].replaceChildren(...tasks.map(taskRow));
   elements['control-empty'].hidden = tasks.length > 0;
-  elements['control-empty'].textContent = state.controlTab === 'queue' ? 'No waiting tasks' : 'No active tasks';
+  elements['control-empty'].textContent = {
+    queue: 'No waiting tasks',
+    active: 'No active tasks',
+    done: 'No completed tasks'
+  }[state.controlTab] ?? 'No tasks';
   elements['control-diagnostics'].hidden = true;
   elements['control-diagnostics'].replaceChildren();
   setView('control-room-view');
