@@ -83,7 +83,6 @@ export function openMobileThread(card, zoneColor) {
   canvasState.threadPinOnRender = true;
   renderThreadPanel();
   updateLaunchReadiness();
-  document.querySelector('.thread-draft')?.focus();
 }
 
 export function closeMobileThread() {

@@ -4,6 +4,13 @@ import test from 'node:test';
 
 const source = await readFile(new URL('../src/mobile-thread.js', import.meta.url), 'utf8');
 
+test('opening a mobile thread does not focus the draft and raise the software keyboard', () => {
+  const openMobileThread = source.match(/export function openMobileThread\([\s\S]*?\n\}/)?.[0] ?? '';
+
+  assert.match(openMobileThread, /renderThreadPanel\(\);/);
+  assert.doesNotMatch(openMobileThread, /\.focus\(\)/);
+});
+
 test('mobile thread routes jump-to-bottom into persistent bottom following', () => {
   assert.match(source, /import \{ pinThreadFeedToLastMessage \} from '\/canvas-src\/runtime\/thread\/effect\/pin-thread-feed-to-last-message\.js';/);
   assert.match(source, /action === 'jump-thread-bottom'\) pinThreadFeedToLastMessage\(\{ follow: true \}\)/);
