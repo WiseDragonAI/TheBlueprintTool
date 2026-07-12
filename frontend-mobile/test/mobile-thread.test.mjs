@@ -10,5 +10,10 @@ test('mobile thread launch continues an owned terminal Codex run', () => {
   assert.match(source, /if \(summary\.status === 'running'\) return/);
   assert.match(source, /requestCardSkillRunContinue\(\{/);
   assert.match(source, /runId: existingRunId/);
-  assert.equal(source.match(/syncThreadCodexRunControls\(\{ threadId: canvasState\.threadId, running: true \}\)/g)?.length, 2);
+  assert.match(source, /resumeExternallyStartedCardSkillRun\(\{ ledgerId: currentLedgerId, cardId: String\(currentCard\.id\), runId: existingRunId \}\)/);
+  assert.match(source, /function hydrateRunningThreadRun\(runId, startedAt\)/);
+  assert.match(source, /canvasState\.threadRunSummaryByThreadId\[threadId\] = \{/);
+  assert.match(source, /status: 'running'/);
+  assert.match(source, /hydrateRunningThreadRun\(existingRunId, continuedAt\);[\s\S]*await refreshThreadLedger\(\)/);
+  assert.match(source, /bindThreadCodexRunLog\([^;]+runId \}\);\n  hydrateRunningThreadRun\(runId, startedAt\);[\s\S]*await refreshThreadLedger\(\)/);
 });
