@@ -13,7 +13,6 @@ export type LedgerMutation = {
   card?: Record<string, unknown>;
   cardId?: string;
   masterTaskId?: string;
-  subtaskCardId?: string;
   imageSrc?: string;
   cardPatch?: { id?: string; status?: string; title?: string; description?: string; imageSizes?: Record<string, { width?: number; height?: number }>; codexRunModel?: CodexModel; codexRunEffort?: CodexEffort };
   annotation?: Record<string, unknown>;
@@ -110,25 +109,39 @@ export function applyLedgerMutation(input: {
       }
     }
   }
-  if (mutation.action === 'complete-master-subtask') {
+  if (mutation.action === 'complete-master-task') {
     const masterTaskId = String(mutation.masterTaskId ?? '');
-    const subtaskCardId = String(mutation.subtaskCardId ?? '');
     const masterTask = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === masterTaskId);
-    const subtask = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === subtaskCardId);
-    if (!masterTask || !subtask) {
-      mutationError = { statusCode: 404, body: { ok: false, error: 'Master task or linked subtask not found.' } };
+    if (!masterTask) {
+      mutationError = { statusCode: 404, body: { ok: false, error: 'Master task not found.' } };
     } else {
       const markdown = readCardDescription({ decisionOsRoot, card: masterTask });
-      const escapedId = subtaskCardId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const subtaskLine = new RegExp(`^(\\s*\\d+[.)]\\s+\\[[^\\]]+\\]\\(card:${escapedId}\\))(?:\\s+[—-]\\s+Status:\\s*.*?)?\\s*$`, 'im');
-      if (!/^\s*(?:#[a-z][a-z0-9-]*\s*)*#master-task\b/im.test(markdown) || !subtaskLine.test(markdown)) {
-        mutationError = { statusCode: 400, body: { ok: false, error: 'The requested card is not linked from the master task Markdown.' } };
+      const subtaskLine = /^(\s*\d+[.)]\s+\[[^\]]+\]\(card:([^)]+)\))(?:\s+[—-]\s+Status:\s*.*?)?\s*$/gim;
+      const subtaskIds = Array.from(markdown.matchAll(subtaskLine), (match) => match[2].trim());
+      const linkedSubtasks = subtaskIds.map((id) => (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === id));
+      if (!/^\s*(?:#[a-z][a-z0-9-]*\s*)*#master-task\b/im.test(markdown) || subtaskIds.length === 0) {
+        mutationError = { statusCode: 400, body: { ok: false, error: 'Master task Markdown must contain at least one canonical subtask link.' } };
+      } else if (linkedSubtasks.some((card) => !card)) {
+        mutationError = { statusCode: 400, body: { ok: false, error: 'Every canonical subtask link must resolve to a ledger card.' } };
       } else {
-        subtask.status = 'done';
+        for (const subtask of linkedSubtasks) subtask!.status = 'done';
+        masterTask.status = 'done';
+        const completedAt = new Date().toISOString();
+        let completedMarkdown = markdown
+          .replace(/^(\s*(?:#[a-z][a-z0-9-]*\s*)*#master-task\b[^\n]*)$/im, (line) => `${line.replace(/\s*#task-(?:waiting|active|complete)\b/gi, '')} #task-complete`)
+          .replace(subtaskLine, '$1 — Status: complete');
+        if (/^\s*(?:\*\*)?Completed at(?:\*\*)?\s*:/im.test(completedMarkdown)) {
+          completedMarkdown = completedMarkdown.replace(/^\s*(?:\*\*)?Completed at(?:\*\*)?\s*:.*$/im, `Completed at: ${completedAt}`);
+        } else {
+          const activeLine = /^\s*(?:\*\*)?Active since(?:\*\*)?\s*:.*$/im;
+          completedMarkdown = activeLine.test(completedMarkdown)
+            ? completedMarkdown.replace(activeLine, (line) => `${line}\nCompleted at: ${completedAt}`)
+            : completedMarkdown.replace(/^(\s*(?:#[a-z][a-z0-9-]*\s*)*#master-task\b[^\n]*)$/im, `$1\n\nCompleted at: ${completedAt}`);
+        }
         writeCardDescriptionFile({
           decisionOsRoot,
           card: masterTask,
-          description: markdown.replace(subtaskLine, '$1 — Status: complete'),
+          description: completedMarkdown,
           ledgerPath,
         });
       }
