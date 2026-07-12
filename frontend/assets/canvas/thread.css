@@ -1069,6 +1069,16 @@
     height: 66px;
   }
 
+  .terminal-button__key {
+    display: none;
+  }
+
+  .terminal-command-actions .terminal-button__icon {
+    width: 24px;
+    height: 24px;
+    flex-basis: 24px;
+  }
+
   .terminal-button--thread-text {
     display: inline-flex;
   }

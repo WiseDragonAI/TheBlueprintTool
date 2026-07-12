@@ -146,6 +146,18 @@
   justify-content: center;
 }
 
+.terminal-button__icon {
+  width: 21px;
+  height: 21px;
+  flex: 0 0 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, currentColor, transparent 62%));
+}
+
 .terminal-button__label {
   font-size: 12px;
   line-height: 16px;
@@ -154,11 +166,13 @@
 }
 
 .terminal-button--send .terminal-button__glyph,
+.terminal-button--send .terminal-button__icon,
 .terminal-button--send .terminal-button__label {
   color: #2196f3;
 }
 
 .terminal-button--stop .terminal-button__glyph,
+.terminal-button--stop .terminal-button__icon,
 .terminal-button--stop .terminal-button__label {
   color: #d96060;
 }
