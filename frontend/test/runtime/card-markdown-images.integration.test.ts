@@ -21,6 +21,7 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   const titleRenderer = source('frontend/src/runtime/ledger/component/append-title-text.ts');
   const wheel = source('frontend/src/runtime/gesture/controller/handle-wheel.ts');
   const css = source('frontend/assets/canvas/objects.css');
+  const imageViewer = source('frontend/src/runtime/ledger/effect/open-ledger-card-image-viewer.ts');
 
   assert.match(inlineParser, /text\.startsWith\('!\[', start\)/);
   assert.match(inlineParser, /kind:\s*'image'/);
@@ -30,6 +31,21 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   assert.match(parser, /images\.images\.push\(\.\.\.standaloneImages\)/);
   assert.match(renderer, /renderLedgerCardMedia/);
   assert.match(mediaRenderer, /ledger-card-media-carousel/);
+  assert.match(mediaRenderer, /renderFullscreenButton/);
+  assert.match(mediaRenderer, /is-fullscreen-control-visible/);
+  assert.match(mediaRenderer, /openLedgerCardImageViewer\(\{ alt: image\.alt, source: image\.src, trigger: button \}\)/);
+  assert.match(imageViewer, /assets\/vendor\/panzoom-4\.6\.2\.es\.js/);
+  assert.match(imageViewer, /minScale:\s*0\.3/);
+  assert.match(imageViewer, /maxScale:\s*50/);
+  assert.match(imageViewer, /startScale:\s*1/);
+  assert.match(imageViewer, /panzoom\.zoomWithWheel\(event\)/);
+  assert.match(imageViewer, /panzoom\.destroy\(\)/);
+  assert.match(imageViewer, /trigger\.focus\(\)/);
+  assert.match(imageViewer, /document\.body\.style\.overflow = 'hidden'/);
+  assert.match(imageViewer, /trapDialogFocus\(event, dialog\)/);
+  assert.match(css, /\.ledger-card-media-fullscreen\s*\{[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;/s);
+  assert.match(css, /\.ledger-card-media-slide\.is-fullscreen-control-visible \.ledger-card-media-fullscreen[^{]*\{[^}]*opacity:\s*1;[^}]*pointer-events:\s*auto;/s);
+  assert.match(css, /\.ledger-card-image-viewer-close\s*\{[^}]*position:\s*fixed;[^}]*top:\s*max\(16px, env\(safe-area-inset-top\)\);[^}]*right:\s*max\(16px, env\(safe-area-inset-right\)\);/s);
   assert.doesNotMatch(mediaRenderer, /ledger-card-image-shell/);
   assert.match(mediaRenderer, /function imageTitleFromSource\(source: string\)/);
   assert.match(mediaRenderer, /decodeURIComponent\(filename\)/);

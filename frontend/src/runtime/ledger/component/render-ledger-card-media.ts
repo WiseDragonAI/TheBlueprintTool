@@ -14,6 +14,7 @@ import {
 } from '../helper/persist-ledger-card-media-carousel.js';
 import { scheduleCanvasMediaOverlayRender } from '../../canvas/effect/render-canvas-media-overlay.js';
 import { state } from '../../state.js';
+import { openLedgerCardImageViewer } from '../effect/open-ledger-card-image-viewer.js';
 
 type LedgerCardImage = Extract<LedgerMarkdownBlock, { kind: 'images' }>['images'][number];
 export type LedgerCardImageSizes = Record<string, { width?: number; height?: number }>;
@@ -188,7 +189,23 @@ function imageTitleFromSource(source: string): string {
   }
 }
 
-function renderMediaSlide(image: LedgerCardImage, index: number, shell: HTMLElement, options: LedgerCardMediaOptions): HTMLElement {
+function renderFullscreenButton(image: LedgerCardImage, slide: HTMLElement): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.className = 'ledger-card-media-fullscreen terminal-button';
+  button.type = 'button';
+  button.textContent = '⛶';
+  button.setAttribute('aria-label', `Open ${image.alt || 'carousel image'} fullscreen`);
+  button.addEventListener('pointerdown', (event) => event.stopPropagation());
+  button.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openLedgerCardImageViewer({ alt: image.alt, source: image.src, trigger: button });
+  });
+  slide.appendChild(button);
+  return button;
+}
+
+function renderMediaSlide(image: LedgerCardImage, index: number, shell: HTMLElement, options: LedgerCardMediaOptions, isCarousel: boolean): HTMLElement {
   const slide = document.createElement('figure');
   slide.className = 'ledger-card-media-slide';
   slide.setAttribute('aria-label', image.alt || `Image ${index + 1}`);
@@ -214,6 +231,17 @@ function renderMediaSlide(image: LedgerCardImage, index: number, shell: HTMLElem
   if (index === 0 && element.complete) applyImageAspectRatio(shell, element);
 
   slide.appendChild(element);
+  if (isCarousel) {
+    const fullscreenButton = renderFullscreenButton(image, slide);
+    element.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const visible = slide.classList.toggle('is-fullscreen-control-visible');
+      fullscreenButton.setAttribute('aria-hidden', visible ? 'false' : 'true');
+      if (visible) fullscreenButton.focus({ preventScroll: true });
+    });
+    fullscreenButton.setAttribute('aria-hidden', 'true');
+  }
   if (titleText) {
     const caption = document.createElement('figcaption');
     caption.className = 'ledger-card-media-title';
@@ -426,7 +454,7 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
     }, { passive: true });
   }
   for (const [index, image] of block.images.entries()) {
-    track.appendChild(renderMediaSlide(image, index, shell, options));
+    track.appendChild(renderMediaSlide(image, index, shell, options, isCarousel));
   }
   shell.appendChild(track);
   const threadResizeHandle = mediaSurface === 'thread' ? renderThreadImageResizeHandle(shell, options, sizeSource) : null;
