@@ -18,6 +18,7 @@ import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.j
 import { resetActiveTool } from '../../toolbox/controller/reset-active-tool.js';
 import { openThreadPanel } from '../../thread/effect/open-thread-panel.js';
 import { closeThreadPanel } from '../../thread/effect/close-thread-panel.js';
+import { focusThreadDraft } from '../../thread/effect/focus-thread-draft.js';
 import { submitThreadDraft } from '../../thread/effect/submit-thread-draft.js';
 import { startVoiceRecording } from '../../voice/controller/start-voice-recording.js';
 import { stopVoiceRecording } from '../../voice/controller/stop-voice-recording.js';
@@ -66,7 +67,8 @@ export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
   telemetry('keyboard-shortcut', { key, ctrlKey: event.ctrlKey });
   if (key === 'a') {
     event.preventDefault();
-    if (!state.threadPanelOpen) openThreadPanel();
+    if (state.threadPanelOpen) focusThreadDraft();
+    else openThreadPanel();
     return;
   }
   if (key === 'x') {

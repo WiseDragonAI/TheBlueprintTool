@@ -62,7 +62,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(keyboard, /pasteSelectionController/);
   assert.match(keyboard, /openThreadPanel/);
   assert.match(keyboard, /closeThreadPanel/);
-  assert.doesNotMatch(keyboard, /focusThreadDraft/);
+  assert.match(keyboard, /focusThreadDraft/);
   assert.match(keyboard, /cancelVoiceRecording/);
   assert.match(keyboard, /key === 'a'/);
   assert.match(keyboard, /key === 'x'/);
