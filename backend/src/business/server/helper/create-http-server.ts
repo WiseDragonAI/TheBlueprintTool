@@ -257,13 +257,18 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const url = (request.url ?? '/').split('?')[0];
     const projects = projectCatalog();
     const cookieProjectId = String(request.headers.cookie ?? '').split(';').map((part) => part.trim()).find((part) => part.startsWith('decision-os-project='))?.slice('decision-os-project='.length);
-    const requestedProjectId = String(request.headers['x-decision-os-project'] ?? cookieProjectId ?? '');
-    const activeProject = resolveCatalogProject({ projects, projectId: requestedProjectId, fallbackDecisionOsRoot: masterDecisionOsRoot });
-    if (requestedProjectId && !activeProject && !url.startsWith('/decision-os/projects')) {
+    const headerProjectId = String(request.headers['x-decision-os-project'] ?? '');
+    const requestedProjectId = headerProjectId || cookieProjectId || '';
+    let activeProject = resolveCatalogProject({ projects, projectId: requestedProjectId, fallbackDecisionOsRoot: masterDecisionOsRoot });
+    if (headerProjectId && !activeProject && !url.startsWith('/decision-os/projects')) {
       response.statusCode = 404;
       response.setHeader('content-type', 'application/json');
       response.end(JSON.stringify({ ok: false, error: 'Unknown project id.' }));
       return;
+    }
+    if (!headerProjectId && cookieProjectId && !activeProject) {
+      activeProject = resolveCatalogProject({ projects, fallbackDecisionOsRoot: masterDecisionOsRoot });
+      if (activeProject) response.setHeader('set-cookie', `decision-os-project=${encodeURIComponent(activeProject.id)}; Path=/; SameSite=Lax`);
     }
     const decisionOsRoot = activeProject?.decisionOsRoot ?? masterDecisionOsRoot;
     const requestRuntime = { ...runtime, decisionOsRoot };

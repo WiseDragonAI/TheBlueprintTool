@@ -40,6 +40,12 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
     const invalid = await fetch(`${baseUrl}/decision-os/specs`, { headers: { 'x-decision-os-project': 'invalid' } });
     assert.equal(invalid.status, 404);
 
+    const staleCookie = await fetch(`${baseUrl}/decision-os/specs`, { headers: { cookie: 'decision-os-project=old-root-id' } });
+    assert.equal(staleCookie.status, 200);
+    assert.match(staleCookie.headers.get('set-cookie') ?? '', new RegExp(`decision-os-project=${catalog.projects[0].id}`));
+    const fallbackLedger = await staleCookie.json() as { cards: Array<{ title: string }> };
+    assert.equal(fallbackLedger.cards[0].title, 'Admin Specs');
+
     const color = await fetch(`${baseUrl}/decision-os/projects/${projectA.id}`, {
       method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ color: '#123456' })
     });
