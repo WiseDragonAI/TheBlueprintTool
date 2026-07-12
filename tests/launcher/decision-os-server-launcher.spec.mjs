@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -21,4 +21,12 @@ test('decision-os-server launcher resolves loader, server, frontend root, and ts
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }
+});
+
+test('decision-os-server launcher forwards supervisor termination signals to its backend child', () => {
+  const source = readFileSync(resolve('bin/decision-os-server.mjs'), 'utf8');
+  assert.match(source, /for \(const signal of \['SIGTERM', 'SIGINT', 'SIGHUP'\]\)/);
+  assert.match(source, /process\.once\(signal, \(\) => \{/);
+  assert.match(source, /child\.kill\(signal\)/);
+  assert.match(source, /child\.once\('exit', \(code, signal\) => \{/);
 });
