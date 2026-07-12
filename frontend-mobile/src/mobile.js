@@ -36,7 +36,6 @@ let creationKind = '';
 let controlRoomScrollFrame = 0;
 let queuePersistenceSequence = 0;
 let queueDragSnapshot = null;
-let queueDropCommitted = false;
 
 function setView(name) {
   for (const id of ['loading-view', 'error-view', 'empty-view', 'overview-view', 'control-room-view', 'ledger-view', 'zone-view', 'card-view']) {
@@ -313,35 +312,32 @@ function reorderVisibleQueue(cardId, targetIndex) {
 
 function beginQueueDrag() {
   queueDragSnapshot = state.controlRoom.queue.slice();
-  queueDropCommitted = false;
 }
 
 function cancelQueueDrag() {
   if (queueDragSnapshot) state.controlRoom.queue = queueDragSnapshot;
   queueDragSnapshot = null;
-  queueDropCommitted = false;
   state.draggedTaskId = '';
   renderControlRoom();
 }
 
 function commitQueueDrag() {
-  queueDropCommitted = true;
   queueDragSnapshot = null;
   state.draggedTaskId = '';
   void persistQueueOrder();
 }
 
-function animateQueueMove(cardId, targetCardId) {
+function moveQueuePlaceholder(cardId, placeholder, clientY) {
   const list = elements['control-task-list'];
-  const dragged = list.querySelector(`[data-card-id="${CSS.escape(cardId)}"]`);
-  const target = list.querySelector(`[data-card-id="${CSS.escape(targetCardId)}"]`);
-  if (!dragged || !target || dragged === target) return;
   const rows = [...list.querySelectorAll('.control-task')];
+  const targetIndex = rows.filter((row) => clientY > row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2).length;
+  const visible = filteredControlTasks();
+  const sourceIndex = visible.findIndex((task) => task.cardId === cardId);
+  if (sourceIndex === targetIndex || targetIndex < 0 || targetIndex >= visible.length) return;
   const previousTops = new Map(rows.map((row) => [row, row.getBoundingClientRect().top]));
-  const sourceIndex = rows.indexOf(dragged);
-  const targetIndex = rows.indexOf(target);
   if (!reorderVisibleQueue(cardId, targetIndex)) return;
-  list.insertBefore(dragged, sourceIndex < targetIndex ? target.nextSibling : target);
+  const remaining = [...list.children].filter((row) => row !== placeholder);
+  list.insertBefore(placeholder, remaining[targetIndex] ?? null);
   const nextRows = [...list.querySelectorAll('.control-task')];
   nextRows.forEach((row, index) => {
     row.classList.toggle('next-task', index === 0);
@@ -363,6 +359,7 @@ function taskRow(task, index) {
   article.id = `task-${task.cardId}`;
   article.dataset.cardId = task.cardId;
   article.draggable = false;
+  let suppressNavigation = false;
   const summary = document.createElement('button');
   summary.type = 'button';
   summary.className = 'control-task-summary';
@@ -394,67 +391,68 @@ function taskRow(task, index) {
     summary.querySelector('.task-copy').append(diagnostic);
   }
   if (queue) {
-    const handle = document.createElement('button');
-    handle.type = 'button';
-    handle.className = 'task-drag-handle';
-    handle.draggable = true;
-    handle.setAttribute('aria-label', `Reorder ${task.title}`);
-    handle.textContent = '⠿';
-    let pressTimer = 0;
-    let touchActive = false;
-    let touchTarget = article;
-    handle.addEventListener('pointerdown', (event) => {
-      if (event.pointerType === 'mouse') return;
-      pressTimer = window.setTimeout(() => {
-        touchActive = true;
+    let pointerId = -1;
+    let startX = 0;
+    let startY = 0;
+    let dragging = false;
+    let placeholder = null;
+    const clearFloatingCard = () => {
+      if (placeholder?.isConnected) placeholder.replaceWith(article);
+      article.classList.remove('dragging');
+      article.removeAttribute('style');
+      placeholder = null;
+      dragging = false;
+      pointerId = -1;
+    };
+    article.addEventListener('pointerdown', (event) => {
+      if (event.button !== undefined && event.button !== 0) return;
+      pointerId = event.pointerId;
+      startX = event.clientX;
+      startY = event.clientY;
+      article.setPointerCapture(pointerId);
+    });
+    article.addEventListener('pointermove', (event) => {
+      if (event.pointerId !== pointerId) return;
+      const dx = event.clientX - startX;
+      const dy = event.clientY - startY;
+      if (!dragging && Math.hypot(dx, dy) < 6) return;
+      event.preventDefault();
+      if (!dragging) {
+        dragging = true;
+        suppressNavigation = true;
         beginQueueDrag();
         state.draggedTaskId = task.cardId;
+        const rect = article.getBoundingClientRect();
+        placeholder = document.createElement('div');
+        placeholder.className = 'control-task-placeholder';
+        placeholder.style.height = `${rect.height}px`;
+        article.replaceWith(placeholder);
         article.classList.add('dragging');
-        handle.setPointerCapture(event.pointerId);
-      }, 350);
-    });
-    handle.addEventListener('pointermove', (event) => {
-      if (!touchActive) return;
-      event.preventDefault();
-      const candidate = document.elementFromPoint(event.clientX, event.clientY)?.closest('.control-task');
-      if (candidate && candidate !== touchTarget) {
-        touchTarget = candidate;
-        animateQueueMove(task.cardId, candidate.dataset.cardId);
+        Object.assign(article.style, {
+          position: 'fixed', left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`,
+          zIndex: '100', pointerEvents: 'none', transform: 'translate3d(0, 0, 0)'
+        });
+        document.body.append(article);
       }
+      article.style.transform = `translate3d(0, ${event.clientY - startY}px, 0)`;
+      moveQueuePlaceholder(task.cardId, placeholder, event.clientY);
     });
-    const finishTouch = (commit) => {
-      window.clearTimeout(pressTimer);
-      if (!touchActive) return;
-      article.classList.remove('dragging');
-      touchActive = false;
-      if (commit) commitQueueDrag();
-      else cancelQueueDrag();
+    const finishPointerDrag = (commit) => {
+      if (!dragging) {
+        pointerId = -1;
+        return;
+      }
+      clearFloatingCard();
+      if (commit) commitQueueDrag(); else cancelQueueDrag();
     };
-    handle.addEventListener('pointerup', () => finishTouch(true));
-    handle.addEventListener('pointercancel', () => finishTouch(false));
-    article.prepend(handle);
-    article.addEventListener('dragstart', (event) => {
-      beginQueueDrag();
-      state.draggedTaskId = task.cardId;
-      article.classList.add('dragging');
-      event.dataTransfer.effectAllowed = 'move';
-    });
-    article.addEventListener('dragend', () => {
-      article.classList.remove('dragging');
-      if (!queueDropCommitted) cancelQueueDrag();
-      queueDropCommitted = false;
-    });
-    article.addEventListener('dragover', (event) => {
-      event.preventDefault();
-      if (state.draggedTaskId) animateQueueMove(state.draggedTaskId, task.cardId);
-    });
-    article.addEventListener('drop', (event) => {
-      event.preventDefault();
-      if (state.draggedTaskId) commitQueueDrag();
-    });
+    article.addEventListener('pointerup', () => finishPointerDrag(true));
+    article.addEventListener('pointercancel', () => finishPointerDrag(false));
   }
   if (directNavigation) {
-    summary.addEventListener('click', () => navigate(pathForTask(task)));
+    summary.addEventListener('click', () => {
+      if (suppressNavigation) { suppressNavigation = false; return; }
+      navigate(pathForTask(task));
+    });
     article.append(summary);
     return article;
   }

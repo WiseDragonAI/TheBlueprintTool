@@ -129,7 +129,7 @@ test('formats the exact active Codex session duration as a minute-second stopwat
 
 test('renders active tasks as compact direct links without metadata or disclosure details', () => {
   assert.match(mobile, /class="task-stopwatch" data-active-since/);
-  assert.match(mobile, /summary\.addEventListener\('click', \(\) => navigate\(pathForTask\(task\)\)\)/);
+  assert.match(mobile, /summary\.addEventListener\('click'[\s\S]*navigate\(pathForTask\(task\)\)/);
   assert.match(mobile, /if \(active\) \{[\s\S]*article\.append\(summary\);[\s\S]*return article;/);
 });
 
@@ -137,17 +137,20 @@ test('opens queued master tasks directly without building disclosure content', (
   assert.match(mobile, /const directNavigation = active \|\| queue;/);
   assert.match(mobile, /if \(directNavigation\) \{[\s\S]*navigate\(pathForTask\(task\)\)[\s\S]*article\.append\(summary\);[\s\S]*return article;/);
   assert.match(mobile, /\$\{queue \? '' : '<span class="task-chevron">⌄<\/span>'\}/);
-  assert.match(mobile, /if \(queue\) \{[\s\S]*article\.addEventListener\('drop'/);
+  assert.match(mobile, /if \(queue\) \{[\s\S]*article\.addEventListener\('pointerdown'/);
 });
 
-test('reorders queue rows continuously with FLIP animation for mouse and touch movement', () => {
-  assert.match(mobile, /function animateQueueMove\(cardId, targetCardId\)/);
+test('drags the pressed queue card under the pointer and animates displaced rows', () => {
+  assert.match(mobile, /article\.addEventListener\('pointerdown'/);
+  assert.match(mobile, /article\.setPointerCapture\(pointerId\)/);
+  assert.match(mobile, /article\.style\.transform = `translate3d\(0, \$\{event\.clientY - startY\}px, 0\)`/);
+  assert.match(mobile, /function moveQueuePlaceholder\(cardId, placeholder, clientY\)/);
   assert.match(mobile, /row\.animate\(\[\{ transform: `translateY\(\$\{delta\}px\)` \}, \{ transform: 'translateY\(0\)' \}\]/);
-  assert.match(mobile, /pointermove[\s\S]*animateQueueMove\(task\.cardId, candidate\.dataset\.cardId\)/);
-  assert.match(mobile, /dragover[\s\S]*animateQueueMove\(state\.draggedTaskId, task\.cardId\)/);
-  assert.match(mobile, /pointercancel[\s\S]*finishTouch\(false\)/);
-  assert.match(mobile, /if \(!queueDropCommitted\) cancelQueueDrag\(\)/);
+  assert.match(mobile, /pointercancel[\s\S]*finishPointerDrag\(false\)/);
+  assert.doesNotMatch(mobile, /pressTimer|dragstart|dragover|task-drag-handle/);
   assert.match(styles, /will-change:\s*transform/);
+  assert.match(styles, /\.control-task-summary[^}]*touch-action:\s*none/);
+  assert.doesNotMatch(styles, /\.control-task\.dragging[^}]*opacity/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
 });
 
