@@ -1,6 +1,6 @@
 const STATUS_LABELS = ['task-waiting', 'task-active', 'task-complete'];
 
-export function parseMasterTaskMarkdown({ cardId, title, ledgerId, ledgerTitle, markdown, cardStatus = 'todo', cards = [], codexRunId = '', codexStatus = '' }) {
+export function parseMasterTaskMarkdown({ cardId, title, projectId = '', projectName = '', projectColor = '', ledgerId, ledgerTitle, markdown, cardStatus = 'todo', cards = [], codexRunId = '', codexStatus = '' }) {
   const source = String(markdown ?? '').replace(/\r\n?/g, '\n');
   const labelLines = source.split('\n').filter((line) => /^\s*(?:#[a-z][a-z0-9-]*\s*)+$/i.test(line));
   const labels = new Set(Array.from(labelLines.join('\n').matchAll(/#([a-z][a-z0-9-]*)\b/gi), (match) => match[1].toLowerCase()));
@@ -47,6 +47,9 @@ export function parseMasterTaskMarkdown({ cardId, title, ledgerId, ledgerTitle, 
     diagnostics,
     cardId: String(cardId),
     title: String(title || `Card ${cardId}`),
+    projectId: String(projectId),
+    projectName: String(projectName),
+    projectColor: String(projectColor),
     ledgerId: String(ledgerId),
     ledgerTitle: String(ledgerTitle),
     ledger,

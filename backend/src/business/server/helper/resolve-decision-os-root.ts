@@ -15,7 +15,8 @@ export function resolveDecisionOsRoot(input: { action_payload?: AnyRecord; runti
   const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
   const configuredRoot = String(payload.decisionOsRoot ?? runtime.decisionOsRoot ?? process.env.DECISION_OS_ROOT ?? '');
   if (configuredRoot) return resolve(configuredRoot);
-  let current = resolve(String(payload.cwd ?? runtime.cwd ?? process.cwd()));
+  const launchCwd = resolve(String(payload.cwd ?? runtime.cwd ?? process.cwd()));
+  let current = launchCwd;
   while (true) {
     const candidate = resolve(current, '.decision-os');
     if (existsSync(candidate)) return candidate;
@@ -24,5 +25,5 @@ export function resolveDecisionOsRoot(input: { action_payload?: AnyRecord; runti
     current = parent;
   }
   const fallback = String(payload.decisionOsDirectory ?? '.decision-os');
-  return isAbsolute(fallback) ? fallback : resolve(process.cwd(), fallback);
+  return isAbsolute(fallback) ? fallback : resolve(launchCwd, fallback);
 }

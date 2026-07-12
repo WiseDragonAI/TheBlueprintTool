@@ -8,6 +8,8 @@ import { controlRoomPath, parseControlRoomRoute } from './mobile-control-room-ro
 
 const state = {
   projectName: 'decision-os',
+  projects: [],
+  activeProjectId: '',
   ledgers: [],
   ledger: null,
   activeLedgerId: '',
@@ -17,14 +19,15 @@ const state = {
   query: '',
   controlRoom: null,
   controlTab: 'queue',
+  projectFilter: 'All',
   controlFilter: 'All'
 };
 
 const elements = Object.fromEntries([
-  'project-name', 'ledger-links', 'loading-view', 'error-view', 'error-message', 'empty-view',
+  'project-name', 'project-links', 'ledger-links', 'loading-view', 'error-view', 'error-message', 'empty-view',
   'overview-view', 'overview-summary', 'overview-ledgers', 'ledger-view', 'ledger-title', 'ledger-summary',
   'zone-list', 'zone-view', 'zone-title', 'zone-summary', 'card-search', 'card-list',
-  'no-results', 'card-view', 'card-title', 'card-body', 'control-room-view', 'control-filters',
+  'no-results', 'card-view', 'card-title', 'card-body', 'control-room-view', 'control-project-filters', 'control-filters',
   'control-task-list', 'control-empty', 'control-diagnostics'
 ].map((id) => [id, document.getElementById(id)]));
 
@@ -37,6 +40,23 @@ let creationKind = '';
 let controlRoomScrollFrame = 0;
 let queuePersistenceSequence = 0;
 let queueSortable = null;
+
+function projectFetch(url, options = {}, projectId = state.activeProjectId) {
+  const headers = new Headers(options.headers ?? {});
+  if (projectId) headers.set('x-decision-os-project', projectId);
+  return fetch(url, { ...options, headers });
+}
+
+function selectProject(projectId) {
+  const project = state.projects.find((entry) => entry.id === projectId);
+  if (!project) return;
+  state.activeProjectId = project.id;
+  state.projectName = project.name;
+  state.ledgers = project.ledgers;
+  state.ledger = null;
+  document.cookie = `decision-os-project=${encodeURIComponent(project.id)}; Path=/; SameSite=Lax`;
+  elements['project-name'].textContent = project.name;
+}
 
 function setView(name) {
   for (const id of ['loading-view', 'error-view', 'empty-view', 'overview-view', 'control-room-view', 'ledger-view', 'zone-view', 'card-view']) {
@@ -67,7 +87,7 @@ function cardPath(ledgerId, zoneId, cardId) {
 }
 
 function pathForTask(task) {
-  const ledger = state.controlRoom?.documents?.find((entry) => entry.ledgerId === task.ledgerId)?.document;
+  const ledger = state.controlRoom?.documents?.find((entry) => entry.projectId === task.projectId && entry.ledgerId === task.ledgerId)?.document;
   const previous = state.ledger;
   state.ledger = ledger;
   const zone = ledgerZones().find((entry) => entry.cards.some((card) => String(card.id) === task.cardId));
@@ -114,12 +134,12 @@ function openCreationModal(kind) {
   name.focus();
 }
 
-async function ledgerMutation(ledgerId, mutation) {
-  const response = await fetch(`/decision-os/${encodeURIComponent(ledgerId)}`, {
+async function ledgerMutation(ledgerId, mutation, projectId = state.activeProjectId) {
+  const response = await projectFetch(`/decision-os/${encodeURIComponent(ledgerId)}`, {
     method: 'PATCH',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(mutation)
-  });
+  }, projectId);
   const payload = await response.json().catch(() => null);
   if (!response.ok || payload?.ok === false) throw new Error(payload?.error || `Request failed with HTTP ${response.status}.`);
   return payload;
@@ -175,7 +195,7 @@ function nextCardRect(zone) {
 }
 
 async function createLedger(name) {
-  const response = await fetch('/decision-os/ledgers', {
+  const response = await projectFetch('/decision-os/ledgers', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ title: name })
@@ -262,6 +282,36 @@ function renderLedgerLinks() {
     destination('Pipelines', '', 'nav-pipelines-button'),
     destination('Skill library', '', 'nav-skills-button')
   );
+  elements['project-links'].replaceChildren(...state.projects.map((project) => {
+    const row = document.createElement('div');
+    row.className = `project-link${project.id === state.activeProjectId ? ' active' : ''}`;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = project.name;
+    button.title = project.relativePath;
+    button.style.setProperty('--project-color', project.color);
+    button.addEventListener('click', () => {
+      selectProject(project.id);
+      state.projectFilter = project.id;
+      state.controlFilter = 'All';
+      navigate('/');
+    });
+    const color = document.createElement('input');
+    color.type = 'color';
+    color.value = project.color;
+    color.setAttribute('aria-label', `Color for ${project.name}`);
+    color.addEventListener('change', async () => {
+      const response = await fetch(`/decision-os/projects/${encodeURIComponent(project.id)}`, {
+        method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ color: color.value })
+      });
+      if (!response.ok) return;
+      project.color = color.value;
+      renderLedgerLinks();
+      if (!elements['control-room-view'].hidden) renderControlRoom();
+    });
+    row.append(button, color);
+    return row;
+  }));
 }
 
 function renderOverview() {
@@ -295,7 +345,8 @@ function renderOverview() {
 
 function filteredControlTasks() {
   const tasks = state.controlRoom?.[state.controlTab] ?? [];
-  return state.controlFilter === 'All' ? tasks : tasks.filter((task) => task.ledger === state.controlFilter);
+  const projectTasks = state.projectFilter === 'All' ? tasks : tasks.filter((task) => task.projectId === state.projectFilter);
+  return state.controlFilter === 'All' ? projectTasks : projectTasks.filter((task) => task.ledgerId === state.controlFilter);
 }
 
 function syncQueueFromDom() {
@@ -335,7 +386,8 @@ function initializeQueueSortable() {
 
 function controlTaskCount(tab) {
   const tasks = state.controlRoom?.[tab] ?? [];
-  return state.controlFilter === 'All' ? tasks.length : tasks.filter((task) => task.ledger === state.controlFilter).length;
+  const projectTasks = state.projectFilter === 'All' ? tasks : tasks.filter((task) => task.projectId === state.projectFilter);
+  return state.controlFilter === 'All' ? projectTasks.length : projectTasks.filter((task) => task.ledgerId === state.controlFilter).length;
 }
 
 function taskRow(task, index) {
@@ -347,6 +399,7 @@ function taskRow(task, index) {
   const summary = document.createElement('button');
   summary.type = 'button';
   summary.className = 'control-task-summary';
+  article.style.borderInlineStartColor = task.projectColor || 'transparent';
   const active = state.controlTab === 'active';
   const queue = state.controlTab === 'queue';
   const directNavigation = active || queue;
@@ -363,7 +416,7 @@ function taskRow(task, index) {
   const age = task.status === 'task-complete' ? 'completed' : task.status === 'task-active' ? activeAge(task.activeSince) : waitingAge(task.waitingSince);
   const process = task.codexProcessing ? ` · Codex ${task.codexRunId}` : '';
   if (!active) {
-    summary.querySelector('.task-meta').textContent = `${task.ledger} · ${age}${process}`;
+    summary.querySelector('.task-meta').textContent = `${task.projectName} · ${task.ledger} · ${age}${process}`;
     const nextSubtask = summary.querySelector('.task-next');
     if (nextSubtask) nextSubtask.textContent = `Next: ${task.nextSubtask.title}`;
   }
@@ -375,7 +428,7 @@ function taskRow(task, index) {
     summary.querySelector('.task-copy').append(diagnostic);
   }
   if (directNavigation) {
-    summary.addEventListener('click', () => navigate(pathForTask(task)));
+    summary.addEventListener('click', () => { selectProject(task.projectId); navigate(pathForTask(task)); });
     article.append(summary);
     return article;
   }
@@ -390,7 +443,8 @@ function taskRow(task, index) {
     button.querySelector('span').textContent = subtask.title;
     button.querySelector('small').textContent = subtask.status;
     button.addEventListener('click', () => {
-      const target = state.controlRoom.allTasks.find((candidate) => candidate.cardId === subtask.cardId && candidate.ledgerId === task.ledgerId);
+      const target = state.controlRoom.allTasks.find((candidate) => candidate.projectId === task.projectId && candidate.cardId === subtask.cardId && candidate.ledgerId === task.ledgerId);
+      selectProject(task.projectId);
       if (target) navigate(pathForTask(target));
       else {
         const ledger = state.controlRoom.documents.find((entry) => entry.ledgerId === task.ledgerId)?.document;
@@ -408,7 +462,7 @@ function taskRow(task, index) {
   const open = document.createElement('button');
   open.type = 'button';
   open.textContent = 'Open master task';
-  open.addEventListener('click', () => navigate(pathForTask(task)));
+  open.addEventListener('click', () => { selectProject(task.projectId); navigate(pathForTask(task)); });
   actions.append(open);
   details.append(...subtasks, actions);
   summary.addEventListener('click', () => {
@@ -425,15 +479,30 @@ function renderControlRoom() {
   state.activeLedgerId = '';
   state.activeZoneId = '';
   renderLedgerLinks();
-  const filters = ['All', ...(state.controlRoom?.ledgers ?? [])];
-  if (!filters.includes(state.controlFilter)) state.controlFilter = 'All';
+  const projectFilters = [{ id: 'All', name: 'All projects' }, ...state.projects.map(({ id, name }) => ({ id, name }))];
+  if (!projectFilters.some((project) => project.id === state.projectFilter)) state.projectFilter = 'All';
+  elements['control-project-filters'].replaceChildren(...projectFilters.map((project) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'filter-chip';
+    button.textContent = project.name;
+    button.setAttribute('aria-pressed', String(project.id === state.projectFilter));
+    button.addEventListener('click', () => { state.projectFilter = project.id; state.controlFilter = 'All'; renderControlRoom(); });
+    return button;
+  }));
+  const scopedLedgers = state.projectFilter === 'All'
+    ? []
+    : (state.projects.find((project) => project.id === state.projectFilter)?.ledgers ?? []);
+  const filters = [{ id: 'All', title: 'All ledgers' }, ...scopedLedgers];
+  if (!filters.some((filter) => filter.id === state.controlFilter)) state.controlFilter = 'All';
+  elements['control-filters'].hidden = state.projectFilter === 'All';
   elements['control-filters'].replaceChildren(...filters.map((filter) => {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'filter-chip';
-    button.textContent = filter;
-    button.setAttribute('aria-pressed', String(filter === state.controlFilter));
-    button.addEventListener('click', () => { state.controlFilter = filter; renderControlRoom(); });
+    button.textContent = filter.title;
+    button.setAttribute('aria-pressed', String(filter.id === state.controlFilter));
+    button.addEventListener('click', () => { state.controlFilter = filter.id; renderControlRoom(); });
     return button;
   }));
   document.querySelectorAll('[data-control-tab]').forEach((button) => {
@@ -473,28 +542,31 @@ function persistControlRoomScrollAnchor() {
 }
 
 async function loadControlRoom() {
-  const documents = await Promise.all(state.ledgers.map(async (ledger) => ({
+  const documents = await Promise.all(state.projects.flatMap((project) => project.ledgers.map(async (ledger) => ({
+    projectId: project.id,
+    projectName: project.name,
+    projectColor: project.color,
     ledgerId: ledger.id,
-    document: await fetch(`/decision-os/${encodeURIComponent(ledger.id)}`, { cache: 'no-store' }).then((response) => {
-      if (!response.ok) throw new Error(`Could not load ${ledger.title} (${response.status}).`);
+    ledgerTitle: ledger.title,
+    document: await projectFetch(`/decision-os/${encodeURIComponent(ledger.id)}`, { cache: 'no-store' }, project.id).then((response) => {
+      if (!response.ok) throw new Error(`Could not load ${project.name}/${ledger.title} (${response.status}).`);
       return response.json();
     })
-  })));
-  const allTasks = (await Promise.all(documents.flatMap(({ ledgerId, document }) => {
-    const ledgerTitle = state.ledgers.find((entry) => entry.id === ledgerId)?.title ?? ledgerId;
+  }))));
+  const allTasks = (await Promise.all(documents.flatMap(({ projectId, projectName, projectColor, ledgerId, ledgerTitle, document }) => {
     const cards = document.cards ?? [];
     return cards.map(async (card) => {
       const markdown = ledgerCardBody(card);
       const runId = String(card.codexThreadRunId ?? '');
       let codexStatus = '';
       if (runId && /#task-active\b/i.test(markdown)) {
-        const response = await fetch(`/api/codex/skills/runs/${encodeURIComponent(runId)}?ledgerId=${encodeURIComponent(ledgerId)}&cardId=${encodeURIComponent(card.id)}&since=0`, { cache: 'no-store' });
+        const response = await projectFetch(`/api/codex/skills/runs/${encodeURIComponent(runId)}?ledgerId=${encodeURIComponent(ledgerId)}&cardId=${encodeURIComponent(card.id)}&since=0`, { cache: 'no-store' }, projectId);
         if (response.ok) {
           const payload = await response.json();
           codexStatus = String(payload.run?.status ?? payload.status ?? '');
         }
       }
-      return { cardId: card.id, title: card.title, ledgerId, ledgerTitle, markdown, cardStatus: card.status, cards, codexRunId: runId, codexStatus };
+      return { cardId: card.id, title: card.title, projectId, projectName, projectColor, ledgerId, ledgerTitle, markdown, cardStatus: card.status, cards, codexRunId: runId, codexStatus };
     });
   }))).flat();
   state.controlRoom = { ...deriveControlRoom(allTasks), allTasks, documents };
@@ -516,7 +588,7 @@ async function persistQueueOrder() {
     await Promise.all(mutations.map(({ task, markdown }) => ledgerMutation(task.ledgerId, {
       action: 'patch-card',
       cardPatch: { id: task.cardId, description: markdown }
-    })));
+    }, task.projectId)));
   } catch (error) {
     if (sequence !== queuePersistenceSequence) return;
     await loadControlRoom();
@@ -527,7 +599,7 @@ async function persistQueueOrder() {
 }
 
 async function activateMasterTask({ ledgerId, cardId, startedAt }) {
-  const ledger = await fetch(`/decision-os/${encodeURIComponent(ledgerId)}`, { cache: 'no-store' }).then((response) => response.json());
+  const ledger = await projectFetch(`/decision-os/${encodeURIComponent(ledgerId)}`, { cache: 'no-store' }).then((response) => response.json());
   const card = ledger.cards?.find((entry) => String(entry.id) === String(cardId));
   if (!card || !parseMasterCandidate(card)) return ledger;
   return ledgerMutation(ledgerId, {
@@ -543,7 +615,7 @@ function parseMasterCandidate(card) {
 async function createTaskIntake() {
   const ledgerRef = state.ledgers.find((entry) => entry.title === state.controlFilter || entry.id === state.controlFilter) ?? state.ledgers[0];
   if (!ledgerRef) throw new Error('Create a ledger before starting a task.');
-  const ledger = await fetch(`/decision-os/${encodeURIComponent(ledgerRef.id)}`, { cache: 'no-store' }).then((response) => response.json());
+  const ledger = await projectFetch(`/decision-os/${encodeURIComponent(ledgerRef.id)}`, { cache: 'no-store' }).then((response) => response.json());
   state.ledger = ledger;
   state.activeLedgerId = ledgerRef.id;
   const rect = nextZoneRect();
@@ -866,7 +938,7 @@ function renderZone(zone) {
 }
 
 async function loadLedger(ledgerId) {
-  const response = await fetch(`/decision-os/${encodeURIComponent(ledgerId)}`, { cache: 'no-store' });
+  const response = await projectFetch(`/decision-os/${encodeURIComponent(ledgerId)}`, { cache: 'no-store' });
   if (!response.ok) throw new Error(`The server returned HTTP ${response.status}.`);
   const ledger = await response.json();
   if (!ledger || !Array.isArray(ledger.cards)) throw new Error('The ledger response does not contain a card list.');
@@ -879,7 +951,7 @@ async function loadLedger(ledgerId) {
     ledgers: state.ledgers,
     onCodexStarted: activateMasterTask,
     onLedgerRefresh: async (activeLedgerId) => {
-      const refreshed = await fetch(`/decision-os/${encodeURIComponent(activeLedgerId)}`, { cache: 'no-store' }).then((result) => result.ok ? result.json() : null);
+      const refreshed = await projectFetch(`/decision-os/${encodeURIComponent(activeLedgerId)}`, { cache: 'no-store' }).then((result) => result.ok ? result.json() : null);
       if (refreshed && activeLedgerId === state.activeLedgerId) state.ledger = refreshed;
       return refreshed;
     }
@@ -889,10 +961,21 @@ async function loadLedger(ledgerId) {
 async function loadRoute() {
   setView('loading-view');
   try {
-    const response = await fetch('/decision-os/state', { cache: 'no-store' });
+    const catalogResponse = await fetch('/decision-os/projects', { cache: 'no-store' });
+    if (!catalogResponse.ok) throw new Error(`The project catalog returned HTTP ${catalogResponse.status}.`);
+    const catalog = await catalogResponse.json();
+    state.projects = Array.isArray(catalog.projects) ? catalog.projects : [];
+    if (!state.projects.length) {
+      state.ledgers = [];
+      renderLedgerLinks();
+      setView('empty-view');
+      return;
+    }
+    if (!state.projects.some((project) => project.id === state.activeProjectId)) selectProject(catalog.selectedProjectId || state.projects[0].id);
+    const response = await projectFetch('/decision-os/state', { cache: 'no-store' });
     if (!response.ok) throw new Error(`The server returned HTTP ${response.status}.`);
     const project = await response.json();
-    state.projectName = 'decision-os';
+    state.projectName = project.projectName || state.projectName;
     state.ledgers = Array.isArray(project.ledgers) ? project.ledgers.filter((ledger) => ledger?.id && ledger?.title) : [];
     elements['project-name'].textContent = state.projectName;
     if (!state.ledgers.length) {

@@ -175,8 +175,17 @@ test('omits the next-subtask subtitle when no actionable subtask exists', () => 
 });
 
 test('omits completed-subtask progress from task-row metadata', () => {
-  assert.match(mobile, /textContent = `\$\{task\.ledger\} · \$\{age\}\$\{process\}`/);
+  assert.match(mobile, /textContent = `\$\{task\.projectName\} · \$\{task\.ledger\} · \$\{age\}\$\{process\}`/);
   assert.doesNotMatch(mobile, /task\.complete\}\/\$\{task\.subtasks\.length\} complete/);
+});
+
+test('adds project hierarchy, scoped ledger filters, and project color configuration', () => {
+  assert.match(html, /id="project-links"/);
+  assert.match(html, /id="control-project-filters"/);
+  assert.match(mobile, /state\.projectFilter === 'All'/);
+  assert.match(mobile, /projectTasks\.filter\(\(task\) => task\.ledgerId === state\.controlFilter\)/);
+  assert.match(mobile, /\/decision-os\/projects\/\$\{encodeURIComponent\(project\.id\)\}/);
+  assert.match(styles, /\.project-link input\[type="color"\]/);
 });
 
 test('keeps task metadata in Markdown but removes it from the visible card body', () => {

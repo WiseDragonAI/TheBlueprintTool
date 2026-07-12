@@ -143,6 +143,24 @@ npm run cli -- answer --ledger ../.decision-os/specs.json --thread-id thread-600
 
 `generator-cli` is reserved for scaffold generation from the MasterLedger and related generation checks.
 
+## Termux Home Master Server
+
+Launch Decision OS from the Termux home to recursively discover every nested project directory that contains `.decision-os/state.json`:
+
+```bash
+setsid sh -c 'cd /data/data/com.termux/files/home && exec env PORT=50150 DECISION_OS_FRONTEND_ROOT=/data/data/com.termux/files/home/decision-os/frontend-mobile /data/data/com.termux/files/home/decision-os/bin/decision-os-server.mjs >> /tmp/decision-os-home-50150.log 2>&1' </dev/null >/dev/null 2>&1 &
+```
+
+Verify the process, project catalog, and Control Room route:
+
+```bash
+ps -ef | rg 'decision-os-server|server.ts|50150' | rg -v rg
+curl -sS http://127.0.0.1:50150/decision-os/projects
+curl -sS -I http://127.0.0.1:50150/
+```
+
+The server scans through intermediate directories without Decision OS data. Each project retains its relative nested path for request isolation and displays the basename of its project directory. Project colors are stored in the master scope at `/data/data/com.termux/files/home/.decision-os/projects.json`.
+
 ## Card Markdown Images
 
 Card markdown supports image syntax in descriptions and field tabs:

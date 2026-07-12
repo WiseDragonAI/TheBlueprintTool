@@ -39,6 +39,7 @@ import { readCodexPipelineRunController } from '../../codex/controller/read-code
 import { cancelCodexPipelineRunController } from '../../codex/controller/cancel-codex-pipeline-run-controller.js';
 import { restartCodexPipelineRunController } from '../../codex/controller/restart-codex-pipeline-run-controller.js';
 import { resumeCodexPipelineRuns } from '../../codex/helper/resume-codex-pipeline-runs.js';
+import { discoverDecisionOsProjects, resolveCatalogProject, saveProjectColor } from './project-catalog.js';
 
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
@@ -161,8 +162,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     : existsSync(resolve(process.cwd(), 'frontend'))
       ? resolve(process.cwd(), 'frontend')
       : resolve(process.cwd(), '..', 'frontend');
-  const decisionOsRoot = resolveDecisionOsRoot({ action_payload: payload, runtime_state: runtime });
-  runtime.decisionOsRoot = decisionOsRoot;
+  const masterDecisionOsRoot = resolveDecisionOsRoot({ action_payload: payload, runtime_state: runtime });
+  const masterRoot = dirname(masterDecisionOsRoot);
+  const decisionOsRoot = masterDecisionOsRoot;
+  runtime.decisionOsRoot = masterDecisionOsRoot;
   if (payload.mode === 'dry-run') {
     return { ok: true, port, server: { listening: false, port } };
   }
@@ -234,16 +237,57 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     }
   };
   void resumeCodexPipelineRuns({ decisionOsRoot, runtime }).catch(() => undefined);
-  const loadLedgerContentFiles = (ledger: AnyRecord): AnyRecord => hydrateLedgerCardContent(hydrateLedgerThreadNotes(ledger, decisionOsRoot), decisionOsRoot);
-  const persistLedgerAndRespond = (ledgerId: string, ledgerPath: string, ledger: AnyRecord, response: ServerResponse): void => {
+  const loadLedgerContentFiles = (ledger: AnyRecord, activeDecisionOsRoot = decisionOsRoot): AnyRecord => hydrateLedgerCardContent(hydrateLedgerThreadNotes(ledger, activeDecisionOsRoot), activeDecisionOsRoot);
+  const persistLedgerAndRespond = (ledgerId: string, ledgerPath: string, ledger: AnyRecord, response: ServerResponse, activeDecisionOsRoot = decisionOsRoot): void => {
     stripHydratedThreadNotes(ledger);
     writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
     response.setHeader(ledgerRevisionHeader, String(ledgerRevisions.advance(ledgerId)));
-    response.end(JSON.stringify(loadLedgerContentFiles(ledger)));
+    response.end(JSON.stringify(loadLedgerContentFiles(ledger, activeDecisionOsRoot)));
   };
   const cardContentWatcher = watchCardContentFiles({ decisionOsRoot, onChange: publishCardContentChange });
+  let projectCatalogCache = { expiresAt: 0, projects: [] as ReturnType<typeof discoverDecisionOsProjects> };
+  const projectCatalog = (): ReturnType<typeof discoverDecisionOsProjects> => {
+    const now = Date.now();
+    if (projectCatalogCache.expiresAt > now) return projectCatalogCache.projects;
+    const projects = discoverDecisionOsProjects({ masterRoot, masterDecisionOsRoot });
+    projectCatalogCache = { expiresAt: now + 5000, projects };
+    return projects;
+  };
   const server = createServer(async (request, response) => {
     const url = (request.url ?? '/').split('?')[0];
+    const projects = projectCatalog();
+    const cookieProjectId = String(request.headers.cookie ?? '').split(';').map((part) => part.trim()).find((part) => part.startsWith('decision-os-project='))?.slice('decision-os-project='.length);
+    const requestedProjectId = String(request.headers['x-decision-os-project'] ?? cookieProjectId ?? '');
+    const activeProject = resolveCatalogProject({ projects, projectId: requestedProjectId, fallbackDecisionOsRoot: masterDecisionOsRoot });
+    if (requestedProjectId && !activeProject && !url.startsWith('/decision-os/projects')) {
+      response.statusCode = 404;
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ ok: false, error: 'Unknown project id.' }));
+      return;
+    }
+    const decisionOsRoot = activeProject?.decisionOsRoot ?? masterDecisionOsRoot;
+    const requestRuntime = { ...runtime, decisionOsRoot };
+    if (url === '/decision-os/projects' && request.method === 'GET') {
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ projects, selectedProjectId: activeProject?.id ?? '' }));
+      return;
+    }
+    if (url.startsWith('/decision-os/projects/') && request.method === 'PATCH') {
+      const projectId = decodeRouteSegment(url.slice('/decision-os/projects/'.length));
+      const bodyBuffer = await readRequestBuffer(request);
+      try {
+        const body = JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
+        const project = saveProjectColor({ masterDecisionOsRoot, projects, projectId, color: String(body.color ?? '') });
+        projectCatalogCache = { expiresAt: 0, projects: [] };
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ ok: true, project }));
+      } catch (error) {
+        response.statusCode = 400;
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : 'Project update failed.' }));
+      }
+      return;
+    }
     if (tryServeDecisionOsAsset({ url, decisionOsRoot, response })) return;
     if (url === '/api/server/restart' && request.method === 'POST') {
       response.setHeader('content-type', 'application/json');
@@ -282,7 +326,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       return;
     }
     if (url === '/api/codex/pipelines' && request.method === 'GET') {
-      const result = listCodexPipelinesController({ runtime_state: runtime });
+      const result = listCodexPipelinesController({ runtime_state: requestRuntime });
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
       response.end(JSON.stringify(result));
@@ -297,7 +341,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           return {};
         }
       })();
-      const result = saveCodexPipelineController({ action_payload: { ...savePayload, operation: 'create' }, runtime_state: runtime });
+      const result = saveCodexPipelineController({ action_payload: { ...savePayload, operation: 'create' }, runtime_state: requestRuntime });
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 201));
       response.end(JSON.stringify(result));
@@ -314,7 +358,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       })();
       const result = await startCodexPipelineRunController({
         action_payload: { ...runPayload, onLedgerChange: publishLedgerContentChange },
-        runtime_state: runtime,
+        runtime_state: requestRuntime,
       });
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));
@@ -323,7 +367,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     }
     if (url.startsWith('/api/codex/pipelines/runs/') && url.endsWith('/cancel') && request.method === 'POST') {
       const runId = decodeRouteSegment(url.slice('/api/codex/pipelines/runs/'.length, -'/cancel'.length));
-      const result = await cancelCodexPipelineRunController({ action_payload: { runId }, runtime_state: runtime });
+      const result = await cancelCodexPipelineRunController({ action_payload: { runId }, runtime_state: requestRuntime });
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));
       response.end(JSON.stringify(result));
@@ -331,7 +375,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     }
     if (url.startsWith('/api/codex/pipelines/runs/') && url.endsWith('/restart') && request.method === 'POST') {
       const runId = decodeRouteSegment(url.slice('/api/codex/pipelines/runs/'.length, -'/restart'.length));
-      const result = await restartCodexPipelineRunController({ action_payload: { runId }, runtime_state: runtime });
+      const result = await restartCodexPipelineRunController({ action_payload: { runId }, runtime_state: requestRuntime });
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));
       response.end(JSON.stringify(result));
@@ -339,7 +383,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     }
     if (url.startsWith('/api/codex/pipelines/runs/') && request.method === 'GET') {
       const runId = decodeRouteSegment(url.slice('/api/codex/pipelines/runs/'.length));
-      const result = await readCodexPipelineRunController({ action_payload: { runId }, runtime_state: runtime });
+      const result = await readCodexPipelineRunController({ action_payload: { runId }, runtime_state: requestRuntime });
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
       response.end(JSON.stringify(result));
@@ -355,7 +399,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           return {};
         }
       })();
-      const result = saveCodexPipelineController({ action_payload: { ...savePayload, pipelineId, operation: 'update' }, runtime_state: runtime });
+      const result = saveCodexPipelineController({ action_payload: { ...savePayload, pipelineId, operation: 'update' }, runtime_state: requestRuntime });
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
       response.end(JSON.stringify(result));
@@ -363,7 +407,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     }
     if (url.startsWith('/api/codex/skill-library/') && request.method === 'GET') {
       const skillName = decodeRouteSegment(url.slice('/api/codex/skill-library/'.length));
-      const result = readCodexSkillLibraryController({ action_payload: { skillName }, runtime_state: runtime });
+      const result = readCodexSkillLibraryController({ action_payload: { skillName }, runtime_state: requestRuntime });
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
       response.end(JSON.stringify(result));
@@ -379,14 +423,14 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           return {};
         }
       })();
-      const result = saveCodexSkillLibraryController({ action_payload: { ...savePayload, skillName }, runtime_state: runtime });
+      const result = saveCodexSkillLibraryController({ action_payload: { ...savePayload, skillName }, runtime_state: requestRuntime });
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
       response.end(JSON.stringify(result));
       return;
     }
     if (url === '/api/codex/skills' && request.method === 'GET') {
-      const skills = readCodexSkillCatalog({ decisionOsRoot, runtime }).skills;
+      const skills = readCodexSkillCatalog({ decisionOsRoot, runtime: requestRuntime }).skills;
       response.setHeader('content-type', 'application/json');
       response.statusCode = 200;
       response.end(JSON.stringify({ ok: true, skills }));
@@ -403,7 +447,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       })();
       const result = await startCardSkillProcessController({
         action_payload: { ...processPayload, onLedgerChange: publishLedgerContentChange },
-        runtime_state: runtime
+        runtime_state: requestRuntime
       });
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));
@@ -421,7 +465,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       })();
       const result = await startThreadCodexProcessController({
         action_payload: { ...processPayload, onLedgerChange: publishLedgerContentChange },
-        runtime_state: runtime
+        runtime_state: requestRuntime
       });
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));
@@ -447,7 +491,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           since: requestUrl.searchParams.get('since') ?? '0',
           traceId
         },
-        runtime_state: runtime
+        runtime_state: requestRuntime
       });
       if (traceId) logCodexContinueDebug('status-route-response', {
         traceId,
@@ -486,7 +530,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       });
       const result = await continueCardSkillRunController({
         action_payload: { ...continuePayload, runId, onLedgerChange: publishLedgerContentChange },
-        runtime_state: runtime
+        runtime_state: requestRuntime
       });
       logCodexContinueDebug('continue-route-response', {
         traceId,
@@ -515,7 +559,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const runId = decodeURIComponent(url.slice('/api/codex/skills/runs/'.length, -'/cancel'.length));
       const result = await cancelCardSkillRunController({
         action_payload: { ...cancelPayload, runId },
-        runtime_state: runtime
+        runtime_state: requestRuntime
       });
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));
@@ -533,7 +577,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           mimeType: request.headers['content-type'] ?? 'audio/webm',
           threadId: request.headers['x-thread-id'] ?? ''
         },
-        runtime_state: runtime
+        runtime_state: requestRuntime
       });
       return;
     }
@@ -551,7 +595,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           onCardContentChange: publishCardContentChange,
           onLedgerChange: publishLedgerContentChange
         },
-        runtime_state: runtime
+        runtime_state: requestRuntime
       });
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));
@@ -624,7 +668,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           response,
           threadId: request.headers['x-thread-id'] ?? retryPayload.threadId ?? ''
         },
-        runtime_state: runtime
+        runtime_state: requestRuntime
       });
       return;
     }
@@ -687,7 +731,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           });
           const overview = ensureLedgersCanvasDocument({ decisionOsRoot });
           response.setHeader(ledgerRevisionHeader, String(ledgerRevisions.advance(tabId)));
-          response.end(JSON.stringify(loadLedgerContentFiles(overview.document)));
+          response.end(JSON.stringify(loadLedgerContentFiles(overview.document, decisionOsRoot)));
           return;
         }
         if (isLedgersCanvas && mutation.action === 'patch-card' && mutation.cardPatch?.id && typeof mutation.cardPatch.title === 'string') {
@@ -697,7 +741,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             response.end(JSON.stringify({ ok: false, error: rename.error }));
             return;
           }
-          persistLedgerAndRespond(tabId, ledgerPath, ledger, response);
+          persistLedgerAndRespond(tabId, ledgerPath, ledger, response, decisionOsRoot);
           return;
         }
         if (isLedgersCanvas && mutation.action === 'delete-card' && mutation.cardId) {
@@ -707,7 +751,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             response.end(JSON.stringify({ ok: false, error: deletion.error }));
             return;
           }
-          persistLedgerAndRespond(tabId, ledgerPath, ledger, response);
+          persistLedgerAndRespond(tabId, ledgerPath, ledger, response, decisionOsRoot);
           return;
         }
         const mutationResult = applyLedgerMutation({ decisionOsRoot, ledgerPath, ledger, mutation });
@@ -716,7 +760,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           response.end(JSON.stringify(mutationResult.error.body));
           return;
         }
-        persistLedgerAndRespond(tabId, ledgerPath, ledger, response);
+        persistLedgerAndRespond(tabId, ledgerPath, ledger, response, decisionOsRoot);
         return;
       }
       if (existsSync(ledgerPath)) {
@@ -724,7 +768,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         // WHAT: Expose reconciliation revisions only for ledger documents.
         // WHY: The project-state response is not an active canvas ledger.
         if (tabId !== 'state') response.setHeader(ledgerRevisionHeader, String(ledgerRevisions.current(tabId)));
-        response.end(JSON.stringify(tabId === 'state' ? { projectName: projectNameForDecisionOsRoot(decisionOsRoot), ledgers: stateRead.ledgers } : loadLedgerContentFiles(ledger)));
+        response.end(JSON.stringify(tabId === 'state' ? { projectId: activeProject?.id ?? '', projectName: projectNameForDecisionOsRoot(decisionOsRoot), projectColor: activeProject?.color ?? '#38d9e8', ledgers: stateRead.ledgers } : loadLedgerContentFiles(ledger, decisionOsRoot)));
       } else {
         response.end(JSON.stringify({ ok: false, missing: ledgerPath }));
       }
