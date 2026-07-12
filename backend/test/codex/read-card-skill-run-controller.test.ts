@@ -102,6 +102,7 @@ test('thread-launched run reads return chronological diagnostics without changin
     assert.equal(response.status, 200);
     const body = await response.json() as {
       ok: boolean;
+      active: boolean;
       runKind: string;
       status: string;
       lineCount: number;
@@ -120,6 +121,7 @@ test('thread-launched run reads return chronological diagnostics without changin
       persistedEventCount: number;
     };
     assert.equal(body.ok, true);
+    assert.equal(body.active, false);
     assert.equal(body.runKind, 'thread');
     assert.equal(body.status, 'complete');
     assert.equal(body.lineCount, 12);

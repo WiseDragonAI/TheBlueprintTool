@@ -22,11 +22,11 @@ export async function processThreadCodexController(input: { threadId?: string; c
   if (existingRunId) {
     bindThreadCodexRunLog({ ledgerId, threadId, cardId, runId: existingRunId });
     const summary = await requestCardSkillRunStatus({ ledgerId, cardId, runId: existingRunId });
-    if (summary.status === 'running') {
+    if (summary.active) {
       telemetry('codex-thread-process-focused-active-run', { ledgerId, threadId, cardId, run: existingRunId });
       return true;
     }
-    if (!summary.ok || summary.status === 'unknown') {
+    if (!summary.ok) {
       telemetry('codex-thread-process-resume-failed', { ledgerId, threadId, cardId, run: existingRunId, error: summary.error ?? 'Run status unavailable.' });
       return false;
     }

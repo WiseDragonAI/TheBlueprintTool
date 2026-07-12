@@ -350,6 +350,7 @@ test('requestCardSkillRunStatus queries derived run progress', async () => {
       assert.equal(url, '/api/codex/skills/runs/codex-skill-1000-abcd?ledgerId=specs&cardId=card-a&since=4');
       return new Response(JSON.stringify({
         ok: true,
+        active: true,
         runId: 'codex-skill-1000-abcd',
         runKind: 'thread',
         status: 'running',
@@ -377,6 +378,7 @@ test('requestCardSkillRunStatus queries derived run progress', async () => {
 
     const result = await requestCardSkillRunStatus({ ledgerId: 'specs', cardId: 'card-a', runId: 'codex-skill-1000-abcd', since: 4 });
     assert.equal(result.ok, true);
+    assert.equal(result.active, true);
     assert.equal(result.status, 'running');
     assert.equal(result.startedAt, '2026-07-08T00:00:00.000Z');
     assert.equal(result.toolCallCount, 2);

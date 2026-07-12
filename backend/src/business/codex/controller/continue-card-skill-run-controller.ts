@@ -176,14 +176,20 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   const status = await readCardSkillRunController({ action_payload: { ledgerId, cardId, runId, since: 0, traceId }, runtime_state: runtime });
   logCodexContinueDebug('preflight-status', { traceId, ledgerId, cardId, runId, ok: status.ok, status: status.status, lineCount: status.lineCount, persistedEventCount: status.persistedEventCount, latestEventType: status.latestEvent && typeof status.latestEvent === 'object' ? String((status.latestEvent as AnyRecord).type ?? '') : '', error: status.error });
   if (status.ok === false) return status;
-  if (status.status === 'running') return fail(409, 'Run is already active.', { status: status.status, lineCount: status.lineCount });
+  // A freshly restarted server can infer `running` from recent file writes, but
+  // only an in-memory runtime entry proves that this server still owns a child.
 
   const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord & { cards?: AnyRecord[] };
   if (!resolveCardSkillRunOwnership({ ledger, decisionOsRoot, cardId, runId }).found) {
     return fail(404, 'Run not found on card.', { cardId });
   }
   const continuation = threadMessagesAfterLastCodexEvent({ ledger, decisionOsRoot, cardId, runId, traceId });
-  const messages = continuation.messages;
+  const interrupted = status.status === 'running' || status.status === 'unknown';
+  const messages = continuation.messages.length > 0
+    ? continuation.messages
+    : interrupted
+      ? [{ role: 'operator', message: 'Continue the interrupted task from the durable session context.' }]
+      : [];
   logCodexContinueDebug('message-extraction', continuation.debug);
   if (messages.length === 0) return fail(409, 'No thread messages were found after the last Codex session end.');
 
