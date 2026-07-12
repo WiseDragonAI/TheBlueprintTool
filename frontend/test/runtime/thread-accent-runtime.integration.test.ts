@@ -105,11 +105,14 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   assert.match(threadLogRenderer, /document\.createElement\('details'\)/);
   assert.match(indexHtml, /role="tablist"[\s\S]*role="tab"[\s\S]*role="tabpanel"/);
   assert.match(indexHtml, /thread-toolbar[\s\S]*thread-target[\s\S]*thread-tabs[\s\S]*data-action="close-thread-panel"[\s\S]*thread-actions/);
-  assert.match(mobileIndexHtml, /thread-toolbar[\s\S]*thread-target[\s\S]*thread-tabs[\s\S]*thread-close-button[\s\S]*thread-actions/);
+  assert.match(mobileIndexHtml, /thread-toolbar[\s\S]*thread-tabs[\s\S]*thread-close-button[\s\S]*thread-actions/);
+  assert.doesNotMatch(mobileIndexHtml, /class="thread-target"/);
   assert.doesNotMatch(mobileIndexHtml, /thread-title-row/);
   assert.match(mobileCss, /mobile-thread-inspector \.thread-heading\s*{[^}]*grid-template-rows: 44px 44px;/);
-  assert.match(mobileCss, /mobile-thread-inspector \.thread-toolbar\s*{[^}]*grid-template-columns: minmax\(0, 1fr\) auto 44px;/);
-  assert.match(mobileCss, /mobile-thread-inspector \.thread-actions\s*{[^}]*width: 100%;/);
+  assert.match(mobileCss, /mobile-thread-inspector \.thread-heading\s*{[^}]*gap: 12px;/);
+  assert.match(mobileCss, /mobile-thread-inspector \.thread-toolbar\s*{[^}]*justify-content: flex-end;[^}]*gap: 8px;/);
+  assert.match(mobileCss, /mobile-thread-inspector \.thread-actions\s*{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);[^}]*gap: 8px;[^}]*width: 100%;/);
+  assert.match(mobileCss, /mobile-thread-inspector \.thread-codex-button\s*{[^}]*width: 100%;[^}]*height: 44px;[^}]*min-height: 44px;/);
   assert.match(mediaRenderer, /mediaSurface !== 'thread'[\s\S]*watchContainedImageSizing\(shell\)/);
   assert.match(mediaRenderer, /renderThreadImageResizeHandle\(shell, options, sizeSource\)/);
 });
