@@ -232,10 +232,14 @@ h1 { margin: 0; font-size: clamp(28px, 8vw, 44px); line-height: 1.08; letter-spa
 .mobile-thread-inspector[hidden] { display: none; }
 .mobile-thread-inspector .thread-panel.agent-chat.phone { width: 100%; height: 100dvh; }
 .mobile-thread-inspector .thread-chat-shell { min-height: 0; }
-.mobile-thread-inspector .thread-title-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.mobile-thread-inspector .thread-target { flex: 1 1 auto; min-width: 0; margin: 0; }
+.mobile-thread-inspector .thread-heading { grid-template-rows: 44px 44px; gap: 8px; }
+.mobile-thread-inspector .thread-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto 44px; gap: 6px; min-width: 0; min-height: 44px; }
+.mobile-thread-inspector .thread-target { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mobile-thread-inspector .thread-tabs { height: 44px; padding: 0; }
+.mobile-thread-inspector .thread-tab { height: 44px; padding-inline: 9px; line-height: 44px; }
 .thread-close-button { display: grid; place-items: center; width: 36px; height: 36px; flex: 0 0 auto; border: 1px solid rgba(255,255,255,.14); border-radius: 2px; color: #d7dee6; background: #181818; font-size: 22px; cursor: pointer; }
-.mobile-thread-inspector .thread-actions { min-width: 0; max-width: 100%; }
+.mobile-thread-inspector .thread-close-button { width: 44px; height: 44px; }
+.mobile-thread-inspector .thread-actions { grid-template-columns: minmax(0, 1fr) minmax(84px, .58fr) auto; width: 100%; min-width: 0; max-width: 100%; }
 .mobile-thread-inspector .thread-codex-field { min-width: 0; }
 .mobile-thread-inspector .thread-codex-select { max-width: 116px; }
 .mobile-thread-inspector .thread-note-message.ledger-card-body { display: block; padding: 0; border: 0; background: transparent; box-shadow: none; }

@@ -41,6 +41,8 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   const threadPanelRenderer = readFileSync(new URL('frontend/src/runtime/thread/effect/render-thread-panel.ts', root), 'utf8');
   const threadLogRenderer = readFileSync(new URL('frontend/src/runtime/thread/effect/render-thread-codex-log.ts', root), 'utf8');
   const indexHtml = readFileSync(new URL('frontend/index.html', root), 'utf8');
+  const mobileIndexHtml = readFileSync(new URL('frontend-mobile/index.html', root), 'utf8');
+  const mobileCss = readFileSync(new URL('frontend-mobile/assets/mobile.css', root), 'utf8');
   const mediaRenderer = readFileSync(new URL('frontend/src/runtime/ledger/component/render-ledger-card-media.ts', root), 'utf8');
   assert.match(shellCss, /-34px 0 68px rgba\(0, 0, 0, 0\.86\)/);
   assert.match(threadCss, /voice-panel[\s\S]*--thread-accent/);
@@ -103,6 +105,11 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   assert.match(threadLogRenderer, /document\.createElement\('details'\)/);
   assert.match(indexHtml, /role="tablist"[\s\S]*role="tab"[\s\S]*role="tabpanel"/);
   assert.match(indexHtml, /thread-toolbar[\s\S]*thread-target[\s\S]*thread-tabs[\s\S]*data-action="close-thread-panel"[\s\S]*thread-actions/);
+  assert.match(mobileIndexHtml, /thread-toolbar[\s\S]*thread-target[\s\S]*thread-tabs[\s\S]*thread-close-button[\s\S]*thread-actions/);
+  assert.doesNotMatch(mobileIndexHtml, /thread-title-row/);
+  assert.match(mobileCss, /mobile-thread-inspector \.thread-heading\s*{[^}]*grid-template-rows: 44px 44px;/);
+  assert.match(mobileCss, /mobile-thread-inspector \.thread-toolbar\s*{[^}]*grid-template-columns: minmax\(0, 1fr\) auto 44px;/);
+  assert.match(mobileCss, /mobile-thread-inspector \.thread-actions\s*{[^}]*width: 100%;/);
   assert.match(mediaRenderer, /mediaSurface !== 'thread'[\s\S]*watchContainedImageSizing\(shell\)/);
   assert.match(mediaRenderer, /renderThreadImageResizeHandle\(shell, options, sizeSource\)/);
 });
