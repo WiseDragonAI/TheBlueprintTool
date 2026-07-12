@@ -326,6 +326,21 @@ test('card skill run route infers status from the latest continued JSONL segment
     assert.deepEqual(nonFatalDiagnostic.diagnostics, []);
     assert.match(readFileSync(logPath, 'utf8'), /codex_models_manager::manager: failed to refresh available models/);
 
+    const patchVerificationDiagnostic = [
+      '2026-07-12T07:43:52.933040Z ERROR codex_core::tools::router: error=apply_patch verification failed: Failed to find expected lines in thread.md:',
+      'import { readFile } from \'node:fs/promises\';',
+    ].join('\n');
+    writeFileSync(logPath, `${patchVerificationDiagnostic}\n`);
+    const patchDiagnosticAt = new Date(Date.now() + 7);
+    utimesSync(logPath, patchDiagnosticAt, patchDiagnosticAt);
+    const patchDiagnosticResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}`);
+    assert.equal(patchDiagnosticResponse.status, 200);
+    const patchDiagnostic = await patchDiagnosticResponse.json() as { status: string; errorCount: number; diagnostics: unknown[] };
+    assert.equal(patchDiagnostic.status, 'running');
+    assert.equal(patchDiagnostic.errorCount, 0);
+    assert.deepEqual(patchDiagnostic.diagnostics, []);
+    assert.match(readFileSync(logPath, 'utf8'), /apply_patch verification failed/);
+
     writeFileSync(logPath, 'Codex run cancelled: terminated by operator\n');
     const cancelledAt = new Date();
     utimesSync(logPath, cancelledAt, cancelledAt);

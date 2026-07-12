@@ -16,11 +16,28 @@ type AnyRecord = Record<string, unknown>;
 type RunStatus = 'running' | 'complete' | 'failed' | 'cancelled' | 'unknown';
 
 const NON_FATAL_CODEX_MODEL_REFRESH_DIAGNOSTIC = /\bcodex_models_manager::manager:\s*failed to refresh available models:\s*timeout waiting for child process to exit\b/i;
+const NON_FATAL_APPLY_PATCH_VERIFICATION_DIAGNOSTIC = /\bcodex_core::tools::router:\s*error=apply_patch verification failed:/i;
 
 function isNonFatalCodexDiagnostic(text: string): boolean {
   // WHAT: Recognize the Codex model-catalog refresh timeout that does not terminate the active run.
   // WHY: The line must remain in the raw log without becoming an actionable error or failed run status.
-  return NON_FATAL_CODEX_MODEL_REFRESH_DIAGNOSTIC.test(text);
+  return NON_FATAL_CODEX_MODEL_REFRESH_DIAGNOSTIC.test(text)
+    || NON_FATAL_APPLY_PATCH_VERIFICATION_DIAGNOSTIC.test(text);
+}
+
+function actionableCodexLog(log: string): string {
+  const lines = log.replace(/\r\n?/g, '\n').split('\n');
+  const actionable: string[] = [];
+  let suppressPatchContext = false;
+  for (const line of lines) {
+    if (NON_FATAL_APPLY_PATCH_VERIFICATION_DIAGNOSTIC.test(line)) {
+      suppressPatchContext = true;
+      continue;
+    }
+    if (suppressPatchContext && /^\d{4}-\d{2}-\d{2}T\S+\s+(?:ERROR|WARN|WARNING|INFO)\b/.test(line)) suppressPatchContext = false;
+    if (!suppressPatchContext && !isNonFatalCodexDiagnostic(line)) actionable.push(line);
+  }
+  return actionable.join('\n');
 }
 
 function logCodexContinueDebug(phase: string, detail: AnyRecord): void {
@@ -78,11 +95,7 @@ function latestRunEventStatus(events: NormalizedRunEvent[]): RunStatus | null {
 function inferredStatus(input: { runtime: AnyRecord; runId: string; events: NormalizedRunEvent[]; stdoutFile: string; stderrFile: string; stderrLog: string }): RunStatus {
   const runtimeStatus = runtimeRunStatus(input.runtime, input.runId);
   if (runtimeStatus) return runtimeStatus;
-  const actionableStderrLog = input.stderrLog
-    .replace(/\r\n?/g, '\n')
-    .split('\n')
-    .filter((line) => !isNonFatalCodexDiagnostic(line))
-    .join('\n');
+  const actionableStderrLog = actionableCodexLog(input.stderrLog);
   const logStatus: RunStatus | null = /cancelled|canceled|terminated by operator/i.test(actionableStderrLog)
     ? 'cancelled'
     : /(spawn|enoent|failed|exit code [1-9]|error:)/i.test(actionableStderrLog)
@@ -122,8 +135,8 @@ function elapsedMs(input: { runtime: AnyRecord; runId: string; status: RunStatus
 }
 
 function normalizedRunDiagnostics(log: string): NormalizedRunEvent[] {
-  return log.replace(/\r\n?/g, '\n').split('\n').flatMap((text, index) => {
-    if (!text.trim() || isNonFatalCodexDiagnostic(text)) return [];
+  return actionableCodexLog(log).split('\n').flatMap((text, index) => {
+    if (!text.trim()) return [];
     return [normalizeCardSkillRunDiagnostic({ line: index + 1, text })];
   });
 }
