@@ -632,7 +632,9 @@ const mobileCarouselInstances = new WeakMap();
 
 function destroyMobileCarousels(root) {
   for (const shell of root.querySelectorAll('.ledger-card-media-carousel')) {
-    mobileCarouselInstances.get(shell)?.destroy();
+    const instance = mobileCarouselInstances.get(shell);
+    if (instance?.titleTimer) clearTimeout(instance.titleTimer);
+    instance?.api.destroy();
     mobileCarouselInstances.delete(shell);
   }
 }
@@ -655,7 +657,6 @@ function initializeMobileCarousels(root) {
       loop: false,
       startIndex
     });
-    mobileCarouselInstances.set(shell, api);
     const replaceControl = (selector, action) => {
       const current = shell.querySelector(selector);
       if (!current) return null;
@@ -681,6 +682,8 @@ function initializeMobileCarousels(root) {
         api.scrollTo(index);
       });
     });
+    const instance = { api, titleTimer: null };
+    mobileCarouselInstances.set(shell, instance);
     const sync = () => {
       const selected = api.selectedScrollSnap();
       selectors.forEach((button, index) => {
@@ -690,8 +693,30 @@ function initializeMobileCarousels(root) {
       });
       if (shell.dataset.carouselStateId) saveLedgerCardMediaCarouselSlide(shell.dataset.carouselStateId, selected, slides.length);
     };
-    api.on('select', sync).on('reInit', sync);
+    const hideTitles = () => {
+      if (instance.titleTimer) clearTimeout(instance.titleTimer);
+      for (const title of shell.querySelectorAll('.ledger-card-media-title')) title.classList.remove('is-visible');
+      instance.titleTimer = null;
+    };
+    const revealTitle = () => {
+      hideTitles();
+      const title = slides[api.selectedScrollSnap()]?.querySelector('.ledger-card-media-title');
+      if (!title) return;
+      title.classList.add('is-visible');
+      instance.titleTimer = setTimeout(() => {
+        title.classList.remove('is-visible');
+        instance.titleTimer = null;
+      }, 1000);
+    };
+    api.on('pointerDown', hideTitles).on('select', () => {
+      sync();
+      hideTitles();
+    }).on('settle', revealTitle).on('reInit', () => {
+      sync();
+      revealTitle();
+    });
     sync();
+    revealTitle();
   }
 }
 
