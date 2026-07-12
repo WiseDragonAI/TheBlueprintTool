@@ -73,9 +73,15 @@ function pathForTask(task) {
 }
 
 function navigate(path, replace = false) {
-  history[replace ? 'replaceState' : 'pushState']({}, '', path);
+  const returnPath = `${location.pathname}${location.search}${location.hash}`;
+  history[replace ? 'replaceState' : 'pushState']({ returnPath }, '', path);
   closeMenu();
   void loadRoute();
+}
+
+function completionReturnPath() {
+  const returnPath = asText(history.state?.returnPath);
+  return returnPath.startsWith('/') ? returnPath : '/';
 }
 
 function objectId(prefix) {
@@ -685,7 +691,7 @@ function renderCard(card) {
       completeButton.textContent = 'Completing task…';
       try {
         state.ledger = await ledgerMutation(state.activeLedgerId, { action: 'complete-master-task', masterTaskId: card.id });
-        renderCard(state.ledger.cards.find((entry) => String(entry.id) === String(card.id)));
+        navigate(completionReturnPath(), true);
       } catch (cause) {
         completeButton.disabled = false;
         completeButton.textContent = 'Complete master task';

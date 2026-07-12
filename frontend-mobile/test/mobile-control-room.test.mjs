@@ -154,6 +154,8 @@ test('routes master-task cards back to the control room and regular cards back t
 
 test('completes all linked cards from the master-task detail', () => {
   assert.match(mobile, /action: 'complete-master-task', masterTaskId: card\.id/);
+  assert.match(mobile, /navigate\(completionReturnPath\(\), true\)/);
+  assert.match(mobile, /return returnPath\.startsWith\('\/'\) \? returnPath : '\/'/);
   assert.match(mobile, /completeButton\.textContent = card\.status === 'done' \? 'Master task complete' : 'Complete master task'/);
   assert.match(mobile, /overview\.append\(status, heading, subtasks, completion\)/);
   assert.doesNotMatch(mobile, /complete-master-subtask|masterTaskId=|Mark task as done/);
