@@ -313,10 +313,9 @@ function taskRow(task, index) {
   const queue = state.controlTab === 'queue';
   const directNavigation = active || queue;
   if (!directNavigation) summary.setAttribute('aria-expanded', 'false');
-  const next = task.nextSubtask ? `Next: ${task.nextSubtask.title}` : 'No actionable subtask';
   summary.innerHTML = active
     ? `<span class="task-copy"><strong></strong></span><span class="task-stopwatch" data-active-since=""></span>`
-    : `<span class="task-copy"><strong></strong><span class="task-meta"></span><span class="task-next"></span></span>${queue ? '' : '<span class="task-chevron">⌄</span>'}`;
+    : `<span class="task-copy"><strong></strong><span class="task-meta"></span>${task.nextSubtask ? '<span class="task-next"></span>' : ''}</span>${queue ? '' : '<span class="task-chevron">⌄</span>'}`;
   summary.querySelector('strong').textContent = task.title;
   if (active) {
     const stopwatch = summary.querySelector('.task-stopwatch');
@@ -327,7 +326,8 @@ function taskRow(task, index) {
   const process = task.codexProcessing ? ` · Codex ${task.codexRunId}` : '';
   if (!active) {
     summary.querySelector('.task-meta').textContent = `${task.ledger} · ${age}${process} · ${task.complete}/${task.subtasks.length} complete`;
-    summary.querySelector('.task-next').textContent = next;
+    const nextSubtask = summary.querySelector('.task-next');
+    if (nextSubtask) nextSubtask.textContent = `Next: ${task.nextSubtask.title}`;
   }
   if (task.diagnostics.length) {
     article.classList.add('has-diagnostics');
