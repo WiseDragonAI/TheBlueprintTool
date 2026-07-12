@@ -21,7 +21,21 @@ function main() {
     return;
   }
   const child = spawn(process.execPath, ['--import', loader, server, ...process.argv.slice(2)], { env, stdio: 'inherit' });
-  child.on('exit', (code) => process.exit(code ?? 0));
+  let forwardedSignal = null;
+  for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP']) {
+    process.once(signal, () => {
+      forwardedSignal = signal;
+      if (!child.killed) child.kill(signal);
+    });
+  }
+  child.once('error', (error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+  child.once('exit', (code, signal) => {
+    if (forwardedSignal || signal) process.exit(0);
+    process.exit(code ?? 1);
+  });
 }
 
 main();
