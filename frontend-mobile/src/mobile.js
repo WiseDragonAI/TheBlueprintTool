@@ -233,25 +233,24 @@ async function submitCreation() {
 }
 
 function renderLedgerLinks() {
-  const overviewLink = document.createElement('a');
-  overviewLink.className = `ledger-link${state.activeLedgerId ? '' : ' active'}`;
-  overviewLink.href = '/';
-  overviewLink.textContent = 'Control room';
-  overviewLink.addEventListener('click', (event) => {
-    event.preventDefault();
-    navigate('/');
-  });
-  elements['ledger-links'].replaceChildren(overviewLink, ...state.ledgers.map((ledger) => {
-    const link = document.createElement('a');
-    link.className = `ledger-link${ledger.id === state.activeLedgerId ? ' active' : ''}`;
-    link.href = ledgerPath(ledger.id);
-    link.textContent = ledger.title;
+  const route = `/${routeParts()[0] ?? ''}`;
+  const destination = (label, href, className = '') => {
+    const link = document.createElement(href ? 'a' : 'button');
+    link.className = `ledger-link ${className}${route === href ? ' active' : ''}`.trim();
+    link.textContent = label;
+    if (href) link.href = href;
     link.addEventListener('click', (event) => {
       event.preventDefault();
-      navigate(link.getAttribute('href'));
+      if (href) navigate(href);
     });
     return link;
-  }));
+  };
+  elements['ledger-links'].replaceChildren(
+    destination('Control room', '/'),
+    destination('Ledgers', '/ledgers'),
+    destination('Pipelines', '', 'nav-pipelines-button'),
+    destination('Skill library', '', 'nav-skills-button')
+  );
 }
 
 function renderOverview() {
@@ -715,6 +714,12 @@ async function loadRoute() {
     if (!requestedLedger) {
       await loadControlRoom();
       renderControlRoom();
+      return;
+    }
+    if (requestedLedger === 'ledgers') {
+      state.activeLedgerId = '';
+      renderLedgerLinks();
+      renderOverview();
       return;
     }
     const ledgerId = state.ledgers.some((ledger) => ledger.id === requestedLedger) ? requestedLedger : '';

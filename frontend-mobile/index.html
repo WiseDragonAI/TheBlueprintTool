@@ -14,24 +14,23 @@
   <body>
     <div class="app-shell shell">
       <header class="topbar">
-        <button class="icon-button menu-button" type="button" aria-label="Open ledgers" aria-expanded="false">☰</button>
+        <button class="icon-button menu-button" type="button" aria-label="Open navigation" aria-expanded="false">☰</button>
         <a class="brand" href="/" aria-label="Control room home">
           <span class="brand-mark">D</span>
           <span><strong id="project-name">decision-os</strong><small>Control room</small></span>
         </a>
-        <button class="icon-button pipelines-button" type="button" aria-label="Open pipelines">P</button>
         <button class="icon-button refresh-button" type="button" aria-label="Refresh ledger">↻</button>
       </header>
 
       <div class="layout">
-        <nav class="ledger-nav" aria-label="Ledgers">
+        <nav class="ledger-nav" aria-label="Application navigation">
           <div class="nav-heading">
-            <span>Ledgers</span>
-            <button class="icon-button close-menu-button" type="button" aria-label="Close ledgers">×</button>
+            <span>Navigation</span>
+            <button class="icon-button close-menu-button" type="button" aria-label="Close navigation">×</button>
           </div>
           <div id="ledger-links" class="ledger-links"></div>
         </nav>
-        <button class="nav-scrim" type="button" aria-label="Close ledgers"></button>
+        <button class="nav-scrim" type="button" aria-label="Close navigation"></button>
 
         <main class="content" tabindex="-1">
           <section id="loading-view" class="state-view">
@@ -66,8 +65,6 @@
 
           <section id="control-room-view" class="control-room" hidden>
             <div class="control-sticky">
-              <div class="control-heading"><div><p class="eyebrow">Decision OS</p><h1>Control room</h1></div><span class="live-dot">Live</span></div>
-              <button class="new-task-button primary-button" type="button">+ New task</button>
               <div id="control-filters" class="control-filters" aria-label="Filter tasks by ledger"></div>
             </div>
             <div id="control-task-list" class="control-task-list"></div>
@@ -77,6 +74,7 @@
               <button type="button" data-control-tab="queue" role="tab" aria-selected="true"><span>Queue</span><small>Waiting</small></button>
               <button type="button" data-control-tab="active" role="tab" aria-selected="false"><span>Active</span><small>In progress</small></button>
               <button type="button" data-control-tab="done" role="tab" aria-selected="false"><span>Done</span><small>Completed</small></button>
+              <button class="new-task-button" type="button"><span>+ New task</span><small>Create</small></button>
             </nav>
           </section>
 

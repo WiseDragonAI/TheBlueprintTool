@@ -52,7 +52,10 @@ function renderProcessDetail(record) {
     model.append(option('', `Inherit (${record.effectiveCodexModel || 'default'})`), ...modelOptions.map((item) => option(item)));
     const effort = document.createElement('select'); effort.setAttribute('aria-label', 'Codex effort');
     effort.append(option('', `Inherit (${record.effectiveCodexEffort || 'default'})`), ...effortOptions.map((item) => option(item)));
-    detail.append(model, effort, button('Start skill', 'primary-button process-start', () => startSkill(record, model.value, effort.value)));
+    const start = button('Start skill', 'primary-button process-start', () => startSkill(record, model.value, effort.value));
+    start.disabled = !state.cardId;
+    if (!state.cardId) start.title = 'Open a card to run this skill.';
+    detail.append(model, effort, start);
   } else {
     const steps = document.createElement('ol');
     for (const step of pipelineSteps(record)) { const item = document.createElement('li'); item.textContent = `${step.name}: ${step.skills.map((skill) => skill.skillName).join(', ') || 'No skills'}`; steps.append(item); }
@@ -92,6 +95,13 @@ function formatError(error) { const refs = error.body?.invalidReferences; return
 async function openProcess() {
   if (!state.ledgerId || !state.cardId) return;
   el('.process-modal').showModal(); el('.process-library').hidden = false; el('.process-detail').hidden = true; message('.process-message', 'Loading libraries…');
+  try { const result = await loadLibraries(); message('.process-message', result.issues?.map((issue) => issue.message).join(' ') || ''); renderProcessList(); }
+  catch (error) { message('.process-message', error.message, true); el('.process-library').replaceChildren(); }
+}
+async function openSkills() {
+  state.processTab = 'skills';
+  document.querySelectorAll('[data-process-tab]').forEach((tab) => tab.setAttribute('aria-selected', String(tab.dataset.processTab === 'skills')));
+  el('.process-modal').showModal(); el('.process-library').hidden = false; el('.process-detail').hidden = true; message('.process-message', 'Loading skill library…');
   try { const result = await loadLibraries(); message('.process-message', result.issues?.map((issue) => issue.message).join(' ') || ''); renderProcessList(); }
   catch (error) { message('.process-message', error.message, true); el('.process-library').replaceChildren(); }
 }
@@ -143,7 +153,9 @@ async function saveEditor() {
 }
 export function setMobileCodexContext(context) { state.ledgerId = String(context.ledgerId || ''); state.cardId = String(context.cardId || ''); el('.process-card-button').disabled = !state.cardId; }
 export function initializeMobileCodex() {
-  el('.process-card-button').addEventListener('click', openProcess); el('.pipelines-button').addEventListener('click', openPipelines);
+  el('.process-card-button').addEventListener('click', openProcess);
+  el('.nav-pipelines-button').addEventListener('click', () => { document.body.classList.remove('menu-open'); void openPipelines(); });
+  el('.nav-skills-button').addEventListener('click', () => { document.body.classList.remove('menu-open'); void openSkills(); });
   el('.process-close').addEventListener('click', () => el('.process-modal').close()); el('.pipelines-close').addEventListener('click', () => el('.pipelines-modal').close());
   document.querySelectorAll('[data-process-tab]').forEach((tab) => tab.addEventListener('click', () => { state.processTab = tab.dataset.processTab; document.querySelectorAll('[data-process-tab]').forEach((item) => item.setAttribute('aria-selected', String(item === tab))); el('.process-detail').hidden = true; el('.process-library').hidden = false; message('.process-message', ''); renderProcessList(); }));
   el('.pipeline-new').addEventListener('click', () => openEditor()); el('.pipeline-editor-back').addEventListener('click', () => { el('.pipeline-editor-modal').close(); el('.pipelines-modal').showModal(); });

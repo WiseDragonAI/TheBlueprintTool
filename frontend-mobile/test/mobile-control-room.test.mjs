@@ -3,7 +3,11 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { activeAge, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from '../src/mobile-control-room.js';
 
-const mobile = await readFile(new URL('../src/mobile.js', import.meta.url), 'utf8');
+const [mobile, html, styles] = await Promise.all([
+  readFile(new URL('../src/mobile.js', import.meta.url), 'utf8'),
+  readFile(new URL('../index.html', import.meta.url), 'utf8'),
+  readFile(new URL('../assets/mobile.css', import.meta.url), 'utf8')
+]);
 
 const task = (overrides = {}) => ({
   cardId: 'card-a',
@@ -98,4 +102,15 @@ test('routes master-task cards back to the control room and regular cards back t
   assert.match(mobile, /backButton\.textContent = parsedTask\.masterTask \? '← Back to control room' : '← Back to zone'/);
   assert.match(mobile, /backButton\.dataset\.destination = parsedTask\.masterTask \? 'control-room' : 'zone'/);
   assert.match(mobile, /dataset\.destination === 'control-room' \? '\/' : zonePath/);
+});
+
+test('uses global application destinations and keeps new task as the fourth control-room action', () => {
+  assert.match(mobile, /destination\('Control room', '\/'\)/);
+  assert.match(mobile, /destination\('Ledgers', '\/ledgers'\)/);
+  assert.match(mobile, /destination\('Pipelines', '', 'nav-pipelines-button'\)/);
+  assert.match(mobile, /destination\('Skill library', '', 'nav-skills-button'\)/);
+  assert.doesNotMatch(html, /class="icon-button pipelines-button"/);
+  assert.doesNotMatch(html, /class="control-heading"|class="live-dot"/);
+  assert.match(html, /data-control-tab="done"[\s\S]*class="new-task-button"/);
+  assert.match(styles, /grid-template-columns: repeat\(4, 1fr\)/);
 });
