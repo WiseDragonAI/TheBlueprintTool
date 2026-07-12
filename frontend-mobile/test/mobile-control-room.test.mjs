@@ -146,6 +146,11 @@ test('omits the next-subtask subtitle when no actionable subtask exists', () => 
   assert.match(mobile, /if \(nextSubtask\) nextSubtask\.textContent = `Next: \$\{task\.nextSubtask\.title\}`/);
 });
 
+test('omits completed-subtask progress from task-row metadata', () => {
+  assert.match(mobile, /textContent = `\$\{task\.ledger\} · \$\{age\}\$\{process\}`/);
+  assert.doesNotMatch(mobile, /task\.complete\}\/\$\{task\.subtasks\.length\} complete/);
+});
+
 test('keeps task metadata in Markdown but removes it from the visible card body', () => {
   const visible = visibleMasterTaskMarkdown(task().markdown);
   assert.doesNotMatch(visible, /#master-task|Ledger:|Waiting since:|Status:/);
