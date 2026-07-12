@@ -62,6 +62,7 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   assert.match(threadCss, /thread-toolbar\s*{[\s\S]*justify-content: flex-end;[\s\S]*white-space: nowrap;/);
   assert.match(threadCss, /thread-actions\s*{[\s\S]*grid-template-columns: minmax\(112px, 1fr\) 84px auto;/);
   assert.match(threadCss, /thread-actions\[hidden\]\s*{[\s\S]*display: none;/);
+  assert.match(threadCss, /thread-heading\[data-codex-running="true"\]\s*{[^}]*grid-template-rows: 28px;[^}]*gap: 0;/);
   assert.match(threadCss, /thread-tab\[aria-selected="true"\][\s\S]*box-shadow:/);
   assert.match(threadCss, /thread-tab\[data-run-status="running"\]\s*{[\s\S]*animation: thread-codex-log-running/);
   assert.match(threadCss, /thread-conversation-scroll,[\s\S]*thread-log-scroll[\s\S]*overflow: auto;/);
@@ -110,6 +111,7 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   assert.doesNotMatch(mobileIndexHtml, /thread-title-row/);
   assert.match(mobileCss, /mobile-thread-inspector \.thread-heading\s*{[^}]*grid-template-rows: 44px 44px;/);
   assert.match(mobileCss, /mobile-thread-inspector \.thread-heading\s*{[^}]*gap: 12px;/);
+  assert.match(mobileCss, /mobile-thread-inspector \.thread-heading\[data-codex-running="true"\]\s*{[^}]*grid-template-rows: 44px;[^}]*gap: 0;/);
   assert.match(mobileCss, /mobile-thread-inspector \.thread-toolbar\s*{[^}]*justify-content: flex-end;[^}]*gap: 8px;/);
   assert.match(mobileCss, /mobile-thread-inspector \.thread-actions\s*{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);[^}]*gap: 8px;[^}]*width: 100%;/);
   assert.match(mobileCss, /mobile-thread-inspector \.thread-codex-button\s*{[^}]*width: 100%;[^}]*height: 44px;[^}]*min-height: 44px;/);
