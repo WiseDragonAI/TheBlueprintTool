@@ -206,8 +206,19 @@ test('drives mobile carousels with pinned dependency-free Embla physics', () => 
   assert.match(mobile, /api\.scrollPrev\(\)/);
   assert.match(mobile, /api\.scrollNext\(\)/);
   assert.match(mobile, /api\.scrollTo\(index\)/);
-  assert.match(mobile, /api\.on\('select', sync\)\.on\('reInit', sync\)/);
-  assert.match(mobile, /mobileCarouselInstances\.get\(shell\)\?\.destroy\(\)/);
+  assert.match(mobile, /api\.on\('pointerDown', hideTitles\)[\s\S]*\.on\('settle', revealTitle\)/);
+  assert.match(mobile, /instance\?\.api\.destroy\(\)/);
+});
+
+test('shows the settled image title for one second and then fades it out', () => {
+  assert.match(mobile, /const revealTitle = \(\) => \{/);
+  assert.match(mobile, /const hideTitles = \(\) => \{/);
+  assert.match(mobile, /slides\[api\.selectedScrollSnap\(\)\]\?\.querySelector\('\.ledger-card-media-title'\)/);
+  assert.match(mobile, /title\.classList\.add\('is-visible'\)/);
+  assert.match(mobile, /setTimeout\(\(\) => \{[\s\S]*title\.classList\.remove\('is-visible'\)[\s\S]*\}, 1000\)/);
+  assert.match(mobile, /if \(instance\?\.titleTimer\) clearTimeout\(instance\.titleTimer\)/);
+  assert.match(styles, /\.ledger-card-media-title \{[^}]*opacity: 0;[^}]*transition: opacity 260ms ease;/);
+  assert.match(styles, /\.ledger-card-media-title\.is-visible \{ opacity: 1; \}/);
 });
 
 test('parses letter-prefixed card sections from the decision-os formatting contract', () => {
