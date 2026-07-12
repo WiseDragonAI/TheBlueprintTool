@@ -154,8 +154,13 @@ async function saveEditor() {
 export function setMobileCodexContext(context) { state.ledgerId = String(context.ledgerId || ''); state.cardId = String(context.cardId || ''); el('.process-card-button').disabled = !state.cardId; }
 export function initializeMobileCodex() {
   el('.process-card-button').addEventListener('click', openProcess);
-  el('.nav-pipelines-button').addEventListener('click', () => { document.body.classList.remove('menu-open'); void openPipelines(); });
-  el('.nav-skills-button').addEventListener('click', () => { document.body.classList.remove('menu-open'); void openSkills(); });
+  document.addEventListener('click', (event) => {
+    const navigationButton = event.target.closest('.nav-pipelines-button, .nav-skills-button');
+    if (!navigationButton) return;
+    document.body.classList.remove('menu-open');
+    if (navigationButton.classList.contains('nav-pipelines-button')) void openPipelines();
+    else void openSkills();
+  });
   el('.process-close').addEventListener('click', () => el('.process-modal').close()); el('.pipelines-close').addEventListener('click', () => el('.pipelines-modal').close());
   document.querySelectorAll('[data-process-tab]').forEach((tab) => tab.addEventListener('click', () => { state.processTab = tab.dataset.processTab; document.querySelectorAll('[data-process-tab]').forEach((item) => item.setAttribute('aria-selected', String(item === tab))); el('.process-detail').hidden = true; el('.process-library').hidden = false; message('.process-message', ''); renderProcessList(); }));
   el('.pipeline-new').addEventListener('click', () => openEditor()); el('.pipeline-editor-back').addEventListener('click', () => { el('.pipeline-editor-modal').close(); el('.pipelines-modal').showModal(); });
