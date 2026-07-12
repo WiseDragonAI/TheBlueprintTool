@@ -103,6 +103,14 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     input?.click();
     return;
   }
+  if (action === 'toggle-thread-text') {
+    const composer = actionTarget.closest('.terminal-composer');
+    const draft = composer?.querySelector('.thread-draft') as HTMLTextAreaElement | null;
+    composer?.classList.remove('is-mobile-text-collapsed');
+    actionTarget.setAttribute('aria-expanded', 'true');
+    draft?.focus();
+    return;
+  }
   if (action === 'jump-thread-bottom') {
     pinThreadFeedToLastMessage({ follow: true });
     return;
@@ -209,6 +217,12 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
   }
   if (action === 'submit-thread-draft') {
     await submitThreadDraft();
+    const composer = actionTarget.closest('.terminal-composer');
+    const draft = composer?.querySelector('.thread-draft') as HTMLTextAreaElement | null;
+    if (draft && !draft.value) {
+      composer?.classList.add('is-mobile-text-collapsed');
+      composer?.querySelector('[data-action="toggle-thread-text"]')?.setAttribute('aria-expanded', 'false');
+    }
     return;
   }
   if (action === 'delete-note') {

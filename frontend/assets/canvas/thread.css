@@ -1023,6 +1023,10 @@
   display: none;
 }
 
+.terminal-button--thread-text {
+  display: none;
+}
+
 .terminal-button--compact {
   min-height: 28px;
   padding: 0 10px;
@@ -1041,8 +1045,8 @@
 
 @media (max-width: 760px) {
   .thread-draft {
-    height: 64px;
-    min-height: 64px;
+    height: 75dvh;
+    min-height: 75dvh;
   }
 
   .voice-terminal-status,
@@ -1051,10 +1055,33 @@
   }
 
   .terminal-command-row {
-    justify-content: flex-end;
+    width: 100%;
   }
 
-  .terminal-button--thread-send {
+  .terminal-command-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .terminal-command-actions .terminal-button {
+    width: 100%;
+    height: 66px;
+  }
+
+  .terminal-button--thread-text {
     display: inline-flex;
+  }
+
+  .terminal-composer:not(.is-mobile-text-collapsed) .terminal-button--thread-text {
+    display: none;
+  }
+
+  .terminal-composer:not(.is-mobile-text-collapsed) .terminal-button--thread-send {
+    display: inline-flex;
+  }
+
+  .terminal-composer.is-mobile-text-collapsed .thread-draft {
+    display: none;
   }
 }
