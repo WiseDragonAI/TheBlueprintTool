@@ -1019,6 +1019,10 @@
   --terminal-button-gradient-shadow: linear-gradient(90deg, color-mix(in srgb, var(--thread-accent), transparent 36%), rgba(255, 255, 255, 0.18));
 }
 
+.terminal-button--thread-send {
+  display: none;
+}
+
 .terminal-button--compact {
   min-height: 28px;
   padding: 0 10px;
@@ -1033,4 +1037,22 @@
 
 .voice-panel.recording {
   filter: saturate(1.08) brightness(1.04);
+}
+
+@media (max-width: 760px) {
+  .thread-draft {
+    min-height: 72px;
+  }
+
+  .terminal-command-hint {
+    display: none;
+  }
+
+  .terminal-command-row {
+    justify-content: flex-end;
+  }
+
+  .terminal-button--thread-send {
+    display: inline-flex;
+  }
 }

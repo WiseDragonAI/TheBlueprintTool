@@ -17,6 +17,7 @@ import { deleteCardController } from '../../card/controller/delete-card-controll
 import { confirmCardImageDeletionController } from '../../card/controller/confirm-card-image-deletion-controller.js';
 import { deleteCardImageController } from '../../card/controller/delete-card-image-controller.js';
 import { createNoteController } from '../../thread/controller/create-note-controller.js';
+import { submitThreadDraft } from '../../thread/effect/submit-thread-draft.js';
 import { deleteNoteController } from '../../thread/controller/delete-note-controller.js';
 import { confirmNoteDeletionController } from '../../thread/controller/confirm-note-deletion-controller.js';
 import { renderThreadPanel } from '../../thread/effect/render-thread-panel.js';
@@ -205,6 +206,10 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
   if (action === 'create-note') {
     await createNoteController({ threadId: state.threadId, body: (document.querySelector('.thread-draft') as HTMLTextAreaElement).value });
     renderThreadPanel();
+  }
+  if (action === 'submit-thread-draft') {
+    await submitThreadDraft();
+    return;
   }
   if (action === 'delete-note') {
     await deleteNoteController({

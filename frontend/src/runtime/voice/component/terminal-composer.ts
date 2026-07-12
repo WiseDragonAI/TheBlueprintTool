@@ -12,6 +12,7 @@ export function terminalComposer(): string {
           <input class="thread-file-input" type="file" multiple hidden aria-label="Upload files to thread">
           <button class="terminal-button terminal-button--attach terminal-button--compact" type="button" data-action="thread-file-picker" title="Upload files"><span class="terminal-button__key">+</span><span class="terminal-button__label">FILE</span></button>
           <button class="terminal-button terminal-button--record terminal-button--compact" type="button" data-action="voice-toggle"><span class="terminal-button__key">X</span><span class="terminal-button__label">REC</span></button>
+          <button class="terminal-button terminal-button--send terminal-button--compact terminal-button--thread-send" type="button" data-action="submit-thread-draft"><span class="terminal-button__label">SEND</span></button>
         </div>
       </div>
     </section>
