@@ -5,6 +5,7 @@ const state = { ledgerId: '', cardId: '', skills: [], pipelines: [], steps: [], 
 const el = (selector) => document.querySelector(selector);
 const uid = (prefix) => `${prefix}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
 const message = (selector, text, bad = false) => { const node = el(selector); node.textContent = text; node.classList.toggle('error', bad); };
+const setBusy = (node, busy) => { node.disabled = busy; if (busy) node.setAttribute('aria-busy', 'true'); else node.removeAttribute('aria-busy'); };
 async function jsonRequest(url, options) {
   const response = await fetch(url, options).catch(() => null);
   if (!response) throw new Error('Request failed.');
@@ -60,32 +61,32 @@ function renderProcessDetail(record) {
   el('.process-library').hidden = true;
 }
 async function startSkill(skill, codexModel, codexEffort) {
-  const submit = el('.process-start'); submit.disabled = true; message('.process-message', 'Submitting skill run…');
+  const submit = el('.process-start'); setBusy(submit, true); message('.process-message', 'Submitting skill run…');
   try {
     const payload = { ledgerId: state.ledgerId, cardId: state.cardId, skillName: skill.name };
     if (codexModel) payload.codexModel = codexModel; if (codexEffort) payload.codexEffort = codexEffort;
     const body = await jsonRequest('/api/codex/skills/process', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
     message('.process-message', `Skill run ${body.run?.status || 'started'}.`);
     if (body.run?.id) pollSkill(body.run);
-  } catch (error) { message('.process-message', error.message, true); submit.disabled = false; }
+  } catch (error) { message('.process-message', error.message, true); setBusy(submit, false); }
 }
 async function startPipeline(pipeline) {
-  const submit = el('.process-start'); submit.disabled = true; message('.process-message', 'Submitting pipeline run…');
+  const submit = el('.process-start'); setBusy(submit, true); message('.process-message', 'Submitting pipeline run…');
   try {
     const body = await jsonRequest('/api/codex/pipelines/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ledgerId: state.ledgerId, sourceCardId: state.cardId, pipelineId: pipeline.id }) });
     message('.process-message', `Pipeline ${body.run?.status || 'started'}.`);
     if (body.run?.id) pollPipeline(body.run.id);
-  } catch (error) { message('.process-message', formatError(error), true); submit.disabled = false; }
+  } catch (error) { message('.process-message', formatError(error), true); setBusy(submit, false); }
 }
 function schedule(task) { clearTimeout(state.pollTimer); state.pollTimer = setTimeout(task, 1500); }
 async function pollPipeline(runId) {
-  try { const body = await jsonRequest(`/api/codex/pipelines/runs/${encodeURIComponent(runId)}`); const status = body.run?.status || 'running'; message('.process-message', `Pipeline ${status}.`); if (!terminalStatuses.has(status)) schedule(() => pollPipeline(runId)); else el('.process-start').disabled = false; }
-  catch (error) { message('.process-message', error.message, true); el('.process-start').disabled = false; }
+  try { const body = await jsonRequest(`/api/codex/pipelines/runs/${encodeURIComponent(runId)}`); const status = body.run?.status || 'running'; message('.process-message', `Pipeline ${status}.`); if (!terminalStatuses.has(status)) schedule(() => pollPipeline(runId)); else setBusy(el('.process-start'), false); }
+  catch (error) { message('.process-message', error.message, true); setBusy(el('.process-start'), false); }
 }
 async function pollSkill(run) {
   const outputCardId = run.outputCardId || state.cardId;
-  try { const body = await jsonRequest(`/api/codex/skills/runs/${encodeURIComponent(run.id)}?ledgerId=${encodeURIComponent(state.ledgerId)}&cardId=${encodeURIComponent(outputCardId)}&since=0`); const status = body.run?.status || body.status || 'running'; message('.process-message', `Skill run ${status}.`); if (!terminalStatuses.has(status)) schedule(() => pollSkill({ ...run, ...(body.run || {}) })); else el('.process-start').disabled = false; }
-  catch (error) { message('.process-message', error.message, true); el('.process-start').disabled = false; }
+  try { const body = await jsonRequest(`/api/codex/skills/runs/${encodeURIComponent(run.id)}?ledgerId=${encodeURIComponent(state.ledgerId)}&cardId=${encodeURIComponent(outputCardId)}&since=0`); const status = body.run?.status || body.status || 'running'; message('.process-message', `Skill run ${status}.`); if (!terminalStatuses.has(status)) schedule(() => pollSkill({ ...run, ...(body.run || {}) })); else setBusy(el('.process-start'), false); }
+  catch (error) { message('.process-message', error.message, true); setBusy(el('.process-start'), false); }
 }
 function formatError(error) { const refs = error.body?.invalidReferences; return refs?.length ? `${error.message} Invalid references: ${refs.map((item) => item.reference).join(', ')}.` : error.message; }
 async function openProcess() {
@@ -134,11 +135,11 @@ function closePicker() { el('.skill-picker-modal').close(); el('.pipeline-editor
 async function saveEditor() {
   const editor = state.editor; const form = el('.pipeline-editor-form'); editor.name = form.elements['pipeline-name'].value.trim(); editor.purpose = form.elements['pipeline-purpose'].value.trim();
   if (!editor.name) return message('.pipeline-editor-message', 'Pipeline name is required.', true);
-  const save = el('.pipeline-save'); save.disabled = true; message('.pipeline-editor-message', 'Saving…');
+  const save = el('.pipeline-save'); setBusy(save, true); message('.pipeline-editor-message', 'Saving…');
   const pipeline = { id: editor.id, name: editor.name, purpose: editor.purpose, stepIds: editor.steps.map((step) => step.id) };
   const steps = editor.steps.map((step) => ({ id: step.id, name: step.name.trim(), purpose: step.purpose.trim(), skills: step.skills }));
   try { const url = editor.existingId ? `/api/codex/pipelines/${encodeURIComponent(editor.existingId)}` : '/api/codex/pipelines'; const body = await jsonRequest(url, { method: editor.existingId ? 'PUT' : 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pipeline, steps }) }); state.pipelines = body.pipelines || state.pipelines; state.steps = body.steps || state.steps; el('.pipeline-editor-modal').close(); el('.pipelines-modal').showModal(); renderPipelineLibrary(); message('.pipelines-message', body.issues?.map((issue) => issue.message).join(' ') || 'Pipeline saved.'); }
-  catch (error) { message('.pipeline-editor-message', formatError(error), true); } finally { save.disabled = false; }
+  catch (error) { message('.pipeline-editor-message', formatError(error), true); } finally { setBusy(save, false); }
 }
 export function setMobileCodexContext(context) { state.ledgerId = String(context.ledgerId || ''); state.cardId = String(context.cardId || ''); el('.process-card-button').disabled = !state.cardId; }
 export function initializeMobileCodex() {

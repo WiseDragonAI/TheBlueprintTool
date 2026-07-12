@@ -753,11 +753,12 @@ document.querySelector('.create-card-button').addEventListener('click', () => op
 document.querySelector('.new-task-button').addEventListener('click', async () => {
   const button = document.querySelector('.new-task-button');
   button.disabled = true;
+  button.setAttribute('aria-busy', 'true');
   try { await createTaskIntake(); }
   catch (cause) {
     elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Task intake creation failed.';
     setView('error-view');
-  } finally { button.disabled = false; }
+  } finally { button.disabled = false; button.removeAttribute('aria-busy'); }
 });
 document.querySelectorAll('[data-control-tab]').forEach((button) => button.addEventListener('click', () => {
   state.controlTab = button.dataset.controlTab;

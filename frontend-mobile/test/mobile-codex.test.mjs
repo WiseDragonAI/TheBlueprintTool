@@ -20,7 +20,8 @@ test('mobile card detail exposes processing and both process libraries', () => {
 });
 
 test('mobile processing guards duplicate submissions and polls terminal states', () => {
-  assert.match(script, /submit\.disabled = true/);
+  assert.match(script, /setBusy\(submit, true\)/);
+  assert.match(script, /setAttribute\('aria-busy', 'true'\)/);
   assert.match(script, /new Set\(\['complete', 'failed', 'cancelled'\]\)/);
   assert.match(script, /\/api\/codex\/skills\/runs\/\$\{encodeURIComponent\(run\.id\)\}/);
   assert.match(script, /\/api\/codex\/pipelines\/runs\/\$\{encodeURIComponent\(runId\)\}/);
@@ -33,7 +34,21 @@ test('mobile pipeline editor supports ordered steps, ordered skills, inheritance
   assert.match(script, /move\(step\.skills, index, -1\)/);
   assert.match(script, /codexModel: null, codexEffort: null/);
   assert.match(script, /method: editor\.existingId \? 'PUT' : 'POST'/);
-  assert.match(script, /save\.disabled = true/);
+  assert.match(script, /setBusy\(save, true\)/);
+});
+
+test('mobile controls share voice-derived geometry, depth, motion, and accessible states', () => {
+  assert.match(styles, /--control-size: 44px/);
+  assert.match(styles, /--control-radius: 3px/);
+  assert.match(styles, /--control-shadow: inset/);
+  assert.match(styles, /--motion-fast: 120ms/);
+  assert.match(styles, /--motion-disclosure: 180ms/);
+  assert.match(styles, /--motion-view: 240ms/);
+  assert.match(styles, /@media \(hover: hover\) and \(pointer: fine\)/);
+  assert.match(styles, /button\[aria-pressed="true"\]/);
+  assert.match(styles, /button\[aria-selected="true"\]/);
+  assert.match(styles, /button\[aria-busy="true"\]/);
+  assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
 });
 
 test('nested mobile layers have explicit back actions and narrow layouts cannot overflow', () => {
