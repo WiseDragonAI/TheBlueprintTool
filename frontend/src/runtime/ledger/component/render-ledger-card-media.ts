@@ -333,6 +333,49 @@ function scrollCarousel(shell: HTMLElement, images: LedgerCardImage[], track: HT
   scrollCarouselTo(shell, images, track, nextIndex, stateId, 'smooth');
 }
 
+function bindSingleSlideSwipe(shell: HTMLElement, images: LedgerCardImage[], track: HTMLElement, stateId: string): void {
+  let gesture: { pointerId: number; startX: number; startY: number; startIndex: number; horizontal: boolean } | null = null;
+
+  track.addEventListener('pointerdown', (event) => {
+    if (event.pointerType !== 'touch' && event.pointerType !== 'pen') return;
+    gesture = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startIndex: carouselIndex(track),
+      horizontal: false
+    };
+    track.setPointerCapture?.(event.pointerId);
+  });
+
+  track.addEventListener('pointermove', (event) => {
+    if (!gesture || event.pointerId !== gesture.pointerId) return;
+    const deltaX = event.clientX - gesture.startX;
+    const deltaY = event.clientY - gesture.startY;
+    if (!gesture.horizontal && Math.abs(deltaX) <= Math.abs(deltaY)) return;
+    gesture.horizontal = true;
+    event.preventDefault();
+    const slideWidth = Math.max(1, track.clientWidth);
+    const minLeft = Math.max(0, (gesture.startIndex - 1) * slideWidth);
+    const maxLeft = Math.min((track.children.length - 1) * slideWidth, (gesture.startIndex + 1) * slideWidth);
+    track.scrollLeft = Math.max(minLeft, Math.min(maxLeft, gesture.startIndex * slideWidth - deltaX));
+  });
+
+  const finish = (event: PointerEvent) => {
+    if (!gesture || event.pointerId !== gesture.pointerId) return;
+    const current = gesture;
+    gesture = null;
+    track.releasePointerCapture?.(event.pointerId);
+    const deltaX = event.clientX - current.startX;
+    const threshold = Math.max(48, track.clientWidth * 0.18);
+    const direction = current.horizontal && Math.abs(deltaX) >= threshold ? (deltaX < 0 ? 1 : -1) : 0;
+    scrollCarouselTo(shell, images, track, current.startIndex + direction, stateId, 'smooth');
+  };
+
+  track.addEventListener('pointerup', finish);
+  track.addEventListener('pointercancel', finish);
+}
+
 function renderSlideButton(image: LedgerCardImage, index: number, shell: HTMLElement, track: HTMLElement, stateId: string, images: LedgerCardImage[]): HTMLButtonElement {
   const button = document.createElement('button');
   button.className = 'ledger-card-media-slide-button';
@@ -385,6 +428,7 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
   }
 
   if (isCarousel) {
+    bindSingleSlideSwipe(shell, block.images, track, persistedCarouselStateId);
     const progress = document.createElement('div');
     progress.className = 'ledger-card-media-progress';
     progress.setAttribute('aria-hidden', 'true');
@@ -406,7 +450,7 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
     const previous = document.createElement('button');
     previous.className = 'ledger-card-media-button';
     previous.type = 'button';
-    previous.textContent = '<';
+    previous.textContent = '‹';
     previous.setAttribute('aria-label', 'Previous image');
     previous.addEventListener('click', (event) => {
       event.preventDefault();
@@ -417,7 +461,7 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
     const next = document.createElement('button');
     next.className = 'ledger-card-media-button';
     next.type = 'button';
-    next.textContent = '>';
+    next.textContent = '›';
     next.setAttribute('aria-label', 'Next image');
     next.addEventListener('click', (event) => {
       event.preventDefault();

@@ -99,6 +99,11 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   assert.match(mediaRenderer, /syncMediaCarousel\(shell, block\.images, track, persistedCarouselStateId\)/);
   assert.match(mediaRenderer, /syncMediaCarousel\(shell, block\.images, track, persistedCarouselStateId, \{ persist: false \}\)/);
   assert.match(mediaRenderer, /track\.scrollTo\(\{ left: nextIndex \* slideWidth, behavior \}\)/);
+  assert.match(mediaRenderer, /function bindSingleSlideSwipe/);
+  assert.match(mediaRenderer, /Math\.max\(48, track\.clientWidth \* 0\.18\)/);
+  assert.match(mediaRenderer, /current\.startIndex \+ direction/);
+  assert.match(mediaRenderer, /previous\.textContent = '‹'/);
+  assert.match(mediaRenderer, /next\.textContent = '›'/);
   assert.match(mediaCarouselPersistence, /storageKey = 'decision-os\.cardMedia\.carouselSlides'/);
   assert.match(mediaCarouselPersistence, /localStorage\.getItem\(storageKey\)/);
   assert.match(mediaCarouselPersistence, /localStorage\.setItem\(storageKey, JSON\.stringify\(states\)\)/);
@@ -120,6 +125,7 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   assert.match(css, /\.ledger-card-media-shell::after\s*{/);
   assert.match(css, /\.ledger-card-media-track\s*{[^}]*scroll-snap-type:\s*x mandatory;/s);
   assert.match(css, /\.ledger-card-media-carousel \.ledger-card-media-track\s*{[^}]*scrollbar-width:\s*none;/s);
+  assert.match(css, /\.ledger-card-media-carousel \.ledger-card-media-track\s*{[^}]*touch-action:\s*pan-y;/s);
   assert.match(css, /\.ledger-card-media-slide\s*{[^}]*grid-template-rows:\s*minmax\(0, 1fr\) auto;[^}]*padding:[^}]*var\(--ledger-card-media-slide-nav-height\)[^}]*var\(--ledger-card-media-title-slider-gap\)/s);
   assert.match(css, /\.ledger-card-media-image\s*{[^}]*width:\s*var\(--ledger-card-media-contained-width, auto\);[^}]*height:\s*var\(--ledger-card-media-contained-height, auto\);[^}]*max-width:\s*100%;[^}]*max-height:\s*100%;[^}]*object-fit:\s*contain;[^}]*object-position:\s*center;/s);
   assert.match(css, /\.ledger-card-media-nav \.ledger-card-media-delete\s*{[^}]*position:\s*absolute;[^}]*top:\s*8px;[^}]*right:\s*10px;[^}]*width:\s*24px;[^}]*height:\s*24px;[^}]*opacity:\s*1;/s);
