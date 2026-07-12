@@ -19,6 +19,13 @@ test('mobile card detail exposes processing and both process libraries', () => {
   assert.match(script, /ledgerId: state\.ledgerId, sourceCardId: state\.cardId, pipelineId: pipeline\.id/);
 });
 
+test('mobile card detail keeps its three navigation controls in one row before the title', () => {
+  assert.match(html, /card-detail-actions[\s\S]*back-to-zone-button[\s\S]*process-card-button[\s\S]*thread-open-button[\s\S]*id="card-title"/);
+  assert.match(styles, /\.card-detail-actions \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(styles, /\.card-detail-header h1 \{[^}]*width: 100%[^}]*font-size: clamp\(24px, 7vw, 34px\)/);
+  assert.match(mobile, /backButton\.textContent = '← Back'/);
+});
+
 test('dynamic navigation library actions use delegated event handling', () => {
   assert.match(script, /document\.addEventListener\('click', \(event\) => \{/);
   assert.match(script, /event\.target\.closest\('\.nav-pipelines-button, \.nav-skills-button'\)/);
