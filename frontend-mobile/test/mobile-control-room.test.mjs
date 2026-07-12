@@ -107,6 +107,13 @@ test('renders active tasks as compact direct links without metadata or disclosur
   assert.match(mobile, /if \(active\) \{[\s\S]*article\.append\(summary\);[\s\S]*return article;/);
 });
 
+test('opens queued master tasks directly without building disclosure content', () => {
+  assert.match(mobile, /const directNavigation = active \|\| queue;/);
+  assert.match(mobile, /if \(directNavigation\) \{[\s\S]*navigate\(pathForTask\(task\)\)[\s\S]*article\.append\(summary\);[\s\S]*return article;/);
+  assert.match(mobile, /\$\{queue \? '' : '<span class="task-chevron">⌄<\/span>'\}/);
+  assert.match(mobile, /if \(queue\) \{[\s\S]*article\.addEventListener\('drop'/);
+});
+
 test('keeps task metadata in Markdown but removes it from the visible card body', () => {
   const visible = visibleMasterTaskMarkdown(task().markdown);
   assert.doesNotMatch(visible, /#master-task|Ledger:|Waiting since:|Status:/);

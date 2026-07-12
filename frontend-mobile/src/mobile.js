@@ -296,11 +296,13 @@ function taskRow(task, index) {
   summary.type = 'button';
   summary.className = 'control-task-summary';
   const active = state.controlTab === 'active';
-  if (!active) summary.setAttribute('aria-expanded', 'false');
+  const queue = state.controlTab === 'queue';
+  const directNavigation = active || queue;
+  if (!directNavigation) summary.setAttribute('aria-expanded', 'false');
   const next = task.nextSubtask ? `Next: ${task.nextSubtask.title}` : 'No actionable subtask';
   summary.innerHTML = active
     ? `<span class="task-copy"><strong></strong></span><span class="task-stopwatch" data-active-since=""></span>`
-    : `<span class="task-copy"><strong></strong><span class="task-meta"></span><span class="task-next"></span></span><span class="task-chevron">⌄</span>`;
+    : `<span class="task-copy"><strong></strong><span class="task-meta"></span><span class="task-next"></span></span>${queue ? '' : '<span class="task-chevron">⌄</span>'}`;
   summary.querySelector('strong').textContent = task.title;
   if (active) {
     const stopwatch = summary.querySelector('.task-stopwatch');
@@ -320,7 +322,7 @@ function taskRow(task, index) {
     diagnostic.textContent = task.diagnostics.join(' · ');
     summary.querySelector('.task-copy').append(diagnostic);
   }
-  if (state.controlTab === 'queue') {
+  if (queue) {
     const handle = document.createElement('button');
     handle.type = 'button';
     handle.className = 'task-drag-handle';
@@ -363,8 +365,21 @@ function taskRow(task, index) {
     handle.addEventListener('pointerup', finishTouch);
     handle.addEventListener('pointercancel', finishTouch);
     article.prepend(handle);
+    article.addEventListener('dragstart', (event) => {
+      state.draggedTaskId = task.cardId;
+      article.classList.add('dragging');
+      event.dataTransfer.effectAllowed = 'move';
+    });
+    article.addEventListener('dragend', () => { state.draggedTaskId = ''; article.classList.remove('dragging'); });
+    article.addEventListener('dragover', (event) => { event.preventDefault(); article.classList.add('drag-target'); });
+    article.addEventListener('dragleave', () => article.classList.remove('drag-target'));
+    article.addEventListener('drop', (event) => {
+      event.preventDefault();
+      article.classList.remove('drag-target');
+      if (state.draggedTaskId) void moveTask(state.draggedTaskId, index);
+    });
   }
-  if (active) {
+  if (directNavigation) {
     summary.addEventListener('click', () => navigate(pathForTask(task)));
     article.append(summary);
     return article;
@@ -414,19 +429,6 @@ function taskRow(task, index) {
   summary.addEventListener('click', () => {
     details.hidden = !details.hidden;
     summary.setAttribute('aria-expanded', String(!details.hidden));
-  });
-  article.addEventListener('dragstart', (event) => {
-    state.draggedTaskId = task.cardId;
-    article.classList.add('dragging');
-    event.dataTransfer.effectAllowed = 'move';
-  });
-  article.addEventListener('dragend', () => { state.draggedTaskId = ''; article.classList.remove('dragging'); });
-  article.addEventListener('dragover', (event) => { event.preventDefault(); article.classList.add('drag-target'); });
-  article.addEventListener('dragleave', () => article.classList.remove('drag-target'));
-  article.addEventListener('drop', (event) => {
-    event.preventDefault();
-    article.classList.remove('drag-target');
-    if (state.draggedTaskId) void moveTask(state.draggedTaskId, index);
   });
   article.append(summary, details);
   return article;
