@@ -34,6 +34,9 @@ const creationModal = document.querySelector('.creation-modal');
 const creationForm = document.querySelector('.creation-form');
 let creationKind = '';
 let controlRoomScrollFrame = 0;
+let queuePersistenceSequence = 0;
+let queueDragSnapshot = null;
+let queueDropCommitted = false;
 
 function setView(name) {
   for (const id of ['loading-view', 'error-view', 'empty-view', 'overview-view', 'control-room-view', 'ledger-view', 'zone-view', 'card-view']) {
@@ -295,6 +298,60 @@ function filteredControlTasks() {
   return state.controlFilter === 'All' ? tasks : tasks.filter((task) => task.ledger === state.controlFilter);
 }
 
+function reorderVisibleQueue(cardId, targetIndex) {
+  const visible = filteredControlTasks();
+  const sourceIndex = visible.findIndex((task) => task.cardId === cardId);
+  if (sourceIndex < 0 || targetIndex < 0 || targetIndex >= visible.length || sourceIndex === targetIndex) return false;
+  const reordered = visible.slice();
+  const [moved] = reordered.splice(sourceIndex, 1);
+  reordered.splice(targetIndex, 0, moved);
+  const visibleIds = new Set(visible.map((task) => task.cardId));
+  let replacementIndex = 0;
+  state.controlRoom.queue = state.controlRoom.queue.map((task) => visibleIds.has(task.cardId) ? reordered[replacementIndex++] : task);
+  return true;
+}
+
+function beginQueueDrag() {
+  queueDragSnapshot = state.controlRoom.queue.slice();
+  queueDropCommitted = false;
+}
+
+function cancelQueueDrag() {
+  if (queueDragSnapshot) state.controlRoom.queue = queueDragSnapshot;
+  queueDragSnapshot = null;
+  queueDropCommitted = false;
+  state.draggedTaskId = '';
+  renderControlRoom();
+}
+
+function commitQueueDrag() {
+  queueDropCommitted = true;
+  queueDragSnapshot = null;
+  state.draggedTaskId = '';
+  void persistQueueOrder();
+}
+
+function animateQueueMove(cardId, targetCardId) {
+  const list = elements['control-task-list'];
+  const dragged = list.querySelector(`[data-card-id="${CSS.escape(cardId)}"]`);
+  const target = list.querySelector(`[data-card-id="${CSS.escape(targetCardId)}"]`);
+  if (!dragged || !target || dragged === target) return;
+  const rows = [...list.querySelectorAll('.control-task')];
+  const previousTops = new Map(rows.map((row) => [row, row.getBoundingClientRect().top]));
+  const sourceIndex = rows.indexOf(dragged);
+  const targetIndex = rows.indexOf(target);
+  if (!reorderVisibleQueue(cardId, targetIndex)) return;
+  list.insertBefore(dragged, sourceIndex < targetIndex ? target.nextSibling : target);
+  const nextRows = [...list.querySelectorAll('.control-task')];
+  nextRows.forEach((row, index) => {
+    row.classList.toggle('next-task', index === 0);
+    const delta = previousTops.get(row) - row.getBoundingClientRect().top;
+    if (delta && typeof row.animate === 'function') {
+      row.animate([{ transform: `translateY(${delta}px)` }, { transform: 'translateY(0)' }], { duration: 180, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    }
+  });
+}
+
 function controlTaskCount(tab) {
   const tasks = state.controlRoom?.[tab] ?? [];
   return state.controlFilter === 'All' ? tasks.length : tasks.filter((task) => task.ledger === state.controlFilter).length;
@@ -350,6 +407,7 @@ function taskRow(task, index) {
       if (event.pointerType === 'mouse') return;
       pressTimer = window.setTimeout(() => {
         touchActive = true;
+        beginQueueDrag();
         state.draggedTaskId = task.cardId;
         article.classList.add('dragging');
         handle.setPointerCapture(event.pointerId);
@@ -360,37 +418,39 @@ function taskRow(task, index) {
       event.preventDefault();
       const candidate = document.elementFromPoint(event.clientX, event.clientY)?.closest('.control-task');
       if (candidate && candidate !== touchTarget) {
-        touchTarget.classList.remove('drag-target');
         touchTarget = candidate;
-        touchTarget.classList.add('drag-target');
+        animateQueueMove(task.cardId, candidate.dataset.cardId);
       }
     });
-    const finishTouch = () => {
+    const finishTouch = (commit) => {
       window.clearTimeout(pressTimer);
       if (!touchActive) return;
-      const targetId = touchTarget.dataset.cardId;
-      const targetIndex = filteredControlTasks().findIndex((candidate) => candidate.cardId === targetId);
       article.classList.remove('dragging');
-      touchTarget.classList.remove('drag-target');
       touchActive = false;
-      state.draggedTaskId = '';
-      if (targetIndex >= 0) void moveTask(task.cardId, targetIndex);
+      if (commit) commitQueueDrag();
+      else cancelQueueDrag();
     };
-    handle.addEventListener('pointerup', finishTouch);
-    handle.addEventListener('pointercancel', finishTouch);
+    handle.addEventListener('pointerup', () => finishTouch(true));
+    handle.addEventListener('pointercancel', () => finishTouch(false));
     article.prepend(handle);
     article.addEventListener('dragstart', (event) => {
+      beginQueueDrag();
       state.draggedTaskId = task.cardId;
       article.classList.add('dragging');
       event.dataTransfer.effectAllowed = 'move';
     });
-    article.addEventListener('dragend', () => { state.draggedTaskId = ''; article.classList.remove('dragging'); });
-    article.addEventListener('dragover', (event) => { event.preventDefault(); article.classList.add('drag-target'); });
-    article.addEventListener('dragleave', () => article.classList.remove('drag-target'));
+    article.addEventListener('dragend', () => {
+      article.classList.remove('dragging');
+      if (!queueDropCommitted) cancelQueueDrag();
+      queueDropCommitted = false;
+    });
+    article.addEventListener('dragover', (event) => {
+      event.preventDefault();
+      if (state.draggedTaskId) animateQueueMove(state.draggedTaskId, task.cardId);
+    });
     article.addEventListener('drop', (event) => {
       event.preventDefault();
-      article.classList.remove('drag-target');
-      if (state.draggedTaskId) void moveTask(state.draggedTaskId, index);
+      if (state.draggedTaskId) commitQueueDrag();
     });
   }
   if (directNavigation) {
@@ -527,18 +587,35 @@ async function loadControlRoom() {
 }
 
 async function moveTask(cardId, targetIndex) {
-  const visible = filteredControlTasks();
-  const sourceIndex = visible.findIndex((task) => task.cardId === cardId);
-  if (sourceIndex < 0 || targetIndex < 0 || targetIndex >= visible.length || sourceIndex === targetIndex) return;
-  const reordered = visible.slice();
-  const [moved] = reordered.splice(sourceIndex, 1);
-  reordered.splice(targetIndex, 0, moved);
-  await Promise.all(reordered.map((task, index) => ledgerMutation(task.ledgerId, {
-    action: 'patch-card',
-    cardPatch: { id: task.cardId, description: withQueueRank(task.markdown, index + 1) }
-  })));
-  await loadControlRoom();
+  if (!reorderVisibleQueue(cardId, targetIndex)) return;
   renderControlRoom();
+  await persistQueueOrder();
+}
+
+async function persistQueueOrder() {
+  const sequence = ++queuePersistenceSequence;
+  const reordered = filteredControlTasks();
+  const mutations = reordered.map((task, index) => {
+    const markdown = withQueueRank(task.markdown, index + 1);
+    task.markdown = markdown;
+    task.queueRank = index + 1;
+    const source = state.controlRoom.allTasks.find((candidate) => candidate.cardId === task.cardId && candidate.ledgerId === task.ledgerId);
+    if (source) source.markdown = markdown;
+    return { task, markdown };
+  });
+  renderControlRoom();
+  try {
+    await Promise.all(mutations.map(({ task, markdown }) => ledgerMutation(task.ledgerId, {
+      action: 'patch-card',
+      cardPatch: { id: task.cardId, description: markdown }
+    })));
+  } catch (error) {
+    if (sequence !== queuePersistenceSequence) return;
+    await loadControlRoom();
+    renderControlRoom();
+    elements['error-message'].textContent = error instanceof Error ? error.message : 'Queue order persistence failed.';
+    setView('error-view');
+  }
 }
 
 async function activateMasterTask({ ledgerId, cardId, startedAt }) {

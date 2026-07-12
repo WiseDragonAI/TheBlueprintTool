@@ -140,6 +140,27 @@ test('opens queued master tasks directly without building disclosure content', (
   assert.match(mobile, /if \(queue\) \{[\s\S]*article\.addEventListener\('drop'/);
 });
 
+test('reorders queue rows continuously with FLIP animation for mouse and touch movement', () => {
+  assert.match(mobile, /function animateQueueMove\(cardId, targetCardId\)/);
+  assert.match(mobile, /row\.animate\(\[\{ transform: `translateY\(\$\{delta\}px\)` \}, \{ transform: 'translateY\(0\)' \}\]/);
+  assert.match(mobile, /pointermove[\s\S]*animateQueueMove\(task\.cardId, candidate\.dataset\.cardId\)/);
+  assert.match(mobile, /dragover[\s\S]*animateQueueMove\(state\.draggedTaskId, task\.cardId\)/);
+  assert.match(mobile, /pointercancel[\s\S]*finishTouch\(false\)/);
+  assert.match(mobile, /if \(!queueDropCommitted\) cancelQueueDrag\(\)/);
+  assert.match(styles, /will-change:\s*transform/);
+  assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
+});
+
+test('persists optimistic ranks without a success reload and reconciles the latest failure', () => {
+  const persistence = mobile.slice(mobile.indexOf('async function persistQueueOrder()'), mobile.indexOf('async function activateMasterTask'));
+  assert.match(persistence, /task\.markdown = markdown/);
+  assert.match(persistence, /task\.queueRank = index \+ 1/);
+  assert.match(persistence, /renderControlRoom\(\);[\s\S]*try \{/);
+  assert.doesNotMatch(persistence.match(/try \{[\s\S]*?\} catch/)[0], /loadControlRoom/);
+  assert.match(persistence, /sequence !== queuePersistenceSequence/);
+  assert.match(persistence, /await loadControlRoom\(\);[\s\S]*setView\('error-view'\)/);
+});
+
 test('omits the next-subtask subtitle when no actionable subtask exists', () => {
   assert.doesNotMatch(mobile, /No actionable subtask/);
   assert.match(mobile, /task\.nextSubtask \? '<span class="task-next"><\/span>' : ''/);
