@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { deriveControlRoom, parseMasterTaskMarkdown, waitingAge, withQueueRank } from '../src/mobile-control-room.js';
+import { activeAge, deriveControlRoom, parseMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from '../src/mobile-control-room.js';
 
 const task = (overrides = {}) => ({
   cardId: 'card-a',
@@ -24,12 +24,30 @@ test('derives tabs, filters, completed exclusion, FIFO, and ranked priority', ()
     task({ cardId: 'newer', markdown: task().markdown.replace('10T10', '11T10') }),
     task({ cardId: 'oldest' }),
     task({ cardId: 'ranked', markdown: `${task().markdown.replace('10T10', '12T10')}\nQueue rank: 1` }),
-    task({ cardId: 'active', markdown: task().markdown.replace('#task-waiting', '#task-active') }),
+    task({ cardId: 'active', markdown: task().markdown.replace('#task-waiting', '#task-active').replace('Waiting since:', 'Active since: 2026-07-10T10:30:00.000Z\nWaiting since:') }),
     task({ cardId: 'done', markdown: task().markdown.replace('#task-waiting', '#task-complete') })
   ]);
   assert.deepEqual(result.queue.map((entry) => entry.cardId), ['ranked', 'oldest', 'newer']);
   assert.deepEqual(result.active.map((entry) => entry.cardId), ['active']);
   assert.deepEqual(result.ledgers, ['Tasks']);
+});
+
+test('ignores task tag examples in ordinary Markdown prose', () => {
+  const parsed = parseMasterTaskMarkdown(task({ markdown: 'This specification documents `#master-task`, `#task-waiting`, and `#task-active`.' }));
+  assert.equal(parsed.valid, false);
+  assert.equal(parsed.diagnostics.includes('missing #master-task'), true);
+  assert.equal(deriveControlRoom([{ ...task(), markdown: parsed.markdown }]).diagnostics.length, 0);
+});
+
+test('transitions a canonical master task to active with its launch timestamp', () => {
+  const startedAt = '2026-07-12T06:35:14.888Z';
+  const markdown = withActiveStatus(task().markdown, startedAt);
+  assert.match(markdown, /^#master-task #task-active$/m);
+  assert.match(markdown, /^Active since: 2026-07-12T06:35:14.888Z$/m);
+  const parsed = parseMasterTaskMarkdown(task({ markdown }));
+  assert.equal(parsed.valid, true);
+  assert.equal(parsed.activeSince, startedAt);
+  assert.equal(activeAge(startedAt, Date.parse('2026-07-12T06:40:14.888Z')), '5m active');
 });
 
 test('reports invalid canonical markdown and rewrites queue rank in place', () => {

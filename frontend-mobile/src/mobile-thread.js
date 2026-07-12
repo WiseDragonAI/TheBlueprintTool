@@ -15,6 +15,7 @@ import { bindThreadCodexRunLog } from '/canvas-src/runtime/codex/effect/bind-thr
 let currentCard = null;
 let currentLedgerId = '';
 let onLedgerRefresh = async () => null;
+let onCodexStarted = async () => null;
 let initialized = false;
 let eventSource = null;
 
@@ -30,6 +31,7 @@ function updateLaunchReadiness() {
 export function syncMobileThreadContext(input) {
   currentLedgerId = String(input.ledgerId ?? '');
   onLedgerRefresh = input.onLedgerRefresh ?? onLedgerRefresh;
+  onCodexStarted = input.onCodexStarted ?? onCodexStarted;
   canvasState.canvasMode = 'ledger';
   canvasState.activeTab = currentLedgerId;
   canvasState.activeLedgerId = currentLedgerId;
@@ -111,6 +113,11 @@ async function startCodex(button) {
     button.disabled = false;
     return;
   }
+  await onCodexStarted({
+    ledgerId: currentLedgerId,
+    cardId: String(currentCard.id),
+    startedAt: String(result.run?.startedAt || new Date().toISOString())
+  });
   await refreshThreadLedger();
   const runId = String(result.run?.id ?? '');
   if (runId) bindThreadCodexRunLog({ ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId });

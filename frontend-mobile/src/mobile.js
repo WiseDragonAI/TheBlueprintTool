@@ -2,7 +2,7 @@ import { renderLedgerCardMarkdown } from '/canvas-src/runtime/ledger/component/r
 import { ledgerCardBody } from '/canvas-src/runtime/ledger/helper/ledger-card-body.js';
 import { initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './mobile-thread.js';
 import { initializeMobileCodex, setMobileCodexContext } from './mobile-codex.js';
-import { deriveControlRoom, waitingAge, withQueueRank } from './mobile-control-room.js';
+import { activeAge, deriveControlRoom, waitingAge, withActiveStatus, withQueueRank } from './mobile-control-room.js';
 
 const state = {
   projectName: 'decision-os',
@@ -208,7 +208,7 @@ async function createCard(name, description) {
     fields: []
   };
   state.ledger = await ledgerMutation(state.activeLedgerId, { action: 'create-card', card });
-  syncMobileThreadContext({ ledgerId: state.activeLedgerId, ledger: state.ledger, ledgers: state.ledgers });
+  syncMobileThreadContext({ ledgerId: state.activeLedgerId, ledger: state.ledger, ledgers: state.ledgers, onCodexStarted: activateMasterTask });
   navigate(cardPath(state.activeLedgerId, state.activeZoneId, card.id));
 }
 
@@ -300,7 +300,8 @@ function taskRow(task, index) {
   const next = task.nextSubtask ? `Next: ${task.nextSubtask.title}` : 'No actionable subtask';
   summary.innerHTML = `<span class="task-copy"><strong></strong><span class="task-meta"></span><span class="task-next"></span></span><span class="task-chevron">⌄</span>`;
   summary.querySelector('strong').textContent = task.title;
-  summary.querySelector('.task-meta').textContent = `${task.ledger} · ${waitingAge(task.waitingSince)} · ${task.complete}/${task.subtasks.length} complete`;
+  const age = task.status === 'task-active' ? activeAge(task.activeSince) : waitingAge(task.waitingSince);
+  summary.querySelector('.task-meta').textContent = `${task.ledger} · ${age} · ${task.complete}/${task.subtasks.length} complete`;
   summary.querySelector('.task-next').textContent = next;
   if (state.controlTab === 'queue') {
     const handle = document.createElement('button');
@@ -475,6 +476,20 @@ async function moveTask(cardId, targetIndex) {
   renderControlRoom();
 }
 
+async function activateMasterTask({ ledgerId, cardId, startedAt }) {
+  const ledger = await fetch(`/decision-os/${encodeURIComponent(ledgerId)}`, { cache: 'no-store' }).then((response) => response.json());
+  const card = ledger.cards?.find((entry) => String(entry.id) === String(cardId));
+  if (!card || !parseMasterCandidate(card)) return ledger;
+  return ledgerMutation(ledgerId, {
+    action: 'patch-card',
+    cardPatch: { id: cardId, description: withActiveStatus(ledgerCardBody(card), startedAt) }
+  });
+}
+
+function parseMasterCandidate(card) {
+  return /^\s*(?:#[a-z][a-z0-9-]*\s*)*#master-task\b(?:\s*#[a-z][a-z0-9-]*)*\s*$/im.test(ledgerCardBody(card));
+}
+
 async function createTaskIntake() {
   const ledgerRef = state.ledgers.find((entry) => entry.title === state.controlFilter || entry.id === state.controlFilter) ?? state.ledgers[0];
   if (!ledgerRef) throw new Error('Create a ledger before starting a task.');
@@ -492,7 +507,7 @@ async function createTaskIntake() {
   state.ledger = updated;
   state.activeZoneId = zone.id;
   state.activeZoneColor = zone.color;
-  syncMobileThreadContext({ ledgerId: ledgerRef.id, ledger: updated, ledgers: state.ledgers });
+  syncMobileThreadContext({ ledgerId: ledgerRef.id, ledger: updated, ledgers: state.ledgers, onCodexStarted: activateMasterTask });
   navigate(cardPath(ledgerRef.id, zone.id, cardId));
   openMobileThread(card, zone.color);
 }
@@ -627,6 +642,7 @@ async function loadLedger(ledgerId) {
     ledgerId,
     ledger,
     ledgers: state.ledgers,
+    onCodexStarted: activateMasterTask,
     onLedgerRefresh: async (activeLedgerId) => {
       const refreshed = await fetch(`/decision-os/${encodeURIComponent(activeLedgerId)}`, { cache: 'no-store' }).then((result) => result.ok ? result.json() : null);
       if (refreshed && activeLedgerId === state.activeLedgerId) state.ledger = refreshed;
