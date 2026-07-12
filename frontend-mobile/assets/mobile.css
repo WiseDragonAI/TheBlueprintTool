@@ -184,11 +184,12 @@ h1 { margin: 0; font-size: clamp(28px, 8vw, 44px); line-height: 1.08; letter-spa
 .card-row-arrow { color: var(--accent); font-size: 20px; }
 .no-results { padding: 50px 20px; color: var(--muted); text-align: center; }
 
-.back-button { min-height: 44px; margin: -6px 0 18px; padding: 0 14px; color: var(--accent); }
-.card-detail-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: start; padding: 0 0 22px 14px; border-bottom: 1px solid var(--line); border-left: 4px solid var(--zone-color, var(--accent)); }
-.card-detail-header h1 { margin-top: 8px; }
+.back-button { min-height: 44px; padding: 0 14px; color: var(--accent); }
+.card-detail-header { display: grid; gap: 18px; padding: 0 0 22px 14px; border-bottom: 1px solid var(--line); border-left: 4px solid var(--zone-color, var(--accent)); }
+.card-detail-header h1 { width: 100%; font-size: clamp(24px, 7vw, 34px); }
 .thread-open-button { min-height: 44px; padding: 0 14px; color: color-mix(in srgb, var(--zone-color, var(--accent)), white 46%); }
-.card-detail-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.card-detail-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.card-detail-actions button { min-width: 0; padding-inline: 8px; }
 .process-card-button { min-height: 44px; padding: 0 14px; color: var(--accent); background: var(--control-bg-primary); }
 .card-body { display: grid; gap: 20px; padding: 22px 0; color: var(--text); }
 .task-overview { margin-top: 20px; }

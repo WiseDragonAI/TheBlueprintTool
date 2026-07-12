@@ -609,7 +609,7 @@ function renderCard(card) {
     cards: state.ledger?.cards ?? []
   });
   const backButton = document.querySelector('.back-to-zone-button');
-  backButton.textContent = parsedTask.masterTask ? '← Back to control room' : '← Back to zone';
+  backButton.textContent = '← Back';
   backButton.dataset.destination = parsedTask.masterTask ? 'control-room' : 'zone';
   const content = renderLedgerCardMarkdown(parsedTask.masterTask ? visibleMasterTaskMarkdown(markdown) : markdown, { imageSizes, mediaSurface: 'thread' });
   if (parsedTask.masterTask) {
