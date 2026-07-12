@@ -18,3 +18,15 @@ test('validates canonical master tasks and rejects stale lifecycle metadata', as
   assert.equal(invalid.ok, false);
   if (!invalid.ok) assert.match(invalid.error, /stale: expected exactly one task status label, invalid Waiting since/);
 });
+
+test('scopes master-task validation to one card', async () => {
+  const ledgerFile = await createJsonFile({
+    cards: [
+      { id: 'valid', comment: { what: '#master-task #task-complete\n\nLedger: Tasks\nWaiting since: 2026-07-12T00:00:00.000Z' } },
+      { id: 'invalid', comment: { what: '#master-task #task-waiting #task-active\n\nLedger: Tasks' } },
+    ],
+  });
+
+  const result = await dispatchLedgerCliCommandController(['validate-master-tasks', '--ledger', ledgerFile, '--card-id', 'valid']);
+  assert.deepEqual(result, { ok: true, value: 'Validated 1 master task.' });
+});

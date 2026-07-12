@@ -147,6 +147,15 @@ Ctrl+D  Resize selected cards to their content and selected zones to contained c
 GIT_SSH_COMMAND='ssh -i ~/.ssh/id_jb_wise -o IdentitiesOnly=yes' git push
 ```
 
+## Master Task Completion
+
+1. **Parse before work:** run `ledger-cli card-context --ledger <ledger-file> --card-id <master-card-id> --json`, then inspect every card referenced under `## Subtasks` and every structured `subtaskIds` entry.
+2. **Use ledger truth:** a subtask is complete only when its linked ledger card has `status: "done"`. Markdown text such as `Status: complete` is a synchronized human-readable projection, not the source of truth.
+3. **Complete finished subtasks:** after implementation and verification, run `ledger-cli done --ledger <ledger-file> --card-id <subtask-card-id>` for each finished subtask and change its master-card `## Subtasks` entry to `Status: complete` in the same turn.
+4. **Complete the master:** when every required subtask and acceptance criterion is complete, run `ledger-cli done --ledger <ledger-file> --card-id <master-card-id>`, replace the single lifecycle label with `#task-complete`, and add `Completed at: <ISO-8601>` to the master-card Markdown.
+5. **Do not falsely complete:** keep the task `#task-active` and report the concrete blocker when a required acceptance criterion is not met. A missing optional verification that the operator explicitly declined does not block completion when the implemented acceptance criteria pass.
+6. **Mandatory pre-reply gate:** run `ledger-cli validate-master-tasks --ledger <ledger-file> --card-id <master-card-id>` and re-read the master card plus all linked card statuses before sending the final `# AGENT` reply. Do not report implementation complete while the corresponding ledger cards remain `todo`.
+
 ## Debugging
 
 - Solve one problem at a time instead of trying to fix everything.

@@ -222,7 +222,7 @@ export async function manageLedgerJsonController(
 
   if (actionPayload.ledgerCommand === 'validate-master-tasks') {
     const hydratedLedger = await hydrateLedgerCardContent(ledger.value, actionPayload.ledgerJsonFile, fs);
-    const report = validateMasterTasks(hydratedLedger);
+    const report = validateMasterTasks(hydratedLedger, actionPayload.cardOperation?.cardId);
     const output = formatMasterTaskValidation(report);
     return report.errors.length === 0 ? { ok: true, value: output } : { ok: false, error: output };
   }

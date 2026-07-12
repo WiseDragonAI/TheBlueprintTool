@@ -10,8 +10,10 @@ function isRecord(value: unknown): value is JsonObject {
 
 const statusLabels = ['task-waiting', 'task-active', 'task-complete'];
 
-export function validateMasterTasks(ledger: unknown): { checked: number; errors: Array<{ cardId: string; diagnostics: string[] }> } {
-  const cards = isRecord(ledger) && Array.isArray(ledger.cards) ? ledger.cards.filter(isRecord) : [];
+export function validateMasterTasks(ledger: unknown, cardId?: string): { checked: number; errors: Array<{ cardId: string; diagnostics: string[] }> } {
+  const cards = isRecord(ledger) && Array.isArray(ledger.cards)
+    ? ledger.cards.filter(isRecord).filter((card) => !cardId || String(card.id ?? '') === cardId)
+    : [];
   const errors: Array<{ cardId: string; diagnostics: string[] }> = [];
   let checked = 0;
 

@@ -70,7 +70,7 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
       messageFile: flagValue(argv, '--message-file'),
       threadId: flagValue(argv, '--thread-id'),
     },
-    cardOperation: normalizedMode === 'card-context'
+    cardOperation: normalizedMode === 'card-context' || normalizedMode === 'validate-master-tasks'
       ? { cardId: flagValue(argv, '--card-id') }
       : undefined,
     json: argv.includes('--json'),
