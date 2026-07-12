@@ -596,6 +596,9 @@ function renderCard(card) {
     cardStatus: card.status,
     cards: state.ledger?.cards ?? []
   });
+  const backButton = document.querySelector('.back-to-zone-button');
+  backButton.textContent = parsedTask.masterTask ? '← Back to control room' : '← Back to zone';
+  backButton.dataset.destination = parsedTask.masterTask ? 'control-room' : 'zone';
   const content = renderLedgerCardMarkdown(parsedTask.masterTask ? visibleMasterTaskMarkdown(markdown) : markdown, { imageSizes, mediaSurface: 'thread' });
   if (parsedTask.masterTask) {
     const overview = document.createElement('section');
@@ -749,7 +752,9 @@ document.querySelector('.refresh-button').addEventListener('click', () => {
 });
 document.querySelector('.retry-button').addEventListener('click', () => loadRoute());
 document.querySelector('.back-to-ledger-button').addEventListener('click', () => navigate(ledgerPath(state.activeLedgerId)));
-document.querySelector('.back-to-zone-button').addEventListener('click', () => navigate(zonePath(state.activeLedgerId, state.activeZoneId)));
+document.querySelector('.back-to-zone-button').addEventListener('click', (event) => {
+  navigate(event.currentTarget.dataset.destination === 'control-room' ? '/' : zonePath(state.activeLedgerId, state.activeZoneId));
+});
 document.querySelector('.create-ledger-button').addEventListener('click', () => openCreationModal('ledger'));
 document.querySelector('.create-zone-button').addEventListener('click', () => openCreationModal('zone'));
 document.querySelector('.create-card-button').addEventListener('click', () => openCreationModal('card'));

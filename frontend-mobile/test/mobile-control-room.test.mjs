@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { activeAge, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from '../src/mobile-control-room.js';
+
+const mobile = await readFile(new URL('../src/mobile.js', import.meta.url), 'utf8');
 
 const task = (overrides = {}) => ({
   cardId: 'card-a',
@@ -89,4 +92,10 @@ test('parses letter-prefixed card sections from the decision-os formatting contr
   assert.equal(parsed.subtasks.length, 2);
   assert.equal(parsed.complete, 1);
   assert.equal(parsed.nextSubtask.cardId, 'card-b');
+});
+
+test('routes master-task cards back to the control room and regular cards back to their zone', () => {
+  assert.match(mobile, /backButton\.textContent = parsedTask\.masterTask \? '← Back to control room' : '← Back to zone'/);
+  assert.match(mobile, /backButton\.dataset\.destination = parsedTask\.masterTask \? 'control-room' : 'zone'/);
+  assert.match(mobile, /dataset\.destination === 'control-room' \? '\/' : zonePath/);
 });
