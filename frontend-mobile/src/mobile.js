@@ -300,7 +300,8 @@ function taskRow(task, index) {
   summary.innerHTML = `<span class="task-copy"><strong></strong><span class="task-meta"></span><span class="task-next"></span></span><span class="task-chevron">⌄</span>`;
   summary.querySelector('strong').textContent = task.title;
   const age = task.status === 'task-complete' ? 'completed' : task.status === 'task-active' ? activeAge(task.activeSince) : waitingAge(task.waitingSince);
-  summary.querySelector('.task-meta').textContent = `${task.ledger} · ${age} · ${task.complete}/${task.subtasks.length} complete`;
+  const process = task.codexProcessing ? ` · Codex ${task.codexRunId}` : '';
+  summary.querySelector('.task-meta').textContent = `${task.ledger} · ${age}${process} · ${task.complete}/${task.subtasks.length} complete`;
   summary.querySelector('.task-next').textContent = next;
   if (task.diagnostics.length) {
     article.classList.add('has-diagnostics');
@@ -456,11 +457,23 @@ async function loadControlRoom() {
       return response.json();
     })
   })));
-  const allTasks = documents.flatMap(({ ledgerId, document }) => {
+  const allTasks = (await Promise.all(documents.flatMap(({ ledgerId, document }) => {
     const ledgerTitle = state.ledgers.find((entry) => entry.id === ledgerId)?.title ?? ledgerId;
     const cards = document.cards ?? [];
-    return cards.map((card) => ({ cardId: card.id, title: card.title, ledgerId, ledgerTitle, markdown: ledgerCardBody(card), cardStatus: card.status, cards }));
-  });
+    return cards.map(async (card) => {
+      const markdown = ledgerCardBody(card);
+      const runId = String(card.codexThreadRunId ?? '');
+      let codexStatus = '';
+      if (runId && /#task-active\b/i.test(markdown)) {
+        const response = await fetch(`/api/codex/skills/runs/${encodeURIComponent(runId)}?ledgerId=${encodeURIComponent(ledgerId)}&cardId=${encodeURIComponent(card.id)}&since=0`, { cache: 'no-store' });
+        if (response.ok) {
+          const payload = await response.json();
+          codexStatus = String(payload.run?.status ?? payload.status ?? '');
+        }
+      }
+      return { cardId: card.id, title: card.title, ledgerId, ledgerTitle, markdown, cardStatus: card.status, cards, codexRunId: runId, codexStatus };
+    });
+  }))).flat();
   state.controlRoom = { ...deriveControlRoom(allTasks), allTasks, documents };
 }
 
@@ -751,6 +764,13 @@ async function loadRoute() {
 document.querySelector('.menu-button').addEventListener('click', openMenu);
 document.querySelector('.close-menu-button').addEventListener('click', closeMenu);
 document.querySelector('.nav-scrim').addEventListener('click', closeMenu);
+document.querySelector('.nav-server-restart-button').addEventListener('click', async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  button.textContent = 'Restarting…';
+  await fetch('/api/server/restart', { method: 'POST' }).catch(() => undefined);
+  window.setTimeout(() => location.reload(), 1500);
+});
 document.querySelector('.refresh-button').addEventListener('click', () => {
   state.ledger = null;
   void loadRoute();

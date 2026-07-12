@@ -56,3 +56,30 @@ test('create-http-server serves shared TypeScript modules through their browser 
     rmSync(projectRoot, { recursive: true, force: true });
   }
 });
+
+test('create-http-server acknowledges a manual restart before invoking the supervisor exit hook', async () => {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'decision-os-server-restart-'));
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const frontendRoot = join(projectRoot, 'frontend');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  mkdirSync(frontendRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
+  writeFileSync(join(frontendRoot, 'index.html'), '<!doctype html>');
+  let restarted = false;
+  const runtime: Record<string, unknown> = { decisionOsRoot, restartServer: () => { restarted = true; } };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', decisionOsFrontendRoot: frontendRoot }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/server/restart`, { method: 'POST' });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { ok: true, restarting: true });
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    assert.equal(restarted, true);
+  } finally {
+    server.close();
+    await once(server, 'close');
+    rmSync(projectRoot, { recursive: true, force: true });
+  }
+});

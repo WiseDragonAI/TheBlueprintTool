@@ -1,6 +1,6 @@
 const STATUS_LABELS = ['task-waiting', 'task-active', 'task-complete'];
 
-export function parseMasterTaskMarkdown({ cardId, title, ledgerId, ledgerTitle, markdown, cardStatus = 'todo', cards = [] }) {
+export function parseMasterTaskMarkdown({ cardId, title, ledgerId, ledgerTitle, markdown, cardStatus = 'todo', cards = [], codexRunId = '', codexStatus = '' }) {
   const source = String(markdown ?? '').replace(/\r\n?/g, '\n');
   const labelLines = source.split('\n').filter((line) => /^\s*(?:#[a-z][a-z0-9-]*\s*)+$/i.test(line));
   const labels = new Set(Array.from(labelLines.join('\n').matchAll(/#([a-z][a-z0-9-]*)\b/gi), (match) => match[1].toLowerCase()));
@@ -39,6 +39,8 @@ export function parseMasterTaskMarkdown({ cardId, title, ledgerId, ledgerTitle, 
     }
   }
   const complete = subtasks.filter((task) => /^(?:complete|completed|done)$/i.test(task.status)).length;
+  const normalizedCodexStatus = String(codexStatus).toLowerCase();
+  const codexProcessing = ['processing', 'running', 'in_progress'].includes(normalizedCodexStatus);
   return {
     valid: diagnostics.length === 0,
     masterTask: labels.has('master-task'),
@@ -48,7 +50,10 @@ export function parseMasterTaskMarkdown({ cardId, title, ledgerId, ledgerTitle, 
     ledgerId: String(ledgerId),
     ledgerTitle: String(ledgerTitle),
     ledger,
-    status: cardStatus === 'done' ? 'task-complete' : (labels.has('task-active') ? 'task-active' : 'task-waiting'),
+    status: cardStatus === 'done' ? 'task-complete' : (labels.has('task-active') && codexProcessing ? 'task-active' : 'task-waiting'),
+    codexRunId: String(codexRunId),
+    codexStatus: normalizedCodexStatus,
+    codexProcessing,
     waitingSince: waitingText,
     waitingTime,
     activeSince: activeText,

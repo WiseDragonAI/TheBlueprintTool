@@ -118,6 +118,7 @@ body.menu-open .ledger-nav { transform: translateX(0); }
 body.menu-open .nav-scrim { opacity: 1; pointer-events: auto; }
 .nav-heading { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding: 0 4px 10px 12px; color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .ledger-links { display: grid; gap: 6px; }
+.nav-server-restart-button { width: 100%; margin-top: 24px; padding: 12px; border-color: var(--danger); color: var(--danger); background: transparent; }
 .ledger-link { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 50px; padding: 10px 13px; border: 0; color: var(--muted); background: transparent; text-align: left; text-decoration: none; }
 .ledger-link::before { content: ""; width: 8px; height: 8px; flex: 0 0 auto; border: 2px solid currentColor; border-radius: 50%; }
 .ledger-link.active { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent), transparent 92%); box-shadow: inset 0 -2px 0 var(--accent); }
