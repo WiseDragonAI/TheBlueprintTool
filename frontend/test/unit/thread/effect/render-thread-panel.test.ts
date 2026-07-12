@@ -275,10 +275,10 @@ test('thread selection persists the complete default pair and synchronizes a mou
     const button = actions.querySelector('.thread-codex-button') as FakeElement;
     assert.ok(actions);
     assert.equal(model.value, 'gpt-5.6-sol');
-    assert.equal(effort.value, 'high');
+    assert.equal(effort.value, 'medium');
     assert.equal(button.dataset.codexCardId, 'card-a');
     assert.equal(button.dataset.codexModel, 'gpt-5.6-sol');
-    assert.equal(button.dataset.codexEffort, 'high');
+    assert.equal(button.dataset.codexEffort, 'medium');
 
     model.focus();
     model.value = 'gpt-5.4';
@@ -288,11 +288,11 @@ test('thread selection persists the complete default pair and synchronizes a mou
 
     assert.deepEqual(requests[0], {
       action: 'patch-card',
-      cardPatch: { id: 'card-a', codexRunModel: 'gpt-5.4', codexRunEffort: 'high' }
+      cardPatch: { id: 'card-a', codexRunModel: 'gpt-5.4', codexRunEffort: 'medium' }
     });
     assert.equal(button.dataset.codexModel, 'gpt-5.4');
     assert.equal(widgetModel.value, 'gpt-5.4');
-    assert.equal(widgetEffort.value, 'high');
+    assert.equal(widgetEffort.value, 'medium');
 
     widgetEffort.value = 'ultra';
     await persistCardCodexRunPreference({ cardId: 'card-a', model: widgetModel.value, effort: widgetEffort.value });

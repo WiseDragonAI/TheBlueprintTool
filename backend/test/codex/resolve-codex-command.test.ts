@@ -84,7 +84,7 @@ test('resolveCodexCommand supports GPT-5.6 with ultra reasoning', () => {
   }
 });
 
-test('resolveCodexCommand defaults to gpt-5.6-sol with high effort when no selection is configured', () => {
+test('resolveCodexCommand defaults to gpt-5.6-sol with medium effort when no selection is configured', () => {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-codex-command-'));
   const previousCodexModel = process.env.CODEX_MODEL;
   const previousCodexEffort = process.env.CODEX_EFFORT;
@@ -94,9 +94,9 @@ test('resolveCodexCommand defaults to gpt-5.6-sol with high effort when no selec
     const command = resolveCodexCommand({ workspaceRoot: workspace, runtime: {} });
 
     assert.equal(command.model, 'gpt-5.6-sol');
-    assert.equal(command.effort, 'high');
+    assert.equal(command.effort, 'medium');
     assert.equal(command.args.includes('gpt-5.6-sol'), true);
-    assert.equal(command.args.includes('model_reasoning_effort="high"'), true);
+    assert.equal(command.args.includes('model_reasoning_effort="medium"'), true);
   } finally {
     if (previousCodexModel === undefined) delete process.env.CODEX_MODEL;
     else process.env.CODEX_MODEL = previousCodexModel;
