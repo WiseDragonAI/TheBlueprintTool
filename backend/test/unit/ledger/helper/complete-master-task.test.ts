@@ -62,3 +62,35 @@ test('rejects completion when a canonical subtask link is unresolved', () => {
     rmSync(workspace, { recursive: true, force: true });
   }
 });
+
+test('completes a direct-treatment master task with no linked subtask cards', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-master-task-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  const ledgerPath = join(decisionOsRoot, 'specs.json');
+  const ledger = {
+    cards: [{
+      id: 'master-direct',
+      status: 'todo',
+      comment: {
+        what: '#master-task #task-active\n\nLedger: Specs\nWaiting since: 2026-07-12T00:00:00.000Z\nActive since: 2026-07-12T00:01:00.000Z\n\n## D. Subtasks\n\n1. **Direct treatment:** Implemented as one focused change.',
+      },
+    }],
+  };
+
+  try {
+    const result = applyLedgerMutation({
+      decisionOsRoot,
+      ledgerPath,
+      ledger,
+      mutation: { action: 'complete-master-task', masterTaskId: 'master-direct' },
+    });
+    assert.equal(result.error, undefined);
+    assert.equal(ledger.cards[0]?.status, 'done');
+    const markdown = readFileSync(join(decisionOsRoot, 'cards', 'specs', 'master-direct.md'), 'utf8');
+    assert.match(markdown, /^#master-task #task-complete$/m);
+    assert.match(markdown, /^Completed at: \d{4}-\d{2}-\d{2}T/m);
+    assert.match(markdown, /\*\*Direct treatment:\*\*/);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
