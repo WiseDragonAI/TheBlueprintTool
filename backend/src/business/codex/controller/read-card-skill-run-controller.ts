@@ -230,7 +230,7 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     nextSince: parsedLines.at(-1)?.line ?? 0,
     toolCallCount: uniqueToolCallCount(runId, segmentEvents),
     agentMessageCount: segmentEvents.filter((event) => event.kind === 'agent_message').length,
-    fileChangeCount: segmentEvents.filter((event) => event.kind === 'file_change').length,
+    fileChangeCount: segmentEvents.filter((event) => event.title === 'File changes').length,
     thinkingCount: segmentEvents.filter((event) => event.kind === 'thinking').length,
     warningCount: segmentEvents.filter((event) => event.kind === 'warning').length + diagnostics.filter((event) => event.kind === 'warning').length,
     errorCount: segmentEvents.filter((event) => event.kind === 'error').length + diagnostics.filter((event) => event.kind === 'error').length,

@@ -55,6 +55,15 @@ function toolAction(command: string): string {
 }
 
 export function threadRunToolPresentation(event: ThreadRunLogEvent): ThreadRunToolPresentation {
+  if (event.title === 'File changes') {
+    const files = event.tool.split('\n').map((line) => line.replace(/^-\s*/, '').trim()).filter(Boolean);
+    return {
+      action: 'Files',
+      command: files.join('\n') || 'File changes',
+      compactCommand: compactText(files.join(', ') || 'File changes'),
+      status: event.status || 'pending',
+    };
+  }
   const command = displayCommand(event.tool || event.title);
   const statusParts = [event.status];
   // WHAT: Surface a producer exit code beside lifecycle status when available.

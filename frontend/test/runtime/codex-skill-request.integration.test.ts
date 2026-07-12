@@ -440,6 +440,16 @@ test('thread run reducer coalesces tool lifecycles, deduplicates diagnostics, an
   assert.notEqual(missingIds.events[0].eventKey, missingIds.events[1].eventKey);
 });
 
+test('thread run reducer coalesces file-change lifecycles as tool calls', () => {
+  const result = mergeThreadRunEvents([], [
+    runEvent({ line: 20, kind: 'tool_call', itemId: 'files-1', type: 'item.started', title: 'File changes', status: 'in_progress', tool: '- frontend/src/app.ts: updated' }),
+    runEvent({ line: 21, kind: 'tool_call', itemId: 'files-1', type: 'item.completed', title: 'File changes', status: 'completed', tool: '- frontend/src/app.ts: updated', output: '- frontend/src/app.ts: updated' }),
+  ], 'codex-skill-5000-log');
+  assert.equal(result.events.length, 1);
+  assert.equal(result.events[0].status, 'completed');
+  assert.equal(groupSequentialToolCalls(result.events)[0].kind, 'tool-group');
+});
+
 test('thread log consumer shares one advancing poller across rerenders and stops on every terminal state', async () => {
   const previousFetch = globalThis.fetch;
   const previousSetTimeout = globalThis.setTimeout;

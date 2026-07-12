@@ -125,7 +125,7 @@ test('thread-launched run reads return chronological diagnostics without changin
     assert.equal(body.lineCount, 12);
     assert.equal(body.nextSince, 12);
     assert.ok(body.elapsedMs >= 89000 && body.elapsedMs <= 91000);
-    assert.equal(body.toolCallCount, 2);
+    assert.equal(body.toolCallCount, 3);
     assert.equal(body.agentMessageCount, 1);
     assert.equal(body.fileChangeCount, 1);
     assert.equal(body.thinkingCount, 1);
@@ -139,7 +139,7 @@ test('thread-launched run reads return chronological diagnostics without changin
     assert.equal(body.persistedEventCount, 0);
     assert.deepEqual(body.metadata, { sourceCardTitle: 'Thread target', sourceThreadId: threadId, codexModel: 'gpt-5.5', codexEffort: 'xhigh' });
     assert.deepEqual(body.events.map((event) => event.line), [3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
-    assert.deepEqual(body.events.map((event) => event.kind), ['thinking', 'agent_message', 'tool_call', 'tool_call', 'tool_call', 'file_change', 'warning', 'transport', 'error', 'run_status']);
+    assert.deepEqual(body.events.map((event) => event.kind), ['thinking', 'agent_message', 'tool_call', 'tool_call', 'tool_call', 'tool_call', 'warning', 'transport', 'error', 'run_status']);
     assert.deepEqual(body.events.filter((event) => event.itemId === 'cmd-1').map((event) => event.line), [5, 6]);
     assert.equal(body.events.find((event) => event.line === 6)?.output, 'found TODO');
     assert.equal(body.events.every((event) => event.source === 'jsonl' && event.sourceLine === event.line), true);

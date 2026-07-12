@@ -6,6 +6,7 @@ import {
   type NormalizedRunEvent,
   type ParsedRunLine
 } from './card-skill-run-event-types.js';
+import { isAbsolute, relative } from 'node:path';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -53,7 +54,11 @@ function changesText(changes: unknown): string {
     // WHY: One irregular change item must not discard the rest of the file-change event.
     if (!change || typeof change !== 'object' || Array.isArray(change)) return `- ${String(change)}`;
     const record = change as AnyRecord;
-    const path = String(record.path ?? record.file ?? record.name ?? 'file');
+    const sourcePath = String(record.path ?? record.file ?? record.name ?? 'file');
+    // WHAT: Display files relative to the workspace from which decision-os was launched.
+    // WHY: Absolute host paths consume the mobile log without adding repository context.
+    const workspacePath = isAbsolute(sourcePath) ? relative(process.cwd(), sourcePath) : sourcePath;
+    const path = workspacePath && !workspacePath.startsWith('..') ? workspacePath : sourcePath;
     const action = String(record.kind ?? record.type ?? record.action ?? record.status ?? 'changed');
     return `- ${path}: ${action}`;
   }).join('\n');
@@ -162,11 +167,11 @@ export function normalizeCardSkillRunEvent(line: ParsedRunLine): NormalizedRunEv
     if (output) parts.push('', fencedTextBlock(output));
     return normalizedJsonlEvent(line.line, { type, kind: 'tool_call', title: tool || (itemType === 'web_search' ? 'Web search' : 'Tool call'), text: parts.join('\n'), status, itemId, tool, output, exitCode, severity: status === 'failed' ? 'error' : 'info', persist: true });
   }
-  // WHAT: Format file-change records as a stable change list.
-  // WHY: Durable thread history should show what the run modified.
+  // WHAT: Normalize file changes as tool calls with the same lifecycle identity as commands.
+  // WHY: Started and completed records must coalesce inside the compact tool disclosure.
   if (itemType === 'file_change') {
     const text = changesText(item.changes);
-    return normalizedJsonlEvent(line.line, { type, kind: 'file_change', title: 'File changes', text, status, itemId, tool: '', output: '', exitCode: '', severity: status === 'failed' ? 'error' : 'info', persist: true });
+    return normalizedJsonlEvent(line.line, { type, kind: 'tool_call', title: 'File changes', text, status, itemId, tool: text, output: text, exitCode: '', severity: status === 'failed' ? 'error' : 'info', persist: true });
   }
   const text = textBlock(item.text ?? item.message ?? event.message ?? event.text);
   // WHAT: Promote diagnostic-shaped fallback records into the diagnostic contract.
