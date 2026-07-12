@@ -4,11 +4,12 @@ import test from 'node:test';
 import { activeAge, activeStopwatch, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from '../src/mobile-control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from '../src/mobile-control-room-route.js';
 
-const [mobile, html, styles, embla] = await Promise.all([
+const [mobile, html, styles, embla, panzoom] = await Promise.all([
   readFile(new URL('../src/mobile.js', import.meta.url), 'utf8'),
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
   readFile(new URL('../assets/mobile.css', import.meta.url), 'utf8'),
-  readFile(new URL('../assets/vendor/embla-carousel-8.6.0.umd.js', import.meta.url), 'utf8')
+  readFile(new URL('../assets/vendor/embla-carousel-8.6.0.umd.js', import.meta.url), 'utf8'),
+  readFile(new URL('../assets/vendor/panzoom-4.6.2.es.js', import.meta.url), 'utf8')
 ]);
 
 const task = (overrides = {}) => ({
@@ -208,6 +209,14 @@ test('drives mobile carousels with pinned dependency-free Embla physics', () => 
   assert.match(mobile, /api\.scrollTo\(index\)/);
   assert.match(mobile, /api\.on\('pointerDown', hideTitles\)[\s\S]*\.on\('settle', revealTitle\)/);
   assert.match(mobile, /instance\?\.api\.destroy\(\)/);
+});
+
+test('serves the pinned Panzoom fullscreen viewer on the mobile carousel surface', () => {
+  assert.match(panzoom, /Panzoom 4\.6\.2/);
+  assert.match(styles, /\.ledger-card-media-fullscreen \{ position: absolute; top: 14px; right: 14px;[^}]*opacity: 0; pointer-events: none;/);
+  assert.match(styles, /\.ledger-card-media-slide\.is-fullscreen-control-visible \.ledger-card-media-fullscreen,[^{]*\{ opacity: 1; pointer-events: auto;/);
+  assert.match(styles, /\.ledger-card-image-viewer-stage \{[^}]*touch-action: none;/);
+  assert.match(styles, /\.ledger-card-image-viewer-close \{ position: fixed; top: max\(16px, env\(safe-area-inset-top\)\); right: max\(16px, env\(safe-area-inset-right\)\);/);
 });
 
 test('shows the settled image title for one second and then fades it out', () => {
