@@ -310,6 +310,11 @@ test('thread selection persists the complete default pair and synchronizes a mou
     assert.equal(actions.querySelector('[data-codex-preference="model"]'), model);
     assert.equal(model.value, 'gpt-5.4');
     assert.equal((globalThis.document as unknown as { activeElement: FakeElement }).activeElement, model);
+
+    state.threadPanelOpen = false;
+    renderThreadPanel();
+    assert.equal(root.querySelector('.panel')?.hidden, true);
+    assert.equal(root.querySelector('.thread-panel')?.hidden, true);
   } finally {
     globalThis.fetch = previousFetch;
   }

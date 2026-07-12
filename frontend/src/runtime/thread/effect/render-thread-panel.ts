@@ -224,7 +224,7 @@ export function renderThreadPanel(): void {
   const sameRenderedThread = activeThreadId && state.renderedThreadId === activeThreadId;
   if (shouldOpenThread && !shouldPinThread && sameRenderedThread) saveThreadScrollPosition(activeThreadId, activeTab);
 
-  inspector.hidden = false;
+  inspector.hidden = !shouldOpenThread;
   panel.hidden = !shouldOpenThread;
   shell.classList.toggle('has-inspector', shouldOpenThread);
 
