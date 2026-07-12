@@ -7,7 +7,7 @@ import { state } from '../../state.js';
 export function resolveThreadTargetTitle(threadId: string): string {
   const escapedThreadId = globalThis.CSS?.escape ? CSS.escape(threadId) : threadId.replace(/["\\]/g, '\\$&');
   const target = threadId ? document.querySelector(`[data-thread-id="${escapedThreadId}"]`) as HTMLElement | null : null;
-  const domTitle = target?.querySelector('.ledger-card-title, .zone-title, strong')?.textContent?.trim();
+  const domTitle = target?.querySelector('.ledger-card-title, .zone-title')?.textContent?.trim();
   if (domTitle) return domTitle;
   const id = threadId.replace(/^thread-/, '');
   const ledger = state.activeLedger as { cards?: Array<Record<string, unknown>>; annotations?: Array<Record<string, unknown>> } | null;
@@ -15,5 +15,7 @@ export function resolveThreadTargetTitle(threadId: string): string {
   if (card) return String(card.title ?? id);
   const annotation = ledger?.annotations?.find((entry) => String(entry.id ?? '') === id);
   if (annotation) return String(annotation.label ?? id);
+  const fallbackDomTitle = target?.querySelector('strong')?.textContent?.trim();
+  if (fallbackDomTitle) return fallbackDomTitle;
   return threadId ? id : '';
 }
