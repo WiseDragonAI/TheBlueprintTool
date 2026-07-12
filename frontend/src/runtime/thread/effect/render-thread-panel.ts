@@ -16,6 +16,7 @@ import { renderVoiceStatus } from '../../voice/effect/render-voice-status.js';
 import { resolveThreadTargetTitle } from '../helper/resolve-thread-target-title.js';
 import { applyThreadAccent } from './apply-thread-accent.js';
 import { pinThreadFeedToLastMessage } from './pin-thread-feed-to-last-message.js';
+import { isThreadFollowingBottom } from '../helper/thread-follow-bottom.js';
 import { restoreThreadDraft } from './persist-thread-draft.js';
 import { restoreThreadScrollPosition, saveThreadScrollPosition } from './persist-thread-scroll.js';
 import { renderThreadCodexLog } from './render-thread-codex-log.js';
@@ -226,8 +227,9 @@ export function renderThreadPanel(): void {
   const activeThreadId = String(state.threadId ?? '');
   const activeTab = activeThreadPanelTab(activeThreadId);
   const shouldPinThread = Boolean(shouldOpenThread && state.threadPinOnRender);
+  const shouldFollowBottom = Boolean(shouldOpenThread && activeTab === 'thread' && isThreadFollowingBottom(activeThreadId));
   const sameRenderedThread = activeThreadId && state.renderedThreadId === activeThreadId;
-  if (shouldOpenThread && !shouldPinThread && sameRenderedThread) saveThreadScrollPosition(activeThreadId, activeTab);
+  if (shouldOpenThread && !shouldPinThread && !shouldFollowBottom && sameRenderedThread) saveThreadScrollPosition(activeThreadId, activeTab);
 
   inspector.hidden = !shouldOpenThread;
   panel.hidden = !shouldOpenThread;
@@ -261,7 +263,7 @@ export function renderThreadPanel(): void {
   }
   renderTelemetry();
 
-  if (shouldPinThread) {
+  if (shouldPinThread || shouldFollowBottom) {
     state.threadPinOnRender = false;
     pinThreadFeedToLastMessage();
   } else if (shouldOpenThread) {

@@ -10,6 +10,7 @@ import { closeThreadPanel } from '../../src/runtime/thread/effect/close-thread-p
 import { restoreThreadDraft, saveThreadDraft } from '../../src/runtime/thread/effect/persist-thread-draft.js';
 import { restoreThreadScrollPosition, saveThreadScrollPosition } from '../../src/runtime/thread/effect/persist-thread-scroll.js';
 import { pinThreadFeedToLastMessage } from '../../src/runtime/thread/effect/pin-thread-feed-to-last-message.js';
+import { isThreadFollowingBottom } from '../../src/runtime/thread/helper/thread-follow-bottom.js';
 import { renderThreadJumpButton } from '../../src/runtime/thread/effect/render-thread-jump-button.js';
 import { renderThreadNotes } from '../../src/runtime/thread/effect/render-thread-notes.js';
 import { state } from '../../src/runtime/state.js';
@@ -326,6 +327,31 @@ test('pin-thread-feed-to-last-message scrolls the thread viewport to the newest 
   }
 });
 
+test('pin-thread-feed-to-last-message activates follow-bottom on the primary mobile viewport', () => {
+  const previousDocument = globalThis.document;
+  const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
+  const chat = { scrollTop: 0, scrollHeight: 720 };
+  (globalThis as unknown as { document: unknown }).document = {
+    querySelector(selector: string) {
+      if (selector === '.thread-panel .thread-conversation-scroll') return chat;
+      return null;
+    }
+  };
+  (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = undefined;
+  state.threadId = 'thread-mobile';
+  state.threadFollowBottomByThreadId = {};
+  try {
+    pinThreadFeedToLastMessage({ follow: true });
+    assert.equal(chat.scrollTop, 720);
+    assert.equal(isThreadFollowingBottom('thread-mobile'), true);
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+    (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = previousRequestAnimationFrame;
+    state.threadId = '';
+    state.threadFollowBottomByThreadId = {};
+  }
+});
+
 test('render-thread-jump-button shows only when the thread viewport is away from the bottom', () => {
   const previousDocument = globalThis.document;
   const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
@@ -376,6 +402,8 @@ test('render-thread-jump-button shows only when the thread viewport is away from
     return 1;
   };
   try {
+    state.threadId = 'thread-jump';
+    state.threadFollowBottomByThreadId = { 'thread-jump': true };
     renderThreadJumpButton();
     assert.equal(shell.children[0], frame);
     assert.equal(chat.children.length, 0);
@@ -389,9 +417,12 @@ test('render-thread-jump-button shows only when the thread viewport is away from
     scrollHandler?.(new Event('scroll'));
     assert.equal((button as TestElement & { hidden: boolean }).hidden, true);
     assert.equal(button?.attributes['aria-hidden'], 'true');
+    assert.equal(isThreadFollowingBottom('thread-jump'), false);
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
     (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = previousRequestAnimationFrame;
+    state.threadId = '';
+    state.threadFollowBottomByThreadId = {};
   }
 });
 
