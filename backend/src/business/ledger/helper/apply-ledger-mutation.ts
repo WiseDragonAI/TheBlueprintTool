@@ -4,7 +4,7 @@
  */
 import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-ledger-notes.js';
 import { relationshipReferencesCard } from './relationship-references-card.js';
-import { deleteCardMarkdownImage, duplicateCardContentFile, externalizeCardContent, sameMarkdownImageSource, writeCardDescriptionFile } from './card-content-file.js';
+import { deleteCardMarkdownImage, duplicateCardContentFile, externalizeCardContent, readCardDescription, sameMarkdownImageSource, writeCardDescriptionFile } from './card-content-file.js';
 import { hydrateLedgerThreadNotes, writeThreadNotesFile } from './thread-content-file.js';
 import { codexEffortOptions, codexModelOptions, type CodexEffort, type CodexModel } from '../../../../../shared/schemas/codex-pipeline-types.js';
 
@@ -12,6 +12,8 @@ export type LedgerMutation = {
   action?: string;
   card?: Record<string, unknown>;
   cardId?: string;
+  masterTaskId?: string;
+  subtaskCardId?: string;
   imageSrc?: string;
   cardPatch?: { id?: string; status?: string; title?: string; description?: string; imageSizes?: Record<string, { width?: number; height?: number }>; codexRunModel?: CodexModel; codexRunEffort?: CodexEffort };
   annotation?: Record<string, unknown>;
@@ -105,6 +107,30 @@ export function applyLedgerMutation(input: {
       if (card && validCodexPreference) {
         card.codexRunModel = mutation.cardPatch.codexRunModel;
         card.codexRunEffort = mutation.cardPatch.codexRunEffort;
+      }
+    }
+  }
+  if (mutation.action === 'complete-master-subtask') {
+    const masterTaskId = String(mutation.masterTaskId ?? '');
+    const subtaskCardId = String(mutation.subtaskCardId ?? '');
+    const masterTask = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === masterTaskId);
+    const subtask = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === subtaskCardId);
+    if (!masterTask || !subtask) {
+      mutationError = { statusCode: 404, body: { ok: false, error: 'Master task or linked subtask not found.' } };
+    } else {
+      const markdown = readCardDescription({ decisionOsRoot, card: masterTask });
+      const escapedId = subtaskCardId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const subtaskLine = new RegExp(`^(\\s*\\d+[.)]\\s+\\[[^\\]]+\\]\\(card:${escapedId}\\))(?:\\s+[—-]\\s+Status:\\s*.*?)?\\s*$`, 'im');
+      if (!/^\s*(?:#[a-z][a-z0-9-]*\s*)*#master-task\b/im.test(markdown) || !subtaskLine.test(markdown)) {
+        mutationError = { statusCode: 400, body: { ok: false, error: 'The requested card is not linked from the master task Markdown.' } };
+      } else {
+        subtask.status = 'done';
+        writeCardDescriptionFile({
+          decisionOsRoot,
+          card: masterTask,
+          description: markdown.replace(subtaskLine, '$1 — Status: complete'),
+          ledgerPath,
+        });
       }
     }
   }
