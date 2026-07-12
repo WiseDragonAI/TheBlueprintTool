@@ -1,5 +1,6 @@
 import { renderLedgerCardMarkdown } from '/canvas-src/runtime/ledger/component/render-ledger-card-markdown.js';
 import { ledgerCardBody } from '/canvas-src/runtime/ledger/helper/ledger-card-body.js';
+import { saveLedgerCardMediaCarouselSlide } from '/canvas-src/runtime/ledger/helper/persist-ledger-card-media-carousel.js';
 import { initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './mobile-thread.js';
 import { initializeMobileCodex, setMobileCodexContext } from './mobile-codex.js';
 import { activeAge, activeStopwatch, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from './mobile-control-room.js';
@@ -624,6 +625,73 @@ function renderCards(cards) {
   elements['zone-summary'].textContent = `${filtered.length === cards.length ? cards.length : `${filtered.length} of ${cards.length}`} cards`;
 }
 
+const mobileCarouselInstances = new WeakMap();
+
+function destroyMobileCarousels(root) {
+  for (const shell of root.querySelectorAll('.ledger-card-media-carousel')) {
+    mobileCarouselInstances.get(shell)?.destroy();
+    mobileCarouselInstances.delete(shell);
+  }
+}
+
+function initializeMobileCarousels(root) {
+  for (const shell of root.querySelectorAll('.ledger-card-media-carousel[data-carousel-driver="external"]')) {
+    const track = shell.querySelector('.ledger-card-media-track');
+    const slides = Array.from(track?.children ?? []);
+    if (!track || slides.length < 2 || typeof globalThis.EmblaCarousel !== 'function') continue;
+    const startIndex = Math.max(0, Math.min(slides.length - 1, Number(shell.dataset.carouselStartIndex) || 0));
+    const api = globalThis.EmblaCarousel(shell, {
+      align: 'center',
+      container: track,
+      slides,
+      containScroll: 'trimSnaps',
+      dragFree: false,
+      slidesToScroll: 1,
+      skipSnaps: false,
+      duration: 25,
+      loop: false,
+      startIndex
+    });
+    mobileCarouselInstances.set(shell, api);
+    const replaceControl = (selector, action) => {
+      const current = shell.querySelector(selector);
+      if (!current) return null;
+      const control = current.cloneNode(true);
+      current.replaceWith(control);
+      control.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        action();
+      });
+      return control;
+    };
+    replaceControl('.ledger-card-media-nav .ledger-card-media-button:first-child', () => api.scrollPrev());
+    replaceControl('.ledger-card-media-nav .ledger-card-media-button:nth-child(2)', () => api.scrollNext());
+    const selectors = Array.from(shell.querySelectorAll('.ledger-card-media-slide-button'));
+    selectors.forEach((button, index) => {
+      const replacement = button.cloneNode(true);
+      button.replaceWith(replacement);
+      selectors[index] = replacement;
+      replacement.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        api.scrollTo(index);
+      });
+    });
+    const sync = () => {
+      const selected = api.selectedScrollSnap();
+      selectors.forEach((button, index) => {
+        const active = index === selected;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-current', active ? 'true' : 'false');
+      });
+      if (shell.dataset.carouselStateId) saveLedgerCardMediaCarouselSlide(shell.dataset.carouselStateId, selected, slides.length);
+    };
+    api.on('select', sync).on('reInit', sync);
+    sync();
+  }
+}
+
 function renderCard(card) {
   state.activeCardId = asText(card.id);
   elements['card-title'].textContent = asText(card.title).trim() || `Card ${card.id}`;
@@ -641,7 +709,8 @@ function renderCard(card) {
   const backButton = document.querySelector('.back-to-zone-button');
   backButton.textContent = '← Back';
   backButton.dataset.destination = parsedTask.masterTask ? 'control-room' : 'zone';
-  const content = renderLedgerCardMarkdown(parsedTask.masterTask ? visibleMasterTaskMarkdown(markdown) : markdown, { imageSizes, mediaSurface: 'thread' });
+  destroyMobileCarousels(elements['card-body']);
+  const content = renderLedgerCardMarkdown(parsedTask.masterTask ? visibleMasterTaskMarkdown(markdown) : markdown, { imageSizes, mediaSurface: 'thread', carouselDriver: 'external' });
   if (parsedTask.masterTask) {
     const overview = document.createElement('section');
     overview.className = 'task-overview';
@@ -691,6 +760,7 @@ function renderCard(card) {
     overview.append(status, heading, subtasks, completion);
     elements['card-body'].replaceChildren(content, overview);
   } else elements['card-body'].replaceChildren(content);
+  initializeMobileCarousels(elements['card-body']);
   elements['card-view'].style.setProperty('--zone-color', state.activeZoneColor || 'var(--accent)');
   setMobileThreadCard(card);
   setMobileCodexContext({ ledgerId: state.activeLedgerId, cardId: state.activeCardId });
