@@ -2,6 +2,9 @@
  * WHAT: Renders and updates the thread feed jump-to-bottom control.
  * WHY: Long threads need a quick return path to the newest note without moving the composer.
  */
+import { state } from '../../state.js';
+import { setThreadFollowBottom } from '../helper/thread-follow-bottom.js';
+
 const threadJumpScrollHandlers = new WeakMap<HTMLElement, EventListener>();
 
 function threadChatElement(): HTMLElement | null {
@@ -41,6 +44,7 @@ export function syncThreadJumpButtonVisibility(): void {
   const maxScrollTop = Math.max(0, scrollHeight - clientHeight);
   const bottomDistance = Math.max(0, maxScrollTop - scrollTop);
   const shouldShow = maxScrollTop > 8 && bottomDistance > 72;
+  if (bottomDistance > 72) setThreadFollowBottom(String(state.threadId ?? ''), false);
   button.hidden = !shouldShow;
   button.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
 }

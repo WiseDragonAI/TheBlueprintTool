@@ -103,7 +103,7 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     return;
   }
   if (action === 'jump-thread-bottom') {
-    pinThreadFeedToLastMessage();
+    pinThreadFeedToLastMessage({ follow: true });
     return;
   }
   if (action === 'voice-cancel') cancelVoiceRecording();

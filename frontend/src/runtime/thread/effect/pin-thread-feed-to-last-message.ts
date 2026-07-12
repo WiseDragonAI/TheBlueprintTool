@@ -3,12 +3,15 @@
  * WHY: Opening a card thread should land on the latest operator/agent exchange.
  */
 import { syncThreadJumpButtonVisibility } from './render-thread-jump-button.js';
+import { state } from '../../state.js';
+import { setThreadFollowBottom } from '../helper/thread-follow-bottom.js';
 
-export function pinThreadFeedToLastMessage(options: { behavior?: ScrollBehavior } = {}): void {
+export function pinThreadFeedToLastMessage(options: { behavior?: ScrollBehavior; follow?: boolean } = {}): void {
   const chat = (document.querySelector('.thread-panel .thread-conversation-scroll')
     ?? document.querySelector('.thread-panel .chat')) as HTMLElement | null;
   const list = document.querySelector('.thread-note-list') as HTMLElement | null;
   if (!chat) return;
+  if (options.follow) setThreadFollowBottom(String(state.threadId ?? ''), true);
   const scrollOptions: ScrollIntoViewOptions = options.behavior === 'smooth'
     ? { block: 'end', inline: 'nearest', behavior: options.behavior }
     : { block: 'end', inline: 'nearest' };
