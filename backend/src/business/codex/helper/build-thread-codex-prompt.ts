@@ -43,6 +43,7 @@ export function buildThreadCodexPrompt(input: {
     '7. **Operator-owned completion:** Never set a card status to `done` and never declare a master task complete unless the operator explicitly instructs you to complete that specific card. Completing work or all subtasks is not completion authorization.',
     '8. **Markdown task metadata:** Keep master-task identity, lifecycle labels, timestamps, queue rank, and subtask links in the card Markdown contract. Do not create a parallel task-data object in ledger JSON. Linked subtask completion comes from each linked card status, not duplicated status prose in the master Markdown.',
     `9. **Master-task validation:** After creating or changing master-task Markdown, run \`ledger-cli validate-master-tasks --ledger ${input.ledgerFile}\` and repair every reported error before replying. A master task must have exactly one lifecycle label: \`#task-waiting\`, \`#task-active\`, or \`#task-complete\`.`,
+    `10. **Master-task naming:** When the supplied card Markdown contains \`#master-task\`, replace the launch title \`${input.cardTitle}\` with a concise title derived from the operator request and rename the card's enclosing zone to the same title. This naming edit to \`${input.ledgerFile}\` is required and is the sole automatic exception to the ledger guard. Never leave a master task or its zone named \`New task intake\`.`,
     '',
     '---',
     '',
