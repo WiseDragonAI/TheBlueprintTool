@@ -31,6 +31,7 @@ const elements = Object.fromEntries([
 const asText = (value) => value == null ? '' : typeof value === 'string' ? value : JSON.stringify(value, null, 2);
 const routeParts = () => location.pathname.split('/').filter(Boolean).map(decodeURIComponent);
 const creationModal = document.querySelector('.creation-modal');
+const deleteMasterTaskModal = document.querySelector('.delete-master-task-modal');
 const creationForm = document.querySelector('.creation-form');
 let creationKind = '';
 let controlRoomScrollFrame = 0;
@@ -758,7 +759,15 @@ function renderCard(card) {
         setView('error-view');
       }
     });
-    completion.append(completeButton);
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'delete-master-task-button';
+    deleteButton.textContent = 'Delete master task';
+    deleteButton.addEventListener('click', () => {
+      deleteMasterTaskModal.dataset.cardId = String(card.id);
+      deleteMasterTaskModal.showModal();
+    });
+    completion.append(completeButton, deleteButton);
     overview.append(status, heading, subtasks, completion);
     elements['card-body'].replaceChildren(content, overview);
   } else elements['card-body'].replaceChildren(content);
@@ -769,6 +778,27 @@ function renderCard(card) {
   setView('card-view');
   document.title = `${elements['card-title'].textContent} · ${state.projectName}`;
 }
+
+document.querySelector('.cancel-delete-master-task-button').addEventListener('click', () => deleteMasterTaskModal.close());
+document.querySelector('.confirm-delete-master-task-button').addEventListener('click', async (event) => {
+  const button = event.currentTarget;
+  const cardId = deleteMasterTaskModal.dataset.cardId;
+  if (!cardId) return;
+  button.disabled = true;
+  button.textContent = 'Deleting task…';
+  try {
+    state.ledger = await ledgerMutation(state.activeLedgerId, { action: 'delete-card', cardId });
+    deleteMasterTaskModal.close();
+    navigate('/', true);
+  } catch (cause) {
+    deleteMasterTaskModal.close();
+    elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Master task deletion failed.';
+    setView('error-view');
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Delete master task';
+  }
+});
 
 function renderLedger() {
   const active = state.ledgers.find((ledger) => ledger.id === state.activeLedgerId);

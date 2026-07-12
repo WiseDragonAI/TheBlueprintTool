@@ -234,6 +234,16 @@ test('completes all linked cards from the master-task detail', () => {
   assert.match(styles, /\.complete-master-task-button \{ width: 100%; min-height: 52px;/);
 });
 
+test('deletes a master task from its detail after explicit confirmation', () => {
+  assert.match(mobile, /completion\.append\(completeButton, deleteButton\)/);
+  assert.match(mobile, /deleteMasterTaskModal\.showModal\(\)/);
+  assert.match(mobile, /action: 'delete-card', cardId/);
+  assert.match(mobile, /navigate\('\/', true\)/);
+  assert.match(html, /class="delete-master-task-modal mobile-confirm-modal"/);
+  assert.match(html, /Its linked subtask cards are kept\./);
+  assert.match(styles, /\.delete-master-task-button \{ width: 100%; min-height: 52px; margin-top: 12px;/);
+});
+
 test('uses global application destinations and keeps new task as the fourth control-room action', () => {
   assert.match(mobile, /destination\('Control room', '\/'\)/);
   assert.match(mobile, /destination\('Ledgers', '\/ledgers'\)/);
