@@ -119,8 +119,8 @@ export function applyLedgerMutation(input: {
       const subtaskLine = /^(\s*\d+[.)]\s+\[[^\]]+\]\(card:([^)]+)\))(?:\s+[—-]\s+Status:\s*.*?)?\s*$/gim;
       const subtaskIds = Array.from(markdown.matchAll(subtaskLine), (match) => match[2].trim());
       const linkedSubtasks = subtaskIds.map((id) => (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === id));
-      if (!/^\s*(?:#[a-z][a-z0-9-]*\s*)*#master-task\b/im.test(markdown) || subtaskIds.length === 0) {
-        mutationError = { statusCode: 400, body: { ok: false, error: 'Master task Markdown must contain at least one canonical subtask link.' } };
+      if (!/^\s*(?:#[a-z][a-z0-9-]*\s*)*#master-task\b/im.test(markdown)) {
+        mutationError = { statusCode: 400, body: { ok: false, error: 'The requested card is not a canonical master task.' } };
       } else if (linkedSubtasks.some((card) => !card)) {
         mutationError = { statusCode: 400, body: { ok: false, error: 'Every canonical subtask link must resolve to a ledger card.' } };
       } else {
