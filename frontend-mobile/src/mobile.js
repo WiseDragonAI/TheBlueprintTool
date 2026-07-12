@@ -3,6 +3,7 @@ import { ledgerCardBody } from '/canvas-src/runtime/ledger/helper/ledger-card-bo
 import { initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './mobile-thread.js';
 import { initializeMobileCodex, setMobileCodexContext } from './mobile-codex.js';
 import { activeAge, activeStopwatch, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from './mobile-control-room.js';
+import { controlRoomPath, parseControlRoomRoute } from './mobile-control-room-route.js';
 
 const state = {
   projectName: 'decision-os',
@@ -32,6 +33,7 @@ const routeParts = () => location.pathname.split('/').filter(Boolean).map(decode
 const creationModal = document.querySelector('.creation-modal');
 const creationForm = document.querySelector('.creation-form');
 let creationKind = '';
+let controlRoomScrollFrame = 0;
 
 function setView(name) {
   for (const id of ['loading-view', 'error-view', 'empty-view', 'overview-view', 'control-room-view', 'ledger-view', 'zone-view', 'card-view']) {
@@ -290,6 +292,7 @@ function filteredControlTasks() {
 function taskRow(task, index) {
   const article = document.createElement('article');
   article.className = `control-task${index === 0 && state.controlTab === 'queue' ? ' next-task' : ''}`;
+  article.id = `task-${task.cardId}`;
   article.dataset.cardId = task.cardId;
   article.draggable = false;
   const summary = document.createElement('button');
@@ -462,6 +465,22 @@ function renderControlRoom() {
   elements['control-diagnostics'].replaceChildren();
   setView('control-room-view');
   document.title = `Control room · ${state.projectName}`;
+  const { anchor } = parseControlRoomRoute(location.href);
+  if (anchor) window.requestAnimationFrame(() => document.getElementById(anchor)?.scrollIntoView({ block: 'start' }));
+}
+
+function persistControlRoomScrollAnchor() {
+  if (location.pathname !== '/' || elements['control-room-view'].hidden) return;
+  window.cancelAnimationFrame(controlRoomScrollFrame);
+  controlRoomScrollFrame = window.requestAnimationFrame(() => {
+    const rows = [...elements['control-task-list'].querySelectorAll('.control-task')];
+    const nearest = rows.reduce((best, row) => {
+      const distance = Math.abs(row.getBoundingClientRect().top);
+      return !best || distance < best.distance ? { row, distance } : best;
+    }, null)?.row;
+    const nextPath = controlRoomPath(state.controlTab, nearest?.id ?? '');
+    if (`${location.pathname}${location.search}${location.hash}` !== nextPath) history.replaceState({}, '', nextPath);
+  });
 }
 
 async function loadControlRoom() {
@@ -761,6 +780,10 @@ async function loadRoute() {
 
     const [requestedLedger, zoneMarker, requestedZone, cardMarker, requestedCard] = routeParts();
     if (!requestedLedger) {
+      const route = parseControlRoomRoute(location.href);
+      state.controlTab = route.tab;
+      const canonicalPath = controlRoomPath(route.tab, route.anchor);
+      if (`${location.pathname}${location.search}${location.hash}` !== canonicalPath) history.replaceState({}, '', canonicalPath);
       await loadControlRoom();
       renderControlRoom();
       return;
@@ -831,6 +854,8 @@ document.querySelector('.new-task-button').addEventListener('click', async () =>
 });
 document.querySelectorAll('[data-control-tab]').forEach((button) => button.addEventListener('click', () => {
   state.controlTab = button.dataset.controlTab;
+  history.pushState({}, '', controlRoomPath(state.controlTab));
+  window.scrollTo({ top: 0 });
   renderControlRoom();
 }));
 document.querySelector('.creation-cancel').addEventListener('click', () => creationModal.close());
@@ -843,6 +868,7 @@ elements['card-search'].addEventListener('input', (event) => {
   renderCards(state.ledger?.cards ?? []);
 });
 window.addEventListener('popstate', () => loadRoute());
+window.addEventListener('scroll', persistControlRoomScrollAnchor, { passive: true });
 window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && document.body.classList.contains('menu-open')) closeMenu();
 });
