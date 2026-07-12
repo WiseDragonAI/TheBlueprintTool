@@ -10,4 +10,5 @@ test('mobile thread launch continues an owned terminal Codex run', () => {
   assert.match(source, /if \(summary\.status === 'running'\) return/);
   assert.match(source, /requestCardSkillRunContinue\(\{/);
   assert.match(source, /runId: existingRunId/);
+  assert.equal(source.match(/syncThreadCodexRunControls\(\{ threadId: canvasState\.threadId, running: true \}\)/g)?.length, 2);
 });

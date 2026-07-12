@@ -14,6 +14,7 @@ import { requestCardSkillRunContinue } from '/canvas-src/runtime/codex/effect/re
 import { requestCardSkillRunStatus } from '/canvas-src/runtime/codex/effect/request-card-skill-run-status.js';
 import { bindThreadCodexRunLog } from '/canvas-src/runtime/codex/effect/bind-thread-codex-run-log.js';
 import { cardCodexThreadRunId } from '/canvas-src/runtime/codex/helper/card-codex-thread-run-id.js';
+import { syncThreadCodexRunControls } from '/canvas-src/runtime/thread/effect/sync-thread-codex-run-controls.js';
 
 let currentCard = null;
 let currentLedgerId = '';
@@ -125,6 +126,7 @@ async function startCodex(button) {
       button.disabled = false;
       return;
     }
+    syncThreadCodexRunControls({ threadId: canvasState.threadId, running: true });
     await onCodexStarted({
       ledgerId: currentLedgerId,
       cardId: String(currentCard.id),
@@ -145,6 +147,7 @@ async function startCodex(button) {
     button.disabled = false;
     return;
   }
+  syncThreadCodexRunControls({ threadId: canvasState.threadId, running: true });
   await onCodexStarted({
     ledgerId: currentLedgerId,
     cardId: String(currentCard.id),
