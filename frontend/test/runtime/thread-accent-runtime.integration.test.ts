@@ -56,10 +56,12 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   assert.match(threadCss, /thread-note-message \.ledger-card-heading[\s\S]*--thread-heading-color/);
   assert.match(threadCss, /thread-note-message \.ledger-card-hr[\s\S]*border-top-color: rgba\(255, 255, 255, 0\.18\)/);
   assert.match(threadCss, /thread-feed\s*{[\s\S]*min-width: 0;[\s\S]*min-height: 0;/);
-  assert.match(threadCss, /thread-heading\s*{[\s\S]*position: sticky;[\s\S]*grid-template-rows: minmax\(22px, auto\) auto;/);
-  assert.match(threadCss, /thread-toolbar\s*{[\s\S]*flex-wrap: wrap;[\s\S]*white-space: nowrap;/);
+  assert.match(threadCss, /thread-heading\s*{[\s\S]*position: sticky;[\s\S]*grid-template-rows: 28px 28px;/);
+  assert.match(threadCss, /thread-toolbar\s*{[\s\S]*justify-content: flex-end;[\s\S]*white-space: nowrap;/);
   assert.match(threadCss, /thread-actions\s*{[\s\S]*grid-template-columns: minmax\(112px, 1fr\) 84px auto;/);
+  assert.match(threadCss, /thread-actions\[hidden\]\s*{[\s\S]*display: none;/);
   assert.match(threadCss, /thread-tab\[aria-selected="true"\][\s\S]*box-shadow:/);
+  assert.match(threadCss, /thread-tab\[data-run-status="running"\]\s*{[\s\S]*animation: thread-codex-log-running/);
   assert.match(threadCss, /thread-conversation-scroll,[\s\S]*thread-log-scroll[\s\S]*overflow: auto;/);
   assert.match(threadCss, /codex-log-status\[data-run-status="failed"\],[\s\S]*border-left-color: #ff6473/);
   assert.match(threadCss, /codex-tool-group-summary:focus-visible,[\s\S]*outline: 2px solid/);
@@ -100,6 +102,7 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   assert.match(threadLogRenderer, /No Codex run for this thread\./);
   assert.match(threadLogRenderer, /document\.createElement\('details'\)/);
   assert.match(indexHtml, /role="tablist"[\s\S]*role="tab"[\s\S]*role="tabpanel"/);
+  assert.match(indexHtml, /thread-toolbar[\s\S]*thread-target[\s\S]*thread-tabs[\s\S]*data-action="close-thread-panel"[\s\S]*thread-actions/);
   assert.match(mediaRenderer, /mediaSurface !== 'thread'[\s\S]*watchContainedImageSizing\(shell\)/);
   assert.match(mediaRenderer, /renderThreadImageResizeHandle\(shell, options, sizeSource\)/);
 });

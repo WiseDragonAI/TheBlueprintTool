@@ -25,6 +25,8 @@ import { refreshRuntimeState } from '../../refresh/controller/refresh-runtime-st
 import { selectTarget } from '../../selection/controller/select-target.js';
 import { selectThread } from '../../thread/effect/select-thread.js';
 import { openThreadPanel } from '../../thread/effect/open-thread-panel.js';
+import { closeThreadPanel } from '../../thread/effect/close-thread-panel.js';
+import { syncThreadCodexRunControls } from '../../thread/effect/sync-thread-codex-run-controls.js';
 import { startVoiceRecording } from '../../voice/controller/start-voice-recording.js';
 import { stopVoiceRecording } from '../../voice/controller/stop-voice-recording.js';
 import { cancelVoiceRecording } from '../../voice/controller/cancel-voice-recording.js';
@@ -55,6 +57,10 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
   const action = actionTarget?.dataset.action;
   if (!action) return;
   telemetry('tool-button-click', { action });
+  if (action === 'close-thread-panel') {
+    closeThreadPanel();
+    return;
+  }
   if (action === 'open-ledgers-canvas') {
     if (event.ctrlKey || event.metaKey) {
       openLedgersCanvasInNewTab();
@@ -134,13 +140,18 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
   if (action === 'process-thread-codex') {
     const button = actionTarget as HTMLButtonElement;
     button.disabled = true;
+    const threadId = actionTarget.dataset.threadId ?? state.threadId;
+    syncThreadCodexRunControls({ threadId, running: true });
     const ok = await processThreadCodexController({
-      threadId: actionTarget.dataset.threadId ?? state.threadId,
+      threadId,
       cardId: actionTarget.dataset.codexCardId ?? '',
       codexModel: actionTarget.dataset.codexModel ?? '',
       codexEffort: actionTarget.dataset.codexEffort ?? ''
     });
-    if (!ok && button.isConnected) button.disabled = false;
+    if (!ok) {
+      syncThreadCodexRunControls({ threadId, running: false });
+      if (button.isConnected) button.disabled = false;
+    }
     return;
   }
   if (action === 'edit-card-title') {

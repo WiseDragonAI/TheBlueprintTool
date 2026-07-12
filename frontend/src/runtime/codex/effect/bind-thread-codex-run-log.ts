@@ -7,6 +7,7 @@ import { codexRunDurationLabel, liveCodexRunElapsedMs } from '../helper/live-cod
 import { mergeThreadRunEvents, type ThreadRunLogEvent } from '../helper/thread-run-log.js';
 import { bindCardSkillRunLogConsumer } from './poll-card-skill-run.js';
 import type { CardSkillRunSummary } from './request-card-skill-run-status.js';
+import { syncThreadCodexRunControls } from '../../thread/effect/sync-thread-codex-run-controls.js';
 
 function recordState(name: string): Record<string, any> {
   if (!state[name] || typeof state[name] !== 'object' || Array.isArray(state[name])) state[name] = {};
@@ -137,8 +138,10 @@ function consumeThreadRunSummary(input: { threadId: string; runId: string; summa
   }
 
   if (String(state.threadId ?? '') !== input.threadId || typeof document === 'undefined') return;
-  const launchButton = document.querySelector('.thread-codex-button') as HTMLButtonElement | null;
-  if (launchButton?.dataset.threadId === input.threadId) launchButton.disabled = input.summary.ok && input.summary.status === 'running';
+  syncThreadCodexRunControls({
+    threadId: input.threadId,
+    running: input.summary.ok && input.summary.status === 'running',
+  });
   void import('../../thread/effect/render-thread-codex-log.js').then(({ renderThreadCodexLog }) => renderThreadCodexLog());
 }
 

@@ -113,14 +113,15 @@
           <div class="thread-chat-shell">
             <main class="chat">
               <header class="thread-heading">
-                <p class="thread-target" title="No thread selected">No thread selected</p>
                 <div class="thread-toolbar">
+                  <p class="thread-target" title="No thread selected">No thread selected</p>
                   <div class="thread-tabs" role="tablist" aria-label="Thread views">
                     <button id="thread-tab-thread" class="thread-tab" type="button" role="tab" aria-selected="true" aria-controls="thread-panel-thread" tabindex="0">Thread</button>
                     <button id="thread-tab-codex-log" class="thread-tab" type="button" role="tab" aria-selected="false" aria-controls="thread-panel-codex-log" tabindex="-1">Codex Log</button>
                   </div>
-                  <div class="thread-actions"></div>
+                  <button class="thread-close terminal-button terminal-button--compact" type="button" data-action="close-thread-panel" title="Close thread panel" aria-label="Close thread panel"><span aria-hidden="true">×</span></button>
                 </div>
+                <div class="thread-actions"></div>
               </header>
               <div class="thread-tab-panels">
                 <section id="thread-panel-thread" class="thread-tab-panel thread-conversation-panel" role="tabpanel" aria-labelledby="thread-tab-thread">

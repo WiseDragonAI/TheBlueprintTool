@@ -21,6 +21,7 @@ import { restoreThreadScrollPosition, saveThreadScrollPosition } from './persist
 import { renderThreadCodexLog } from './render-thread-codex-log.js';
 import { renderThreadJumpButton, syncThreadJumpButtonVisibility } from './render-thread-jump-button.js';
 import { renderThreadNotes } from './render-thread-notes.js';
+import { syncThreadCodexRunControls } from './sync-thread-codex-run-controls.js';
 
 const threadTabOrder: ThreadPanelTab[] = ['thread', 'codex-log'];
 
@@ -102,6 +103,8 @@ function renderThreadActions(threadId: string): void {
       effort.value = threadCodexEffort;
       effort.title = `Effort: ${threadCodexEffort}`;
     }
+    const summary = state.threadRunSummaryByThreadId?.[threadId] as { ok?: boolean; status?: string } | undefined;
+    syncThreadCodexRunControls({ threadId, running: summary?.ok === true && summary.status === 'running' });
     return;
   }
   actions.replaceChildren();
@@ -148,6 +151,8 @@ function renderThreadActions(threadId: string): void {
   });
   const effortSelect = effort.querySelector('select') as HTMLSelectElement;
   actions.append(model, effort, button);
+  const summary = state.threadRunSummaryByThreadId?.[threadId] as { ok?: boolean; status?: string } | undefined;
+  syncThreadCodexRunControls({ threadId, running: summary?.ok === true && summary.status === 'running' });
 }
 
 function tabButton(tab: ThreadPanelTab): HTMLButtonElement | null {
