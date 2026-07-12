@@ -12,7 +12,7 @@ export type CardCodexRunPreference = {
 
 export const defaultCardCodexRunPreference: CardCodexRunPreference = {
   model: 'gpt-5.6-sol',
-  effort: 'high',
+  effort: 'medium',
 };
 
 export function cardCodexRunPreference(card: Record<string, unknown> | null | undefined): CardCodexRunPreference {
