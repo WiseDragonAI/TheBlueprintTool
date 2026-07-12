@@ -140,6 +140,12 @@ test('opens queued master tasks directly without building disclosure content', (
   assert.match(mobile, /if \(queue\) \{[\s\S]*article\.addEventListener\('drop'/);
 });
 
+test('omits the next-subtask subtitle when no actionable subtask exists', () => {
+  assert.doesNotMatch(mobile, /No actionable subtask/);
+  assert.match(mobile, /task\.nextSubtask \? '<span class="task-next"><\/span>' : ''/);
+  assert.match(mobile, /if \(nextSubtask\) nextSubtask\.textContent = `Next: \$\{task\.nextSubtask\.title\}`/);
+});
+
 test('keeps task metadata in Markdown but removes it from the visible card body', () => {
   const visible = visibleMasterTaskMarkdown(task().markdown);
   assert.doesNotMatch(visible, /#master-task|Ledger:|Waiting since:|Status:/);
