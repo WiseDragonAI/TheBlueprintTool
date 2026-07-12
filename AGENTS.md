@@ -28,6 +28,28 @@
 - **Don't.** `Add headers or query params: x-ledger-id, x-thread-id, x-card-id, x-note-id, x-queue-codex.`
 - **Do.** `Add required headers to /api/voice-upload: x-ledger-id, x-thread-id, x-card-id, x-note-id, x-queue-codex.`
 
+### Complex Interaction Library Gate
+
+- **Trigger.** Before implementing touch gestures, drag-and-drop sorting, carousels, rich-text editing, virtualized lists, focus traps, collision detection, or another interaction with a multi-event browser state machine, inspect maintained framework-free libraries and the existing dependency stack.
+- **Decision.** Prefer a mature library when it owns input normalization, cancellation, animation, scrolling, accessibility, and cleanup. Write custom interaction code only when verified requirements are materially outside the library contract.
+- **Operator visibility.** State the selected library, license, pinned version, runtime delivery method, and the concrete reason for selecting it before implementation. When custom code is selected, state the evidence that rules out the library path.
+- **Boundary.** Keep application-specific state and persistence outside the library. Consume the library's stable completion event, update local state optimistically, then persist.
+
+### Interaction Verification and Claims
+
+- **Behavioral evidence.** Source-pattern assertions, syntax checks, and unit tests do not prove a touch, pointer, scroll, focus, animation, or drag interaction works. Verify the complete gesture on the served target surface with representative browser input.
+- **Persistence evidence.** For optimistic UI, verify three distinct moments: the UI changes before the request resolves, successful persistence survives a fresh reload, and a rejected request reconciles to server-confirmed state.
+- **Target evidence.** Confirm the operator-facing route serves the changed files and pinned assets. Record the route, HTTP result, and behavioral observation without restarting the server unless the operator requested it.
+- **Claim calibration.** Use `implemented; automated checks pass; device interaction not yet verified` when target-surface verification is unavailable. Do not write `works`, `fixed`, `complete`, or mark the related ledger card `done` without behavioral evidence for the affected interaction.
+- **Operator gate.** When only the operator can exercise the required device path, keep the task active and ask for one focused validation step instead of declaring success.
+
+### Contradicted Success RCA
+
+- **Stop condition.** After the operator reports that a claimed interaction fix still fails, stop incremental patching and reopen the affected subtask.
+- **Evidence.** Capture the exact route, device and browser, gesture sequence, screenshot or recording, DOM state, request sequence, and persisted state before editing again.
+- **RCA.** Identify the first incorrect transition in the event-to-DOM-to-local-state-to-request-to-server-state chain. Record evidence for the cause in the card and add a regression that exercises that boundary.
+- **Escalation.** After one contradicted success claim, reassess the implementation approach, including a maintained library replacement. Do not issue a second success claim from the same class of static evidence.
+
 ### Formatting Contract
 
 1. **Headings:** use `H2` card sections with uppercase letters: `## A. Scope`, `## B. Contract`, `## C. Acceptance Criteria`.
