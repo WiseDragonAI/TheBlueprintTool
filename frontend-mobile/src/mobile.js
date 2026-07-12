@@ -57,9 +57,8 @@ function zonePath(ledgerId, zoneId) {
   return `${ledgerPath(ledgerId)}/zone/${encodeURIComponent(zoneId)}`;
 }
 
-function cardPath(ledgerId, zoneId, cardId, masterTaskId = '') {
-  const path = `${zonePath(ledgerId, zoneId)}/card/${encodeURIComponent(cardId)}`;
-  return masterTaskId ? `${path}?masterTaskId=${encodeURIComponent(masterTaskId)}` : path;
+function cardPath(ledgerId, zoneId, cardId) {
+  return `${zonePath(ledgerId, zoneId)}/card/${encodeURIComponent(cardId)}`;
 }
 
 function pathForTask(task) {
@@ -389,7 +388,7 @@ function taskRow(task, index) {
         state.ledger = ledger;
         const zone = ledgerZones().find((entry) => entry.cards.some((card) => String(card.id) === subtask.cardId));
         state.ledger = previous;
-        navigate(cardPath(task.ledgerId, zone?.id ?? 'ungrouped', subtask.cardId, task.cardId));
+        navigate(cardPath(task.ledgerId, zone?.id ?? 'ungrouped', subtask.cardId));
       }
     });
     return button;
@@ -649,42 +648,34 @@ function renderCard(card) {
       button.querySelector('small').textContent = subtask.status;
       button.addEventListener('click', () => {
         const zone = ledgerZones().find((entry) => entry.cards.some((entryCard) => String(entryCard.id) === subtask.cardId));
-        navigate(cardPath(state.activeLedgerId, zone?.id ?? 'ungrouped', subtask.cardId, card.id));
+        navigate(cardPath(state.activeLedgerId, zone?.id ?? 'ungrouped', subtask.cardId));
       });
       return button;
     }));
-    overview.append(status, heading, subtasks);
+    const completion = document.createElement('section');
+    completion.className = 'master-task-completion';
+    const completeButton = document.createElement('button');
+    completeButton.type = 'button';
+    completeButton.className = 'complete-master-task-button';
+    completeButton.textContent = card.status === 'done' ? 'Master task complete' : 'Complete master task';
+    completeButton.disabled = card.status === 'done';
+    completeButton.addEventListener('click', async () => {
+      completeButton.disabled = true;
+      completeButton.textContent = 'Completing task…';
+      try {
+        state.ledger = await ledgerMutation(state.activeLedgerId, { action: 'complete-master-task', masterTaskId: card.id });
+        renderCard(state.ledger.cards.find((entry) => String(entry.id) === String(card.id)));
+      } catch (cause) {
+        completeButton.disabled = false;
+        completeButton.textContent = 'Complete master task';
+        elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Master task completion failed.';
+        setView('error-view');
+      }
+    });
+    completion.append(completeButton);
+    overview.append(status, heading, subtasks, completion);
     elements['card-body'].replaceChildren(content, overview);
-  } else {
-    const masterTaskId = new URLSearchParams(location.search).get('masterTaskId') ?? '';
-    const masterTask = (state.ledger?.cards ?? []).find((entry) => String(entry.id) === masterTaskId);
-    const masterMarkdown = masterTask ? ledgerCardBody(masterTask) : '';
-    const linkedFromMaster = masterTaskId && masterMarkdown.includes(`](card:${card.id})`);
-    if (linkedFromMaster) {
-      const completion = document.createElement('section');
-      completion.className = 'subtask-completion';
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'complete-subtask-button';
-      button.textContent = card.status === 'done' ? 'Task done' : 'Mark task as done';
-      button.disabled = card.status === 'done';
-      button.addEventListener('click', async () => {
-        button.disabled = true;
-        button.textContent = 'Marking done…';
-        try {
-          state.ledger = await ledgerMutation(state.activeLedgerId, { action: 'complete-master-subtask', masterTaskId, subtaskCardId: card.id });
-          renderCard(state.ledger.cards.find((entry) => String(entry.id) === String(card.id)));
-        } catch (cause) {
-          button.disabled = false;
-          button.textContent = 'Mark task as done';
-          elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Task completion failed.';
-          setView('error-view');
-        }
-      });
-      completion.append(button);
-      elements['card-body'].replaceChildren(content, completion);
-    } else elements['card-body'].replaceChildren(content);
-  }
+  } else elements['card-body'].replaceChildren(content);
   elements['card-view'].style.setProperty('--zone-color', state.activeZoneColor || 'var(--accent)');
   setMobileThreadCard(card);
   setMobileCodexContext({ ledgerId: state.activeLedgerId, cardId: state.activeCardId });

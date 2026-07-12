@@ -127,12 +127,12 @@ test('routes master-task cards back to the control room and regular cards back t
   assert.match(mobile, /dataset\.destination === 'control-room' \? '\/' : zonePath/);
 });
 
-test('carries master-task context to a subtask and completes it through one ledger mutation', () => {
-  assert.match(mobile, /cardPath\(task\.ledgerId, zone\?\.id \?\? 'ungrouped', subtask\.cardId, task\.cardId\)/);
-  assert.match(mobile, /cardPath\(state\.activeLedgerId, zone\?\.id \?\? 'ungrouped', subtask\.cardId, card\.id\)/);
-  assert.match(mobile, /action: 'complete-master-subtask', masterTaskId, subtaskCardId: card\.id/);
-  assert.match(mobile, /button\.textContent = card\.status === 'done' \? 'Task done' : 'Mark task as done'/);
-  assert.match(styles, /\.complete-subtask-button \{ width: 100%; min-height: 52px;/);
+test('completes all linked cards from the master-task detail', () => {
+  assert.match(mobile, /action: 'complete-master-task', masterTaskId: card\.id/);
+  assert.match(mobile, /completeButton\.textContent = card\.status === 'done' \? 'Master task complete' : 'Complete master task'/);
+  assert.match(mobile, /overview\.append\(status, heading, subtasks, completion\)/);
+  assert.doesNotMatch(mobile, /complete-master-subtask|masterTaskId=|Mark task as done/);
+  assert.match(styles, /\.complete-master-task-button \{ width: 100%; min-height: 52px;/);
 });
 
 test('uses global application destinations and keeps new task as the fourth control-room action', () => {
