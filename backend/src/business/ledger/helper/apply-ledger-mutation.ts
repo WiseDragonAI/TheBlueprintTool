@@ -13,7 +13,7 @@ export type LedgerMutation = {
   card?: Record<string, unknown>;
   cardId?: string;
   imageSrc?: string;
-  cardPatch?: { id?: string; status?: string; title?: string; description?: string; imageSizes?: Record<string, { width?: number; height?: number }>; codexRunModel?: CodexModel; codexRunEffort?: CodexEffort; taskState?: 'waiting' | 'active'; taskWaitingSince?: string; taskActiveSince?: string; taskQueueRank?: number; subtaskIds?: string[] };
+  cardPatch?: { id?: string; status?: string; title?: string; description?: string; imageSizes?: Record<string, { width?: number; height?: number }>; codexRunModel?: CodexModel; codexRunEffort?: CodexEffort };
   annotation?: Record<string, unknown>;
   relationship?: Record<string, unknown>;
   zoneIds?: string[];
@@ -98,11 +98,6 @@ export function applyLedgerMutation(input: {
     if (!mutationError) {
       if (card && (mutation.cardPatch.status === 'todo' || mutation.cardPatch.status === 'done')) card.status = mutation.cardPatch.status;
       if (card && typeof mutation.cardPatch.title === 'string') card.title = mutation.cardPatch.title;
-      if (card && (mutation.cardPatch.taskState === 'waiting' || mutation.cardPatch.taskState === 'active')) card.taskState = mutation.cardPatch.taskState;
-      if (card && typeof mutation.cardPatch.taskWaitingSince === 'string') card.taskWaitingSince = mutation.cardPatch.taskWaitingSince;
-      if (card && typeof mutation.cardPatch.taskActiveSince === 'string') card.taskActiveSince = mutation.cardPatch.taskActiveSince;
-      if (card && Number.isInteger(mutation.cardPatch.taskQueueRank) && Number(mutation.cardPatch.taskQueueRank) > 0) card.taskQueueRank = mutation.cardPatch.taskQueueRank;
-      if (card && Array.isArray(mutation.cardPatch.subtaskIds) && mutation.cardPatch.subtaskIds.every((id) => typeof id === 'string')) card.subtaskIds = mutation.cardPatch.subtaskIds;
       if (card && typeof mutation.cardPatch.description === 'string') {
         writeCardDescriptionFile({ decisionOsRoot, card, description: mutation.cardPatch.description, ledgerPath });
       }

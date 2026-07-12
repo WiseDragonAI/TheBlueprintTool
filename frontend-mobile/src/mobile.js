@@ -2,7 +2,7 @@ import { renderLedgerCardMarkdown } from '/canvas-src/runtime/ledger/component/r
 import { ledgerCardBody } from '/canvas-src/runtime/ledger/helper/ledger-card-body.js';
 import { initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './mobile-thread.js';
 import { initializeMobileCodex, setMobileCodexContext } from './mobile-codex.js';
-import { activeAge, deriveControlRoom, waitingAge } from './mobile-control-room.js';
+import { activeAge, deriveControlRoom, waitingAge, withActiveStatus, withQueueRank } from './mobile-control-room.js';
 
 const state = {
   projectName: 'decision-os',
@@ -300,7 +300,7 @@ function taskRow(task, index) {
   const next = task.nextSubtask ? `Next: ${task.nextSubtask.title}` : 'No actionable subtask';
   summary.innerHTML = `<span class="task-copy"><strong></strong><span class="task-meta"></span><span class="task-next"></span></span><span class="task-chevron">⌄</span>`;
   summary.querySelector('strong').textContent = task.title;
-  const age = task.status === 'active' ? activeAge(task.activeSince) : waitingAge(task.waitingSince);
+  const age = task.status === 'task-active' ? activeAge(task.activeSince) : waitingAge(task.waitingSince);
   summary.querySelector('.task-meta').textContent = `${task.ledger} · ${age} · ${task.complete}/${task.subtasks.length} complete`;
   summary.querySelector('.task-next').textContent = next;
   if (state.controlTab === 'queue') {
@@ -456,8 +456,7 @@ async function loadControlRoom() {
   })));
   const allTasks = documents.flatMap(({ ledgerId, document }) => {
     const ledgerTitle = state.ledgers.find((entry) => entry.id === ledgerId)?.title ?? ledgerId;
-    const cards = document.cards ?? [];
-    return cards.map((card) => ({ card, cards, cardId: String(card.id), title: card.title, ledgerId, ledgerTitle }));
+    return (document.cards ?? []).map((card) => ({ cardId: card.id, title: card.title, ledgerId, ledgerTitle, markdown: ledgerCardBody(card) }));
   });
   state.controlRoom = { ...deriveControlRoom(allTasks), allTasks, documents };
 }
@@ -471,7 +470,7 @@ async function moveTask(cardId, targetIndex) {
   reordered.splice(targetIndex, 0, moved);
   await Promise.all(reordered.map((task, index) => ledgerMutation(task.ledgerId, {
     action: 'patch-card',
-    cardPatch: { id: task.cardId, taskQueueRank: index + 1 }
+    cardPatch: { id: task.cardId, description: withQueueRank(task.markdown, index + 1) }
   })));
   await loadControlRoom();
   renderControlRoom();
@@ -480,11 +479,15 @@ async function moveTask(cardId, targetIndex) {
 async function activateMasterTask({ ledgerId, cardId, startedAt }) {
   const ledger = await fetch(`/decision-os/${encodeURIComponent(ledgerId)}`, { cache: 'no-store' }).then((response) => response.json());
   const card = ledger.cards?.find((entry) => String(entry.id) === String(cardId));
-  if (!card || card.cardType !== 'master-task' || card.status === 'done') return ledger;
+  if (!card || !parseMasterCandidate(card)) return ledger;
   return ledgerMutation(ledgerId, {
     action: 'patch-card',
-    cardPatch: { id: cardId, taskState: 'active', taskActiveSince: startedAt }
+    cardPatch: { id: cardId, description: withActiveStatus(ledgerCardBody(card), startedAt) }
   });
+}
+
+function parseMasterCandidate(card) {
+  return /^\s*(?:#[a-z][a-z0-9-]*\s*)*#master-task\b(?:\s*#[a-z][a-z0-9-]*)*\s*$/im.test(ledgerCardBody(card));
 }
 
 async function createTaskIntake() {
@@ -498,8 +501,8 @@ async function createTaskIntake() {
   await ledgerMutation(ledgerRef.id, { action: 'create-zone', annotation: zone });
   const cardId = objectId('card');
   const timestamp = new Date().toISOString();
-  const markdown = `## A. Intake\n\n1. Describe the task in this thread and attach the required files before launching Codex.\n2. Codex must categorize the task, keep this mandatory new zone, rename this master task and zone, and create actionable subtask cards in this zone.\n`;
-  const card = { id: cardId, title: 'New task intake', cardType: 'master-task', domainId: ledgerRef.id, status: 'todo', taskState: 'waiting', taskWaitingSince: timestamp, taskQueueRank: null, subtaskIds: [], x: rect.x + 60, y: rect.y + 60, w: 360, h: 240, comment: { what: markdown }, facts: [], fields: [] };
+  const markdown = `#master-task #task-waiting\n\nLedger: ${ledgerRef.title}\nWaiting since: ${timestamp}\n\n## Intake\n\nDescribe the task in this thread, attach the required files, then launch Codex. Categorize the task, keep this mandatory new zone, rename this master task and zone, create actionable subtask cards in this zone, and write canonical card links and statuses under \`## Subtasks\`.\n\n## Subtasks\n`;
+  const card = { id: cardId, title: 'New task intake', cardType: 'note', domainId: ledgerRef.id, status: 'todo', x: rect.x + 60, y: rect.y + 60, w: 360, h: 240, comment: { what: markdown }, facts: [], fields: [] };
   const updated = await ledgerMutation(ledgerRef.id, { action: 'create-card', card });
   state.ledger = updated;
   state.activeZoneId = zone.id;
@@ -579,26 +582,7 @@ function renderCard(card) {
   state.activeCardId = asText(card.id);
   elements['card-title'].textContent = asText(card.title).trim() || `Card ${card.id}`;
   const imageSizes = card.imageSizes && typeof card.imageSizes === 'object' ? card.imageSizes : {};
-  const content = renderLedgerCardMarkdown(ledgerCardBody(card), { imageSizes, mediaSurface: 'thread' });
-  if (card.cardType === 'master-task') {
-    const metadata = document.createElement('dl');
-    metadata.className = 'task-metadata';
-    const status = card.status === 'done' ? 'complete' : (card.taskState === 'active' ? 'active' : 'waiting');
-    const rows = [
-      ['Type', 'Master task'],
-      ['Status', status],
-      ['Ledger', state.ledgers.find((entry) => entry.id === state.activeLedgerId)?.title ?? state.activeLedgerId],
-      ['Subtasks', String(Array.isArray(card.subtaskIds) ? card.subtaskIds.length : 0)]
-    ];
-    for (const [label, value] of rows) {
-      const term = document.createElement('dt');
-      term.textContent = label;
-      const detail = document.createElement('dd');
-      detail.textContent = value;
-      metadata.append(term, detail);
-    }
-    elements['card-body'].replaceChildren(metadata, content);
-  } else elements['card-body'].replaceChildren(content);
+  elements['card-body'].replaceChildren(renderLedgerCardMarkdown(ledgerCardBody(card), { imageSizes, mediaSurface: 'thread' }));
   elements['card-view'].style.setProperty('--zone-color', state.activeZoneColor || 'var(--accent)');
   setMobileThreadCard(card);
   setMobileCodexContext({ ledgerId: state.activeLedgerId, cardId: state.activeCardId });

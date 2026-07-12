@@ -125,11 +125,6 @@ h1 { margin: 0; font-size: clamp(28px, 8vw, 44px); line-height: 1.08; letter-spa
 .card-detail-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .process-card-button { min-height: 40px; padding: 0 14px; border: 0; border-radius: var(--radius); color: var(--bg); background: var(--accent); font-weight: 800; }
 .card-body { display: grid; gap: 20px; padding: 22px 0; color: var(--text); }
-.task-metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
-.task-metadata div { display: contents; }
-.task-metadata dt, .task-metadata dd { margin: 0; padding: 10px 12px; border: 1px solid var(--line); background: var(--panel); }
-.task-metadata dt { color: var(--muted); font-size: 12px; }
-.task-metadata dd { color: var(--accent); font-weight: 700; text-transform: capitalize; }
 .ledger-card-body { display: grid; gap: 14px; padding: 18px; border: 1px solid color-mix(in srgb, var(--zone-color), rgba(255,255,255,.18) 12%); border-radius: var(--radius); background: linear-gradient(180deg, rgb(16, 18, 23) 0%, rgb(9, 11, 15) 100%); box-shadow: 0 0 0 1px color-mix(in srgb, var(--zone-color), transparent 55%); line-height: 1.65; overflow-wrap: anywhere; }
 .ledger-card-body > * { margin: 0; }
 .ledger-card-body h1, .ledger-card-body h2, .ledger-card-body h3, .ledger-card-body h4, .ledger-card-body h5, .ledger-card-body h6 { color: color-mix(in srgb, var(--zone-color), white 52%); font-size: 1rem; letter-spacing: 0; }

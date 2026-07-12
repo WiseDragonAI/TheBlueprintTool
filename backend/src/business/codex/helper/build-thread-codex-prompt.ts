@@ -40,8 +40,6 @@ export function buildThreadCodexPrompt(input: {
     '4. **Completion reply:** Append exactly one `# AGENT` reply to the thread markdown when you finish your turn.',
     '5. **Patch rule:** Patch the thread markdown file directly for multi-paragraph replies.',
     '6. **Ledger guard:** Do not edit the ledger JSON unless the operator explicitly asks for it.',
-    '7. **Operator-owned completion:** Never set a card status to `done` and never declare a master task complete unless the operator explicitly instructs you to complete that specific card. Completing work or all subtasks is not completion authorization.',
-    '8. **Structured task state:** Task lifecycle metadata belongs to the ledger card fields (`cardType`, `status`, `taskState`, task timestamps, queue rank, and `subtaskIds`), not in card Markdown. Do not add task labels, lifecycle timestamps, queue metadata, or subtask status annotations to card content.',
     '',
     '---',
     '',
