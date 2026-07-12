@@ -24,3 +24,12 @@ test('resolve-decision-os-root walks upward from an arbitrary workspace cwd', ()
     rmSync(workspace, { recursive: true, force: true });
   }
 });
+
+test('resolve-decision-os-root anchors fallback storage to the supplied launch cwd', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-master-workspace-'));
+  try {
+    assert.equal(resolveDecisionOsRoot({ action_payload: { cwd: workspace }, runtime_state: {} }), join(workspace, '.decision-os'));
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
