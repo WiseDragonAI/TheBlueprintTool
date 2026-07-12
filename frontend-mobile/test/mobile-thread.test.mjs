@@ -4,6 +4,11 @@ import test from 'node:test';
 
 const source = await readFile(new URL('../src/mobile-thread.js', import.meta.url), 'utf8');
 
+test('mobile thread routes jump-to-bottom into persistent bottom following', () => {
+  assert.match(source, /import \{ pinThreadFeedToLastMessage \} from '\/canvas-src\/runtime\/thread\/effect\/pin-thread-feed-to-last-message\.js';/);
+  assert.match(source, /action === 'jump-thread-bottom'\) pinThreadFeedToLastMessage\(\{ follow: true \}\)/);
+});
+
 test('mobile thread launch continues an owned terminal Codex run', () => {
   assert.match(source, /cardCodexThreadRunId\(currentCard\)/);
   assert.match(source, /requestCardSkillRunStatus\(/);
