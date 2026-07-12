@@ -1,64 +1,55 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { activeAge, deriveControlRoom, parseMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from '../src/mobile-control-room.js';
+import { activeAge, deriveControlRoom, taskFromCard, waitingAge } from '../src/mobile-control-room.js';
 
+const cards = [
+  { id: 'card-r', title: 'Research', status: 'done' },
+  { id: 'card-b', title: 'Build', status: 'todo' }
+];
 const task = (overrides = {}) => ({
-  cardId: 'card-a',
-  title: 'Master A',
+  card: {
+    id: 'card-a',
+    title: 'Master A',
+    cardType: 'master-task',
+    status: 'todo',
+    taskState: 'waiting',
+    taskWaitingSince: '2026-07-10T10:00:00.000Z',
+    subtaskIds: ['card-r', 'card-b'],
+    ...overrides
+  },
+  cards,
   ledgerId: 'tasks',
-  ledgerTitle: 'Tasks',
-  markdown: '#master-task #task-waiting\n\nLedger: Tasks\nWaiting since: 2026-07-10T10:00:00.000Z\n\n## Subtasks\n\n1. [Research](card:card-r) — Status: complete\n2. [Build](card:card-b) — Status: active',
-  ...overrides
+  ledgerTitle: 'Tasks'
 });
 
-test('parses the canonical master-task markdown without another data model', () => {
-  const parsed = parseMasterTaskMarkdown(task());
+test('derives master-task metadata and subtask progress from structured card fields', () => {
+  const parsed = taskFromCard(task());
   assert.equal(parsed.valid, true);
-  assert.equal(parsed.status, 'task-waiting');
+  assert.equal(parsed.status, 'waiting');
   assert.equal(parsed.complete, 1);
   assert.equal(parsed.nextSubtask.cardId, 'card-b');
 });
 
-test('derives tabs, filters, completed exclusion, FIFO, and ranked priority', () => {
+test('derives tabs, completed exclusion, FIFO, and ranked priority from card status', () => {
   const result = deriveControlRoom([
-    task({ cardId: 'newer', markdown: task().markdown.replace('10T10', '11T10') }),
-    task({ cardId: 'oldest' }),
-    task({ cardId: 'ranked', markdown: `${task().markdown.replace('10T10', '12T10')}\nQueue rank: 1` }),
-    task({ cardId: 'active', markdown: task().markdown.replace('#task-waiting', '#task-active').replace('Waiting since:', 'Active since: 2026-07-10T10:30:00.000Z\nWaiting since:') }),
-    task({ cardId: 'done', markdown: task().markdown.replace('#task-waiting', '#task-complete') })
+    task({ id: 'newer', taskWaitingSince: '2026-07-11T10:00:00.000Z' }),
+    task({ id: 'oldest' }),
+    task({ id: 'ranked', taskWaitingSince: '2026-07-12T10:00:00.000Z', taskQueueRank: 1 }),
+    task({ id: 'active', taskState: 'active', taskActiveSince: '2026-07-10T10:30:00.000Z' }),
+    task({ id: 'done', status: 'done' })
   ]);
   assert.deepEqual(result.queue.map((entry) => entry.cardId), ['ranked', 'oldest', 'newer']);
   assert.deepEqual(result.active.map((entry) => entry.cardId), ['active']);
-  assert.deepEqual(result.ledgers, ['Tasks']);
+  assert.equal(result.queue.some((entry) => entry.cardId === 'done'), false);
 });
 
-test('ignores task tag examples in ordinary Markdown prose', () => {
-  const parsed = parseMasterTaskMarkdown(task({ markdown: 'This specification documents `#master-task`, `#task-waiting`, and `#task-active`.' }));
+test('does not interpret task-looking Markdown as lifecycle metadata', () => {
+  const parsed = taskFromCard(task({ cardType: 'note', description: '#master-task #task-active' }));
+  assert.equal(parsed.masterTask, false);
   assert.equal(parsed.valid, false);
-  assert.equal(parsed.diagnostics.includes('missing #master-task'), true);
-  assert.equal(deriveControlRoom([{ ...task(), markdown: parsed.markdown }]).diagnostics.length, 0);
 });
 
-test('transitions a canonical master task to active with its launch timestamp', () => {
-  const startedAt = '2026-07-12T06:35:14.888Z';
-  const markdown = withActiveStatus(task().markdown, startedAt);
-  assert.match(markdown, /^#master-task #task-active$/m);
-  assert.match(markdown, /^Active since: 2026-07-12T06:35:14.888Z$/m);
-  const parsed = parseMasterTaskMarkdown(task({ markdown }));
-  assert.equal(parsed.valid, true);
-  assert.equal(parsed.activeSince, startedAt);
-  assert.equal(activeAge(startedAt, Date.parse('2026-07-12T06:40:14.888Z')), '5m active');
-});
-
-test('reports invalid canonical markdown and rewrites queue rank in place', () => {
-  const invalid = parseMasterTaskMarkdown(task({ markdown: '#master-task #task-waiting\nLedger: Tasks' }));
-  assert.equal(invalid.valid, false);
-  assert.match(invalid.diagnostics.join(','), /Waiting since/);
-  const ranked = withQueueRank(task().markdown, 3);
-  assert.match(ranked, /Waiting since: .*\nQueue rank: 3/);
-  assert.equal(withQueueRank(ranked, 1).match(/Queue rank:/g).length, 1);
-});
-
-test('formats a stable waiting age', () => {
+test('formats stable waiting and active ages', () => {
   assert.equal(waitingAge('2026-07-10T10:00:00.000Z', Date.parse('2026-07-12T10:00:00.000Z')), '2d waiting');
+  assert.equal(activeAge('2026-07-12T06:35:14.888Z', Date.parse('2026-07-12T06:40:14.888Z')), '5m active');
 });
