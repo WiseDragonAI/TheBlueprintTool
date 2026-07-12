@@ -1096,6 +1096,101 @@
   object-position: center;
 }
 
+.ledger-card-media-fullscreen {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 50%;
+  background: rgba(3, 5, 8, 0.82);
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 180ms ease, transform 180ms ease, background-color 140ms ease;
+}
+
+.ledger-card-media-slide.is-fullscreen-control-visible .ledger-card-media-fullscreen,
+.ledger-card-media-fullscreen:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.ledger-card-media-fullscreen:hover,
+.ledger-card-media-fullscreen:focus-visible {
+  background: rgba(22, 31, 42, 0.96);
+  outline: 2px solid color-mix(in srgb, var(--card-zone-color), white 30%);
+  outline-offset: 2px;
+}
+
+.ledger-card-image-viewer {
+  width: 100vw;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: #020306;
+  color: var(--text);
+}
+
+.ledger-card-image-viewer::backdrop {
+  background: rgba(0, 0, 0, 0.94);
+}
+
+.ledger-card-image-viewer-stage {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  overflow: hidden;
+  place-items: center;
+  touch-action: none;
+  user-select: none;
+}
+
+.ledger-card-image-viewer-image {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100vw;
+  max-height: 100dvh;
+  object-fit: contain;
+  touch-action: none;
+  user-select: none;
+  will-change: transform;
+}
+
+.ledger-card-image-viewer-close {
+  position: fixed;
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(3, 5, 8, 0.88);
+  font-size: 28px;
+  line-height: 1;
+}
+
 .ledger-card-html-frame,
 .ledger-card-html-invalid {
   display: block;
