@@ -21,8 +21,9 @@ export function parseMasterTaskMarkdown({ cardId, title, ledgerId, ledgerTitle, 
   if (queueRank !== null && (!Number.isInteger(queueRank) || queueRank < 1)) diagnostics.push('invalid Queue rank');
 
   const subtasks = [];
-  const sectionStart = source.search(/^##\s+Subtasks\s*$/im);
-  const afterHeading = sectionStart < 0 ? '' : source.slice(sectionStart).replace(/^##\s+Subtasks\s*\n?/i, '');
+  const subtaskHeading = /^##\s+(?:[A-Z]\.\s+)?Subtasks\s*$/im;
+  const sectionStart = source.search(subtaskHeading);
+  const afterHeading = sectionStart < 0 ? '' : source.slice(sectionStart).replace(subtaskHeading, '').replace(/^\n/, '');
   const section = afterHeading.split(/^##\s+/m, 1)[0];
   for (const line of section.split('\n')) {
     const match = line.match(/^\s*\d+[.)]\s+\[([^\]]+)]\(card:([^)]+)\)\s+[—-]\s+Status:\s*(.+?)\s*$/i);
@@ -101,7 +102,17 @@ export function visibleMasterTaskMarkdown(markdown) {
   while (lines.length && !lines[0].trim()) lines.shift();
   if (/^\s*(?:#[a-z][a-z0-9-]*\s*)+$/i.test(lines[0] ?? '') && /#master-task\b/i.test(lines[0])) lines.shift();
   while (lines.length && (!lines[0].trim() || /^\s*(?:Ledger|Waiting since|Active since|Queue rank)\s*:/i.test(lines[0]))) lines.shift();
-  return lines.join('\n').replace(/(\]\(card:[^)]+\))\s+[—-]\s+Status:\s*[^\n]+/gi, '$1').trim();
+  const subtaskIndex = lines.findIndex((line) => /^##\s+(?:[A-Z]\.\s+)?Subtasks\s*$/i.test(line));
+  if (subtaskIndex >= 0) {
+    let start = subtaskIndex;
+    while (start > 0 && !lines[start - 1].trim()) start -= 1;
+    if (start > 0 && /^---\s*$/.test(lines[start - 1])) start -= 1;
+    let end = lines.findIndex((line, index) => index > subtaskIndex && /^##\s+/.test(line));
+    if (end < 0) end = lines.length;
+    while (end > start && (!lines[end - 1].trim() || /^---\s*$/.test(lines[end - 1]))) end -= 1;
+    lines.splice(start, end - start);
+  }
+  return lines.join('\n').trim();
 }
 
 export function withQueueRank(markdown, rank) {

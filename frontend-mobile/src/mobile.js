@@ -595,21 +595,32 @@ function renderCard(card) {
   });
   const content = renderLedgerCardMarkdown(parsedTask.masterTask ? visibleMasterTaskMarkdown(markdown) : markdown, { imageSizes, mediaSurface: 'thread' });
   if (parsedTask.masterTask) {
-    const metadata = document.createElement('dl');
-    metadata.className = 'task-metadata';
-    for (const [label, value] of [
-      ['Type', 'Master task'],
-      ['Status', parsedTask.status.replace('task-', '')],
-      ['Ledger', parsedTask.ledger],
-      ['Progress', `${parsedTask.complete}/${parsedTask.subtasks.length}`]
-    ]) {
-      const term = document.createElement('dt');
-      term.textContent = label;
-      const detail = document.createElement('dd');
-      detail.textContent = value;
-      metadata.append(term, detail);
-    }
-    elements['card-body'].replaceChildren(metadata, content);
+    const overview = document.createElement('section');
+    overview.className = 'task-overview';
+    const status = document.createElement('p');
+    status.className = 'task-status-line';
+    status.innerHTML = '<strong></strong><span></span>';
+    status.querySelector('strong').textContent = parsedTask.status.replace('task-', '');
+    status.querySelector('span').textContent = `${parsedTask.complete} of ${parsedTask.subtasks.length} complete`;
+    const heading = document.createElement('h2');
+    heading.textContent = 'Subtasks';
+    const subtasks = document.createElement('div');
+    subtasks.className = 'task-subtasks';
+    subtasks.replaceChildren(...parsedTask.subtasks.map((subtask) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'subtask-row';
+      button.innerHTML = '<span></span><small></small>';
+      button.querySelector('span').textContent = subtask.title;
+      button.querySelector('small').textContent = subtask.status;
+      button.addEventListener('click', () => {
+        const zone = ledgerZones().find((entry) => entry.cards.some((entryCard) => String(entryCard.id) === subtask.cardId));
+        navigate(cardPath(state.activeLedgerId, zone?.id ?? 'ungrouped', subtask.cardId));
+      });
+      return button;
+    }));
+    overview.append(status, heading, subtasks);
+    elements['card-body'].replaceChildren(content, overview);
   } else elements['card-body'].replaceChildren(content);
   elements['card-view'].style.setProperty('--zone-color', state.activeZoneColor || 'var(--accent)');
   setMobileThreadCard(card);

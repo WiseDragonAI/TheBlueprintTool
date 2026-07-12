@@ -68,5 +68,13 @@ test('formats a stable waiting age', () => {
 test('keeps task metadata in Markdown but removes it from the visible card body', () => {
   const visible = visibleMasterTaskMarkdown(task().markdown);
   assert.doesNotMatch(visible, /#master-task|Ledger:|Waiting since:|Status:/);
-  assert.match(visible, /\[Research\]\(card:card-r\)/);
+  assert.doesNotMatch(visible, /\[Research\]\(card:card-r\)/);
+});
+
+test('parses letter-prefixed card sections from the decision-os formatting contract', () => {
+  const markdown = task().markdown.replace('## Subtasks', '## B. Subtasks');
+  const parsed = parseMasterTaskMarkdown(task({ markdown }));
+  assert.equal(parsed.subtasks.length, 2);
+  assert.equal(parsed.complete, 1);
+  assert.equal(parsed.nextSubtask.cardId, 'card-b');
 });
