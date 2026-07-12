@@ -566,7 +566,8 @@ async function loadControlRoom() {
           codexStatus = String(payload.run?.status ?? payload.status ?? '');
         }
       }
-      return { cardId: card.id, title: card.title, projectId, projectName, projectColor, ledgerId, ledgerTitle, markdown, cardStatus: card.status, cards, codexRunId: runId, codexStatus };
+      const threadNotes = document.notes?.[`thread-${card.id}`] ?? [];
+      return { cardId: card.id, title: card.title, projectId, projectName, projectColor, ledgerId, ledgerTitle, markdown, cardStatus: card.status, cards, threadNotes, codexRunId: runId, codexStatus };
     });
   }))).flat();
   state.controlRoom = { ...deriveControlRoom(allTasks), allTasks, documents };

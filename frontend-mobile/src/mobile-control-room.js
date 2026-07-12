@@ -1,13 +1,19 @@
 const STATUS_LABELS = ['task-waiting', 'task-active', 'task-complete'];
 
-export function parseMasterTaskMarkdown({ cardId, title, projectId = '', projectName = '', projectColor = '', ledgerId, ledgerTitle, markdown, cardStatus = 'todo', cards = [], codexRunId = '', codexStatus = '' }) {
+export function parseMasterTaskMarkdown({ cardId, title, projectId = '', projectName = '', projectColor = '', ledgerId, ledgerTitle, markdown, cardStatus = 'todo', cards = [], threadNotes = [], codexRunId = '', codexStatus = '' }) {
   const source = String(markdown ?? '').replace(/\r\n?/g, '\n');
   const labelLines = source.split('\n').filter((line) => /^\s*(?:#[a-z][a-z0-9-]*\s*)+$/i.test(line));
   const labels = new Set(Array.from(labelLines.join('\n').matchAll(/#([a-z][a-z0-9-]*)\b/gi), (match) => match[1].toLowerCase()));
   const statuses = STATUS_LABELS.filter((status) => labels.has(status));
   const ledger = source.match(/^\s*(?:\*\*)?Ledger(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
   const waitingText = source.match(/^\s*(?:\*\*)?Waiting since(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
-  const waitingTime = Date.parse(waitingText);
+  const latestThreadTime = threadNotes.reduce((latest, note) => {
+    const timestamp = Date.parse(String(note?.timestamp ?? ''));
+    return Number.isFinite(timestamp) ? Math.max(latest, timestamp) : latest;
+  }, Number.NEGATIVE_INFINITY);
+  // A waiting period restarts whenever either participant adds a thread message.
+  // The card field remains the durable fallback for tasks without a timestamped thread.
+  const waitingTime = Number.isFinite(latestThreadTime) ? latestThreadTime : Date.parse(waitingText);
   const activeText = source.match(/^\s*(?:\*\*)?Active since(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
   const activeTime = Date.parse(activeText);
   const rankText = source.match(/^\s*(?:\*\*)?Queue rank(?:\*\*)?\s*:\s*(\d+)\s*$/im)?.[1] ?? '';
@@ -57,7 +63,7 @@ export function parseMasterTaskMarkdown({ cardId, title, projectId = '', project
     codexRunId: String(codexRunId),
     codexStatus: normalizedCodexStatus,
     codexProcessing,
-    waitingSince: waitingText,
+    waitingSince: Number.isFinite(latestThreadTime) ? new Date(latestThreadTime).toISOString() : waitingText,
     waitingTime,
     activeSince: activeText,
     activeTime,
