@@ -13,7 +13,7 @@ test('mobile thread composer is compact and exposes a send action', () => {
   assert.match(actionClick, /action === 'submit-thread-draft'/);
   assert.match(actionClick, /await submitThreadDraft\(\)/);
   assert.match(threadCss, /\.terminal-button--thread-send\s*\{\s*display:\s*none/);
-  assert.match(threadCss, /@media \(max-width: 760px\)[\s\S]*\.thread-draft\s*\{[\s\S]*min-height:\s*72px/);
-  assert.match(threadCss, /@media \(max-width: 760px\)[\s\S]*\.terminal-command-hint\s*\{[\s\S]*display:\s*none/);
+  assert.match(threadCss, /@media \(max-width: 760px\)[\s\S]*\.thread-draft\s*\{[\s\S]*height:\s*64px;[\s\S]*min-height:\s*64px/);
+  assert.match(threadCss, /@media \(max-width: 760px\)[\s\S]*\.voice-terminal-status,[\s\S]*\.terminal-command-hint\s*\{[\s\S]*display:\s*none/);
   assert.match(threadCss, /@media \(max-width: 760px\)[\s\S]*\.terminal-button--thread-send\s*\{[\s\S]*display:\s*inline-flex/);
 });
