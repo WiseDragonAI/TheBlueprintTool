@@ -145,3 +145,10 @@ export function waitingAge(timestamp, now = Date.now()) {
 export function activeAge(timestamp, now = Date.now()) {
   return waitingAge(timestamp, now).replace(/ waiting$/, ' active');
 }
+
+export function activeStopwatch(timestamp, now = Date.now()) {
+  const elapsedSeconds = Math.floor(Math.max(0, now - Date.parse(timestamp)) / 1000);
+  const minutes = Math.floor(elapsedSeconds / 60);
+  const seconds = elapsedSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
