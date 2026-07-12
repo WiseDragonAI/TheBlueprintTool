@@ -56,7 +56,6 @@ export function openLedgerCardImageViewer(input: { alt: string; source: string; 
     cursor: 'grab'
   }) as PanzoomInstance;
 
-  const stopViewerGesture = (event: Event) => event.stopPropagation();
   const zoomWithWheel = (event: WheelEvent) => {
     event.preventDefault();
     event.stopPropagation();
@@ -75,9 +74,6 @@ export function openLedgerCardImageViewer(input: { alt: string; source: string; 
     if (closed) return;
     closed = true;
     stage.removeEventListener('wheel', zoomWithWheel);
-    dialog.removeEventListener('pointerdown', stopViewerGesture);
-    dialog.removeEventListener('pointermove', stopViewerGesture);
-    dialog.removeEventListener('pointerup', stopViewerGesture);
     dialog.removeEventListener('keydown', handleKeydown);
     panzoom.destroy();
     dialog.close();
@@ -87,9 +83,6 @@ export function openLedgerCardImageViewer(input: { alt: string; source: string; 
   };
 
   stage.addEventListener('wheel', zoomWithWheel, { passive: false });
-  dialog.addEventListener('pointerdown', stopViewerGesture);
-  dialog.addEventListener('pointermove', stopViewerGesture);
-  dialog.addEventListener('pointerup', stopViewerGesture);
   dialog.addEventListener('keydown', handleKeydown);
   dialog.addEventListener('cancel', (event) => {
     event.preventDefault();

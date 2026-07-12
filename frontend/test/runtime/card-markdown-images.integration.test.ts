@@ -22,6 +22,7 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   const wheel = source('frontend/src/runtime/gesture/controller/handle-wheel.ts');
   const css = source('frontend/assets/canvas/objects.css');
   const imageViewer = source('frontend/src/runtime/ledger/effect/open-ledger-card-image-viewer.ts');
+  const panzoom = source('frontend/assets/vendor/panzoom-4.6.2.es.js');
 
   assert.match(inlineParser, /text\.startsWith\('!\[', start\)/);
   assert.match(inlineParser, /kind:\s*'image'/);
@@ -40,6 +41,8 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   assert.match(imageViewer, /startScale:\s*1/);
   assert.match(imageViewer, /panzoom\.zoomWithWheel\(event\)/);
   assert.match(imageViewer, /panzoom\.destroy\(\)/);
+  assert.match(panzoom, /onPointer\('move', document, handleMove/);
+  assert.doesNotMatch(imageViewer, /dialog\.addEventListener\('pointer(move|up)'[\s\S]*stopPropagation/);
   assert.match(imageViewer, /trigger\.focus\(\)/);
   assert.match(imageViewer, /document\.body\.style\.overflow = 'hidden'/);
   assert.match(imageViewer, /trapDialogFocus\(event, dialog\)/);
