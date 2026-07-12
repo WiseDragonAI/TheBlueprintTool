@@ -295,6 +295,11 @@ function filteredControlTasks() {
   return state.controlFilter === 'All' ? tasks : tasks.filter((task) => task.ledger === state.controlFilter);
 }
 
+function controlTaskCount(tab) {
+  const tasks = state.controlRoom?.[tab] ?? [];
+  return state.controlFilter === 'All' ? tasks.length : tasks.filter((task) => task.ledger === state.controlFilter).length;
+}
+
 function taskRow(task, index) {
   const article = document.createElement('article');
   article.className = `control-task${index === 0 && state.controlTab === 'queue' ? ' next-task' : ''}`;
@@ -460,6 +465,8 @@ function renderControlRoom() {
   }));
   document.querySelectorAll('[data-control-tab]').forEach((button) => {
     button.setAttribute('aria-selected', String(button.dataset.controlTab === state.controlTab));
+    const count = controlTaskCount(button.dataset.controlTab);
+    button.querySelector('small').textContent = `${count} ${count === 1 ? 'task' : 'tasks'}`;
   });
   const tasks = filteredControlTasks();
   elements['control-task-list'].replaceChildren(...tasks.map(taskRow));

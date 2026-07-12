@@ -43,6 +43,14 @@ test('derives waiting, active, and done tabs with FIFO and ranked priority', () 
   assert.deepEqual(result.ledgers, ['Tasks']);
 });
 
+test('renders dynamic task totals in every Control Room status tab', () => {
+  assert.match(html, /data-control-tab="queue"[\s\S]*?<small>0 tasks<\/small>/);
+  assert.match(html, /data-control-tab="active"[\s\S]*?<small>0 tasks<\/small>/);
+  assert.match(html, /data-control-tab="done"[\s\S]*?<small>0 tasks<\/small>/);
+  assert.match(mobile, /const count = controlTaskCount\(button\.dataset\.controlTab\)/);
+  assert.match(mobile, /`\$\{count\} \$\{count === 1 \? 'task' : 'tasks'\}`/);
+});
+
 test('round-trips the mobile Control Room tab and task scroll anchor through the URL', () => {
   assert.deepEqual(parseControlRoomRoute('https://example.test/?tab=active#task-card-a'), { tab: 'active', anchor: 'task-card-a' });
   assert.equal(controlRoomPath('done', 'task-card-b'), '/?tab=done#task-card-b');
