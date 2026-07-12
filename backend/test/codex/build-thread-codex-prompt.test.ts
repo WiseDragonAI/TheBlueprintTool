@@ -30,6 +30,7 @@ test('thread Codex prompt uses a direct scoped contract without triggering open-
   assert.match(prompt.developerInstructions, /\*\*Thread markdown file:\*\* `\/workspace\/\.decision-os\/threads\/specs\/thread-card-a\.md`/);
   assert.match(prompt.developerInstructions, /\*\*Run summary file:\*\* `\/workspace\/\.decision-os\/runs\/codex-skills\/specs\/run\.md`/);
   assert.match(prompt.developerInstructions, /\*\*Operator timestamp:\*\* `2026-07-08T01:00:00\.000Z`/);
+  assert.match(prompt.developerInstructions, /ledger-cli validate-master-tasks --ledger \/workspace\/\.decision-os\/specs\.json/);
   assert.doesNotMatch(prompt.developerInstructions, /<(?:workspaceRoot|ledgerFile|cardId|cardTitle|cardMarkdownFile|threadId|threadMarkdownFile|runSummaryFile|operatorNoteTimestamp|epoch-ms|8-hex|ISO-8601)>/);
   assert.doesNotMatch(prompt.developerInstructions, /# Card A|Implement this request/);
   assert.doesNotMatch(prompt.developerInstructions, /treat-open-notes|open notes|You are treating/i);

@@ -6,7 +6,7 @@ import type { Stats } from 'node:fs';
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
-export type LedgerCommand = 'answer' | 'card-context' | 'done' | 'export' | 'help' | 'inspect' | 'migrate-decision-os' | 'mutate' | 'overview' | 'todo' | 'unanswered' | 'zone-cards';
+export type LedgerCommand = 'answer' | 'card-context' | 'done' | 'export' | 'help' | 'inspect' | 'migrate-decision-os' | 'mutate' | 'overview' | 'todo' | 'unanswered' | 'validate-master-tasks' | 'zone-cards';
 
 export type AssetCommand = 'apply-gc-plan' | 'gc' | 'list-orphans' | 'list-referenced' | 'prune-json' | 'stage-referenced';
 

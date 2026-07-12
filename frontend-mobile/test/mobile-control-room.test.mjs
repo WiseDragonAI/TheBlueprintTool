@@ -61,6 +61,16 @@ test('reports invalid canonical markdown and rewrites queue rank in place', () =
   assert.equal(withQueueRank(ranked, 1).match(/Queue rank:/g).length, 1);
 });
 
+test('keeps malformed master tasks visible in the control room with diagnostics', () => {
+  const malformed = task({
+    cardId: 'malformed',
+    markdown: '#master-task #task-waiting #task-active\n\nLedger: Tasks\n\n## Subtasks\n'
+  });
+  const result = deriveControlRoom([malformed]);
+  assert.deepEqual(result.active.map((entry) => entry.cardId), ['malformed']);
+  assert.deepEqual(result.diagnostics.map((entry) => entry.cardId), ['malformed']);
+});
+
 test('formats a stable waiting age', () => {
   assert.equal(waitingAge('2026-07-10T10:00:00.000Z', Date.parse('2026-07-12T10:00:00.000Z')), '2d waiting');
 });

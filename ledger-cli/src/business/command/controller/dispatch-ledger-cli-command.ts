@@ -60,7 +60,7 @@ export async function dispatchLedgerCliCommandController(
     statusOperation: command.statusOperation,
     zoneOperation: command.zoneOperation,
   }, ports.fs);
-  if (result.ok && (command.mode === 'card-context' || command.mode === 'export' || command.mode === 'overview' || command.mode === 'unanswered' || command.mode === 'zone-cards') && typeof result.value === 'string') {
+  if (result.ok && (command.mode === 'card-context' || command.mode === 'export' || command.mode === 'overview' || command.mode === 'unanswered' || command.mode === 'validate-master-tasks' || command.mode === 'zone-cards') && typeof result.value === 'string') {
     ports.emit ? ports.emit(result.value) : console.log(result.value);
   }
   return result;

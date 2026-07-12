@@ -48,7 +48,7 @@ export function parseMasterTaskMarkdown({ cardId, title, ledgerId, ledgerTitle, 
     ledgerId: String(ledgerId),
     ledgerTitle: String(ledgerTitle),
     ledger,
-    status: cardStatus === 'done' ? 'task-complete' : (statuses[0] === 'task-active' ? 'task-active' : 'task-waiting'),
+    status: cardStatus === 'done' ? 'task-complete' : (labels.has('task-active') ? 'task-active' : 'task-waiting'),
     waitingSince: waitingText,
     waitingTime,
     activeSince: activeText,
@@ -79,14 +79,17 @@ export function withActiveStatus(markdown, timestamp) {
 
 export function deriveControlRoom(cards) {
   const parsed = cards.map(parseMasterTaskMarkdown);
-  const eligible = parsed.filter((task) => task.valid && task.status !== 'task-complete');
+  // Keep malformed master tasks visible so operators can open and repair them.
+  const eligible = parsed.filter((task) => task.masterTask && task.status !== 'task-complete');
   const compare = (left, right) => {
     if (left.queueRank !== null || right.queueRank !== null) {
       if (left.queueRank === null) return 1;
       if (right.queueRank === null) return -1;
       if (left.queueRank !== right.queueRank) return left.queueRank - right.queueRank;
     }
-    return left.waitingTime - right.waitingTime || left.cardId.localeCompare(right.cardId);
+    const leftTime = Number.isFinite(left.waitingTime) ? left.waitingTime : Number.POSITIVE_INFINITY;
+    const rightTime = Number.isFinite(right.waitingTime) ? right.waitingTime : Number.POSITIVE_INFINITY;
+    return leftTime - rightTime || left.cardId.localeCompare(right.cardId);
   };
   return {
     queue: eligible.filter((task) => task.status === 'task-waiting').sort(compare),

@@ -13,6 +13,7 @@ import { findUnansweredThreads } from '../helper/find-unanswered-threads.js';
 import { formatUnansweredThreads } from '../helper/format-unanswered-threads.js';
 import { resolveLedgerCardContext, resolveLedgerZoneCardsContext } from '../helper/resolve-ledger-zone-context.js';
 import { hydrateLedgerCardContent, writeCardCommentContent } from '../helper/card-content-file.js';
+import { formatMasterTaskValidation, validateMasterTasks } from '../helper/validate-master-tasks.js';
 import { hydrateLedgerThreadNotes, stripHydratedThreadNotes } from '../helper/thread-content-file.js';
 
 type JsonObject = Record<string, unknown>;
@@ -175,7 +176,7 @@ function setLedgerCardStatus(ledger: unknown, operation: { cardId?: string; stat
 
 export async function manageLedgerJsonController(
   actionPayload: {
-    ledgerCommand: 'answer' | 'card-context' | 'done' | 'export' | 'inspect' | 'mutate' | 'overview' | 'todo' | 'unanswered' | 'zone-cards';
+    ledgerCommand: 'answer' | 'card-context' | 'done' | 'export' | 'inspect' | 'mutate' | 'overview' | 'todo' | 'unanswered' | 'validate-master-tasks' | 'zone-cards';
     answerOperation?: { message?: string; messageFile?: string; threadId?: string };
     cardOperation?: { cardId?: string };
     exportOperation?: { outputFile?: string };
@@ -218,6 +219,13 @@ export async function manageLedgerJsonController(
     return ledger;
   }
   await hydrateLedgerThreadNotes(ledger.value, actionPayload.ledgerJsonFile, fs);
+
+  if (actionPayload.ledgerCommand === 'validate-master-tasks') {
+    const hydratedLedger = await hydrateLedgerCardContent(ledger.value, actionPayload.ledgerJsonFile, fs);
+    const report = validateMasterTasks(hydratedLedger);
+    const output = formatMasterTaskValidation(report);
+    return report.errors.length === 0 ? { ok: true, value: output } : { ok: false, error: output };
+  }
 
   if (actionPayload.ledgerCommand === 'card-context') {
     const context = resolveLedgerCardContext({ ledger: ledger.value, ledgerJsonFile: actionPayload.ledgerJsonFile, cardId: actionPayload.cardOperation?.cardId });
