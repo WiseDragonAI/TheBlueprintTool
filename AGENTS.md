@@ -38,6 +38,12 @@
 
 ## decision-os Server Procedure
 
+### Server Restart Ownership
+
+- **Server restarts are operator-owned actions.** An agent must not stop, restart, replace, or otherwise disrupt a running decision-os server unless the operator explicitly asks the agent to perform that server action.
+- A request to diagnose, fix, implement, test, or deploy a code change does **not** implicitly authorize a server restart.
+- When a completed change requires a restart to become active, report that requirement and leave the restart to the operator unless the operator has explicitly authorized it.
+
 decision-os serves the active `.decision-os` workspace by resolving the workspace root from the process
 current working directory. Always start the server from the target project workspace, not from the
 decision-os repo, unless the operator explicitly wants to inspect the repo's own ledgers.
