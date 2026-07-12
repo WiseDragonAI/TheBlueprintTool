@@ -64,6 +64,7 @@ test('reports invalid canonical markdown and rewrites queue rank in place', () =
 test('keeps malformed master tasks visible in the control room with diagnostics', () => {
   const malformed = task({
     cardId: 'malformed',
+    cardStatus: 'done',
     markdown: '#master-task #task-waiting #task-active\n\nLedger: Tasks\n\n## Subtasks\n'
   });
   const result = deriveControlRoom([malformed]);

@@ -303,6 +303,13 @@ function taskRow(task, index) {
   const age = task.status === 'task-active' ? activeAge(task.activeSince) : waitingAge(task.waitingSince);
   summary.querySelector('.task-meta').textContent = `${task.ledger} · ${age} · ${task.complete}/${task.subtasks.length} complete`;
   summary.querySelector('.task-next').textContent = next;
+  if (task.diagnostics.length) {
+    article.classList.add('has-diagnostics');
+    const diagnostic = document.createElement('span');
+    diagnostic.className = 'task-diagnostic';
+    diagnostic.textContent = task.diagnostics.join(' · ');
+    summary.querySelector('.task-copy').append(diagnostic);
+  }
   if (state.controlTab === 'queue') {
     const handle = document.createElement('button');
     handle.type = 'button';
@@ -432,16 +439,8 @@ function renderControlRoom() {
   elements['control-task-list'].replaceChildren(...tasks.map(taskRow));
   elements['control-empty'].hidden = tasks.length > 0;
   elements['control-empty'].textContent = state.controlTab === 'queue' ? 'No waiting tasks' : 'No active tasks';
-  const diagnostics = state.controlRoom?.diagnostics ?? [];
-  elements['control-diagnostics'].hidden = diagnostics.length === 0;
+  elements['control-diagnostics'].hidden = true;
   elements['control-diagnostics'].replaceChildren();
-  if (diagnostics.length) {
-    const summary = document.createElement('summary');
-    summary.textContent = 'Markdown diagnostics';
-    const body = document.createElement('pre');
-    body.textContent = diagnostics.map((task) => `${task.cardId}: ${task.diagnostics.join(', ')}`).join('\n');
-    elements['control-diagnostics'].append(summary, body);
-  }
   setView('control-room-view');
   document.title = `Control room · ${state.projectName}`;
 }
