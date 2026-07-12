@@ -16,8 +16,7 @@ const state = {
   query: '',
   controlRoom: null,
   controlTab: 'queue',
-  controlFilter: 'All',
-  draggedTaskId: ''
+  controlFilter: 'All'
 };
 
 const elements = Object.fromEntries([
@@ -35,7 +34,7 @@ const creationForm = document.querySelector('.creation-form');
 let creationKind = '';
 let controlRoomScrollFrame = 0;
 let queuePersistenceSequence = 0;
-let queueDragSnapshot = null;
+let queueSortable = null;
 
 function setView(name) {
   for (const id of ['loading-view', 'error-view', 'empty-view', 'overview-view', 'control-room-view', 'ledger-view', 'zone-view', 'card-view']) {
@@ -297,53 +296,35 @@ function filteredControlTasks() {
   return state.controlFilter === 'All' ? tasks : tasks.filter((task) => task.ledger === state.controlFilter);
 }
 
-function reorderVisibleQueue(cardId, targetIndex) {
+function syncQueueFromDom() {
+  const orderedIds = [...elements['control-task-list'].querySelectorAll('.control-task')].map((row) => row.dataset.cardId);
   const visible = filteredControlTasks();
-  const sourceIndex = visible.findIndex((task) => task.cardId === cardId);
-  if (sourceIndex < 0 || targetIndex < 0 || targetIndex >= visible.length || sourceIndex === targetIndex) return false;
-  const reordered = visible.slice();
-  const [moved] = reordered.splice(sourceIndex, 1);
-  reordered.splice(targetIndex, 0, moved);
+  const byId = new Map(visible.map((task) => [task.cardId, task]));
+  const reordered = orderedIds.map((cardId) => byId.get(cardId)).filter(Boolean);
   const visibleIds = new Set(visible.map((task) => task.cardId));
   let replacementIndex = 0;
   state.controlRoom.queue = state.controlRoom.queue.map((task) => visibleIds.has(task.cardId) ? reordered[replacementIndex++] : task);
-  return true;
 }
 
-function beginQueueDrag() {
-  queueDragSnapshot = state.controlRoom.queue.slice();
-}
-
-function cancelQueueDrag() {
-  if (queueDragSnapshot) state.controlRoom.queue = queueDragSnapshot;
-  queueDragSnapshot = null;
-  state.draggedTaskId = '';
-  renderControlRoom();
-}
-
-function commitQueueDrag() {
-  queueDragSnapshot = null;
-  state.draggedTaskId = '';
-  void persistQueueOrder();
-}
-
-function moveQueuePlaceholder(cardId, placeholder, clientY) {
-  const list = elements['control-task-list'];
-  const rows = [...list.querySelectorAll('.control-task')];
-  const targetIndex = rows.filter((row) => clientY > row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2).length;
-  const visible = filteredControlTasks();
-  const sourceIndex = visible.findIndex((task) => task.cardId === cardId);
-  if (sourceIndex === targetIndex || targetIndex < 0 || targetIndex >= visible.length) return;
-  const previousTops = new Map(rows.map((row) => [row, row.getBoundingClientRect().top]));
-  if (!reorderVisibleQueue(cardId, targetIndex)) return;
-  const remaining = [...list.children].filter((row) => row !== placeholder);
-  list.insertBefore(placeholder, remaining[targetIndex] ?? null);
-  const nextRows = [...list.querySelectorAll('.control-task')];
-  nextRows.forEach((row, index) => {
-    row.classList.toggle('next-task', index === 0);
-    const delta = previousTops.get(row) - row.getBoundingClientRect().top;
-    if (delta && typeof row.animate === 'function') {
-      row.animate([{ transform: `translateY(${delta}px)` }, { transform: 'translateY(0)' }], { duration: 180, easing: 'cubic-bezier(.2,.8,.2,1)' });
+function initializeQueueSortable() {
+  queueSortable?.destroy();
+  queueSortable = null;
+  if (state.controlTab !== 'queue' || filteredControlTasks().length < 2 || typeof globalThis.Sortable !== 'function') return;
+  queueSortable = globalThis.Sortable.create(elements['control-task-list'], {
+    animation: 180,
+    draggable: '.control-task',
+    forceFallback: true,
+    fallbackOnBody: true,
+    fallbackTolerance: 4,
+    touchStartThreshold: 4,
+    chosenClass: 'queue-task-chosen',
+    dragClass: 'queue-task-dragging',
+    ghostClass: 'queue-task-ghost',
+    fallbackClass: 'queue-task-fallback',
+    onEnd(event) {
+      if (event.oldIndex === event.newIndex) return;
+      syncQueueFromDom();
+      queueMicrotask(() => void persistQueueOrder());
     }
   });
 }
@@ -359,7 +340,6 @@ function taskRow(task, index) {
   article.id = `task-${task.cardId}`;
   article.dataset.cardId = task.cardId;
   article.draggable = false;
-  let suppressNavigation = false;
   const summary = document.createElement('button');
   summary.type = 'button';
   summary.className = 'control-task-summary';
@@ -390,69 +370,8 @@ function taskRow(task, index) {
     diagnostic.textContent = task.diagnostics.join(' · ');
     summary.querySelector('.task-copy').append(diagnostic);
   }
-  if (queue) {
-    let pointerId = -1;
-    let startX = 0;
-    let startY = 0;
-    let dragging = false;
-    let placeholder = null;
-    const clearFloatingCard = () => {
-      if (placeholder?.isConnected) placeholder.replaceWith(article);
-      article.classList.remove('dragging');
-      article.removeAttribute('style');
-      placeholder = null;
-      dragging = false;
-      pointerId = -1;
-    };
-    article.addEventListener('pointerdown', (event) => {
-      if (event.button !== undefined && event.button !== 0) return;
-      pointerId = event.pointerId;
-      startX = event.clientX;
-      startY = event.clientY;
-      article.setPointerCapture(pointerId);
-    });
-    article.addEventListener('pointermove', (event) => {
-      if (event.pointerId !== pointerId) return;
-      const dx = event.clientX - startX;
-      const dy = event.clientY - startY;
-      if (!dragging && Math.hypot(dx, dy) < 6) return;
-      event.preventDefault();
-      if (!dragging) {
-        dragging = true;
-        suppressNavigation = true;
-        beginQueueDrag();
-        state.draggedTaskId = task.cardId;
-        const rect = article.getBoundingClientRect();
-        placeholder = document.createElement('div');
-        placeholder.className = 'control-task-placeholder';
-        placeholder.style.height = `${rect.height}px`;
-        article.replaceWith(placeholder);
-        article.classList.add('dragging');
-        Object.assign(article.style, {
-          position: 'fixed', left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`,
-          zIndex: '100', pointerEvents: 'none', transform: 'translate3d(0, 0, 0)'
-        });
-        document.body.append(article);
-      }
-      article.style.transform = `translate3d(0, ${event.clientY - startY}px, 0)`;
-      moveQueuePlaceholder(task.cardId, placeholder, event.clientY);
-    });
-    const finishPointerDrag = (commit) => {
-      if (!dragging) {
-        pointerId = -1;
-        return;
-      }
-      clearFloatingCard();
-      if (commit) commitQueueDrag(); else cancelQueueDrag();
-    };
-    article.addEventListener('pointerup', () => finishPointerDrag(true));
-    article.addEventListener('pointercancel', () => finishPointerDrag(false));
-  }
   if (directNavigation) {
-    summary.addEventListener('click', () => {
-      if (suppressNavigation) { suppressNavigation = false; return; }
-      navigate(pathForTask(task));
-    });
+    summary.addEventListener('click', () => navigate(pathForTask(task)));
     article.append(summary);
     return article;
   }
@@ -487,16 +406,6 @@ function taskRow(task, index) {
   open.textContent = 'Open master task';
   open.addEventListener('click', () => navigate(pathForTask(task)));
   actions.append(open);
-  if (state.controlTab === 'queue') {
-    for (const [label, delta] of [['Move up', -1], ['Move down', 1]]) {
-      const move = document.createElement('button');
-      move.type = 'button';
-      move.textContent = label;
-      move.disabled = index + delta < 0 || index + delta >= filteredControlTasks().length;
-      move.addEventListener('click', () => void moveTask(task.cardId, index + delta));
-      actions.append(move);
-    }
-  }
   details.append(...subtasks, actions);
   summary.addEventListener('click', () => {
     details.hidden = !details.hidden;
@@ -507,6 +416,8 @@ function taskRow(task, index) {
 }
 
 function renderControlRoom() {
+  queueSortable?.destroy();
+  queueSortable = null;
   state.activeLedgerId = '';
   state.activeZoneId = '';
   renderLedgerLinks();
@@ -528,6 +439,7 @@ function renderControlRoom() {
   });
   const tasks = filteredControlTasks();
   elements['control-task-list'].replaceChildren(...tasks.map(taskRow));
+  initializeQueueSortable();
   elements['control-empty'].hidden = tasks.length > 0;
   elements['control-empty'].textContent = {
     queue: 'No waiting tasks',
@@ -582,12 +494,6 @@ async function loadControlRoom() {
     });
   }))).flat();
   state.controlRoom = { ...deriveControlRoom(allTasks), allTasks, documents };
-}
-
-async function moveTask(cardId, targetIndex) {
-  if (!reorderVisibleQueue(cardId, targetIndex)) return;
-  renderControlRoom();
-  await persistQueueOrder();
 }
 
 async function persistQueueOrder() {

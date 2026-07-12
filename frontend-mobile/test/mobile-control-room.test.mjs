@@ -137,20 +137,20 @@ test('opens queued master tasks directly without building disclosure content', (
   assert.match(mobile, /const directNavigation = active \|\| queue;/);
   assert.match(mobile, /if \(directNavigation\) \{[\s\S]*navigate\(pathForTask\(task\)\)[\s\S]*article\.append\(summary\);[\s\S]*return article;/);
   assert.match(mobile, /\$\{queue \? '' : '<span class="task-chevron">⌄<\/span>'\}/);
-  assert.match(mobile, /if \(queue\) \{[\s\S]*article\.addEventListener\('pointerdown'/);
+  assert.match(mobile, /initializeQueueSortable\(\)/);
 });
 
-test('drags the pressed queue card under the pointer and animates displaced rows', () => {
-  assert.match(mobile, /article\.addEventListener\('pointerdown'/);
-  assert.match(mobile, /article\.setPointerCapture\(pointerId\)/);
-  assert.match(mobile, /article\.style\.transform = `translate3d\(0, \$\{event\.clientY - startY\}px, 0\)`/);
-  assert.match(mobile, /function moveQueuePlaceholder\(cardId, placeholder, clientY\)/);
-  assert.match(mobile, /row\.animate\(\[\{ transform: `translateY\(\$\{delta\}px\)` \}, \{ transform: 'translateY\(0\)' \}\]/);
-  assert.match(mobile, /pointercancel[\s\S]*finishPointerDrag\(false\)/);
-  assert.doesNotMatch(mobile, /pressTimer|dragstart|dragover|task-drag-handle/);
-  assert.match(styles, /will-change:\s*transform/);
-  assert.match(styles, /\.control-task-summary[^}]*touch-action:\s*none/);
-  assert.doesNotMatch(styles, /\.control-task\.dragging[^}]*opacity/);
+test('delegates touch sorting and animation to vendored SortableJS', () => {
+  assert.match(html, /sortable-1\.15\.7\.min\.js/);
+  assert.match(mobile, /globalThis\.Sortable\.create\(elements\['control-task-list'\]/);
+  assert.match(mobile, /animation:\s*180/);
+  assert.match(mobile, /forceFallback:\s*true/);
+  assert.match(mobile, /fallbackOnBody:\s*true/);
+  assert.match(mobile, /fallbackTolerance:\s*4/);
+  assert.match(mobile, /touchStartThreshold:\s*4/);
+  assert.match(mobile, /onEnd\(event\)[\s\S]*syncQueueFromDom\(\)[\s\S]*queueMicrotask\(\(\) => void persistQueueOrder\(\)\)/);
+  assert.doesNotMatch(mobile, /setPointerCapture|pointermove|control-task-placeholder|task-drag-handle/);
+  assert.match(styles, /\.queue-task-fallback[^}]*opacity:\s*1\s*!important/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
 });
 
