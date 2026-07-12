@@ -1,6 +1,7 @@
 import { state as canvasState } from '/canvas-src/runtime/state.js';
 import { selectThread } from '/canvas-src/runtime/thread/effect/select-thread.js';
 import { renderThreadPanel } from '/canvas-src/runtime/thread/effect/render-thread-panel.js';
+import { pinThreadFeedToLastMessage } from '/canvas-src/runtime/thread/effect/pin-thread-feed-to-last-message.js';
 import { submitThreadDraft } from '/canvas-src/runtime/thread/effect/submit-thread-draft.js';
 import { saveThreadDraft } from '/canvas-src/runtime/thread/effect/persist-thread-draft.js';
 import { startVoiceRecording } from '/canvas-src/runtime/voice/controller/start-voice-recording.js';
@@ -213,6 +214,7 @@ export function initializeMobileThread() {
     } else if (action === 'voice-cancel') cancelVoiceRecording();
     else if (action === 'voice-retry') await retryVoiceTranscription({ threadId: button.dataset.threadId, noteId: button.dataset.noteId, voiceFileRef: button.dataset.voiceFileRef });
     else if (action === 'thread-file-picker') button.closest('.terminal-composer')?.querySelector('.thread-file-input')?.click();
+    else if (action === 'jump-thread-bottom') pinThreadFeedToLastMessage({ follow: true });
     else if (action === 'process-thread-codex') await startCodex(button);
     else if (action === 'confirm-delete-note') {
       const modal = document.querySelector('.confirm-modal');
