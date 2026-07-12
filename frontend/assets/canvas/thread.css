@@ -1019,6 +1019,16 @@
   --terminal-button-gradient-shadow: linear-gradient(90deg, color-mix(in srgb, var(--thread-accent), transparent 36%), rgba(255, 255, 255, 0.18));
 }
 
+.terminal-button--thread-text {
+  --terminal-button-color: #b58cff;
+  --terminal-button-gradient-shadow: linear-gradient(90deg, rgba(181, 140, 255, 0.5), rgba(113, 92, 220, 0.32));
+}
+
+.terminal-button--record {
+  --terminal-button-color: #ff6f91;
+  --terminal-button-gradient-shadow: linear-gradient(90deg, rgba(255, 111, 145, 0.5), rgba(221, 70, 110, 0.32));
+}
+
 .terminal-button--thread-send {
   display: none;
 }
@@ -1071,6 +1081,12 @@
 
   .terminal-button__key {
     display: none;
+  }
+
+  .terminal-button--stack {
+    grid-template-rows: 1fr 16px;
+    gap: 3px;
+    padding-block: 9px;
   }
 
   .terminal-command-actions .terminal-button__icon {
