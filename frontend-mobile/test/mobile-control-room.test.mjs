@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { activeAge, activeStopwatch, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from '../src/mobile-control-room.js';
+import { controlRoomPath, parseControlRoomRoute } from '../src/mobile-control-room-route.js';
 
 const [mobile, html, styles] = await Promise.all([
   readFile(new URL('../src/mobile.js', import.meta.url), 'utf8'),
@@ -40,6 +41,23 @@ test('derives waiting, active, and done tabs with FIFO and ranked priority', () 
   assert.deepEqual(result.active.map((entry) => entry.cardId), ['active']);
   assert.deepEqual(result.done.map((entry) => entry.cardId), ['done']);
   assert.deepEqual(result.ledgers, ['Tasks']);
+});
+
+test('round-trips the mobile Control Room tab and task scroll anchor through the URL', () => {
+  assert.deepEqual(parseControlRoomRoute('https://example.test/?tab=active#task-card-a'), { tab: 'active', anchor: 'task-card-a' });
+  assert.equal(controlRoomPath('done', 'task-card-b'), '/?tab=done#task-card-b');
+});
+
+test('canonicalizes invalid mobile Control Room URL state', () => {
+  assert.deepEqual(parseControlRoomRoute('https://example.test/?tab=unknown#untrusted'), { tab: 'queue', anchor: '' });
+  assert.equal(controlRoomPath('unknown', 'untrusted'), '/?tab=queue');
+});
+
+test('persists Control Room tab navigation and the nearest task anchor in browser history', () => {
+  assert.match(mobile, /article\.id = `task-\$\{task\.cardId\}`/);
+  assert.match(mobile, /history\.pushState\(\{\}, '', controlRoomPath\(state\.controlTab\)\)/);
+  assert.match(mobile, /history\.replaceState\(\{\}, '', nextPath\)/);
+  assert.match(mobile, /document\.getElementById\(anchor\)\?\.scrollIntoView\(\{ block: 'start' \}\)/);
 });
 
 test('shows task-active only while its Codex process is running', () => {
