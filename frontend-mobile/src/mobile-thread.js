@@ -18,6 +18,15 @@ let onLedgerRefresh = async () => null;
 let initialized = false;
 let eventSource = null;
 
+function updateLaunchReadiness() {
+  const button = document.querySelector('.mobile-thread-inspector [data-action="process-thread-codex"]');
+  if (!button) return;
+  const notes = canvasState.activeLedger?.notes?.[canvasState.threadId] ?? [];
+  const hasSavedInput = notes.some((note) => note?.role !== 'assistant' && (String(note?.message ?? '').trim() || note?.voiceFileRef));
+  button.disabled = !hasSavedInput;
+  button.title = hasSavedInput ? 'Launch Codex for this intake' : 'Add and save an intake message first';
+}
+
 export function syncMobileThreadContext(input) {
   currentLedgerId = String(input.ledgerId ?? '');
   onLedgerRefresh = input.onLedgerRefresh ?? onLedgerRefresh;
@@ -47,6 +56,7 @@ export function openMobileThread(card, zoneColor) {
   canvasState.threadPanelOpen = true;
   canvasState.threadPinOnRender = true;
   renderThreadPanel();
+  updateLaunchReadiness();
   document.querySelector('.thread-draft')?.focus();
 }
 
@@ -64,11 +74,13 @@ async function refreshThreadLedger() {
   canvasState.activeLedger = ledger;
   if (currentCard) currentCard = ledger.cards?.find((card) => String(card.id) === String(currentCard.id)) ?? currentCard;
   renderThreadPanel();
+  updateLaunchReadiness();
 }
 
 async function appendTextNote() {
   await submitThreadDraft();
   renderThreadPanel();
+  updateLaunchReadiness();
 }
 
 async function deleteNote(button) {
@@ -85,6 +97,8 @@ async function deleteNote(button) {
 
 async function startCodex(button) {
   if (!currentCard || !currentLedgerId) return;
+  updateLaunchReadiness();
+  if (button.disabled) return;
   button.disabled = true;
   const result = await requestThreadCodexProcess({
     ledgerId: currentLedgerId,
@@ -163,6 +177,7 @@ export function initializeMobileThread() {
     if (event.target.matches('.thread-file-input')) {
       await uploadThreadFileController(event.target);
       renderThreadPanel();
+      updateLaunchReadiness();
     }
   });
   document.addEventListener('paste', (event) => void pasteThreadImageController(event));

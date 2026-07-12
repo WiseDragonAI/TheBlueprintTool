@@ -1,7 +1,8 @@
 import { renderLedgerCardMarkdown } from '/canvas-src/runtime/ledger/component/render-ledger-card-markdown.js';
 import { ledgerCardBody } from '/canvas-src/runtime/ledger/helper/ledger-card-body.js';
-import { initializeMobileThread, setMobileThreadCard, syncMobileThreadContext } from './mobile-thread.js';
+import { initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './mobile-thread.js';
 import { initializeMobileCodex, setMobileCodexContext } from './mobile-codex.js';
+import { deriveControlRoom, waitingAge, withQueueRank } from './mobile-control-room.js';
 
 const state = {
   projectName: 'decision-os',
@@ -11,14 +12,19 @@ const state = {
   activeZoneId: '',
   activeZoneColor: '',
   activeCardId: '',
-  query: ''
+  query: '',
+  controlRoom: null,
+  controlTab: 'queue',
+  controlFilter: 'All',
+  draggedTaskId: ''
 };
 
 const elements = Object.fromEntries([
   'project-name', 'ledger-links', 'loading-view', 'error-view', 'error-message', 'empty-view',
   'overview-view', 'overview-summary', 'overview-ledgers', 'ledger-view', 'ledger-title', 'ledger-summary',
   'zone-list', 'zone-view', 'zone-title', 'zone-summary', 'card-search', 'card-list',
-  'no-results', 'card-view', 'card-title', 'card-body'
+  'no-results', 'card-view', 'card-title', 'card-body', 'control-room-view', 'control-filters',
+  'control-task-list', 'control-empty', 'control-diagnostics'
 ].map((id) => [id, document.getElementById(id)]));
 
 const asText = (value) => value == null ? '' : typeof value === 'string' ? value : JSON.stringify(value, null, 2);
@@ -28,7 +34,7 @@ const creationForm = document.querySelector('.creation-form');
 let creationKind = '';
 
 function setView(name) {
-  for (const id of ['loading-view', 'error-view', 'empty-view', 'overview-view', 'ledger-view', 'zone-view', 'card-view']) {
+  for (const id of ['loading-view', 'error-view', 'empty-view', 'overview-view', 'control-room-view', 'ledger-view', 'zone-view', 'card-view']) {
     elements[id].hidden = id !== name;
   }
 }
@@ -53,6 +59,15 @@ function zonePath(ledgerId, zoneId) {
 
 function cardPath(ledgerId, zoneId, cardId) {
   return `${zonePath(ledgerId, zoneId)}/card/${encodeURIComponent(cardId)}`;
+}
+
+function pathForTask(task) {
+  const ledger = state.controlRoom?.documents?.find((entry) => entry.ledgerId === task.ledgerId)?.document;
+  const previous = state.ledger;
+  state.ledger = ledger;
+  const zone = ledgerZones().find((entry) => entry.cards.some((card) => String(card.id) === task.cardId));
+  state.ledger = previous;
+  return cardPath(task.ledgerId, zone?.id ?? 'ungrouped', task.cardId);
 }
 
 function navigate(path, replace = false) {
@@ -221,7 +236,7 @@ function renderLedgerLinks() {
   const overviewLink = document.createElement('a');
   overviewLink.className = `ledger-link${state.activeLedgerId ? '' : ' active'}`;
   overviewLink.href = '/';
-  overviewLink.textContent = 'All ledgers';
+  overviewLink.textContent = 'Control room';
   overviewLink.addEventListener('click', (event) => {
     event.preventDefault();
     navigate('/');
@@ -266,6 +281,220 @@ function renderOverview() {
   }));
   setView('overview-view');
   document.title = `Ledgers · ${state.projectName}`;
+}
+
+function filteredControlTasks() {
+  const tasks = state.controlRoom?.[state.controlTab] ?? [];
+  return state.controlFilter === 'All' ? tasks : tasks.filter((task) => task.ledger === state.controlFilter);
+}
+
+function taskRow(task, index) {
+  const article = document.createElement('article');
+  article.className = `control-task${index === 0 && state.controlTab === 'queue' ? ' next-task' : ''}`;
+  article.dataset.cardId = task.cardId;
+  article.draggable = false;
+  const summary = document.createElement('button');
+  summary.type = 'button';
+  summary.className = 'control-task-summary';
+  summary.setAttribute('aria-expanded', 'false');
+  const next = task.nextSubtask ? `Next: ${task.nextSubtask.title}` : 'No actionable subtask';
+  summary.innerHTML = `<span class="task-copy"><strong></strong><span class="task-meta"></span><span class="task-next"></span></span><span class="task-chevron">⌄</span>`;
+  summary.querySelector('strong').textContent = task.title;
+  summary.querySelector('.task-meta').textContent = `${task.ledger} · ${waitingAge(task.waitingSince)} · ${task.complete}/${task.subtasks.length} complete`;
+  summary.querySelector('.task-next').textContent = next;
+  if (state.controlTab === 'queue') {
+    const handle = document.createElement('button');
+    handle.type = 'button';
+    handle.className = 'task-drag-handle';
+    handle.draggable = true;
+    handle.setAttribute('aria-label', `Reorder ${task.title}`);
+    handle.textContent = '⠿';
+    let pressTimer = 0;
+    let touchActive = false;
+    let touchTarget = article;
+    handle.addEventListener('pointerdown', (event) => {
+      if (event.pointerType === 'mouse') return;
+      pressTimer = window.setTimeout(() => {
+        touchActive = true;
+        state.draggedTaskId = task.cardId;
+        article.classList.add('dragging');
+        handle.setPointerCapture(event.pointerId);
+      }, 350);
+    });
+    handle.addEventListener('pointermove', (event) => {
+      if (!touchActive) return;
+      event.preventDefault();
+      const candidate = document.elementFromPoint(event.clientX, event.clientY)?.closest('.control-task');
+      if (candidate && candidate !== touchTarget) {
+        touchTarget.classList.remove('drag-target');
+        touchTarget = candidate;
+        touchTarget.classList.add('drag-target');
+      }
+    });
+    const finishTouch = () => {
+      window.clearTimeout(pressTimer);
+      if (!touchActive) return;
+      const targetId = touchTarget.dataset.cardId;
+      const targetIndex = filteredControlTasks().findIndex((candidate) => candidate.cardId === targetId);
+      article.classList.remove('dragging');
+      touchTarget.classList.remove('drag-target');
+      touchActive = false;
+      state.draggedTaskId = '';
+      if (targetIndex >= 0) void moveTask(task.cardId, targetIndex);
+    };
+    handle.addEventListener('pointerup', finishTouch);
+    handle.addEventListener('pointercancel', finishTouch);
+    article.prepend(handle);
+  }
+  const details = document.createElement('section');
+  details.className = 'control-task-details';
+  details.hidden = true;
+  const subtasks = task.subtasks.map((subtask) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'subtask-row';
+    button.innerHTML = '<span></span><small></small>';
+    button.querySelector('span').textContent = subtask.title;
+    button.querySelector('small').textContent = subtask.status;
+    button.addEventListener('click', () => {
+      const target = state.controlRoom.allTasks.find((candidate) => candidate.cardId === subtask.cardId && candidate.ledgerId === task.ledgerId);
+      if (target) navigate(pathForTask(target));
+      else {
+        const ledger = state.controlRoom.documents.find((entry) => entry.ledgerId === task.ledgerId)?.document;
+        const previous = state.ledger;
+        state.ledger = ledger;
+        const zone = ledgerZones().find((entry) => entry.cards.some((card) => String(card.id) === subtask.cardId));
+        state.ledger = previous;
+        navigate(cardPath(task.ledgerId, zone?.id ?? 'ungrouped', subtask.cardId));
+      }
+    });
+    return button;
+  });
+  const actions = document.createElement('div');
+  actions.className = 'task-actions';
+  const open = document.createElement('button');
+  open.type = 'button';
+  open.textContent = 'Open master task';
+  open.addEventListener('click', () => navigate(pathForTask(task)));
+  actions.append(open);
+  if (state.controlTab === 'queue') {
+    for (const [label, delta] of [['Move up', -1], ['Move down', 1]]) {
+      const move = document.createElement('button');
+      move.type = 'button';
+      move.textContent = label;
+      move.disabled = index + delta < 0 || index + delta >= filteredControlTasks().length;
+      move.addEventListener('click', () => void moveTask(task.cardId, index + delta));
+      actions.append(move);
+    }
+  }
+  details.append(...subtasks, actions);
+  summary.addEventListener('click', () => {
+    details.hidden = !details.hidden;
+    summary.setAttribute('aria-expanded', String(!details.hidden));
+  });
+  article.addEventListener('dragstart', (event) => {
+    state.draggedTaskId = task.cardId;
+    article.classList.add('dragging');
+    event.dataTransfer.effectAllowed = 'move';
+  });
+  article.addEventListener('dragend', () => { state.draggedTaskId = ''; article.classList.remove('dragging'); });
+  article.addEventListener('dragover', (event) => { event.preventDefault(); article.classList.add('drag-target'); });
+  article.addEventListener('dragleave', () => article.classList.remove('drag-target'));
+  article.addEventListener('drop', (event) => {
+    event.preventDefault();
+    article.classList.remove('drag-target');
+    if (state.draggedTaskId) void moveTask(state.draggedTaskId, index);
+  });
+  article.append(summary, details);
+  return article;
+}
+
+function renderControlRoom() {
+  state.activeLedgerId = '';
+  state.activeZoneId = '';
+  renderLedgerLinks();
+  const filters = ['All', ...(state.controlRoom?.ledgers ?? [])];
+  if (!filters.includes(state.controlFilter)) state.controlFilter = 'All';
+  elements['control-filters'].replaceChildren(...filters.map((filter) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'filter-chip';
+    button.textContent = filter;
+    button.setAttribute('aria-pressed', String(filter === state.controlFilter));
+    button.addEventListener('click', () => { state.controlFilter = filter; renderControlRoom(); });
+    return button;
+  }));
+  document.querySelectorAll('[data-control-tab]').forEach((button) => {
+    button.setAttribute('aria-selected', String(button.dataset.controlTab === state.controlTab));
+  });
+  const tasks = filteredControlTasks();
+  elements['control-task-list'].replaceChildren(...tasks.map(taskRow));
+  elements['control-empty'].hidden = tasks.length > 0;
+  elements['control-empty'].textContent = state.controlTab === 'queue' ? 'No waiting tasks' : 'No active tasks';
+  const diagnostics = state.controlRoom?.diagnostics ?? [];
+  elements['control-diagnostics'].hidden = diagnostics.length === 0;
+  elements['control-diagnostics'].replaceChildren();
+  if (diagnostics.length) {
+    const summary = document.createElement('summary');
+    summary.textContent = 'Markdown diagnostics';
+    const body = document.createElement('pre');
+    body.textContent = diagnostics.map((task) => `${task.cardId}: ${task.diagnostics.join(', ')}`).join('\n');
+    elements['control-diagnostics'].append(summary, body);
+  }
+  setView('control-room-view');
+  document.title = `Control room · ${state.projectName}`;
+}
+
+async function loadControlRoom() {
+  const documents = await Promise.all(state.ledgers.map(async (ledger) => ({
+    ledgerId: ledger.id,
+    document: await fetch(`/decision-os/${encodeURIComponent(ledger.id)}`, { cache: 'no-store' }).then((response) => {
+      if (!response.ok) throw new Error(`Could not load ${ledger.title} (${response.status}).`);
+      return response.json();
+    })
+  })));
+  const allTasks = documents.flatMap(({ ledgerId, document }) => {
+    const ledgerTitle = state.ledgers.find((entry) => entry.id === ledgerId)?.title ?? ledgerId;
+    return (document.cards ?? []).map((card) => ({ cardId: card.id, title: card.title, ledgerId, ledgerTitle, markdown: ledgerCardBody(card) }));
+  });
+  state.controlRoom = { ...deriveControlRoom(allTasks), allTasks, documents };
+}
+
+async function moveTask(cardId, targetIndex) {
+  const visible = filteredControlTasks();
+  const sourceIndex = visible.findIndex((task) => task.cardId === cardId);
+  if (sourceIndex < 0 || targetIndex < 0 || targetIndex >= visible.length || sourceIndex === targetIndex) return;
+  const reordered = visible.slice();
+  const [moved] = reordered.splice(sourceIndex, 1);
+  reordered.splice(targetIndex, 0, moved);
+  await Promise.all(reordered.map((task, index) => ledgerMutation(task.ledgerId, {
+    action: 'patch-card',
+    cardPatch: { id: task.cardId, description: withQueueRank(task.markdown, index + 1) }
+  })));
+  await loadControlRoom();
+  renderControlRoom();
+}
+
+async function createTaskIntake() {
+  const ledgerRef = state.ledgers.find((entry) => entry.title === state.controlFilter || entry.id === state.controlFilter) ?? state.ledgers[0];
+  if (!ledgerRef) throw new Error('Create a ledger before starting a task.');
+  const ledger = await fetch(`/decision-os/${encodeURIComponent(ledgerRef.id)}`, { cache: 'no-store' }).then((response) => response.json());
+  state.ledger = ledger;
+  state.activeLedgerId = ledgerRef.id;
+  const rect = nextZoneRect();
+  const zone = { id: objectId('zone'), ...rect, color: '#38d9e8', label: 'New task intake', comments: [] };
+  await ledgerMutation(ledgerRef.id, { action: 'create-zone', annotation: zone });
+  const cardId = objectId('card');
+  const timestamp = new Date().toISOString();
+  const markdown = `#master-task #task-waiting\n\nLedger: ${ledgerRef.title}\nWaiting since: ${timestamp}\n\n## Intake\n\nDescribe the task in this thread, attach the required files, then launch Codex. Categorize the task, keep this mandatory new zone, rename this master task and zone, create actionable subtask cards in this zone, and write canonical card links and statuses under \`## Subtasks\`.\n\n## Subtasks\n`;
+  const card = { id: cardId, title: 'New task intake', cardType: 'note', domainId: ledgerRef.id, status: 'todo', x: rect.x + 60, y: rect.y + 60, w: 360, h: 240, comment: { what: markdown }, facts: [], fields: [] };
+  const updated = await ledgerMutation(ledgerRef.id, { action: 'create-card', card });
+  state.ledger = updated;
+  state.activeZoneId = zone.id;
+  state.activeZoneColor = zone.color;
+  syncMobileThreadContext({ ledgerId: ledgerRef.id, ledger: updated, ledgers: state.ledgers });
+  navigate(cardPath(ledgerRef.id, zone.id, cardId));
+  openMobileThread(card, zone.color);
 }
 
 function cardOverlapArea(card, zone) {
@@ -423,7 +652,8 @@ async function loadRoute() {
 
     const [requestedLedger, zoneMarker, requestedZone, cardMarker, requestedCard] = routeParts();
     if (!requestedLedger) {
-      renderOverview();
+      await loadControlRoom();
+      renderControlRoom();
       return;
     }
     const ledgerId = state.ledgers.some((ledger) => ledger.id === requestedLedger) ? requestedLedger : '';
@@ -465,6 +695,19 @@ document.querySelector('.back-to-zone-button').addEventListener('click', () => n
 document.querySelector('.create-ledger-button').addEventListener('click', () => openCreationModal('ledger'));
 document.querySelector('.create-zone-button').addEventListener('click', () => openCreationModal('zone'));
 document.querySelector('.create-card-button').addEventListener('click', () => openCreationModal('card'));
+document.querySelector('.new-task-button').addEventListener('click', async () => {
+  const button = document.querySelector('.new-task-button');
+  button.disabled = true;
+  try { await createTaskIntake(); }
+  catch (cause) {
+    elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Task intake creation failed.';
+    setView('error-view');
+  } finally { button.disabled = false; }
+});
+document.querySelectorAll('[data-control-tab]').forEach((button) => button.addEventListener('click', () => {
+  state.controlTab = button.dataset.controlTab;
+  renderControlRoom();
+}));
 document.querySelector('.creation-cancel').addEventListener('click', () => creationModal.close());
 creationForm.addEventListener('submit', (event) => {
   event.preventDefault();
