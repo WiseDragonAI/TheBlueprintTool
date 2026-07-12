@@ -148,7 +148,9 @@ test('delegates touch sorting and animation to vendored SortableJS', () => {
   assert.match(mobile, /forceFallback:\s*true/);
   assert.match(mobile, /fallbackOnBody:\s*true/);
   assert.match(mobile, /fallbackTolerance:\s*4/);
-  assert.match(mobile, /touchStartThreshold:\s*4/);
+  assert.match(mobile, /delay:\s*300/);
+  assert.match(mobile, /delayOnTouchOnly:\s*true/);
+  assert.match(mobile, /touchStartThreshold:\s*8/);
   assert.match(mobile, /onEnd\(event\)[\s\S]*syncQueueFromDom\(\)[\s\S]*queueMicrotask\(\(\) => void persistQueueOrder\(\)\)/);
   assert.doesNotMatch(mobile, /setPointerCapture|pointermove|control-task-placeholder|task-drag-handle/);
   assert.match(styles, /\.queue-task-fallback[^}]*opacity:\s*1\s*!important/);
