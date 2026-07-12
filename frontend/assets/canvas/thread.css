@@ -53,6 +53,11 @@
   background: #0a0a0a;
 }
 
+.thread-heading[data-codex-running="true"] {
+  grid-template-rows: 28px;
+  gap: 0;
+}
+
 .thread-toolbar {
   display: flex;
   align-items: center;
