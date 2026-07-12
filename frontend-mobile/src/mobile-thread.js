@@ -129,8 +129,8 @@ async function startCodex(button) {
   if (existingRunId) {
     bindThreadCodexRunLog({ ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId: existingRunId });
     const summary = await requestCardSkillRunStatus({ ledgerId: currentLedgerId, cardId: String(currentCard.id), runId: existingRunId });
-    if (summary.status === 'running') return;
-    if (!summary.ok || summary.status === 'unknown') {
+    if (summary.active) return;
+    if (!summary.ok) {
       button.disabled = false;
       return;
     }

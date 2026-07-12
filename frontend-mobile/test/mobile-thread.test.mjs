@@ -16,10 +16,11 @@ test('mobile thread routes jump-to-bottom into persistent bottom following', () 
   assert.match(source, /action === 'jump-thread-bottom'\) pinThreadFeedToLastMessage\(\{ follow: true \}\)/);
 });
 
-test('mobile thread launch continues an owned terminal Codex run', () => {
+test('mobile thread launch continues a terminal or orphaned Codex run', () => {
   assert.match(source, /cardCodexThreadRunId\(currentCard\)/);
   assert.match(source, /requestCardSkillRunStatus\(/);
-  assert.match(source, /if \(summary\.status === 'running'\) return/);
+  assert.match(source, /if \(summary\.active\) return/);
+  assert.doesNotMatch(source, /summary\.status === 'unknown'/);
   assert.match(source, /requestCardSkillRunContinue\(\{/);
   assert.match(source, /runId: existingRunId/);
   assert.match(source, /resumeExternallyStartedCardSkillRun\(\{ ledgerId: currentLedgerId, cardId: String\(currentCard\.id\), runId: existingRunId \}\)/);
