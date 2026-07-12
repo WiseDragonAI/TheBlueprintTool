@@ -66,7 +66,7 @@ export function writeCardDescriptionFile(input: { decisionOsRoot: string; card: 
   input.card.comment = nextComment;
 }
 
-function readCardDescription(input: { decisionOsRoot: string; card: AnyRecord }): string {
+export function readCardDescription(input: { decisionOsRoot: string; card: AnyRecord }): string {
   const comment = commentFor(input.card);
   const file = resolveCardContentFile(input.decisionOsRoot, comment.contentFile);
   if (file && existsSync(file)) return readFileSync(file, 'utf8');

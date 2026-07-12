@@ -111,9 +111,17 @@ test('parses letter-prefixed card sections from the decision-os formatting contr
 });
 
 test('routes master-task cards back to the control room and regular cards back to their zone', () => {
-  assert.match(mobile, /backButton\.textContent = parsedTask\.masterTask \? '← Back to control room' : '← Back to zone'/);
+  assert.match(mobile, /backButton\.textContent = '← Back'/);
   assert.match(mobile, /backButton\.dataset\.destination = parsedTask\.masterTask \? 'control-room' : 'zone'/);
   assert.match(mobile, /dataset\.destination === 'control-room' \? '\/' : zonePath/);
+});
+
+test('carries master-task context to a subtask and completes it through one ledger mutation', () => {
+  assert.match(mobile, /cardPath\(task\.ledgerId, zone\?\.id \?\? 'ungrouped', subtask\.cardId, task\.cardId\)/);
+  assert.match(mobile, /cardPath\(state\.activeLedgerId, zone\?\.id \?\? 'ungrouped', subtask\.cardId, card\.id\)/);
+  assert.match(mobile, /action: 'complete-master-subtask', masterTaskId, subtaskCardId: card\.id/);
+  assert.match(mobile, /button\.textContent = card\.status === 'done' \? 'Task done' : 'Mark task as done'/);
+  assert.match(styles, /\.complete-subtask-button \{ width: 100%; min-height: 52px;/);
 });
 
 test('uses global application destinations and keeps new task as the fourth control-room action', () => {

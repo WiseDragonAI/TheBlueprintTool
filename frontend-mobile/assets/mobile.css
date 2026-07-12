@@ -198,6 +198,9 @@ h1 { margin: 0; font-size: clamp(28px, 8vw, 44px); line-height: 1.08; letter-spa
 .task-status-line span { font-variant-numeric: tabular-nums; }
 .task-overview h2 { margin: 0 0 6px; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
 .task-subtasks { border-top: 1px solid var(--line); }
+.subtask-completion { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--line); }
+.complete-subtask-button { width: 100%; min-height: 52px; border-color: var(--accent); color: #07100c; background: var(--accent); font-weight: 800; }
+.complete-subtask-button:disabled { color: var(--muted); background: var(--panel); }
 .ledger-card-body { display: grid; gap: 14px; padding: 18px; border: 1px solid color-mix(in srgb, var(--zone-color), rgba(255,255,255,.18) 12%); border-radius: var(--radius); background: linear-gradient(180deg, rgb(16, 18, 23) 0%, rgb(9, 11, 15) 100%); box-shadow: 0 0 0 1px color-mix(in srgb, var(--zone-color), transparent 55%); line-height: 1.65; overflow-wrap: anywhere; }
 .ledger-card-body > * { margin: 0; }
 .ledger-card-body h1, .ledger-card-body h2, .ledger-card-body h3, .ledger-card-body h4, .ledger-card-body h5, .ledger-card-body h6 { color: color-mix(in srgb, var(--zone-color), white 52%); font-size: 1rem; letter-spacing: 0; }
