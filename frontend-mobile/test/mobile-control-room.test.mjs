@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { activeAge, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from '../src/mobile-control-room.js';
+import { activeAge, activeStopwatch, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from '../src/mobile-control-room.js';
 
 const [mobile, html, styles] = await Promise.all([
   readFile(new URL('../src/mobile.js', import.meta.url), 'utf8'),
@@ -94,6 +94,17 @@ test('keeps malformed master tasks visible in the control room with diagnostics'
 
 test('formats a stable waiting age', () => {
   assert.equal(waitingAge('2026-07-10T10:00:00.000Z', Date.parse('2026-07-12T10:00:00.000Z')), '2d waiting');
+});
+
+test('formats the exact active Codex session duration as a minute-second stopwatch', () => {
+  assert.equal(activeStopwatch('2026-07-12T10:00:00.000Z', Date.parse('2026-07-12T10:03:07.999Z')), '03:07');
+  assert.equal(activeStopwatch('2026-07-12T10:00:00.000Z', Date.parse('2026-07-12T11:02:03.000Z')), '62:03');
+});
+
+test('renders active tasks as compact direct links without metadata or disclosure details', () => {
+  assert.match(mobile, /class="task-stopwatch" data-active-since/);
+  assert.match(mobile, /summary\.addEventListener\('click', \(\) => navigate\(pathForTask\(task\)\)\)/);
+  assert.match(mobile, /if \(active\) \{[\s\S]*article\.append\(summary\);[\s\S]*return article;/);
 });
 
 test('keeps task metadata in Markdown but removes it from the visible card body', () => {

@@ -2,7 +2,7 @@ import { renderLedgerCardMarkdown } from '/canvas-src/runtime/ledger/component/r
 import { ledgerCardBody } from '/canvas-src/runtime/ledger/helper/ledger-card-body.js';
 import { initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './mobile-thread.js';
 import { initializeMobileCodex, setMobileCodexContext } from './mobile-codex.js';
-import { activeAge, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from './mobile-control-room.js';
+import { activeAge, activeStopwatch, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from './mobile-control-room.js';
 
 const state = {
   projectName: 'decision-os',
@@ -296,14 +296,24 @@ function taskRow(task, index) {
   const summary = document.createElement('button');
   summary.type = 'button';
   summary.className = 'control-task-summary';
-  summary.setAttribute('aria-expanded', 'false');
+  const active = state.controlTab === 'active';
+  if (!active) summary.setAttribute('aria-expanded', 'false');
   const next = task.nextSubtask ? `Next: ${task.nextSubtask.title}` : 'No actionable subtask';
-  summary.innerHTML = `<span class="task-copy"><strong></strong><span class="task-meta"></span><span class="task-next"></span></span><span class="task-chevron">⌄</span>`;
+  summary.innerHTML = active
+    ? `<span class="task-copy"><strong></strong></span><span class="task-stopwatch" data-active-since=""></span>`
+    : `<span class="task-copy"><strong></strong><span class="task-meta"></span><span class="task-next"></span></span><span class="task-chevron">⌄</span>`;
   summary.querySelector('strong').textContent = task.title;
+  if (active) {
+    const stopwatch = summary.querySelector('.task-stopwatch');
+    stopwatch.dataset.activeSince = task.activeSince;
+    stopwatch.textContent = activeStopwatch(task.activeSince);
+  }
   const age = task.status === 'task-complete' ? 'completed' : task.status === 'task-active' ? activeAge(task.activeSince) : waitingAge(task.waitingSince);
   const process = task.codexProcessing ? ` · Codex ${task.codexRunId}` : '';
-  summary.querySelector('.task-meta').textContent = `${task.ledger} · ${age}${process} · ${task.complete}/${task.subtasks.length} complete`;
-  summary.querySelector('.task-next').textContent = next;
+  if (!active) {
+    summary.querySelector('.task-meta').textContent = `${task.ledger} · ${age}${process} · ${task.complete}/${task.subtasks.length} complete`;
+    summary.querySelector('.task-next').textContent = next;
+  }
   if (task.diagnostics.length) {
     article.classList.add('has-diagnostics');
     const diagnostic = document.createElement('span');
@@ -354,6 +364,11 @@ function taskRow(task, index) {
     handle.addEventListener('pointerup', finishTouch);
     handle.addEventListener('pointercancel', finishTouch);
     article.prepend(handle);
+  }
+  if (active) {
+    summary.addEventListener('click', () => navigate(pathForTask(task)));
+    article.append(summary);
+    return article;
   }
   const details = document.createElement('section');
   details.className = 'control-task-details';
@@ -843,4 +858,9 @@ window.addEventListener('keydown', (event) => {
 
 initializeMobileThread();
 initializeMobileCodex();
+window.setInterval(() => {
+  document.querySelectorAll('.task-stopwatch[data-active-since]').forEach((stopwatch) => {
+    stopwatch.textContent = activeStopwatch(stopwatch.dataset.activeSince);
+  });
+}, 1000);
 void loadRoute();
