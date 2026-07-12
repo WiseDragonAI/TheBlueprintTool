@@ -39,6 +39,22 @@ test('resolve-thread-target-title falls back to ledger card titles', () => {
   }
 });
 
+test('resolve-thread-target-title prefers ledger truth over generic strong content inside a mobile card', () => {
+  const previousDocument = globalThis.document;
+  (globalThis as unknown as { document: unknown }).document = {
+    querySelector() {
+      return { querySelector: (selector: string) => selector === 'strong' ? { textContent: 'Objective:' } : null };
+    }
+  };
+  state.activeLedger = { cards: [{ id: 'card-a', title: 'Mobile Header Task' }], annotations: [] };
+  try {
+    assert.equal(resolveThreadTargetTitle('thread-card-a'), 'Mobile Header Task');
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+    state.activeLedger = null;
+  }
+});
+
 test('card-has-agent-last-answer only marks assistant or agent latest notes', () => {
   state.activeLedger = {
     notes: {
