@@ -33,6 +33,7 @@ export type CardSkillRunMetadata = {
 
 export type CardSkillRunSummary = {
   ok: boolean;
+  active?: boolean;
   runId: string;
   runKind: 'thread' | 'card' | 'unknown';
   status: CardSkillRunStatus;
@@ -95,6 +96,7 @@ function normalizedEvents(value: unknown, runId: string): CardSkillRunEvent[] {
 function unavailableSummary(runId: string, since: number, error: string): CardSkillRunSummary {
   return {
     ok: false,
+    active: false,
     runId,
     runKind: 'unknown',
     status: 'unknown',
@@ -131,6 +133,7 @@ export async function requestCardSkillRunStatus(input: { ledgerId: string; cardI
   const diagnostics = normalizedEvents(body.diagnostics, runId);
   return {
     ok: response.ok && body.ok !== false,
+    active: body.active === true,
     runId,
     runKind: body.runKind === 'thread' ? 'thread' : body.runKind === 'card' ? 'card' : 'unknown',
     status: body.status ?? 'unknown',

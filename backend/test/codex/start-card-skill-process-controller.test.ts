@@ -805,6 +805,24 @@ test('card skill run continue route resumes the captured session with post-end t
     assert.equal(latestStatus.persistedEventCount, 0);
     assert.deepEqual(latestStatus.events.map((event) => event.type), ['turn.started', 'item.completed', 'turn.completed']);
     assert.equal(readFileSync(threadFile, 'utf8'), threadBeforeLatestResume);
+
+    const interruptedThread = `${threadBeforeLatestResume.trimEnd()}\n\n# AGENT\n<!-- decision-os:note {"id":"codex-${runId}-line-13","timestamp":"2026-07-07T17:18:00.000Z","status":"running","codexRunId":"${runId}","codexLine":"13","codexKind":"run_status","codexEventType":"turn.started"} -->\n\nCodex turn started.\n`;
+    writeFileSync(threadFile, interruptedThread);
+    appendFileSync(jsonlFile, `${JSON.stringify({ type: 'turn.started' })}\n`);
+    appendFileSync(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.log`), `decision-os:codex-run-segment ${JSON.stringify({ runId, startedAt: new Date().toISOString(), segment: 'continue', startLine: 12 })}\n`);
+    delete (runtime.codexSkillRuns as Record<string, unknown>)[runId];
+
+    const orphanedStatusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}&since=0`);
+    const orphanedStatus = await orphanedStatusResponse.json() as { status: string; active: boolean };
+    assert.equal(orphanedStatus.status, 'running');
+    assert.equal(orphanedStatus.active, false);
+    const interruptedResumeResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}/continue`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ledgerId: 'specs', cardId: outputCardId, codexModel: 'gpt-5.5', codexEffort: 'high' })
+    });
+    assert.equal(interruptedResumeResponse.status, 202);
+    await waitForText(inputFile, 'Continue the interrupted task from the durable session context.');
   } finally {
     server.close();
     process.chdir(originalCwd);
