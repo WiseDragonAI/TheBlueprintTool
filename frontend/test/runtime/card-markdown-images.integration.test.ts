@@ -100,6 +100,10 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   assert.match(mediaRenderer, /syncMediaCarousel\(shell, block\.images, track, persistedCarouselStateId, \{ persist: false \}\)/);
   assert.match(mediaRenderer, /track\.scrollTo\(\{ left: nextIndex \* slideWidth, behavior \}\)/);
   assert.match(mediaRenderer, /function bindSingleSlideSwipe/);
+  assert.match(mediaRenderer, /options\.carouselDriver === 'external'/);
+  assert.match(mediaRenderer, /if \(!externalCarouselDriver\) bindSingleSlideSwipe/);
+  assert.match(mediaRenderer, /dataset\.carouselStateId = persistedCarouselStateId/);
+  assert.match(mediaRenderer, /dataset\.carouselStartIndex = String\(readLedgerCardMediaCarouselSlide/);
   assert.match(mediaRenderer, /Math\.max\(48, track\.clientWidth \* 0\.18\)/);
   assert.match(mediaRenderer, /current\.startIndex \+ direction/);
   assert.match(mediaRenderer, /previous\.textContent = '‹'/);

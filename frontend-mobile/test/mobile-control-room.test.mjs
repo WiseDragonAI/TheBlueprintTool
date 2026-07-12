@@ -4,10 +4,11 @@ import test from 'node:test';
 import { activeAge, activeStopwatch, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from '../src/mobile-control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from '../src/mobile-control-room-route.js';
 
-const [mobile, html, styles] = await Promise.all([
+const [mobile, html, styles, embla] = await Promise.all([
   readFile(new URL('../src/mobile.js', import.meta.url), 'utf8'),
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
-  readFile(new URL('../assets/mobile.css', import.meta.url), 'utf8')
+  readFile(new URL('../assets/mobile.css', import.meta.url), 'utf8'),
+  readFile(new URL('../assets/vendor/embla-carousel-8.6.0.umd.js', import.meta.url), 'utf8')
 ]);
 
 const task = (overrides = {}) => ({
@@ -183,12 +184,28 @@ test('keeps task metadata in Markdown but removes it from the visible card body'
 
 test('lays mobile carousel controls over the image with touch-safe navigation', () => {
   assert.match(styles, /\.ledger-card-media-shell \{ position: relative;[^}]*aspect-ratio:/);
-  assert.match(styles, /\.ledger-card-media-track \{[^}]*height: 100%;[^}]*overflow: hidden;[^}]*touch-action: pan-y;/);
+  assert.match(styles, /\.ledger-card-media-track \{[^}]*height: 100%;[^}]*overflow: visible;[^}]*touch-action: pan-y;[^}]*will-change: transform;/);
   assert.match(styles, /\.ledger-card-media-title \{ position: absolute;[^}]*bottom: 48px;[^}]*border-radius: 999px;/);
   assert.match(styles, /\.ledger-card-media-nav \{ position: absolute;[^}]*inset: 8px;[^}]*justify-content: space-between;/);
   assert.match(styles, /\.ledger-card-media-button \{[^}]*width: 42px;[^}]*height: 52px;[^}]*border-radius: 999px;/);
   assert.match(styles, /\.ledger-card-media-slide-nav \{ position: absolute;[^}]*bottom: 12px;/);
   assert.match(styles, /\.ledger-card-media-slide-button\.is-active \{/);
+});
+
+test('drives mobile carousels with pinned dependency-free Embla physics', () => {
+  assert.match(html, /\/assets\/vendor\/embla-carousel-8\.6\.0\.umd\.js/);
+  assert.match(embla, /\.EmblaCarousel=/);
+  assert.match(mobile, /carouselDriver: 'external'/);
+  assert.match(mobile, /globalThis\.EmblaCarousel\(shell, \{/);
+  assert.match(mobile, /dragFree: false/);
+  assert.match(mobile, /slidesToScroll: 1/);
+  assert.match(mobile, /skipSnaps: false/);
+  assert.match(mobile, /duration: 25/);
+  assert.match(mobile, /api\.scrollPrev\(\)/);
+  assert.match(mobile, /api\.scrollNext\(\)/);
+  assert.match(mobile, /api\.scrollTo\(index\)/);
+  assert.match(mobile, /api\.on\('select', sync\)\.on\('reInit', sync\)/);
+  assert.match(mobile, /mobileCarouselInstances\.get\(shell\)\?\.destroy\(\)/);
 });
 
 test('parses letter-prefixed card sections from the decision-os formatting contract', () => {

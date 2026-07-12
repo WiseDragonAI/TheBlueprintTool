@@ -20,6 +20,7 @@ export type LedgerCardImageSizes = Record<string, { width?: number; height?: num
 
 type LedgerCardMediaOptions = {
   cardId?: string;
+  carouselDriver?: 'internal' | 'external';
   imageSizes?: LedgerCardImageSizes;
   mediaSurface?: 'card' | 'thread';
   onImageResize?: (source: string, dimensions: { width: number; height: number }) => void;
@@ -394,6 +395,7 @@ function renderSlideButton(image: LedgerCardImage, index: number, shell: HTMLEle
 
 export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind: 'images' }>, options: LedgerCardMediaOptions = {}): HTMLElement {
   const isCarousel = block.images.length > 1;
+  const externalCarouselDriver = options.carouselDriver === 'external';
   const persistedCarouselStateId = carouselStateId(block, options, isCarousel);
   const mediaSurface = options.mediaSurface ?? 'card';
   const shell = document.createElement('div');
@@ -404,6 +406,11 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
   ].filter(Boolean).join(' ');
   shell.dataset.ledgerCardMedia = 'true';
   shell.dataset.wheelCapture = 'true';
+  shell.dataset.carouselDriver = externalCarouselDriver ? 'external' : 'internal';
+  if (persistedCarouselStateId) {
+    shell.dataset.carouselStateId = persistedCarouselStateId;
+    shell.dataset.carouselStartIndex = String(readLedgerCardMediaCarouselSlide(persistedCarouselStateId, block.images.length));
+  }
   const sizeSource = block.images[0]?.src ?? '';
   shell.dataset.imageSizeId = sizeSource;
   applyPersistedDimensions(shell, dimensionsFor(sizeSource, options.imageSizes));
@@ -412,10 +419,12 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
   const track = document.createElement('div');
   track.className = 'ledger-card-media-track';
   track.setAttribute('aria-label', isCarousel ? 'Card image carousel' : 'Card image');
-  track.addEventListener('scroll', () => {
-    syncMediaCarousel(shell, block.images, track, persistedCarouselStateId);
-    if (mediaSurface !== 'thread') scheduleCanvasMediaOverlayRender();
-  }, { passive: true });
+  if (!externalCarouselDriver) {
+    track.addEventListener('scroll', () => {
+      syncMediaCarousel(shell, block.images, track, persistedCarouselStateId);
+      if (mediaSurface !== 'thread') scheduleCanvasMediaOverlayRender();
+    }, { passive: true });
+  }
   for (const [index, image] of block.images.entries()) {
     track.appendChild(renderMediaSlide(image, index, shell, options));
   }
@@ -428,7 +437,7 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
   }
 
   if (isCarousel) {
-    bindSingleSlideSwipe(shell, block.images, track, persistedCarouselStateId);
+    if (!externalCarouselDriver) bindSingleSlideSwipe(shell, block.images, track, persistedCarouselStateId);
     const progress = document.createElement('div');
     progress.className = 'ledger-card-media-progress';
     progress.setAttribute('aria-hidden', 'true');
@@ -473,9 +482,11 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
     nav.replaceChildren(previous, next, ...(deleteButton ? [deleteButton] : []));
     shell.appendChild(slideNav);
     shell.appendChild(nav);
-    watchCarouselSlider(shell, track);
-    syncMediaCarousel(shell, block.images, track, persistedCarouselStateId, { persist: false });
-    hydrateCarouselSlide(shell, persistedCarouselStateId, block.images);
+    if (!externalCarouselDriver) {
+      watchCarouselSlider(shell, track);
+      syncMediaCarousel(shell, block.images, track, persistedCarouselStateId, { persist: false });
+      hydrateCarouselSlide(shell, persistedCarouselStateId, block.images);
+    }
   }
 
   return shell;
