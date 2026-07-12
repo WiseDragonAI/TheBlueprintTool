@@ -325,7 +325,7 @@ function taskRow(task, index) {
   const age = task.status === 'task-complete' ? 'completed' : task.status === 'task-active' ? activeAge(task.activeSince) : waitingAge(task.waitingSince);
   const process = task.codexProcessing ? ` · Codex ${task.codexRunId}` : '';
   if (!active) {
-    summary.querySelector('.task-meta').textContent = `${task.ledger} · ${age}${process} · ${task.complete}/${task.subtasks.length} complete`;
+    summary.querySelector('.task-meta').textContent = `${task.ledger} · ${age}${process}`;
     const nextSubtask = summary.querySelector('.task-next');
     if (nextSubtask) nextSubtask.textContent = `Next: ${task.nextSubtask.title}`;
   }
