@@ -29,6 +29,7 @@ import { startCardSkillProcessController } from '../../codex/controller/start-ca
 import { startThreadCodexProcessController } from '../../codex/controller/start-thread-codex-process-controller.js';
 import { readCardSkillRunController } from '../../codex/controller/read-card-skill-run-controller.js';
 import { cancelCardSkillRunController } from '../../codex/controller/cancel-card-skill-run-controller.js';
+import { deleteThreadCodexSessionController } from '../../codex/controller/delete-thread-codex-session-controller.js';
 import { continueCardSkillRunController } from '../../codex/controller/continue-card-skill-run-controller.js';
 import { listCodexPipelinesController } from '../../codex/controller/list-codex-pipelines-controller.js';
 import { saveCodexPipelineController } from '../../codex/controller/save-codex-pipeline-controller.js';
@@ -639,6 +640,25 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       });
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));
+      response.end(JSON.stringify(result));
+      return;
+    }
+    if (url.startsWith('/api/codex/skills/runs/') && request.method === 'DELETE') {
+      const bodyBuffer = await readRequestBuffer(request);
+      const deletePayload = (() => {
+        try {
+          return JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
+        } catch {
+          return {};
+        }
+      })();
+      const runId = decodeURIComponent(url.slice('/api/codex/skills/runs/'.length));
+      const result = await deleteThreadCodexSessionController({
+        action_payload: { ...deletePayload, runId, onLedgerChange: publishLedgerContentChange },
+        runtime_state: requestRuntime
+      });
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
       response.end(JSON.stringify(result));
       return;
     }

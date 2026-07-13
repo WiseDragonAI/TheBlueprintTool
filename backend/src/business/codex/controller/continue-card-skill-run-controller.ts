@@ -289,6 +289,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     updateRuntimeRun(runtime, runId, { status: 'failed', error: error.message, finishedAt });
     finishRunStreams(stdout, stderr, () => {
       flushCardSkillRunEventIngestor(runEventIngestor, runId);
+      updateRuntimeRun(runtime, runId, { settledAt: new Date().toISOString() });
       notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, status: 'failed' });
     });
   });
@@ -304,6 +305,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     finishRunStreams(stdout, stderr, () => {
       if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
       flushCardSkillRunEventIngestor(runEventIngestor, runId);
+      updateRuntimeRun(runtime, runId, { settledAt: new Date().toISOString() });
       notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, status, exitCode });
     });
   });

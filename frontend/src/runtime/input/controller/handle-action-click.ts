@@ -39,6 +39,8 @@ import { openCardProcessModal } from '../../codex/effect/render-card-process-mod
 import { openPipelinesModal } from '../../codex/effect/render-pipelines-modal.js';
 import { processThreadCodexController } from '../../codex/controller/process-thread-codex-controller.js';
 import { stopThreadCodexRunController } from '../../codex/controller/stop-thread-codex-run-controller.js';
+import { confirmThreadCodexSessionDeletionController } from '../../codex/controller/confirm-thread-codex-session-deletion-controller.js';
+import { deleteThreadCodexSessionController } from '../../codex/controller/delete-thread-codex-session-controller.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 function toggleRail(button: HTMLElement): void {
@@ -170,6 +172,24 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
       ledgerId: String(state.activeTab ?? ''),
       cardId: actionTarget.dataset.codexCardId ?? '',
       runId: actionTarget.dataset.codexRunId ?? '',
+    });
+    return;
+  }
+  if (action === 'confirm-delete-thread-codex-session') {
+    confirmThreadCodexSessionDeletionController({
+      ledgerId: String(state.activeTab ?? ''),
+      cardId: actionTarget.dataset.codexCardId ?? '',
+      runId: actionTarget.dataset.codexRunId ?? '',
+      threadId: actionTarget.dataset.threadId ?? state.threadId,
+    });
+    return;
+  }
+  if (action === 'delete-thread-codex-session') {
+    await deleteThreadCodexSessionController({
+      ledgerId: actionTarget.dataset.ledgerId ?? modal.dataset.ledgerId ?? String(state.activeTab ?? ''),
+      cardId: actionTarget.dataset.cardId ?? modal.dataset.cardId ?? '',
+      runId: actionTarget.dataset.runId ?? modal.dataset.runId ?? '',
+      threadId: actionTarget.dataset.threadId ?? modal.dataset.threadId ?? state.threadId,
     });
     return;
   }

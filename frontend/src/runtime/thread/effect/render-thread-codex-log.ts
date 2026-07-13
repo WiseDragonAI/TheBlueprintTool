@@ -12,6 +12,7 @@ import { state, type ThreadPanelTab } from '../../state.js';
 import { renderThreadCodexLogEvent } from '../component/render-thread-codex-log-event.js';
 import { renderThreadCodexLogStatus } from '../component/render-thread-codex-log-status.js';
 import { threadCodexStopState } from '../../codex/controller/stop-thread-codex-run-controller.js';
+import { threadCodexSessionDeletionState } from '../../codex/controller/delete-thread-codex-session-controller.js';
 
 type DisclosureByThread = Record<string, Record<string, boolean>>;
 
@@ -118,6 +119,23 @@ function renderAnnouncement(threadId: string): HTMLElement {
   return live;
 }
 
+function renderDeleteSession(input: { cardId: string; runId: string; threadId: string }): HTMLElement {
+  const footer = document.createElement('div');
+  footer.className = 'codex-log-session-footer';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'codex-log-delete-session terminal-button terminal-button--stop';
+  button.dataset.action = 'confirm-delete-thread-codex-session';
+  button.dataset.codexCardId = input.cardId;
+  button.dataset.codexRunId = input.runId;
+  button.dataset.threadId = input.threadId;
+  button.title = 'Delete Codex session';
+  button.setAttribute('aria-label', button.title);
+  button.textContent = 'Delete session';
+  footer.append(button);
+  return footer;
+}
+
 export function renderThreadCodexLog(): void {
   const root = document.querySelector('.thread-codex-log') as HTMLElement | null;
   // WHAT: Skip the final DOM effect when the thread log surface is not mounted.
@@ -165,6 +183,15 @@ export function renderThreadCodexLog(): void {
     error.textContent = stopError;
     root.append(error);
   }
+  const deleteError = threadCodexSessionDeletionState(runId).error;
+  if (deleteError) {
+    const error = document.createElement('p');
+    error.className = 'codex-log-delete-error';
+    error.dataset.codexLogDeleteError = '';
+    error.setAttribute('role', 'alert');
+    error.textContent = deleteError;
+    root.append(error);
+  }
   // WHAT: Surface an unavailable response separately from chronological run events.
   // WHY: Transport and ownership failures are not producer log records.
   if (summary?.ok === false) {
@@ -186,7 +213,7 @@ export function renderThreadCodexLog(): void {
     waiting.textContent = 'Waiting for Codex output.';
     stream.append(waiting);
   }
-  root.append(stream);
+  root.append(stream, renderDeleteSession({ cardId: String(card.id ?? ''), runId, threadId }));
 
   const restore = () => {
     // WHAT: Skip scroll restoration when the independent log viewport is absent.
