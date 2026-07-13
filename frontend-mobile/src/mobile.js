@@ -5,6 +5,8 @@ import { initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobi
 import { initializeMobileCodex, setMobileCodexContext } from './mobile-codex.js';
 import { activeAge, activeStopwatch, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from './mobile-control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from './mobile-control-room-route.js';
+import { parseProjectRoute, projectPath } from './mobile-project-route.js';
+import { projectSettingsValues, saveProjectSettingsRequest } from './mobile-project-settings.js';
 
 const state = {
   projectName: 'decision-os',
@@ -18,13 +20,16 @@ const state = {
   activeCardId: '',
   query: '',
   controlRoom: null,
+  viewedProjectId: '',
   controlTab: 'queue',
   projectFilter: 'All',
   controlFilter: 'All'
 };
 
 const elements = Object.fromEntries([
-  'project-name', 'project-links', 'ledger-links', 'loading-view', 'error-view', 'error-message', 'empty-view',
+  'project-name', 'ledger-links', 'loading-view', 'error-view', 'error-message', 'empty-view',
+  'projects-view', 'projects-summary', 'project-list', 'project-detail-view', 'project-detail-name', 'project-detail-description',
+  'project-detail-color', 'project-detail-status', 'project-detail-path',
   'overview-view', 'overview-summary', 'overview-ledgers', 'ledger-view', 'ledger-title', 'ledger-summary',
   'zone-list', 'zone-view', 'zone-title', 'zone-summary', 'card-search', 'card-list',
   'no-results', 'card-view', 'card-title', 'card-body', 'control-room-view', 'control-project-filters', 'control-filters',
@@ -36,6 +41,8 @@ const routeParts = () => location.pathname.split('/').filter(Boolean).map(decode
 const creationModal = document.querySelector('.creation-modal');
 const deleteMasterTaskModal = document.querySelector('.delete-master-task-modal');
 const newTaskProjectModal = document.querySelector('.new-task-project-modal');
+const projectSettingsModal = document.querySelector('.project-settings-modal');
+const projectSettingsForm = document.querySelector('.project-settings-form');
 const creationForm = document.querySelector('.creation-form');
 let creationKind = '';
 let controlRoomScrollFrame = 0;
@@ -60,7 +67,7 @@ function selectProject(projectId) {
 }
 
 function setView(name) {
-  for (const id of ['loading-view', 'error-view', 'empty-view', 'overview-view', 'control-room-view', 'ledger-view', 'zone-view', 'card-view']) {
+  for (const id of ['loading-view', 'error-view', 'empty-view', 'projects-view', 'project-detail-view', 'overview-view', 'control-room-view', 'ledger-view', 'zone-view', 'card-view']) {
     elements[id].hidden = id !== name;
   }
 }
@@ -266,10 +273,25 @@ async function submitCreation() {
 
 function renderLedgerLinks() {
   const route = `/${routeParts()[0] ?? ''}`;
-  const destination = (label, href, className = '') => {
+  const icons = {
+    dashboard: '<path d="M4 13h6V4H4v9Zm10 7h6V11h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z"/>',
+    folder: '<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H10l2 2h7.5A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5v-11Z"/>',
+    book: '<path d="M5 4h6a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Zm14 0h-2a3 3 0 0 0-3 3v13h2a3 3 0 0 0 3-3V4Z"/>',
+    flow: '<path d="M5 5h4v4H5V5Zm10 10h4v4h-4v-4ZM7 9v3a5 5 0 0 0 5 5h3M9 7h6a2 2 0 0 1 2 2v6"/>',
+    library: '<path d="M4 5h4v15H4V5Zm6-1h4v16h-4V4Zm6 3h4v13h-4V7Z"/>'
+  };
+  const destination = (label, href, icon, className = '') => {
     const link = document.createElement(href ? 'a' : 'button');
     link.className = `ledger-link ${className}${route === href ? ' active' : ''}`.trim();
-    link.textContent = label;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.dataset.navIcon = icon;
+    svg.innerHTML = icons[icon];
+    const text = document.createElement('span');
+    text.textContent = label;
+    link.append(svg, text);
+    if (route === href) link.setAttribute('aria-current', 'page');
     if (href) link.href = href;
     link.addEventListener('click', (event) => {
       event.preventDefault();
@@ -278,41 +300,99 @@ function renderLedgerLinks() {
     return link;
   };
   elements['ledger-links'].replaceChildren(
-    destination('Control room', '/'),
-    destination('Ledgers', '/ledgers'),
-    destination('Pipelines', '', 'nav-pipelines-button'),
-    destination('Skill library', '', 'nav-skills-button')
+    destination('Control room', '/', 'dashboard'),
+    destination('Projects', '/projects', 'folder'),
+    destination('Ledgers', '/ledgers', 'book'),
+    destination('Pipelines', '', 'flow', 'nav-pipelines-button'),
+    destination('Skill library', '', 'library', 'nav-skills-button')
   );
-  elements['project-links'].replaceChildren(...state.projects.map((project) => {
-    const row = document.createElement('div');
-    row.className = `project-link${project.id === state.activeProjectId ? ' active' : ''}`;
+}
+
+function renderProjects() {
+  state.activeLedgerId = '';
+  state.activeZoneId = '';
+  state.viewedProjectId = '';
+  renderLedgerLinks();
+  elements['projects-summary'].textContent = `${state.projects.length} ${state.projects.length === 1 ? 'project' : 'projects'}`;
+  elements['project-list'].replaceChildren(...state.projects.map((project) => {
     const button = document.createElement('button');
     button.type = 'button';
-    button.textContent = project.name;
-    button.title = project.relativePath;
+    button.className = 'project-card';
     button.style.setProperty('--project-color', project.color);
-    button.addEventListener('click', () => {
-      selectProject(project.id);
-      state.projectFilter = project.id;
-      state.controlFilter = 'All';
-      navigate('/');
-    });
-    const color = document.createElement('input');
-    color.type = 'color';
-    color.value = project.color;
-    color.setAttribute('aria-label', `Color for ${project.name}`);
-    color.addEventListener('change', async () => {
-      const response = await fetch(`/decision-os/projects/${encodeURIComponent(project.id)}`, {
-        method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ color: color.value })
-      });
-      if (!response.ok) return;
-      project.color = color.value;
-      renderLedgerLinks();
-      if (!elements['control-room-view'].hidden) renderControlRoom();
-    });
-    row.append(button, color);
-    return row;
+    const active = project.id === state.activeProjectId;
+    button.innerHTML = '<span class="project-card-copy"><span class="project-card-heading"><strong></strong><small></small></span><span class="project-card-description"></span><code></code></span><span class="row-arrow">›</span>';
+    button.querySelector('strong').textContent = project.name;
+    const badge = button.querySelector('small');
+    badge.textContent = active ? 'Active' : '';
+    badge.hidden = !active;
+    button.querySelector('.project-card-description').textContent = project.description || 'No description provided.';
+    button.querySelector('code').textContent = project.relativePath;
+    button.setAttribute('aria-label', `${project.name}${active ? ', active project' : ''}`);
+    button.addEventListener('click', () => navigate(projectPath(project.id)));
+    return button;
   }));
+  setView('projects-view');
+  document.title = 'Projects · Decision OS';
+}
+
+function renderProjectDetail(project) {
+  state.activeLedgerId = '';
+  state.activeZoneId = '';
+  state.viewedProjectId = project.id;
+  renderLedgerLinks();
+  elements['project-detail-name'].textContent = project.name;
+  elements['project-detail-description'].textContent = project.description || 'No description provided.';
+  elements['project-detail-color'].style.setProperty('--project-color', project.color);
+  elements['project-detail-color'].style.backgroundColor = project.color;
+  elements['project-detail-status'].textContent = project.id === state.activeProjectId ? 'Active project' : 'Available project';
+  elements['project-detail-path'].textContent = project.relativePath;
+  setView('project-detail-view');
+  document.title = `${project.name} · Projects`;
+}
+
+function openProjectSettings() {
+  const project = state.projects.find((entry) => entry.id === state.viewedProjectId);
+  if (!project) return;
+  const values = projectSettingsValues(project);
+  document.querySelector('#project-settings-name').value = values.name;
+  document.querySelector('#project-settings-description').value = values.description;
+  document.querySelector('#project-settings-color').value = values.color;
+  document.querySelector('.project-settings-error').hidden = true;
+  projectSettingsModal.showModal();
+  document.querySelector('#project-settings-name').focus();
+}
+
+async function submitProjectSettings() {
+  const project = state.projects.find((entry) => entry.id === state.viewedProjectId);
+  if (!project || !projectSettingsForm.reportValidity()) return;
+  const save = document.querySelector('.project-settings-save');
+  const error = document.querySelector('.project-settings-error');
+  save.disabled = true;
+  save.setAttribute('aria-busy', 'true');
+  error.hidden = true;
+  try {
+    const result = await saveProjectSettingsRequest({
+      fetchImpl: fetch,
+      projects: state.projects,
+      projectId: project.id,
+      values: {
+        name: document.querySelector('#project-settings-name').value,
+        description: document.querySelector('#project-settings-description').value,
+        color: document.querySelector('#project-settings-color').value,
+      },
+    });
+    state.projects = result.projects;
+    if (state.activeProjectId === result.project.id) selectProject(result.project.id);
+    projectSettingsModal.close();
+    renderProjectDetail(result.project);
+    window.requestAnimationFrame(() => document.querySelector('.project-settings-button').focus());
+  } catch (cause) {
+    error.textContent = cause instanceof Error ? cause.message : 'Project update failed.';
+    error.hidden = false;
+  } finally {
+    save.disabled = false;
+    save.removeAttribute('aria-busy');
+  }
 }
 
 function renderOverview() {
@@ -1031,10 +1111,22 @@ async function loadRoute() {
       return;
     }
     if (!state.projects.some((project) => project.id === state.activeProjectId)) selectProject(catalog.selectedProjectId || state.projects[0].id);
+    const projectRoute = parseProjectRoute(location.pathname);
+    if (projectRoute?.view === 'index') {
+      renderProjects();
+      return;
+    }
+    if (projectRoute?.view === 'detail') {
+      const viewedProject = state.projects.find((project) => project.id === projectRoute.projectId);
+      if (!viewedProject) throw new Error('Project not found.');
+      renderProjectDetail(viewedProject);
+      return;
+    }
+    if (projectRoute?.view === 'invalid') throw new Error('Project route not found.');
     const response = await projectFetch('/decision-os/state', { cache: 'no-store' });
     if (!response.ok) throw new Error(`The server returned HTTP ${response.status}.`);
     const project = await response.json();
-    state.projectName = project.projectName || state.projectName;
+    state.projectName = state.projects.find((entry) => entry.id === state.activeProjectId)?.name || project.projectName || state.projectName;
     state.ledgers = Array.isArray(project.ledgers) ? project.ledgers.filter((ledger) => ledger?.id && ledger?.title) : [];
     elements['project-name'].textContent = state.projectName;
     if (!state.ledgers.length) {
@@ -1100,6 +1192,24 @@ document.querySelector('.refresh-button').addEventListener('click', () => {
   void loadRoute();
 });
 document.querySelector('.retry-button').addEventListener('click', () => loadRoute());
+document.querySelector('.back-to-projects-button').addEventListener('click', () => navigate(projectPath()));
+document.querySelector('.open-project-button').addEventListener('click', () => {
+  selectProject(state.viewedProjectId);
+  state.projectFilter = state.activeProjectId;
+  state.controlFilter = 'All';
+  navigate('/');
+});
+document.querySelector('.project-settings-button').addEventListener('click', openProjectSettings);
+document.querySelector('.project-settings-cancel').addEventListener('click', () => {
+  if (!projectSettingsModal.dataset.busy) projectSettingsModal.close();
+});
+projectSettingsModal.addEventListener('cancel', (event) => {
+  if (document.querySelector('.project-settings-save').disabled) event.preventDefault();
+});
+projectSettingsForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  void submitProjectSettings();
+});
 document.querySelector('.back-to-ledger-button').addEventListener('click', () => navigate(ledgerPath(state.activeLedgerId)));
 document.querySelector('.back-to-zone-button').addEventListener('click', (event) => {
   navigate(event.currentTarget.dataset.destination === 'control-room' ? '/' : zonePath(state.activeLedgerId, state.activeZoneId));
