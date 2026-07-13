@@ -277,6 +277,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
       updateRuntimeRun(runtime, runId, { status: 'failed', error: error.message, finishedAt });
       finishRunStreams(stdout, stderr, () => {
         flushCardSkillRunEventIngestor(runEventIngestor, runId);
+        updateRuntimeRun(runtime, runId, { settledAt: new Date().toISOString() });
         notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, status: 'failed' });
       });
     });
@@ -313,7 +314,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
         const status: ProcessStatus = cancelled ? 'cancelled' : exitCode === 0 ? 'complete' : 'failed';
         const detail = status === 'cancelled' ? 'terminated by operator' : `exit code ${exitCode ?? 'unknown'}`;
         appendRunStatus(runSummaryFile, status, detail);
-        updateRuntimeRun(runtime, runId, { status, exitCode, finishedAt });
+        updateRuntimeRun(runtime, runId, { status, exitCode, finishedAt, settledAt: new Date().toISOString() });
         if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
         notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, status, exitCode });
       });

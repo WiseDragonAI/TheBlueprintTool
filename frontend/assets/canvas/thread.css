@@ -637,13 +637,26 @@
   opacity: 0.66;
 }
 
-.codex-log-stop-error {
+.codex-log-stop-error,
+.codex-log-delete-error {
   margin: 0;
   padding: 8px 10px;
   border-left: 2px solid #ff6473;
   background: rgba(99, 17, 29, 0.2);
   color: #ffd2d7;
   font-size: 12px;
+}
+
+.codex-log-session-footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 100, 115, 0.18);
+}
+
+.codex-log-delete-session {
+  min-width: 132px;
 }
 
 .codex-log-diagnostic-summary {

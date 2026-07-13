@@ -9,6 +9,7 @@ import { loadCodexPipelines } from '../../src/runtime/codex/effect/load-codex-pi
 import { loadCodexSkillLibrary } from '../../src/runtime/codex/effect/load-codex-skill-library.js';
 import { requestCardSkillProcess } from '../../src/runtime/codex/effect/request-card-skill-process.js';
 import { requestCardSkillRunCancel } from '../../src/runtime/codex/effect/request-card-skill-run-cancel.js';
+import { requestThreadCodexSessionDelete } from '../../src/runtime/codex/effect/request-thread-codex-session-delete.js';
 import { requestCardSkillRunContinue } from '../../src/runtime/codex/effect/request-card-skill-run-continue.js';
 import { requestCardSkillRunStatus } from '../../src/runtime/codex/effect/request-card-skill-run-status.js';
 import { requestThreadCodexProcess } from '../../src/runtime/codex/effect/request-thread-codex-process.js';
@@ -742,6 +743,24 @@ test('requestCardSkillRunCancel posts active card run cancellation', async () =>
     const result = await requestCardSkillRunCancel({ ledgerId: 'specs', cardId: 'card-a', runId: 'codex-skill-1000-abcd' });
     assert.equal(result.ok, true);
     assert.equal(result.status, 'cancelled');
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('requestThreadCodexSessionDelete sends exact run ownership with DELETE', async () => {
+  const previousFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      assert.equal(url, '/api/codex/skills/runs/codex-skill-1000-delete');
+      assert.equal(init?.method, 'DELETE');
+      assert.deepEqual(JSON.parse(String(init?.body)), { ledgerId: 'specs', cardId: 'card-a' });
+      return new Response(JSON.stringify({ ok: true, status: 'deleted' }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    assert.deepEqual(
+      await requestThreadCodexSessionDelete({ ledgerId: 'specs', cardId: 'card-a', runId: 'codex-skill-1000-delete' }),
+      { ok: true, status: 'deleted', error: undefined }
+    );
   } finally {
     globalThis.fetch = previousFetch;
   }
