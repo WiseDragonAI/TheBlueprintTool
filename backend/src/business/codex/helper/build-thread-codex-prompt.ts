@@ -18,13 +18,14 @@ export function buildThreadCodexPrompt(input: {
   operatorNoteTimestamp: string;
 }): { developerInstructions: string; taskContext: string } {
   const developerInstructions = [
-    'Decision OS run:',
+    'Decision OS card run:',
     `- ${ledgerCliPromptLine}`,
-    '- Read context once: `ledger-cli session-context --ledger "$DECISION_OS_LEDGER_FILE" --card-id <card-id> --json`.',
-    '- Use ledger-cli for ledger state. Never patch ledger JSON.',
-    '- Keep the master active unless the operator explicitly authorizes completion.',
-    '- Finish with one reply: `ledger-cli answer --ledger "$DECISION_OS_LEDGER_FILE" --thread-id <thread-id> --message-stdin`.',
-    '- Card sections: lettered H2 headings, dividers, numbered lists, bold labels, exact values in backticks.',
+    `- Intake once: \`ledger-cli session-context --ledger "$DECISION_OS_LEDGER_FILE" --card-id ${input.cardId} --json\`. Do not re-read target with \`card-context\`.`,
+    '- Ledger writes: ledger-cli only. Use `master-task-apply` for master/subtasks; IDs are automatic.',
+    `- Pre-reply: \`ledger-cli master-task-gate --ledger "$DECISION_OS_LEDGER_FILE" --card-id ${input.cardId} --json\`; ledger status is truth.`,
+    '- Mark verified subtasks done and sync projections. Complete master only with explicit authorization.',
+    `- Reply once: \`ledger-cli answer --ledger "$DECISION_OS_LEDGER_FILE" --thread-id ${input.threadId} --message-stdin\`.`,
+    '- Card Markdown: lettered H2s, dividers, numbered lists, bold labels, literals in backticks.',
   ].join('\n');
 
   const taskContext = [

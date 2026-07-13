@@ -17,10 +17,13 @@ test('thread Codex prompt uses a direct scoped contract without triggering open-
     operatorNoteTimestamp: '2026-07-08T01:00:00.000Z',
   });
 
-  assert.match(prompt.developerInstructions, /^Decision OS run:/);
+  assert.match(prompt.developerInstructions, /^Decision OS card run:/);
   assert.match(prompt.developerInstructions, /ledger-cli is on PATH/);
-  assert.match(prompt.developerInstructions, /session-context/);
-  assert.match(prompt.developerInstructions, /--message-stdin/);
+  assert.match(prompt.developerInstructions, /session-context[^\n]+card-a/);
+  assert.match(prompt.developerInstructions, /Do not re-read target with `card-context`/);
+  assert.match(prompt.developerInstructions, /master-task-apply/);
+  assert.match(prompt.developerInstructions, /master-task-gate[^\n]+card-a/);
+  assert.match(prompt.developerInstructions, /--thread-id thread-card-a --message-stdin/);
   assert.ok(prompt.developerInstructions.length < 800);
   assert.doesNotMatch(prompt.developerInstructions, /# Card A|Implement this request/);
   assert.doesNotMatch(prompt.developerInstructions, /treat-open-notes|open notes|You are treating/i);
