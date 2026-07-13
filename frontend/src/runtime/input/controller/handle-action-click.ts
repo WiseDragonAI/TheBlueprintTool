@@ -38,6 +38,7 @@ import { persistState } from '../../persistence/effect/persist-state.js';
 import { openCardProcessModal } from '../../codex/effect/render-card-process-modal.js';
 import { openPipelinesModal } from '../../codex/effect/render-pipelines-modal.js';
 import { processThreadCodexController } from '../../codex/controller/process-thread-codex-controller.js';
+import { stopThreadCodexRunController } from '../../codex/controller/stop-thread-codex-run-controller.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
 function toggleRail(button: HTMLElement): void {
@@ -161,6 +162,15 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
       syncThreadCodexRunControls({ threadId, running: false });
       if (button.isConnected) button.disabled = false;
     }
+    return;
+  }
+  if (action === 'stop-thread-codex') {
+    await stopThreadCodexRunController({
+      button: actionTarget as HTMLButtonElement,
+      ledgerId: String(state.activeTab ?? ''),
+      cardId: actionTarget.dataset.codexCardId ?? '',
+      runId: actionTarget.dataset.codexRunId ?? '',
+    });
     return;
   }
   if (action === 'edit-card-title') {

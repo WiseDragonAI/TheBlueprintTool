@@ -592,6 +592,63 @@
   white-space: nowrap;
 }
 
+.codex-log-stop-action {
+  grid-column: 1 / -1;
+}
+
+.codex-log-stop-action dt {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.codex-log-stop-action dd {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0;
+  overflow: visible;
+}
+
+.codex-log-stop {
+  width: 64px;
+  height: 64px;
+  min-width: 64px;
+  min-height: 64px;
+  padding: 7px;
+  display: grid;
+  grid-template-rows: 31px 17px;
+  justify-items: center;
+  align-items: center;
+  gap: 0;
+}
+
+.codex-log-stop-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.codex-log-stop .terminal-button__label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.codex-log-stop:disabled {
+  cursor: default;
+  opacity: 0.66;
+}
+
+.codex-log-stop-error {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 2px solid #ff6473;
+  background: rgba(99, 17, 29, 0.2);
+  color: #ffd2d7;
+  font-size: 12px;
+}
+
 .codex-log-diagnostic-summary {
   grid-column: 1 / -1;
   margin: 0;
