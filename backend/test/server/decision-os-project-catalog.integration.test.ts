@@ -21,16 +21,21 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
   createProject(home, 'dev/project-a', 'Project A Specs');
   createProject(home, 'dev/project-b', 'Project B Specs');
   const runtime: Record<string, unknown> = {};
-  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: home }, runtime_state: runtime });
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: home, decisionOsFrontendRoot: join(process.cwd(), 'frontend-mobile') }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
   try {
     const catalogResponse = await fetch(`${baseUrl}/decision-os/projects`);
-    const catalog = await catalogResponse.json() as { projects: Array<{ id: string; name: string; relativePath: string }> };
+    const catalog = await catalogResponse.json() as { projects: Array<{ id: string; name: string; description: string; color: string; relativePath: string; root: string }> };
     assert.deepEqual(catalog.projects.map((project) => project.relativePath), ['admin', 'dev/project-a', 'dev/project-b']);
     assert.deepEqual(catalog.projects.map((project) => project.name), ['admin', 'project-a', 'project-b']);
+
+    const projectPage = await fetch(`${baseUrl}/projects/${encodeURIComponent(catalog.projects[0].id)}`);
+    assert.equal(projectPage.status, 200);
+    assert.match(projectPage.headers.get('content-type') ?? '', /text\/html/);
+    assert.match(await projectPage.text(), /id="project-detail-view"/);
 
     const projectA = catalog.projects.find((project) => project.name === 'project-a')!;
     const ledgerResponse = await fetch(`${baseUrl}/decision-os/specs`, { headers: { 'x-decision-os-project': projectA.id } });
@@ -46,10 +51,30 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
     const fallbackLedger = await staleCookie.json() as { cards: Array<{ title: string }> };
     assert.equal(fallbackLedger.cards[0].title, 'Admin Specs');
 
-    const color = await fetch(`${baseUrl}/decision-os/projects/${projectA.id}`, {
-      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ color: '#123456' })
+    const identity = { id: projectA.id, relativePath: projectA.relativePath, root: projectA.root };
+    const update = await fetch(`${baseUrl}/decision-os/projects/${projectA.id}`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Project Alpha', description: 'Primary workspace', color: '#123456' })
     });
-    assert.equal(color.ok, true);
+    assert.equal(update.ok, true);
+    const updated = await update.json() as { project: typeof projectA };
+    assert.deepEqual({ id: updated.project.id, relativePath: updated.project.relativePath, root: updated.project.root }, identity);
+    assert.deepEqual({ name: updated.project.name, description: updated.project.description, color: updated.project.color }, { name: 'Project Alpha', description: 'Primary workspace', color: '#123456' });
+
+    const reloaded = await fetch(`${baseUrl}/decision-os/projects`).then((response) => response.json()) as { projects: typeof catalog.projects };
+    assert.deepEqual(
+      reloaded.projects.find((project) => project.id === projectA.id),
+      { ...projectA, name: 'Project Alpha', description: 'Primary workspace', color: '#123456' },
+    );
+
+    const rejected = await fetch(`${baseUrl}/decision-os/projects/${projectA.id}`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: '', description: 'Changed', color: '#654321' })
+    });
+    assert.equal(rejected.status, 400);
+    const afterRejection = await fetch(`${baseUrl}/decision-os/projects`).then((response) => response.json()) as { projects: typeof catalog.projects };
+    assert.deepEqual(
+      afterRejection.projects.find((project) => project.id === projectA.id),
+      { ...projectA, name: 'Project Alpha', description: 'Primary workspace', color: '#123456' },
+    );
   } finally {
     server.close();
     await once(server, 'close');

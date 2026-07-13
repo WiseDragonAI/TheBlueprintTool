@@ -197,13 +197,17 @@ test('omits completed-subtask progress from task-row metadata', () => {
   assert.doesNotMatch(mobile, /task\.complete\}\/\$\{task\.subtasks\.length\} complete/);
 });
 
-test('adds project hierarchy, scoped ledger filters, and project color configuration', () => {
-  assert.match(html, /id="project-links"/);
+test('keeps scoped Control Room filters while project editing moves to dedicated routes', () => {
+  assert.doesNotMatch(html, /id="project-links"|class="project-nav-section"/);
+  assert.match(html, /id="projects-view"/);
+  assert.match(html, /class="project-settings-modal"/);
   assert.match(html, /id="control-project-filters"/);
   assert.match(mobile, /state\.projectFilter === 'All'/);
   assert.match(mobile, /projectTasks\.filter\(\(task\) => task\.ledgerId === state\.controlFilter\)/);
-  assert.match(mobile, /\/decision-os\/projects\/\$\{encodeURIComponent\(project\.id\)\}/);
-  assert.match(styles, /\.project-link input\[type="color"\]/);
+  assert.doesNotMatch(styles, /\.project-link input\[type="color"\]/);
+  assert.match(mobile, /saveProjectSettingsRequest\(\{/);
+  assert.match(mobile, /renderProjectDetail\(result\.project\)/);
+  assert.match(mobile, /state\.projects\.find\(\(entry\) => entry\.id === state\.activeProjectId\)\?\.name \|\| project\.projectName/);
 });
 
 test('requires an explicit project choice before creating a new task intake', () => {
@@ -321,10 +325,13 @@ test('deletes a master task from its detail after explicit confirmation', () => 
 });
 
 test('uses global application destinations and keeps new task as the fourth control-room action', () => {
-  assert.match(mobile, /destination\('Control room', '\/'\)/);
-  assert.match(mobile, /destination\('Ledgers', '\/ledgers'\)/);
-  assert.match(mobile, /destination\('Pipelines', '', 'nav-pipelines-button'\)/);
-  assert.match(mobile, /destination\('Skill library', '', 'nav-skills-button'\)/);
+  assert.match(mobile, /destination\('Control room', '\/', 'dashboard'\)/);
+  assert.match(mobile, /destination\('Projects', '\/projects', 'folder'\)/);
+  assert.match(mobile, /destination\('Ledgers', '\/ledgers', 'book'\)/);
+  assert.match(mobile, /destination\('Pipelines', '', 'flow', 'nav-pipelines-button'\)/);
+  assert.match(mobile, /destination\('Skill library', '', 'library', 'nav-skills-button'\)/);
+  assert.doesNotMatch(styles, /\.ledger-link::before/);
+  assert.match(styles, /svg\[data-nav-icon="dashboard"\]/);
   assert.doesNotMatch(html, /class="icon-button pipelines-button"/);
   assert.doesNotMatch(html, /class="control-heading"|class="live-dot"/);
   assert.match(html, /data-control-tab="done"[\s\S]*class="new-task-button"/);
