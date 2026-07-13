@@ -12,12 +12,25 @@ import { join, resolve } from 'node:path';
 test('decision-os-server launcher resolves loader, server, frontend root, and tsconfig from any cwd', () => {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-launcher-'));
   try {
-    const output = execFileSync(process.execPath, [resolve('bin/decision-os-server.mjs'), '--print-command'], { cwd: workspace, encoding: 'utf8' });
+    const output = execFileSync(process.execPath, [resolve('bin/decision-os-server.mjs'), '--print-command'], {
+      cwd: workspace,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        DECISION_OS_FRONTEND_ROOT: resolve('frontend'),
+        DECISION_OS_LEDGER_ROOT: '/tmp/unrelated-ledger-root',
+        DECISION_OS_LEDGER_FILE: '/tmp/unrelated-ledger.json',
+        DECISION_OS_PROJECT_ID: 'unrelated-project',
+        DECISION_OS_SERVER_URL: 'http://127.0.0.1:9999',
+        TSX_TSCONFIG_PATH: resolve('backend/tsconfig.json'),
+      },
+    });
     const command = JSON.parse(output);
     assert.equal(command.cwd, workspace);
     assert.deepEqual(command.args, ['--import', resolve('backend/node_modules/tsx/dist/loader.mjs'), resolve('backend/src/server.ts')]);
     assert.equal(command.env.DECISION_OS_FRONTEND_ROOT, resolve('frontend'));
     assert.equal(command.env.TSX_TSCONFIG_PATH, resolve('backend/tsconfig.json'));
+    assert.deepEqual(command.scopedDecisionOsKeys, []);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }

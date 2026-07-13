@@ -43,7 +43,7 @@ export function decisionOsCodexEnvironment(input: { runtime: AnyRecord; decision
     ...process.env,
     PATH: shimDirectory ? `${shimDirectory}${delimiter}${process.env.PATH ?? ''}` : process.env.PATH,
     DECISION_OS_PROJECT_ID: String(input.runtime.projectId ?? ''),
-    DECISION_OS_ROOT: resolve(input.decisionOsRoot),
+    DECISION_OS_LEDGER_ROOT: resolve(input.decisionOsRoot),
     DECISION_OS_LEDGER_FILE: resolve(input.ledgerFile),
     DECISION_OS_SERVER_URL: serverUrl(input.runtime),
   };

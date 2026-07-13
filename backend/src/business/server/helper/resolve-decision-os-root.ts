@@ -14,7 +14,7 @@ export function resolveDecisionOsRoot(input: { action_payload?: AnyRecord; runti
   const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord };
   const payload = (envelope.action_payload ?? input) as AnyRecord;
   const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
-  const configuredRoot = String(payload.decisionOsRoot ?? runtime.decisionOsRoot ?? process.env.DECISION_OS_ROOT ?? '');
+  const configuredRoot = String(payload.decisionOsRoot ?? runtime.decisionOsRoot ?? '');
   if (configuredRoot) return resolve(configuredRoot);
   const launchCwd = resolve(String(payload.cwd ?? runtime.cwd ?? process.cwd()));
   let current = launchCwd;

@@ -15,6 +15,7 @@ test('Codex runtime exposes one project-scoped ledger-cli command', () => {
   const env = decisionOsCodexEnvironment({ runtime, decisionOsRoot: join(root, 'child', '.decision-os'), ledgerFile: join(root, 'child', '.decision-os', 'specs.json') });
   assert.equal(env.PATH?.split(delimiter)[0], shimDirectory);
   assert.equal(env.DECISION_OS_PROJECT_ID, 'project-a');
+  assert.equal(env.DECISION_OS_LEDGER_ROOT, join(root, 'child', '.decision-os'));
   assert.equal(env.DECISION_OS_SERVER_URL, 'http://127.0.0.1:50150');
   assert.match(readFileSync(join(shimDirectory, 'ledger-cli'), 'utf8'), /exec .*node.*ledger-cli\.mjs' "\$@"/);
 });

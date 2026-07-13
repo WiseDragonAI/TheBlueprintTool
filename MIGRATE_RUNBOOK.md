@@ -72,9 +72,11 @@ Environment variables now use:
 
 ```bash
 DECISION_OS_FRONTEND_ROOT=/home/jbb/dev/EditorBP/decision-os/frontend
-DECISION_OS_ROOT=/path/to/workspace/.decision-os
+DECISION_OS_LEDGER_ROOT=/path/to/workspace/.decision-os
 DECISION_OS_VOICE_UPLOAD_ROOT=/path/to/workspace/.decision-os/voice-uploads
 ```
+
+`DECISION_OS_LEDGER_ROOT` is injected into Codex child processes to bound `ledger-cli` filesystem access. It does not configure backend startup or project catalog discovery; the server launch cwd owns that scope.
 
 ## 5. Commands
 

@@ -231,8 +231,8 @@ export async function manageLedgerJsonController(
   }
 
   if (actionPayload.ledgerCommand === 'execution-profile') {
-    const workspaceRoot = process.env.DECISION_OS_ROOT
-      ? resolve(process.env.DECISION_OS_ROOT, '..')
+    const workspaceRoot = process.env.DECISION_OS_LEDGER_ROOT
+      ? resolve(process.env.DECISION_OS_LEDGER_ROOT, '..')
       : resolve(actionPayload.ledgerJsonFile, '../..');
     const packageFile = resolve(workspaceRoot, 'package.json');
     let packageJson: JsonObject = {};
@@ -250,7 +250,7 @@ export async function manageLedgerJsonController(
       version: 1,
       projectId: process.env.DECISION_OS_PROJECT_ID ?? '',
       workspaceRoot,
-      decisionOsRoot: process.env.DECISION_OS_ROOT ?? resolve(workspaceRoot, '.decision-os'),
+      decisionOsRoot: process.env.DECISION_OS_LEDGER_ROOT ?? resolve(workspaceRoot, '.decision-os'),
       ledgerFile: resolve(actionPayload.ledgerJsonFile),
       packageManager: 'npm',
       scripts,

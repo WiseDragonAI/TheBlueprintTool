@@ -33,3 +33,19 @@ test('resolve-decision-os-root anchors fallback storage to the supplied launch c
     rmSync(workspace, { recursive: true, force: true });
   }
 });
+
+test('resolve-decision-os-root ignores inherited ledger-cli scope', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-server-workspace-'));
+  const unrelated = mkdtempSync(join(tmpdir(), 'decision-os-ledger-scope-'));
+  const previous = process.env.DECISION_OS_LEDGER_ROOT;
+  try {
+    mkdirSync(join(workspace, '.decision-os'), { recursive: true });
+    process.env.DECISION_OS_LEDGER_ROOT = join(unrelated, '.decision-os');
+    assert.equal(resolveDecisionOsRoot({ action_payload: { cwd: workspace }, runtime_state: {} }), join(workspace, '.decision-os'));
+  } finally {
+    if (previous === undefined) delete process.env.DECISION_OS_LEDGER_ROOT;
+    else process.env.DECISION_OS_LEDGER_ROOT = previous;
+    rmSync(workspace, { recursive: true, force: true });
+    rmSync(unrelated, { recursive: true, force: true });
+  }
+});

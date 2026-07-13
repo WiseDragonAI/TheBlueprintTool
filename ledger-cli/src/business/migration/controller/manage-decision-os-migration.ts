@@ -12,7 +12,7 @@ const replacements: Array<{ from: string; to: string }> = [
   { from: 'corev2FrontendRoot', to: 'decisionOsFrontendRoot' },
   { from: 'COREV2_', to: 'DECISION_OS_' },
   { from: 'COREV2', to: 'DECISION_OS' },
-  { from: 'BLUEPRINTTOOL_ROOT', to: 'DECISION_OS_ROOT' },
+  { from: 'BLUEPRINTTOOL_ROOT', to: 'DECISION_OS_LEDGER_ROOT' },
   { from: 'CoreV2', to: 'decision-os' },
   { from: 'corev2:note', to: 'decision-os:note' },
   { from: 'corev2.asset-gc-plan', to: 'decision-os.asset-gc-plan' },
