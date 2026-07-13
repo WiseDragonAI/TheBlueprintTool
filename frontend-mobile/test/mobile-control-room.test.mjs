@@ -215,6 +215,8 @@ test('requires an explicit project choice before creating a new task intake', ()
   const projectPicker = mobile.slice(mobile.indexOf('function openNewTaskProjectModal()'), mobile.indexOf('function cardOverlapArea'));
   assert.match(projectPicker, /name\.textContent = project\.name;\s*button\.append\(name\)/);
   assert.doesNotMatch(projectPicker, /project\.relativePath|Project workspace/);
+  assert.match(styles, /\.new-task-project-list \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(styles, /\.new-task-project-option \{[^}]*display: flex;[^}]*align-items: center;[^}]*justify-content: center;[^}]*min-height: 52px;[^}]*padding: 8px 10px;[^}]*text-align: center/);
   assert.match(styles, /\.new-task-project-option \{[^}]*border-inline-start: 4px solid var\(--project-color/);
 });
 
