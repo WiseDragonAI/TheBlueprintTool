@@ -541,7 +541,7 @@
 
 .codex-log-status {
   display: grid;
-  grid-template-columns: 76px repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 1px;
   margin: 0;
   overflow: hidden;
@@ -607,28 +607,27 @@
   overflow: visible;
 }
 
-.codex-log-stop,
-.codex-log-resume {
-  width: 64px;
-  height: 64px;
-  min-width: 64px;
-  min-height: 64px;
-  padding: 7px;
+.codex-log-action-button {
+  width: 100%;
+  max-width: 64px;
+  height: 56px;
+  min-width: 0;
+  min-height: 56px;
+  padding: 5px;
   display: grid;
-  grid-template-rows: 31px 17px;
+  grid-template-rows: 27px 15px;
   justify-items: center;
   align-items: center;
   gap: 0;
 }
 
-.codex-log-run-action-icon {
-  font-size: 28px;
+.codex-log-action-icon {
+  font-size: 24px;
   line-height: 1;
 }
 
-.codex-log-stop .terminal-button__label,
-.codex-log-resume .terminal-button__label {
-  font-size: 10px;
+.codex-log-action-button .terminal-button__label {
+  font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.05em;
 }
