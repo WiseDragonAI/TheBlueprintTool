@@ -206,6 +206,15 @@ test('adds project hierarchy, scoped ledger filters, and project color configura
   assert.match(styles, /\.project-link input\[type="color"\]/);
 });
 
+test('requires an explicit project choice before creating a new task intake', () => {
+  assert.match(html, /class="new-task-project-modal"/);
+  assert.match(html, /The task and its Codex run will use this project workspace\./);
+  assert.match(mobile, /document\.querySelector\('\.new-task-button'\)\.addEventListener\('click', openNewTaskProjectModal\)/);
+  assert.match(mobile, /await createTaskIntake\(project\.id\)/);
+  assert.match(mobile, /async function createTaskIntake\(projectId\) \{\s*selectProject\(projectId\)/);
+  assert.match(styles, /\.new-task-project-option \{[^}]*border-inline-start: 4px solid var\(--project-color/);
+});
+
 test('keeps task metadata in Markdown but removes it from the visible card body', () => {
   const visible = visibleMasterTaskMarkdown(task().markdown);
   assert.doesNotMatch(visible, /#master-task|Ledger:|Waiting since:|Status:/);

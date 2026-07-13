@@ -169,6 +169,19 @@
         <button class="cancel-delete-master-task-button" type="button">Cancel</button>
       </dialog>
 
+      <dialog class="new-task-project-modal" aria-labelledby="new-task-project-title">
+        <section class="new-task-project-sheet">
+          <header>
+            <p class="eyebrow">New task</p>
+            <h2 id="new-task-project-title">Choose a project</h2>
+            <p class="muted">The task and its Codex run will use this project workspace.</p>
+          </header>
+          <div class="new-task-project-list"></div>
+          <p class="new-task-project-error" role="alert" hidden></p>
+          <footer><button class="new-task-project-cancel" type="button">Cancel</button></footer>
+        </section>
+      </dialog>
+
       <dialog class="creation-modal" aria-labelledby="creation-title">
         <form method="dialog" class="creation-form">
           <header>

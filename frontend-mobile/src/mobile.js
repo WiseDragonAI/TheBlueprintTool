@@ -35,6 +35,7 @@ const asText = (value) => value == null ? '' : typeof value === 'string' ? value
 const routeParts = () => location.pathname.split('/').filter(Boolean).map(decodeURIComponent);
 const creationModal = document.querySelector('.creation-modal');
 const deleteMasterTaskModal = document.querySelector('.delete-master-task-modal');
+const newTaskProjectModal = document.querySelector('.new-task-project-modal');
 const creationForm = document.querySelector('.creation-form');
 let creationKind = '';
 let controlRoomScrollFrame = 0;
@@ -613,7 +614,9 @@ function parseMasterCandidate(card) {
   return /^\s*(?:#[a-z][a-z0-9-]*\s*)*#master-task\b(?:\s*#[a-z][a-z0-9-]*)*\s*$/im.test(ledgerCardBody(card));
 }
 
-async function createTaskIntake() {
+async function createTaskIntake(projectId) {
+  selectProject(projectId);
+  if (state.activeProjectId !== projectId) throw new Error('The selected project is no longer available.');
   const ledgerRef = state.ledgers.find((entry) => entry.title === state.controlFilter || entry.id === state.controlFilter) ?? state.ledgers[0];
   if (!ledgerRef) throw new Error('Create a ledger before starting a task.');
   const ledger = await projectFetch(`/decision-os/${encodeURIComponent(ledgerRef.id)}`, { cache: 'no-store' }).then((response) => response.json());
@@ -633,6 +636,50 @@ async function createTaskIntake() {
   syncMobileThreadContext({ ledgerId: ledgerRef.id, ledger: updated, ledgers: state.ledgers, onCodexStarted: activateMasterTask });
   navigate(cardPath(ledgerRef.id, zone.id, cardId));
   openMobileThread(card, zone.color);
+}
+
+function openNewTaskProjectModal() {
+  const list = document.querySelector('.new-task-project-list');
+  const error = document.querySelector('.new-task-project-error');
+  const cancel = document.querySelector('.new-task-project-cancel');
+  delete newTaskProjectModal.dataset.busy;
+  cancel.disabled = false;
+  error.hidden = true;
+  error.textContent = '';
+  list.replaceChildren(...state.projects.map((project) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'new-task-project-option';
+    button.style.setProperty('--project-color', project.color);
+    const name = document.createElement('strong');
+    name.textContent = project.name;
+    const path = document.createElement('span');
+    path.textContent = project.relativePath || 'Project workspace';
+    button.append(name, path);
+    button.addEventListener('click', async () => {
+      const options = [...list.querySelectorAll('button')];
+      options.forEach((option) => { option.disabled = true; });
+      newTaskProjectModal.dataset.busy = 'true';
+      cancel.disabled = true;
+      button.setAttribute('aria-busy', 'true');
+      error.hidden = true;
+      try {
+        await createTaskIntake(project.id);
+        delete newTaskProjectModal.dataset.busy;
+        newTaskProjectModal.close();
+      } catch (cause) {
+        error.textContent = cause instanceof Error ? cause.message : 'Task intake creation failed.';
+        error.hidden = false;
+        options.forEach((option) => { option.disabled = false; });
+        delete newTaskProjectModal.dataset.busy;
+        cancel.disabled = false;
+        button.removeAttribute('aria-busy');
+      }
+    });
+    return button;
+  }));
+  newTaskProjectModal.showModal();
+  list.querySelector('button')?.focus();
 }
 
 function cardOverlapArea(card, zone) {
@@ -1049,15 +1096,12 @@ document.querySelector('.back-to-zone-button').addEventListener('click', (event)
 document.querySelector('.create-ledger-button').addEventListener('click', () => openCreationModal('ledger'));
 document.querySelector('.create-zone-button').addEventListener('click', () => openCreationModal('zone'));
 document.querySelector('.create-card-button').addEventListener('click', () => openCreationModal('card'));
-document.querySelector('.new-task-button').addEventListener('click', async () => {
-  const button = document.querySelector('.new-task-button');
-  button.disabled = true;
-  button.setAttribute('aria-busy', 'true');
-  try { await createTaskIntake(); }
-  catch (cause) {
-    elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Task intake creation failed.';
-    setView('error-view');
-  } finally { button.disabled = false; button.removeAttribute('aria-busy'); }
+document.querySelector('.new-task-button').addEventListener('click', openNewTaskProjectModal);
+document.querySelector('.new-task-project-cancel').addEventListener('click', () => {
+  if (!newTaskProjectModal.dataset.busy) newTaskProjectModal.close();
+});
+newTaskProjectModal.addEventListener('cancel', (event) => {
+  if (newTaskProjectModal.dataset.busy) event.preventDefault();
 });
 document.querySelectorAll('[data-control-tab]').forEach((button) => button.addEventListener('click', () => {
   state.controlTab = button.dataset.controlTab;
