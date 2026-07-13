@@ -461,6 +461,88 @@ test('thread codex process route anchors the run widget on the source card and s
   }
 });
 
+test('thread codex process resumes a capacity-interrupted session after five seconds with the same model and effort', async () => {
+  const originalCwd = process.cwd();
+  const previousCodexBin = process.env.CODEX_BIN;
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-thread-capacity-resume-'));
+  const fakeCodex = join(workspace, 'fake-codex-capacity.mjs');
+  const launchesFile = join(workspace, 'launches.jsonl');
+  mkdirSync(join(workspace, '.decision-os'), { recursive: true });
+  writeFileSync(join(workspace, '.decision-os', 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }]
+  }, null, 2));
+  writeFileSync(join(workspace, '.decision-os', 'specs.json'), JSON.stringify({
+    cards: [{
+      id: 'card-capacity', title: 'Capacity run', x: 100, y: 120, w: 320, h: 180,
+      comment: { what: 'Resume this headless run.' }, facts: [], fields: []
+    }],
+    annotations: [], relationships: [],
+    notes: { 'thread-card-capacity': [{
+      id: 'note-operator', role: 'operator', message: 'Run the task.', timestamp: '2026-07-13T10:11:20.500Z'
+    }] }
+  }, null, 2));
+  writeFileSync(fakeCodex, [
+    '#!/usr/bin/env node',
+    'import { appendFileSync } from "node:fs";',
+    'const args = process.argv.slice(2);',
+    `appendFileSync(${JSON.stringify(launchesFile)}, JSON.stringify({ at: Date.now(), args }) + "\\n");`,
+    'process.stdin.on("data", () => undefined);',
+    'process.stdin.on("end", () => {',
+    '  if (!args.includes("resume")) {',
+    '    console.log(JSON.stringify({ type: "thread.started", thread_id: "session-capacity" }));',
+    '    console.log(JSON.stringify({ type: "error", message: "Selected model is at capacity. Please try a different model." }));',
+    '    process.exitCode = 1;',
+    '    return;',
+    '  }',
+    '  console.log(JSON.stringify({ type: "turn.completed" }));',
+    '});',
+  ].join('\n'));
+  chmodSync(fakeCodex, 0o755);
+
+  process.chdir(workspace);
+  process.env.CODEX_BIN = fakeCodex;
+  const runtime: Record<string, unknown> = {};
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const address = server.address() as AddressInfo;
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/threads/process`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        ledgerId: 'specs', threadId: 'thread-card-capacity', cardId: 'card-capacity',
+        codexModel: 'gpt-5.4', codexEffort: 'high'
+      })
+    });
+    assert.equal(response.status, 202);
+    const body = await response.json() as { run: { id: string; outputFile: string } };
+    const startedWaitingAt = Date.now();
+    while ((!existsSync(launchesFile) || readFileSync(launchesFile, 'utf8').trim().split('\n').length < 2) && Date.now() - startedWaitingAt < 8_000) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    const launches = readFileSync(launchesFile, 'utf8').trim().split('\n').map((line) => JSON.parse(line) as { at: number; args: string[] });
+    assert.equal(launches.length, 2);
+    assert.ok(launches[1].at - launches[0].at >= 4_900);
+    assert.deepEqual(launches[1].args.slice(0, 4), ['exec', 'resume', '--dangerously-bypass-approvals-and-sandbox', '--json']);
+    assert.equal(launches[1].args.includes('session-capacity'), true);
+    for (const launch of launches) {
+      assert.equal(launch.args[launch.args.indexOf('--model') + 1], 'gpt-5.4');
+      assert.equal(launch.args.includes('model_reasoning_effort="high"'), true);
+    }
+    await waitForText(body.run.outputFile, 'Codex run completed');
+    const runtimeRun = (runtime.codexSkillRuns as Record<string, { status: string }>)[body.run.id];
+    assert.equal(runtimeRun.status, 'complete');
+  } finally {
+    server.close();
+    process.chdir(originalCwd);
+    if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
+    else process.env.CODEX_BIN = previousCodexBin;
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
 test('all card-owned terminal lifecycle batches leave ledger and conversation bytes unchanged', () => {
   for (const terminal of [
     { type: 'turn.completed' },
