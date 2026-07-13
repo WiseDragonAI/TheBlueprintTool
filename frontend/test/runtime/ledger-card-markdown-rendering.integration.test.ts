@@ -147,6 +147,29 @@ test('ledger cards render numbered markdown as semantic ordered lists', () => {
   }
 });
 
+test('thread command markdown preserves each backtick span as a code element', () => {
+  const previousDocument = globalThis.document;
+  (globalThis as unknown as { document: unknown }).document = {
+    createElement: (tagName: string) => new FakeElement(tagName),
+    createTextNode: (text: string) => new FakeText(text)
+  };
+
+  try {
+    const card = renderDetail({
+      id: 'card-thread-command',
+      title: 'Thread command',
+      comment: { what: 'Defining `LedgerCli` left `command -v LedgerCli` empty inside `sh -lc`.' }
+    }) as unknown as FakeElement;
+    const body = findElementByClass(card, 'ledger-card-body') as FakeElement;
+    const paragraph = body.children[0] as FakeElement;
+    const codeNodes = paragraph.children.filter((child) => child instanceof FakeElement && child.tagName === 'code') as FakeElement[];
+
+    assert.deepEqual(codeNodes.map((node) => node.textContent), ['LedgerCli', 'command -v LedgerCli', 'sh -lc']);
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+  }
+});
+
 test('ledger cards render markdown tables as table elements', () => {
   const previousDocument = globalThis.document;
   (globalThis as unknown as { document: unknown }).document = {
