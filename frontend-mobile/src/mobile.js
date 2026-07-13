@@ -480,32 +480,45 @@ function renderControlRoom() {
   state.activeLedgerId = '';
   state.activeZoneId = '';
   renderLedgerLinks();
-  const projectFilters = [{ id: 'All', name: 'All projects' }, ...state.projects.map(({ id, name }) => ({ id, name }))];
+  const projectFilters = [{ id: 'All', name: 'All projects', color: '#20242b' }, ...state.projects];
   if (!projectFilters.some((project) => project.id === state.projectFilter)) state.projectFilter = 'All';
-  elements['control-project-filters'].replaceChildren(...projectFilters.map((project) => {
+  const showProjectFilters = state.projectFilter === 'All';
+  const projectButtons = projectFilters.map((project) => {
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'filter-chip';
+    button.className = `project-filter-chip${project.id === 'All' ? ' all-projects-filter' : ''}`;
     button.textContent = project.name;
     button.setAttribute('aria-pressed', String(project.id === state.projectFilter));
+    button.style.setProperty('--project-color', project.color);
     button.addEventListener('click', () => { state.projectFilter = project.id; state.controlFilter = 'All'; renderControlRoom(); });
     return button;
-  }));
-  const scopedLedgers = state.projectFilter === 'All'
-    ? []
-    : (state.projects.find((project) => project.id === state.projectFilter)?.ledgers ?? []);
+  });
+  elements['control-project-filters'].hidden = !showProjectFilters;
+  elements['control-project-filters'].replaceChildren(...(showProjectFilters ? projectButtons : []));
+  const scopedLedgers = state.projects.find((project) => project.id === state.projectFilter)?.ledgers ?? [];
   const filters = [{ id: 'All', title: 'All ledgers' }, ...scopedLedgers];
   if (!filters.some((filter) => filter.id === state.controlFilter)) state.controlFilter = 'All';
-  elements['control-filters'].hidden = state.projectFilter === 'All';
-  elements['control-filters'].replaceChildren(...filters.map((filter) => {
+  const ledgerButtons = filters.map((filter) => {
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'filter-chip';
+    button.className = 'ledger-filter-chip';
     button.textContent = filter.title;
     button.setAttribute('aria-pressed', String(filter.id === state.controlFilter));
     button.addEventListener('click', () => { state.controlFilter = filter.id; renderControlRoom(); });
     return button;
-  }));
+  });
+  const clearProject = document.createElement('button');
+  clearProject.type = 'button';
+  clearProject.className = 'filter-clear-button';
+  clearProject.textContent = 'Clear';
+  clearProject.setAttribute('aria-label', 'Clear project and ledger filters');
+  clearProject.addEventListener('click', () => {
+    state.projectFilter = 'All';
+    state.controlFilter = 'All';
+    renderControlRoom();
+  });
+  elements['control-filters'].hidden = showProjectFilters;
+  elements['control-filters'].replaceChildren(...(showProjectFilters ? [] : [...ledgerButtons, clearProject]));
   document.querySelectorAll('[data-control-tab]').forEach((button) => {
     button.setAttribute('aria-selected', String(button.dataset.controlTab === state.controlTab));
     const count = controlTaskCount(button.dataset.controlTab);
