@@ -424,7 +424,7 @@
 
 .ledger-card-title code {
   color: var(--card-code-color);
-  font-family: var(--mono);
+  font-family: inherit;
   font-size: 1em;
 }
 
@@ -1530,7 +1530,7 @@
 
 .ledger-card-body code {
   color: var(--card-code-color);
-  font-family: var(--mono);
+  font-family: inherit;
   font-size: 1em;
 }
 

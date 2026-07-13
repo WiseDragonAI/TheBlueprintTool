@@ -26,6 +26,9 @@ test('card markdown inline code and bold styling follow card color specs', () =>
   assert.match(colorRuntime, /function hsvToRgb/);
   assert.match(colorRuntime, /MIN_READABLE_LUMINANCE/);
   assert.match(colorRuntime, /--card-code-color/);
+  assert.match(css, /\.ledger-card-title code\s*\{[^}]*color:\s*var\(--card-code-color\);[^}]*font-family:\s*inherit;/s);
+  assert.match(css, /\.ledger-card-body code\s*\{[^}]*color:\s*var\(--card-code-color\);[^}]*font-family:\s*inherit;/s);
+  assert.match(css, /\.ledger-card-code-block\s*\{[^}]*font-family:\s*var\(--mono\);/s);
   assert.match(css, /\.card\s*{[^}]*--card-readable-color:\s*color-mix\(in srgb, var\(--card-zone-color\), white 52%\);[^}]*--card-code-color:\s*var\(--card-readable-color\);/s);
   assert.match(css, /\.ledger-card-body code\s*{[^}]*color:\s*var\(--card-code-color\);/s);
   assert.match(css, /\.ledger-card-body strong\s*{[^}]*color:\s*var\(--text\);[^}]*font-weight:\s*800;/s);
