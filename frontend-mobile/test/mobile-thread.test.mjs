@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const source = await readFile(new URL('../src/mobile-thread.js', import.meta.url), 'utf8');
+const sharedThreadRenderer = await readFile(new URL('../../frontend/src/runtime/thread/effect/render-thread-notes.ts', import.meta.url), 'utf8');
 const { collapseMobileThreadComposer, expandMobileThreadComposer } = await import('../src/mobile-thread-composer.js');
 
 test('mobile Text action replaces jump with close, then collapses without clearing the draft', () => {
@@ -80,6 +81,13 @@ test('opening a mobile thread does not focus the draft and raise the software ke
 
   assert.match(openMobileThread, /renderThreadPanel\(\);/);
   assert.doesNotMatch(openMobileThread, /\.focus\(\)/);
+});
+
+test('mobile thread uses the shared renderer that owns the local voice progress clock', () => {
+  assert.match(source, /import \{ renderThreadPanel \} from '\/canvas-src\/runtime\/thread\/effect\/render-thread-panel\.js';/);
+  assert.match(sharedThreadRenderer, /import \{ syncVoiceProgressClock \} from '\.\.\/\.\.\/voice\/effect\/run-voice-progress-clock\.js';/);
+  assert.match(sharedThreadRenderer, /spinner\.dataset\.voicePhaseStartedAt = phaseStartedAt/);
+  assert.match(sharedThreadRenderer, /syncVoiceProgressClock\(\);/);
 });
 
 test('mobile thread routes jump-to-bottom into persistent bottom following', () => {
