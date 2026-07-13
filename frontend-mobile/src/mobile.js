@@ -666,9 +666,7 @@ function openNewTaskProjectModal() {
     button.style.setProperty('--project-color', project.color);
     const name = document.createElement('strong');
     name.textContent = project.name;
-    const path = document.createElement('span');
-    path.textContent = project.relativePath || 'Project workspace';
-    button.append(name, path);
+    button.append(name);
     button.addEventListener('click', async () => {
       const options = [...list.querySelectorAll('button')];
       options.forEach((option) => { option.disabled = true; });
