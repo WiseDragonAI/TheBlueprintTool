@@ -15,7 +15,7 @@ function text(value: unknown): string { return typeof value === 'string' ? value
 async function read(path: string, fs?: FileSystemPort): Promise<string> { return fs ? fs.readFile(path) : promises.readFile(path, 'utf8'); }
 
 function scopeError(ledgerJsonFile: string): Result<never> | null {
-  const rootValue = process.env.DECISION_OS_ROOT?.trim();
+  const rootValue = process.env.DECISION_OS_LEDGER_ROOT?.trim();
   if (!rootValue) return null;
   const root = resolve(rootValue);
   const ledger = resolve(ledgerJsonFile);
@@ -65,7 +65,7 @@ export async function resolveSessionContext(input: { ledger: unknown; ledgerJson
     version: 1,
     projectId: process.env.DECISION_OS_PROJECT_ID ?? '',
     ledgerFile: resolve(input.ledgerJsonFile),
-    decisionOsRoot: process.env.DECISION_OS_ROOT ?? '',
+    decisionOsRoot: process.env.DECISION_OS_LEDGER_ROOT ?? '',
     serverUrl: process.env.DECISION_OS_SERVER_URL ?? '',
     card: selected.find((entry) => text(entry.metadata.id) === input.cardId),
     run: (() => {

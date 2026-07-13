@@ -28,7 +28,7 @@ function parsePlan(value: string): Result<Plan> {
 }
 
 export function applyMasterTaskPlan(input: { ledgerJsonFile: string; planJson: string }): Result<string> {
-  const scopedRoot = process.env.DECISION_OS_ROOT?.trim();
+  const scopedRoot = process.env.DECISION_OS_LEDGER_ROOT?.trim();
   if (scopedRoot) {
     const inner = relative(resolve(scopedRoot), resolve(input.ledgerJsonFile));
     if (!inner || inner.startsWith('..') || isAbsolute(inner)) return { ok: false, error: JSON.stringify({ version: 1, code: 'scope_mismatch' }) };

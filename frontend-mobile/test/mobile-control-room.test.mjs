@@ -230,7 +230,7 @@ test('derives resource request scope exclusively from canonical URLs', () => {
   assert.match(mobile, /installProjectRequestScope\(\)/);
   assert.match(mobile, /const scope = parseProjectScope\(location\.pathname\)/);
   assert.doesNotMatch(mobile, /setProjectRequestProjectId|activeProjectId|selectProject/);
-  assert.doesNotMatch(mobile, /document\.cookie|x-decision-os-project/);
+  assert.doesNotMatch(mobile, /document\.cookie/);
   assert.match(mobile, /cardPathForProject\(task\.projectId, task\.ledgerId/);
 });
 

@@ -25,9 +25,9 @@ function fixture(): { root: string; decisionOs: string; ledger: string } {
 
 test('session context and gate return one bounded project-scoped response', async () => {
   const { decisionOs, ledger } = fixture();
-  const previousRoot = process.env.DECISION_OS_ROOT;
+  const previousRoot = process.env.DECISION_OS_LEDGER_ROOT;
   const previousProject = process.env.DECISION_OS_PROJECT_ID;
-  process.env.DECISION_OS_ROOT = decisionOs;
+  process.env.DECISION_OS_LEDGER_ROOT = decisionOs;
   process.env.DECISION_OS_PROJECT_ID = 'project-a';
   try {
     const context = await manageLedgerJsonController({ ledgerCommand: 'session-context', ledgerJsonFile: ledger, cardOperation: { cardId: 'master' } });
@@ -41,7 +41,7 @@ test('session context and gate return one bounded project-scoped response', asyn
     assert.equal(gate.ok, true);
     if (gate.ok) assert.equal(JSON.parse(String(gate.value)).ready, true);
   } finally {
-    if (previousRoot === undefined) delete process.env.DECISION_OS_ROOT; else process.env.DECISION_OS_ROOT = previousRoot;
+    if (previousRoot === undefined) delete process.env.DECISION_OS_LEDGER_ROOT; else process.env.DECISION_OS_LEDGER_ROOT = previousRoot;
     if (previousProject === undefined) delete process.env.DECISION_OS_PROJECT_ID; else process.env.DECISION_OS_PROJECT_ID = previousProject;
   }
 });

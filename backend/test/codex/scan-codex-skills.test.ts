@@ -47,6 +47,7 @@ test('scanCodexSkills classifies sources, preserves precedence, and returns stab
     symlinkSync(external, join(workspace, '.skills', 'symlinked-skill'), 'dir');
 
     const skills = scanCodexSkills({ workspaceRoot: workspace });
+    const sameRootSkills = scanCodexSkills({ workspaceRoot: workspace, serverRoot: workspace });
     const duplicate = skills.find((skill) => skill.name === 'duplicate-skill');
     const user = skills.find((skill) => skill.name === 'user-skill');
     const system = skills.find((skill) => skill.name === 'system-skill');
@@ -56,6 +57,7 @@ test('scanCodexSkills classifies sources, preserves precedence, and returns stab
     assert.equal(duplicate?.source, 'workspace');
     assert.equal(duplicate?.editable, true);
     assert.equal(duplicate?.readOnlyReason, null);
+    assert.equal(sameRootSkills.find((skill) => skill.name === 'duplicate-skill')?.source, 'workspace');
     assert.match(duplicate?.revision ?? '', /^[a-f0-9]{64}$/);
     assert.equal(user?.source, 'user');
     assert.equal(user?.editable, true);

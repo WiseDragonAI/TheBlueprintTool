@@ -347,8 +347,8 @@ test('thread codex process route anchors the run widget on the source card and s
     const developerArgument = args.find((argument) => argument.startsWith('developer_instructions='));
     assert.ok(developerArgument);
     const developerInstructions = JSON.parse(developerArgument.slice('developer_instructions='.length)) as string;
-    assert.match(developerInstructions, /^Decision OS run:/);
-    assert.match(developerInstructions, /ledger-cli is on PATH/);
+    assert.match(developerInstructions, /^Decision OS card run:/);
+    assert.match(developerInstructions, /Ledger writes use ledger-cli/);
     assert.match(developerInstructions, /session-context/);
     assert.match(developerInstructions, /--message-stdin/);
     assert.ok(developerInstructions.length < 800);

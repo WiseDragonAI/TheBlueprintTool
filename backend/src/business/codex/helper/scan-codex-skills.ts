@@ -41,9 +41,11 @@ export function candidateSkillRoots(workspaceRoot: string, serverRoot?: string):
   const home = codexHome();
   const userSkills = resolve(home, 'skills');
   const systemSkills = resolve(userSkills, '.system');
+  const workspace = resolve(workspaceRoot);
+  const server = serverRoot ? resolve(serverRoot) : '';
   return [
-    ...(serverRoot ? [{ directory: resolve(serverRoot, '.skills'), source: 'server' as const, maxDepth: 5 }] : []),
-    { directory: resolve(workspaceRoot, '.skills'), source: 'workspace', maxDepth: 5 },
+    ...(server && server !== workspace ? [{ directory: resolve(server, '.skills'), source: 'server' as const, maxDepth: 5 }] : []),
+    { directory: resolve(workspace, '.skills'), source: 'workspace', maxDepth: 5 },
     { directory: userSkills, source: 'user', maxDepth: 6, excludedDirectories: [systemSkills] },
     { directory: systemSkills, source: 'system', maxDepth: 5 },
     { directory: resolve(home, 'plugins', 'cache'), source: 'plugin', maxDepth: 10 },

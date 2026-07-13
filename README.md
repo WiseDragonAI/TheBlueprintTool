@@ -143,6 +143,8 @@ npm run cli -- answer --ledger ../.decision-os/specs.json --thread-id thread-600
 
 `generator-cli` is reserved for scaffold generation from the MasterLedger and related generation checks.
 
+Codex child processes receive `DECISION_OS_LEDGER_ROOT` as the filesystem boundary for `ledger-cli`. This variable does not select the server workspace or project catalog. Decision OS server scope always comes from the launcher cwd.
+
 ## Termux Home Master Server
 
 Launch Decision OS from the Termux home to recursively discover every nested project directory that contains `.decision-os`:

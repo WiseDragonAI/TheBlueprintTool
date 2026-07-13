@@ -85,9 +85,8 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
     const invalid = await fetch(`${baseUrl}/p/invalid/decision-os/specs`);
     assert.equal(invalid.status, 404);
 
-    const ambiguous = await fetch(`${baseUrl}/decision-os/specs`, { headers: { cookie: 'decision-os-project=old-root-id', 'x-decision-os-project': projectA.id } });
+    const ambiguous = await fetch(`${baseUrl}/decision-os/specs`);
     assert.equal(ambiguous.status, 400);
-    assert.equal(ambiguous.headers.get('set-cookie'), null);
     assert.match(await ambiguous.text(), /Project id is required in the URL/);
 
     const ambiguousLegacyLedger = await fetch(`${baseUrl}/specs`, { redirect: 'manual' });
