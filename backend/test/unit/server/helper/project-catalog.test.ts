@@ -101,9 +101,20 @@ test('creates one initialized catalog project and persists its metadata', () => 
   assert.equal(created.name, 'Project Alpha');
   assert.equal(created.description, 'Primary workspace');
   assert.deepEqual(JSON.parse(readFileSync(join(root, 'Project Alpha', '.decision-os', 'state.json'), 'utf8')), {
-    projectName: 'Project Alpha',
-    ledgers: [],
+    ledgers: [{ id: 'tasks', title: 'tasks', ledgerFile: '.decision-os/tasks.json', cardId: 'ledger-card:tasks' }],
   });
+  assert.deepEqual(JSON.parse(readFileSync(join(root, 'Project Alpha', '.decision-os', 'tasks.json'), 'utf8')), {
+    modelName: 'tasks',
+    diagramSize: { width: 5200, height: 2600 },
+    viewport: { x: 0, y: 0, scale: 1 },
+    cards: [],
+    annotations: [],
+    relationships: [],
+    notes: {},
+  });
+  const overview = JSON.parse(readFileSync(join(root, 'Project Alpha', '.decision-os', 'ledgers-canvas.json'), 'utf8')) as { cards: Array<Record<string, unknown>> };
+  assert.equal(overview.cards.some((card) => card.id === 'ledger-card:tasks' && card.targetLedgerId === 'tasks'), true);
+  assert.deepEqual(created.ledgers, [{ id: 'tasks', title: 'tasks', ledgerFile: '.decision-os/tasks.json' }]);
   assert.equal(JSON.parse(readFileSync(join(root, 'Project Alpha', '.decision-os', 'project.json'), 'utf8')).id, created.id);
 });
 

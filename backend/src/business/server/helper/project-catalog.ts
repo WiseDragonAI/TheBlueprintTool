@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, relative, resolve, sep } from 'node:path';
+import { createLinkedLedger } from '../../ledger/helper/create-linked-ledger.js';
 
 export type DecisionOsProject = {
   id: string;
@@ -164,8 +165,9 @@ export function createDecisionOsProject(input: {
   const decisionOsRoot = resolve(projectRoot, '.decision-os');
   try {
     mkdirSync(decisionOsRoot, { recursive: true });
-    writeFileSync(resolve(decisionOsRoot, 'state.json'), `${JSON.stringify({ projectName: name, ledgers: [] }, null, 2)}\n`);
+    writeFileSync(resolve(decisionOsRoot, 'state.json'), `${JSON.stringify({ ledgers: [] }, null, 2)}\n`);
     writeFileSync(resolve(decisionOsRoot, 'project.json'), `${JSON.stringify({ id: randomUUID() }, null, 2)}\n`);
+    createLinkedLedger({ decisionOsRoot, title: 'tasks' });
     const projects = discoverDecisionOsProjects({ masterRoot, masterDecisionOsRoot: input.masterDecisionOsRoot });
     const created = projects.find((project) => project.root === projectRoot);
     if (!created) throw new Error('Created project was not discovered in the catalog.');

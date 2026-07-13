@@ -1,0 +1,33 @@
+{
+  "modelName": "ledgers-canvas",
+  "diagramSize": {
+    "width": 5200,
+    "height": 2600
+  },
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "scale": 0.42
+  },
+  "cards": [
+    {
+      "id": "ledger-card:tasks",
+      "targetLedgerId": "tasks",
+      "cardType": "ledger",
+      "domainId": "ledgers",
+      "title": "tasks",
+      "ledgerFile": ".decision-os/tasks.json",
+      "status": "todo",
+      "x": 0,
+      "y": 0,
+      "w": 360,
+      "h": 180,
+      "comment": {
+        "what": "Ledger: tasks"
+      }
+    }
+  ],
+  "annotations": [],
+  "relationships": [],
+  "notes": {}
+}
