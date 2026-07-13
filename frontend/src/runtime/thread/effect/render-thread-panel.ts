@@ -23,6 +23,7 @@ import { renderThreadCodexLog } from './render-thread-codex-log.js';
 import { renderThreadJumpButton, syncThreadJumpButtonVisibility } from './render-thread-jump-button.js';
 import { renderThreadNotes } from './render-thread-notes.js';
 import { syncThreadCodexRunControls } from './sync-thread-codex-run-controls.js';
+import { restorePendingVoiceUploads } from '../../voice/effect/restore-pending-voice-uploads.js';
 
 const threadTabOrder: ThreadPanelTab[] = ['thread', 'codex-log'];
 
@@ -252,6 +253,7 @@ export function renderThreadPanel(): void {
   applyThreadAccent();
   telemetry('render-thread-panel', { threadId: activeThreadId, tab: activeTab });
   renderThreadNotes();
+  void restorePendingVoiceUploads(activeThreadId);
   bindActiveThreadRun(activeThreadId);
   renderThreadCodexLog();
   renderThreadJumpButton(activeTab === 'thread');

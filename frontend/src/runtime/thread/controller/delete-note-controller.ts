@@ -9,6 +9,7 @@ import { normalizeDeletedNoteIds } from '../../ledger/helper/normalize-deleted-n
 import { normalizeLedgerNotes } from '../../ledger/helper/normalize-ledger-notes.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { renderThreadPanel } from '../effect/render-thread-panel.js';
+import { deletePendingVoiceUpload } from '../../voice/effect/persist-pending-voice-upload.js';
 
 export async function deleteNoteController(input: string | { threadId: string; noteId?: string }): Promise<void> {
   const threadId = typeof input === 'string' ? input : input.threadId;
@@ -21,6 +22,11 @@ export async function deleteNoteController(input: string | { threadId: string; n
     restoreLocalThreadNote(threadId, removed);
     renderThreadPanel();
     return;
+  }
+  if (removed.note?.localVoiceUploadId) {
+    await deletePendingVoiceUpload(String(removed.note.localVoiceUploadId)).catch((error) => {
+      telemetry('delete-pending-voice-upload-failed', { threadId, noteId, error: error instanceof Error ? error.message : String(error) });
+    });
   }
   modal.close?.();
 }

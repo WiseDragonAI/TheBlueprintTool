@@ -524,6 +524,40 @@ test('render-thread-notes keeps failed voice audio retryable', () => {
   }
 });
 
+test('render-thread-notes exposes retry for a locally preserved pre-acceptance upload', () => {
+  const previousDocument = globalThis.document;
+  const rendered: TestElement[] = [];
+  const list = {
+    className: '',
+    replaceChildren() { rendered.length = 0; },
+    append(item: TestElement) { rendered.push(item); }
+  };
+  (globalThis as unknown as { document: unknown }).document = {
+    querySelector(selector: string) { return selector === '.thread-note-list' ? list : null; },
+    createElement(tagName: string) { return createTestElement('', tagName); },
+    createTextNode(text: string) { return createTestElement(text); }
+  };
+  try {
+    state.threadId = 'thread-card-a';
+    state.activeLedger = {
+      notes: {
+        'thread-card-a': [{ id: 'note-local', role: 'operator', message: 'Voice upload failed before transcription. Audio is saved locally.', localVoiceUploadId: 'note-local', status: 'upload failed' }]
+      }
+    };
+    renderThreadNotes();
+    assert.equal(rendered[0].className, 'thread-note is-retryable is-operator');
+    const retry = rendered[0].children.find((child) => child.className?.includes('thread-note-retry'));
+    assert.equal(retry?.dataset?.action, 'voice-retry');
+    assert.equal(retry?.dataset?.noteId, 'note-local');
+    assert.equal(retry?.dataset?.localVoiceUploadId, 'note-local');
+    assert.equal(retry?.dataset?.voiceFileRef, '');
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+    state.threadId = '';
+    state.activeLedger = null;
+  }
+});
+
 test('render-thread-notes keeps active voice transcription progress concise', () => {
   const previousDocument = globalThis.document;
   const rendered: TestElement[] = [];

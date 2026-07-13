@@ -120,7 +120,7 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
   }
   if (action === 'voice-cancel') cancelVoiceRecording();
   if (action === 'voice-retry') {
-    await retryVoiceTranscription({ threadId: actionTarget.dataset.threadId ?? state.threadId, noteId: actionTarget.dataset.noteId ?? '', voiceFileRef: actionTarget.dataset.voiceFileRef ?? '' });
+    await retryVoiceTranscription({ threadId: actionTarget.dataset.threadId ?? state.threadId, noteId: actionTarget.dataset.noteId ?? '', voiceFileRef: actionTarget.dataset.voiceFileRef ?? '', localVoiceUploadId: actionTarget.dataset.localVoiceUploadId ?? '' });
     return;
   }
   if (action === 'confirm-delete-card') {

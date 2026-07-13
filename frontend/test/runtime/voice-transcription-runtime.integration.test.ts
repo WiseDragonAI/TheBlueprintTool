@@ -11,6 +11,13 @@ import { appendVoiceNote } from '../../src/runtime/voice/effect/append-voice-not
 import { createNoteController } from '../../src/runtime/thread/controller/create-note-controller.js';
 import { loadActiveLedgerState } from '../../src/runtime/ledger/effect/load-active-ledger-state.js';
 import { state } from '../../src/runtime/state.js';
+import { retryVoiceTranscription } from '../../src/runtime/voice/effect/retry-voice-transcription.js';
+import {
+  clearPendingVoiceUploadMemoryForTest,
+  persistPendingVoiceUpload,
+  readPendingVoiceUpload
+} from '../../src/runtime/voice/effect/persist-pending-voice-upload.js';
+import { clearPendingVoiceUploadRestoreStateForTest, restorePendingVoiceUploads } from '../../src/runtime/voice/effect/restore-pending-voice-uploads.js';
 
 test('fill-thread-draft appends transcribed text to the active draft', () => {
   const previousDocument = globalThis.document;
@@ -207,22 +214,44 @@ test('request-transcription keeps preserved upload retryable when metadata commi
   (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
     constructor(_name: string, public options: Record<string, unknown> = {}) {}
   };
-  (globalThis as unknown as { fetch: unknown }).fetch = async () => ({
-    ok: false,
-    status: 500,
-    json: async () => ({ body: { ok: false, uploaded: true, configured: true, noteId: 'note-voice-1', voiceFileRef: '/tmp/preserved.webm', error: 'Voice note commit failed.' } })
-  });
+  let uploadCount = 0;
+  let persistedBeforeFetch = false;
+  (globalThis as unknown as { fetch: unknown }).fetch = async (_url: string, init?: RequestInit) => {
+    uploadCount += 1;
+    const noteId = String((init?.body as FormData).get('noteId') ?? '');
+    persistedBeforeFetch = Boolean(await readPendingVoiceUpload(noteId));
+    if (uploadCount === 1) return {
+      ok: false,
+      status: 500,
+      json: async () => ({ body: { ok: false, uploaded: true, configured: true, noteId, voiceFileRef: '/tmp/preserved.webm', error: 'Voice note commit failed.' } })
+    };
+    return {
+      ok: true,
+      status: 202,
+      json: async () => ({ body: { ok: true, uploaded: true, configured: true, noteId, voiceFileRef: '/tmp/retried.webm', status: 'queued', revision: 1 } })
+    };
+  };
 
   try {
     state.threadId = 'thread-card-a';
+    state.activeTab = 'specs';
     state.activeLedger = { notes: { 'thread-card-a': [] } };
     await requestTranscription(new Blob(['abc'], { type: 'audio/webm' }));
     const note = state.activeLedger.notes['thread-card-a'][0];
+    const noteId = String(note.id);
+    assert.equal(persistedBeforeFetch, true);
     assert.equal(note.status, 'upload failed');
     assert.equal(note.voiceFileRef, '/tmp/preserved.webm');
-    assert.equal(note.message, 'Voice uploaded; transcription unavailable.');
-    assert.equal(state.voice.voiceFileRef, '/tmp/preserved.webm');
+    assert.equal(note.localVoiceUploadId, noteId);
+    assert.equal(note.message, 'Voice uploaded; server acceptance failed. Audio is saved locally.');
+    assert.ok(await readPendingVoiceUpload(noteId));
     assert.match(state.voice.transcriptionStatus, /^voice upload failed/);
+    await retryVoiceTranscription({ threadId: 'thread-card-a', noteId, localVoiceUploadId: noteId });
+    assert.equal(uploadCount, 2);
+    assert.equal(note.voiceFileRef, '/tmp/retried.webm');
+    assert.equal(note.status, 'queued');
+    assert.equal(note.localVoiceUploadId, '');
+    assert.equal(await readPendingVoiceUpload(noteId), null);
   } finally {
     (globalThis as unknown as { fetch: unknown }).fetch = previousFetch;
     (globalThis as unknown as { document: unknown }).document = previousDocument;
@@ -231,6 +260,40 @@ test('request-transcription keeps preserved upload retryable when metadata commi
     state.threadId = '';
     state.activeLedger = null;
     state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
+    clearPendingVoiceUploadMemoryForTest();
+  }
+});
+
+test('pending voice upload restores the same retryable note after local state is lost', async () => {
+  const previousDocument = globalThis.document;
+  try {
+    (globalThis as unknown as { document: unknown }).document = undefined;
+    clearPendingVoiceUploadMemoryForTest();
+    clearPendingVoiceUploadRestoreStateForTest();
+    state.activeTab = 'specs';
+    state.threadId = 'thread-card-a';
+    state.activeLedger = { notes: { 'thread-card-a': [] } };
+    await persistPendingVoiceUpload({
+      noteId: 'note-local-reload',
+      threadId: 'thread-card-a',
+      ledgerId: 'specs',
+      cardId: 'card-a',
+      queueCodex: true,
+      audio: new Blob(['saved audio'], { type: 'audio/webm' }),
+      createdAt: '2026-07-13T15:49:00.000Z'
+    });
+    assert.equal(await restorePendingVoiceUploads('thread-card-a'), true);
+    const note = state.activeLedger.notes['thread-card-a'][0];
+    assert.equal(note.id, 'note-local-reload');
+    assert.equal(note.status, 'upload failed');
+    assert.equal(note.localVoiceUploadId, 'note-local-reload');
+    assert.match(note.message, /saved locally/);
+  } finally {
+    clearPendingVoiceUploadMemoryForTest();
+    clearPendingVoiceUploadRestoreStateForTest();
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+    state.threadId = '';
+    state.activeLedger = null;
   }
 });
 

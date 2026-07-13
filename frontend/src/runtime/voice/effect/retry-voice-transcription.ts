@@ -9,9 +9,16 @@ import { transcribeUploadedVoiceAudio } from './transcribe-uploaded-voice-audio.
 import { currentLedgerStateId } from '../../ledger/helper/current-ledger-state-id.js';
 import { applyVoiceServerNote, watchVoiceTranscription } from './reconcile-voice-transcription.js';
 import { patchOptimisticThreadNote } from '../../thread/effect/patch-optimistic-thread-note.js';
+import { submitPendingVoiceUpload } from './submit-pending-voice-upload.js';
 
-export async function retryVoiceTranscription(input: { noteId: string; voiceFileRef: string; threadId?: string }): Promise<void> {
-  if (!input.noteId || !input.voiceFileRef) return;
+export async function retryVoiceTranscription(input: { noteId: string; voiceFileRef?: string; localVoiceUploadId?: string; threadId?: string }): Promise<void> {
+  if (!input.noteId) return;
+  if (input.localVoiceUploadId) {
+    telemetry('retry-voice-upload', { threadId: input.threadId || state.threadId, noteId: input.noteId });
+    await submitPendingVoiceUpload(input.localVoiceUploadId);
+    return;
+  }
+  if (!input.voiceFileRef) return;
   const threadId = input.threadId || state.threadId;
   state.voice.transcriptionStatus = 'retrying transcription';
   renderVoiceStatus();

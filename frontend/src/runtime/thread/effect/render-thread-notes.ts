@@ -128,7 +128,8 @@ export function renderThreadNotes(): void {
     const noteId = String(note.id ?? '');
     const normalizedStatus = status.toLowerCase();
     const busy = /committing|uploading|queued|transcribing|finalizing|retrying/.test(normalizedStatus);
-    const retryable = Boolean(note.voiceFileRef) && normalizedStatus === 'transcription failed';
+    const localVoiceUploadId = String(note.localVoiceUploadId ?? '');
+    const retryable = (Boolean(note.voiceFileRef) && normalizedStatus === 'transcription failed') || (Boolean(localVoiceUploadId) && normalizedStatus === 'upload failed');
     const voiceOwned = Boolean(note.voiceFileRef);
     const phaseLabel = voiceOwned ? voicePhaseLabel(status) : status;
     const item = document.createElement('li');
@@ -182,6 +183,7 @@ export function renderThreadNotes(): void {
       retry.dataset.threadId = state.threadId;
       retry.dataset.noteId = String(note.id ?? '');
       retry.dataset.voiceFileRef = String(note.voiceFileRef ?? '');
+      retry.dataset.localVoiceUploadId = localVoiceUploadId;
       retry.textContent = 'Retry';
       item.append(retry);
     }
