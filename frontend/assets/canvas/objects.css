@@ -925,9 +925,14 @@
   font-size: 1em;
 }
 
+.ledger-card-body ol,
 .ledger-card-body ul {
   margin: 0;
   padding-left: 17px;
+}
+
+.ledger-card-body li::marker {
+  color: var(--card-code-color);
 }
 
 .ledger-card-hr {
