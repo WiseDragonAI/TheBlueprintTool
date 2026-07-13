@@ -287,8 +287,8 @@ test('thread codex process route anchors the run widget on the source card and s
     '  const args = process.argv.slice(2);',
     '  const developerArgument = args.find((argument) => argument.startsWith("developer_instructions=")) || "";',
     '  const developerInstructions = JSON.parse(developerArgument.slice("developer_instructions=".length));',
-    '  const match = developerInstructions.match(/\\*\\*Run summary file:\\*\\* `([^`]+)`/);',
-    '  const threadMatch = developerInstructions.match(/\\*\\*Thread markdown file:\\*\\* `([^`]+)`/);',
+    '  const match = input.match(/Run summary: (.+)/);',
+    '  const threadMatch = input.match(/Thread: [^ ]+ \\(([^)]+)\\)/);',
     '  if (!match || !threadMatch) process.exit(2);',
     '  writeFileSync(match[1], "# Fake Thread Run\\n\\nscoped\\n");',
     '  appendFileSync(threadMatch[1], "\\n\\n# AGENT\\n<!-- decision-os:note {\\"id\\":\\"note-agent-scoped-final\\",\\"timestamp\\":\\"2026-07-10T01:02:00.000Z\\"} -->\\n\\nScoped final answer.\\n");',
@@ -326,14 +326,14 @@ test('thread codex process route anchors the run widget on the source card and s
       body: JSON.stringify({ ledgerId: 'specs', threadId: 'thread-card-a', cardId: 'card-a', codexModel: 'gpt-5.4', codexEffort: 'medium' })
     });
     assert.equal(response.status, 202);
-    const body = await response.json() as { ok: boolean; run: { id: string; outputCardId: string; sourceThreadId: string; outputFile: string; codexModel: string; codexEffort: string } };
+    const body = await response.json() as { ok: boolean; run: { id: string; outputCardId: string; sourceThreadId: string; outputFile: string; stdoutFile: string; codexModel: string; codexEffort: string } };
     assert.equal(body.ok, true);
     assert.equal(body.run.outputCardId, 'card-a');
     assert.equal(body.run.sourceThreadId, 'thread-card-a');
     assert.equal(body.run.codexModel, 'gpt-5.4');
     assert.equal(body.run.codexEffort, 'medium');
 
-    await waitForText(inputFile, 'Execute the operator request from one decision-os card thread.');
+    await waitForText(inputFile, 'Execute the operator request from this Decision OS thread.');
     const input = readFileSync(inputFile, 'utf8');
     assert.match(input, /Please update this exact card from the thread\./);
     assert.doesNotMatch(input, /Codex internal output should not be prompt context\./);
@@ -347,17 +347,11 @@ test('thread codex process route anchors the run widget on the source card and s
     const developerArgument = args.find((argument) => argument.startsWith('developer_instructions='));
     assert.ok(developerArgument);
     const developerInstructions = JSON.parse(developerArgument.slice('developer_instructions='.length)) as string;
-    assert.match(developerInstructions, /^## A\. Scope/m);
-    assert.match(developerInstructions, /^## D\. Card Markdown Formatting Rules/m);
-    assert.match(developerInstructions, /\*\*Workspace root:\*\* `[^`]+`/);
-    assert.match(developerInstructions, /\*\*Ledger file:\*\* `.*\.decision-os\/specs\.json`/);
-    assert.match(developerInstructions, /\*\*Card id:\*\* `card-a`/);
-    assert.match(developerInstructions, /\*\*Prompt card title at launch:\*\* Thread Card/);
-    assert.match(developerInstructions, /\*\*Card markdown file:\*\* `.*\.decision-os\/cards\/specs\/card-a\.md`/);
-    assert.match(developerInstructions, /\*\*Thread id:\*\* `thread-card-a`/);
-    assert.match(developerInstructions, /\*\*Thread markdown file:\*\* `.*\.decision-os\/threads\/specs\/thread-card-a\.md`/);
-    assert.match(developerInstructions, /\*\*Run summary file:\*\* `.*\.decision-os\/runs\/codex-skills\/specs\/codex-skill-/);
-    assert.match(developerInstructions, /\*\*Operator timestamp:\*\* `2026-07-08T01:00:00\.000Z`/);
+    assert.match(developerInstructions, /^Decision OS run:/);
+    assert.match(developerInstructions, /ledger-cli is on PATH/);
+    assert.match(developerInstructions, /session-context/);
+    assert.match(developerInstructions, /--message-stdin/);
+    assert.ok(developerInstructions.length < 800);
     assert.doesNotMatch(developerInstructions, /Please update this exact card|Codex internal output|Existing card body/);
     assert.doesNotMatch(developerInstructions, /<(?:workspaceRoot|ledgerFile|cardId|cardTitle|cardMarkdownFile|threadId|threadMarkdownFile|runSummaryFile|operatorNoteTimestamp)>/);
 
@@ -376,6 +370,13 @@ test('thread codex process route anchors the run widget on the source card and s
 
     await waitForText(body.run.outputFile, 'scoped');
     await waitForText(body.run.outputFile, 'Codex run completed');
+    await waitForText(`${body.run.stdoutFile}.telemetry.jsonl`, '"callId":"tool-1"');
+    const telemetryRow = JSON.parse(readFileSync(`${body.run.stdoutFile}.telemetry.jsonl`, 'utf8').trim().split('\n')[0]);
+    assert.equal(typeof telemetryRow.startedAt, 'string');
+    assert.equal(typeof telemetryRow.completedAt, 'string');
+    assert.equal(typeof telemetryRow.durationMs, 'number');
+    assert.equal(telemetryRow.success, true);
+    assert.equal(telemetryRow.runId, body.run.id);
     const ledgerPath = join(workspace, '.decision-os', 'specs.json');
     const threadPath = join(workspace, '.decision-os', 'threads', 'specs', 'thread-card-a.md');
     await waitForText(threadPath, 'Scoped final answer.');
@@ -409,11 +410,11 @@ test('thread codex process route anchors the run widget on the source card and s
       assert.equal(status.runKind, 'thread');
       assert.equal(status.status, 'complete');
       assert.equal(status.persistedEventCount, 0);
-      assert.equal(status.toolCallCount, 1);
+      assert.equal(status.toolCallCount, 2);
       assert.equal(status.thinkingCount, 1);
       assert.equal(status.warningCount, 2);
       assert.equal(status.transportStatus, 'degraded');
-      assert.deepEqual(status.events.map((event) => event.kind), ['run_status', 'run_status', 'thinking', 'agent_message', 'tool_call', 'tool_call', 'file_change', 'warning', 'transport', 'run_status']);
+      assert.deepEqual(status.events.map((event) => event.kind), ['run_status', 'run_status', 'thinking', 'agent_message', 'tool_call', 'tool_call', 'tool_call', 'warning', 'transport', 'run_status']);
       assert.deepEqual(status.diagnostics.map((event) => event.kind), ['warning', 'transport']);
       assert.equal(status.metadata.codexModel, 'gpt-5.4');
       assert.equal(status.metadata.codexEffort, 'medium');

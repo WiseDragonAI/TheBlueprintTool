@@ -20,6 +20,7 @@ import { codexRunSegmentMarker } from './codex-run-segment-marker.js';
 import { readCodexPipelineStore, writeCodexPipelineStore } from './codex-pipeline-store.js';
 import { buildPipelineSkillPrompt } from './build-pipeline-skill-prompt.js';
 import { resolveCodexCommand } from './resolve-codex-command.js';
+import { decisionOsCodexEnvironment } from './decision-os-codex-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 type TerminalStatus = 'complete' | 'failed' | 'cancelled';
@@ -385,7 +386,11 @@ export function spawnPipelineSkillProcess(input: {
   });
 
   mkdirSync(dirname(input.skill.stdoutFile), { recursive: true });
-  const child = spawn(command.command, command.args, { cwd: workspaceRoot, stdio: ['pipe', 'pipe', 'pipe'] });
+  const child = spawn(command.command, command.args, {
+    cwd: workspaceRoot,
+    env: decisionOsCodexEnvironment({ runtime: input.runtime, decisionOsRoot: input.decisionOsRoot, ledgerFile: context.ledgerPath }),
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
   const stdout = createWriteStream(input.skill.stdoutFile, { flags: 'a' });
   const stderr = createWriteStream(input.skill.stderrFile, { flags: 'a' });
   const runEventIngestor = createCardSkillRunEventIngestor({
@@ -393,6 +398,7 @@ export function spawnPipelineSkillProcess(input: {
     ledgerPath: context.ledgerPath,
     cardId: input.step.outputCardId,
     runId: input.skill.runId,
+    telemetryFile: `${input.skill.stdoutFile}.telemetry.jsonl`,
   });
   const startedAt = input.skill.startedAt ?? new Date().toISOString();
   appendFileSync(input.skill.stderrFile, codexRunSegmentMarker({

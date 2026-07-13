@@ -4,6 +4,7 @@
  */
 import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { telemetry } from '@backend/telemetry/harness.js';
 
 type AnyRecord = Record<string, unknown>;
@@ -17,7 +18,11 @@ export function resolveDecisionOsRoot(input: { action_payload?: AnyRecord; runti
   if (configuredRoot) return resolve(configuredRoot);
   const launchCwd = resolve(String(payload.cwd ?? runtime.cwd ?? process.cwd()));
   let current = launchCwd;
+  const systemTemporaryRoot = resolve(tmpdir());
   while (true) {
+    // WHAT: Treat the operating-system temp root as a workspace boundary.
+    // WHY: Test and preview workspaces below /tmp must not inherit another run's /tmp/.decision-os state.
+    if (current === systemTemporaryRoot) break;
     const candidate = resolve(current, '.decision-os');
     if (existsSync(candidate)) return candidate;
     const parent = dirname(current);

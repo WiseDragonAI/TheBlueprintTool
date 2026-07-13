@@ -4,6 +4,7 @@
  */
 import { createServer, type ServerResponse } from 'node:http';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 import { telemetry } from '@backend/telemetry/harness.js';
@@ -41,6 +42,7 @@ import { restartCodexPipelineRunController } from '../../codex/controller/restar
 import { resumeCodexPipelineRuns } from '../../codex/helper/resume-codex-pipeline-runs.js';
 import { discoverDecisionOsProjects, resolveCatalogProject, saveProjectMetadata } from './project-catalog.js';
 import { isGlobalProjectEndpoint, isProjectSensitiveEndpoint, parseProjectUrlScope } from './project-url-scope.js';
+import { ensureLedgerCliShim } from '../../codex/helper/decision-os-codex-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
@@ -167,6 +169,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const masterRoot = dirname(masterDecisionOsRoot);
   const decisionOsRoot = masterDecisionOsRoot;
   runtime.decisionOsRoot = masterDecisionOsRoot;
+  runtime.port = port;
+  runtime.ledgerCliShimDirectory = ensureLedgerCliShim({
+    masterDecisionOsRoot,
+    launcher: resolve(dirname(fileURLToPath(import.meta.url)), '../../../../../bin/ledger-cli.mjs'),
+  });
   if (payload.mode === 'dry-run') {
     return { ok: true, port, server: { listening: false, port } };
   }
@@ -186,8 +193,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const clients = new Set<ServerResponse>();
     const revisions = createLedgerRevisionTracker();
     const projectRuntime = activeDecisionOsRoot === masterDecisionOsRoot
-      ? Object.assign(runtime, { decisionOsRoot: activeDecisionOsRoot })
-      : Object.assign({}, runtime, { decisionOsRoot: activeDecisionOsRoot });
+      ? Object.assign(runtime, { decisionOsRoot: activeDecisionOsRoot, projectId })
+      : Object.assign({}, runtime, { decisionOsRoot: activeDecisionOsRoot, projectId });
     const broadcast = (message: string): void => {
       for (const client of clients) client.write(message);
       for (const client of globalContentEventClients) client.write(message);

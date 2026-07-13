@@ -58,7 +58,7 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
   const normalizedMode: LedgerCommand | 'assets' = argv.length === 0 || argv.includes('--help') || argv.includes('-h') || mode === 'help'
     ? 'help'
     : mode === 'assets' ? 'assets'
-    : mode === 'answer' || mode === 'card-context' || mode === 'done' || mode === 'export' || mode === 'migrate-decision-os' || mode === 'mutate' || mode === 'overview' || mode === 'todo' || mode === 'unanswered' || mode === 'validate-master-tasks' || mode === 'zone-cards' ? mode : 'inspect';
+    : mode === 'answer' || mode === 'card-context' || mode === 'codex-run-audit' || mode === 'done' || mode === 'execution-profile' || mode === 'export' || mode === 'master-task-apply' || mode === 'master-task-gate' || mode === 'migrate-decision-os' || mode === 'mutate' || mode === 'overview' || mode === 'session-context' || mode === 'todo' || mode === 'unanswered' || mode === 'validate-master-tasks' || mode === 'zone-cards' ? mode : 'inspect';
   const assetAction = (argv[1] === 'apply-gc-plan' || argv[1] === 'gc' || argv[1] === 'list-orphans' || argv[1] === 'list-referenced' || argv[1] === 'prune-json' || argv[1] === 'stage-referenced'
     ? argv[1]
     : 'gc') as AssetCommand;
@@ -68,9 +68,10 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
     answerOperation: {
       message: flagValue(argv, '--message'),
       messageFile: flagValue(argv, '--message-file'),
+      messageStdin: argv.includes('--message-stdin'),
       threadId: flagValue(argv, '--thread-id'),
     },
-    cardOperation: normalizedMode === 'card-context' || normalizedMode === 'validate-master-tasks'
+    cardOperation: normalizedMode === 'card-context' || normalizedMode === 'session-context' || normalizedMode === 'master-task-gate' || normalizedMode === 'validate-master-tasks'
       ? { cardId: flagValue(argv, '--card-id') }
       : undefined,
     json: argv.includes('--json'),
@@ -99,6 +100,12 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
         root: flagValue(argv, '--root'),
         write: argv.includes('--write'),
       }
+      : undefined,
+    masterTaskOperation: normalizedMode === 'master-task-apply'
+      ? { planStdin: argv.includes('--plan-stdin') }
+      : undefined,
+    runAuditOperation: normalizedMode === 'codex-run-audit'
+      ? { root: flagValue(argv, '--root'), count: flagNumber(argv, '--count') ?? 10, cutoff: flagNumber(argv, '--cutoff'), exclusions: flagValues(argv, '--exclude') }
       : undefined,
     mutationOperation: {
       addCardFile: flagValue(argv, '--add-card-file'),

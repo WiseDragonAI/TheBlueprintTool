@@ -18,6 +18,7 @@ import { codexRunSegmentMarker } from '../helper/codex-run-segment-marker.js';
 import { isCodexThreadArtifactNote } from '../helper/is-codex-thread-artifact-note.js';
 import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand, resolveCodexResumeCommand, type CodexCommand } from '../helper/resolve-codex-command.js';
 import { codexCapacityResumeDelayMs, isTransientCodexCapacityFailure, readCodexSessionId } from '../helper/transient-codex-capacity-failure.js';
+import { decisionOsCodexEnvironment } from '../helper/decision-os-codex-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 type ProcessStatus = 'running' | 'complete' | 'failed' | 'cancelled';
@@ -240,10 +241,14 @@ export async function startThreadCodexProcessController(input: { action_payload?
     const stdoutByteOffset = existsSync(stdoutFile) ? statSync(stdoutFile).size : 0;
     const stderrByteOffset = existsSync(stderrFile) ? statSync(stderrFile).size : 0;
     const attemptStartedAt = new Date().toISOString();
-    const child = spawn(attemptCommand.command, attemptCommand.args, { cwd: workspaceRoot, stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(attemptCommand.command, attemptCommand.args, {
+      cwd: workspaceRoot,
+      env: decisionOsCodexEnvironment({ runtime, decisionOsRoot, ledgerFile: ledgerPath }),
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
     const stdout = createWriteStream(stdoutFile, { flags: 'a' });
     const stderr = createWriteStream(stderrFile, { flags: 'a' });
-    const runEventIngestor = createCardSkillRunEventIngestor({ decisionOsRoot, ledgerPath, cardId, runId, startLine: eventStartLine });
+    const runEventIngestor = createCardSkillRunEventIngestor({ decisionOsRoot, ledgerPath, cardId, runId, startLine: eventStartLine, telemetryFile: `${stdoutFile}.telemetry.jsonl` });
     appendFileSync(stderrFile, codexRunSegmentMarker({
       runId,
       startedAt: attemptStartedAt,
