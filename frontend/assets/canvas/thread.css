@@ -541,7 +541,7 @@
 
 .codex-log-status {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: 76px repeat(4, minmax(0, 1fr));
   gap: 1px;
   margin: 0;
   overflow: hidden;
@@ -592,11 +592,7 @@
   white-space: nowrap;
 }
 
-.codex-log-stop-action {
-  grid-column: 1 / -1;
-}
-
-.codex-log-stop-action dt {
+.codex-log-run-action dt {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -604,14 +600,15 @@
   clip: rect(0 0 0 0);
 }
 
-.codex-log-stop-action dd {
+.codex-log-run-action dd {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   margin: 0;
   overflow: visible;
 }
 
-.codex-log-stop {
+.codex-log-stop,
+.codex-log-resume {
   width: 64px;
   height: 64px;
   min-width: 64px;
@@ -624,12 +621,13 @@
   gap: 0;
 }
 
-.codex-log-stop-icon {
+.codex-log-run-action-icon {
   font-size: 28px;
   line-height: 1;
 }
 
-.codex-log-stop .terminal-button__label {
+.codex-log-stop .terminal-button__label,
+.codex-log-resume .terminal-button__label {
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.05em;

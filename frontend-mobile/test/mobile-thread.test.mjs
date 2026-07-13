@@ -113,12 +113,17 @@ test('mobile thread launch continues a terminal or orphaned Codex run', () => {
 });
 
 test('mobile Codex Log renders and routes the large square STOP control for running sessions', () => {
-  assert.match(sharedCodexStatus, /if \(status === 'running'\)/);
-  assert.match(sharedCodexStatus, /stop\.className = 'codex-log-stop terminal-button terminal-button--stop'/);
-  assert.match(sharedCodexStatus, /stop\.dataset\.action = 'stop-thread-codex'/);
+  assert.match(sharedCodexStatus, /if \(status === 'running' \|\| terminal\)/);
+  assert.match(sharedCodexStatus, /button\.className = 'codex-log-stop terminal-button terminal-button--stop'/);
+  assert.match(sharedCodexStatus, /button\.dataset\.action = 'stop-thread-codex'/);
   assert.match(sharedCodexStatus, /icon\.textContent = '■'/);
   assert.match(sharedCodexStatus, /label\.textContent = 'STOP'/);
-  assert.match(sharedThreadCss, /\.codex-log-stop\s*{[^}]*width:\s*64px;[^}]*height:\s*64px;/s);
+  assert.match(sharedCodexStatus, /button\.className = 'codex-log-resume terminal-button terminal-button--send'/);
+  assert.match(sharedCodexStatus, /button\.dataset\.action = 'process-thread-codex'/);
+  assert.match(sharedCodexStatus, /label\.textContent = 'RESUME'/);
+  assert.doesNotMatch(sharedCodexStatus, /\['Status', status\]/);
+  assert.match(sharedThreadCss, /grid-template-columns:\s*76px repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(sharedThreadCss, /\.codex-log-stop,\s*\.codex-log-resume\s*{[^}]*width:\s*64px;[^}]*height:\s*64px;/s);
   assert.match(source, /import \{ stopThreadCodexRunController \} from '\/canvas-src\/runtime\/codex\/controller\/stop-thread-codex-run-controller\.js';/);
   assert.match(source, /action === 'stop-thread-codex'[\s\S]*stopThreadCodexRunController\(\{/);
   assert.match(source, /ledgerId: currentLedgerId/);
