@@ -133,3 +133,12 @@ test('mobile Codex Log uses one action-and-metrics row for STOP, RESUME, and STA
   assert.match(source, /ledgerId: currentLedgerId/);
   assert.match(source, /runId: button\.dataset\.codexRunId \|\| ''/);
 });
+
+test('mobile thread routes the shared session-delete actions before its note modal actions', () => {
+  assert.match(source, /createMobileThreadSessionDeletionHandler/);
+  assert.match(source, /if \(await handleMobileThreadSessionDeletion\(\{ action, button \}\)\) return;/);
+  assert.match(source, /confirmThreadCodexSessionDeletionController/);
+  assert.match(source, /deleteThreadCodexSessionController\(input, \{/);
+  assert.match(source, /refresh: refreshThreadLedger/);
+  assert.match(source, /resetMobileThreadConfirmationModal\(modal\)/);
+});

@@ -34,8 +34,10 @@ test('shared modal confirmation routes exact identity and success clears cached 
 
   const deletion = source('frontend/src/runtime/codex/controller/delete-thread-codex-session-controller.ts');
   assert.match(deletion, /deletionStateByRunId\.set\(input\.runId, \{ pending: true, error: '' \}\)[\s\S]*await requestThreadCodexSessionDelete/);
-  assert.match(deletion, /if \(!result\.ok\)[\s\S]*error: result\.error[\s\S]*renderThreadPanel\(\)[\s\S]*return false/);
-  assert.match(deletion, /clearThreadRunCache\(input\.threadId\)[\s\S]*await refreshRuntimeState\(\)[\s\S]*renderThreadPanel\(\)/);
+  assert.match(deletion, /const refresh = effects\.refresh \?\? refreshRuntimeState/);
+  assert.match(deletion, /const render = effects\.render \?\? renderThreadPanel/);
+  assert.match(deletion, /if \(!result\.ok\)[\s\S]*error: result\.error[\s\S]*render\(\)[\s\S]*return false/);
+  assert.match(deletion, /clearThreadRunCache\(input\.threadId\)[\s\S]*await refresh\(\)[\s\S]*render\(\)/);
   for (const key of ['threadRunIdByThreadId', 'threadRunSummaryByThreadId', 'threadRunEventsByThreadId', 'threadToolGroupDisclosureByThreadId', 'threadToolRowDisclosureByThreadId']) {
     assert.match(deletion, new RegExp(key));
   }
