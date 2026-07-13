@@ -14,7 +14,8 @@ test('mobile card detail exposes processing and both process libraries', () => {
   assert.match(html, /class="process-card-button"/);
   assert.match(html, /data-process-tab="skills"/);
   assert.match(html, /data-process-tab="pipelines"/);
-  assert.match(mobile, /setMobileCodexContext\(\{ ledgerId: state\.activeLedgerId, cardId: state\.activeCardId \}\)/);
+  assert.match(mobile, /setMobileCodexContext\(\{ projectId: state\.resourceProjectId, ledgerId: state\.activeLedgerId, cardId: state\.activeCardId \}\)/);
+  assert.match(script, /projectScopedRequestPath\(url, state\.projectId\)/);
   assert.match(script, /ledgerId: state\.ledgerId, cardId: state\.cardId, skillName: skill\.name/);
   assert.match(script, /ledgerId: state\.ledgerId, sourceCardId: state\.cardId, pipelineId: pipeline\.id/);
 });

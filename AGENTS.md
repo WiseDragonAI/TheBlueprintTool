@@ -64,9 +64,10 @@
 
 - **Do not restart or stop the server unless the operator explicitly asks.**
 
-decision-os serves the active `.decision-os` workspace by resolving the workspace root from the process
-current working directory. Always start the server from the target project workspace, not from the
-decision-os repo, unless the operator explicitly wants to inspect the repo's own ledgers.
+decision-os serves every discovered `.decision-os` project below the server launch directory. The
+Control Room is always `/`, all projects remain simultaneously accessible, and project-owned resources
+use canonical `/p/:projectId/...` URLs. Start the master server from the directory whose descendants
+form the project catalog.
 
 For this decision-os repo workspace, use port `50150`. Port `4174` is registered to
 `Ardaria_57` in multiterm state; do not start this repo on `4174`.
@@ -80,16 +81,16 @@ Then verify both the process and HTTP route:
 
 ```bash
 ps -ef | rg 'decision-os-server|server.ts|50150' | rg -v rg
-curl -sS -I http://127.0.0.1:50150/specs
+curl -sS -I http://127.0.0.1:50150/
 ```
 
 Expected routes for decision-os:
 
 ```text
-http://127.0.0.1:50150/specs
-http://127.0.0.1:50150/data
-http://127.0.0.1:50150/performances
-http://127.0.0.1:50150/tasks-system
+http://127.0.0.1:50150/
+http://127.0.0.1:50150/projects
+http://127.0.0.1:50150/ledgers
+http://127.0.0.1:50150/p/<project-id>/ledgers/<ledger-id>
 ```
 
 ## Background Launch Rules

@@ -17,6 +17,7 @@ export type DecisionOsProject = {
 };
 
 type ProjectMetadata = { name: string; description: string; color: string };
+type ProjectIdentity = { id?: string };
 type ProjectSettings = {
   projects?: Record<string, Partial<ProjectMetadata>>;
   colors?: Record<string, string>;
@@ -30,6 +31,22 @@ function normalizedRelative(root: string, candidate: string): string {
 
 function projectId(relativePath: string): string {
   return Buffer.from(relativePath || '.', 'utf8').toString('base64url');
+}
+
+function stableProjectId(decisionOsRoot: string, relativePath: string): string {
+  const identityFile = resolve(decisionOsRoot, 'project.json');
+  try {
+    const identity = JSON.parse(readFileSync(identityFile, 'utf8')) as ProjectIdentity;
+    const id = String(identity.id ?? '').trim();
+    if (/^[a-zA-Z0-9_-]+$/.test(id)) return id;
+  } catch {
+    // Existing projects receive their legacy URL id on first discovery.
+  }
+  const id = projectId(relativePath);
+  const temporary = `${identityFile}.tmp-${process.pid}-${Date.now()}`;
+  writeFileSync(temporary, `${JSON.stringify({ id }, null, 2)}\n`);
+  renameSync(temporary, identityFile);
+  return id;
 }
 
 function settingsFile(masterDecisionOsRoot: string): string {
@@ -70,7 +87,7 @@ export function discoverDecisionOsProjects(input: { masterRoot: string; masterDe
   const settings = readSettings(input.masterDecisionOsRoot);
   const candidates: string[] = [];
   const visit = (directory: string): void => {
-    if (existsSync(resolve(directory, '.decision-os', 'state.json'))) candidates.push(directory);
+    if (existsSync(resolve(directory, '.decision-os'))) candidates.push(directory);
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       if (!entry.isDirectory() || entry.isSymbolicLink() || skippedDirectories.has(entry.name)) continue;
       const child = resolve(directory, entry.name);
@@ -82,9 +99,10 @@ export function discoverDecisionOsProjects(input: { masterRoot: string; masterDe
     }
   };
   visit(masterRoot);
-  return candidates.map((root, index) => {
+  const projects = candidates.map((root, index) => {
     const relativePath = normalizedRelative(masterRoot, root) || '.';
-    const id = projectId(relativePath);
+    const decisionOsRoot = resolve(root, '.decision-os');
+    const id = stableProjectId(decisionOsRoot, relativePath);
     const metadata = settings.projects?.[id];
     const fallbackName = basename(root);
     const configuredName = typeof metadata?.name === 'string' ? metadata.name.trim() : '';
@@ -100,11 +118,16 @@ export function discoverDecisionOsProjects(input: { masterRoot: string; masterDe
       description: configuredDescription,
       relativePath,
       root,
-      decisionOsRoot: resolve(root, '.decision-os'),
+      decisionOsRoot,
       color: configuredColor.toLowerCase(),
-      ledgers: ledgersFor(resolve(root, '.decision-os')),
+      ledgers: ledgersFor(decisionOsRoot),
     };
-  }).sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+  });
+  const nestedProjects = projects.filter((project) => project.relativePath !== '.');
+  const visibleProjects = nestedProjects.length
+    ? projects.filter((project) => project.relativePath !== '.' || project.ledgers.length > 0)
+    : projects;
+  return visibleProjects.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
 }
 
 export function resolveCatalogProject(input: { projects: DecisionOsProject[]; projectId?: string; fallbackDecisionOsRoot: string }): DecisionOsProject | null {

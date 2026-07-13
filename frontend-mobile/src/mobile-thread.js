@@ -23,6 +23,7 @@ import { collapseMobileThreadComposer, expandMobileThreadComposer } from './mobi
 import { projectScopedRequestPath } from '/canvas-src/runtime/project/helper/project-request-scope.js';
 
 let currentCard = null;
+let currentProjectId = '';
 let currentLedgerId = '';
 let onLedgerRefresh = async () => null;
 let onCodexStarted = async () => null;
@@ -59,6 +60,7 @@ function hydrateRunningThreadRun(runId, startedAt) {
 }
 
 export function syncMobileThreadContext(input) {
+  currentProjectId = String(input.projectId ?? '');
   currentLedgerId = String(input.ledgerId ?? '');
   onLedgerRefresh = input.onLedgerRefresh ?? onLedgerRefresh;
   onCodexStarted = input.onCodexStarted ?? onCodexStarted;
@@ -190,7 +192,7 @@ async function startCodex(button) {
 
 function subscribeEvents() {
   if (typeof EventSource === 'undefined') return;
-  const url = projectScopedRequestPath('/api/ledger-content-events');
+  const url = projectScopedRequestPath('/api/ledger-content-events', currentProjectId);
   if (eventSource && eventSourceUrl === url) return;
   eventSource?.close();
   eventSourceUrl = url;

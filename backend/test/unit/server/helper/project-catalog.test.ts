@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { discoverDecisionOsProjects, resolveCatalogProject, saveProjectMetadata } from '@backend/business/server/helper/project-catalog.js';
@@ -28,6 +28,19 @@ test('recursively discovers projects through intermediate directories and uses d
   assert.equal(projects[1].ledgers.length, 2);
   assert.equal(resolveCatalogProject({ projects, projectId: projects[1].id, fallbackDecisionOsRoot: join(root, '.decision-os') })?.root, join(root, 'dev/project-a'));
   assert.equal(resolveCatalogProject({ projects, projectId: 'invalid', fallbackDecisionOsRoot: join(root, '.decision-os') }), null);
+});
+
+test('keeps a project URL identity when its directory moves', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-project-identity-'));
+  project(root, 'before');
+  const masterDecisionOsRoot = join(root, '.decision-os');
+  const original = discoverDecisionOsProjects({ masterRoot: root, masterDecisionOsRoot })[0];
+  renameSync(join(root, 'before'), join(root, 'after'));
+  const moved = discoverDecisionOsProjects({ masterRoot: root, masterDecisionOsRoot })[0];
+
+  assert.equal(moved.id, original.id);
+  assert.equal(moved.relativePath, 'after');
+  assert.deepEqual(JSON.parse(readFileSync(join(root, 'after', '.decision-os', 'project.json'), 'utf8')), { id: original.id });
 });
 
 test('persists validated project metadata at master scope and migrates legacy colors', () => {

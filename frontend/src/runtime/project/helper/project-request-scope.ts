@@ -1,4 +1,3 @@
-let projectId = '';
 let installed = false;
 
 function pathnameOf(input: string): string {
@@ -15,15 +14,17 @@ function globallyScoped(pathname: string): boolean {
     || pathname === '/api/server/restart';
 }
 
-export function projectBasePath(value = projectId): string {
+function projectIdFromLocation(): string {
+  const match = String(globalThis.location?.pathname ?? '').match(/^\/p\/([^/]+)(?:\/|$)/);
+  if (!match) return '';
+  try { return decodeURIComponent(match[1]).trim(); } catch { return ''; }
+}
+
+export function projectBasePath(value = projectIdFromLocation()): string {
   return value ? `/p/${encodeURIComponent(value)}` : '';
 }
 
-export function setProjectRequestProjectId(value: string): void {
-  projectId = String(value ?? '').trim();
-}
-
-export function projectScopedRequestPath(input: string, value = projectId): string {
+export function projectScopedRequestPath(input: string, value = projectIdFromLocation()): string {
   const path = String(input ?? '');
   const pathname = pathnameOf(path);
   if (!value || globallyScoped(pathname) || pathname.startsWith('/p/')) return path;
@@ -44,6 +45,22 @@ export function installProjectRequestScope(): void {
   globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
     if (typeof input === 'string' || input instanceof URL) return nativeFetch(projectScopedRequestPath(String(input)), init);
     const scoped = projectScopedRequestPath(input.url);
-    return nativeFetch(scoped === input.url ? input : new Request(scoped, input), init);
+    if (scoped === input.url) return nativeFetch(input, init);
+    const requestInit: RequestInit & { duplex?: 'half' } = {
+      method: input.method,
+      headers: input.headers,
+      body: input.body,
+      mode: input.mode,
+      credentials: input.credentials,
+      cache: input.cache,
+      redirect: input.redirect,
+      referrer: input.referrer,
+      referrerPolicy: input.referrerPolicy,
+      integrity: input.integrity,
+      keepalive: input.keepalive,
+      signal: input.signal,
+    };
+    if (input.body) requestInit.duplex = 'half';
+    return nativeFetch(new Request(scoped, requestInit), init);
   }) as typeof globalThis.fetch;
 }

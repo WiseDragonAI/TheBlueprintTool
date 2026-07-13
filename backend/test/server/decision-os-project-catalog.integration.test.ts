@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
@@ -21,7 +21,8 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
   createProject(home, 'dev/project-a', 'Project A Specs');
   createProject(home, 'dev/project-b', 'Project B Specs');
   const runtime: Record<string, unknown> = {};
-  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: home, decisionOsFrontendRoot: join(process.cwd(), 'frontend-mobile') }, runtime_state: runtime });
+  const repositoryRoot = basename(process.cwd()) === 'backend' ? join(process.cwd(), '..') : process.cwd();
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: home, decisionOsFrontendRoot: join(repositoryRoot, 'frontend-mobile') }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -32,17 +33,22 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
     assert.deepEqual(catalog.projects.map((project) => project.relativePath), ['admin', 'dev/project-a', 'dev/project-b']);
     assert.deepEqual(catalog.projects.map((project) => project.name), ['admin', 'project-a', 'project-b']);
 
-    const legacyPage = await fetch(`${baseUrl}/projects/${encodeURIComponent(catalog.projects[0].id)}`, { redirect: 'manual' });
-    assert.equal(legacyPage.status, 302);
-    assert.equal(legacyPage.headers.get('location'), `/p/${catalog.projects[0].id}/projects/${catalog.projects[0].id}`);
+    const controlRoom = await fetch(`${baseUrl}/`);
+    assert.equal(controlRoom.status, 200);
+    assert.match(controlRoom.headers.get('content-type') ?? '', /text\/html/);
 
-    const projectPage = await fetch(`${baseUrl}/p/${encodeURIComponent(catalog.projects[0].id)}/projects/${encodeURIComponent(catalog.projects[0].id)}`);
+    const legacyPage = await fetch(`${baseUrl}/p/${catalog.projects[0].id}/projects/${catalog.projects[0].id}`, { redirect: 'manual' });
+    assert.equal(legacyPage.status, 302);
+    assert.equal(legacyPage.headers.get('location'), `/projects/${catalog.projects[0].id}`);
+
+    const projectPage = await fetch(`${baseUrl}/projects/${encodeURIComponent(catalog.projects[0].id)}`);
     assert.equal(projectPage.status, 200);
     assert.match(projectPage.headers.get('content-type') ?? '', /text\/html/);
     assert.match(await projectPage.text(), /id="project-detail-view"/);
 
     const projectA = catalog.projects.find((project) => project.name === 'project-a')!;
     const ledgerResponse = await fetch(`${baseUrl}/p/${projectA.id}/decision-os/specs`);
+    assert.equal(ledgerResponse.headers.get('x-decision-os-ledger-revision'), '0');
     const ledger = await ledgerResponse.json() as { cards: Array<{ title: string }> };
     assert.equal(ledger.cards[0].title, 'Project A Specs');
 
@@ -54,6 +60,10 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
     assert.equal(ambiguous.headers.get('set-cookie'), null);
     assert.match(await ambiguous.text(), /Project id is required in the URL/);
 
+    const ambiguousLegacyLedger = await fetch(`${baseUrl}/specs`, { redirect: 'manual' });
+    assert.equal(ambiguousLegacyLedger.status, 409);
+    assert.match(await ambiguousLegacyLedger.text(), /Ambiguous legacy ledger URL/);
+
     const projectB = catalog.projects.find((project) => project.name === 'project-b')!;
     const isolated = await fetch(`${baseUrl}/p/${projectB.id}/decision-os/specs`).then((response) => response.json()) as { cards: Array<{ title: string }> };
     assert.equal(isolated.cards[0].title, 'Project B Specs');
@@ -61,7 +71,10 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
       method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'Project A Specs-card', title: 'Mutated A' } })
     });
     assert.equal(mutatedA.ok, true);
-    const unchangedB = await fetch(`${baseUrl}/p/${projectB.id}/decision-os/specs`).then((response) => response.json()) as { cards: Array<{ title: string }> };
+    assert.equal(mutatedA.headers.get('x-decision-os-ledger-revision'), '1');
+    const unchangedBResponse = await fetch(`${baseUrl}/p/${projectB.id}/decision-os/specs`);
+    assert.equal(unchangedBResponse.headers.get('x-decision-os-ledger-revision'), '0');
+    const unchangedB = await unchangedBResponse.json() as { cards: Array<{ title: string }> };
     assert.equal(unchangedB.cards[0].title, 'Project B Specs');
 
     const identity = { id: projectA.id, relativePath: projectA.relativePath, root: projectA.root };
