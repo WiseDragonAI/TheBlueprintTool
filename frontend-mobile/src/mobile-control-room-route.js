@@ -15,8 +15,8 @@ export function parseControlRoomRoute(url) {
   };
 }
 
-export function controlRoomPath(tab, anchor = '') {
+export function controlRoomPath(projectId, tab, anchor = '') {
   const safeTab = CONTROL_ROOM_TABS.has(tab) ? tab : 'queue';
   const safeAnchor = anchor.startsWith('task-') ? anchor : '';
-  return `/?tab=${encodeURIComponent(safeTab)}${safeAnchor ? `#${encodeURIComponent(safeAnchor)}` : ''}`;
+  return `/p/${encodeURIComponent(projectId)}/control-room?tab=${encodeURIComponent(safeTab)}${safeAnchor ? `#${encodeURIComponent(safeAnchor)}` : ''}`;
 }

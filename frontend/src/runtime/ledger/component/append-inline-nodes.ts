@@ -2,6 +2,7 @@ import { type LedgerMarkdownInline } from '../helper/parse-ledger-card-markdown.
 import { commitActiveLedgerMutation } from '../effect/commit-active-ledger-mutation.js';
 import { state } from '../../state.js';
 import { type LedgerCardImageSizes } from './render-ledger-card-media.js';
+import { projectScopedRequestPath } from '../../project/helper/project-request-scope.js';
 
 type InlineNodeOptions = {
   cardId?: string;
@@ -69,7 +70,7 @@ export function appendInlineNodes(parent: HTMLElement, nodes: LedgerMarkdownInli
       }
       const link = document.createElement('a');
       link.className = 'ledger-card-link';
-      link.setAttribute('href', node.href);
+      link.setAttribute('href', projectScopedRequestPath(node.href));
       link.setAttribute('target', '_blank');
       link.setAttribute('rel', 'noopener noreferrer');
       if (node.title) link.setAttribute('title', node.title);
@@ -86,7 +87,7 @@ export function appendInlineNodes(parent: HTMLElement, nodes: LedgerMarkdownInli
       watchInlineImageResize(frame, options, node.src);
       const image = document.createElement('img');
       image.className = 'ledger-card-inline-image';
-      image.src = node.src;
+      image.src = projectScopedRequestPath(node.src);
       image.alt = node.alt;
       image.loading = 'lazy';
       image.decoding = 'async';

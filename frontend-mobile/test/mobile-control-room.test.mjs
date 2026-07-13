@@ -73,17 +73,17 @@ test('renders dynamic task totals in every Control Room status tab', () => {
 
 test('round-trips the mobile Control Room tab and task scroll anchor through the URL', () => {
   assert.deepEqual(parseControlRoomRoute('https://example.test/?tab=active#task-card-a'), { tab: 'active', anchor: 'task-card-a' });
-  assert.equal(controlRoomPath('done', 'task-card-b'), '/?tab=done#task-card-b');
+  assert.equal(controlRoomPath('project-a', 'done', 'task-card-b'), '/p/project-a/control-room?tab=done#task-card-b');
 });
 
 test('canonicalizes invalid mobile Control Room URL state', () => {
   assert.deepEqual(parseControlRoomRoute('https://example.test/?tab=unknown#untrusted'), { tab: 'queue', anchor: '' });
-  assert.equal(controlRoomPath('unknown', 'untrusted'), '/?tab=queue');
+  assert.equal(controlRoomPath('project-a', 'unknown', 'untrusted'), '/p/project-a/control-room?tab=queue');
 });
 
 test('persists Control Room tab navigation and the nearest task anchor in browser history', () => {
   assert.match(mobile, /article\.id = `task-\$\{task\.cardId\}`/);
-  assert.match(mobile, /history\.pushState\(\{\}, '', controlRoomPath\(state\.controlTab\)\)/);
+  assert.match(mobile, /history\.pushState\(\{\}, '', controlRoomPath\(state\.activeProjectId, state\.controlTab\)\)/);
   assert.match(mobile, /history\.replaceState\(\{\}, '', nextPath\)/);
   assert.match(mobile, /document\.getElementById\(anchor\)\?\.scrollIntoView\(\{ block: 'start' \}\)/);
 });
@@ -210,6 +210,14 @@ test('keeps scoped Control Room filters while project editing moves to dedicated
   assert.match(mobile, /state\.projects\.find\(\(entry\) => entry\.id === state\.activeProjectId\)\?\.name \|\| project\.projectName/);
 });
 
+test('derives project selection and browser requests exclusively from canonical URLs', () => {
+  assert.match(mobile, /installProjectRequestScope\(\)/);
+  assert.match(mobile, /const scope = parseProjectScope\(location\.pathname\)/);
+  assert.match(mobile, /setProjectRequestProjectId\(project\.id\)/);
+  assert.doesNotMatch(mobile, /document\.cookie|x-decision-os-project/);
+  assert.match(mobile, /cardPathForProject\(task\.projectId, task\.ledgerId/);
+});
+
 test('requires an explicit project choice before creating a new task intake', () => {
   assert.match(html, /class="new-task-project-modal"/);
   assert.match(html, /The task and its Codex run will use this project workspace\./);
@@ -301,13 +309,13 @@ test('parses letter-prefixed card sections from the decision-os formatting contr
 test('routes master-task cards back to the control room and regular cards back to their zone', () => {
   assert.match(mobile, /backButton\.textContent = '← Back'/);
   assert.match(mobile, /backButton\.dataset\.destination = parsedTask\.masterTask \? 'control-room' : 'zone'/);
-  assert.match(mobile, /dataset\.destination === 'control-room' \? '\/' : zonePath/);
+  assert.match(mobile, /dataset\.destination === 'control-room' \? controlRoomPath\(state\.activeProjectId, state\.controlTab\) : zonePath/);
 });
 
 test('completes all linked cards from the master-task detail', () => {
   assert.match(mobile, /action: 'complete-master-task', masterTaskId: card\.id/);
   assert.match(mobile, /navigate\(completionReturnPath\(\), true\)/);
-  assert.match(mobile, /return returnPath\.startsWith\('\/'\) \? returnPath : '\/'/);
+  assert.match(mobile, /return returnPath\.startsWith\('\/'\) \? returnPath : controlRoomPath\(state\.activeProjectId, 'queue'\)/);
   assert.match(mobile, /completeButton\.textContent = card\.status === 'done' \? 'Master task complete' : 'Complete master task'/);
   assert.match(mobile, /overview\.append\(status, heading, subtasks, completion\)/);
   assert.doesNotMatch(mobile, /complete-master-subtask|masterTaskId=|Mark task as done/);
@@ -318,18 +326,18 @@ test('deletes a master task from its detail after explicit confirmation', () => 
   assert.match(mobile, /completion\.append\(completeButton, deleteButton\)/);
   assert.match(mobile, /deleteMasterTaskModal\.showModal\(\)/);
   assert.match(mobile, /action: 'delete-card', cardId/);
-  assert.match(mobile, /navigate\('\/', true\)/);
+  assert.match(mobile, /navigate\(controlRoomPath\(state\.activeProjectId, state\.controlTab\), true\)/);
   assert.match(html, /class="delete-master-task-modal mobile-confirm-modal"/);
   assert.match(html, /Its linked subtask cards are kept\./);
   assert.match(styles, /\.delete-master-task-button \{ width: 100%; min-height: 52px; margin-top: 12px;/);
 });
 
-test('uses global application destinations and keeps new task as the fourth control-room action', () => {
-  assert.match(mobile, /destination\('Control room', '\/', 'dashboard'\)/);
-  assert.match(mobile, /destination\('Projects', '\/projects', 'folder'\)/);
-  assert.match(mobile, /destination\('Ledgers', '\/ledgers', 'book'\)/);
-  assert.match(mobile, /destination\('Pipelines', '', 'flow', 'nav-pipelines-button'\)/);
-  assert.match(mobile, /destination\('Skill library', '', 'library', 'nav-skills-button'\)/);
+test('uses project-scoped application destinations and keeps new task as the fourth control-room action', () => {
+  assert.match(mobile, /destination\('Control room', controlRoomPath\(state\.activeProjectId, state\.controlTab\), 'dashboard', 'control-room'\)/);
+  assert.match(mobile, /destination\('Projects', projectPath\(state\.activeProjectId\), 'folder', 'projects'\)/);
+  assert.match(mobile, /destination\('Ledgers', ledgerPathForProject\(state\.activeProjectId\), 'book', 'ledgers'\)/);
+  assert.match(mobile, /destination\('Pipelines', '', 'flow', '', 'nav-pipelines-button'\)/);
+  assert.match(mobile, /destination\('Skill library', '', 'library', '', 'nav-skills-button'\)/);
   assert.doesNotMatch(styles, /\.ledger-link::before/);
   assert.match(styles, /svg\[data-nav-icon="dashboard"\]/);
   assert.doesNotMatch(html, /class="icon-button pipelines-button"/);
