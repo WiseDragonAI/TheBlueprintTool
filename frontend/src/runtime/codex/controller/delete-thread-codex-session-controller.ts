@@ -10,6 +10,7 @@ import { clearThreadCodexStopState } from './stop-thread-codex-run-controller.js
 import { requestThreadCodexSessionDelete } from '../effect/request-thread-codex-session-delete.js';
 
 type DeletionState = { pending: boolean; error: string };
+type DeletionEffects = { refresh?: () => Promise<unknown>; render?: () => void };
 const deletionStateByRunId = new Map<string, DeletionState>();
 
 export function threadCodexSessionDeletionState(runId: string): DeletionState {
@@ -41,7 +42,12 @@ function setConfirmPending(pending: boolean): void {
   confirm.textContent = pending ? 'Deleting session' : 'Delete session';
 }
 
-export async function deleteThreadCodexSessionController(input: { ledgerId: string; cardId: string; runId: string; threadId: string }): Promise<boolean> {
+export async function deleteThreadCodexSessionController(
+  input: { ledgerId: string; cardId: string; runId: string; threadId: string },
+  effects: DeletionEffects = {},
+): Promise<boolean> {
+  const refresh = effects.refresh ?? refreshRuntimeState;
+  const render = effects.render ?? renderThreadPanel;
   if (!input.ledgerId || !input.cardId || !input.runId || !input.threadId || threadCodexSessionDeletionState(input.runId).pending) return false;
   deletionStateByRunId.set(input.runId, { pending: true, error: '' });
   setConfirmPending(true);
@@ -50,7 +56,7 @@ export async function deleteThreadCodexSessionController(input: { ledgerId: stri
     deletionStateByRunId.set(input.runId, { pending: false, error: result.error || 'Session deletion failed.' });
     setConfirmPending(false);
     modal.close?.();
-    renderThreadPanel();
+    render();
     return false;
   }
 
@@ -58,7 +64,7 @@ export async function deleteThreadCodexSessionController(input: { ledgerId: stri
   clearThreadCodexStopState(input.runId);
   clearThreadRunCache(input.threadId);
   modal.close?.();
-  await refreshRuntimeState();
-  renderThreadPanel();
+  await refresh();
+  render();
   return true;
 }

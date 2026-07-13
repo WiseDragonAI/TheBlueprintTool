@@ -19,7 +19,10 @@ import { cardCodexThreadRunId } from '/canvas-src/runtime/codex/helper/card-code
 import { syncThreadCodexRunControls } from '/canvas-src/runtime/thread/effect/sync-thread-codex-run-controls.js';
 import { resumeExternallyStartedCardSkillRun } from '/canvas-src/runtime/codex/effect/poll-card-skill-run.js';
 import { stopThreadCodexRunController } from '/canvas-src/runtime/codex/controller/stop-thread-codex-run-controller.js';
+import { confirmThreadCodexSessionDeletionController } from '/canvas-src/runtime/codex/controller/confirm-thread-codex-session-deletion-controller.js';
+import { deleteThreadCodexSessionController } from '/canvas-src/runtime/codex/controller/delete-thread-codex-session-controller.js';
 import { collapseMobileThreadComposer, expandMobileThreadComposer } from './mobile-thread-composer.js';
+import { createMobileThreadSessionDeletionHandler, resetMobileThreadConfirmationModal } from './mobile-thread-session-deletion.js';
 import { projectScopedRequestPath } from '/canvas-src/runtime/project/helper/project-request-scope.js';
 
 let currentCard = null;
@@ -30,6 +33,19 @@ let onCodexStarted = async () => null;
 let initialized = false;
 let eventSource = null;
 let eventSourceUrl = '';
+
+const handleMobileThreadSessionDeletion = createMobileThreadSessionDeletionHandler({
+  modal: () => document.querySelector('.confirm-modal'),
+  ledgerId: () => currentLedgerId,
+  cardId: () => String(currentCard?.id || ''),
+  threadId: () => String(canvasState.threadId || ''),
+  confirm: confirmThreadCodexSessionDeletionController,
+  remove: (input) => deleteThreadCodexSessionController(input, {
+    refresh: refreshThreadLedger,
+    render: renderThreadPanel,
+  }),
+  successFocus: () => document.querySelector('.mobile-thread-inspector [data-action="process-thread-codex"]'),
+});
 
 function updateLaunchReadiness() {
   const button = document.querySelector('.mobile-thread-inspector [data-action="process-thread-codex"]');
@@ -219,6 +235,7 @@ export function initializeMobileThread() {
     const button = event.target.closest('[data-action]');
     if (!button || !button.closest('.mobile-thread-inspector, .mobile-confirm-modal')) return;
     const action = button.dataset.action;
+    if (await handleMobileThreadSessionDeletion({ action, button })) return;
     if (action === 'voice-toggle') {
       if (canvasState.voice.recording) await stopVoiceRecording({ queueCodex: event.shiftKey });
       else await startVoiceRecording();
@@ -240,6 +257,7 @@ export function initializeMobileThread() {
     });
     else if (action === 'confirm-delete-note') {
       const modal = document.querySelector('.confirm-modal');
+      resetMobileThreadConfirmationModal(modal);
       modal.dataset.threadId = button.dataset.threadId;
       modal.dataset.noteId = button.dataset.noteId;
       modal.showModal();
