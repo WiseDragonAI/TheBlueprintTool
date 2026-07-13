@@ -19,6 +19,7 @@ import { cardCodexThreadRunId } from '/canvas-src/runtime/codex/helper/card-code
 import { syncThreadCodexRunControls } from '/canvas-src/runtime/thread/effect/sync-thread-codex-run-controls.js';
 import { resumeExternallyStartedCardSkillRun } from '/canvas-src/runtime/codex/effect/poll-card-skill-run.js';
 import { collapseMobileThreadComposer, expandMobileThreadComposer } from './mobile-thread-composer.js';
+import { projectScopedRequestPath } from '/canvas-src/runtime/project/helper/project-request-scope.js';
 
 let currentCard = null;
 let currentLedgerId = '';
@@ -26,6 +27,7 @@ let onLedgerRefresh = async () => null;
 let onCodexStarted = async () => null;
 let initialized = false;
 let eventSource = null;
+let eventSourceUrl = '';
 
 function updateLaunchReadiness() {
   const button = document.querySelector('.mobile-thread-inspector [data-action="process-thread-codex"]');
@@ -64,6 +66,7 @@ export function syncMobileThreadContext(input) {
   canvasState.activeLedger = input.ledger;
   canvasState.ledgers = input.ledgers;
   canvasState.ledgerTabs = input.ledgers;
+  subscribeEvents();
   if (canvasState.ledgerReconciliation?.routeLedgerStateId !== currentLedgerId) {
     canvasState.ledgerReconciliation.routeLedgerStateId = currentLedgerId;
     canvasState.ledgerReconciliation.routeEpoch += 1;
@@ -184,8 +187,12 @@ async function startCodex(button) {
 }
 
 function subscribeEvents() {
-  if (eventSource || typeof EventSource === 'undefined') return;
-  eventSource = new EventSource('/api/ledger-content-events');
+  if (typeof EventSource === 'undefined') return;
+  const url = projectScopedRequestPath('/api/ledger-content-events');
+  if (eventSource && eventSourceUrl === url) return;
+  eventSource?.close();
+  eventSourceUrl = url;
+  eventSource = new EventSource(url);
   const refresh = (event) => {
     let payload = {};
     try { payload = JSON.parse(event.data || '{}'); } catch {}
@@ -200,7 +207,6 @@ function subscribeEvents() {
 export function initializeMobileThread() {
   if (initialized) return;
   initialized = true;
-  subscribeEvents();
   document.querySelector('.thread-open-button').addEventListener('click', () => {
     if (currentCard) openMobileThread(currentCard, getComputedStyle(document.querySelector('#card-view')).getPropertyValue('--zone-color').trim());
   });

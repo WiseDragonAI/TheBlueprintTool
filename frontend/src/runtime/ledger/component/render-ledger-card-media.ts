@@ -15,6 +15,7 @@ import {
 import { scheduleCanvasMediaOverlayRender } from '../../canvas/effect/render-canvas-media-overlay.js';
 import { state } from '../../state.js';
 import { openLedgerCardImageViewer } from '../effect/open-ledger-card-image-viewer.js';
+import { projectScopedRequestPath } from '../../project/helper/project-request-scope.js';
 
 type LedgerCardImage = Extract<LedgerMarkdownBlock, { kind: 'images' }>['images'][number];
 export type LedgerCardImageSizes = Record<string, { width?: number; height?: number }>;
@@ -199,7 +200,7 @@ function renderFullscreenButton(image: LedgerCardImage, slide: HTMLElement): HTM
   button.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
-    openLedgerCardImageViewer({ alt: image.alt, source: image.src, trigger: button });
+    openLedgerCardImageViewer({ alt: image.alt, source: projectScopedRequestPath(image.src), trigger: button });
   });
   slide.appendChild(button);
   return button;
@@ -213,7 +214,7 @@ function renderMediaSlide(image: LedgerCardImage, index: number, shell: HTMLElem
 
   const element = document.createElement('img');
   element.className = 'ledger-card-media-image';
-  element.src = image.src;
+  element.src = projectScopedRequestPath(image.src);
   element.alt = image.alt;
   element.loading = 'lazy';
   element.decoding = 'async';

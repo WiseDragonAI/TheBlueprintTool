@@ -5,8 +5,11 @@ import { initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobi
 import { initializeMobileCodex, setMobileCodexContext } from './mobile-codex.js';
 import { activeAge, activeStopwatch, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from './mobile-control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from './mobile-control-room-route.js';
-import { parseProjectRoute, projectPath } from './mobile-project-route.js';
+import { cardPathForProject, ledgerPathForProject, parseProjectRoute, parseProjectScope, projectPath, zonePathForProject } from './mobile-project-route.js';
 import { projectSettingsValues, saveProjectSettingsRequest } from './mobile-project-settings.js';
+import { installProjectRequestScope, projectScopedRequestPath, setProjectRequestProjectId } from '/canvas-src/runtime/project/helper/project-request-scope.js';
+
+installProjectRequestScope();
 
 const state = {
   projectName: 'decision-os',
@@ -37,7 +40,7 @@ const elements = Object.fromEntries([
 ].map((id) => [id, document.getElementById(id)]));
 
 const asText = (value) => value == null ? '' : typeof value === 'string' ? value : JSON.stringify(value, null, 2);
-const routeParts = () => location.pathname.split('/').filter(Boolean).map(decodeURIComponent);
+const routeParts = () => parseProjectScope(location.pathname)?.segments ?? [];
 const creationModal = document.querySelector('.creation-modal');
 const deleteMasterTaskModal = document.querySelector('.delete-master-task-modal');
 const newTaskProjectModal = document.querySelector('.new-task-project-modal');
@@ -50,9 +53,7 @@ let queuePersistenceSequence = 0;
 let queueSortable = null;
 
 function projectFetch(url, options = {}, projectId = state.activeProjectId) {
-  const headers = new Headers(options.headers ?? {});
-  if (projectId) headers.set('x-decision-os-project', projectId);
-  return fetch(url, { ...options, headers });
+  return fetch(projectScopedRequestPath(url, projectId), options);
 }
 
 function selectProject(projectId) {
@@ -62,7 +63,7 @@ function selectProject(projectId) {
   state.projectName = project.name;
   state.ledgers = project.ledgers;
   state.ledger = null;
-  document.cookie = `decision-os-project=${encodeURIComponent(project.id)}; Path=/; SameSite=Lax`;
+  setProjectRequestProjectId(project.id);
   elements['project-name'].textContent = project.name;
 }
 
@@ -83,15 +84,15 @@ function openMenu() {
 }
 
 function ledgerPath(ledgerId) {
-  return `/${encodeURIComponent(ledgerId)}`;
+  return ledgerPathForProject(state.activeProjectId, ledgerId);
 }
 
 function zonePath(ledgerId, zoneId) {
-  return `${ledgerPath(ledgerId)}/zone/${encodeURIComponent(zoneId)}`;
+  return zonePathForProject(state.activeProjectId, ledgerId, zoneId);
 }
 
 function cardPath(ledgerId, zoneId, cardId) {
-  return `${zonePath(ledgerId, zoneId)}/card/${encodeURIComponent(cardId)}`;
+  return cardPathForProject(state.activeProjectId, ledgerId, zoneId, cardId);
 }
 
 function pathForTask(task) {
@@ -100,7 +101,7 @@ function pathForTask(task) {
   state.ledger = ledger;
   const zone = ledgerZones().find((entry) => entry.cards.some((card) => String(card.id) === task.cardId));
   state.ledger = previous;
-  return cardPath(task.ledgerId, zone?.id ?? 'ungrouped', task.cardId);
+  return cardPathForProject(task.projectId, task.ledgerId, zone?.id ?? 'ungrouped', task.cardId);
 }
 
 function navigate(path, replace = false) {
@@ -112,7 +113,7 @@ function navigate(path, replace = false) {
 
 function completionReturnPath() {
   const returnPath = asText(history.state?.returnPath);
-  return returnPath.startsWith('/') ? returnPath : '/';
+  return returnPath.startsWith('/') ? returnPath : controlRoomPath(state.activeProjectId, 'queue');
 }
 
 function objectId(prefix) {
@@ -272,7 +273,7 @@ async function submitCreation() {
 }
 
 function renderLedgerLinks() {
-  const route = `/${routeParts()[0] ?? ''}`;
+  const route = routeParts()[0] ?? '';
   const icons = {
     dashboard: '<path d="M4 13h6V4H4v9Zm10 7h6V11h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z"/>',
     folder: '<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H10l2 2h7.5A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5v-11Z"/>',
@@ -280,9 +281,9 @@ function renderLedgerLinks() {
     flow: '<path d="M5 5h4v4H5V5Zm10 10h4v4h-4v-4ZM7 9v3a5 5 0 0 0 5 5h3M9 7h6a2 2 0 0 1 2 2v6"/>',
     library: '<path d="M4 5h4v15H4V5Zm6-1h4v16h-4V4Zm6 3h4v13h-4V7Z"/>'
   };
-  const destination = (label, href, icon, className = '') => {
+  const destination = (label, href, icon, activeRoute, className = '') => {
     const link = document.createElement(href ? 'a' : 'button');
-    link.className = `ledger-link ${className}${route === href ? ' active' : ''}`.trim();
+    link.className = `ledger-link ${className}${route === activeRoute ? ' active' : ''}`.trim();
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('viewBox', '0 0 24 24');
     svg.setAttribute('aria-hidden', 'true');
@@ -291,7 +292,7 @@ function renderLedgerLinks() {
     const text = document.createElement('span');
     text.textContent = label;
     link.append(svg, text);
-    if (route === href) link.setAttribute('aria-current', 'page');
+    if (route === activeRoute) link.setAttribute('aria-current', 'page');
     if (href) link.href = href;
     link.addEventListener('click', (event) => {
       event.preventDefault();
@@ -300,11 +301,11 @@ function renderLedgerLinks() {
     return link;
   };
   elements['ledger-links'].replaceChildren(
-    destination('Control room', '/', 'dashboard'),
-    destination('Projects', '/projects', 'folder'),
-    destination('Ledgers', '/ledgers', 'book'),
-    destination('Pipelines', '', 'flow', 'nav-pipelines-button'),
-    destination('Skill library', '', 'library', 'nav-skills-button')
+    destination('Control room', controlRoomPath(state.activeProjectId, state.controlTab), 'dashboard', 'control-room'),
+    destination('Projects', projectPath(state.activeProjectId), 'folder', 'projects'),
+    destination('Ledgers', ledgerPathForProject(state.activeProjectId), 'book', 'ledgers'),
+    destination('Pipelines', '', 'flow', '', 'nav-pipelines-button'),
+    destination('Skill library', '', 'library', '', 'nav-skills-button')
   );
 }
 
@@ -328,7 +329,7 @@ function renderProjects() {
     button.querySelector('.project-card-description').textContent = project.description || 'No description provided.';
     button.querySelector('code').textContent = project.relativePath;
     button.setAttribute('aria-label', `${project.name}${active ? ', active project' : ''}`);
-    button.addEventListener('click', () => navigate(projectPath(project.id)));
+    button.addEventListener('click', () => navigate(projectPath(state.activeProjectId, project.id)));
     return button;
   }));
   setView('projects-view');
@@ -622,7 +623,7 @@ function renderControlRoom() {
 }
 
 function persistControlRoomScrollAnchor() {
-  if (location.pathname !== '/' || elements['control-room-view'].hidden) return;
+  if (routeParts()[0] !== 'control-room' || elements['control-room-view'].hidden) return;
   window.cancelAnimationFrame(controlRoomScrollFrame);
   controlRoomScrollFrame = window.requestAnimationFrame(() => {
     const rows = [...elements['control-task-list'].querySelectorAll('.control-task')];
@@ -630,7 +631,7 @@ function persistControlRoomScrollAnchor() {
       const distance = Math.abs(row.getBoundingClientRect().top);
       return !best || distance < best.distance ? { row, distance } : best;
     }, null)?.row;
-    const nextPath = controlRoomPath(state.controlTab, nearest?.id ?? '');
+    const nextPath = controlRoomPath(state.activeProjectId, state.controlTab, nearest?.id ?? '');
     if (`${location.pathname}${location.search}${location.hash}` !== nextPath) history.replaceState({}, '', nextPath);
   });
 }
@@ -1025,7 +1026,7 @@ document.querySelector('.confirm-delete-master-task-button').addEventListener('c
   try {
     state.ledger = await ledgerMutation(state.activeLedgerId, { action: 'delete-card', cardId });
     deleteMasterTaskModal.close();
-    navigate('/', true);
+    navigate(controlRoomPath(state.activeProjectId, state.controlTab), true);
   } catch (cause) {
     deleteMasterTaskModal.close();
     elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Master task deletion failed.';
@@ -1110,7 +1111,11 @@ async function loadRoute() {
       setView('empty-view');
       return;
     }
-    if (!state.projects.some((project) => project.id === state.activeProjectId)) selectProject(catalog.selectedProjectId || state.projects[0].id);
+    const scope = parseProjectScope(location.pathname);
+    if (!scope) throw new Error('Project context is missing from the URL.');
+    const routeProject = state.projects.find((project) => project.id === scope.projectId);
+    if (!routeProject) throw new Error('Project not found.');
+    if (state.activeProjectId !== routeProject.id) selectProject(routeProject.id);
     const projectRoute = parseProjectRoute(location.pathname);
     if (projectRoute?.view === 'index') {
       renderProjects();
@@ -1135,31 +1140,31 @@ async function loadRoute() {
       return;
     }
 
-    const [requestedLedger, zoneMarker, requestedZone, cardMarker, requestedCard] = routeParts();
-    if (!requestedLedger) {
+    const [section, requestedLedger, zoneMarker, requestedZone, cardMarker, requestedCard] = routeParts();
+    if (section === 'control-room') {
       const route = parseControlRoomRoute(location.href);
       state.controlTab = route.tab;
-      const canonicalPath = controlRoomPath(route.tab, route.anchor);
+      const canonicalPath = controlRoomPath(state.activeProjectId, route.tab, route.anchor);
       if (`${location.pathname}${location.search}${location.hash}` !== canonicalPath) history.replaceState({}, '', canonicalPath);
       await loadControlRoom();
       renderControlRoom();
       return;
     }
-    if (requestedLedger === 'ledgers') {
+    if (section === 'ledgers' && !requestedLedger) {
       state.activeLedgerId = '';
       renderLedgerLinks();
       renderOverview();
       return;
     }
-    const ledgerId = state.ledgers.some((ledger) => ledger.id === requestedLedger) ? requestedLedger : '';
+    const ledgerId = section === 'ledgers' && state.ledgers.some((ledger) => ledger.id === requestedLedger) ? requestedLedger : '';
     if (!ledgerId) {
-      navigate('/', true);
+      navigate(controlRoomPath(state.activeProjectId, 'queue'), true);
       return;
     }
     if (state.activeLedgerId !== ledgerId || !state.ledger) await loadLedger(ledgerId);
     const zones = ledgerZones();
-    const zone = zoneMarker === 'zone' ? zones.find((entry) => String(entry.id) === requestedZone) : null;
-    if (zone && cardMarker === 'card' && requestedCard) {
+    const zone = zoneMarker === 'zones' ? zones.find((entry) => String(entry.id) === requestedZone) : null;
+    if (zone && cardMarker === 'cards' && requestedCard) {
       const card = zone.cards.find((entry) => String(entry.id) === requestedCard);
       if (card) renderCard(card);
       else navigate(zonePath(ledgerId, zone.id), true);
@@ -1192,12 +1197,12 @@ document.querySelector('.refresh-button').addEventListener('click', () => {
   void loadRoute();
 });
 document.querySelector('.retry-button').addEventListener('click', () => loadRoute());
-document.querySelector('.back-to-projects-button').addEventListener('click', () => navigate(projectPath()));
+document.querySelector('.back-to-projects-button').addEventListener('click', () => navigate(projectPath(state.activeProjectId)));
 document.querySelector('.open-project-button').addEventListener('click', () => {
   selectProject(state.viewedProjectId);
   state.projectFilter = state.activeProjectId;
   state.controlFilter = 'All';
-  navigate('/');
+  navigate(controlRoomPath(state.activeProjectId, 'queue'));
 });
 document.querySelector('.project-settings-button').addEventListener('click', openProjectSettings);
 document.querySelector('.project-settings-cancel').addEventListener('click', () => {
@@ -1212,7 +1217,7 @@ projectSettingsForm.addEventListener('submit', (event) => {
 });
 document.querySelector('.back-to-ledger-button').addEventListener('click', () => navigate(ledgerPath(state.activeLedgerId)));
 document.querySelector('.back-to-zone-button').addEventListener('click', (event) => {
-  navigate(event.currentTarget.dataset.destination === 'control-room' ? '/' : zonePath(state.activeLedgerId, state.activeZoneId));
+  navigate(event.currentTarget.dataset.destination === 'control-room' ? controlRoomPath(state.activeProjectId, state.controlTab) : zonePath(state.activeLedgerId, state.activeZoneId));
 });
 document.querySelector('.create-ledger-button').addEventListener('click', () => openCreationModal('ledger'));
 document.querySelector('.create-zone-button').addEventListener('click', () => openCreationModal('zone'));
@@ -1226,7 +1231,7 @@ newTaskProjectModal.addEventListener('cancel', (event) => {
 });
 document.querySelectorAll('[data-control-tab]').forEach((button) => button.addEventListener('click', () => {
   state.controlTab = button.dataset.controlTab;
-  history.pushState({}, '', controlRoomPath(state.controlTab));
+  history.pushState({}, '', controlRoomPath(state.activeProjectId, state.controlTab));
   window.scrollTo({ top: 0 });
   renderControlRoom();
 }));

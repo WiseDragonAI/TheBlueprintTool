@@ -40,6 +40,7 @@ import { cancelCodexPipelineRunController } from '../../codex/controller/cancel-
 import { restartCodexPipelineRunController } from '../../codex/controller/restart-codex-pipeline-run-controller.js';
 import { resumeCodexPipelineRuns } from '../../codex/helper/resume-codex-pipeline-runs.js';
 import { discoverDecisionOsProjects, resolveCatalogProject, saveProjectMetadata } from './project-catalog.js';
+import { isGlobalProjectEndpoint, isProjectSensitiveEndpoint, parseProjectUrlScope } from './project-url-scope.js';
 
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
@@ -254,21 +255,18 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     return projects;
   };
   const server = createServer(async (request, response) => {
-    const url = (request.url ?? '/').split('?')[0];
+    const requestPath = (request.url ?? '/').split('?')[0];
+    const projectScope = parseProjectUrlScope(requestPath);
+    const url = projectScope && isProjectSensitiveEndpoint(projectScope.scopedPath) ? projectScope.scopedPath : requestPath;
     const projects = projectCatalog();
-    const cookieProjectId = String(request.headers.cookie ?? '').split(';').map((part) => part.trim()).find((part) => part.startsWith('decision-os-project='))?.slice('decision-os-project='.length);
-    const headerProjectId = String(request.headers['x-decision-os-project'] ?? '');
-    const requestedProjectId = headerProjectId || cookieProjectId || '';
-    let activeProject = resolveCatalogProject({ projects, projectId: requestedProjectId, fallbackDecisionOsRoot: masterDecisionOsRoot });
-    if (headerProjectId && !activeProject && !url.startsWith('/decision-os/projects')) {
+    const activeProject = projectScope
+      ? resolveCatalogProject({ projects, projectId: projectScope.projectId, fallbackDecisionOsRoot: masterDecisionOsRoot })
+      : null;
+    if (projectScope && !activeProject) {
       response.statusCode = 404;
       response.setHeader('content-type', 'application/json');
       response.end(JSON.stringify({ ok: false, error: 'Unknown project id.' }));
       return;
-    }
-    if (!headerProjectId && cookieProjectId && !activeProject) {
-      activeProject = resolveCatalogProject({ projects, fallbackDecisionOsRoot: masterDecisionOsRoot });
-      if (activeProject) response.setHeader('set-cookie', `decision-os-project=${encodeURIComponent(activeProject.id)}; Path=/; SameSite=Lax`);
     }
     const decisionOsRoot = activeProject?.decisionOsRoot ?? masterDecisionOsRoot;
     const requestRuntime = { ...runtime, decisionOsRoot };
@@ -298,6 +296,30 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         response.setHeader('content-type', 'application/json');
         response.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : 'Project update failed.' }));
       }
+      return;
+    }
+    if (!projectScope && request.method === 'GET') {
+      const fallbackProject = resolveCatalogProject({ projects, fallbackDecisionOsRoot: masterDecisionOsRoot });
+      const query = (request.url ?? '').includes('?') ? `?${(request.url ?? '').split('?').slice(1).join('?')}` : '';
+      let destination = '';
+      if (fallbackProject && requestPath === '/') destination = `/p/${encodeURIComponent(fallbackProject.id)}/control-room${query}`;
+      if (fallbackProject && requestPath === '/projects') destination = `/p/${encodeURIComponent(fallbackProject.id)}/projects${query}`;
+      if (requestPath.startsWith('/projects/')) {
+        const viewedId = decodeRouteSegment(requestPath.slice('/projects/'.length));
+        if (projects.some((project) => project.id === viewedId)) destination = `/p/${encodeURIComponent(viewedId)}/projects/${encodeURIComponent(viewedId)}${query}`;
+      }
+      if (fallbackProject && requestPath === '/ledgers') destination = `/p/${encodeURIComponent(fallbackProject.id)}/ledgers${query}`;
+      if (destination) {
+        response.statusCode = 302;
+        response.setHeader('location', destination);
+        response.end();
+        return;
+      }
+    }
+    if (!projectScope && isProjectSensitiveEndpoint(url) && !isGlobalProjectEndpoint(url)) {
+      response.statusCode = 400;
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ ok: false, error: 'Project id is required in the URL.' }));
       return;
     }
     if (tryServeDecisionOsAsset({ url, decisionOsRoot, response })) return;
@@ -814,8 +836,20 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const blueprintState = readCanonicalDecisionOsState({ action_payload: { decisionOsFile: resolve(decisionOsRoot, 'state.json'), writeBack: true } });
     const routeTabId = url.split('/').filter(Boolean)[0] ?? '';
     const isLedgerRoute = Boolean(routeTabId && blueprintState.ledgers.some((ledger) => ledger.id === routeTabId));
-    const isProjectRoute = url === '/projects' || url.startsWith('/projects/');
-    const isAppRoute = url === '/' || url === '/ledgers' || isProjectRoute || isLedgerRoute;
+    if (!projectScope && request.method === 'GET' && isLedgerRoute) {
+      const fallbackProject = resolveCatalogProject({ projects, fallbackDecisionOsRoot: masterDecisionOsRoot });
+      if (fallbackProject) {
+        const routeParts = requestPath.split('/').filter(Boolean).map(decodeRouteSegment);
+        let destination = `/p/${encodeURIComponent(fallbackProject.id)}/ledgers/${encodeURIComponent(routeParts[0])}`;
+        if (routeParts[1] === 'zone' && routeParts[2]) destination += `/zones/${encodeURIComponent(routeParts[2])}`;
+        if (routeParts[3] === 'card' && routeParts[4]) destination += `/cards/${encodeURIComponent(routeParts[4])}`;
+        response.statusCode = 302;
+        response.setHeader('location', destination);
+        response.end();
+        return;
+      }
+    }
+    const isAppRoute = Boolean(projectScope && !isProjectSensitiveEndpoint(projectScope.scopedPath));
     const staticModuleRoot = isSharedModuleRoute
       ? resolve(frontendRoot, '..', 'shared')
       : isCanvasSourceRoute

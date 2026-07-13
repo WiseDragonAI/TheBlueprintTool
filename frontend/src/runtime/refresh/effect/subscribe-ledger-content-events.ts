@@ -24,6 +24,7 @@ import {
   type ContentChangeEvent
 } from '../helper/content-event-payload.js';
 import { installVoiceTranscriptionRecoveryListeners, reconcilePendingVoiceTranscriptions, reconcileVoiceTranscription } from '../../voice/effect/reconcile-voice-transcription.js';
+import { projectScopedRequestPath } from '../../project/helper/project-request-scope.js';
 
 export {
   flushPendingLedgerContentRefresh,
@@ -71,7 +72,7 @@ export function subscribeLedgerContentEvents(): void {
   if (subscribed || typeof EventSource === 'undefined') return;
   subscribed = true;
   installVoiceTranscriptionRecoveryListeners();
-  const events = new EventSource('/api/ledger-content-events');
+  const events = new EventSource(projectScopedRequestPath('/api/ledger-content-events'));
   events.addEventListener('open', () => reconcilePendingVoiceTranscriptions('event-source-open'));
   events.addEventListener('card-content-change', (event) => {
     const payload = contentEventPayload(event);

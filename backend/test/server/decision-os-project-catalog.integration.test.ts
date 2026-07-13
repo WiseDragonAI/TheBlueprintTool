@@ -32,24 +32,37 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
     assert.deepEqual(catalog.projects.map((project) => project.relativePath), ['admin', 'dev/project-a', 'dev/project-b']);
     assert.deepEqual(catalog.projects.map((project) => project.name), ['admin', 'project-a', 'project-b']);
 
-    const projectPage = await fetch(`${baseUrl}/projects/${encodeURIComponent(catalog.projects[0].id)}`);
+    const legacyPage = await fetch(`${baseUrl}/projects/${encodeURIComponent(catalog.projects[0].id)}`, { redirect: 'manual' });
+    assert.equal(legacyPage.status, 302);
+    assert.equal(legacyPage.headers.get('location'), `/p/${catalog.projects[0].id}/projects/${catalog.projects[0].id}`);
+
+    const projectPage = await fetch(`${baseUrl}/p/${encodeURIComponent(catalog.projects[0].id)}/projects/${encodeURIComponent(catalog.projects[0].id)}`);
     assert.equal(projectPage.status, 200);
     assert.match(projectPage.headers.get('content-type') ?? '', /text\/html/);
     assert.match(await projectPage.text(), /id="project-detail-view"/);
 
     const projectA = catalog.projects.find((project) => project.name === 'project-a')!;
-    const ledgerResponse = await fetch(`${baseUrl}/decision-os/specs`, { headers: { 'x-decision-os-project': projectA.id } });
+    const ledgerResponse = await fetch(`${baseUrl}/p/${projectA.id}/decision-os/specs`);
     const ledger = await ledgerResponse.json() as { cards: Array<{ title: string }> };
     assert.equal(ledger.cards[0].title, 'Project A Specs');
 
-    const invalid = await fetch(`${baseUrl}/decision-os/specs`, { headers: { 'x-decision-os-project': 'invalid' } });
+    const invalid = await fetch(`${baseUrl}/p/invalid/decision-os/specs`);
     assert.equal(invalid.status, 404);
 
-    const staleCookie = await fetch(`${baseUrl}/decision-os/specs`, { headers: { cookie: 'decision-os-project=old-root-id' } });
-    assert.equal(staleCookie.status, 200);
-    assert.match(staleCookie.headers.get('set-cookie') ?? '', new RegExp(`decision-os-project=${catalog.projects[0].id}`));
-    const fallbackLedger = await staleCookie.json() as { cards: Array<{ title: string }> };
-    assert.equal(fallbackLedger.cards[0].title, 'Admin Specs');
+    const ambiguous = await fetch(`${baseUrl}/decision-os/specs`, { headers: { cookie: 'decision-os-project=old-root-id', 'x-decision-os-project': projectA.id } });
+    assert.equal(ambiguous.status, 400);
+    assert.equal(ambiguous.headers.get('set-cookie'), null);
+    assert.match(await ambiguous.text(), /Project id is required in the URL/);
+
+    const projectB = catalog.projects.find((project) => project.name === 'project-b')!;
+    const isolated = await fetch(`${baseUrl}/p/${projectB.id}/decision-os/specs`).then((response) => response.json()) as { cards: Array<{ title: string }> };
+    assert.equal(isolated.cards[0].title, 'Project B Specs');
+    const mutatedA = await fetch(`${baseUrl}/p/${projectA.id}/decision-os/specs`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'Project A Specs-card', title: 'Mutated A' } })
+    });
+    assert.equal(mutatedA.ok, true);
+    const unchangedB = await fetch(`${baseUrl}/p/${projectB.id}/decision-os/specs`).then((response) => response.json()) as { cards: Array<{ title: string }> };
+    assert.equal(unchangedB.cards[0].title, 'Project B Specs');
 
     const identity = { id: projectA.id, relativePath: projectA.relativePath, root: projectA.root };
     const update = await fetch(`${baseUrl}/decision-os/projects/${projectA.id}`, {
