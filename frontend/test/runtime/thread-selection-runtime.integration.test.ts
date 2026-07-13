@@ -413,6 +413,13 @@ test('render-thread-jump-button shows only when the thread viewport is away from
     assert.equal((button as TestElement & { hidden: boolean }).hidden, false);
     assert.equal(button?.attributes['aria-hidden'], 'false');
 
+    button!.dataset.action = 'close-thread-text';
+    chat.scrollTop = 600;
+    scrollHandler?.(new Event('scroll'));
+    assert.equal((button as TestElement & { hidden: boolean }).hidden, false);
+    assert.equal(button?.attributes['aria-hidden'], 'false');
+
+    button!.dataset.action = 'jump-thread-bottom';
     chat.scrollTop = 560;
     scrollHandler?.(new Event('scroll'));
     assert.equal((button as TestElement & { hidden: boolean }).hidden, true);

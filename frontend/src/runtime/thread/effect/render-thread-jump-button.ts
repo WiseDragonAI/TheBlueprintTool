@@ -32,6 +32,11 @@ export function syncThreadJumpButtonVisibility(): void {
   const chat = threadChatElement();
   const button = threadJumpButton();
   if (!chat || !button) return;
+  if (button.dataset.action === 'close-thread-text') {
+    button.hidden = false;
+    button.setAttribute('aria-hidden', 'false');
+    return;
+  }
   const conversationPanel = document.querySelector('.thread-conversation-panel') as HTMLElement | null;
   if (conversationPanel?.hidden) {
     button.hidden = true;

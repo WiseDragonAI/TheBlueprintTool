@@ -422,6 +422,26 @@
   transform: rotate(45deg);
 }
 
+.thread-jump-bottom.is-thread-text-close .thread-jump-bottom-chevron::before,
+.thread-jump-bottom.is-thread-text-close .thread-jump-bottom-chevron::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  left: 0;
+  width: 12px;
+  height: 2px;
+  border: 0;
+  background: currentColor;
+}
+
+.thread-jump-bottom.is-thread-text-close .thread-jump-bottom-chevron::before {
+  transform: rotate(45deg);
+}
+
+.thread-jump-bottom.is-thread-text-close .thread-jump-bottom-chevron::after {
+  transform: rotate(-45deg);
+}
+
 .thread-note {
   position: relative;
   display: grid;

@@ -2,6 +2,7 @@ import { state as canvasState } from '/canvas-src/runtime/state.js';
 import { selectThread } from '/canvas-src/runtime/thread/effect/select-thread.js';
 import { renderThreadPanel } from '/canvas-src/runtime/thread/effect/render-thread-panel.js';
 import { pinThreadFeedToLastMessage } from '/canvas-src/runtime/thread/effect/pin-thread-feed-to-last-message.js';
+import { syncThreadJumpButtonVisibility } from '/canvas-src/runtime/thread/effect/render-thread-jump-button.js';
 import { submitThreadDraft } from '/canvas-src/runtime/thread/effect/submit-thread-draft.js';
 import { saveThreadDraft } from '/canvas-src/runtime/thread/effect/persist-thread-draft.js';
 import { startVoiceRecording } from '/canvas-src/runtime/voice/controller/start-voice-recording.js';
@@ -17,7 +18,7 @@ import { bindThreadCodexRunLog } from '/canvas-src/runtime/codex/effect/bind-thr
 import { cardCodexThreadRunId } from '/canvas-src/runtime/codex/helper/card-codex-thread-run-id.js';
 import { syncThreadCodexRunControls } from '/canvas-src/runtime/thread/effect/sync-thread-codex-run-controls.js';
 import { resumeExternallyStartedCardSkillRun } from '/canvas-src/runtime/codex/effect/poll-card-skill-run.js';
-import { expandMobileThreadComposer } from './mobile-thread-composer.js';
+import { collapseMobileThreadComposer, expandMobileThreadComposer } from './mobile-thread-composer.js';
 
 let currentCard = null;
 let currentLedgerId = '';
@@ -215,6 +216,9 @@ export function initializeMobileThread() {
     else if (action === 'voice-retry') await retryVoiceTranscription({ threadId: button.dataset.threadId, noteId: button.dataset.noteId, voiceFileRef: button.dataset.voiceFileRef });
     else if (action === 'thread-file-picker') button.closest('.terminal-composer')?.querySelector('.thread-file-input')?.click();
     else if (action === 'toggle-thread-text') expandMobileThreadComposer(button);
+    else if (action === 'close-thread-text') {
+      if (collapseMobileThreadComposer(button)) syncThreadJumpButtonVisibility();
+    }
     else if (action === 'submit-thread-draft') await appendTextNote();
     else if (action === 'jump-thread-bottom') pinThreadFeedToLastMessage({ follow: true });
     else if (action === 'process-thread-codex') await startCodex(button);

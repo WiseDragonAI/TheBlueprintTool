@@ -3,27 +3,75 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const source = await readFile(new URL('../src/mobile-thread.js', import.meta.url), 'utf8');
-const { expandMobileThreadComposer } = await import('../src/mobile-thread-composer.js');
+const { collapseMobileThreadComposer, expandMobileThreadComposer } = await import('../src/mobile-thread-composer.js');
 
-test('mobile Text action expands and focuses the shared thread composer', () => {
+test('mobile Text action replaces jump with close, then collapses without clearing the draft', () => {
   const classNames = new Set(['terminal-composer', 'is-mobile-text-collapsed']);
   let focused = false;
-  const draft = { focus() { focused = true; } };
+  let blurred = false;
+  let textButtonFocused = false;
+  const draft = { value: 'preserved draft', focus() { focused = true; }, blur() { blurred = true; } };
+  const textAttributes = new Map();
+  const textButton = {
+    focus() { textButtonFocused = true; },
+    setAttribute(name, value) { textAttributes.set(name, value); }
+  };
   const composer = {
-    classList: { remove(value) { classNames.delete(value); } },
-    querySelector(selector) { return selector === '.thread-draft' ? draft : null; }
+    classList: {
+      add(value) { classNames.add(value); },
+      remove(value) { classNames.delete(value); }
+    },
+    querySelector(selector) {
+      if (selector === '.thread-draft') return draft;
+      if (selector === '[data-action="toggle-thread-text"]') return textButton;
+      return null;
+    }
   };
   const attributes = new Map();
   const button = {
     closest(selector) { return selector === '.terminal-composer' ? composer : null; },
     setAttribute(name, value) { attributes.set(name, value); }
   };
+  const jumpClasses = new Set();
+  const jumpAttributes = new Map();
+  const jump = {
+    dataset: { action: 'jump-thread-bottom' },
+    title: 'Jump to bottom',
+    hidden: true,
+    classList: {
+      add(value) { jumpClasses.add(value); },
+      remove(value) { jumpClasses.delete(value); }
+    },
+    setAttribute(name, value) { jumpAttributes.set(name, value); }
+  };
+  const root = {
+    querySelector(selector) {
+      if (selector === '.thread-jump-bottom') return jump;
+      if (selector === '.terminal-composer') return composer;
+      return null;
+    }
+  };
 
-  assert.equal(expandMobileThreadComposer(button), true);
+  assert.equal(expandMobileThreadComposer(button, root), true);
   assert.equal(classNames.has('is-mobile-text-collapsed'), false);
   assert.equal(attributes.get('aria-expanded'), 'true');
   assert.equal(focused, true);
+  assert.equal(jump.dataset.action, 'close-thread-text');
+  assert.equal(jump.title, 'Close text input');
+  assert.equal(jump.hidden, false);
+  assert.equal(jumpClasses.has('is-thread-text-close'), true);
+
+  assert.equal(collapseMobileThreadComposer(jump, root), true);
+  assert.equal(classNames.has('is-mobile-text-collapsed'), true);
+  assert.equal(textAttributes.get('aria-expanded'), 'false');
+  assert.equal(jump.dataset.action, 'jump-thread-bottom');
+  assert.equal(jumpClasses.has('is-thread-text-close'), false);
+  assert.equal(draft.value, 'preserved draft');
+  assert.equal(blurred, true);
+  assert.equal(textButtonFocused, true);
   assert.match(source, /action === 'toggle-thread-text'\) expandMobileThreadComposer\(button\)/);
+  assert.match(source, /action === 'close-thread-text'/);
+  assert.match(source, /collapseMobileThreadComposer\(button\)/);
   assert.match(source, /action === 'submit-thread-draft'\) await appendTextNote\(\)/);
 });
 
