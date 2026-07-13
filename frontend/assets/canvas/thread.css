@@ -922,6 +922,7 @@
 }
 
 .thread-note-message p:last-child,
+.thread-note-message ol:last-child,
 .thread-note-message ul:last-child,
 .thread-note-message .ledger-card-hr:last-child,
 .thread-note-message .ledger-card-table-scroll:last-child,
@@ -930,14 +931,29 @@
 }
 
 .thread-note-message code {
+  color: var(--card-code-color);
+  font-family: inherit;
   font-size: 1em;
   font-style: normal;
+}
+
+.thread-note-message ol,
+.thread-note-message ul {
+  padding-left: 1.5em;
+}
+
+.thread-note-message li::marker {
+  color: var(--card-code-color);
 }
 
 .thread-note-message .ledger-card-code-block,
 .thread-note-message .ledger-card-code-block code,
 .thread-note-message .ledger-card-code-block span {
   font-style: normal;
+}
+
+.thread-note-message .ledger-card-code-block code {
+  font-family: var(--mono);
 }
 
 .thread-note-message .ledger-card-hr {
