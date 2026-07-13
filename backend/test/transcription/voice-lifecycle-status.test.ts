@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { traces } from '@backend/telemetry/harness.js';
 import {
+  applyNotePatch,
   readVoiceTranscriptionStatusController,
   startVoiceUploadOrchestrationController
 } from '@backend/business/transcription/controller/start-voice-upload-orchestration-controller.js';
@@ -103,6 +104,42 @@ test('voice status read rejects incomplete and unknown note scope', () => {
       action_payload: { ledgerId: 'specs', threadId: 'thread-missing', noteId: 'note-missing' },
       runtime_state: fixture.runtime
     }).statusCode, 404);
+  } finally {
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('voice lifecycle rejects an older server phase write after terminal persistence', async () => {
+  const fixture = workspaceFixture();
+  try {
+    await startVoiceUploadOrchestrationController({
+      action_payload: {
+        ledgerId: 'specs',
+        threadId: 'thread-card-a',
+        noteId: 'note-stale-write',
+        audioBuffer: Buffer.from('voice'),
+        mimeType: 'audio/webm',
+        transcriptionText: 'Durable terminal transcript.',
+        awaitCompletion: true
+      },
+      runtime_state: fixture.runtime
+    });
+    const stale = applyNotePatch({
+      runtime: fixture.runtime,
+      ledgerId: 'specs',
+      threadId: 'thread-card-a',
+      note: { id: 'note-stale-write', body: 'Voice uploaded.', status: 'transcribing', revision: 2 },
+      reason: 'test-stale-write'
+    });
+    assert.equal(stale.ok, false);
+    assert.equal(stale.stale, true);
+    const status = readVoiceTranscriptionStatusController({
+      action_payload: { ledgerId: 'specs', threadId: 'thread-card-a', noteId: 'note-stale-write' },
+      runtime_state: fixture.runtime
+    });
+    assert.equal((status.note as Record<string, unknown>).status, 'transcribed');
+    assert.equal((status.note as Record<string, unknown>).revision, 4);
+    assert.equal((status.note as Record<string, unknown>).message, 'Durable terminal transcript.');
   } finally {
     rmSync(fixture.root, { recursive: true, force: true });
   }

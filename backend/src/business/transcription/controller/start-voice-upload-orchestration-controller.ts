@@ -95,7 +95,7 @@ function notifyThreadChange(context: LedgerContext, threadId: string, callback: 
   });
 }
 
-function applyNotePatch(input: {
+export function applyNotePatch(input: {
   runtime: AnyRecord;
   ledgerId: string;
   threadId: string;
