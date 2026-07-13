@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { state } from '../../src/runtime/state.js';
 import {
   applyVoiceServerNote,
+  installVoiceTranscriptionRecoveryListeners,
   reconcileVoiceTranscription,
   resetVoiceTranscriptionReconciliationForTests,
   voiceTranscriptionWatcherCountForTests,
@@ -77,6 +78,47 @@ test('terminal reconciliation stops the pending note watcher', async () => {
     watchVoiceTranscription({ ledgerId: 'specs', threadId: 'thread-card-a', noteId: 'note-a' });
     assert.equal(voiceTranscriptionWatcherCountForTests(), 1);
     await reconcileVoiceTranscription({ ledgerId: 'specs', threadId: 'thread-card-a', noteId: 'note-a' });
+    assert.equal(voiceTranscriptionWatcherCountForTests(), 0);
+  } finally {
+    globalThis.fetch = previousFetch;
+    restore();
+  }
+});
+
+test('returning to a visible page immediately reconciles a completed voice note', async () => {
+  const restore = installRuntime();
+  const previousFetch = globalThis.fetch;
+  let visibilityListener: (() => void) | undefined;
+  let fetched: (() => void) | undefined;
+  const fetchStarted = new Promise<void>((resolve) => { fetched = resolve; });
+  (globalThis.document as unknown as { addEventListener: (type: string, listener: () => void) => void }).addEventListener = (type, listener) => {
+    if (type === 'visibilitychange') visibilityListener = listener;
+  };
+  state.activeLedger.notes['thread-card-a'] = [{
+    id: 'note-visible',
+    message: 'Voice uploaded.',
+    voiceFileRef: '/tmp/voice.wav',
+    status: 'transcribing',
+    revision: 2,
+    acceptedAt: new Date().toISOString()
+  }];
+  globalThis.fetch = (async () => {
+    fetched?.();
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, note: { id: 'note-visible', message: 'Visible transcript.', status: 'transcribed', revision: 4 } })
+    } as Response;
+  }) as typeof fetch;
+  try {
+    watchVoiceTranscription({ ledgerId: 'specs', threadId: 'thread-card-a', noteId: 'note-visible' });
+    installVoiceTranscriptionRecoveryListeners();
+    assert.equal(typeof visibilityListener, 'function');
+    visibilityListener?.();
+    await fetchStarted;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].status, 'transcribed');
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].message, 'Visible transcript.');
     assert.equal(voiceTranscriptionWatcherCountForTests(), 0);
   } finally {
     globalThis.fetch = previousFetch;
