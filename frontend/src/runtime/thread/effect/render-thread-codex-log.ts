@@ -11,6 +11,7 @@ import { threadCodexCardId } from '../../codex/helper/thread-codex-card-id.js';
 import { state, type ThreadPanelTab } from '../../state.js';
 import { renderThreadCodexLogEvent } from '../component/render-thread-codex-log-event.js';
 import { renderThreadCodexLogStatus } from '../component/render-thread-codex-log-status.js';
+import { threadCodexStopState } from '../../codex/controller/stop-thread-codex-run-controller.js';
 
 type DisclosureByThread = Record<string, Record<string, boolean>>;
 
@@ -155,6 +156,15 @@ export function renderThreadCodexLog(): void {
     ? recordState('threadRunEventsByThreadId')[threadId] as ThreadRunLogEvent[]
     : [];
   root.append(renderAnnouncement(threadId), renderThreadCodexLogStatus({ summary: summary ?? null, card, runId, threadId }));
+  const stopError = threadCodexStopState(runId).error;
+  if (stopError) {
+    const error = document.createElement('p');
+    error.className = 'codex-log-stop-error';
+    error.dataset.codexLogStopError = '';
+    error.setAttribute('role', 'alert');
+    error.textContent = stopError;
+    root.append(error);
+  }
   // WHAT: Surface an unavailable response separately from chronological run events.
   // WHY: Transport and ownership failures are not producer log records.
   if (summary?.ok === false) {

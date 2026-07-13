@@ -4,6 +4,18 @@
  */
 import { requestCardSkillRunCancel } from '../effect/request-card-skill-run-cancel.js';
 
+type ThreadCodexStopState = { pending: boolean; error: string };
+
+const stopStateByRunId = new Map<string, ThreadCodexStopState>();
+
+export function threadCodexStopState(runId: string): ThreadCodexStopState {
+  return stopStateByRunId.get(runId) ?? { pending: false, error: '' };
+}
+
+export function clearThreadCodexStopState(runId: string): void {
+  if (runId) stopStateByRunId.delete(runId);
+}
+
 function stopLabel(button: HTMLButtonElement): HTMLElement | null {
   return button.querySelector<HTMLElement>('[data-codex-log-stop-label]');
 }
@@ -43,12 +55,16 @@ export async function stopThreadCodexRunController(input: {
   cardId: string;
   runId: string;
 }): Promise<boolean> {
-  if (!input.ledgerId || !input.cardId || !input.runId || input.button.dataset.stopPending === 'true') return false;
+  const current = threadCodexStopState(input.runId);
+  if (!input.ledgerId || !input.cardId || !input.runId || current.pending) return false;
+  stopStateByRunId.set(input.runId, { pending: true, error: '' });
   clearStopError(input.button);
   setStopState(input.button, 'stopping');
   const result = await requestCardSkillRunCancel({ ledgerId: input.ledgerId, cardId: input.cardId, runId: input.runId });
   if (result.ok) return true;
+  const error = result.error || 'Stop failed.';
+  stopStateByRunId.set(input.runId, { pending: false, error });
   setStopState(input.button, 'ready');
-  showStopError(input.button, result.error || 'Stop failed.');
+  showStopError(input.button, error);
   return false;
 }

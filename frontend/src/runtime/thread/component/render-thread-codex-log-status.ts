@@ -6,6 +6,7 @@ import { codexRunDurationLabel } from '../../codex/helper/codex-run-duration-lab
 import { liveCodexRunElapsedMs } from '../../codex/helper/live-codex-run-elapsed-ms.js';
 import type { CardSkillRunSummary } from '../../codex/effect/request-card-skill-run-status.js';
 import { cardCodexRunPreference } from '../../codex/helper/card-codex-run-preference.js';
+import { clearThreadCodexStopState, threadCodexStopState } from '../../codex/controller/stop-thread-codex-run-controller.js';
 
 function renderRunAction(input: { card: Record<string, unknown>; runId: string; threadId: string; running: boolean }): HTMLElement {
   const item = document.createElement('div');
@@ -34,6 +35,13 @@ function renderRunAction(input: { card: Record<string, unknown>; runId: string; 
   label.className = 'terminal-button__label';
   if (input.running) label.dataset.codexLogStopLabel = '';
   label.textContent = action;
+  if (input.running && threadCodexStopState(input.runId).pending) {
+    button.disabled = true;
+    button.dataset.stopPending = 'true';
+    button.title = 'Stopping Codex run';
+    button.setAttribute('aria-label', button.title);
+    label.textContent = 'STOPPING';
+  }
   button.replaceChildren(icon, label);
   description.append(button);
   item.append(term, description);
@@ -47,7 +55,9 @@ export function renderThreadCodexLogStatus(input: { summary: CardSkillRunSummary
   strip.className = 'codex-log-status';
   strip.dataset.runStatus = status;
   strip.dataset.runId = input.runId;
-  strip.append(renderRunAction({ card: input.card, runId: input.runId, threadId: input.threadId, running: status === 'running' }));
+  const running = summary?.ok === true && summary.active === true && status === 'running';
+  if (!running) clearThreadCodexStopState(input.runId);
+  strip.append(renderRunAction({ card: input.card, runId: input.runId, threadId: input.threadId, running }));
   const values: Array<[string, string, string?]> = [
     ['Model', summary?.metadata.codexModel || String(input.card.codexRunModel ?? '') || '—'],
     ['Effort', summary?.metadata.codexEffort || String(input.card.codexRunEffort ?? '') || '—'],
