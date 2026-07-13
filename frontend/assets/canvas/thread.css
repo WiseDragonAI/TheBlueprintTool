@@ -720,6 +720,11 @@
   border-left-color: #74d680;
 }
 
+.codex-log-event.is-todo_list {
+  border-left-color: #7ed6a5;
+  background: rgba(18, 48, 34, 0.3);
+}
+
 .codex-log-event-heading {
   display: flex;
   align-items: baseline;
@@ -743,6 +748,32 @@
   color: #cdd7df;
   font-size: 12px;
   line-height: 1.45;
+}
+
+.codex-todo-list {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.codex-todo-list li {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 5px;
+  align-items: baseline;
+}
+
+.codex-todo-list li.is-completed {
+  color: #8da299;
+  text-decoration: line-through;
+}
+
+.codex-todo-list-marker {
+  color: #7ed6a5;
+  font-family: var(--mono);
+  text-decoration: none;
 }
 
 .codex-tool-group {

@@ -453,6 +453,20 @@ test('thread run reducer coalesces file-change lifecycles as tool calls', () => 
   assert.equal(groupSequentialToolCalls(result.events)[0].kind, 'tool-group');
 });
 
+test('thread run reducer replaces native todo-list snapshots without grouping them as tools', () => {
+  const result = mergeThreadRunEvents([], [
+    runEvent({ line: 40, kind: 'todo_list', itemId: 'todo-1', type: 'item.started', status: 'in_progress', title: 'Todo list', output: '[{"text":"Inspect","completed":false}]' }),
+    runEvent({ line: 41, kind: 'todo_list', itemId: 'todo-1', type: 'item.updated', status: 'in_progress', title: 'Todo list', output: '[{"text":"Inspect","completed":true}]' }),
+    runEvent({ line: 42, kind: 'todo_list', itemId: 'todo-1', type: 'item.completed', status: 'completed', title: 'Todo list', output: '[{"text":"Inspect","completed":true}]' }),
+  ], 'codex-skill-5000-log');
+  assert.equal(result.events.length, 1);
+  assert.equal(result.events[0].line, 40);
+  assert.equal(result.events[0].status, 'completed');
+  assert.match(result.events[0].output, /"completed":true/);
+  assert.deepEqual(result.tools, {});
+  assert.equal(groupSequentialToolCalls(result.events)[0].kind, 'event');
+});
+
 test('thread log consumer shares one advancing poller across rerenders and stops on every terminal state', async () => {
   const previousFetch = globalThis.fetch;
   const previousSetTimeout = globalThis.setTimeout;

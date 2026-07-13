@@ -23,8 +23,16 @@ export function threadRunToolKey(event: Partial<CardSkillRunEvent>, fallbackRunI
   return itemId ? `${runId}:item:${itemId}` : `${runId}:line:${threadRunEventSourceIdentity(event)}`;
 }
 
+export function threadRunLifecycleKey(event: Partial<CardSkillRunEvent>, fallbackRunId = ''): string {
+  const kind = String(event.kind ?? '');
+  if (kind !== 'tool_call' && kind !== 'todo_list') return '';
+  const runId = threadRunEventRunId(event, fallbackRunId);
+  const itemId = String(event.itemId ?? '').trim();
+  return itemId ? `${runId}:item:${itemId}` : '';
+}
+
 export function threadRunEventKey(event: Partial<CardSkillRunEvent>, fallbackRunId = ''): string {
   const runId = threadRunEventRunId(event, fallbackRunId);
-  const toolKey = threadRunToolKey(event, fallbackRunId);
-  return toolKey || `${runId}:event:${threadRunEventSourceIdentity(event)}`;
+  const lifecycleKey = threadRunLifecycleKey(event, fallbackRunId);
+  return lifecycleKey || threadRunToolKey(event, fallbackRunId) || `${runId}:event:${threadRunEventSourceIdentity(event)}`;
 }
