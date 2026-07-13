@@ -930,7 +930,7 @@
   margin-bottom: 0;
 }
 
-.thread-note-message code {
+.thread-note .thread-note-message code {
   color: var(--card-code-color);
   font-family: inherit;
   font-size: 1em;

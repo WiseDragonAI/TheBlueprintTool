@@ -10,8 +10,10 @@ const root = new URL('../../../', import.meta.url);
 
 test('thread markdown keeps inline code in the note font and accents list markers', () => {
   const css = readFileSync(new URL('frontend/assets/canvas/thread.css', root), 'utf8');
+  const mobileCss = readFileSync(new URL('frontend-mobile/assets/mobile.css', root), 'utf8');
 
-  assert.match(css, /\.thread-note-message code\s*\{[^}]*color:\s*var\(--card-code-color\);[^}]*font-family:\s*inherit;/s);
+  assert.match(mobileCss, /\.ledger-card-body code\s*\{/);
+  assert.match(css, /\.thread-note \.thread-note-message code\s*\{[^}]*color:\s*var\(--card-code-color\);[^}]*font-family:\s*inherit;/s);
   assert.match(css, /\.thread-note-message li::marker\s*\{[^}]*color:\s*var\(--card-code-color\);/s);
   assert.match(css, /\.thread-note-message \.ledger-card-code-block code\s*\{[^}]*font-family:\s*var\(--mono\);/s);
 });
