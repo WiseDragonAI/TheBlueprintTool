@@ -108,6 +108,7 @@ test('mobile thread launch continues a terminal or orphaned Codex run', () => {
   assert.match(source, /resumeExternallyStartedCardSkillRun\(\{ ledgerId: currentLedgerId, cardId: String\(currentCard\.id\), runId: existingRunId \}\)/);
   assert.match(source, /function hydrateRunningThreadRun\(runId, startedAt\)/);
   assert.match(source, /canvasState\.threadRunSummaryByThreadId\[threadId\] = \{/);
+  assert.match(source, /active: true/);
   assert.match(source, /status: 'running'/);
   assert.match(source, /hydrateRunningThreadRun\(existingRunId, continuedAt\);[\s\S]*await refreshThreadLedger\(\)/);
   assert.match(source, /bindThreadCodexRunLog\([^;]+runId \}\);\n  hydrateRunningThreadRun\(runId, startedAt\);[\s\S]*await refreshThreadLedger\(\)/);
@@ -115,6 +116,9 @@ test('mobile thread launch continues a terminal or orphaned Codex run', () => {
 
 test('mobile Codex Log uses one action-and-metrics row for STOP, RESUME, and START', () => {
   assert.match(sharedCodexStatus, /strip\.append\(renderRunAction\(/);
+  assert.match(sharedCodexStatus, /summary\?\.ok === true && summary\.active === true && status === 'running'/);
+  assert.match(sharedCodexStatus, /threadCodexStopState\(input\.runId\)\.pending/);
+  assert.match(sharedCodexLog, /const stopError = threadCodexStopState\(runId\)\.error/);
   assert.doesNotMatch(sharedCodexStatus, /\['Status', status\]/);
   assert.match(sharedCodexStatus, /input\.running \? 'STOP' : input\.runId \? 'RESUME' : 'START'/);
   assert.match(sharedCodexStatus, /button\.dataset\.action = input\.running \? 'stop-thread-codex' : 'process-thread-codex'/);

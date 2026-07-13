@@ -4,7 +4,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { stopThreadCodexRunController } from '../../src/runtime/codex/controller/stop-thread-codex-run-controller.js';
+import { clearThreadCodexStopState, stopThreadCodexRunController, threadCodexStopState } from '../../src/runtime/codex/controller/stop-thread-codex-run-controller.js';
 
 function fakeButton() {
   const label = { textContent: 'STOP' };
@@ -24,6 +24,7 @@ function fakeButton() {
 }
 
 test('Codex Log STOP sends one request while the first stop is pending', async () => {
+  clearThreadCodexStopState('run-a');
   const previousFetch = globalThis.fetch;
   let requests = 0;
   let settle!: (response: Response) => void;
@@ -39,6 +40,7 @@ test('Codex Log STOP sends one request while the first stop is pending', async (
     assert.equal(second, false);
     assert.equal(control.button.disabled, true);
     assert.equal(control.label.textContent, 'STOPPING');
+    assert.equal(threadCodexStopState('run-a').pending, true);
     settle(new Response(JSON.stringify({ ok: true, status: 'cancelled' }), { status: 202, headers: { 'content-type': 'application/json' } }));
     assert.equal(await first, true);
   } finally {
@@ -47,6 +49,7 @@ test('Codex Log STOP sends one request while the first stop is pending', async (
 });
 
 test('Codex Log STOP restores the control and exposes a rejected-request error', async () => {
+  clearThreadCodexStopState('run-a');
   const previousFetch = globalThis.fetch;
   try {
     globalThis.fetch = (async () => new Response(JSON.stringify({ ok: false, status: 'unknown', error: 'Active run not found.' }), {
@@ -59,6 +62,7 @@ test('Codex Log STOP restores the control and exposes a rejected-request error',
     assert.equal(control.button.disabled, false);
     assert.equal(control.label.textContent, 'STOP');
     assert.equal(control.error.textContent, 'Active run not found.');
+    assert.deepEqual(threadCodexStopState('run-a'), { pending: false, error: 'Active run not found.' });
   } finally {
     globalThis.fetch = previousFetch;
   }

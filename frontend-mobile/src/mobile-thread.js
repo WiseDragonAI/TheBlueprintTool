@@ -49,6 +49,7 @@ function hydrateRunningThreadRun(runId, startedAt) {
   canvasState.threadRunSummaryByThreadId[threadId] = {
     ...previous,
     ok: true,
+    active: true,
     runId,
     status: 'running',
     startedAt: String(startedAt || previous.startedAt || new Date().toISOString()),
