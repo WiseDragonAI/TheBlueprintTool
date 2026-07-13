@@ -5,6 +5,7 @@
 import { dirname, resolve } from 'node:path';
 import { readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import { scanCodexSkills } from '../helper/scan-codex-skills.js';
+import { runtimeServerRoot } from '../helper/server-skill-context.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -14,7 +15,7 @@ export function listCodexPipelinesController(
   const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord };
   const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
   const decisionOsRoot = resolve(String(runtime.decisionOsRoot ?? resolve(process.cwd(), '.decision-os')));
-  const availableSkillNames = scanCodexSkills({ workspaceRoot: dirname(decisionOsRoot) }).map((skill) => skill.name);
+  const availableSkillNames = scanCodexSkills({ workspaceRoot: dirname(decisionOsRoot), serverRoot: runtimeServerRoot(runtime) }).map((skill) => skill.name);
   const normalized = readCodexPipelineStore({ decisionOsRoot, availableSkillNames });
   return {
     ok: true,

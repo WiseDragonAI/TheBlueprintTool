@@ -7,6 +7,7 @@ import type { CodexPipeline, CodexPipelineSkill, CodexPipelineStep } from '../..
 import { readCodexPipelineStore, writeCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import { isAllowedCodexEffort, isAllowedCodexModel } from '../helper/resolve-codex-command.js';
 import { scanCodexSkills } from '../helper/scan-codex-skills.js';
+import { runtimeServerRoot } from '../helper/server-skill-context.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -101,7 +102,7 @@ export function saveCodexPipelineController(
   const timestamp = new Date().toISOString();
   const parsedSteps = parseSteps(payload.steps, timestamp);
   if (parsedSteps.error) return parsedSteps.error;
-  const availableSkillNames = scanCodexSkills({ workspaceRoot: dirname(decisionOsRoot) }).map((skill) => skill.name);
+  const availableSkillNames = scanCodexSkills({ workspaceRoot: dirname(decisionOsRoot), serverRoot: runtimeServerRoot(runtime) }).map((skill) => skill.name);
   const before = readCodexPipelineStore({ decisionOsRoot, availableSkillNames });
   const existing = before.store.pipelines.find((pipeline) => pipeline.id === id);
   if (operation === 'create' && existing) return { ok: false, statusCode: 409, error: 'A pipeline with this id already exists.', pipelineId: id };

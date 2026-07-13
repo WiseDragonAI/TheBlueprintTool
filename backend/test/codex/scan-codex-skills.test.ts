@@ -4,6 +4,8 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { scanCodexSkills } from '@backend/business/codex/helper/scan-codex-skills.js';
+import { resolveServerSkillContext } from '@backend/business/codex/helper/server-skill-context.js';
+import { buildPipelineSkillPrompt } from '@backend/business/codex/helper/build-pipeline-skill-prompt.js';
 
 function skillMarkdown(name: string, description: string, body = '# Instructions\n\nDo the work.'): string {
   return ['---', `name: ${name}`, `description: ${description}`, '---', '', body, ''].join('\n');
@@ -76,5 +78,38 @@ test('scanCodexSkills classifies sources, preserves precedence, and returns stab
     rmSync(workspace, { recursive: true, force: true });
     rmSync(codexHome, { recursive: true, force: true });
     rmSync(external, { recursive: true, force: true });
+  }
+});
+
+test('one server skill wins in every managed project and supplies exact run instructions', () => {
+  const serverRoot = mkdtempSync(join(tmpdir(), 'decision-os-server-skill-root-'));
+  const firstProject = join(serverRoot, 'projects', 'first');
+  const secondProject = join(serverRoot, 'projects', 'second');
+  const serverSkillFile = join(serverRoot, '.skills', 'shared-skill', 'SKILL.md');
+  const projectDuplicate = join(firstProject, '.skills', 'shared-skill', 'SKILL.md');
+  const markdown = skillMarkdown('shared-skill', 'Server-wide instructions', '# Server workflow');
+  try {
+    for (const directory of [firstProject, secondProject, join(serverSkillFile, '..'), join(projectDuplicate, '..')]) mkdirSync(directory, { recursive: true });
+    writeFileSync(serverSkillFile, markdown);
+    writeFileSync(projectDuplicate, skillMarkdown('shared-skill', 'Project duplicate'));
+    const first = scanCodexSkills({ workspaceRoot: firstProject, serverRoot }).find((skill) => skill.name === 'shared-skill');
+    const second = scanCodexSkills({ workspaceRoot: secondProject, serverRoot }).find((skill) => skill.name === 'shared-skill');
+    assert.equal(first?.source, 'server');
+    assert.equal(second?.source, 'server');
+    assert.equal(first?.description, 'Server-wide instructions');
+    assert.equal(first?.editable, false);
+    const context = resolveServerSkillContext({
+      decisionOsRoot: join(secondProject, '.decision-os'), runtime: { serverRoot }, skillName: 'shared-skill',
+    });
+    assert.deepEqual(context, { markdown, packageRoot: join(serverRoot, '.skills', 'shared-skill') });
+    const prompt = buildPipelineSkillPrompt({
+      skillName: 'shared-skill', ledgerFile: '/ledger.json', pipelineRunId: 'run', pipelineName: 'Pipeline',
+      sourceCardId: 'source', sourceCardTitle: 'Source', stepId: 'step', stepTitle: 'Step',
+      stepInputCardId: 'input', stepInputCardContent: 'Input', outputCardId: 'output', outputMarkdownFile: '/output.md', serverSkill: context,
+    });
+    assert.match(prompt, /Decision OS server skill package:/);
+    assert.match(prompt, /# Server workflow/);
+  } finally {
+    rmSync(serverRoot, { recursive: true, force: true });
   }
 });

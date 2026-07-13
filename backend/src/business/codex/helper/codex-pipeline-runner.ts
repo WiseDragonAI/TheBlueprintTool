@@ -21,6 +21,7 @@ import { readCodexPipelineStore, writeCodexPipelineStore } from './codex-pipelin
 import { buildPipelineSkillPrompt } from './build-pipeline-skill-prompt.js';
 import { resolveCodexCommand } from './resolve-codex-command.js';
 import { decisionOsCodexEnvironment } from './decision-os-codex-runtime.js';
+import { resolveServerSkillContext } from './server-skill-context.js';
 
 type AnyRecord = Record<string, unknown>;
 type TerminalStatus = 'complete' | 'failed' | 'cancelled';
@@ -383,6 +384,7 @@ export function spawnPipelineSkillProcess(input: {
     stepInputCardContent: stageInput.content,
     outputCardId: input.step.outputCardId,
     outputMarkdownFile: outputFile,
+    serverSkill: resolveServerSkillContext({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, skillName: input.skill.skillName }),
   });
 
   mkdirSync(dirname(input.skill.stdoutFile), { recursive: true });

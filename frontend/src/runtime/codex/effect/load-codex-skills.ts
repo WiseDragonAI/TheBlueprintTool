@@ -4,7 +4,7 @@
  */
 import type { CodexEffort, CodexModel } from '../helper/codex-run-options.js';
 
-export type CodexSkillSource = 'workspace' | 'user' | 'system' | 'plugin';
+export type CodexSkillSource = 'server' | 'workspace' | 'user' | 'system' | 'plugin';
 
 export type CodexSkillSummary = {
   name: string;

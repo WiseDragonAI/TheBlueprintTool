@@ -15,7 +15,16 @@ export function buildPipelineSkillPrompt(input: {
   stepInputCardContent: string;
   outputCardId: string;
   outputMarkdownFile: string;
+  serverSkill?: { markdown: string; packageRoot: string } | null;
 }): string {
+  const serverSkill = input.serverSkill ? [
+    '',
+    `Decision OS server skill package: ${input.serverSkill.packageRoot}`,
+    'Apply the following exact SKILL.md instructions. Read referenced files from that package only when the instructions require them.',
+    '```markdown',
+    input.serverSkill.markdown,
+    '```',
+  ] : [];
   return [
     `$${input.skillName}`,
     '',
@@ -32,6 +41,7 @@ export function buildPipelineSkillPrompt(input: {
     `Current skill: ${input.skillName}`,
     `Input card id: ${input.stepInputCardId}`,
     `Output card id: ${input.outputCardId}`,
+    ...serverSkill,
     '',
     'Input card content:',
     '```markdown',
