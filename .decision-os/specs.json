@@ -6,9 +6,9 @@
     "height": 8900
   },
   "viewport": {
-    "x": 1586.2181233977608,
-    "y": -310.5101828354706,
-    "scale": 0.1146663531648272
+    "x": 12,
+    "y": 34,
+    "scale": 1.25
   },
   "positions": {
     "10000001": {
@@ -20,11 +20,6 @@
       "x": -4217,
       "y": 3992,
       "w": 266
-    },
-    "b4e9c2d7": {
-      "x": -7707,
-      "y": 8892,
-      "w": 680
     },
     "20000001": {
       "x": -3453,
@@ -305,6 +300,11 @@
       "x": 1546,
       "y": 5351,
       "w": 560
+    },
+    "b4e9c2d7": {
+      "x": -7707,
+      "y": 8892,
+      "w": 680
     },
     "a25db692": {
       "x": 1546,
@@ -5398,9 +5398,2657 @@
       "facts": [],
       "fields": [],
       "h": 154
+    },
+    {
+      "id": "card-965466a1-09d4-4ab2-ad3c-322e6a37c8a5",
+      "title": "Unify Mobile Visual Design",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 8508,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-965466a1-09d4-4ab2-ad3c-322e6a37c8a5.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783841633862-b830fed3",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783841633862-b830fed3.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-1a6d9d08-688c-4d25-a5c9-43ab73770cb7",
+      "title": "Build the voice-derived mobile control system",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10002,
+      "y": 8508,
+      "w": 320,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-1a6d9d08-688c-4d25-a5c9-43ab73770cb7.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-4325aafc-318b-4d17-b2c8-523f12c543e0",
+      "title": "Migrate the mobile Control Room",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9642,
+      "y": 8508,
+      "w": 320,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-4325aafc-318b-4d17-b2c8-523f12c543e0.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-9a3b90f1-5f5e-4aae-a1f7-0cc25f7fbc3d",
+      "title": "Migrate remaining mobile product surfaces",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10002,
+      "y": 8788,
+      "w": 320,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-9a3b90f1-5f5e-4aae-a1f7-0cc25f7fbc3d.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-3611dbf5-510f-4c1a-bead-fdb87d6f7430",
+      "title": "Add accessible mobile motion and interaction states",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9642,
+      "y": 8788,
+      "w": 320,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-3611dbf5-510f-4c1a-bead-fdb87d6f7430.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-2d481620-d203-42f8-8f5d-cce7b43fd42b",
+      "title": "Verify mobile design consistency and regressions",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10002,
+      "y": 9068,
+      "w": 320,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-2d481620-d203-42f8-8f5d-cce7b43fd42b.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-6783f43f-25f0-4d1e-9e50-31fb62c1cb08",
+      "title": "Mobile Control Room",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 9528,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-6783f43f-25f0-4d1e-9e50-31fb62c1cb08.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783839740181-ae1e7acd",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783839740181-ae1e7acd.md"
+    },
+    {
+      "id": "card-c2df50a1-b82d-4b71-aa90-6d46512d7a61",
+      "title": "Define the Control Room task model and mobile journey",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10002,
+      "y": 9528,
+      "w": 320,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-c2df50a1-b82d-4b71-aa90-6d46512d7a61.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-d83f99a0-8cf3-45a6-a80b-c448cf97c789",
+      "title": "Implement the mobile Control Room and task intake",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9642,
+      "y": 9528,
+      "w": 320,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-d83f99a0-8cf3-45a6-a80b-c448cf97c789.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-a59bd1a8-7001-4218-b2b2-e6cf88257b58",
+      "title": "Fix canonical task-label parsing",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10002,
+      "y": 9808,
+      "w": 320,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-a59bd1a8-7001-4218-b2b2-e6cf88257b58.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-137b16fa-01ca-4ee0-830d-7e302181ee24",
+      "title": "Wire Codex launch to active status and elapsed timer",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9642,
+      "y": 9808,
+      "w": 320,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-137b16fa-01ca-4ee0-830d-7e302181ee24.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-db22414c-4a95-4431-81e3-e917a75233f6",
+      "title": "Compact file changes into tool calls",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 10548,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-db22414c-4a95-4431-81e3-e917a75233f6.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783842056448-9df876c3",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783842056448-9df876c3.md"
+    },
+    {
+      "id": "card-663db0c4-33c3-4e83-bb26-8622faffa82e",
+      "title": "Enforce master task completion lifecycle",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 11568,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-663db0c4-33c3-4e83-bb26-8622faffa82e.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783844475635-ae5b95f1",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783844475635-ae5b95f1.md"
+    },
+    {
+      "id": "card-dda968e6-a7db-4856-8487-8aab1a0a98e1",
+      "title": "Polish mobile thread Codex header",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 12588,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-dda968e6-a7db-4856-8487-8aab1a0a98e1.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783845841209-82bb1b6c",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783845841209-82bb1b6c.md"
+    },
+    {
+      "id": "card-322796d6-5c38-437f-9b03-d8c46f538f42",
+      "title": "Default Sol Threads to Medium Effort",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 13608,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-322796d6-5c38-437f-9b03-d8c46f538f42.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783845989073-d7891e94",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783845989073-d7891e94.md"
+    },
+    {
+      "id": "card-dc17bf78-cd30-48b3-9167-e4cfcdbf970c",
+      "title": "Treat Recoverable Patch Failures Correctly",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 14628,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-dc17bf78-cd30-48b3-9167-e4cfcdbf970c.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783846188640-c7ac82fa",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783846188640-c7ac82fa.md"
+    },
+    {
+      "id": "card-7664c9d7-8ca4-48f3-8d7f-a86d2817ab21",
+      "title": "Enforce Master Task Naming",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 15648,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-7664c9d7-8ca4-48f3-8d7f-a86d2817ab21.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783846253381-41739090",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783846253381-41739090.md"
+    },
+    {
+      "id": "card-1c211390-04a2-4b1c-ac40-9b9f27289840",
+      "title": "Mobile Application Navigation",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 16668,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-1c211390-04a2-4b1c-ac40-9b9f27289840.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783847161446-4bfddd3e",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783847161446-4bfddd3e.md"
+    },
+    {
+      "id": "card-36a4cd91-534f-46c3-b569-9ef8e6d81f41",
+      "title": "Replace drawer with application navigation",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9982,
+      "y": 16668,
+      "w": 360,
+      "h": 300,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-36a4cd91-534f-46c3-b569-9ef8e6d81f41.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-b874b4c3-d5cc-41e7-aa62-e09f49c45fe0",
+      "title": "Compact the control room actions",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9562,
+      "y": 16668,
+      "w": 360,
+      "h": 300,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-b874b4c3-d5cc-41e7-aa62-e09f49c45fe0.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-b5623e76-e319-4abe-bde1-08139a0b040f",
+      "title": "Simplify mobile card header",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 17688,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-b5623e76-e319-4abe-bde1-08139a0b040f.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783852357458-ff05d0ab",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783852357458-ff05d0ab.md"
+    },
+    {
+      "id": "card-08e28a3e-c791-4453-97da-b9943a0a3892",
+      "title": "Collapse Running Codex Launcher",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 18708,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-08e28a3e-c791-4453-97da-b9943a0a3892.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783852407245-beed2f41",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783852407245-beed2f41.md"
+    },
+    {
+      "id": "card-4c2173e6-f1a7-4a10-a28f-544bc244a982",
+      "title": "Implement mobile card header layout",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9982,
+      "y": 17688,
+      "w": 360,
+      "h": 300,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-4c2173e6-f1a7-4a10-a28f-544bc244a982.md"
+      }
+    },
+    {
+      "id": "card-4be77613-f7da-453a-8fac-e9ac715193fd",
+      "title": "Collapse the running Codex launcher row",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9982,
+      "y": 18708,
+      "w": 360,
+      "h": 300,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-4be77613-f7da-453a-8fac-e9ac715193fd.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-d4def20b-ce78-4b2b-8d07-309bcd462e0d",
+      "title": "Complete Master Subtasks from Control Room",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 19728,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-d4def20b-ce78-4b2b-8d07-309bcd462e0d.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783852857006-1b47d946",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783852857006-1b47d946.md"
+    },
+    {
+      "id": "card-9ed2f4d1-1f30-4d68-b81c-3ec94629d9be",
+      "title": "Implement Aggregate Master Completion",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9982,
+      "y": 19728,
+      "w": 360,
+      "h": 300,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-9ed2f4d1-1f30-4d68-b81c-3ec94629d9be.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-9c3ebf9f-3942-4b88-8d83-ceb6bc8b6c04",
+      "title": "Stop Mobile Thread Autofocus",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 20748,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-9c3ebf9f-3942-4b88-8d83-ceb6bc8b6c04.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783853080844-8647dfcc",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783853080844-8647dfcc.md"
+    },
+    {
+      "id": "card-b7d7cebe-50db-4f0c-be35-76ae02dfd7a0",
+      "title": "Simplify Active Codex Task Rows",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 21768,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-b7d7cebe-50db-4f0c-be35-76ae02dfd7a0.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783853148392-ce3b2c01",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783853148392-ce3b2c01.md"
+    },
+    {
+      "id": "card-5e6778e9-7f3a-4cc3-ad99-8d2ddd1eb032",
+      "title": "Fix Mobile Thread Follow Bottom",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 22788,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-5e6778e9-7f3a-4cc3-ad99-8d2ddd1eb032.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783853212779-81a4fd79",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783853212779-81a4fd79.md"
+    },
+    {
+      "id": "card-8f511980-e8af-4f99-a3d9-3842eca71a3b",
+      "title": "Remove mobile thread draft focus",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9982,
+      "y": 20748,
+      "w": 360,
+      "h": 280,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-8f511980-e8af-4f99-a3d9-3842eca71a3b.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-9a5044ee-da92-47ab-889d-83b65e6e6941",
+      "title": "Compact Mobile Thread Composer",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 23808,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-9a5044ee-da92-47ab-889d-83b65e6e6941.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783857918231-b283b22a",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783857918231-b283b22a.md"
+    },
+    {
+      "id": "card-1aa8eca7-d3e9-4e2d-91f9-bb2ffa7793fd",
+      "title": "Persist Mobile Control Room Route",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 24828,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-1aa8eca7-d3e9-4e2d-91f9-bb2ffa7793fd.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783854713621-202bb777",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783854713621-202bb777.md"
+    },
+    {
+      "id": "card-d76e46df-e71c-4503-84a2-48cd571a9e23",
+      "title": "Implement mobile Control Room URL state",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9982,
+      "y": 24828,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-d76e46df-e71c-4503-84a2-48cd571a9e23.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-c75c1246-9595-4633-ad19-b8942b4648af",
+      "title": "Verify mobile route restoration",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9562,
+      "y": 24828,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-c75c1246-9595-4633-ad19-b8942b4648af.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-fab927b7-e446-4093-a860-6c32214d2e5e",
+      "title": "Return After Master Task Completion",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 25848,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-fab927b7-e446-4093-a860-6c32214d2e5e.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783857844469-ef771f4c",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783857844469-ef771f4c.md"
+    },
+    {
+      "id": "card-4b122c83-c7db-45fa-b1c1-968db03b3b70",
+      "title": "Implement completion return navigation",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9982,
+      "y": 25848,
+      "w": 680,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-4b122c83-c7db-45fa-b1c1-968db03b3b70.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-1bc5f2d1-86da-4a5f-8fcd-f987a4539941",
+      "title": "Control Room task counts",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 26868,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-1bc5f2d1-86da-4a5f-8fcd-f987a4539941.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783857955820-6d9f7916",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783857955820-6d9f7916.md"
+    },
+    {
+      "id": "card-4f784225-f8dc-41b4-87fd-d04dff36f716",
+      "title": "Implement Control Room task counts",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9982,
+      "y": 26868,
+      "w": 360,
+      "h": 300,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-4f784225-f8dc-41b4-87fd-d04dff36f716.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-5fc31910-c874-4bfa-a8c3-06d93db6d1b0",
+      "title": "Implement compact mobile thread composer",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9982,
+      "y": 23808,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-5fc31910-c874-4bfa-a8c3-06d93db6d1b0.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-a1397b46-7583-4bac-b74c-cc758c3a7903",
+      "title": "Explore Decision OS Logo Directions",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10402,
+      "y": 27888,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-a1397b46-7583-4bac-b74c-cc758c3a7903.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783859067656-a62fc0d6",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783859067656-a62fc0d6.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "high"
+    },
+    {
+      "id": "card-cf110703-fad9-47a8-b2c4-5a03413e607e",
+      "title": "Tighten mobile composer and hide idle status",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9562,
+      "y": 23808,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-cf110703-fad9-47a8-b2c4-5a03413e607e.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-ee38b25f-66d3-4d40-89be-b4c6da09a440",
+      "title": "Optimistic animated queue reordering",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 28908,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-ee38b25f-66d3-4d40-89be-b4c6da09a440.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783859140362-b5ff9602",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783859140362-b5ff9602.md"
+    },
+    {
+      "id": "card-f7b8f6aa-b20c-4daf-b270-c3ed9d1f33b4",
+      "title": "Implement live animated queue reordering",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10022,
+      "y": 28908,
+      "w": 360,
+      "h": 420,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-f7b8f6aa-b20c-4daf-b270-c3ed9d1f33b4.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-95e1ae46-68e1-4b46-9b76-3814c8b587df",
+      "title": "Implement optimistic rank persistence and reconciliation",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9622,
+      "y": 28908,
+      "w": 360,
+      "h": 420,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-95e1ae46-68e1-4b46-9b76-3814c8b587df.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-880c2143-c573-46e9-a204-0d79766bc5bf",
+      "title": "Build voice-first mobile thread dock",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9982,
+      "y": 24108,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-880c2143-c573-46e9-a204-0d79766bc5bf.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-ee38a29f-1cfb-42bd-a0f3-b56d50f3d2a8",
+      "title": "Termux multi-project master server",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 29928,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-ee38a29f-1cfb-42bd-a0f3-b56d50f3d2a8.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783860526018-ecb35087",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783860526018-ecb35087.md"
+    },
+    {
+      "id": "card-34288c99-cf14-4d5f-8840-83bc957c9a36",
+      "title": "Synchronized Server Skills",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10402,
+      "y": 30948,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-34288c99-cf14-4d5f-8840-83bc957c9a36.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783959179617-f810ea1b",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783959179617-f810ea1b.md"
+    },
+    {
+      "id": "card-8d04f508-7d34-4636-b2dd-8cf8d791a51f",
+      "title": "Create file-level Skills ledger projection",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10002,
+      "y": 30948,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-8d04f508-7d34-4636-b2dd-8cf8d791a51f.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-f91c1eef-e237-4591-9d25-d4719f4c0a17",
+      "title": "Add ledger-cli skill create and update",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 31248,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-f91c1eef-e237-4591-9d25-d4719f4c0a17.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-eab11f26-5e45-4bb6-99bb-e8be74918aee",
+      "title": "Verify shared server skill execution",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10002,
+      "y": 31248,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-eab11f26-5e45-4bb6-99bb-e8be74918aee.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-00d5e664-8cdd-44c4-bca4-d505a7b5a920",
+      "title": "General implementation plan",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9602,
+      "y": 31248,
+      "w": 300,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-00d5e664-8cdd-44c4-bca4-d505a7b5a920.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-42177913-0d28-4c43-ba94-adb3a569f3a3",
+      "title": "Mobile Carousel Touch and Controls",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 31968,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-42177913-0d28-4c43-ba94-adb3a569f3a3.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783860754274-31724f61",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783860754274-31724f61.md"
+    },
+    {
+      "id": "card-ba280bee",
+      "title": "Map current workspace and server resolution",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10012,
+      "y": 29928,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-ba280bee.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-a4db686f",
+      "title": "Specify project discovery and identity",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9622,
+      "y": 29928,
+      "w": 300,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-a4db686f.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-3144fd86",
+      "title": "Specify project registry and color settings",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 30208,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-3144fd86.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-8ac5b051",
+      "title": "Implement multi-project server access",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10012,
+      "y": 30208,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-8ac5b051.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-ad51d385",
+      "title": "Add the project hierarchy to Control Room",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9622,
+      "y": 30208,
+      "w": 300,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-ad51d385.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-bebbeee1",
+      "title": "Implement project and ledger task filters",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 30488,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-bebbeee1.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-3f3f5d05",
+      "title": "Add project configuration to the burger menu",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10012,
+      "y": 30488,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-3f3f5d05.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-ba20da2c",
+      "title": "Verify and document the Termux master workflow",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9622,
+      "y": 30488,
+      "w": 300,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-ba20da2c.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-5e212225-e092-4b5b-807a-d6515cbefc18",
+      "title": "Polish Mobile Thread Controls",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 32988,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-5e212225-e092-4b5b-807a-d6515cbefc18.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783860836903-423573ed",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783860836903-423573ed.md"
+    },
+    {
+      "id": "card-51a3062a-4f74-47f2-beff-a956ae67d0a9",
+      "title": "Fix mobile carousel gesture and controls",
+      "cardType": "task",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9962,
+      "y": 31968,
+      "w": 420,
+      "h": 300,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-51a3062a-4f74-47f2-beff-a956ae67d0a9.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-44641099-1d6b-4a21-857a-ed37225c9585",
+      "title": "Implement polished mobile thread controls",
+      "cardType": "task",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9962,
+      "y": 32988,
+      "w": 360,
+      "h": 300,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-44641099-1d6b-4a21-857a-ed37225c9585.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-d632070f-31ae-402e-8e79-b2bd97b32d00",
+      "title": "Fix served mobile carousel visual layout",
+      "cardType": "task",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9962,
+      "y": 32308,
+      "w": 420,
+      "h": 300,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-d632070f-31ae-402e-8e79-b2bd97b32d00.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-f69417b9-3432-4f5e-9b4c-0d2ad0511e4f",
+      "title": "Default Sol Threads to Medium Effort",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 34008,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-f69417b9-3432-4f5e-9b4c-0d2ad0511e4f.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1783861578746-69fe7ab7",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783861578746-69fe7ab7.md"
+    },
+    {
+      "id": "card-7a7a995b-c3c4-4aad-acca-0adebc09f6ab",
+      "title": "Replace mobile swipe with Embla Carousel",
+      "cardType": "task",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9482,
+      "y": 31968,
+      "w": 420,
+      "h": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-7a7a995b-c3c4-4aad-acca-0adebc09f6ab.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-846e5c2b-a5a7-495a-8e73-d97cda971282",
+      "title": "Delete Master Tasks from Mobile",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 35028,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-846e5c2b-a5a7-495a-8e73-d97cda971282.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783862148705-ca075833",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783862148705-ca075833.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-5fd31ed7-3f1e-47d7-9c48-d555ddc8aa87",
+      "title": "Add confirmed mobile master-task deletion",
+      "cardType": "task",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9982,
+      "y": 35028,
+      "w": 420,
+      "h": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-5fd31ed7-3f1e-47d7-9c48-d555ddc8aa87.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-aa48cc9b-9319-494e-b343-f3026b76a05a",
+      "title": "Fullscreen Carousel Image Viewer",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 36048,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-aa48cc9b-9319-494e-b343-f3026b76a05a.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783862319139-596dfbbf",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783862319139-596dfbbf.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-11aeabbd-6654-4fdd-973f-15293b92295c",
+      "title": "Show and fade settled image title",
+      "cardType": "task",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9482,
+      "y": 32328,
+      "w": 420,
+      "h": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-11aeabbd-6654-4fdd-973f-15293b92295c.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-141e25dd-34ee-47cf-ad6f-9e112bde599b",
+      "title": "Implement carousel fullscreen image viewer",
+      "cardType": "task",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9982,
+      "y": 36048,
+      "w": 420,
+      "h": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-141e25dd-34ee-47cf-ad6f-9e112bde599b.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-31bc7dad-92a6-4249-a47b-ede138094a9e",
+      "title": "Verify fullscreen viewer on the served touch surface",
+      "cardType": "task",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9982,
+      "y": 36408,
+      "w": 420,
+      "h": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-31bc7dad-92a6-4249-a47b-ede138094a9e.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-b61f227f-7b10-43bb-a7d2-502621d7896e",
+      "title": "Understand Codex Plugins",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10402,
+      "y": 38088,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-b61f227f-7b10-43bb-a7d2-502621d7896e.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783874754235-7e5d836d",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783874754235-7e5d836d.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-2bb850eb-80d0-46a1-9622-fec4f61d8079",
+      "title": "Research and explain Codex plugins",
+      "cardType": "task",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9982,
+      "y": 38088,
+      "w": 420,
+      "h": 320,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-2bb850eb-80d0-46a1-9622-fec4f61d8079.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-3f818661-ce9d-4390-b820-44f0140b32aa",
+      "title": "Correct Task Waiting Age",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 39108,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-3f818661-ce9d-4390-b820-44f0140b32aa.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783876005476-19a66932",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783876005476-19a66932.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-79607fb0-148f-44d6-99ec-8483e3a42fa3",
+      "title": "Research plugin use cases and community adoption",
+      "cardType": "task",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9502,
+      "y": 38088,
+      "w": 420,
+      "h": 360,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-79607fb0-148f-44d6-99ec-8483e3a42fa3.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-9ab81782-75c6-428d-add8-a22a37ce5fda",
+      "title": "Verify rotating neon Codex Log border",
+      "cardType": "task",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9982,
+      "y": 40128,
+      "w": 420,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-9ab81782-75c6-428d-add8-a22a37ce5fda.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-b8022ebf-81d9-4881-9a86-c8011c389734",
+      "title": "Rotating Neon Codex Log Border",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 40128,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-b8022ebf-81d9-4881-9a86-c8011c389734.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783920648146-e85cc5db",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783920648146-e85cc5db.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-7074d33a-39da-42a1-b470-673cbe221def",
+      "title": "Reliable Voice Transcription Lifecycle",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 41148,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-7074d33a-39da-42a1-b470-673cbe221def.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783920977905-de5f94ad",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783920977905-de5f94ad.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-eb947f30-3631-47df-bf9b-1872ece19c61",
+      "title": "Implement Server-Owned Voice Lifecycle and Status Reads",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10002,
+      "y": 41148,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-eb947f30-3631-47df-bf9b-1872ece19c61.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-bd5b07d9-ba69-4a2d-b703-8124fdfdadbc",
+      "title": "Implement Resilient Voice Reconciliation and Progress UI",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9602,
+      "y": 41148,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-bd5b07d9-ba69-4a2d-b703-8124fdfdadbc.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-a83775f8-09b0-4aeb-977e-010cc0962925",
+      "title": "Verify Voice Lifecycle Recovery on the Served Mobile Surface",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 41428,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-a83775f8-09b0-4aeb-977e-010cc0962925.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-49cf1765-4987-44a9-a64d-d15d4b504c07",
+      "title": "Restore Mobile Thread Text Input",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 43188,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-49cf1765-4987-44a9-a64d-d15d4b504c07.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783922260282-efe3411d",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783922260282-efe3411d.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-3f5c2113-be56-4398-bb03-a07d2562791a",
+      "title": "Show Only Project Names in Task Picker",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 44208,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-3f5c2113-be56-4398-bb03-a07d2562791a.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783922505676-a471b9c9",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783922505676-a471b9c9.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-33feff8b-08e4-4de3-bff5-6b327052854c",
+      "title": "Verify mobile thread text input in Brave",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9982,
+      "y": 43188,
+      "w": 360,
+      "h": 300,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-33feff8b-08e4-4de3-bff5-6b327052854c.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-6d480f9c-d0f3-4d2a-a4a8-d4a6b91903b9",
+      "title": "Project management workspace",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 45228,
+      "w": 360,
+      "h": 640,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-6d480f9c-d0f3-4d2a-a4a8-d4a6b91903b9.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783922757385-74bb902e",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783922757385-74bb902e.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-f4c7acd7-9789-4faf-ac08-9594ec0743d1",
+      "title": "Remove project paths and compact the new-task picker",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9962,
+      "y": 44208,
+      "w": 420,
+      "h": 300,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-f4c7acd7-9789-4faf-ac08-9594ec0743d1.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-aec89b5f-dc4e-4942-9b9e-d7136252c2fd",
+      "title": "Persist editable project metadata",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10012,
+      "y": 45228,
+      "w": 340,
+      "h": 420,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-aec89b5f-dc4e-4942-9b9e-d7136252c2fd.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-c4fab217-0065-4221-8beb-b9b4e0212f44",
+      "title": "Build the Projects index, detail, and settings flow",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9622,
+      "y": 45228,
+      "w": 340,
+      "h": 480,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-c4fab217-0065-4221-8beb-b9b4e0212f44.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-f331b2de-18ca-46f8-92e5-0ed8024eb364",
+      "title": "Simplify the mobile drawer and add destination icons",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10012,
+      "y": 45708,
+      "w": 340,
+      "h": 340,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-f331b2de-18ca-46f8-92e5-0ed8024eb364.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-8b9dee68-8979-4112-b59d-6781713a9677",
+      "title": "Codex Tool-Call Efficiency Audit",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10402,
+      "y": 46248,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-8b9dee68-8979-4112-b59d-6781713a9677.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783931152363-7d2cbdf9",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783931152363-7d2cbdf9.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-6dbc3431-80a2-4fa0-9d57-aafc7d679fd6",
+      "title": "Make project identity canonical in mobile URLs",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9622,
+      "y": 45748,
+      "w": 340,
+      "h": 300,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-6dbc3431-80a2-4fa0-9d57-aafc7d679fd6.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-c1e2d98f-beaf-4aec-a64a-7bf07e61013e",
+      "title": "Instrument Codex tool-call telemetry",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10012,
+      "y": 46248,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-c1e2d98f-beaf-4aec-a64a-7bf07e61013e.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-144497b4-0428-40a2-ad9a-ec5a1234f386",
+      "title": "Add Decision OS session context tool",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -9632,
+      "y": 46248,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-144497b4-0428-40a2-ad9a-ec5a1234f386.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-16785306-87fd-473c-94f4-b7b066e0d524",
+      "title": "Add atomic master-task lifecycle tools",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10012,
+      "y": 46658,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-16785306-87fd-473c-94f4-b7b066e0d524.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-caa4c6bf-f76a-4ddc-a309-39d2ed11a08d",
+      "title": "Add repository execution profile tool",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -9632,
+      "y": 46658,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-caa4c6bf-f76a-4ddc-a309-39d2ed11a08d.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-64a9c5b1-3061-462b-bda0-275d69947712",
+      "title": "Stop Active Codex Runs",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 47268,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-64a9c5b1-3061-462b-bda0-275d69947712.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783932175496-c8c2037d",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783932175496-c8c2037d.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-a1b03a54-4315-4e20-8566-8f4c2dc8dc56",
+      "title": "Implement the Codex Session STOP Control",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9992,
+      "y": 47268,
+      "w": 360,
+      "h": 360,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-a1b03a54-4315-4e20-8566-8f4c2dc8dc56.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-7af0bea9-eebb-42f1-942a-8e030c386cf3",
+      "title": "Verify Codex Process Stopping on the Served Thread",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9582,
+      "y": 47268,
+      "w": 360,
+      "h": 360,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-7af0bea9-eebb-42f1-942a-8e030c386cf3.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-62fdfda8-6b8a-40fe-a99f-44c96bfdfa9b",
+      "title": "Unify Mobile Thread Markdown Styling",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 48288,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-62fdfda8-6b8a-40fe-a99f-44c96bfdfa9b.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783935577639-b634fb99",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783935577639-b634fb99.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-1bc22bdf-1008-421a-aeba-0e783bf4206f",
+      "title": "Implement Shared Thread Markdown Styling",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9962,
+      "y": 48288,
+      "w": 420,
+      "h": 360,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-1bc22bdf-1008-421a-aeba-0e783bf4206f.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-2164c008-359f-40ac-8abf-505ee5b5fe38",
+      "title": "Build Stable Server State Projections",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10402,
+      "y": 49308,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-2164c008-359f-40ac-8abf-505ee5b5fe38.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783936239493-28650043",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783936239493-28650043.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-21104e8d-ab8b-41dd-ac47-a8f475b128e3",
+      "title": "Build the stable server projection cache",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10402,
+      "y": 49608,
+      "w": 320,
+      "h": 300,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-21104e8d-ab8b-41dd-ac47-a8f475b128e3.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-55fd1779-4267-4c63-914f-24ccb44ead8f",
+      "title": "Add a compact Codex run-status read path",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10042,
+      "y": 49608,
+      "w": 320,
+      "h": 300,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-55fd1779-4267-4c63-914f-24ccb44ead8f.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-c9c354ca-59a7-4086-81d2-ef61e85104fb",
+      "title": "Migrate and verify the mobile Control Room reload",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -9682,
+      "y": 49608,
+      "w": 320,
+      "h": 300,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-c9c354ca-59a7-4086-81d2-ef61e85104fb.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-e9143c38-c0e1-456d-8ae6-47015de3950d",
+      "title": "Replace hydrated ledger transport with scoped read models",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10402,
+      "y": 49948,
+      "w": 680,
+      "h": 200,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-e9143c38-c0e1-456d-8ae6-47015de3950d.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-840ff2e0-739b-4721-8f3a-af9d543aabbe",
+      "title": "Auto-Resume Capacity-Interrupted Codex Threads",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 50328,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-840ff2e0-739b-4721-8f3a-af9d543aabbe.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783937485565-8562a33e",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783937485565-8562a33e.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-f98dc24a-f48e-47d7-866b-effddd853e9c",
+      "title": "Analyze Codex capacity recovery",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9980,
+      "y": 50328,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-f98dc24a-f48e-47d7-866b-effddd853e9c.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-65f2dd16-8872-4855-aecf-6e03c1bd3fa1",
+      "title": "Implement Codex capacity auto-resume",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9560,
+      "y": 50328,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-65f2dd16-8872-4855-aecf-6e03c1bd3fa1.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-2c5430d1-17e4-4bbe-bc0b-c86a113fc7db",
+      "title": "Preserve Base Font for Inline Code",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 51348,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-2c5430d1-17e4-4bbe-bc0b-c86a113fc7db.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783941608174-56d808fa",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783941608174-56d808fa.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-3c79ae06-ef5f-4f63-a08a-2bb7acf3c24c",
+      "title": "Restore the base font for card inline code",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9962,
+      "y": 51348,
+      "w": 420,
+      "h": 300,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-3c79ae06-ef5f-4f63-a08a-2bb7acf3c24c.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-92a7dd40-d2a7-4eac-9bd2-cab117b34b3e",
+      "title": "Align Card Numbered Lists",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 52368,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-92a7dd40-d2a7-4eac-9bd2-cab117b34b3e.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783942251368-f49334e9",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783942251368-f49334e9.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-7877c056-66a9-47f1-ba2d-8b00cb83c43e",
+      "title": "Align and verify card numbered lists",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9962,
+      "y": 52368,
+      "w": 420,
+      "h": 340,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-7877c056-66a9-47f1-ba2d-8b00cb83c43e.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-5c8fa767-d997-41a8-9ae5-ea57af228f59",
+      "title": "Mobile Chromium Testing Runbook",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 53388,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-5c8fa767-d997-41a8-9ae5-ea57af228f59.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783947400826-19bf5e68",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783947400826-19bf5e68.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-aaea5fc2-44ea-4f3a-b147-bf8624365870",
+      "title": "Document mobile Chromium workflow",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10012,
+      "y": 53388,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-aaea5fc2-44ea-4f3a-b147-bf8624365870.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-5b99d38a-67de-45a7-9d26-bea9e490d5d1",
+      "title": "Delete Codex thread sessions",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 54408,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-5b99d38a-67de-45a7-9d26-bea9e490d5d1.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783955146517-72c5eb8c",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783955146517-72c5eb8c.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-eb22cf72-8eb3-4f28-9a15-9f46b5d70a8f",
+      "title": "Implement atomic Codex session deletion",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10012,
+      "y": 54408,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-eb22cf72-8eb3-4f28-9a15-9f46b5d70a8f.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-128761b3-fc73-4529-95a4-63fb6cb2aded",
+      "title": "Add the Codex Log delete-session flow",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9632,
+      "y": 54408,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-128761b3-fc73-4529-95a4-63fb6cb2aded.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-c6f72f28-1b4f-457f-b710-4b485c4b5b35",
+      "title": "Verify session deletion and fresh relaunch",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10012,
+      "y": 54818,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-c6f72f28-1b4f-457f-b710-4b485c4b5b35.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-3d98483e-9bf0-4cf2-be65-6d341546c463",
+      "title": "Render native Codex todo lists",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 55428,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-3d98483e-9bf0-4cf2-be65-6d341546c463.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783956792791-ebfc64b5",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783956792791-ebfc64b5.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-d8f0e5b3-ca5b-47d7-b043-402535beb921",
+      "title": "Normalize native Codex todo-list events",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10012,
+      "y": 55428,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-d8f0e5b3-ca5b-47d7-b043-402535beb921.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-837f62a4-a3f1-47f9-8025-d903a2d28400",
+      "title": "Present todo lists in the Codex Log",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9632,
+      "y": 55428,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-837f62a4-a3f1-47f9-8025-d903a2d28400.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-83d8dcae-2e34-4ebd-923d-16607c699cf4",
+      "title": "Verify todo-list parsing and presentation",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10012,
+      "y": 55838,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-83d8dcae-2e34-4ebd-923d-16607c699cf4.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-89546a8b-0056-4957-892e-e82acaf94cbf",
+      "title": "Draft session retrospective and closeout skill",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10402,
+      "y": 56448,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-89546a8b-0056-4957-892e-e82acaf94cbf.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783957606859-5a50334e",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783957606859-5a50334e.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-f6986c23-f9a3-48f0-8987-86ce5b53970b",
+      "title": "Make pre-transcription voice uploads retryable",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10402,
+      "y": 57468,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-f6986c23-f9a3-48f0-8987-86ce5b53970b.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783957946293-9a623f40",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783957946293-9a623f40.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-23127cae-657e-4500-a884-c6cd019e667b",
+      "title": "Persist and retry pre-acceptance voice uploads",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10012,
+      "y": 57468,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-23127cae-657e-4500-a884-c6cd019e667b.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-0ff36e57-96c3-489c-b003-80d60449265e",
+      "title": "Verify durable voice upload recovery",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9632,
+      "y": 57468,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-0ff36e57-96c3-489c-b003-80d60449265e.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-6d47492e-7d27-4219-ae71-45df641b104c",
+      "title": "Commit completed master-task state",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10402,
+      "y": 58488,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-6d47492e-7d27-4219-ae71-45df641b104c.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783963097882-82d21664",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783963097882-82d21664.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-56a9c8e0-1bc0-4452-b094-b4c6c85bc1aa",
+      "title": "Implement scoped completion commit",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10012,
+      "y": 58488,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-56a9c8e0-1bc0-4452-b094-b4c6c85bc1aa.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-b9c6959d-561f-4a49-9d22-4d763d43e689",
+      "title": "Verify and integrate completion commit",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9632,
+      "y": 58488,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-b9c6959d-561f-4a49-9d22-4d763d43e689.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-new",
+      "title": "New card",
+      "x": 30,
+      "y": 40,
+      "w": 260,
+      "h": 132,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-new.md"
+      }
+    },
+    {
+      "id": "card-355e8705-4d48-4765-82bb-74615db3013e",
+      "title": "Create projects from the projects catalog",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10402,
+      "y": 59508,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-355e8705-4d48-4765-82bb-74615db3013e.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783966854735-ed7f7cff",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783966854735-ed7f7cff.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-94a30f4e-9473-4489-9165-7919db6010e4",
+      "title": "Implement safe project creation and initialization",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10012,
+      "y": 59508,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-94a30f4e-9473-4489-9165-7919db6010e4.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-a1c0de9b-4018-44e3-bebe-74d9c66b5960",
+      "title": "Add the mobile create-project flow",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -9632,
+      "y": 59508,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-a1c0de9b-4018-44e3-bebe-74d9c66b5960.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-697f0d76-8e4e-4269-a20e-536d16157dff",
+      "title": "Verify and integrate project creation",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10012,
+      "y": 59918,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-697f0d76-8e4e-4269-a20e-536d16157dff.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-27c351db-0de0-4539-bcc1-ecbe1ca0ac7f",
+      "title": "Restore Pink to the Control Room catalog",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10402,
+      "y": 60528,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-27c351db-0de0-4539-bcc1-ecbe1ca0ac7f.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783967595414-4e4cfe18",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783967595414-4e4cfe18.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
+    },
+    {
+      "id": "card-9f93844a-47c7-4892-9208-638fef4a5ed2",
+      "title": "Diagnose Pink catalog disappearance",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10012,
+      "y": 60528,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-9f93844a-47c7-4892-9208-638fef4a5ed2.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-18496a6d-ffac-47d7-a92d-ac3c58592662",
+      "title": "Relaunch the catalog from the home root",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -9632,
+      "y": 60528,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-18496a6d-ffac-47d7-a92d-ac3c58592662.md"
+      },
+      "facts": [],
+      "fields": []
     }
   ],
-  "relationships": [],
+  "relationships": [
+    {
+      "id": "relationship-c4def4e1-455e-4792-80f5-99e7d80a4fbc",
+      "from": "card-62fdfda8-6b8a-40fe-a99f-44c96bfdfa9b",
+      "to": "card-1bc22bdf-1008-421a-aeba-0e783bf4206f",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-7f3a9c2c-72ec-4438-92d8-4b8017132ae3",
+      "from": "card-b8022ebf-81d9-4881-9a86-c8011c389734",
+      "to": "card-9ab81782-75c6-428d-add8-a22a37ce5fda",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-2b8f21d0-8143-41b1-923e-6870c9705a60",
+      "from": "card-42177913-0d28-4c43-ba94-adb3a569f3a3",
+      "to": "card-51a3062a-4f74-47f2-beff-a956ae67d0a9",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-87c81072-54ab-4a30-bd64-15151be4f3c0",
+      "from": "card-42177913-0d28-4c43-ba94-adb3a569f3a3",
+      "to": "card-d632070f-31ae-402e-8e79-b2bd97b32d00",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-b17e25e9-917e-4e26-a02e-9ea029d5929d",
+      "from": "card-42177913-0d28-4c43-ba94-adb3a569f3a3",
+      "to": "card-7a7a995b-c3c4-4aad-acca-0adebc09f6ab",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-2252dc3e-408f-47db-827f-8827f0a179d5",
+      "from": "card-42177913-0d28-4c43-ba94-adb3a569f3a3",
+      "to": "card-11aeabbd-6654-4fdd-973f-15293b92295c",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-0561acfd-463b-41d5-82dd-f16e73b8a675",
+      "from": "card-aa48cc9b-9319-494e-b343-f3026b76a05a",
+      "to": "card-141e25dd-34ee-47cf-ad6f-9e112bde599b",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-9869a104-c362-432b-83b4-3f9d21b9b825",
+      "from": "card-aa48cc9b-9319-494e-b343-f3026b76a05a",
+      "to": "card-31bc7dad-92a6-4249-a47b-ede138094a9e",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-4cae850c-09df-4592-99e4-22cad0bc9d0f",
+      "from": "card-b61f227f-7b10-43bb-a7d2-502621d7896e",
+      "to": "card-2bb850eb-80d0-46a1-9622-fec4f61d8079",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-1c944f16-b6e6-43cb-8b1d-ac837e1189fd",
+      "from": "card-b61f227f-7b10-43bb-a7d2-502621d7896e",
+      "to": "card-79607fb0-148f-44d6-99ec-8483e3a42fa3",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-0926bbff",
+      "from": "card-7074d33a-39da-42a1-b470-673cbe221def",
+      "to": "card-eb947f30-3631-47df-bf9b-1872ece19c61",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-49c77d41",
+      "from": "card-7074d33a-39da-42a1-b470-673cbe221def",
+      "to": "card-bd5b07d9-ba69-4a2d-b703-8124fdfdadbc",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-97f7a62b",
+      "from": "card-7074d33a-39da-42a1-b470-673cbe221def",
+      "to": "card-a83775f8-09b0-4aeb-977e-010cc0962925",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-74009eb0-0659-44d3-9729-e9b6d3fd937d",
+      "from": "card-6d480f9c-d0f3-4d2a-a4a8-d4a6b91903b9",
+      "to": "card-aec89b5f-dc4e-4942-9b9e-d7136252c2fd",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-51da12b6-a2d2-4bc0-afbc-a8261fa6944e",
+      "from": "card-6d480f9c-d0f3-4d2a-a4a8-d4a6b91903b9",
+      "to": "card-c4fab217-0065-4221-8beb-b9b4e0212f44",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-892b71c8-781a-4e86-9fe5-835e98d34cf3",
+      "from": "card-6d480f9c-d0f3-4d2a-a4a8-d4a6b91903b9",
+      "to": "card-f331b2de-18ca-46f8-92e5-0ed8024eb364",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-5f6b82e8-b02e-4002-a689-4ba4c87acabc",
+      "from": "card-6d480f9c-d0f3-4d2a-a4a8-d4a6b91903b9",
+      "to": "card-6dbc3431-80a2-4fa0-9d57-aafc7d679fd6",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-ac389ebe-6ecd-4635-9ba8-33a3b556fc24",
+      "from": "card-8b9dee68-8979-4112-b59d-6781713a9677",
+      "to": "card-c1e2d98f-beaf-4aec-a64a-7bf07e61013e",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-82d38e33-1edf-411d-a9d4-64a692badf4e",
+      "from": "card-8b9dee68-8979-4112-b59d-6781713a9677",
+      "to": "card-144497b4-0428-40a2-ad9a-ec5a1234f386",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-73c73cae-5367-4fc7-ba0c-098d73ffdbf3",
+      "from": "card-8b9dee68-8979-4112-b59d-6781713a9677",
+      "to": "card-16785306-87fd-473c-94f4-b7b066e0d524",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-d09ea365-0d49-4723-a48e-a3ec12e460d8",
+      "from": "card-8b9dee68-8979-4112-b59d-6781713a9677",
+      "to": "card-caa4c6bf-f76a-4ddc-a309-39d2ed11a08d",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-07e6816c",
+      "from": "card-64a9c5b1-3061-462b-bda0-275d69947712",
+      "to": "card-a1b03a54-4315-4e20-8566-8f4c2dc8dc56",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-bc032421",
+      "from": "card-64a9c5b1-3061-462b-bda0-275d69947712",
+      "to": "card-7af0bea9-eebb-42f1-942a-8e030c386cf3",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-a1bbce92",
+      "from": "card-2c5430d1-17e4-4bbe-bc0b-c86a113fc7db",
+      "to": "card-3c79ae06-ef5f-4f63-a08a-2bb7acf3c24c",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-ed23d3da",
+      "from": "card-92a7dd40-d2a7-4eac-9bd2-cab117b34b3e",
+      "to": "card-7877c056-66a9-47f1-ba2d-8b00cb83c43e",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-423fb950-2365-402e-af17-8384f1bee0b2",
+      "from": "card-5c8fa767-d997-41a8-9ae5-ea57af228f59",
+      "to": "card-aaea5fc2-44ea-4f3a-b147-bf8624365870",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-dc1a9414-1748-4303-aadc-486672ba4e6c",
+      "from": "card-5b99d38a-67de-45a7-9d26-bea9e490d5d1",
+      "to": "card-eb22cf72-8eb3-4f28-9a15-9f46b5d70a8f",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-ed976ff3-bc60-4ff3-a53c-260dc3005817",
+      "from": "card-5b99d38a-67de-45a7-9d26-bea9e490d5d1",
+      "to": "card-128761b3-fc73-4529-95a4-63fb6cb2aded",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-1c98ab65-3c39-4293-b4ec-90e12c8d0f29",
+      "from": "card-5b99d38a-67de-45a7-9d26-bea9e490d5d1",
+      "to": "card-c6f72f28-1b4f-457f-b710-4b485c4b5b35",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-4158478b-349e-422c-8d31-49eb89fc4ed9",
+      "from": "card-3d98483e-9bf0-4cf2-be65-6d341546c463",
+      "to": "card-d8f0e5b3-ca5b-47d7-b043-402535beb921",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-6f8f0317-c0ee-4c2c-bf32-a0b80c6b9190",
+      "from": "card-3d98483e-9bf0-4cf2-be65-6d341546c463",
+      "to": "card-837f62a4-a3f1-47f9-8025-d903a2d28400",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-d47f79ac-b77f-418f-bf61-6e34efa10f9f",
+      "from": "card-3d98483e-9bf0-4cf2-be65-6d341546c463",
+      "to": "card-83d8dcae-2e34-4ebd-923d-16607c699cf4",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-7bfe9f49-e74c-462e-9084-27772d711a66",
+      "from": "card-f6986c23-f9a3-48f0-8987-86ce5b53970b",
+      "to": "card-23127cae-657e-4500-a884-c6cd019e667b",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-36d0acec-b767-417f-9bde-c0418306d72c",
+      "from": "card-f6986c23-f9a3-48f0-8987-86ce5b53970b",
+      "to": "card-0ff36e57-96c3-489c-b003-80d60449265e",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-5a295d22-f3ad-44e3-a63c-33552448e667",
+      "from": "card-6d47492e-7d27-4219-ae71-45df641b104c",
+      "to": "card-56a9c8e0-1bc0-4452-b094-b4c6c85bc1aa",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-35813f39-245f-4d7f-acd9-f10b11b24ecb",
+      "from": "card-6d47492e-7d27-4219-ae71-45df641b104c",
+      "to": "card-b9c6959d-561f-4a49-9d22-4d763d43e689",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-f18c2c2f-b301-4434-854a-cb2b705ed6dc",
+      "from": "card-355e8705-4d48-4765-82bb-74615db3013e",
+      "to": "card-94a30f4e-9473-4489-9165-7919db6010e4",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-2b84bc5c-7029-4c7a-aa8b-07dc008a8e3e",
+      "from": "card-355e8705-4d48-4765-82bb-74615db3013e",
+      "to": "card-a1c0de9b-4018-44e3-bebe-74d9c66b5960",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-9d70a2c0-d890-44d6-98f9-979dddc4bac8",
+      "from": "card-355e8705-4d48-4765-82bb-74615db3013e",
+      "to": "card-697f0d76-8e4e-4269-a20e-536d16157dff",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-83483ea1-70f0-4290-9317-6e57ea68ad12",
+      "from": "card-27c351db-0de0-4539-bcc1-ecbe1ca0ac7f",
+      "to": "card-9f93844a-47c7-4892-9208-638fef4a5ed2",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-8e3aa88e-7d14-47f9-b326-17890a648ec9",
+      "from": "card-27c351db-0de0-4539-bcc1-ecbe1ca0ac7f",
+      "to": "card-18496a6d-ffac-47d7-a92d-ac3c58592662",
+      "label": "subtask"
+    }
+  ],
   "annotations": [
     {
       "id": "zone-int-zone",
@@ -5627,6 +8275,526 @@
       "label": "CLI",
       "variant": "zone",
       "comments": []
+    },
+    {
+      "id": "zone-eab3fc63-c672-43eb-ab02-c5c3d6e9cc85",
+      "x": -10462,
+      "y": 8448,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Unify Mobile Visual Design",
+      "comments": []
+    },
+    {
+      "id": "zone-71da503a-355a-4ad1-93aa-bffd8d83d094",
+      "x": -10462,
+      "y": 9468,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Control Room",
+      "comments": []
+    },
+    {
+      "id": "zone-873ce6f8-7abc-4210-97ad-414d056b9a98",
+      "x": -10462,
+      "y": 10488,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Compact file changes into tool calls",
+      "comments": []
+    },
+    {
+      "id": "zone-6b9f2ad9-3b32-4d8f-900b-c5f8226ccbd8",
+      "x": -10462,
+      "y": 11508,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Simplify mobile card header",
+      "comments": []
+    },
+    {
+      "id": "zone-1d955032-675f-4a2d-bc76-50254925b3cb",
+      "x": -10462,
+      "y": 12528,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Default Sol Threads to Medium Effort",
+      "comments": []
+    },
+    {
+      "id": "zone-d4c7cb15-6b8d-42b1-8238-53d42fb9142c",
+      "x": -10462,
+      "y": 13548,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Unify Mobile Thread Markdown Styling",
+      "comments": []
+    },
+    {
+      "id": "zone-28d05b50-8a41-4eb1-9d43-d4a030171fb2",
+      "x": -10462,
+      "y": 14568,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Preserve Base Font for Inline Code",
+      "comments": []
+    },
+    {
+      "id": "zone-a9a7173f-93fd-4f38-98c7-753cd2d038be",
+      "x": -10462,
+      "y": 15588,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Enforce Master Task Naming",
+      "comments": []
+    },
+    {
+      "id": "zone-94133b73-14b2-4097-b969-31dc3d6e7f33",
+      "x": -10462,
+      "y": 16608,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Mobile Application Navigation",
+      "comments": []
+    },
+    {
+      "id": "zone-b5fb1291-7679-4717-b131-bb5106197540",
+      "x": -10462,
+      "y": 17628,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Simplify mobile card header",
+      "comments": []
+    },
+    {
+      "id": "zone-6159ad9c-760e-4f93-b8cf-eb0527ff7035",
+      "x": -10462,
+      "y": 18648,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Collapse Running Codex Launcher",
+      "comments": []
+    },
+    {
+      "id": "zone-6638a6a6-120b-4e8b-a3bb-e2e997dd55a4",
+      "x": -10462,
+      "y": 19668,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Complete Master Subtasks from Control Room",
+      "comments": []
+    },
+    {
+      "id": "zone-a329c9cc-9093-4257-b8dc-a2c4a5024313",
+      "x": -10462,
+      "y": 20688,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Stop Mobile Thread Autofocus",
+      "comments": []
+    },
+    {
+      "id": "zone-33dad280-f66e-40a1-a7fa-d913131a404d",
+      "x": -10462,
+      "y": 21708,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Simplify Active Codex Task Rows",
+      "comments": []
+    },
+    {
+      "id": "zone-32a4709b-7b3e-48c5-a740-1149e55890c0",
+      "x": -10462,
+      "y": 22728,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Fix Mobile Thread Follow Bottom",
+      "comments": []
+    },
+    {
+      "id": "zone-fb6e77b1-0c3e-4a35-9a68-6ace5ed3c00e",
+      "x": -10462,
+      "y": 23748,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Compact Mobile Thread Composer",
+      "comments": []
+    },
+    {
+      "id": "zone-1496c617-5373-4f94-b56d-9a2442c5ce2d",
+      "x": -10462,
+      "y": 24768,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Persist Mobile Control Room Route",
+      "comments": []
+    },
+    {
+      "id": "zone-19a31a34-cae9-45c1-9e54-82519947374c",
+      "x": -10462,
+      "y": 25788,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Return After Master Task Completion",
+      "comments": []
+    },
+    {
+      "id": "zone-c0a1270e-3a50-456e-9c98-e60795d37ae1",
+      "x": -10462,
+      "y": 26808,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Control Room task counts",
+      "comments": []
+    },
+    {
+      "id": "zone-033dcbfc-f5cf-4d54-ba91-7312bed05e2f",
+      "x": -10462,
+      "y": 27828,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Explore Decision OS Logo Directions",
+      "comments": []
+    },
+    {
+      "id": "zone-e0dbd8a5-c7d9-493a-a524-f6c01c8031c1",
+      "x": -10462,
+      "y": 28848,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Optimistic animated queue reordering",
+      "comments": []
+    },
+    {
+      "id": "zone-9941d6f1-5a39-4160-adc2-8c684a71c883",
+      "x": -10462,
+      "y": 29868,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Termux multi-project master server",
+      "comments": []
+    },
+    {
+      "id": "zone-f4371239-933d-4b2a-adbc-38481259382c",
+      "x": -10462,
+      "y": 30888,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Synchronized Server Skills",
+      "comments": []
+    },
+    {
+      "id": "zone-006c56eb-3115-48fe-9ad3-ba7e46314b5a",
+      "x": -10462,
+      "y": 31908,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Mobile Carousel Touch and Controls",
+      "comments": []
+    },
+    {
+      "id": "zone-3d30ddcd-1773-449b-b9ca-e346c1554a69",
+      "x": -10462,
+      "y": 32928,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Polish Mobile Thread Controls",
+      "comments": []
+    },
+    {
+      "id": "zone-d4175cfc-cd02-4731-8e17-3132ea83cfd2",
+      "x": -10462,
+      "y": 33948,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Default Sol Threads to Medium Effort",
+      "comments": []
+    },
+    {
+      "id": "zone-14822e2e-5294-4159-940a-4821890194ee",
+      "x": -10462,
+      "y": 34968,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Delete Master Tasks from Mobile",
+      "comments": []
+    },
+    {
+      "id": "zone-d8f385e3-0c12-4ae9-9ae2-5ffeb985c259",
+      "x": -10462,
+      "y": 35988,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Fullscreen Carousel Image Viewer",
+      "comments": []
+    },
+    {
+      "id": "zone-4a9e1f3f-a4c2-4de5-9550-e438c5cf45ed",
+      "x": -10462,
+      "y": 37008,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "New task intake",
+      "comments": []
+    },
+    {
+      "id": "zone-db1f31cb-8e93-4720-9484-8d1a9645b818",
+      "x": -10462,
+      "y": 38028,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Understand Codex Plugins",
+      "comments": []
+    },
+    {
+      "id": "zone-bce00c91-3d4c-48f3-b0bf-e732071be4e8",
+      "x": -10462,
+      "y": 39048,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Correct Task Waiting Age",
+      "comments": []
+    },
+    {
+      "id": "zone-01f376ac-c3c9-4424-8f69-a6cc92540d1c",
+      "x": -10462,
+      "y": 40068,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Rotating Neon Codex Log Border",
+      "comments": []
+    },
+    {
+      "id": "zone-6785c01e-6b6b-4573-b410-7fa49ebcddf9",
+      "x": -10462,
+      "y": 41088,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Reliable Voice Transcription Lifecycle",
+      "comments": []
+    },
+    {
+      "id": "zone-139dac63-e69f-45a7-bdd8-31cf580fe9b6",
+      "x": -10462,
+      "y": 42108,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "New task intake",
+      "comments": []
+    },
+    {
+      "id": "zone-c2bfe8ed-af0a-4e52-b639-44fe0c9792fb",
+      "x": -10462,
+      "y": 43128,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Restore Mobile Thread Text Input",
+      "comments": []
+    },
+    {
+      "id": "zone-025073e2-9fe3-4d0d-84da-fd6ea37b2caa",
+      "x": -10462,
+      "y": 44148,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Show Only Project Names in Task Picker",
+      "comments": []
+    },
+    {
+      "id": "zone-4f844b96-18e5-487c-ad48-36044ac91f7e",
+      "x": -10462,
+      "y": 45168,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Project management workspace",
+      "comments": []
+    },
+    {
+      "id": "zone-61c02548-47ca-459e-81f2-bafb57d5dad8",
+      "x": -10462,
+      "y": 46188,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Codex Tool-Call Efficiency Audit",
+      "comments": []
+    },
+    {
+      "id": "zone-34058ea4-80db-479d-b410-20d999711670",
+      "x": -10462,
+      "y": 47208,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Stop Active Codex Runs",
+      "comments": []
+    },
+    {
+      "id": "zone-f233f487-1e5e-4aac-99eb-8e2969e64d9b",
+      "x": -10462,
+      "y": 48228,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Unify Mobile Thread Markdown Styling",
+      "comments": []
+    },
+    {
+      "id": "zone-c59bdce6-9611-408a-8211-cb89eda8aad5",
+      "x": -10462,
+      "y": 49248,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Build Stable Server State Projections",
+      "comments": []
+    },
+    {
+      "id": "zone-c9b270f0-2d56-4a9a-b2c4-0aafd7258d2b",
+      "x": -10462,
+      "y": 50268,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Auto-Resume Capacity-Interrupted Codex Threads",
+      "comments": []
+    },
+    {
+      "id": "zone-2cd0804e-f302-4f08-b543-fbe28c32a07e",
+      "x": -10462,
+      "y": 51288,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Preserve Base Font for Inline Code",
+      "comments": []
+    },
+    {
+      "id": "zone-24aa9b4b-0faf-4282-b366-42c74b8ae4dd",
+      "x": -10462,
+      "y": 52308,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Align Card Numbered Lists",
+      "comments": []
+    },
+    {
+      "id": "zone-14ebc42d-4d38-4725-b388-61120d259bd8",
+      "x": -10462,
+      "y": 53328,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Mobile Chromium Testing Runbook",
+      "comments": []
+    },
+    {
+      "id": "zone-91833351-738b-432f-8952-3ec8655ad4ee",
+      "x": -10462,
+      "y": 54348,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Delete Codex thread sessions",
+      "comments": []
+    },
+    {
+      "id": "zone-06e702c7-5454-4453-b06c-545f79ed58e1",
+      "x": -10462,
+      "y": 55368,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Render native Codex todo lists",
+      "comments": []
+    },
+    {
+      "id": "zone-dcf3cd03-6efb-4d87-8439-38574ab8bfba",
+      "x": -10462,
+      "y": 56388,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Session retrospective skill draft",
+      "comments": []
+    },
+    {
+      "id": "zone-410f2d94-d7a5-4d50-91c5-18cd5e880c6c",
+      "x": -10462,
+      "y": 57408,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Voice upload recovery",
+      "comments": []
+    },
+    {
+      "id": "zone-2ecde856-e9e9-48f2-bab7-d01366fbe8d1",
+      "x": -10462,
+      "y": 58428,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Commit completed master-task state",
+      "comments": []
+    },
+    {
+      "id": "zone-62e144ba-4fb9-487d-a2c4-06417c4c5032",
+      "x": -10462,
+      "y": 59448,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Create projects from the projects catalog",
+      "comments": []
+    },
+    {
+      "id": "zone-e308bdcf-a486-4220-95a6-a7f2df2c4718",
+      "x": -10462,
+      "y": 60468,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Restore Pink to the Control Room catalog",
+      "comments": []
     }
   ],
   "notes": {},
@@ -5638,5 +8806,63 @@
   },
   "updatedAt": "2026-05-31T09:20:00.000Z",
   "cardEdits": {},
-  "threadFiles": {}
+  "threadFiles": {
+    "thread-card-965466a1-09d4-4ab2-ad3c-322e6a37c8a5": ".decision-os/threads/specs/thread-card-965466a1-09d4-4ab2-ad3c-322e6a37c8a5.md",
+    "thread-card-6783f43f-25f0-4d1e-9e50-31fb62c1cb08": ".decision-os/threads/specs/thread-card-6783f43f-25f0-4d1e-9e50-31fb62c1cb08.md",
+    "thread-card-db22414c-4a95-4431-81e3-e917a75233f6": ".decision-os/threads/specs/thread-card-db22414c-4a95-4431-81e3-e917a75233f6.md",
+    "thread-card-663db0c4-33c3-4e83-bb26-8622faffa82e": ".decision-os/threads/specs/thread-card-663db0c4-33c3-4e83-bb26-8622faffa82e.md",
+    "thread-card-dda968e6-a7db-4856-8487-8aab1a0a98e1": ".decision-os/threads/specs/thread-card-dda968e6-a7db-4856-8487-8aab1a0a98e1.md",
+    "thread-card-322796d6-5c38-437f-9b03-d8c46f538f42": ".decision-os/threads/specs/thread-card-322796d6-5c38-437f-9b03-d8c46f538f42.md",
+    "thread-card-dc17bf78-cd30-48b3-9167-e4cfcdbf970c": ".decision-os/threads/specs/thread-card-dc17bf78-cd30-48b3-9167-e4cfcdbf970c.md",
+    "thread-card-7664c9d7-8ca4-48f3-8d7f-a86d2817ab21": ".decision-os/threads/specs/thread-card-7664c9d7-8ca4-48f3-8d7f-a86d2817ab21.md",
+    "thread-card-1c211390-04a2-4b1c-ac40-9b9f27289840": ".decision-os/threads/specs/thread-card-1c211390-04a2-4b1c-ac40-9b9f27289840.md",
+    "thread-card-b5623e76-e319-4abe-bde1-08139a0b040f": ".decision-os/threads/specs/thread-card-b5623e76-e319-4abe-bde1-08139a0b040f.md",
+    "thread-card-08e28a3e-c791-4453-97da-b9943a0a3892": ".decision-os/threads/specs/thread-card-08e28a3e-c791-4453-97da-b9943a0a3892.md",
+    "thread-card-d4def20b-ce78-4b2b-8d07-309bcd462e0d": ".decision-os/threads/specs/thread-card-d4def20b-ce78-4b2b-8d07-309bcd462e0d.md",
+    "thread-card-9c3ebf9f-3942-4b88-8d83-ceb6bc8b6c04": ".decision-os/threads/specs/thread-card-9c3ebf9f-3942-4b88-8d83-ceb6bc8b6c04.md",
+    "thread-card-b7d7cebe-50db-4f0c-be35-76ae02dfd7a0": ".decision-os/threads/specs/thread-card-b7d7cebe-50db-4f0c-be35-76ae02dfd7a0.md",
+    "thread-card-5e6778e9-7f3a-4cc3-ad99-8d2ddd1eb032": ".decision-os/threads/specs/thread-card-5e6778e9-7f3a-4cc3-ad99-8d2ddd1eb032.md",
+    "thread-card-9a5044ee-da92-47ab-889d-83b65e6e6941": ".decision-os/threads/specs/thread-card-9a5044ee-da92-47ab-889d-83b65e6e6941.md",
+    "thread-card-1aa8eca7-d3e9-4e2d-91f9-bb2ffa7793fd": ".decision-os/threads/specs/thread-card-1aa8eca7-d3e9-4e2d-91f9-bb2ffa7793fd.md",
+    "thread-card-fab927b7-e446-4093-a860-6c32214d2e5e": ".decision-os/threads/specs/thread-card-fab927b7-e446-4093-a860-6c32214d2e5e.md",
+    "thread-card-1bc5f2d1-86da-4a5f-8fcd-f987a4539941": ".decision-os/threads/specs/thread-card-1bc5f2d1-86da-4a5f-8fcd-f987a4539941.md",
+    "thread-card-a1397b46-7583-4bac-b74c-cc758c3a7903": ".decision-os/threads/specs/thread-card-a1397b46-7583-4bac-b74c-cc758c3a7903.md",
+    "thread-card-ee38b25f-66d3-4d40-89be-b4c6da09a440": ".decision-os/threads/specs/thread-card-ee38b25f-66d3-4d40-89be-b4c6da09a440.md",
+    "thread-card-ee38a29f-1cfb-42bd-a0f3-b56d50f3d2a8": ".decision-os/threads/specs/thread-card-ee38a29f-1cfb-42bd-a0f3-b56d50f3d2a8.md",
+    "thread-card-34288c99-cf14-4d5f-8840-83bc957c9a36": ".decision-os/threads/specs/thread-card-34288c99-cf14-4d5f-8840-83bc957c9a36.md",
+    "thread-card-42177913-0d28-4c43-ba94-adb3a569f3a3": ".decision-os/threads/specs/thread-card-42177913-0d28-4c43-ba94-adb3a569f3a3.md",
+    "thread-card-5e212225-e092-4b5b-807a-d6515cbefc18": ".decision-os/threads/specs/thread-card-5e212225-e092-4b5b-807a-d6515cbefc18.md",
+    "thread-card-f69417b9-3432-4f5e-9b4c-0d2ad0511e4f": ".decision-os/threads/specs/thread-card-f69417b9-3432-4f5e-9b4c-0d2ad0511e4f.md",
+    "thread-card-846e5c2b-a5a7-495a-8e73-d97cda971282": ".decision-os/threads/specs/thread-card-846e5c2b-a5a7-495a-8e73-d97cda971282.md",
+    "thread-card-aa48cc9b-9319-494e-b343-f3026b76a05a": ".decision-os/threads/specs/thread-card-aa48cc9b-9319-494e-b343-f3026b76a05a.md",
+    "thread-card-b61f227f-7b10-43bb-a7d2-502621d7896e": ".decision-os/threads/specs/thread-card-b61f227f-7b10-43bb-a7d2-502621d7896e.md",
+    "thread-card-3f818661-ce9d-4390-b820-44f0140b32aa": ".decision-os/threads/specs/thread-card-3f818661-ce9d-4390-b820-44f0140b32aa.md",
+    "thread-card-b8022ebf-81d9-4881-9a86-c8011c389734": ".decision-os/threads/specs/thread-card-b8022ebf-81d9-4881-9a86-c8011c389734.md",
+    "thread-card-7074d33a-39da-42a1-b470-673cbe221def": ".decision-os/threads/specs/thread-card-7074d33a-39da-42a1-b470-673cbe221def.md",
+    "thread-card-49cf1765-4987-44a9-a64d-d15d4b504c07": ".decision-os/threads/specs/thread-card-49cf1765-4987-44a9-a64d-d15d4b504c07.md",
+    "thread-card-3f5c2113-be56-4398-bb03-a07d2562791a": ".decision-os/threads/specs/thread-card-3f5c2113-be56-4398-bb03-a07d2562791a.md",
+    "thread-card-6d480f9c-d0f3-4d2a-a4a8-d4a6b91903b9": ".decision-os/threads/specs/thread-card-6d480f9c-d0f3-4d2a-a4a8-d4a6b91903b9.md",
+    "thread-card-8b9dee68-8979-4112-b59d-6781713a9677": ".decision-os/threads/specs/thread-card-8b9dee68-8979-4112-b59d-6781713a9677.md",
+    "thread-card-64a9c5b1-3061-462b-bda0-275d69947712": ".decision-os/threads/specs/thread-card-64a9c5b1-3061-462b-bda0-275d69947712.md",
+    "thread-card-62fdfda8-6b8a-40fe-a99f-44c96bfdfa9b": ".decision-os/threads/specs/thread-card-62fdfda8-6b8a-40fe-a99f-44c96bfdfa9b.md",
+    "thread-card-2164c008-359f-40ac-8abf-505ee5b5fe38": ".decision-os/threads/specs/thread-card-2164c008-359f-40ac-8abf-505ee5b5fe38.md",
+    "thread-card-840ff2e0-739b-4721-8f3a-af9d543aabbe": ".decision-os/threads/specs/thread-card-840ff2e0-739b-4721-8f3a-af9d543aabbe.md",
+    "thread-card-2c5430d1-17e4-4bbe-bc0b-c86a113fc7db": ".decision-os/threads/specs/thread-card-2c5430d1-17e4-4bbe-bc0b-c86a113fc7db.md",
+    "thread-card-92a7dd40-d2a7-4eac-9bd2-cab117b34b3e": ".decision-os/threads/specs/thread-card-92a7dd40-d2a7-4eac-9bd2-cab117b34b3e.md",
+    "thread-card-5c8fa767-d997-41a8-9ae5-ea57af228f59": ".decision-os/threads/specs/thread-card-5c8fa767-d997-41a8-9ae5-ea57af228f59.md",
+    "thread-card-5b99d38a-67de-45a7-9d26-bea9e490d5d1": ".decision-os/threads/specs/thread-card-5b99d38a-67de-45a7-9d26-bea9e490d5d1.md",
+    "thread-card-3d98483e-9bf0-4cf2-be65-6d341546c463": ".decision-os/threads/specs/thread-card-3d98483e-9bf0-4cf2-be65-6d341546c463.md",
+    "thread-card-89546a8b-0056-4957-892e-e82acaf94cbf": ".decision-os/threads/specs/thread-card-89546a8b-0056-4957-892e-e82acaf94cbf.md",
+    "thread-card-f6986c23-f9a3-48f0-8987-86ce5b53970b": ".decision-os/threads/specs/thread-card-f6986c23-f9a3-48f0-8987-86ce5b53970b.md",
+    "thread-card-6d47492e-7d27-4219-ae71-45df641b104c": ".decision-os/threads/specs/thread-card-6d47492e-7d27-4219-ae71-45df641b104c.md",
+    "thread-card-new": ".decision-os/threads/specs/thread-card-new.md",
+    "thread-card-a": ".decision-os/threads/specs/thread-card-a.md",
+    "thread-card-355e8705-4d48-4765-82bb-74615db3013e": ".decision-os/threads/specs/thread-card-355e8705-4d48-4765-82bb-74615db3013e.md",
+    "thread-card-27c351db-0de0-4539-bcc1-ecbe1ca0ac7f": ".decision-os/threads/specs/thread-card-27c351db-0de0-4539-bcc1-ecbe1ca0ac7f.md"
+  },
+  "deletedNoteIds": {
+    "thread-card-7074d33a-39da-42a1-b470-673cbe221def": [
+      "note-1783932484769-d9ca2dd762dea8"
+    ]
+  }
 }
