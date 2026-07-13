@@ -71,6 +71,10 @@ test('renders dynamic task totals in every Control Room status tab', () => {
   assert.match(mobile, /`\$\{count\} \$\{count === 1 \? 'task' : 'tasks'\}`/);
 });
 
+test('mobile card inline code changes color without replacing the surrounding font', () => {
+  assert.match(styles, /\.ledger-card-body code \{[^}]*color: color-mix\(in srgb, var\(--zone-color\), white 52%\);[^}]*font-family: inherit;/);
+});
+
 test('round-trips the mobile Control Room tab and task scroll anchor through the URL', () => {
   assert.deepEqual(parseControlRoomRoute('https://example.test/?tab=active#task-card-a'), { tab: 'active', anchor: 'task-card-a' });
   assert.equal(controlRoomPath('done', 'task-card-b'), '/?tab=done#task-card-b');
