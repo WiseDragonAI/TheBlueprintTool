@@ -134,8 +134,14 @@ body.menu-open .nav-scrim { opacity: 1; pointer-events: auto; }
 .control-room { padding-bottom: 82px; }
 .control-sticky { position: sticky; top: 64px; z-index: 15; margin: -20px -14px 16px; padding: 18px 14px 12px; border-bottom: 1px solid var(--line); background: rgba(9,10,12,.96); backdrop-filter: blur(18px); }
 .control-filters { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
-.filter-chip { flex: 0 0 auto; min-height: 44px; padding: 0 14px; color: var(--muted); }
-.filter-chip[aria-pressed="true"] { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent), transparent 88%); }
+.control-filters[hidden] { display: none; }
+.project-filter-chip { flex: 0 0 auto; min-height: 34px; padding: 5px 12px; border: 1px solid color-mix(in srgb, var(--project-color), white 24%); border-radius: 9px; color: white; background: var(--project-color); box-shadow: inset 0 1px 0 #ffffff2e, 0 3px 10px color-mix(in srgb, var(--project-color), transparent 65%); font-size: 13px; font-weight: 800; line-height: 1.1; }
+.project-filter-chip[aria-pressed="true"] { outline: 2px solid white; outline-offset: -3px; }
+.all-projects-filter { --project-color: #20242b; border-color: #49515d; color: var(--text); box-shadow: inset 0 1px 0 #ffffff1c; }
+.ledger-filter-chip, .filter-clear-button { flex: 0 0 auto; min-height: 36px; padding: 5px 12px; border-radius: 999px; font-size: 13px; line-height: 1.1; }
+.ledger-filter-chip { color: var(--muted); }
+.ledger-filter-chip[aria-pressed="true"] { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent), transparent 88%); }
+.filter-clear-button { margin-left: 8px; border-color: color-mix(in srgb, var(--danger), transparent 35%); color: var(--danger); background: color-mix(in srgb, var(--danger), transparent 90%); font-weight: 800; }
 .control-task-list { display: grid; gap: 12px; }
 .control-task { position: relative; border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: var(--radius); background: linear-gradient(180deg, var(--panel) 0%, var(--panel-deep) 100%); }
 .control-task.next-task { border-color: var(--accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent), transparent 50%), 0 10px 32px #0008; }

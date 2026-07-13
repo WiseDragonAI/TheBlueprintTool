@@ -206,6 +206,21 @@ test('adds project hierarchy, scoped ledger filters, and project color configura
   assert.match(styles, /\.project-link input\[type="color"\]/);
 });
 
+test('drills from one compact full-color project row into one ledger row with a trailing clear action', () => {
+  assert.match(mobile, /const showProjectFilters = state\.projectFilter === 'All'/);
+  assert.match(mobile, /className = `project-filter-chip\$\{project\.id === 'All' \? ' all-projects-filter' : ''\}`/);
+  assert.match(mobile, /button\.style\.setProperty\('--project-color', project\.color\)/);
+  assert.match(mobile, /elements\['control-project-filters'\]\.hidden = !showProjectFilters/);
+  assert.match(mobile, /replaceChildren\(\.\.\.\(showProjectFilters \? projectButtons : \[\]\)\)/);
+  assert.match(mobile, /elements\['control-filters'\]\.hidden = showProjectFilters/);
+  assert.match(mobile, /replaceChildren\(\.\.\.\(showProjectFilters \? \[\] : \[\.\.\.ledgerButtons, clearProject\]\)\)/);
+  assert.match(mobile, /clearProject\.textContent = 'Clear'/);
+  assert.match(mobile, /state\.projectFilter = 'All';\s*state\.controlFilter = 'All';\s*renderControlRoom\(\)/);
+  assert.match(styles, /\.control-filters\[hidden\] \{ display: none; \}/);
+  assert.match(styles, /\.project-filter-chip \{[^}]*min-height: 34px;[^}]*background: var\(--project-color\)/);
+  assert.match(styles, /\.filter-clear-button \{ margin-left: 8px;/);
+});
+
 test('keeps task metadata in Markdown but removes it from the visible card body', () => {
   const visible = visibleMasterTaskMarkdown(task().markdown);
   assert.doesNotMatch(visible, /#master-task|Ledger:|Waiting since:|Status:/);
