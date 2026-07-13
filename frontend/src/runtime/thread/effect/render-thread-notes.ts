@@ -8,7 +8,8 @@ import { renderLedgerCardMarkdown } from '../../ledger/component/render-ledger-c
 import { sendActiveLedgerMutation } from '../../ledger/effect/send-active-ledger-mutation.js';
 import { deletedNoteIdSet } from '../../ledger/helper/normalize-deleted-note-ids.js';
 import { syncVoiceTranscriptionWatchers } from '../../voice/effect/reconcile-voice-transcription.js';
-import { voicePhaseElapsedSeconds, voicePhaseLabel } from '../../voice/helper/voice-transcription-lifecycle.js';
+import { syncVoiceProgressClock } from '../../voice/effect/run-voice-progress-clock.js';
+import { voicePhaseElapsedSeconds, voicePhaseLabel, voicePhaseStartedAt } from '../../voice/helper/voice-transcription-lifecycle.js';
 
 type ThreadImageSizes = Record<string, { width?: number; height?: number }>;
 
@@ -113,7 +114,10 @@ export function renderThreadNotes(): void {
   syncVoiceTranscriptionWatchers();
   const signature = threadNotesSignature(String(state.threadId ?? ''), notes);
   const dataset = noteListDataset(list);
-  if (existing && dataset.threadId === String(state.threadId ?? '') && dataset.notesSignature === signature) return;
+  if (existing && dataset.threadId === String(state.threadId ?? '') && dataset.notesSignature === signature) {
+    syncVoiceProgressClock();
+    return;
+  }
   dataset.threadId = String(state.threadId ?? '');
   dataset.notesSignature = signature;
   list.replaceChildren();
@@ -163,6 +167,11 @@ export function renderThreadNotes(): void {
       spinner.className = 'thread-note-spinner';
       const elapsed = voiceOwned ? voicePhaseElapsedSeconds(note) : null;
       spinner.textContent = `${phaseLabel || 'Processing'}${elapsed === null ? '' : ` · ${elapsed}s`}`;
+      const phaseStartedAt = voiceOwned ? voicePhaseStartedAt(note) : '';
+      if (phaseStartedAt) {
+        spinner.dataset.voicePhaseStartedAt = phaseStartedAt;
+        spinner.dataset.voicePhaseLabel = phaseLabel || 'Processing';
+      }
       item.append(spinner);
     }
     if (retryable) {
@@ -178,4 +187,5 @@ export function renderThreadNotes(): void {
     }
     list.append(item);
   }
+  syncVoiceProgressClock();
 }
