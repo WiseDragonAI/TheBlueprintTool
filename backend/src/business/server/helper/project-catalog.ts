@@ -2,7 +2,8 @@
  * WHAT: Discovers and configures Decision OS projects below one master workspace.
  * WHY: A home-scoped server needs stable, validated project roots without trusting request paths.
  */
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, relative, resolve, sep } from 'node:path';
 
 export type DecisionOsProject = {
@@ -24,6 +25,18 @@ type ProjectSettings = {
 };
 const skippedDirectories = new Set(['.git', '.decision-os', '.worktrees', 'node_modules']);
 const defaultColors = ['#38d9e8', '#a78bfa', '#fb7185', '#fbbf24', '#34d399', '#60a5fa'];
+
+function validateProjectCreationInput(nameInput: string, descriptionInput: string): { name: string; description: string } {
+  const name = nameInput.trim();
+  const description = descriptionInput.trim();
+  if (!name) throw new Error('Project name is required.');
+  if (name.length > 120) throw new Error('Project name must not exceed 120 characters.');
+  if (description.length > 1000) throw new Error('Project description must not exceed 1000 characters.');
+  if (name === '.' || name === '..' || /[\\/\u0000-\u001f\u007f]/.test(name)) {
+    throw new Error('Project name must be a safe directory name without path separators or control characters.');
+  }
+  return { name, description };
+}
 
 function normalizedRelative(root: string, candidate: string): string {
   return relative(root, candidate).split(sep).join('/');
@@ -134,6 +147,40 @@ export function resolveCatalogProject(input: { projects: DecisionOsProject[]; pr
   if (input.projectId) return input.projects.find((project) => project.id === input.projectId) ?? null;
   const fallbackRoot = realpathSync(dirname(input.fallbackDecisionOsRoot));
   return input.projects.find((project) => realpathSync(project.root) === fallbackRoot) ?? input.projects[0] ?? null;
+}
+
+export function createDecisionOsProject(input: {
+  masterRoot: string;
+  masterDecisionOsRoot: string;
+  name: string;
+  description: string;
+}): DecisionOsProject {
+  const { name, description } = validateProjectCreationInput(input.name, input.description);
+  const masterRoot = realpathSync(input.masterRoot);
+  const projectRoot = resolve(masterRoot, name);
+  if (dirname(projectRoot) !== masterRoot) throw new Error('Project directory must be directly below the catalog root.');
+  if (existsSync(projectRoot)) throw new Error('A file or directory already exists with this project name.');
+
+  const decisionOsRoot = resolve(projectRoot, '.decision-os');
+  try {
+    mkdirSync(decisionOsRoot, { recursive: true });
+    writeFileSync(resolve(decisionOsRoot, 'state.json'), `${JSON.stringify({ projectName: name, ledgers: [] }, null, 2)}\n`);
+    writeFileSync(resolve(decisionOsRoot, 'project.json'), `${JSON.stringify({ id: randomUUID() }, null, 2)}\n`);
+    const projects = discoverDecisionOsProjects({ masterRoot, masterDecisionOsRoot: input.masterDecisionOsRoot });
+    const created = projects.find((project) => project.root === projectRoot);
+    if (!created) throw new Error('Created project was not discovered in the catalog.');
+    return saveProjectMetadata({
+      masterDecisionOsRoot: input.masterDecisionOsRoot,
+      projects,
+      projectId: created.id,
+      name,
+      description,
+      color: created.color,
+    });
+  } catch (error) {
+    rmSync(projectRoot, { recursive: true, force: true });
+    throw error;
+  }
 }
 
 export function saveProjectMetadata(input: {

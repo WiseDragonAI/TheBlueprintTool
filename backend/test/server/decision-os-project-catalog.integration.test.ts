@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import type { AddressInfo } from 'node:net';
@@ -32,6 +32,30 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
     const catalog = await catalogResponse.json() as { projects: Array<{ id: string; name: string; description: string; color: string; relativePath: string; root: string }> };
     assert.deepEqual(catalog.projects.map((project) => project.relativePath), ['admin', 'dev/project-a', 'dev/project-b']);
     assert.deepEqual(catalog.projects.map((project) => project.name), ['admin', 'project-a', 'project-b']);
+
+    const creation = await fetch(`${baseUrl}/decision-os/projects`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Project Gamma', description: 'Created from the catalog' })
+    });
+    assert.equal(creation.status, 201);
+    const created = await creation.json() as { project: { id: string; name: string; description: string; relativePath: string } };
+    assert.deepEqual(
+      { name: created.project.name, description: created.project.description, relativePath: created.project.relativePath },
+      { name: 'Project Gamma', description: 'Created from the catalog', relativePath: 'Project Gamma' },
+    );
+    assert.deepEqual(JSON.parse(readFileSync(join(home, 'Project Gamma', '.decision-os', 'state.json'), 'utf8')), { projectName: 'Project Gamma', ledgers: [] });
+    const refreshedCatalog = await fetch(`${baseUrl}/decision-os/projects`).then((response) => response.json()) as { projects: Array<{ id: string }> };
+    assert.ok(refreshedCatalog.projects.some((project) => project.id === created.project.id));
+
+    const collision = await fetch(`${baseUrl}/decision-os/projects`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Project Gamma', description: 'Duplicate' })
+    });
+    assert.equal(collision.status, 400);
+    assert.match(await collision.text(), /already exists/);
+    const unsafe = await fetch(`${baseUrl}/decision-os/projects`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: '../escape' })
+    });
+    assert.equal(unsafe.status, 400);
+    assert.equal(existsSync(join(home, '..', 'escape')), false);
 
     const controlRoom = await fetch(`${baseUrl}/`);
     assert.equal(controlRoom.status, 200);

@@ -71,6 +71,7 @@
                 <h1>Projects</h1>
                 <p id="projects-summary" class="muted"></p>
               </div>
+              <button class="create-button create-project-button" type="button">+ Project</button>
             </div>
             <div id="project-list" class="project-list"></div>
           </section>
@@ -220,8 +221,8 @@
             <input id="creation-name" name="name" required maxlength="120" autocomplete="off" />
           </label>
           <label class="creation-field creation-description-field" hidden>
-            <span>Description</span>
-            <textarea id="creation-description" name="description" rows="6" placeholder="Markdown is supported"></textarea>
+            <span id="creation-description-label">Description</span>
+            <textarea id="creation-description" name="description" rows="6" maxlength="1000"></textarea>
           </label>
           <label class="creation-field creation-color-field" hidden>
             <span>Color</span>
