@@ -42,6 +42,7 @@ export function buildCardSkillContinuePrompt(input: { messages: AnyRecord[]; new
     const context = input.newSessionContext;
     return [
       'Start a new Codex session for an existing decision-os run.',
+      'ledger-cli is on PATH; use $DECISION_OS_LEDGER_FILE and do not locate the CLI.',
       'The previous Codex session is intentionally unavailable. Reconstruct context from the durable workspace state below.',
       '',
       'Scope:',

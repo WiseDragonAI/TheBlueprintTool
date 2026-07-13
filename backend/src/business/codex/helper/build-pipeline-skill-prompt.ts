@@ -19,6 +19,7 @@ export function buildPipelineSkillPrompt(input: {
   return [
     `$${input.skillName}`,
     '',
+    'ledger-cli is on PATH; use $DECISION_OS_LEDGER_FILE and do not locate the CLI.',
     'You are processing one stage of a decision-os card pipeline from the active workspace.',
     '',
     `Pipeline run id: ${input.pipelineRunId}`,

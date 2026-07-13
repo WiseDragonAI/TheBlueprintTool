@@ -3,6 +3,8 @@
  * WHY: ledger edits must use committed ledger files as the work surface.
  */
 import type { FileSystemPort, Result } from '../../../lib/types.js';
+import { resolve } from 'node:path';
+import { constants, existsSync, accessSync } from 'node:fs';
 import { telemetry } from '../../../lib/telemetry/telemetry.js';
 import { readLedgerJson } from '../helper/read-ledger-json.js';
 import { writeLedgerJson } from '../effect/write-ledger-json.js';
@@ -15,6 +17,7 @@ import { resolveLedgerCardContext, resolveLedgerZoneCardsContext } from '../help
 import { hydrateLedgerCardContent, writeCardCommentContent } from '../helper/card-content-file.js';
 import { formatMasterTaskValidation, validateMasterTasks } from '../helper/validate-master-tasks.js';
 import { hydrateLedgerThreadNotes, stripHydratedThreadNotes } from '../helper/thread-content-file.js';
+import { resolveMasterTaskGate, resolveSessionContext } from '../helper/resolve-session-context.js';
 
 type JsonObject = Record<string, unknown>;
 
@@ -176,8 +179,8 @@ function setLedgerCardStatus(ledger: unknown, operation: { cardId?: string; stat
 
 export async function manageLedgerJsonController(
   actionPayload: {
-    ledgerCommand: 'answer' | 'card-context' | 'done' | 'export' | 'inspect' | 'mutate' | 'overview' | 'todo' | 'unanswered' | 'validate-master-tasks' | 'zone-cards';
-    answerOperation?: { message?: string; messageFile?: string; threadId?: string };
+    ledgerCommand: 'answer' | 'card-context' | 'done' | 'execution-profile' | 'export' | 'inspect' | 'master-task-gate' | 'mutate' | 'overview' | 'session-context' | 'todo' | 'unanswered' | 'validate-master-tasks' | 'zone-cards';
+    answerOperation?: { message?: string; messageFile?: string; messageStdin?: boolean; threadId?: string };
     cardOperation?: { cardId?: string };
     exportOperation?: { outputFile?: string };
     json?: boolean;
@@ -217,6 +220,54 @@ export async function manageLedgerJsonController(
   if (!ledger.ok) {
     telemetry('manage-ledger-json-rejected', { error: ledger.error });
     return ledger;
+  }
+
+  if (actionPayload.ledgerCommand === 'session-context') {
+    return resolveSessionContext({ ledger: ledger.value, ledgerJsonFile: actionPayload.ledgerJsonFile, cardId: actionPayload.cardOperation?.cardId, fs });
+  }
+
+  if (actionPayload.ledgerCommand === 'master-task-gate') {
+    return resolveMasterTaskGate({ ledger: ledger.value, ledgerJsonFile: actionPayload.ledgerJsonFile, cardId: actionPayload.cardOperation?.cardId, fs });
+  }
+
+  if (actionPayload.ledgerCommand === 'execution-profile') {
+    const workspaceRoot = process.env.DECISION_OS_ROOT
+      ? resolve(process.env.DECISION_OS_ROOT, '..')
+      : resolve(actionPayload.ledgerJsonFile, '../..');
+    const packageFile = resolve(workspaceRoot, 'package.json');
+    let packageJson: JsonObject = {};
+    try { packageJson = JSON.parse(await readFileWithNode(packageFile)) as JsonObject; } catch { /* typed unavailable fields below */ }
+    const scripts = isRecord(packageJson.scripts) ? packageJson.scripts : {};
+    const scriptNames = Object.keys(scripts);
+    const typechecks = scriptNames.filter((name) => name === 'typecheck' || name.startsWith('typecheck:')).map((name) => `npm run ${name}`);
+    const focusedTests = scriptNames.filter((name) => name === 'test' || name.startsWith('test:')).map((name) => `npm run ${name}`);
+    const dependencyRoots = [workspaceRoot, resolve(workspaceRoot, 'backend'), resolve(workspaceRoot, 'frontend'), resolve(workspaceRoot, 'ledger-cli')]
+      .map((root) => resolve(root, 'node_modules')).filter(existsSync);
+    const executable = (file: string): boolean => { try { accessSync(file, constants.X_OK); return true; } catch { return false; } };
+    const serverLauncher = resolve(workspaceRoot, 'bin', 'decision-os-server.mjs');
+    const browserDriver = resolve(workspaceRoot, 'frontend', 'node_modules', '.bin', 'playwright');
+    const output = {
+      version: 1,
+      projectId: process.env.DECISION_OS_PROJECT_ID ?? '',
+      workspaceRoot,
+      decisionOsRoot: process.env.DECISION_OS_ROOT ?? resolve(workspaceRoot, '.decision-os'),
+      ledgerFile: resolve(actionPayload.ledgerJsonFile),
+      packageManager: 'npm',
+      scripts,
+      commands: {
+        install: 'npm install',
+        typechecks,
+        focusedTests,
+        worktreeBootstrap: dependencyRoots.length > 0 ? `Use dependencies from ${dependencyRoots[0]}.` : 'npm install',
+      },
+      dependencyRoots,
+      server: { launcher: serverLauncher, available: executable(serverLauncher), url: process.env.DECISION_OS_SERVER_URL ?? '', frontendRoot: existsSync(resolve(workspaceRoot, 'frontend')) ? resolve(workspaceRoot, 'frontend') : null },
+      browser: { driver: browserDriver, available: executable(browserDriver) },
+      serverUrl: process.env.DECISION_OS_SERVER_URL ?? '',
+      restartPolicy: 'Do not restart or stop the server unless the operator explicitly asks.',
+      ready: existsSync(packageFile) && dependencyRoots.length > 0,
+    };
+    return { ok: true, value: JSON.stringify(output, null, 2) };
   }
   await hydrateLedgerThreadNotes(ledger.value, actionPayload.ledgerJsonFile, fs);
 
@@ -285,10 +336,14 @@ export async function manageLedgerJsonController(
       telemetry('manage-ledger-json-rejected', { error: answered.error });
       return answered;
     }
-    await writeLedgerJson(actionPayload.ledgerJsonFile, stripHydratedThreadNotes(answered.value), fs);
+    const answeredLedger = answered.value;
+    const notes = isRecord(answeredLedger) && isRecord(answeredLedger.notes) ? answeredLedger.notes : {};
+    const threadNotes = Array.isArray(notes[actionPayload.answerOperation?.threadId ?? '']) ? notes[actionPayload.answerOperation?.threadId ?? ''] as unknown[] : [];
+    const note = threadNotes.at(-1);
+    await writeLedgerJson(actionPayload.ledgerJsonFile, stripHydratedThreadNotes(answeredLedger), fs);
     telemetry('write-ledger-json', { path: actionPayload.ledgerJsonFile });
     telemetry('manage-ledger-json-completed');
-    return answered;
+    return { ok: true, value: JSON.stringify({ version: 1, persisted: true, note }, null, 2) };
   }
 
   if (actionPayload.ledgerCommand === 'todo' || actionPayload.ledgerCommand === 'done') {

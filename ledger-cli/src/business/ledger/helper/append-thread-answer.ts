@@ -20,7 +20,7 @@ async function readMessageFile(path: string, fs?: FileSystemPort): Promise<strin
 
 export async function appendThreadAnswer(
   ledger: unknown,
-  operation: { message?: string; messageFile?: string; threadId?: string } | undefined,
+  operation: { message?: string; messageFile?: string; messageStdin?: boolean; threadId?: string } | undefined,
   ledgerJsonFile: string,
   fs?: FileSystemPort,
 ): Promise<Result<unknown>> {
@@ -28,12 +28,13 @@ export async function appendThreadAnswer(
   if (!threadId) return { ok: false, error: 'Answer command requires --thread-id.' };
   const message = String(operation?.message ?? (operation?.messageFile ? await readMessageFile(operation.messageFile, fs) : '')).trimEnd();
   if (!message.trim()) return { ok: false, error: 'Answer command requires --message or --message-file.' };
+  if (/^#\s+(?:AGENT|OPERATOR)\s*$/im.test(message)) return { ok: false, error: 'Answer message must contain one note body without a thread role heading.' };
   if (!isRecord(ledger)) return { ok: false, error: 'Answer command requires an object ledger.' };
   const nextLedger: JsonObject = { ...ledger };
   const notes = isRecord(nextLedger.notes) ? { ...nextLedger.notes } : {};
   const threadNotes = Array.isArray(notes[threadId]) ? [...notes[threadId] as unknown[]] : [];
   const note = {
-    id: `note-agent-${Date.now()}-${randomUUID()}`,
+    id: `note-agent-${Date.now()}-${randomUUID().slice(0, 8)}`,
     role: 'agent',
     message,
     timestamp: new Date().toISOString(),

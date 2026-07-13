@@ -3,6 +3,8 @@
  * WHY: Stream scheduling belongs at the stdout ingestion boundary, separate from parsing and persistence details.
  */
 import { StringDecoder } from 'node:string_decoder';
+import { appendFileSync, mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { normalizeCardSkillRunEvent } from '../helper/normalize-card-skill-run-event.js';
 import {
   type CardSkillRunEventIngestor,
@@ -19,6 +21,7 @@ export function createCardSkillRunEventIngestor(input: {
   runId: string;
   startLine?: number;
   batchDelayMs?: number;
+  telemetryFile?: string;
 }): CardSkillRunEventIngestor {
   const decoder = new StringDecoder('utf8');
   const pendingEvents = new Map<number, NormalizedRunEvent>();
@@ -26,6 +29,31 @@ export function createCardSkillRunEventIngestor(input: {
   let nextLine = Math.max(0, Number(input.startLine ?? 0)) + 1;
   let remainder = '';
   let timer: NodeJS.Timeout | undefined;
+  let turnId = '';
+  const startedTools = new Map<string, { startedAt: string; tool: string }>();
+
+  const persistTelemetry = (event: AnyRecord, normalized: NormalizedRunEvent): void => {
+    if (!input.telemetryFile) return;
+    const type = String(event.type ?? '');
+    const item = event.item && typeof event.item === 'object' && !Array.isArray(event.item) ? event.item as AnyRecord : {};
+    if (type === 'turn.started') turnId = String(item.id ?? event.turn_id ?? event.id ?? turnId);
+    if (normalized.kind !== 'tool_call' || !normalized.itemId) return;
+    const now = new Date();
+    if (type === 'item.started') {
+      startedTools.set(normalized.itemId, { startedAt: now.toISOString(), tool: normalized.tool || normalized.title });
+      return;
+    }
+    if (type !== 'item.completed' && type !== 'item.failed') return;
+    const started = startedTools.get(normalized.itemId);
+    const startedAt = started?.startedAt ?? now.toISOString();
+    const completedAt = now.toISOString();
+    const durationMs = Math.max(0, now.getTime() - Date.parse(startedAt));
+    const success = type === 'item.completed' && normalized.status !== 'failed' && normalized.exitCode !== '1';
+    const row = { version: 1, startedAt, completedAt, durationMs, tool: started?.tool ?? normalized.tool ?? normalized.title, success, outputBytes: Buffer.byteLength(normalized.output), runId: input.runId, turnId, callId: normalized.itemId };
+    mkdirSync(dirname(input.telemetryFile), { recursive: true });
+    appendFileSync(input.telemetryFile, `${JSON.stringify(row)}\n`, 'utf8');
+    startedTools.delete(normalized.itemId);
+  };
 
   const enqueueLine = (rawLine: string): void => {
     const line = nextLine;
@@ -40,6 +68,7 @@ export function createCardSkillRunEventIngestor(input: {
       // WHY: Scalars and arrays have no lifecycle event contract to persist.
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
       const event = normalizeCardSkillRunEvent({ line, event: parsed as AnyRecord });
+      persistTelemetry(parsed as AnyRecord, event);
       // WHAT: Queue only events that have a durable thread representation.
       // WHY: Empty informational records remain available in the JSONL source without creating blank notes.
       if (event.persist) pendingEvents.set(event.line, event);
@@ -102,6 +131,14 @@ export function createCardSkillRunEventIngestor(input: {
       if (remainder) {
         enqueueLine(remainder);
         remainder = '';
+      }
+      if (input.telemetryFile && startedTools.size > 0) {
+        const completedAt = new Date().toISOString();
+        mkdirSync(dirname(input.telemetryFile), { recursive: true });
+        for (const [callId, started] of startedTools) {
+          appendFileSync(input.telemetryFile, `${JSON.stringify({ version: 1, startedAt: started.startedAt, completedAt, durationMs: Math.max(0, Date.parse(completedAt) - Date.parse(started.startedAt)), tool: started.tool, success: false, status: 'interrupted', outputBytes: 0, runId: input.runId, turnId, callId })}\n`, 'utf8');
+        }
+        startedTools.clear();
       }
       return persistPending();
     },

@@ -13,6 +13,7 @@ export function buildCardSkillPrompt(input: {
   return [
     `$${input.skillName}`,
     '',
+    'ledger-cli is on PATH; use $DECISION_OS_LEDGER_FILE and do not locate the CLI.',
     'You are processing one decision-os card from the active workspace.',
     '',
     'Treat the following source card as the complete incoming card content for this run.',

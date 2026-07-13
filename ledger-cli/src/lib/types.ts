@@ -6,7 +6,7 @@ import type { Stats } from 'node:fs';
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
-export type LedgerCommand = 'answer' | 'card-context' | 'done' | 'export' | 'help' | 'inspect' | 'migrate-decision-os' | 'mutate' | 'overview' | 'todo' | 'unanswered' | 'validate-master-tasks' | 'zone-cards';
+export type LedgerCommand = 'answer' | 'card-context' | 'codex-run-audit' | 'done' | 'execution-profile' | 'export' | 'help' | 'inspect' | 'master-task-apply' | 'master-task-gate' | 'migrate-decision-os' | 'mutate' | 'overview' | 'session-context' | 'todo' | 'unanswered' | 'validate-master-tasks' | 'zone-cards';
 
 export type AssetCommand = 'apply-gc-plan' | 'gc' | 'list-orphans' | 'list-referenced' | 'prune-json' | 'stage-referenced';
 
@@ -38,6 +38,7 @@ export type LedgerCliCommand = {
   answerOperation?: {
     message?: string;
     messageFile?: string;
+    messageStdin?: boolean;
     threadId?: string;
   };
   cardOperation?: {
@@ -50,6 +51,8 @@ export type LedgerCliCommand = {
   mutationFile?: string;
   mutationOperation: LedgerMutationOperation;
   migrationOperation?: MigrationOperation;
+  masterTaskOperation?: { planStdin: boolean };
+  runAuditOperation?: { root?: string; count: number; cutoff?: number; exclusions: string[] };
   statusOperation?: {
     cardId?: string;
     status: 'todo' | 'done';

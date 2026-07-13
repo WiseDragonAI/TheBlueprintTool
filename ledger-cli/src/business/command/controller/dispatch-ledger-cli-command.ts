@@ -9,6 +9,8 @@ import { formatLedgerCliHelp } from '../helper/format-ledger-cli-help.js';
 import { manageLedgerJsonController } from '../../ledger/controller/manage-ledger-json.js';
 import { manageAssetsController } from '../../assets/controller/manage-assets.js';
 import { manageDecisionOsMigrationController } from '../../migration/controller/manage-decision-os-migration.js';
+import { applyMasterTaskPlan } from '../../ledger/helper/apply-master-task-plan.js';
+import { auditCodexRuns } from '../../ledger/helper/audit-codex-runs.js';
 
 export async function dispatchLedgerCliCommandController(
   argv: string[],
@@ -48,6 +50,27 @@ export async function dispatchLedgerCliCommandController(
     return result;
   }
 
+  if (command.mode === 'answer' && command.answerOperation?.messageStdin) {
+    let message = '';
+    for await (const chunk of process.stdin) message += String(chunk);
+    command.answerOperation.message = message;
+  }
+
+  if (command.mode === 'master-task-apply') {
+    if (!command.masterTaskOperation?.planStdin) return { ok: false, error: 'master-task-apply requires --plan-stdin.' };
+    let planJson = '';
+    for await (const chunk of process.stdin) planJson += String(chunk);
+    const result = applyMasterTaskPlan({ ledgerJsonFile: command.ledgerJsonFile, planJson });
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+
+  if (command.mode === 'codex-run-audit') {
+    const result = auditCodexRuns(command.runAuditOperation ?? { count: 10, exclusions: [] });
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+
   const result = await manageLedgerJsonController({
     answerOperation: command.answerOperation,
     cardOperation: command.cardOperation,
@@ -60,7 +83,7 @@ export async function dispatchLedgerCliCommandController(
     statusOperation: command.statusOperation,
     zoneOperation: command.zoneOperation,
   }, ports.fs);
-  if (result.ok && (command.mode === 'card-context' || command.mode === 'export' || command.mode === 'overview' || command.mode === 'unanswered' || command.mode === 'validate-master-tasks' || command.mode === 'zone-cards') && typeof result.value === 'string') {
+  if (result.ok && (command.mode === 'answer' || command.mode === 'card-context' || command.mode === 'execution-profile' || command.mode === 'export' || command.mode === 'master-task-gate' || command.mode === 'overview' || command.mode === 'session-context' || command.mode === 'unanswered' || command.mode === 'validate-master-tasks' || command.mode === 'zone-cards') && typeof result.value === 'string') {
     ports.emit ? ports.emit(result.value) : console.log(result.value);
   }
   return result;

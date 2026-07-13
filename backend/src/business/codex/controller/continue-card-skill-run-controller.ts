@@ -17,6 +17,7 @@ import { resolveCardSkillRunOwnership } from '../helper/resolve-card-skill-run-o
 import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand, resolveCodexResumeCommand } from '../helper/resolve-codex-command.js';
 import { threadMessagesAfterLastCodexEvent } from '../helper/thread-messages-after-last-codex-event.js';
 import { readCardSkillRunController } from './read-card-skill-run-controller.js';
+import { decisionOsCodexEnvironment } from '../helper/decision-os-codex-runtime.js';
 
 type AnyRecord = Record<string, unknown>;
 type ProcessStatus = 'running' | 'complete' | 'failed' | 'cancelled';
@@ -225,10 +226,14 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   logCodexContinueDebug('spawn-prep', { traceId, ledgerId, cardId, runId, newSession, command: command.command, args: command.args, model: command.model, effort: command.effort, sessionId, promptChars: prompt.length, messageCount: messages.length, outputFile });
   mkdirSync(runDirectory, { recursive: true });
   const eventStartLine = prepareCardSkillRunEventAppend(stdoutFile);
-  const child = spawn(command.command, command.args, { cwd: workspaceRoot, stdio: ['pipe', 'pipe', 'pipe'] });
+  const child = spawn(command.command, command.args, {
+    cwd: workspaceRoot,
+    env: decisionOsCodexEnvironment({ runtime, decisionOsRoot, ledgerFile: ledgerPath }),
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
   const stdout = createWriteStream(stdoutFile, { flags: 'a' });
   const stderr = createWriteStream(stderrFile, { flags: 'a' });
-  const runEventIngestor = createCardSkillRunEventIngestor({ decisionOsRoot, ledgerPath, cardId, runId, startLine: eventStartLine });
+  const runEventIngestor = createCardSkillRunEventIngestor({ decisionOsRoot, ledgerPath, cardId, runId, startLine: eventStartLine, telemetryFile: `${stdoutFile}.telemetry.jsonl` });
   const continuedAt = new Date().toISOString();
   appendFileSync(stderrFile, codexRunSegmentMarker({
     runId,

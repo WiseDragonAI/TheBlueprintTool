@@ -17,31 +17,16 @@ test('thread Codex prompt uses a direct scoped contract without triggering open-
     operatorNoteTimestamp: '2026-07-08T01:00:00.000Z',
   });
 
-  assert.match(prompt.developerInstructions, /^## A\. Scope/m);
-  assert.match(prompt.developerInstructions, /^## B\. Scoped Treatment Rules/m);
-  assert.match(prompt.developerInstructions, /^## C\. Thread Reply Contract/m);
-  assert.match(prompt.developerInstructions, /^## D\. Card Markdown Formatting Rules/m);
-  assert.match(prompt.developerInstructions, /\*\*Workspace root:\*\* `\/workspace`/);
-  assert.match(prompt.developerInstructions, /\*\*Ledger file:\*\* `\/workspace\/\.decision-os\/specs\.json`/);
-  assert.match(prompt.developerInstructions, /\*\*Card id:\*\* `card-a`/);
-  assert.match(prompt.developerInstructions, /\*\*Prompt card title at launch:\*\* Card A/);
-  assert.match(prompt.developerInstructions, /\*\*Card markdown file:\*\* `\/workspace\/\.decision-os\/cards\/specs\/card-a\.md`/);
-  assert.match(prompt.developerInstructions, /\*\*Thread id:\*\* `thread-card-a`/);
-  assert.match(prompt.developerInstructions, /\*\*Thread markdown file:\*\* `\/workspace\/\.decision-os\/threads\/specs\/thread-card-a\.md`/);
-  assert.match(prompt.developerInstructions, /\*\*Run summary file:\*\* `\/workspace\/\.decision-os\/runs\/codex-skills\/specs\/run\.md`/);
-  assert.match(prompt.developerInstructions, /\*\*Operator timestamp:\*\* `2026-07-08T01:00:00\.000Z`/);
-  assert.match(prompt.developerInstructions, /ledger-cli validate-master-tasks --ledger \/workspace\/\.decision-os\/specs\.json/);
-  assert.match(prompt.developerInstructions, /\*\*Master-task naming:\*\*/);
-  assert.match(prompt.developerInstructions, /replace the launch title `Card A`/);
-  assert.match(prompt.developerInstructions, /rename the card's enclosing zone to the same title/);
-  assert.match(prompt.developerInstructions, /sole automatic exception to the ledger guard/);
-  assert.match(prompt.developerInstructions, /Never leave a master task or its zone named `New task intake`/);
-  assert.doesNotMatch(prompt.developerInstructions, /<(?:workspaceRoot|ledgerFile|cardId|cardTitle|cardMarkdownFile|threadId|threadMarkdownFile|runSummaryFile|operatorNoteTimestamp|epoch-ms|8-hex|ISO-8601)>/);
+  assert.match(prompt.developerInstructions, /^Decision OS run:/);
+  assert.match(prompt.developerInstructions, /ledger-cli is on PATH/);
+  assert.match(prompt.developerInstructions, /session-context/);
+  assert.match(prompt.developerInstructions, /--message-stdin/);
+  assert.ok(prompt.developerInstructions.length < 800);
   assert.doesNotMatch(prompt.developerInstructions, /# Card A|Implement this request/);
   assert.doesNotMatch(prompt.developerInstructions, /treat-open-notes|open notes|You are treating/i);
 
-  assert.match(prompt.taskContext, /Execute the operator request from one decision-os card thread\./);
-  assert.match(prompt.taskContext, /Current thread markdown:[\s\S]*Implement this request\./);
-  assert.match(prompt.taskContext, /Current card markdown:[\s\S]*# Card A/);
+  assert.match(prompt.taskContext, /Execute the operator request from this Decision OS thread\./);
+  assert.match(prompt.taskContext, /Thread:[\s\S]*Implement this request\./);
+  assert.match(prompt.taskContext, /Card:[\s\S]*# Card A/);
   assert.doesNotMatch(prompt.taskContext, /^## A\. Scope/m);
 });
