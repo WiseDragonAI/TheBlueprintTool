@@ -3,7 +3,7 @@
  * WHY: The thread panel needs a direct Codex action that continues against the same thread messages.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
-import { appendFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync, type WriteStream } from 'node:fs';
+import { appendFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync, type WriteStream } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
@@ -12,10 +12,12 @@ import { formatThreadMarkdown, hydrateLedgerThreadNotes, resolveThreadContentFil
 import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-ledger-notes.js';
 import { flushCardSkillRunEventIngestor } from '../effect/flush-card-skill-run-event-ingestor.js';
 import { createCardSkillRunEventIngestor } from '../effect/ingest-card-skill-run-events.js';
+import { prepareCardSkillRunEventAppend } from '../effect/prepare-card-skill-run-event-append.js';
 import { buildThreadCodexPrompt } from '../helper/build-thread-codex-prompt.js';
 import { codexRunSegmentMarker } from '../helper/codex-run-segment-marker.js';
 import { isCodexThreadArtifactNote } from '../helper/is-codex-thread-artifact-note.js';
-import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand } from '../helper/resolve-codex-command.js';
+import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand, resolveCodexResumeCommand, type CodexCommand } from '../helper/resolve-codex-command.js';
+import { codexCapacityResumeDelayMs, isTransientCodexCapacityFailure, readCodexSessionId } from '../helper/transient-codex-capacity-failure.js';
 
 type AnyRecord = Record<string, unknown>;
 type ProcessStatus = 'running' | 'complete' | 'failed' | 'cancelled';
@@ -212,28 +214,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
   stripHydratedThreadNotes(ledger);
   writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2), 'utf8');
 
-  const child = spawn(command.command, command.args, { cwd: workspaceRoot, stdio: ['pipe', 'pipe', 'pipe'] });
-  const stdout = createWriteStream(stdoutFile, { flags: 'a' });
-  const stderr = createWriteStream(stderrFile, { flags: 'a' });
-  const runEventIngestor = createCardSkillRunEventIngestor({ decisionOsRoot, ledgerPath, cardId, runId });
   const startedAt = new Date().toISOString();
-  appendFileSync(stderrFile, codexRunSegmentMarker({
-    runId,
-    startedAt,
-    segment: 'start',
-    startLine: 0,
-    metadata: {
-      sourceCardTitle: String(source.title ?? cardId),
-      sourceThreadId: threadId,
-      codexModel: command.model,
-      codexEffort: command.effort
-    }
-  }), 'utf8');
-  child.stdout.on('data', (chunk: Buffer) => runEventIngestor.ingest(chunk));
-  child.stdout.pipe(stdout, { end: false });
-  child.stderr.pipe(stderr, { end: false });
-  child.stdin.end(prompt.taskContext);
-
   const run = {
     id: runId,
     skillName: 'decision-os-thread',
@@ -248,39 +229,93 @@ export async function startThreadCodexProcessController(input: { action_payload?
     stderrFile,
     codexModel: command.model,
     codexEffort: command.effort,
-    pid: child.pid ?? 0,
+    pid: 0,
     status: 'running',
     startedAt,
   };
   updateRuntimeRun(runtime, runId, run);
-  attachRuntimeRunChild(runtime, runId, child);
 
-  let settled = false;
-  child.on('error', (error) => {
-    if (settled) return;
-    settled = true;
-    const finishedAt = new Date().toISOString();
-    appendRunStatus(runSummaryFile, 'failed', error.message);
-    updateRuntimeRun(runtime, runId, { status: 'failed', error: error.message, finishedAt });
-    finishRunStreams(stdout, stderr, () => {
-      flushCardSkillRunEventIngestor(runEventIngestor, runId);
-      notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, status: 'failed' });
-    });
-  });
-  child.on('close', (exitCode) => {
-    if (settled) return;
-    settled = true;
-    const finishedAt = new Date().toISOString();
-    const status: ProcessStatus = runtimeRunStatus(runtime, runId) === 'cancelled' ? 'cancelled' : exitCode === 0 ? 'complete' : 'failed';
-    const detail = status === 'cancelled' ? 'terminated by operator' : `exit code ${exitCode ?? 'unknown'}`;
-    appendRunStatus(runSummaryFile, status, detail);
-    updateRuntimeRun(runtime, runId, { status, exitCode, finishedAt });
-    finishRunStreams(stdout, stderr, () => {
-      if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
-      flushCardSkillRunEventIngestor(runEventIngestor, runId);
-      notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, status, exitCode });
-    });
-  });
+  const launch = (attemptCommand: CodexCommand, taskInput: string, segment: 'start' | 'continue'): void => {
+    const eventStartLine = segment === 'start' ? 0 : prepareCardSkillRunEventAppend(stdoutFile);
+    const stdoutByteOffset = existsSync(stdoutFile) ? statSync(stdoutFile).size : 0;
+    const stderrByteOffset = existsSync(stderrFile) ? statSync(stderrFile).size : 0;
+    const attemptStartedAt = new Date().toISOString();
+    const child = spawn(attemptCommand.command, attemptCommand.args, { cwd: workspaceRoot, stdio: ['pipe', 'pipe', 'pipe'] });
+    const stdout = createWriteStream(stdoutFile, { flags: 'a' });
+    const stderr = createWriteStream(stderrFile, { flags: 'a' });
+    const runEventIngestor = createCardSkillRunEventIngestor({ decisionOsRoot, ledgerPath, cardId, runId, startLine: eventStartLine });
+    appendFileSync(stderrFile, codexRunSegmentMarker({
+      runId,
+      startedAt: attemptStartedAt,
+      segment,
+      startLine: eventStartLine,
+      metadata: {
+        sourceCardTitle: String(source.title ?? cardId),
+        sourceThreadId: threadId,
+        codexModel: attemptCommand.model,
+        codexEffort: attemptCommand.effort
+      }
+    }), 'utf8');
+    updateRuntimeRun(runtime, runId, { pid: child.pid ?? 0, status: 'running', transientRetryAt: null });
+    attachRuntimeRunChild(runtime, runId, child);
+    child.stdout.on('data', (chunk: Buffer) => runEventIngestor.ingest(chunk));
+    child.stdout.pipe(stdout, { end: false });
+    child.stderr.pipe(stderr, { end: false });
+    child.stdin.end(taskInput);
 
-  return { ok: true, statusCode: 202, run: publicRun(run) };
+    let attemptSettled = false;
+    child.on('error', (error) => {
+      if (attemptSettled) return;
+      attemptSettled = true;
+      const finishedAt = new Date().toISOString();
+      appendRunStatus(runSummaryFile, 'failed', error.message);
+      updateRuntimeRun(runtime, runId, { status: 'failed', error: error.message, finishedAt });
+      finishRunStreams(stdout, stderr, () => {
+        flushCardSkillRunEventIngestor(runEventIngestor, runId);
+        notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, status: 'failed' });
+      });
+    });
+    child.on('close', (exitCode) => {
+      if (attemptSettled) return;
+      attemptSettled = true;
+      finishRunStreams(stdout, stderr, () => {
+        flushCardSkillRunEventIngestor(runEventIngestor, runId);
+        const cancelled = runtimeRunStatus(runtime, runId) === 'cancelled';
+        const sessionId = exitCode === 0 || cancelled ? '' : readCodexSessionId(stdoutFile);
+        if (!cancelled && exitCode !== 0 && sessionId && isTransientCodexCapacityFailure({
+          stdoutFile,
+          stderrFile,
+          stdoutByteOffset,
+          stderrByteOffset,
+        })) {
+          const retryAt = new Date(Date.now() + codexCapacityResumeDelayMs).toISOString();
+          appendRunStatus(runSummaryFile, 'running', `model capacity reached; resuming the same session after ${codexCapacityResumeDelayMs / 1000} seconds`);
+          updateRuntimeRun(runtime, runId, { status: 'running', transientRetryAt: retryAt, exitCode });
+          setTimeout(() => {
+            if (runtimeRunStatus(runtime, runId) !== 'running') return;
+            const resumeCommand = resolveCodexResumeCommand({
+              workspaceRoot,
+              runtime,
+              sessionId,
+              codexModel: command.model,
+              codexEffort: command.effort,
+            });
+            launch(resumeCommand, 'Continue the interrupted task from the durable session context.', 'continue');
+          }, codexCapacityResumeDelayMs);
+          return;
+        }
+        const finishedAt = new Date().toISOString();
+        const status: ProcessStatus = cancelled ? 'cancelled' : exitCode === 0 ? 'complete' : 'failed';
+        const detail = status === 'cancelled' ? 'terminated by operator' : `exit code ${exitCode ?? 'unknown'}`;
+        appendRunStatus(runSummaryFile, status, detail);
+        updateRuntimeRun(runtime, runId, { status, exitCode, finishedAt });
+        if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
+        notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, status, exitCode });
+      });
+    });
+  };
+
+  launch(command, prompt.taskContext, 'start');
+
+  return { ok: true, statusCode: 202, run: publicRun(runtimeRuns(runtime)[runId]) };
 }
