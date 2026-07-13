@@ -471,7 +471,7 @@
   margin: 8px 0 10px;
   padding: 8px 9px;
   box-sizing: border-box;
-  height: 112px;
+  height: 132px;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--card-zone-color), transparent 34%);
   border-radius: 2px;
@@ -526,7 +526,6 @@
   display: none;
 }
 
-.codex-run-cancel,
 .codex-run-continue,
 .codex-run-new-session {
   min-height: 22px;
@@ -545,7 +544,32 @@
   letter-spacing: 0;
 }
 
-.codex-run-cancel:disabled,
+.codex-run-stop {
+  width: 58px;
+  height: 58px;
+  min-width: 58px;
+  min-height: 58px;
+  padding: 6px;
+  display: grid;
+  grid-template-rows: 28px 16px;
+  justify-items: center;
+  align-items: center;
+  gap: 0;
+  border-radius: 3px;
+}
+
+.codex-run-stop-icon {
+  font-size: 25px;
+  line-height: 1;
+}
+
+.codex-run-stop .terminal-button__label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.codex-run-stop:disabled,
 .codex-run-continue:disabled,
 .codex-run-new-session:disabled {
   cursor: default;
