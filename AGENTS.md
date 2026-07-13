@@ -58,6 +58,19 @@
 4. **Bold:** use **bold** for the important words that carry the point.
 5. **Backticks:** use `backticks` for technical, secondary, exact, or literal terms: file paths, routes, config keys, commands, IDs, statuses, branch names, code symbols, and literal values.
 
+## Mobile Chromium Procedure
+
+- **Mandatory runbook:** Before installing, running, debugging, or modifying
+  browser automation on the phone, and before using Chromium for a mobile test
+  or screenshot, read and follow [`BROWSER_RUNBOOK.md`](BROWSER_RUNBOOK.md).
+- **Verified helper:** Use `../tool/browser/browse.js` with the Termux Chromium
+  executable at `/data/data/com.termux/files/usr/bin/chromium-browser`.
+- **Required flags:** Preserve `--no-sandbox`, `--no-zygote`,
+  `--single-process`, `--disable-dev-shm-usage`, and `--disable-gpu`.
+- **Server boundary:** Chromium is a separate client process. Do not restart,
+  stop, replace, or launch the Decision OS server while preparing a browser test
+  unless the operator explicitly requests a server restart.
+
 ## decision-os Server Procedure
 
 ### Server Restart Ownership
