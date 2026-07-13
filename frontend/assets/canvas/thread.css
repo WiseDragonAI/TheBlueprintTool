@@ -592,11 +592,7 @@
   white-space: nowrap;
 }
 
-.codex-log-stop-action {
-  grid-column: 1 / -1;
-}
-
-.codex-log-stop-action dt {
+.codex-log-run-action dt {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -604,33 +600,34 @@
   clip: rect(0 0 0 0);
 }
 
-.codex-log-stop-action dd {
+.codex-log-run-action dd {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   margin: 0;
   overflow: visible;
 }
 
-.codex-log-stop {
-  width: 64px;
-  height: 64px;
-  min-width: 64px;
-  min-height: 64px;
-  padding: 7px;
+.codex-log-action-button {
+  width: 100%;
+  max-width: 64px;
+  height: 56px;
+  min-width: 0;
+  min-height: 56px;
+  padding: 5px;
   display: grid;
-  grid-template-rows: 31px 17px;
+  grid-template-rows: 27px 15px;
   justify-items: center;
   align-items: center;
   gap: 0;
 }
 
-.codex-log-stop-icon {
-  font-size: 28px;
+.codex-log-action-icon {
+  font-size: 24px;
   line-height: 1;
 }
 
-.codex-log-stop .terminal-button__label {
-  font-size: 10px;
+.codex-log-action-button .terminal-button__label {
+  font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.05em;
 }

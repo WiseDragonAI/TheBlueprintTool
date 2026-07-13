@@ -132,11 +132,18 @@ export function renderThreadCodexLog(): void {
   root.replaceChildren();
   // WHAT: Render the exact empty state when the selected thread owns no Codex run.
   // WHY: Missing ownership is distinct from an unavailable run response.
-  if (!runId || !card) {
+  if (!card) {
     const empty = document.createElement('p');
     empty.className = 'codex-log-empty';
     empty.textContent = 'No Codex run for this thread.';
     root.append(empty);
+    return;
+  }
+  if (!runId) {
+    const empty = document.createElement('p');
+    empty.className = 'codex-log-empty';
+    empty.textContent = 'No Codex run for this thread.';
+    root.append(renderThreadCodexLogStatus({ summary: null, card, runId: '', threadId }), empty);
     return;
   }
 
@@ -147,7 +154,7 @@ export function renderThreadCodexLog(): void {
     && Array.isArray(recordState('threadRunEventsByThreadId')[threadId])
     ? recordState('threadRunEventsByThreadId')[threadId] as ThreadRunLogEvent[]
     : [];
-  root.append(renderAnnouncement(threadId), renderThreadCodexLogStatus({ summary: summary ?? null, card, runId }));
+  root.append(renderAnnouncement(threadId), renderThreadCodexLogStatus({ summary: summary ?? null, card, runId, threadId }));
   // WHAT: Surface an unavailable response separately from chronological run events.
   // WHY: Transport and ownership failures are not producer log records.
   if (summary?.ok === false) {
