@@ -23,7 +23,7 @@ export type LedgerMutation = {
   geometry?: Record<string, Record<string, { x: number; y: number; width: number; height: number }>>;
   viewport?: { x?: number; y?: number; scale?: number };
   region?: { id?: string; kind?: string; label?: string; color?: string };
-  note?: { id?: string; threadId?: string; body?: string; voiceFileRef?: string; status?: string; transcriptionStartedAt?: string; source?: string; error?: string; codexQueueStatus?: string; codexQueueRequestedAt?: string; codexQueueRunId?: string; codexQueueError?: string; imageSizes?: Record<string, { width?: number; height?: number }> };
+  note?: { id?: string; threadId?: string; body?: string; voiceFileRef?: string; status?: string; transcriptionStartedAt?: string; uploadReceivedAt?: string; audioPersistedAt?: string; acceptedAt?: string; providerStartedAt?: string; providerSettledAt?: string; completedAt?: string; revision?: number; source?: string; error?: string; codexQueueStatus?: string; codexQueueRequestedAt?: string; codexQueueRunId?: string; codexQueueError?: string; imageSizes?: Record<string, { width?: number; height?: number }> };
   selection?: { cardIds?: string[]; zoneIds?: string[]; groupIds?: string[] };
   pasteSuffix?: string;
 };
@@ -56,6 +56,13 @@ export function applyLedgerMutation(input: {
     voiceFileRef: note?.voiceFileRef ?? '',
     status: note?.status ?? '',
     transcriptionStartedAt: note?.transcriptionStartedAt ?? '',
+    uploadReceivedAt: note?.uploadReceivedAt ?? '',
+    audioPersistedAt: note?.audioPersistedAt ?? '',
+    acceptedAt: note?.acceptedAt ?? '',
+    providerStartedAt: note?.providerStartedAt ?? '',
+    providerSettledAt: note?.providerSettledAt ?? '',
+    completedAt: note?.completedAt ?? '',
+    revision: Number.isFinite(Number(note?.revision)) ? Number(note?.revision) : 0,
     error: note?.error ?? '',
     codexQueueStatus: note?.codexQueueStatus ?? '',
     codexQueueRequestedAt: note?.codexQueueRequestedAt ?? '',
@@ -64,9 +71,10 @@ export function applyLedgerMutation(input: {
   });
 
   const patchVoiceMetadata = (target: Record<string, unknown>, note: Record<string, unknown> | undefined, options: { overwrite: boolean }): void => {
-    for (const key of ['voiceFileRef', 'status', 'transcriptionStartedAt', 'error', 'codexQueueStatus', 'codexQueueRequestedAt', 'codexQueueRunId', 'codexQueueError']) {
+    for (const key of ['voiceFileRef', 'status', 'transcriptionStartedAt', 'uploadReceivedAt', 'audioPersistedAt', 'acceptedAt', 'providerStartedAt', 'providerSettledAt', 'completedAt', 'error', 'codexQueueStatus', 'codexQueueRequestedAt', 'codexQueueRunId', 'codexQueueError']) {
       if (typeof note?.[key] === 'string' && (options.overwrite || !target[key])) target[key] = note[key];
     }
+    if (Number.isFinite(Number(note?.revision)) && (options.overwrite || !target.revision)) target.revision = Number(note?.revision);
   };
 
   if ((mutation.action === 'create-zone' || mutation.action === 'create-group') && mutation.annotation?.id) {

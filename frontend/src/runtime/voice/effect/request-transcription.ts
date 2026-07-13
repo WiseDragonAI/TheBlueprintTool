@@ -11,6 +11,8 @@ import { patchOptimisticThreadNote } from '../../thread/effect/patch-optimistic-
 import { activeThreadContentScope, loadActiveThreadSlice } from '../../thread/effect/load-active-thread-slice.js';
 import { ledgerEndpointForTab } from '../../ledger/helper/ledger-endpoint-for-tab.js';
 import { normalizeLedgerNotes } from '../../ledger/helper/normalize-ledger-notes.js';
+import { currentLedgerStateId } from '../../ledger/helper/current-ledger-state-id.js';
+import { applyVoiceServerNote, watchVoiceTranscription } from './reconcile-voice-transcription.js';
 
 async function reconcileAcceptedVoiceNote(threadId: string, noteId: string): Promise<void> {
   const scope = activeThreadContentScope();
@@ -84,11 +86,29 @@ export async function requestTranscription(audio: Blob | null, input: VoiceTrans
   }
   state.voice.voiceFileRef = upload.voiceFileRef;
   state.voice.transcriptionStatus = 'transcribing';
-  patchOptimisticThreadNote({ threadId, noteId, body: 'Voice uploaded.', voiceFileRef: upload.voiceFileRef, status: 'transcribing', error: '', transcriptionStartedAt: new Date().toISOString(), optimistic: false });
+  applyVoiceServerNote({
+    ledgerId: options.ledgerId || currentLedgerStateId(),
+    threadId,
+    noteId,
+    note: {
+      id: noteId,
+      message: 'Voice uploaded.',
+      voiceFileRef: upload.voiceFileRef,
+      status: upload.lifecycleStatus || 'queued',
+      error: '',
+      uploadReceivedAt: upload.uploadReceivedAt ?? '',
+      audioPersistedAt: upload.audioPersistedAt ?? '',
+      acceptedAt: upload.acceptedAt ?? '',
+      providerStartedAt: upload.providerStartedAt ?? '',
+      transcriptionStartedAt: upload.providerStartedAt ?? '',
+      revision: upload.revision ?? 1
+    }
+  });
   // The server owns transcription after accepting the upload. Clear the recorder-level
   // busy state so another note can start while this note reports its own progress.
   state.voice.transcriptionStatus = 'idle';
   await reconcileAcceptedVoiceNote(threadId, noteId);
+  watchVoiceTranscription({ ledgerId: options.ledgerId || currentLedgerStateId(), threadId, noteId });
   telemetry('render-voice-status', { status: state.voice.transcriptionStatus, durationMs: state.voice.durationMs });
   renderVoiceStatus();
 }

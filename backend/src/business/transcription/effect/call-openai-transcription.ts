@@ -29,7 +29,8 @@ export async function callOpenaiTranscription(input: { action_payload?: AnyRecor
   const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',
     headers: { authorization: `Bearer ${apiKey}` },
-    body: form
+    body: form,
+    signal: payload.signal as AbortSignal | undefined
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) return { ok: false, error: String(body.error?.message ?? `OpenAI transcription failed with ${response.status}`) };

@@ -1,0 +1,91 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { state } from '../../src/runtime/state.js';
+import {
+  applyVoiceServerNote,
+  reconcileVoiceTranscription,
+  resetVoiceTranscriptionReconciliationForTests,
+  voiceTranscriptionWatcherCountForTests,
+  watchVoiceTranscription
+} from '../../src/runtime/voice/effect/reconcile-voice-transcription.js';
+import { voicePhaseElapsedSeconds, voicePhaseLabel } from '../../src/runtime/voice/helper/voice-transcription-lifecycle.js';
+
+function installRuntime(): () => void {
+  const previousDocument = globalThis.document;
+  const previousWindow = globalThis.window;
+  const previousCustomEvent = globalThis.CustomEvent;
+  (globalThis as unknown as { document: unknown }).document = { querySelector: () => null, addEventListener() {}, visibilityState: 'visible' };
+  (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {}, addEventListener() {} };
+  (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
+    constructor(_name: string, public options: Record<string, unknown> = {}) {}
+  };
+  state.activeLedgerId = 'specs';
+  state.activeTab = 'specs';
+  state.threadId = 'thread-card-a';
+  state.activeLedger = { notes: { 'thread-card-a': [] } };
+  return () => {
+    resetVoiceTranscriptionReconciliationForTests();
+    state.threadId = '';
+    state.activeLedger = null;
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+    (globalThis as unknown as { window: unknown }).window = previousWindow;
+    (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
+  };
+}
+
+test('targeted reconciliation recovers a missed terminal SSE without reloading the ledger', async () => {
+  const restore = installRuntime();
+  const previousFetch = globalThis.fetch;
+  state.activeLedger.notes['thread-card-a'] = [{ id: 'note-a', message: 'Voice uploaded.', voiceFileRef: '/tmp/voice.wav', status: 'transcribing', revision: 2 }];
+  globalThis.fetch = (async (url: string) => {
+    assert.match(url, /^\/api\/voice-transcription-status\?/);
+    return { ok: true, status: 200, json: async () => ({ ok: true, note: { id: 'note-a', message: 'Recovered transcript.', voiceFileRef: '/tmp/voice.wav', status: 'transcribed', revision: 4, completedAt: '2026-07-13T00:00:04.000Z' } }) } as Response;
+  }) as typeof fetch;
+  try {
+    const applied = await reconcileVoiceTranscription({ ledgerId: 'specs', threadId: 'thread-card-a', noteId: 'note-a' });
+    assert.equal(applied, true);
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].message, 'Recovered transcript.');
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].status, 'transcribed');
+  } finally {
+    globalThis.fetch = previousFetch;
+    restore();
+  }
+});
+
+test('older intermediate revisions cannot replace a terminal voice note', () => {
+  const restore = installRuntime();
+  state.activeLedger.notes['thread-card-a'] = [{ id: 'note-a', message: 'Final transcript.', voiceFileRef: '/tmp/voice.wav', status: 'transcribed', revision: 4 }];
+  try {
+    const applied = applyVoiceServerNote({
+      ledgerId: 'specs', threadId: 'thread-card-a', noteId: 'note-a',
+      note: { id: 'note-a', message: 'Voice uploaded.', status: 'transcribing', revision: 2 }
+    });
+    assert.equal(applied, false);
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].message, 'Final transcript.');
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].status, 'transcribed');
+  } finally {
+    restore();
+  }
+});
+
+test('terminal reconciliation stops the pending note watcher', async () => {
+  const restore = installRuntime();
+  const previousFetch = globalThis.fetch;
+  state.activeLedger.notes['thread-card-a'] = [{ id: 'note-a', message: 'Voice uploaded.', voiceFileRef: '/tmp/voice.wav', status: 'queued', revision: 1, acceptedAt: new Date().toISOString() }];
+  globalThis.fetch = (async () => ({ ok: true, status: 200, json: async () => ({ ok: true, note: { id: 'note-a', message: 'Done.', voiceFileRef: '/tmp/voice.wav', status: 'transcribed', revision: 4 } }) })) as unknown as typeof fetch;
+  try {
+    watchVoiceTranscription({ ledgerId: 'specs', threadId: 'thread-card-a', noteId: 'note-a' });
+    assert.equal(voiceTranscriptionWatcherCountForTests(), 1);
+    await reconcileVoiceTranscription({ ledgerId: 'specs', threadId: 'thread-card-a', noteId: 'note-a' });
+    assert.equal(voiceTranscriptionWatcherCountForTests(), 0);
+  } finally {
+    globalThis.fetch = previousFetch;
+    restore();
+  }
+});
+
+test('voice progress labels expose exact phase and elapsed seconds', () => {
+  assert.equal(voicePhaseLabel('queued'), 'Waiting for transcription');
+  assert.equal(voicePhaseLabel('finalizing'), 'Finalizing transcript');
+  assert.equal(voicePhaseElapsedSeconds({ status: 'transcribing', providerStartedAt: '2026-07-13T00:00:00.000Z' }, Date.parse('2026-07-13T00:00:12.900Z')), 12);
+});

@@ -8,25 +8,9 @@ import { fillThreadDraft } from '../../src/runtime/voice/effect/fill-thread-draf
 import { uploadVoiceAudio } from '../../src/runtime/voice/effect/upload-voice-audio.js';
 import { requestTranscription } from '../../src/runtime/voice/effect/request-transcription.js';
 import { appendVoiceNote } from '../../src/runtime/voice/effect/append-voice-note.js';
-import { expireStaleVoiceTranscription, voiceTranscriptionTimeoutMs } from '../../src/runtime/voice/helper/expire-stale-voice-transcription.js';
 import { createNoteController } from '../../src/runtime/thread/controller/create-note-controller.js';
 import { loadActiveLedgerState } from '../../src/runtime/ledger/effect/load-active-ledger-state.js';
 import { state } from '../../src/runtime/state.js';
-
-test('stale transcribing voice notes fail after 30 seconds or missing start time', () => {
-  const startedAt = new Date('2026-05-27T00:00:00.000Z').toISOString();
-  const active = { id: 'note-active', role: 'operator', message: 'Voice uploaded.', voiceFileRef: '/tmp/voice.webm', status: 'transcribing', transcriptionStartedAt: startedAt };
-  const stale = { id: 'note-stale', role: 'operator', message: 'Voice uploaded.', voiceFileRef: '/tmp/voice.webm', status: 'transcribing', transcriptionStartedAt: startedAt };
-  const missingStart = { id: 'note-missing-start', role: 'operator', message: 'Voice uploaded.', voiceFileRef: '/tmp/voice.webm', status: 'transcribing' };
-
-  assert.equal(expireStaleVoiceTranscription(active, Date.parse(startedAt) + voiceTranscriptionTimeoutMs - 1), false);
-  assert.equal(active.status, 'transcribing');
-  assert.equal(expireStaleVoiceTranscription(stale, Date.parse(startedAt) + voiceTranscriptionTimeoutMs), true);
-  assert.equal(stale.status, 'transcription failed');
-  assert.equal(stale.message, 'Voice uploaded; transcription failed.');
-  assert.equal(expireStaleVoiceTranscription(missingStart, Date.parse(startedAt)), true);
-  assert.equal(missingStart.status, 'transcription failed');
-});
 
 test('fill-thread-draft appends transcribed text to the active draft', () => {
   const previousDocument = globalThis.document;
@@ -401,7 +385,7 @@ test('request-transcription updates the captured thread after selection changes'
     assert.equal(state.threadId, 'thread-card-b');
     assert.equal(state.activeLedger.notes['thread-card-a'][0].message, 'Voice uploaded.');
     assert.equal(state.activeLedger.notes['thread-card-a'][0].voiceFileRef, '/tmp/voice-owned.webm');
-    assert.equal(state.activeLedger.notes['thread-card-a'][0].status, 'transcribing');
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].status, 'queued');
     assert.equal(state.activeLedger.notes['thread-card-b'].length, 0);
   } finally {
     (globalThis as unknown as { fetch: unknown }).fetch = previousFetch;
