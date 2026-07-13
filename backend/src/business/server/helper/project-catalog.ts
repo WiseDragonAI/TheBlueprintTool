@@ -2,7 +2,7 @@
  * WHAT: Discovers and configures Decision OS projects below one master workspace.
  * WHY: A home-scoped server needs stable, validated project roots without trusting request paths.
  */
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, dirname, relative, resolve, sep } from 'node:path';
 
 export type DecisionOsProject = {
@@ -11,11 +11,16 @@ export type DecisionOsProject = {
   relativePath: string;
   root: string;
   decisionOsRoot: string;
+  description: string;
   color: string;
   ledgers: Array<{ id: string; title: string; ledgerFile: string }>;
 };
 
-type ProjectSettings = { colors?: Record<string, string> };
+type ProjectMetadata = { name: string; description: string; color: string };
+type ProjectSettings = {
+  projects?: Record<string, Partial<ProjectMetadata>>;
+  colors?: Record<string, string>;
+};
 const skippedDirectories = new Set(['.git', '.decision-os', '.worktrees', 'node_modules']);
 const defaultColors = ['#38d9e8', '#a78bfa', '#fb7185', '#fbbf24', '#34d399', '#60a5fa'];
 
@@ -37,6 +42,10 @@ function readSettings(masterDecisionOsRoot: string): ProjectSettings {
   } catch {
     return {};
   }
+}
+
+function validColor(value: unknown): value is string {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
 }
 
 function ledgersFor(decisionOsRoot: string): DecisionOsProject['ledgers'] {
@@ -76,13 +85,23 @@ export function discoverDecisionOsProjects(input: { masterRoot: string; masterDe
   return candidates.map((root, index) => {
     const relativePath = normalizedRelative(masterRoot, root) || '.';
     const id = projectId(relativePath);
+    const metadata = settings.projects?.[id];
+    const fallbackName = basename(root);
+    const configuredName = typeof metadata?.name === 'string' ? metadata.name.trim() : '';
+    const configuredDescription = typeof metadata?.description === 'string' ? metadata.description : '';
+    const configuredColor = validColor(metadata?.color)
+      ? metadata.color
+      : validColor(settings.colors?.[id])
+        ? settings.colors[id]
+        : defaultColors[index % defaultColors.length];
     return {
       id,
-      name: basename(root),
+      name: configuredName || fallbackName,
+      description: configuredDescription,
       relativePath,
       root,
       decisionOsRoot: resolve(root, '.decision-os'),
-      color: String(settings.colors?.[id] ?? defaultColors[index % defaultColors.length]),
+      color: configuredColor.toLowerCase(),
       ledgers: ledgersFor(resolve(root, '.decision-os')),
     };
   }).sort((left, right) => left.relativePath.localeCompare(right.relativePath));
@@ -94,13 +113,34 @@ export function resolveCatalogProject(input: { projects: DecisionOsProject[]; pr
   return input.projects.find((project) => realpathSync(project.root) === fallbackRoot) ?? input.projects[0] ?? null;
 }
 
-export function saveProjectColor(input: { masterDecisionOsRoot: string; projects: DecisionOsProject[]; projectId: string; color: string }): DecisionOsProject {
+export function saveProjectMetadata(input: {
+  masterDecisionOsRoot: string;
+  projects: DecisionOsProject[];
+  projectId: string;
+  name: string;
+  description: string;
+  color: string;
+}): DecisionOsProject {
   const project = input.projects.find((entry) => entry.id === input.projectId);
   if (!project) throw new Error('Unknown project id.');
-  if (!/^#[0-9a-f]{6}$/i.test(input.color)) throw new Error('Project color must be a six-digit hex color.');
+  const name = input.name.trim();
+  const description = input.description.trim();
+  const color = input.color.toLowerCase();
+  if (!name) throw new Error('Project name is required.');
+  if (name.length > 120) throw new Error('Project name must not exceed 120 characters.');
+  if (description.length > 1000) throw new Error('Project description must not exceed 1000 characters.');
+  if (!validColor(color)) throw new Error('Project color must be a six-digit hex color.');
   const settings = readSettings(input.masterDecisionOsRoot);
-  const next = { ...settings, colors: { ...settings.colors, [input.projectId]: input.color.toLowerCase() } };
+  const migratedProjects = { ...settings.projects };
+  for (const [id, legacyColor] of Object.entries(settings.colors ?? {})) {
+    if (validColor(legacyColor)) migratedProjects[id] = { ...migratedProjects[id], color: legacyColor.toLowerCase() };
+  }
+  migratedProjects[input.projectId] = { name, description, color };
+  const next: ProjectSettings = { projects: migratedProjects };
   mkdirSync(input.masterDecisionOsRoot, { recursive: true });
-  writeFileSync(settingsFile(input.masterDecisionOsRoot), `${JSON.stringify(next, null, 2)}\n`);
-  return { ...project, color: input.color.toLowerCase() };
+  const destination = settingsFile(input.masterDecisionOsRoot);
+  const temporary = `${destination}.tmp-${process.pid}-${Date.now()}`;
+  writeFileSync(temporary, `${JSON.stringify(next, null, 2)}\n`);
+  renameSync(temporary, destination);
+  return { ...project, name, description, color };
 }

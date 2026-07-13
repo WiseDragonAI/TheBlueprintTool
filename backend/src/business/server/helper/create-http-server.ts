@@ -39,7 +39,7 @@ import { readCodexPipelineRunController } from '../../codex/controller/read-code
 import { cancelCodexPipelineRunController } from '../../codex/controller/cancel-codex-pipeline-run-controller.js';
 import { restartCodexPipelineRunController } from '../../codex/controller/restart-codex-pipeline-run-controller.js';
 import { resumeCodexPipelineRuns } from '../../codex/helper/resume-codex-pipeline-runs.js';
-import { discoverDecisionOsProjects, resolveCatalogProject, saveProjectColor } from './project-catalog.js';
+import { discoverDecisionOsProjects, resolveCatalogProject, saveProjectMetadata } from './project-catalog.js';
 
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
@@ -282,7 +282,14 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const bodyBuffer = await readRequestBuffer(request);
       try {
         const body = JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
-        const project = saveProjectColor({ masterDecisionOsRoot, projects, projectId, color: String(body.color ?? '') });
+        const project = saveProjectMetadata({
+          masterDecisionOsRoot,
+          projects,
+          projectId,
+          name: String(body.name ?? ''),
+          description: String(body.description ?? ''),
+          color: String(body.color ?? ''),
+        });
         projectCatalogCache = { expiresAt: 0, projects: [] };
         response.setHeader('content-type', 'application/json');
         response.end(JSON.stringify({ ok: true, project }));
@@ -789,7 +796,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const blueprintState = readCanonicalDecisionOsState({ action_payload: { decisionOsFile: resolve(decisionOsRoot, 'state.json'), writeBack: true } });
     const routeTabId = url.split('/').filter(Boolean)[0] ?? '';
     const isLedgerRoute = Boolean(routeTabId && blueprintState.ledgers.some((ledger) => ledger.id === routeTabId));
-    const isAppRoute = url === '/' || url === '/ledgers' || isLedgerRoute;
+    const isProjectRoute = url === '/projects' || url.startsWith('/projects/');
+    const isAppRoute = url === '/' || url === '/ledgers' || isProjectRoute || isLedgerRoute;
     const staticModuleRoot = isSharedModuleRoute
       ? resolve(frontendRoot, '..', 'shared')
       : isCanvasSourceRoute
