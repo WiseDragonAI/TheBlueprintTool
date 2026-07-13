@@ -6,6 +6,7 @@ import type { CardSkillRunEvent } from '../effect/request-card-skill-run-status.
 import {
   threadRunEventKey,
   threadRunEventRunId,
+  threadRunLifecycleKey,
   threadRunEventSourceIdentity,
   threadRunToolKey,
 } from './thread-run-event-identity.js';
@@ -67,6 +68,10 @@ function terminalToolEvent(event: ThreadRunLogEvent): boolean {
     || /^(?:complete|completed|failed|cancelled|canceled)$/i.test(event.status);
 }
 
+function lifecycleEvent(event: ThreadRunLogEvent, fallbackRunId: string): boolean {
+  return Boolean(threadRunLifecycleKey(event, fallbackRunId));
+}
+
 export function mergeThreadRunEvents(
   previousEvents: ReadonlyArray<CardSkillRunEvent | ThreadRunLogEvent>,
   incrementalEvents: ReadonlyArray<CardSkillRunEvent>,
@@ -95,9 +100,9 @@ export function mergeThreadRunEvents(
     }
 
     const existing = events[existingIndex];
-    // WHAT: Update only active tool lifecycles and reject regressions from terminal states.
-    // WHY: Non-tool events are immutable observations and late start records must not overwrite completion.
-    if (!incoming.toolKey || (terminalToolEvent(existing) && !terminalToolEvent(incoming))) continue;
+    // WHAT: Update tool and todo-list lifecycles while rejecting regressions from terminal states.
+    // WHY: Native todo snapshots share item identity without belonging in tool disclosure groups.
+    if (!lifecycleEvent(incoming, fallbackRunId) || (terminalToolEvent(existing) && !terminalToolEvent(incoming))) continue;
     const updated: ThreadRunLogEvent = {
       ...existing,
       ...incoming,

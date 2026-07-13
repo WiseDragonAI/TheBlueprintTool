@@ -64,6 +64,23 @@ function changesText(changes: unknown): string {
   }).join('\n');
 }
 
+function todoListItems(items: unknown): Array<{ text: string; completed: boolean }> {
+  if (!Array.isArray(items)) return [];
+  return items.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
+    const record = entry as AnyRecord;
+    const text = String(record.text ?? '').trim();
+    return text ? [{ text, completed: record.completed === true }] : [];
+  });
+}
+
+function todoListStatus(type: string, status: string): string {
+  if (status) return status;
+  if (/\.completed$/i.test(type)) return 'completed';
+  if (/\.(?:started|updated)$/i.test(type)) return 'in_progress';
+  return '';
+}
+
 function normalizedJsonlEvent(line: number, event: Omit<NormalizedRunEvent, 'line' | 'source' | 'sourceLine'>): NormalizedRunEvent {
   return { line, source: 'jsonl', sourceLine: line, ...event };
 }
@@ -153,6 +170,25 @@ export function normalizeCardSkillRunEvent(line: ParsedRunLine): NormalizedRunEv
   if (/reason|thinking|thought/i.test(itemType)) {
     const text = textBlock(item.text ?? item.summary ?? item.message ?? event.text);
     return normalizedJsonlEvent(line.line, { type, kind: 'thinking', title: 'Codex thinking', text, status, itemId, tool: '', output: '', exitCode: '', severity: 'info', persist: Boolean(text) });
+  }
+  // WHAT: Preserve native TodoList snapshots as a dedicated lifecycle event.
+  // WHY: The producer emits ordered boolean state rather than readable text or command output.
+  if (itemType === 'todo_list') {
+    const items = todoListItems(item.items);
+    const text = items.map((entry) => `- [${entry.completed ? 'x' : ' '}] ${entry.text}`).join('\n');
+    return normalizedJsonlEvent(line.line, {
+      type,
+      kind: 'todo_list',
+      title: 'Todo list',
+      text,
+      status: todoListStatus(type, status),
+      itemId,
+      tool: 'TodoList',
+      output: JSON.stringify(items),
+      exitCode: '',
+      severity: 'info',
+      persist: items.length > 0,
+    });
   }
   // WHAT: Format command execution details as one Markdown tool-call note.
   // WHY: Commands, status, exit code, and output must remain readable without raw JSON inspection.
