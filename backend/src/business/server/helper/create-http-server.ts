@@ -170,92 +170,77 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   if (payload.mode === 'dry-run') {
     return { ok: true, port, server: { listening: false, port } };
   }
-  const contentEventClients = new Set<ServerResponse>();
-  const ledgerRevisions = createLedgerRevisionTracker();
-  const publishCardContentChange = (event: CardContentChange | AnyRecord): void => {
-    const ledgerId = String(event.ledgerId ?? '');
-    const hasCompleteScope = Boolean(ledgerId && (event.kind !== 'thread-content' || String(event.threadId ?? '')));
-    const resolvedEvent = hasCompleteScope
-      ? null
-      : resolveCardContentChange({
-        decisionOsRoot,
+  const globalContentEventClients = new Set<ServerResponse>();
+  type ProjectContext = {
+    clients: Set<ServerResponse>;
+    revisions: ReturnType<typeof createLedgerRevisionTracker>;
+    runtime: AnyRecord;
+    publishCard: (event: CardContentChange | AnyRecord) => void;
+    publishLedger: (event: AnyRecord) => void;
+    watcher: ReturnType<typeof watchCardContentFiles>;
+  };
+  const projectContexts = new Map<string, ProjectContext>();
+  const projectContext = (activeDecisionOsRoot: string, projectId: string): ProjectContext => {
+    const existing = projectContexts.get(activeDecisionOsRoot);
+    if (existing) return existing;
+    const clients = new Set<ServerResponse>();
+    const revisions = createLedgerRevisionTracker();
+    const projectRuntime = activeDecisionOsRoot === masterDecisionOsRoot
+      ? Object.assign(runtime, { decisionOsRoot: activeDecisionOsRoot })
+      : Object.assign({}, runtime, { decisionOsRoot: activeDecisionOsRoot });
+    const broadcast = (message: string): void => {
+      for (const client of clients) client.write(message);
+      for (const client of globalContentEventClients) client.write(message);
+    };
+    const publishCard = (event: CardContentChange | AnyRecord): void => {
+      const ledgerId = String(event.ledgerId ?? '');
+      const hasCompleteScope = Boolean(ledgerId && (event.kind !== 'thread-content' || String(event.threadId ?? '')));
+      const resolvedEvent = hasCompleteScope ? null : resolveCardContentChange({
+        decisionOsRoot: activeDecisionOsRoot,
         change: {
           contentFile: String(event.contentFile ?? ''),
-          file: String(event.file ?? resolve(decisionOsRoot, String(event.contentFile ?? '').replace(/^\/?\.decision-os\//, ''))),
+          file: String(event.file ?? resolve(activeDecisionOsRoot, String(event.contentFile ?? '').replace(/^\/?\.decision-os\//, ''))),
           kind: event.kind === 'thread-content' ? 'thread-content' : 'card-content'
         }
       });
-    const scopedEvent = hasCompleteScope ? event : resolvedEvent ? { ...event, ...resolvedEvent } : null;
-    // WHAT: Suppress content events without one verified owning ledger and thread when applicable.
-    // WHY: Unscoped events would make frontend reconciliation fetch the wrong active surface.
-    if (!scopedEvent) return;
-    ledgerRevisions.advance(String(scopedEvent.ledgerId));
-    const message = `event: card-content-change\ndata: ${JSON.stringify(scopedEvent)}\n\n`;
-    for (const client of contentEventClients) client.write(message);
-  };
-  const publishLedgerContentChange = (event: AnyRecord): void => {
-    const ledgerId = String(event.ledgerId ?? '');
-    // WHAT: Advance only lifecycle events that declare their owning ledger.
-    // WHY: Process-local revisions must remain isolated per ledger.
-    if (ledgerId) ledgerRevisions.advance(ledgerId);
-    const message = `event: ledger-content-change\ndata: ${JSON.stringify(event)}\n\n`;
-    for (const client of contentEventClients) client.write(message);
-  };
-  runtime.onPipelineLedgerChange = publishLedgerContentChange;
-  runtime.onCodexRunSettled = (event: AnyRecord): void => {
-    if (event.pipelineRunId && event.pipelineTerminal === true) {
-      const pipelineStatus = String(event.pipelineStatus ?? event.status ?? 'complete');
-      const reason = pipelineStatus === 'complete'
-        ? 'pipeline-completed'
-        : pipelineStatus === 'cancelled'
-          ? 'pipeline-cancelled'
-          : 'pipeline-failed';
-      publishLedgerContentChange({
-        reason,
-        ledgerId: String(event.ledgerId ?? ''),
-        pipelineRunId: String(event.pipelineRunId),
-        pipelineStatus,
-        status: String(event.status ?? pipelineStatus),
-        runId: String(event.runId ?? ''),
-        cardId: String(event.cardId ?? event.outputCardId ?? ''),
-        outputCardId: String(event.outputCardId ?? event.cardId ?? ''),
-        threadId: String(event.threadId ?? '')
+      const scopedEvent = hasCompleteScope ? event : resolvedEvent ? { ...event, ...resolvedEvent } : null;
+      if (!scopedEvent) return;
+      revisions.advance(String(scopedEvent.ledgerId));
+      broadcast(`event: card-content-change\ndata: ${JSON.stringify({ ...scopedEvent, projectId })}\n\n`);
+    };
+    const publishLedger = (event: AnyRecord): void => {
+      const ledgerId = String(event.ledgerId ?? '');
+      if (ledgerId) revisions.advance(ledgerId);
+      broadcast(`event: ledger-content-change\ndata: ${JSON.stringify({ ...event, projectId })}\n\n`);
+    };
+    projectRuntime.onPipelineLedgerChange = publishLedger;
+    projectRuntime.onCodexRunSettled = (event: AnyRecord): void => {
+      if (event.pipelineRunId && event.pipelineTerminal === true) {
+        const pipelineStatus = String(event.pipelineStatus ?? event.status ?? 'complete');
+        publishLedger({
+          reason: pipelineStatus === 'complete' ? 'pipeline-completed' : pipelineStatus === 'cancelled' ? 'pipeline-cancelled' : 'pipeline-failed',
+          ledgerId: String(event.ledgerId ?? ''), pipelineRunId: String(event.pipelineRunId), pipelineStatus,
+          status: String(event.status ?? pipelineStatus), runId: String(event.runId ?? ''),
+          cardId: String(event.cardId ?? event.outputCardId ?? ''), outputCardId: String(event.outputCardId ?? event.cardId ?? ''),
+          threadId: String(event.threadId ?? '')
+        });
+      }
+      if (event.pipelineRunId) void resumeCodexPipelineRuns({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime }).catch(() => undefined);
+      if (!event.pipelineRunId || event.pipelineTerminal === true) void continueQueuedVoiceCodexAfterRun({
+        runtime: projectRuntime, ledgerId: String(event.ledgerId ?? ''), cardId: String(event.cardId ?? event.outputCardId ?? ''),
+        threadId: String(event.threadId ?? ''), runId: String(event.runId ?? ''), onCardContentChange: publishCard, onLedgerChange: publishLedger
       });
-    }
-    if (event.pipelineRunId) {
-      void resumeCodexPipelineRuns({ decisionOsRoot, runtime }).catch(() => undefined);
-    }
-    if (!event.pipelineRunId || event.pipelineTerminal === true) {
-      void continueQueuedVoiceCodexAfterRun({
-        runtime,
-        ledgerId: String(event.ledgerId ?? ''),
-        cardId: String(event.cardId ?? event.outputCardId ?? ''),
-        threadId: String(event.threadId ?? ''),
-        runId: String(event.runId ?? ''),
-        onCardContentChange: publishCardContentChange,
-        onLedgerChange: publishLedgerContentChange
-      });
-    }
+    };
+    const context: ProjectContext = {
+      clients, revisions, runtime: projectRuntime, publishCard, publishLedger,
+      watcher: watchCardContentFiles({ decisionOsRoot: activeDecisionOsRoot, onChange: publishCard })
+    };
+    projectContexts.set(activeDecisionOsRoot, context);
+    void resumeCodexPipelineRuns({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime }).catch(() => undefined);
+    return context;
   };
-  void resumeCodexPipelineRuns({ decisionOsRoot, runtime }).catch(() => undefined);
   const loadLedgerContentFiles = (ledger: AnyRecord, activeDecisionOsRoot = decisionOsRoot): AnyRecord => hydrateLedgerCardContent(hydrateLedgerThreadNotes(ledger, activeDecisionOsRoot), activeDecisionOsRoot);
-  const persistLedgerAndRespond = (ledgerId: string, ledgerPath: string, ledger: AnyRecord, response: ServerResponse, activeDecisionOsRoot = decisionOsRoot): void => {
-    stripHydratedThreadNotes(ledger);
-    writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
-    response.setHeader(ledgerRevisionHeader, String(ledgerRevisions.advance(ledgerId)));
-    response.end(JSON.stringify(loadLedgerContentFiles(ledger, activeDecisionOsRoot)));
-  };
-  const cardContentWatcher = watchCardContentFiles({ decisionOsRoot, onChange: publishCardContentChange });
   let projectCatalogCache = { expiresAt: 0, projects: [] as ReturnType<typeof discoverDecisionOsProjects> };
-  const projectRuntimeStates = new Map<string, AnyRecord>();
-  const projectRuntimeState = (activeDecisionOsRoot: string): AnyRecord => {
-    const existing = projectRuntimeStates.get(activeDecisionOsRoot) ?? {};
-    // WHAT: Preserve process registries across the start, status, continue, and stop HTTP requests for one project.
-    // WHY: A per-request spread loses controller-owned child-process state before the later stop request can find it.
-    Object.assign(existing, runtime, { decisionOsRoot: activeDecisionOsRoot });
-    projectRuntimeStates.set(activeDecisionOsRoot, existing);
-    return existing;
-  };
   const projectCatalog = (): ReturnType<typeof discoverDecisionOsProjects> => {
     const now = Date.now();
     if (projectCatalogCache.expiresAt > now) return projectCatalogCache.projects;
@@ -263,25 +248,59 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     projectCatalogCache = { expiresAt: now + 5000, projects };
     return projects;
   };
+  for (const project of projectCatalog()) projectContext(project.decisionOsRoot, project.id);
   const server = createServer(async (request, response) => {
     const requestPath = (request.url ?? '/').split('?')[0];
     const projectScope = parseProjectUrlScope(requestPath);
+    if (requestPath.startsWith('/p/') && !projectScope) {
+      response.statusCode = 400;
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ ok: false, error: 'Malformed project URL.' }));
+      return;
+    }
     const url = projectScope && isProjectSensitiveEndpoint(projectScope.scopedPath) ? projectScope.scopedPath : requestPath;
     const projects = projectCatalog();
     const activeProject = projectScope
       ? resolveCatalogProject({ projects, projectId: projectScope.projectId, fallbackDecisionOsRoot: masterDecisionOsRoot })
-      : null;
+      : projects.length === 1 && isProjectSensitiveEndpoint(url) && !isGlobalProjectEndpoint(url)
+        ? projects[0]
+        : null;
     if (projectScope && !activeProject) {
       response.statusCode = 404;
       response.setHeader('content-type', 'application/json');
       response.end(JSON.stringify({ ok: false, error: 'Unknown project id.' }));
       return;
     }
+    if (request.method === 'GET') {
+      const query = (request.url ?? '').includes('?') ? `?${(request.url ?? '').split('?').slice(1).join('?')}` : '';
+      let destination = '';
+      if (requestPath === '/control-room') destination = `/${query}`;
+      if (projectScope?.scopedPath === '/control-room') destination = `/${query}`;
+      if (projectScope?.scopedPath === '/projects') destination = `/projects${query}`;
+      if (projectScope?.scopedPath.startsWith('/projects/')) destination = `${projectScope.scopedPath}${query}`;
+      if (destination) {
+        response.statusCode = 302;
+        response.setHeader('location', destination);
+        response.end();
+        return;
+      }
+    }
     const decisionOsRoot = activeProject?.decisionOsRoot ?? masterDecisionOsRoot;
-    const requestRuntime = projectRuntimeState(decisionOsRoot);
+    const context = projectContext(decisionOsRoot, activeProject?.id ?? '');
+    const requestRuntime = context.runtime;
+    const contentEventClients = context.clients;
+    const ledgerRevisions = context.revisions;
+    const publishCardContentChange = context.publishCard;
+    const publishLedgerContentChange = context.publishLedger;
+    const persistLedgerAndRespond = (ledgerId: string, ledgerPath: string, ledger: AnyRecord, activeResponse: ServerResponse, activeDecisionOsRoot = decisionOsRoot): void => {
+      stripHydratedThreadNotes(ledger);
+      writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
+      activeResponse.setHeader(ledgerRevisionHeader, String(ledgerRevisions.advance(ledgerId)));
+      activeResponse.end(JSON.stringify(loadLedgerContentFiles(ledger, activeDecisionOsRoot)));
+    };
     if (url === '/decision-os/projects' && request.method === 'GET') {
       response.setHeader('content-type', 'application/json');
-      response.end(JSON.stringify({ projects, selectedProjectId: activeProject?.id ?? '' }));
+      response.end(JSON.stringify({ projects }));
       return;
     }
     if (url.startsWith('/decision-os/projects/') && request.method === 'PATCH') {
@@ -307,29 +326,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       }
       return;
     }
-    if (!projectScope && request.method === 'GET') {
-      const fallbackProject = resolveCatalogProject({ projects, fallbackDecisionOsRoot: masterDecisionOsRoot });
-      const query = (request.url ?? '').includes('?') ? `?${(request.url ?? '').split('?').slice(1).join('?')}` : '';
-      let destination = '';
-      if (fallbackProject && requestPath === '/') destination = `/p/${encodeURIComponent(fallbackProject.id)}/control-room${query}`;
-      if (fallbackProject && requestPath === '/projects') destination = `/p/${encodeURIComponent(fallbackProject.id)}/projects${query}`;
-      if (requestPath.startsWith('/projects/')) {
-        const viewedId = decodeRouteSegment(requestPath.slice('/projects/'.length));
-        if (projects.some((project) => project.id === viewedId)) destination = `/p/${encodeURIComponent(viewedId)}/projects/${encodeURIComponent(viewedId)}${query}`;
-      }
-      if (fallbackProject && requestPath === '/ledgers') destination = `/p/${encodeURIComponent(fallbackProject.id)}/ledgers${query}`;
-      if (destination) {
-        response.statusCode = 302;
-        response.setHeader('location', destination);
-        response.end();
+    if (!projectScope && isProjectSensitiveEndpoint(url) && !isGlobalProjectEndpoint(url)) {
+      if (projects.length !== 1) {
+        response.statusCode = 400;
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ ok: false, error: 'Project id is required in the URL.' }));
         return;
       }
-    }
-    if (!projectScope && isProjectSensitiveEndpoint(url) && !isGlobalProjectEndpoint(url)) {
-      response.statusCode = 400;
-      response.setHeader('content-type', 'application/json');
-      response.end(JSON.stringify({ ok: false, error: 'Project id is required in the URL.' }));
-      return;
     }
     if (tryServeDecisionOsAsset({ url, decisionOsRoot, response })) return;
     if (url === '/api/server/restart' && request.method === 'POST') {
@@ -355,6 +358,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.setHeader('content-type', 'application/json');
       response.statusCode = 204;
       response.end();
+      return;
+    }
+    if (url === '/api/control-room-events' && request.method === 'GET') {
+      response.writeHead(200, { 'cache-control': 'no-store', connection: 'keep-alive', 'content-type': 'text/event-stream' });
+      response.write(': connected\n\n');
+      globalContentEventClients.add(response);
+      request.on('close', () => globalContentEventClients.delete(response));
       return;
     }
     if (url === '/api/ledger-content-events' && request.method === 'GET') {
@@ -842,12 +852,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     // WHY: Browser modules consume authoritative shared schemas whose `.js` URLs must resolve to sibling `.ts` sources.
     const isSharedModuleRoute = url.startsWith('/shared/');
     const isStaticModuleRoute = isFrontendModuleRoute || isSharedModuleRoute || isCanvasSourceRoute || isCanvasAssetRoute;
-    const blueprintState = readCanonicalDecisionOsState({ action_payload: { decisionOsFile: resolve(decisionOsRoot, 'state.json'), writeBack: true } });
     const routeTabId = url.split('/').filter(Boolean)[0] ?? '';
-    const isLedgerRoute = Boolean(routeTabId && blueprintState.ledgers.some((ledger) => ledger.id === routeTabId));
-    if (!projectScope && request.method === 'GET' && isLedgerRoute) {
-      const fallbackProject = resolveCatalogProject({ projects, fallbackDecisionOsRoot: masterDecisionOsRoot });
-      if (fallbackProject) {
+    if (!projectScope && request.method === 'GET' && routeTabId && !['projects', 'ledgers', 'pipelines', 'skills', 'control-room'].includes(routeTabId)) {
+      const matches = projects.filter((project) => project.ledgers.some((ledger) => ledger.id === routeTabId));
+      if (matches.length === 1) {
+        const fallbackProject = matches[0];
         const routeParts = requestPath.split('/').filter(Boolean).map(decodeRouteSegment);
         let destination = `/p/${encodeURIComponent(fallbackProject.id)}/ledgers/${encodeURIComponent(routeParts[0])}`;
         if (routeParts[1] === 'zone' && routeParts[2]) destination += `/zones/${encodeURIComponent(routeParts[2])}`;
@@ -857,8 +866,21 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         response.end();
         return;
       }
+      if (matches.length > 1) {
+        response.statusCode = 409;
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ ok: false, error: 'Ambiguous legacy ledger URL. Use a project-scoped URL.', projectIds: matches.map((project) => project.id) }));
+        return;
+      }
     }
-    const isAppRoute = Boolean(projectScope && !isProjectSensitiveEndpoint(projectScope.scopedPath));
+    const isGlobalAppRoute = requestPath === '/'
+      || requestPath === '/projects'
+      || /^\/projects\/[^/]+$/.test(requestPath)
+      || requestPath === '/ledgers'
+      || requestPath === '/pipelines'
+      || requestPath === '/skills';
+    const isScopedAppRoute = Boolean(projectScope && projectScope.scopedPath.startsWith('/ledgers'));
+    const isAppRoute = isGlobalAppRoute || isScopedAppRoute;
     const staticModuleRoot = isSharedModuleRoute
       ? resolve(frontendRoot, '..', 'shared')
       : isCanvasSourceRoute
@@ -891,8 +913,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     response.end(JSON.stringify({ ok: true, method: request.method, url }));
   });
   server.on('close', () => {
-    cardContentWatcher.close();
-    contentEventClients.clear();
+    for (const context of projectContexts.values()) {
+      context.watcher.close();
+      context.clients.clear();
+    }
+    globalContentEventClients.clear();
   });
   server.listen(port, String(payload.host ?? '127.0.0.1'));
   runtime.server = server;

@@ -10,19 +10,19 @@ export function parseProjectScope(pathname) {
 }
 
 export function parseProjectRoute(pathname) {
-  const scope = parseProjectScope(pathname);
-  if (!scope || scope.segments[0] !== 'projects') return null;
-  if (scope.segments.length === 1) return { view: 'index', contextProjectId: scope.projectId, projectId: '' };
-  if (scope.segments.length === 2 && scope.segments[1]) return { view: 'detail', contextProjectId: scope.projectId, projectId: scope.segments[1] };
-  return { view: 'invalid', contextProjectId: scope.projectId, projectId: '' };
+  const route = parts(pathname);
+  if (route[0] !== 'projects') return null;
+  if (route.length === 1) return { view: 'index', projectId: '' };
+  if (route.length === 2 && route[1]) return { view: 'detail', projectId: route[1] };
+  return { view: 'invalid', projectId: '' };
 }
 
 export function projectBasePath(projectId) {
   return `/p/${encodeURIComponent(projectId)}`;
 }
 
-export function projectPath(contextProjectId, projectId = '') {
-  const base = `${projectBasePath(contextProjectId)}/projects`;
+export function projectPath(projectId = '') {
+  const base = '/projects';
   return projectId ? `${base}/${encodeURIComponent(projectId)}` : base;
 }
 

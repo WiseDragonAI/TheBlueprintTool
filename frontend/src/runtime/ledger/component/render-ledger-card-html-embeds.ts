@@ -13,6 +13,7 @@ import {
 import { scheduleCanvasMediaOverlayRender } from '../../canvas/effect/render-canvas-media-overlay.js';
 import { state } from '../../state.js';
 import { activeLedgers } from '../helper/active-ledgers.js';
+import { projectScopedRequestPath } from '../../project/helper/project-request-scope.js';
 
 type LedgerCardHtmlEmbed = Extract<LedgerMarkdownBlock, { kind: 'htmlEmbeds' }>['embeds'][number];
 type LedgerCardHtmlEmbedOptions = {
@@ -268,7 +269,7 @@ function renderHtmlSlide(embed: LedgerCardHtmlEmbed, index: number): HTMLElement
   if (normalizedSource) {
     const iframe = document.createElement('iframe');
     iframe.className = 'ledger-card-html-frame';
-    iframe.src = browserUrlForWorkspacePath(normalizedSource);
+    iframe.src = projectScopedRequestPath(browserUrlForWorkspacePath(normalizedSource));
     iframe.title = titleText || `HTML embed ${index + 1}`;
     iframe.sandbox.add('allow-scripts', 'allow-same-origin');
     iframe.loading = 'lazy';

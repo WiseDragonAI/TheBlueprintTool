@@ -1,13 +1,13 @@
 const modelOptions = ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.2'];
 const effortOptions = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
 const terminalStatuses = new Set(['complete', 'failed', 'cancelled']);
-const state = { ledgerId: '', cardId: '', skills: [], pipelines: [], steps: [], processTab: 'skills', selected: null, editor: null, pickerStepId: '', pollTimer: 0 };
+const state = { projectId: '', projects: [], ledgerId: '', cardId: '', skills: [], pipelines: [], steps: [], processTab: 'skills', selected: null, editor: null, pickerStepId: '', pollTimer: 0 };
 const el = (selector) => document.querySelector(selector);
 const uid = (prefix) => `${prefix}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
 const message = (selector, text, bad = false) => { const node = el(selector); node.textContent = text; node.classList.toggle('error', bad); };
 const setBusy = (node, busy) => { node.disabled = busy; if (busy) node.setAttribute('aria-busy', 'true'); else node.removeAttribute('aria-busy'); };
 async function jsonRequest(url, options) {
-  const response = await fetch(url, options).catch(() => null);
+  const response = await fetch(projectScopedRequestPath(url, state.projectId), options).catch(() => null);
   if (!response) throw new Error('Request failed.');
   const body = await response.json().catch(() => null);
   if (!body) throw new Error('The server returned an invalid response.');
@@ -101,12 +101,24 @@ async function openProcess() {
 async function openSkills() {
   state.processTab = 'skills';
   document.querySelectorAll('[data-process-tab]').forEach((tab) => tab.setAttribute('aria-selected', String(tab.dataset.processTab === 'skills')));
-  el('.process-modal').showModal(); el('.process-library').hidden = false; el('.process-detail').hidden = true; message('.process-message', 'Loading skill library…');
+  el('.process-modal').showModal(); el('.process-library').hidden = false; el('.process-detail').hidden = true;
+  if (!state.projectId) {
+    message('.process-message', 'Choose the project whose skill library you want to open.');
+    el('.process-library').replaceChildren(...state.projects.map((project) => button(project.name, 'codex-list-item', () => { state.projectId = project.id; void openSkills(); })));
+    return;
+  }
+  message('.process-message', 'Loading skill library…');
   try { const result = await loadLibraries(); message('.process-message', result.issues?.map((issue) => issue.message).join(' ') || ''); renderProcessList(); }
   catch (error) { message('.process-message', error.message, true); el('.process-library').replaceChildren(); }
 }
 async function openPipelines() {
-  el('.pipelines-modal').showModal(); message('.pipelines-message', 'Loading pipelines…');
+  el('.pipelines-modal').showModal();
+  if (!state.projectId) {
+    message('.pipelines-message', 'Choose the project whose pipelines you want to open.');
+    el('.pipeline-library').replaceChildren(...state.projects.map((project) => button(project.name, 'codex-list-item', () => { state.projectId = project.id; void openPipelines(); })));
+    return;
+  }
+  message('.pipelines-message', 'Loading pipelines…');
   try { const result = await loadLibraries(); renderPipelineLibrary(); message('.pipelines-message', result.issues?.map((issue) => issue.message).join(' ') || (state.pipelines.length ? '' : 'No saved pipelines.')); }
   catch (error) { message('.pipelines-message', error.message, true); el('.pipeline-library').replaceChildren(); }
 }
@@ -151,13 +163,24 @@ async function saveEditor() {
   try { const url = editor.existingId ? `/api/codex/pipelines/${encodeURIComponent(editor.existingId)}` : '/api/codex/pipelines'; const body = await jsonRequest(url, { method: editor.existingId ? 'PUT' : 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pipeline, steps }) }); state.pipelines = body.pipelines || state.pipelines; state.steps = body.steps || state.steps; el('.pipeline-editor-modal').close(); el('.pipelines-modal').showModal(); renderPipelineLibrary(); message('.pipelines-message', body.issues?.map((issue) => issue.message).join(' ') || 'Pipeline saved.'); }
   catch (error) { message('.pipeline-editor-message', formatError(error), true); } finally { setBusy(save, false); }
 }
-export function setMobileCodexContext(context) { state.ledgerId = String(context.ledgerId || ''); state.cardId = String(context.cardId || ''); el('.process-card-button').disabled = !state.cardId; }
+export function setMobileCodexContext(context) {
+  if ('projectId' in context) state.projectId = String(context.projectId || '');
+  if (Array.isArray(context.projects)) state.projects = context.projects;
+  if ('ledgerId' in context) state.ledgerId = String(context.ledgerId || '');
+  if ('cardId' in context) state.cardId = String(context.cardId || '');
+  el('.process-card-button').disabled = !state.cardId;
+}
+export function openMobileCodexLibrary(kind) {
+  if (kind === 'pipelines') void openPipelines();
+  else void openSkills();
+}
 export function initializeMobileCodex() {
   el('.process-card-button').addEventListener('click', openProcess);
   document.addEventListener('click', (event) => {
     const navigationButton = event.target.closest('.nav-pipelines-button, .nav-skills-button');
     if (!navigationButton) return;
     document.body.classList.remove('menu-open');
+    if (navigationButton.getAttribute('href')) return;
     if (navigationButton.classList.contains('nav-pipelines-button')) void openPipelines();
     else void openSkills();
   });
@@ -167,3 +190,4 @@ export function initializeMobileCodex() {
   el('.pipeline-add-step').addEventListener('click', () => { state.editor.steps.push({ id: uid('codex-step'), name: `Step ${state.editor.steps.length + 1}`, purpose: '', skills: [] }); renderEditor(); });
   el('.pipeline-editor-form').addEventListener('submit', (event) => { event.preventDefault(); void saveEditor(); }); el('.skill-picker-back').addEventListener('click', closePicker);
 }
+import { projectScopedRequestPath } from '/canvas-src/runtime/project/helper/project-request-scope.js';
