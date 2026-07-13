@@ -7,6 +7,7 @@ import { activeAge, activeStopwatch, deriveControlRoom, parseMasterTaskMarkdown,
 import { controlRoomPath, parseControlRoomRoute } from './mobile-control-room-route.js';
 import { cardPathForProject, ledgerPathForProject, parseProjectRoute, parseProjectScope, projectPath, zonePathForProject } from './mobile-project-route.js';
 import { projectSettingsValues, saveProjectSettingsRequest } from './mobile-project-settings.js';
+import { createProjectRequest } from './mobile-project-creation.js';
 import { installProjectRequestScope, projectScopedRequestPath } from '/canvas-src/runtime/project/helper/project-request-scope.js';
 
 installProjectRequestScope();
@@ -125,6 +126,7 @@ function objectId(prefix) {
 function openCreationModal(kind) {
   creationKind = kind;
   const labels = {
+    project: ['New project', 'Project name', 'Create project'],
     ledger: ['New ledger', 'Ledger name', 'Create ledger'],
     zone: ['New zone', 'Zone name', 'Create zone'],
     card: ['New card', 'Card title', 'Create card']
@@ -136,7 +138,9 @@ function openCreationModal(kind) {
   name.value = '';
   name.placeholder = placeholder;
   document.querySelector('#creation-description').value = '';
-  document.querySelector('.creation-description-field').hidden = kind !== 'card';
+  document.querySelector('#creation-description').placeholder = kind === 'card' ? 'Markdown is supported' : 'Optional';
+  document.querySelector('#creation-description-label').textContent = kind === 'project' ? 'Description (optional)' : 'Description';
+  document.querySelector('.creation-description-field').hidden = kind !== 'card' && kind !== 'project';
   document.querySelector('.creation-color-field').hidden = kind !== 'zone';
   document.querySelector('.creation-submit').textContent = submit;
   document.querySelector('.creation-error').hidden = true;
@@ -216,6 +220,13 @@ async function createLedger(name) {
   navigate(ledgerPath(payload.tab.id));
 }
 
+async function createProject(name, description) {
+  const project = await createProjectRequest({ fetchImpl: fetch, name, description });
+  state.projects = [...state.projects, project].sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+  setMobileCodexContext({ projects: state.projects });
+  navigate(projectPath(project.id));
+}
+
 async function createZone(name, color) {
   const rect = nextZoneRect();
   const annotation = { id: objectId('zone'), ...rect, color, label: name, comments: [] };
@@ -261,6 +272,7 @@ async function submitCreation() {
   submit.disabled = true;
   error.hidden = true;
   try {
+    if (creationKind === 'project') await createProject(name, document.querySelector('#creation-description').value);
     if (creationKind === 'ledger') await createLedger(name);
     if (creationKind === 'zone') await createZone(name, document.querySelector('#creation-color').value);
     if (creationKind === 'card') await createCard(name, document.querySelector('#creation-description').value.trim());
@@ -1153,12 +1165,6 @@ async function loadRoute() {
     const catalog = await catalogResponse.json();
     state.projects = Array.isArray(catalog.projects) ? catalog.projects : [];
     setMobileCodexContext({ projects: state.projects });
-    if (!state.projects.length) {
-      state.ledgers = [];
-      renderLedgerLinks();
-      setView('empty-view');
-      return;
-    }
     const projectRoute = parseProjectRoute(location.pathname);
     if (projectRoute?.view === 'index') {
       renderProjects();
@@ -1171,6 +1177,12 @@ async function loadRoute() {
       return;
     }
     if (projectRoute?.view === 'invalid') throw new Error('Project route not found.');
+    if (!state.projects.length) {
+      state.ledgers = [];
+      renderLedgerLinks();
+      setView('empty-view');
+      return;
+    }
     if (location.pathname === '/') {
       state.resourceProjectId = '';
       setMobileCodexContext({ projectId: '', ledgerId: '', cardId: '' });
@@ -1282,6 +1294,7 @@ document.querySelector('.back-to-zone-button').addEventListener('click', (event)
   navigate(event.currentTarget.dataset.destination === 'control-room' ? controlRoomPath(state.controlTab) : zonePath(state.activeLedgerId, state.activeZoneId));
 });
 document.querySelector('.create-ledger-button').addEventListener('click', () => openCreationModal('ledger'));
+document.querySelector('.create-project-button').addEventListener('click', () => openCreationModal('project'));
 document.querySelector('.create-zone-button').addEventListener('click', () => openCreationModal('zone'));
 document.querySelector('.create-card-button').addEventListener('click', () => openCreationModal('card'));
 document.querySelector('.new-task-button').addEventListener('click', openNewTaskProjectModal);

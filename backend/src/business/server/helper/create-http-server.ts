@@ -42,7 +42,7 @@ import { readCodexPipelineRunController } from '../../codex/controller/read-code
 import { cancelCodexPipelineRunController } from '../../codex/controller/cancel-codex-pipeline-run-controller.js';
 import { restartCodexPipelineRunController } from '../../codex/controller/restart-codex-pipeline-run-controller.js';
 import { resumeCodexPipelineRuns } from '../../codex/helper/resume-codex-pipeline-runs.js';
-import { discoverDecisionOsProjects, resolveCatalogProject, saveProjectMetadata } from './project-catalog.js';
+import { createDecisionOsProject, discoverDecisionOsProjects, resolveCatalogProject, saveProjectMetadata } from './project-catalog.js';
 import { isGlobalProjectEndpoint, isProjectSensitiveEndpoint, parseProjectUrlScope } from './project-url-scope.js';
 import { ensureLedgerCliShim } from '../../codex/helper/decision-os-codex-runtime.js';
 
@@ -311,6 +311,28 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     if (url === '/decision-os/projects' && request.method === 'GET') {
       response.setHeader('content-type', 'application/json');
       response.end(JSON.stringify({ projects }));
+      return;
+    }
+    if (url === '/decision-os/projects' && request.method === 'POST') {
+      const bodyBuffer = await readRequestBuffer(request);
+      try {
+        const body = JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
+        const project = createDecisionOsProject({
+          masterRoot,
+          masterDecisionOsRoot,
+          name: String(body.name ?? ''),
+          description: String(body.description ?? ''),
+        });
+        projectCatalogCache = { expiresAt: 0, projects: [] };
+        projectContext(project.decisionOsRoot, project.id);
+        response.statusCode = 201;
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ ok: true, project }));
+      } catch (error) {
+        response.statusCode = 400;
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : 'Project creation failed.' }));
+      }
       return;
     }
     if (url.startsWith('/decision-os/projects/') && request.method === 'PATCH') {

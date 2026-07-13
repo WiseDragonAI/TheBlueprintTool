@@ -214,6 +214,18 @@ test('keeps scoped Control Room filters while project editing moves to dedicated
   assert.match(mobile, /state\.projects\.find\(\(entry\) => entry\.id === state\.resourceProjectId\)\?\.name \|\| project\.projectName/);
 });
 
+test('creates projects from the projects catalog with the shared creation control', () => {
+  assert.match(html, /class="create-button create-project-button"[^>]*>\+ Project<\/button>/);
+  assert.match(html, /id="creation-name"[^>]*required[^>]*maxlength="120"/);
+  assert.match(html, /id="creation-description"[^>]*maxlength="1000"/);
+  assert.match(mobile, /project: \['New project', 'Project name', 'Create project'\]/);
+  assert.match(mobile, /kind !== 'card' && kind !== 'project'/);
+  assert.match(mobile, /await createProjectRequest\(\{ fetchImpl: fetch, name, description \}\)/);
+  assert.match(mobile, /state\.projects = \[\.\.\.state\.projects, project\]\.sort/);
+  assert.match(mobile, /navigate\(projectPath\(project\.id\)\)/);
+  assert.match(mobile, /create-project-button'\)\.addEventListener\('click', \(\) => openCreationModal\('project'\)\)/);
+});
+
 test('derives resource request scope exclusively from canonical URLs', () => {
   assert.match(mobile, /installProjectRequestScope\(\)/);
   assert.match(mobile, /const scope = parseProjectScope\(location\.pathname\)/);

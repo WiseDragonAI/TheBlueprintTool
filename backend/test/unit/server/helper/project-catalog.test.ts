@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { discoverDecisionOsProjects, resolveCatalogProject, saveProjectMetadata } from '@backend/business/server/helper/project-catalog.js';
+import { createDecisionOsProject, discoverDecisionOsProjects, resolveCatalogProject, saveProjectMetadata } from '@backend/business/server/helper/project-catalog.js';
 
 function project(root: string, relativePath: string, ledgers: Array<{ id: string; title: string }> = [{ id: 'specs', title: 'Specs' }]): string {
   const directory = join(root, relativePath);
@@ -85,4 +85,39 @@ test('rejects invalid metadata without partially changing persisted settings', (
   assert.throws(() => saveProjectMetadata({ ...input, description: 'x'.repeat(1001) }), /1000 characters/);
   assert.throws(() => saveProjectMetadata({ ...input, color: 'red' }), /six-digit hex/);
   assert.equal(readFileSync(join(masterDecisionOsRoot, 'projects.json'), 'utf8'), before);
+});
+
+test('creates one initialized catalog project and persists its metadata', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-project-create-'));
+  const masterDecisionOsRoot = join(root, '.decision-os');
+  const created = createDecisionOsProject({
+    masterRoot: root,
+    masterDecisionOsRoot,
+    name: ' Project Alpha ',
+    description: ' Primary workspace ',
+  });
+
+  assert.equal(created.relativePath, 'Project Alpha');
+  assert.equal(created.name, 'Project Alpha');
+  assert.equal(created.description, 'Primary workspace');
+  assert.deepEqual(JSON.parse(readFileSync(join(root, 'Project Alpha', '.decision-os', 'state.json'), 'utf8')), {
+    projectName: 'Project Alpha',
+    ledgers: [],
+  });
+  assert.equal(JSON.parse(readFileSync(join(root, 'Project Alpha', '.decision-os', 'project.json'), 'utf8')).id, created.id);
+});
+
+test('rejects unsafe and colliding project names without creating partial directories', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-project-create-reject-'));
+  const masterDecisionOsRoot = join(root, '.decision-os');
+  mkdirSync(join(root, 'Existing'));
+  const create = (name: string, description = '') => createDecisionOsProject({ masterRoot: root, masterDecisionOsRoot, name, description });
+
+  assert.throws(() => create(''), /name is required/);
+  assert.throws(() => create('../escape'), /safe directory name/);
+  assert.throws(() => create('Existing'), /already exists/);
+  assert.throws(() => create('x'.repeat(121)), /120 characters/);
+  assert.throws(() => create('Valid name', 'x'.repeat(1001)), /1000 characters/);
+  assert.equal(existsSync(join(root, 'escape')), false);
+  assert.equal(existsSync(join(root, 'Valid name')), false);
 });
