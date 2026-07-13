@@ -30,7 +30,8 @@ export function renderLedgerCardMarkdown(markdown: string, options: LedgerCardMa
       continue;
     }
     if (block.kind === 'list') {
-      const list = document.createElement('ul');
+      const list = document.createElement(block.ordered ? 'ol' : 'ul');
+      if (block.ordered && block.start !== 1) list.setAttribute('start', String(block.start));
       for (const item of block.items) {
         const li = document.createElement('li');
         appendInlineNodes(li, item, options);

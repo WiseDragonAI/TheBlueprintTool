@@ -27,7 +27,7 @@ export type LedgerMarkdownBlock =
   | { kind: 'paragraph'; children: LedgerMarkdownInline[] }
   | { kind: 'images'; images: Extract<LedgerMarkdownInline, { kind: 'image' }>[] }
   | { kind: 'htmlEmbeds'; embeds: { title: string; src: string }[] }
-  | { kind: 'list'; items: LedgerMarkdownInline[][] }
+  | { kind: 'list'; ordered: boolean; start: number; items: LedgerMarkdownInline[][] }
   | { kind: 'table'; headers: LedgerMarkdownInline[][]; rows: LedgerMarkdownInline[][][] }
   | { kind: 'hr' }
   | { kind: 'code'; language: string; text: string };
@@ -147,15 +147,23 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
       htmlEmbeds.embeds.push(htmlEmbed);
       continue;
     }
-    const item = line.match(/^[-*]\s+(.*)$/);
+    const unorderedItem = line.match(/^[-*]\s+(.*)$/);
+    const orderedItem = line.match(/^(\d+)\.\s+(.*)$/);
+    const item = unorderedItem ?? orderedItem;
     if (item) {
       images = null;
       htmlEmbeds = null;
-      if (!list) {
-        list = { kind: 'list', items: [] };
+      const ordered = Boolean(orderedItem);
+      if (!list || list.ordered !== ordered) {
+        list = {
+          kind: 'list',
+          ordered,
+          start: ordered ? Number(orderedItem?.[1] ?? 1) : 1,
+          items: []
+        };
         blocks.push(list);
       }
-      list.items.push(parseLedgerMarkdownInline(item[1]));
+      list.items.push(parseLedgerMarkdownInline(ordered ? item[2] : item[1]));
       continue;
     }
     list = null;
