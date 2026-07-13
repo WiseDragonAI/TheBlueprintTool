@@ -19,6 +19,7 @@ import { hydrateLedgerCardContent } from '../../ledger/helper/card-content-file.
 import { hydrateLedgerThreadNotes, stripHydratedThreadNotes, writeThreadNotesFile } from '../../ledger/helper/thread-content-file.js';
 import { resolveCardContentChange, watchCardContentFiles, type CardContentChange } from '../../refresh/helper/watch-card-content-files.js';
 import { applyLedgerMutation, type LedgerMutation } from '../../ledger/helper/apply-ledger-mutation.js';
+import { commitMasterTaskCompletion } from '../../ledger/helper/commit-master-task-completion.js';
 import { createLinkedLedger } from '../../ledger/helper/create-linked-ledger.js';
 import { deleteLinkedLedger } from '../../ledger/helper/delete-linked-ledger.js';
 import { createLedgerRevisionTracker } from './create-ledger-revision-tracker.js';
@@ -851,6 +852,17 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             return;
           }
           persistLedgerAndRespond(tabId, ledgerPath, ledger, response, decisionOsRoot);
+          return;
+        }
+        if (mutation.action === 'complete-master-task') {
+          const completion = commitMasterTaskCompletion({ decisionOsRoot, ledgerPath, ledger, mutation });
+          if (completion.ok === false) {
+            response.statusCode = completion.error.statusCode;
+            response.end(JSON.stringify(completion.error.body));
+            return;
+          }
+          response.setHeader(ledgerRevisionHeader, String(ledgerRevisions.advance(tabId)));
+          response.end(JSON.stringify(loadLedgerContentFiles(ledger, decisionOsRoot)));
           return;
         }
         const mutationResult = applyLedgerMutation({ decisionOsRoot, ledgerPath, ledger, mutation });
