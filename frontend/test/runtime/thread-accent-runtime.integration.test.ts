@@ -64,7 +64,9 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   assert.match(threadCss, /thread-actions\[hidden\]\s*{[\s\S]*display: none;/);
   assert.match(threadCss, /thread-heading\[data-codex-running="true"\]\s*{[^}]*grid-template-rows: 28px;[^}]*gap: 0;/);
   assert.match(threadCss, /thread-tab\[aria-selected="true"\][\s\S]*box-shadow:/);
-  assert.match(threadCss, /thread-tab\[data-run-status="running"\]\s*{[\s\S]*animation: thread-codex-log-running/);
+  assert.match(threadCss, /@property --thread-codex-log-angle\s*{[\s\S]*syntax: "<angle>"/);
+  assert.match(threadCss, /thread-tab\[data-run-status="running"\]::before\s*{[\s\S]*conic-gradient\([\s\S]*#18f0ff[\s\S]*#7559ff[\s\S]*#ffe24a[\s\S]*animation: thread-codex-log-running 1\.65s linear infinite/);
+  assert.match(threadCss, /prefers-reduced-motion: reduce[\s\S]*thread-tab\[data-run-status="running"\]::before[\s\S]*animation: none/);
   assert.match(threadCss, /thread-conversation-scroll,[\s\S]*thread-log-scroll[\s\S]*overflow: auto;/);
   assert.match(threadCss, /codex-log-status\[data-run-status="failed"\],[\s\S]*border-left-color: #ff6473/);
   assert.match(threadCss, /codex-tool-group-summary:focus-visible,[\s\S]*outline: 2px solid/);
