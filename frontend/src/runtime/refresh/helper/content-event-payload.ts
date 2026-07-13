@@ -15,6 +15,8 @@ export type ContentChangeEvent = {
   runId?: string;
   status?: string;
   threadId?: string;
+  noteId?: string;
+  revision?: number;
 };
 
 export function contentEventPayload(event: Event): ContentChangeEvent {
@@ -33,7 +35,9 @@ export function contentEventPayload(event: Event): ContentChangeEvent {
       reason: typeof parsed.reason === 'string' ? parsed.reason : '',
       runId: typeof parsed.runId === 'string' ? parsed.runId : '',
       status: typeof parsed.status === 'string' ? parsed.status : '',
-      threadId: typeof parsed.threadId === 'string' ? parsed.threadId : ''
+      threadId: typeof parsed.threadId === 'string' ? parsed.threadId : '',
+      noteId: typeof parsed.noteId === 'string' ? parsed.noteId : '',
+      revision: Number.isFinite(Number(parsed.revision)) ? Number(parsed.revision) : 0
     };
   } catch {
     // WHAT: Normalize malformed SSE data to an unscoped empty payload.

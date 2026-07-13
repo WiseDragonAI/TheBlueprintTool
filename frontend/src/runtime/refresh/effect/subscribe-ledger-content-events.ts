@@ -23,6 +23,7 @@ import {
   contentEventPayload,
   type ContentChangeEvent
 } from '../helper/content-event-payload.js';
+import { installVoiceTranscriptionRecoveryListeners, reconcilePendingVoiceTranscriptions, reconcileVoiceTranscription } from '../../voice/effect/reconcile-voice-transcription.js';
 
 export {
   flushPendingLedgerContentRefresh,
@@ -69,7 +70,9 @@ export function subscribeLedgerContentEvents(): void {
   // WHY: Repeated boot paths must not multiply refresh work for each backend event.
   if (subscribed || typeof EventSource === 'undefined') return;
   subscribed = true;
+  installVoiceTranscriptionRecoveryListeners();
   const events = new EventSource('/api/ledger-content-events');
+  events.addEventListener('open', () => reconcilePendingVoiceTranscriptions('event-source-open'));
   events.addEventListener('card-content-change', (event) => {
     const payload = contentEventPayload(event);
     // WHAT: Route thread content directly to the scoped slice refresh path.
@@ -84,6 +87,10 @@ export function subscribeLedgerContentEvents(): void {
       // WHY: Route or thread changes can occur before a queued SSE callback runs.
       if (!isActiveThreadContentScope(scope)) {
         telemetry('thread-content-event-ignored', { reason: 'inactive-scope', ...scope });
+        return;
+      }
+      if (payload.noteId && String(payload.reason ?? '').startsWith('voice-')) {
+        void reconcileVoiceTranscription({ ledgerId: scope.ledgerId, threadId: scope.threadId, noteId: payload.noteId });
         return;
       }
       requestThreadContentRefresh('thread-content-change', scope);

@@ -5,28 +5,34 @@
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { renderVoiceStatus } from './render-voice-status.js';
-import { updateVoiceNote } from './update-voice-note.js';
 import { transcribeUploadedVoiceAudio } from './transcribe-uploaded-voice-audio.js';
+import { currentLedgerStateId } from '../../ledger/helper/current-ledger-state-id.js';
+import { applyVoiceServerNote, watchVoiceTranscription } from './reconcile-voice-transcription.js';
+import { patchOptimisticThreadNote } from '../../thread/effect/patch-optimistic-thread-note.js';
 
 export async function retryVoiceTranscription(input: { noteId: string; voiceFileRef: string; threadId?: string }): Promise<void> {
   if (!input.noteId || !input.voiceFileRef) return;
   const threadId = input.threadId || state.threadId;
   state.voice.transcriptionStatus = 'retrying transcription';
   renderVoiceStatus();
-  void updateVoiceNote({ threadId, noteId: input.noteId, voiceFileRef: input.voiceFileRef, status: 'transcribing', body: 'Voice uploaded.', transcriptionStartedAt: new Date().toISOString() });
+  patchOptimisticThreadNote({ threadId, noteId: input.noteId, voiceFileRef: input.voiceFileRef, status: 'queued', body: 'Voice uploaded.', error: '' });
   telemetry('retry-voice-transcription', { threadId, noteId: input.noteId });
-  const result = await transcribeUploadedVoiceAudio(input.voiceFileRef, threadId);
+  const ledgerId = currentLedgerStateId();
+  const result = await transcribeUploadedVoiceAudio(input.voiceFileRef, threadId, input.noteId, ledgerId);
   const voiceFileRef = result.voiceFileRef || input.voiceFileRef;
-  if (result.ok && result.text.trim()) {
-    void updateVoiceNote({ threadId, noteId: input.noteId, voiceFileRef, status: 'transcribed', body: result.text.trim(), error: '' });
-    state.voice.voiceFileRef = voiceFileRef;
-    state.voice.transcriptionStatus = 'transcribed';
-  } else {
-    const status = result.configured === false ? 'transcription not configured' : 'transcription failed';
-    const error = result.error ?? status;
-    void updateVoiceNote({ threadId, noteId: input.noteId, voiceFileRef, status, body: `Voice uploaded; ${status}.`, error });
-    state.voice.voiceFileRef = voiceFileRef;
-    state.voice.transcriptionStatus = `${status}${error && error !== status ? `: ${error}` : ''}`;
-  }
+  if (result.ok) applyVoiceServerNote({ ledgerId, threadId, noteId: input.noteId, note: {
+    id: input.noteId,
+    message: 'Voice uploaded.',
+    voiceFileRef,
+    status: result.lifecycleStatus || 'queued',
+    revision: result.revision ?? 1,
+    uploadReceivedAt: result.uploadReceivedAt ?? '',
+    audioPersistedAt: result.audioPersistedAt ?? '',
+    acceptedAt: result.acceptedAt ?? '',
+    error: ''
+  } });
+  state.voice.voiceFileRef = voiceFileRef;
+  state.voice.transcriptionStatus = 'idle';
+  watchVoiceTranscription({ ledgerId, threadId, noteId: input.noteId });
   renderVoiceStatus();
 }

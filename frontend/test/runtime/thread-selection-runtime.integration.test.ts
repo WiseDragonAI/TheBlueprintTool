@@ -552,7 +552,7 @@ test('render-thread-notes keeps active voice transcription progress concise', ()
     assert.equal(rendered[0].className, 'thread-note voice-note is-busy is-operator');
     assert.equal(rendered[0].children.some((child) => child.className === 'thread-note-meta'), false);
     const spinner = rendered[0].children.find((child) => child.className === 'thread-note-spinner');
-    assert.equal(spinner?.textContent, 'transcribing');
+    assert.equal(spinner?.textContent, 'Transcribing · 0s');
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
     state.threadId = '';
@@ -560,7 +560,7 @@ test('render-thread-notes keeps active voice transcription progress concise', ()
   }
 });
 
-test('render-thread-notes fails stale voice transcription and exposes retry', () => {
+test('render-thread-notes keeps pending voice state server-owned until reconciliation', () => {
   const previousDocument = globalThis.document;
   const rendered: TestElement[] = [];
   const list = {
@@ -593,12 +593,10 @@ test('render-thread-notes fails stale voice transcription and exposes retry', ()
     };
     renderThreadNotes();
     const note = state.activeLedger.notes['thread-card-a'][0];
-    assert.equal(note.status, 'transcription failed');
-    assert.equal(rendered[0].className, 'thread-note voice-note is-retryable is-operator');
+    assert.equal(note.status, 'transcribing');
+    assert.equal(rendered[0].className, 'thread-note voice-note is-busy is-operator');
     const retry = rendered[0].children.find((child) => child.className?.includes('thread-note-retry'));
-    assert.equal(retry?.dataset?.action, 'voice-retry');
-    assert.equal(retry?.dataset?.noteId, 'note-stale');
-    assert.equal(retry?.dataset?.voiceFileRef, '/tmp/voice.webm');
+    assert.equal(retry, undefined);
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
     state.threadId = '';

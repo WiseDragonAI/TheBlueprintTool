@@ -8,7 +8,7 @@ import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 import { telemetry } from '@backend/telemetry/harness.js';
 import { transcribeVoiceController } from '@backend/business/transcription/controller/transcribe-voice-controller.js';
-import { continueQueuedVoiceCodexAfterRun, startVoiceUploadOrchestrationController } from '@backend/business/transcription/controller/start-voice-upload-orchestration-controller.js';
+import { continueQueuedVoiceCodexAfterRun, readVoiceTranscriptionStatusController, startVoiceRetryOrchestrationController, startVoiceUploadOrchestrationController } from '@backend/business/transcription/controller/start-voice-upload-orchestration-controller.js';
 import { resolveDecisionOsRoot } from './resolve-decision-os-root.js';
 import { readRequestBuffer } from './read-request-buffer.js';
 import { parseMultipartFormData } from './parse-multipart-form-data.js';
@@ -328,6 +328,22 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.write(': connected\n\n');
       contentEventClients.add(response);
       request.on('close', () => contentEventClients.delete(response));
+      return;
+    }
+    if (url === '/api/voice-transcription-status' && request.method === 'GET') {
+      const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
+      const result = readVoiceTranscriptionStatusController({
+        action_payload: {
+          ledgerId: requestUrl.searchParams.get('ledgerId') ?? '',
+          threadId: requestUrl.searchParams.get('threadId') ?? '',
+          noteId: requestUrl.searchParams.get('noteId') ?? ''
+        },
+        runtime_state: requestRuntime
+      });
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
+      response.end(JSON.stringify(result));
       return;
     }
     if (url === '/api/codex/pipelines' && request.method === 'GET') {
@@ -665,16 +681,18 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           return {};
         }
       })();
-      await transcribeVoiceController({
+      const result = await startVoiceRetryOrchestrationController({
         action_payload: {
           ...retryPayload,
-          method: request.method,
-          url,
-          response,
-          threadId: request.headers['x-thread-id'] ?? retryPayload.threadId ?? ''
+          threadId: request.headers['x-thread-id'] ?? retryPayload.threadId ?? '',
+          onCardContentChange: publishCardContentChange,
+          onLedgerChange: publishLedgerContentChange
         },
         runtime_state: requestRuntime
       });
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));
+      response.end(JSON.stringify({ body: result }));
       return;
     }
     if (url === '/decision-os/ledgers' && request.method === 'POST') {

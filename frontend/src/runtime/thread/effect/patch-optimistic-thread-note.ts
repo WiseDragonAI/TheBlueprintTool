@@ -13,6 +13,11 @@ export type OptimisticThreadNotePatch = {
   status?: string;
   error?: string;
   transcriptionStartedAt?: string;
+  uploadReceivedAt?: string;
+  audioPersistedAt?: string;
+  acceptedAt?: string;
+  providerStartedAt?: string;
+  revision?: number;
   optimistic?: boolean;
 };
 
@@ -26,6 +31,11 @@ export function patchOptimisticThreadNote(input: OptimisticThreadNotePatch): boo
   if (typeof input.status === 'string') note.status = input.status;
   if (typeof input.error === 'string') note.error = input.error;
   if (typeof input.transcriptionStartedAt === 'string') note.transcriptionStartedAt = input.transcriptionStartedAt;
+  if (typeof input.uploadReceivedAt === 'string') note.uploadReceivedAt = input.uploadReceivedAt;
+  if (typeof input.audioPersistedAt === 'string') note.audioPersistedAt = input.audioPersistedAt;
+  if (typeof input.acceptedAt === 'string') note.acceptedAt = input.acceptedAt;
+  if (typeof input.providerStartedAt === 'string') note.providerStartedAt = input.providerStartedAt;
+  if (typeof input.revision === 'number') note.revision = input.revision;
   if (typeof input.optimistic === 'boolean') note.optimistic = input.optimistic;
   note.updatedAt = new Date().toISOString();
   void import('./render-thread-panel.js').then(({ renderThreadPanel }) => {

@@ -7,7 +7,8 @@ import { isCodexThreadArtifactNote } from '../../codex/helper/is-codex-thread-ar
 import { renderLedgerCardMarkdown } from '../../ledger/component/render-ledger-card-markdown.js';
 import { sendActiveLedgerMutation } from '../../ledger/effect/send-active-ledger-mutation.js';
 import { deletedNoteIdSet } from '../../ledger/helper/normalize-deleted-note-ids.js';
-import { expireStaleVoiceTranscription, scheduleVoiceTranscriptionTimeout } from '../../voice/helper/expire-stale-voice-transcription.js';
+import { syncVoiceTranscriptionWatchers } from '../../voice/effect/reconcile-voice-transcription.js';
+import { voicePhaseElapsedSeconds, voicePhaseLabel } from '../../voice/helper/voice-transcription-lifecycle.js';
 
 type ThreadImageSizes = Record<string, { width?: number; height?: number }>;
 
@@ -42,6 +43,10 @@ function threadNotesSignature(threadId: string, notes: Array<Record<string, unkn
       String(note.status ?? ''),
       String(note.voiceFileRef ?? ''),
       String(note.transcriptionStartedAt ?? ''),
+      String(note.revision ?? ''),
+      String(note.acceptedAt ?? ''),
+      String(note.providerStartedAt ?? ''),
+      String(note.providerSettledAt ?? ''),
       String(note.optimistic ?? ''),
       imageSizeSignature(note),
       String(text.length),
@@ -105,9 +110,7 @@ export function renderThreadNotes(): void {
         !deletedIds.has(String(note.id ?? '')) && !isCodexThreadArtifactNote(note)
       ))
     : [];
-  for (const note of notes) {
-    if (!expireStaleVoiceTranscription(note)) scheduleVoiceTranscriptionTimeout({ threadId: state.threadId, note });
-  }
+  syncVoiceTranscriptionWatchers();
   const signature = threadNotesSignature(String(state.threadId ?? ''), notes);
   const dataset = noteListDataset(list);
   if (existing && dataset.threadId === String(state.threadId ?? '') && dataset.notesSignature === signature) return;
@@ -120,8 +123,10 @@ export function renderThreadNotes(): void {
     const agentOwned = role === 'agent' || role === 'assistant';
     const noteId = String(note.id ?? '');
     const normalizedStatus = status.toLowerCase();
-    const busy = /committing|uploading|transcribing|retrying/.test(normalizedStatus);
-    const retryable = Boolean(note.voiceFileRef) && /failed|not configured|unavailable/.test(normalizedStatus);
+    const busy = /committing|uploading|queued|transcribing|finalizing|retrying/.test(normalizedStatus);
+    const retryable = Boolean(note.voiceFileRef) && normalizedStatus === 'transcription failed';
+    const voiceOwned = Boolean(note.voiceFileRef);
+    const phaseLabel = voiceOwned ? voicePhaseLabel(status) : status;
     const item = document.createElement('li');
     item.className = ['thread-note', note.voiceFileRef ? 'voice-note' : '', note.optimistic ? 'is-optimistic' : '', busy ? 'is-busy' : '', retryable ? 'is-retryable' : '', agentOwned ? 'is-agent' : 'is-operator'].filter(Boolean).join(' ');
     const body = renderLedgerCardMarkdown(noteText(note), {
@@ -140,7 +145,7 @@ export function renderThreadNotes(): void {
     body.classList.add('thread-note-message');
     const meta = document.createElement('span');
     meta.className = 'thread-note-meta';
-    meta.textContent = status;
+    meta.textContent = phaseLabel;
     const deleteButton = document.createElement('button');
     deleteButton.className = 'thread-note-delete terminal-button terminal-button--compact';
     deleteButton.type = 'button';
@@ -156,7 +161,8 @@ export function renderThreadNotes(): void {
     if (busy) {
       const spinner = document.createElement('span');
       spinner.className = 'thread-note-spinner';
-      spinner.textContent = normalizedStatus || 'processing';
+      const elapsed = voiceOwned ? voicePhaseElapsedSeconds(note) : null;
+      spinner.textContent = `${phaseLabel || 'Processing'}${elapsed === null ? '' : ` · ${elapsed}s`}`;
       item.append(spinner);
     }
     if (retryable) {

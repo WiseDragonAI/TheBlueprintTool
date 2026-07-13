@@ -64,6 +64,22 @@ test('voice upload transcribes on the backend without requiring a card id', asyn
     assert.equal(body.body.ok, true);
     assert.ok(body.body.voiceFileRef);
     await waitForText(join(workspace, '.decision-os', 'threads', 'specs', 'thread-card-a.md'), 'No-card transcript.');
+    const statusResponse = await fetch(
+      `http://127.0.0.1:${address.port}/api/voice-transcription-status?ledgerId=specs&threadId=thread-card-a&noteId=note-no-card`
+    );
+    assert.equal(statusResponse.status, 200);
+    const statusBody = await statusResponse.json() as {
+      ok: boolean;
+      statusCode: number;
+      note: { id: string; status: string; message: string; voiceFileRef: string; revision: number };
+    };
+    assert.equal(statusBody.ok, true);
+    assert.equal(statusBody.statusCode, 200);
+    assert.equal(statusBody.note.id, 'note-no-card');
+    assert.equal(statusBody.note.message, 'No-card transcript.');
+    assert.equal(statusBody.note.voiceFileRef, body.body.voiceFileRef);
+    assert.equal(statusBody.note.status, 'transcribed');
+    assert.equal(statusBody.note.revision, 4);
   } finally {
     server.close();
     process.chdir(originalCwd);

@@ -16,6 +16,12 @@ export type VoiceTranscriptionResult = {
   error?: string;
   status?: number;
   queueCodex?: boolean;
+  revision?: number;
+  lifecycleStatus?: string;
+  uploadReceivedAt?: string;
+  audioPersistedAt?: string;
+  acceptedAt?: string;
+  providerStartedAt?: string;
 };
 
 export type VoiceUploadOptions = {
@@ -78,5 +84,11 @@ export async function uploadVoiceAudio(audio: Blob, input: VoiceUploadOptions | 
   };
   if (body.noteId) result.noteId = String(body.noteId);
   if (body.queueCodex === true) result.queueCodex = true;
+  if (Number.isFinite(Number(body.revision)) && Number(body.revision) > 0) result.revision = Number(body.revision);
+  if (body.status) result.lifecycleStatus = String(body.status);
+  if (body.uploadReceivedAt) result.uploadReceivedAt = String(body.uploadReceivedAt);
+  if (body.audioPersistedAt) result.audioPersistedAt = String(body.audioPersistedAt);
+  if (body.acceptedAt) result.acceptedAt = String(body.acceptedAt);
+  if (body.providerStartedAt) result.providerStartedAt = String(body.providerStartedAt);
   return result;
 }
