@@ -247,6 +247,15 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   };
   const cardContentWatcher = watchCardContentFiles({ decisionOsRoot, onChange: publishCardContentChange });
   let projectCatalogCache = { expiresAt: 0, projects: [] as ReturnType<typeof discoverDecisionOsProjects> };
+  const projectRuntimeStates = new Map<string, AnyRecord>();
+  const projectRuntimeState = (activeDecisionOsRoot: string): AnyRecord => {
+    const existing = projectRuntimeStates.get(activeDecisionOsRoot) ?? {};
+    // WHAT: Preserve process registries across the start, status, continue, and stop HTTP requests for one project.
+    // WHY: A per-request spread loses controller-owned child-process state before the later stop request can find it.
+    Object.assign(existing, runtime, { decisionOsRoot: activeDecisionOsRoot });
+    projectRuntimeStates.set(activeDecisionOsRoot, existing);
+    return existing;
+  };
   const projectCatalog = (): ReturnType<typeof discoverDecisionOsProjects> => {
     const now = Date.now();
     if (projectCatalogCache.expiresAt > now) return projectCatalogCache.projects;
@@ -269,7 +278,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       return;
     }
     const decisionOsRoot = activeProject?.decisionOsRoot ?? masterDecisionOsRoot;
-    const requestRuntime = { ...runtime, decisionOsRoot };
+    const requestRuntime = projectRuntimeState(decisionOsRoot);
     if (url === '/decision-os/projects' && request.method === 'GET') {
       response.setHeader('content-type', 'application/json');
       response.end(JSON.stringify({ projects, selectedProjectId: activeProject?.id ?? '' }));

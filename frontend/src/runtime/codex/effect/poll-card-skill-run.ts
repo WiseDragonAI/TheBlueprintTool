@@ -316,7 +316,12 @@ function stopPoller(key: string): void {
 
 function setCancelButtonState(button: HTMLButtonElement, state: 'ready' | 'stopping'): void {
   button.disabled = state === 'stopping';
-  button.textContent = state === 'stopping' ? 'Stopping' : 'Cancel';
+  const stopping = state === 'stopping';
+  const label = button.querySelector?.<HTMLElement>('[data-codex-run-stop-label]');
+  if (label) label.textContent = stopping ? 'STOPPING' : 'STOP';
+  else button.textContent = stopping ? 'STOPPING' : 'STOP';
+  button.title = stopping ? 'Stopping Codex run' : 'Stop Codex run';
+  button.setAttribute('aria-label', button.title);
 }
 
 function setContinueButtonState(button: HTMLButtonElement, state: 'ready' | 'starting'): void {
@@ -393,12 +398,12 @@ async function cancelRun(poller: Poller): Promise<void> {
   if (!button) return;
   poller.cancelInFlight = true;
   setCancelButtonState(button, 'stopping');
-  setText(poller.element, '[data-codex-run-latest]', 'Cancelling run');
+  setText(poller.element, '[data-codex-run-latest]', 'Stopping run');
   const result = await requestCardSkillRunCancel({ ledgerId: poller.ledgerId, cardId: poller.cardId, runId: poller.runId });
   poller.cancelInFlight = false;
   if (!result.ok) {
     setCancelButtonState(button, 'ready');
-    setText(poller.element, '[data-codex-run-latest]', result.error || 'Cancel failed');
+    setText(poller.element, '[data-codex-run-latest]', result.error || 'Stop failed');
     return;
   }
   setCancelButtonState(button, 'stopping');
@@ -727,7 +732,8 @@ function setPipelineControls(
   setRestartButtonVisible(poller.element, pipelineTerminal && Boolean(result.canRestart));
   setRetryButtonVisible(poller.element, false);
   setSelectionEnabled(poller.element, pipelineTerminal);
-  setPipelineButtonState(cancelButton(poller.element), poller.cancelInFlight, 'Cancel', 'Stopping');
+  const stop = cancelButton(poller.element);
+  if (stop) setCancelButtonState(stop, poller.cancelInFlight ? 'stopping' : 'ready');
   setPipelineButtonState(continueButton(poller.element), poller.continueInFlight, 'Continue', 'Continuing');
   setPipelineButtonState(restartButton(poller.element), poller.restartInFlight, 'Restart', 'Restarting');
 }
@@ -858,14 +864,15 @@ function bindPipelineButtons(poller: PipelineStepPoller): void {
 async function cancelPipelineStepRun(poller: PipelineStepPoller): Promise<void> {
   if (poller.cancelInFlight || poller.inFlight) return;
   poller.cancelInFlight = true;
-  setPipelineButtonState(cancelButton(poller.element), true, 'Cancel', 'Stopping');
-  setText(poller.element, '[data-codex-run-latest]', poller.continuationMode ? 'Cancelling continuation' : 'Cancelling pipeline');
+  const stop = cancelButton(poller.element);
+  if (stop) setCancelButtonState(stop, 'stopping');
+  setText(poller.element, '[data-codex-run-latest]', poller.continuationMode ? 'Stopping continuation' : 'Stopping pipeline');
   const result = poller.continuationMode
     ? await requestCardSkillRunCancel({ ledgerId: poller.ledgerId, cardId: poller.cardId, runId: poller.activeSkillRunId || poller.runId })
     : await requestCodexPipelineRunCancel({ runId: poller.pipelineRunId });
   poller.cancelInFlight = false;
   if (!result.ok) {
-    paintPipelineError(poller, result.error || 'Cancellation failed.');
+    paintPipelineError(poller, result.error || 'Stop failed.');
     return;
   }
   poller.terminal = false;
