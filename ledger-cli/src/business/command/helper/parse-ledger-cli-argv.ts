@@ -58,7 +58,7 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
   const normalizedMode: LedgerCommand | 'assets' = argv.length === 0 || argv.includes('--help') || argv.includes('-h') || mode === 'help'
     ? 'help'
     : mode === 'assets' ? 'assets'
-    : mode === 'answer' || mode === 'card-context' || mode === 'codex-run-audit' || mode === 'done' || mode === 'execution-profile' || mode === 'export' || mode === 'master-task-apply' || mode === 'master-task-gate' || mode === 'migrate-decision-os' || mode === 'mutate' || mode === 'overview' || mode === 'session-context' || mode === 'todo' || mode === 'unanswered' || mode === 'validate-master-tasks' || mode === 'zone-cards' ? mode : 'inspect';
+    : mode === 'answer' || mode === 'card-context' || mode === 'codex-run-audit' || mode === 'done' || mode === 'execution-profile' || mode === 'export' || mode === 'master-task-apply' || mode === 'master-task-gate' || mode === 'migrate-decision-os' || mode === 'mutate' || mode === 'overview' || mode === 'session-context' || mode === 'skills' || mode === 'todo' || mode === 'unanswered' || mode === 'validate-master-tasks' || mode === 'zone-cards' ? mode : 'inspect';
   const assetAction = (argv[1] === 'apply-gc-plan' || argv[1] === 'gc' || argv[1] === 'list-orphans' || argv[1] === 'list-referenced' || argv[1] === 'prune-json' || argv[1] === 'stage-referenced'
     ? argv[1]
     : 'gc') as AssetCommand;
@@ -106,6 +106,14 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
       : undefined,
     runAuditOperation: normalizedMode === 'codex-run-audit'
       ? { root: flagValue(argv, '--root'), count: flagNumber(argv, '--count') ?? 10, cutoff: flagNumber(argv, '--cutoff'), exclusions: flagValues(argv, '--exclude') }
+      : undefined,
+    skillOperation: normalizedMode === 'skills'
+      ? {
+        action: argv[1] === 'update' ? 'update' : 'create',
+        json: argv.includes('--json'),
+        root: flagValue(argv, '--root'),
+        source: flagValue(argv, '--source'),
+      }
       : undefined,
     mutationOperation: {
       addCardFile: flagValue(argv, '--add-card-file'),

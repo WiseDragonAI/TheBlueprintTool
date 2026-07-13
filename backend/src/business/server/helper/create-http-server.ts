@@ -170,6 +170,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const masterRoot = dirname(masterDecisionOsRoot);
   const decisionOsRoot = masterDecisionOsRoot;
   runtime.decisionOsRoot = masterDecisionOsRoot;
+  runtime.serverRoot = masterRoot;
   runtime.port = port;
   runtime.ledgerCliShimDirectory = ensureLedgerCliShim({
     masterDecisionOsRoot,

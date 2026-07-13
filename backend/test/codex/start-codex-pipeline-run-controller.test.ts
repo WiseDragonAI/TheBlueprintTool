@@ -8,6 +8,7 @@ import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
 import { readCodexPipelineStore, writeCodexPipelineStore } from '@backend/business/codex/helper/codex-pipeline-store.js';
+import { discoverDecisionOsProjects } from '@backend/business/server/helper/project-catalog.js';
 
 async function closeServer(server: Server): Promise<void> {
   if (!server.listening) return;
@@ -226,5 +227,86 @@ test('direct temporary runs inherit skill defaults, preserve snapshots, and hono
     if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
     else process.env.CODEX_BIN = previousCodexBin;
     rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('one catalog-level server skill executes directly and in saved pipelines from two managed projects', async () => {
+  const previousCodexBin = process.env.CODEX_BIN;
+  const masterRoot = mkdtempSync(join(tmpdir(), 'decision-os-shared-server-skill-'));
+  const masterDecisionOsRoot = join(masterRoot, '.decision-os');
+  mkdirSync(masterDecisionOsRoot, { recursive: true });
+  writeFileSync(join(masterDecisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
+  const projects = [join(masterRoot, 'repos', 'one'), join(masterRoot, 'repos', 'two')];
+  for (const workspace of projects) {
+    const decisionOsRoot = join(workspace, '.decision-os');
+    mkdirSync(decisionOsRoot, { recursive: true });
+    writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }] }));
+    writeFileSync(join(decisionOsRoot, 'specs.json'), JSON.stringify({
+      cards: [{ id: 'source-card', title: 'Source', x: 0, y: 0, w: 300, h: 180, comment: { what: 'Input' } }],
+      annotations: [], relationships: [], notes: {},
+    }));
+    const now = '2026-07-13T00:00:00.000Z';
+    writeCodexPipelineStore({
+      decisionOsRoot, availableSkillNames: ['shared-catalog-skill'],
+      store: {
+        pipelines: [{ id: 'shared-pipeline', name: 'Shared pipeline', purpose: '', stepIds: ['shared-step'], createdAt: now, updatedAt: now }],
+        steps: [{ id: 'shared-step', name: 'Shared step', purpose: '', createdAt: now, updatedAt: now, skills: [{ id: 'shared-config', skillName: 'shared-catalog-skill', codexModel: null, codexEffort: null }] }],
+        runs: [], skillLibrary: [], activeWorkspaceRun: null,
+      },
+    });
+  }
+  const skillDirectory = join(masterRoot, '.skills', 'shared-catalog-skill');
+  mkdirSync(skillDirectory, { recursive: true });
+  writeFileSync(join(skillDirectory, 'SKILL.md'), '---\nname: shared-catalog-skill\ndescription: Shared catalog workflow\n---\n\n# Server-only instruction\n');
+  const fakeCodex = join(masterRoot, 'fake-codex.mjs');
+  writeFileSync(fakeCodex, [
+    '#!/usr/bin/env node', 'import { writeFileSync } from "node:fs";', 'let prompt = "";',
+    'process.stdin.on("data", (chunk) => { prompt += chunk; });', 'process.stdin.on("end", () => {',
+    ' const output = (prompt.match(/Write the final result to this Markdown file: (.+)/) || [])[1] || "";',
+    ' writeFileSync(output.trim(), "# shared result\\n");', ' writeFileSync(output.trim() + ".input", prompt);',
+    ' console.log(JSON.stringify({ type: "turn.completed" }));', '});',
+  ].join('\n'));
+  chmodSync(fakeCodex, 0o755);
+  process.env.CODEX_BIN = fakeCodex;
+  const runtime: Record<string, unknown> = { decisionOsRoot: masterDecisionOsRoot };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const catalog = discoverDecisionOsProjects({ masterRoot, masterDecisionOsRoot }).filter((project) => projects.includes(project.root));
+  try {
+    assert.equal(catalog.length, 2);
+    for (const project of catalog) {
+      const scoped = `${baseUrl}/p/${encodeURIComponent(project.id)}`;
+      const libraryResponse = await fetch(`${scoped}/api/codex/skills`);
+      const library = await libraryResponse.json() as Record<string, any>;
+      assert.equal(library.skills.some((skill: Record<string, unknown>) => skill.name === 'shared-catalog-skill'), true);
+      const directResponse = await fetch(`${scoped}/api/codex/skills/process`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ledgerId: 'specs', cardId: 'source-card', skillName: 'shared-catalog-skill' }),
+      });
+      assert.equal(directResponse.status, 202);
+      const direct = await directResponse.json() as Record<string, any>;
+      await waitFor(() => readCodexPipelineStore({ decisionOsRoot: project.decisionOsRoot }).store.runs.find((run) => run.id === direct.pipelineRun.id)?.status === 'complete' ? true : null, 'shared direct run');
+      const directInput = join(project.decisionOsRoot, 'cards', 'specs', `${direct.run.outputCardId}.md.input`);
+      assert.match(readFileSync(directInput, 'utf8'), /# Server-only instruction/);
+      const pipelineResponse = await fetch(`${scoped}/api/codex/pipelines/runs`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ledgerId: 'specs', sourceCardId: 'source-card', pipelineId: 'shared-pipeline' }),
+      });
+      assert.equal(pipelineResponse.status, 202);
+      const pipeline = await pipelineResponse.json() as Record<string, any>;
+      const completed = await waitFor(() => {
+        const run = readCodexPipelineStore({ decisionOsRoot: project.decisionOsRoot }).store.runs.find((entry) => entry.id === pipeline.run.id);
+        return run?.status === 'complete' ? run : null;
+      }, 'shared saved pipeline');
+      const pipelineInput = join(project.decisionOsRoot, 'cards', 'specs', `${completed.steps[0].outputCardId}.md.input`);
+      assert.match(readFileSync(pipelineInput, 'utf8'), /Decision OS server skill package:/);
+    }
+  } finally {
+    await closeServer(server);
+    if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
+    else process.env.CODEX_BIN = previousCodexBin;
+    rmSync(masterRoot, { recursive: true, force: true });
   }
 });

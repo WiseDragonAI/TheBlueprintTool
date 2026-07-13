@@ -6,7 +6,7 @@ import type { Stats } from 'node:fs';
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
-export type LedgerCommand = 'answer' | 'card-context' | 'codex-run-audit' | 'done' | 'execution-profile' | 'export' | 'help' | 'inspect' | 'master-task-apply' | 'master-task-gate' | 'migrate-decision-os' | 'mutate' | 'overview' | 'session-context' | 'todo' | 'unanswered' | 'validate-master-tasks' | 'zone-cards';
+export type LedgerCommand = 'answer' | 'card-context' | 'codex-run-audit' | 'done' | 'execution-profile' | 'export' | 'help' | 'inspect' | 'master-task-apply' | 'master-task-gate' | 'migrate-decision-os' | 'mutate' | 'overview' | 'session-context' | 'skills' | 'todo' | 'unanswered' | 'validate-master-tasks' | 'zone-cards';
 
 export type AssetCommand = 'apply-gc-plan' | 'gc' | 'list-orphans' | 'list-referenced' | 'prune-json' | 'stage-referenced';
 
@@ -53,6 +53,7 @@ export type LedgerCliCommand = {
   migrationOperation?: MigrationOperation;
   masterTaskOperation?: { planStdin: boolean };
   runAuditOperation?: { root?: string; count: number; cutoff?: number; exclusions: string[] };
+  skillOperation?: SkillOperation;
   statusOperation?: {
     cardId?: string;
     status: 'todo' | 'done';
@@ -60,6 +61,13 @@ export type LedgerCliCommand = {
   zoneOperation?: {
     zoneId?: string;
   };
+};
+
+export type SkillOperation = {
+  action: 'create' | 'update';
+  json: boolean;
+  root?: string;
+  source?: string;
 };
 
 export type MigrationOperation = {

@@ -26,6 +26,7 @@ import {
   type CodexSkillSummary,
 } from './scan-codex-skills.js';
 import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand } from './resolve-codex-command.js';
+import { runtimeServerRoot } from './server-skill-context.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -199,7 +200,7 @@ export function readCodexSkillCatalog(input: {
   runtime?: AnyRecord;
 }): CodexSkillCatalog {
   const workspaceRoot = dirname(input.decisionOsRoot);
-  const skills = scanCodexSkills({ workspaceRoot });
+  const skills = scanCodexSkills({ workspaceRoot, serverRoot: runtimeServerRoot(input.runtime ?? {}) });
   return catalogFromSkills({ ...input, workspaceRoot, skills });
 }
 
@@ -209,7 +210,7 @@ export function readCodexSkillLibraryDetail(input: {
   skillName: string;
 }): CodexSkillLibraryDetail | null {
   const workspaceRoot = dirname(input.decisionOsRoot);
-  const skills = scanCodexSkills({ workspaceRoot });
+  const skills = scanCodexSkills({ workspaceRoot, serverRoot: runtimeServerRoot(input.runtime ?? {}) });
   const skill = skills.find((candidate) => candidate.name === input.skillName);
   if (!skill) return null;
   const markdown = readFileSync(skill.skillFile, 'utf8');
@@ -238,7 +239,7 @@ export function saveCodexSkillLibrary(input: {
   payload: AnyRecord;
 }): SaveSkillResult {
   const workspaceRoot = dirname(input.decisionOsRoot);
-  const allSkills = scanCodexSkills({ workspaceRoot });
+  const allSkills = scanCodexSkills({ workspaceRoot, serverRoot: runtimeServerRoot(input.runtime ?? {}) });
   const skill = allSkills.find((candidate) => candidate.name === input.skillName);
   if (!skill) return { ok: false, statusCode: 404, error: 'Skill not found.', skillName: input.skillName };
   if (!skill.editable || skill.source === 'system' || skill.source === 'plugin') {

@@ -11,6 +11,7 @@ import { manageAssetsController } from '../../assets/controller/manage-assets.js
 import { manageDecisionOsMigrationController } from '../../migration/controller/manage-decision-os-migration.js';
 import { applyMasterTaskPlan } from '../../ledger/helper/apply-master-task-plan.js';
 import { auditCodexRuns } from '../../ledger/helper/audit-codex-runs.js';
+import { synchronizeServerSkillController } from '../../skills/controller/synchronize-server-skill.js';
 
 export async function dispatchLedgerCliCommandController(
   argv: string[],
@@ -68,6 +69,17 @@ export async function dispatchLedgerCliCommandController(
   if (command.mode === 'codex-run-audit') {
     const result = auditCodexRuns(command.runAuditOperation ?? { count: 10, exclusions: [] });
     if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+
+  if (command.mode === 'skills') {
+    const result = await synchronizeServerSkillController(command.skillOperation);
+    if (result.ok) {
+      const output = command.skillOperation?.json
+        ? JSON.stringify(result.value, null, 2)
+        : `${result.value.operation}d server skill ${result.value.skillName} in ${result.value.commitSha}`;
+      ports.emit ? ports.emit(output) : console.log(output);
+    }
     return result;
   }
 

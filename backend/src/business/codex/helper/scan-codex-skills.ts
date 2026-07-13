@@ -7,7 +7,7 @@ import { existsSync, readdirSync, readFileSync, realpathSync, statSync, type Dir
 import { homedir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 
-export type CodexSkillSource = 'workspace' | 'user' | 'system' | 'plugin';
+export type CodexSkillSource = 'server' | 'workspace' | 'user' | 'system' | 'plugin';
 
 export type CodexSkillSummary = {
   name: string;
@@ -37,11 +37,12 @@ function codexHome(): string {
   return resolve(process.env.CODEX_HOME || join(homedir(), '.codex'));
 }
 
-export function candidateSkillRoots(workspaceRoot: string): SkillRoot[] {
+export function candidateSkillRoots(workspaceRoot: string, serverRoot?: string): SkillRoot[] {
   const home = codexHome();
   const userSkills = resolve(home, 'skills');
   const systemSkills = resolve(userSkills, '.system');
   return [
+    ...(serverRoot ? [{ directory: resolve(serverRoot, '.skills'), source: 'server' as const, maxDepth: 5 }] : []),
     { directory: resolve(workspaceRoot, '.skills'), source: 'workspace', maxDepth: 5 },
     { directory: userSkills, source: 'user', maxDepth: 6, excludedDirectories: [systemSkills] },
     { directory: systemSkills, source: 'system', maxDepth: 5 },
@@ -140,6 +141,7 @@ function isInside(parent: string, child: string): boolean {
 }
 
 function sourceEditability(skillFile: string, root: SkillRoot): { editable: boolean; readOnlyReason: string | null } {
+  if (root.source === 'server') return { editable: false, readOnlyReason: 'Server skills are synchronized through ledger-cli.' };
   if (root.source === 'system') return { editable: false, readOnlyReason: 'System skills are read-only.' };
   if (root.source === 'plugin') return { editable: false, readOnlyReason: 'Plugin skills are read-only.' };
   try {
@@ -171,9 +173,9 @@ function readSkillSummary(skillFile: string, root: SkillRoot): CodexSkillSummary
   }
 }
 
-export function scanCodexSkills(input: { workspaceRoot: string }): CodexSkillSummary[] {
+export function scanCodexSkills(input: { workspaceRoot: string; serverRoot?: string }): CodexSkillSummary[] {
   const byName = new Map<string, CodexSkillSummary>();
-  for (const root of candidateSkillRoots(input.workspaceRoot)) {
+  for (const root of candidateSkillRoots(input.workspaceRoot, input.serverRoot)) {
     for (const skillFile of collectSkillFiles(root)) {
       const summary = readSkillSummary(skillFile, root);
       if (!summary || byName.has(summary.name)) continue;

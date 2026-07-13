@@ -18,6 +18,7 @@ import {
 } from '../helper/create-codex-pipeline-run-manifest.js';
 import { readCodexPipelineStore, writeCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import { scanCodexSkills } from '../helper/scan-codex-skills.js';
+import { runtimeServerRoot } from '../helper/server-skill-context.js';
 import {
   resolvePipelineLedgerContext,
   runNextPipelineSkill,
@@ -63,7 +64,7 @@ export async function startPipelineRun(input: {
   onLedgerChange?: unknown;
 }): Promise<AnyRecord> {
   const workspaceRoot = dirname(input.decisionOsRoot);
-  const availableSkills = scanCodexSkills({ workspaceRoot });
+  const availableSkills = scanCodexSkills({ workspaceRoot, serverRoot: runtimeServerRoot(input.runtime) });
   const availableSkillNames = availableSkills.map((skill) => skill.name);
   const normalized = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot, availableSkillNames });
   const activeError = assertNoActivePipelineRun(normalized.store);
@@ -224,7 +225,7 @@ export async function startCodexPipelineRunController(
   if (!ledgerId || !sourceCardId || !pipelineId) {
     return { ok: false, statusCode: 400, error: 'Missing ledgerId, sourceCardId, or pipelineId.' };
   }
-  const availableSkillNames = scanCodexSkills({ workspaceRoot: dirname(decisionOsRoot) }).map((skill) => skill.name);
+  const availableSkillNames = scanCodexSkills({ workspaceRoot: dirname(decisionOsRoot), serverRoot: runtimeServerRoot(runtime) }).map((skill) => skill.name);
   const normalized = readCodexPipelineStore({ decisionOsRoot, availableSkillNames });
   const pipeline = normalized.store.pipelines.find((entry) => entry.id === pipelineId);
   // WHAT: Return a distinct missing-definition response.
