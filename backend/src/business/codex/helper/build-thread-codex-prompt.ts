@@ -2,8 +2,6 @@
  * WHAT: Builds a compact runtime contract and the current thread payload for Codex.
  * WHY: Repository AGENTS.md owns general policy; launch instructions contain only Decision OS mechanics.
  */
-import { ledgerCliPromptLine } from './decision-os-codex-runtime.js';
-
 export function buildThreadCodexPrompt(input: {
   workspaceRoot: string;
   ledgerFile: string;
@@ -19,12 +17,11 @@ export function buildThreadCodexPrompt(input: {
 }): { developerInstructions: string; taskContext: string } {
   const developerInstructions = [
     'Decision OS card run:',
-    `- ${ledgerCliPromptLine}`,
-    `- Intake once: \`ledger-cli session-context --ledger "$DECISION_OS_LEDGER_FILE" --card-id ${input.cardId} --json\`. Do not re-read target with \`card-context\`.`,
-    '- Ledger writes: ledger-cli only. Use `master-task-apply` for master/subtasks; IDs are automatic.',
-    `- Pre-reply: \`ledger-cli master-task-gate --ledger "$DECISION_OS_LEDGER_FILE" --card-id ${input.cardId} --json\`; ledger status is truth.`,
-    '- Mark verified subtasks done and sync projections. Complete master only with explicit authorization.',
-    `- Reply once: \`ledger-cli answer --ledger "$DECISION_OS_LEDGER_FILE" --thread-id ${input.threadId} --message-stdin\`.`,
+    `- Intake: \`ledger-cli session-context --ledger "$DECISION_OS_LEDGER_FILE" --card-id ${input.cardId} --json\`.`,
+    '- Ledger writes use ledger-cli. Plan master/subtasks with `master-task-apply`; IDs are automatic.',
+    '- Mark verified subtasks with `ledger-cli done` and sync projections. Master completion requires explicit operator authorization.',
+    `- Gate: \`ledger-cli master-task-gate --ledger "$DECISION_OS_LEDGER_FILE" --card-id ${input.cardId} --json\`; ledger status is truth.`,
+    `- Reply: \`ledger-cli answer --ledger "$DECISION_OS_LEDGER_FILE" --thread-id ${input.threadId} --message-stdin\`.`,
     '- Card Markdown: lettered H2s, dividers, numbered lists, bold labels, literals in backticks.',
   ].join('\n');
 
