@@ -1,0 +1,10 @@
+{
+  "ledgers": [
+    {
+      "id": "tasks",
+      "title": "tasks",
+      "ledgerFile": ".decision-os/tasks.json",
+      "cardId": "ledger-card:tasks"
+    }
+  ]
+}

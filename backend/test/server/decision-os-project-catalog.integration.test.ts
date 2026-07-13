@@ -37,12 +37,18 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Project Gamma', description: 'Created from the catalog' })
     });
     assert.equal(creation.status, 201);
-    const created = await creation.json() as { project: { id: string; name: string; description: string; relativePath: string } };
+    const created = await creation.json() as { project: { id: string; name: string; description: string; relativePath: string; ledgers: Array<{ id: string; title: string; ledgerFile: string }> } };
     assert.deepEqual(
       { name: created.project.name, description: created.project.description, relativePath: created.project.relativePath },
       { name: 'Project Gamma', description: 'Created from the catalog', relativePath: 'Project Gamma' },
     );
-    assert.deepEqual(JSON.parse(readFileSync(join(home, 'Project Gamma', '.decision-os', 'state.json'), 'utf8')), { projectName: 'Project Gamma', ledgers: [] });
+    assert.deepEqual(created.project.ledgers, [{ id: 'tasks', title: 'tasks', ledgerFile: '.decision-os/tasks.json' }]);
+    assert.deepEqual(JSON.parse(readFileSync(join(home, 'Project Gamma', '.decision-os', 'state.json'), 'utf8')), {
+      ledgers: [{ id: 'tasks', title: 'tasks', ledgerFile: '.decision-os/tasks.json', cardId: 'ledger-card:tasks' }],
+    });
+    const createdTasks = JSON.parse(readFileSync(join(home, 'Project Gamma', '.decision-os', 'tasks.json'), 'utf8')) as { modelName: string; cards: unknown[] };
+    assert.equal(createdTasks.modelName, 'tasks');
+    assert.deepEqual(createdTasks.cards, []);
     const refreshedCatalog = await fetch(`${baseUrl}/decision-os/projects`).then((response) => response.json()) as { projects: Array<{ id: string }> };
     assert.ok(refreshedCatalog.projects.some((project) => project.id === created.project.id));
 
