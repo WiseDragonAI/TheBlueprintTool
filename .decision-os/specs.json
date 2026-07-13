@@ -7570,7 +7570,7 @@
       "title": "Make pre-transcription voice uploads retryable",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10402,
       "y": 57468,
       "w": 360,
@@ -7750,7 +7750,7 @@
     },
     {
       "id": "card-27c351db-0de0-4539-bcc1-ecbe1ca0ac7f",
-      "title": "Restore Pink to the Control Room catalog",
+      "title": "Decouple server catalog scope and restore Pink",
       "cardType": "note",
       "domainId": "specs",
       "status": "todo",
@@ -7773,7 +7773,7 @@
       "title": "Diagnose Pink catalog disappearance",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10012,
       "y": 60528,
       "w": 340,
@@ -7786,7 +7786,7 @@
     },
     {
       "id": "card-18496a6d-ffac-47d7-a92d-ac3c58592662",
-      "title": "Relaunch the catalog from the home root",
+      "title": "Decouple server catalog scope and restore Pink",
       "cardType": "note",
       "domainId": "specs",
       "status": "todo",
@@ -7799,6 +7799,26 @@
       },
       "facts": [],
       "fields": []
+    },
+    {
+      "id": "card-c29a8f7f-b0a9-437e-bf38-147407f0d563",
+      "title": "New task intake",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10402,
+      "y": 61548,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-c29a8f7f-b0a9-437e-bf38-147407f0d563.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783968761109-8b676d67",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783968761109-8b676d67.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
     }
   ],
   "relationships": [
@@ -8795,6 +8815,16 @@
       "color": "#38d9e8",
       "label": "Restore Pink to the Control Room catalog",
       "comments": []
+    },
+    {
+      "id": "zone-d3c237e6-4318-4a5b-90a7-76474fc9efeb",
+      "x": -10462,
+      "y": 61488,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "New task intake",
+      "comments": []
     }
   ],
   "notes": {},
@@ -8858,7 +8888,8 @@
     "thread-card-new": ".decision-os/threads/specs/thread-card-new.md",
     "thread-card-a": ".decision-os/threads/specs/thread-card-a.md",
     "thread-card-355e8705-4d48-4765-82bb-74615db3013e": ".decision-os/threads/specs/thread-card-355e8705-4d48-4765-82bb-74615db3013e.md",
-    "thread-card-27c351db-0de0-4539-bcc1-ecbe1ca0ac7f": ".decision-os/threads/specs/thread-card-27c351db-0de0-4539-bcc1-ecbe1ca0ac7f.md"
+    "thread-card-27c351db-0de0-4539-bcc1-ecbe1ca0ac7f": ".decision-os/threads/specs/thread-card-27c351db-0de0-4539-bcc1-ecbe1ca0ac7f.md",
+    "thread-card-c29a8f7f-b0a9-437e-bf38-147407f0d563": ".decision-os/threads/specs/thread-card-c29a8f7f-b0a9-437e-bf38-147407f0d563.md"
   },
   "deletedNoteIds": {
     "thread-card-7074d33a-39da-42a1-b470-673cbe221def": [
