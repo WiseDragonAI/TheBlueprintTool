@@ -4,6 +4,8 @@ import test from 'node:test';
 
 const source = await readFile(new URL('../src/mobile-thread.js', import.meta.url), 'utf8');
 const sharedThreadRenderer = await readFile(new URL('../../frontend/src/runtime/thread/effect/render-thread-notes.ts', import.meta.url), 'utf8');
+const sharedCodexStatus = await readFile(new URL('../../frontend/src/runtime/thread/component/render-thread-codex-log-status.ts', import.meta.url), 'utf8');
+const sharedThreadCss = await readFile(new URL('../../frontend/assets/canvas/thread.css', import.meta.url), 'utf8');
 const { collapseMobileThreadComposer, expandMobileThreadComposer } = await import('../src/mobile-thread-composer.js');
 
 test('mobile Text action replaces jump with close, then collapses without clearing the draft', () => {
@@ -108,4 +110,17 @@ test('mobile thread launch continues a terminal or orphaned Codex run', () => {
   assert.match(source, /status: 'running'/);
   assert.match(source, /hydrateRunningThreadRun\(existingRunId, continuedAt\);[\s\S]*await refreshThreadLedger\(\)/);
   assert.match(source, /bindThreadCodexRunLog\([^;]+runId \}\);\n  hydrateRunningThreadRun\(runId, startedAt\);[\s\S]*await refreshThreadLedger\(\)/);
+});
+
+test('mobile Codex Log renders and routes the large square STOP control for running sessions', () => {
+  assert.match(sharedCodexStatus, /if \(status === 'running'\)/);
+  assert.match(sharedCodexStatus, /stop\.className = 'codex-log-stop terminal-button terminal-button--stop'/);
+  assert.match(sharedCodexStatus, /stop\.dataset\.action = 'stop-thread-codex'/);
+  assert.match(sharedCodexStatus, /icon\.textContent = '■'/);
+  assert.match(sharedCodexStatus, /label\.textContent = 'STOP'/);
+  assert.match(sharedThreadCss, /\.codex-log-stop\s*{[^}]*width:\s*64px;[^}]*height:\s*64px;/s);
+  assert.match(source, /import \{ stopThreadCodexRunController \} from '\/canvas-src\/runtime\/codex\/controller\/stop-thread-codex-run-controller\.js';/);
+  assert.match(source, /action === 'stop-thread-codex'[\s\S]*stopThreadCodexRunController\(\{/);
+  assert.match(source, /ledgerId: currentLedgerId/);
+  assert.match(source, /runId: button\.dataset\.codexRunId \|\| ''/);
 });

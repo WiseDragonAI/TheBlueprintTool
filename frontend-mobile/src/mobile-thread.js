@@ -18,6 +18,7 @@ import { bindThreadCodexRunLog } from '/canvas-src/runtime/codex/effect/bind-thr
 import { cardCodexThreadRunId } from '/canvas-src/runtime/codex/helper/card-codex-thread-run-id.js';
 import { syncThreadCodexRunControls } from '/canvas-src/runtime/thread/effect/sync-thread-codex-run-controls.js';
 import { resumeExternallyStartedCardSkillRun } from '/canvas-src/runtime/codex/effect/poll-card-skill-run.js';
+import { stopThreadCodexRunController } from '/canvas-src/runtime/codex/controller/stop-thread-codex-run-controller.js';
 import { collapseMobileThreadComposer, expandMobileThreadComposer } from './mobile-thread-composer.js';
 import { projectScopedRequestPath } from '/canvas-src/runtime/project/helper/project-request-scope.js';
 
@@ -228,6 +229,12 @@ export function initializeMobileThread() {
     else if (action === 'submit-thread-draft') await appendTextNote();
     else if (action === 'jump-thread-bottom') pinThreadFeedToLastMessage({ follow: true });
     else if (action === 'process-thread-codex') await startCodex(button);
+    else if (action === 'stop-thread-codex') await stopThreadCodexRunController({
+      button,
+      ledgerId: currentLedgerId,
+      cardId: button.dataset.codexCardId || String(currentCard?.id || ''),
+      runId: button.dataset.codexRunId || '',
+    });
     else if (action === 'confirm-delete-note') {
       const modal = document.querySelector('.confirm-modal');
       modal.dataset.threadId = button.dataset.threadId;

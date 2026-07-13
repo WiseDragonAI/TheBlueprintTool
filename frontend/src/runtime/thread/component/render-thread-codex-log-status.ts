@@ -32,6 +32,33 @@ export function renderThreadCodexLogStatus(input: { summary: CardSkillRunSummary
     item.append(term, description);
     strip.append(item);
   }
+  if (status === 'running') {
+    const action = document.createElement('div');
+    action.className = 'codex-log-stop-action';
+    const term = document.createElement('dt');
+    term.textContent = 'Run action';
+    const description = document.createElement('dd');
+    const stop = document.createElement('button');
+    stop.type = 'button';
+    stop.className = 'codex-log-stop terminal-button terminal-button--stop';
+    stop.dataset.action = 'stop-thread-codex';
+    stop.dataset.codexRunId = input.runId;
+    stop.dataset.codexCardId = String(input.card.id ?? '');
+    stop.title = 'Stop Codex run';
+    stop.setAttribute('aria-label', stop.title);
+    const icon = document.createElement('span');
+    icon.className = 'terminal-button__glyph codex-log-stop-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = '■';
+    const label = document.createElement('span');
+    label.className = 'terminal-button__label';
+    label.dataset.codexLogStopLabel = '';
+    label.textContent = 'STOP';
+    stop.replaceChildren(icon, label);
+    description.append(stop);
+    action.append(term, description);
+    strip.append(action);
+  }
   // WHAT: Add a diagnostics row only when the run reports an operator-relevant fault signal.
   // WHY: Clean runs keep the compact five-column status strip.
   if ((summary?.warningCount ?? 0) > 0 || (summary?.errorCount ?? 0) > 0 || summary?.transportStatus === 'degraded') {
