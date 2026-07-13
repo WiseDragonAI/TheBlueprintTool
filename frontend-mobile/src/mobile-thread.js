@@ -17,6 +17,7 @@ import { bindThreadCodexRunLog } from '/canvas-src/runtime/codex/effect/bind-thr
 import { cardCodexThreadRunId } from '/canvas-src/runtime/codex/helper/card-codex-thread-run-id.js';
 import { syncThreadCodexRunControls } from '/canvas-src/runtime/thread/effect/sync-thread-codex-run-controls.js';
 import { resumeExternallyStartedCardSkillRun } from '/canvas-src/runtime/codex/effect/poll-card-skill-run.js';
+import { expandMobileThreadComposer } from './mobile-thread-composer.js';
 
 let currentCard = null;
 let currentLedgerId = '';
@@ -213,6 +214,8 @@ export function initializeMobileThread() {
     } else if (action === 'voice-cancel') cancelVoiceRecording();
     else if (action === 'voice-retry') await retryVoiceTranscription({ threadId: button.dataset.threadId, noteId: button.dataset.noteId, voiceFileRef: button.dataset.voiceFileRef });
     else if (action === 'thread-file-picker') button.closest('.terminal-composer')?.querySelector('.thread-file-input')?.click();
+    else if (action === 'toggle-thread-text') expandMobileThreadComposer(button);
+    else if (action === 'submit-thread-draft') await appendTextNote();
     else if (action === 'jump-thread-bottom') pinThreadFeedToLastMessage({ follow: true });
     else if (action === 'process-thread-codex') await startCodex(button);
     else if (action === 'confirm-delete-note') {
