@@ -19,6 +19,8 @@ test('parse-ledger-card-markdown parses common card description markdown', () =>
     },
     {
       kind: 'list',
+      ordered: false,
+      start: 1,
       items: [
         [{ kind: 'text', text: 'first' }],
         [{ kind: 'text', text: 'second' }]
@@ -49,11 +51,19 @@ test('parse-ledger-card-markdown parses common card description markdown', () =>
   ]);
 });
 
-test('parse-ledger-card-markdown treats escaped newlines as markdown line breaks', () => {
-  assert.deepEqual(parseLedgerCardMarkdown('Intro\\n\\n1. Numbered text stays paragraph.\\n- `Item` detail'), [
+test('parse-ledger-card-markdown treats escaped newlines as markdown line breaks and preserves list types', () => {
+  assert.deepEqual(parseLedgerCardMarkdown('Intro\\n\\n3. Numbered item.\\n4. Next item.\\n- `Item` detail'), [
     { kind: 'paragraph', children: [{ kind: 'text', text: 'Intro' }] },
-    { kind: 'paragraph', children: [{ kind: 'text', text: '1. Numbered text stays paragraph.' }] },
-    { kind: 'list', items: [[{ kind: 'code', text: 'Item' }, { kind: 'text', text: ' detail' }]] }
+    {
+      kind: 'list',
+      ordered: true,
+      start: 3,
+      items: [
+        [{ kind: 'text', text: 'Numbered item.' }],
+        [{ kind: 'text', text: 'Next item.' }]
+      ]
+    },
+    { kind: 'list', ordered: false, start: 1, items: [[{ kind: 'code', text: 'Item' }, { kind: 'text', text: ' detail' }]] }
   ]);
 });
 
