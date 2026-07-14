@@ -776,12 +776,14 @@ async function loadControlRoom() {
       const runId = cardCodexRunId(card);
       const pipelineRunId = String(card.codexQueuedPipelineRunId ?? '').trim();
       let codexStatus = '';
+      let codexStartedAt = '';
       let codexQueuePosition = null;
       if (pipelineRunId) {
         const response = await projectFetch(`/api/codex/pipelines/runs/${encodeURIComponent(pipelineRunId)}`, { cache: 'no-store' }, projectId);
         if (response.ok) {
           const payload = await response.json();
           codexStatus = String(payload.run?.status ?? payload.status ?? '');
+          codexStartedAt = String(payload.activeSkill?.startedAt ?? payload.run?.resumedAt ?? payload.run?.startedAt ?? '');
           codexQueuePosition = Number.isInteger(payload.queuePosition) ? payload.queuePosition : null;
         }
       } else if (runId && /#task-active\b/i.test(markdown)) {
@@ -789,11 +791,12 @@ async function loadControlRoom() {
         if (response.ok) {
           const payload = await response.json();
           codexStatus = String(payload.run?.status ?? payload.status ?? '');
+          codexStartedAt = String(payload.run?.startedAt ?? payload.startedAt ?? '');
           codexQueuePosition = Number.isInteger(payload.queuePosition) ? payload.queuePosition : null;
         }
       }
       const threadNotes = document.notes?.[`thread-${card.id}`] ?? [];
-      return { cardId: card.id, title: card.title, projectId, projectName, projectColor, ledgerId, ledgerTitle, markdown, cardStatus: card.status, cards, threadNotes, codexRunId: runId, codexPipelineRunId: pipelineRunId, codexStatus, codexQueuePosition };
+      return { cardId: card.id, title: card.title, projectId, projectName, projectColor, ledgerId, ledgerTitle, markdown, cardStatus: card.status, cards, threadNotes, codexRunId: runId, codexPipelineRunId: pipelineRunId, codexStatus, codexStartedAt, codexQueuePosition };
     });
   }))).flat();
   state.controlRoom = { ...deriveControlRoom(allTasks), allTasks, documents };
