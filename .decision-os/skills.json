@@ -171,28 +171,6 @@
       "comment": {
         "contentFile": ".decision-os/cards/skills/card-skill-feature-planner.md"
       }
-    },
-    {
-      "id": "card-skill-retrospect-and-close-task-skill-md-0abb9a1300",
-      "title": "Skill / retrospect-and-close-task",
-      "cardType": "note",
-      "domainId": "skills",
-      "status": "todo",
-      "x": 160,
-      "y": -2559.9751118848512,
-      "w": 520,
-      "h": 280,
-      "labels": [
-        "skill",
-        "retrospect-and-close-task",
-        "skill-main"
-      ],
-      "comment": {
-        "contentFile": ".decision-os/cards/skills/card-skill-retrospect-and-close-task-skill-md-0abb9a1300.md"
-      },
-      "skillName": "retrospect-and-close-task",
-      "skillRole": "main",
-      "skillFile": ".skills/retrospect-and-close-task/SKILL.md"
     }
   ],
   "annotations": [
@@ -215,17 +193,6 @@
       "y": 1784.5621716460073,
       "width": 3277,
       "height": 6920
-    },
-    {
-      "id": "zone-skill-retrospect-and-close-task-1e9f6ca96a",
-      "label": "retrospect-and-close-task",
-      "variant": "zone",
-      "color": "#38d9e8",
-      "x": 120,
-      "y": -2649.9751118848512,
-      "width": 1200,
-      "height": 460,
-      "skillName": "retrospect-and-close-task"
     }
   ],
   "relationships": [
@@ -285,8 +252,7 @@
     "thread-card-skill-executor-spec": ".decision-os/threads/skills/thread-card-skill-executor-spec.md",
     "thread-card-skill-executor-implement": ".decision-os/threads/skills/thread-card-skill-executor-implement.md",
     "thread-card-skill-feature-analyzer": ".decision-os/threads/skills/thread-card-skill-feature-analyzer.md",
-    "thread-card-skill-feature-planner": ".decision-os/threads/skills/thread-card-skill-feature-planner.md",
-    "thread-card-skill-retrospect-and-close-task-skill-md-0abb9a1300": ".decision-os/threads/skills/thread-card-skill-retrospect-and-close-task-skill-md-0abb9a1300.md"
+    "thread-card-skill-feature-planner": ".decision-os/threads/skills/thread-card-skill-feature-planner.md"
   },
   "deletedNoteIds": {
     "thread-card-codex-skill-1783485668635-1989a1e2": [
