@@ -42,6 +42,7 @@ const elements = Object.fromEntries([
 ].map((id) => [id, document.getElementById(id)]));
 
 const asText = (value) => value == null ? '' : typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+const defaultAccent = '#38d9e8';
 const routeParts = () => parseProjectScope(location.pathname)?.segments ?? [];
 const creationModal = document.querySelector('.creation-modal');
 const deleteMasterTaskModal = document.querySelector('.delete-master-task-modal');
@@ -68,6 +69,8 @@ function setResourceProject(projectId) {
   state.ledgers = project.ledgers;
   state.ledger = null;
   elements['project-name'].textContent = project.name;
+  document.documentElement.style.setProperty('--accent', project.color || defaultAccent);
+  document.documentElement.style.setProperty('--accent-strong', project.color || defaultAccent);
 }
 
 function setView(name) {
@@ -143,6 +146,7 @@ function openCreationModal(kind) {
   document.querySelector('#creation-description-label').textContent = kind === 'project' ? 'Description (optional)' : 'Description';
   document.querySelector('.creation-description-field').hidden = kind !== 'card' && kind !== 'project';
   document.querySelector('.creation-color-field').hidden = kind !== 'zone';
+  if (kind === 'zone') document.querySelector('#creation-color').value = state.projects.find((project) => project.id === state.resourceProjectId)?.color || defaultAccent;
   document.querySelector('.creation-submit').textContent = submit;
   document.querySelector('.creation-error').hidden = true;
   creationModal.showModal();
@@ -401,6 +405,8 @@ function renderProjectDetail(project) {
   state.activeLedgerId = '';
   state.activeZoneId = '';
   state.viewedProjectId = project.id;
+  document.documentElement.style.setProperty('--accent', project.color || defaultAccent);
+  document.documentElement.style.setProperty('--accent-strong', project.color || defaultAccent);
   renderLedgerLinks();
   elements['project-detail-name'].textContent = project.name;
   elements['project-detail-description'].textContent = project.description || 'No description provided.';
@@ -572,6 +578,7 @@ function taskRow(task, index) {
   summary.type = 'button';
   summary.className = 'control-task-summary';
   article.style.borderInlineStartColor = task.projectColor || 'transparent';
+  article.style.setProperty('--accent', task.projectColor || defaultAccent);
   const active = state.controlTab === 'active';
   const queue = state.controlTab === 'queue';
   const directNavigation = active || queue;
@@ -839,7 +846,8 @@ async function createTaskIntake(projectId) {
   state.ledger = ledger;
   state.activeLedgerId = ledgerRef.id;
   const rect = nextZoneRect();
-  const zone = { id: objectId('zone'), ...rect, color: '#38d9e8', label: 'New task intake', comments: [] };
+  const projectColor = state.projects.find((project) => project.id === projectId)?.color || defaultAccent;
+  const zone = { id: objectId('zone'), ...rect, color: projectColor, label: 'New task intake', comments: [] };
   await ledgerMutation(ledgerRef.id, { action: 'create-zone', annotation: zone });
   const cardId = objectId('card');
   const timestamp = new Date().toISOString();
@@ -949,6 +957,7 @@ function renderCards(cards) {
     title.textContent = asText(card.title).trim() || `Card ${card.id}`;
     copy.append(title);
     button.style.setProperty('--zone-color', state.activeZoneColor || 'var(--accent)');
+    button.style.setProperty('--accent', state.activeZoneColor || defaultAccent);
     const arrow = document.createElement('span');
     arrow.className = 'card-row-arrow';
     arrow.setAttribute('aria-hidden', 'true');
@@ -1152,6 +1161,7 @@ function renderCard(card) {
   } else elements['card-body'].replaceChildren(content);
   initializeMobileCarousels(elements['card-body']);
   elements['card-view'].style.setProperty('--zone-color', state.activeZoneColor || 'var(--accent)');
+  elements['card-view'].style.setProperty('--accent', state.activeZoneColor || defaultAccent);
   setMobileThreadCard(card);
   setMobileCodexContext({ projectId: state.resourceProjectId, ledgerId: state.activeLedgerId, cardId: state.activeCardId });
   setView('card-view');
@@ -1248,6 +1258,8 @@ async function loadRoute() {
     if (!catalogResponse.ok) throw new Error(`The project catalog returned HTTP ${catalogResponse.status}.`);
     const catalog = await catalogResponse.json();
     state.projects = Array.isArray(catalog.projects) ? catalog.projects : [];
+    document.documentElement.style.setProperty('--accent', defaultAccent);
+    document.documentElement.style.setProperty('--accent-strong', defaultAccent);
     setMobileCodexContext({ projects: state.projects });
     const projectRoute = parseProjectRoute(location.pathname);
     if (projectRoute?.view === 'index') {
