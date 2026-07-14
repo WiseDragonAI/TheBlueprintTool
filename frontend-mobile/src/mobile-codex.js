@@ -1,7 +1,6 @@
 const modelOptions = ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.2'];
 const effortOptions = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
-const terminalStatuses = new Set(['complete', 'failed', 'cancelled']);
-const state = { projectId: '', projects: [], ledgerId: '', cardId: '', skills: [], availableTags: [], pipelines: [], steps: [], processTab: 'skills', libraryScope: 'project', query: '', projectFilter: 'All', tagFilter: 'All', selected: null, editor: null, pickerStepId: '', pollTimer: 0 };
+const state = { projectId: '', projects: [], ledgerId: '', cardId: '', skills: [], availableTags: [], pipelines: [], steps: [], processTab: 'skills', libraryScope: 'project', query: '', projectFilter: 'All', tagFilter: 'All', selected: null, editor: null, pickerStepId: '' };
 const el = (selector) => document.querySelector(selector);
 const uid = (prefix) => `${prefix}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
 const message = (selector, text, bad = false) => { const node = el(selector); node.textContent = text; node.classList.toggle('error', bad); };
@@ -228,27 +227,20 @@ async function startSkill(skill, codexModel, codexEffort) {
     const payload = { ledgerId: state.ledgerId, cardId: state.cardId, skillName: skill.name };
     if (codexModel) payload.codexModel = codexModel; if (codexEffort) payload.codexEffort = codexEffort;
     const body = await jsonRequest('/api/codex/skills/process', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
-    message('.process-message', `Skill run ${body.run?.status || 'started'}.`);
-    if (body.run?.id) pollSkill(body.run);
+    finishProcessLaunch({ pipelineRunId: body.pipelineRun?.id || '', queuePosition: body.queuePosition });
   } catch (error) { message('.process-message', error.message, true); setBusy(submit, false); }
 }
 async function startPipeline(pipeline) {
   const submit = el('.process-start'); setBusy(submit, true); message('.process-message', 'Submitting pipeline run…');
   try {
     const body = await jsonRequest('/api/codex/pipelines/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ledgerId: state.ledgerId, sourceCardId: state.cardId, pipelineId: pipeline.id }) });
-    message('.process-message', `Pipeline ${body.run?.status || 'started'}.`);
-    if (body.run?.id) pollPipeline(body.run.id);
+    finishProcessLaunch({ pipelineRunId: body.run?.id || '', queuePosition: body.queuePosition });
   } catch (error) { message('.process-message', formatError(error), true); setBusy(submit, false); }
 }
-function schedule(task) { clearTimeout(state.pollTimer); state.pollTimer = setTimeout(task, 1500); }
-async function pollPipeline(runId) {
-  try { const body = await jsonRequest(`/api/codex/pipelines/runs/${encodeURIComponent(runId)}`); const status = body.run?.status || 'running'; message('.process-message', `Pipeline ${status}.`); if (!terminalStatuses.has(status)) schedule(() => pollPipeline(runId)); else setBusy(el('.process-start'), false); }
-  catch (error) { message('.process-message', error.message, true); setBusy(el('.process-start'), false); }
-}
-async function pollSkill(run) {
-  const outputCardId = run.outputCardId || state.cardId;
-  try { const body = await jsonRequest(`/api/codex/skills/runs/${encodeURIComponent(run.id)}?ledgerId=${encodeURIComponent(state.ledgerId)}&cardId=${encodeURIComponent(outputCardId)}&since=0`); const status = body.run?.status || body.status || 'running'; message('.process-message', `Skill run ${status}.`); if (!terminalStatuses.has(status)) schedule(() => pollSkill({ ...run, ...(body.run || {}) })); else setBusy(el('.process-start'), false); }
-  catch (error) { message('.process-message', error.message, true); setBusy(el('.process-start'), false); }
+function finishProcessLaunch(detail) {
+  el('.process-modal').close();
+  setMobileCodexView(document, 'library', { global: false, libraryTitle: 'Process card' });
+  window.dispatchEvent(new CustomEvent('decision-os:codex-run-enqueued', { detail: { ...detail, cardId: state.cardId, ledgerId: state.ledgerId, projectId: state.projectId } }));
 }
 function formatError(error) { const refs = error.body?.invalidReferences; return refs?.length ? `${error.message} Invalid references: ${refs.map((item) => item.reference).join(', ')}.` : error.message; }
 async function openProcess() {

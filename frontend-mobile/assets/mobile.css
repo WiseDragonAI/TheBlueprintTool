@@ -165,6 +165,8 @@ body.menu-open .nav-scrim { opacity: 1; pointer-events: auto; }
 .task-meta { margin-top: 7px; color: var(--accent); font-size: 12px; }
 .task-next { margin-top: 7px; color: var(--muted); font-size: 13px; }
 .task-stopwatch { align-self: center; color: var(--accent); font-variant-numeric: tabular-nums; font-weight: 800; }
+.task-runtime-status { align-self: center; }
+.task-queue-position { align-self: center; color: var(--accent); font-weight: 800; white-space: nowrap; }
 .task-diagnostic { display: block; margin-top: 10px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--danger), transparent 50%); border-radius: 8px; color: var(--danger); background: color-mix(in srgb, var(--danger), transparent 91%); font-size: 12px; line-height: 1.35; }
 .task-chevron { color: var(--muted); font-size: 20px; }
 .control-task-details { padding: 12px; border-top: 1px solid var(--line); animation: disclosure-in var(--motion-disclosure) var(--ease-out); transform-origin: top; }
