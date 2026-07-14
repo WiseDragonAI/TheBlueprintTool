@@ -23,6 +23,7 @@ export function createCardSkillRunEventIngestor(input: {
   batchDelayMs?: number;
   telemetryFile?: string;
   projectId?: string;
+  onTerminalEvent?: (event: NormalizedRunEvent) => void;
 }): CardSkillRunEventIngestor {
   const decoder = new StringDecoder('utf8');
   const pendingEvents = new Map<number, NormalizedRunEvent>();
@@ -93,6 +94,9 @@ export function createCardSkillRunEventIngestor(input: {
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
       const event = normalizeCardSkillRunEvent({ line, event: parsed as AnyRecord });
       persistTelemetry(parsed as AnyRecord, event);
+      if (event.kind === 'run_status' && (event.status === 'complete' || event.status === 'failed' || event.status === 'cancelled')) {
+        input.onTerminalEvent?.(event);
+      }
       // WHAT: Queue only events that have a durable thread representation.
       // WHY: Empty informational records remain available in the JSONL source without creating blank notes.
       if (event.persist) pendingEvents.set(event.line, event);

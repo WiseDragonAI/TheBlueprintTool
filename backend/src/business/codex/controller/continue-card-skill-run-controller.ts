@@ -22,6 +22,8 @@ import { decisionOsCodexEnvironment } from '../helper/decision-os-codex-runtime.
 import { randomUUID } from 'node:crypto';
 import { enqueueCodexContinuation, removeCodexProcessQueueItem } from '../helper/codex-process-queue.js';
 import { scheduleCodexProcesses, unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
+import { createTerminalCodexProcessReconciler, type TerminalCodexStatus } from '../helper/reconcile-terminal-codex-process.js';
+import { clearCardCodexActiveRun } from '../helper/clear-card-codex-active-run.js';
 
 type AnyRecord = Record<string, unknown>;
 type ProcessStatus = 'running' | 'complete' | 'failed' | 'cancelled';
@@ -267,10 +269,18 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     cwd: workspaceRoot,
     env: decisionOsCodexEnvironment({ runtime, decisionOsRoot, ledgerFile: ledgerPath }),
     stdio: ['pipe', 'pipe', 'pipe'],
+    detached: process.platform !== 'win32',
   });
   const stdout = createWriteStream(stdoutFile, { flags: 'a' });
   const stderr = createWriteStream(stderrFile, { flags: 'a' });
-  const runEventIngestor = createCardSkillRunEventIngestor({ decisionOsRoot, ledgerPath, cardId, runId, startLine: eventStartLine, telemetryFile: `${stdoutFile}.telemetry.jsonl`, projectId: String(runtime.projectId ?? '') });
+  let terminalEventStatus: TerminalCodexStatus | null = null;
+  const terminalReconciler = createTerminalCodexProcessReconciler({
+    child,
+    closeGraceMs: runtime.codexTerminalCloseGraceMs,
+    forceKillGraceMs: runtime.codexTerminalForceKillGraceMs,
+    onTerminalStatus: (status) => { terminalEventStatus = status; },
+  });
+  const runEventIngestor = createCardSkillRunEventIngestor({ decisionOsRoot, ledgerPath, cardId, runId, startLine: eventStartLine, telemetryFile: `${stdoutFile}.telemetry.jsonl`, projectId: String(runtime.projectId ?? ''), onTerminalEvent: terminalReconciler.observe });
   const continuedAt = new Date().toISOString();
   appendFileSync(stderrFile, codexRunSegmentMarker({
     runId,
@@ -328,6 +338,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       flushCardSkillRunEventIngestor(runEventIngestor, runId);
       updateRuntimeRun(runtime, runId, { settledAt: new Date().toISOString() });
       if (queueItemId) removeCodexProcessQueueItem(decisionOsRoot, queueItemId);
+      clearCardCodexActiveRun({ ledgerPath, cardId, runId });
       const schedule = runtime.scheduleCodexProcesses;
       if (typeof schedule === 'function') void schedule();
       notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, status: 'failed' });
@@ -337,7 +348,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     if (settled) return;
     settled = true;
     const finishedAt = new Date().toISOString();
-    const status: ProcessStatus = runtimeRunStatus(runtime, runId) === 'cancelled' ? 'cancelled' : exitCode === 0 ? 'complete' : 'failed';
+    const status: ProcessStatus = runtimeRunStatus(runtime, runId) === 'cancelled' ? 'cancelled' : terminalEventStatus ?? (exitCode === 0 ? 'complete' : 'failed');
     const detail = status === 'cancelled' ? 'terminated by operator' : `${newSession ? 'new session' : 'resume'} exit code ${exitCode ?? 'unknown'}`;
     logCodexContinueDebug('child-close', { traceId, ledgerId, cardId, runId, exitCode, status, detail, finishedAt });
     appendRunStatus(outputFile, status, detail);
@@ -347,6 +358,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       flushCardSkillRunEventIngestor(runEventIngestor, runId);
       updateRuntimeRun(runtime, runId, { settledAt: new Date().toISOString() });
       if (queueItemId) removeCodexProcessQueueItem(decisionOsRoot, queueItemId);
+      clearCardCodexActiveRun({ ledgerPath, cardId, runId });
       const schedule = runtime.scheduleCodexProcesses;
       if (typeof schedule === 'function') void schedule();
       notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, status, exitCode });
