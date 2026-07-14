@@ -783,7 +783,7 @@ async function loadControlRoom() {
         if (response.ok) {
           const payload = await response.json();
           codexStatus = String(payload.run?.status ?? payload.status ?? '');
-          codexStartedAt = String(payload.activeSkill?.startedAt ?? payload.run?.resumedAt ?? payload.run?.startedAt ?? '');
+          codexStartedAt = String(payload.run?.resumedAt ?? payload.run?.createdAt ?? '');
           codexQueuePosition = Number.isInteger(payload.queuePosition) ? payload.queuePosition : null;
         }
       } else if (runId && /#task-active\b/i.test(markdown)) {
@@ -791,7 +791,6 @@ async function loadControlRoom() {
         if (response.ok) {
           const payload = await response.json();
           codexStatus = String(payload.run?.status ?? payload.status ?? '');
-          codexStartedAt = String(payload.run?.startedAt ?? payload.startedAt ?? '');
           codexQueuePosition = Number.isInteger(payload.queuePosition) ? payload.queuePosition : null;
         }
       }
