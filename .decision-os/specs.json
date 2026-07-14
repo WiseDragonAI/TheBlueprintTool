@@ -6102,7 +6102,7 @@
       "title": "Explore Decision OS Logo Directions",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "delayed",
       "x": -10402,
       "y": 27888,
       "w": 360,
@@ -7902,7 +7902,7 @@
     },
     {
       "id": "card-e7a1760a-371d-48ac-80b3-96b4e7ce2102",
-      "title": "Add Cooperative Phone Workload Admission",
+      "title": "Add Cooperative Test Admission Runbooks",
       "cardType": "note",
       "domainId": "specs",
       "status": "todo",
@@ -8312,7 +8312,7 @@
       "title": "Replace Codex launch button with Run control",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10402,
       "y": 71748,
       "w": 360,
@@ -8427,7 +8427,7 @@
       "title": "Define concise master-task writing rules",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -9632,
       "y": 71748,
       "w": 340,
@@ -8647,7 +8647,7 @@
       "title": "Add Codex process settings and queue UX",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -9632,
       "y": 73788,
       "w": 340,
@@ -8757,6 +8757,312 @@
       "h": 380,
       "comment": {
         "contentFile": ".decision-os/cards/specs/card-25c345d0-1866-4dbf-8472-1321ff779863.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-ee15cea8-cd78-48b5-8434-e50a24c4725c",
+      "title": "Replace Done with Delayed in Control Room",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10402,
+      "y": 75828,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-ee15cea8-cd78-48b5-8434-e50a24c4725c.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784043946379-d5592bac",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784043946379-d5592bac",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784043946379-d5592bac.md",
+      "codexQueuedPipelineRunId": "codex-skill-1784046263126-8dea61f9",
+      "codexQueuedRunId": "codex-skill-1784046263126-8dea61f9"
+    },
+    {
+      "id": "card-f499fa82-da9d-4635-ab4b-b6c9b4ecf97f",
+      "title": "Extend persisted card status with delayed",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10012,
+      "y": 75828,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-f499fa82-da9d-4635-ab4b-b6c9b4ecf97f.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-96c89483-4652-45d4-942f-c1df28322cfa",
+      "title": "Replace Done tab and add master-task backlog controls",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9632,
+      "y": 75828,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-96c89483-4652-45d4-942f-c1df28322cfa.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-ddfeb9bd-5150-4f0d-9ed7-0b858b2ec462",
+      "title": "Verify delayed workflow on the served target",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10012,
+      "y": 76238,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-ddfeb9bd-5150-4f0d-9ed7-0b858b2ec462.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-7d2090c9-0a50-4e6d-a164-2dee515e4a55",
+      "title": "Make retrospective skill complete master tasks atomically",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10402,
+      "y": 76848,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-7d2090c9-0a50-4e6d-a164-2dee515e4a55.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784044515026-40645883",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784044515026-40645883",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784044515026-40645883.md"
+    },
+    {
+      "id": "card-79fefde6-99a4-4c0d-a3cb-78d5877b0f63",
+      "title": "Propagate project colors through task hierarchies",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10402,
+      "y": 77868,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-79fefde6-99a4-4c0d-a3cb-78d5877b0f63.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784044787029-2b63a840",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784044787029-2b63a840",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784044787029-2b63a840.md"
+    },
+    {
+      "id": "card-dd46e795-69dc-4f6d-a962-eda9ca552c09",
+      "title": "Harden retrospective skill authorization and closeout contract",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10012,
+      "y": 76848,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-dd46e795-69dc-4f6d-a962-eda9ca552c09.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-dd596665-9fda-4421-9152-10e676970e17",
+      "title": "Rename delayed workflow to backlog",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -9682,
+      "y": 49948,
+      "w": 320,
+      "h": 200,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-dd596665-9fda-4421-9152-10e676970e17.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-fe040c66-b579-43b9-b1d3-1b832d02808b",
+      "title": "Default new zones to the active project color",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10012,
+      "y": 77868,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-fe040c66-b579-43b9-b1d3-1b832d02808b.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-e0422017-7f79-4eac-9746-a6201d2015c7",
+      "title": "Realign existing Mastercard hierarchy zones",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9632,
+      "y": 77868,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-e0422017-7f79-4eac-9746-a6201d2015c7.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-ebc66b93-c86c-42fa-a980-7a8ead0bb56c",
+      "title": "Verify project-color propagation on the served surface",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10012,
+      "y": 78278,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-ebc66b93-c86c-42fa-a980-7a8ead0bb56c.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-1d402e0e-4906-4b81-b6b4-25d68220347f",
+      "title": "Determine whether server restart terminates headless Codex runs",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10402,
+      "y": 78888,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-1d402e0e-4906-4b81-b6b4-25d68220347f.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784045465232-9a38beba",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784045465232-9a38beba",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784045465232-9a38beba.md"
+    },
+    {
+      "id": "card-06fa34b2-e93b-4569-bafa-26edf458b47c",
+      "title": "Trace headless Codex lifecycle across server restart",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10012,
+      "y": 78888,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-06fa34b2-e93b-4569-bafa-26edf458b47c.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-7b6bc749-87a5-4d63-90e5-d4b21bccaaad",
+      "title": "Initialize and hydrate mobile project colors",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10402,
+      "y": 79908,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-7b6bc749-87a5-4d63-90e5-d4b21bccaaad.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784046175787-e74dbf4a",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784046175787-e74dbf4a",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784046175787-e74dbf4a.md"
+    },
+    {
+      "id": "card-codex-skill-1784046263126-8dea61f9",
+      "title": "retrospect-and-close-task result",
+      "cardType": "codex-skill-run",
+      "x": -9946,
+      "y": 75828,
+      "w": 700,
+      "h": 260,
+      "status": "todo",
+      "codexPipelineRunId": "codex-skill-1784046263126-8dea61f9",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexRunId": "codex-skill-1784046263126-8dea61f9",
+      "codexSkillName": "retrospect-and-close-task",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-codex-skill-1784046263126-8dea61f9.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-dd161067-6460-49ec-898b-ada6bb508853",
+      "title": "Implement project color initialization and hydration",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10012,
+      "y": 79908,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-dd161067-6460-49ec-898b-ada6bb508853.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-4f386e8a-6930-4197-80e7-b6d74b1c442f",
+      "title": "Verify mobile settings behavior and record lessons",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -9632,
+      "y": 79908,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-4f386e8a-6930-4197-80e7-b6d74b1c442f.md"
       },
       "facts": [],
       "fields": []
@@ -9230,6 +9536,78 @@
       "from": "card-216df8e7-2b14-4abf-946a-2bef86b90db4",
       "to": "card-25c345d0-1866-4dbf-8472-1321ff779863",
       "label": "subtask"
+    },
+    {
+      "id": "rel-8ad40cc9-9014-4e13-8160-e3dcb701597d",
+      "from": "card-ee15cea8-cd78-48b5-8434-e50a24c4725c",
+      "to": "card-f499fa82-da9d-4635-ab4b-b6c9b4ecf97f",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-27996a4b-aac7-4822-ae44-267616e57b84",
+      "from": "card-ee15cea8-cd78-48b5-8434-e50a24c4725c",
+      "to": "card-96c89483-4652-45d4-942f-c1df28322cfa",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-db813f5e-4b9c-4f75-8d9a-e0b3c09f1e5e",
+      "from": "card-ee15cea8-cd78-48b5-8434-e50a24c4725c",
+      "to": "card-ddfeb9bd-5150-4f0d-9ed7-0b858b2ec462",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-1cda1425-dfd4-4bac-b3b1-8da45a89f3bf",
+      "from": "card-7d2090c9-0a50-4e6d-a164-2dee515e4a55",
+      "to": "card-dd46e795-69dc-4f6d-a962-eda9ca552c09",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-478e7d77-7cda-4498-88c5-d4a851991e63",
+      "from": "card-2164c008-359f-40ac-8abf-505ee5b5fe38",
+      "to": "card-dd596665-9fda-4421-9152-10e676970e17",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-9c1e7180-8db2-45ea-9a1f-c271d01a1599",
+      "from": "card-79fefde6-99a4-4c0d-a3cb-78d5877b0f63",
+      "to": "card-fe040c66-b579-43b9-b1d3-1b832d02808b",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-5461f11c-0845-4343-85ed-09f816015e0e",
+      "from": "card-79fefde6-99a4-4c0d-a3cb-78d5877b0f63",
+      "to": "card-e0422017-7f79-4eac-9746-a6201d2015c7",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-b02ebf42-d227-4328-88ca-aa9422a98941",
+      "from": "card-79fefde6-99a4-4c0d-a3cb-78d5877b0f63",
+      "to": "card-ebc66b93-c86c-42fa-a980-7a8ead0bb56c",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-1f664267-cd3f-4bfc-9e66-3f8aab31193a",
+      "from": "card-1d402e0e-4906-4b81-b6b4-25d68220347f",
+      "to": "card-06fa34b2-e93b-4569-bafa-26edf458b47c",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-codex-skill-1784046263126-8dea61f9-1",
+      "from": "card-ee15cea8-cd78-48b5-8434-e50a24c4725c",
+      "to": "card-codex-skill-1784046263126-8dea61f9",
+      "label": "retrospect-and-close-task"
+    },
+    {
+      "id": "rel-00430a90-2276-4b68-979e-f56a6dbcab3f",
+      "from": "card-7b6bc749-87a5-4d63-90e5-d4b21bccaaad",
+      "to": "card-dd161067-6460-49ec-898b-ada6bb508853",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-c5099ff6-191b-43d3-a0ba-205fdcb79f0c",
+      "from": "card-7b6bc749-87a5-4d63-90e5-d4b21bccaaad",
+      "to": "card-4f386e8a-6930-4197-80e7-b6d74b1c442f",
+      "label": "subtask"
     }
   ],
   "annotations": [
@@ -9432,7 +9810,7 @@
       "y": 3121,
       "width": 796,
       "height": 1715,
-      "color": "#22c55e",
+      "color": "#4f36e0",
       "label": "Server",
       "variant": "zone",
       "comments": []
@@ -9465,7 +9843,7 @@
       "y": 8448,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Unify Mobile Visual Design",
       "comments": []
     },
@@ -9475,7 +9853,7 @@
       "y": 9468,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Control Room",
       "comments": []
     },
@@ -9485,7 +9863,7 @@
       "y": 10488,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Compact file changes into tool calls",
       "comments": []
     },
@@ -9495,7 +9873,7 @@
       "y": 11508,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Simplify mobile card header",
       "comments": []
     },
@@ -9505,7 +9883,7 @@
       "y": 12528,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Default Sol Threads to Medium Effort",
       "comments": []
     },
@@ -9515,7 +9893,7 @@
       "y": 13548,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Unify Mobile Thread Markdown Styling",
       "comments": []
     },
@@ -9525,7 +9903,7 @@
       "y": 14568,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Preserve Base Font for Inline Code",
       "comments": []
     },
@@ -9535,7 +9913,7 @@
       "y": 15588,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Enforce Master Task Naming",
       "comments": []
     },
@@ -9545,7 +9923,7 @@
       "y": 16608,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Mobile Application Navigation",
       "comments": []
     },
@@ -9555,7 +9933,7 @@
       "y": 17628,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Simplify mobile card header",
       "comments": []
     },
@@ -9565,7 +9943,7 @@
       "y": 18648,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Collapse Running Codex Launcher",
       "comments": []
     },
@@ -9575,7 +9953,7 @@
       "y": 19668,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Complete Master Subtasks from Control Room",
       "comments": []
     },
@@ -9585,7 +9963,7 @@
       "y": 20688,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Stop Mobile Thread Autofocus",
       "comments": []
     },
@@ -9595,7 +9973,7 @@
       "y": 21708,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Simplify Active Codex Task Rows",
       "comments": []
     },
@@ -9605,7 +9983,7 @@
       "y": 22728,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Fix Mobile Thread Follow Bottom",
       "comments": []
     },
@@ -9615,7 +9993,7 @@
       "y": 23748,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Compact Mobile Thread Composer",
       "comments": []
     },
@@ -9625,7 +10003,7 @@
       "y": 24768,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Persist Mobile Control Room Route",
       "comments": []
     },
@@ -9635,7 +10013,7 @@
       "y": 25788,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Return After Master Task Completion",
       "comments": []
     },
@@ -9645,7 +10023,7 @@
       "y": 26808,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Control Room task counts",
       "comments": []
     },
@@ -9655,7 +10033,7 @@
       "y": 27828,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Explore Decision OS Logo Directions",
       "comments": []
     },
@@ -9665,7 +10043,7 @@
       "y": 28848,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Optimistic animated queue reordering",
       "comments": []
     },
@@ -9675,7 +10053,7 @@
       "y": 29868,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Termux multi-project master server",
       "comments": []
     },
@@ -9685,7 +10063,7 @@
       "y": 30888,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Synchronized Server Skills",
       "comments": []
     },
@@ -9695,7 +10073,7 @@
       "y": 31908,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Mobile Carousel Touch and Controls",
       "comments": []
     },
@@ -9705,7 +10083,7 @@
       "y": 32928,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Polish Mobile Thread Controls",
       "comments": []
     },
@@ -9715,7 +10093,7 @@
       "y": 33948,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Default Sol Threads to Medium Effort",
       "comments": []
     },
@@ -9725,7 +10103,7 @@
       "y": 34968,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Delete Master Tasks from Mobile",
       "comments": []
     },
@@ -9735,7 +10113,7 @@
       "y": 35988,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Fullscreen Carousel Image Viewer",
       "comments": []
     },
@@ -9755,7 +10133,7 @@
       "y": 38028,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Understand Codex Plugins",
       "comments": []
     },
@@ -9765,7 +10143,7 @@
       "y": 39048,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Correct Task Waiting Age",
       "comments": []
     },
@@ -9775,7 +10153,7 @@
       "y": 40068,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Rotating Neon Codex Log Border",
       "comments": []
     },
@@ -9785,7 +10163,7 @@
       "y": 41088,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Reliable Voice Transcription Lifecycle",
       "comments": []
     },
@@ -9805,7 +10183,7 @@
       "y": 43128,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Restore Mobile Thread Text Input",
       "comments": []
     },
@@ -9815,7 +10193,7 @@
       "y": 44148,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Show Only Project Names in Task Picker",
       "comments": []
     },
@@ -9825,7 +10203,7 @@
       "y": 45168,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Project management workspace",
       "comments": []
     },
@@ -9835,7 +10213,7 @@
       "y": 46188,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Codex Tool-Call Efficiency Audit",
       "comments": []
     },
@@ -9845,7 +10223,7 @@
       "y": 47208,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Stop Active Codex Runs",
       "comments": []
     },
@@ -9855,7 +10233,7 @@
       "y": 48228,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Unify Mobile Thread Markdown Styling",
       "comments": []
     },
@@ -9865,7 +10243,7 @@
       "y": 49248,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Build Stable Server State Projections",
       "comments": []
     },
@@ -9875,7 +10253,7 @@
       "y": 50268,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Auto-Resume Capacity-Interrupted Codex Threads",
       "comments": []
     },
@@ -9885,7 +10263,7 @@
       "y": 51288,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Preserve Base Font for Inline Code",
       "comments": []
     },
@@ -9895,7 +10273,7 @@
       "y": 52308,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Align Card Numbered Lists",
       "comments": []
     },
@@ -9905,7 +10283,7 @@
       "y": 53328,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Mobile Chromium Testing Runbook",
       "comments": []
     },
@@ -9915,7 +10293,7 @@
       "y": 54348,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Delete Codex thread sessions",
       "comments": []
     },
@@ -9925,7 +10303,7 @@
       "y": 55368,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Render native Codex todo lists",
       "comments": []
     },
@@ -9935,7 +10313,7 @@
       "y": 56388,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Session retrospective skill draft",
       "comments": []
     },
@@ -9945,7 +10323,7 @@
       "y": 57408,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Voice upload recovery",
       "comments": []
     },
@@ -9955,7 +10333,7 @@
       "y": 58428,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Commit completed master-task state",
       "comments": []
     },
@@ -9965,7 +10343,7 @@
       "y": 59448,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Create projects from the projects catalog",
       "comments": []
     },
@@ -9975,7 +10353,7 @@
       "y": 60468,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Restore Pink to the Control Room catalog",
       "comments": []
     },
@@ -9985,7 +10363,7 @@
       "y": 61488,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Default project tasks ledger",
       "comments": []
     },
@@ -10015,7 +10393,7 @@
       "y": 64548,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Codex Log project-scope fix",
       "comments": []
     },
@@ -10025,7 +10403,7 @@
       "y": 65568,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Make card instructions flexible",
       "comments": []
     },
@@ -10035,7 +10413,7 @@
       "y": 66588,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Skills and Card Processing Library",
       "comments": []
     },
@@ -10045,7 +10423,7 @@
       "y": 67608,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Unify Skill Processing with Codex Execution",
       "comments": []
     },
@@ -10055,7 +10433,7 @@
       "y": 68628,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Mobile–Desktop Relay Study",
       "comments": []
     },
@@ -10075,7 +10453,7 @@
       "y": 70668,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Favorite and unify skill libraries",
       "comments": []
     },
@@ -10085,7 +10463,7 @@
       "y": 71688,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Run control",
       "comments": []
     },
@@ -10105,7 +10483,7 @@
       "y": 73728,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Codex run queue",
       "comments": []
     },
@@ -10115,8 +10493,58 @@
       "y": 74748,
       "width": 1200,
       "height": 900,
-      "color": "#38d9e8",
+      "color": "#4f36e0",
       "label": "Retrospective card commit",
+      "comments": []
+    },
+    {
+      "id": "zone-a97f6e8d-36ee-4853-b392-d5b4d0977713",
+      "x": -10462,
+      "y": 75768,
+      "width": 1200,
+      "height": 900,
+      "color": "#4f36e0",
+      "label": "Control Room delayed tasks",
+      "comments": []
+    },
+    {
+      "id": "zone-fb97eecb-ff20-4f72-93e7-78d29be3f21c",
+      "x": -10462,
+      "y": 76788,
+      "width": 1200,
+      "height": 900,
+      "color": "#4f36e0",
+      "label": "Retrospective atomic closeout",
+      "comments": []
+    },
+    {
+      "id": "zone-9f2f623e-a34a-49af-b4e7-cd1063fc2120",
+      "x": -10462,
+      "y": 77808,
+      "width": 1200,
+      "height": 900,
+      "color": "#4f36e0",
+      "label": "Project-colored task hierarchies",
+      "comments": []
+    },
+    {
+      "id": "zone-a11a08c2-c128-4f4d-a485-edb6b02361c9",
+      "x": -10462,
+      "y": 78828,
+      "width": 1200,
+      "height": 900,
+      "color": "#4f36e0",
+      "label": "Codex run lifecycle on server restart",
+      "comments": []
+    },
+    {
+      "id": "zone-263cd122-5a08-4479-bafc-7301207ce57c",
+      "x": -10462,
+      "y": 79848,
+      "width": 1200,
+      "height": 900,
+      "color": "#5d5bcf",
+      "label": "Mobile project color initialization",
       "comments": []
     }
   ],
@@ -10204,7 +10632,13 @@
     "thread-card-53faf998-2066-4a03-b4f6-d529fcb89ad6": ".decision-os/threads/specs/thread-card-53faf998-2066-4a03-b4f6-d529fcb89ad6.md",
     "thread-card-codex-skill-1784036508459-8926cc1f": ".decision-os/threads/specs/thread-card-codex-skill-1784036508459-8926cc1f.md",
     "thread-card-codex-skill-1784037279472-474ce8cd": ".decision-os/threads/specs/thread-card-codex-skill-1784037279472-474ce8cd.md",
-    "thread-card-216df8e7-2b14-4abf-946a-2bef86b90db4": ".decision-os/threads/specs/thread-card-216df8e7-2b14-4abf-946a-2bef86b90db4.md"
+    "thread-card-216df8e7-2b14-4abf-946a-2bef86b90db4": ".decision-os/threads/specs/thread-card-216df8e7-2b14-4abf-946a-2bef86b90db4.md",
+    "thread-card-ee15cea8-cd78-48b5-8434-e50a24c4725c": ".decision-os/threads/specs/thread-card-ee15cea8-cd78-48b5-8434-e50a24c4725c.md",
+    "thread-card-7d2090c9-0a50-4e6d-a164-2dee515e4a55": ".decision-os/threads/specs/thread-card-7d2090c9-0a50-4e6d-a164-2dee515e4a55.md",
+    "thread-card-79fefde6-99a4-4c0d-a3cb-78d5877b0f63": ".decision-os/threads/specs/thread-card-79fefde6-99a4-4c0d-a3cb-78d5877b0f63.md",
+    "thread-card-1d402e0e-4906-4b81-b6b4-25d68220347f": ".decision-os/threads/specs/thread-card-1d402e0e-4906-4b81-b6b4-25d68220347f.md",
+    "thread-card-7b6bc749-87a5-4d63-90e5-d4b21bccaaad": ".decision-os/threads/specs/thread-card-7b6bc749-87a5-4d63-90e5-d4b21bccaaad.md",
+    "thread-card-codex-skill-1784046263126-8dea61f9": ".decision-os/threads/specs/thread-card-codex-skill-1784046263126-8dea61f9.md"
   },
   "deletedNoteIds": {
     "thread-card-7074d33a-39da-42a1-b470-673cbe221def": [
