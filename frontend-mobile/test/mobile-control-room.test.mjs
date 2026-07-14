@@ -256,7 +256,7 @@ test('keeps scoped Control Room filters while project editing moves to dedicated
   assert.match(mobile, /projectTasks\.filter\(\(task\) => task\.ledgerId === state\.controlFilter\)/);
   assert.doesNotMatch(styles, /\.project-link input\[type="color"\]/);
   assert.match(mobile, /saveProjectSettingsRequest\(\{/);
-  assert.match(mobile, /function configureProjectColorPicker\(\) \{[\s\S]*globalThis\.Coloris\?\.\(\{[\s\S]*parent: projectSettingsModal,[\s\S]*alpha: false,[\s\S]*focusInput: false/);
+  assert.match(mobile, /function configureProjectColorPicker\(\) \{[\s\S]*globalThis\.Coloris\?\.init\(\);[\s\S]*globalThis\.Coloris\?\.\(\{[\s\S]*parent: projectSettingsModal,[\s\S]*alpha: false,[\s\S]*focusInput: false/);
   assert.match(mobile, /document\.readyState === 'loading'[\s\S]*DOMContentLoaded', configureProjectColorPicker/);
   assert.match(mobile, /colorInput\.value = values\.color;[\s\S]*colorInput\.dispatchEvent\(new Event\('input', \{ bubbles: true \}\)\)/);
   assert.match(coloris, /e\.Coloris=t\(\)/);

@@ -50,6 +50,7 @@ const newTaskProjectModal = document.querySelector('.new-task-project-modal');
 const projectSettingsModal = document.querySelector('.project-settings-modal');
 const projectSettingsForm = document.querySelector('.project-settings-form');
 function configureProjectColorPicker() {
+  globalThis.Coloris?.init();
   globalThis.Coloris?.({
     parent: projectSettingsModal,
     themeMode: 'dark',
