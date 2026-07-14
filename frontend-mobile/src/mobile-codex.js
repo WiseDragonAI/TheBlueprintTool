@@ -1,7 +1,7 @@
 const modelOptions = ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.2'];
 const effortOptions = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
 const terminalStatuses = new Set(['complete', 'failed', 'cancelled']);
-const state = { projectId: '', projects: [], ledgerId: '', cardId: '', skills: [], pipelines: [], steps: [], processTab: 'skills', libraryScope: 'project', query: '', projectFilter: 'All', tagFilter: 'All', selected: null, editor: null, pickerStepId: '', pollTimer: 0 };
+const state = { projectId: '', projects: [], ledgerId: '', cardId: '', skills: [], availableTags: [], pipelines: [], steps: [], processTab: 'skills', libraryScope: 'project', query: '', projectFilter: 'All', tagFilter: 'All', selected: null, editor: null, pickerStepId: '', pollTimer: 0 };
 const el = (selector) => document.querySelector(selector);
 const uid = (prefix) => `${prefix}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
 const message = (selector, text, bad = false) => { const node = el(selector); node.textContent = text; node.classList.toggle('error', bad); };
@@ -21,6 +21,7 @@ async function loadLibraries(projectId = state.projectId) {
   ]);
   const project = state.projects.find((entry) => entry.id === projectId);
   state.skills = (Array.isArray(skills.skills) ? skills.skills : []).map((skill) => ({ ...skill, projects: project ? [project] : [] }));
+  state.availableTags = Array.isArray(skills.availableTags) ? skills.availableTags : [];
   state.pipelines = (Array.isArray(pipelines.pipelines) ? pipelines.pipelines : []).map((pipeline) => ({ ...pipeline, projectId, projectName: project?.name || '', projectColor: project?.color || '#20242b' }));
   state.steps = (Array.isArray(pipelines.steps) ? pipelines.steps : []).map((step) => ({ ...step, projectId }));
   return pipelines;
@@ -46,10 +47,11 @@ async function loadGlobalLibraries() {
       jsonRequest('/api/codex/skills', undefined, project.id),
       jsonRequest('/api/codex/pipelines', undefined, project.id)
     ]);
-    return { project, skills: skills.skills || [], pipelines: pipelines.pipelines || [], steps: pipelines.steps || [], issues: pipelines.issues || [] };
+    return { project, skills: skills.skills || [], availableTags: skills.availableTags || [], pipelines: pipelines.pipelines || [], steps: pipelines.steps || [], issues: pipelines.issues || [] };
   }));
   const loaded = results.filter((result) => result.status === 'fulfilled').map((result) => result.value);
   if (!loaded.length && state.projects.length) throw new Error('Could not load any project libraries.');
+  state.availableTags = [...new Set(loaded.flatMap((library) => library.availableTags))];
   const bySkill = new Map();
   for (const library of loaded) {
     for (const skill of library.skills) {
@@ -113,24 +115,36 @@ function renderProcessList() {
   message('.process-message', visible.length ? `${visible.length} ${state.processTab}` : records.length ? `No matching ${state.processTab}.` : `No ${state.processTab} are available.`);
 }
 function option(value, label = value) { const node = document.createElement('option'); node.value = value; node.textContent = label; return node; }
+function renderSkillTagChoices(record) {
+  const fieldset = document.createElement('fieldset'); fieldset.className = 'skill-tags-field';
+  const legend = document.createElement('legend'); legend.textContent = 'Tags';
+  const choices = document.createElement('div'); choices.className = 'skill-tag-choices';
+  const selected = new Set(Array.isArray(record.tags) ? record.tags : []);
+  for (const tag of state.availableTags) {
+    const label = document.createElement('label'); label.className = 'skill-tag-choice';
+    const input = document.createElement('input'); input.type = 'checkbox'; input.name = 'skill-tag'; input.value = tag; input.checked = selected.has(tag);
+    const text = document.createElement('span'); text.textContent = tag; decorateSkillCategoryLabel(text, tag);
+    label.append(input, text); choices.append(label);
+  }
+  fieldset.append(legend, choices);
+  return fieldset;
+}
+function selectedSkillTags(fieldset) { return [...fieldset.querySelectorAll('input[name="skill-tag"]:checked')].map((input) => input.value); }
 function renderProcessDetail(record) {
   state.selected = record;
   if (record.projectId) state.projectId = record.projectId;
   const detail = el('.process-detail'); detail.hidden = false; detail.replaceChildren();
   const viewContext = { global: state.libraryScope === 'global', libraryTitle: state.processTab === 'skills' ? 'Skill library' : 'Pipelines', detailTitle: state.processTab === 'skills' ? 'Skill details' : 'Pipeline details' };
-  const back = button('← Back to library', 'codex-back-link', () => setMobileCodexView(document, 'library', viewContext));
   const title = document.createElement('h3'); title.className = 'skill-detail-title'; title.textContent = record.name;
   const purpose = document.createElement('p');
   purpose.textContent = state.processTab === 'skills' ? record.description : (record.purpose || 'No purpose provided.');
-  detail.append(back, title, purpose);
+  detail.append(title, purpose);
   if (state.processTab === 'skills') {
     if (state.libraryScope === 'global') {
-      const tagsField = document.createElement('label'); tagsField.className = 'codex-field skill-tags-field';
-      const tagsLabel = document.createElement('span'); tagsLabel.textContent = 'Tags';
-      const tagsInput = document.createElement('input'); tagsInput.className = 'skill-tags-input'; tagsInput.setAttribute('aria-label', 'Skill tags'); tagsInput.value = tagsForSkill(record).join(', ');
-      tagsField.append(tagsLabel, tagsInput);
-      const saveTags = button('Save tags', 'codex-secondary skill-tags-save', () => { void saveGlobalSkillTags(record, tagsInput.value); });
-      const favorite = button(record.favorite ? 'Remove from favorites' : 'Mark as favorite', 'primary-button skill-favorite-toggle', () => { void toggleGlobalSkillFavorite(record); });
+      const tagsField = renderSkillTagChoices(record);
+      const saveTags = button('Save tags', 'codex-secondary skill-tags-save', () => { void saveGlobalSkillTags(record, selectedSkillTags(tagsField)); });
+      const favorite = button(record.favorite ? '★' : '☆', 'skill-favorite-toggle', () => { void toggleGlobalSkillFavorite(record); });
+      favorite.setAttribute('aria-label', record.favorite ? 'Remove from favorites' : 'Add to favorites');
       favorite.setAttribute('aria-pressed', String(record.favorite === true));
       const status = document.createElement('p'); status.className = 'codex-message process-detail-message'; status.setAttribute('role', 'status');
       detail.append(tagsField, saveTags, favorite, status);
@@ -181,8 +195,8 @@ async function toggleGlobalSkillFavorite(record) {
     message('.process-detail-message', error.message, true);
   }
 }
-async function saveGlobalSkillTags(record, value) {
-  const tags = [...new Set(String(value).split(',').map((tag) => tag.trim()).filter(Boolean))].slice(0, 8);
+async function saveGlobalSkillTags(record, selectedTags) {
+  const tags = [...new Set(selectedTags)].filter((tag) => state.availableTags.includes(tag));
   const identity = (skill) => skill.name === record.name && skill.source === record.source && skill.revision === record.revision;
   const prior = state.skills.filter(identity).map((skill) => ({ skill, tags: [...(skill.tags || [])] }));
   prior.forEach(({ skill }) => { skill.tags = tags; });
@@ -329,7 +343,13 @@ export function initializeMobileCodex() {
     if (navigationButton.classList.contains('nav-pipelines-button')) void openPipelines();
     else void openSkills();
   });
-  el('.process-close').addEventListener('click', () => el('.process-modal').close()); el('.pipelines-close').addEventListener('click', () => el('.pipelines-modal').close());
+  el('.process-close').addEventListener('click', () => {
+    if (!el('.process-detail').hidden) {
+      setMobileCodexView(document, 'library', { global: state.libraryScope === 'global', libraryTitle: state.processTab === 'skills' ? 'Skill library' : 'Pipelines' });
+      return;
+    }
+    el('.process-modal').close();
+  }); el('.pipelines-close').addEventListener('click', () => el('.pipelines-modal').close());
   document.querySelectorAll('[data-process-tab]').forEach((tab) => tab.addEventListener('click', () => { state.processTab = tab.dataset.processTab; state.query = ''; state.tagFilter = 'All'; document.querySelectorAll('[data-process-tab]').forEach((item) => item.setAttribute('aria-selected', String(item === tab))); setMobileCodexView(document, 'library', { global: state.libraryScope === 'global', libraryTitle: state.processTab === 'skills' ? 'Skill library' : 'Pipelines' }); message('.process-message', ''); renderProcessList(); }));
   el('.process-search').addEventListener('input', (event) => { state.query = event.target.value; renderProcessList(); event.target.focus(); });
   el('.process-filter-clear').addEventListener('click', () => { state.query = ''; state.projectFilter = 'All'; state.tagFilter = 'All'; renderProcessList(); });

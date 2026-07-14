@@ -115,17 +115,25 @@ test('skill libraries share favorite ordering, colored categories, and scope-spe
   assert.match(script, /renderSkillLibraryItemContent\(record\)/);
   assert.match(script, /decorateSkillCategoryLabel\(chip, value\.category\)/);
   assert.match(script, /state\.libraryScope === 'global'/);
-  assert.match(script, /'Mark as favorite'/);
+  assert.match(script, /record\.favorite \? '★' : '☆'/);
+  assert.match(script, /'Remove from favorites' : 'Add to favorites'/);
   assert.match(script, /'Save tags'/);
+  assert.match(script, /skills\.availableTags/);
+  assert.match(script, /input\.type = 'checkbox'/);
+  assert.match(script, /state\.availableTags\.includes\(tag\)/);
   assert.match(script, /JSON\.stringify\(\{ tags \}\)/);
   assert.match(script, /JSON\.stringify\(\{ favorite \}\)/);
   assert.match(script, /try \{ await loadGlobalLibraries\(\); \}/);
   assert.doesNotMatch(sharedRow, /project-record-label|skill-source-label|skill-favorite-label/);
+  assert.match(sharedRow, /skill-favorite-star/);
+  assert.match(sharedRow, /favorite\.textContent = '★'/);
   assert.match(styles, /\.skill-category-filter \{[^}]*background: var\(--skill-category-color\)/);
+  assert.match(styles, /\.skill-favorite-toggle\[aria-pressed="true"\] \{[^}]*color: #fbbf24/);
+  assert.match(styles, /\.skill-tag-choice input:checked \+ span/);
   assert.match(styles, /\.codex-list-item \.project-record-label, \.codex-list-item \.skill-category-label[^}]*padding: 4px 7px/);
 });
 
-test('skill detail is an exclusive modal view and Back restores every library control', () => {
+test('skill detail is an exclusive modal view and the single close control restores every library control', () => {
   const selectors = new Map([
     ['.codex-tabs', { hidden: false }],
     ['.codex-library-controls', { hidden: false }],
@@ -144,4 +152,7 @@ test('skill detail is an exclusive modal view and Back restores every library co
   assert.deepEqual([...selectors.keys()].slice(0, 4).map((selector) => selectors.get(selector).hidden), [false, false, false, false]);
   assert.equal(selectors.get('.process-detail').hidden, true);
   assert.equal(selectors.get('#process-title').textContent, 'Skill library');
+  assert.doesNotMatch(script, /Back to library/);
+  assert.match(script, /if \(!el\('\.process-detail'\)\.hidden\)/);
+  assert.match(script, /setMobileCodexView\(document, 'library'/);
 });

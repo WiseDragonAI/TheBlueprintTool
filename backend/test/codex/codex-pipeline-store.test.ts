@@ -75,7 +75,7 @@ test('pipeline store starts empty and preserves ordered reusable definitions acr
     assert.deepEqual(loaded.store.steps[1].skills.map((skill) => skill.skillName), ['task-list']);
     assert.equal(loaded.store.skillLibrary[0].defaultCodexModel, 'gpt-5.4');
     assert.equal(loaded.store.skillLibrary[0].favorite, true);
-    assert.deepEqual(loaded.store.skillLibrary[0].tags, ['Research', 'Priority']);
+    assert.deepEqual(loaded.store.skillLibrary[0].tags, ['Research']);
     assert.equal(loaded.invalidReferences.length, 0);
     assert.equal(readFileSync(pipelineStoreFile(decisionOsRoot), 'utf8').includes(workspace), false);
   } finally {

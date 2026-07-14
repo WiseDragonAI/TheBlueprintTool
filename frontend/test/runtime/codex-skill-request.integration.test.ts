@@ -303,11 +303,11 @@ test('skill tag save sends path-free metadata and returns canonical tags', async
     globalThis.fetch = (async (url: string, init?: RequestInit) => {
       assert.equal(url, '/api/codex/skill-library/system%2Fskill');
       assert.equal(init?.method, 'PUT');
-      assert.deepEqual(JSON.parse(String(init?.body)), { tags: ['Research', 'Priority'] });
-      return new Response(JSON.stringify({ ok: true, skill: { name: 'system/skill', tags: ['Research', 'Priority'] } }), { status: 200 });
+      assert.deepEqual(JSON.parse(String(init?.body)), { tags: ['Research', 'Automation'] });
+      return new Response(JSON.stringify({ ok: true, skill: { name: 'system/skill', tags: ['Research', 'Automation'] } }), { status: 200 });
     }) as typeof fetch;
-    const result = await requestCodexSkillMetadataSave('system/skill', { tags: ['Research', 'Priority'] });
-    assert.deepEqual(result.skill?.tags, ['Research', 'Priority']);
+    const result = await requestCodexSkillMetadataSave('system/skill', { tags: ['Research', 'Automation'] });
+    assert.deepEqual(result.skill?.tags, ['Research', 'Automation']);
   } finally {
     globalThis.fetch = previousFetch;
   }

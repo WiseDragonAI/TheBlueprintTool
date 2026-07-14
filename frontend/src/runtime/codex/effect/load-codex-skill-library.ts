@@ -12,6 +12,7 @@ export type CodexSkillLibraryLoadResult = {
   ok: boolean;
   statusCode: number;
   skill?: CodexSkillLibraryDetail;
+  availableTags: string[];
   error?: string;
 };
 
@@ -21,14 +22,15 @@ type SkillLibraryResponse = Partial<CodexSkillLibraryLoadResult> & {
 
 export async function loadCodexSkillLibrary(skillName: string): Promise<CodexSkillLibraryLoadResult> {
   const response = await fetch(`/api/codex/skill-library/${encodeURIComponent(skillName)}`).catch(() => undefined);
-  if (!response) return { ok: false, statusCode: 0, error: 'Request failed.' };
+  if (!response) return { ok: false, statusCode: 0, availableTags: [], error: 'Request failed.' };
   const body = await response.json().catch(() => null) as SkillLibraryResponse | null;
-  if (!body) return { ok: false, statusCode: response.status, error: 'Invalid response.' };
+  if (!body) return { ok: false, statusCode: response.status, availableTags: [], error: 'Invalid response.' };
   const ok = response.ok && body.ok !== false;
   return {
     ok,
     statusCode: response.status,
     skill: body.skill,
+    availableTags: Array.isArray(body.availableTags) ? body.availableTags : [],
     error: ok ? undefined : String(body.error ?? `Request failed (${response.status}).`),
   };
 }

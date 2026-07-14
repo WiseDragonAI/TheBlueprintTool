@@ -36,7 +36,7 @@ import { listCodexPipelinesController } from '../../codex/controller/list-codex-
 import { saveCodexPipelineController } from '../../codex/controller/save-codex-pipeline-controller.js';
 import { readCodexSkillLibraryController } from '../../codex/controller/read-codex-skill-library-controller.js';
 import { saveCodexSkillLibraryController } from '../../codex/controller/save-codex-skill-library-controller.js';
-import { readCodexSkillCatalog } from '../../codex/helper/codex-skill-library.js';
+import { codexSkillTags, readCodexSkillCatalog } from '../../codex/helper/codex-skill-library.js';
 import { startCodexPipelineRunController } from '../../codex/controller/start-codex-pipeline-run-controller.js';
 import { readCodexPipelineRunController } from '../../codex/controller/read-codex-pipeline-run-controller.js';
 import { cancelCodexPipelineRunController } from '../../codex/controller/cancel-codex-pipeline-run-controller.js';
@@ -536,7 +536,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const skills = readCodexSkillCatalog({ decisionOsRoot, runtime: requestRuntime }).skills;
       response.setHeader('content-type', 'application/json');
       response.statusCode = 200;
-      response.end(JSON.stringify({ ok: true, skills }));
+      response.end(JSON.stringify({ ok: true, skills, availableTags: codexSkillTags }));
       return;
     }
     if (url === '/api/codex/skills/process' && request.method === 'POST') {
