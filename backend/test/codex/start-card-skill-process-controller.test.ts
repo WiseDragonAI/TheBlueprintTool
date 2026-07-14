@@ -14,12 +14,17 @@ import { createHttpServer } from '@backend/business/server/helper/create-http-se
 import { parseThreadMarkdown } from '@backend/business/ledger/helper/thread-content-file.js';
 import { persistCardSkillRunEvents } from '@backend/business/codex/effect/persist-card-skill-run-events.js';
 import { normalizeCardSkillRunEvent } from '@backend/business/codex/helper/normalize-card-skill-run-event.js';
+import { readCodexProcessQueue } from '@backend/business/codex/helper/codex-process-queue.js';
 
 type ContentChangeEvent = {
-  contentFile: string;
-  kind: 'card-content' | 'thread-content';
+  contentFile?: string;
+  kind?: 'card-content' | 'thread-content';
   ledgerId: string;
   threadId?: string;
+  reason?: string;
+  runId?: string;
+  cardId?: string;
+  status?: string;
 };
 
 async function startContentEventCollector(endpoint: string): Promise<{ events: ContentChangeEvent[]; close(): Promise<void> }> {
@@ -42,7 +47,7 @@ async function startContentEventCollector(endpoint: string): Promise<{ events: C
         const frame = buffer.slice(0, boundary);
         buffer = buffer.slice(boundary + 2);
         const lines = frame.split('\n');
-        if (!lines.includes('event: card-content-change')) continue;
+        if (!lines.includes('event: card-content-change') && !lines.includes('event: ledger-content-change')) continue;
         const data = lines.filter((line) => line.startsWith('data: ')).map((line) => line.slice(6)).join('\n');
         events.push(JSON.parse(data) as ContentChangeEvent);
       }
@@ -279,12 +284,16 @@ test('card skill process route creates a linked output card and launches codex',
     assert.equal(threadBody.ok, true);
     assert.notEqual(threadBody.run.id, body.run.id);
     await waitForText(threadBody.run.outputFile, 'Codex run completed');
+    await waitForCondition(() => {
+      const current = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { cards: Array<Record<string, unknown>> };
+      return current.cards.find((entry) => entry.id === 'source-card')?.codexActiveRunId === undefined;
+    }, 'the completed thread run to clear active card ownership');
 
     const replacedLedger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as {
       cards: Array<Record<string, unknown>>;
     };
     const replacedSource = replacedLedger.cards.find((card) => card.id === 'source-card');
-    assert.equal(replacedSource?.codexActiveRunId, threadBody.run.id);
+    assert.equal(replacedSource?.codexActiveRunId, undefined);
     assert.equal(replacedSource?.codexThreadRunId, threadBody.run.id);
     assert.equal(replacedSource?.codexRunId, undefined);
     assert.equal(replacedSource?.codexRunOutputFile, undefined);
@@ -354,12 +363,13 @@ test('thread codex process route anchors the run widget on the source card and s
     `  appendFileSync(${JSON.stringify(launchesFile)}, "launch\\n");`,
     '  const args = process.argv.slice(2);',
     '  const developerArgument = args.find((argument) => argument.startsWith("developer_instructions=")) || "";',
-    '  const developerInstructions = JSON.parse(developerArgument.slice("developer_instructions=".length));',
+    '  const developerInstructions = developerArgument ? JSON.parse(developerArgument.slice("developer_instructions=".length)) : "";',
     '  const match = input.match(/Run summary: (.+)/);',
     '  const threadMatch = input.match(/Thread: [^ ]+ \\(([^)]+)\\)/);',
-    '  if (!match || !threadMatch) process.exit(2);',
-    '  writeFileSync(match[1], "# Fake Thread Run\\n\\nscoped\\n");',
-    '  appendFileSync(threadMatch[1], "\\n\\n# AGENT\\n<!-- decision-os:note {\\"id\\":\\"note-agent-scoped-final\\",\\"timestamp\\":\\"2026-07-10T01:02:00.000Z\\"} -->\\n\\nScoped final answer.\\n");',
+    '  const resumed = args.includes("resume");',
+    '  if ((!match || !threadMatch) && !resumed) process.exit(2);',
+    '  if (!resumed) writeFileSync(match[1], "# Fake Thread Run\\n\\nscoped\\n");',
+    '  if (!resumed) appendFileSync(threadMatch[1], "\\n\\n# AGENT\\n<!-- decision-os:note {\\"id\\":\\"note-agent-scoped-final\\",\\"timestamp\\":\\"2026-07-10T01:02:00.000Z\\"} -->\\n\\nScoped final answer.\\n");',
     '  console.log(JSON.stringify({ type: "thread.started", thread_id: "session-thread-a" }));',
     '  console.log(JSON.stringify({ type: "turn.started" }));',
     '  console.log(JSON.stringify({ type: "item.completed", item: { id: "thinking-1", type: "reasoning", text: "Thinking remains in the run log." } }));',
@@ -372,13 +382,14 @@ test('thread codex process route anchors the run widget on the source card and s
     '  console.log(JSON.stringify({ type: "turn.completed" }));',
     '  console.error("WARNING stderr retry budget is low");',
     '  console.error("Reconnecting transport after request timed out");',
+    '  if (input.includes("Hang after terminal.")) setInterval(() => {}, 1000);',
     '});',
   ].join('\n'));
   chmodSync(fakeCodex, 0o755);
 
   process.chdir(workspace);
   process.env.CODEX_BIN = fakeCodex;
-  const runtime: Record<string, unknown> = {};
+  const runtime: Record<string, unknown> = { codexTerminalCloseGraceMs: 20, codexTerminalForceKillGraceMs: 20 };
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
@@ -423,6 +434,14 @@ test('thread codex process route anchors the run widget on the source card and s
     assert.doesNotMatch(developerInstructions, /Please update this exact card|Codex internal output|Existing card body/);
     assert.doesNotMatch(developerInstructions, /<(?:workspaceRoot|ledgerFile|cardId|cardTitle|cardMarkdownFile|threadId|threadMarkdownFile|runSummaryFile|operatorNoteTimestamp)>/);
 
+    await waitForCondition(() => {
+      const runs = runtime.codexSkillRuns as Record<string, { status?: string; settledAt?: string }> | undefined;
+      const current = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { cards: Array<Record<string, unknown>> };
+      return runs?.[body.run.id]?.status === 'complete'
+        && Boolean(runs[body.run.id]?.settledAt)
+        && current.cards.find((entry) => entry.id === 'card-a')?.codexActiveRunId === undefined;
+    }, 'the initial thread run to settle');
+
     const ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as {
       cards: Array<{ id: string; codexThreadRunId?: string; codexThreadRunOutputFile?: string; codexRunModel?: string; codexRunEffort?: string; comment?: { contentFile?: string } }>;
       threadFiles: Record<string, string>;
@@ -430,7 +449,7 @@ test('thread codex process route anchors the run widget on the source card and s
     const card = ledger.cards.find((entry) => entry.id === 'card-a');
     assert.equal(ledger.cards.length, 1);
     assert.equal(card?.codexThreadRunId, body.run.id);
-    assert.equal((card as Record<string, unknown>)?.codexActiveRunId, body.run.id);
+    assert.equal((card as Record<string, unknown>)?.codexActiveRunId, undefined);
     assert.equal(card?.codexThreadRunOutputFile?.includes(body.run.id), true);
     assert.equal(card?.codexRunModel, 'gpt-5.4');
     assert.equal(card?.codexRunEffort, 'medium');
@@ -461,6 +480,10 @@ test('thread codex process route anchors the run widget on the source card and s
 
     const lifecycleEvent = eventCollector.events.find((event) => event.kind === 'thread-content' && event.ledgerId === 'specs' && event.threadId === 'thread-card-a');
     assert.equal(lifecycleEvent?.contentFile, '.decision-os/threads/specs/thread-card-a.md');
+    await waitForCondition(
+      () => eventCollector?.events.some((event) => event.reason === 'codex-thread-settled' && event.runId === body.run.id && event.status === 'complete') === true,
+      'the ordinary thread settlement ledger event',
+    );
     const threadBeforePolling = readFileSync(threadPath, 'utf8');
     const lifecycleNotes = parseThreadMarkdown(threadBeforePolling).filter((note) => note.codexRunId === body.run.id);
     assert.deepEqual(lifecycleNotes, []);
@@ -525,6 +548,30 @@ test('thread codex process route anchors the run widget on the source card and s
     assert.equal(duplicate.runId, body.run.id);
     assert.match(duplicate.error, /continue the existing run/i);
     assert.equal(readFileSync(launchesFile, 'utf8').trim().split('\n').length, launchCountBeforeRejection);
+
+    appendFileSync(threadPath, '\n# OPERATOR\n<!-- decision-os:note {"id":"note-operator-hung-wrapper","timestamp":"2026-07-08T01:06:00.000Z"} -->\n\nHang after terminal.\n', 'utf8');
+    const continuedResponse = await fetch(`${baseUrl}/api/codex/skills/runs/${body.run.id}/continue`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ledgerId: 'specs', cardId: 'card-a', codexModel: 'gpt-5.4', codexEffort: 'medium' })
+    });
+    assert.equal(continuedResponse.status, 202);
+    await waitForCondition(() => {
+      const runs = runtime.codexSkillRuns as Record<string, { status?: string; settledAt?: string }> | undefined;
+      return runs?.[body.run.id]?.status === 'complete' && Boolean(runs[body.run.id]?.settledAt);
+    }, 'the terminal event to settle the hung Codex wrapper');
+    assert.equal(readCodexProcessQueue(join(workspace, '.decision-os')).some((item) => String(item.payload.runId ?? item.id) === body.run.id), false);
+    const reconciledStatus = await fetch(`${baseUrl}/api/codex/skills/runs/${body.run.id}?ledgerId=specs&cardId=card-a&since=0`).then((result) => result.json()) as { status: string; active: boolean; latestEvent: { type: string } };
+    assert.equal(reconciledStatus.status, 'complete');
+    assert.equal(reconciledStatus.active, false);
+    assert.equal(reconciledStatus.latestEvent.type, 'turn.completed');
+    const settledCard = (JSON.parse(readFileSync(ledgerPath, 'utf8')) as { cards: Array<Record<string, unknown>> }).cards.find((entry) => entry.id === 'card-a');
+    assert.equal(settledCard?.codexActiveRunId, undefined);
+    assert.equal(settledCard?.codexThreadRunId, body.run.id);
+    await waitForCondition(
+      () => eventCollector?.events.filter((event) => event.reason === 'codex-thread-settled' && event.runId === body.run.id && event.status === 'complete').length === 2,
+      'one terminal ledger event per thread settlement',
+    );
   } finally {
     await eventCollector?.close();
     server.close();

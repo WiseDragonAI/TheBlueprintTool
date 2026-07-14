@@ -431,6 +431,13 @@ test('inactive SSE scopes are no-ops and a lifecycle thread event updates notes 
   assert.equal(runtimeDom.content.querySelector('[data-card-id="sentinel"]'), canvasSentinel);
   assert.equal(runtimeDom.threadHeading.querySelector('.thread-actions'), actions);
   assert.equal(state.activeLedger.notes['thread-card-a'][0].id, 'codex-event');
+
+  events.emit('ledger-content-change', {
+    reason: 'codex-thread-settled', ledgerId: 'specs', threadId: 'thread-card-a', cardId: 'card-a',
+    runId: 'codex-skill-1-test', status: 'complete'
+  });
+  await waitFor(() => fetchCount === 2 && !state.ledgerContentRefresh.inFlight);
+  assert.equal(state.telemetry.some((trace: Record<string, any>) => trace.name === 'ledger-content-refresh' && trace.args.reasons.includes('codex-thread-settled')), true);
 });
 
 test('events received during an in-flight ledger load drain the latest state and every changed card file', async () => {

@@ -24,6 +24,8 @@ import { projectCardCodexRun } from '../helper/project-card-codex-run.js';
 import { enqueueCodexThreadProcess, removeCodexProcessQueueItem } from '../helper/codex-process-queue.js';
 import { scheduleCodexProcesses, unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
 import { readCardSkillRunController } from './read-card-skill-run-controller.js';
+import { createTerminalCodexProcessReconciler, type TerminalCodexStatus } from '../helper/reconcile-terminal-codex-process.js';
+import { clearCardCodexActiveRun } from '../helper/clear-card-codex-active-run.js';
 
 type AnyRecord = Record<string, unknown>;
 type ProcessStatus = 'running' | 'complete' | 'failed' | 'cancelled';
@@ -302,10 +304,18 @@ export async function startThreadCodexProcessController(input: { action_payload?
       cwd: workspaceRoot,
       env: decisionOsCodexEnvironment({ runtime, decisionOsRoot, ledgerFile: ledgerPath }),
       stdio: ['pipe', 'pipe', 'pipe'],
+      detached: process.platform !== 'win32',
     });
     const stdout = createWriteStream(stdoutFile, { flags: 'a' });
     const stderr = createWriteStream(stderrFile, { flags: 'a' });
-    const runEventIngestor = createCardSkillRunEventIngestor({ decisionOsRoot, ledgerPath, cardId, runId, startLine: eventStartLine, telemetryFile: `${stdoutFile}.telemetry.jsonl`, projectId: String(runtime.projectId ?? '') });
+    let terminalEventStatus: TerminalCodexStatus | null = null;
+    const terminalReconciler = createTerminalCodexProcessReconciler({
+      child,
+      closeGraceMs: runtime.codexTerminalCloseGraceMs,
+      forceKillGraceMs: runtime.codexTerminalForceKillGraceMs,
+      onTerminalStatus: (status) => { terminalEventStatus = status; },
+    });
+    const runEventIngestor = createCardSkillRunEventIngestor({ decisionOsRoot, ledgerPath, cardId, runId, startLine: eventStartLine, telemetryFile: `${stdoutFile}.telemetry.jsonl`, projectId: String(runtime.projectId ?? ''), onTerminalEvent: terminalReconciler.observe });
     appendFileSync(stderrFile, codexRunSegmentMarker({
       runId,
       startedAt: attemptStartedAt,
@@ -336,6 +346,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
         flushCardSkillRunEventIngestor(runEventIngestor, runId);
         updateRuntimeRun(runtime, runId, { settledAt: new Date().toISOString() });
         removeCodexProcessQueueItem(decisionOsRoot, runId);
+        clearCardCodexActiveRun({ ledgerPath, cardId, runId });
         const schedule = runtime.scheduleCodexProcesses;
         if (typeof schedule === 'function') void schedule();
         notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, status: 'failed' });
@@ -371,11 +382,12 @@ export async function startThreadCodexProcessController(input: { action_payload?
           return;
         }
         const finishedAt = new Date().toISOString();
-        const status: ProcessStatus = cancelled ? 'cancelled' : exitCode === 0 ? 'complete' : 'failed';
+        const status: ProcessStatus = cancelled ? 'cancelled' : terminalEventStatus ?? (exitCode === 0 ? 'complete' : 'failed');
         const detail = status === 'cancelled' ? 'terminated by operator' : `exit code ${exitCode ?? 'unknown'}`;
         appendRunStatus(runSummaryFile, status, detail);
         updateRuntimeRun(runtime, runId, { status, exitCode, finishedAt, settledAt: new Date().toISOString() });
         removeCodexProcessQueueItem(decisionOsRoot, runId);
+        clearCardCodexActiveRun({ ledgerPath, cardId, runId });
         const schedule = runtime.scheduleCodexProcesses;
         if (typeof schedule === 'function') void schedule();
         if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');

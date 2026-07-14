@@ -275,6 +275,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     projectRuntime.onPipelineLedgerChange = publishLedger;
     projectRuntime.scheduleCodexProcesses = scheduleGlobalCodexProcesses;
     projectRuntime.onCodexRunSettled = (event: AnyRecord): void => {
+      if (!event.pipelineRunId) {
+        publishLedger({
+          reason: 'codex-thread-settled', ledgerId: String(event.ledgerId ?? ''), status: String(event.status ?? ''),
+          runId: String(event.runId ?? ''), cardId: String(event.cardId ?? event.outputCardId ?? ''),
+          outputCardId: String(event.outputCardId ?? event.cardId ?? ''), threadId: String(event.threadId ?? '')
+        });
+      }
       if (event.pipelineRunId && event.pipelineTerminal === true) {
         const pipelineStatus = String(event.pipelineStatus ?? event.status ?? 'complete');
         publishLedger({
