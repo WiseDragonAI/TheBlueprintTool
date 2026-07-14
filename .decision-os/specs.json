@@ -7685,7 +7685,7 @@
       "title": "Create projects from the projects catalog",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10402,
       "y": 59508,
       "w": 360,
@@ -7705,7 +7705,7 @@
       "title": "Implement safe project creation and initialization",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10012,
       "y": 59508,
       "w": 340,
@@ -7721,7 +7721,7 @@
       "title": "Add the mobile create-project flow",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -9632,
       "y": 59508,
       "w": 340,
@@ -7737,7 +7737,7 @@
       "title": "Verify and integrate project creation",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10012,
       "y": 59918,
       "w": 340,
@@ -7864,6 +7864,22 @@
       "h": 360,
       "comment": {
         "contentFile": ".decision-os/cards/specs/card-6d2f0eb3-9ad3-41b7-a17f-5bf6c292400e.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-f6378fe9-0460-4537-82e6-16de7162deff",
+      "title": "Implement centralized Decision OS memory storage",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -9622,
+      "y": 56448,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-f6378fe9-0460-4537-82e6-16de7162deff.md"
       },
       "facts": [],
       "fields": []
@@ -8126,6 +8142,12 @@
       "id": "rel-f4dbe474-fbe1-46d3-b398-0a1c0c4d8040",
       "from": "card-c29a8f7f-b0a9-437e-bf38-147407f0d563",
       "to": "card-cf23e4a8-d018-45fc-af6a-6302ebbd6468",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-a2ccb7ec-9013-42d5-b4ad-fbd0acf67388",
+      "from": "card-6d2f0eb3-9ad3-41b7-a17f-5bf6c292400e",
+      "to": "card-f6378fe9-0460-4537-82e6-16de7162deff",
       "label": "subtask"
     }
   ],
