@@ -7875,9 +7875,14 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexActiveRunId": "codex-skill-1784030071335-e1c22f36",
-      "codexThreadRunId": "codex-skill-1784030071335-e1c22f36",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784030071335-e1c22f36.md"
+      "codexActiveRunId": "codex-skill-1784031700776-454fe9e9",
+      "codexRunId": "codex-skill-1784031700776-454fe9e9",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784031700776-454fe9e9.md",
+      "codexPipelineRunId": "codex-skill-1784031700776-454fe9e9",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexSkillName": "retrospect-and-close-task"
     },
     {
       "id": "card-f6378fe9-0460-4537-82e6-16de7162deff",
@@ -7917,7 +7922,7 @@
     },
     {
       "id": "card-ad6652a3-f7b4-4727-9e98-89fa0ffe2c6c",
-      "title": "Diagnose missing project scope in Codex Log navigation",
+      "title": "Fix Codex Log project scope across mobile navigation",
       "cardType": "note",
       "domainId": "specs",
       "status": "todo",
@@ -8286,7 +8291,7 @@
       "title": "Favorite and unify skill libraries",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10402,
       "y": 70728,
       "w": 360,
@@ -8349,7 +8354,7 @@
       "title": "Unify responsive skill library presentation",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -9632,
       "y": 70728,
       "w": 340,
@@ -8365,7 +8370,7 @@
       "title": "Verify skill favorites on served surfaces",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10012,
       "y": 71138,
       "w": 340,
@@ -8453,6 +8458,148 @@
       "codexActiveRunId": "codex-skill-1784030813931-2012791e",
       "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784030813931-2012791e.md",
       "codexPipelineRunId": "codex-skill-1784030813931-2012791e",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexSkillName": "retrospect-and-close-task"
+    },
+    {
+      "id": "card-818b0b80-a682-4271-addf-c0bcfd753845",
+      "title": "Correct mobile Skill Library metadata UX",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10402,
+      "y": 72768,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-818b0b80-a682-4271-addf-c0bcfd753845.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784031255108-ee4f2cd0",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784031255108-ee4f2cd0",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784031255108-ee4f2cd0.md"
+    },
+    {
+      "id": "card-d2252509-5bb5-4114-94f0-dbdbde681209",
+      "title": "Bound memory retrieval and tighten retrospective lessons",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9622,
+      "y": 56448,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-d2252509-5bb5-4114-94f0-dbdbde681209.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-7eedf841-9ab2-486e-9b61-aa58a227519d",
+      "title": "Constrain skill tags to supported categories",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10012,
+      "y": 72768,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-7eedf841-9ab2-486e-9b61-aa58a227519d.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-b20963e7-ff0b-4d93-ad27-265dc0a8261d",
+      "title": "Use accessible yellow stars for favorites",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -9632,
+      "y": 72768,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-b20963e7-ff0b-4d93-ad27-265dc0a8261d.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-9d60d4cf-c142-4caf-85fd-83809fff0c70",
+      "title": "Unify Skill Library detail navigation",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10012,
+      "y": 73178,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-9d60d4cf-c142-4caf-85fd-83809fff0c70.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-97922c74-81c2-4421-9c0d-d02e0e70191e",
+      "title": "Verify mobile Skill Library on served route",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -9632,
+      "y": 73178,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-97922c74-81c2-4421-9c0d-d02e0e70191e.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-0a834510-6cb9-4e07-940f-4ac502c6c7c9",
+      "title": "Fix mobile Codex poller project ownership and cleanup",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10012,
+      "y": 64608,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-0a834510-6cb9-4e07-940f-4ac502c6c7c9.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-codex-skill-1784031700776-454fe9e9",
+      "title": "retrospect-and-close-task result",
+      "cardType": "codex-skill-run",
+      "x": -9556,
+      "y": 56448,
+      "w": 700,
+      "h": 260,
+      "status": "todo",
+      "codexRunId": "codex-skill-1784031700776-454fe9e9",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-codex-skill-1784031700776-454fe9e9.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784031700776-454fe9e9",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784031700776-454fe9e9.md",
+      "codexPipelineRunId": "codex-skill-1784031700776-454fe9e9",
       "codexPipelineName": "retrospect-and-close-task run",
       "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
       "codexPipelineStepName": "retrospect-and-close-task",
@@ -8848,6 +8995,48 @@
       "id": "rel-codex-skill-1784030813931-2012791e-1",
       "from": "card-5ebfd7ed-0197-420d-b524-cbed39993737",
       "to": "card-codex-skill-1784030813931-2012791e",
+      "label": "retrospect-and-close-task"
+    },
+    {
+      "id": "rel-2ee14457-26cb-428b-aa88-4af6e735a6e7",
+      "from": "card-6d2f0eb3-9ad3-41b7-a17f-5bf6c292400e",
+      "to": "card-d2252509-5bb5-4114-94f0-dbdbde681209",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-67b52cc7-64aa-4aa6-899f-55d729e63b75",
+      "from": "card-818b0b80-a682-4271-addf-c0bcfd753845",
+      "to": "card-7eedf841-9ab2-486e-9b61-aa58a227519d",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-2a02c9af-25e2-4798-9fb5-8674a463cb6b",
+      "from": "card-818b0b80-a682-4271-addf-c0bcfd753845",
+      "to": "card-b20963e7-ff0b-4d93-ad27-265dc0a8261d",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-838fbec6-5a1f-41ea-a9b7-6352d39c6e31",
+      "from": "card-818b0b80-a682-4271-addf-c0bcfd753845",
+      "to": "card-9d60d4cf-c142-4caf-85fd-83809fff0c70",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-e5b8fe27-7663-456f-a5c0-4d732d1e5a9e",
+      "from": "card-818b0b80-a682-4271-addf-c0bcfd753845",
+      "to": "card-97922c74-81c2-4421-9c0d-d02e0e70191e",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-228a24f3-21c1-40db-985b-0a06f61d1344",
+      "from": "card-ad6652a3-f7b4-4727-9e98-89fa0ffe2c6c",
+      "to": "card-0a834510-6cb9-4e07-940f-4ac502c6c7c9",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-codex-skill-1784031700776-454fe9e9-1",
+      "from": "card-6d2f0eb3-9ad3-41b7-a17f-5bf6c292400e",
+      "to": "card-codex-skill-1784031700776-454fe9e9",
       "label": "retrospect-and-close-task"
     }
   ],
@@ -9635,7 +9824,7 @@
       "width": 1200,
       "height": 900,
       "color": "#38d9e8",
-      "label": "Codex Log project-scope diagnosis",
+      "label": "Codex Log project-scope fix",
       "comments": []
     },
     {
@@ -9706,6 +9895,16 @@
       "height": 900,
       "color": "#38d9e8",
       "label": "Run control",
+      "comments": []
+    },
+    {
+      "id": "zone-197e73d9-0e1c-4439-9402-f0b568754e6f",
+      "x": -10462,
+      "y": 72708,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "Mobile Skill Library metadata UX",
       "comments": []
     }
   ],
@@ -9787,7 +9986,9 @@
     "thread-card-5ebfd7ed-0197-420d-b524-cbed39993737": ".decision-os/threads/specs/thread-card-5ebfd7ed-0197-420d-b524-cbed39993737.md",
     "thread-card-6d2f0eb3-9ad3-41b7-a17f-5bf6c292400e": ".decision-os/threads/specs/thread-card-6d2f0eb3-9ad3-41b7-a17f-5bf6c292400e.md",
     "thread-card-codex-skill-1784030180133-084a9051": ".decision-os/threads/specs/thread-card-codex-skill-1784030180133-084a9051.md",
-    "thread-card-codex-skill-1784030813931-2012791e": ".decision-os/threads/specs/thread-card-codex-skill-1784030813931-2012791e.md"
+    "thread-card-codex-skill-1784030813931-2012791e": ".decision-os/threads/specs/thread-card-codex-skill-1784030813931-2012791e.md",
+    "thread-card-818b0b80-a682-4271-addf-c0bcfd753845": ".decision-os/threads/specs/thread-card-818b0b80-a682-4271-addf-c0bcfd753845.md",
+    "thread-card-codex-skill-1784031700776-454fe9e9": ".decision-os/threads/specs/thread-card-codex-skill-1784031700776-454fe9e9.md"
   },
   "deletedNoteIds": {
     "thread-card-7074d33a-39da-42a1-b470-673cbe221def": [
