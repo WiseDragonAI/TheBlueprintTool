@@ -119,6 +119,7 @@ test('skill libraries share favorite ordering, colored categories, and scope-spe
   assert.match(script, /'Remove from favorites' : 'Add to favorites'/);
   assert.match(script, /'Save tags'/);
   assert.match(script, /skills\.availableTags/);
+  assert.match(script, /state\.availableTags = \[\.\.\.skillCategories\]/);
   assert.match(script, /input\.type = 'checkbox'/);
   assert.match(script, /state\.availableTags\.includes\(tag\)/);
   assert.match(script, /JSON\.stringify\(\{ tags \}\)/);
