@@ -192,6 +192,7 @@ const {
   openSkillLibraryEditor,
   renderSkillLibraryEditorModal,
   saveSkillLibraryDraft,
+  saveSkillLibraryTag,
   skillLibraryEditorState,
 } = await import('../../src/runtime/codex/effect/render-skill-library-editor-modal.js');
 const {
@@ -688,6 +689,37 @@ test('skill editor retains a conflicting draft and protected skills remain unsav
     assert.equal(saveButtons[0].disabled, true);
     assert.equal(await saveSkillLibraryDraft(), false);
     assert.equal(skillLibraryEditorState.detail?.readOnlyReason, 'System skills are managed by Codex.');
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('skill tag buttons save one value immediately and roll back a rejected optimistic update', async () => {
+  const previousFetch = globalThis.fetch;
+  const detail = { ...catalog[0], markdown: 'skill', tags: [] };
+  const firstSave = deferred<Response>();
+  let saveCount = 0;
+  try {
+    globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+      if (!init) return new Response(JSON.stringify({ ok: true, skill: detail, availableTags: ['Research', 'Interface'] }), { status: 200 });
+      saveCount += 1;
+      assert.deepEqual(JSON.parse(String(init.body)), { tags: [saveCount === 1 ? 'Research' : 'Interface'] });
+      if (saveCount === 1) return firstSave.promise;
+      return new Response(JSON.stringify({ ok: false, error: 'Rejected tag.' }), { status: 403 });
+    }) as typeof fetch;
+    await openSkillLibraryEditor({ skillName: 'analysis' });
+    const pending = saveSkillLibraryTag('Research');
+    assert.deepEqual(skillLibraryEditorState.detail?.tags, ['Research']);
+    assert.equal(skillLibraryEditorState.tagsSaving, true);
+    assert.equal(findByText(fakeDocument.skillLibraryEditorModal, 'Save tags').length, 0);
+    assert.equal(findByText(fakeDocument.skillLibraryEditorModal, 'Research')[0].getAttribute('aria-pressed'), 'true');
+    firstSave.resolve(new Response(JSON.stringify({ ok: true, skill: { ...detail, tags: ['Research'] } }), { status: 200 }));
+    assert.equal(await pending, true);
+    assert.deepEqual(skillLibraryEditorState.detail?.tags, ['Research']);
+
+    assert.equal(await saveSkillLibraryTag('Interface'), false);
+    assert.deepEqual(skillLibraryEditorState.detail?.tags, ['Research']);
+    assert.equal(skillLibraryEditorState.error, 'Rejected tag.');
   } finally {
     globalThis.fetch = previousFetch;
   }

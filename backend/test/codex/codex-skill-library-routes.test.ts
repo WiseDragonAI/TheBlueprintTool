@@ -14,7 +14,11 @@ import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
-import { validateSkillMarkdown, writeEditableSkillFile } from '@backend/business/codex/helper/codex-skill-library.js';
+import {
+  saveCodexSkillLibrary,
+  validateSkillMarkdown,
+  writeEditableSkillFile,
+} from '@backend/business/codex/helper/codex-skill-library.js';
 import { scanCodexSkills } from '@backend/business/codex/helper/scan-codex-skills.js';
 
 function markdown(name: string, description: string, body = 'Follow the instructions.'): string {
@@ -111,15 +115,15 @@ test('skill library routes save editable Markdown and defaults without exposing 
     const tagsResponse = await fetch(`${baseUrl}/api/codex/skill-library/workspace-skill`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ tags: ['Research', 'Automation', 'Research'] }),
+      body: JSON.stringify({ tags: ['Research'] }),
     });
     assert.equal(tagsResponse.status, 200);
     const tagged = await tagsResponse.json() as Record<string, any>;
-    assert.deepEqual(tagged.skill.tags, ['Research', 'Automation']);
+    assert.deepEqual(tagged.skill.tags, ['Research']);
     assert.equal(tagged.skill.favorite, true);
     assert.equal(readFileSync(workspaceFile, 'utf8'), markdownBeforeFavorite);
     const tagsCatalog = await fetch(`${baseUrl}/api/codex/skills`).then((response) => response.json()) as Record<string, any>;
-    assert.deepEqual(tagsCatalog.skills.find((entry: Record<string, any>) => entry.name === 'workspace-skill').tags, ['Research', 'Automation']);
+    assert.deepEqual(tagsCatalog.skills.find((entry: Record<string, any>) => entry.name === 'workspace-skill').tags, ['Research']);
     assert.deepEqual(tagsCatalog.availableTags, detail.availableTags);
 
     const unsupportedTagsResponse = await fetch(`${baseUrl}/api/codex/skill-library/workspace-skill`, {
@@ -128,8 +132,15 @@ test('skill library routes save editable Markdown and defaults without exposing 
       body: JSON.stringify({ tags: ['Research', 'Priority'] }),
     });
     assert.equal(unsupportedTagsResponse.status, 400);
-    assert.match(String((await unsupportedTagsResponse.json() as Record<string, any>).error), /only values from/);
-    assert.deepEqual(JSON.parse(readFileSync(storeFile, 'utf8')).skillLibrary[0].tags, ['Research', 'Automation']);
+    assert.match(String((await unsupportedTagsResponse.json() as Record<string, any>).error), /at most one value from/);
+    assert.deepEqual(JSON.parse(readFileSync(storeFile, 'utf8')).skillLibrary[0].tags, ['Research']);
+
+    const multipleTagsResponse = await fetch(`${baseUrl}/api/codex/skill-library/workspace-skill`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ tags: ['Research', 'Automation'] }),
+    });
+    assert.equal(multipleTagsResponse.status, 400);
 
     const staleResponse = await fetch(`${baseUrl}/api/codex/skill-library/workspace-skill`, {
       method: 'PUT',
@@ -225,6 +236,38 @@ test('skill library routes save editable Markdown and defaults without exposing 
     else process.env.CODEX_HOME = previousCodexHome;
     rmSync(workspace, { recursive: true, force: true });
     rmSync(codexHome, { recursive: true, force: true });
+  }
+});
+
+test('server skill tags persist as project metadata without editing synchronized Markdown', () => {
+  const serverRoot = mkdtempSync(join(tmpdir(), 'decision-os-skill-library-server-'));
+  const projectRoot = join(serverRoot, 'projects', 'child-project');
+  const decisionOsRoot = join(projectRoot, '.decision-os');
+  const serverFile = join(serverRoot, '.skills', 'server-skill', 'SKILL.md');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  mkdirSync(join(serverFile, '..'), { recursive: true });
+  writeFileSync(serverFile, markdown('server-skill', 'Server description'));
+
+  try {
+    const markdownBeforeTags = readFileSync(serverFile, 'utf8');
+    const result = saveCodexSkillLibrary({
+      decisionOsRoot,
+      runtime: { serverRoot },
+      skillName: 'server-skill',
+      payload: { tags: ['Interface'] },
+    });
+
+    assert.equal(result.statusCode, 200);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.skill.source, 'server');
+    assert.equal(result.skill.editable, false);
+    assert.deepEqual(result.skill.tags, ['Interface']);
+    assert.equal(readFileSync(serverFile, 'utf8'), markdownBeforeTags);
+    const persisted = JSON.parse(readFileSync(join(decisionOsRoot, 'codex-pipelines.json'), 'utf8')) as Record<string, any>;
+    assert.deepEqual(persisted.skillLibrary[0].tags, ['Interface']);
+  } finally {
+    rmSync(serverRoot, { recursive: true, force: true });
   }
 });
 

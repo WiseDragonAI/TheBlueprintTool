@@ -269,7 +269,7 @@ export function saveCodexSkillLibrary(input: {
     : [...(priorRecord?.tags ?? [])];
   if (metadataOnly) {
     if (requestedFavorite === undefined) return { ok: false, statusCode: 400, error: 'Favorite must be a boolean.', skillName: input.skillName };
-    if (requestedTags === undefined) return { ok: false, statusCode: 400, error: `Tags must contain only values from: ${codexSkillTags.join(', ')}.`, skillName: input.skillName };
+    if (requestedTags === undefined) return { ok: false, statusCode: 400, error: `Tags must contain at most one value from: ${codexSkillTags.join(', ')}.`, skillName: input.skillName };
     const updatedAt = new Date().toISOString();
     const skillLibrary = [
       ...before.store.skillLibrary.filter((entry) => entry.skillName !== skill.name),

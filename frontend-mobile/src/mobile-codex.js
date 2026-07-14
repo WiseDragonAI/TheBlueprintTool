@@ -1,6 +1,6 @@
 const modelOptions = ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.2'];
 const effortOptions = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
-const state = { projectId: '', projects: [], ledgerId: '', cardId: '', skills: [], availableTags: [], pipelines: [], steps: [], processTab: 'skills', libraryScope: 'project', query: '', projectFilter: 'All', tagFilter: 'All', selected: null, editor: null, pickerStepId: '' };
+const state = { projectId: '', projects: [], ledgerId: '', cardId: '', skills: [], availableTags: [], tagSaving: false, pipelines: [], steps: [], processTab: 'skills', libraryScope: 'project', query: '', projectFilter: 'All', tagFilter: 'All', selected: null, editor: null, pickerStepId: '' };
 const el = (selector) => document.querySelector(selector);
 const uid = (prefix) => `${prefix}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
 const message = (selector, text, bad = false) => { const node = el(selector); node.textContent = text; node.classList.toggle('error', bad); };
@@ -60,7 +60,7 @@ async function loadGlobalLibraries() {
       if (existing) {
         existing.projects.push(library.project);
         existing.favorite ||= skill.favorite === true;
-        existing.tags = [...new Set([...tagsForSkill(existing), ...tagsForSkill(skill)])];
+        if (!existing.tags?.length && skill.tags?.length) existing.tags = [skill.tags[0]];
       }
       else bySkill.set(key, { ...skill, projects: [library.project] });
     }
@@ -118,18 +118,19 @@ function option(value, label = value) { const node = document.createElement('opt
 function renderSkillTagChoices(record) {
   const fieldset = document.createElement('fieldset'); fieldset.className = 'skill-tags-field';
   const legend = document.createElement('legend'); legend.textContent = 'Tags';
-  const choices = document.createElement('div'); choices.className = 'skill-tag-choices';
-  const selected = new Set(Array.isArray(record.tags) ? record.tags : []);
+  const choices = document.createElement('div'); choices.className = 'skill-tag-choices'; choices.setAttribute('aria-label', 'Select one skill tag');
+  const selected = Array.isArray(record.tags) ? record.tags[0] : '';
   for (const tag of state.availableTags) {
-    const label = document.createElement('label'); label.className = 'skill-tag-choice';
-    const input = document.createElement('input'); input.type = 'checkbox'; input.name = 'skill-tag'; input.value = tag; input.checked = selected.has(tag);
-    const text = document.createElement('span'); text.textContent = tag; decorateSkillCategoryLabel(text, tag);
-    label.append(input, text); choices.append(label);
+    const choice = button(tag, 'skill-tag-choice', () => { void saveGlobalSkillTag(record, tag); });
+    choice.setAttribute('aria-pressed', String(selected === tag));
+    choice.setAttribute('aria-label', `Set ${tag} tag`);
+    choice.disabled = state.tagSaving;
+    decorateSkillCategoryLabel(choice, tag);
+    choices.append(choice);
   }
   fieldset.append(legend, choices);
   return fieldset;
 }
-function selectedSkillTags(fieldset) { return [...fieldset.querySelectorAll('input[name="skill-tag"]:checked')].map((input) => input.value); }
 function renderProcessDetail(record) {
   state.selected = record;
   if (record.projectId) state.projectId = record.projectId;
@@ -142,12 +143,11 @@ function renderProcessDetail(record) {
   if (state.processTab === 'skills') {
     if (state.libraryScope === 'global') {
       const tagsField = renderSkillTagChoices(record);
-      const saveTags = button('Save tags', 'codex-secondary skill-tags-save', () => { void saveGlobalSkillTags(record, selectedSkillTags(tagsField)); });
       const favorite = button(record.favorite ? '★' : '☆', 'skill-favorite-toggle', () => { void toggleGlobalSkillFavorite(record); });
       favorite.setAttribute('aria-label', record.favorite ? 'Remove from favorites' : 'Add to favorites');
       favorite.setAttribute('aria-pressed', String(record.favorite === true));
       const status = document.createElement('p'); status.className = 'codex-message process-detail-message'; status.setAttribute('role', 'status');
-      detail.append(tagsField, saveTags, favorite, status);
+      detail.append(tagsField, favorite, status);
       setMobileCodexView(document, 'detail', viewContext);
       return;
     }
@@ -195,26 +195,28 @@ async function toggleGlobalSkillFavorite(record) {
     message('.process-detail-message', error.message, true);
   }
 }
-async function saveGlobalSkillTags(record, selectedTags) {
-  const tags = [...new Set(selectedTags)].filter((tag) => state.availableTags.includes(tag));
+async function saveGlobalSkillTag(record, tag) {
+  if (state.tagSaving || !state.availableTags.includes(tag) || record.tags?.[0] === tag) return;
+  const tags = [tag];
   const identity = (skill) => skill.name === record.name && skill.source === record.source && skill.revision === record.revision;
   const prior = state.skills.filter(identity).map((skill) => ({ skill, tags: [...(skill.tags || [])] }));
+  state.tagSaving = true;
   prior.forEach(({ skill }) => { skill.tags = tags; });
   renderProcessList();
   renderProcessDetail(record);
-  const submit = el('.skill-tags-save');
-  setBusy(submit, true);
-  message('.process-detail-message', 'Saving tags…');
+  message('.process-detail-message', `Saving ${tag}…`);
   try {
     await Promise.all(recordProjects(record).map((project) => jsonRequest(`/api/codex/skill-library/${encodeURIComponent(record.name)}`, {
       method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ tags })
     }, project.id)));
+    state.tagSaving = false;
     renderProcessList();
     renderProcessDetail(record);
-    message('.process-detail-message', 'Tags saved.');
+    message('.process-detail-message', `${tag} saved.`);
   } catch (error) {
     try { await loadGlobalLibraries(); }
     catch { prior.forEach(({ skill, tags: priorTags }) => { skill.tags = priorTags; }); }
+    state.tagSaving = false;
     const current = state.skills.find(identity) || record;
     renderProcessList();
     renderProcessDetail(current);

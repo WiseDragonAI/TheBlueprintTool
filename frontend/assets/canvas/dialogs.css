@@ -1157,7 +1157,14 @@
   border: 1px solid var(--line);
   border-radius: var(--control-radius);
   color: var(--text);
+  background: var(--panel);
   text-transform: none;
+}
+
+.skill-editor-tag-choice[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent), transparent 88%);
 }
 
 .skill-library-metadata {
