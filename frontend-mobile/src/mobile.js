@@ -1104,18 +1104,18 @@ function renderCard(card) {
     const delayButton = document.createElement('button');
     delayButton.type = 'button';
     delayButton.className = 'delay-master-task-button';
-    delayButton.textContent = delayed ? 'Restore to queue' : 'Park task';
+    delayButton.textContent = delayed ? 'Restore to queue' : 'Move to backlog';
     delayButton.disabled = card.status === 'done';
     delayButton.addEventListener('click', async () => {
       const nextStatus = delayed ? 'todo' : 'delayed';
       delayButton.disabled = true;
-      delayButton.textContent = delayed ? 'Restoring task…' : 'Parking task…';
+      delayButton.textContent = delayed ? 'Restoring task…' : 'Moving to backlog…';
       try {
         state.ledger = await ledgerMutation(state.activeLedgerId, { action: 'patch-card', cardPatch: { id: card.id, status: nextStatus } });
         navigate(controlRoomPath(nextStatus === 'delayed' ? 'delayed' : 'queue'), true);
       } catch (cause) {
         delayButton.disabled = false;
-        delayButton.textContent = delayed ? 'Restore to queue' : 'Park task';
+        delayButton.textContent = delayed ? 'Restore to queue' : 'Move to backlog';
         elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Master task status update failed.';
         setView('error-view');
       }

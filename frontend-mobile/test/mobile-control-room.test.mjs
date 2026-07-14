@@ -175,7 +175,8 @@ test('keeps malformed master tasks visible in the control room with diagnostics'
 });
 
 test('parks and restores master tasks through the shared card status mutation', () => {
-  assert.match(mobile, /delayButton\.textContent = delayed \? 'Restore to queue' : 'Park task'/);
+  assert.match(mobile, /delayButton\.textContent = delayed \? 'Restore to queue' : 'Move to backlog'/);
+  assert.doesNotMatch(mobile, /Park task|Parking task/);
   assert.match(mobile, /const nextStatus = delayed \? 'todo' : 'delayed'/);
   assert.match(mobile, /ledgerMutation\(state\.activeLedgerId, \{ action: 'patch-card', cardPatch: \{ id: card\.id, status: nextStatus \} \}\)/);
   assert.match(mobile, /controlRoomPath\(nextStatus === 'delayed' \? 'delayed' : 'queue'\)/);
