@@ -4,6 +4,7 @@
   "type": "module",
   "private": true,
   "bin": {
+    "decision-os-workload-status": "./bin/decision-os-workload-status.mjs",
     "decision-os-server": "./bin/decision-os-server.mjs",
     "ledger-cli": "./bin/ledger-cli.mjs",
     "normalize-card-heights": "./bin/normalize-card-heights.mjs",

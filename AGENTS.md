@@ -202,6 +202,20 @@ GIT_SSH_COMMAND='ssh -i ~/.ssh/id_jb_wise -o IdentitiesOnly=yes' git push
 
 - It is a code smell to do expensive operations for many more elements than are needed in the end.
 
+## Phone Workload Budget
+
+Before typecheck or test suite:
+
+```bash
+node bin/decision-os-workload-status.mjs
+```
+
+- `GO`: start one command.
+- `WAIT`: `sleep 5`; rerun check.
+- Tests: focused first. Always `--test-concurrency=1`.
+- Per task: one typecheck maximum. One full suite maximum.
+- Full-suite failure: rerun failed tests only.
+
 ## Card Image Assets
 
 Markdown image assets can be referenced from the active workspace `.decision-os` directory:
