@@ -28,6 +28,12 @@
 - **Don't.** `Add headers or query params: x-ledger-id, x-thread-id, x-card-id, x-note-id, x-queue-codex.`
 - **Do.** `Add required headers to /api/voice-upload: x-ledger-id, x-thread-id, x-card-id, x-note-id, x-queue-codex.`
 
+### Reference Component Fidelity
+
+- **Trigger.** When the operator names an existing widget or component as the visual reference, inspect that component's rendered structure and every CSS rule controlling its surface, icon, label, casing, spacing, and states before implementation.
+- **Requirement.** Copy the reference component's styling boundary exactly. When the reference applies accent color only to its icon and label, keep the button surface, border, shadow, and container on the reference component's shared styling.
+- **Verification.** Compare computed foreground, background, label casing, SVG structure, and dimensions between the changed control and the named reference on the served target surface.
+
 ### Complex Interaction Library Gate
 
 - **Trigger.** Before implementing touch gestures, drag-and-drop sorting, carousels, rich-text editing, virtualized lists, focus traps, collision detection, or another interaction with a multi-event browser state machine, inspect maintained framework-free libraries and the existing dependency stack.
