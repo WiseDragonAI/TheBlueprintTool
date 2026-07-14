@@ -66,7 +66,7 @@ export type LedgerCliCommand = {
 export type SkillOperation = {
   action: 'create' | 'update';
   json: boolean;
-  root?: string;
+  rootFlagProvided: boolean;
   source?: string;
 };
 

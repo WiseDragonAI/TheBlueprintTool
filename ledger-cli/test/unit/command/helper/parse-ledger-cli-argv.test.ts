@@ -190,11 +190,12 @@ test('parse-ledger-cli-argv parses decision-os migration commands', () => {
 });
 
 test('parse-ledger-cli-argv parses synchronized skill commands', () => {
-  const create = parseLedgerCliArgv(['skills', 'create', '--root', '/server', '--source', '/source/my-skill', '--json']);
+  const create = parseLedgerCliArgv(['skills', 'create', '--source', '/source/my-skill', '--json']);
   const update = parseLedgerCliArgv(['skills', 'update', '--root', '/server', '--source', '/source/my-skill']);
 
   assert.equal(create.mode, 'skills');
-  assert.deepEqual(create.skillOperation, { action: 'create', json: true, root: '/server', source: '/source/my-skill' });
+  assert.deepEqual(create.skillOperation, { action: 'create', json: true, rootFlagProvided: false, source: '/source/my-skill' });
   assert.equal(update.skillOperation?.action, 'update');
   assert.equal(update.skillOperation?.json, false);
+  assert.equal(update.skillOperation?.rootFlagProvided, true);
 });
