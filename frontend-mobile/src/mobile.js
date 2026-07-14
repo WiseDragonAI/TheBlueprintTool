@@ -3,7 +3,7 @@ import { ledgerCardBody } from '/canvas-src/runtime/ledger/helper/ledger-card-bo
 import { saveLedgerCardMediaCarouselSlide } from '/canvas-src/runtime/ledger/helper/persist-ledger-card-media-carousel.js';
 import { initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './mobile-thread.js';
 import { initializeMobileCodex, openMobileCodexLibrary, setMobileCodexContext } from './mobile-codex.js';
-import { activeAge, activeStopwatch, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from './mobile-control-room.js';
+import { activeAge, activeStopwatch, cardCodexRunId, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from './mobile-control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from './mobile-control-room-route.js';
 import { cardPathForProject, ledgerPathForProject, parseProjectRoute, parseProjectScope, projectPath, zonePathForProject } from './mobile-project-route.js';
 import { projectSettingsValues, saveProjectSettingsRequest } from './mobile-project-settings.js';
@@ -695,7 +695,7 @@ async function loadControlRoom() {
     const cards = document.cards ?? [];
     return cards.map(async (card) => {
       const markdown = ledgerCardBody(card);
-      const runId = String(card.codexThreadRunId ?? '');
+      const runId = cardCodexRunId(card);
       let codexStatus = '';
       if (runId && /#task-active\b/i.test(markdown)) {
         const response = await projectFetch(`/api/codex/skills/runs/${encodeURIComponent(runId)}?ledgerId=${encodeURIComponent(ledgerId)}&cardId=${encodeURIComponent(card.id)}&since=0`, { cache: 'no-store' }, projectId);

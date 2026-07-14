@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { activeAge, activeStopwatch, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from '../src/mobile-control-room.js';
+import { activeAge, activeStopwatch, cardCodexRunId, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from '../src/mobile-control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from '../src/mobile-control-room-route.js';
 
 const [mobile, html, styles, embla, panzoom] = await Promise.all([
@@ -102,6 +102,22 @@ test('shows task-active only while its Codex process is running', () => {
   assert.deepEqual(result.queue.map((entry) => entry.cardId), ['stopped']);
   assert.equal(result.active[0].codexRunId, 'run-123');
   assert.match(mobile, /Codex \$\{task\.codexRunId\}/);
+});
+
+test('Control Room resolves Process Card runs through the shared current-run pointer', () => {
+  const processCardRunId = cardCodexRunId({
+    codexActiveRunId: 'codex-skill-pipeline',
+    codexThreadRunId: 'codex-skill-thread',
+    codexRunId: 'codex-skill-card'
+  });
+  assert.equal(processCardRunId, 'codex-skill-pipeline');
+  assert.equal(cardCodexRunId({ codexThreadRunId: 'codex-skill-thread' }), 'codex-skill-thread');
+  assert.equal(cardCodexRunId({ codexRunId: 'codex-skill-card' }), 'codex-skill-card');
+  const markdown = task().markdown.replace('#task-waiting', '#task-active').replace('Waiting since:', 'Active since: 2026-07-10T10:30:00.000Z\nWaiting since:');
+  const result = deriveControlRoom([task({ markdown, codexRunId: processCardRunId, codexStatus: 'running' })]);
+  assert.deepEqual(result.active.map((entry) => entry.cardId), ['card-a']);
+  assert.equal(result.queue.length, 0);
+  assert.match(mobile, /const runId = cardCodexRunId\(card\)/);
 });
 
 test('ignores task tag examples in ordinary Markdown prose', () => {

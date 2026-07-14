@@ -1,5 +1,11 @@
 const STATUS_LABELS = ['task-waiting', 'task-active', 'task-complete'];
 
+export function cardCodexRunId(card) {
+  return String(card?.codexActiveRunId ?? '').trim()
+    || String(card?.codexThreadRunId ?? '').trim()
+    || String(card?.codexRunId ?? '').trim();
+}
+
 export function parseMasterTaskMarkdown({ cardId, title, projectId = '', projectName = '', projectColor = '', ledgerId, ledgerTitle, markdown, cardStatus = 'todo', cards = [], threadNotes = [], codexRunId = '', codexStatus = '' }) {
   const source = String(markdown ?? '').replace(/\r\n?/g, '\n');
   const labelLines = source.split('\n').filter((line) => /^\s*(?:#[a-z][a-z0-9-]*\s*)+$/i.test(line));
