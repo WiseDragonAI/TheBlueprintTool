@@ -162,21 +162,10 @@ export function renderSkillLibraryEditorModal(): void {
     const tagChoices = document.createElement('div');
     tagChoices.className = 'skill-editor-tag-choices';
     for (const tag of skillLibraryEditorState.availableTags) {
-      const choice = document.createElement('label');
-      choice.className = 'skill-editor-tag-choice';
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.value = tag;
-      checkbox.checked = skillLibraryEditorState.tags.includes(tag);
-      checkbox.disabled = skillLibraryEditorState.tagsSaving;
-      checkbox.addEventListener('change', () => {
-        skillLibraryEditorState.tags = checkbox.checked
-          ? [...new Set([...skillLibraryEditorState.tags, tag])]
-          : skillLibraryEditorState.tags.filter((candidate) => candidate !== tag);
-      });
-      const text = document.createElement('span');
-      text.textContent = tag;
-      choice.append(checkbox, text);
+      const choice = button(tag, () => { void saveSkillLibraryTag(tag); }, 'skill-editor-tag-choice');
+      choice.setAttribute('aria-pressed', String(skillLibraryEditorState.tags[0] === tag));
+      choice.setAttribute('aria-label', `Set ${tag} tag`);
+      choice.disabled = skillLibraryEditorState.tagsSaving;
       tagChoices.append(choice);
     }
     tagsField.replaceChildren(tagsLabel, tagChoices);
@@ -204,9 +193,6 @@ export function renderSkillLibraryEditorModal(): void {
   message.textContent = skillLibraryEditorState.error || skillLibraryEditorState.notice;
   footer.append(message);
   if (skillLibraryEditorState.detail) {
-    const saveTags = button(skillLibraryEditorState.tagsSaving ? 'Saving tags…' : 'Save tags', () => { void saveSkillLibraryTags(); }, 'ghost-button', 'skill-editor-save-tags');
-    saveTags.disabled = skillLibraryEditorState.tagsSaving || skillLibraryEditorState.saving || skillLibraryEditorState.favoriteSaving;
-    footer.append(saveTags);
     const favorite = button(
       skillLibraryEditorState.favoriteSaving
         ? 'Saving favorite…'
@@ -332,15 +318,16 @@ export async function saveSkillLibraryDraft(): Promise<boolean> {
   return true;
 }
 
-export async function saveSkillLibraryTags(): Promise<boolean> {
+export async function saveSkillLibraryTag(tag: string): Promise<boolean> {
   const detail = skillLibraryEditorState.detail;
-  if (!detail || skillLibraryEditorState.tagsSaving) return false;
+  if (!detail || skillLibraryEditorState.tagsSaving || !skillLibraryEditorState.availableTags.includes(tag) || detail.tags?.[0] === tag) return false;
   const generation = skillEditorGeneration;
   const prior = detail;
-  const tags = [...skillLibraryEditorState.tags];
+  const tags = [tag];
   skillLibraryEditorState.tagsSaving = true;
   skillLibraryEditorState.error = '';
   skillLibraryEditorState.detail = { ...detail, tags };
+  skillLibraryEditorState.tags = tags;
   renderSkillLibraryEditorModal();
   const result = await requestCodexSkillMetadataSave(detail.name, { tags });
   if (generation !== skillEditorGeneration || detail.name !== skillLibraryEditorState.skillName) return false;
@@ -354,7 +341,7 @@ export async function saveSkillLibraryTags(): Promise<boolean> {
   }
   skillLibraryEditorState.detail = result.skill;
   skillLibraryEditorState.tags = [...(result.skill.tags ?? [])];
-  skillLibraryEditorState.notice = 'Tags saved.';
+  skillLibraryEditorState.notice = `${tag} saved.`;
   await skillLibraryEditorState.onSaved?.(result.skill);
   renderSkillLibraryEditorModal();
   return true;

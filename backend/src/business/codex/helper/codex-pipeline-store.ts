@@ -53,7 +53,7 @@ function nullableText(value: unknown): string | null {
 function skillTags(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   const allowed = new Set<string>(codexSkillTags);
-  return [...new Set(value.map(text).filter((tag) => allowed.has(tag)))];
+  return [...new Set(value.map(text).filter((tag) => allowed.has(tag)))].slice(0, 1);
 }
 
 function status(value: unknown): CodexPipelineStatus {

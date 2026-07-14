@@ -17,7 +17,7 @@ export const codexSkillTags = [
 
 const allowedCodexSkillTags = new Set<string>(codexSkillTags);
 
-export function normalizeCodexSkillTags(value: unknown, limit = codexSkillTags.length): string[] | undefined {
+export function normalizeCodexSkillTags(value: unknown, limit = 1): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const tags = [...new Set(value.map((tag) => typeof tag === 'string' ? tag.trim() : '').filter(Boolean))];
   if (tags.length > limit || tags.some((tag) => !allowedCodexSkillTags.has(tag))) return undefined;

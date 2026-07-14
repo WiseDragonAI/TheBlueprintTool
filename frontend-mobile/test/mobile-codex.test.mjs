@@ -122,10 +122,13 @@ test('skill libraries share favorite ordering, colored categories, and scope-spe
   assert.match(script, /state\.libraryScope === 'global'/);
   assert.match(script, /record\.favorite \? '★' : '☆'/);
   assert.match(script, /'Remove from favorites' : 'Add to favorites'/);
-  assert.match(script, /'Save tags'/);
+  assert.doesNotMatch(script, /'Save tags'/);
   assert.match(script, /skills\.availableTags/);
   assert.match(script, /state\.availableTags = \[\.\.\.skillCategories\]/);
-  assert.match(script, /input\.type = 'checkbox'/);
+  assert.doesNotMatch(script, /input\.type = 'checkbox'/);
+  assert.match(script, /saveGlobalSkillTag\(record, tag\)/);
+  assert.match(script, /choice\.setAttribute\('aria-pressed'/);
+  assert.match(script, /const tags = \[tag\]/);
   assert.match(script, /state\.availableTags\.includes\(tag\)/);
   assert.match(script, /JSON\.stringify\(\{ tags \}\)/);
   assert.match(script, /JSON\.stringify\(\{ favorite \}\)/);
@@ -135,7 +138,7 @@ test('skill libraries share favorite ordering, colored categories, and scope-spe
   assert.match(sharedRow, /favorite\.textContent = '★'/);
   assert.match(styles, /\.skill-category-filter \{[^}]*background: var\(--skill-category-color\)/);
   assert.match(styles, /\.skill-favorite-toggle\[aria-pressed="true"\] \{[^}]*color: #fbbf24/);
-  assert.match(styles, /\.skill-tag-choice input:checked \+ span/);
+  assert.match(styles, /\.skill-tag-choice\[aria-pressed="true"\]/);
   assert.match(styles, /\.codex-list-item \.project-record-label, \.codex-list-item \.skill-category-label[^}]*padding: 4px 7px/);
 });
 
