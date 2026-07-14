@@ -15,7 +15,7 @@ test('mobile card detail exposes processing and both process libraries', () => {
   assert.match(html, /data-process-tab="skills"/);
   assert.match(html, /data-process-tab="pipelines"/);
   assert.match(mobile, /setMobileCodexContext\(\{ projectId: state\.resourceProjectId, ledgerId: state\.activeLedgerId, cardId: state\.activeCardId \}\)/);
-  assert.match(script, /projectScopedRequestPath\(url, state\.projectId\)/);
+  assert.match(script, /projectScopedRequestPath\(url, projectId\)/);
   assert.match(script, /ledgerId: state\.ledgerId, cardId: state\.cardId, skillName: skill\.name/);
   assert.match(script, /ledgerId: state\.ledgerId, sourceCardId: state\.cardId, pipelineId: pipeline\.id/);
 });
@@ -78,4 +78,32 @@ test('catalog, save, run, invalid-reference, and warning messages stay actionabl
   assert.match(script, /Invalid references:/);
   assert.match(script, /result\.issues\?\.map/);
   assert.match(script, /message\('\.pipeline-editor-message', formatError\(error\), true\)/);
+});
+
+test('global skills and pipelines flatten managed project libraries without a project gate', () => {
+  assert.match(script, /Promise\.allSettled\(state\.projects\.map/);
+  assert.match(script, /const bySkill = new Map\(\)/);
+  assert.match(script, /existing\.projects\.push\(library\.project\)/);
+  assert.match(script, /projectId: project\.id, projectName: project\.name, projectColor: project\.color/);
+  assert.doesNotMatch(script, /Choose the project whose (?:skill library|pipelines)/);
+});
+
+test('library surfaces expose search, project filters, tag filters, and clearing', () => {
+  assert.match(html, /class="process-search"/);
+  assert.match(html, /class="process-project-filters codex-filter-row"/);
+  assert.match(html, /class="process-tag-filters codex-filter-row"/);
+  assert.match(html, /class="pipelines-search"/);
+  assert.match(html, /class="pipelines-project-filters codex-filter-row"/);
+  assert.match(html, /class="pipelines-tag-filters codex-filter-row"/);
+  assert.match(script, /state\.projectFilter !== 'All'/);
+  assert.match(script, /state\.tagFilter !== 'All'/);
+  assert.match(script, /state\.query\.trim\(\)\.toLowerCase\(\)/);
+  assert.match(styles, /\.codex-filter-row \{[^}]*overflow-x: auto/);
+});
+
+test('global pipeline editing remains scoped to the owning project', () => {
+  assert.match(script, /if \(pipeline\?\.projectId\) state\.projectId = pipeline\.projectId/);
+  assert.match(script, /item\.projectId !== state\.projectId/);
+  assert.match(script, /project\.id === state\.projectId/);
+  assert.match(script, /state\.projectFilter === 'All'/);
 });
