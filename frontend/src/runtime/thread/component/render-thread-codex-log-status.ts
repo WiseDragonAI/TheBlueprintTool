@@ -64,6 +64,12 @@ export function renderThreadCodexLogStatus(input: { summary: CardSkillRunSummary
     ['Elapsed', codexRunDurationLabel(summary ? liveCodexRunElapsedMs(summary) : 0), 'codex-log-elapsed'],
     ['Tools', String(summary?.toolCallCount ?? 0)],
   ];
+  if (summary?.pipelineRunId) {
+    values.splice(1, 0,
+      ['Pipeline', `${summary.pipelineName || 'Pipeline'} · ${summary.pipelineStatus || summary.status}`],
+      ['Skill', `${summary.skillName || summary.pipelineStepName || 'Skill'} · ${summary.status}`],
+    );
+  }
   for (const [label, value, dataName] of values) {
     const item = document.createElement('div');
     const term = document.createElement('dt');

@@ -22,6 +22,7 @@ import { buildPipelineSkillPrompt } from './build-pipeline-skill-prompt.js';
 import { resolveCodexCommand } from './resolve-codex-command.js';
 import { decisionOsCodexEnvironment } from './decision-os-codex-runtime.js';
 import { resolveServerSkillContext } from './server-skill-context.js';
+import { projectCardCodexRun } from './project-card-codex-run.js';
 
 type AnyRecord = Record<string, unknown>;
 type TerminalStatus = 'complete' | 'failed' | 'cancelled';
@@ -143,22 +144,32 @@ function outputFileForCard(context: PipelineLedgerContext, decisionOsRoot: strin
   return resolveCardContentFile(decisionOsRoot, comment.contentFile) ?? '';
 }
 
-function updateOutputCardRunMetadata(input: {
+function projectPipelineSkillRun(input: {
+  decisionOsRoot: string;
   context: PipelineLedgerContext;
   step: CodexPipelineRunStep;
   skill: CodexPipelineRunSkill;
   pipelineRun: CodexPipelineRun;
 }): void {
-  const card = (input.context.ledger.cards ?? []).find((entry) => String(entry.id ?? '') === input.step.outputCardId);
-  if (!card) return;
-  card.codexRunId = input.skill.runId;
-  card.codexPipelineRunId = input.pipelineRun.id;
-  card.codexPipelineStepId = input.step.stepId;
-  card.codexPipelineStepName = input.step.name;
-  card.codexPipelineName = input.pipelineRun.pipelineName;
-  card.codexSkillName = input.skill.skillName;
-  card.codexRunModel = input.skill.codexModel;
-  card.codexRunEffort = input.skill.codexEffort;
+  const outputFile = outputFileForCard(input.context, input.decisionOsRoot, input.step.outputCardId);
+  const outputFileRef = outputFile ? relative(dirname(input.decisionOsRoot), outputFile) : '';
+  const projection = {
+    ledger: input.context.ledger,
+    runId: input.skill.runId,
+    outputFileRef,
+    codexModel: input.skill.codexModel,
+    codexEffort: input.skill.codexEffort,
+    ownership: 'card' as const,
+    pipeline: {
+      runId: input.pipelineRun.id,
+      name: input.pipelineRun.pipelineName,
+      stepId: input.step.stepId,
+      stepName: input.step.name,
+      skillName: input.skill.skillName,
+    },
+  };
+  projectCardCodexRun({ ...projection, cardId: input.pipelineRun.sourceCardId });
+  projectCardCodexRun({ ...projection, cardId: input.step.outputCardId });
   persistLedger(input.context);
 }
 
@@ -357,7 +368,7 @@ export function spawnPipelineSkillProcess(input: {
   if (!context) throw new Error(`Ledger ${input.pipelineRun.ledgerId} could not be loaded for pipeline run ${input.pipelineRun.id}.`);
   const outputFile = outputFileForCard(context, input.decisionOsRoot, input.step.outputCardId);
   if (!outputFile) throw new Error(`Output card ${input.step.outputCardId} has no Markdown file.`);
-  updateOutputCardRunMetadata({ context, step: input.step, skill: input.skill, pipelineRun: input.pipelineRun });
+  projectPipelineSkillRun({ decisionOsRoot: input.decisionOsRoot, context, step: input.step, skill: input.skill, pipelineRun: input.pipelineRun });
   const stageInput = priorInput({
     run: input.pipelineRun,
     step: input.step,

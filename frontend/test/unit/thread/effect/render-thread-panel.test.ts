@@ -413,6 +413,11 @@ test('generated skill-result threads bind and render their durable card run id',
         runId,
         runKind: 'card',
         status: 'complete',
+        pipelineRunId: 'codex-pipeline-1783682000000-generated',
+        pipelineName: 'Research pipeline',
+        pipelineStepName: 'Synthesis',
+        skillName: 'research-synthesis',
+        pipelineStatus: 'complete',
         lineCount: 1,
         nextSince: 1,
         events: [],
@@ -453,6 +458,10 @@ test('generated skill-result threads bind and render their durable card run id',
       `/api/codex/skills/runs/${runId}?ledgerId=ux&cardId=${cardId}&since=0`,
     ]);
     for (let index = 0; index < 12; index += 1) await Promise.resolve();
+    renderThreadPanel();
+    const statusValues = codexLog.querySelectorAll('dd').map((element) => element.textContent);
+    assert.ok(statusValues.includes('Research pipeline · complete'));
+    assert.ok(statusValues.includes('research-synthesis · complete'));
   } finally {
     globalThis.fetch = previousFetch;
     globalThis.setTimeout = previousSetTimeout;
