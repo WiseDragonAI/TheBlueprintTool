@@ -24,6 +24,7 @@ import { renderThreadJumpButton, syncThreadJumpButtonVisibility } from './render
 import { renderThreadNotes } from './render-thread-notes.js';
 import { syncThreadCodexRunControls } from './sync-thread-codex-run-controls.js';
 import { restorePendingVoiceUploads } from '../../voice/effect/restore-pending-voice-uploads.js';
+import { SVG_NS } from '../../dom.js';
 
 const threadTabOrder: ThreadPanelTab[] = ['thread', 'codex-log'];
 
@@ -122,15 +123,19 @@ function renderThreadActions(threadId: string): void {
   button.dataset.codexCardId = cardId;
   button.dataset.codexModel = threadCodexModel;
   button.dataset.codexEffort = threadCodexEffort;
-  button.title = 'Start Codex from this thread';
+  button.title = 'Run Codex from this thread';
   button.setAttribute('aria-label', button.title);
-  const key = document.createElement('span');
-  key.className = 'terminal-button__key';
-  key.textContent = '>';
+  const icon = document.createElementNS(SVG_NS, 'svg');
+  icon.classList.add('terminal-button__icon', 'thread-codex-run-icon');
+  icon.setAttribute('viewBox', '0 0 24 24');
+  icon.setAttribute('aria-hidden', 'true');
+  const chevron = document.createElementNS(SVG_NS, 'path');
+  chevron.setAttribute('d', 'm9 6 6 6-6 6');
+  icon.append(chevron);
   const label = document.createElement('span');
   label.className = 'terminal-button__label';
-  label.textContent = 'Codex';
-  button.replaceChildren(key, label);
+  label.textContent = 'Run';
+  button.replaceChildren(icon, label);
 
   const model = renderThreadCodexSelect({
     preference: 'model',

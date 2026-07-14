@@ -170,7 +170,8 @@ function installDom(): { root: FakeElement; heading: FakeElement; codexLog: Fake
     get activeElement() { return activeElement; },
     querySelector(selector: string) { return queryAll(root, selector)[0] ?? null; },
     querySelectorAll(selector: string) { return queryAll(root, selector); },
-    createElement(tagName: string) { return fakeElement(tagName); }
+    createElement(tagName: string) { return fakeElement(tagName); },
+    createElementNS(_namespace: string, tagName: string) { return fakeElement(tagName); }
   };
   (globalThis as unknown as { window: unknown }).window = {
     __coreTelemetry: [],
@@ -279,6 +280,9 @@ test('thread selection persists the complete default pair and synchronizes a mou
     assert.equal(button.dataset.codexCardId, 'card-a');
     assert.equal(button.dataset.codexModel, 'gpt-5.6-sol');
     assert.equal(button.dataset.codexEffort, 'medium');
+    assert.equal(button.title, 'Run Codex from this thread');
+    assert.equal(button.querySelector('.thread-codex-run-icon')?.tagName, 'SVG');
+    assert.equal(button.querySelector('.terminal-button__label')?.textContent, 'Run');
 
     model.focus();
     model.value = 'gpt-5.4';
