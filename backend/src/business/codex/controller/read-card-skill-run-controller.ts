@@ -194,10 +194,12 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
   const inferred = inferredStatus({ runtime, runId, events: segmentEvents, stdoutFile, stderrFile, stderrLog: segmentLog });
   const inMemoryStatus = runtimeRunStatus(runtime, runId);
   const queuedProcess = readCodexProcessQueue(decisionOsRoot).find((item) => item.id === runId || String(item.payload.runId ?? '') === runId);
+  const interruptedProcess = queuedProcess?.status === 'interrupted' ? queuedProcess : null;
+  const inferredTerminal = inferred === 'complete' || inferred === 'failed' || inferred === 'cancelled' ? inferred : null;
   const status = inMemoryStatus
     ?? (persistedSkill && (persistedSkill.status === 'complete' || persistedSkill.status === 'failed' || persistedSkill.status === 'cancelled')
       ? persistedSkill.status
-      : inferred);
+      : inferredTerminal ?? (interruptedProcess ? 'failed' : inferred));
   // Retain the response field for clients while making explicit that status reads persist nothing.
   const persistedEventCount = 0;
   const returnedEvents = segmentEvents.filter((event) => event.line > since);
@@ -242,6 +244,7 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     pipelineStatus: persistedPipelineRun?.status ?? null,
     status,
     active: inMemoryStatus === 'running',
+    interruptedAt: interruptedProcess?.interruptedAt ?? null,
     queuePosition: status === 'pending' && queuedProcess ? unifiedCodexQueuePosition({ decisionOsRoot, id: queuedProcess.id, createdAt: queuedProcess.createdAt, runtime }) : null,
     startedAt: new Date(runSegmentStartedAtMs({ runtime, runId, stderrFile })).toISOString(),
     elapsedMs: elapsedMs({ runtime, runId, status, stdoutFile, stderrFile }),
@@ -259,5 +262,6 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     latestEvent: segmentEvents.at(-1) ?? null,
     events: returnedEvents,
     diagnostics,
+    ...(interruptedProcess ? { error: interruptedProcess.interruptionReason } : {}),
   };
 }
