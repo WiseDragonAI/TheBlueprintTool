@@ -303,6 +303,7 @@
 }
 
 .canvas .card:not(.detail-visible)[data-card-work-status="todo"] .ledger-card-overview-status,
+.canvas .card:not(.detail-visible)[data-card-work-status="delayed"] .ledger-card-overview-status,
 .canvas .card:not(.detail-visible)[data-card-work-status="processing"] .ledger-card-overview-status {
   display: flex;
   top: 50%;
@@ -322,6 +323,12 @@
 .canvas.low-detail .card:not(.detail-visible)[data-card-work-status="todo"] .ledger-card-overview-status {
   border-color: var(--card-zone-color, var(--line));
   background: rgb(12, 16, 12);
+  box-shadow: none;
+}
+
+.canvas.low-detail .card:not(.detail-visible)[data-card-work-status="delayed"] .ledger-card-overview-status {
+  border-color: color-mix(in srgb, #9aa4b2, white 18%);
+  background: color-mix(in srgb, #9aa4b2, rgba(3, 4, 5, 0.94) 38%);
   box-shadow: none;
 }
 

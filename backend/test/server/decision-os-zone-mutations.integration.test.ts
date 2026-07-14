@@ -187,6 +187,31 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
     const imageSizeLedger = await imageSizeResponse.json() as { cards: Array<Record<string, unknown>> };
     assert.deepEqual(imageSizeLedger.cards.find((entry) => entry.id === 'card-a')?.imageSizes, { '/.decision-os/ui-mockups/mock.png': { width: 320, height: 180 } });
 
+    const delayedStatusResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'card-a', status: 'delayed' } })
+    });
+    assert.equal(delayedStatusResponse.ok, true);
+    const delayedStatusLedger = await delayedStatusResponse.json() as { cards: Array<Record<string, unknown>> };
+    assert.equal(delayedStatusLedger.cards.find((entry) => entry.id === 'card-a')?.status, 'delayed');
+
+    const restoredStatusResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'card-a', status: 'todo' } })
+    });
+    assert.equal(restoredStatusResponse.ok, true);
+    const restoredStatusLedger = await restoredStatusResponse.json() as { cards: Array<Record<string, unknown>> };
+    assert.equal(restoredStatusLedger.cards.find((entry) => entry.id === 'card-a')?.status, 'todo');
+
+    const invalidStatusResponse = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'card-a', status: 'parked' } })
+    });
+    assert.equal(invalidStatusResponse.status, 400);
+
     const cardStatusResponse = await fetch(endpoint, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },

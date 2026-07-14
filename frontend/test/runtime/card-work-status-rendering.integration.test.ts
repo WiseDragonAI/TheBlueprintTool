@@ -58,7 +58,7 @@ function findElementByClass(root: FakeElement, className: string): FakeElement |
   return undefined;
 }
 
-test('ledger card chrome renders todo processing and done workflow statuses', async () => {
+test('ledger card chrome renders todo processing delayed and done workflow statuses', async () => {
   const previousDocument = globalThis.document;
   (globalThis as unknown as { document: unknown }).document = {
     querySelector: () => new FakeElement('div'),
@@ -79,11 +79,13 @@ test('ledger card chrome renders todo processing and done workflow statuses', as
 
     const todo = patchLedgerCard({ id: 'card-todo', title: 'Todo', comment: { what: 'Todo.' } }) as unknown as FakeElement;
     const processing = patchLedgerCard({ id: 'card-processing', title: 'Processing', comment: { what: 'Processing.' } }) as unknown as FakeElement;
+    const delayed = patchLedgerCard({ id: 'card-delayed', status: 'delayed', title: 'Delayed', comment: { what: 'Delayed.' } }) as unknown as FakeElement;
     const done = patchLedgerCard({ id: 'card-done', status: 'done', title: 'Done', comment: { what: 'Done.' } }) as unknown as FakeElement;
 
     const todoIndicator = findElementByClass(todo, 'card-status-indicator') as FakeElement;
     const processingIndicator = findElementByClass(processing, 'card-status-indicator') as FakeElement;
     const processingButton = renderLedgerCardStatusButton('card-processing', 'todo', 'processing') as unknown as FakeElement;
+    const delayedButton = renderLedgerCardStatusButton('card-delayed', 'delayed', 'delayed') as unknown as FakeElement;
     const doneButton = renderLedgerCardStatusButton('card-done', 'done', 'done') as unknown as FakeElement;
 
     assert.equal(todo.dataset.cardStatus, 'todo');
@@ -96,6 +98,9 @@ test('ledger card chrome renders todo processing and done workflow statuses', as
     assert.equal(processingButton.dataset.cardCurrentStatus, 'processing');
     assert.equal(processingButton.attributes['aria-label'], 'Current status: processing. Waiting for agent response');
     assert.equal(processing.children.some((child) => child instanceof FakeElement && child.className.includes('ledger-card-status-toggle')), false);
+    assert.equal(delayed.dataset.cardStatus, 'delayed');
+    assert.equal(delayed.dataset.cardWorkStatus, 'delayed');
+    assert.equal(delayedButton.dataset.nextStatus, 'todo');
     assert.equal(done.dataset.cardStatus, 'done');
     assert.equal(done.dataset.cardWorkStatus, 'done');
     assert.equal(doneButton.dataset.cardCurrentStatus, 'done');

@@ -49,24 +49,27 @@ test('ignores malformed thread timestamps and retains the card waiting timestamp
   assert.equal(parsed.waitingTime, Date.parse('2026-07-10T10:00:00.000Z'));
 });
 
-test('derives waiting, active, and done tabs with FIFO and ranked priority', () => {
+test('derives waiting, active, and delayed tabs with FIFO and ranked priority', () => {
   const result = deriveControlRoom([
     task({ cardId: 'newer', markdown: task().markdown.replace('10T10', '11T10') }),
     task({ cardId: 'oldest' }),
     task({ cardId: 'ranked', markdown: `${task().markdown.replace('10T10', '12T10')}\nQueue rank: 1` }),
     task({ cardId: 'active', codexRunId: 'run-active', codexStatus: 'processing', markdown: task().markdown.replace('#task-waiting', '#task-active').replace('Waiting since:', 'Active since: 2026-07-10T10:30:00.000Z\nWaiting since:') }),
+    task({ cardId: 'delayed', cardStatus: 'delayed' }),
     task({ cardId: 'done', cardStatus: 'done', markdown: task().markdown.replace('#task-waiting', '#task-complete') })
   ]);
   assert.deepEqual(result.queue.map((entry) => entry.cardId), ['ranked', 'oldest', 'newer']);
   assert.deepEqual(result.active.map((entry) => entry.cardId), ['active']);
-  assert.deepEqual(result.done.map((entry) => entry.cardId), ['done']);
+  assert.deepEqual(result.delayed.map((entry) => entry.cardId), ['delayed']);
+  assert.equal(result.queue.some((entry) => entry.cardId === 'done'), false);
   assert.deepEqual(result.ledgers, ['Tasks']);
 });
 
 test('renders dynamic task totals in every Control Room status tab', () => {
   assert.match(html, /data-control-tab="queue"[\s\S]*?<small>0 tasks<\/small>/);
   assert.match(html, /data-control-tab="active"[\s\S]*?<small>0 tasks<\/small>/);
-  assert.match(html, /data-control-tab="done"[\s\S]*?<small>0 tasks<\/small>/);
+  assert.match(html, /data-control-tab="delayed"[\s\S]*?<small>0 tasks<\/small>/);
+  assert.doesNotMatch(html, /data-control-tab="done"/);
   assert.match(mobile, /const count = controlTaskCount\(button\.dataset\.controlTab\)/);
   assert.match(mobile, /`\$\{count\} \$\{count === 1 \? 'task' : 'tasks'\}`/);
 });
@@ -77,7 +80,7 @@ test('mobile card inline code changes color without replacing the surrounding fo
 
 test('round-trips the mobile Control Room tab and task scroll anchor through the URL', () => {
   assert.deepEqual(parseControlRoomRoute('https://example.test/?tab=active#task-card-a'), { tab: 'active', anchor: 'task-card-a' });
-  assert.equal(controlRoomPath('done', 'task-card-b'), '/?tab=done#task-card-b');
+  assert.equal(controlRoomPath('delayed', 'task-card-b'), '/?tab=delayed#task-card-b');
 });
 
 test('canonicalizes invalid mobile Control Room URL state', () => {
@@ -163,12 +166,20 @@ test('reports invalid canonical markdown and rewrites queue rank in place', () =
 test('keeps malformed master tasks visible in the control room with diagnostics', () => {
   const malformed = task({
     cardId: 'malformed',
-    cardStatus: 'done',
+    cardStatus: 'delayed',
     markdown: '#master-task #task-waiting #task-active\n\nLedger: Tasks\n\n## Subtasks\n'
   });
   const result = deriveControlRoom([malformed]);
-  assert.deepEqual(result.done.map((entry) => entry.cardId), ['malformed']);
+  assert.deepEqual(result.delayed.map((entry) => entry.cardId), ['malformed']);
   assert.deepEqual(result.diagnostics.map((entry) => entry.cardId), ['malformed']);
+});
+
+test('parks and restores master tasks through the shared card status mutation', () => {
+  assert.match(mobile, /delayButton\.textContent = delayed \? 'Restore to queue' : 'Park task'/);
+  assert.match(mobile, /const nextStatus = delayed \? 'todo' : 'delayed'/);
+  assert.match(mobile, /ledgerMutation\(state\.activeLedgerId, \{ action: 'patch-card', cardPatch: \{ id: card\.id, status: nextStatus \} \}\)/);
+  assert.match(mobile, /controlRoomPath\(nextStatus === 'delayed' \? 'delayed' : 'queue'\)/);
+  assert.match(mobile, /delayed: 'No delayed tasks'/);
 });
 
 test('formats a stable waiting age', () => {
@@ -368,7 +379,7 @@ test('completes all linked cards from the master-task detail', () => {
 });
 
 test('deletes a master task from its detail after explicit confirmation', () => {
-  assert.match(mobile, /completion\.append\(completeButton, deleteButton\)/);
+  assert.match(mobile, /completion\.append\(delayButton, completeButton, deleteButton\)/);
   assert.match(mobile, /deleteMasterTaskModal\.showModal\(\)/);
   assert.match(mobile, /action: 'delete-card', cardId/);
   assert.match(mobile, /navigate\(controlRoomPath\(state\.controlTab\), true\)/);
@@ -387,7 +398,7 @@ test('uses global application destinations and keeps new task as the fourth cont
   assert.match(styles, /svg\[data-nav-icon="dashboard"\]/);
   assert.doesNotMatch(html, /class="icon-button pipelines-button"/);
   assert.doesNotMatch(html, /class="control-heading"|class="live-dot"/);
-  assert.match(html, /data-control-tab="done"[\s\S]*class="new-task-button"/);
+  assert.match(html, /data-control-tab="delayed"[\s\S]*class="new-task-button"/);
   assert.match(styles, /grid-template-columns: repeat\(4, 1fr\)/);
   assert.match(html, /class="nav-server-restart-button"/);
   assert.match(mobile, /fetch\('\/api\/server\/restart', \{ method: 'POST' \}\)/);

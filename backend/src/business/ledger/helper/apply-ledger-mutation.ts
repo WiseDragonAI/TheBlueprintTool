@@ -93,6 +93,8 @@ export function applyLedgerMutation(input: {
   }
   if (mutation.action === 'patch-card' && mutation.cardPatch?.id) {
     const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === mutation.cardPatch?.id);
+    const includesStatus = mutation.cardPatch.status !== undefined;
+    const validStatus = mutation.cardPatch.status === 'todo' || mutation.cardPatch.status === 'done' || mutation.cardPatch.status === 'delayed';
     const includesCodexPreference = mutation.cardPatch.codexRunModel !== undefined || mutation.cardPatch.codexRunEffort !== undefined;
     const validCodexPreference = typeof mutation.cardPatch.codexRunModel === 'string'
       && (codexModelOptions as readonly string[]).includes(mutation.cardPatch.codexRunModel)
@@ -104,8 +106,14 @@ export function applyLedgerMutation(input: {
         body: { ok: false, error: 'Codex model and effort must be submitted together with allowed values.' },
       };
     }
+    if (!mutationError && includesStatus && !validStatus) {
+      mutationError = {
+        statusCode: 400,
+        body: { ok: false, error: 'Card status must be todo, delayed, or done.' },
+      };
+    }
     if (!mutationError) {
-      if (card && (mutation.cardPatch.status === 'todo' || mutation.cardPatch.status === 'done')) card.status = mutation.cardPatch.status;
+      if (card && validStatus) card.status = mutation.cardPatch.status;
       if (card && typeof mutation.cardPatch.title === 'string') card.title = mutation.cardPatch.title;
       if (card && typeof mutation.cardPatch.description === 'string') {
         writeCardDescriptionFile({ decisionOsRoot, card, description: mutation.cardPatch.description, ledgerPath });

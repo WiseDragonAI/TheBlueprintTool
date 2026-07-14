@@ -593,7 +593,7 @@ function taskRow(task, index) {
       runtimeStatus.textContent = 'Running';
     }
   }
-  const age = task.status === 'task-complete' ? 'completed' : task.status === 'task-active' ? activeAge(task.activeSince) : waitingAge(task.waitingSince);
+  const age = task.status === 'task-delayed' ? 'delayed' : task.status === 'task-active' ? activeAge(task.activeSince) : waitingAge(task.waitingSince);
   const process = task.codexProcessing ? ` · Codex ${task.codexRunId}` : '';
   if (!active) {
     summary.querySelector('.task-meta').textContent = `${task.projectName} · ${task.ledger} · ${age}${process}`;
@@ -709,7 +709,7 @@ function renderControlRoom() {
   elements['control-empty'].textContent = {
     queue: 'No waiting tasks',
     active: 'No active tasks',
-    done: 'No completed tasks'
+    delayed: 'No delayed tasks'
   }[state.controlTab] ?? 'No tasks';
   elements['control-diagnostics'].hidden = true;
   elements['control-diagnostics'].replaceChildren();
@@ -1100,6 +1100,26 @@ function renderCard(card) {
     }));
     const completion = document.createElement('section');
     completion.className = 'master-task-completion';
+    const delayed = card.status === 'delayed';
+    const delayButton = document.createElement('button');
+    delayButton.type = 'button';
+    delayButton.className = 'delay-master-task-button';
+    delayButton.textContent = delayed ? 'Restore to queue' : 'Park task';
+    delayButton.disabled = card.status === 'done';
+    delayButton.addEventListener('click', async () => {
+      const nextStatus = delayed ? 'todo' : 'delayed';
+      delayButton.disabled = true;
+      delayButton.textContent = delayed ? 'Restoring task…' : 'Parking task…';
+      try {
+        state.ledger = await ledgerMutation(state.activeLedgerId, { action: 'patch-card', cardPatch: { id: card.id, status: nextStatus } });
+        navigate(controlRoomPath(nextStatus === 'delayed' ? 'delayed' : 'queue'), true);
+      } catch (cause) {
+        delayButton.disabled = false;
+        delayButton.textContent = delayed ? 'Restore to queue' : 'Park task';
+        elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Master task status update failed.';
+        setView('error-view');
+      }
+    });
     const completeButton = document.createElement('button');
     completeButton.type = 'button';
     completeButton.className = 'complete-master-task-button';
@@ -1126,7 +1146,7 @@ function renderCard(card) {
       deleteMasterTaskModal.dataset.cardId = String(card.id);
       deleteMasterTaskModal.showModal();
     });
-    completion.append(completeButton, deleteButton);
+    completion.append(delayButton, completeButton, deleteButton);
     overview.append(status, heading, subtasks, completion);
     elements['card-body'].replaceChildren(content, overview);
   } else elements['card-body'].replaceChildren(content);

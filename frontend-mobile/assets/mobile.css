@@ -235,6 +235,8 @@ h1 { margin: 0; font-size: clamp(28px, 8vw, 44px); line-height: 1.08; letter-spa
 .task-overview h2 { margin: 0 0 6px; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
 .task-subtasks { border-top: 1px solid var(--line); }
 .master-task-completion { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--line); }
+.delay-master-task-button { width: 100%; min-height: 52px; margin-bottom: 12px; border-color: color-mix(in srgb, var(--accent), transparent 30%); color: var(--accent); background: transparent; font-weight: 800; }
+.delay-master-task-button:disabled { color: var(--muted); border-color: var(--line); }
 .complete-master-task-button { width: 100%; min-height: 52px; border-color: var(--accent); color: #07100c; background: var(--accent); font-weight: 800; }
 .complete-master-task-button:disabled { color: var(--muted); background: var(--panel); }
 .delete-master-task-button { width: 100%; min-height: 52px; margin-top: 12px; border-color: color-mix(in srgb, var(--danger), transparent 30%); color: var(--danger); background: transparent; font-weight: 800; }
