@@ -8863,7 +8863,7 @@
       "title": "Propagate project colors through task hierarchies",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10402,
       "y": 77868,
       "w": 360,
