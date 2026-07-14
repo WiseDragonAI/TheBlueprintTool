@@ -18,7 +18,7 @@ import { requestCodexPipelineRun } from '../../src/runtime/codex/effect/request-
 import { requestCodexPipelineRunCancel, requestCodexPipelineRunRestart, requestCodexPipelineRunStatus } from '../../src/runtime/codex/effect/request-codex-pipeline-run-status.js';
 import { requestCodexSkillLibrarySave } from '../../src/runtime/codex/effect/request-codex-skill-library-save.js';
 import { requestCodexSkillFavoriteSave, requestCodexSkillMetadataSave } from '../../src/runtime/codex/effect/request-codex-skill-favorite-save.js';
-import { bindCardSkillRunLogConsumer, bindCardSkillRunWidget, resumeExternallyStartedCardSkillRun } from '../../src/runtime/codex/effect/poll-card-skill-run.js';
+import { bindCardSkillRunLogConsumer, bindCardSkillRunWidget, resumeExternallyStartedCardSkillRun, unbindCardSkillRunLogConsumer } from '../../src/runtime/codex/effect/poll-card-skill-run.js';
 import type { CardSkillRunEvent, CardSkillRunStatus, CardSkillRunSummary } from '../../src/runtime/codex/effect/request-card-skill-run-status.js';
 import { cardCodexRunId, cardCodexThreadRunId } from '../../src/runtime/codex/helper/card-codex-run-id.js';
 import { groupSequentialToolCalls, mergeThreadRunEvents } from '../../src/runtime/codex/helper/thread-run-log.js';
@@ -378,11 +378,11 @@ test('threadCodexCardId only resolves card-backed threads', () => {
   assert.equal(threadCodexCardId(null, 'thread-card-a'), '');
 });
 
-test('requestCardSkillRunStatus queries derived run progress', async () => {
+test('requestCardSkillRunStatus queries derived run progress through its captured project scope', async () => {
   const previousFetch = globalThis.fetch;
   try {
     globalThis.fetch = (async (url: string) => {
-      assert.equal(url, '/api/codex/skills/runs/codex-skill-1000-abcd?ledgerId=specs&cardId=card-a&since=4');
+      assert.equal(url, '/p/project-a/api/codex/skills/runs/codex-skill-1000-abcd?ledgerId=specs&cardId=card-a&since=4');
       return new Response(JSON.stringify({
         ok: true,
         active: true,
@@ -411,7 +411,7 @@ test('requestCardSkillRunStatus queries derived run progress', async () => {
       });
     }) as typeof fetch;
 
-    const result = await requestCardSkillRunStatus({ ledgerId: 'specs', cardId: 'card-a', runId: 'codex-skill-1000-abcd', since: 4 });
+    const result = await requestCardSkillRunStatus({ projectId: 'project-a', ledgerId: 'specs', cardId: 'card-a', runId: 'codex-skill-1000-abcd', since: 4 });
     assert.equal(result.ok, true);
     assert.equal(result.active, true);
     assert.equal(result.status, 'running');
@@ -580,6 +580,84 @@ test('thread log consumer shares one advancing poller across rerenders and stops
       assert.equal(timers.size, 0);
     }
   } finally {
+    globalThis.fetch = previousFetch;
+    globalThis.setTimeout = previousSetTimeout;
+    globalThis.clearTimeout = previousClearTimeout;
+    (globalThis as unknown as { window?: unknown }).window = previousWindow;
+    (globalThis as unknown as { CustomEvent?: unknown }).CustomEvent = previousCustomEvent;
+  }
+});
+
+test('thread log consumer keeps captured project scope and unregisters before a background poll tick', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousSetTimeout = globalThis.setTimeout;
+  const previousClearTimeout = globalThis.clearTimeout;
+  const previousWindow = (globalThis as unknown as { window?: unknown }).window;
+  const previousCustomEvent = (globalThis as unknown as { CustomEvent?: unknown }).CustomEvent;
+  let timerId = 0;
+  const timers = new Map<number, { callback: () => void; delay: number }>();
+  const requests: string[] = [];
+  const input = {
+    projectId: 'project-a',
+    ledgerId: 'specs',
+    cardId: 'card-project-scope',
+    runId: 'codex-skill-6100-project-scope',
+    consumerId: 'thread-log:thread-card-project-scope',
+  };
+  const flush = async () => {
+    for (let index = 0; index < 12; index += 1) await Promise.resolve();
+  };
+  const runNextTimer = async (delay: number) => {
+    const entry = [...timers.entries()].find(([, timer]) => timer.delay === delay);
+    assert.ok(entry, `Expected a scheduled ${delay} ms timer.`);
+    timers.delete(entry[0]);
+    entry[1].callback();
+    await flush();
+  };
+  try {
+    (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
+    (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
+      constructor(_name: string, public detail: unknown = undefined) {}
+    };
+    globalThis.setTimeout = ((callback: () => void, delay = 0) => {
+      const id = ++timerId;
+      timers.set(id, { callback, delay: Number(delay) });
+      return id as unknown as ReturnType<typeof setTimeout>;
+    }) as typeof setTimeout;
+    globalThis.clearTimeout = ((id: ReturnType<typeof setTimeout>) => {
+      timers.delete(Number(id));
+    }) as typeof clearTimeout;
+    globalThis.fetch = (async (url: string) => {
+      requests.push(url);
+      return new Response(JSON.stringify({
+        ok: true,
+        active: true,
+        runId: input.runId,
+        runKind: 'thread',
+        status: 'running',
+        lineCount: requests.length,
+        nextSince: requests.length,
+        events: [],
+        diagnostics: [],
+        metadata: {},
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+
+    bindCardSkillRunLogConsumer({ ...input, onSummary() {} });
+    await runNextTimer(0);
+    assert.equal(requests[0], `/p/project-a/api/codex/skills/runs/${input.runId}?ledgerId=specs&cardId=card-project-scope&since=0`);
+    assert.deepEqual([...timers.values()].map((timer) => timer.delay), [1000]);
+
+    unbindCardSkillRunLogConsumer(input);
+    assert.equal(timers.size, 0);
+
+    bindCardSkillRunLogConsumer({ ...input, onSummary() {} });
+    await runNextTimer(0);
+    assert.equal(requests[1], `/p/project-a/api/codex/skills/runs/${input.runId}?ledgerId=specs&cardId=card-project-scope&since=0`);
+    unbindCardSkillRunLogConsumer(input);
+    assert.equal(timers.size, 0);
+  } finally {
+    unbindCardSkillRunLogConsumer(input);
     globalThis.fetch = previousFetch;
     globalThis.setTimeout = previousSetTimeout;
     globalThis.clearTimeout = previousClearTimeout;

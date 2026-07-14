@@ -14,7 +14,7 @@ function globallyScoped(pathname: string): boolean {
     || pathname === '/api/server/restart';
 }
 
-function projectIdFromLocation(): string {
+export function projectIdFromLocation(): string {
   const match = String(globalThis.location?.pathname ?? '').match(/^\/p\/([^/]+)(?:\/|$)/);
   if (!match) return '';
   try { return decodeURIComponent(match[1]).trim(); } catch { return ''; }

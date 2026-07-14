@@ -105,13 +105,22 @@ test('mobile thread launch continues a terminal or orphaned Codex run', () => {
   assert.doesNotMatch(source, /summary\.status === 'unknown'/);
   assert.match(source, /requestCardSkillRunContinue\(\{/);
   assert.match(source, /runId: existingRunId/);
-  assert.match(source, /resumeExternallyStartedCardSkillRun\(\{ ledgerId: currentLedgerId, cardId: String\(currentCard\.id\), runId: existingRunId \}\)/);
+  assert.match(source, /resumeExternallyStartedCardSkillRun\(\{ projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String\(currentCard\.id\), runId: existingRunId \}\)/);
   assert.match(source, /function hydrateRunningThreadRun\(runId, startedAt\)/);
   assert.match(source, /canvasState\.threadRunSummaryByThreadId\[threadId\] = \{/);
   assert.match(source, /active: true/);
   assert.match(source, /status: 'running'/);
   assert.match(source, /hydrateRunningThreadRun\(existingRunId, continuedAt\);[\s\S]*await refreshThreadLedger\(\)/);
   assert.match(source, /bindThreadCodexRunLog\([^;]+runId \}\);\n  hydrateRunningThreadRun\(runId, startedAt\);[\s\S]*await refreshThreadLedger\(\)/);
+});
+
+test('closing a mobile thread unregisters its project-scoped Codex run consumer', () => {
+  const closeMobileThread = source.match(/export function closeMobileThread\(\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+  assert.match(source, /import \{ bindThreadCodexRunLog, unbindThreadCodexRunLog \}/);
+  assert.match(closeMobileThread, /cardCodexThreadRunId\(currentCard\)/);
+  assert.match(closeMobileThread, /unbindThreadCodexRunLog\(\{[\s\S]*projectId: currentProjectId/);
+  assert.match(source, /bindThreadCodexRunLog\(\{ projectId: currentProjectId/);
+  assert.match(source, /requestCardSkillRunStatus\(\{ projectId: currentProjectId/);
 });
 
 test('mobile Codex Log uses one action-and-metrics row for STOP, RESUME, and START', () => {

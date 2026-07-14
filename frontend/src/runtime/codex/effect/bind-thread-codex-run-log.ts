@@ -5,7 +5,8 @@
 import { state } from '../../state.js';
 import { codexRunDurationLabel, liveCodexRunElapsedMs } from '../helper/live-codex-run-elapsed-ms.js';
 import { mergeThreadRunEvents, type ThreadRunLogEvent } from '../helper/thread-run-log.js';
-import { bindCardSkillRunLogConsumer } from './poll-card-skill-run.js';
+import { bindCardSkillRunLogConsumer, unbindCardSkillRunLogConsumer } from './poll-card-skill-run.js';
+import { projectIdFromLocation } from '../../project/helper/project-request-scope.js';
 import type { CardSkillRunSummary } from './request-card-skill-run-status.js';
 import { syncThreadCodexRunControls } from '../../thread/effect/sync-thread-codex-run-controls.js';
 
@@ -145,16 +146,31 @@ function consumeThreadRunSummary(input: { threadId: string; runId: string; summa
   void import('../../thread/effect/render-thread-codex-log.js').then(({ renderThreadCodexLog }) => renderThreadCodexLog());
 }
 
-export function bindThreadCodexRunLog(input: { ledgerId: string; cardId: string; threadId: string; runId: string }): void {
+type ThreadCodexRunLogIdentity = { projectId?: string; ledgerId: string; cardId: string; threadId: string; runId: string };
+
+export function bindThreadCodexRunLog(input: ThreadCodexRunLogIdentity): void {
   if (!input.ledgerId || !input.cardId || !input.threadId || !input.runId) return;
   prepareThreadRun(input.threadId, input.runId);
   const currentSummary = recordState('threadRunSummaryByThreadId')[input.threadId] as CardSkillRunSummary | undefined;
   if (currentSummary) syncThreadCodexRunClock({ threadId: input.threadId, runId: input.runId, summary: currentSummary });
   bindCardSkillRunLogConsumer({
+    projectId: input.projectId ?? projectIdFromLocation(),
     ledgerId: input.ledgerId,
     cardId: input.cardId,
     runId: input.runId,
     consumerId: `thread-log:${input.threadId}`,
     onSummary: (summary) => consumeThreadRunSummary({ threadId: input.threadId, runId: input.runId, summary }),
+  });
+}
+
+export function unbindThreadCodexRunLog(input: ThreadCodexRunLogIdentity): void {
+  if (!input.ledgerId || !input.cardId || !input.threadId || !input.runId) return;
+  stopThreadCodexRunClock(input.threadId);
+  unbindCardSkillRunLogConsumer({
+    projectId: input.projectId ?? projectIdFromLocation(),
+    ledgerId: input.ledgerId,
+    cardId: input.cardId,
+    runId: input.runId,
+    consumerId: `thread-log:${input.threadId}`,
   });
 }
