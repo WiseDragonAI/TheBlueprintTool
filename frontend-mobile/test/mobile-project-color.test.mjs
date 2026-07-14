@@ -10,5 +10,6 @@ test('project color owns zone creation and task hierarchy accents', () => {
   assert.match(mobile, /const zone = \{ id: objectId\('zone'\), \.\.\.rect, color: projectColor, label: 'New task intake'/);
   assert.match(mobile, /article\.style\.setProperty\('--accent', task\.projectColor \|\| defaultAccent\)/);
   assert.match(mobile, /elements\['card-view'\]\.style\.setProperty\('--accent', state\.activeZoneColor \|\| defaultAccent\)/);
+  assert.match(mobile, /if \(card\) \{\s*state\.activeZoneId = asText\(zone\.id\);\s*state\.activeZoneColor = asText\(zone\.color\);\s*renderCard\(card\);/);
   assert.doesNotMatch(mobile, /color: '#38d9e8', label: 'New task intake'/);
 });

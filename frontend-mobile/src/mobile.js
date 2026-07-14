@@ -1343,7 +1343,11 @@ async function loadRoute() {
     const zone = zoneMarker === 'zones' ? zones.find((entry) => String(entry.id) === requestedZone) : null;
     if (zone && cardMarker === 'cards' && requestedCard) {
       const card = zone.cards.find((entry) => String(entry.id) === requestedCard);
-      if (card) renderCard(card);
+      if (card) {
+        state.activeZoneId = asText(zone.id);
+        state.activeZoneColor = asText(zone.color);
+        renderCard(card);
+      }
       else navigate(zonePath(ledgerId, zone.id), true);
     } else if (zone) {
       renderZone(zone);
