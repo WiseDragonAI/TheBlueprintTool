@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const moduleDirectory = dirname(fileURLToPath(import.meta.url));
 const schemaSql = readFileSync(resolve(moduleDirectory, 'schema.sql'), 'utf8');
+const defaultMemoryLimit = 10;
 
 function text(value) {
   return String(value ?? '').trim();
@@ -22,6 +23,15 @@ function required(value, name) {
   const normalized = text(value);
   if (!normalized) throw new Error(`${name} is required`);
   return normalized;
+}
+
+function positiveInteger(value, name, fallback) {
+  if (value === undefined || value === null) return fallback;
+  const normalized = text(value);
+  if (!/^[1-9][0-9]*$/.test(normalized)) throw new Error(`${name} must be a positive integer`);
+  const parsed = Number(normalized);
+  if (!Number.isSafeInteger(parsed)) throw new Error(`${name} must be a positive integer`);
+  return parsed;
 }
 
 function hasTable(database, table) {
@@ -129,6 +139,7 @@ export function readMemories(root, filters = {}) {
     const tag = text(filters.tag).toLowerCase();
     const subtag = text(filters.subtag).toLowerCase();
     const query = text(filters.query);
+    const limit = positiveInteger(filters.limit, 'limit', defaultMemoryLimit);
     return database.prepare(`
       SELECT id, title, body, tag, subtag, project_id, type, source, created_at, updated_at
       FROM memories
@@ -138,7 +149,8 @@ export function readMemories(root, filters = {}) {
         AND (? = '' OR subtag = ?)
         AND (? = '' OR title LIKE '%' || ? || '%' OR body LIKE '%' || ? || '%')
       ORDER BY updated_at DESC, id DESC
-    `).all(projectId, projectId, type, type, tag, tag, subtag, subtag, query, query, query);
+      LIMIT ?
+    `).all(projectId, projectId, type, type, tag, tag, subtag, subtag, query, query, query, limit);
   } finally {
     database.close();
   }
