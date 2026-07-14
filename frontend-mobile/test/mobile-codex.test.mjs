@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { setMobileCodexView } from '../src/mobile-codex-view.js';
 
 const root = new URL('../', import.meta.url);
-const [html, script, styles, mobile] = await Promise.all([
+const [html, script, styles, mobile, sharedRow] = await Promise.all([
   readFile(new URL('index.html', root), 'utf8'),
   readFile(new URL('src/mobile-codex.js', root), 'utf8'),
   readFile(new URL('assets/mobile.css', root), 'utf8'),
   readFile(new URL('src/mobile.js', root), 'utf8'),
+  readFile(new URL('../frontend/src/runtime/codex/component/render-skill-library-item-content.ts', root), 'utf8'),
 ]);
 
 test('mobile card detail exposes processing and both process libraries', () => {
@@ -110,13 +112,36 @@ test('global pipeline editing remains scoped to the owning project', () => {
 
 test('skill libraries share favorite ordering, colored categories, and scope-specific detail actions', () => {
   assert.match(script, /sortSkillsByFavorite\(filtered\)/);
-  assert.match(script, /renderSkillLibraryItemContent\(record, recordProjects\(record\)\)/);
+  assert.match(script, /renderSkillLibraryItemContent\(record\)/);
   assert.match(script, /decorateSkillCategoryLabel\(chip, value\.category\)/);
-  assert.match(script, /className = 'project-record-label'/);
   assert.match(script, /state\.libraryScope === 'global'/);
   assert.match(script, /'Mark as favorite'/);
+  assert.match(script, /'Save tags'/);
+  assert.match(script, /JSON\.stringify\(\{ tags \}\)/);
   assert.match(script, /JSON\.stringify\(\{ favorite \}\)/);
-  assert.match(script, /prior\.forEach\(\(\{ skill, favorite: priorFavorite \}\)/);
+  assert.match(script, /try \{ await loadGlobalLibraries\(\); \}/);
+  assert.doesNotMatch(sharedRow, /project-record-label|skill-source-label|skill-favorite-label/);
   assert.match(styles, /\.skill-category-filter \{[^}]*background: var\(--skill-category-color\)/);
   assert.match(styles, /\.codex-list-item \.project-record-label, \.codex-list-item \.skill-category-label[^}]*padding: 4px 7px/);
+});
+
+test('skill detail is an exclusive modal view and Back restores every library control', () => {
+  const selectors = new Map([
+    ['.codex-tabs', { hidden: false }],
+    ['.codex-library-controls', { hidden: false }],
+    ['.process-message', { hidden: false }],
+    ['.process-library', { hidden: false }],
+    ['.process-detail', { hidden: true }],
+    ['#process-title', { textContent: '' }],
+    ['.process-modal .eyebrow', { textContent: '' }],
+  ]);
+  const rootNode = { querySelector: (selector) => selectors.get(selector) || null };
+  setMobileCodexView(rootNode, 'detail', { global: true, libraryTitle: 'Skill library', detailTitle: 'Skill details' });
+  assert.deepEqual([...selectors.keys()].slice(0, 4).map((selector) => selectors.get(selector).hidden), [true, true, true, true]);
+  assert.equal(selectors.get('.process-detail').hidden, false);
+  assert.equal(selectors.get('#process-title').textContent, 'Skill details');
+  setMobileCodexView(rootNode, 'library', { global: true, libraryTitle: 'Skill library' });
+  assert.deepEqual([...selectors.keys()].slice(0, 4).map((selector) => selectors.get(selector).hidden), [false, false, false, false]);
+  assert.equal(selectors.get('.process-detail').hidden, true);
+  assert.equal(selectors.get('#process-title').textContent, 'Skill library');
 });

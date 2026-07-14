@@ -2,29 +2,20 @@
  * WHAT: Renders the semantic content shared by desktop and mobile skill-library rows.
  * WHY: Library identity, colored categories, project labels, source, and favorite state must not drift by viewport.
  */
-import { categoryForSkill } from '../helper/skill-category.js';
-import { decorateSkillCategoryLabel } from '../helper/skill-library-presentation.js';
+import { colorForSkillTag, decorateSkillCategoryLabel, tagsForSkill } from '../helper/skill-library-presentation.js';
 
-export type SkillLibraryItemProject = { name: string; color?: string };
 export type SkillLibraryItem = {
   name: string;
   description?: string;
-  source?: string;
-  favorite?: boolean;
+  tags?: readonly string[];
 };
 
-export function renderSkillLibraryItemContent(skill: SkillLibraryItem, projects: readonly SkillLibraryItemProject[] = []): HTMLElement[] {
-  const category = categoryForSkill(skill.name);
-  const head = document.createElement('span');
-  head.className = 'skill-result-header';
+export function renderSkillLibraryItemContent(skill: SkillLibraryItem): HTMLElement[] {
+  const tags = tagsForSkill(skill);
   const name = document.createElement('strong');
   name.className = 'skill-result-name';
   name.textContent = skill.name;
-  const categoryLabel = document.createElement('small');
-  categoryLabel.className = 'skill-result-category';
-  categoryLabel.textContent = category;
-  decorateSkillCategoryLabel(categoryLabel, category);
-  head.replaceChildren(name, categoryLabel);
+  name.style.setProperty('--skill-category-color', colorForSkillTag(tags[0]));
 
   const description = document.createElement('span');
   description.className = 'skill-result-description';
@@ -32,22 +23,11 @@ export function renderSkillLibraryItemContent(skill: SkillLibraryItem, projects:
 
   const labels = document.createElement('span');
   labels.className = 'codex-list-labels process-result-metadata';
-  for (const project of projects) {
+  for (const tag of tags) {
     const label = document.createElement('small');
-    label.className = 'project-record-label';
-    label.textContent = project.name;
-    if (project.color) label.style.setProperty('--project-color', project.color);
+    label.textContent = tag;
+    decorateSkillCategoryLabel(label, tag);
     labels.append(label);
   }
-  const source = document.createElement('small');
-  source.className = 'skill-source-label';
-  source.textContent = skill.source || 'skill';
-  labels.append(source);
-  if (skill.favorite === true) {
-    const favorite = document.createElement('small');
-    favorite.className = 'skill-favorite-label';
-    favorite.textContent = 'Favorite';
-    labels.append(favorite);
-  }
-  return [head, description, labels];
+  return [name, description, labels];
 }

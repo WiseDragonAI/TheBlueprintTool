@@ -49,6 +49,11 @@ function nullableText(value: unknown): string | null {
   return normalized || null;
 }
 
+function skillTags(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map(text).filter((tag) => tag.length > 0 && tag.length <= 40))].slice(0, 8);
+}
+
 function status(value: unknown): CodexPipelineStatus {
   const normalized = text(value);
   return normalized === 'running' || normalized === 'complete' || normalized === 'failed' || normalized === 'cancelled'
@@ -294,6 +299,7 @@ function normalizeSkillLibrary(
     normalized.push({
       skillName,
       favorite: input.favorite === true,
+      tags: skillTags(input.tags),
       defaultCodexModel: requestedModel === null || requestedModel === undefined
         ? null
         : text(requestedModel) as CodexSkillLibraryRecord['defaultCodexModel'],

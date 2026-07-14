@@ -14,8 +14,7 @@ import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { processCardSkillController } from '../controller/process-card-skill-controller.js';
 import { renderSkillLibraryItemContent } from '../component/render-skill-library-item-content.js';
-import { categoryForSkill, colorForSkillCategory, skillCategories, type SkillCategory } from '../helper/skill-category.js';
-import { sortSkillsByFavorite } from '../helper/skill-library-presentation.js';
+import { colorForSkillTag, sortSkillsByFavorite, tagsForSkill } from '../helper/skill-library-presentation.js';
 import { codexEffortOptions, codexModelOptions } from '../helper/codex-run-options.js';
 import { loadCodexPipelines } from './load-codex-pipelines.js';
 import { loadCodexSkillsResult, type CodexSkillSummary } from './load-codex-skills.js';
@@ -30,7 +29,7 @@ export type ProcessModalState = {
   cardId: string;
   mode: ProcessModalMode;
   query: string;
-  selectedCategory: SkillCategory | 'All';
+  selectedCategory: string;
   selectedPipelineId: string;
   selectedSkillName: string;
   codexModel: string;
@@ -126,12 +125,15 @@ function pipelineReferences(pipelineId: string): readonly CodexPipelineInvalidRe
   return processModalState.invalidReferences.filter((reference) => reference.pipelineId === pipelineId);
 }
 
-function pipelineCategories(pipeline: CodexPipeline): SkillCategory[] {
+function pipelineCategories(pipeline: CodexPipeline): string[] {
   const stepLookup = stepsById();
-  const categories = new Set<SkillCategory>();
+  const categories = new Set<string>();
   for (const stepId of pipeline.stepIds) {
     const step = stepLookup.get(stepId);
-    for (const skill of step?.skills ?? []) categories.add(categoryForSkill(skill.skillName));
+    for (const skill of step?.skills ?? []) {
+      const catalogSkill = processModalState.skills.find((entry) => entry.name === skill.skillName);
+      tagsForSkill(catalogSkill ?? { name: skill.skillName }).forEach((tag) => categories.add(tag));
+    }
   }
   return [...categories];
 }
@@ -164,24 +166,20 @@ function filteredPipelines(): CodexPipeline[] {
 function filteredSkills(): CodexSkillSummary[] {
   const query = processModalState.query.trim().toLowerCase();
   return sortSkillsByFavorite(processModalState.skills.filter((skill) => {
-    const category = categoryForSkill(skill.name);
-    if (processModalState.selectedCategory !== 'All' && category !== processModalState.selectedCategory) return false;
-    return !query || `${skill.name} ${skill.description} ${skill.source} ${category}`.toLowerCase().includes(query);
+    const tags = tagsForSkill(skill);
+    if (processModalState.selectedCategory !== 'All' && !tags.includes(processModalState.selectedCategory)) return false;
+    return !query || `${skill.name} ${skill.description} ${tags.join(' ')}`.toLowerCase().includes(query);
   }));
 }
 
-function availableCategories(): Array<SkillCategory | 'All'> {
-  const categories = new Set<SkillCategory>();
+function availableCategories(): string[] {
+  const categories = new Set<string>();
   if (processModalState.mode === 'skills') {
-    processModalState.skills.forEach((skill) => categories.add(categoryForSkill(skill.name)));
+    processModalState.skills.forEach((skill) => tagsForSkill(skill).forEach((tag) => categories.add(tag)));
   } else {
     processModalState.pipelines.forEach((pipeline) => pipelineCategories(pipeline).forEach((category) => categories.add(category)));
   }
-  return [
-    'All',
-    ...skillCategories.filter((category) => categories.has(category)),
-    ...(categories.has('Uncategorized') ? ['Uncategorized' as const] : []),
-  ];
+  return ['All', ...[...categories].sort((left, right) => left.localeCompare(right))];
 }
 
 function renderTabs(): HTMLElement {
@@ -237,7 +235,7 @@ function renderCategoryFilters(): HTMLElement {
       processModal?.querySelector<HTMLButtonElement>(`.process-category-filters [data-process-category="${category}"]`)?.focus();
     }, `skill-category-filter${selected ? ' is-selected' : ''}`);
     filter.dataset.processCategory = category;
-    filter.style.setProperty('--skill-category-color', colorForSkillCategory(category));
+    filter.style.setProperty('--skill-category-color', category === 'All' ? '#cbd5e1' : colorForSkillTag(category));
     filter.setAttribute('aria-pressed', String(selected));
     filters.append(filter);
   }
@@ -250,7 +248,7 @@ function renderPipelineResult(pipeline: CodexPipeline): HTMLButtonElement {
   const runnable = pipelineCanRun(pipeline);
   const result = button('', () => selectProcessPipeline(pipeline.id), `process-result${selected ? ' is-selected' : ''}${runnable ? '' : ' has-warning'}`);
   result.dataset.processPipelineId = pipeline.id;
-  if (categories[0]) result.style.setProperty('--skill-category-color', colorForSkillCategory(categories[0]));
+  if (categories[0]) result.style.setProperty('--skill-category-color', colorForSkillTag(categories[0]));
   result.setAttribute('aria-pressed', String(selected));
   const head = document.createElement('span');
   head.className = 'skill-result-header';
@@ -260,7 +258,7 @@ function renderPipelineResult(pipeline: CodexPipeline): HTMLButtonElement {
   const badge = document.createElement('span');
   badge.className = 'skill-result-category';
   badge.textContent = runnable ? (categories[0] ?? 'Pipeline') : 'Needs repair';
-  if (categories[0]) badge.style.setProperty('--skill-category-color', colorForSkillCategory(categories[0]));
+  if (categories[0]) badge.style.setProperty('--skill-category-color', colorForSkillTag(categories[0]));
   head.replaceChildren(name, badge);
   const description = document.createElement('span');
   description.className = 'skill-result-description';
@@ -274,10 +272,10 @@ function renderPipelineResult(pipeline: CodexPipeline): HTMLButtonElement {
 
 function renderSkillResult(skill: CodexSkillSummary): HTMLElement {
   const selected = skill.name === processModalState.selectedSkillName;
-  const category = categoryForSkill(skill.name);
+  const category = tagsForSkill(skill)[0];
   const row = document.createElement('article');
   row.className = `process-skill-row${selected ? ' is-selected' : ''}`;
-  row.style.setProperty('--skill-category-color', colorForSkillCategory(category));
+  row.style.setProperty('--skill-category-color', colorForSkillTag(category));
   const select = button('', () => selectProcessSkill(skill.name), 'process-skill-select');
   select.dataset.processSkillName = skill.name;
   select.setAttribute('aria-pressed', String(selected));

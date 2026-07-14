@@ -97,6 +97,7 @@ export type CodexPipelineRun = {
 export type CodexSkillLibraryRecord = {
   readonly skillName: string;
   readonly favorite: boolean;
+  readonly tags: readonly string[];
   readonly defaultCodexModel: CodexModel | null;
   readonly defaultCodexEffort: CodexEffort | null;
   readonly updatedAt: string;

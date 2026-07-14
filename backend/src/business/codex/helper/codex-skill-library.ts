@@ -38,6 +38,7 @@ export type CodexSkillCatalogEntry = {
   readOnlyReason: string | null;
   revision: string;
   favorite: boolean;
+  tags: string[];
   defaultCodexModel: CodexModel | null;
   defaultCodexEffort: CodexEffort | null;
   effectiveCodexModel: string;
@@ -152,7 +153,7 @@ export function writeEditableSkillFile(input: {
 
 function catalogEntry(input: {
   skill: CodexSkillSummary;
-  defaults: Map<string, { favorite: boolean; defaultCodexModel: CodexModel | null; defaultCodexEffort: CodexEffort | null }>;
+  defaults: Map<string, { favorite: boolean; tags: readonly string[]; defaultCodexModel: CodexModel | null; defaultCodexEffort: CodexEffort | null }>;
   fallbackModel: string;
   fallbackEffort: string;
 }): CodexSkillCatalogEntry {
@@ -167,6 +168,7 @@ function catalogEntry(input: {
     readOnlyReason: input.skill.readOnlyReason,
     revision: input.skill.revision,
     favorite: defaults?.favorite === true,
+    tags: defaults?.tags.length ? [...defaults.tags] : [],
     defaultCodexModel,
     defaultCodexEffort,
     effectiveCodexModel: defaultCodexModel || input.fallbackModel,
@@ -234,6 +236,13 @@ function defaultEffort(value: unknown): CodexEffort | null | undefined {
   return text(value) as CodexEffort;
 }
 
+function savedTags(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const tags = [...new Set(value.map(text).filter(Boolean))];
+  if (tags.length > 8 || tags.some((tag) => tag.length > 40)) return undefined;
+  return tags;
+}
+
 export function saveCodexSkillLibrary(input: {
   decisionOsRoot: string;
   runtime?: AnyRecord;
@@ -250,14 +259,24 @@ export function saveCodexSkillLibrary(input: {
   const availableSkillNames = allSkills.map((entry) => entry.name);
   const before = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot, availableSkillNames });
   const priorRecord = before.store.skillLibrary.find((entry) => entry.skillName === skill.name);
-  const favoriteOnly = Object.keys(input.payload).every((key) => key === 'favorite') && typeof input.payload.favorite === 'boolean';
-  if (favoriteOnly) {
+  const metadataKeys = Object.keys(input.payload);
+  const metadataOnly = metadataKeys.length > 0 && metadataKeys.every((key) => key === 'favorite' || key === 'tags');
+  const requestedFavorite = Object.prototype.hasOwnProperty.call(input.payload, 'favorite')
+    ? typeof input.payload.favorite === 'boolean' ? input.payload.favorite : undefined
+    : priorRecord?.favorite ?? false;
+  const requestedTags = Object.prototype.hasOwnProperty.call(input.payload, 'tags')
+    ? savedTags(input.payload.tags)
+    : [...(priorRecord?.tags ?? [])];
+  if (metadataOnly) {
+    if (requestedFavorite === undefined) return { ok: false, statusCode: 400, error: 'Favorite must be a boolean.', skillName: input.skillName };
+    if (requestedTags === undefined) return { ok: false, statusCode: 400, error: 'Tags must contain at most 8 non-empty values of 40 characters or fewer.', skillName: input.skillName };
     const updatedAt = new Date().toISOString();
     const skillLibrary = [
       ...before.store.skillLibrary.filter((entry) => entry.skillName !== skill.name),
       {
         skillName: skill.name,
-        favorite: input.payload.favorite === true,
+        favorite: requestedFavorite,
+        tags: requestedTags,
         defaultCodexModel: priorRecord?.defaultCodexModel ?? null,
         defaultCodexEffort: priorRecord?.defaultCodexEffort ?? null,
         updatedAt,
@@ -310,7 +329,7 @@ export function saveCodexSkillLibrary(input: {
   const updatedAt = new Date().toISOString();
   const skillLibrary = [
     ...before.store.skillLibrary.filter((entry) => entry.skillName !== skill.name),
-    { skillName: skill.name, favorite: priorRecord?.favorite === true, defaultCodexModel: codexModel, defaultCodexEffort: codexEffort, updatedAt },
+    { skillName: skill.name, favorite: priorRecord?.favorite === true, tags: priorRecord?.tags ?? [], defaultCodexModel: codexModel, defaultCodexEffort: codexEffort, updatedAt },
   ];
 
   let writtenRevision = '';

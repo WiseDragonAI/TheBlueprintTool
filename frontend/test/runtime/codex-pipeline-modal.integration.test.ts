@@ -271,8 +271,9 @@ test('dedicated pipeline skill picker keeps a large catalog in intrinsic non-shr
   assert.equal(results.children.length, largeCatalog.length);
   assert.equal(results.children.every((row) => (
     row.className.includes('pipeline-picker-result')
-    && Boolean(row.querySelector('.skill-result-header'))
+    && row.children[0]?.className.includes('skill-result-name')
     && Boolean(row.querySelector('.skill-result-description'))
+    && Boolean(row.querySelector('.codex-list-labels'))
     && Boolean(row.querySelector('.process-result-metadata'))
   )), true);
 
