@@ -14,7 +14,7 @@ import { pasteThreadImageController } from '/canvas-src/runtime/thread/controlle
 import { requestThreadCodexProcess } from '/canvas-src/runtime/codex/effect/request-thread-codex-process.js';
 import { requestCardSkillRunContinue } from '/canvas-src/runtime/codex/effect/request-card-skill-run-continue.js';
 import { requestCardSkillRunStatus } from '/canvas-src/runtime/codex/effect/request-card-skill-run-status.js';
-import { bindThreadCodexRunLog } from '/canvas-src/runtime/codex/effect/bind-thread-codex-run-log.js';
+import { bindThreadCodexRunLog, unbindThreadCodexRunLog } from '/canvas-src/runtime/codex/effect/bind-thread-codex-run-log.js';
 import { cardCodexThreadRunId } from '/canvas-src/runtime/codex/helper/card-codex-thread-run-id.js';
 import { syncThreadCodexRunControls } from '/canvas-src/runtime/thread/effect/sync-thread-codex-run-controls.js';
 import { resumeExternallyStartedCardSkillRun } from '/canvas-src/runtime/codex/effect/poll-card-skill-run.js';
@@ -113,6 +113,16 @@ export function openMobileThread(card, zoneColor) {
 export function closeMobileThread() {
   if (canvasState.voice.recording) return;
   saveThreadDraft();
+  const runId = currentCard ? cardCodexThreadRunId(currentCard) : '';
+  if (currentLedgerId && currentCard && canvasState.threadId && runId) {
+    unbindThreadCodexRunLog({
+      projectId: currentProjectId,
+      ledgerId: currentLedgerId,
+      cardId: String(currentCard.id),
+      threadId: canvasState.threadId,
+      runId,
+    });
+  }
   canvasState.threadPanelOpen = false;
   document.querySelector('.thread-panel').hidden = true;
   document.querySelector('.mobile-thread-inspector').hidden = true;
@@ -152,8 +162,8 @@ async function startCodex(button) {
   button.disabled = true;
   const existingRunId = cardCodexThreadRunId(currentCard);
   if (existingRunId) {
-    bindThreadCodexRunLog({ ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId: existingRunId });
-    const summary = await requestCardSkillRunStatus({ ledgerId: currentLedgerId, cardId: String(currentCard.id), runId: existingRunId });
+    bindThreadCodexRunLog({ projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId: existingRunId });
+    const summary = await requestCardSkillRunStatus({ projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(currentCard.id), runId: existingRunId });
     if (summary.active) return;
     if (!summary.ok) {
       button.disabled = false;
@@ -171,7 +181,7 @@ async function startCodex(button) {
       return;
     }
     const continuedAt = String(continued.run?.startedAt || new Date().toISOString());
-    resumeExternallyStartedCardSkillRun({ ledgerId: currentLedgerId, cardId: String(currentCard.id), runId: existingRunId });
+    resumeExternallyStartedCardSkillRun({ projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(currentCard.id), runId: existingRunId });
     hydrateRunningThreadRun(existingRunId, continuedAt);
     await onCodexStarted({
       ledgerId: currentLedgerId,
@@ -179,7 +189,7 @@ async function startCodex(button) {
       startedAt: continuedAt
     });
     await refreshThreadLedger();
-    bindThreadCodexRunLog({ ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId: existingRunId });
+    bindThreadCodexRunLog({ projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId: existingRunId });
     return;
   }
   const result = await requestThreadCodexProcess({
@@ -195,7 +205,7 @@ async function startCodex(button) {
   }
   const runId = String(result.run?.id ?? '');
   const startedAt = String(result.run?.startedAt || new Date().toISOString());
-  if (runId) bindThreadCodexRunLog({ ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId });
+  if (runId) bindThreadCodexRunLog({ projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId });
   hydrateRunningThreadRun(runId, startedAt);
   await onCodexStarted({
     ledgerId: currentLedgerId,
@@ -203,7 +213,7 @@ async function startCodex(button) {
     startedAt
   });
   await refreshThreadLedger();
-  if (runId) bindThreadCodexRunLog({ ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId });
+  if (runId) bindThreadCodexRunLog({ projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId });
 }
 
 function subscribeEvents() {

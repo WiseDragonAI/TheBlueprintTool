@@ -3,6 +3,7 @@
  * WHY: The widget needs live JSONL-derived progress without storing a separate run model.
  */
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { projectIdFromLocation } from '../../project/helper/project-request-scope.js';
 import { requestCardSkillRunStatus, type CardSkillRunSummary } from './request-card-skill-run-status.js';
 import { requestCardSkillRunCancel } from './request-card-skill-run-cancel.js';
 import { requestCardSkillRunContinue } from './request-card-skill-run-continue.js';
@@ -17,6 +18,7 @@ import {
 } from './request-codex-pipeline-run-status.js';
 
 type Poller = {
+  projectId: string;
   ledgerId: string;
   cardId: string;
   runId: string;
@@ -123,8 +125,15 @@ function debugContinue(traceId: string, phase: string, detail: Record<string, un
   }).catch(() => undefined);
 }
 
-function pollerKey(input: { ledgerId: string; cardId: string; runId: string }): string {
-  return `${input.ledgerId}:${input.cardId}:${input.runId}`;
+type PollerIdentity = { projectId?: string; ledgerId: string; cardId: string; runId: string };
+
+function normalizedPollerIdentity(input: PollerIdentity): Required<PollerIdentity> {
+  return { ...input, projectId: input.projectId ?? projectIdFromLocation() };
+}
+
+function pollerKey(input: PollerIdentity): string {
+  const identity = normalizedPollerIdentity(input);
+  return JSON.stringify([identity.projectId, identity.ledgerId, identity.cardId, identity.runId]);
 }
 
 function statusLabel(status: string): string {
@@ -496,6 +505,7 @@ async function poll(poller: Poller): Promise<void> {
   poller.inFlight = true;
   debugContinue(poller.continueTraceId, 'poll-request', pollerDebugState(poller));
   const summary = await requestCardSkillRunStatus({
+    projectId: poller.projectId,
     ledgerId: poller.ledgerId,
     cardId: poller.cardId,
     runId: poller.runId,
@@ -543,8 +553,9 @@ async function poll(poller: Poller): Promise<void> {
   }
 }
 
-export function resumeExternallyStartedCardSkillRun(input: { ledgerId: string; cardId: string; runId: string }): boolean {
-  const key = pollerKey(input);
+export function resumeExternallyStartedCardSkillRun(input: PollerIdentity): boolean {
+  const identity = normalizedPollerIdentity(input);
+  const key = pollerKey(identity);
   terminalSummaries.delete(key);
   const poller = pollers.get(key);
   if (!poller) return false;
@@ -557,13 +568,15 @@ export function resumeExternallyStartedCardSkillRun(input: { ledgerId: string; c
 }
 
 export function bindCardSkillRunLogConsumer(input: {
+  projectId?: string;
   ledgerId: string;
   cardId: string;
   runId: string;
   consumerId: string;
   onSummary: (summary: CardSkillRunSummary) => void;
 }): void {
-  const key = pollerKey(input);
+  const identity = normalizedPollerIdentity(input);
+  const key = pollerKey(identity);
   const consumers = consumersFor(key);
   consumers.set(input.consumerId, input.onSummary);
   const terminalSummary = terminalSummaries.get(key);
@@ -578,6 +591,7 @@ export function bindCardSkillRunLogConsumer(input: {
     return;
   }
   const poller: Poller = {
+    projectId: identity.projectId,
     ledgerId: input.ledgerId,
     cardId: input.cardId,
     runId: input.runId,
@@ -600,11 +614,24 @@ export function bindCardSkillRunLogConsumer(input: {
   schedulePoll(poller, 0);
 }
 
-export function bindCardSkillRunWidget(input: { ledgerId: string; cardId: string; runId: string; element: HTMLElement }): void {
-  const key = pollerKey(input);
+export function unbindCardSkillRunLogConsumer(input: PollerIdentity & { consumerId: string }): void {
+  const key = pollerKey(normalizedPollerIdentity(input));
+  const consumers = runConsumers.get(key);
+  if (!consumers) return;
+  consumers.delete(input.consumerId);
+  if (consumers.size > 0) return;
+  runConsumers.delete(key);
+  const poller = pollers.get(key);
+  if (poller && !poller.element) stopPoller(key);
+}
+
+export function bindCardSkillRunWidget(input: PollerIdentity & { element: HTMLElement }): void {
+  const identity = normalizedPollerIdentity(input);
+  const scopedInput = { ...input, projectId: identity.projectId };
+  const key = pollerKey(identity);
   const terminalSummary = terminalSummaries.get(key);
   if (terminalSummary) {
-    const poller: Poller = { ...input, consumers: consumersFor(key), historyEvents: [...terminalSummary.events], since: terminalSummary.lineCount, startedAtMs: runStartedAt(input.runId), timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, continueTraceId: '', detachedChecks: 0, terminal: true };
+    const poller: Poller = { ...scopedInput, consumers: consumersFor(key), historyEvents: [...terminalSummary.events], since: terminalSummary.lineCount, startedAtMs: runStartedAt(input.runId), timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, continueTraceId: '', detachedChecks: 0, terminal: true };
     pollers.set(key, poller);
     paintWidget(input.element, terminalSummary);
     bindCancelButton(poller);
@@ -626,7 +653,7 @@ export function bindCardSkillRunWidget(input: { ledgerId: string; cardId: string
     if (!existing.timer && !existing.inFlight) schedulePoll(existing, 0);
     return;
   }
-  const poller: Poller = { ...input, consumers: consumersFor(key), historyEvents: [], since: 0, startedAtMs: runStartedAt(input.runId), timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, continueTraceId: '', detachedChecks: 0, terminal: false };
+  const poller: Poller = { ...scopedInput, consumers: consumersFor(key), historyEvents: [], since: 0, startedAtMs: runStartedAt(input.runId), timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, continueTraceId: '', detachedChecks: 0, terminal: false };
   pollers.set(key, poller);
   bindCancelButton(poller);
   bindContinueButton(poller);
