@@ -21,7 +21,7 @@ async function loadLibraries(projectId = state.projectId) {
   ]);
   const project = state.projects.find((entry) => entry.id === projectId);
   state.skills = (Array.isArray(skills.skills) ? skills.skills : []).map((skill) => ({ ...skill, projects: project ? [project] : [] }));
-  state.availableTags = Array.isArray(skills.availableTags) ? skills.availableTags : [];
+  state.availableTags = Array.isArray(skills.availableTags) && skills.availableTags.length ? skills.availableTags : [...skillCategories];
   state.pipelines = (Array.isArray(pipelines.pipelines) ? pipelines.pipelines : []).map((pipeline) => ({ ...pipeline, projectId, projectName: project?.name || '', projectColor: project?.color || '#20242b' }));
   state.steps = (Array.isArray(pipelines.steps) ? pipelines.steps : []).map((step) => ({ ...step, projectId }));
   return pipelines;
@@ -52,6 +52,7 @@ async function loadGlobalLibraries() {
   const loaded = results.filter((result) => result.status === 'fulfilled').map((result) => result.value);
   if (!loaded.length && state.projects.length) throw new Error('Could not load any project libraries.');
   state.availableTags = [...new Set(loaded.flatMap((library) => library.availableTags))];
+  if (!state.availableTags.length) state.availableTags = [...skillCategories];
   const bySkill = new Map();
   for (const library of loaded) {
     for (const skill of library.skills) {
@@ -361,5 +362,6 @@ export function initializeMobileCodex() {
 }
 import { projectScopedRequestPath } from '/canvas-src/runtime/project/helper/project-request-scope.js';
 import { decorateSkillCategoryLabel, sortSkillsByFavorite, tagsForSkill } from '/canvas-src/runtime/codex/helper/skill-library-presentation.js';
+import { skillCategories } from '/canvas-src/runtime/codex/helper/skill-category.js';
 import { renderSkillLibraryItemContent } from '/canvas-src/runtime/codex/component/render-skill-library-item-content.js';
 import { setMobileCodexView } from './mobile-codex-view.js';
