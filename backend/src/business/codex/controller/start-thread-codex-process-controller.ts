@@ -277,7 +277,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
       statusCode: 202,
       run: current,
       queued: current.status === 'pending',
-      queuePosition: current.status === 'pending' ? unifiedCodexQueuePosition({ decisionOsRoot, id: runId, createdAt }) : null,
+      queuePosition: current.status === 'pending' ? unifiedCodexQueuePosition({ decisionOsRoot, id: runId, createdAt, runtime }) : null,
       maxConcurrentCodexProcesses: Number(runtime.decisionOsSettings && typeof runtime.decisionOsSettings === 'object' ? (runtime.decisionOsSettings as AnyRecord).maxConcurrentCodexProcesses ?? 1 : 1),
     };
   }

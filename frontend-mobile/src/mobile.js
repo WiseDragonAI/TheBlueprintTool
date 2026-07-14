@@ -7,7 +7,7 @@ import { activeAge, activeStopwatch, cardCodexRunId, deriveControlRoom, parseMas
 import { controlRoomPath, parseControlRoomRoute } from './mobile-control-room-route.js';
 import { cardPathForProject, ledgerPathForProject, parseProjectRoute, parseProjectScope, projectPath, zonePathForProject } from './mobile-project-route.js';
 import { projectSettingsValues, saveProjectSettingsRequest } from './mobile-project-settings.js';
-import { loadCodexProcessSettings, saveCodexProcessSettings } from './mobile-codex-settings.js';
+import { codexProcessLimitRange, loadCodexProcessSettings, saveCodexProcessSettings, stepCodexProcessLimit } from './mobile-codex-settings.js';
 import { createProjectRequest } from './mobile-project-creation.js';
 import { installProjectRequestScope, projectScopedRequestPath } from '/canvas-src/runtime/project/helper/project-request-scope.js';
 
@@ -38,7 +38,7 @@ const elements = Object.fromEntries([
   'overview-view', 'overview-summary', 'overview-ledgers', 'ledger-view', 'ledger-title', 'ledger-summary',
   'zone-list', 'zone-view', 'zone-title', 'zone-summary', 'card-search', 'card-list',
   'no-results', 'card-view', 'card-title', 'card-body', 'control-room-view', 'control-project-filters', 'control-filters',
-  'control-task-list', 'control-empty', 'control-diagnostics', 'codex-settings-project', 'codex-settings-limit', 'codex-settings-message'
+  'control-task-list', 'control-empty', 'control-diagnostics', 'codex-settings-limit', 'codex-settings-message'
 ].map((id) => [id, document.getElementById(id)]));
 
 const asText = (value) => value == null ? '' : typeof value === 'string' ? value : JSON.stringify(value, null, 2);
@@ -325,19 +325,22 @@ function renderLedgerLinks() {
   );
 }
 
-async function loadCodexSettingsForProject(projectId) {
-  const project = state.projects.find((entry) => entry.id === projectId);
-  if (!project) return;
+function renderCodexProcessLimit(value) {
+  const limit = Number(value) || codexProcessLimitRange.minimum;
+  elements['codex-settings-limit'].value = String(limit);
+  elements['codex-settings-limit'].textContent = String(limit);
+  document.querySelector('.codex-settings-increase').disabled = limit >= codexProcessLimitRange.maximum;
+  document.querySelector('.codex-settings-decrease').disabled = limit <= codexProcessLimitRange.minimum;
+}
+
+async function loadCodexSettings() {
   elements['codex-settings-message'].textContent = 'Loading…';
-  elements['codex-settings-limit'].disabled = true;
   try {
-    const settings = await loadCodexProcessSettings((url, options) => projectFetch(url, options, project.id));
-    elements['codex-settings-limit'].value = String(settings.maxConcurrentCodexProcesses);
+    const settings = await loadCodexProcessSettings(fetch);
+    renderCodexProcessLimit(settings.maxConcurrentCodexProcesses);
     elements['codex-settings-message'].textContent = '';
   } catch (error) {
     elements['codex-settings-message'].textContent = error instanceof Error ? error.message : 'Could not load settings.';
-  } finally {
-    elements['codex-settings-limit'].disabled = false;
   }
 }
 
@@ -345,24 +348,17 @@ function renderSettings() {
   state.resourceProjectId = '';
   setMobileCodexContext({ projectId: '', ledgerId: '', cardId: '' });
   renderLedgerLinks();
-  elements['codex-settings-project'].replaceChildren(...state.projects.map((project) => {
-    const option = document.createElement('option');
-    option.value = project.id;
-    option.textContent = project.name;
-    return option;
-  }));
   setView('settings-view');
-  if (state.projects[0]) void loadCodexSettingsForProject(state.projects[0].id);
+  void loadCodexSettings();
 }
 
 async function submitCodexProcessSettings() {
-  const projectId = elements['codex-settings-project'].value;
   const save = document.querySelector('.codex-settings-save');
   save.disabled = true;
   elements['codex-settings-message'].textContent = '';
   try {
-    const result = await saveCodexProcessSettings((url, options) => projectFetch(url, options, projectId), elements['codex-settings-limit'].value);
-    elements['codex-settings-limit'].value = String(result.maxConcurrentCodexProcesses);
+    const result = await saveCodexProcessSettings(fetch, elements['codex-settings-limit'].value);
+    renderCodexProcessLimit(result.maxConcurrentCodexProcesses);
     elements['codex-settings-message'].textContent = 'Settings saved.';
   } catch (error) {
     elements['codex-settings-message'].textContent = error instanceof Error ? error.message : 'Could not save settings.';
@@ -1360,7 +1356,8 @@ projectSettingsForm.addEventListener('submit', (event) => {
   event.preventDefault();
   void submitProjectSettings();
 });
-elements['codex-settings-project'].addEventListener('change', (event) => void loadCodexSettingsForProject(event.target.value));
+document.querySelector('.codex-settings-increase').addEventListener('click', () => renderCodexProcessLimit(stepCodexProcessLimit(elements['codex-settings-limit'].value, 1)));
+document.querySelector('.codex-settings-decrease').addEventListener('click', () => renderCodexProcessLimit(stepCodexProcessLimit(elements['codex-settings-limit'].value, -1)));
 document.querySelector('.codex-process-settings-form').addEventListener('submit', (event) => {
   event.preventDefault();
   void submitCodexProcessSettings();

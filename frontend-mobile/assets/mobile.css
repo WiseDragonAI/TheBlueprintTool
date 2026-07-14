@@ -127,8 +127,12 @@ body.menu-open .nav-scrim { opacity: 1; pointer-events: auto; }
 .content { width: 100%; max-width: 980px; margin: 0 auto; padding: 20px 14px max(50px, env(safe-area-inset-bottom)); outline: 0; }
 .project-list { display: grid; gap: 12px; }
 .settings-panel { display: grid; gap: 18px; max-width: 560px; padding: 20px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
-.settings-panel select { width: 100%; min-height: 48px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--text); background: var(--panel-deep); font: inherit; font-size: 16px; text-transform: none; }
-.settings-panel select:focus { border-color: var(--accent); outline: 0; }
+.codex-process-limit-field { display: grid; gap: 12px; margin: 0; padding: 0; border: 0; }
+.codex-process-limit-field legend { color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+.codex-process-stepper { display: grid; grid-template-columns: 44px minmax(72px, 112px) 44px; gap: 8px; align-items: center; }
+.codex-process-stepper output { display: grid; min-height: 44px; place-items: center; border: 1px solid var(--line); border-radius: var(--radius); color: var(--text); background: var(--panel-deep); font-size: 22px; font-variant-numeric: tabular-nums; font-weight: 800; }
+.codex-process-stepper .codex-icon { padding: 0; color: var(--text); }
+.codex-process-stepper .codex-icon:disabled { color: var(--muted); opacity: .45; }
 .settings-help, .settings-message { margin: 0; }
 .settings-message { min-height: 20px; color: var(--accent); font-size: 13px; }
 .codex-settings-save { justify-self: start; }

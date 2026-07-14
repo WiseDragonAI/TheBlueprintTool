@@ -65,7 +65,10 @@ export async function resumeCodexPipelineRuns(input: {
     }
   }
 
-  const schedule = await scheduleCodexProcesses({ decisionOsRoot, runtime: input.runtime });
+  const sharedSchedule = input.runtime.scheduleCodexProcesses;
+  const schedule = typeof sharedSchedule === 'function'
+    ? await sharedSchedule()
+    : await scheduleCodexProcesses({ decisionOsRoot, runtime: input.runtime });
   const launches = Array.isArray(schedule.launched) ? schedule.launched as AnyRecord[] : [];
   resumed.push(...launches.filter((entry) => entry.skillRun).map((entry) => entry.skillRun as AnyRecord));
   const current = readCodexPipelineStore({ decisionOsRoot }).store;

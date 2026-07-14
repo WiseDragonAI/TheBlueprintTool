@@ -2,10 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { loadCodexProcessSettings, saveCodexProcessSettings, validateCodexProcessLimit } from '../src/mobile-codex-settings.js';
+import { loadCodexProcessSettings, saveCodexProcessSettings, stepCodexProcessLimit, validateCodexProcessLimit } from '../src/mobile-codex-settings.js';
 
-test('validates and saves the project Codex process limit', async () => {
+test('steps, validates, and saves the server-wide Codex process limit', async () => {
   assert.equal(validateCodexProcessLimit('4'), 4);
+  assert.equal(stepCodexProcessLimit('4', 1), 5);
+  assert.equal(stepCodexProcessLimit('4', -1), 3);
+  assert.equal(stepCodexProcessLimit('1', -1), 1);
+  assert.equal(stepCodexProcessLimit('32', 1), 32);
   assert.throws(() => validateCodexProcessLimit('0'), /integer from 1 to 32/);
   assert.throws(() => validateCodexProcessLimit('2.5'), /integer from 1 to 32/);
   let request;
@@ -19,7 +23,7 @@ test('validates and saves the project Codex process limit', async () => {
   assert.equal(result.maxConcurrentCodexProcesses, 4);
 });
 
-test('loads the persisted project Codex process limit', async () => {
+test('loads the persisted server-wide Codex process limit', async () => {
   const result = await loadCodexProcessSettings(async () => ({
     ok: true,
     json: async () => ({ ok: true, maxConcurrentCodexProcesses: 3, minimum: 1, maximum: 32 }),
@@ -34,4 +38,9 @@ test('exposes the settings screen from burger navigation', () => {
   assert.match(source, /location\.pathname === '\/settings'/);
   assert.match(html, /id="settings-view"/);
   assert.match(html, /Maximum concurrent Codex processes/);
+  assert.doesNotMatch(html, /id="codex-settings-project"/);
+  assert.doesNotMatch(html, /id="codex-settings-limit"[^>]*type="number"/);
+  assert.match(html, /class="codex-icon codex-settings-increase"/);
+  assert.match(html, /class="codex-icon codex-settings-decrease"/);
+  assert.match(source, /stepCodexProcessLimit/);
 });

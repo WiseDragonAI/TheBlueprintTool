@@ -101,18 +101,18 @@
               <div>
                 <p class="eyebrow">Runtime</p>
                 <h1>Settings</h1>
-                <p class="muted">Configure Codex process capacity for each project.</p>
+                <p class="muted">Configure the server-wide Codex process capacity.</p>
               </div>
             </div>
             <form class="codex-process-settings-form settings-panel">
-              <label class="creation-field">
-                <span>Project</span>
-                <select id="codex-settings-project" name="projectId"></select>
-              </label>
-              <label class="creation-field">
-                <span>Maximum concurrent Codex processes</span>
-                <input id="codex-settings-limit" name="maxConcurrentCodexProcesses" type="number" inputmode="numeric" min="1" max="32" step="1" required />
-              </label>
+              <fieldset class="codex-process-limit-field">
+                <legend>Maximum concurrent Codex processes</legend>
+                <div class="codex-process-stepper">
+                  <button class="codex-icon codex-settings-increase" type="button" aria-label="Increase maximum concurrent Codex processes">↑</button>
+                  <output id="codex-settings-limit" aria-live="polite">1</output>
+                  <button class="codex-icon codex-settings-decrease" type="button" aria-label="Decrease maximum concurrent Codex processes">↓</button>
+                </div>
+              </fieldset>
               <p class="muted settings-help">New launches wait in FIFO order after this number of Codex processes are running.</p>
               <p id="codex-settings-message" class="settings-message" role="status"></p>
               <button class="primary-button codex-settings-save" type="submit">Save settings</button>

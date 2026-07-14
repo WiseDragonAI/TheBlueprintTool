@@ -106,7 +106,9 @@ export async function restartCodexPipelineRunController(
       cardIds: run.steps.map((step) => step.outputCardId),
     });
   }
-  await scheduleCodexProcesses({ decisionOsRoot, runtime });
+  const sharedSchedule = runtime.scheduleCodexProcesses;
+  if (typeof sharedSchedule === 'function') await sharedSchedule();
+  else await scheduleCodexProcesses({ decisionOsRoot, runtime });
   const detail = await readCodexPipelineRunController({ action_payload: { runId: run.id }, runtime_state: runtime });
   return { ...detail, statusCode: 202 };
 }

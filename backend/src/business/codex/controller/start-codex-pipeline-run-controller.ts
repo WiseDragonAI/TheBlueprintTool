@@ -127,7 +127,10 @@ export async function startPipelineRun(input: {
       cardIds: run.steps.map((step) => step.outputCardId),
     });
   }
-  const schedule = await scheduleCodexProcesses({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime });
+  const sharedSchedule = input.runtime.scheduleCodexProcesses;
+  const schedule = typeof sharedSchedule === 'function'
+    ? await sharedSchedule()
+    : await scheduleCodexProcesses({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime });
   const launches = Array.isArray(schedule.launched) ? schedule.launched as AnyRecord[] : [];
   const launch = launches.find((entry) => entry.run && typeof entry.run === 'object' && String((entry.run as AnyRecord).id ?? '') === run.id);
   if (launch?.ok === false) return launch;
@@ -138,7 +141,7 @@ export async function startPipelineRun(input: {
     statusCode: 202,
     run: scheduledRun,
     skillRun: launch?.skillRun ?? null,
-    queuePosition: scheduledRun.status === 'pending' ? unifiedCodexQueuePosition({ decisionOsRoot: input.decisionOsRoot, id: run.id, createdAt: run.createdAt }) : null,
+    queuePosition: scheduledRun.status === 'pending' ? unifiedCodexQueuePosition({ decisionOsRoot: input.decisionOsRoot, id: run.id, createdAt: run.createdAt, runtime: input.runtime }) : null,
     maxConcurrentCodexProcesses: schedule.capacity,
   };
 }

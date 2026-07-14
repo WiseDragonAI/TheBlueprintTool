@@ -12,6 +12,8 @@ import {
   recoverCodexProcessQueue,
   removeCodexProcessQueueItem,
 } from '../../src/business/codex/helper/codex-process-queue.js';
+import { runningCodexProcessCount, unifiedCodexQueuePosition } from '../../src/business/codex/helper/codex-process-scheduler.js';
+import { maxConcurrentCodexProcesses } from '../../src/business/codex/helper/codex-pipeline-runner.js';
 
 test('persists mixed Codex work in FIFO order and recovers an interrupted claim', () => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-process-queue-'));
@@ -30,4 +32,17 @@ test('persists mixed Codex work in FIFO order and recovers an interrupted claim'
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('uses server-wide capacity, running count, and queue position callbacks', () => {
+  const runtime = {
+    decisionOsSettings: { maxConcurrentCodexProcesses: 2 },
+    codexSkillRuns: { local: { status: 'running' } },
+    globalCodexProcessCapacity: () => 5,
+    globalCodexRunningProcessCount: () => 4,
+    globalCodexQueuePosition: (id: string) => id === 'queued' ? 3 : 1,
+  };
+  assert.equal(maxConcurrentCodexProcesses(runtime), 5);
+  assert.equal(runningCodexProcessCount(runtime), 4);
+  assert.equal(unifiedCodexQueuePosition({ decisionOsRoot: '/unused', id: 'queued', createdAt: '', runtime }), 3);
 });

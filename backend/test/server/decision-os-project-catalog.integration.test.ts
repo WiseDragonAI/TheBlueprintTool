@@ -67,6 +67,15 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
     assert.equal(controlRoom.status, 200);
     assert.match(controlRoom.headers.get('content-type') ?? '', /text\/html/);
 
+    const initialCodexSettings = await fetch(`${baseUrl}/api/settings/codex-processes`).then((response) => response.json()) as { maxConcurrentCodexProcesses: number };
+    assert.equal(initialCodexSettings.maxConcurrentCodexProcesses, 1);
+    const savedCodexSettings = await fetch(`${baseUrl}/api/settings/codex-processes`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ maxConcurrentCodexProcesses: 3 })
+    });
+    assert.equal(savedCodexSettings.ok, true);
+    assert.equal((await savedCodexSettings.json() as { maxConcurrentCodexProcesses: number }).maxConcurrentCodexProcesses, 3);
+    assert.equal(JSON.parse(readFileSync(join(home, '.decision-os', '.settings.json'), 'utf8')).maxConcurrentCodexProcesses, 3);
+
     const legacyPage = await fetch(`${baseUrl}/p/${catalog.projects[0].id}/projects/${catalog.projects[0].id}`, { redirect: 'manual' });
     assert.equal(legacyPage.status, 302);
     assert.equal(legacyPage.headers.get('location'), `/projects/${catalog.projects[0].id}`);
