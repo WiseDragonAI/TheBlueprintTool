@@ -153,7 +153,7 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     const button = actionTarget as HTMLButtonElement;
     button.disabled = true;
     const threadId = actionTarget.dataset.threadId ?? state.threadId;
-    syncThreadCodexRunControls({ threadId, running: true });
+    syncThreadCodexRunControls({ threadId, status: 'running' });
     const ok = await processThreadCodexController({
       threadId,
       cardId: actionTarget.dataset.codexCardId ?? '',
@@ -161,7 +161,7 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
       codexEffort: actionTarget.dataset.codexEffort ?? ''
     });
     if (!ok) {
-      syncThreadCodexRunControls({ threadId, running: false });
+      syncThreadCodexRunControls({ threadId, status: 'unknown' });
       if (button.isConnected) button.disabled = false;
     }
     return;

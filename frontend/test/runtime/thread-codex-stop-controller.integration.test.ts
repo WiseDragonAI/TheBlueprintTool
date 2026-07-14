@@ -67,3 +67,25 @@ test('Codex Log STOP restores the control and exposes a rejected-request error',
     globalThis.fetch = previousFetch;
   }
 });
+
+test('queued cancellation restores the CANCEL label after rejection', async () => {
+  clearThreadCodexStopState('run-queued');
+  const previousFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (async () => new Response(JSON.stringify({ ok: false, error: 'Queued run was not cancelled.' }), {
+      status: 409,
+      headers: { 'content-type': 'application/json' },
+    })) as typeof fetch;
+    const control = fakeButton();
+    control.button.dataset.stopReadyLabel = 'CANCEL';
+    control.button.dataset.stopPendingLabel = 'CANCELLING';
+    control.button.dataset.stopReadyTitle = 'Cancel queued Codex run';
+    control.button.dataset.stopPendingTitle = 'Cancelling queued Codex run';
+    const stopped = await stopThreadCodexRunController({ button: control.button, ledgerId: 'specs', cardId: 'card-a', runId: 'run-queued' });
+    assert.equal(stopped, false);
+    assert.equal(control.label.textContent, 'CANCEL');
+    assert.equal(control.button.title, 'Cancel queued Codex run');
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});

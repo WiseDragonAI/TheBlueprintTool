@@ -4,7 +4,7 @@
  */
 import { projectScopedRequestPath } from '../../project/helper/project-request-scope.js';
 
-export type CardSkillRunStatus = 'running' | 'complete' | 'failed' | 'cancelled' | 'unknown';
+export type CardSkillRunStatus = 'pending' | 'running' | 'complete' | 'failed' | 'cancelled' | 'unknown';
 export type CardSkillRunEventSource = 'jsonl' | 'stderr';
 export type CardSkillRunEventSeverity = 'info' | 'warning' | 'error';
 
@@ -36,6 +36,7 @@ export type CardSkillRunMetadata = {
 export type CardSkillRunSummary = {
   ok: boolean;
   active?: boolean;
+  queuePosition?: number | null;
   runId: string;
   runKind: 'thread' | 'card' | 'unknown';
   pipelineRunId: string;
@@ -104,6 +105,7 @@ function unavailableSummary(runId: string, since: number, error: string): CardSk
   return {
     ok: false,
     active: false,
+    queuePosition: null,
     runId,
     runKind: 'unknown',
     pipelineRunId: '',
@@ -147,13 +149,14 @@ export async function requestCardSkillRunStatus(input: { projectId?: string; led
   return {
     ok: response.ok && body.ok !== false,
     active: body.active === true,
+    queuePosition: Number.isInteger((body as Record<string, unknown>).queuePosition) ? Number((body as Record<string, unknown>).queuePosition) : null,
     runId,
     runKind: body.runKind === 'thread' ? 'thread' : body.runKind === 'card' ? 'card' : 'unknown',
     pipelineRunId: String((body as Record<string, unknown>).pipelineRunId ?? ''),
     pipelineName: String((body as Record<string, unknown>).pipelineName ?? ''),
     pipelineStepName: String((body as Record<string, unknown>).pipelineStepName ?? ''),
     skillName: String((body as Record<string, unknown>).skillName ?? ''),
-    pipelineStatus: ['running', 'complete', 'failed', 'cancelled', 'unknown'].includes(String((body as Record<string, unknown>).pipelineStatus ?? ''))
+    pipelineStatus: ['pending', 'running', 'complete', 'failed', 'cancelled', 'unknown'].includes(String((body as Record<string, unknown>).pipelineStatus ?? ''))
       ? String((body as Record<string, unknown>).pipelineStatus) as CardSkillRunStatus
       : '',
     status: body.status ?? 'unknown',

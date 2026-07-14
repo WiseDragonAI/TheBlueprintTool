@@ -56,7 +56,7 @@ function updateLaunchReadiness() {
   button.title = hasSavedInput ? 'Launch Codex for this intake' : 'Add and save an intake message first';
 }
 
-function hydrateRunningThreadRun(runId, startedAt) {
+function hydrateThreadRun(runId, startedAt, status, queuePosition) {
   const threadId = String(canvasState.threadId || '');
   if (!threadId || !runId) return;
   canvasState.threadRunIdByThreadId ||= {};
@@ -66,13 +66,14 @@ function hydrateRunningThreadRun(runId, startedAt) {
   canvasState.threadRunSummaryByThreadId[threadId] = {
     ...previous,
     ok: true,
-    active: true,
+    active: status === 'running',
     runId,
-    status: 'running',
+    status,
+    queuePosition: Number.isInteger(queuePosition) ? queuePosition : null,
     startedAt: String(startedAt || previous.startedAt || new Date().toISOString()),
     error: ''
   };
-  syncThreadCodexRunControls({ threadId, running: true });
+  syncThreadCodexRunControls({ threadId, status, queuePosition });
 }
 
 export function syncMobileThreadContext(input) {
@@ -164,7 +165,7 @@ async function startCodex(button) {
   if (existingRunId) {
     bindThreadCodexRunLog({ projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId: existingRunId });
     const summary = await requestCardSkillRunStatus({ projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(currentCard.id), runId: existingRunId });
-    if (summary.active) return;
+    if (summary.active || summary.status === 'pending') return;
     if (!summary.ok) {
       button.disabled = false;
       return;
@@ -182,7 +183,8 @@ async function startCodex(button) {
     }
     const continuedAt = String(continued.run?.startedAt || new Date().toISOString());
     resumeExternallyStartedCardSkillRun({ projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(currentCard.id), runId: existingRunId });
-    hydrateRunningThreadRun(existingRunId, continuedAt);
+    const continuedStatus = String(continued.status || continued.run?.status || 'running');
+    hydrateThreadRun(existingRunId, continuedAt, continuedStatus, continued.queuePosition);
     await onCodexStarted({
       ledgerId: currentLedgerId,
       cardId: String(currentCard.id),
@@ -206,7 +208,8 @@ async function startCodex(button) {
   const runId = String(result.run?.id ?? '');
   const startedAt = String(result.run?.startedAt || new Date().toISOString());
   if (runId) bindThreadCodexRunLog({ projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId });
-  hydrateRunningThreadRun(runId, startedAt);
+  const status = String(result.run?.status || 'running');
+  hydrateThreadRun(runId, startedAt, status, result.queuePosition);
   await onCodexStarted({
     ledgerId: currentLedgerId,
     cardId: String(currentCard.id),
