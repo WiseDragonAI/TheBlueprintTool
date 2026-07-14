@@ -625,15 +625,13 @@ export async function runSelectedPipeline(): Promise<boolean> {
   if (generation !== processLoadGeneration || cardId !== processModalState.cardId) return false;
   processModalState.processing = false;
   if (!result.ok) {
-    processModalState.error = result.statusCode === 409 && result.activeRunId
-      ? `Another pipeline is active (${result.activeRunId}). Finish or cancel it before starting this pipeline.`
-      : result.error || 'Could not start this pipeline.';
+    processModalState.error = result.error || 'Could not start this pipeline.';
     renderCardProcessModal();
     return false;
   }
   await refreshRuntimeState();
   if (generation !== processLoadGeneration || cardId !== processModalState.cardId) return false;
-  telemetry('codex-pipeline-run-started', { cardId, pipelineId: pipeline.id, runId: result.run?.id ?? '' });
+  telemetry('codex-pipeline-run-started', { cardId, pipelineId: pipeline.id, runId: result.run?.id ?? '', queuePosition: result.queuePosition ?? 0 });
   closeCardProcessModal();
   return true;
 }

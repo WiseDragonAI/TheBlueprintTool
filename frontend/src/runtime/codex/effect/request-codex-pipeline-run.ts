@@ -20,6 +20,8 @@ export type CodexPipelineRunResult = {
   skillRun?: Record<string, unknown> | null;
   invalidReferences: readonly CodexPipelineInvalidReference[];
   activeRunId?: string;
+  queuePosition?: number | null;
+  maxConcurrentCodexProcesses?: number;
   error?: string;
 };
 
@@ -46,6 +48,8 @@ export async function requestCodexPipelineRun(input: CodexPipelineRunRequest): P
     skillRun: body.skillRun,
     invalidReferences: Array.isArray(body.invalidReferences) ? body.invalidReferences : [],
     activeRunId: body.activeRunId,
+    queuePosition: Number.isInteger(body.queuePosition) && Number(body.queuePosition) > 0 ? Number(body.queuePosition) : null,
+    maxConcurrentCodexProcesses: Number(body.maxConcurrentCodexProcesses) || undefined,
     error: ok ? undefined : String(body.error ?? `Request failed (${response.status}).`),
   };
 }

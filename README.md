@@ -225,6 +225,18 @@ If `transcriptionEnabled` is `false`, decision-os still uploads and persists the
 
 Do not commit real API keys. Keep `.decision-os/.settings.json` workspace-local.
 
+## Codex Process Capacity
+
+Codex skill and pipeline runs use a durable per-workspace FIFO queue. Configure the maximum number of concurrently running Codex processes in `.decision-os/.settings.json`:
+
+```json
+{
+  "maxConcurrentCodexProcesses": 2
+}
+```
+
+The default is `1`. Values are clamped to the inclusive range `1`–`32`. The environment alias is `CODEX_MAX_CONCURRENT_PROCESSES`.
+
 ## Voice Notes
 
 Voice notes are created optimistically in the active thread, then reconciled into the active ledger file through:

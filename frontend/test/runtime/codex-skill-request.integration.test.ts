@@ -18,7 +18,7 @@ import { requestCodexPipelineRun } from '../../src/runtime/codex/effect/request-
 import { requestCodexPipelineRunCancel, requestCodexPipelineRunRestart, requestCodexPipelineRunStatus } from '../../src/runtime/codex/effect/request-codex-pipeline-run-status.js';
 import { requestCodexSkillLibrarySave } from '../../src/runtime/codex/effect/request-codex-skill-library-save.js';
 import { requestCodexSkillFavoriteSave, requestCodexSkillMetadataSave } from '../../src/runtime/codex/effect/request-codex-skill-favorite-save.js';
-import { bindCardSkillRunLogConsumer, bindCardSkillRunWidget, resumeExternallyStartedCardSkillRun, unbindCardSkillRunLogConsumer } from '../../src/runtime/codex/effect/poll-card-skill-run.js';
+import { bindCardSkillRunLogConsumer, bindCardSkillRunWidget, pipelineLatestLabel, resumeExternallyStartedCardSkillRun, unbindCardSkillRunLogConsumer } from '../../src/runtime/codex/effect/poll-card-skill-run.js';
 import type { CardSkillRunEvent, CardSkillRunStatus, CardSkillRunSummary } from '../../src/runtime/codex/effect/request-card-skill-run-status.js';
 import { cardCodexRunId, cardCodexThreadRunId } from '../../src/runtime/codex/helper/card-codex-run-id.js';
 import { groupSequentialToolCalls, mergeThreadRunEvents } from '../../src/runtime/codex/helper/thread-run-log.js';
@@ -189,7 +189,7 @@ test('pipeline clients preserve ordered reusable definitions and lifecycle reque
         assert.equal(url, '/api/codex/pipelines/runs');
         assert.equal(init?.method, 'POST');
         assert.deepEqual(JSON.parse(String(init?.body)), { ledgerId: 'specs', sourceCardId: 'card-a', pipelineId: pipeline.id });
-        return new Response(JSON.stringify({ ok: true, run: { id: 'run-a', status: 'running' }, invalidReferences: [] }), { status: 202 });
+        return new Response(JSON.stringify({ ok: true, run: { id: 'run-a', status: 'pending' }, queuePosition: 3, invalidReferences: [] }), { status: 202 });
       }
       if (requestIndex === 5) {
         assert.equal(url, '/api/codex/pipelines/runs/run%2Fa');
@@ -216,7 +216,9 @@ test('pipeline clients preserve ordered reusable definitions and lifecycle reque
     };
     assert.equal((await requestCodexPipelineSave(saveDraft)).ok, true);
     assert.equal((await requestCodexPipelineSave({ ...saveDraft, operation: 'update', pipelineId: pipeline.id })).ok, true);
-    assert.equal((await requestCodexPipelineRun({ ledgerId: 'specs', sourceCardId: 'card-a', pipelineId: pipeline.id })).statusCode, 202);
+    const queued = await requestCodexPipelineRun({ ledgerId: 'specs', sourceCardId: 'card-a', pipelineId: pipeline.id });
+    assert.equal(queued.statusCode, 202);
+    assert.equal(queued.queuePosition, 3);
     assert.equal((await requestCodexPipelineRunStatus({ runId: 'run/a' })).canCancel, true);
     assert.equal((await requestCodexPipelineRunCancel({ runId: 'run/a' })).status, 'cancelled');
     assert.equal((await requestCodexPipelineRunRestart({ runId: 'run/a' })).ok, true);
@@ -224,6 +226,13 @@ test('pipeline clients preserve ordered reusable definitions and lifecycle reque
   } finally {
     globalThis.fetch = previousFetch;
   }
+});
+
+test('queued pipeline labels expose the one-based FIFO position', () => {
+  const result = { run: { status: 'pending' }, queuePosition: 2 } as any;
+  const step = { name: 'Analysis' } as any;
+  const skill = { skillName: 'analyze' } as any;
+  assert.equal(pipelineLatestLabel(result, step, skill, 'pending'), 'Queued · position 2');
 });
 
 test('skill-library clients encode identity, exclude paths, and surface revision conflicts', async () => {

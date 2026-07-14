@@ -9,6 +9,7 @@ import { readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import {
   pipelineRuntimeRun,
   reassessPipelineAfterSkill,
+  scheduleCodexPipelineRuns,
 } from '../helper/codex-pipeline-runner.js';
 import { readCodexPipelineRunController } from './read-codex-pipeline-run-controller.js';
 
@@ -72,6 +73,7 @@ export async function cancelCodexPipelineRunController(
       await new Promise((resolveWait) => setTimeout(resolveWait, 10));
     }
   }
+  scheduleCodexPipelineRuns({ decisionOsRoot, runtime });
   if (typeof runtime.onPipelineLedgerChange === 'function') {
     (runtime.onPipelineLedgerChange as (event: AnyRecord) => void)({
       reason: 'pipeline-cancelled',

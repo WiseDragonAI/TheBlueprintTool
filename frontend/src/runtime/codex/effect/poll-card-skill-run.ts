@@ -709,12 +709,13 @@ function effectivePipelineStepStatus(result: CodexPipelineRunStatusResult, step:
   return 'pending';
 }
 
-function pipelineLatestLabel(
+export function pipelineLatestLabel(
   result: CodexPipelineRunStatusResult,
   step: CodexPipelineRunStepDetail,
   skill: CodexPipelineRunSkillDetail | null,
   status: PipelineWidgetStatus,
 ): string {
+  if (result.run?.status === 'pending' && result.queuePosition) return `Queued · position ${result.queuePosition}`;
   if (status === 'pending') return `Waiting for ${skill?.skillName || 'the previous pipeline step'}`;
   if (status === 'running') return `Running ${skill?.skillName || step.name}`;
   if (status === 'complete') return result.run?.status === 'complete' ? 'Pipeline complete' : 'Step complete · pipeline continues';
@@ -752,8 +753,9 @@ function setPipelineControls(
   skill: CodexPipelineRunSkillDetail | null,
 ): void {
   const running = status === 'running';
+  const queued = result.run?.status === 'pending' && Boolean(result.queuePosition);
   const pipelineTerminal = result.run?.status === 'complete' || result.run?.status === 'failed' || result.run?.status === 'cancelled';
-  setCancelButtonVisible(poller.element, running && Boolean(result.canCancel));
+  setCancelButtonVisible(poller.element, (running || queued) && Boolean(result.canCancel));
   setContinueButtonVisible(poller.element, pipelineTerminal && Boolean(result.canContinue) && Boolean(skill?.runId));
   setNewSessionButtonVisible(poller.element, false);
   setRestartButtonVisible(poller.element, pipelineTerminal && Boolean(result.canRestart));
@@ -773,7 +775,8 @@ function paintPipelineStep(
 ): PipelineWidgetStatus {
   const status = effectivePipelineStepStatus(result, step);
   poller.element.dataset.runStatus = status;
-  setText(poller.element, '[data-codex-run-status]', statusLabel(status));
+  const queued = result.run?.status === 'pending' && Boolean(result.queuePosition);
+  setText(poller.element, '[data-codex-run-status]', queued ? 'QUEUED' : statusLabel(status));
   paintPipelineContext(poller.element, result, step, skill);
   setPipelineControls(poller, status, result, skill);
   setText(poller.element, '[data-codex-run-latest]', pipelineLatestLabel(result, step, skill, status));

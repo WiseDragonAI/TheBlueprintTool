@@ -27,6 +27,28 @@ import { projectCardCodexRun } from './project-card-codex-run.js';
 type AnyRecord = Record<string, unknown>;
 type TerminalStatus = 'complete' | 'failed' | 'cancelled';
 
+export function maxConcurrentCodexProcesses(runtime: AnyRecord): number {
+  const settings = runtime.decisionOsSettings && typeof runtime.decisionOsSettings === 'object'
+    ? runtime.decisionOsSettings as AnyRecord
+    : {};
+  const configured = Number(
+    process.env.CODEX_MAX_CONCURRENT_PROCESSES
+      ?? settings.maxConcurrentCodexProcesses
+      ?? settings.CODEX_MAX_CONCURRENT_PROCESSES
+      ?? 1,
+  );
+  if (!Number.isFinite(configured)) return 1;
+  return Math.min(32, Math.max(1, Math.floor(configured)));
+}
+
+export function pipelineQueuePosition(input: {
+  runs: readonly CodexPipelineRun[];
+  pipelineRunId: string;
+}): number | null {
+  const index = input.runs.filter((run) => run.status === 'pending').findIndex((run) => run.id === input.pipelineRunId);
+  return index < 0 ? null : index + 1;
+}
+
 export type PipelineLedgerContext = {
   ledgerId: string;
   ledgerPath: string;
@@ -255,14 +277,15 @@ export function reassessPipelineAfterSkill(input: {
     finishedAt: isTerminal(status) ? prior.finishedAt ?? now : null,
     error: steps.find((step) => step.status === 'failed' || step.status === 'cancelled')?.error ?? '',
   };
+  const nextRuns = before.store.runs.map((entry) => entry.id === run.id ? run : entry);
   const activeWorkspaceRun = isTerminal(status) && before.store.activeWorkspaceRun === run.id
-    ? null
+    ? nextRuns.find((entry) => entry.status === 'running')?.id ?? null
     : before.store.activeWorkspaceRun;
   const written = writeCodexPipelineStore({
     decisionOsRoot: input.decisionOsRoot,
     store: {
       ...before.store,
-      runs: before.store.runs.map((entry) => entry.id === run.id ? run : entry),
+      runs: nextRuns,
       activeWorkspaceRun,
     },
   });
@@ -324,7 +347,7 @@ export function markPipelineSkillStarted(input: {
     store: {
       ...before.store,
       runs: before.store.runs.map((entry) => entry.id === run.id ? run : entry),
-      activeWorkspaceRun: run.id,
+      activeWorkspaceRun: before.store.activeWorkspaceRun ?? run.id,
     },
   });
   return written.store.runs.find((entry) => entry.id === run.id) ?? run;
@@ -495,6 +518,9 @@ export function spawnPipelineSkillProcess(input: {
       if (status === 'complete' && reassessed && !isTerminal(reassessed.status)) {
         runNextPipelineSkill({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, pipelineRunId: input.pipelineRun.id });
       }
+      if (reassessed && isTerminal(reassessed.status)) {
+        scheduleCodexPipelineRuns({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime });
+      }
       notify(input.runtime.onCodexRunSettled, {
         ledgerId: input.pipelineRun.ledgerId,
         cardId: input.step.outputCardId,
@@ -566,6 +592,34 @@ export function runNextPipelineSkill(input: {
     });
     return { ok: false, statusCode: 500, error: message, run: failed };
   }
+}
+
+export function scheduleCodexPipelineRuns(input: {
+  decisionOsRoot: string;
+  runtime: AnyRecord;
+}): { launched: AnyRecord[]; queuedRunIds: string[]; capacity: number } {
+  const capacity = maxConcurrentCodexProcesses(input.runtime);
+  const launched: AnyRecord[] = [];
+  while (true) {
+    const store = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot }).store;
+    const running = store.runs.filter((run) => run.status === 'running').length;
+    if (running >= capacity) break;
+    const next = store.runs.find((run) => run.status === 'pending');
+    if (!next) break;
+    const launch = runNextPipelineSkill({
+      decisionOsRoot: input.decisionOsRoot,
+      runtime: input.runtime,
+      pipelineRunId: next.id,
+    });
+    launched.push(launch);
+    if (launch.ok === false || !launch.skillRun) break;
+  }
+  const finalStore = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot }).store;
+  return {
+    launched,
+    queuedRunIds: finalStore.runs.filter((run) => run.status === 'pending').map((run) => run.id),
+    capacity,
+  };
 }
 
 export function pipelineRunLogAvailability(skill: CodexPipelineRunSkill): {

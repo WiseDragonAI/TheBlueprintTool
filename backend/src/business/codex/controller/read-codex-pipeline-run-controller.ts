@@ -7,6 +7,7 @@ import { resolve } from 'node:path';
 import { resolveCardContentFile } from '@backend/business/ledger/helper/card-content-file.js';
 import { readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import {
+  pipelineQueuePosition,
   pipelineRunLogAvailability,
   reassessPipelineAfterSkill,
   resolvePipelineLedgerContext,
@@ -27,7 +28,8 @@ export async function readCodexPipelineRunController(
   const decisionOsRoot = resolve(String(runtime.decisionOsRoot ?? resolve(process.cwd(), '.decision-os')));
   const runId = text(payload.runId ?? payload.pipelineRunId);
   if (!runId) return { ok: false, statusCode: 400, error: 'Missing pipeline run id.' };
-  const storedRun = readCodexPipelineStore({ decisionOsRoot }).store.runs.find((entry) => entry.id === runId);
+  const storedStore = readCodexPipelineStore({ decisionOsRoot }).store;
+  const storedRun = storedStore.runs.find((entry) => entry.id === runId);
   const run = storedRun && (storedRun.status === 'pending' || storedRun.status === 'running')
     ? reassessPipelineAfterSkill({ decisionOsRoot, runtime, pipelineRunId: runId }) ?? storedRun
     : storedRun;
@@ -68,5 +70,6 @@ export async function readCodexPipelineRunController(
     canCancel: run.status === 'pending' || run.status === 'running',
     canRestart: terminal,
     canContinue: terminal,
+    queuePosition: pipelineQueuePosition({ runs: readCodexPipelineStore({ decisionOsRoot }).store.runs, pipelineRunId: run.id }),
   };
 }
