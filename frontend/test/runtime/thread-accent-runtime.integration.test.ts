@@ -34,6 +34,7 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   assert.equal(clampCardCodeColor('#4b00ff'), '#8968d9');
   const shellCss = readFileSync(new URL('frontend/assets/canvas/shell.css', root), 'utf8');
   const threadCss = readFileSync(new URL('frontend/assets/canvas/thread.css', root), 'utf8');
+  const terminalButtonCss = readFileSync(new URL('frontend/assets/canvas/terminal-button.css', root), 'utf8');
   const colorRuntime = readFileSync(new URL('frontend/src/runtime/card/effect/render-card-zone-colors.ts', root), 'utf8');
   const controlsCss = readFileSync(new URL('frontend/assets/canvas/terminal-chat-controls.css', root), 'utf8');
   const accentEffect = readFileSync(new URL('frontend/src/runtime/thread/effect/apply-thread-accent.ts', root), 'utf8');
@@ -62,6 +63,10 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   assert.match(threadCss, /thread-toolbar\s*{[\s\S]*justify-content: flex-end;[\s\S]*white-space: nowrap;/);
   assert.match(threadCss, /thread-actions\s*{[\s\S]*grid-template-columns: minmax\(112px, 1fr\) 84px auto;/);
   assert.match(threadCss, /thread-actions\[hidden\]\s*{[\s\S]*display: none;/);
+  const runButtonRule = threadCss.match(/\.thread-codex-button\s*{([^}]*)}/)?.[1] ?? '';
+  assert.match(terminalButtonCss, /\.terminal-button\s*{[\s\S]*--terminal-button-background: #181818;/);
+  assert.match(runButtonRule, /--terminal-button-color: #74d680;/);
+  assert.doesNotMatch(runButtonRule, /--terminal-button-background|--fx-shell-control/);
   assert.match(threadCss, /thread-heading\[data-codex-running="true"\]\s*{[^}]*grid-template-rows: 28px;[^}]*gap: 0;/);
   assert.match(threadCss, /thread-tab\[aria-selected="true"\][\s\S]*box-shadow:/);
   assert.match(threadCss, /@property --thread-codex-log-angle\s*{[\s\S]*syntax: "<angle>"/);

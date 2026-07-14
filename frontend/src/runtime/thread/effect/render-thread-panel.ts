@@ -134,7 +134,7 @@ function renderThreadActions(threadId: string): void {
   icon.append(chevron);
   const label = document.createElement('span');
   label.className = 'terminal-button__label';
-  label.textContent = 'Run';
+  label.textContent = 'RUN';
   button.replaceChildren(icon, label);
 
   const model = renderThreadCodexSelect({

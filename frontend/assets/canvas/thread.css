@@ -241,13 +241,8 @@
 }
 
 .thread-codex-button {
-  --terminal-button-background: linear-gradient(165deg, #203421 0%, #172418 54%, #101811 100%);
-  --terminal-button-color: #c9f6cf;
+  --terminal-button-color: #74d680;
   --terminal-button-gradient-shadow: linear-gradient(90deg, rgba(116, 214, 128, 0.56), rgba(62, 156, 84, 0.42));
-  --fx-shell-control:
-    inset 0 0 0 1px rgba(116, 214, 128, 0.42),
-    inset 0 0 12px rgba(116, 214, 128, 0.2),
-    0 0 12px rgba(62, 156, 84, 0.16);
   flex: 0 0 auto;
   height: 28px;
   min-height: 28px;
