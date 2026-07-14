@@ -25,8 +25,8 @@ function setStopState(button: HTMLButtonElement, state: 'ready' | 'stopping'): v
   button.disabled = stopping;
   button.dataset.stopPending = stopping ? 'true' : '';
   const label = stopLabel(button);
-  if (label) label.textContent = stopping ? 'STOPPING' : 'STOP';
-  button.title = stopping ? 'Stopping Codex run' : 'Stop Codex run';
+  if (label) label.textContent = stopping ? (button.dataset.stopPendingLabel || 'STOPPING') : (button.dataset.stopReadyLabel || 'STOP');
+  button.title = stopping ? (button.dataset.stopPendingTitle || 'Stopping Codex run') : (button.dataset.stopReadyTitle || 'Stop Codex run');
   button.setAttribute('aria-label', button.title);
 }
 

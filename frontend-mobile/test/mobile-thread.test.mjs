@@ -101,17 +101,17 @@ test('mobile thread routes jump-to-bottom into persistent bottom following', () 
 test('mobile thread launch continues a terminal or orphaned Codex run', () => {
   assert.match(source, /cardCodexThreadRunId\(currentCard\)/);
   assert.match(source, /requestCardSkillRunStatus\(/);
-  assert.match(source, /if \(summary\.active\) return/);
+  assert.match(source, /if \(summary\.active \|\| summary\.status === 'pending'\) return/);
   assert.doesNotMatch(source, /summary\.status === 'unknown'/);
   assert.match(source, /requestCardSkillRunContinue\(\{/);
   assert.match(source, /runId: existingRunId/);
   assert.match(source, /resumeExternallyStartedCardSkillRun\(\{ projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String\(currentCard\.id\), runId: existingRunId \}\)/);
-  assert.match(source, /function hydrateRunningThreadRun\(runId, startedAt\)/);
+  assert.match(source, /function hydrateThreadRun\(runId, startedAt, status, queuePosition\)/);
   assert.match(source, /canvasState\.threadRunSummaryByThreadId\[threadId\] = \{/);
-  assert.match(source, /active: true/);
-  assert.match(source, /status: 'running'/);
-  assert.match(source, /hydrateRunningThreadRun\(existingRunId, continuedAt\);[\s\S]*await refreshThreadLedger\(\)/);
-  assert.match(source, /bindThreadCodexRunLog\([^;]+runId \}\);\n  hydrateRunningThreadRun\(runId, startedAt\);[\s\S]*await refreshThreadLedger\(\)/);
+  assert.match(source, /active: status === 'running'/);
+  assert.match(source, /queuePosition: Number\.isInteger\(queuePosition\) \? queuePosition : null/);
+  assert.match(source, /hydrateThreadRun\(existingRunId, continuedAt, continuedStatus, continued\.queuePosition\);[\s\S]*await refreshThreadLedger\(\)/);
+  assert.match(source, /bindThreadCodexRunLog\([^;]+runId \}\);\n  const status = String\(result\.run\?\.status \|\| 'running'\);\n  hydrateThreadRun\(runId, startedAt, status, result\.queuePosition\);[\s\S]*await refreshThreadLedger\(\)/);
 });
 
 test('closing a mobile thread unregisters its project-scoped Codex run consumer', () => {
@@ -123,15 +123,17 @@ test('closing a mobile thread unregisters its project-scoped Codex run consumer'
   assert.match(source, /requestCardSkillRunStatus\(\{ projectId: currentProjectId/);
 });
 
-test('mobile Codex Log uses one action-and-metrics row for STOP, RESUME, and START', () => {
+test('mobile Codex Log uses one action-and-metrics row for queued, running, resumable, and idle runs', () => {
   assert.match(sharedCodexStatus, /strip\.append\(renderRunAction\(/);
   assert.match(sharedCodexStatus, /summary\?\.ok === true && summary\.active === true && status === 'running'/);
   assert.match(sharedCodexStatus, /threadCodexStopState\(input\.runId\)\.pending/);
   assert.match(sharedCodexLog, /const stopError = threadCodexStopState\(runId\)\.error/);
   assert.doesNotMatch(sharedCodexStatus, /\['Status', status\]/);
-  assert.match(sharedCodexStatus, /input\.running \? 'STOP' : input\.runId \? 'RESUME' : 'START'/);
-  assert.match(sharedCodexStatus, /button\.dataset\.action = input\.running \? 'stop-thread-codex' : 'process-thread-codex'/);
-  assert.match(sharedCodexStatus, /input\.running \? '■' : input\.runId \? '↻' : '▶'/);
+  assert.match(sharedCodexStatus, /input\.running \? 'STOP' : input\.queued \? 'CANCEL' : input\.runId \? 'RESUME' : 'START'/);
+  assert.match(sharedCodexStatus, /button\.dataset\.action = occupied \? 'stop-thread-codex' : 'process-thread-codex'/);
+  assert.match(sharedCodexStatus, /icon\.textContent = occupied \? '■' : input\.runId \? '↻' : '▶'/);
+  assert.match(sharedCodexStatus, /`Queued · position \$\{summary\.queuePosition\}`/);
+  assert.match(sharedCodexLog, /Codex will start when capacity is available/);
   assert.match(sharedCodexStatus, /terminal-button--stop' : 'terminal-button--send'/);
   assert.match(sharedThreadCss, /\.codex-log-status\s*{[^}]*grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/s);
   assert.match(sharedThreadCss, /\.codex-log-action-button\s*{[^}]*max-width:\s*64px;[^}]*height:\s*56px;/s);

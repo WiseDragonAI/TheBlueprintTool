@@ -141,7 +141,8 @@ function consumeThreadRunSummary(input: { threadId: string; runId: string; summa
   if (String(state.threadId ?? '') !== input.threadId || typeof document === 'undefined') return;
   syncThreadCodexRunControls({
     threadId: input.threadId,
-    running: input.summary.ok && input.summary.status === 'running',
+    status: input.summary.ok ? input.summary.status : 'unknown',
+    queuePosition: input.summary.queuePosition,
   });
   void import('../../thread/effect/render-thread-codex-log.js').then(({ renderThreadCodexLog }) => renderThreadCodexLog());
 }

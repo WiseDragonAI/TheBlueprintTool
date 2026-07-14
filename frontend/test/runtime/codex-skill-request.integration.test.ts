@@ -440,6 +440,30 @@ test('requestCardSkillRunStatus queries derived run progress through its capture
   }
 });
 
+test('requestCardSkillRunStatus preserves queued status and position', async () => {
+  const previousFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (async () => new Response(JSON.stringify({
+      ok: true,
+      active: false,
+      runId: 'codex-skill-queued',
+      runKind: 'thread',
+      status: 'pending',
+      queuePosition: 4,
+      metadata: {},
+      events: [],
+      diagnostics: [],
+    }), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch;
+
+    const result = await requestCardSkillRunStatus({ ledgerId: 'specs', cardId: 'card-a', runId: 'codex-skill-queued' });
+    assert.equal(result.status, 'pending');
+    assert.equal(result.active, false);
+    assert.equal(result.queuePosition, 4);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
 test('thread run reducer coalesces tool lifecycles, deduplicates diagnostics, and preserves group keys', () => {
   const tool = (itemId: string, line: number, status: string, output = '') => runEvent({
     line,

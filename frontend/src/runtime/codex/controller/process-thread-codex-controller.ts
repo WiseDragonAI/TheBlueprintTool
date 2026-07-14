@@ -22,7 +22,7 @@ export async function processThreadCodexController(input: { threadId?: string; c
   if (existingRunId) {
     bindThreadCodexRunLog({ ledgerId, threadId, cardId, runId: existingRunId });
     const summary = await requestCardSkillRunStatus({ ledgerId, cardId, runId: existingRunId });
-    if (summary.active) {
+    if (summary.active || summary.status === 'pending') {
       telemetry('codex-thread-process-focused-active-run', { ledgerId, threadId, cardId, run: existingRunId });
       return true;
     }

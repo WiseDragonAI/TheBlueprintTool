@@ -214,7 +214,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(renderThreadPanel, /button\.dataset\.codexEffort = threadCodexEffort/);
   assert.match(processThreadCodex, /requestThreadCodexProcess\(\{ ledgerId, threadId, cardId, codexModel: input\.codexModel, codexEffort: input\.codexEffort \}\)/);
   assert.match(processThreadCodex, /const existingRunId = cardCodexThreadRunId\(card\)/);
-  assert.match(processThreadCodex, /summary\.status === 'running'[\s\S]*return true/);
+  assert.match(processThreadCodex, /summary\.active \|\| summary\.status === 'pending'[\s\S]*return true/);
   assert.match(processThreadCodex, /requestCardSkillRunContinue\(\{[\s\S]*runId: existingRunId/);
   assert.match(threadCss, /\.thread-codex-select\s*{[^}]*height:\s*28px;[^}]*font-family:\s*var\(--mono\);/s);
 

@@ -8,7 +8,7 @@ import type { CardSkillRunSummary } from '../../codex/effect/request-card-skill-
 import { cardCodexRunPreference } from '../../codex/helper/card-codex-run-preference.js';
 import { clearThreadCodexStopState, threadCodexStopState } from '../../codex/controller/stop-thread-codex-run-controller.js';
 
-function renderRunAction(input: { card: Record<string, unknown>; runId: string; threadId: string; running: boolean }): HTMLElement {
+function renderRunAction(input: { card: Record<string, unknown>; runId: string; threadId: string; running: boolean; queued: boolean }): HTMLElement {
   const item = document.createElement('div');
   item.className = 'codex-log-run-action';
   const term = document.createElement('dt');
@@ -16,31 +16,40 @@ function renderRunAction(input: { card: Record<string, unknown>; runId: string; 
   const description = document.createElement('dd');
   const button = document.createElement('button');
   button.type = 'button';
-  button.className = `codex-log-action-button terminal-button ${input.running ? 'codex-log-stop terminal-button--stop' : 'terminal-button--send'}`;
-  button.dataset.action = input.running ? 'stop-thread-codex' : 'process-thread-codex';
+  const occupied = input.running || input.queued;
+  button.className = `codex-log-action-button terminal-button ${occupied ? 'codex-log-stop terminal-button--stop' : 'terminal-button--send'}`;
+  button.dataset.action = occupied ? 'stop-thread-codex' : 'process-thread-codex';
   button.dataset.codexRunId = input.runId;
   button.dataset.codexCardId = String(input.card.id ?? '');
   button.dataset.threadId = input.threadId;
   const preference = cardCodexRunPreference(input.card);
   button.dataset.codexModel = preference.model;
   button.dataset.codexEffort = preference.effort;
-  const action = input.running ? 'STOP' : input.runId ? 'RESUME' : 'START';
-  button.title = `${action[0]}${action.slice(1).toLowerCase()} Codex run`;
+  const action = input.running ? 'STOP' : input.queued ? 'CANCEL' : input.runId ? 'RESUME' : 'START';
+  const readyTitle = input.queued ? 'Cancel queued Codex run' : `${action[0]}${action.slice(1).toLowerCase()} Codex run`;
+  const pendingTitle = input.queued ? 'Cancelling queued Codex run' : 'Stopping Codex run';
+  button.title = readyTitle;
   button.setAttribute('aria-label', button.title);
   const icon = document.createElement('span');
   icon.className = 'terminal-button__glyph codex-log-action-icon';
   icon.setAttribute('aria-hidden', 'true');
-  icon.textContent = input.running ? '■' : input.runId ? '↻' : '▶';
+  icon.textContent = occupied ? '■' : input.runId ? '↻' : '▶';
   const label = document.createElement('span');
   label.className = 'terminal-button__label';
-  if (input.running) label.dataset.codexLogStopLabel = '';
+  if (occupied) {
+    label.dataset.codexLogStopLabel = '';
+    button.dataset.stopReadyLabel = action;
+    button.dataset.stopPendingLabel = input.queued ? 'CANCELLING' : 'STOPPING';
+    button.dataset.stopReadyTitle = readyTitle;
+    button.dataset.stopPendingTitle = pendingTitle;
+  }
   label.textContent = action;
-  if (input.running && threadCodexStopState(input.runId).pending) {
+  if (occupied && threadCodexStopState(input.runId).pending) {
     button.disabled = true;
     button.dataset.stopPending = 'true';
-    button.title = 'Stopping Codex run';
+    button.title = pendingTitle;
     button.setAttribute('aria-label', button.title);
-    label.textContent = 'STOPPING';
+    label.textContent = button.dataset.stopPendingLabel;
   }
   button.replaceChildren(icon, label);
   description.append(button);
@@ -56,14 +65,16 @@ export function renderThreadCodexLogStatus(input: { summary: CardSkillRunSummary
   strip.dataset.runStatus = status;
   strip.dataset.runId = input.runId;
   const running = summary?.ok === true && summary.active === true && status === 'running';
-  if (!running) clearThreadCodexStopState(input.runId);
-  strip.append(renderRunAction({ card: input.card, runId: input.runId, threadId: input.threadId, running }));
+  const queued = summary?.ok === true && status === 'pending';
+  if (!running && !queued) clearThreadCodexStopState(input.runId);
+  strip.append(renderRunAction({ card: input.card, runId: input.runId, threadId: input.threadId, running, queued }));
   const values: Array<[string, string, string?]> = [
     ['Model', summary?.metadata.codexModel || String(input.card.codexRunModel ?? '') || '—'],
     ['Effort', summary?.metadata.codexEffort || String(input.card.codexRunEffort ?? '') || '—'],
-    ['Elapsed', codexRunDurationLabel(summary ? liveCodexRunElapsedMs(summary) : 0), 'codex-log-elapsed'],
     ['Tools', String(summary?.toolCallCount ?? 0)],
   ];
+  if (queued) values.splice(0, 0, ['Queue', Number.isInteger(summary.queuePosition) ? `Queued · position ${summary.queuePosition}` : 'Queued']);
+  else values.splice(2, 0, ['Elapsed', codexRunDurationLabel(summary ? liveCodexRunElapsedMs(summary) : 0), 'codex-log-elapsed']);
   if (summary?.pipelineRunId) {
     values.splice(1, 0,
       ['Pipeline', `${summary.pipelineName || 'Pipeline'} · ${summary.pipelineStatus || summary.status}`],

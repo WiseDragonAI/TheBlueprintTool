@@ -210,7 +210,9 @@ export function renderThreadCodexLog(): void {
   if (events.length === 0 && summary?.ok !== false) {
     const waiting = document.createElement('p');
     waiting.className = 'codex-log-waiting';
-    waiting.textContent = 'Waiting for Codex output.';
+    waiting.textContent = summary?.status === 'pending'
+      ? `Queued${Number.isInteger(summary.queuePosition) ? ` · position ${summary.queuePosition}` : ''}. Codex will start when capacity is available.`
+      : 'Waiting for Codex output.';
     stream.append(waiting);
   }
   root.append(stream, renderDeleteSession({ cardId: String(card.id ?? ''), runId, threadId }));
