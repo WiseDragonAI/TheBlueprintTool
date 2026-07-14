@@ -15,10 +15,11 @@ test('thread Codex prompt uses a direct scoped contract without triggering open-
     threadMarkdown: '# OPERATOR\n\nImplement this request.\n',
     runSummaryFile: '/workspace/.decision-os/runs/codex-skills/specs/run.md',
     operatorNoteTimestamp: '2026-07-08T01:00:00.000Z',
+    context: { version: 2, card: { id: 'card-a', markdown: '# Card A\n' }, thread: { id: 'thread-card-a', markdown: '# OPERATOR\n\nImplement this request.\n' } },
   });
 
   assert.match(prompt.developerInstructions, /^Decision OS card run:/);
-  assert.match(prompt.developerInstructions, /session-context[^\n]+card-a/);
+  assert.doesNotMatch(prompt.developerInstructions, /session-context/);
   assert.match(prompt.developerInstructions, /master-task-apply/);
   assert.match(prompt.developerInstructions, /master-task-gate[^\n]+card-a/);
   assert.match(prompt.developerInstructions, /--thread-id thread-card-a --message-stdin/);
@@ -30,7 +31,8 @@ test('thread Codex prompt uses a direct scoped contract without triggering open-
   assert.doesNotMatch(prompt.developerInstructions, /treat-open-notes|open notes|You are treating/i);
 
   assert.match(prompt.taskContext, /Execute the operator request from this Decision OS thread\./);
-  assert.match(prompt.taskContext, /Thread:[\s\S]*Implement this request\./);
-  assert.match(prompt.taskContext, /Card:[\s\S]*# Card A/);
+  assert.match(prompt.taskContext, /Decision OS context:/);
+  assert.match(prompt.taskContext, /Implement this request\./);
+  assert.match(prompt.taskContext, /# Card A/);
   assert.doesNotMatch(prompt.taskContext, /^## [A-Z]\./m);
 });

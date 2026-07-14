@@ -440,6 +440,7 @@ export function spawnPipelineSkillProcess(input: {
     cardId: input.step.outputCardId,
     runId: input.skill.runId,
     telemetryFile: `${input.skill.stdoutFile}.telemetry.jsonl`,
+    projectId: String(input.runtime.projectId ?? ''),
   });
   const startedAt = input.skill.startedAt ?? new Date().toISOString();
   appendFileSync(input.skill.stderrFile, codexRunSegmentMarker({

@@ -14,6 +14,7 @@ import { flushCardSkillRunEventIngestor } from '../effect/flush-card-skill-run-e
 import { createCardSkillRunEventIngestor } from '../effect/ingest-card-skill-run-events.js';
 import { prepareCardSkillRunEventAppend } from '../effect/prepare-card-skill-run-event-append.js';
 import { buildThreadCodexPrompt } from '../helper/build-thread-codex-prompt.js';
+import { buildCardLaunchContext } from '../helper/build-card-launch-context.js';
 import { codexRunSegmentMarker } from '../helper/codex-run-segment-marker.js';
 import { isCodexThreadArtifactNote } from '../helper/is-codex-thread-artifact-note.js';
 import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand, resolveCodexResumeCommand, type CodexCommand } from '../helper/resolve-codex-command.js';
@@ -206,18 +207,28 @@ export async function startThreadCodexProcessController(input: { action_payload?
   const runSummaryFile = resolve(decisionOsRoot, runSummaryRef.replace(/^\.decision-os\//, ''));
   writeFileSync(runSummaryFile, [`# Thread Codex Run`, '', `Status: ${queueDispatch ? 'processing' : 'queued'}`, `Source card: ${String(source.title ?? cardId)}`, `Source thread: ${threadId}`, `Codex run: ${runId}`].join('\n'), 'utf8');
 
+  const cardMarkdown = readFileSync(sourceCardFile, 'utf8');
   const prompt = buildThreadCodexPrompt({
     workspaceRoot,
     ledgerFile: ledgerPath,
     cardId,
     cardTitle: String(source.title ?? cardId),
     cardMarkdownFile: sourceCardFile,
-    cardMarkdown: readFileSync(sourceCardFile, 'utf8'),
+    cardMarkdown,
     threadId,
     threadMarkdownFile: sourceThreadFile,
     threadMarkdown: threadPrompt.markdown,
     runSummaryFile,
     operatorNoteTimestamp: threadPrompt.operatorNoteTimestamp,
+    context: buildCardLaunchContext({
+      projectId: String(runtime.projectId ?? ''),
+      ledgerId,
+      cardId,
+      threadId,
+      ledger,
+      cardMarkdown,
+      threadMarkdown: threadPrompt.markdown,
+    }),
   });
   const command = resolveCodexCommand({
     workspaceRoot,
@@ -294,7 +305,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
     });
     const stdout = createWriteStream(stdoutFile, { flags: 'a' });
     const stderr = createWriteStream(stderrFile, { flags: 'a' });
-    const runEventIngestor = createCardSkillRunEventIngestor({ decisionOsRoot, ledgerPath, cardId, runId, startLine: eventStartLine, telemetryFile: `${stdoutFile}.telemetry.jsonl` });
+    const runEventIngestor = createCardSkillRunEventIngestor({ decisionOsRoot, ledgerPath, cardId, runId, startLine: eventStartLine, telemetryFile: `${stdoutFile}.telemetry.jsonl`, projectId: String(runtime.projectId ?? '') });
     appendFileSync(stderrFile, codexRunSegmentMarker({
       runId,
       startedAt: attemptStartedAt,

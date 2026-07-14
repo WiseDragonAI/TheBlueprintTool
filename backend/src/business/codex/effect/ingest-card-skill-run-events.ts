@@ -22,6 +22,7 @@ export function createCardSkillRunEventIngestor(input: {
   startLine?: number;
   batchDelayMs?: number;
   telemetryFile?: string;
+  projectId?: string;
 }): CardSkillRunEventIngestor {
   const decoder = new StringDecoder('utf8');
   const pendingEvents = new Map<number, NormalizedRunEvent>();
@@ -29,30 +30,53 @@ export function createCardSkillRunEventIngestor(input: {
   let nextLine = Math.max(0, Number(input.startLine ?? 0)) + 1;
   let remainder = '';
   let timer: NodeJS.Timeout | undefined;
-  let turnId = '';
-  const startedTools = new Map<string, { startedAt: string; tool: string }>();
+  let turnSequence = 0;
+  let turnId = `${input.runId}:turn-${Math.max(0, Number(input.startLine ?? 0)) + 1}-0`;
+  const startedTools = new Map<string, { startedAt: string; startedNs: bigint; tool: string; command: string; timingSource: 'producer' | 'observer' }>();
+
+  const eventTime = (event: AnyRecord, item: AnyRecord): string | null => {
+    const candidate = String(event.timestamp ?? event.created_at ?? item.timestamp ?? item.created_at ?? '');
+    return candidate && Number.isFinite(Date.parse(candidate)) ? new Date(candidate).toISOString() : null;
+  };
+
+  const toolName = (item: AnyRecord, normalized: NormalizedRunEvent): string => {
+    const type = String(item.type ?? '');
+    if (type === 'command_execution') return 'shell';
+    if (type === 'web_search') return 'web_search';
+    if (type === 'file_change') return 'file_change';
+    return String(item.name ?? type ?? normalized.kind ?? 'tool_call');
+  };
 
   const persistTelemetry = (event: AnyRecord, normalized: NormalizedRunEvent): void => {
     if (!input.telemetryFile) return;
     const type = String(event.type ?? '');
     const item = event.item && typeof event.item === 'object' && !Array.isArray(event.item) ? event.item as AnyRecord : {};
-    if (type === 'turn.started') turnId = String(item.id ?? event.turn_id ?? event.id ?? turnId);
+    if (type === 'turn.started') {
+      turnSequence += 1;
+      turnId = String(item.id ?? event.turn_id ?? event.id ?? '') || `${input.runId}:turn-${Math.max(0, Number(input.startLine ?? 0)) + 1}-${turnSequence}`;
+    }
     if (normalized.kind !== 'tool_call' || !normalized.itemId) return;
     const now = new Date();
+    const key = `${turnId}:${normalized.itemId}`;
     if (type === 'item.started') {
-      startedTools.set(normalized.itemId, { startedAt: now.toISOString(), tool: normalized.tool || normalized.title });
+      const producerTime = eventTime(event, item);
+      startedTools.set(key, { startedAt: producerTime ?? now.toISOString(), startedNs: process.hrtime.bigint(), tool: toolName(item, normalized), command: normalized.tool || normalized.title, timingSource: producerTime ? 'producer' : 'observer' });
       return;
     }
     if (type !== 'item.completed' && type !== 'item.failed') return;
-    const started = startedTools.get(normalized.itemId);
-    const startedAt = started?.startedAt ?? now.toISOString();
-    const completedAt = now.toISOString();
-    const durationMs = Math.max(0, now.getTime() - Date.parse(startedAt));
-    const success = type === 'item.completed' && normalized.status !== 'failed' && normalized.exitCode !== '1';
-    const row = { version: 1, startedAt, completedAt, durationMs, tool: started?.tool ?? normalized.tool ?? normalized.title, success, outputBytes: Buffer.byteLength(normalized.output), runId: input.runId, turnId, callId: normalized.itemId };
+    const started = startedTools.get(key);
+    const completedProducerTime = eventTime(event, item);
+    const startedAt = started?.startedAt ?? completedProducerTime ?? now.toISOString();
+    const completedAt = completedProducerTime ?? now.toISOString();
+    const producerDuration = completedProducerTime && started?.timingSource === 'producer' ? Date.parse(completedAt) - Date.parse(startedAt) : Number.NaN;
+    const observerDuration = started ? Number(process.hrtime.bigint() - started.startedNs) / 1_000_000 : Number.NaN;
+    const durationMs = Number.isFinite(producerDuration) && producerDuration > 0 ? producerDuration : Number.isFinite(observerDuration) && observerDuration > 0 ? observerDuration : null;
+    const exitCode = normalized.exitCode === '' ? 0 : Number(normalized.exitCode);
+    const success = type === 'item.completed' && normalized.status !== 'failed' && (!Number.isFinite(exitCode) || exitCode === 0);
+    const row = { version: 2, projectId: input.projectId ?? process.env.DECISION_OS_PROJECT_ID ?? '', startedAt, completedAt, durationMs, timingSource: Number.isFinite(producerDuration) && producerDuration > 0 ? 'producer' : started ? 'observer' : 'unavailable', tool: started?.tool ?? toolName(item, normalized), command: started?.command ?? normalized.tool ?? normalized.title, success, status: normalized.status, outputBytes: Buffer.byteLength(normalized.output), runId: input.runId, turnId, callId: key };
     mkdirSync(dirname(input.telemetryFile), { recursive: true });
     appendFileSync(input.telemetryFile, `${JSON.stringify(row)}\n`, 'utf8');
-    startedTools.delete(normalized.itemId);
+    startedTools.delete(key);
   };
 
   const enqueueLine = (rawLine: string): void => {
@@ -136,7 +160,8 @@ export function createCardSkillRunEventIngestor(input: {
         const completedAt = new Date().toISOString();
         mkdirSync(dirname(input.telemetryFile), { recursive: true });
         for (const [callId, started] of startedTools) {
-          appendFileSync(input.telemetryFile, `${JSON.stringify({ version: 1, startedAt: started.startedAt, completedAt, durationMs: Math.max(0, Date.parse(completedAt) - Date.parse(started.startedAt)), tool: started.tool, success: false, status: 'interrupted', outputBytes: 0, runId: input.runId, turnId, callId })}\n`, 'utf8');
+          const durationMs = Number(process.hrtime.bigint() - started.startedNs) / 1_000_000;
+          appendFileSync(input.telemetryFile, `${JSON.stringify({ version: 2, projectId: input.projectId ?? process.env.DECISION_OS_PROJECT_ID ?? '', startedAt: started.startedAt, completedAt, durationMs: durationMs > 0 ? durationMs : null, timingSource: 'observer', tool: started.tool, command: started.command, success: false, status: 'interrupted', outputBytes: 0, runId: input.runId, turnId, callId })}\n`, 'utf8');
         }
         startedTools.clear();
       }

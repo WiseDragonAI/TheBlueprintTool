@@ -24,6 +24,8 @@ test('ledger-cli command emits help without reading a ledger', async () => {
   assert.match(messages.join('\n'), /zone-cards --ledger <file> --zone-id <id> --json/);
   assert.match(messages.join('\n'), /answer --ledger <file> --thread-id <id>/);
   assert.match(messages.join('\n'), /--message-file <file>/);
+  assert.match(messages.join('\n'), /codex-run-events --run-id <id> --item-type <type>/);
+  assert.match(messages.join('\n'), /"sections":\[/);
 });
 
 test('ledger-cli command mutates a ledger and emits overview text', async () => {
