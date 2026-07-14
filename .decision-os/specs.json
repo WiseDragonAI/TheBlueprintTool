@@ -8072,7 +8072,7 @@
       "title": "Unify Skill Processing with Codex Execution",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10402,
       "y": 67668,
       "w": 360,
@@ -8180,7 +8180,7 @@
       "title": "Verify the served Process Card lifecycle",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10012,
       "y": 68078,
       "w": 340,
@@ -8196,7 +8196,7 @@
       "title": "Study Mobile–Desktop Stream Relay",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "delayed",
       "x": -10402,
       "y": 68688,
       "w": 360,
@@ -8610,7 +8610,7 @@
       "title": "Queue Codex skill and pipeline runs",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10402,
       "y": 73788,
       "w": 360,
@@ -8631,7 +8631,7 @@
       "title": "Unify Codex process scheduling",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10012,
       "y": 73788,
       "w": 340,
@@ -8647,7 +8647,7 @@
       "title": "Add Codex process settings and queue UX",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -9632,
       "y": 73788,
       "w": 340,
@@ -8663,7 +8663,7 @@
       "title": "Verify Codex queue on the served mobile surface",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10012,
       "y": 74198,
       "w": 340,
@@ -8873,18 +8873,25 @@
       },
       "facts": [],
       "fields": [],
-      "codexActiveRunId": "codex-skill-1784044787029-2b63a840",
+      "codexActiveRunId": "codex-skill-1784047681152-4f93da75",
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784044787029-2b63a840",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784044787029-2b63a840.md"
+      "codexQueuedPipelineRunId": "codex-skill-1784047681152-4f93da75",
+      "codexQueuedRunId": "codex-skill-1784047681152-4f93da75",
+      "codexRunId": "codex-skill-1784047681152-4f93da75",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784047681152-4f93da75.md",
+      "codexPipelineRunId": "codex-skill-1784047681152-4f93da75",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexSkillName": "retrospect-and-close-task"
     },
     {
       "id": "card-dd46e795-69dc-4f6d-a962-eda9ca552c09",
       "title": "Harden retrospective skill authorization and closeout contract",
       "cardType": "note",
       "domainId": "specs",
-      "status": "done",
+      "status": "todo",
       "x": -10012,
       "y": 76848,
       "w": 340,
@@ -8982,7 +8989,7 @@
     },
     {
       "id": "card-06fa34b2-e93b-4569-bafa-26edf458b47c",
-      "title": "Trace headless Codex lifecycle across server restart",
+      "title": "Design restart-safe Codex process ownership",
       "cardType": "note",
       "domainId": "specs",
       "status": "done",
@@ -9047,7 +9054,7 @@
       "title": "Implement project color initialization and hydration",
       "cardType": "note",
       "domainId": "specs",
-      "status": "done",
+      "status": "todo",
       "x": -10012,
       "y": 79908,
       "w": 340,
@@ -9063,7 +9070,7 @@
       "title": "Verify mobile settings behavior and record lessons",
       "cardType": "note",
       "domainId": "specs",
-      "status": "done",
+      "status": "todo",
       "x": -9632,
       "y": 79908,
       "w": 340,
@@ -9098,6 +9105,84 @@
       "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
       "codexPipelineStepName": "retrospect-and-close-task",
       "codexSkillName": "retrospect-and-close-task"
+    },
+    {
+      "id": "card-codex-skill-1784047681152-4f93da75",
+      "title": "retrospect-and-close-task result",
+      "cardType": "codex-skill-run",
+      "x": -9946,
+      "y": 77868,
+      "w": 700,
+      "h": 260,
+      "status": "todo",
+      "codexRunId": "codex-skill-1784047681152-4f93da75",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-codex-skill-1784047681152-4f93da75.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784047681152-4f93da75",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784047681152-4f93da75.md",
+      "codexPipelineRunId": "codex-skill-1784047681152-4f93da75",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexSkillName": "retrospect-and-close-task"
+    },
+    {
+      "id": "card-d18c1157-d5cd-4a53-b743-9a6aa278dbd3",
+      "title": "Align Control Room active timers with current Codex runs",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10402,
+      "y": 80928,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-d18c1157-d5cd-4a53-b743-9a6aa278dbd3.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784047795762-1fd59472",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784047795762-1fd59472",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784047795762-1fd59472.md"
+    },
+    {
+      "id": "card-86a7e0e1-9013-439e-b997-b34b15eac1da",
+      "title": "Use current run timing in Control Room tasks",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10012,
+      "y": 80928,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-86a7e0e1-9013-439e-b997-b34b15eac1da.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-f6ee6c08-b3e3-4dd7-99ee-6ac4f70cb6cc",
+      "title": "Verify active timer alignment",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -9632,
+      "y": 80928,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-f6ee6c08-b3e3-4dd7-99ee-6ac4f70cb6cc.md"
+      },
+      "facts": [],
+      "fields": []
     }
   ],
   "relationships": [
@@ -9646,6 +9731,24 @@
       "from": "card-e28f0b44-7ad8-40cf-82af-cb1d626282cd",
       "to": "card-codex-skill-1784047137979-57bc97d8",
       "label": "retrospect-and-close-task"
+    },
+    {
+      "id": "rel-codex-skill-1784047681152-4f93da75-1",
+      "from": "card-79fefde6-99a4-4c0d-a3cb-78d5877b0f63",
+      "to": "card-codex-skill-1784047681152-4f93da75",
+      "label": "retrospect-and-close-task"
+    },
+    {
+      "id": "rel-6c357a1e-b5e3-4105-a399-dd56c94bad9f",
+      "from": "card-d18c1157-d5cd-4a53-b743-9a6aa278dbd3",
+      "to": "card-86a7e0e1-9013-439e-b997-b34b15eac1da",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-f414bc18-340f-4d24-a37c-a0063d069217",
+      "from": "card-d18c1157-d5cd-4a53-b743-9a6aa278dbd3",
+      "to": "card-f6ee6c08-b3e3-4dd7-99ee-6ac4f70cb6cc",
+      "label": "subtask"
     }
   ],
   "annotations": [
@@ -10584,6 +10687,16 @@
       "color": "#5d5bcf",
       "label": "Mobile project color initialization",
       "comments": []
+    },
+    {
+      "id": "zone-fe59e75e-d36f-4caa-b414-ed66cddc317d",
+      "x": -10462,
+      "y": 80868,
+      "width": 1200,
+      "height": 900,
+      "color": "#5d5bcf",
+      "label": "Current-run timer alignment",
+      "comments": []
     }
   ],
   "notes": {},
@@ -10677,7 +10790,9 @@
     "thread-card-1d402e0e-4906-4b81-b6b4-25d68220347f": ".decision-os/threads/specs/thread-card-1d402e0e-4906-4b81-b6b4-25d68220347f.md",
     "thread-card-7b6bc749-87a5-4d63-90e5-d4b21bccaaad": ".decision-os/threads/specs/thread-card-7b6bc749-87a5-4d63-90e5-d4b21bccaaad.md",
     "thread-card-codex-skill-1784046263126-8dea61f9": ".decision-os/threads/specs/thread-card-codex-skill-1784046263126-8dea61f9.md",
-    "thread-card-codex-skill-1784047137979-57bc97d8": ".decision-os/threads/specs/thread-card-codex-skill-1784047137979-57bc97d8.md"
+    "thread-card-codex-skill-1784047137979-57bc97d8": ".decision-os/threads/specs/thread-card-codex-skill-1784047137979-57bc97d8.md",
+    "thread-card-codex-skill-1784047681152-4f93da75": ".decision-os/threads/specs/thread-card-codex-skill-1784047681152-4f93da75.md",
+    "thread-card-d18c1157-d5cd-4a53-b743-9a6aa278dbd3": ".decision-os/threads/specs/thread-card-d18c1157-d5cd-4a53-b743-9a6aa278dbd3.md"
   },
   "deletedNoteIds": {
     "thread-card-7074d33a-39da-42a1-b470-673cbe221def": [
