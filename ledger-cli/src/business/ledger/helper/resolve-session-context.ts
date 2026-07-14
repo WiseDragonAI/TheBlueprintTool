@@ -98,9 +98,6 @@ export async function resolveMasterTaskGate(input: { ledger: unknown; ledgerJson
   if (invalidRoles.length > 0) discrepancies.push('invalid_thread_role');
   const card = record(value.card) ? value.card : {};
   const masterMarkdown = text(card.markdown);
-  const acceptanceTail = masterMarkdown.match(/^## [A-Z]\. Acceptance Criteria\s*$([\s\S]*)/m)?.[1] ?? '';
-  const acceptanceSection = acceptanceTail.split(/\n---\s*\n|\n## [A-Z]\. /, 1)[0];
-  const acceptanceCriteria = acceptanceSection.split('\n').map((line) => line.match(/^\s*\d+\.\s+(.+)$/)?.[1]).filter((line): line is string => Boolean(line));
   const staleProjections: string[] = [];
   for (const linked of linkedCards) {
     const metadata = record(linked.metadata) ? linked.metadata : {};
@@ -110,5 +107,5 @@ export async function resolveMasterTaskGate(input: { ledger: unknown; ledgerJson
     if (projection && projection !== expected) staleProjections.push(cardId);
   }
   if (staleProjections.length > 0) discrepancies.push(...staleProjections.map((id) => `stale_subtask_projection:${id}`));
-  return { ok: true, value: JSON.stringify({ version: 1, ready: discrepancies.length === 0, discrepancies, threadRolesValid: invalidRoles.length === 0, acceptanceCriteria: acceptanceCriteria.map((criterion) => ({ criterion, state: 'reported' })), staleProjections, context: value }, null, 2) };
+  return { ok: true, value: JSON.stringify({ version: 1, ready: discrepancies.length === 0, discrepancies, threadRolesValid: invalidRoles.length === 0, staleProjections, context: value }, null, 2) };
 }
