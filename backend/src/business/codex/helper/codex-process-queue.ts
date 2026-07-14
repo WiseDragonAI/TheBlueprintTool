@@ -10,11 +10,15 @@ type AnyRecord = Record<string, unknown>;
 export type CodexProcessQueueItem = {
   id: string;
   kind: 'thread' | 'continuation';
-  status: 'pending' | 'running';
+  status: 'pending' | 'running' | 'interrupted';
   createdAt: string;
   startedAt: string | null;
+  interruptedAt: string | null;
+  interruptionReason: string;
   payload: AnyRecord;
 };
+
+export const codexProcessRestartInterruptionReason = 'Decision OS server restarted while this Codex process was running. The process was not relaunched.';
 
 function filePath(decisionOsRoot: string): string {
   return resolve(decisionOsRoot, 'codex-process-queue.json');
@@ -24,12 +28,15 @@ function normalizeItem(value: unknown): CodexProcessQueueItem | null {
   const item = value && typeof value === 'object' ? value as AnyRecord : {};
   const id = String(item.id ?? '').trim();
   if (!id || (item.kind !== 'thread' && item.kind !== 'continuation')) return null;
+  const status = item.status === 'running' || item.status === 'interrupted' ? item.status : 'pending';
   return {
     id,
     kind: item.kind,
-    status: item.status === 'running' ? 'running' : 'pending',
+    status,
     createdAt: String(item.createdAt ?? ''),
     startedAt: typeof item.startedAt === 'string' ? item.startedAt : null,
+    interruptedAt: status === 'interrupted' && typeof item.interruptedAt === 'string' ? item.interruptedAt : null,
+    interruptionReason: status === 'interrupted' ? String(item.interruptionReason ?? codexProcessRestartInterruptionReason) : '',
     payload: item.payload && typeof item.payload === 'object' ? item.payload as AnyRecord : {},
   };
 }
@@ -56,13 +63,13 @@ export function writeCodexProcessQueue(decisionOsRoot: string, items: readonly C
 }
 
 export function enqueueCodexThreadProcess(input: { decisionOsRoot: string; id: string; createdAt: string; payload: AnyRecord }): CodexProcessQueueItem {
-  const item: CodexProcessQueueItem = { id: input.id, kind: 'thread', status: 'pending', createdAt: input.createdAt, startedAt: null, payload: input.payload };
+  const item: CodexProcessQueueItem = { id: input.id, kind: 'thread', status: 'pending', createdAt: input.createdAt, startedAt: null, interruptedAt: null, interruptionReason: '', payload: input.payload };
   writeCodexProcessQueue(input.decisionOsRoot, [...readCodexProcessQueue(input.decisionOsRoot), item]);
   return item;
 }
 
 export function enqueueCodexContinuation(input: { decisionOsRoot: string; id: string; createdAt: string; payload: AnyRecord }): CodexProcessQueueItem {
-  const item: CodexProcessQueueItem = { id: input.id, kind: 'continuation', status: 'pending', createdAt: input.createdAt, startedAt: null, payload: input.payload };
+  const item: CodexProcessQueueItem = { id: input.id, kind: 'continuation', status: 'pending', createdAt: input.createdAt, startedAt: null, interruptedAt: null, interruptionReason: '', payload: input.payload };
   writeCodexProcessQueue(input.decisionOsRoot, [...readCodexProcessQueue(input.decisionOsRoot), item]);
   return item;
 }
@@ -72,7 +79,7 @@ export function markCodexProcessQueueItemRunning(decisionOsRoot: string, id: str
   const now = new Date().toISOString();
   const items = readCodexProcessQueue(decisionOsRoot).map((item) => {
     if (item.id !== id || item.status !== 'pending') return item;
-    selected = { ...item, status: 'running', startedAt: now };
+    selected = { ...item, status: 'running', startedAt: now, interruptedAt: null, interruptionReason: '' };
     return selected;
   });
   if (selected) writeCodexProcessQueue(decisionOsRoot, items);
@@ -88,7 +95,13 @@ export function removeCodexProcessQueueItem(decisionOsRoot: string, id: string):
 export function recoverCodexProcessQueue(decisionOsRoot: string): void {
   const items = readCodexProcessQueue(decisionOsRoot);
   if (!items.some((item) => item.status === 'running')) return;
-  writeCodexProcessQueue(decisionOsRoot, items.map((item) => item.status === 'running' ? { ...item, status: 'pending', startedAt: null } : item));
+  const interruptedAt = new Date().toISOString();
+  writeCodexProcessQueue(decisionOsRoot, items.map((item) => item.status === 'running' ? {
+    ...item,
+    status: 'interrupted',
+    interruptedAt,
+    interruptionReason: codexProcessRestartInterruptionReason,
+  } : item));
 }
 
 export function codexProcessQueuePosition(decisionOsRoot: string, id: string): number | null {
