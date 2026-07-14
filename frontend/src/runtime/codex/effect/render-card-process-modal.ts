@@ -13,7 +13,9 @@ import { refreshRuntimeState } from '../../refresh/controller/refresh-runtime-st
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { processCardSkillController } from '../controller/process-card-skill-controller.js';
+import { renderSkillLibraryItemContent } from '../component/render-skill-library-item-content.js';
 import { categoryForSkill, colorForSkillCategory, skillCategories, type SkillCategory } from '../helper/skill-category.js';
+import { sortSkillsByFavorite } from '../helper/skill-library-presentation.js';
 import { codexEffortOptions, codexModelOptions } from '../helper/codex-run-options.js';
 import { loadCodexPipelines } from './load-codex-pipelines.js';
 import { loadCodexSkillsResult, type CodexSkillSummary } from './load-codex-skills.js';
@@ -161,11 +163,11 @@ function filteredPipelines(): CodexPipeline[] {
 
 function filteredSkills(): CodexSkillSummary[] {
   const query = processModalState.query.trim().toLowerCase();
-  return processModalState.skills.filter((skill) => {
+  return sortSkillsByFavorite(processModalState.skills.filter((skill) => {
     const category = categoryForSkill(skill.name);
     if (processModalState.selectedCategory !== 'All' && category !== processModalState.selectedCategory) return false;
     return !query || `${skill.name} ${skill.description} ${skill.source} ${category}`.toLowerCase().includes(query);
-  });
+  }));
 }
 
 function availableCategories(): Array<SkillCategory | 'All'> {
@@ -279,22 +281,10 @@ function renderSkillResult(skill: CodexSkillSummary): HTMLElement {
   const select = button('', () => selectProcessSkill(skill.name), 'process-skill-select');
   select.dataset.processSkillName = skill.name;
   select.setAttribute('aria-pressed', String(selected));
-  const head = document.createElement('span');
-  head.className = 'skill-result-header';
-  const name = document.createElement('span');
-  name.className = 'skill-result-name';
-  name.textContent = skill.name;
-  const badge = document.createElement('span');
-  badge.className = 'skill-result-category';
-  badge.textContent = category;
-  head.replaceChildren(name, badge);
-  const description = document.createElement('span');
-  description.className = 'skill-result-description';
-  description.textContent = skill.description || 'No description.';
   const defaults = document.createElement('span');
   defaults.className = 'process-result-metadata';
-  defaults.textContent = `${skill.source} · ${skill.effectiveCodexModel} · ${skill.effectiveCodexEffort}`;
-  select.replaceChildren(head, description, defaults);
+  defaults.textContent = `${skill.effectiveCodexModel} · ${skill.effectiveCodexEffort}`;
+  select.replaceChildren(...renderSkillLibraryItemContent(skill), defaults);
   const editCell = document.createElement('div');
   editCell.className = 'process-skill-edit-cell';
   if (skill.editable) {

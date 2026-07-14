@@ -293,6 +293,7 @@ function normalizeSkillLibrary(
     }
     normalized.push({
       skillName,
+      favorite: input.favorite === true,
       defaultCodexModel: requestedModel === null || requestedModel === undefined
         ? null
         : text(requestedModel) as CodexSkillLibraryRecord['defaultCodexModel'],

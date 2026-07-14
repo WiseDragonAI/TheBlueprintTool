@@ -59,6 +59,7 @@ test('skill library routes save editable Markdown and defaults without exposing 
     assert.equal(detail.skill.editable, true);
     assert.equal(detail.skill.defaultCodexModel, null);
     assert.equal(detail.skill.defaultCodexEffort, null);
+    assert.equal(detail.skill.favorite, false);
     assert.equal('skillFile' in detail.skill, false);
     assert.equal(detailText.includes(workspace), false);
 
@@ -84,10 +85,25 @@ test('skill library routes save editable Markdown and defaults without exposing 
     const persisted = JSON.parse(readFileSync(storeFile, 'utf8')) as Record<string, any>;
     assert.deepEqual(persisted.skillLibrary[0], {
       skillName: 'workspace-skill',
+      favorite: false,
       defaultCodexModel: 'gpt-5.4',
       defaultCodexEffort: 'high',
       updatedAt: persisted.skillLibrary[0].updatedAt,
     });
+
+    const markdownBeforeFavorite = readFileSync(workspaceFile, 'utf8');
+    const favoriteResponse = await fetch(`${baseUrl}/api/codex/skill-library/workspace-skill`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ favorite: true }),
+    });
+    assert.equal(favoriteResponse.status, 200);
+    const favorite = await favoriteResponse.json() as Record<string, any>;
+    assert.equal(favorite.skill.favorite, true);
+    assert.equal(readFileSync(workspaceFile, 'utf8'), markdownBeforeFavorite);
+    const favoriteCatalog = await fetch(`${baseUrl}/api/codex/skills`).then((response) => response.json()) as Record<string, any>;
+    assert.equal(favoriteCatalog.skills.find((entry: Record<string, any>) => entry.name === 'workspace-skill').favorite, true);
+    assert.equal(JSON.parse(readFileSync(storeFile, 'utf8')).skillLibrary[0].favorite, true);
 
     const staleResponse = await fetch(`${baseUrl}/api/codex/skill-library/workspace-skill`, {
       method: 'PUT',
@@ -152,6 +168,13 @@ test('skill library routes save editable Markdown and defaults without exposing 
       const protectedDetail = await protectedDetailResponse.json() as Record<string, any>;
       assert.equal(protectedDetail.skill.source, expectedSource);
       assert.equal(protectedDetail.skill.editable, false);
+      const protectedFavoriteResponse = await fetch(`${baseUrl}/api/codex/skill-library/${skillName}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ favorite: true }),
+      });
+      assert.equal(protectedFavoriteResponse.status, 200);
+      assert.equal((await protectedFavoriteResponse.json() as Record<string, any>).skill.favorite, true);
       const protectedSaveResponse = await fetch(`${baseUrl}/api/codex/skill-library/${skillName}`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },

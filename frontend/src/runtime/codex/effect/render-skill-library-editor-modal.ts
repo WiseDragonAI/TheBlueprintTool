@@ -7,6 +7,7 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { codexEffortOptions, codexModelOptions, type CodexEffort, type CodexModel } from '../helper/codex-run-options.js';
 import { loadCodexSkillLibrary, type CodexSkillLibraryDetail } from './load-codex-skill-library.js';
 import { requestCodexSkillLibrarySave } from './request-codex-skill-library-save.js';
+import { requestCodexSkillFavoriteSave } from './request-codex-skill-favorite-save.js';
 
 export type SkillLibraryEditorState = {
   skillName: string;
@@ -16,6 +17,7 @@ export type SkillLibraryEditorState = {
   defaultCodexEffort: CodexEffort | null;
   loading: boolean;
   saving: boolean;
+  favoriteSaving: boolean;
   error: string;
   notice: string;
   onSaved?: (skill: CodexSkillLibraryDetail) => void | Promise<void>;
@@ -30,6 +32,7 @@ export const skillLibraryEditorState: SkillLibraryEditorState = {
   defaultCodexEffort: null,
   loading: false,
   saving: false,
+  favoriteSaving: false,
   error: '',
   notice: '',
 };
@@ -169,6 +172,17 @@ export function renderSkillLibraryEditorModal(): void {
   message.textContent = skillLibraryEditorState.error || skillLibraryEditorState.notice;
   footer.append(message);
   if (skillLibraryEditorState.detail) {
+    const favorite = button(
+      skillLibraryEditorState.favoriteSaving
+        ? 'Saving favorite…'
+        : skillLibraryEditorState.detail.favorite ? 'Remove from favorites' : 'Mark as favorite',
+      () => { void toggleSkillLibraryFavorite(); },
+      'ghost-button skill-favorite-toggle',
+      'skill-editor-favorite',
+    );
+    favorite.setAttribute('aria-pressed', String(skillLibraryEditorState.detail.favorite));
+    favorite.disabled = skillLibraryEditorState.favoriteSaving || skillLibraryEditorState.saving;
+    footer.append(favorite);
     const reload = button('Reload', () => { void reloadSkillLibraryDraft(); }, 'ghost-button', 'skill-editor-reload');
     reload.disabled = skillLibraryEditorState.loading || skillLibraryEditorState.saving;
     footer.append(reload);
@@ -201,6 +215,7 @@ export async function openSkillLibraryEditor(input: {
     defaultCodexEffort: null,
     loading: true,
     saving: false,
+    favoriteSaving: false,
     error: '',
     notice: '',
     onSaved: input.onSaved,
@@ -273,6 +288,31 @@ export async function saveSkillLibraryDraft(): Promise<boolean> {
   skillLibraryEditorState.notice = 'Skill saved. Inherited run settings have been refreshed.';
   telemetry('codex-skill-library-saved', { skillName: detail.name });
   await onSaved?.(result.skill);
+  renderSkillLibraryEditorModal();
+  return true;
+}
+
+export async function toggleSkillLibraryFavorite(): Promise<boolean> {
+  const detail = skillLibraryEditorState.detail;
+  if (!detail || skillLibraryEditorState.favoriteSaving) return false;
+  const generation = skillEditorGeneration;
+  const favorite = !detail.favorite;
+  skillLibraryEditorState.favoriteSaving = true;
+  skillLibraryEditorState.error = '';
+  skillLibraryEditorState.detail = { ...detail, favorite };
+  renderSkillLibraryEditorModal();
+  const result = await requestCodexSkillFavoriteSave(detail.name, favorite);
+  if (generation !== skillEditorGeneration || detail.name !== skillLibraryEditorState.skillName) return false;
+  skillLibraryEditorState.favoriteSaving = false;
+  if (!result.ok || !result.skill) {
+    skillLibraryEditorState.detail = detail;
+    skillLibraryEditorState.error = result.error || 'Could not save this favorite.';
+    renderSkillLibraryEditorModal();
+    return false;
+  }
+  skillLibraryEditorState.detail = result.skill;
+  skillLibraryEditorState.notice = favorite ? 'Added to favorites.' : 'Removed from favorites.';
+  await skillLibraryEditorState.onSaved?.(result.skill);
   renderSkillLibraryEditorModal();
   return true;
 }

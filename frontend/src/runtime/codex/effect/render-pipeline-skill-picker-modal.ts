@@ -4,6 +4,7 @@
  */
 import { pipelineSkillPickerModal } from '../../dom.js';
 import { categoryForSkill, colorForSkillCategory, skillCategories, type SkillCategory } from '../helper/skill-category.js';
+import { sortSkillsByFavorite } from '../helper/skill-library-presentation.js';
 import type { CodexSkillSummary } from './load-codex-skills.js';
 import { openSkillLibraryEditor } from './render-skill-library-editor-modal.js';
 
@@ -59,11 +60,11 @@ function availableCategories(): Array<SkillCategory | 'All'> {
 
 function filteredSkills(): CodexSkillSummary[] {
   const query = pipelineSkillPickerState.query.trim().toLowerCase();
-  return pipelineSkillPickerState.skills.filter((skill) => {
+  return sortSkillsByFavorite(pipelineSkillPickerState.skills.filter((skill) => {
     const category = categoryForSkill(skill.name);
     if (pipelineSkillPickerState.selectedCategory !== 'All' && category !== pipelineSkillPickerState.selectedCategory) return false;
     return !query || `${skill.name} ${skill.description} ${skill.source} ${category}`.toLowerCase().includes(query);
-  });
+  }));
 }
 
 function selectedSkill(): CodexSkillSummary | undefined {

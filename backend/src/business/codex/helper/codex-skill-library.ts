@@ -37,6 +37,7 @@ export type CodexSkillCatalogEntry = {
   editable: boolean;
   readOnlyReason: string | null;
   revision: string;
+  favorite: boolean;
   defaultCodexModel: CodexModel | null;
   defaultCodexEffort: CodexEffort | null;
   effectiveCodexModel: string;
@@ -151,7 +152,7 @@ export function writeEditableSkillFile(input: {
 
 function catalogEntry(input: {
   skill: CodexSkillSummary;
-  defaults: Map<string, { defaultCodexModel: CodexModel | null; defaultCodexEffort: CodexEffort | null }>;
+  defaults: Map<string, { favorite: boolean; defaultCodexModel: CodexModel | null; defaultCodexEffort: CodexEffort | null }>;
   fallbackModel: string;
   fallbackEffort: string;
 }): CodexSkillCatalogEntry {
@@ -165,6 +166,7 @@ function catalogEntry(input: {
     editable: input.skill.editable,
     readOnlyReason: input.skill.readOnlyReason,
     revision: input.skill.revision,
+    favorite: defaults?.favorite === true,
     defaultCodexModel,
     defaultCodexEffort,
     effectiveCodexModel: defaultCodexModel || input.fallbackModel,
@@ -242,11 +244,41 @@ export function saveCodexSkillLibrary(input: {
   const allSkills = scanCodexSkills({ workspaceRoot, serverRoot: runtimeServerRoot(input.runtime ?? {}) });
   const skill = allSkills.find((candidate) => candidate.name === input.skillName);
   if (!skill) return { ok: false, statusCode: 404, error: 'Skill not found.', skillName: input.skillName };
-  if (!skill.editable || skill.source === 'system' || skill.source === 'plugin') {
-    return { ok: false, statusCode: 403, error: skill.readOnlyReason || 'This skill is read-only.', skillName: input.skillName };
-  }
   if ('skillFile' in input.payload || 'filePath' in input.payload || 'path' in input.payload) {
     return { ok: false, statusCode: 400, error: 'Filesystem paths are not accepted.', skillName: input.skillName };
+  }
+  const availableSkillNames = allSkills.map((entry) => entry.name);
+  const before = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot, availableSkillNames });
+  const priorRecord = before.store.skillLibrary.find((entry) => entry.skillName === skill.name);
+  const favoriteOnly = Object.keys(input.payload).every((key) => key === 'favorite') && typeof input.payload.favorite === 'boolean';
+  if (favoriteOnly) {
+    const updatedAt = new Date().toISOString();
+    const skillLibrary = [
+      ...before.store.skillLibrary.filter((entry) => entry.skillName !== skill.name),
+      {
+        skillName: skill.name,
+        favorite: input.payload.favorite === true,
+        defaultCodexModel: priorRecord?.defaultCodexModel ?? null,
+        defaultCodexEffort: priorRecord?.defaultCodexEffort ?? null,
+        updatedAt,
+      },
+    ];
+    try {
+      writeCodexPipelineStore({
+        decisionOsRoot: input.decisionOsRoot,
+        availableSkillNames,
+        store: { ...before.store, skillLibrary },
+      });
+    } catch {
+      return { ok: false, statusCode: 500, error: 'Could not save the skill library.', skillName: input.skillName };
+    }
+    const detail = readCodexSkillLibraryDetail({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, skillName: input.skillName });
+    return detail
+      ? { ok: true, statusCode: 200, skill: detail }
+      : { ok: false, statusCode: 500, error: 'The saved skill could not be reloaded.', skillName: input.skillName };
+  }
+  if (!skill.editable || skill.source === 'system' || skill.source === 'plugin') {
+    return { ok: false, statusCode: 403, error: skill.readOnlyReason || 'This skill is read-only.', skillName: input.skillName };
   }
   if (!Object.prototype.hasOwnProperty.call(input.payload, 'markdown')
     || !Object.prototype.hasOwnProperty.call(input.payload, 'revision')
@@ -275,12 +307,10 @@ export function saveCodexSkillLibrary(input: {
       currentRevision,
     };
   }
-  const availableSkillNames = allSkills.map((entry) => entry.name);
-  const before = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot, availableSkillNames });
   const updatedAt = new Date().toISOString();
   const skillLibrary = [
     ...before.store.skillLibrary.filter((entry) => entry.skillName !== skill.name),
-    { skillName: skill.name, defaultCodexModel: codexModel, defaultCodexEffort: codexEffort, updatedAt },
+    { skillName: skill.name, favorite: priorRecord?.favorite === true, defaultCodexModel: codexModel, defaultCodexEffort: codexEffort, updatedAt },
   ];
 
   let writtenRevision = '';

@@ -59,6 +59,7 @@ test('pipeline store starts empty and preserves ordered reusable definitions acr
         runs: [],
         skillLibrary: [{
           skillName: 'analysis',
+          favorite: true,
           defaultCodexModel: 'gpt-5.4',
           defaultCodexEffort: 'high',
           updatedAt: '2026-07-10T00:00:00.000Z',
@@ -72,6 +73,7 @@ test('pipeline store starts empty and preserves ordered reusable definitions acr
     assert.deepEqual(loaded.store.steps.map((step) => step.id), ['step-a', 'step-b']);
     assert.deepEqual(loaded.store.steps[1].skills.map((skill) => skill.skillName), ['task-list']);
     assert.equal(loaded.store.skillLibrary[0].defaultCodexModel, 'gpt-5.4');
+    assert.equal(loaded.store.skillLibrary[0].favorite, true);
     assert.equal(loaded.invalidReferences.length, 0);
     assert.equal(readFileSync(pipelineStoreFile(decisionOsRoot), 'utf8').includes(workspace), false);
   } finally {
@@ -110,6 +112,7 @@ test('pipeline store normalization is deterministic and reports duplicate, stale
   assert.equal(normalized.store.pipelines[0].name, 'First');
   assert.equal(normalized.store.steps.length, 1);
   assert.deepEqual(normalized.store.skillLibrary.map((entry) => entry.skillName), ['analysis', 'stale-skill']);
+  assert.deepEqual(normalized.store.skillLibrary.map((entry) => entry.favorite), [false, false]);
   assert.deepEqual(normalized.invalidReferences, [
     { kind: 'skill', reference: 'missing-skill', pipelineId: 'pipeline-a', stepId: 'step-a' },
     { kind: 'step', reference: 'missing-step', pipelineId: 'pipeline-a', stepId: 'missing-step' },
