@@ -241,13 +241,23 @@
 }
 
 .thread-codex-button {
-  --terminal-button-background: linear-gradient(165deg, #18222d 0%, #121920 54%, #0c1117 100%);
-  --terminal-button-color: color-mix(in srgb, var(--thread-accent), white 52%);
-  --terminal-button-gradient-shadow: linear-gradient(90deg, color-mix(in srgb, var(--thread-accent), transparent 30%), rgba(87, 189, 255, 0.2));
+  --terminal-button-background: linear-gradient(165deg, #203421 0%, #172418 54%, #101811 100%);
+  --terminal-button-color: #c9f6cf;
+  --terminal-button-gradient-shadow: linear-gradient(90deg, rgba(116, 214, 128, 0.56), rgba(62, 156, 84, 0.42));
+  --fx-shell-control:
+    inset 0 0 0 1px rgba(116, 214, 128, 0.42),
+    inset 0 0 12px rgba(116, 214, 128, 0.2),
+    0 0 12px rgba(62, 156, 84, 0.16);
   flex: 0 0 auto;
   height: 28px;
   min-height: 28px;
   padding-inline: 7px;
+}
+
+.thread-codex-run-icon {
+  width: 18px;
+  height: 18px;
+  flex-basis: 18px;
 }
 
 .thread-target {
