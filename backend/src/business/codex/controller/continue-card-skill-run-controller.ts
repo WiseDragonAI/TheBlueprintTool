@@ -247,7 +247,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     const current = publicRun(runtimeRuns(runtime)[runId]);
     return {
       ok: true, statusCode: 202, run: current, queued: current.status === 'pending',
-      queuePosition: current.status === 'pending' ? unifiedCodexQueuePosition({ decisionOsRoot, id: itemId, createdAt }) : null,
+      queuePosition: current.status === 'pending' ? unifiedCodexQueuePosition({ decisionOsRoot, id: itemId, createdAt, runtime }) : null,
     };
   }
   logCodexContinueDebug('spawn-prep', { traceId, ledgerId, cardId, runId, newSession, command: command.command, args: command.args, model: command.model, effort: command.effort, sessionId, promptChars: prompt.length, messageCount: messages.length, outputFile });

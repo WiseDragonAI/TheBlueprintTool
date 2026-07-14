@@ -70,6 +70,6 @@ export async function readCodexPipelineRunController(
     canCancel: run.status === 'pending' || run.status === 'running',
     canRestart: terminal,
     canContinue: terminal,
-    queuePosition: run.status === 'pending' ? unifiedCodexQueuePosition({ decisionOsRoot, id: run.id, createdAt: run.createdAt }) : null,
+    queuePosition: run.status === 'pending' ? unifiedCodexQueuePosition({ decisionOsRoot, id: run.id, createdAt: run.createdAt, runtime }) : null,
   };
 }

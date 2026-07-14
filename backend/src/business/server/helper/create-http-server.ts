@@ -45,7 +45,7 @@ import { cancelCodexPipelineRunController } from '../../codex/controller/cancel-
 import { restartCodexPipelineRunController } from '../../codex/controller/restart-codex-pipeline-run-controller.js';
 import { resumeCodexPipelineRuns } from '../../codex/helper/resume-codex-pipeline-runs.js';
 import { recoverCodexProcessQueue } from '../../codex/helper/codex-process-queue.js';
-import { scheduleCodexProcesses } from '../../codex/helper/codex-process-scheduler.js';
+import { nextPendingCodexProcessCreatedAt, pendingCodexProcessEntries, runningCodexProcessCount, scheduleCodexProcesses } from '../../codex/helper/codex-process-scheduler.js';
 import { createDecisionOsProject, discoverDecisionOsProjects, resolveCatalogProject, saveProjectMetadata } from './project-catalog.js';
 import { isGlobalProjectEndpoint, isProjectSensitiveEndpoint, parseProjectUrlScope } from './project-url-scope.js';
 import { ensureLedgerCliShim } from '../../codex/helper/decision-os-codex-runtime.js';
@@ -196,6 +196,43 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     watcher: ReturnType<typeof watchCardContentFiles>;
   };
   const projectContexts = new Map<string, ProjectContext>();
+  const globalCodexProcessCapacity = (): number => {
+    const settings = runtime.decisionOsSettings && typeof runtime.decisionOsSettings === 'object' ? runtime.decisionOsSettings as AnyRecord : {};
+    return normalizedConcurrentCodexProcesses(process.env.CODEX_MAX_CONCURRENT_PROCESSES ?? settings.maxConcurrentCodexProcesses ?? 1) ?? 1;
+  };
+  const globalCodexRunningProcessCount = (): number => [...projectContexts.values()]
+    .reduce((count, context) => count + runningCodexProcessCount({ codexSkillRuns: context.runtime.codexSkillRuns }), 0);
+  const globalCodexQueuePosition = (id: string): number => {
+    const pending = [...projectContexts.keys()].flatMap((root, rootOrder) => pendingCodexProcessEntries(root)
+      .map((entry) => ({ ...entry, order: rootOrder * 2_000_000 + entry.order })))
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.order - right.order);
+    const index = pending.findIndex((entry) => entry.id === id);
+    return index < 0 ? 1 : index + 1;
+  };
+  const scheduleGlobalCodexProcesses = (): Promise<AnyRecord> => {
+    const active = runtime.globalCodexSchedulePromise;
+    if (active instanceof Promise) return active as Promise<AnyRecord>;
+    const schedule = (async (): Promise<AnyRecord> => {
+      const launched: AnyRecord[] = [];
+      const capacity = globalCodexProcessCapacity();
+      while (globalCodexRunningProcessCount() < capacity) {
+        const candidate = [...projectContexts.entries()]
+          .map(([root, context]) => ({ root, context, createdAt: nextPendingCodexProcessCreatedAt(root) }))
+          .filter((entry): entry is { root: string; context: ProjectContext; createdAt: string } => Boolean(entry.createdAt))
+          .sort((left, right) => left.createdAt.localeCompare(right.createdAt))[0];
+        if (!candidate) break;
+        const result = await scheduleCodexProcesses({ decisionOsRoot: candidate.root, runtime: candidate.context.runtime, launchLimit: 1 });
+        const localLaunches = Array.isArray(result.launched) ? result.launched as AnyRecord[] : [];
+        launched.push(...localLaunches);
+        if (localLaunches.length === 0 || result.ok === false) break;
+      }
+      return { ok: launched.every((entry) => entry.ok !== false), launched, capacity };
+    })().finally(() => {
+      if (runtime.globalCodexSchedulePromise === schedule) delete runtime.globalCodexSchedulePromise;
+    });
+    Object.defineProperty(runtime, 'globalCodexSchedulePromise', { value: schedule, writable: true, configurable: true, enumerable: false });
+    return schedule;
+  };
   const projectContext = (activeDecisionOsRoot: string, projectId: string): ProjectContext => {
     const existing = projectContexts.get(activeDecisionOsRoot);
     if (existing) return existing;
@@ -207,6 +244,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     if (activeDecisionOsRoot !== masterDecisionOsRoot) {
       readDecisionOsSettings({ action_payload: { decisionOsRoot: activeDecisionOsRoot }, runtime_state: projectRuntime });
     }
+    projectRuntime.globalCodexProcessCapacity = globalCodexProcessCapacity;
+    projectRuntime.globalCodexRunningProcessCount = globalCodexRunningProcessCount;
+    projectRuntime.globalCodexQueuePosition = globalCodexQueuePosition;
     const broadcast = (message: string): void => {
       for (const client of clients) client.write(message);
       for (const client of globalContentEventClients) client.write(message);
@@ -233,7 +273,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       broadcast(`event: ledger-content-change\ndata: ${JSON.stringify({ ...event, projectId })}\n\n`);
     };
     projectRuntime.onPipelineLedgerChange = publishLedger;
-    projectRuntime.scheduleCodexProcesses = (): Promise<AnyRecord> => scheduleCodexProcesses({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime });
+    projectRuntime.scheduleCodexProcesses = scheduleGlobalCodexProcesses;
     projectRuntime.onCodexRunSettled = (event: AnyRecord): void => {
       if (event.pipelineRunId && event.pipelineTerminal === true) {
         const pipelineStatus = String(event.pipelineStatus ?? event.status ?? 'complete');
@@ -320,25 +360,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       activeResponse.end(JSON.stringify(loadLedgerContentFiles(ledger, activeDecisionOsRoot)));
     };
     if (url === '/api/settings/codex-processes' && request.method === 'GET') {
-      if (!projectScope && projects.length !== 1) {
-        response.statusCode = 400;
-        response.setHeader('content-type', 'application/json');
-        response.end(JSON.stringify({ ok: false, error: 'Project id is required in the URL.' }));
-        return;
-      }
-      const settings = readDecisionOsSettings({ action_payload: { decisionOsRoot }, runtime_state: requestRuntime }).settings as AnyRecord;
+      const settings = readDecisionOsSettings({ action_payload: { decisionOsRoot: masterDecisionOsRoot }, runtime_state: runtime }).settings as AnyRecord;
       const configured = normalizedConcurrentCodexProcesses(settings.maxConcurrentCodexProcesses) ?? 1;
       response.setHeader('content-type', 'application/json');
       response.end(JSON.stringify({ ok: true, maxConcurrentCodexProcesses: Number.isInteger(configured) ? configured : 1, minimum: 1, maximum: 32 }));
       return;
     }
     if (url === '/api/settings/codex-processes' && request.method === 'PATCH') {
-      if (!projectScope && projects.length !== 1) {
-        response.statusCode = 400;
-        response.setHeader('content-type', 'application/json');
-        response.end(JSON.stringify({ ok: false, error: 'Project id is required in the URL.' }));
-        return;
-      }
       const bodyBuffer = await readRequestBuffer(request);
       let body: AnyRecord = {};
       try {
@@ -346,8 +374,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       } catch {
         body = {};
       }
-      const result = saveCodexProcessSettings({ decisionOsRoot, runtime: requestRuntime, maxConcurrentCodexProcesses: body.maxConcurrentCodexProcesses });
-      if (result.ok === true) void scheduleCodexProcesses({ decisionOsRoot, runtime: requestRuntime });
+      const result = saveCodexProcessSettings({ decisionOsRoot: masterDecisionOsRoot, runtime, maxConcurrentCodexProcesses: body.maxConcurrentCodexProcesses });
+      if (result.ok === true) void scheduleGlobalCodexProcesses();
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
       response.end(JSON.stringify(result));

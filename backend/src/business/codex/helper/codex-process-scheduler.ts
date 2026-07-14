@@ -11,23 +11,42 @@ import { continueCardSkillRunController } from '../controller/continue-card-skil
 type AnyRecord = Record<string, unknown>;
 
 export function runningCodexProcessCount(runtime: AnyRecord): number {
+  const sharedCount = runtime.globalCodexRunningProcessCount;
+  if (typeof sharedCount === 'function') return Math.max(0, Number(sharedCount()) || 0);
   const runs = runtime.codexSkillRuns && typeof runtime.codexSkillRuns === 'object' ? runtime.codexSkillRuns as Record<string, AnyRecord> : {};
   return Object.values(runs).filter((run) => run.status === 'running').length;
 }
 
-export function unifiedCodexQueuePosition(input: { decisionOsRoot: string; id: string; createdAt: string }): number {
+export function nextPendingCodexProcessCreatedAt(decisionOsRoot: string): string | null {
+  const pipeline = readCodexPipelineStore({ decisionOsRoot }).store.runs.find((run) => run.status === 'pending');
+  const process = readCodexProcessQueue(decisionOsRoot).find((item) => item.status === 'pending');
+  if (!pipeline) return process?.createdAt ?? null;
+  if (!process) return pipeline.createdAt;
+  return process.createdAt <= pipeline.createdAt ? process.createdAt : pipeline.createdAt;
+}
+
+export function pendingCodexProcessEntries(decisionOsRoot: string): Array<{ id: string; createdAt: string; order: number }> {
+  return [
+    ...readCodexPipelineStore({ decisionOsRoot }).store.runs.filter((run) => run.status === 'pending').map((run, order) => ({ id: run.id, createdAt: run.createdAt, order })),
+    ...readCodexProcessQueue(decisionOsRoot).filter((item) => item.status === 'pending').map((item, order) => ({ id: item.id, createdAt: item.createdAt, order: 1_000_000 + order })),
+  ];
+}
+
+export function unifiedCodexQueuePosition(input: { decisionOsRoot: string; id: string; createdAt: string; runtime?: AnyRecord }): number {
+  const sharedPosition = input.runtime?.globalCodexQueuePosition;
+  if (typeof sharedPosition === 'function') return Math.max(1, Number(sharedPosition(input.id)) || 1);
   const pending = [
-    ...readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot }).store.runs.filter((run) => run.status === 'pending').map((run, order) => ({ id: run.id, createdAt: run.createdAt, order })),
-    ...readCodexProcessQueue(input.decisionOsRoot).filter((item) => item.status === 'pending').map((item, order) => ({ id: item.id, createdAt: item.createdAt, order: 1_000_000 + order })),
+    ...pendingCodexProcessEntries(input.decisionOsRoot),
   ].sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.order - right.order);
   const index = pending.findIndex((entry) => entry.id === input.id);
   return index < 0 ? 1 : index + 1;
 }
 
-async function runCodexProcessSchedule(input: { decisionOsRoot: string; runtime: AnyRecord }): Promise<AnyRecord> {
+async function runCodexProcessSchedule(input: { decisionOsRoot: string; runtime: AnyRecord; launchLimit?: number }): Promise<AnyRecord> {
   const launched: AnyRecord[] = [];
   const capacity = maxConcurrentCodexProcesses(input.runtime);
-  while (runningCodexProcessCount(input.runtime) < capacity) {
+  const launchLimit = Math.max(1, input.launchLimit ?? Number.POSITIVE_INFINITY);
+  while (runningCodexProcessCount(input.runtime) < capacity && launched.length < launchLimit) {
     const pipeline = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot }).store.runs.find((run) => run.status === 'pending');
     const thread = readCodexProcessQueue(input.decisionOsRoot).find((item) => item.status === 'pending');
     if (!pipeline && !thread) break;
@@ -52,7 +71,7 @@ async function runCodexProcessSchedule(input: { decisionOsRoot: string; runtime:
   return { ok: launched.every((entry) => entry.ok !== false), launched, capacity };
 }
 
-export function scheduleCodexProcesses(input: { decisionOsRoot: string; runtime: AnyRecord }): Promise<AnyRecord> {
+export function scheduleCodexProcesses(input: { decisionOsRoot: string; runtime: AnyRecord; launchLimit?: number }): Promise<AnyRecord> {
   const active = input.runtime.codexProcessSchedulePromise;
   if (active instanceof Promise) return active as Promise<AnyRecord>;
   const schedule = runCodexProcessSchedule(input).finally(() => {

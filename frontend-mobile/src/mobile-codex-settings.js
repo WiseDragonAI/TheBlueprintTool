@@ -26,3 +26,8 @@ export async function saveCodexProcessSettings(fetchImpl, value) {
   if (!response.ok || payload?.ok !== true) throw new Error(payload?.error || `Request failed with HTTP ${response.status}.`);
   return payload;
 }
+
+export function stepCodexProcessLimit(value, delta) {
+  const current = validateCodexProcessLimit(value);
+  return Math.min(codexProcessLimitRange.maximum, Math.max(codexProcessLimitRange.minimum, current + Math.sign(delta)));
+}

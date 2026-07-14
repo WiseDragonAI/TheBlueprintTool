@@ -28,6 +28,11 @@ type AnyRecord = Record<string, unknown>;
 type TerminalStatus = 'complete' | 'failed' | 'cancelled';
 
 export function maxConcurrentCodexProcesses(runtime: AnyRecord): number {
+  const sharedCapacity = runtime.globalCodexProcessCapacity;
+  if (typeof sharedCapacity === 'function') {
+    const configured = Number(sharedCapacity());
+    if (Number.isFinite(configured)) return Math.min(32, Math.max(1, Math.floor(configured)));
+  }
   const settings = runtime.decisionOsSettings && typeof runtime.decisionOsSettings === 'object'
     ? runtime.decisionOsSettings as AnyRecord
     : {};
