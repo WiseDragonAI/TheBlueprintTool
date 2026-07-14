@@ -109,6 +109,23 @@ test('shows task-active only while its Codex process is running', () => {
   assert.match(mobile, /Codex \$\{task\.codexRunId\}/);
 });
 
+test('anchors an active task to the current Codex run instead of the persisted first activation', () => {
+  const firstActivation = '2026-07-10T10:30:00.000Z';
+  const currentRunStartedAt = '2026-07-10T10:35:07.000Z';
+  const markdown = task().markdown.replace('#task-waiting', '#task-active').replace('Waiting since:', `Active since: ${firstActivation}\nWaiting since:`);
+  const parsed = parseMasterTaskMarkdown(task({
+    markdown,
+    codexRunId: 'run-current',
+    codexStatus: 'running',
+    codexStartedAt: currentRunStartedAt
+  }));
+  assert.equal(parsed.activeSince, currentRunStartedAt);
+  assert.equal(parsed.activeTime, Date.parse(currentRunStartedAt));
+  assert.equal(activeStopwatch(parsed.activeSince, Date.parse('2026-07-10T10:37:12.000Z')), '02:05');
+  assert.match(mobile, /payload\.activeSkill\?\.startedAt \?\? payload\.run\?\.resumedAt \?\? payload\.run\?\.startedAt/);
+  assert.match(mobile, /payload\.run\?\.startedAt \?\? payload\.startedAt/);
+});
+
 test('shows queued Codex pipelines in Active with their one-based position', () => {
   const result = deriveControlRoom([task({
     codexPipelineRunId: 'pipeline-queued',
