@@ -116,7 +116,7 @@ function renderThreadActions(threadId: string): void {
   if (!cardId) return;
 
   const button = document.createElement('button');
-  button.className = 'thread-codex-button terminal-button terminal-button--compact';
+  button.className = 'thread-codex-button thread-action-button terminal-button terminal-button--compact';
   button.type = 'button';
   button.dataset.action = 'process-thread-codex';
   button.dataset.threadId = threadId;

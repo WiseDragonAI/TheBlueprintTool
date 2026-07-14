@@ -280,6 +280,7 @@ test('thread selection persists the complete default pair and synchronizes a mou
     assert.equal(button.dataset.codexCardId, 'card-a');
     assert.equal(button.dataset.codexModel, 'gpt-5.6-sol');
     assert.equal(button.dataset.codexEffort, 'medium');
+    assert.equal(button.classList.contains('thread-action-button'), true);
     assert.equal(button.title, 'Run Codex from this thread');
     assert.equal(button.querySelector('.thread-codex-run-icon')?.tagName, 'SVG');
     assert.equal(button.querySelector('.terminal-button__label')?.textContent, 'RUN');
