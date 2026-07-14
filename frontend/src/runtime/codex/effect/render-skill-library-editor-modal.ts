@@ -18,6 +18,7 @@ export type SkillLibraryEditorState = {
   loading: boolean;
   saving: boolean;
   favoriteSaving: boolean;
+  availableTags: string[];
   tags: string[];
   tagsSaving: boolean;
   error: string;
@@ -35,6 +36,7 @@ export const skillLibraryEditorState: SkillLibraryEditorState = {
   loading: false,
   saving: false,
   favoriteSaving: false,
+  availableTags: [],
   tags: [],
   tagsSaving: false,
   error: '',
@@ -153,18 +155,31 @@ export function renderSkillLibraryEditorModal(): void {
       }),
     );
 
-    const tagsField = document.createElement('label');
+    const tagsField = document.createElement('fieldset');
     tagsField.className = 'codex-field skill-tags-field';
-    const tagsLabel = document.createElement('span');
+    const tagsLabel = document.createElement('legend');
     tagsLabel.textContent = 'Tags';
-    const tagsInput = document.createElement('input');
-    tagsInput.setAttribute('aria-label', 'Skill tags');
-    tagsInput.value = skillLibraryEditorState.tags.join(', ');
-    tagsInput.disabled = skillLibraryEditorState.tagsSaving;
-    tagsInput.addEventListener('input', () => {
-      skillLibraryEditorState.tags = [...new Set(tagsInput.value.split(',').map((tag) => tag.trim()).filter(Boolean))].slice(0, 8);
-    });
-    tagsField.replaceChildren(tagsLabel, tagsInput);
+    const tagChoices = document.createElement('div');
+    tagChoices.className = 'skill-editor-tag-choices';
+    for (const tag of skillLibraryEditorState.availableTags) {
+      const choice = document.createElement('label');
+      choice.className = 'skill-editor-tag-choice';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = tag;
+      checkbox.checked = skillLibraryEditorState.tags.includes(tag);
+      checkbox.disabled = skillLibraryEditorState.tagsSaving;
+      checkbox.addEventListener('change', () => {
+        skillLibraryEditorState.tags = checkbox.checked
+          ? [...new Set([...skillLibraryEditorState.tags, tag])]
+          : skillLibraryEditorState.tags.filter((candidate) => candidate !== tag);
+      });
+      const text = document.createElement('span');
+      text.textContent = tag;
+      choice.append(checkbox, text);
+      tagChoices.append(choice);
+    }
+    tagsField.replaceChildren(tagsLabel, tagChoices);
 
     const markdownField = document.createElement('label');
     markdownField.className = 'codex-field skill-markdown-field';
@@ -236,6 +251,7 @@ export async function openSkillLibraryEditor(input: {
     loading: true,
     saving: false,
     favoriteSaving: false,
+    availableTags: [],
     tags: [],
     tagsSaving: false,
     error: '',
@@ -270,6 +286,7 @@ export async function reloadSkillLibraryDraft(): Promise<void> {
   skillLibraryEditorState.markdown = result.skill.markdown;
   skillLibraryEditorState.defaultCodexModel = result.skill.defaultCodexModel;
   skillLibraryEditorState.defaultCodexEffort = result.skill.defaultCodexEffort;
+  skillLibraryEditorState.availableTags = result.availableTags;
   skillLibraryEditorState.tags = [...(result.skill.tags ?? [])];
   renderSkillLibraryEditorModal();
 }

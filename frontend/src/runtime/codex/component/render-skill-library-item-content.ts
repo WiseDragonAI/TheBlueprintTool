@@ -7,15 +7,23 @@ import { colorForSkillTag, decorateSkillCategoryLabel, tagsForSkill } from '../h
 export type SkillLibraryItem = {
   name: string;
   description?: string;
+  favorite?: boolean;
   tags?: readonly string[];
 };
 
 export function renderSkillLibraryItemContent(skill: SkillLibraryItem): HTMLElement[] {
   const tags = tagsForSkill(skill);
   const name = document.createElement('strong');
-  name.className = 'skill-result-name';
+  name.className = 'skill-result-name skill-result-heading';
   name.textContent = skill.name;
   name.style.setProperty('--skill-category-color', colorForSkillTag(tags[0]));
+  if (skill.favorite) {
+    const favorite = document.createElement('span');
+    favorite.className = 'skill-favorite-star';
+    favorite.setAttribute('aria-label', 'Favorite');
+    favorite.textContent = '★';
+    name.append(favorite);
+  }
 
   const description = document.createElement('span');
   description.className = 'skill-result-description';

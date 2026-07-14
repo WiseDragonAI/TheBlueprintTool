@@ -1124,11 +1124,40 @@
 
 .skill-library-editor-body {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 12px;
   min-height: 0;
   overflow: hidden;
   padding-top: 14px;
+}
+
+.skill-tags-field {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.skill-tags-field legend {
+  margin-bottom: 7px;
+}
+
+.skill-editor-tag-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.skill-editor-tag-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  color: var(--text);
+  text-transform: none;
 }
 
 .skill-library-metadata {

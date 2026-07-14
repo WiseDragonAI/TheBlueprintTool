@@ -20,6 +20,7 @@ import type {
   CodexSkillLibraryRecord,
 } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import { codexPipelineStoreVersion } from '../../../../../shared/schemas/codex-pipeline-types.js';
+import { codexSkillTags } from './codex-skill-tags.js';
 import { isAllowedCodexEffort, isAllowedCodexModel } from './resolve-codex-command.js';
 
 type AnyRecord = Record<string, unknown>;
@@ -51,7 +52,8 @@ function nullableText(value: unknown): string | null {
 
 function skillTags(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  return [...new Set(value.map(text).filter((tag) => tag.length > 0 && tag.length <= 40))].slice(0, 8);
+  const allowed = new Set<string>(codexSkillTags);
+  return [...new Set(value.map(text).filter((tag) => allowed.has(tag)))];
 }
 
 function status(value: unknown): CodexPipelineStatus {

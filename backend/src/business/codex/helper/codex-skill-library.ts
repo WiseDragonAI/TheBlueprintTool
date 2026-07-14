@@ -27,6 +27,9 @@ import {
 } from './scan-codex-skills.js';
 import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand } from './resolve-codex-command.js';
 import { runtimeServerRoot } from './server-skill-context.js';
+import { codexSkillTags, normalizeCodexSkillTags } from './codex-skill-tags.js';
+
+export { codexSkillTags } from './codex-skill-tags.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -237,10 +240,7 @@ function defaultEffort(value: unknown): CodexEffort | null | undefined {
 }
 
 function savedTags(value: unknown): string[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const tags = [...new Set(value.map(text).filter(Boolean))];
-  if (tags.length > 8 || tags.some((tag) => tag.length > 40)) return undefined;
-  return tags;
+  return normalizeCodexSkillTags(value);
 }
 
 export function saveCodexSkillLibrary(input: {
@@ -269,7 +269,7 @@ export function saveCodexSkillLibrary(input: {
     : [...(priorRecord?.tags ?? [])];
   if (metadataOnly) {
     if (requestedFavorite === undefined) return { ok: false, statusCode: 400, error: 'Favorite must be a boolean.', skillName: input.skillName };
-    if (requestedTags === undefined) return { ok: false, statusCode: 400, error: 'Tags must contain at most 8 non-empty values of 40 characters or fewer.', skillName: input.skillName };
+    if (requestedTags === undefined) return { ok: false, statusCode: 400, error: `Tags must contain only values from: ${codexSkillTags.join(', ')}.`, skillName: input.skillName };
     const updatedAt = new Date().toISOString();
     const skillLibrary = [
       ...before.store.skillLibrary.filter((entry) => entry.skillName !== skill.name),

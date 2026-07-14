@@ -61,6 +61,7 @@ test('skill library routes save editable Markdown and defaults without exposing 
     assert.equal(detail.skill.defaultCodexEffort, null);
     assert.equal(detail.skill.favorite, false);
     assert.deepEqual(detail.skill.tags, []);
+    assert.deepEqual(detail.availableTags, ['Architecture', 'Implementation', 'Interface', 'Writing', 'Marketing', 'Product', 'Research', 'Automation', 'Artifacts', 'Platform']);
     assert.equal('skillFile' in detail.skill, false);
     assert.equal(detailText.includes(workspace), false);
 
@@ -110,15 +111,25 @@ test('skill library routes save editable Markdown and defaults without exposing 
     const tagsResponse = await fetch(`${baseUrl}/api/codex/skill-library/workspace-skill`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ tags: ['Research', 'Priority', 'Research'] }),
+      body: JSON.stringify({ tags: ['Research', 'Automation', 'Research'] }),
     });
     assert.equal(tagsResponse.status, 200);
     const tagged = await tagsResponse.json() as Record<string, any>;
-    assert.deepEqual(tagged.skill.tags, ['Research', 'Priority']);
+    assert.deepEqual(tagged.skill.tags, ['Research', 'Automation']);
     assert.equal(tagged.skill.favorite, true);
     assert.equal(readFileSync(workspaceFile, 'utf8'), markdownBeforeFavorite);
     const tagsCatalog = await fetch(`${baseUrl}/api/codex/skills`).then((response) => response.json()) as Record<string, any>;
-    assert.deepEqual(tagsCatalog.skills.find((entry: Record<string, any>) => entry.name === 'workspace-skill').tags, ['Research', 'Priority']);
+    assert.deepEqual(tagsCatalog.skills.find((entry: Record<string, any>) => entry.name === 'workspace-skill').tags, ['Research', 'Automation']);
+    assert.deepEqual(tagsCatalog.availableTags, detail.availableTags);
+
+    const unsupportedTagsResponse = await fetch(`${baseUrl}/api/codex/skill-library/workspace-skill`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ tags: ['Research', 'Priority'] }),
+    });
+    assert.equal(unsupportedTagsResponse.status, 400);
+    assert.match(String((await unsupportedTagsResponse.json() as Record<string, any>).error), /only values from/);
+    assert.deepEqual(JSON.parse(readFileSync(storeFile, 'utf8')).skillLibrary[0].tags, ['Research', 'Automation']);
 
     const staleResponse = await fetch(`${baseUrl}/api/codex/skill-library/workspace-skill`, {
       method: 'PUT',

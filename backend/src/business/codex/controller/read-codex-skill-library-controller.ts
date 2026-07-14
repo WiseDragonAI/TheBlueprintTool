@@ -3,7 +3,7 @@
  * WHY: Skill editing must use an immutable name instead of a client-provided filesystem path.
  */
 import { resolve } from 'node:path';
-import { readCodexSkillLibraryDetail } from '../helper/codex-skill-library.js';
+import { codexSkillTags, readCodexSkillLibraryDetail } from '../helper/codex-skill-library.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -19,7 +19,7 @@ export function readCodexSkillLibraryController(
   try {
     const skill = readCodexSkillLibraryDetail({ decisionOsRoot, runtime, skillName });
     if (!skill) return { ok: false, statusCode: 404, error: 'Skill not found.', skillName };
-    return { ok: true, statusCode: 200, skill };
+    return { ok: true, statusCode: 200, skill, availableTags: codexSkillTags };
   } catch (error) {
     return {
       ok: false,
