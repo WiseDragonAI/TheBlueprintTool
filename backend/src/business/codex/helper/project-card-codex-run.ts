@@ -26,12 +26,21 @@ export function projectCardCodexRun(input: {
   card.codexRunModel = input.codexModel;
   card.codexRunEffort = input.codexEffort;
   if (input.ownership === 'thread') {
+    delete card.codexRunId;
+    delete card.codexRunOutputFile;
     card.codexThreadRunId = input.runId;
     card.codexThreadRunOutputFile = input.outputFileRef;
   } else {
+    delete card.codexThreadRunId;
+    delete card.codexThreadRunOutputFile;
     card.codexRunId = input.runId;
     card.codexRunOutputFile = input.outputFileRef;
   }
+  delete card.codexPipelineRunId;
+  delete card.codexPipelineName;
+  delete card.codexPipelineStepId;
+  delete card.codexPipelineStepName;
+  delete card.codexSkillName;
   if (input.pipeline) {
     card.codexPipelineRunId = input.pipeline.runId;
     card.codexPipelineName = input.pipeline.name;
