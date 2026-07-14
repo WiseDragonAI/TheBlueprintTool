@@ -42,27 +42,42 @@ function writeSkill(root: string, name: string, references: Record<string, strin
 async function fixture(): Promise<{ root: string; sourceRoot: string }> {
   const root = await tempDir('decision-os-server-skills-');
   const sourceRoot = await tempDir('decision-os-skill-source-');
-  mkdirSync(join(root, '.decision-os'), { recursive: true });
-  writeFileSync(join(root, '.decision-os', 'skills.json'), JSON.stringify({
-    modelName: 'skills', cards: [], annotations: [], relationships: [], notes: {}, threadFiles: {},
-  }, null, 2));
   git(root, 'init');
   git(root, 'config', 'user.name', 'Decision OS Test');
   git(root, 'config', 'user.email', 'decision-os@example.test');
-  git(root, 'add', '.decision-os/skills.json');
-  git(root, 'commit', '-m', 'test: initialize skills ledger');
+  writeFileSync(join(root, 'README.md'), '# Server catalog\n');
+  git(root, 'add', 'README.md');
+  git(root, 'commit', '-m', 'test: initialize server catalog');
   return { root, sourceRoot };
+}
+
+async function fromRoot<T>(root: string, run: () => Promise<T>): Promise<T> {
+  const previous = process.cwd();
+  process.chdir(root);
+  try {
+    return await run();
+  } finally {
+    process.chdir(previous);
+  }
+}
+
+function skillCommand(root: string, argv: string[], emit?: (message: string) => void) {
+  return fromRoot(root, () => dispatchLedgerCliCommandController(argv, emit ? { emit } : {}));
 }
 
 test('skills create and update synchronize exact mirrors, tags, stable ids, resources, and focused commits', async () => {
   const { root, sourceRoot } = await fixture();
   const source = writeSkill(sourceRoot, 'shared-review', { 'guide.md': '# Guide v1\n', 'nested/policy.md': '# Policy\n' });
   const messages: string[] = [];
-  const created = await dispatchLedgerCliCommandController([
-    'skills', 'create', '--root', root, '--source', source, '--json',
-  ], { emit: (message) => messages.push(message) });
+  const created = await skillCommand(root, [
+    'skills', 'create', '--source', source, '--json',
+  ], (message) => messages.push(message));
   assert.equal(created.ok, true);
   assert.match(messages.join('\n'), /"skillName": "shared-review"/);
+  const firstState = JSON.parse(readFileSync(join(root, '.decision-os', 'state.json'), 'utf8'));
+  assert.deepEqual(firstState.ledgers, [{ id: 'skills', title: 'Skills', ledgerFile: '.decision-os/skills.json', cardId: 'ledger-card:skills' }]);
+  const firstOverview = JSON.parse(readFileSync(join(root, '.decision-os', 'ledgers-canvas.json'), 'utf8'));
+  assert.equal(firstOverview.cards.some((card: Record<string, unknown>) => card.id === 'ledger-card:skills' && card.targetLedgerId === 'skills'), true);
   const firstLedger = JSON.parse(readFileSync(join(root, '.decision-os', 'skills.json'), 'utf8'));
   const firstCards = firstLedger.cards.filter((card: Record<string, unknown>) => card.skillName === 'shared-review');
   assert.equal(firstCards.length, 3);
@@ -81,14 +96,14 @@ test('skills create and update synchronize exact mirrors, tags, stable ids, reso
     statSync(join(source, 'scripts', 'run.sh')).mode & 0o777,
   );
   const createFiles = git(root, 'show', '--pretty=format:', '--name-only', 'HEAD').split('\n').filter(Boolean);
-  assert.equal(createFiles.every((file) => file === '.decision-os/skills.json' || file.startsWith('.decision-os/cards/skills/') || file.startsWith('.decision-os/threads/skills/') || file.startsWith('.skills/shared-review/')), true);
+  assert.equal(createFiles.every((file) => file === '.decision-os/skills.json' || file === '.decision-os/state.json' || file === '.decision-os/ledgers-canvas.json' || file.startsWith('.decision-os/cards/skills/') || file.startsWith('.decision-os/threads/skills/') || file.startsWith('.skills/shared-review/')), true);
 
   const mainId = firstCards.find((card: Record<string, unknown>) => card.skillRole === 'main').id;
   const guideId = firstCards.find((card: Record<string, unknown>) => card.skillFile === '.skills/shared-review/references/guide.md').id;
   writeFileSync(join(root, 'unrelated.txt'), 'keep staged\n');
   git(root, 'add', 'unrelated.txt');
   writeSkill(sourceRoot, 'shared-review', { 'guide.md': '# Guide v2\n', 'new.md': '# New\n' });
-  const updated = await dispatchLedgerCliCommandController(['skills', 'update', '--root', root, '--source', source]);
+  const updated = await skillCommand(root, ['skills', 'update', '--source', source]);
   assert.equal(updated.ok, true);
   assert.equal(git(root, 'diff', '--cached', '--name-only'), 'unrelated.txt');
   const secondLedger = JSON.parse(readFileSync(join(root, '.decision-os', 'skills.json'), 'utf8'));
@@ -106,33 +121,36 @@ test('skills create and update synchronize exact mirrors, tags, stable ids, reso
 test('skills commands reject invalid identities, symlinks, dirty targets, and restore files after commit failure', async () => {
   const { root, sourceRoot } = await fixture();
   const source = writeSkill(sourceRoot, 'safe-sync', { 'guide.md': '# Guide\n' });
-  assert.equal((await dispatchLedgerCliCommandController(['skills', 'create', '--root', root, '--source', source])).ok, true);
-  const duplicate = await dispatchLedgerCliCommandController(['skills', 'create', '--root', root, '--source', source]);
+  const explicitRoot = await skillCommand(root, ['skills', 'create', '--root', root, '--source', source]);
+  assert.equal(explicitRoot.ok, false);
+  assert.match(explicitRoot.error, /does not accept --root/);
+  assert.equal((await skillCommand(root, ['skills', 'create', '--source', source])).ok, true);
+  const duplicate = await skillCommand(root, ['skills', 'create', '--source', source]);
   assert.equal(duplicate.ok, false);
   const missingSource = writeSkill(sourceRoot, 'missing-sync', { 'guide.md': '# Guide\n' });
-  assert.equal((await dispatchLedgerCliCommandController(['skills', 'update', '--root', root, '--source', missingSource])).ok, false);
+  assert.equal((await skillCommand(root, ['skills', 'update', '--source', missingSource])).ok, false);
   const symlinkSource = writeSkill(sourceRoot, 'linked-sync', { 'guide.md': '# Guide\n' });
   symlinkSync(join(symlinkSource, 'references', 'guide.md'), join(symlinkSource, 'references', 'linked.md'));
-  assert.equal((await dispatchLedgerCliCommandController(['skills', 'create', '--root', root, '--source', symlinkSource])).ok, false);
+  assert.equal((await skillCommand(root, ['skills', 'create', '--source', symlinkSource])).ok, false);
   const missingReference = writeSkill(sourceRoot, 'missing-reference', {});
-  assert.equal((await dispatchLedgerCliCommandController(['skills', 'create', '--root', root, '--source', missingReference])).ok, false);
+  assert.equal((await skillCommand(root, ['skills', 'create', '--source', missingReference])).ok, false);
   const invalidOpenAi = writeSkill(sourceRoot, 'invalid-openai', { 'guide.md': '# Guide\n' });
   writeFileSync(join(invalidOpenAi, 'agents', 'openai.yaml'), 'interface:\n  display_name: Invalid\n');
-  assert.equal((await dispatchLedgerCliCommandController(['skills', 'create', '--root', root, '--source', invalidOpenAi])).ok, false);
+  assert.equal((await skillCommand(root, ['skills', 'create', '--source', invalidOpenAi])).ok, false);
 
   const beforeWriteFailureLedger = readFileSync(join(root, '.decision-os', 'skills.json'));
   const beforeWriteFailurePackage = readFileSync(join(root, '.skills', 'safe-sync', 'references', 'guide.md'));
   writeSkill(sourceRoot, 'safe-sync', { 'guide.md': '# Write failure candidate\n' });
-  const writeFailed = await synchronizeServerSkillController(
-    { action: 'update', json: false, root, source },
+  const writeFailed = await fromRoot(root, () => synchronizeServerSkillController(
+    { action: 'update', json: false, rootFlagProvided: false, source },
     { afterWrites: () => { throw new Error('Injected transaction write failure.'); } },
-  );
+  ));
   assert.equal(writeFailed.ok, false);
   assert.equal(readFileSync(join(root, '.decision-os', 'skills.json')).equals(beforeWriteFailureLedger), true);
   assert.equal(readFileSync(join(root, '.skills', 'safe-sync', 'references', 'guide.md')).equals(beforeWriteFailurePackage), true);
 
   writeFileSync(join(root, '.skills', 'safe-sync', 'SKILL.md'), 'dirty\n');
-  assert.equal((await dispatchLedgerCliCommandController(['skills', 'update', '--root', root, '--source', source])).ok, false);
+  assert.equal((await skillCommand(root, ['skills', 'update', '--source', source])).ok, false);
   git(root, 'restore', '.skills/safe-sync/SKILL.md');
   const beforeHead = git(root, 'rev-parse', 'HEAD');
   const beforeLedger = readFileSync(join(root, '.decision-os', 'skills.json'));
@@ -140,10 +158,26 @@ test('skills commands reject invalid identities, symlinks, dirty targets, and re
   writeSkill(sourceRoot, 'safe-sync', { 'guide.md': '# Changed but rejected\n' });
   const hook = join(root, '.git', 'hooks', 'pre-commit');
   writeFileSync(hook, '#!/bin/sh\nexit 1\n', { mode: 0o755 });
-  const failed = await dispatchLedgerCliCommandController(['skills', 'update', '--root', root, '--source', source]);
+  const failed = await skillCommand(root, ['skills', 'update', '--source', source]);
   assert.equal(failed.ok, false);
   assert.equal(git(root, 'rev-parse', 'HEAD'), beforeHead);
   assert.equal(readFileSync(join(root, '.decision-os', 'skills.json')).equals(beforeLedger), true);
   assert.equal(readFileSync(join(root, '.skills', 'safe-sync', 'references', 'guide.md')).equals(beforeGuide), true);
   assert.equal(git(root, 'status', '--porcelain', '--', '.decision-os/skills.json', '.skills/safe-sync'), '');
+});
+
+test('skills create rolls back first-run ledger provisioning when the transaction fails', async () => {
+  const { root, sourceRoot } = await fixture();
+  const source = writeSkill(sourceRoot, 'first-run-rollback', { 'guide.md': '# Guide\n' });
+  const beforeHead = git(root, 'rev-parse', 'HEAD');
+  const failed = await fromRoot(root, () => synchronizeServerSkillController(
+    { action: 'create', json: false, rootFlagProvided: false, source },
+    { afterWrites: () => { throw new Error('Injected first-run failure.'); } },
+  ));
+  assert.equal(failed.ok, false);
+  assert.equal(git(root, 'rev-parse', 'HEAD'), beforeHead);
+  assert.equal(existsSync(join(root, '.decision-os', 'skills.json')), false);
+  assert.equal(existsSync(join(root, '.decision-os', 'state.json')), false);
+  assert.equal(existsSync(join(root, '.decision-os', 'ledgers-canvas.json')), false);
+  assert.equal(existsSync(join(root, '.skills', 'first-run-rollback')), false);
 });

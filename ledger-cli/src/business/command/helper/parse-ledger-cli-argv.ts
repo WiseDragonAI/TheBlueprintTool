@@ -111,7 +111,7 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
       ? {
         action: argv[1] === 'update' ? 'update' : 'create',
         json: argv.includes('--json'),
-        root: flagValue(argv, '--root'),
+        rootFlagProvided: argv.includes('--root'),
         source: flagValue(argv, '--source'),
       }
       : undefined,

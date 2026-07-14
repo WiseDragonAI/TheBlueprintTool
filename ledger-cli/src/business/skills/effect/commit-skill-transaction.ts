@@ -66,11 +66,13 @@ export function commitSkillTransaction(input: {
   root: string;
   skill: OpenAiSkillPackage;
   priorMappedFiles: string[];
+  registryWrites: Array<{ file: string; value: Record<string, any> }>;
   afterWrites?: () => void;
 }): string {
   const packagePath = `.skills/${input.skill.name}`;
   const ownedPaths = uniqueRoots([
     '.decision-os/skills.json', packagePath, ...input.priorMappedFiles,
+    ...input.registryWrites.map((entry) => entry.file),
     ...input.projection.cardFiles.map((entry) => entry.file), ...input.projection.threadFiles.map((entry) => entry.file),
     ...input.projection.removedCardFiles, ...input.projection.removedThreadFiles,
   ]);
@@ -103,6 +105,7 @@ export function commitSkillTransaction(input: {
         writeFileSync(file, thread.content, 'utf8');
       }
     }
+    for (const registry of input.registryWrites) writeAtomicJson(resolve(input.root, registry.file), registry.value);
     writeAtomicJson(input.ledgerFile, input.projection.ledger);
     input.afterWrites?.();
     git(input.root, ['add', '-A', '-f', '--', ...ownedPaths]);
