@@ -348,6 +348,7 @@ function renderSettings() {
   state.resourceProjectId = '';
   setMobileCodexContext({ projectId: '', ledgerId: '', cardId: '' });
   renderLedgerLinks();
+  renderCodexProcessLimit(elements['codex-settings-limit'].value);
   setView('settings-view');
   void loadCodexSettings();
 }
