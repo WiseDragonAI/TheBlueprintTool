@@ -26,6 +26,38 @@ test('CLI adds, lists, and searches project memories', () => {
     const search = run('search', '--root', workspace, '--project', 'project-a', '--type', 'code', '--query', 'Searchable');
     assert.equal(search.status, 0, search.stderr);
     assert.equal(JSON.parse(search.stdout)[0].body, 'Searchable body');
+    const limited = run('list', '--root', workspace, '--project', 'project-a', '--limit', '1');
+    assert.equal(limited.status, 0, limited.stderr);
+    assert.equal(JSON.parse(limited.stdout).length, 1);
+    for (const invalid of ['', '0', '-1', '1.5', 'many']) {
+      const result = run('list', '--root', workspace, '--limit', invalid);
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /limit must be a positive integer/);
+    }
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('memory reads default to the newest ten and apply explicit limits after filters', () => {
+  const workspace = root('limits');
+  try {
+    for (let index = 1; index <= 12; index += 1) {
+      addMemory(workspace, {
+        title: `Lesson ${index}`,
+        body: index % 2 === 0 ? 'Matching body' : 'Other body',
+        tag: 'engineering',
+        subtag: 'limit',
+        projectId: 'project-a',
+        type: 'code',
+      });
+    }
+    const newest = readMemories(workspace, { projectId: 'project-a', type: 'code' });
+    assert.equal(newest.length, 10);
+    assert.deepEqual(newest.slice(0, 3).map((row) => row.title), ['Lesson 12', 'Lesson 11', 'Lesson 10']);
+    const filtered = readMemories(workspace, { projectId: 'project-a', query: 'Matching', limit: 3 });
+    assert.deepEqual(filtered.map((row) => row.title), ['Lesson 12', 'Lesson 10', 'Lesson 8']);
+    assert.throws(() => readMemories(workspace, { limit: 0 }), /limit must be a positive integer/);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }

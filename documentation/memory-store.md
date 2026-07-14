@@ -7,8 +7,10 @@ Each memory contains `title`, `body`, `tag`, `subtag`, `project_id`, `type`, `so
 ```sh
 node tool/memory/memory.mjs add --root "$HOME" --project ZGVjaXNpb24tb3M --type code --title "Stable title" --body "Reusable lesson" --tag engineering --subtag rule --source "commit abc"
 node tool/memory/memory.mjs list --root "$HOME" --project ZGVjaXNpb24tb3M --type code
-node tool/memory/memory.mjs search --root "$HOME" --project ZGVjaXNpb24tb3M --query hydration
+node tool/memory/memory.mjs search --root "$HOME" --project ZGVjaXNpb24tb3M --query hydration --limit 5
 node tool/memory/memory.mjs migrate --root "$HOME" --source "$HOME/.codex/memories.sqlite3" --project ZGVjaXNpb24tb3M --type code
 ```
+
+`list` and `search` return the newest `10` matching rows by default. Pass `--limit <positive-integer>` to request a different bound; filtering is applied before the limit.
 
 After migration, require `quickCheck: "ok"`, matching source and migrated row counts, and a successful filtered read before deleting the legacy database and home-level CLI.
