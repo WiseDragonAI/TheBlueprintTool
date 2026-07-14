@@ -5,9 +5,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { traces } from '@backend/telemetry/harness.js';
@@ -46,6 +47,12 @@ test('create-http-server serves shared TypeScript modules through their browser 
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
   try {
+    const memoryDatabasePath = join(decisionOsRoot, 'memories.sqlite3');
+    assert.equal(runtime.memoryDatabasePath, memoryDatabasePath);
+    assert.equal(existsSync(memoryDatabasePath), true);
+    const memoryDatabase = new DatabaseSync(memoryDatabasePath, { readOnly: true });
+    assert.equal(memoryDatabase.prepare('PRAGMA quick_check').get().quick_check, 'ok');
+    memoryDatabase.close();
     const response = await fetch(`${baseUrl}/shared/schemas/options.js`);
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('content-type'), 'text/javascript; charset=utf-8');
