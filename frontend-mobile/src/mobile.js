@@ -49,16 +49,20 @@ const deleteMasterTaskModal = document.querySelector('.delete-master-task-modal'
 const newTaskProjectModal = document.querySelector('.new-task-project-modal');
 const projectSettingsModal = document.querySelector('.project-settings-modal');
 const projectSettingsForm = document.querySelector('.project-settings-form');
-globalThis.Coloris?.({
-  parent: projectSettingsModal,
-  themeMode: 'dark',
-  theme: 'large',
-  alpha: false,
-  format: 'hex',
-  focusInput: false,
-  closeButton: true,
-  closeLabel: 'Done',
-});
+function configureProjectColorPicker() {
+  globalThis.Coloris?.({
+    parent: projectSettingsModal,
+    themeMode: 'dark',
+    theme: 'large',
+    alpha: false,
+    format: 'hex',
+    focusInput: false,
+    closeButton: true,
+    closeLabel: 'Done',
+  });
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', configureProjectColorPicker, { once: true });
+else configureProjectColorPicker();
 const creationForm = document.querySelector('.creation-form');
 let creationKind = '';
 let controlRoomScrollFrame = 0;
