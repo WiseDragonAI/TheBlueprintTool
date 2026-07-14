@@ -49,21 +49,6 @@ const deleteMasterTaskModal = document.querySelector('.delete-master-task-modal'
 const newTaskProjectModal = document.querySelector('.new-task-project-modal');
 const projectSettingsModal = document.querySelector('.project-settings-modal');
 const projectSettingsForm = document.querySelector('.project-settings-form');
-function configureProjectColorPicker() {
-  globalThis.Coloris?.init();
-  globalThis.Coloris?.({
-    parent: projectSettingsModal,
-    themeMode: 'dark',
-    theme: 'large',
-    alpha: false,
-    format: 'hex',
-    focusInput: false,
-    closeButton: true,
-    closeLabel: 'Done',
-  });
-}
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', configureProjectColorPicker, { once: true });
-else configureProjectColorPicker();
 const creationForm = document.querySelector('.creation-form');
 let creationKind = '';
 let controlRoomScrollFrame = 0;
@@ -439,9 +424,7 @@ function openProjectSettings() {
   const values = projectSettingsValues(project);
   document.querySelector('#project-settings-name').value = values.name;
   document.querySelector('#project-settings-description').value = values.description;
-  const colorInput = document.querySelector('#project-settings-color');
-  colorInput.value = values.color;
-  colorInput.dispatchEvent(new Event('input', { bubbles: true }));
+  document.querySelector('#project-settings-color').value = values.color;
   document.querySelector('.project-settings-error').hidden = true;
   projectSettingsModal.showModal();
   document.querySelector('#project-settings-name').focus();

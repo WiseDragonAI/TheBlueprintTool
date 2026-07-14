@@ -4,14 +4,12 @@ import test from 'node:test';
 import { activeAge, activeStopwatch, cardCodexRunId, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from '../src/mobile-control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from '../src/mobile-control-room-route.js';
 
-const [mobile, html, styles, embla, panzoom, coloris, colorisLicense] = await Promise.all([
+const [mobile, html, styles, embla, panzoom] = await Promise.all([
   readFile(new URL('../src/mobile.js', import.meta.url), 'utf8'),
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
   readFile(new URL('../assets/mobile.css', import.meta.url), 'utf8'),
   readFile(new URL('../assets/vendor/embla-carousel-8.6.0.umd.js', import.meta.url), 'utf8'),
-  readFile(new URL('../assets/vendor/panzoom-4.6.2.es.js', import.meta.url), 'utf8'),
-  readFile(new URL('../assets/vendor/coloris-0.25.0.min.js', import.meta.url), 'utf8'),
-  readFile(new URL('../assets/vendor/coloris-0.25.0.LICENSE', import.meta.url), 'utf8'),
+  readFile(new URL('../assets/vendor/panzoom-4.6.2.es.js', import.meta.url), 'utf8')
 ]);
 
 const task = (overrides = {}) => ({
@@ -265,22 +263,11 @@ test('keeps scoped Control Room filters while project editing moves to dedicated
   assert.doesNotMatch(html, /id="project-links"|class="project-nav-section"/);
   assert.match(html, /id="projects-view"/);
   assert.match(html, /class="project-settings-modal"/);
-  assert.match(html, /coloris-0\.25\.0\.min\.css/);
-  assert.match(html, /id="project-settings-color"[^>]*type="text"[^>]*data-coloris[^>]*readonly/);
-  assert.match(html, /coloris-0\.25\.0\.min\.js/);
   assert.match(html, /id="control-project-filters"/);
   assert.match(mobile, /state\.projectFilter === 'All'/);
   assert.match(mobile, /projectTasks\.filter\(\(task\) => task\.ledgerId === state\.controlFilter\)/);
   assert.doesNotMatch(styles, /\.project-link input\[type="color"\]/);
   assert.match(mobile, /saveProjectSettingsRequest\(\{/);
-  assert.match(mobile, /function configureProjectColorPicker\(\) \{[\s\S]*globalThis\.Coloris\?\.init\(\);[\s\S]*globalThis\.Coloris\?\.\(\{[\s\S]*parent: projectSettingsModal,[\s\S]*alpha: false,[\s\S]*focusInput: false/);
-  assert.match(mobile, /document\.readyState === 'loading'[\s\S]*DOMContentLoaded', configureProjectColorPicker/);
-  assert.match(mobile, /colorInput\.value = values\.color;[\s\S]*colorInput\.dispatchEvent\(new Event\('input', \{ bubbles: true \}\)\)/);
-  assert.match(coloris, /e\.Coloris=t\(\)/);
-  assert.match(coloris, /touchstart/);
-  assert.match(coloris, /aria-label/);
-  assert.match(colorisLicense, /MIT License/);
-  assert.match(styles, /\.project-settings-modal \.clr-gradient \{[^}]*touch-action: none/);
   assert.match(mobile, /renderProjectDetail\(result\.project\)/);
   assert.match(mobile, /state\.projects\.find\(\(entry\) => entry\.id === state\.resourceProjectId\)\?\.name \|\| project\.projectName/);
 });
