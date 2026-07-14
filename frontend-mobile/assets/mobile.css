@@ -328,18 +328,6 @@ body:has(.new-task-project-modal[open]) { overflow: hidden; }
 .creation-modal::backdrop { background: #000c; backdrop-filter: blur(3px); }
 .project-settings-modal { width: min(92vw, 460px); padding: 0; border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--text); background: var(--panel); }
 .project-settings-modal::backdrop { background: #000c; backdrop-filter: blur(3px); }
-.project-settings-modal .clr-field { display: block; width: 100%; color: #38d9e8; }
-.project-settings-modal .clr-field input { padding-inline-end: 58px; cursor: pointer; }
-.project-settings-modal .clr-field button { width: 48px; border-inline-start: 1px solid var(--line); border-radius: 0 var(--radius) var(--radius) 0; }
-.project-settings-modal .clr-picker { width: min(360px, calc(100% - 32px)); border: 1px solid var(--line-strong); background: var(--panel-strong); box-shadow: 0 16px 42px #000c; }
-.project-settings-modal .clr-gradient { height: 180px; margin: 12px 12px 18px; width: calc(100% - 24px); border-radius: var(--radius); touch-action: none; }
-.project-settings-modal .clr-marker { width: 24px; height: 24px; margin: -12px 0 0 -12px; border-width: 2px; }
-.project-settings-modal .clr-hue { width: calc(100% - 40px); height: 16px; margin: 12px 20px 22px; }
-.project-settings-modal .clr-hue input[type="range"] { height: 44px; top: -14px; }
-.project-settings-modal .clr-hue div { width: 28px; height: 28px; margin-left: -14px; }
-.project-settings-modal .clr-preview { width: 40px; height: 40px; margin: 8px 0 14px 14px; }
-.project-settings-modal input.clr-color { min-height: 44px; margin: 6px 14px 14px auto; border-color: var(--line-strong); background: var(--panel-deep); }
-.project-settings-modal .clr-close { min-height: 40px; margin: 8px 14px 14px auto; padding-inline: 18px; border: 1px solid var(--line-strong); color: var(--text); background: var(--panel-deep); }
 .project-settings-form { display: grid; gap: 18px; padding: 22px; }
 .project-settings-form header h2 { margin: 0; font-size: 24px; }
 .project-settings-error { margin: -6px 0 0; color: var(--danger); font-size: 13px; }
