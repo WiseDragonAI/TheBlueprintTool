@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="/canvas-assets/canvas/terminal-chat.css" />
     <link rel="stylesheet" href="/canvas-assets/canvas/terminal-chat-controls.css" />
     <link rel="stylesheet" href="/canvas-assets/canvas/thread.css" />
+    <link rel="stylesheet" href="/assets/vendor/coloris-0.25.0.min.css" />
     <link rel="stylesheet" href="/assets/mobile.css" />
   </head>
   <body>
@@ -275,7 +276,7 @@
           </label>
           <label class="creation-field">
             <span>Color</span>
-            <input id="project-settings-color" name="color" type="color" value="#38d9e8" />
+            <input id="project-settings-color" name="color" type="text" value="#38d9e8" data-coloris readonly aria-label="Project color" />
           </label>
           <p class="project-settings-error" role="alert" hidden></p>
           <footer>
@@ -337,6 +338,7 @@
     <script src="/canvas-assets/vendor/highlight.min.js"></script>
     <script src="/assets/vendor/sortable-1.15.7.min.js"></script>
     <script src="/assets/vendor/embla-carousel-8.6.0.umd.js"></script>
+    <script src="/assets/vendor/coloris-0.25.0.min.js"></script>
     <script type="module" src="/src/mobile.js"></script>
   </body>
 </html>
