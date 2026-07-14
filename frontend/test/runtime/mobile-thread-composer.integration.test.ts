@@ -30,6 +30,8 @@ test('mobile thread composer defaults to a voice-first dock and expands text ent
   assert.match(threadCss, /grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(threadCss, /\.terminal-command-actions \.terminal-button\s*\{[\s\S]*height:\s*66px/);
   assert.match(threadCss, /@media \(max-width: 760px\)[\s\S]*\.terminal-button__key\s*\{[\s\S]*display:\s*none/);
+  assert.match(threadCss, /\.terminal-button--attach\s*\{[\s\S]*--terminal-button-color:\s*#69d7ff;[\s\S]*--terminal-button-gradient-shadow:\s*linear-gradient\(90deg, rgba\(105, 215, 255, 0\.5\), rgba\(67, 145, 214, 0\.32\)\)/);
+  assert.doesNotMatch(threadCss.match(/\.terminal-button--attach\s*\{[^}]+\}/)?.[0] ?? '', /--thread-accent/);
   assert.match(threadCss, /\.terminal-button--thread-text\s*\{[\s\S]*--terminal-button-color:\s*#b58cff/);
   assert.match(threadCss, /\.terminal-button--record\s*\{[\s\S]*--terminal-button-color:\s*#ff6f91/);
   assert.match(threadCss, /@media \(max-width: 760px\)[\s\S]*\.terminal-button--stack\s*\{[\s\S]*grid-template-rows:\s*1fr 16px;[\s\S]*padding-block:\s*9px/);
