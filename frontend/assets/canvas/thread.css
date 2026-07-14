@@ -1183,8 +1183,8 @@
 
 .terminal-button--attach {
   --terminal-button-background: linear-gradient(165deg, #142426 0%, #101b1d 54%, #0c1416 100%);
-  --terminal-button-color: color-mix(in srgb, var(--thread-accent), white 42%);
-  --terminal-button-gradient-shadow: linear-gradient(90deg, color-mix(in srgb, var(--thread-accent), transparent 36%), rgba(255, 255, 255, 0.18));
+  --terminal-button-color: #69d7ff;
+  --terminal-button-gradient-shadow: linear-gradient(90deg, rgba(105, 215, 255, 0.5), rgba(67, 145, 214, 0.32));
 }
 
 .terminal-button--thread-text {
