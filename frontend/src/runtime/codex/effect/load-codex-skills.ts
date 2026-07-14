@@ -14,6 +14,7 @@ export type CodexSkillSummary = {
   readOnlyReason: string | null;
   revision: string;
   favorite?: boolean;
+  tags?: string[];
   defaultCodexModel: CodexModel | null;
   defaultCodexEffort: CodexEffort | null;
   effectiveCodexModel: string;

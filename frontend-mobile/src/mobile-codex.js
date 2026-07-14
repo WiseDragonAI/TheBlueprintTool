@@ -25,7 +25,7 @@ async function loadLibraries(projectId = state.projectId) {
   state.steps = (Array.isArray(pipelines.steps) ? pipelines.steps : []).map((step) => ({ ...step, projectId }));
   return pipelines;
 }
-function skillTags(skill) { return [categoryForSkill(skill.name)]; }
+function skillTags(skill) { return tagsForSkill(skill); }
 function pipelineTags(pipeline) { return [...new Set(pipelineSteps(pipeline).flatMap((step) => step.skills.flatMap((skill) => skillTags(state.skills.find((item) => item.name === skill.skillName) || { name: skill.skillName }))))]; }
 function recordProjects(record) { return Array.isArray(record.projects) ? record.projects : state.projects.filter((project) => project.id === record.projectId); }
 function recordTags(record) { return state.processTab === 'skills' ? skillTags(record) : pipelineTags(record); }
@@ -55,7 +55,11 @@ async function loadGlobalLibraries() {
     for (const skill of library.skills) {
       const key = [skill.name, skill.source, skill.revision].join('\u0000');
       const existing = bySkill.get(key);
-      if (existing) { existing.projects.push(library.project); existing.favorite ||= skill.favorite === true; }
+      if (existing) {
+        existing.projects.push(library.project);
+        existing.favorite ||= skill.favorite === true;
+        existing.tags = [...new Set([...tagsForSkill(existing), ...tagsForSkill(skill)])];
+      }
       else bySkill.set(key, { ...skill, projects: [library.project] });
     }
   }
@@ -97,7 +101,7 @@ function renderProcessList() {
   const visible = filteredRecords(records);
   list.replaceChildren(...visible.map((record) => {
     const node = button('', 'codex-list-item', () => renderProcessDetail(record));
-    if (state.processTab === 'skills') { node.replaceChildren(...renderSkillLibraryItemContent(record, recordProjects(record))); return node; }
+    if (state.processTab === 'skills') { node.replaceChildren(...renderSkillLibraryItemContent(record)); return node; }
     const title = document.createElement('strong'); title.textContent = record.name;
     const detail = document.createElement('span');
     detail.textContent = state.processTab === 'skills' ? (record.description || `${record.source} skill`) : (record.purpose || `${record.stepIds.length} steps`);
@@ -113,17 +117,24 @@ function renderProcessDetail(record) {
   state.selected = record;
   if (record.projectId) state.projectId = record.projectId;
   const detail = el('.process-detail'); detail.hidden = false; detail.replaceChildren();
-  const back = button('← Back to library', 'codex-back-link', () => { detail.hidden = true; el('.process-library').hidden = false; });
-  const title = document.createElement('h3'); title.textContent = record.name;
+  const viewContext = { global: state.libraryScope === 'global', libraryTitle: state.processTab === 'skills' ? 'Skill library' : 'Pipelines', detailTitle: state.processTab === 'skills' ? 'Skill details' : 'Pipeline details' };
+  const back = button('← Back to library', 'codex-back-link', () => setMobileCodexView(document, 'library', viewContext));
+  const title = document.createElement('h3'); title.className = 'skill-detail-title'; title.textContent = record.name;
   const purpose = document.createElement('p');
   purpose.textContent = state.processTab === 'skills' ? record.description : (record.purpose || 'No purpose provided.');
   detail.append(back, title, purpose);
   if (state.processTab === 'skills') {
     if (state.libraryScope === 'global') {
+      const tagsField = document.createElement('label'); tagsField.className = 'codex-field skill-tags-field';
+      const tagsLabel = document.createElement('span'); tagsLabel.textContent = 'Tags';
+      const tagsInput = document.createElement('input'); tagsInput.className = 'skill-tags-input'; tagsInput.setAttribute('aria-label', 'Skill tags'); tagsInput.value = tagsForSkill(record).join(', ');
+      tagsField.append(tagsLabel, tagsInput);
+      const saveTags = button('Save tags', 'codex-secondary skill-tags-save', () => { void saveGlobalSkillTags(record, tagsInput.value); });
       const favorite = button(record.favorite ? 'Remove from favorites' : 'Mark as favorite', 'primary-button skill-favorite-toggle', () => { void toggleGlobalSkillFavorite(record); });
       favorite.setAttribute('aria-pressed', String(record.favorite === true));
-      detail.append(favorite);
-      el('.process-library').hidden = true;
+      const status = document.createElement('p'); status.className = 'codex-message process-detail-message'; status.setAttribute('role', 'status');
+      detail.append(tagsField, saveTags, favorite, status);
+      setMobileCodexView(document, 'detail', viewContext);
       return;
     }
     const model = document.createElement('select'); model.setAttribute('aria-label', 'Codex model');
@@ -142,7 +153,7 @@ function renderProcessDetail(record) {
     if (!state.cardId) start.title = 'Open a card to run this pipeline.';
     detail.append(steps, start);
   }
-  el('.process-library').hidden = true;
+  setMobileCodexView(document, 'detail', viewContext);
 }
 async function toggleGlobalSkillFavorite(record) {
   const favorite = !record.favorite;
@@ -153,19 +164,47 @@ async function toggleGlobalSkillFavorite(record) {
   renderProcessDetail(record);
   const submit = el('.skill-favorite-toggle');
   setBusy(submit, true);
-  message('.process-message', favorite ? 'Adding favorite…' : 'Removing favorite…');
+  message('.process-detail-message', favorite ? 'Adding favorite…' : 'Removing favorite…');
   try {
     await Promise.all(recordProjects(record).map((project) => jsonRequest(`/api/codex/skill-library/${encodeURIComponent(record.name)}`, {
       method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ favorite })
     }, project.id)));
-    message('.process-message', favorite ? 'Added to favorites.' : 'Removed from favorites.');
     renderProcessList();
     renderProcessDetail(record);
+    message('.process-detail-message', favorite ? 'Added to favorites.' : 'Removed from favorites.');
   } catch (error) {
-    prior.forEach(({ skill, favorite: priorFavorite }) => { skill.favorite = priorFavorite; });
+    try { await loadGlobalLibraries(); }
+    catch { prior.forEach(({ skill, favorite: priorFavorite }) => { skill.favorite = priorFavorite; }); }
+    const current = state.skills.find(identity) || record;
+    renderProcessList();
+    renderProcessDetail(current);
+    message('.process-detail-message', error.message, true);
+  }
+}
+async function saveGlobalSkillTags(record, value) {
+  const tags = [...new Set(String(value).split(',').map((tag) => tag.trim()).filter(Boolean))].slice(0, 8);
+  const identity = (skill) => skill.name === record.name && skill.source === record.source && skill.revision === record.revision;
+  const prior = state.skills.filter(identity).map((skill) => ({ skill, tags: [...(skill.tags || [])] }));
+  prior.forEach(({ skill }) => { skill.tags = tags; });
+  renderProcessList();
+  renderProcessDetail(record);
+  const submit = el('.skill-tags-save');
+  setBusy(submit, true);
+  message('.process-detail-message', 'Saving tags…');
+  try {
+    await Promise.all(recordProjects(record).map((project) => jsonRequest(`/api/codex/skill-library/${encodeURIComponent(record.name)}`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ tags })
+    }, project.id)));
     renderProcessList();
     renderProcessDetail(record);
-    message('.process-message', error.message, true);
+    message('.process-detail-message', 'Tags saved.');
+  } catch (error) {
+    try { await loadGlobalLibraries(); }
+    catch { prior.forEach(({ skill, tags: priorTags }) => { skill.tags = priorTags; }); }
+    const current = state.skills.find(identity) || record;
+    renderProcessList();
+    renderProcessDetail(current);
+    message('.process-detail-message', error.message, true);
   }
 }
 async function startSkill(skill, codexModel, codexEffort) {
@@ -200,7 +239,7 @@ function formatError(error) { const refs = error.body?.invalidReferences; return
 async function openProcess() {
   if (!state.ledgerId || !state.cardId) return;
   state.libraryScope = 'project'; state.query = ''; state.projectFilter = 'All'; state.tagFilter = 'All';
-  el('.process-modal').showModal(); el('.process-library').hidden = false; el('.process-detail').hidden = true; message('.process-message', 'Loading libraries…');
+  el('.process-modal').showModal(); setMobileCodexView(document, 'library', { global: false, libraryTitle: 'Process card' }); message('.process-message', 'Loading libraries…');
   try { const result = await loadLibraries(); message('.process-message', result.issues?.map((issue) => issue.message).join(' ') || ''); renderProcessList(); }
   catch (error) { message('.process-message', error.message, true); el('.process-library').replaceChildren(); }
 }
@@ -208,7 +247,7 @@ async function openSkills() {
   state.processTab = 'skills';
   state.libraryScope = 'global'; state.query = ''; state.projectFilter = 'All'; state.tagFilter = 'All';
   document.querySelectorAll('[data-process-tab]').forEach((tab) => tab.setAttribute('aria-selected', String(tab.dataset.processTab === 'skills')));
-  el('.process-modal').showModal(); el('.process-library').hidden = false; el('.process-detail').hidden = true;
+  el('.process-modal').showModal(); setMobileCodexView(document, 'library', { global: true, libraryTitle: 'Skill library' });
   message('.process-message', 'Loading skill library…');
   try { const result = await loadGlobalLibraries(); renderProcessList(); if (result.failedProjects) message('.process-message', `${result.failedProjects} project libraries could not be loaded.`, true); }
   catch (error) { message('.process-message', error.message, true); el('.process-library').replaceChildren(); }
@@ -291,7 +330,7 @@ export function initializeMobileCodex() {
     else void openSkills();
   });
   el('.process-close').addEventListener('click', () => el('.process-modal').close()); el('.pipelines-close').addEventListener('click', () => el('.pipelines-modal').close());
-  document.querySelectorAll('[data-process-tab]').forEach((tab) => tab.addEventListener('click', () => { state.processTab = tab.dataset.processTab; state.query = ''; state.tagFilter = 'All'; document.querySelectorAll('[data-process-tab]').forEach((item) => item.setAttribute('aria-selected', String(item === tab))); el('.process-detail').hidden = true; el('.process-library').hidden = false; message('.process-message', ''); renderProcessList(); }));
+  document.querySelectorAll('[data-process-tab]').forEach((tab) => tab.addEventListener('click', () => { state.processTab = tab.dataset.processTab; state.query = ''; state.tagFilter = 'All'; document.querySelectorAll('[data-process-tab]').forEach((item) => item.setAttribute('aria-selected', String(item === tab))); setMobileCodexView(document, 'library', { global: state.libraryScope === 'global', libraryTitle: state.processTab === 'skills' ? 'Skill library' : 'Pipelines' }); message('.process-message', ''); renderProcessList(); }));
   el('.process-search').addEventListener('input', (event) => { state.query = event.target.value; renderProcessList(); event.target.focus(); });
   el('.process-filter-clear').addEventListener('click', () => { state.query = ''; state.projectFilter = 'All'; state.tagFilter = 'All'; renderProcessList(); });
   el('.pipelines-search').addEventListener('input', (event) => { state.query = event.target.value; renderPipelineLibrary(); event.target.focus(); });
@@ -301,6 +340,6 @@ export function initializeMobileCodex() {
   el('.pipeline-editor-form').addEventListener('submit', (event) => { event.preventDefault(); void saveEditor(); }); el('.skill-picker-back').addEventListener('click', closePicker);
 }
 import { projectScopedRequestPath } from '/canvas-src/runtime/project/helper/project-request-scope.js';
-import { categoryForSkill } from '/canvas-src/runtime/codex/helper/skill-category.js';
-import { decorateSkillCategoryLabel, sortSkillsByFavorite } from '/canvas-src/runtime/codex/helper/skill-library-presentation.js';
+import { decorateSkillCategoryLabel, sortSkillsByFavorite, tagsForSkill } from '/canvas-src/runtime/codex/helper/skill-library-presentation.js';
 import { renderSkillLibraryItemContent } from '/canvas-src/runtime/codex/component/render-skill-library-item-content.js';
+import { setMobileCodexView } from './mobile-codex-view.js';

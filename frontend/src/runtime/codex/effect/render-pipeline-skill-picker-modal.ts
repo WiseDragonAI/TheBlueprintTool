@@ -3,8 +3,8 @@
  * WHY: Step configuration must stay readable instead of embedding the complete skill library beside the skill sequence.
  */
 import { pipelineSkillPickerModal } from '../../dom.js';
-import { categoryForSkill, colorForSkillCategory, skillCategories, type SkillCategory } from '../helper/skill-category.js';
-import { sortSkillsByFavorite } from '../helper/skill-library-presentation.js';
+import { renderSkillLibraryItemContent } from '../component/render-skill-library-item-content.js';
+import { colorForSkillTag, sortSkillsByFavorite, tagsForSkill } from '../helper/skill-library-presentation.js';
 import type { CodexSkillSummary } from './load-codex-skills.js';
 import { openSkillLibraryEditor } from './render-skill-library-editor-modal.js';
 
@@ -20,7 +20,7 @@ type PipelineSkillPickerState = {
   skills: CodexSkillSummary[];
   selectedSkillName: string;
   query: string;
-  selectedCategory: SkillCategory | 'All';
+  selectedCategory: string;
   insertionIndex: number;
   onInsert?: (selection: PipelineSkillPickerSelection) => void;
   reloadSkills?: () => Promise<readonly CodexSkillSummary[]>;
@@ -49,21 +49,17 @@ function makeButton(label: string, onClick: () => void, className = 'ghost-butto
   return button;
 }
 
-function availableCategories(): Array<SkillCategory | 'All'> {
-  const available = new Set(pipelineSkillPickerState.skills.map((skill) => categoryForSkill(skill.name)));
-  return [
-    'All',
-    ...skillCategories.filter((category) => available.has(category)),
-    ...(available.has('Uncategorized') ? ['Uncategorized' as const] : []),
-  ];
+function availableCategories(): string[] {
+  const available = new Set(pipelineSkillPickerState.skills.flatMap(tagsForSkill));
+  return ['All', ...[...available].sort((left, right) => left.localeCompare(right))];
 }
 
 function filteredSkills(): CodexSkillSummary[] {
   const query = pipelineSkillPickerState.query.trim().toLowerCase();
   return sortSkillsByFavorite(pipelineSkillPickerState.skills.filter((skill) => {
-    const category = categoryForSkill(skill.name);
-    if (pipelineSkillPickerState.selectedCategory !== 'All' && category !== pipelineSkillPickerState.selectedCategory) return false;
-    return !query || `${skill.name} ${skill.description} ${skill.source} ${category}`.toLowerCase().includes(query);
+    const tags = tagsForSkill(skill);
+    if (pipelineSkillPickerState.selectedCategory !== 'All' && !tags.includes(pipelineSkillPickerState.selectedCategory)) return false;
+    return !query || `${skill.name} ${skill.description} ${tags.join(' ')}`.toLowerCase().includes(query);
   }));
 }
 
@@ -99,7 +95,7 @@ function renderCategoryFilters(): HTMLElement {
       pipelineSkillPickerModal?.querySelector<HTMLButtonElement>(`[data-picker-category="${category}"]`)?.focus();
     }, `skill-category-filter${selected ? ' is-selected' : ''}`, `picker-category:${category}`);
     filter.dataset.pickerCategory = category;
-    filter.style.setProperty('--skill-category-color', colorForSkillCategory(category));
+    filter.style.setProperty('--skill-category-color', category === 'All' ? '#cbd5e1' : colorForSkillTag(category));
     filter.setAttribute('aria-pressed', String(selected));
     filters.append(filter);
   }
@@ -108,26 +104,14 @@ function renderCategoryFilters(): HTMLElement {
 
 function renderSkillResult(skill: CodexSkillSummary): HTMLButtonElement {
   const selected = skill.name === pipelineSkillPickerState.selectedSkillName;
-  const category = categoryForSkill(skill.name);
+  const category = tagsForSkill(skill)[0];
   const result = makeButton('', () => selectPipelineSkillPickerSkill(skill.name), `pipeline-picker-result${selected ? ' is-selected' : ''}`, `picker-skill:${skill.name}`);
-  result.style.setProperty('--skill-category-color', colorForSkillCategory(category));
+  result.style.setProperty('--skill-category-color', colorForSkillTag(category));
   result.setAttribute('aria-pressed', String(selected));
-  const head = document.createElement('span');
-  head.className = 'skill-result-header';
-  const name = document.createElement('span');
-  name.className = 'skill-result-name';
-  name.textContent = skill.name;
-  const badge = document.createElement('span');
-  badge.className = 'skill-result-category';
-  badge.textContent = category;
-  head.replaceChildren(name, badge);
-  const description = document.createElement('span');
-  description.className = 'skill-result-description';
-  description.textContent = skill.description || 'No description.';
   const metadata = document.createElement('span');
   metadata.className = 'process-result-metadata';
-  metadata.textContent = `${skill.source} · ${skill.effectiveCodexModel} · ${skill.effectiveCodexEffort}`;
-  result.replaceChildren(head, description, metadata);
+  metadata.textContent = `${skill.effectiveCodexModel} · ${skill.effectiveCodexEffort}`;
+  result.replaceChildren(...renderSkillLibraryItemContent(skill), metadata);
   return result;
 }
 

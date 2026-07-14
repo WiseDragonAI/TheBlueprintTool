@@ -60,6 +60,7 @@ test('skill library routes save editable Markdown and defaults without exposing 
     assert.equal(detail.skill.defaultCodexModel, null);
     assert.equal(detail.skill.defaultCodexEffort, null);
     assert.equal(detail.skill.favorite, false);
+    assert.deepEqual(detail.skill.tags, []);
     assert.equal('skillFile' in detail.skill, false);
     assert.equal(detailText.includes(workspace), false);
 
@@ -86,6 +87,7 @@ test('skill library routes save editable Markdown and defaults without exposing 
     assert.deepEqual(persisted.skillLibrary[0], {
       skillName: 'workspace-skill',
       favorite: false,
+      tags: [],
       defaultCodexModel: 'gpt-5.4',
       defaultCodexEffort: 'high',
       updatedAt: persisted.skillLibrary[0].updatedAt,
@@ -104,6 +106,19 @@ test('skill library routes save editable Markdown and defaults without exposing 
     const favoriteCatalog = await fetch(`${baseUrl}/api/codex/skills`).then((response) => response.json()) as Record<string, any>;
     assert.equal(favoriteCatalog.skills.find((entry: Record<string, any>) => entry.name === 'workspace-skill').favorite, true);
     assert.equal(JSON.parse(readFileSync(storeFile, 'utf8')).skillLibrary[0].favorite, true);
+
+    const tagsResponse = await fetch(`${baseUrl}/api/codex/skill-library/workspace-skill`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ tags: ['Research', 'Priority', 'Research'] }),
+    });
+    assert.equal(tagsResponse.status, 200);
+    const tagged = await tagsResponse.json() as Record<string, any>;
+    assert.deepEqual(tagged.skill.tags, ['Research', 'Priority']);
+    assert.equal(tagged.skill.favorite, true);
+    assert.equal(readFileSync(workspaceFile, 'utf8'), markdownBeforeFavorite);
+    const tagsCatalog = await fetch(`${baseUrl}/api/codex/skills`).then((response) => response.json()) as Record<string, any>;
+    assert.deepEqual(tagsCatalog.skills.find((entry: Record<string, any>) => entry.name === 'workspace-skill').tags, ['Research', 'Priority']);
 
     const staleResponse = await fetch(`${baseUrl}/api/codex/skill-library/workspace-skill`, {
       method: 'PUT',

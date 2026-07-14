@@ -7,7 +7,7 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { codexEffortOptions, codexModelOptions, type CodexEffort, type CodexModel } from '../helper/codex-run-options.js';
 import { loadCodexSkillLibrary, type CodexSkillLibraryDetail } from './load-codex-skill-library.js';
 import { requestCodexSkillLibrarySave } from './request-codex-skill-library-save.js';
-import { requestCodexSkillFavoriteSave } from './request-codex-skill-favorite-save.js';
+import { requestCodexSkillFavoriteSave, requestCodexSkillMetadataSave } from './request-codex-skill-favorite-save.js';
 
 export type SkillLibraryEditorState = {
   skillName: string;
@@ -18,6 +18,8 @@ export type SkillLibraryEditorState = {
   loading: boolean;
   saving: boolean;
   favoriteSaving: boolean;
+  tags: string[];
+  tagsSaving: boolean;
   error: string;
   notice: string;
   onSaved?: (skill: CodexSkillLibraryDetail) => void | Promise<void>;
@@ -33,6 +35,8 @@ export const skillLibraryEditorState: SkillLibraryEditorState = {
   loading: false,
   saving: false,
   favoriteSaving: false,
+  tags: [],
+  tagsSaving: false,
   error: '',
   notice: '',
 };
@@ -149,6 +153,19 @@ export function renderSkillLibraryEditorModal(): void {
       }),
     );
 
+    const tagsField = document.createElement('label');
+    tagsField.className = 'codex-field skill-tags-field';
+    const tagsLabel = document.createElement('span');
+    tagsLabel.textContent = 'Tags';
+    const tagsInput = document.createElement('input');
+    tagsInput.setAttribute('aria-label', 'Skill tags');
+    tagsInput.value = skillLibraryEditorState.tags.join(', ');
+    tagsInput.disabled = skillLibraryEditorState.tagsSaving;
+    tagsInput.addEventListener('input', () => {
+      skillLibraryEditorState.tags = [...new Set(tagsInput.value.split(',').map((tag) => tag.trim()).filter(Boolean))].slice(0, 8);
+    });
+    tagsField.replaceChildren(tagsLabel, tagsInput);
+
     const markdownField = document.createElement('label');
     markdownField.className = 'codex-field skill-markdown-field';
     const markdownLabel = document.createElement('span');
@@ -161,7 +178,7 @@ export function renderSkillLibraryEditorModal(): void {
     textarea.disabled = skillLibraryEditorState.saving;
     textarea.addEventListener('input', () => { skillLibraryEditorState.markdown = textarea.value; });
     markdownField.replaceChildren(markdownLabel, textarea);
-    body.replaceChildren(metadata, defaults, markdownField);
+    body.replaceChildren(metadata, tagsField, defaults, markdownField);
   }
 
   const footer = document.createElement('footer');
@@ -172,6 +189,9 @@ export function renderSkillLibraryEditorModal(): void {
   message.textContent = skillLibraryEditorState.error || skillLibraryEditorState.notice;
   footer.append(message);
   if (skillLibraryEditorState.detail) {
+    const saveTags = button(skillLibraryEditorState.tagsSaving ? 'Saving tags…' : 'Save tags', () => { void saveSkillLibraryTags(); }, 'ghost-button', 'skill-editor-save-tags');
+    saveTags.disabled = skillLibraryEditorState.tagsSaving || skillLibraryEditorState.saving || skillLibraryEditorState.favoriteSaving;
+    footer.append(saveTags);
     const favorite = button(
       skillLibraryEditorState.favoriteSaving
         ? 'Saving favorite…'
@@ -216,6 +236,8 @@ export async function openSkillLibraryEditor(input: {
     loading: true,
     saving: false,
     favoriteSaving: false,
+    tags: [],
+    tagsSaving: false,
     error: '',
     notice: '',
     onSaved: input.onSaved,
@@ -248,6 +270,7 @@ export async function reloadSkillLibraryDraft(): Promise<void> {
   skillLibraryEditorState.markdown = result.skill.markdown;
   skillLibraryEditorState.defaultCodexModel = result.skill.defaultCodexModel;
   skillLibraryEditorState.defaultCodexEffort = result.skill.defaultCodexEffort;
+  skillLibraryEditorState.tags = [...(result.skill.tags ?? [])];
   renderSkillLibraryEditorModal();
 }
 
@@ -288,6 +311,34 @@ export async function saveSkillLibraryDraft(): Promise<boolean> {
   skillLibraryEditorState.notice = 'Skill saved. Inherited run settings have been refreshed.';
   telemetry('codex-skill-library-saved', { skillName: detail.name });
   await onSaved?.(result.skill);
+  renderSkillLibraryEditorModal();
+  return true;
+}
+
+export async function saveSkillLibraryTags(): Promise<boolean> {
+  const detail = skillLibraryEditorState.detail;
+  if (!detail || skillLibraryEditorState.tagsSaving) return false;
+  const generation = skillEditorGeneration;
+  const prior = detail;
+  const tags = [...skillLibraryEditorState.tags];
+  skillLibraryEditorState.tagsSaving = true;
+  skillLibraryEditorState.error = '';
+  skillLibraryEditorState.detail = { ...detail, tags };
+  renderSkillLibraryEditorModal();
+  const result = await requestCodexSkillMetadataSave(detail.name, { tags });
+  if (generation !== skillEditorGeneration || detail.name !== skillLibraryEditorState.skillName) return false;
+  skillLibraryEditorState.tagsSaving = false;
+  if (!result.ok || !result.skill) {
+    skillLibraryEditorState.detail = prior;
+    skillLibraryEditorState.tags = [...(prior.tags ?? [])];
+    skillLibraryEditorState.error = result.error || 'Could not save skill tags.';
+    renderSkillLibraryEditorModal();
+    return false;
+  }
+  skillLibraryEditorState.detail = result.skill;
+  skillLibraryEditorState.tags = [...(result.skill.tags ?? [])];
+  skillLibraryEditorState.notice = 'Tags saved.';
+  await skillLibraryEditorState.onSaved?.(result.skill);
   renderSkillLibraryEditorModal();
   return true;
 }

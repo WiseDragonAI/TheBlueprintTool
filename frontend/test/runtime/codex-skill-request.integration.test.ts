@@ -17,7 +17,7 @@ import { requestCodexPipelineSave } from '../../src/runtime/codex/effect/request
 import { requestCodexPipelineRun } from '../../src/runtime/codex/effect/request-codex-pipeline-run.js';
 import { requestCodexPipelineRunCancel, requestCodexPipelineRunRestart, requestCodexPipelineRunStatus } from '../../src/runtime/codex/effect/request-codex-pipeline-run-status.js';
 import { requestCodexSkillLibrarySave } from '../../src/runtime/codex/effect/request-codex-skill-library-save.js';
-import { requestCodexSkillFavoriteSave } from '../../src/runtime/codex/effect/request-codex-skill-favorite-save.js';
+import { requestCodexSkillFavoriteSave, requestCodexSkillMetadataSave } from '../../src/runtime/codex/effect/request-codex-skill-favorite-save.js';
 import { bindCardSkillRunLogConsumer, bindCardSkillRunWidget, resumeExternallyStartedCardSkillRun } from '../../src/runtime/codex/effect/poll-card-skill-run.js';
 import type { CardSkillRunEvent, CardSkillRunStatus, CardSkillRunSummary } from '../../src/runtime/codex/effect/request-card-skill-run-status.js';
 import { cardCodexRunId, cardCodexThreadRunId } from '../../src/runtime/codex/helper/card-codex-run-id.js';
@@ -292,6 +292,22 @@ test('skill favorite save sends only the favorite value and returns canonical de
     const result = await requestCodexSkillFavoriteSave('system/skill', true);
     assert.equal(result.ok, true);
     assert.equal(result.skill?.favorite, true);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('skill tag save sends path-free metadata and returns canonical tags', async () => {
+  const previousFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      assert.equal(url, '/api/codex/skill-library/system%2Fskill');
+      assert.equal(init?.method, 'PUT');
+      assert.deepEqual(JSON.parse(String(init?.body)), { tags: ['Research', 'Priority'] });
+      return new Response(JSON.stringify({ ok: true, skill: { name: 'system/skill', tags: ['Research', 'Priority'] } }), { status: 200 });
+    }) as typeof fetch;
+    const result = await requestCodexSkillMetadataSave('system/skill', { tags: ['Research', 'Priority'] });
+    assert.deepEqual(result.skill?.tags, ['Research', 'Priority']);
   } finally {
     globalThis.fetch = previousFetch;
   }

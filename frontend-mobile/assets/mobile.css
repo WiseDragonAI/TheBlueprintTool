@@ -353,6 +353,7 @@ body:has(.new-task-project-modal[open]) { overflow: hidden; }
 .codex-list { display: grid; gap: 10px; }
 .codex-list-item { display: grid; gap: 6px; width: 100%; min-height: 64px; padding: 12px; border: 1px solid var(--line); text-align: left; background: var(--panel); }
 .codex-list-item span, .codex-list-item small, .codex-message { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.codex-list-item .skill-result-name { overflow-wrap: anywhere; color: color-mix(in srgb, var(--skill-category-color), white 34%); font-size: 16px; line-height: 1.25; }
 .codex-list-labels { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .codex-list-item .project-record-label, .codex-list-item .skill-category-label, .codex-list-item .skill-favorite-label { padding: 4px 7px; border-radius: 5px; color: white; font-size: 10px; font-weight: 800; line-height: 1.1; text-transform: uppercase; }
 .codex-list-item .project-record-label { background: var(--project-color); }
@@ -361,6 +362,9 @@ body:has(.new-task-project-modal[open]) { overflow: hidden; }
 .codex-list-item .skill-source-label { padding-inline: 2px; text-transform: capitalize; }
 .codex-message.error { color: var(--danger); }
 .process-detail { display: grid; gap: 16px; }
+.skill-detail-title { color: var(--accent); font-size: 20px; line-height: 1.25; overflow-wrap: anywhere; }
+.skill-tags-field { text-transform: none; }
+.skill-tags-field > span { text-transform: uppercase; }
 .process-detail select, .pipeline-step input, .pipeline-step textarea, .pipeline-skill select, .codex-field input, .codex-field textarea { width: 100%; min-width: 0; min-height: 44px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--text); background: #080a0d; font: inherit; }
 .codex-back-link { min-height: 44px; padding: 0; border: 0; color: var(--accent); text-align: left; background: transparent; }
 .codex-field { display: grid; gap: 7px; color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; }
