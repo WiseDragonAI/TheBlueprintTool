@@ -7805,7 +7805,7 @@
       "title": "Create a default tasks ledger for new projects",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10402,
       "y": 61548,
       "w": 360,
@@ -8907,6 +8907,16 @@
       "color": "#38d9e8",
       "label": "Default project tasks ledger",
       "comments": []
+    },
+    {
+      "id": "zone-6bd0fd0d-a787-450e-959d-04e62f8ede5c",
+      "x": -10462,
+      "y": 62508,
+      "width": 1200,
+      "height": 900,
+      "color": "#38d9e8",
+      "label": "New task intake",
+      "comments": []
     }
   ],
   "notes": {},
@@ -8976,6 +8986,9 @@
   "deletedNoteIds": {
     "thread-card-7074d33a-39da-42a1-b470-673cbe221def": [
       "note-1783932484769-d9ca2dd762dea8"
+    ],
+    "thread-card-89546a8b-0056-4957-892e-e82acaf94cbf": [
+      "note-1784014844499-e771a056471ff8"
     ]
   }
 }
