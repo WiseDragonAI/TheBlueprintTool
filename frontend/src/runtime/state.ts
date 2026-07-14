@@ -50,6 +50,7 @@ export type ThreadRunDisclosureState = Record<string, boolean>;
 export const state: any = {
   routePath: globalThis.window?.location?.pathname ?? '/',
   projectName: 'Project',
+  projectColor: '#38d9e8',
   canvasMode: 'ledger',
   activeLedgerId: 'specs',
   activeTab: 'specs',
@@ -74,7 +75,7 @@ export const state: any = {
   } satisfies LedgerReconciliationState,
   activeTool: 'select',
   railCollapsed: false,
-  zoneColor: '#55b8ff',
+  zoneColor: '#38d9e8',
   cardCounter: 1,
   zoneCounter: 3,
   groupCounter: 2,

@@ -10,9 +10,14 @@ export async function loadDecisionOsState(): Promise<void> {
     telemetry('load-decision-os-state', { ok: false });
     return;
   }
-  const blueprintState = await response.json().catch(() => undefined) as { projectName?: string; ledgers?: Array<{ id?: string; title?: string; ledgerFile?: string; cardId?: string }>; tabs?: Array<{ id?: string; title?: string; ledgerFile?: string; cardId?: string }> } | undefined;
+  const blueprintState = await response.json().catch(() => undefined) as { projectName?: string; projectColor?: string; ledgers?: Array<{ id?: string; title?: string; ledgerFile?: string; cardId?: string }>; tabs?: Array<{ id?: string; title?: string; ledgerFile?: string; cardId?: string }> } | undefined;
   const projectName = String(blueprintState?.projectName ?? '').trim();
   if (projectName) state.projectName = projectName;
+  const projectColor = String(blueprintState?.projectColor ?? '').trim();
+  if (projectColor) {
+    state.projectColor = projectColor;
+    state.zoneColor = projectColor;
+  }
   const ledgers = (blueprintState?.ledgers ?? blueprintState?.tabs ?? []).filter((ledger) => ledger.id && ledger.title);
   if (ledgers.length > 0) {
     state.ledgers = ledgers;
