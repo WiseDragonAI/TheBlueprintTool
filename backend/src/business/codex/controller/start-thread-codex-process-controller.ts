@@ -19,6 +19,7 @@ import { isCodexThreadArtifactNote } from '../helper/is-codex-thread-artifact-no
 import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand, resolveCodexResumeCommand, type CodexCommand } from '../helper/resolve-codex-command.js';
 import { codexCapacityResumeDelayMs, isTransientCodexCapacityFailure, readCodexSessionId } from '../helper/transient-codex-capacity-failure.js';
 import { decisionOsCodexEnvironment } from '../helper/decision-os-codex-runtime.js';
+import { projectCardCodexRun } from '../helper/project-card-codex-run.js';
 
 type AnyRecord = Record<string, unknown>;
 type ProcessStatus = 'running' | 'complete' | 'failed' | 'cancelled';
@@ -168,7 +169,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
     cardId,
     threadId,
   };
-  const existingRunId = String(source.codexThreadRunId ?? '').trim();
+  const existingRunId = String(source.codexActiveRunId ?? source.codexThreadRunId ?? source.codexRunId ?? '').trim();
   if (existingRunId) return {
     ok: false,
     statusCode: 409,
@@ -208,10 +209,15 @@ export async function startThreadCodexProcessController(input: { action_payload?
     codexEffort: requestedCodexEffort,
     developerInstructions: prompt.developerInstructions,
   });
-  source.codexThreadRunId = runId;
-  source.codexThreadRunOutputFile = runSummaryRef;
-  source.codexRunModel = command.model;
-  source.codexRunEffort = command.effort;
+  projectCardCodexRun({
+    ledger,
+    cardId,
+    runId,
+    outputFileRef: runSummaryRef,
+    codexModel: command.model,
+    codexEffort: command.effort,
+    ownership: 'thread',
+  });
   stripHydratedThreadNotes(ledger);
   writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2), 'utf8');
 

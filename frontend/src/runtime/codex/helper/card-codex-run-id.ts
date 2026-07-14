@@ -8,7 +8,7 @@ import { cardCodexThreadRunId } from './card-codex-thread-run-id.js';
 export { cardCodexThreadRunId } from './card-codex-thread-run-id.js';
 
 export function cardCodexRunId(card: Record<string, unknown>): string {
-  const fieldRunId = cardCodexThreadRunId(card) || String(card.codexRunId ?? '').trim();
+  const fieldRunId = String(card.codexActiveRunId ?? '').trim() || cardCodexThreadRunId(card) || String(card.codexRunId ?? '').trim();
   // WHAT: Prefer an explicit validated run field over generated-card fallbacks.
   // WHY: Explicit ownership is the least ambiguous and cheapest lookup path.
   if (/^codex-skill-[^\s]+$/.test(fieldRunId)) return fieldRunId;

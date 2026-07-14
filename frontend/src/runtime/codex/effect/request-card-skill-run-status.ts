@@ -36,6 +36,11 @@ export type CardSkillRunSummary = {
   active?: boolean;
   runId: string;
   runKind: 'thread' | 'card' | 'unknown';
+  pipelineRunId: string;
+  pipelineName: string;
+  pipelineStepName: string;
+  skillName: string;
+  pipelineStatus: CardSkillRunStatus | '';
   status: CardSkillRunStatus;
   startedAt: string;
   elapsedMs: number;
@@ -99,6 +104,11 @@ function unavailableSummary(runId: string, since: number, error: string): CardSk
     active: false,
     runId,
     runKind: 'unknown',
+    pipelineRunId: '',
+    pipelineName: '',
+    pipelineStepName: '',
+    skillName: '',
+    pipelineStatus: '',
     status: 'unknown',
     startedAt: '',
     elapsedMs: 0,
@@ -136,6 +146,13 @@ export async function requestCardSkillRunStatus(input: { ledgerId: string; cardI
     active: body.active === true,
     runId,
     runKind: body.runKind === 'thread' ? 'thread' : body.runKind === 'card' ? 'card' : 'unknown',
+    pipelineRunId: String((body as Record<string, unknown>).pipelineRunId ?? ''),
+    pipelineName: String((body as Record<string, unknown>).pipelineName ?? ''),
+    pipelineStepName: String((body as Record<string, unknown>).pipelineStepName ?? ''),
+    skillName: String((body as Record<string, unknown>).skillName ?? ''),
+    pipelineStatus: ['running', 'complete', 'failed', 'cancelled', 'unknown'].includes(String((body as Record<string, unknown>).pipelineStatus ?? ''))
+      ? String((body as Record<string, unknown>).pipelineStatus) as CardSkillRunStatus
+      : '',
     status: body.status ?? 'unknown',
     startedAt: String(body.startedAt ?? ''),
     elapsedMs: Number(body.elapsedMs ?? 0),

@@ -820,6 +820,11 @@ test('requestCardSkillRunContinue can start a new session with the selected mode
 test('cardCodexRunId falls back to the durable output card id', () => {
   assert.equal(cardCodexRunId({
     id: 'card-a',
+    codexActiveRunId: 'codex-skill-9999-pipeline',
+    codexThreadRunId: 'codex-skill-9999-thread'
+  }), 'codex-skill-9999-pipeline');
+  assert.equal(cardCodexRunId({
+    id: 'card-a',
     codexThreadRunId: 'codex-skill-9999-thread'
   }), 'codex-skill-9999-thread');
   assert.equal(cardCodexRunId({

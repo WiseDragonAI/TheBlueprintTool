@@ -236,6 +236,7 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     pipelineStepId: persistedStep?.stepId ?? '',
     pipelineStepName: persistedStep?.name ?? '',
     skillName: persistedSkill?.skillName ?? '',
+    pipelineStatus: persistedPipelineRun?.status ?? null,
     status,
     active: inMemoryStatus === 'running',
     startedAt: new Date(runSegmentStartedAtMs({ runtime, runId, stderrFile })).toISOString(),

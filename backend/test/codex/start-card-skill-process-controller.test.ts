@@ -170,7 +170,19 @@ test('card skill process route creates a linked output card and launches codex',
     assert.equal(body.run.codexEffort, 'xhigh');
 
     const ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as {
-      cards: Array<{ id: string; x: number; codexRunModel?: string; codexRunEffort?: string; comment?: { contentFile?: string } }>;
+      cards: Array<{
+        id: string;
+        x: number;
+        codexActiveRunId?: string;
+        codexRunId?: string;
+        codexRunOutputFile?: string;
+        codexPipelineRunId?: string;
+        codexPipelineName?: string;
+        codexSkillName?: string;
+        codexRunModel?: string;
+        codexRunEffort?: string;
+        comment?: { contentFile?: string };
+      }>;
       relationships: Array<{ from: string; to: string; label: string }>;
     };
     assert.equal(ledger.cards.some((card) => card.id === body.run.outputCardId && card.x > 420), true);
@@ -179,6 +191,28 @@ test('card skill process route creates a linked output card and launches codex',
     assert.equal(outputCard?.comment?.contentFile?.endsWith(`${body.run.outputCardId}.md`), true);
     assert.equal(outputCard?.codexRunModel, 'gpt-5.4');
     assert.equal(outputCard?.codexRunEffort, 'xhigh');
+    const sourceCard = ledger.cards.find((card) => card.id === 'source-card');
+    assert.equal(sourceCard?.codexActiveRunId, body.run.id);
+    assert.equal(sourceCard?.codexRunId, body.run.id);
+    assert.equal(sourceCard?.codexRunOutputFile, outputCard?.comment?.contentFile);
+    assert.equal(sourceCard?.codexPipelineRunId, body.run.id);
+    assert.equal(sourceCard?.codexPipelineName, 'test-skill run');
+    assert.equal(sourceCard?.codexSkillName, 'test-skill');
+
+    const sourceStatusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${body.run.id}?ledgerId=specs&cardId=source-card&since=0`);
+    assert.equal(sourceStatusResponse.status, 200);
+    const sourceStatus = await sourceStatusResponse.json() as {
+      pipelineRunId: string;
+      pipelineName: string;
+      pipelineStepName: string;
+      skillName: string;
+      pipelineStatus: string;
+    };
+    assert.equal(sourceStatus.pipelineRunId, body.run.id);
+    assert.equal(sourceStatus.pipelineName, 'test-skill run');
+    assert.equal(sourceStatus.pipelineStepName, 'test-skill');
+    assert.equal(sourceStatus.skillName, 'test-skill');
+    assert.equal(sourceStatus.pipelineStatus, 'running');
 
     const statusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${body.run.id}?ledgerId=specs&cardId=${body.run.outputCardId}&since=0`);
     assert.equal(statusResponse.status, 200);
@@ -362,6 +396,7 @@ test('thread codex process route anchors the run widget on the source card and s
     const card = ledger.cards.find((entry) => entry.id === 'card-a');
     assert.equal(ledger.cards.length, 1);
     assert.equal(card?.codexThreadRunId, body.run.id);
+    assert.equal((card as Record<string, unknown>)?.codexActiveRunId, body.run.id);
     assert.equal(card?.codexThreadRunOutputFile?.includes(body.run.id), true);
     assert.equal(card?.codexRunModel, 'gpt-5.4');
     assert.equal(card?.codexRunEffort, 'medium');
