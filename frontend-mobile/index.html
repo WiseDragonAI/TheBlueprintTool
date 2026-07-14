@@ -266,6 +266,12 @@
         <section class="codex-sheet">
           <header><button class="codex-back process-close" type="button" aria-label="Close card processing">×</button><div><p class="eyebrow">Card processing</p><h2 id="process-title">Process card</h2></div></header>
           <div class="codex-tabs" role="tablist" aria-label="Processing library"><button type="button" data-process-tab="skills" aria-selected="true">Skills</button><button type="button" data-process-tab="pipelines" aria-selected="false">Pipelines</button></div>
+          <div class="codex-library-controls">
+            <label class="codex-library-search"><span aria-hidden="true">⌕</span><input class="process-search" type="search" placeholder="Search library" aria-label="Search processing library"></label>
+            <div class="process-project-filters codex-filter-row" aria-label="Filter processing library by project"></div>
+            <div class="process-tag-filters codex-filter-row" aria-label="Filter processing library by tag"></div>
+            <button class="process-filter-clear codex-filter-clear" type="button">Clear filters</button>
+          </div>
           <p class="codex-message process-message" role="status"></p>
           <div class="process-library codex-list"></div>
           <section class="process-detail" hidden></section>
@@ -275,6 +281,12 @@
       <dialog class="codex-modal pipelines-modal" aria-labelledby="pipelines-title">
         <section class="codex-sheet">
           <header><button class="codex-back pipelines-close" type="button" aria-label="Close pipelines">×</button><div><p class="eyebrow">Library</p><h2 id="pipelines-title">Pipelines</h2></div><button class="primary-button pipeline-new" type="button">New</button></header>
+          <div class="codex-library-controls">
+            <label class="codex-library-search"><span aria-hidden="true">⌕</span><input class="pipelines-search" type="search" placeholder="Search pipelines" aria-label="Search pipelines"></label>
+            <div class="pipelines-project-filters codex-filter-row" aria-label="Filter pipelines by project"></div>
+            <div class="pipelines-tag-filters codex-filter-row" aria-label="Filter pipelines by tag"></div>
+            <button class="pipelines-filter-clear codex-filter-clear" type="button">Clear filters</button>
+          </div>
           <p class="codex-message pipelines-message" role="status"></p>
           <div class="pipeline-library codex-list"></div>
         </section>
