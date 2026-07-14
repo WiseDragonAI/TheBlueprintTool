@@ -20,6 +20,7 @@ import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand, resolve
 import { codexCapacityResumeDelayMs, isTransientCodexCapacityFailure, readCodexSessionId } from '../helper/transient-codex-capacity-failure.js';
 import { decisionOsCodexEnvironment } from '../helper/decision-os-codex-runtime.js';
 import { projectCardCodexRun } from '../helper/project-card-codex-run.js';
+import { readCardSkillRunController } from './read-card-skill-run-controller.js';
 
 type AnyRecord = Record<string, unknown>;
 type ProcessStatus = 'running' | 'complete' | 'failed' | 'cancelled';
@@ -170,14 +171,26 @@ export async function startThreadCodexProcessController(input: { action_payload?
     threadId,
   };
   const existingRunId = String(source.codexActiveRunId ?? source.codexThreadRunId ?? source.codexRunId ?? '').trim();
-  if (existingRunId) return {
-    ok: false,
-    statusCode: 409,
-    error: 'Thread already owns a Codex run. Continue the existing run or explicitly start a new session.',
-    cardId,
-    threadId,
-    runId: existingRunId,
-  };
+  if (existingRunId) {
+    const threadRunId = String(source.codexThreadRunId ?? '').trim();
+    const existing = threadRunId === existingRunId
+      ? null
+      : await readCardSkillRunController({
+          action_payload: { ledgerId, cardId, runId: existingRunId, since: 0 },
+          runtime_state: runtime,
+        });
+    const existingStatus = String(existing?.status ?? '');
+    const replaceableCardRun = existing?.ok === true
+      && (existingStatus === 'complete' || existingStatus === 'failed' || existingStatus === 'cancelled');
+    if (!replaceableCardRun) return {
+      ok: false,
+      statusCode: 409,
+      error: 'Card already owns an active or resumable Codex run. Continue the existing run or explicitly start a new session.',
+      cardId,
+      threadId,
+      runId: existingRunId,
+    };
+  }
 
   const runId = `codex-skill-${Date.now()}-${randomUUID().slice(0, 8)}`;
   const runDirectoryRef = `.decision-os/runs/codex-skills/${safeSegment(ledgerStem(ledgerPath))}`;

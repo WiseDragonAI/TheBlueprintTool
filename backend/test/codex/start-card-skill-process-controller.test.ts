@@ -124,7 +124,14 @@ test('card skill process route creates a linked output card and launches codex',
     }],
     annotations: [],
     relationships: [],
-    notes: {}
+    notes: {
+      'thread-source-card': [{
+        id: 'note-operator-thread-after-skill',
+        role: 'operator',
+        message: 'Start a fresh thread run after the completed skill.',
+        timestamp: '2026-07-14T11:31:41.028Z'
+      }]
+    }
   }, null, 2));
   writeFileSync(fakeCodex, [
     '#!/usr/bin/env node',
@@ -133,12 +140,14 @@ test('card skill process route creates a linked output card and launches codex',
     'process.stdin.on("data", (chunk) => { input += chunk; });',
     'process.stdin.on("end", () => {',
     '  const match = input.match(/Write the final result to this Markdown file: (.+)/);',
-    '  if (!match) process.exit(2);',
+    '  const threadMatch = input.match(/Run summary: (.+)/);',
+    '  if (!match && !threadMatch) process.exit(2);',
     '  const args = process.argv.slice(2);',
     '  const model = args[args.indexOf("--model") + 1] || "";',
     '  const effort = args[args.indexOf("-c") + 1] || "";',
     '  const ledgerFile = (input.match(/Ledger file: (.+)/) || [])[1] || "";',
-    '  writeFileSync(match[1].trim(), "# Fake Result\\n\\n" + (input.includes("$test-skill") ? "skill seen" : "skill missing") + "\\nmodel=" + model + "\\neffort=" + effort + "\\nledgerFile=" + ledgerFile + "\\n");',
+    '  const outputFile = (match?.[1] || threadMatch?.[1] || "").trim();',
+    '  writeFileSync(outputFile, match ? "# Fake Result\\n\\n" + (input.includes("$test-skill") ? "skill seen" : "skill missing") + "\\nmodel=" + model + "\\neffort=" + effort + "\\nledgerFile=" + ledgerFile + "\\n" : "# Fake Thread Result\\n");',
     '  console.log(JSON.stringify({ type: "thread.started", thread_id: "ordinary-card-skill" }));',
     '  console.log(JSON.stringify({ type: "item.started", item: { id: "ordinary-tool", type: "command_execution", command: "rg TODO", status: "in_progress" } }));',
     '  console.log(JSON.stringify({ type: "item.completed", item: { id: "ordinary-tool", type: "command_execution", command: "rg TODO", aggregated_output: "done", exit_code: 0, status: "completed" } }));',
@@ -259,6 +268,31 @@ test('card skill process route creates a linked output card and launches codex',
     const thread = existsSync(threadFile) ? readFileSync(threadFile, 'utf8') : '';
     assert.deepEqual(parseThreadMarkdown(thread).filter((note) => note.codexRunId === body.run.id), []);
     assert.doesNotMatch(thread, new RegExp(`codex-${body.run.id}-line-`));
+
+    const threadResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/threads/process`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ledgerId: 'specs', threadId: 'thread-source-card', cardId: 'source-card' })
+    });
+    assert.equal(threadResponse.status, 202);
+    const threadBody = await threadResponse.json() as { ok: boolean; run: { id: string; outputFile: string } };
+    assert.equal(threadBody.ok, true);
+    assert.notEqual(threadBody.run.id, body.run.id);
+    await waitForText(threadBody.run.outputFile, 'Codex run completed');
+
+    const replacedLedger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as {
+      cards: Array<Record<string, unknown>>;
+    };
+    const replacedSource = replacedLedger.cards.find((card) => card.id === 'source-card');
+    assert.equal(replacedSource?.codexActiveRunId, threadBody.run.id);
+    assert.equal(replacedSource?.codexThreadRunId, threadBody.run.id);
+    assert.equal(replacedSource?.codexRunId, undefined);
+    assert.equal(replacedSource?.codexRunOutputFile, undefined);
+    assert.equal(replacedSource?.codexPipelineRunId, undefined);
+    assert.equal(replacedSource?.codexPipelineName, undefined);
+    assert.equal(replacedSource?.codexPipelineStepId, undefined);
+    assert.equal(replacedSource?.codexPipelineStepName, undefined);
+    assert.equal(replacedSource?.codexSkillName, undefined);
   } finally {
     server.close();
     process.chdir(originalCwd);
