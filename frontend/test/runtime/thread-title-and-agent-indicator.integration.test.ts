@@ -70,7 +70,7 @@ test('card-has-agent-last-answer only marks assistant or agent latest notes', ()
   }
 });
 
-test('resolve-card-work-status derives processing from latest operator notes and lets done win', () => {
+test('resolve-card-work-status derives processing from latest operator notes and lets persisted terminal states win', () => {
   state.activeLedger = {
     notes: {
       'thread-card-a': [{ role: 'operator', message: 'Question' }, { role: 'assistant', message: 'Answer' }],
@@ -83,6 +83,7 @@ test('resolve-card-work-status derives processing from latest operator notes and
     assert.equal(resolveCardWorkStatus({ id: 'card-a' }), 'todo');
     assert.equal(resolveCardWorkStatus({ id: 'card-b' }), 'processing');
     assert.equal(resolveCardWorkStatus({ id: 'card-c', status: 'done' }), 'done');
+    assert.equal(resolveCardWorkStatus({ id: 'card-d', status: 'delayed' }), 'delayed');
     assert.equal(resolveCardWorkStatus({ id: 'card-d' }), 'processing');
     assert.equal(resolveCardWorkStatus({ id: 'card-new' }), 'todo');
   } finally {

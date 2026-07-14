@@ -296,6 +296,11 @@
   background: color-mix(in srgb, #74d680, rgba(3, 4, 5, 0.94) 40%);
 }
 
+.card[data-card-work-status="delayed"] .card-status-indicator {
+  border-color: color-mix(in srgb, #9aa4b2, white 18%);
+  background: color-mix(in srgb, #9aa4b2, rgba(3, 4, 5, 0.94) 38%);
+}
+
 .card.connected {
   outline: none;
   border-color: color-mix(in srgb, var(--card-zone-color), white 18%);

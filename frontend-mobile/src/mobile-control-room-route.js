@@ -1,4 +1,4 @@
-const CONTROL_ROOM_TABS = new Set(['queue', 'active', 'done']);
+const CONTROL_ROOM_TABS = new Set(['queue', 'active', 'delayed']);
 
 export function parseControlRoomRoute(url) {
   const parsed = new URL(url, 'http://decision-os.local');

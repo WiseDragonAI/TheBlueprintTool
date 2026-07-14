@@ -1,7 +1,7 @@
 import type { CardPersistedWorkStatus, CardVisibleWorkStatus } from '../../card/helper/resolve-card-work-status.js';
 
 export function renderLedgerCardStatusButton(cardId: string, persistedStatus: CardPersistedWorkStatus, visibleStatus: CardVisibleWorkStatus): HTMLButtonElement {
-  const nextStatus = persistedStatus === 'done' ? 'todo' : 'done';
+  const nextStatus = persistedStatus === 'todo' ? 'done' : 'todo';
   const button = document.createElement('button');
   button.className = 'ledger-card-status-toggle terminal-button terminal-button--compact';
   button.type = 'button';

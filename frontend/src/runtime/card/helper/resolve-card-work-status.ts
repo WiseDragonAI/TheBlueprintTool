@@ -4,7 +4,7 @@
  */
 import { state } from '../../state.js';
 
-export type CardPersistedWorkStatus = 'todo' | 'done';
+export type CardPersistedWorkStatus = 'todo' | 'delayed' | 'done';
 export type CardVisibleWorkStatus = CardPersistedWorkStatus | 'processing';
 
 function latestThreadRole(cardId: string): string {
@@ -15,12 +15,13 @@ function latestThreadRole(cardId: string): string {
 }
 
 export function cardPersistedWorkStatus(card: Record<string, unknown>): CardPersistedWorkStatus {
-  return card.status === 'done' ? 'done' : 'todo';
+  if (card.status === 'done') return 'done';
+  return card.status === 'delayed' ? 'delayed' : 'todo';
 }
 
 export function resolveCardWorkStatus(card: Record<string, unknown>): CardVisibleWorkStatus {
   const persistedStatus = cardPersistedWorkStatus(card);
-  if (persistedStatus === 'done') return 'done';
+  if (persistedStatus !== 'todo') return persistedStatus;
 
   const role = latestThreadRole(String(card.id ?? ''));
   if (role === 'operator') return 'processing';
