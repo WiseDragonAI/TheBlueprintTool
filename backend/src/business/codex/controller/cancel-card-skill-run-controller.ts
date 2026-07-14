@@ -3,7 +3,9 @@
  * WHY: The canvas widget needs a direct stop control for the server-owned child process.
  */
 import type { ChildProcess } from 'node:child_process';
+import { resolve } from 'node:path';
 import { cancelCodexPipelineRunController } from './cancel-codex-pipeline-run-controller.js';
+import { readCodexProcessQueue, removeCodexProcessQueueItem } from '../helper/codex-process-queue.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -20,6 +22,7 @@ export async function cancelCardSkillRunController(input: { action_payload?: Any
   const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord };
   const payload = (envelope.action_payload ?? input) as AnyRecord;
   const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
+  const decisionOsRoot = resolve(String(runtime.decisionOsRoot ?? resolve(process.cwd(), '.decision-os')));
   const ledgerId = String(payload.ledgerId ?? '').trim();
   const cardId = String(payload.cardId ?? '').trim();
   const runId = String(payload.runId ?? '').trim();
@@ -28,6 +31,12 @@ export async function cancelCardSkillRunController(input: { action_payload?: Any
   const run = runtimeRuns(runtime)[runId];
   if (!run || String(run.ledgerId ?? '') !== ledgerId || String(run.outputCardId ?? '') !== cardId) {
     return { ok: false, statusCode: 404, error: 'Active run not found.', runId };
+  }
+  if (String(run.status ?? '') === 'pending') {
+    const queued = readCodexProcessQueue(decisionOsRoot).find((item) => item.id === runId || String(item.payload.runId ?? '') === runId);
+    if (queued) removeCodexProcessQueueItem(decisionOsRoot, queued.id);
+    Object.assign(run, { status: 'cancelled', finishedAt: new Date().toISOString() });
+    return { ok: true, statusCode: 202, status: 'cancelled', run: publicRun(run) };
   }
   if (String(run.status ?? '') !== 'running') {
     return { ok: true, statusCode: 200, status: String(run.status ?? 'unknown'), run: publicRun(run) };

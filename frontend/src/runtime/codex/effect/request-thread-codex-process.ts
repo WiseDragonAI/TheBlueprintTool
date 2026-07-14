@@ -10,13 +10,13 @@ export type ThreadCodexProcessRequest = {
   codexEffort?: string;
 };
 
-export async function requestThreadCodexProcess(input: ThreadCodexProcessRequest): Promise<{ ok: boolean; run?: Record<string, unknown>; error?: string }> {
+export async function requestThreadCodexProcess(input: ThreadCodexProcessRequest): Promise<{ ok: boolean; run?: Record<string, unknown>; queuePosition?: number | null; error?: string }> {
   const response = await fetch('/api/codex/threads/process', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(input),
   }).catch(() => undefined);
   if (!response) return { ok: false, error: 'Request failed.' };
-  const body = await response.json().catch(() => ({})) as { ok?: boolean; run?: Record<string, unknown>; error?: string };
-  return { ok: response.ok && body.ok !== false, run: body.run, error: body.error };
+  const body = await response.json().catch(() => ({})) as { ok?: boolean; run?: Record<string, unknown>; queuePosition?: number | null; error?: string };
+  return { ok: response.ok && body.ok !== false, run: body.run, queuePosition: body.queuePosition, error: body.error };
 }

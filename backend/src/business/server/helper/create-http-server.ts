@@ -12,6 +12,7 @@ import { transcribeVoiceController } from '@backend/business/transcription/contr
 import { continueQueuedVoiceCodexAfterRun, readVoiceTranscriptionStatusController, startVoiceRetryOrchestrationController, startVoiceUploadOrchestrationController } from '@backend/business/transcription/controller/start-voice-upload-orchestration-controller.js';
 import { resolveDecisionOsRoot } from './resolve-decision-os-root.js';
 import { readDecisionOsSettings } from './read-decision-os-settings.js';
+import { normalizedConcurrentCodexProcesses, saveCodexProcessSettings } from './save-codex-process-settings.js';
 import { readRequestBuffer } from './read-request-buffer.js';
 import { parseMultipartFormData } from './parse-multipart-form-data.js';
 import { contentTypeFor } from './content-type-for.js';
@@ -43,6 +44,8 @@ import { readCodexPipelineRunController } from '../../codex/controller/read-code
 import { cancelCodexPipelineRunController } from '../../codex/controller/cancel-codex-pipeline-run-controller.js';
 import { restartCodexPipelineRunController } from '../../codex/controller/restart-codex-pipeline-run-controller.js';
 import { resumeCodexPipelineRuns } from '../../codex/helper/resume-codex-pipeline-runs.js';
+import { recoverCodexProcessQueue } from '../../codex/helper/codex-process-queue.js';
+import { scheduleCodexProcesses } from '../../codex/helper/codex-process-scheduler.js';
 import { createDecisionOsProject, discoverDecisionOsProjects, resolveCatalogProject, saveProjectMetadata } from './project-catalog.js';
 import { isGlobalProjectEndpoint, isProjectSensitiveEndpoint, parseProjectUrlScope } from './project-url-scope.js';
 import { ensureLedgerCliShim } from '../../codex/helper/decision-os-codex-runtime.js';
@@ -230,6 +233,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       broadcast(`event: ledger-content-change\ndata: ${JSON.stringify({ ...event, projectId })}\n\n`);
     };
     projectRuntime.onPipelineLedgerChange = publishLedger;
+    projectRuntime.scheduleCodexProcesses = (): Promise<AnyRecord> => scheduleCodexProcesses({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime });
     projectRuntime.onCodexRunSettled = (event: AnyRecord): void => {
       if (event.pipelineRunId && event.pipelineTerminal === true) {
         const pipelineStatus = String(event.pipelineStatus ?? event.status ?? 'complete');
@@ -252,6 +256,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       watcher: watchCardContentFiles({ decisionOsRoot: activeDecisionOsRoot, onChange: publishCard })
     };
     projectContexts.set(activeDecisionOsRoot, context);
+    recoverCodexProcessQueue(activeDecisionOsRoot);
     void resumeCodexPipelineRuns({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime }).catch(() => undefined);
     return context;
   };
@@ -314,6 +319,40 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       activeResponse.setHeader(ledgerRevisionHeader, String(ledgerRevisions.advance(ledgerId)));
       activeResponse.end(JSON.stringify(loadLedgerContentFiles(ledger, activeDecisionOsRoot)));
     };
+    if (url === '/api/settings/codex-processes' && request.method === 'GET') {
+      if (!projectScope && projects.length !== 1) {
+        response.statusCode = 400;
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ ok: false, error: 'Project id is required in the URL.' }));
+        return;
+      }
+      const settings = readDecisionOsSettings({ action_payload: { decisionOsRoot }, runtime_state: requestRuntime }).settings as AnyRecord;
+      const configured = normalizedConcurrentCodexProcesses(settings.maxConcurrentCodexProcesses) ?? 1;
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ ok: true, maxConcurrentCodexProcesses: Number.isInteger(configured) ? configured : 1, minimum: 1, maximum: 32 }));
+      return;
+    }
+    if (url === '/api/settings/codex-processes' && request.method === 'PATCH') {
+      if (!projectScope && projects.length !== 1) {
+        response.statusCode = 400;
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ ok: false, error: 'Project id is required in the URL.' }));
+        return;
+      }
+      const bodyBuffer = await readRequestBuffer(request);
+      let body: AnyRecord = {};
+      try {
+        body = JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
+      } catch {
+        body = {};
+      }
+      const result = saveCodexProcessSettings({ decisionOsRoot, runtime: requestRuntime, maxConcurrentCodexProcesses: body.maxConcurrentCodexProcesses });
+      if (result.ok === true) void scheduleCodexProcesses({ decisionOsRoot, runtime: requestRuntime });
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
+      response.end(JSON.stringify(result));
+      return;
+    }
     if (url === '/decision-os/projects' && request.method === 'GET') {
       response.setHeader('content-type', 'application/json');
       response.end(JSON.stringify({ projects }));

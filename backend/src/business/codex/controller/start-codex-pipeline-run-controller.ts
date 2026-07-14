@@ -19,11 +19,10 @@ import { readCodexPipelineStore, writeCodexPipelineStore } from '../helper/codex
 import { scanCodexSkills } from '../helper/scan-codex-skills.js';
 import { runtimeServerRoot } from '../helper/server-skill-context.js';
 import {
-  pipelineQueuePosition,
   resolvePipelineLedgerContext,
-  scheduleCodexPipelineRuns,
   type PipelineLedgerContext,
 } from '../helper/codex-pipeline-runner.js';
+import { scheduleCodexProcesses, unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -128,8 +127,9 @@ export async function startPipelineRun(input: {
       cardIds: run.steps.map((step) => step.outputCardId),
     });
   }
-  const schedule = scheduleCodexPipelineRuns({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime });
-  const launch = schedule.launched.find((entry) => entry.run && typeof entry.run === 'object' && String((entry.run as AnyRecord).id ?? '') === run.id);
+  const schedule = await scheduleCodexProcesses({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime });
+  const launches = Array.isArray(schedule.launched) ? schedule.launched as AnyRecord[] : [];
+  const launch = launches.find((entry) => entry.run && typeof entry.run === 'object' && String((entry.run as AnyRecord).id ?? '') === run.id);
   if (launch?.ok === false) return launch;
   const persisted = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot }).store;
   const scheduledRun = persisted.runs.find((entry) => entry.id === run.id) ?? run;
@@ -138,7 +138,7 @@ export async function startPipelineRun(input: {
     statusCode: 202,
     run: scheduledRun,
     skillRun: launch?.skillRun ?? null,
-    queuePosition: pipelineQueuePosition({ runs: persisted.runs, pipelineRunId: run.id }),
+    queuePosition: scheduledRun.status === 'pending' ? unifiedCodexQueuePosition({ decisionOsRoot: input.decisionOsRoot, id: run.id, createdAt: run.createdAt }) : null,
     maxConcurrentCodexProcesses: schedule.capacity,
   };
 }

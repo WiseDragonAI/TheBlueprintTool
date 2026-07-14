@@ -10,8 +10,8 @@ import { stripHydratedThreadNotes, writeThreadNotesFile } from '@backend/busines
 import { readCodexPipelineStore, writeCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import {
   resolvePipelineLedgerContext,
-  scheduleCodexPipelineRuns,
 } from '../helper/codex-pipeline-runner.js';
+import { scheduleCodexProcesses } from '../helper/codex-process-scheduler.js';
 import { readCodexPipelineRunController } from './read-codex-pipeline-run-controller.js';
 
 type AnyRecord = Record<string, unknown>;
@@ -23,6 +23,7 @@ function text(value: unknown): string {
 function resetRun(run: CodexPipelineRun, timestamp: string): CodexPipelineRun {
   return {
     ...run,
+    createdAt: timestamp,
     status: 'pending',
     steps: run.steps.map((step) => ({
       ...step,
@@ -105,7 +106,7 @@ export async function restartCodexPipelineRunController(
       cardIds: run.steps.map((step) => step.outputCardId),
     });
   }
-  scheduleCodexPipelineRuns({ decisionOsRoot, runtime });
+  await scheduleCodexProcesses({ decisionOsRoot, runtime });
   const detail = await readCodexPipelineRunController({ action_payload: { runId: run.id }, runtime_state: runtime });
   return { ...detail, statusCode: 202 };
 }

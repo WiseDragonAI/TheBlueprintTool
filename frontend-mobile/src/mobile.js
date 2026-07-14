@@ -7,6 +7,7 @@ import { activeAge, activeStopwatch, cardCodexRunId, deriveControlRoom, parseMas
 import { controlRoomPath, parseControlRoomRoute } from './mobile-control-room-route.js';
 import { cardPathForProject, ledgerPathForProject, parseProjectRoute, parseProjectScope, projectPath, zonePathForProject } from './mobile-project-route.js';
 import { projectSettingsValues, saveProjectSettingsRequest } from './mobile-project-settings.js';
+import { loadCodexProcessSettings, saveCodexProcessSettings } from './mobile-codex-settings.js';
 import { createProjectRequest } from './mobile-project-creation.js';
 import { installProjectRequestScope, projectScopedRequestPath } from '/canvas-src/runtime/project/helper/project-request-scope.js';
 
@@ -32,12 +33,12 @@ const state = {
 
 const elements = Object.fromEntries([
   'project-name', 'ledger-links', 'loading-view', 'error-view', 'error-message', 'empty-view',
-  'projects-view', 'projects-summary', 'project-list', 'project-detail-view', 'project-detail-name', 'project-detail-description',
+  'projects-view', 'projects-summary', 'project-list', 'project-detail-view', 'project-detail-name', 'project-detail-description', 'settings-view',
   'project-detail-color', 'project-detail-status', 'project-detail-path',
   'overview-view', 'overview-summary', 'overview-ledgers', 'ledger-view', 'ledger-title', 'ledger-summary',
   'zone-list', 'zone-view', 'zone-title', 'zone-summary', 'card-search', 'card-list',
   'no-results', 'card-view', 'card-title', 'card-body', 'control-room-view', 'control-project-filters', 'control-filters',
-  'control-task-list', 'control-empty', 'control-diagnostics'
+  'control-task-list', 'control-empty', 'control-diagnostics', 'codex-settings-project', 'codex-settings-limit', 'codex-settings-message'
 ].map((id) => [id, document.getElementById(id)]));
 
 const asText = (value) => value == null ? '' : typeof value === 'string' ? value : JSON.stringify(value, null, 2);
@@ -70,7 +71,7 @@ function setResourceProject(projectId) {
 }
 
 function setView(name) {
-  for (const id of ['loading-view', 'error-view', 'empty-view', 'projects-view', 'project-detail-view', 'overview-view', 'control-room-view', 'ledger-view', 'zone-view', 'card-view']) {
+  for (const id of ['loading-view', 'error-view', 'empty-view', 'projects-view', 'project-detail-view', 'settings-view', 'overview-view', 'control-room-view', 'ledger-view', 'zone-view', 'card-view']) {
     elements[id].hidden = id !== name;
   }
 }
@@ -292,7 +293,8 @@ function renderLedgerLinks() {
     folder: '<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H10l2 2h7.5A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5v-11Z"/>',
     book: '<path d="M5 4h6a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Zm14 0h-2a3 3 0 0 0-3 3v13h2a3 3 0 0 0 3-3V4Z"/>',
     flow: '<path d="M5 5h4v4H5V5Zm10 10h4v4h-4v-4ZM7 9v3a5 5 0 0 0 5 5h3M9 7h6a2 2 0 0 1 2 2v6"/>',
-    library: '<path d="M4 5h4v15H4V5Zm6-1h4v16h-4V4Zm6 3h4v13h-4V7Z"/>'
+    library: '<path d="M4 5h4v15H4V5Zm6-1h4v16h-4V4Zm6 3h4v13h-4V7Z"/>',
+    settings: '<path d="M10.8 3h2.4l.6 2.2a7 7 0 0 1 1.5.9l2.2-.6 1.2 2.1-1.6 1.6c.1.5.2 1.1.2 1.8s-.1 1.3-.2 1.8l1.6 1.6-1.2 2.1-2.2-.6a7 7 0 0 1-1.5.9l-.6 2.2h-2.4l-.6-2.2a7 7 0 0 1-1.5-.9l-2.2.6-1.2-2.1 1.6-1.6A7 7 0 0 1 6.7 11c0-.7.1-1.3.2-1.8L5.3 7.6l1.2-2.1 2.2.6a7 7 0 0 1 1.5-.9L10.8 3Zm1.2 5a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/>'
   };
   const destination = (label, href, icon, activeRoute, className = '') => {
     const link = document.createElement(href ? 'a' : 'button');
@@ -318,8 +320,55 @@ function renderLedgerLinks() {
     destination('Projects', projectPath(), 'folder', 'projects'),
     destination('Ledgers', '/ledgers', 'book', 'ledgers'),
     destination('Pipelines', '/pipelines', 'flow', 'pipelines', 'nav-pipelines-button'),
-    destination('Skill library', '/skills', 'library', 'skills', 'nav-skills-button')
+    destination('Skill library', '/skills', 'library', 'skills', 'nav-skills-button'),
+    destination('Settings', '/settings', 'settings', 'settings', 'nav-settings-button')
   );
+}
+
+async function loadCodexSettingsForProject(projectId) {
+  const project = state.projects.find((entry) => entry.id === projectId);
+  if (!project) return;
+  elements['codex-settings-message'].textContent = 'Loading…';
+  elements['codex-settings-limit'].disabled = true;
+  try {
+    const settings = await loadCodexProcessSettings((url, options) => projectFetch(url, options, project.id));
+    elements['codex-settings-limit'].value = String(settings.maxConcurrentCodexProcesses);
+    elements['codex-settings-message'].textContent = '';
+  } catch (error) {
+    elements['codex-settings-message'].textContent = error instanceof Error ? error.message : 'Could not load settings.';
+  } finally {
+    elements['codex-settings-limit'].disabled = false;
+  }
+}
+
+function renderSettings() {
+  state.resourceProjectId = '';
+  setMobileCodexContext({ projectId: '', ledgerId: '', cardId: '' });
+  renderLedgerLinks();
+  elements['codex-settings-project'].replaceChildren(...state.projects.map((project) => {
+    const option = document.createElement('option');
+    option.value = project.id;
+    option.textContent = project.name;
+    return option;
+  }));
+  setView('settings-view');
+  if (state.projects[0]) void loadCodexSettingsForProject(state.projects[0].id);
+}
+
+async function submitCodexProcessSettings() {
+  const projectId = elements['codex-settings-project'].value;
+  const save = document.querySelector('.codex-settings-save');
+  save.disabled = true;
+  elements['codex-settings-message'].textContent = '';
+  try {
+    const result = await saveCodexProcessSettings((url, options) => projectFetch(url, options, projectId), elements['codex-settings-limit'].value);
+    elements['codex-settings-limit'].value = String(result.maxConcurrentCodexProcesses);
+    elements['codex-settings-message'].textContent = 'Settings saved.';
+  } catch (error) {
+    elements['codex-settings-message'].textContent = error instanceof Error ? error.message : 'Could not save settings.';
+  } finally {
+    save.disabled = false;
+  }
 }
 
 function renderProjects() {
@@ -719,6 +768,7 @@ async function loadControlRoom() {
         if (response.ok) {
           const payload = await response.json();
           codexStatus = String(payload.run?.status ?? payload.status ?? '');
+          codexQueuePosition = Number.isInteger(payload.queuePosition) ? payload.queuePosition : null;
         }
       }
       const threadNotes = document.notes?.[`thread-${card.id}`] ?? [];
@@ -1218,6 +1268,10 @@ async function loadRoute() {
       renderGlobalLedgers();
       return;
     }
+    if (location.pathname === '/settings') {
+      renderSettings();
+      return;
+    }
     if (location.pathname === '/pipelines' || location.pathname === '/skills') {
       state.resourceProjectId = '';
       setMobileCodexContext({ projectId: '', ledgerId: '', cardId: '' });
@@ -1305,6 +1359,11 @@ projectSettingsModal.addEventListener('cancel', (event) => {
 projectSettingsForm.addEventListener('submit', (event) => {
   event.preventDefault();
   void submitProjectSettings();
+});
+elements['codex-settings-project'].addEventListener('change', (event) => void loadCodexSettingsForProject(event.target.value));
+document.querySelector('.codex-process-settings-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  void submitCodexProcessSettings();
 });
 document.querySelector('.back-to-ledger-button').addEventListener('click', () => navigate(ledgerPath(state.activeLedgerId)));
 document.querySelector('.back-to-zone-button').addEventListener('click', (event) => {
