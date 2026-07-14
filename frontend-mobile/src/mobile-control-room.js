@@ -6,7 +6,7 @@ export function cardCodexRunId(card) {
     || String(card?.codexRunId ?? '').trim();
 }
 
-export function parseMasterTaskMarkdown({ cardId, title, projectId = '', projectName = '', projectColor = '', ledgerId, ledgerTitle, markdown, cardStatus = 'todo', cards = [], threadNotes = [], codexRunId = '', codexStatus = '' }) {
+export function parseMasterTaskMarkdown({ cardId, title, projectId = '', projectName = '', projectColor = '', ledgerId, ledgerTitle, markdown, cardStatus = 'todo', cards = [], threadNotes = [], codexRunId = '', codexPipelineRunId = '', codexStatus = '', codexQueuePosition = null }) {
   const source = String(markdown ?? '').replace(/\r\n?/g, '\n');
   const labelLines = source.split('\n').filter((line) => /^\s*(?:#[a-z][a-z0-9-]*\s*)+$/i.test(line));
   const labels = new Set(Array.from(labelLines.join('\n').matchAll(/#([a-z][a-z0-9-]*)\b/gi), (match) => match[1].toLowerCase()));
@@ -53,6 +53,7 @@ export function parseMasterTaskMarkdown({ cardId, title, projectId = '', project
   const complete = subtasks.filter((task) => /^(?:complete|completed|done)$/i.test(task.status)).length;
   const normalizedCodexStatus = String(codexStatus).toLowerCase();
   const codexProcessing = ['processing', 'running', 'in_progress'].includes(normalizedCodexStatus);
+  const codexQueued = normalizedCodexStatus === 'pending' && Number.isInteger(codexQueuePosition) && codexQueuePosition > 0;
   return {
     valid: diagnostics.length === 0,
     masterTask: labels.has('master-task'),
@@ -65,10 +66,13 @@ export function parseMasterTaskMarkdown({ cardId, title, projectId = '', project
     ledgerId: String(ledgerId),
     ledgerTitle: String(ledgerTitle),
     ledger,
-    status: cardStatus === 'done' ? 'task-complete' : (labels.has('task-active') && codexProcessing ? 'task-active' : 'task-waiting'),
+    status: cardStatus === 'done' ? 'task-complete' : ((codexQueued || codexProcessing) ? 'task-active' : 'task-waiting'),
     codexRunId: String(codexRunId),
+    codexPipelineRunId: String(codexPipelineRunId),
     codexStatus: normalizedCodexStatus,
     codexProcessing,
+    codexQueued,
+    codexQueuePosition: codexQueued ? codexQueuePosition : null,
     waitingSince: Number.isFinite(latestThreadTime) ? new Date(latestThreadTime).toISOString() : waitingText,
     waitingTime,
     activeSince: activeText,

@@ -531,13 +531,21 @@ function taskRow(task, index) {
   const directNavigation = active || queue;
   if (!directNavigation) summary.setAttribute('aria-expanded', 'false');
   summary.innerHTML = active
-    ? `<span class="task-copy"><strong></strong></span><span class="task-stopwatch" data-active-since=""></span>`
+    ? `<span class="task-copy"><strong></strong></span><span class="task-runtime-status"></span>`
     : `<span class="task-copy"><strong></strong><span class="task-meta"></span>${task.nextSubtask ? '<span class="task-next"></span>' : ''}</span>${queue ? '' : '<span class="task-chevron">⌄</span>'}`;
   summary.querySelector('strong').textContent = task.title;
   if (active) {
-    const stopwatch = summary.querySelector('.task-stopwatch');
-    stopwatch.dataset.activeSince = task.activeSince;
-    stopwatch.textContent = activeStopwatch(task.activeSince);
+    const runtimeStatus = summary.querySelector('.task-runtime-status');
+    if (task.codexQueued) {
+      runtimeStatus.className = 'task-queue-position';
+      runtimeStatus.textContent = `Queued · position ${task.codexQueuePosition}`;
+    } else if (task.activeSince) {
+      runtimeStatus.className = 'task-stopwatch';
+      runtimeStatus.dataset.activeSince = task.activeSince;
+      runtimeStatus.textContent = activeStopwatch(task.activeSince);
+    } else {
+      runtimeStatus.textContent = 'Running';
+    }
   }
   const age = task.status === 'task-complete' ? 'completed' : task.status === 'task-active' ? activeAge(task.activeSince) : waitingAge(task.waitingSince);
   const process = task.codexProcessing ? ` · Codex ${task.codexRunId}` : '';
@@ -696,8 +704,17 @@ async function loadControlRoom() {
     return cards.map(async (card) => {
       const markdown = ledgerCardBody(card);
       const runId = cardCodexRunId(card);
+      const pipelineRunId = String(card.codexQueuedPipelineRunId ?? '').trim();
       let codexStatus = '';
-      if (runId && /#task-active\b/i.test(markdown)) {
+      let codexQueuePosition = null;
+      if (pipelineRunId) {
+        const response = await projectFetch(`/api/codex/pipelines/runs/${encodeURIComponent(pipelineRunId)}`, { cache: 'no-store' }, projectId);
+        if (response.ok) {
+          const payload = await response.json();
+          codexStatus = String(payload.run?.status ?? payload.status ?? '');
+          codexQueuePosition = Number.isInteger(payload.queuePosition) ? payload.queuePosition : null;
+        }
+      } else if (runId && /#task-active\b/i.test(markdown)) {
         const response = await projectFetch(`/api/codex/skills/runs/${encodeURIComponent(runId)}?ledgerId=${encodeURIComponent(ledgerId)}&cardId=${encodeURIComponent(card.id)}&since=0`, { cache: 'no-store' }, projectId);
         if (response.ok) {
           const payload = await response.json();
@@ -705,7 +722,7 @@ async function loadControlRoom() {
         }
       }
       const threadNotes = document.notes?.[`thread-${card.id}`] ?? [];
-      return { cardId: card.id, title: card.title, projectId, projectName, projectColor, ledgerId, ledgerTitle, markdown, cardStatus: card.status, cards, threadNotes, codexRunId: runId, codexStatus };
+      return { cardId: card.id, title: card.title, projectId, projectName, projectColor, ledgerId, ledgerTitle, markdown, cardStatus: card.status, cards, threadNotes, codexRunId: runId, codexPipelineRunId: pipelineRunId, codexStatus, codexQueuePosition };
     });
   }))).flat();
   state.controlRoom = { ...deriveControlRoom(allTasks), allTasks, documents };
@@ -1320,6 +1337,7 @@ elements['card-search'].addEventListener('input', (event) => {
   renderCards(state.ledger?.cards ?? []);
 });
 window.addEventListener('popstate', () => loadRoute());
+window.addEventListener('decision-os:codex-run-enqueued', () => { void loadRoute(); });
 window.addEventListener('scroll', persistControlRoomScrollAnchor, { passive: true });
 window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && document.body.classList.contains('menu-open')) closeMenu();

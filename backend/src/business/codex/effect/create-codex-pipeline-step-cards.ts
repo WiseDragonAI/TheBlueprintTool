@@ -74,6 +74,9 @@ export function createCodexPipelineStepCards(input: {
     if (relationMutation.ok === false) return relationMutation.error?.body ?? { error: 'Could not create a pipeline step relationship.' };
     previousCardId = step.outputCardId;
   }
+  const firstSkill = input.run.steps[0]?.skills[0];
+  input.source.codexQueuedPipelineRunId = input.run.id;
+  input.source.codexQueuedRunId = firstSkill?.runId ?? '';
   stripHydratedThreadNotes(input.context.ledger);
   writeFileSync(input.context.ledgerPath, JSON.stringify(input.context.ledger, null, 2), 'utf8');
   return null;

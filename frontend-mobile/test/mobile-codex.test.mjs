@@ -35,12 +35,17 @@ test('dynamic navigation library actions use delegated event handling', () => {
   assert.doesNotMatch(script, /el\('\.nav-(?:pipelines|skills)-button'\)\.addEventListener/);
 });
 
-test('mobile processing guards duplicate submissions and polls terminal states', () => {
+test('mobile processing guards duplicate submissions and delegates status to the card route', () => {
   assert.match(script, /setBusy\(submit, true\)/);
   assert.match(script, /setAttribute\('aria-busy', 'true'\)/);
-  assert.match(script, /new Set\(\['complete', 'failed', 'cancelled'\]\)/);
-  assert.match(script, /\/api\/codex\/skills\/runs\/\$\{encodeURIComponent\(run\.id\)\}/);
-  assert.match(script, /\/api\/codex\/pipelines\/runs\/\$\{encodeURIComponent\(runId\)\}/);
+  assert.doesNotMatch(script, /function poll(?:Skill|Pipeline)/);
+});
+
+test('successful mobile processing closes the nested detail and returns to the card route', () => {
+  assert.match(script, /function finishProcessLaunch\(detail\)/);
+  assert.match(script, /el\('\.process-modal'\)\.close\(\)/);
+  assert.match(script, /decision-os:codex-run-enqueued/);
+  assert.match(mobile, /addEventListener\('decision-os:codex-run-enqueued', \(\) => \{ void loadRoute\(\); \}\)/);
 });
 
 test('mobile pipeline editor supports ordered steps, ordered skills, inheritance, and persistence', () => {

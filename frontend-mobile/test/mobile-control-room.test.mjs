@@ -104,6 +104,19 @@ test('shows task-active only while its Codex process is running', () => {
   assert.match(mobile, /Codex \$\{task\.codexRunId\}/);
 });
 
+test('shows queued Codex pipelines in Active with their one-based position', () => {
+  const result = deriveControlRoom([task({
+    codexPipelineRunId: 'pipeline-queued',
+    codexStatus: 'pending',
+    codexQueuePosition: 2
+  })]);
+  assert.equal(result.queue.length, 0);
+  assert.equal(result.active[0].codexQueued, true);
+  assert.equal(result.active[0].codexQueuePosition, 2);
+  assert.match(mobile, /Queued · position \$\{task\.codexQueuePosition\}/);
+  assert.match(styles, /\.task-queue-position \{[^}]*white-space: nowrap/);
+});
+
 test('Control Room resolves Process Card runs through the shared current-run pointer', () => {
   const processCardRunId = cardCodexRunId({
     codexActiveRunId: 'codex-skill-pipeline',
@@ -168,7 +181,7 @@ test('formats the exact active Codex session duration as a minute-second stopwat
 });
 
 test('renders active tasks as compact direct links without metadata or disclosure details', () => {
-  assert.match(mobile, /class="task-stopwatch" data-active-since/);
+  assert.match(mobile, /runtimeStatus\.className = 'task-stopwatch'/);
   assert.match(mobile, /summary\.addEventListener\('click'[\s\S]*navigate\(pathForTask\(task\)\)/);
   assert.match(mobile, /if \(active\) \{[\s\S]*article\.append\(summary\);[\s\S]*return article;/);
 });
