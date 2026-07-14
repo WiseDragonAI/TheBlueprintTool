@@ -208,7 +208,7 @@ GIT_SSH_COMMAND='ssh -i ~/.ssh/id_jb_wise -o IdentitiesOnly=yes' git push
 
 - It is a code smell to do expensive operations for many more elements than are needed in the end.
 
-## Phone Workload Budget
+## Test Admission
 
 Before typecheck or test suite:
 
@@ -216,11 +216,19 @@ Before typecheck or test suite:
 node bin/decision-os-workload-status.mjs
 ```
 
-- `GO`: start one command.
-- `WAIT`: `sleep 5`; rerun check.
-- Tests: focused first. Always `--test-concurrency=1`.
-- Per task: one typecheck maximum. One full suite maximum.
-- Full-suite failure: rerun failed tests only.
+- `GO`: start verification.
+- `WAIT`: `sleep 5`; retry check. Do not start verification.
+- No lock. Simultaneous `GO` remains possible.
+
+## Verification Hygiene
+
+- During implementation: run smallest relevant test files.
+- Add and fix change-specific tests first.
+- Typecheck once after code stabilizes. Scope changed package.
+- Full suite once after implementation and focused tests pass.
+- Failure: rerun smallest failing scope.
+- Passing check: do not repeat after docs-only edits.
+- Keep project default test concurrency.
 
 ## Card Image Assets
 
