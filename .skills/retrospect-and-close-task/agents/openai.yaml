@@ -1,0 +1,4 @@
+interface:
+  display_name: "Retrospect and Close Task"
+  short_description: "Extract lessons and close verified task cards"
+  default_prompt: "Use $retrospect-and-close-task to review this Codex task, save reusable lessons, close verified cards, and commit Decision OS documentation."
