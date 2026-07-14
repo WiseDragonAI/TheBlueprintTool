@@ -10,9 +10,9 @@ import { stripHydratedThreadNotes, writeThreadNotesFile } from '@backend/busines
 import { readCodexPipelineStore, writeCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import {
   resolvePipelineLedgerContext,
-  runNextPipelineSkill,
+  scheduleCodexPipelineRuns,
 } from '../helper/codex-pipeline-runner.js';
-import { assertNoActivePipelineRun } from './start-codex-pipeline-run-controller.js';
+import { readCodexPipelineRunController } from './read-codex-pipeline-run-controller.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -61,8 +61,6 @@ export async function restartCodexPipelineRunController(
   if (run.status !== 'complete' && run.status !== 'failed' && run.status !== 'cancelled') {
     return { ok: false, statusCode: 409, error: 'Only a terminal pipeline run can be restarted.', runId, status: run.status };
   }
-  const activeError = assertNoActivePipelineRun(normalized.store);
-  if (activeError && activeError.activeRunId !== run.id) return activeError;
   const context = resolvePipelineLedgerContext({ decisionOsRoot, runtime, ledgerId: run.ledgerId });
   if (!context) return { ok: false, statusCode: 404, error: 'Pipeline ledger not found.', ledgerId: run.ledgerId };
   for (const step of run.steps) {
@@ -97,7 +95,6 @@ export async function restartCodexPipelineRunController(
     store: {
       ...normalized.store,
       runs: normalized.store.runs.map((entry) => entry.id === run.id ? restarted : entry),
-      activeWorkspaceRun: run.id,
     },
   });
   if (typeof runtime.onPipelineLedgerChange === 'function') {
@@ -108,5 +105,7 @@ export async function restartCodexPipelineRunController(
       cardIds: run.steps.map((step) => step.outputCardId),
     });
   }
-  return runNextPipelineSkill({ decisionOsRoot, runtime, pipelineRunId: run.id });
+  scheduleCodexPipelineRuns({ decisionOsRoot, runtime });
+  const detail = await readCodexPipelineRunController({ action_payload: { runId: run.id }, runtime_state: runtime });
+  return { ...detail, statusCode: 202 };
 }

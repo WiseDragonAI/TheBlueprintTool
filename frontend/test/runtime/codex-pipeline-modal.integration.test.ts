@@ -373,7 +373,7 @@ test('pipeline editor save submits exact inherited and explicit values and appli
   }
 });
 
-test('Process card derives source content, reloads skill defaults on reopen, and surfaces active-run conflicts', async () => {
+test('Process card derives source content, reloads skill defaults on reopen, and surfaces launch failures', async () => {
   const previousFetch = globalThis.fetch;
   const previousLedger = state.activeLedger;
   const previousTab = state.activeTab;
@@ -437,7 +437,7 @@ test('Process card derives source content, reloads skill defaults on reopen, and
     assert.equal(processModalState.codexEffort, 'ultra');
     setCardProcessTab('pipelines');
     assert.equal(await runSelectedPipeline(), false);
-    assert.match(processModalState.error, /run-active/);
+    assert.equal(processModalState.error, 'Another run is active.');
   } finally {
     globalThis.fetch = previousFetch;
     state.activeLedger = previousLedger;

@@ -9,7 +9,6 @@ import type {
   CodexPipeline,
   CodexPipelineRun,
   CodexPipelineStep,
-  CodexPipelineStore,
 } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import { createCodexPipelineStepCards } from '../effect/create-codex-pipeline-step-cards.js';
 import {
@@ -20,8 +19,9 @@ import { readCodexPipelineStore, writeCodexPipelineStore } from '../helper/codex
 import { scanCodexSkills } from '../helper/scan-codex-skills.js';
 import { runtimeServerRoot } from '../helper/server-skill-context.js';
 import {
+  pipelineQueuePosition,
   resolvePipelineLedgerContext,
-  runNextPipelineSkill,
+  scheduleCodexPipelineRuns,
   type PipelineLedgerContext,
 } from '../helper/codex-pipeline-runner.js';
 
@@ -39,22 +39,6 @@ function sourceCard(context: PipelineLedgerContext, sourceCardId: string): AnyRe
   return (context.ledger.cards ?? []).find((entry) => String(entry.id ?? '') === sourceCardId) ?? null;
 }
 
-export function assertNoActivePipelineRun(store: CodexPipelineStore): AnyRecord | null {
-  // WHAT: Allow starts when the workspace has no recorded lock.
-  // WHY: A missing active run is the normal idle state.
-  if (!store.activeWorkspaceRun) return null;
-  const active = store.runs.find((run) => run.id === store.activeWorkspaceRun);
-  // WHAT: Ignore stale locks whose run is absent or terminal.
-  // WHY: Only an in-progress run may block a new workspace pipeline.
-  if (!active || active.status === 'complete' || active.status === 'failed' || active.status === 'cancelled') return null;
-  return {
-    ok: false,
-    statusCode: 409,
-    error: 'Another Codex pipeline is already active in this workspace.',
-    activeRunId: active.id,
-  };
-}
-
 export async function startPipelineRun(input: {
   decisionOsRoot: string;
   runtime: AnyRecord;
@@ -67,10 +51,6 @@ export async function startPipelineRun(input: {
   const availableSkills = scanCodexSkills({ workspaceRoot, serverRoot: runtimeServerRoot(input.runtime) });
   const availableSkillNames = availableSkills.map((skill) => skill.name);
   const normalized = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot, availableSkillNames });
-  const activeError = assertNoActivePipelineRun(normalized.store);
-  // WHAT: Reject a second non-terminal workspace run.
-  // WHY: Pipeline execution uses one durable workspace lock.
-  if (activeError) return activeError;
   const unavailableSkill = input.definition.steps
     .flatMap((step) => step.skills)
     .find((skill) => !availableSkillNames.includes(skill.skillName));
@@ -130,7 +110,7 @@ export async function startPipelineRun(input: {
     writeCodexPipelineStore({
       decisionOsRoot: input.decisionOsRoot,
       availableSkillNames,
-      store: { ...normalized.store, runs: [...normalized.store.runs, run], activeWorkspaceRun: run.id },
+      store: { ...normalized.store, runs: [...normalized.store.runs, run] },
     });
   } catch {
     // WHAT: Report manifest persistence failure before launching Codex.
@@ -142,17 +122,25 @@ export async function startPipelineRun(input: {
   if (typeof input.onLedgerChange === 'function') input.runtime.onPipelineLedgerChange = input.onLedgerChange;
   if (typeof input.onLedgerChange === 'function') {
     (input.onLedgerChange as (event: AnyRecord) => void)({
-      reason: 'pipeline-started',
+      reason: 'pipeline-enqueued',
       ledgerId: input.ledgerId,
       pipelineRunId: run.id,
       cardIds: run.steps.map((step) => step.outputCardId),
     });
   }
-  const launch = runNextPipelineSkill({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, pipelineRunId: run.id });
-  // WHAT: Preserve the runner's actionable launch failure.
-  // WHY: The start route must expose the exact terminal state persisted by the runner.
-  if (launch.ok === false) return launch;
-  return { ok: true, statusCode: 202, run: launch.run ?? run, skillRun: launch.skillRun ?? null };
+  const schedule = scheduleCodexPipelineRuns({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime });
+  const launch = schedule.launched.find((entry) => entry.run && typeof entry.run === 'object' && String((entry.run as AnyRecord).id ?? '') === run.id);
+  if (launch?.ok === false) return launch;
+  const persisted = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot }).store;
+  const scheduledRun = persisted.runs.find((entry) => entry.id === run.id) ?? run;
+  return {
+    ok: true,
+    statusCode: 202,
+    run: scheduledRun,
+    skillRun: launch?.skillRun ?? null,
+    queuePosition: pipelineQueuePosition({ runs: persisted.runs, pipelineRunId: run.id }),
+    maxConcurrentCodexProcesses: schedule.capacity,
+  };
 }
 
 export async function startTemporaryPipelineRun(input: {

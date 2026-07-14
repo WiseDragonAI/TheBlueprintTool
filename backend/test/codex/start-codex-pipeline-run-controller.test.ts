@@ -18,7 +18,7 @@ async function closeServer(server: Server): Promise<void> {
 
 async function waitFor<T>(read: () => T | null, label: string): Promise<T> {
   const started = Date.now();
-  while (Date.now() - started < 5000) {
+  while (Date.now() - started < 30000) {
     const value = read();
     if (value !== null) return value;
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -119,24 +119,30 @@ test('saved pipeline creates all step cards and runs five isolated skills strict
     assert.equal(started.run.steps[0].skills[1].codexModel, 'gpt-5.5');
     assert.equal(started.run.steps[0].skills[1].codexEffort, 'low');
 
-    const conflict = await fetch(`${baseUrl}/api/codex/pipelines/runs`, {
+    const queuedResponse = await fetch(`${baseUrl}/api/codex/pipelines/runs`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ ledgerId: 'specs', sourceCardId: 'source-card', pipelineId: 'pipeline-five' }),
     });
-    assert.equal(conflict.status, 409);
-    const conflictBody = await conflict.json() as Record<string, any>;
-    assert.equal(conflictBody.activeRunId, pipelineRunId);
+    assert.equal(queuedResponse.status, 202);
+    const queuedBody = await queuedResponse.json() as Record<string, any>;
+    assert.equal(queuedBody.run.status, 'pending');
+    assert.equal(queuedBody.queuePosition, 1);
+    const queuedPipelineRunId = queuedBody.run.id as string;
 
     const completed = await waitFor(() => {
       const run = readCodexPipelineStore({ decisionOsRoot }).store.runs.find((entry) => entry.id === pipelineRunId);
       return run?.status === 'complete' ? run : null;
     }, 'pipeline completion');
     assert.equal(completed.steps.every((step) => step.status === 'complete'), true);
+    await waitFor(() => {
+      const run = readCodexPipelineStore({ decisionOsRoot }).store.runs.find((entry) => entry.id === queuedPipelineRunId);
+      return run?.status === 'complete' ? run : null;
+    }, 'queued pipeline completion');
     assert.equal(readCodexPipelineStore({ decisionOsRoot }).store.activeWorkspaceRun, null);
     const allSkills = completed.steps.flatMap((step) => step.skills);
     assert.equal(new Set(allSkills.map((skill) => skill.runId)).size, 5);
     assert.equal(allSkills.every((skill) => existsSync(skill.stdoutFile) && existsSync(skill.stderrFile)), true);
-    assert.deepEqual(readFileSync(lifecycleFile, 'utf8').trim().split('\n'), [
+    assert.deepEqual(readFileSync(lifecycleFile, 'utf8').trim().split('\n').slice(0, 10), [
       'start:alpha', 'end:alpha', 'start:beta', 'end:beta', 'start:gamma', 'end:gamma',
       'start:delta', 'end:delta', 'start:epsilon', 'end:epsilon',
     ]);
@@ -222,6 +228,71 @@ test('direct temporary runs inherit skill defaults, preserve snapshots, and hono
     assert.equal(explicit.run.codexModel, 'gpt-5.6-sol');
     assert.equal(explicit.run.codexEffort, 'ultra');
     await waitFor(() => readCodexPipelineStore({ decisionOsRoot }).store.runs.find((run) => run.id === explicit.pipelineRun.id)?.status === 'complete' ? true : null, 'explicit direct run');
+  } finally {
+    await closeServer(server);
+    if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
+    else process.env.CODEX_BIN = previousCodexBin;
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('workspace capacity runs two pipelines concurrently and promotes the FIFO queue', async () => {
+  const previousCodexBin = process.env.CODEX_BIN;
+  const { workspace, decisionOsRoot } = createWorkspace('decision-os-capacity-');
+  const fakeCodex = join(workspace, 'fake-codex.mjs');
+  const lifecycleFile = join(workspace, 'lifecycle.txt');
+  createSkill(workspace, 'alpha');
+  writeFileSync(fakeCodex, [
+    '#!/usr/bin/env node',
+    'import { appendFileSync, writeFileSync } from "node:fs";',
+    'let prompt = "";',
+    'process.stdin.on("data", (chunk) => { prompt += chunk; });',
+    'process.stdin.on("end", () => {',
+    '  const output = (prompt.match(/Write the final result to this Markdown file: (.+)/) || [])[1] || "";',
+    `  appendFileSync(${JSON.stringify(lifecycleFile)}, "start" + String.fromCharCode(10));`,
+    '  writeFileSync(output.trim(), "# result\\n");',
+    '  setTimeout(() => {',
+    '    console.log(JSON.stringify({ type: "turn.completed" }));',
+    `    appendFileSync(${JSON.stringify(lifecycleFile)}, "end" + String.fromCharCode(10));`,
+    '  }, 150);',
+    '});',
+  ].join('\n'));
+  chmodSync(fakeCodex, 0o755);
+  process.env.CODEX_BIN = fakeCodex;
+  const runtime: Record<string, unknown> = {
+    decisionOsRoot,
+    decisionOsSettings: { maxConcurrentCodexProcesses: 2 },
+  };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  try {
+    const starts: Record<string, any>[] = [];
+    for (let index = 0; index < 3; index += 1) {
+      const response = await fetch(`${baseUrl}/api/codex/skills/process`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ledgerId: 'specs', cardId: 'source-card', skillName: 'alpha' }),
+      });
+      assert.equal(response.status, 202);
+      starts.push(await response.json() as Record<string, any>);
+    }
+    assert.deepEqual(starts.map((entry) => entry.pipelineRun.status), ['running', 'running', 'pending']);
+    assert.deepEqual(starts.map((entry) => entry.queuePosition), [null, null, 1]);
+    let lastStatuses: string[] = [];
+    try {
+      await waitFor(() => {
+        const runs = readCodexPipelineStore({ decisionOsRoot }).store.runs;
+        lastStatuses = runs.map((run) => run.status);
+        return runs.length === 3 && runs.every((run) => run.status === 'complete') ? runs : null;
+      }, 'capacity queue completion');
+    } catch {
+      assert.fail(`Capacity queue did not settle: ${lastStatuses.join(',')}`);
+    }
+    const lifecycle = readFileSync(lifecycleFile, 'utf8').trim().split('\n');
+    assert.deepEqual(lifecycle.slice(0, 2), ['start', 'start']);
+    assert.equal(lifecycle.filter((line) => line === 'start').length, 3);
+    assert.equal(lifecycle.filter((line) => line === 'end').length, 3);
   } finally {
     await closeServer(server);
     if (previousCodexBin === undefined) delete process.env.CODEX_BIN;

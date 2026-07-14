@@ -42,6 +42,7 @@ export type CodexPipelineRunStatusResult = {
   canCancel: boolean;
   canRestart: boolean;
   canContinue: boolean;
+  queuePosition: number | null;
   status?: string;
   error?: string;
 };
@@ -79,6 +80,7 @@ function unavailableStatus(error: string, statusCode = 0): CodexPipelineRunStatu
     canCancel: false,
     canRestart: false,
     canContinue: false,
+    queuePosition: null,
     error,
   };
 }
@@ -95,6 +97,7 @@ function normalizeStatus(response: Response, body: PipelineRunStatusResponse): C
     canCancel: Boolean(body.canCancel),
     canRestart: Boolean(body.canRestart),
     canContinue: Boolean(body.canContinue),
+    queuePosition: Number.isInteger(body.queuePosition) && Number(body.queuePosition) > 0 ? Number(body.queuePosition) : null,
     status: body.status,
     error: ok ? undefined : String(body.error ?? `Request failed (${response.status}).`),
   };

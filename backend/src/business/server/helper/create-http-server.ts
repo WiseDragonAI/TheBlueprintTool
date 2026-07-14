@@ -11,6 +11,7 @@ import { telemetry } from '@backend/telemetry/harness.js';
 import { transcribeVoiceController } from '@backend/business/transcription/controller/transcribe-voice-controller.js';
 import { continueQueuedVoiceCodexAfterRun, readVoiceTranscriptionStatusController, startVoiceRetryOrchestrationController, startVoiceUploadOrchestrationController } from '@backend/business/transcription/controller/start-voice-upload-orchestration-controller.js';
 import { resolveDecisionOsRoot } from './resolve-decision-os-root.js';
+import { readDecisionOsSettings } from './read-decision-os-settings.js';
 import { readRequestBuffer } from './read-request-buffer.js';
 import { parseMultipartFormData } from './parse-multipart-form-data.js';
 import { contentTypeFor } from './content-type-for.js';
@@ -200,6 +201,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const projectRuntime = activeDecisionOsRoot === masterDecisionOsRoot
       ? Object.assign(runtime, { decisionOsRoot: activeDecisionOsRoot, projectId })
       : Object.assign({}, runtime, { decisionOsRoot: activeDecisionOsRoot, projectId });
+    if (activeDecisionOsRoot !== masterDecisionOsRoot) {
+      readDecisionOsSettings({ action_payload: { decisionOsRoot: activeDecisionOsRoot }, runtime_state: projectRuntime });
+    }
     const broadcast = (message: string): void => {
       for (const client of clients) client.write(message);
       for (const client of globalContentEventClients) client.write(message);
