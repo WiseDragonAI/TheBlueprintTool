@@ -1,0 +1,14 @@
+# Decision OS Memory Store
+
+The server launch root owns the catalog-wide database at `<server-launch-root>/.decision-os/memories.sqlite3`. The Decision OS repository owns the CLI at `tool/memory/memory.mjs`. Codex's internal `~/.codex/memories_1.sqlite` is not part of this contract.
+
+Each memory contains `title`, `body`, `tag`, `subtag`, `project_id`, `type`, `source`, `created_at`, and `updated_at`. The upsert identity is `title + tag + subtag + project_id + type`. Use the canonical project ID from `.decision-os/project.json`; use `global` for a lesson shared by every project. Use lowercase type slugs such as `code` and `copywriting`.
+
+```sh
+node tool/memory/memory.mjs add --root "$HOME" --project ZGVjaXNpb24tb3M --type code --title "Stable title" --body "Reusable lesson" --tag engineering --subtag rule --source "commit abc"
+node tool/memory/memory.mjs list --root "$HOME" --project ZGVjaXNpb24tb3M --type code
+node tool/memory/memory.mjs search --root "$HOME" --project ZGVjaXNpb24tb3M --query hydration
+node tool/memory/memory.mjs migrate --root "$HOME" --source "$HOME/.codex/memories.sqlite3" --project ZGVjaXNpb24tb3M --type code
+```
+
+After migration, require `quickCheck: "ok"`, matching source and migrated row counts, and a successful filtered read before deleting the legacy database and home-level CLI.

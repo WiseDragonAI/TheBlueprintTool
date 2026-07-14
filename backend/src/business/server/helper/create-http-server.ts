@@ -45,6 +45,7 @@ import { resumeCodexPipelineRuns } from '../../codex/helper/resume-codex-pipelin
 import { createDecisionOsProject, discoverDecisionOsProjects, resolveCatalogProject, saveProjectMetadata } from './project-catalog.js';
 import { isGlobalProjectEndpoint, isProjectSensitiveEndpoint, parseProjectUrlScope } from './project-url-scope.js';
 import { ensureLedgerCliShim } from '../../codex/helper/decision-os-codex-runtime.js';
+import { ensureDecisionOsMemoryStore } from './ensure-decision-os-memory-store.js';
 
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
@@ -180,6 +181,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   if (payload.mode === 'dry-run') {
     return { ok: true, port, server: { listening: false, port } };
   }
+  runtime.memoryDatabasePath = ensureDecisionOsMemoryStore(masterDecisionOsRoot);
   const globalContentEventClients = new Set<ServerResponse>();
   type ProjectContext = {
     clients: Set<ServerResponse>;
