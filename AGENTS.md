@@ -13,7 +13,7 @@
 
 - **Rule.** Never write anti-specs: generic process claims that spend operator tokens and attention without adding a concrete requirement, constraint, decision, evidence, or action.
 - **Don't.** `Good PRDs do not exist to create paperwork. They align teams around the customer problem, goals, requirements, risks, constraints, dependencies, and success measures before execution.`
-- **Do.** `PRD purpose: capture the requested decision, user need, current technical context, current UX context, constraints, evidence, risks, options, recommendation, acceptance criteria, and next operator gate.`
+- **Do.** `Card purpose: give the operator the verified information needed to understand the current state and make the next decision.`
 
 ### No Suppositions
 
@@ -52,11 +52,11 @@
 
 ### Formatting Contract
 
-1. **Headings:** use `H2` card sections with uppercase letters: `## A. Scope`, `## B. Contract`, `## C. Acceptance Criteria`.
-2. **Dividers:** put `---` between card sections.
-3. **Lists:** write section content as numbered list items: `1.`, `2.`, `3.`.
-4. **Bold:** use **bold** for the important words that carry the point.
-5. **Backticks:** use `backticks` for technical, secondary, exact, or literal terms: file paths, routes, config keys, commands, IDs, statuses, branch names, code symbols, and literal values.
+1. **Content:** include only verified information needed for the next operator decision; use task-specific section titles, never a default schema.
+2. **Headings:** use letter-prefixed `H2` card sections.
+3. **Dividers:** put `---` between sections.
+4. **Lists:** use numbered list items.
+5. **Emphasis:** use **bold** for key points and `backticks` for exact literals.
 
 ## Mobile Chromium Procedure
 

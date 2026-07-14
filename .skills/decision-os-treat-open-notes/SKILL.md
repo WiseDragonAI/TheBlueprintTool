@@ -73,16 +73,7 @@ Never change a card status while treating open notes unless the operator explici
 
 ## Durable Card Formatting
 
-When creating or rewriting decision-os card content, use this formatting by default unless the operator explicitly asks for a different format:
-
-1. Use only `H2` section headings for card sections.
-2. Prefix every `H2` section heading with an explicit uppercase section letter and period, for example `## A. Scope`, `## B. Server Contract`, `## C. Client Contract`.
-3. Put `---` horizontal rules between sections.
-4. Use numbered lists for section content; do not use unordered bullet lists for normal card requirements.
-5. Use **bold** for important labels or concepts at the start of each numbered item.
-6. Use `backticks` for file paths, config keys, API routes, method codes, literal values, statuses, and other exact tokens.
-7. Keep card prose concrete and implementation-ready. Avoid generic acknowledgements inside durable card content.
-8. When splitting one note into multiple cards, apply this formatting to every created or edited card.
+Follow the active workspace `AGENTS.md` card-content and formatting rules. This skill does not define a separate section schema.
 
 ## Persist Answers
 

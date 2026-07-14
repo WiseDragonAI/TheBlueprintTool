@@ -22,13 +22,15 @@ test('thread Codex prompt uses a direct scoped contract without triggering open-
   assert.match(prompt.developerInstructions, /master-task-apply/);
   assert.match(prompt.developerInstructions, /master-task-gate[^\n]+card-a/);
   assert.match(prompt.developerInstructions, /--thread-id thread-card-a --message-stdin/);
+  assert.match(prompt.developerInstructions, /workspace `AGENTS\.md` formatting contract/);
   assert.ok(prompt.developerInstructions.length < 700);
   assert.doesNotMatch(prompt.developerInstructions, /card-context|do not|never|locate the CLI/i);
+  assert.doesNotMatch(prompt.developerInstructions, /Scope|Contract|Acceptance Criteria/);
   assert.doesNotMatch(prompt.developerInstructions, /# Card A|Implement this request/);
   assert.doesNotMatch(prompt.developerInstructions, /treat-open-notes|open notes|You are treating/i);
 
   assert.match(prompt.taskContext, /Execute the operator request from this Decision OS thread\./);
   assert.match(prompt.taskContext, /Thread:[\s\S]*Implement this request\./);
   assert.match(prompt.taskContext, /Card:[\s\S]*# Card A/);
-  assert.doesNotMatch(prompt.taskContext, /^## A\. Scope/m);
+  assert.doesNotMatch(prompt.taskContext, /^## [A-Z]\./m);
 });

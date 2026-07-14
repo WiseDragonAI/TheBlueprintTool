@@ -13,7 +13,7 @@ function fixture(): { root: string; decisionOs: string; ledger: string } {
   mkdirSync(join(decisionOs, 'cards', 'specs'), { recursive: true });
   mkdirSync(join(decisionOs, 'threads', 'specs'), { recursive: true });
   const ledger = join(decisionOs, 'specs.json');
-  writeFileSync(join(decisionOs, 'cards', 'specs', 'master.md'), '#master-task #task-active\n\nLedger: Specs\nWaiting since: 2026-01-01T00:00:00.000Z\nActive since: 2026-01-01T00:00:00.000Z\n\n## A. Subtasks\n');
+  writeFileSync(join(decisionOs, 'cards', 'specs', 'master.md'), '#master-task #task-active\n\nLedger: Specs\nWaiting since: 2026-01-01T00:00:00.000Z\nActive since: 2026-01-01T00:00:00.000Z\n\n## A. Current Finding\n\n1. **State:** Ready for the operator.\n\n---\n\n## B. Subtasks\n');
   writeFileSync(join(decisionOs, 'threads', 'specs', 'thread-master.md'), '# OPERATOR\n<!-- decision-os:note {"id":"n","timestamp":"2026-01-01T00:00:00.000Z"} -->\n\nDo it.\n');
   writeFileSync(ledger, JSON.stringify({
     cards: [{ id: 'master', title: 'Master', status: 'todo', domainId: 'specs', x: 10, y: 10, w: 100, h: 100, comment: { contentFile: '.decision-os/cards/specs/master.md' } }],
@@ -39,7 +39,11 @@ test('session context and gate return one bounded project-scoped response', asyn
     }
     const gate = await manageLedgerJsonController({ ledgerCommand: 'master-task-gate', ledgerJsonFile: ledger, cardOperation: { cardId: 'master' } });
     assert.equal(gate.ok, true);
-    if (gate.ok) assert.equal(JSON.parse(String(gate.value)).ready, true);
+    if (gate.ok) {
+      const value = JSON.parse(String(gate.value));
+      assert.equal(value.ready, true);
+      assert.equal('acceptanceCriteria' in value, false);
+    }
   } finally {
     if (previousRoot === undefined) delete process.env.DECISION_OS_LEDGER_ROOT; else process.env.DECISION_OS_LEDGER_ROOT = previousRoot;
     if (previousProject === undefined) delete process.env.DECISION_OS_PROJECT_ID; else process.env.DECISION_OS_PROJECT_ID = previousProject;
@@ -47,18 +51,24 @@ test('session context and gate return one bounded project-scoped response', asyn
 });
 
 test('master-task apply generates ids and persists the complete projection in one call', () => {
-  const { ledger } = fixture();
-  const result = applyMasterTaskPlan({ ledgerJsonFile: ledger, planJson: JSON.stringify({
-    masterCardId: 'master', title: 'Renamed', zoneTitle: 'Renamed',
-    masterMarkdown: '#master-task #task-active\n\nLedger: Specs\nWaiting since: 2026-01-01T00:00:00.000Z\nActive since: 2026-01-01T00:00:00.000Z\n\n## A. Subtasks\n',
-    subtasks: [{ title: 'Child', markdown: '## A. Scope\n\n1. **Objective:** Implement it.\n' }],
-  }) });
-  assert.equal(result.ok, true);
-  const persisted = JSON.parse(readFileSync(ledger, 'utf8')) as { cards: Array<{ id: string; title: string }>; relationships: unknown[] };
-  assert.equal(persisted.cards.length, 2);
-  assert.match(persisted.cards[1].id, /^card-[0-9a-f-]{36}$/);
-  assert.equal(persisted.relationships.length, 1);
-  assert.match(readFileSync(join(ledger, '../..', `.decision-os/cards/specs/${persisted.cards[1].id}.md`), 'utf8'), /Implement it/);
+  const { decisionOs, ledger } = fixture();
+  const previousRoot = process.env.DECISION_OS_LEDGER_ROOT;
+  process.env.DECISION_OS_LEDGER_ROOT = decisionOs;
+  try {
+    const result = applyMasterTaskPlan({ ledgerJsonFile: ledger, planJson: JSON.stringify({
+      masterCardId: 'master', title: 'Renamed', zoneTitle: 'Renamed',
+      masterMarkdown: '#master-task #task-active\n\nLedger: Specs\nWaiting since: 2026-01-01T00:00:00.000Z\nActive since: 2026-01-01T00:00:00.000Z\n\n## A. Subtasks\n',
+      subtasks: [{ title: 'Child', markdown: '## A. Implementation Detail\n\n1. **Objective:** Implement it.\n' }],
+    }) });
+    assert.equal(result.ok, true, result.ok ? undefined : result.error);
+    const persisted = JSON.parse(readFileSync(ledger, 'utf8')) as { cards: Array<{ id: string; title: string }>; relationships: unknown[] };
+    assert.equal(persisted.cards.length, 2);
+    assert.match(persisted.cards[1].id, /^card-[0-9a-f-]{36}$/);
+    assert.equal(persisted.relationships.length, 1);
+    assert.match(readFileSync(join(ledger, '../..', `.decision-os/cards/specs/${persisted.cards[1].id}.md`), 'utf8'), /Implement it/);
+  } finally {
+    if (previousRoot === undefined) delete process.env.DECISION_OS_LEDGER_ROOT; else process.env.DECISION_OS_LEDGER_ROOT = previousRoot;
+  }
 });
 
 test('run audit selects newest runs across projects and calculates telemetry percentiles', () => {
