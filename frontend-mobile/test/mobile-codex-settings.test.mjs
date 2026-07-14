@@ -42,5 +42,6 @@ test('exposes the settings screen from burger navigation', () => {
   assert.doesNotMatch(html, /id="codex-settings-limit"[^>]*type="number"/);
   assert.match(html, /class="codex-icon codex-settings-increase"/);
   assert.match(html, /class="codex-icon codex-settings-decrease"/);
+  assert.match(html, /class="codex-icon codex-settings-decrease"[^>]*disabled/);
   assert.match(source, /stepCodexProcessLimit/);
 });
