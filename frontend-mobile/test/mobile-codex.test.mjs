@@ -107,3 +107,16 @@ test('global pipeline editing remains scoped to the owning project', () => {
   assert.match(script, /project\.id === state\.projectId/);
   assert.match(script, /state\.projectFilter === 'All'/);
 });
+
+test('skill libraries share favorite ordering, colored categories, and scope-specific detail actions', () => {
+  assert.match(script, /sortSkillsByFavorite\(filtered\)/);
+  assert.match(script, /renderSkillLibraryItemContent\(record, recordProjects\(record\)\)/);
+  assert.match(script, /decorateSkillCategoryLabel\(chip, value\.category\)/);
+  assert.match(script, /className = 'project-record-label'/);
+  assert.match(script, /state\.libraryScope === 'global'/);
+  assert.match(script, /'Mark as favorite'/);
+  assert.match(script, /JSON\.stringify\(\{ favorite \}\)/);
+  assert.match(script, /prior\.forEach\(\(\{ skill, favorite: priorFavorite \}\)/);
+  assert.match(styles, /\.skill-category-filter \{[^}]*background: var\(--skill-category-color\)/);
+  assert.match(styles, /\.codex-list-item \.project-record-label, \.codex-list-item \.skill-category-label[^}]*padding: 4px 7px/);
+});

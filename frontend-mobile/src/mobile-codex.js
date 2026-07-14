@@ -25,19 +25,20 @@ async function loadLibraries(projectId = state.projectId) {
   state.steps = (Array.isArray(pipelines.steps) ? pipelines.steps : []).map((step) => ({ ...step, projectId }));
   return pipelines;
 }
-function skillTags(skill) { return [categoryForSkill(skill.name), String(skill.source || 'uncategorized')]; }
+function skillTags(skill) { return [categoryForSkill(skill.name)]; }
 function pipelineTags(pipeline) { return [...new Set(pipelineSteps(pipeline).flatMap((step) => step.skills.flatMap((skill) => skillTags(state.skills.find((item) => item.name === skill.skillName) || { name: skill.skillName }))))]; }
 function recordProjects(record) { return Array.isArray(record.projects) ? record.projects : state.projects.filter((project) => project.id === record.projectId); }
 function recordTags(record) { return state.processTab === 'skills' ? skillTags(record) : pipelineTags(record); }
 function filteredRecords(records) {
   const query = state.query.trim().toLowerCase();
-  return records.filter((record) => {
+  const filtered = records.filter((record) => {
     const projects = recordProjects(record);
     const tags = recordTags(record);
     if (state.projectFilter !== 'All' && !projects.some((project) => project.id === state.projectFilter)) return false;
     if (state.tagFilter !== 'All' && !tags.includes(state.tagFilter)) return false;
     return !query || [record.name, record.description, record.purpose, ...projects.map((project) => project.name), ...tags].join(' ').toLowerCase().includes(query);
   });
+  return state.processTab === 'skills' ? sortSkillsByFavorite(filtered) : filtered;
 }
 async function loadGlobalLibraries() {
   const results = await Promise.allSettled(state.projects.map(async (project) => {
@@ -54,7 +55,7 @@ async function loadGlobalLibraries() {
     for (const skill of library.skills) {
       const key = [skill.name, skill.source, skill.revision].join('\u0000');
       const existing = bySkill.get(key);
-      if (existing) existing.projects.push(library.project);
+      if (existing) { existing.projects.push(library.project); existing.favorite ||= skill.favorite === true; }
       else bySkill.set(key, { ...skill, projects: [library.project] });
     }
   }
@@ -71,13 +72,14 @@ function renderFilterChips(containerSelector, values, selected, className, onSel
     const chip = button(value.label, className, () => onSelect(value.id));
     chip.setAttribute('aria-pressed', String(value.id === selected));
     if (value.color) chip.style.setProperty('--project-color', value.color);
+    if (value.category) decorateSkillCategoryLabel(chip, value.category);
     return chip;
   }));
 }
 function renderLibraryFilters(records, rerender, prefix = 'process') {
   const projects = [{ id: 'All', label: 'All projects', color: '#20242b' }, ...state.projects.map((project) => ({ id: project.id, label: project.name, color: project.color }))]
     .filter((project) => project.id === 'All' || records.some((record) => recordProjects(record).some((candidate) => candidate.id === project.id)));
-  const tags = ['All', ...new Set(records.flatMap(recordTags))].map((tag) => ({ id: tag, label: tag === 'All' ? 'All tags' : tag }));
+  const tags = ['All', ...new Set(records.flatMap(recordTags))].map((tag) => ({ id: tag, label: tag === 'All' ? 'All tags' : tag, category: tag }));
   if (!projects.some((project) => project.id === state.projectFilter)) state.projectFilter = 'All';
   if (!tags.some((tag) => tag.id === state.tagFilter)) state.tagFilter = 'All';
   const projectSelector = `.${prefix}-project-filters`;
@@ -85,7 +87,7 @@ function renderLibraryFilters(records, rerender, prefix = 'process') {
   const search = el(`.${prefix}-search`);
   search.value = state.query;
   renderFilterChips(projectSelector, projects, state.projectFilter, 'project-filter-chip', (id) => { state.projectFilter = id; rerender(); });
-  renderFilterChips(tagSelector, tags, state.tagFilter, 'ledger-filter-chip', (id) => { state.tagFilter = id; rerender(); });
+  renderFilterChips(tagSelector, tags, state.tagFilter, 'skill-category-filter', (id) => { state.tagFilter = id; rerender(); });
   el(projectSelector).hidden = state.libraryScope !== 'global';
 }
 function renderProcessList() {
@@ -95,12 +97,14 @@ function renderProcessList() {
   const visible = filteredRecords(records);
   list.replaceChildren(...visible.map((record) => {
     const node = button('', 'codex-list-item', () => renderProcessDetail(record));
+    if (state.processTab === 'skills') { node.replaceChildren(...renderSkillLibraryItemContent(record, recordProjects(record))); return node; }
     const title = document.createElement('strong'); title.textContent = record.name;
     const detail = document.createElement('span');
     detail.textContent = state.processTab === 'skills' ? (record.description || `${record.source} skill`) : (record.purpose || `${record.stepIds.length} steps`);
-    const metadata = document.createElement('small');
-    metadata.textContent = [...recordProjects(record).map((project) => project.name), ...recordTags(record)].join(' · ');
-    node.append(title, detail, metadata); return node;
+    const labels = document.createElement('span'); labels.className = 'codex-list-labels';
+    for (const project of recordProjects(record)) { const label = document.createElement('small'); label.className = 'project-record-label'; label.textContent = project.name; label.style.setProperty('--project-color', project.color); labels.append(label); }
+    for (const category of recordTags(record)) { const label = document.createElement('small'); label.textContent = category; decorateSkillCategoryLabel(label, category); labels.append(label); }
+    node.append(title, detail, labels); return node;
   }));
   message('.process-message', visible.length ? `${visible.length} ${state.processTab}` : records.length ? `No matching ${state.processTab}.` : `No ${state.processTab} are available.`);
 }
@@ -115,6 +119,13 @@ function renderProcessDetail(record) {
   purpose.textContent = state.processTab === 'skills' ? record.description : (record.purpose || 'No purpose provided.');
   detail.append(back, title, purpose);
   if (state.processTab === 'skills') {
+    if (state.libraryScope === 'global') {
+      const favorite = button(record.favorite ? 'Remove from favorites' : 'Mark as favorite', 'primary-button skill-favorite-toggle', () => { void toggleGlobalSkillFavorite(record); });
+      favorite.setAttribute('aria-pressed', String(record.favorite === true));
+      detail.append(favorite);
+      el('.process-library').hidden = true;
+      return;
+    }
     const model = document.createElement('select'); model.setAttribute('aria-label', 'Codex model');
     model.append(option('', `Inherit (${record.effectiveCodexModel || 'default'})`), ...modelOptions.map((item) => option(item)));
     const effort = document.createElement('select'); effort.setAttribute('aria-label', 'Codex effort');
@@ -132,6 +143,30 @@ function renderProcessDetail(record) {
     detail.append(steps, start);
   }
   el('.process-library').hidden = true;
+}
+async function toggleGlobalSkillFavorite(record) {
+  const favorite = !record.favorite;
+  const identity = (skill) => skill.name === record.name && skill.source === record.source && skill.revision === record.revision;
+  const prior = state.skills.filter(identity).map((skill) => ({ skill, favorite: skill.favorite === true }));
+  prior.forEach(({ skill }) => { skill.favorite = favorite; });
+  renderProcessList();
+  renderProcessDetail(record);
+  const submit = el('.skill-favorite-toggle');
+  setBusy(submit, true);
+  message('.process-message', favorite ? 'Adding favorite…' : 'Removing favorite…');
+  try {
+    await Promise.all(recordProjects(record).map((project) => jsonRequest(`/api/codex/skill-library/${encodeURIComponent(record.name)}`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ favorite })
+    }, project.id)));
+    message('.process-message', favorite ? 'Added to favorites.' : 'Removed from favorites.');
+    renderProcessList();
+    renderProcessDetail(record);
+  } catch (error) {
+    prior.forEach(({ skill, favorite: priorFavorite }) => { skill.favorite = priorFavorite; });
+    renderProcessList();
+    renderProcessDetail(record);
+    message('.process-message', error.message, true);
+  }
 }
 async function startSkill(skill, codexModel, codexEffort) {
   const submit = el('.process-start'); setBusy(submit, true); message('.process-message', 'Submitting skill run…');
@@ -267,3 +302,5 @@ export function initializeMobileCodex() {
 }
 import { projectScopedRequestPath } from '/canvas-src/runtime/project/helper/project-request-scope.js';
 import { categoryForSkill } from '/canvas-src/runtime/codex/helper/skill-category.js';
+import { decorateSkillCategoryLabel, sortSkillsByFavorite } from '/canvas-src/runtime/codex/helper/skill-library-presentation.js';
+import { renderSkillLibraryItemContent } from '/canvas-src/runtime/codex/component/render-skill-library-item-content.js';

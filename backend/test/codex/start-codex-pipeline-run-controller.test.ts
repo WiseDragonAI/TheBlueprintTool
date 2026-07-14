@@ -94,7 +94,7 @@ test('saved pipeline creates all step cards and runs five isolated skills strict
         ] },
       ],
       runs: [],
-      skillLibrary: [{ skillName: 'alpha', defaultCodexModel: 'gpt-5.4', defaultCodexEffort: 'high', updatedAt: now }],
+      skillLibrary: [{ skillName: 'alpha', favorite: false, defaultCodexModel: 'gpt-5.4', defaultCodexEffort: 'high', updatedAt: now }],
       activeWorkspaceRun: null,
     },
   });
@@ -181,7 +181,7 @@ test('direct temporary runs inherit skill defaults, preserve snapshots, and hono
     availableSkillNames: ['alpha'],
     store: {
       pipelines: [], steps: [], runs: [], activeWorkspaceRun: null,
-      skillLibrary: [{ skillName: 'alpha', defaultCodexModel: 'gpt-5.4', defaultCodexEffort: 'high', updatedAt: now }],
+      skillLibrary: [{ skillName: 'alpha', favorite: false, defaultCodexModel: 'gpt-5.4', defaultCodexEffort: 'high', updatedAt: now }],
     },
   });
   process.env.CODEX_BIN = fakeCodex;
@@ -206,7 +206,7 @@ test('direct temporary runs inherit skill defaults, preserve snapshots, and hono
       availableSkillNames: ['alpha'],
       store: {
         ...afterFirst,
-        skillLibrary: [{ skillName: 'alpha', defaultCodexModel: 'gpt-5.5', defaultCodexEffort: 'low', updatedAt: new Date().toISOString() }],
+        skillLibrary: [{ skillName: 'alpha', favorite: false, defaultCodexModel: 'gpt-5.5', defaultCodexEffort: 'low', updatedAt: new Date().toISOString() }],
       },
     });
     const stable = readCodexPipelineStore({ decisionOsRoot }).store.runs.find((run) => run.id === inherited.pipelineRun.id);

@@ -347,10 +347,18 @@ body:has(.new-task-project-modal[open]) { overflow: hidden; }
 .codex-library-search input { min-width: 0; border: 0; outline: 0; color: var(--text); background: transparent; font: inherit; }
 .codex-filter-row { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
 .codex-filter-row[hidden] { display: none; }
+.skill-category-filter { --skill-category-color: var(--accent); flex: 0 0 auto; min-height: 34px; padding: 5px 12px; border: 1px solid color-mix(in srgb, var(--skill-category-color), white 24%); border-radius: 9px; color: white; background: var(--skill-category-color); box-shadow: inset 0 1px 0 #ffffff2e, 0 3px 10px color-mix(in srgb, var(--skill-category-color), transparent 65%); font-size: 13px; font-weight: 800; }
+.skill-category-filter[aria-pressed="false"] { color: color-mix(in srgb, var(--skill-category-color), white 38%); background: color-mix(in srgb, var(--skill-category-color), transparent 78%); }
 .codex-filter-clear { justify-self: start; min-height: 36px; padding: 0 10px; color: var(--accent); background: transparent; }
 .codex-list { display: grid; gap: 10px; }
 .codex-list-item { display: grid; gap: 6px; width: 100%; min-height: 64px; padding: 12px; border: 1px solid var(--line); text-align: left; background: var(--panel); }
 .codex-list-item span, .codex-list-item small, .codex-message { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.codex-list-labels { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.codex-list-item .project-record-label, .codex-list-item .skill-category-label, .codex-list-item .skill-favorite-label { padding: 4px 7px; border-radius: 5px; color: white; font-size: 10px; font-weight: 800; line-height: 1.1; text-transform: uppercase; }
+.codex-list-item .project-record-label { background: var(--project-color); }
+.codex-list-item .skill-category-label { background: var(--skill-category-color); }
+.codex-list-item .skill-favorite-label { color: #17120a; background: #fbbf24; }
+.codex-list-item .skill-source-label { padding-inline: 2px; text-transform: capitalize; }
 .codex-message.error { color: var(--danger); }
 .process-detail { display: grid; gap: 16px; }
 .process-detail select, .pipeline-step input, .pipeline-step textarea, .pipeline-skill select, .codex-field input, .codex-field textarea { width: 100%; min-width: 0; min-height: 44px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--text); background: #080a0d; font: inherit; }

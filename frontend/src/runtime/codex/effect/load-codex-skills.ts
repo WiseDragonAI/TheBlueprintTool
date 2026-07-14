@@ -13,6 +13,7 @@ export type CodexSkillSummary = {
   editable: boolean;
   readOnlyReason: string | null;
   revision: string;
+  favorite?: boolean;
   defaultCodexModel: CodexModel | null;
   defaultCodexEffort: CodexEffort | null;
   effectiveCodexModel: string;
