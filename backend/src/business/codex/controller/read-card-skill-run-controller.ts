@@ -10,10 +10,12 @@ import { normalizeCardSkillRunDiagnostic, normalizeCardSkillRunEvent } from '../
 import { readCardSkillRunEventLines } from '../helper/read-card-skill-run-event-lines.js';
 import { codexRunSegmentMetadata, latestCodexRunSegmentLog, latestCodexRunSegmentStartedAtMs, latestCodexRunSegmentStartLine, type CodexRunSegmentMetadata } from '../helper/codex-run-segment-marker.js';
 import { readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
+import { readCodexProcessQueue } from '../helper/codex-process-queue.js';
+import { unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
 import { resolveCardSkillRunOwnership } from '../helper/resolve-card-skill-run-ownership.js';
 
 type AnyRecord = Record<string, unknown>;
-type RunStatus = 'running' | 'complete' | 'failed' | 'cancelled' | 'unknown';
+type RunStatus = 'pending' | 'running' | 'complete' | 'failed' | 'cancelled' | 'unknown';
 
 const NON_FATAL_CODEX_MODEL_REFRESH_DIAGNOSTIC = /\bcodex_models_manager::manager:\s*failed to refresh available models:\s*timeout waiting for child process to exit\b/i;
 const NON_FATAL_APPLY_PATCH_VERIFICATION_DIAGNOSTIC = /\bcodex_core::tools::router:\s*error=apply_patch verification failed:/i;
@@ -67,7 +69,7 @@ function runtimeRunStatus(runtime: AnyRecord, runId: string): RunStatus | null {
   const runs = runtime.codexSkillRuns && typeof runtime.codexSkillRuns === 'object' ? runtime.codexSkillRuns as Record<string, AnyRecord> : {};
   const run = runs[runId];
   const status = String(run?.status ?? '');
-  return status === 'running' || status === 'complete' || status === 'failed' || status === 'cancelled' ? status : null;
+  return status === 'pending' || status === 'running' || status === 'complete' || status === 'failed' || status === 'cancelled' ? status : null;
 }
 
 function runtimeRunMetadata(runtime: AnyRecord, runId: string): CodexRunSegmentMetadata {
@@ -191,6 +193,7 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
   const diagnostics = normalizedRunDiagnostics(segmentLog);
   const inferred = inferredStatus({ runtime, runId, events: segmentEvents, stdoutFile, stderrFile, stderrLog: segmentLog });
   const inMemoryStatus = runtimeRunStatus(runtime, runId);
+  const queuedProcess = readCodexProcessQueue(decisionOsRoot).find((item) => item.id === runId || String(item.payload.runId ?? '') === runId);
   const status = inMemoryStatus
     ?? (persistedSkill && (persistedSkill.status === 'complete' || persistedSkill.status === 'failed' || persistedSkill.status === 'cancelled')
       ? persistedSkill.status
@@ -239,6 +242,7 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     pipelineStatus: persistedPipelineRun?.status ?? null,
     status,
     active: inMemoryStatus === 'running',
+    queuePosition: status === 'pending' && queuedProcess ? unifiedCodexQueuePosition({ decisionOsRoot, id: queuedProcess.id, createdAt: queuedProcess.createdAt }) : null,
     startedAt: new Date(runSegmentStartedAtMs({ runtime, runId, stderrFile })).toISOString(),
     elapsedMs: elapsedMs({ runtime, runId, status, stdoutFile, stderrFile }),
     lineCount: parsedLines.at(-1)?.line ?? 0,

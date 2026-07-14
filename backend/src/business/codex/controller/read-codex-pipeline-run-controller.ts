@@ -7,11 +7,11 @@ import { resolve } from 'node:path';
 import { resolveCardContentFile } from '@backend/business/ledger/helper/card-content-file.js';
 import { readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import {
-  pipelineQueuePosition,
   pipelineRunLogAvailability,
   reassessPipelineAfterSkill,
   resolvePipelineLedgerContext,
 } from '../helper/codex-pipeline-runner.js';
+import { unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -70,6 +70,6 @@ export async function readCodexPipelineRunController(
     canCancel: run.status === 'pending' || run.status === 'running',
     canRestart: terminal,
     canContinue: terminal,
-    queuePosition: pipelineQueuePosition({ runs: readCodexPipelineStore({ decisionOsRoot }).store.runs, pipelineRunId: run.id }),
+    queuePosition: run.status === 'pending' ? unifiedCodexQueuePosition({ decisionOsRoot, id: run.id, createdAt: run.createdAt }) : null,
   };
 }

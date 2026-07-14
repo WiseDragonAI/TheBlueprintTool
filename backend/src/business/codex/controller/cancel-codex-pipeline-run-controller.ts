@@ -73,7 +73,9 @@ export async function cancelCodexPipelineRunController(
       await new Promise((resolveWait) => setTimeout(resolveWait, 10));
     }
   }
-  scheduleCodexPipelineRuns({ decisionOsRoot, runtime });
+  const schedule = runtime.scheduleCodexProcesses;
+  if (typeof schedule === 'function') void schedule();
+  else scheduleCodexPipelineRuns({ decisionOsRoot, runtime });
   if (typeof runtime.onPipelineLedgerChange === 'function') {
     (runtime.onPipelineLedgerChange as (event: AnyRecord) => void)({
       reason: 'pipeline-cancelled',

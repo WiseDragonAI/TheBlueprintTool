@@ -519,7 +519,8 @@ export function spawnPipelineSkillProcess(input: {
         runNextPipelineSkill({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, pipelineRunId: input.pipelineRun.id });
       }
       if (reassessed && isTerminal(reassessed.status)) {
-        scheduleCodexPipelineRuns({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime });
+        const schedule = input.runtime.scheduleCodexProcesses;
+        if (typeof schedule === 'function') void schedule();
       }
       notify(input.runtime.onCodexRunSettled, {
         ledgerId: input.pipelineRun.ledgerId,
@@ -602,7 +603,8 @@ export function scheduleCodexPipelineRuns(input: {
   const launched: AnyRecord[] = [];
   while (true) {
     const store = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot }).store;
-    const running = store.runs.filter((run) => run.status === 'running').length;
+    const runs = input.runtime.codexSkillRuns && typeof input.runtime.codexSkillRuns === 'object' ? input.runtime.codexSkillRuns as Record<string, AnyRecord> : {};
+    const running = Object.values(runs).filter((run) => run.status === 'running').length;
     if (running >= capacity) break;
     const next = store.runs.find((run) => run.status === 'pending');
     if (!next) break;

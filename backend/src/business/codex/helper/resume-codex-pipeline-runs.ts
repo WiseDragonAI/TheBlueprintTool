@@ -9,8 +9,9 @@ import {
   pipelineRuntimeRun,
   reassessPipelineAfterSkill,
   runNextPipelineSkill,
-  scheduleCodexPipelineRuns,
 } from './codex-pipeline-runner.js';
+import { scheduleCodexProcesses } from './codex-process-scheduler.js';
+import { readCodexProcessQueue } from './codex-process-queue.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -64,15 +65,19 @@ export async function resumeCodexPipelineRuns(input: {
     }
   }
 
-  const schedule = scheduleCodexPipelineRuns({ decisionOsRoot, runtime: input.runtime });
-  resumed.push(...schedule.launched.filter((entry) => entry.skillRun).map((entry) => entry.skillRun as AnyRecord));
+  const schedule = await scheduleCodexProcesses({ decisionOsRoot, runtime: input.runtime });
+  const launches = Array.isArray(schedule.launched) ? schedule.launched as AnyRecord[] : [];
+  resumed.push(...launches.filter((entry) => entry.skillRun).map((entry) => entry.skillRun as AnyRecord));
   const current = readCodexPipelineStore({ decisionOsRoot }).store;
   const activeRunIds = current.runs.filter((entry) => entry.status === 'running').map((entry) => entry.id);
   return {
-    ok: schedule.launched.every((entry) => entry.ok !== false),
+    ok: launches.every((entry) => entry.ok !== false),
     resumed,
     activeRunId: activeRunIds[0] ?? null,
     activeRunIds,
-    queuedRunIds: schedule.queuedRunIds,
+    queuedRunIds: [
+      ...current.runs.filter((entry) => entry.status === 'pending').map((entry) => entry.id),
+      ...readCodexProcessQueue(decisionOsRoot).filter((entry) => entry.status === 'pending').map((entry) => entry.id),
+    ],
   };
 }

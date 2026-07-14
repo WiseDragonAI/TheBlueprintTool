@@ -18,6 +18,9 @@ import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand, resolve
 import { threadMessagesAfterLastCodexEvent } from '../helper/thread-messages-after-last-codex-event.js';
 import { readCardSkillRunController } from './read-card-skill-run-controller.js';
 import { decisionOsCodexEnvironment } from '../helper/decision-os-codex-runtime.js';
+import { randomUUID } from 'node:crypto';
+import { enqueueCodexContinuation, removeCodexProcessQueueItem } from '../helper/codex-process-queue.js';
+import { scheduleCodexProcesses, unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
 
 type AnyRecord = Record<string, unknown>;
 type ProcessStatus = 'running' | 'complete' | 'failed' | 'cancelled';
@@ -146,6 +149,8 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   const runId = String(payload.runId ?? '').trim();
   const traceId = String(payload.traceId ?? '');
   const newSession = payload.newSession === true;
+  const queueDispatch = payload.queueDispatch === true;
+  const queueItemId = optionalText(payload.queueItemId);
   const fail = (statusCode: number, error: string, extra: AnyRecord = {}): AnyRecord => {
     logCodexContinueDebug('continue-controller-fail', { traceId, ledgerId, cardId, runId, statusCode, error, ...extra });
     return { ok: false, statusCode, error, runId, ...extra };
@@ -223,6 +228,28 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       outputMarkdown: readFileSync(outputFile, 'utf8'),
     } : undefined,
   });
+  if (!queueDispatch) {
+    const createdAt = new Date().toISOString();
+    const itemId = `codex-continuation-${Date.now()}-${randomUUID().slice(0, 8)}`;
+    enqueueCodexContinuation({
+      decisionOsRoot,
+      id: itemId,
+      createdAt,
+      payload: { ledgerId, cardId, runId, newSession, codexModel: command.model, codexEffort: command.effort, traceId },
+    });
+    updateRuntimeRun(runtime, runId, {
+      id: runId, ledgerId, outputCardId: cardId, codexModel: command.model, codexEffort: command.effort,
+      status: 'pending', queueItemId: itemId, createdAt,
+    });
+    const schedule = runtime.scheduleCodexProcesses;
+    if (typeof schedule === 'function') await schedule();
+    else await scheduleCodexProcesses({ decisionOsRoot, runtime });
+    const current = publicRun(runtimeRuns(runtime)[runId]);
+    return {
+      ok: true, statusCode: 202, run: current, queued: current.status === 'pending',
+      queuePosition: current.status === 'pending' ? unifiedCodexQueuePosition({ decisionOsRoot, id: itemId, createdAt }) : null,
+    };
+  }
   logCodexContinueDebug('spawn-prep', { traceId, ledgerId, cardId, runId, newSession, command: command.command, args: command.args, model: command.model, effort: command.effort, sessionId, promptChars: prompt.length, messageCount: messages.length, outputFile });
   mkdirSync(runDirectory, { recursive: true });
   const eventStartLine = prepareCardSkillRunEventAppend(stdoutFile);
@@ -290,6 +317,9 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     finishRunStreams(stdout, stderr, () => {
       flushCardSkillRunEventIngestor(runEventIngestor, runId);
       updateRuntimeRun(runtime, runId, { settledAt: new Date().toISOString() });
+      if (queueItemId) removeCodexProcessQueueItem(decisionOsRoot, queueItemId);
+      const schedule = runtime.scheduleCodexProcesses;
+      if (typeof schedule === 'function') void schedule();
       notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, status: 'failed' });
     });
   });
@@ -306,6 +336,9 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
       flushCardSkillRunEventIngestor(runEventIngestor, runId);
       updateRuntimeRun(runtime, runId, { settledAt: new Date().toISOString() });
+      if (queueItemId) removeCodexProcessQueueItem(decisionOsRoot, queueItemId);
+      const schedule = runtime.scheduleCodexProcesses;
+      if (typeof schedule === 'function') void schedule();
       notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, status, exitCode });
     });
   });
