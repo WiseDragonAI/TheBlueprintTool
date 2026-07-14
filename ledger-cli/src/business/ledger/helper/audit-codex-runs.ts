@@ -6,7 +6,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, relative, resolve, sep } from 'node:path';
 import type { Result } from '../../../lib/types.js';
 
-type Row = { startedAt?: string; completedAt?: string; durationMs?: number; tool?: string; success?: boolean; outputBytes?: number; runId?: string; turnId?: string; callId?: string; status?: string };
+type Row = { projectId?: string; startedAt?: string; completedAt?: string; durationMs?: number | null; tool?: string; command?: string; success?: boolean; outputBytes?: number; runId?: string; turnId?: string; callId?: string; status?: string };
 const skipped = new Set(['.git', '.worktrees', 'node_modules']);
 function epoch(runId: string): number { return Number(runId.match(/^codex-(?:skill|pipeline)-(\d+)-/)?.[1] ?? 0); }
 function percentile(values: number[], fraction: number): number | null { if (!values.length) return null; const sorted = [...values].sort((a, b) => a - b); return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * fraction) - 1)]; }
@@ -48,7 +48,7 @@ export function auditCodexRuns(input: { root?: string; count: number; cutoff?: n
     return { projectId: run.project.projectId, projectRoot: run.project.root, runId: run.runId, startedEpoch: epoch(run.runId), runFile: run.file, telemetryAvailable: rows.length > 0, rows };
   });
   const rows = selected.flatMap((run) => run.rows);
-  const durations = rows.map((row) => Number(row.durationMs)).filter(Number.isFinite);
+  const durations = rows.flatMap((row) => typeof row.durationMs === 'number' && Number.isFinite(row.durationMs) && row.durationMs > 0 ? [row.durationMs] : []);
   const repeated = new Map<string, number>();
   for (const row of rows) { const key = normalizedTool(String(row.tool ?? '')); if (key) repeated.set(key, (repeated.get(key) ?? 0) + 1); }
   const output = {
@@ -63,6 +63,8 @@ export function auditCodexRuns(input: { root?: string; count: number; cutoff?: n
       medianLatencyMs: percentile(durations, 0.5),
       p95LatencyMs: percentile(durations, 0.95),
       historicalLatencyUnavailableRuns: selected.filter((run) => !run.telemetryAvailable).map((run) => run.runId),
+      incompleteIdentityRows: rows.filter((row) => !row.projectId || !row.runId || !row.turnId || !row.callId).length,
+      unavailableDurationRows: rows.filter((row) => typeof row.durationMs !== 'number' || !Number.isFinite(row.durationMs) || row.durationMs <= 0).length,
       repeatedCalls: [...repeated.entries()].filter(([, count]) => count > 1).sort((left, right) => right[1] - left[1]).map(([tool, count]) => ({ tool, count })),
     },
   };

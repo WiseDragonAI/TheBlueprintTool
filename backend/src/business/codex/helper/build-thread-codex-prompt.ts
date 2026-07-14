@@ -14,10 +14,10 @@ export function buildThreadCodexPrompt(input: {
   threadMarkdown: string;
   runSummaryFile: string;
   operatorNoteTimestamp: string;
+  context: Record<string, unknown>;
 }): { developerInstructions: string; taskContext: string } {
   const developerInstructions = [
     'Decision OS card run:',
-    `- Intake: \`ledger-cli session-context --ledger "$DECISION_OS_LEDGER_FILE" --card-id ${input.cardId} --json\`.`,
     '- Ledger writes use ledger-cli. Plan master/subtasks with `master-task-apply`; IDs are automatic.',
     '- Mark verified subtasks with `ledger-cli done` and sync projections. Master completion requires explicit operator authorization.',
     `- Gate: \`ledger-cli master-task-gate --ledger "$DECISION_OS_LEDGER_FILE" --card-id ${input.cardId} --json\`; ledger status is truth.`,
@@ -31,14 +31,9 @@ export function buildThreadCodexPrompt(input: {
     `Thread: ${input.threadId} (${input.threadMarkdownFile})`,
     `Run summary: ${input.runSummaryFile}`,
     '',
-    'Thread:',
-    '```markdown',
-    input.threadMarkdown,
-    '```',
-    '',
-    'Card:',
-    '```markdown',
-    input.cardMarkdown,
+    'Decision OS context:',
+    '```json',
+    JSON.stringify(input.context, null, 2),
     '```',
   ].join('\n');
 

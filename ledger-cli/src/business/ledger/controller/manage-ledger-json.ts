@@ -3,8 +3,9 @@
  * WHY: ledger edits must use committed ledger files as the work surface.
  */
 import type { FileSystemPort, Result } from '../../../lib/types.js';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { constants, existsSync, accessSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { telemetry } from '../../../lib/telemetry/telemetry.js';
 import { readLedgerJson } from '../helper/read-ledger-json.js';
 import { writeLedgerJson } from '../effect/write-ledger-json.js';
@@ -23,6 +24,17 @@ type JsonObject = Record<string, unknown>;
 
 function isRecord(value: unknown): value is JsonObject {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+function primaryCheckoutRoot(workspaceRoot: string): string {
+  try {
+    const common = String(execFileSync('git', ['-C', workspaceRoot, 'rev-parse', '--git-common-dir'], { encoding: 'utf8' })).trim();
+    return dirname(resolve(workspaceRoot, common));
+  } catch { return workspaceRoot; }
 }
 
 async function applyLedgerMutationOperation(
@@ -238,11 +250,24 @@ export async function manageLedgerJsonController(
     let packageJson: JsonObject = {};
     try { packageJson = JSON.parse(await readFileWithNode(packageFile)) as JsonObject; } catch { /* typed unavailable fields below */ }
     const scripts = isRecord(packageJson.scripts) ? packageJson.scripts : {};
-    const scriptNames = Object.keys(scripts);
-    const typechecks = scriptNames.filter((name) => name === 'typecheck' || name.startsWith('typecheck:')).map((name) => `npm run ${name}`);
-    const focusedTests = scriptNames.filter((name) => name === 'test' || name.startsWith('test:')).map((name) => `npm run ${name}`);
-    const dependencyRoots = [workspaceRoot, resolve(workspaceRoot, 'backend'), resolve(workspaceRoot, 'frontend'), resolve(workspaceRoot, 'ledger-cli')]
-      .map((root) => resolve(root, 'node_modules')).filter(existsSync);
+    const primaryRoot = primaryCheckoutRoot(workspaceRoot);
+    const dependencyRoots = [primaryRoot, resolve(primaryRoot, 'backend'), resolve(primaryRoot, 'frontend'), resolve(primaryRoot, 'ledger-cli'), workspaceRoot, resolve(workspaceRoot, 'backend'), resolve(workspaceRoot, 'frontend'), resolve(workspaceRoot, 'ledger-cli')]
+      .map((root) => resolve(root, 'node_modules')).filter((value, index, all) => existsSync(value) && all.indexOf(value) === index);
+    const backendTsx = resolve(workspaceRoot, 'backend', 'node_modules', 'tsx', 'dist', 'esm', 'index.mjs');
+    const backendTsc = resolve(workspaceRoot, 'backend', 'node_modules', '.bin', 'tsc');
+    const frontendTsc = resolve(workspaceRoot, 'frontend', 'node_modules', '.bin', 'tsc');
+    const ledgerTsc = resolve(workspaceRoot, 'ledger-cli', 'node_modules', '.bin', 'tsc');
+    const packageRoots = ['backend', 'frontend', 'ledger-cli'].map((name) => resolve(workspaceRoot, name)).filter((root) => existsSync(resolve(root, 'package-lock.json')));
+    const bootstrap = packageRoots.filter((root) => !existsSync(resolve(root, 'node_modules'))).map((root) => `npm ci --ignore-scripts --prefix ${shellQuote(root)}`);
+    const typechecks = [
+      existsSync(backendTsc) ? `${shellQuote(backendTsc)} -p ${shellQuote(resolve(workspaceRoot, 'backend', 'tsconfig.json'))} --noEmit` : '',
+      existsSync(frontendTsc) ? `${shellQuote(frontendTsc)} -p ${shellQuote(resolve(workspaceRoot, 'frontend', 'tsconfig.json'))} --noEmit` : '',
+      existsSync(ledgerTsc) ? `${shellQuote(ledgerTsc)} -p ${shellQuote(resolve(workspaceRoot, 'ledger-cli', 'tsconfig.json'))} --noEmit` : '',
+    ].filter(Boolean);
+    const focusedTests = [
+      existsSync(backendTsx) ? `env TSX_TSCONFIG_PATH=${shellQuote(resolve(workspaceRoot, 'backend', 'tsconfig.json'))} node --test --test-concurrency=1 --import ${shellQuote(backendTsx)} <backend-test-file>` : '',
+      existsSync(backendTsx) ? `env TSX_TSCONFIG_PATH=${shellQuote(resolve(workspaceRoot, 'ledger-cli', 'tsconfig.json'))} node --test --test-concurrency=1 --import ${shellQuote(backendTsx)} <ledger-cli-test-file>` : '',
+    ].filter(Boolean);
     const executable = (file: string): boolean => { try { accessSync(file, constants.X_OK); return true; } catch { return false; } };
     const serverLauncher = resolve(workspaceRoot, 'bin', 'decision-os-server.mjs');
     const browserDriver = resolve(workspaceRoot, 'frontend', 'node_modules', '.bin', 'playwright');
@@ -258,14 +283,15 @@ export async function manageLedgerJsonController(
         install: 'npm install',
         typechecks,
         focusedTests,
-        worktreeBootstrap: dependencyRoots.length > 0 ? `Use dependencies from ${dependencyRoots[0]}.` : 'npm install',
+        worktreeBootstrap: bootstrap,
       },
+      primaryRoot,
       dependencyRoots,
       server: { launcher: serverLauncher, available: executable(serverLauncher), url: process.env.DECISION_OS_SERVER_URL ?? '', frontendRoot: existsSync(resolve(workspaceRoot, 'frontend')) ? resolve(workspaceRoot, 'frontend') : null },
       browser: { driver: browserDriver, available: executable(browserDriver) },
       serverUrl: process.env.DECISION_OS_SERVER_URL ?? '',
       restartPolicy: 'Do not restart or stop the server unless the operator explicitly asks.',
-      ready: existsSync(packageFile) && dependencyRoots.length > 0,
+      ready: existsSync(packageFile) && bootstrap.length === 0,
     };
     return { ok: true, value: JSON.stringify(output, null, 2) };
   }

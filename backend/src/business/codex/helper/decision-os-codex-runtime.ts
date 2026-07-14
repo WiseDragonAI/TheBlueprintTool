@@ -46,6 +46,7 @@ export function decisionOsCodexEnvironment(input: { runtime: AnyRecord; decision
     DECISION_OS_LEDGER_ROOT: resolve(input.decisionOsRoot),
     DECISION_OS_LEDGER_FILE: resolve(input.ledgerFile),
     DECISION_OS_SERVER_URL: serverUrl(input.runtime),
+    DECISION_OS_MASTER_ROOT: String(input.runtime.serverRoot ?? dirname(resolve(input.decisionOsRoot))),
   };
 }
 

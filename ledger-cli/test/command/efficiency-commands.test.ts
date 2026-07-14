@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { manageLedgerJsonController } from '../../src/business/ledger/controller/manage-ledger-json.js';
 import { applyMasterTaskPlan } from '../../src/business/ledger/helper/apply-master-task-plan.js';
 import { auditCodexRuns } from '../../src/business/ledger/helper/audit-codex-runs.js';
+import { resolveCodexRunEvents } from '../../src/business/ledger/helper/resolve-codex-run-events.js';
 
 function fixture(): { root: string; decisionOs: string; ledger: string } {
   const root = mkdtempSync(join(tmpdir(), 'decision-os-efficiency-'));
@@ -35,7 +36,9 @@ test('session context and gate return one bounded project-scoped response', asyn
     if (context.ok) {
       const value = JSON.parse(String(context.value));
       assert.equal(value.projectId, 'project-a');
-      assert.match(value.thread.markdown, /Do it\./);
+      assert.equal(value.thread.contentFile, '.decision-os/threads/specs/thread-master.md');
+      assert.equal(value.thread.markdown, undefined);
+      assert.equal(value.actions.masterTaskApply.input.sections[0].title, 'string');
     }
     const gate = await manageLedgerJsonController({ ledgerCommand: 'master-task-gate', ledgerJsonFile: ledger, cardOperation: { cardId: 'master' } });
     assert.equal(gate.ok, true);
@@ -50,24 +53,50 @@ test('session context and gate return one bounded project-scoped response', asyn
   }
 });
 
-test('master-task apply generates ids and persists the complete projection in one call', () => {
+test('master-task apply preserves lifecycle metadata, generates ids, and persists structured sections', () => {
   const { decisionOs, ledger } = fixture();
   const previousRoot = process.env.DECISION_OS_LEDGER_ROOT;
   process.env.DECISION_OS_LEDGER_ROOT = decisionOs;
   try {
     const result = applyMasterTaskPlan({ ledgerJsonFile: ledger, planJson: JSON.stringify({
       masterCardId: 'master', title: 'Renamed', zoneTitle: 'Renamed',
-      masterMarkdown: '#master-task #task-active\n\nLedger: Specs\nWaiting since: 2026-01-01T00:00:00.000Z\nActive since: 2026-01-01T00:00:00.000Z\n\n## A. Subtasks\n',
-      subtasks: [{ title: 'Child', markdown: '## A. Implementation Detail\n\n1. **Objective:** Implement it.\n' }],
+      sections: [{ title: 'Decision', markdown: '1. **Choice:** Build it.' }],
+      subtasks: [{ title: 'Child', sections: [{ title: 'Implementation Detail', markdown: '1. **Objective:** Implement it.' }] }],
     }) });
     assert.equal(result.ok, true, result.ok ? undefined : result.error);
     const persisted = JSON.parse(readFileSync(ledger, 'utf8')) as { cards: Array<{ id: string; title: string }>; relationships: unknown[] };
     assert.equal(persisted.cards.length, 2);
     assert.match(persisted.cards[1].id, /^card-[0-9a-f-]{36}$/);
     assert.equal(persisted.relationships.length, 1);
+    const masterMarkdown = readFileSync(join(decisionOs, 'cards', 'specs', 'master.md'), 'utf8');
+    assert.match(masterMarkdown, /Waiting since: 2026-01-01T00:00:00.000Z/);
+    assert.match(masterMarkdown, /## A\. Decision/);
     assert.match(readFileSync(join(ledger, '../..', `.decision-os/cards/specs/${persisted.cards[1].id}.md`), 'utf8'), /Implement it/);
   } finally {
     if (previousRoot === undefined) delete process.env.DECISION_OS_LEDGER_ROOT; else process.env.DECISION_OS_LEDGER_ROOT = previousRoot;
+  }
+});
+
+test('bounded run events returns only the requested event type from one catalog run', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-events-'));
+  const decisionOs = join(root, 'project', '.decision-os');
+  const runs = join(decisionOs, 'runs', 'codex-skills', 'specs');
+  mkdirSync(runs, { recursive: true });
+  writeFileSync(join(decisionOs, 'state.json'), '{}');
+  writeFileSync(join(decisionOs, 'project.json'), JSON.stringify({ id: 'project-a' }));
+  const runId = 'codex-skill-300-abcd';
+  writeFileSync(join(runs, `${runId}.jsonl`), [
+    JSON.stringify({ type: 'item.completed', item: { id: 'todo-1', type: 'todo_list', items: [{ text: 'One', completed: false }] } }),
+    JSON.stringify({ type: 'item.completed', item: { id: 'tool-1', type: 'command_execution', aggregated_output: 'large output' } }),
+  ].join('\n'));
+  const result = resolveCodexRunEvents({ root, runId, itemType: 'todo_list' });
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    const value = JSON.parse(result.value);
+    assert.equal(value.projectId, 'project-a');
+    assert.equal(value.events.length, 1);
+    assert.equal(value.events[0].itemId, 'todo-1');
+    assert.doesNotMatch(result.value, /large output/);
   }
 });
 

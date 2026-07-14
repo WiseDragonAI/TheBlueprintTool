@@ -10,20 +10,31 @@ import { resolveCardZone } from './resolve-ledger-zone-context.js';
 import { validateMasterTasks } from './validate-master-tasks.js';
 
 type JsonObject = Record<string, unknown>;
-type Subtask = { title: string; markdown: string };
-type Plan = { masterCardId: string; title: string; zoneTitle?: string; masterMarkdown: string; subtasks: Subtask[] };
+type Section = { title: string; markdown: string };
+type Subtask = { title: string; markdown?: string; sections?: Section[] };
+type Plan = { masterCardId: string; title: string; zoneTitle?: string; masterMarkdown?: string; sections?: Section[]; subtasks: Subtask[] };
 function record(value: unknown): value is JsonObject { return Boolean(value) && typeof value === 'object' && !Array.isArray(value); }
 function id(prefix: 'card' | 'rel'): string { return `${prefix}-${randomUUID()}`; }
 function safe(value: string): string { return value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled'; }
 
+function sections(value: unknown): Section[] {
+  return Array.isArray(value) ? value.filter(record).map((item) => ({ title: String(item.title ?? '').trim(), markdown: String(item.markdown ?? '').trim() })).filter((item) => item.title && item.markdown) : [];
+}
+
+function renderSections(value: Section[]): string {
+  return value.map((section, index) => `## ${String.fromCharCode(65 + index)}. ${section.title}\n\n${section.markdown.trim()}`).join('\n\n---\n\n');
+}
+
 function parsePlan(value: string): Result<Plan> {
   try {
     const plan = JSON.parse(value) as JsonObject;
-    const subtasks = Array.isArray(plan.subtasks) ? plan.subtasks.filter(record).map((item) => ({ title: String(item.title ?? '').trim(), markdown: String(item.markdown ?? '') })) : [];
-    if (!String(plan.masterCardId ?? '').trim() || !String(plan.title ?? '').trim() || !String(plan.masterMarkdown ?? '').trim() || subtasks.some((item) => !item.title || !item.markdown.trim())) {
-      return { ok: false, error: 'master-task-apply requires masterCardId, title, masterMarkdown, and complete subtasks.' };
+    const masterSections = sections(plan.sections);
+    const subtasks = Array.isArray(plan.subtasks) ? plan.subtasks.filter(record).map((item) => ({ title: String(item.title ?? '').trim(), markdown: String(item.markdown ?? '').trim() || undefined, sections: sections(item.sections) })) : [];
+    const masterMarkdown = String(plan.masterMarkdown ?? '').trim() || undefined;
+    if (!String(plan.masterCardId ?? '').trim() || !String(plan.title ?? '').trim() || (!masterMarkdown && masterSections.length === 0) || subtasks.some((item) => !item.title || (!item.markdown && item.sections?.length === 0))) {
+      return { ok: false, error: 'master-task-apply requires masterCardId, title, sections, and complete ID-free subtasks. See session-context actions.masterTaskApply.' };
     }
-    return { ok: true, value: { masterCardId: String(plan.masterCardId), title: String(plan.title), zoneTitle: String(plan.zoneTitle ?? plan.title), masterMarkdown: String(plan.masterMarkdown), subtasks } };
+    return { ok: true, value: { masterCardId: String(plan.masterCardId), title: String(plan.title), zoneTitle: String(plan.zoneTitle ?? plan.title), masterMarkdown, sections: masterSections, subtasks } };
   } catch (error) { return { ok: false, error: error instanceof Error ? error.message : 'Invalid plan JSON.' }; }
 }
 
@@ -49,9 +60,6 @@ export function applyMasterTaskPlan(input: { ledgerJsonFile: string; planJson: s
   const nextId = (prefix: 'card' | 'rel'): string => { let value = id(prefix); while (existingIds.has(value)) value = id(prefix); existingIds.add(value); return value; };
   const created = plan.subtasks.map((subtask, index) => ({ id: nextId('card'), relationshipId: nextId('rel'), ...subtask, index }));
   const links = created.map((item, index) => `${index + 1}. [${item.title}](card:${item.id}) — Status: pending`).join('\n');
-  const masterMarkdown = /(?:^|\n)## [A-Z]\. Subtasks\s*\n[\s\S]*$/m.test(plan.masterMarkdown)
-    ? plan.masterMarkdown.replace(/((?:^|\n)## [A-Z]\. Subtasks\s*\n)[\s\S]*$/m, `$1\n${links}\n`)
-    : `${plan.masterMarkdown.trimEnd()}\n\n---\n\n## Z. Subtasks\n\n${links}\n`;
   master.title = plan.title;
   zone.label = plan.zoneTitle || plan.title;
   const domainId = String(master.domainId ?? 'specs');
@@ -60,13 +68,23 @@ export function applyMasterTaskPlan(input: { ledgerJsonFile: string; planJson: s
   const files = new Map<string, string>();
   const masterComment = record(master.comment) ? master.comment : {};
   const masterRef = String(masterComment.contentFile ?? `.decision-os/cards/${safe(domainId)}/${safe(plan.masterCardId)}.md`);
-  files.set(resolve(input.ledgerJsonFile, '../..', masterRef), masterMarkdown);
+  const masterFile = resolve(input.ledgerJsonFile, '../..', masterRef);
+  const existingMasterMarkdown = existsSync(masterFile) ? readFileSync(masterFile, 'utf8') : '';
+  const lifecycleHeader = existingMasterMarkdown.match(/^[\s\S]*?(?=^##\s)/m)?.[0]?.trimEnd();
+  if (!plan.masterMarkdown && !lifecycleHeader?.includes('#master-task')) return { ok: false, error: 'Existing master Markdown has no preservable #master-task lifecycle header.' };
+  const body = plan.masterMarkdown ?? renderSections(plan.sections ?? []);
+  const projected = plan.masterMarkdown ? body : `${lifecycleHeader}\n\n${body}`;
+  const masterMarkdown = /(?:^|\n)## [A-Z]\. Subtasks\s*\n[\s\S]*$/m.test(projected)
+    ? projected.replace(/((?:^|\n)## [A-Z]\. Subtasks\s*\n)[\s\S]*$/m, `$1\n${links}\n`)
+    : `${projected.trimEnd()}\n\n---\n\n## ${String.fromCharCode(65 + (plan.sections?.length ?? 25))}. Subtasks\n\n${links}\n`;
+  files.set(masterFile, masterMarkdown);
   master.comment = { ...masterComment, contentFile: masterRef };
   for (const item of created) {
     const contentFile = `.decision-os/cards/${safe(domainId)}/${item.id}.md`;
     cards.push({ id: item.id, title: item.title, cardType: 'note', domainId, status: 'todo', x: baseX + (item.index % 2) * 380, y: baseY + Math.floor(item.index / 2) * 410, w: 340, h: 380, comment: { contentFile }, facts: [], fields: [] });
     relationships.push({ id: item.relationshipId, from: plan.masterCardId, to: item.id, label: 'subtask' });
-    files.set(resolve(input.ledgerJsonFile, '../..', contentFile), item.markdown.trimEnd() + '\n');
+    const subtaskMarkdown = item.markdown ?? renderSections(item.sections ?? []);
+    files.set(resolve(input.ledgerJsonFile, '../..', contentFile), subtaskMarkdown.trimEnd() + '\n');
   }
   const nextLedger = { ...ledger, cards, relationships, annotations };
   const validationLedger = { ...nextLedger, cards: cards.map((card) => {

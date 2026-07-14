@@ -14,6 +14,33 @@ function record(value: unknown): value is JsonObject { return Boolean(value) && 
 function text(value: unknown): string { return typeof value === 'string' ? value : ''; }
 async function read(path: string, fs?: FileSystemPort): Promise<string> { return fs ? fs.readFile(path) : promises.readFile(path, 'utf8'); }
 
+function referencedCardIds(markdown: string): string[] {
+  const ids = new Set<string>();
+  for (const match of markdown.matchAll(/(?:card:|\/cards\/)(card-[a-zA-Z0-9-]+)/g)) ids.add(match[1]);
+  return [...ids];
+}
+
+function compactCard(entry: { metadata: JsonObject; contentFile: string; absoluteContentFile: string; markdown: string }, includeMarkdown = false): JsonObject {
+  const value: JsonObject = {
+    metadata: {
+      id: text(entry.metadata.id),
+      title: text(entry.metadata.title),
+      status: text(entry.metadata.status),
+      domainId: text(entry.metadata.domainId),
+      cardType: text(entry.metadata.cardType),
+    },
+    contentFile: entry.contentFile,
+    run: {
+      runId: text(entry.metadata.codexThreadRunId) || text(entry.metadata.codexPipelineRunId),
+      outputFile: text(entry.metadata.codexThreadRunOutputFile),
+      model: text(entry.metadata.codexRunModel),
+      effort: text(entry.metadata.codexRunEffort),
+    },
+  };
+  if (includeMarkdown) value.markdown = entry.markdown;
+  return value;
+}
+
 function scopeError(ledgerJsonFile: string): Result<never> | null {
   const rootValue = process.env.DECISION_OS_LEDGER_ROOT?.trim();
   if (!rootValue) return null;
@@ -25,7 +52,7 @@ function scopeError(ledgerJsonFile: string): Result<never> | null {
     : null;
 }
 
-export async function resolveSessionContext(input: { ledger: unknown; ledgerJsonFile: string; cardId?: string; fs?: FileSystemPort }): Promise<Result<string>> {
+export async function resolveSessionContext(input: { ledger: unknown; ledgerJsonFile: string; cardId?: string; fs?: FileSystemPort; includeDocuments?: boolean }): Promise<Result<string>> {
   const mismatch = scopeError(input.ledgerJsonFile);
   if (mismatch) return mismatch;
   const context = resolveLedgerCardContext(input);
@@ -56,32 +83,56 @@ export async function resolveSessionContext(input: { ledger: unknown; ledgerJson
     if (!inner || inner.startsWith('..') || isAbsolute(inner)) return { ok: false, error: JSON.stringify({ version: 1, code: 'scope_mismatch' }) };
     try { threadMarkdown = await read(threadFile, input.fs); } catch { return { ok: false, error: JSON.stringify({ version: 1, code: 'invalid_markdown', threadId }) }; }
   }
+  const referencedIds = referencedCardIds(threadMarkdown).filter((id) => id !== input.cardId && !linkedIds.has(id));
+  const referenced: Array<{ metadata: JsonObject; contentFile: string; absoluteContentFile: string; markdown: string }> = [];
+  for (const card of cards.filter((entry) => referencedIds.includes(text(entry.id)))) {
+    const comment = record(card.comment) ? card.comment : {};
+    referenced.push({ metadata: card, contentFile: text(comment.contentFile), absoluteContentFile: '', markdown: '' });
+  }
   const hydrated = { ...input.ledger, cards: selectedCards.map((card) => {
     const entry = selected.find((candidate) => text(candidate.metadata.id) === text(card.id));
     return { ...card, comment: { ...(record(card.comment) ? card.comment : {}), what: entry?.markdown ?? '' } };
   }) };
   const validation = validateMasterTasks(hydrated, input.cardId);
+  const target = selected.find((entry) => text(entry.metadata.id) === input.cardId);
+  const linked = selected.filter((entry) => text(entry.metadata.id) !== input.cardId);
+  const includeDocuments = input.includeDocuments === true;
   return { ok: true, value: JSON.stringify({
-    version: 1,
+    version: 2,
     projectId: process.env.DECISION_OS_PROJECT_ID ?? '',
     ledgerFile: resolve(input.ledgerJsonFile),
     decisionOsRoot: process.env.DECISION_OS_LEDGER_ROOT ?? '',
     serverUrl: process.env.DECISION_OS_SERVER_URL ?? '',
-    card: selected.find((entry) => text(entry.metadata.id) === input.cardId),
+    card: target ? (includeDocuments ? target : compactCard(target, true)) : null,
     run: (() => {
-      const target = selected.find((entry) => text(entry.metadata.id) === input.cardId)?.metadata ?? {};
-      return { runId: text(target.codexThreadRunId) || text(target.codexPipelineRunId), outputFile: text(target.codexThreadRunOutputFile), model: text(target.codexRunModel), effort: text(target.codexRunEffort) };
+      const metadata = target?.metadata ?? {};
+      return { runId: text(metadata.codexThreadRunId) || text(metadata.codexPipelineRunId), outputFile: text(metadata.codexThreadRunOutputFile), model: text(metadata.codexRunModel), effort: text(metadata.codexRunEffort) };
     })(),
-    thread: { id: threadId, contentFile: threadRef, absoluteContentFile: threadFile, markdown: threadMarkdown },
+    thread: includeDocuments ? { id: threadId, contentFile: threadRef, absoluteContentFile: threadFile, markdown: threadMarkdown } : { id: threadId, contentFile: threadRef },
     zone: context.value.zone,
     relationships: context.value.relationships,
-    linkedCards: selected.filter((entry) => text(entry.metadata.id) !== input.cardId),
+    linkedCards: includeDocuments ? linked : linked.map((entry) => compactCard(entry)),
+    referencedCards: referenced.map((entry) => compactCard(entry)),
     validation,
+    actions: {
+      masterTaskApply: {
+        command: 'ledger-cli master-task-apply --ledger "$DECISION_OS_LEDGER_FILE" --plan-stdin',
+        input: {
+          masterCardId: input.cardId,
+          title: 'string',
+          zoneTitle: 'string',
+          sections: [{ title: 'string', markdown: 'string' }],
+          subtasks: [{ title: 'string', sections: [{ title: 'string', markdown: 'string' }] }],
+        },
+        preserved: ['lifecycleHeader', 'timestamps', 'geometry'],
+        generated: ['cardIds', 'relationshipIds', 'subtaskLinks'],
+      },
+    },
   }, null, 2) };
 }
 
 export async function resolveMasterTaskGate(input: { ledger: unknown; ledgerJsonFile: string; cardId?: string; fs?: FileSystemPort }): Promise<Result<string>> {
-  const context = await resolveSessionContext(input);
+  const context = await resolveSessionContext({ ...input, includeDocuments: true });
   if (!context.ok) return context;
   const value = JSON.parse(context.value) as JsonObject;
   const linkedCards = Array.isArray(value.linkedCards) ? value.linkedCards.filter(record) : [];

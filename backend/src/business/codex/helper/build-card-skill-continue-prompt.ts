@@ -12,6 +12,7 @@ type NewSessionContext = {
   cardTitle: string;
   outputFile: string;
   outputMarkdown: string;
+  context: AnyRecord;
 };
 
 function noteRole(note: AnyRecord): string {
@@ -42,32 +43,14 @@ export function buildCardSkillContinuePrompt(input: { messages: AnyRecord[]; new
     const context = input.newSessionContext;
     return [
       'Start a new Codex session for an existing decision-os run.',
-      'ledger-cli is on PATH; use $DECISION_OS_LEDGER_FILE and do not locate the CLI.',
-      'The previous Codex session is intentionally unavailable. Reconstruct context from the durable workspace state below.',
+      'The previous Codex session is unavailable. Continue from the current Decision OS context below.',
       '',
-      'Scope:',
-      `Workspace root: ${context.workspaceRoot}`,
-      `Ledger file: ${context.ledgerFile}`,
-      `Codex run id: ${context.runId}`,
-      `Output card id: ${context.cardId}`,
-      `Output card title: ${context.cardTitle}`,
-      `Output markdown file: ${context.outputFile}`,
-      '',
-      'Rules:',
-      '1. Read the output markdown and inspect the linked source card in the ledger before acting.',
-      '2. Treat the newer thread messages below as the operator request for this turn.',
-      '3. Apply requested repo edits and update the output markdown with the useful final result.',
-      '4. Do not edit ledger JSON manually.',
-      '5. Keep unrelated files unchanged.',
-      '6. Use English only.',
-      '',
-      'Current output markdown:',
-      '```markdown',
-      context.outputMarkdown,
+      'Decision OS context:',
+      '```json',
+      JSON.stringify(context.context, null, 2),
       '```',
       '',
-      'Newer thread messages:',
-      messages,
+      'Use ledger-cli for ledger writes and persist the final thread reply with `answer --message-stdin`.',
     ].join('\n');
   }
   return [

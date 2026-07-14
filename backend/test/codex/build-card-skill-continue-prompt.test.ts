@@ -23,12 +23,14 @@ test('buildCardSkillContinuePrompt reconstructs durable context for a new sessio
       cardTitle: 'Existing result',
       outputFile: '/workspace/.decision-os/cards/specs/result.md',
       outputMarkdown: '# Existing result\n',
+      context: { version: 2, card: { id: 'card-codex-skill-1-test', markdown: '# Existing result\n' }, thread: { markdown: '# OPERATOR\n\nApply the requested change.' } },
     },
   });
 
   assert.match(prompt, /^Start a new Codex session for an existing decision-os run\./);
-  assert.match(prompt, /The previous Codex session is intentionally unavailable/);
-  assert.match(prompt, /Output markdown file: \/workspace\/\.decision-os\/cards\/specs\/result\.md/);
+  assert.match(prompt, /The previous Codex session is unavailable/);
+  assert.match(prompt, /Decision OS context:/);
   assert.match(prompt, /# Existing result/);
   assert.match(prompt, /Apply the requested change\./);
+  assert.doesNotMatch(prompt, /session-context|do not|never|locate the CLI/i);
 });

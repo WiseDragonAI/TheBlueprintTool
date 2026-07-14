@@ -11,6 +11,7 @@ import { manageAssetsController } from '../../assets/controller/manage-assets.js
 import { manageDecisionOsMigrationController } from '../../migration/controller/manage-decision-os-migration.js';
 import { applyMasterTaskPlan } from '../../ledger/helper/apply-master-task-plan.js';
 import { auditCodexRuns } from '../../ledger/helper/audit-codex-runs.js';
+import { resolveCodexRunEvents } from '../../ledger/helper/resolve-codex-run-events.js';
 import { synchronizeServerSkillController } from '../../skills/controller/synchronize-server-skill.js';
 
 export async function dispatchLedgerCliCommandController(
@@ -68,6 +69,14 @@ export async function dispatchLedgerCliCommandController(
 
   if (command.mode === 'codex-run-audit') {
     const result = auditCodexRuns(command.runAuditOperation ?? { count: 10, exclusions: [] });
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+
+  if (command.mode === 'codex-run-events') {
+    const operation = command.runEventsOperation;
+    if (!operation?.runId || !operation.itemType) return { ok: false, error: 'codex-run-events requires --run-id and --item-type.' };
+    const result = resolveCodexRunEvents(operation);
     if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
     return result;
   }

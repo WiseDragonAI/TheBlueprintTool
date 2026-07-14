@@ -12,6 +12,7 @@ import { flushCardSkillRunEventIngestor } from '../effect/flush-card-skill-run-e
 import { createCardSkillRunEventIngestor } from '../effect/ingest-card-skill-run-events.js';
 import { prepareCardSkillRunEventAppend } from '../effect/prepare-card-skill-run-event-append.js';
 import { buildCardSkillContinuePrompt } from '../helper/build-card-skill-continue-prompt.js';
+import { buildCardLaunchContext } from '../helper/build-card-launch-context.js';
 import { codexRunSegmentMarker } from '../helper/codex-run-segment-marker.js';
 import { resolveCardSkillRunOwnership } from '../helper/resolve-card-skill-run-ownership.js';
 import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand, resolveCodexResumeCommand } from '../helper/resolve-codex-command.js';
@@ -190,7 +191,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     return fail(404, 'Run not found on card.', { cardId });
   }
   const continuation = threadMessagesAfterLastCodexEvent({ ledger, decisionOsRoot, cardId, runId, traceId });
-  const interrupted = status.status === 'running' || status.status === 'unknown';
+  const interrupted = status.status === 'running' || status.status === 'pending' || status.status === 'unknown';
   const messages = continuation.messages.length > 0
     ? continuation.messages
     : interrupted
@@ -226,6 +227,15 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       cardTitle: String(card?.title ?? cardId),
       outputFile,
       outputMarkdown: readFileSync(outputFile, 'utf8'),
+      context: buildCardLaunchContext({
+        projectId: String(runtime.projectId ?? ''),
+        ledgerId,
+        cardId,
+        threadId: `thread-${cardId}`,
+        ledger,
+        cardMarkdown: readFileSync(outputFile, 'utf8'),
+        threadMarkdown: messages.map((message) => `# ${String(message.role ?? '').toLowerCase() === 'agent' ? 'AGENT' : 'OPERATOR'}\n\n${String(message.message ?? message.body ?? '')}`).join('\n\n'),
+      }),
     } : undefined,
   });
   if (!queueDispatch) {
@@ -260,7 +270,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   });
   const stdout = createWriteStream(stdoutFile, { flags: 'a' });
   const stderr = createWriteStream(stderrFile, { flags: 'a' });
-  const runEventIngestor = createCardSkillRunEventIngestor({ decisionOsRoot, ledgerPath, cardId, runId, startLine: eventStartLine, telemetryFile: `${stdoutFile}.telemetry.jsonl` });
+  const runEventIngestor = createCardSkillRunEventIngestor({ decisionOsRoot, ledgerPath, cardId, runId, startLine: eventStartLine, telemetryFile: `${stdoutFile}.telemetry.jsonl`, projectId: String(runtime.projectId ?? '') });
   const continuedAt = new Date().toISOString();
   appendFileSync(stderrFile, codexRunSegmentMarker({
     runId,

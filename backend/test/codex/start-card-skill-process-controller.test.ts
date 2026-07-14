@@ -417,7 +417,7 @@ test('thread codex process route anchors the run widget on the source card and s
     const developerInstructions = JSON.parse(developerArgument.slice('developer_instructions='.length)) as string;
     assert.match(developerInstructions, /^Decision OS card run:/);
     assert.match(developerInstructions, /Ledger writes use ledger-cli/);
-    assert.match(developerInstructions, /session-context/);
+    assert.doesNotMatch(developerInstructions, /session-context/);
     assert.match(developerInstructions, /--message-stdin/);
     assert.ok(developerInstructions.length < 800);
     assert.doesNotMatch(developerInstructions, /Please update this exact card|Codex internal output|Existing card body/);
@@ -439,13 +439,17 @@ test('thread codex process route anchors the run widget on the source card and s
 
     await waitForText(body.run.outputFile, 'scoped');
     await waitForText(body.run.outputFile, 'Codex run completed');
-    await waitForText(`${body.run.stdoutFile}.telemetry.jsonl`, '"callId":"tool-1"');
+    await waitForText(`${body.run.stdoutFile}.telemetry.jsonl`, 'tool-1"');
     const telemetryRow = JSON.parse(readFileSync(`${body.run.stdoutFile}.telemetry.jsonl`, 'utf8').trim().split('\n')[0]);
     assert.equal(typeof telemetryRow.startedAt, 'string');
     assert.equal(typeof telemetryRow.completedAt, 'string');
     assert.equal(typeof telemetryRow.durationMs, 'number');
     assert.equal(telemetryRow.success, true);
     assert.equal(telemetryRow.runId, body.run.id);
+    assert.equal(typeof telemetryRow.projectId, 'string');
+    assert.ok(telemetryRow.projectId.length > 0);
+    assert.equal(telemetryRow.tool, 'shell');
+    assert.match(telemetryRow.callId, /tool-1$/);
     const ledgerPath = join(workspace, '.decision-os', 'specs.json');
     const threadPath = join(workspace, '.decision-os', 'threads', 'specs', 'thread-card-a.md');
     await waitForText(threadPath, 'Scoped final answer.');
@@ -914,7 +918,9 @@ test('card skill run continue route resumes the captured session with post-end t
     assert.equal(freshBody.run.resumeSessionId, '');
     await waitForText(inputFile, 'Start a new Codex session for an existing decision-os run.');
     const freshInput = readFileSync(inputFile, 'utf8');
-    assert.match(freshInput, /The previous Codex session is intentionally unavailable/);
+    assert.match(freshInput, /The previous Codex session is unavailable/);
+    assert.match(freshInput, /Decision OS context:/);
+    assert.doesNotMatch(freshInput, /session-context|locate the CLI/i);
     assert.match(freshInput, /Start without the previous session context\./);
     assert.match(freshInput, /# Finished Skill Result/);
     const freshArgs = JSON.parse(readFileSync(argvFile, 'utf8')) as string[];
