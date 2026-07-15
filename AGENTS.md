@@ -234,7 +234,7 @@ node bin/decision-os-workload-status.mjs
 - Full suite once after implementation and focused tests pass.
 - Failure: rerun smallest failing scope.
 - Passing check: do not repeat after docs-only edits.
-- Keep project default test concurrency.
+- On mobile, test and typecheck commands must use no more than `3`-way parallelism.
 
 ## Card Image Assets
 
