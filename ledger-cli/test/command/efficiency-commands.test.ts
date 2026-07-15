@@ -77,22 +77,25 @@ test('master-task apply preserves lifecycle metadata, generates ids, and persist
   }
 });
 
-test('execution profile exposes admission and focused verification commands without a concurrency override', async () => {
+test('execution profile puts verification behind the lease without a concurrency override', async () => {
   const { decisionOs, ledger } = fixture();
-  const backendModules = join(decisionOs, '..', 'backend', 'node_modules');
-  const backendTsx = join(backendModules, 'tsx', 'dist', 'esm');
-  mkdirSync(backendTsx, { recursive: true });
-  writeFileSync(join(backendTsx, 'index.mjs'), '');
+  const workspace = join(decisionOs, '..');
+  const backendModules = join(workspace, 'backend', 'node_modules');
+  mkdirSync(join(backendModules, 'tsx', 'dist', 'esm'), { recursive: true });
+  mkdirSync(join(backendModules, '.bin'), { recursive: true });
+  writeFileSync(join(backendModules, 'tsx', 'dist', 'esm', 'index.mjs'), '');
+  writeFileSync(join(backendModules, '.bin', 'tsc'), '');
   const previousRoot = process.env.DECISION_OS_LEDGER_ROOT;
   process.env.DECISION_OS_LEDGER_ROOT = decisionOs;
   try {
     const result = await manageLedgerJsonController({ ledgerCommand: 'execution-profile', ledgerJsonFile: ledger });
     assert.equal(result.ok, true);
     if (result.ok) {
-      const value = JSON.parse(String(result.value));
-      assert.equal(value.commands.admission, 'node bin/decision-os-workload-status.mjs');
-      assert.equal(value.commands.focusedTests.length, 2);
-      assert.equal(value.commands.focusedTests.every((command: string) => !command.includes('test-concurrency')), true);
+      const profile = JSON.parse(String(result.value));
+      assert.equal(profile.commands.verificationLease, 'node bin/decision-os-verify.mjs -- <command> [args...]');
+      assert.ok(profile.commands.typechecks.every((command: string) => command.includes('decision-os-verify.mjs')));
+      assert.ok(profile.commands.focusedTests.every((command: string) => command.includes('decision-os-verify.mjs')));
+      assert.ok(profile.commands.focusedTests.every((command: string) => !command.includes('test-concurrency')));
     }
   } finally {
     if (previousRoot === undefined) delete process.env.DECISION_OS_LEDGER_ROOT; else process.env.DECISION_OS_LEDGER_ROOT = previousRoot;

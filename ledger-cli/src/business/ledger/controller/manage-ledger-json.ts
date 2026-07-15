@@ -257,16 +257,18 @@ export async function manageLedgerJsonController(
     const backendTsc = resolve(workspaceRoot, 'backend', 'node_modules', '.bin', 'tsc');
     const frontendTsc = resolve(workspaceRoot, 'frontend', 'node_modules', '.bin', 'tsc');
     const ledgerTsc = resolve(workspaceRoot, 'ledger-cli', 'node_modules', '.bin', 'tsc');
+    const verificationLease = `node ${shellQuote(resolve(workspaceRoot, 'bin', 'decision-os-verify.mjs'))} --`;
+    const leased = (command: string): string => command ? `${verificationLease} ${command}` : '';
     const packageRoots = ['backend', 'frontend', 'ledger-cli'].map((name) => resolve(workspaceRoot, name)).filter((root) => existsSync(resolve(root, 'package-lock.json')));
     const bootstrap = packageRoots.filter((root) => !existsSync(resolve(root, 'node_modules'))).map((root) => `npm ci --ignore-scripts --prefix ${shellQuote(root)}`);
     const typechecks = [
-      existsSync(backendTsc) ? `${shellQuote(backendTsc)} -p ${shellQuote(resolve(workspaceRoot, 'backend', 'tsconfig.json'))} --noEmit` : '',
-      existsSync(frontendTsc) ? `${shellQuote(frontendTsc)} -p ${shellQuote(resolve(workspaceRoot, 'frontend', 'tsconfig.json'))} --noEmit` : '',
-      existsSync(ledgerTsc) ? `${shellQuote(ledgerTsc)} -p ${shellQuote(resolve(workspaceRoot, 'ledger-cli', 'tsconfig.json'))} --noEmit` : '',
+      existsSync(backendTsc) ? leased(`${shellQuote(backendTsc)} -p ${shellQuote(resolve(workspaceRoot, 'backend', 'tsconfig.json'))} --noEmit`) : '',
+      existsSync(frontendTsc) ? leased(`${shellQuote(frontendTsc)} -p ${shellQuote(resolve(workspaceRoot, 'frontend', 'tsconfig.json'))} --noEmit`) : '',
+      existsSync(ledgerTsc) ? leased(`${shellQuote(ledgerTsc)} -p ${shellQuote(resolve(workspaceRoot, 'ledger-cli', 'tsconfig.json'))} --noEmit`) : '',
     ].filter(Boolean);
     const focusedTests = [
-      existsSync(backendTsx) ? `env TSX_TSCONFIG_PATH=${shellQuote(resolve(workspaceRoot, 'backend', 'tsconfig.json'))} node --test --import ${shellQuote(backendTsx)} <backend-test-file>` : '',
-      existsSync(backendTsx) ? `env TSX_TSCONFIG_PATH=${shellQuote(resolve(workspaceRoot, 'ledger-cli', 'tsconfig.json'))} node --test --import ${shellQuote(backendTsx)} <ledger-cli-test-file>` : '',
+      existsSync(backendTsx) ? leased(`env TSX_TSCONFIG_PATH=${shellQuote(resolve(workspaceRoot, 'backend', 'tsconfig.json'))} node --test --import ${shellQuote(backendTsx)} <backend-test-file>`) : '',
+      existsSync(backendTsx) ? leased(`env TSX_TSCONFIG_PATH=${shellQuote(resolve(workspaceRoot, 'ledger-cli', 'tsconfig.json'))} node --test --import ${shellQuote(backendTsx)} <ledger-cli-test-file>`) : '',
     ].filter(Boolean);
     const executable = (file: string): boolean => { try { accessSync(file, constants.X_OK); return true; } catch { return false; } };
     const serverLauncher = resolve(workspaceRoot, 'bin', 'decision-os-server.mjs');
@@ -280,7 +282,7 @@ export async function manageLedgerJsonController(
       packageManager: 'npm',
       scripts,
       commands: {
-        admission: 'node bin/decision-os-workload-status.mjs',
+        verificationLease: 'node bin/decision-os-verify.mjs -- <command> [args...]',
         install: 'npm install',
         typechecks,
         focusedTests,

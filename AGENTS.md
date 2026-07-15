@@ -220,15 +220,15 @@ GIT_SSH_COMMAND='ssh -i ~/.ssh/id_jb_wise -o IdentitiesOnly=yes' git push
 
 ## Test Admission
 
-Before typecheck or test suite:
+Run every test and typecheck through the repository-wide lease:
 
 ```bash
-node bin/decision-os-workload-status.mjs
+node bin/decision-os-verify.mjs -- <command> [args...]
 ```
 
-- `GO`: start verification.
-- `WAIT`: `sleep 5`; retry check. Do not start verification.
-- No lock. Simultaneous `GO` remains possible.
+- The command waits when another Decision OS verification owns the lease.
+- Pass one direct test or typecheck command. Shell wrappers are rejected.
+- `node bin/decision-os-workload-status.mjs` remains a read-only diagnostic.
 
 ## Verification Hygiene
 
