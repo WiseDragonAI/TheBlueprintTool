@@ -15,7 +15,7 @@ import {
 import { runningCodexProcessCount, unifiedCodexQueuePosition } from '../../src/business/codex/helper/codex-process-scheduler.js';
 import { maxConcurrentCodexProcesses } from '../../src/business/codex/helper/codex-pipeline-runner.js';
 
-test('persists mixed Codex work in FIFO order and never requeues an interrupted claim', () => {
+test('persists mixed Codex work in FIFO order and recovers a claimed thread as a continuation', () => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-process-queue-'));
   try {
     enqueueCodexThreadProcess({ decisionOsRoot: root, id: 'thread-a', createdAt: '2026-07-14T10:00:00.000Z', payload: { cardId: 'a' } });
@@ -26,14 +26,19 @@ test('persists mixed Codex work in FIFO order and never requeues an interrupted 
     assert.equal(codexProcessQueuePosition(root, 'continue-b'), 1);
     recoverCodexProcessQueue(root);
     const recovered = readCodexProcessQueue(root);
-    assert.deepEqual(recovered.map((item) => [item.id, item.status]), [['thread-a', 'interrupted'], ['continue-b', 'pending']]);
-    assert.equal(recovered[0].startedAt !== null, true);
-    assert.equal(recovered[0].interruptedAt !== null, true);
-    assert.match(recovered[0].interruptionReason, /server restarted/i);
-    assert.equal(codexProcessQueuePosition(root, 'thread-a'), null);
-    const interruptedAt = recovered[0].interruptedAt;
+    assert.deepEqual(recovered.map((item) => [item.id, item.kind, item.status]), [['thread-a', 'continuation', 'pending'], ['continue-b', 'continuation', 'pending']]);
+    assert.equal(recovered[0].startedAt, null);
+    assert.equal(recovered[0].interruptedAt, null);
+    assert.equal(recovered[0].interruptionReason, '');
+    assert.deepEqual(recovered[0].payload, {
+      cardId: 'a',
+      runId: 'thread-a',
+      newSession: false,
+      restartRecovery: true,
+    });
+    assert.equal(codexProcessQueuePosition(root, 'thread-a'), 1);
     recoverCodexProcessQueue(root);
-    assert.equal(readCodexProcessQueue(root)[0].interruptedAt, interruptedAt);
+    assert.equal(readCodexProcessQueue(root)[0].status, 'pending');
     removeCodexProcessQueueItem(root, 'thread-a');
     assert.deepEqual(readCodexProcessQueue(root).map((item) => item.id), ['continue-b']);
     assert.equal(JSON.parse(readFileSync(resolve(root, 'codex-process-queue.json'), 'utf8')).version, 1);
@@ -53,4 +58,25 @@ test('uses server-wide capacity, running count, and queue position callbacks', (
   assert.equal(maxConcurrentCodexProcesses(runtime), 5);
   assert.equal(runningCodexProcessCount(runtime), 4);
   assert.equal(unifiedCodexQueuePosition({ decisionOsRoot: '/unused', id: 'queued', createdAt: '', runtime }), 3);
+});
+
+test('recovers a claimed continuation without changing its durable run identity', () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-continuation-recovery-'));
+  try {
+    enqueueCodexContinuation({
+      decisionOsRoot: root,
+      id: 'continuation-a',
+      createdAt: '2026-07-15T07:00:00.000Z',
+      payload: { ledgerId: 'specs', cardId: 'card-a', runId: 'run-a', newSession: false },
+    });
+    assert.equal(markCodexProcessQueueItemRunning(root, 'continuation-a')?.status, 'running');
+    recoverCodexProcessQueue(root);
+    const [recovered] = readCodexProcessQueue(root);
+    assert.equal(recovered.status, 'pending');
+    assert.equal(recovered.kind, 'continuation');
+    assert.equal(recovered.payload.runId, 'run-a');
+    assert.equal(recovered.payload.restartRecovery, true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
