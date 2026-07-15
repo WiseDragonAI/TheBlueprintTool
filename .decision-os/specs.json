@@ -6102,7 +6102,7 @@
       "title": "Explore Decision OS Logo Directions",
       "cardType": "note",
       "domainId": "specs",
-      "status": "delayed",
+      "status": "backlog",
       "x": -10402,
       "y": 27888,
       "w": 360,
@@ -6672,7 +6672,7 @@
       "title": "Understand Codex Plugins",
       "cardType": "note",
       "domainId": "specs",
-      "status": "delayed",
+      "status": "backlog",
       "x": -10402,
       "y": 38088,
       "w": 360,
@@ -7241,7 +7241,7 @@
     },
     {
       "id": "card-e9143c38-c0e1-456d-8ae6-47015de3950d",
-      "title": "Replace hydrated ledger transport with scoped read models",
+      "title": "Scope hydrated ledger transport",
       "cardType": "note",
       "domainId": "specs",
       "status": "todo",
@@ -8196,7 +8196,7 @@
       "title": "Study Mobile–Desktop Stream Relay",
       "cardType": "note",
       "domainId": "specs",
-      "status": "delayed",
+      "status": "backlog",
       "x": -10402,
       "y": 68688,
       "w": 360,
@@ -8852,7 +8852,6 @@
       },
       "facts": [],
       "fields": [],
-      "codexActiveRunId": "codex-skill-1784044515026-40645883",
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
       "codexThreadRunId": "codex-skill-1784044515026-40645883",
@@ -8888,7 +8887,7 @@
     },
     {
       "id": "card-dd46e795-69dc-4f6d-a962-eda9ca552c09",
-      "title": "Harden retrospective skill authorization and closeout contract",
+      "title": "Approve retrospective and atomic closeout skill draft",
       "cardType": "note",
       "domainId": "specs",
       "status": "todo",
@@ -8968,7 +8967,7 @@
     },
     {
       "id": "card-1d402e0e-4906-4b81-b6b4-25d68220347f",
-      "title": "Determine whether server restart terminates headless Codex runs",
+      "title": "Prevent Codex relaunch after server restart",
       "cardType": "note",
       "domainId": "specs",
       "status": "todo",
@@ -8989,7 +8988,7 @@
     },
     {
       "id": "card-06fa34b2-e93b-4569-bafa-26edf458b47c",
-      "title": "Design restart-safe Codex process ownership",
+      "title": "Prevent Codex relaunch after server restart",
       "cardType": "note",
       "domainId": "specs",
       "status": "done",
@@ -9157,7 +9156,7 @@
       "title": "Use current run timing in Control Room tasks",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10012,
       "y": 80928,
       "w": 340,
@@ -9173,13 +9172,257 @@
       "title": "Verify active timer alignment",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -9632,
       "y": 80928,
       "w": 340,
       "h": 380,
       "comment": {
         "contentFile": ".decision-os/cards/specs/card-f6ee6c08-b3e3-4dd7-99ee-6ac4f70cb6cc.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-1e597b5f-2ad9-4370-98f8-2c2ec78218ca",
+      "title": "Fix stale Codex run settlement and client refresh",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10402,
+      "y": 81948,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-1e597b5f-2ad9-4370-98f8-2c2ec78218ca.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784055213878-78bdd3de",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784055213878-78bdd3de",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784055213878-78bdd3de.md"
+    },
+    {
+      "id": "card-cd909ba1-5429-4be6-9a10-ce234a9799c9",
+      "title": "Trace referenced Codex run settlement state",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10012,
+      "y": 81948,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-cd909ba1-5429-4be6-9a10-ce234a9799c9.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-f04421b9-5e04-4b5f-a0d0-0f54395a198b",
+      "title": "Explain client refresh and classify the defect",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9632,
+      "y": 81948,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-f04421b9-5e04-4b5f-a0d0-0f54395a198b.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-7320bbfc-299a-4d35-8fc6-e926eaf43eb3",
+      "title": "Reconcile terminal Codex events with hung wrappers",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10012,
+      "y": 81948,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-7320bbfc-299a-4d35-8fc6-e926eaf43eb3.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-24108c2d-e4e6-44c2-89ce-3d37f9f58788",
+      "title": "Publish ordinary thread settlement refresh events",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9632,
+      "y": 81948,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-24108c2d-e4e6-44c2-89ce-3d37f9f58788.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-85e19584-9173-4380-85e2-34c02e41e31f",
+      "title": "SKILL.md — retrospect-and-close-task",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10012,
+      "y": 77248,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-85e19584-9173-4380-85e2-34c02e41e31f.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784057533013-dafbf871",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784057533013-dafbf871",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784057533013-dafbf871.md"
+    },
+    {
+      "id": "card-0cf226d4-e34c-46a6-9608-dc4f3561420a",
+      "title": "Streamline skill project identity and master completion",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10402,
+      "y": 82968,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-0cf226d4-e34c-46a6-9608-dc4f3561420a.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784093378439-398e5b67",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784093378439-398e5b67",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784093378439-398e5b67.md"
+    },
+    {
+      "id": "card-e8c278f2-eafa-4a2f-99f2-97449ca533cd",
+      "title": "Inject project ID into skill-run prompts",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10012,
+      "y": 82968,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-e8c278f2-eafa-4a2f-99f2-97449ca533cd.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-f5475b37-55ba-4249-8bf9-1473fece9c28",
+      "title": "Add one-command atomic master completion",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -9632,
+      "y": 82968,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-f5475b37-55ba-4249-8bf9-1473fece9c28.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-46dfc2e7-3833-42ba-8b13-1a75f99776e2",
+      "title": "Implement project-scoped retrospective completion CLI",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "x": -10012,
+      "y": 76848,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-46dfc2e7-3833-42ba-8b13-1a75f99776e2.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-b85c6294-593d-4870-8c6e-ec559386df3c",
+      "title": "Recover queued Codex runs after server restart",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10402,
+      "y": 83988,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-b85c6294-593d-4870-8c6e-ec559386df3c.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784099340376-9875925e",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784099340376-9875925e",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784099340376-9875925e.md"
+    },
+    {
+      "id": "card-bbba9c8c-a7b5-4316-9dad-697808154491",
+      "title": "Trace startup queue recovery and capture the root cause",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10012,
+      "y": 83988,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-bbba9c8c-a7b5-4316-9dad-697808154491.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-4c37f170-35b2-49cd-9b54-b4c5cb1faa1c",
+      "title": "Implement automatic draining of recovered Codex queue items",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -9632,
+      "y": 83988,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-4c37f170-35b2-49cd-9b54-b4c5cb1faa1c.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-7dad8c3e-9bdd-4ee4-89c4-1799151ca22d",
+      "title": "Verify restart recovery and integrate the fix",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10012,
+      "y": 84398,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-7dad8c3e-9bdd-4ee4-89c4-1799151ca22d.md"
       },
       "facts": [],
       "fields": []
@@ -9748,6 +9991,96 @@
       "id": "rel-f414bc18-340f-4d24-a37c-a0063d069217",
       "from": "card-d18c1157-d5cd-4a53-b743-9a6aa278dbd3",
       "to": "card-f6ee6c08-b3e3-4dd7-99ee-6ac4f70cb6cc",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-3bd94201-2a2b-41a7-8719-292de3519c5d",
+      "from": "card-1e597b5f-2ad9-4370-98f8-2c2ec78218ca",
+      "to": "card-cd909ba1-5429-4be6-9a10-ce234a9799c9",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-6f5f292c-b8fb-49f4-a2e9-b199259d2918",
+      "from": "card-1e597b5f-2ad9-4370-98f8-2c2ec78218ca",
+      "to": "card-f04421b9-5e04-4b5f-a0d0-0f54395a198b",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-50722497-ed0d-4b7f-8192-929359849e13",
+      "from": "card-1e597b5f-2ad9-4370-98f8-2c2ec78218ca",
+      "to": "card-7320bbfc-299a-4d35-8fc6-e926eaf43eb3",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-625fc5f0-abc9-4fe0-a6b1-9a7ce0d890d4",
+      "from": "card-1e597b5f-2ad9-4370-98f8-2c2ec78218ca",
+      "to": "card-24108c2d-e4e6-44c2-89ce-3d37f9f58788",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-780f16b7-28ca-472e-beb6-fe51dc5d4cce",
+      "from": "card-2164c008-359f-40ac-8abf-505ee5b5fe38",
+      "to": "card-21104e8d-ab8b-41dd-ac47-a8f475b128e3",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-7b3f4b4f-da2c-45ed-9011-c0b7403a80f1",
+      "from": "card-2164c008-359f-40ac-8abf-505ee5b5fe38",
+      "to": "card-55fd1779-4267-4c63-914f-24ccb44ead8f",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-380a0952-421a-4075-ad6e-edc5d843f6ee",
+      "from": "card-2164c008-359f-40ac-8abf-505ee5b5fe38",
+      "to": "card-c9c354ca-59a7-4086-81d2-ef61e85104fb",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-4fd13d7f-b5f5-4803-b4c5-1882d303a420",
+      "from": "card-2164c008-359f-40ac-8abf-505ee5b5fe38",
+      "to": "card-e9143c38-c0e1-456d-8ae6-47015de3950d",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-8948fbc4-4c2b-4185-a78c-cf746d0246a7",
+      "from": "card-7d2090c9-0a50-4e6d-a164-2dee515e4a55",
+      "to": "card-85e19584-9173-4380-85e2-34c02e41e31f",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-da583008-b92d-4d30-a35a-e71856cdbfee",
+      "from": "card-0cf226d4-e34c-46a6-9608-dc4f3561420a",
+      "to": "card-e8c278f2-eafa-4a2f-99f2-97449ca533cd",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-9c62f916-de23-4b12-b462-b27c487c9d4a",
+      "from": "card-0cf226d4-e34c-46a6-9608-dc4f3561420a",
+      "to": "card-f5475b37-55ba-4249-8bf9-1473fece9c28",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-f0475072-3100-4858-97ce-ccd1eefaefd4",
+      "from": "card-7d2090c9-0a50-4e6d-a164-2dee515e4a55",
+      "to": "card-46dfc2e7-3833-42ba-8b13-1a75f99776e2",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-c38ddc6f-5f7f-4ae4-8ac0-19830ad0c2cd",
+      "from": "card-b85c6294-593d-4870-8c6e-ec559386df3c",
+      "to": "card-bbba9c8c-a7b5-4316-9dad-697808154491",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-acebd4be-113d-4186-bd2e-11983bee506d",
+      "from": "card-b85c6294-593d-4870-8c6e-ec559386df3c",
+      "to": "card-4c37f170-35b2-49cd-9b54-b4c5cb1faa1c",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-18e7b186-33d6-4e16-b771-a3ac45652245",
+      "from": "card-b85c6294-593d-4870-8c6e-ec559386df3c",
+      "to": "card-7dad8c3e-9bdd-4ee4-89c4-1799151ca22d",
       "label": "subtask"
     }
   ],
@@ -10697,6 +11030,36 @@
       "color": "#5d5bcf",
       "label": "Current-run timer alignment",
       "comments": []
+    },
+    {
+      "id": "zone-46806be8-73c6-4f08-bc21-83d85b436bbd",
+      "x": -10462,
+      "y": 81888,
+      "width": 1200,
+      "height": 900,
+      "color": "#5d5bcf",
+      "label": "Codex Run Settlement Fix",
+      "comments": []
+    },
+    {
+      "id": "zone-43e23234-ba67-410e-8dd5-0e685b5c1d29",
+      "x": -10462,
+      "y": 82908,
+      "width": 1200,
+      "height": 900,
+      "color": "#5d5bcf",
+      "label": "Skill runtime identity and closeout",
+      "comments": []
+    },
+    {
+      "id": "zone-d4dbb52f-1859-4c16-9fe8-4a2104875187",
+      "x": -10462,
+      "y": 83928,
+      "width": 1200,
+      "height": 900,
+      "color": "#4846bd",
+      "label": "Codex restart queue recovery",
+      "comments": []
     }
   ],
   "notes": {},
@@ -10792,7 +11155,11 @@
     "thread-card-codex-skill-1784046263126-8dea61f9": ".decision-os/threads/specs/thread-card-codex-skill-1784046263126-8dea61f9.md",
     "thread-card-codex-skill-1784047137979-57bc97d8": ".decision-os/threads/specs/thread-card-codex-skill-1784047137979-57bc97d8.md",
     "thread-card-codex-skill-1784047681152-4f93da75": ".decision-os/threads/specs/thread-card-codex-skill-1784047681152-4f93da75.md",
-    "thread-card-d18c1157-d5cd-4a53-b743-9a6aa278dbd3": ".decision-os/threads/specs/thread-card-d18c1157-d5cd-4a53-b743-9a6aa278dbd3.md"
+    "thread-card-d18c1157-d5cd-4a53-b743-9a6aa278dbd3": ".decision-os/threads/specs/thread-card-d18c1157-d5cd-4a53-b743-9a6aa278dbd3.md",
+    "thread-card-1e597b5f-2ad9-4370-98f8-2c2ec78218ca": ".decision-os/threads/specs/thread-card-1e597b5f-2ad9-4370-98f8-2c2ec78218ca.md",
+    "thread-card-85e19584-9173-4380-85e2-34c02e41e31f": ".decision-os/threads/specs/thread-card-85e19584-9173-4380-85e2-34c02e41e31f.md",
+    "thread-card-0cf226d4-e34c-46a6-9608-dc4f3561420a": ".decision-os/threads/specs/thread-card-0cf226d4-e34c-46a6-9608-dc4f3561420a.md",
+    "thread-card-b85c6294-593d-4870-8c6e-ec559386df3c": ".decision-os/threads/specs/thread-card-b85c6294-593d-4870-8c6e-ec559386df3c.md"
   },
   "deletedNoteIds": {
     "thread-card-7074d33a-39da-42a1-b470-673cbe221def": [
@@ -10800,6 +11167,13 @@
     ],
     "thread-card-89546a8b-0056-4957-892e-e82acaf94cbf": [
       "note-1784014844499-e771a056471ff8"
+    ],
+    "thread-card-2164c008-359f-40ac-8abf-505ee5b5fe38": [
+      "note-1784055599855-3324954a66d7b"
+    ],
+    "thread-card-0cf226d4-e34c-46a6-9608-dc4f3561420a": [
+      "note-1784093287136-3f55a7bd64c978",
+      "note-1784094721648-fdc8ca4702076"
     ]
   }
 }
