@@ -156,6 +156,14 @@ test('requeues one owned continuation per interrupted logical run and drops stal
         { id: 'card-stale', codexThreadRunId: 'run-newer' },
       ],
     }));
+    const runDirectory = resolve(root, 'runs', 'codex-skills', 'specs');
+    mkdirSync(runDirectory, { recursive: true });
+    writeFileSync(resolve(runDirectory, 'run-owned.jsonl'), [
+      JSON.stringify({ type: 'turn.started' }),
+      JSON.stringify({ type: 'turn.completed' }),
+      JSON.stringify({ type: 'turn.started' }),
+      JSON.stringify({ type: 'item.started', item: { id: 'latest-work', type: 'command_execution' } }),
+    ].join('\n'));
     writeFileSync(resolve(root, 'codex-process-queue.json'), JSON.stringify({
       version: 1,
       items: [
