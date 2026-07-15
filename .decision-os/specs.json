@@ -9657,7 +9657,7 @@
       "title": "Diagnose Why an Active Task Cannot Be Relaunched",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10402,
       "y": 87048,
       "w": 360,
