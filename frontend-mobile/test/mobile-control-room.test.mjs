@@ -107,7 +107,7 @@ test('shows task-active only while its Codex process is running', () => {
   assert.match(mobile, /Codex \$\{task\.codexRunId\}/);
 });
 
-test('anchors an active task to the current Codex run instead of the persisted first activation', () => {
+test('anchors an active pipeline task to its logical launch instead of a recovered process segment', () => {
   const firstActivation = '2026-07-10T10:30:00.000Z';
   const currentRunStartedAt = '2026-07-10T10:35:07.000Z';
   const markdown = task().markdown.replace('#task-waiting', '#task-active').replace('Waiting since:', `Active since: ${firstActivation}\nWaiting since:`);
@@ -123,6 +123,19 @@ test('anchors an active task to the current Codex run instead of the persisted f
   assert.match(mobile, /fetch\('\/api\/control-room', \{ cache: 'no-store', headers:/);
   assert.doesNotMatch(mobile, /api\/codex\/pipelines\/runs\/\$\{encodeURIComponent\(pipelineRunId\)\}/);
   assert.doesNotMatch(mobile, /api\/codex\/skills\/runs\/\$\{encodeURIComponent\(runId\)\}/);
+});
+
+test('keeps a direct Codex task anchored to its persisted logical launch across process recovery', () => {
+  const logicalLaunch = '2026-07-10T10:30:00.000Z';
+  const markdown = task().markdown.replace('#task-waiting', '#task-active').replace('Waiting since:', `Active since: ${logicalLaunch}\nWaiting since:`);
+  const parsed = parseMasterTaskMarkdown(task({
+    markdown,
+    codexRunId: 'run-current',
+    codexStatus: 'running'
+  }));
+  assert.equal(parsed.activeSince, logicalLaunch);
+  assert.equal(activeStopwatch(parsed.activeSince, Date.parse('2026-07-10T10:37:12.000Z')), '07:12');
+  assert.doesNotMatch(mobile, /codexStartedAt = String\(payload\.startedAt/);
 });
 
 test('shows queued Codex pipelines in Active with their one-based position', () => {
@@ -273,6 +286,18 @@ test('keeps scoped Control Room filters while project editing moves to dedicated
   assert.match(mobile, /saveProjectSettingsRequest\(\{/);
   assert.match(mobile, /renderProjectDetail\(result\.project\)/);
   assert.match(mobile, /state\.projects\.find\(\(entry\) => entry\.id === state\.resourceProjectId\)\?\.name \|\| project\.projectName/);
+});
+
+test('uses the pinned app-owned HSV picker with the Brave slider hierarchy', () => {
+  assert.match(html, /nouislider-15\.8\.1\.min\.css/);
+  assert.match(html, /nouislider-15\.8\.1\.min\.js/);
+  assert.match(html, /id="project-color-hue"/);
+  assert.match(html, /id="project-color-saturation"/);
+  assert.match(html, /id="project-color-value"/);
+  assert.match(html, /class="project-color-picker-swatch"/);
+  assert.match(mobile, /hexToHsv\(projectColorPickerOriginal\)/);
+  assert.match(mobile, /committedProjectColor\(projectColorPickerOriginal, projectColorPickerHsv\(\), projectColorPickerDirty\)/);
+  assert.match(styles, /clip-path: polygon\(50% 0, 100% 27%, 100% 100%, 0 100%, 0 27%\)/);
 });
 
 test('creates projects from the projects catalog with the shared creation control', () => {

@@ -60,6 +60,7 @@ type MutationError = { statusCode: number; body: AnyRecord };
 
 const decisionOsAssetPrefix = '/.decision-os/';
 const ledgerRevisionHeader = 'x-decision-os-ledger-revision';
+const completionCommitHeader = 'x-decision-os-completion-commit';
 const allowedDecisionOsImageExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'];
 const allowedLedgerStaticAssetExtensions = ['.html', '.css', '.js', '.mjs', ...allowedDecisionOsImageExtensions];
 
@@ -1082,6 +1083,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             response.end(JSON.stringify(completion.error.body));
             return;
           }
+          response.setHeader(completionCommitHeader, completion.commitSha);
           persistLedgerMutationAndRespond(tabId, ledgerPath, ledger, mutation, response);
           return;
         }

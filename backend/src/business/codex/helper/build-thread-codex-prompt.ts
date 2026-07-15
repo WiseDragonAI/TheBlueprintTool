@@ -4,6 +4,7 @@
  */
 export function buildThreadCodexPrompt(input: {
   workspaceRoot: string;
+  projectId: string;
   ledgerFile: string;
   cardId: string;
   cardTitle: string;
@@ -18,8 +19,9 @@ export function buildThreadCodexPrompt(input: {
 }): { developerInstructions: string; taskContext: string } {
   const developerInstructions = [
     'Decision OS card run:',
+    `- Project: \`${input.projectId}\`.`,
     '- Ledger writes use ledger-cli. Plan master/subtasks with `master-task-apply`; IDs are automatic.',
-    '- Mark verified subtasks with `ledger-cli done` and sync projections. Master completion requires explicit operator authorization.',
+    `- Mark verified subtasks with \`ledger-cli done\` and sync projections. With explicit authorization, complete the master with \`ledger-cli master-task-complete --card-id ${input.cardId}\`.`,
     `- Gate: \`ledger-cli master-task-gate --ledger "$DECISION_OS_LEDGER_FILE" --card-id ${input.cardId} --json\`; ledger status is truth.`,
     `- Reply: \`ledger-cli answer --ledger "$DECISION_OS_LEDGER_FILE" --thread-id ${input.threadId} --message-stdin\`.`,
     '- Card Markdown follows the workspace `AGENTS.md` formatting contract.',

@@ -12,6 +12,7 @@ import { manageDecisionOsMigrationController } from '../../migration/controller/
 import { applyMasterTaskPlan } from '../../ledger/helper/apply-master-task-plan.js';
 import { auditCodexRuns } from '../../ledger/helper/audit-codex-runs.js';
 import { resolveCodexRunEvents } from '../../ledger/helper/resolve-codex-run-events.js';
+import { completeMasterTask } from '../../ledger/helper/complete-master-task.js';
 import { synchronizeServerSkillController } from '../../skills/controller/synchronize-server-skill.js';
 
 export async function dispatchLedgerCliCommandController(
@@ -63,6 +64,12 @@ export async function dispatchLedgerCliCommandController(
     let planJson = '';
     for await (const chunk of process.stdin) planJson += String(chunk);
     const result = applyMasterTaskPlan({ ledgerJsonFile: command.ledgerJsonFile, planJson });
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+
+  if (command.mode === 'master-task-complete') {
+    const result = await completeMasterTask({ cardId: command.cardOperation?.cardId, ledgerJsonFile: command.ledgerJsonFile });
     if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
     return result;
   }

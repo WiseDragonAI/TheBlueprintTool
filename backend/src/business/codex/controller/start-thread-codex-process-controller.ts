@@ -212,6 +212,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
   const cardMarkdown = readFileSync(sourceCardFile, 'utf8');
   const prompt = buildThreadCodexPrompt({
     workspaceRoot,
+    projectId: String(runtime.projectId ?? ''),
     ledgerFile: ledgerPath,
     cardId,
     cardTitle: String(source.title ?? cardId),

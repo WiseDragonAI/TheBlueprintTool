@@ -66,7 +66,7 @@ function runtimeStatus(input: { card: AnyRecord; runtime: AnyRecord; pipelineRun
     const activeSkill = records(activeStep?.skills).find((skill) => ['pending', 'running'].includes(text(skill.status)));
     const status = text(run?.status) || 'unknown';
     const queueIndex = input.queuedRuns.findIndex((entry) => text(entry.id) === pipelineRunId || text((entry.payload as AnyRecord | undefined)?.runId) === pipelineRunId);
-    return { runId, pipelineRunId, status, startedAt: text(activeSkill?.startedAt) || text(activeStep?.startedAt) || text(run?.resumedAt) || text(run?.startedAt), queuePosition: status === 'pending' && queueIndex >= 0 ? queueIndex + 1 : null };
+    return { runId, pipelineRunId, status, startedAt: text(run?.resumedAt) || text(run?.createdAt) || text(run?.startedAt) || text(activeSkill?.startedAt) || text(activeStep?.startedAt), queuePosition: status === 'pending' && queueIndex >= 0 ? queueIndex + 1 : null };
   }
   const runtimeRuns = input.runtime.codexSkillRuns && typeof input.runtime.codexSkillRuns === 'object' ? input.runtime.codexSkillRuns as Record<string, AnyRecord> : {};
   const live = runtimeRuns[runId] ?? {};
@@ -122,8 +122,8 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
     codexRunId: run.runId, codexPipelineRunId: run.pipelineRunId, codexStatus: run.status,
     codexProcessing: processing, codexQueued: queued, codexQueuePosition: queued ? run.queuePosition : null,
     waitingSince: Number.isFinite(latestThreadTime) ? new Date(latestThreadTime).toISOString() : waitingText,
-    waitingTime, activeSince: processing && run.startedAt ? run.startedAt : activeText,
-    activeTime: Date.parse(processing && run.startedAt ? text(run.startedAt) : activeText), queueRank: rank,
+    waitingTime, activeSince: processing && run.pipelineRunId && run.startedAt ? run.startedAt : activeText,
+    activeTime: Date.parse(processing && run.pipelineRunId && run.startedAt ? text(run.startedAt) : activeText), queueRank: rank,
     subtasks, complete, nextSubtask: subtasks.find((subtask) => subtask.status !== 'complete') ?? null,
   };
 }

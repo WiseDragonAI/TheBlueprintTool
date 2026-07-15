@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
+import { readCodexProcessQueue } from '@backend/business/codex/helper/codex-process-queue.js';
 
 async function waitForText(file: string, text: string): Promise<void> {
   const started = Date.now();
@@ -550,6 +551,90 @@ test('card skill run route measures active resumed segment from the latest persi
   } finally {
     server.close();
     process.chdir(originalCwd);
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('server startup reports an interrupted thread run as failed without relaunching it', async () => {
+  const originalCwd = process.cwd();
+  const previousCodexBin = process.env.CODEX_BIN;
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-interrupted-thread-run-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  const runId = `codex-skill-${Date.now() - 1000}-restart1`;
+  const cardId = 'card-interrupted-run';
+  const runDirectory = join(decisionOsRoot, 'runs', 'codex-skills', 'specs');
+  const fakeCodex = join(workspace, 'fake-codex.mjs');
+  const invocationFile = join(workspace, 'invoked.txt');
+  mkdirSync(runDirectory, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }]
+  }, null, 2));
+  writeFileSync(join(decisionOsRoot, 'specs.json'), JSON.stringify({
+    cards: [{
+      id: cardId,
+      title: 'Interrupted thread run',
+      codexThreadRunId: runId,
+      comment: { what: 'Thread body.' },
+      facts: [],
+      fields: []
+    }],
+    annotations: [],
+    relationships: [],
+    notes: {}
+  }, null, 2));
+  writeFileSync(join(runDirectory, `${runId}.jsonl`), [
+    JSON.stringify({ type: 'thread.started' }),
+    JSON.stringify({ type: 'turn.started' }),
+  ].join('\n'));
+  writeFileSync(join(runDirectory, `${runId}.log`), '');
+  writeFileSync(join(decisionOsRoot, 'codex-process-queue.json'), JSON.stringify({
+    version: 1,
+    items: [{
+      id: runId,
+      kind: 'thread',
+      status: 'running',
+      createdAt: new Date(Date.now() - 2000).toISOString(),
+      startedAt: new Date(Date.now() - 1000).toISOString(),
+      payload: { ledgerId: 'specs', threadId: `thread-${cardId}`, cardId },
+    }],
+  }, null, 2));
+  writeFileSync(fakeCodex, [
+    '#!/usr/bin/env node',
+    'import { writeFileSync } from "node:fs";',
+    `writeFileSync(${JSON.stringify(invocationFile)}, "relaunched");`,
+  ].join('\n'));
+  chmodSync(fakeCodex, 0o755);
+
+  process.chdir(workspace);
+  process.env.CODEX_BIN = fakeCodex;
+  const runtime: Record<string, unknown> = {};
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const address = server.address() as AddressInfo;
+
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(existsSync(invocationFile), false);
+    const recovered = readCodexProcessQueue(decisionOsRoot);
+    assert.equal(recovered[0]?.status, 'interrupted');
+    assert.equal(recovered[0]?.startedAt !== null, true);
+    assert.equal(recovered[0]?.interruptedAt !== null, true);
+
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${cardId}`);
+    assert.equal(response.status, 200);
+    const body = await response.json() as { status: string; active: boolean; queuePosition: number | null; interruptedAt: string | null; error: string };
+    assert.equal(body.status, 'failed');
+    assert.equal(body.active, false);
+    assert.equal(body.queuePosition, null);
+    assert.equal(typeof body.interruptedAt, 'string');
+    assert.match(body.error, /server restarted/i);
+    assert.match(body.error, /not relaunched/i);
+  } finally {
+    server.close();
+    process.chdir(originalCwd);
+    if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
+    else process.env.CODEX_BIN = previousCodexBin;
     rmSync(workspace, { recursive: true, force: true });
   }
 });

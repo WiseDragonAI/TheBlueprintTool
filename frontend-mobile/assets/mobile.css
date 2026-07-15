@@ -333,6 +333,27 @@ body:has(.new-task-project-modal[open]) { overflow: hidden; }
 .project-settings-error { margin: -6px 0 0; color: var(--danger); font-size: 13px; }
 .project-settings-form footer { display: flex; justify-content: flex-end; gap: 10px; }
 .project-settings-cancel { min-height: 44px; padding: 0 16px; }
+.project-settings-color-trigger { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 7px 12px; text-align: left; }
+.project-settings-color-swatch { width: 34px; height: 34px; border: 1px solid rgba(255,255,255,.48); border-radius: 3px; background: var(--project-settings-color, var(--accent)); box-shadow: inset 0 0 0 2px rgba(0,0,0,.3); }
+.project-settings-color-value { color: var(--text); font-size: 16px; font-weight: 600; text-transform: lowercase; }
+.project-color-picker-modal { width: min(92vw, 420px); max-width: none; padding: 0; border: 0; border-radius: 24px; color: #f4f0f2; background: #27282b; box-shadow: 0 18px 52px #000b; }
+.project-color-picker-modal::backdrop { background: #000b; }
+.project-color-picker-sheet { display: grid; gap: 0; padding: 24px 24px 18px; }
+.project-color-picker-sheet h2 { margin: 0 0 18px; font-size: 28px; font-weight: 400; }
+.project-color-slider-field { display: grid; gap: 8px; min-width: 0; color: #f4f0f2; font-size: 20px; font-weight: 400; }
+.project-color-slider { height: 42px; margin: 0 21px 38px; border: 1px solid #aeb0b5; border-radius: 3px; background: #000; box-shadow: inset 0 1px 4px #0008; }
+.project-color-slider.noUi-horizontal .noUi-handle { top: 26px; right: -21px; width: 42px; height: 50px; border: 0; border-radius: 3px; background: linear-gradient(#18a9e2, #078dca); box-shadow: 0 2px 4px #0009; clip-path: polygon(50% 0, 100% 27%, 100% 100%, 0 100%, 0 27%); cursor: grab; }
+.project-color-slider.noUi-horizontal .noUi-handle:active { cursor: grabbing; filter: brightness(.9); }
+.project-color-slider .noUi-handle::before, .project-color-slider .noUi-handle::after { content: none; }
+.project-color-slider .noUi-base, .project-color-slider .noUi-connects { border-radius: inherit; }
+.project-color-slider .noUi-touch-area { height: 100%; }
+.project-color-slider .noUi-handle:focus-visible { outline: 3px solid #b8ddff; outline-offset: 3px; }
+.project-color-picker-choice { display: flex; align-items: center; justify-content: flex-end; gap: 14px; min-height: 64px; margin-top: -4px; font-size: 18px; }
+.project-color-picker-swatch { width: 52px; height: 52px; border: 1px solid #b4b6bd; border-radius: 4px; background: var(--project-color-picker-color, #000); box-shadow: inset 0 0 0 5px #25262a; }
+.project-color-picker-sheet footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.project-color-picker-sheet footer button { min-width: 86px; min-height: 46px; padding: 0 14px; color: #c9c7ff; background: transparent; box-shadow: none; font-size: 16px; }
+.project-color-picker-sheet footer button:active { background: #ffffff12; box-shadow: none; }
+body:has(.project-color-picker-modal[open]) { overflow: hidden; }
 .creation-form { display: grid; gap: 18px; padding: 22px; }
 .creation-form header h2 { margin: 0; font-size: 24px; }
 .creation-field { display: grid; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; }
