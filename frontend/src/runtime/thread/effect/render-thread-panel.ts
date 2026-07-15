@@ -106,8 +106,8 @@ function renderThreadActions(threadId: string): void {
       effort.value = threadCodexEffort;
       effort.title = `Effort: ${threadCodexEffort}`;
     }
-    const summary = state.threadRunSummaryByThreadId?.[threadId] as { ok?: boolean; status?: string; queuePosition?: number | null } | undefined;
-    syncThreadCodexRunControls({ threadId, status: summary?.ok === true ? String(summary.status ?? '') : 'unknown', queuePosition: summary?.queuePosition });
+    const summary = state.threadRunSummaryByThreadId?.[threadId] as { ok?: boolean; active?: boolean; status?: string; queuePosition?: number | null } | undefined;
+    syncThreadCodexRunControls({ threadId, status: summary?.ok === true ? String(summary.status ?? '') : 'unknown', active: summary?.ok === true ? summary.active === true : false, queuePosition: summary?.queuePosition });
     return;
   }
   actions.replaceChildren();
@@ -158,8 +158,8 @@ function renderThreadActions(threadId: string): void {
   });
   const effortSelect = effort.querySelector('select') as HTMLSelectElement;
   actions.append(model, effort, button);
-  const summary = state.threadRunSummaryByThreadId?.[threadId] as { ok?: boolean; status?: string; queuePosition?: number | null } | undefined;
-  syncThreadCodexRunControls({ threadId, status: summary?.ok === true ? String(summary.status ?? '') : 'unknown', queuePosition: summary?.queuePosition });
+  const summary = state.threadRunSummaryByThreadId?.[threadId] as { ok?: boolean; active?: boolean; status?: string; queuePosition?: number | null } | undefined;
+  syncThreadCodexRunControls({ threadId, status: summary?.ok === true ? String(summary.status ?? '') : 'unknown', active: summary?.ok === true ? summary.active === true : false, queuePosition: summary?.queuePosition });
 }
 
 function tabButton(tab: ThreadPanelTab): HTMLButtonElement | null {

@@ -23,9 +23,11 @@ import { decisionOsCodexEnvironment } from '../helper/decision-os-codex-runtime.
 import { projectCardCodexRun } from '../helper/project-card-codex-run.js';
 import { enqueueCodexThreadProcess, removeCodexProcessQueueItem } from '../helper/codex-process-queue.js';
 import { scheduleCodexProcesses, unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
-import { readCardSkillRunController } from './read-card-skill-run-controller.js';
 import { createTerminalCodexProcessReconciler, type TerminalCodexStatus } from '../helper/reconcile-terminal-codex-process.js';
 import { clearCardCodexActiveRun } from '../helper/clear-card-codex-active-run.js';
+import { runtimeCodexRunOwnsLiveProcess } from '../helper/runtime-codex-run-owns-live-process.js';
+import { readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
+import { cancelCodexPipelineRunController } from './cancel-codex-pipeline-run-controller.js';
 
 type AnyRecord = Record<string, unknown>;
 type ProcessStatus = 'running' | 'complete' | 'failed' | 'cancelled';
@@ -76,6 +78,29 @@ function attachRuntimeRunChild(runtime: AnyRecord, runId: string, child: ChildPr
 
 function runtimeRunStatus(runtime: AnyRecord, runId: string): string {
   return String(runtimeRuns(runtime)[runId]?.status ?? '');
+}
+
+async function supersedeNonLiveRun(input: { runtime: AnyRecord; decisionOsRoot: string; runId: string }): Promise<void> {
+  removeCodexProcessQueueItem(input.decisionOsRoot, input.runId);
+  const pipelineRun = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot }).store.runs.find((candidate) => (
+    candidate.id === input.runId
+    || candidate.steps.some((step) => step.skills.some((skill) => skill.runId === input.runId))
+  ));
+  if (pipelineRun && pipelineRun.status !== 'complete' && pipelineRun.status !== 'failed' && pipelineRun.status !== 'cancelled') {
+    await cancelCodexPipelineRunController({
+      action_payload: { runId: pipelineRun.id },
+      runtime_state: input.runtime,
+    });
+  }
+  const run = runtimeRuns(input.runtime)[input.runId];
+  if (!run || run.status === 'complete' || run.status === 'failed' || run.status === 'cancelled') return;
+  const finishedAt = new Date().toISOString();
+  updateRuntimeRun(input.runtime, input.runId, {
+    status: 'cancelled',
+    error: 'Superseded by an operator-triggered run.',
+    finishedAt,
+    settledAt: finishedAt,
+  });
 }
 
 function finishRunStreams(stdout: WriteStream, stderr: WriteStream, callback: () => void): void {
@@ -179,24 +204,15 @@ export async function startThreadCodexProcessController(input: { action_payload?
   };
   const existingRunId = String(source.codexActiveRunId ?? source.codexThreadRunId ?? source.codexRunId ?? '').trim();
   if (existingRunId && existingRunId !== reservedRunId) {
-    const threadRunId = String(source.codexThreadRunId ?? '').trim();
-    const existing = threadRunId === existingRunId
-      ? null
-      : await readCardSkillRunController({
-          action_payload: { ledgerId, cardId, runId: existingRunId, since: 0 },
-          runtime_state: runtime,
-        });
-    const existingStatus = String(existing?.status ?? '');
-    const replaceableCardRun = existing?.ok === true
-      && (existingStatus === 'complete' || existingStatus === 'failed' || existingStatus === 'cancelled');
-    if (!replaceableCardRun) return {
+    if (queueDispatch || runtimeCodexRunOwnsLiveProcess(runtime, existingRunId)) return {
       ok: false,
       statusCode: 409,
-      error: 'Card already owns an active or resumable Codex run. Continue the existing run or explicitly start a new session.',
+      error: 'Card already owns a live Codex process.',
       cardId,
       threadId,
       runId: existingRunId,
     };
+    await supersedeNonLiveRun({ runtime, decisionOsRoot, runId: existingRunId });
   }
 
   const runId = reservedRunId || `codex-skill-${Date.now()}-${randomUUID().slice(0, 8)}`;
