@@ -71,6 +71,9 @@ export function buildCardLaunchContext(input: {
     linkedCards: cards.filter((card) => linkedIds.has(String(card.id ?? ''))).map(compactCard),
     referencedCards: cards.filter((card) => referencedIds.includes(String(card.id ?? ''))).map(compactCard),
     actions: {
+      executionProfile: {
+        command: 'ledger-cli execution-profile --ledger "$DECISION_OS_LEDGER_FILE" --json',
+      },
       masterTaskApply: {
         command: 'ledger-cli master-task-apply --ledger "$DECISION_OS_LEDGER_FILE" --plan-stdin',
         input: {

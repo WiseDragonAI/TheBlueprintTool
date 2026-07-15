@@ -77,7 +77,7 @@ test('master-task apply preserves lifecycle metadata, generates ids, and persist
   }
 });
 
-test('execution profile puts tests and typechecks behind the verification lease', async () => {
+test('execution profile puts verification behind the lease without a concurrency override', async () => {
   const { decisionOs, ledger } = fixture();
   const workspace = join(decisionOs, '..');
   const backendModules = join(workspace, 'backend', 'node_modules');
@@ -95,7 +95,7 @@ test('execution profile puts tests and typechecks behind the verification lease'
       assert.equal(profile.commands.verificationLease, 'node bin/decision-os-verify.mjs -- <command> [args...]');
       assert.ok(profile.commands.typechecks.every((command: string) => command.includes('decision-os-verify.mjs')));
       assert.ok(profile.commands.focusedTests.every((command: string) => command.includes('decision-os-verify.mjs')));
-      assert.ok(profile.commands.focusedTests.every((command: string) => command.includes('--test-concurrency=3')));
+      assert.ok(profile.commands.focusedTests.every((command: string) => !command.includes('test-concurrency')));
     }
   } finally {
     if (previousRoot === undefined) delete process.env.DECISION_OS_LEDGER_ROOT; else process.env.DECISION_OS_LEDGER_ROOT = previousRoot;

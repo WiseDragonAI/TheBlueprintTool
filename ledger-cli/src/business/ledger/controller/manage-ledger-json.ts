@@ -267,8 +267,8 @@ export async function manageLedgerJsonController(
       existsSync(ledgerTsc) ? leased(`${shellQuote(ledgerTsc)} -p ${shellQuote(resolve(workspaceRoot, 'ledger-cli', 'tsconfig.json'))} --noEmit`) : '',
     ].filter(Boolean);
     const focusedTests = [
-      existsSync(backendTsx) ? leased(`env TSX_TSCONFIG_PATH=${shellQuote(resolve(workspaceRoot, 'backend', 'tsconfig.json'))} node --test --test-concurrency=3 --import ${shellQuote(backendTsx)} <backend-test-file>`) : '',
-      existsSync(backendTsx) ? leased(`env TSX_TSCONFIG_PATH=${shellQuote(resolve(workspaceRoot, 'ledger-cli', 'tsconfig.json'))} node --test --test-concurrency=3 --import ${shellQuote(backendTsx)} <ledger-cli-test-file>`) : '',
+      existsSync(backendTsx) ? leased(`env TSX_TSCONFIG_PATH=${shellQuote(resolve(workspaceRoot, 'backend', 'tsconfig.json'))} node --test --import ${shellQuote(backendTsx)} <backend-test-file>`) : '',
+      existsSync(backendTsx) ? leased(`env TSX_TSCONFIG_PATH=${shellQuote(resolve(workspaceRoot, 'ledger-cli', 'tsconfig.json'))} node --test --import ${shellQuote(backendTsx)} <ledger-cli-test-file>`) : '',
     ].filter(Boolean);
     const executable = (file: string): boolean => { try { accessSync(file, constants.X_OK); return true; } catch { return false; } };
     const serverLauncher = resolve(workspaceRoot, 'bin', 'decision-os-server.mjs');
