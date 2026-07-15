@@ -5,6 +5,7 @@ import { buildThreadCodexPrompt } from '@backend/business/codex/helper/build-thr
 test('thread Codex prompt uses a direct scoped contract without triggering open-note skills', () => {
   const prompt = buildThreadCodexPrompt({
     workspaceRoot: '/workspace',
+    projectId: 'project-a',
     ledgerFile: '/workspace/.decision-os/specs.json',
     cardId: 'card-a',
     cardTitle: 'Card A',
@@ -19,8 +20,10 @@ test('thread Codex prompt uses a direct scoped contract without triggering open-
   });
 
   assert.match(prompt.developerInstructions, /^Decision OS card run:/);
+  assert.match(prompt.developerInstructions, /Project: `project-a`\./);
   assert.doesNotMatch(prompt.developerInstructions, /session-context/);
   assert.match(prompt.developerInstructions, /master-task-apply/);
+  assert.match(prompt.developerInstructions, /master-task-complete --card-id card-a/);
   assert.match(prompt.developerInstructions, /master-task-gate[^\n]+card-a/);
   assert.match(prompt.developerInstructions, /--thread-id thread-card-a --message-stdin/);
   assert.match(prompt.developerInstructions, /workspace `AGENTS\.md` formatting contract/);

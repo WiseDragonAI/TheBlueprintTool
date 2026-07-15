@@ -25,6 +25,7 @@ test('ledger-cli command emits help without reading a ledger', async () => {
   assert.match(messages.join('\n'), /answer --ledger <file> --thread-id <id>/);
   assert.match(messages.join('\n'), /--message-file <file>/);
   assert.match(messages.join('\n'), /codex-run-events --run-id <id> --item-type <type>/);
+  assert.match(messages.join('\n'), /master-task-complete --card-id <id> \[--ledger <file>\]/);
   assert.match(messages.join('\n'), /"sections":\[/);
 });
 
