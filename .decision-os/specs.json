@@ -8842,7 +8842,7 @@
       "title": "Make retrospective skill complete master tasks atomically",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10402,
       "y": 76848,
       "w": 360,
