@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import {
@@ -8,6 +8,7 @@ import {
   enqueueCodexContinuation,
   enqueueCodexThreadProcess,
   markCodexProcessQueueItemRunning,
+  recordCodexProcessQueueItemProcess,
   readCodexProcessQueue,
   recoverCodexProcessQueue,
   removeCodexProcessQueueItem,
@@ -42,6 +43,101 @@ test('persists mixed Codex work in FIFO order and recovers a claimed thread as a
     removeCodexProcessQueueItem(root, 'thread-a');
     assert.deepEqual(readCodexProcessQueue(root).map((item) => item.id), ['continue-b']);
     assert.equal(JSON.parse(readFileSync(resolve(root, 'codex-process-queue.json'), 'utf8')).version, 1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('adopts a matching live process and settles it from its durable terminal event', async () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-live-process-adoption-'));
+  try {
+    const stdoutFile = resolve(root, 'run-a.jsonl');
+    const stderrFile = resolve(root, 'run-a.log');
+    writeFileSync(stdoutFile, `${JSON.stringify({ type: 'turn.started' })}\n`);
+    writeFileSync(stderrFile, '');
+    enqueueCodexThreadProcess({
+      decisionOsRoot: root,
+      id: 'run-a',
+      createdAt: '2026-07-15T08:00:00.000Z',
+      payload: { ledgerId: 'specs', cardId: 'card-a' },
+    });
+    markCodexProcessQueueItemRunning(root, 'run-a');
+    recordCodexProcessQueueItemProcess({ decisionOsRoot: root, id: 'run-a', processId: process.pid, stdoutFile, stderrFile });
+    const runtime: Record<string, unknown> = {};
+
+    recoverCodexProcessQueue(root, runtime);
+
+    assert.equal(readCodexProcessQueue(root)[0]?.status, 'running');
+    assert.deepEqual((runtime.codexSkillRuns as Record<string, Record<string, unknown>>)['run-a'], {
+      id: 'run-a',
+      ledgerId: 'specs',
+      outputCardId: 'card-a',
+      stdoutFile,
+      stderrFile,
+      pid: process.pid,
+      status: 'running',
+      startedAt: readCodexProcessQueue(root)[0]?.startedAt,
+      adopted: true,
+      queueItemId: 'run-a',
+    });
+    writeFileSync(stdoutFile, [JSON.stringify({ type: 'turn.started' }), JSON.stringify({ type: 'turn.completed' })].join('\n'));
+    const deadline = Date.now() + 1500;
+    while (Date.now() < deadline && readCodexProcessQueue(root).length > 0) await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.deepEqual(readCodexProcessQueue(root), []);
+    assert.equal(((runtime.codexSkillRuns as Record<string, Record<string, unknown>>)['run-a']).status, 'complete');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('terminal JSONL wins over a surviving process identity during restart recovery', () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-terminal-process-recovery-'));
+  try {
+    const stdoutFile = resolve(root, 'run-complete.jsonl');
+    const stderrFile = resolve(root, 'run-complete.log');
+    writeFileSync(stdoutFile, [JSON.stringify({ type: 'turn.started' }), JSON.stringify({ type: 'turn.completed' })].join('\n'));
+    writeFileSync(stderrFile, '');
+    enqueueCodexThreadProcess({
+      decisionOsRoot: root,
+      id: 'run-complete',
+      createdAt: '2026-07-15T08:00:00.000Z',
+      payload: { ledgerId: 'specs', cardId: 'card-a' },
+    });
+    markCodexProcessQueueItemRunning(root, 'run-complete');
+    recordCodexProcessQueueItemProcess({ decisionOsRoot: root, id: 'run-complete', processId: process.pid, stdoutFile, stderrFile });
+    const runtime: Record<string, unknown> = {};
+
+    recoverCodexProcessQueue(root, runtime);
+
+    assert.deepEqual(readCodexProcessQueue(root), []);
+    assert.equal(((runtime.codexSkillRuns as Record<string, Record<string, unknown>>)['run-complete']).status, 'complete');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('finds terminal output for a legacy running item without persisted process fields', () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-legacy-terminal-recovery-'));
+  try {
+    const runId = 'legacy-run';
+    const directory = resolve(root, 'runs', 'codex-skills', 'specs');
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(resolve(directory, `${runId}.jsonl`), JSON.stringify({ type: 'turn.completed' }));
+    writeFileSync(resolve(root, 'codex-process-queue.json'), JSON.stringify({
+      version: 1,
+      items: [{
+        id: runId,
+        kind: 'thread',
+        status: 'running',
+        createdAt: '2026-07-15T08:00:00.000Z',
+        startedAt: '2026-07-15T08:00:01.000Z',
+        payload: { ledgerId: 'specs', cardId: 'card-a' },
+      }],
+    }));
+
+    recoverCodexProcessQueue(root, {});
+
+    assert.deepEqual(readCodexProcessQueue(root), []);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

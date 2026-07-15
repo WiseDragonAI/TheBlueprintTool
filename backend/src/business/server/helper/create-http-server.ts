@@ -320,7 +320,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     watcher = watchCardContentFiles({ decisionOsRoot: activeDecisionOsRoot, onChange: publishCard });
     const context: ProjectContext = { clients, revisions, runtime: projectRuntime, publishCard, publishLedger, watcher };
     projectContexts.set(activeDecisionOsRoot, context);
-    recoverCodexProcessQueue(activeDecisionOsRoot);
+    recoverCodexProcessQueue(activeDecisionOsRoot, projectRuntime);
     void resumeCodexPipelineRuns({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime }).catch(() => undefined);
     return context;
   };
