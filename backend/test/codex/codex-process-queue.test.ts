@@ -81,8 +81,9 @@ test('adopts a matching live process and settles it from its durable terminal ev
       queueItemId: 'run-a',
     });
     writeFileSync(stdoutFile, [JSON.stringify({ type: 'turn.started' }), JSON.stringify({ type: 'turn.completed' })].join('\n'));
-    const deadline = Date.now() + 1500;
-    while (Date.now() < deadline && readCodexProcessQueue(root).length > 0) await new Promise((resolve) => setTimeout(resolve, 25));
+    for (let attempt = 0; attempt < 80 && readCodexProcessQueue(root).length > 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
     assert.deepEqual(readCodexProcessQueue(root), []);
     assert.equal(((runtime.codexSkillRuns as Record<string, Record<string, unknown>>)['run-a']).status, 'complete');
   } finally {
