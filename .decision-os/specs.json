@@ -7176,7 +7176,7 @@
       "title": "Build Stable Server State Projections",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10402,
       "y": 49308,
       "w": 360,
@@ -7186,17 +7186,25 @@
       },
       "facts": [],
       "fields": [],
-      "codexThreadRunId": "codex-skill-1783936239493-28650043",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1783936239493-28650043.md",
       "codexRunModel": "gpt-5.6-sol",
-      "codexRunEffort": "medium"
+      "codexRunEffort": "medium",
+      "codexQueuedPipelineRunId": "codex-skill-1784117802727-5aaa34ec",
+      "codexQueuedRunId": "codex-skill-1784117802727-5aaa34ec",
+      "codexActiveRunId": "codex-skill-1784117802727-5aaa34ec",
+      "codexRunId": "codex-skill-1784117802727-5aaa34ec",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784117802727-5aaa34ec.md",
+      "codexPipelineRunId": "codex-skill-1784117802727-5aaa34ec",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexSkillName": "retrospect-and-close-task"
     },
     {
       "id": "card-21104e8d-ab8b-41dd-ac47-a8f475b128e3",
       "title": "Build the stable server projection cache",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10402,
       "y": 49608,
       "w": 320,
@@ -7212,7 +7220,7 @@
       "title": "Add a compact Codex run-status read path",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10042,
       "y": 49608,
       "w": 320,
@@ -7228,7 +7236,7 @@
       "title": "Migrate and verify the mobile Control Room reload",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -9682,
       "y": 49608,
       "w": 320,
@@ -7244,7 +7252,7 @@
       "title": "Scope hydrated ledger transport",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10402,
       "y": 49948,
       "w": 680,
@@ -8206,11 +8214,10 @@
       },
       "facts": [],
       "fields": [],
-      "codexThreadRunId": "codex-skill-1784105977370-692bfd23",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784105977370-692bfd23.md",
+      "codexThreadRunId": "codex-skill-1784106819265-51e90b0e",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784106819265-51e90b0e.md",
       "codexRunModel": "gpt-5.6-sol",
-      "codexRunEffort": "medium",
-      "codexActiveRunId": "codex-skill-1784105977370-692bfd23"
+      "codexRunEffort": "medium"
     },
     {
       "id": "card-codex-skill-1784022826105-454fe26f",
@@ -8915,7 +8922,7 @@
       "title": "Rename delayed workflow to backlog",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -9682,
       "y": 49948,
       "w": 320,
@@ -9745,9 +9752,8 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784106093151-7a6ff5cd",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784106093151-7a6ff5cd.md",
-      "codexActiveRunId": "codex-skill-1784106093151-7a6ff5cd"
+      "codexThreadRunId": "codex-skill-1784106898307-f969f415",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784106898307-f969f415.md"
     },
     {
       "id": "card-01e62ff9-9d5e-4ccf-81c1-b4e3c69ea1d5",
@@ -9839,11 +9845,11 @@
       "title": "Inventory Federated Project Routes",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
-      "x": -10012,
+      "status": "done",
+      "x": -10022,
       "y": 68688,
       "w": 340,
-      "h": 380,
+      "h": 240,
       "comment": {
         "contentFile": ".decision-os/cards/specs/card-212d0733-7309-4eb4-b7cb-08547659e809.md"
       },
@@ -9855,11 +9861,11 @@
       "title": "Define Federated Identity and Catalog",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
-      "x": -9632,
+      "status": "done",
+      "x": -9642,
       "y": 68688,
       "w": 340,
-      "h": 380,
+      "h": 240,
       "comment": {
         "contentFile": ".decision-os/cards/specs/card-e6cb7fc7-19c7-4a43-aac3-c1239289c97c.md"
       },
@@ -9871,11 +9877,11 @@
       "title": "Specify the Relay Stream Protocol",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
-      "x": -10012,
-      "y": 69098,
+      "status": "done",
+      "x": -10402,
+      "y": 68968,
       "w": 340,
-      "h": 380,
+      "h": 240,
       "comment": {
         "contentFile": ".decision-os/cards/specs/card-77d8a721-02ab-42e2-ad89-1c89be4059d2.md"
       },
@@ -9887,11 +9893,11 @@
       "title": "Define Federation Authorization",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
-      "x": -9632,
-      "y": 69098,
+      "status": "done",
+      "x": -10022,
+      "y": 68968,
       "w": 340,
-      "h": 380,
+      "h": 240,
       "comment": {
         "contentFile": ".decision-os/cards/specs/card-26793ca1-c8cd-49b1-a32c-070bf46b420c.md"
       },
@@ -9903,11 +9909,11 @@
       "title": "Design the Federated Frontend Boundary",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
-      "x": -10012,
-      "y": 69508,
+      "status": "done",
+      "x": -9642,
+      "y": 68968,
       "w": 340,
-      "h": 380,
+      "h": 240,
       "comment": {
         "contentFile": ".decision-os/cards/specs/card-a74055c3-0912-4101-8a75-1237bef4a5c1.md"
       },
@@ -9919,11 +9925,11 @@
       "title": "Bound Federation Failures and Resources",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
-      "x": -9632,
-      "y": 69508,
+      "status": "done",
+      "x": -10402,
+      "y": 69248,
       "w": 340,
-      "h": 380,
+      "h": 240,
       "comment": {
         "contentFile": ".decision-os/cards/specs/card-98d93ccb-bf37-4188-b084-75a694d6340f.md"
       },
@@ -9935,11 +9941,11 @@
       "title": "Prepare the Two-Node Proof of Concept Gate",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
-      "x": -10012,
-      "y": 69918,
+      "status": "done",
+      "x": -10022,
+      "y": 69248,
       "w": 340,
-      "h": 380,
+      "h": 240,
       "comment": {
         "contentFile": ".decision-os/cards/specs/card-b6b5276d-ddee-4ca8-a3a7-19797515fda7.md"
       },
@@ -9966,6 +9972,31 @@
       "codexActiveRunId": "codex-skill-1784106035742-137b1c2d",
       "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784106035742-137b1c2d.md",
       "codexPipelineRunId": "codex-skill-1784106035742-137b1c2d",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexSkillName": "retrospect-and-close-task"
+    },
+    {
+      "id": "card-codex-skill-1784117802727-5aaa34ec",
+      "title": "retrospect-and-close-task result",
+      "cardType": "codex-skill-run",
+      "x": -9946,
+      "y": 49308,
+      "w": 700,
+      "h": 260,
+      "status": "todo",
+      "codexRunId": "codex-skill-1784117802727-5aaa34ec",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-codex-skill-1784117802727-5aaa34ec.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784117802727-5aaa34ec",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784117802727-5aaa34ec.md",
+      "codexPipelineRunId": "codex-skill-1784117802727-5aaa34ec",
       "codexPipelineName": "retrospect-and-close-task run",
       "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
       "codexPipelineStepName": "retrospect-and-close-task",
@@ -10751,6 +10782,12 @@
       "id": "rel-codex-skill-1784106035742-137b1c2d-1",
       "from": "card-e2b65d2f-801d-4739-b4d2-befcada9ba1b",
       "to": "card-codex-skill-1784106035742-137b1c2d",
+      "label": "retrospect-and-close-task"
+    },
+    {
+      "id": "rel-codex-skill-1784117802727-5aaa34ec-1",
+      "from": "card-2164c008-359f-40ac-8abf-505ee5b5fe38",
+      "to": "card-codex-skill-1784117802727-5aaa34ec",
       "label": "retrospect-and-close-task"
     }
   ],
@@ -11878,7 +11915,8 @@
     "thread-card-e2b65d2f-801d-4739-b4d2-befcada9ba1b": ".decision-os/threads/specs/thread-card-e2b65d2f-801d-4739-b4d2-befcada9ba1b.md",
     "thread-card-b9502e23-8e37-4717-ad05-c96f290edb43": ".decision-os/threads/specs/thread-card-b9502e23-8e37-4717-ad05-c96f290edb43.md",
     "thread-card-codex-skill-1784106020584-da48808a": ".decision-os/threads/specs/thread-card-codex-skill-1784106020584-da48808a.md",
-    "thread-card-codex-skill-1784106035742-137b1c2d": ".decision-os/threads/specs/thread-card-codex-skill-1784106035742-137b1c2d.md"
+    "thread-card-codex-skill-1784106035742-137b1c2d": ".decision-os/threads/specs/thread-card-codex-skill-1784106035742-137b1c2d.md",
+    "thread-card-codex-skill-1784117802727-5aaa34ec": ".decision-os/threads/specs/thread-card-codex-skill-1784117802727-5aaa34ec.md"
   },
   "deletedNoteIds": {
     "thread-card-7074d33a-39da-42a1-b470-673cbe221def": [
