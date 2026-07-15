@@ -143,6 +143,40 @@ test('finds terminal output for a legacy running item without persisted process 
   }
 });
 
+test('requeues one owned continuation per interrupted logical run and drops stale ownership', () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-interrupted-logical-runs-'));
+  try {
+    writeFileSync(resolve(root, 'state.json'), JSON.stringify({
+      ledgers: [{ id: 'specs', ledgerFile: '.decision-os/specs.json' }],
+    }));
+    writeFileSync(resolve(root, 'specs.json'), JSON.stringify({
+      cards: [
+        { id: 'card-owned', codexThreadRunId: 'run-owned' },
+        { id: 'card-stale', codexThreadRunId: 'run-newer' },
+      ],
+    }));
+    writeFileSync(resolve(root, 'codex-process-queue.json'), JSON.stringify({
+      version: 1,
+      items: [
+        { id: 'continue-owned-a', kind: 'continuation', status: 'interrupted', createdAt: '2026-07-15T01:00:00.000Z', payload: { ledgerId: 'specs', cardId: 'card-owned', runId: 'run-owned' } },
+        { id: 'continue-owned-b', kind: 'continuation', status: 'interrupted', createdAt: '2026-07-15T02:00:00.000Z', payload: { ledgerId: 'specs', cardId: 'card-owned', runId: 'run-owned' } },
+        { id: 'continue-stale', kind: 'continuation', status: 'interrupted', createdAt: '2026-07-15T03:00:00.000Z', payload: { ledgerId: 'specs', cardId: 'card-stale', runId: 'run-older' } },
+      ],
+    }));
+
+    recoverCodexProcessQueue(root, {});
+
+    const recovered = readCodexProcessQueue(root);
+    assert.equal(recovered.length, 1);
+    assert.equal(recovered[0].id, 'continue-owned-a');
+    assert.equal(recovered[0].status, 'pending');
+    assert.equal(recovered[0].payload.runId, 'run-owned');
+    assert.equal(recovered[0].payload.restartRecovery, true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('uses server-wide capacity, running count, and queue position callbacks', () => {
   const runtime = {
     decisionOsSettings: { maxConcurrentCodexProcesses: 2 },
