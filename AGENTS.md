@@ -30,7 +30,7 @@
 
 ### Task Closure Authorization
 
-- Unless explicitly instructed by the operator or the active skill, agents must not close tasks or mark cards `done`.
+- Unless explicitly instructed by the operator or the active skill, agents must not close master tasks or mark master-task cards `done`.
 
 ### Reference Component Fidelity
 
