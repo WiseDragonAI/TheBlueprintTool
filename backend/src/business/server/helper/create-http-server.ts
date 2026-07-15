@@ -18,7 +18,8 @@ import { parseMultipartFormData } from './parse-multipart-form-data.js';
 import { contentTypeFor } from './content-type-for.js';
 import { normalizeLedgerNotes } from './normalize-ledger-notes.js';
 import { hydrateLedgerCardContent } from '../../ledger/helper/card-content-file.js';
-import { hydrateLedgerThreadNotes, stripHydratedThreadNotes, writeThreadNotesFile } from '../../ledger/helper/thread-content-file.js';
+import { stripHydratedThreadNotes, writeThreadNotesFile } from '../../ledger/helper/thread-content-file.js';
+import { migrateBacklogStatus } from '../../ledger/helper/migrate-backlog-status.js';
 import { resolveCardContentChange, watchCardContentFiles, type CardContentChange } from '../../refresh/helper/watch-card-content-files.js';
 import { applyLedgerMutation, type LedgerMutation } from '../../ledger/helper/apply-ledger-mutation.js';
 import { commitMasterTaskCompletion } from '../../ledger/helper/commit-master-task-completion.js';
@@ -31,6 +32,7 @@ import { renameLinkedLedger } from '../../ledger/helper/rename-linked-ledger.js'
 import { startCardSkillProcessController } from '../../codex/controller/start-card-skill-process-controller.js';
 import { startThreadCodexProcessController } from '../../codex/controller/start-thread-codex-process-controller.js';
 import { readCardSkillRunController } from '../../codex/controller/read-card-skill-run-controller.js';
+import { readCompactPipelineRunStatusController, readCompactSkillRunStatusController } from '../../codex/controller/read-compact-run-status-controller.js';
 import { cancelCardSkillRunController } from '../../codex/controller/cancel-card-skill-run-controller.js';
 import { deleteThreadCodexSessionController } from '../../codex/controller/delete-thread-codex-session-controller.js';
 import { continueCardSkillRunController } from '../../codex/controller/continue-card-skill-run-controller.js';
@@ -50,6 +52,8 @@ import { createDecisionOsProject, discoverDecisionOsProjects, resolveCatalogProj
 import { isGlobalProjectEndpoint, isProjectSensitiveEndpoint, parseProjectUrlScope } from './project-url-scope.js';
 import { ensureLedgerCliShim } from '../../codex/helper/decision-os-codex-runtime.js';
 import { ensureDecisionOsMemoryStore } from './ensure-decision-os-memory-store.js';
+import { createControlRoomProjectionStore } from './control-room-projection-store.js';
+import { ledgerCanvasProjection, ledgerCardProjection, ledgerNavigationProjection, ledgerSearchProjection, ledgerThreadProjection } from './ledger-read-models.js';
 
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
@@ -197,6 +201,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     watcher: ReturnType<typeof watchCardContentFiles>;
   };
   const projectContexts = new Map<string, ProjectContext>();
+  let controlRoomProjectionStore: ReturnType<typeof createControlRoomProjectionStore> | null = null;
   const globalCodexProcessCapacity = (): number => {
     const settings = runtime.decisionOsSettings && typeof runtime.decisionOsSettings === 'object' ? runtime.decisionOsSettings as AnyRecord : {};
     return normalizedConcurrentCodexProcesses(process.env.CODEX_MAX_CONCURRENT_PROCESSES ?? settings.maxConcurrentCodexProcesses ?? 1) ?? 1;
@@ -237,6 +242,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const projectContext = (activeDecisionOsRoot: string, projectId: string): ProjectContext => {
     const existing = projectContexts.get(activeDecisionOsRoot);
     if (existing) return existing;
+    migrateBacklogStatus(activeDecisionOsRoot);
     const clients = new Set<ServerResponse>();
     const revisions = createLedgerRevisionTracker();
     const projectRuntime = activeDecisionOsRoot === masterDecisionOsRoot
@@ -248,6 +254,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     projectRuntime.globalCodexProcessCapacity = globalCodexProcessCapacity;
     projectRuntime.globalCodexRunningProcessCount = globalCodexRunningProcessCount;
     projectRuntime.globalCodexQueuePosition = globalCodexQueuePosition;
+    let watcher: ReturnType<typeof watchCardContentFiles> | null = null;
     const broadcast = (message: string): void => {
       for (const client of clients) client.write(message);
       for (const client of globalContentEventClients) client.write(message);
@@ -265,10 +272,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       });
       const scopedEvent = hasCompleteScope ? event : resolvedEvent ? { ...event, ...resolvedEvent } : null;
       if (!scopedEvent) return;
+      controlRoomProjectionStore?.invalidate(projectId);
       revisions.advance(String(scopedEvent.ledgerId));
       broadcast(`event: card-content-change\ndata: ${JSON.stringify({ ...scopedEvent, projectId })}\n\n`);
     };
     const publishLedger = (event: AnyRecord): void => {
+      controlRoomProjectionStore?.invalidate(projectId);
+      watcher?.refreshOwnership();
       const ledgerId = String(event.ledgerId ?? '');
       if (ledgerId) revisions.advance(ledgerId);
       broadcast(`event: ledger-content-change\ndata: ${JSON.stringify({ ...event, projectId })}\n\n`);
@@ -299,16 +309,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         threadId: String(event.threadId ?? ''), runId: String(event.runId ?? ''), onCardContentChange: publishCard, onLedgerChange: publishLedger
       });
     };
-    const context: ProjectContext = {
-      clients, revisions, runtime: projectRuntime, publishCard, publishLedger,
-      watcher: watchCardContentFiles({ decisionOsRoot: activeDecisionOsRoot, onChange: publishCard })
-    };
+    watcher = watchCardContentFiles({ decisionOsRoot: activeDecisionOsRoot, onChange: publishCard });
+    const context: ProjectContext = { clients, revisions, runtime: projectRuntime, publishCard, publishLedger, watcher };
     projectContexts.set(activeDecisionOsRoot, context);
     recoverCodexProcessQueue(activeDecisionOsRoot);
     void resumeCodexPipelineRuns({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime }).catch(() => undefined);
     return context;
   };
-  const loadLedgerContentFiles = (ledger: AnyRecord, activeDecisionOsRoot = decisionOsRoot): AnyRecord => hydrateLedgerCardContent(hydrateLedgerThreadNotes(ledger, activeDecisionOsRoot), activeDecisionOsRoot);
   let projectCatalogCache = { expiresAt: 0, projects: [] as ReturnType<typeof discoverDecisionOsProjects> };
   const projectCatalog = (): ReturnType<typeof discoverDecisionOsProjects> => {
     const now = Date.now();
@@ -317,7 +324,26 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     projectCatalogCache = { expiresAt: now + 5000, projects };
     return projects;
   };
+  controlRoomProjectionStore = createControlRoomProjectionStore({
+    cacheFile: resolve(masterDecisionOsRoot, 'cache', 'control-room-v3.json'),
+    runtimeForRoot: (root) => projectContexts.get(root)?.runtime ?? {},
+  });
   for (const project of projectCatalog()) projectContext(project.decisionOsRoot, project.id);
+  const reconcileProjectCatalog = (): void => {
+    projectCatalogCache = { expiresAt: 0, projects: [] };
+    const discovered = projectCatalog();
+    const activeRoots = new Set(discovered.map((project) => project.decisionOsRoot));
+    for (const project of discovered) projectContext(project.decisionOsRoot, project.id);
+    for (const [root, context] of projectContexts) {
+      if (activeRoots.has(root)) continue;
+      context.watcher.close();
+      context.clients.clear();
+      projectContexts.delete(root);
+    }
+    controlRoomProjectionStore?.reconcile(discovered);
+  };
+  const projectCatalogSupervisor = setInterval(reconcileProjectCatalog, 30_000);
+  projectCatalogSupervisor.unref();
   const server = createServer(async (request, response) => {
     const requestPath = (request.url ?? '/').split('?')[0];
     const projectScope = parseProjectUrlScope(requestPath);
@@ -338,6 +364,23 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.statusCode = 404;
       response.setHeader('content-type', 'application/json');
       response.end(JSON.stringify({ ok: false, error: 'Unknown project id.' }));
+      return;
+    }
+    if (!projectScope && url === '/api/control-room' && request.method === 'GET') {
+      for (const project of projects) projectContext(project.decisionOsRoot, project.id);
+      const projection = controlRoomProjectionStore.get(projects);
+      const etag = `"${String(projection.fingerprint)}"`;
+      if (request.headers['if-none-match'] === etag) {
+        response.statusCode = 304;
+        response.setHeader('etag', etag);
+        response.end();
+        return;
+      }
+      const { dependencies: _dependencies, projectSlices: _projectSlices, ...publicProjection } = projection;
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      response.setHeader('etag', etag);
+      response.end(JSON.stringify(publicProjection));
       return;
     }
     if (request.method === 'GET') {
@@ -362,11 +405,62 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const publishCardContentChange = context.publishCard;
     const publishLedgerContentChange = context.publishLedger;
     const persistLedgerAndRespond = (ledgerId: string, ledgerPath: string, ledger: AnyRecord, activeResponse: ServerResponse, activeDecisionOsRoot = decisionOsRoot): void => {
+      controlRoomProjectionStore?.invalidate(activeProject?.id ?? '');
       stripHydratedThreadNotes(ledger);
       writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
+      context.watcher.refreshOwnership();
       activeResponse.setHeader(ledgerRevisionHeader, String(ledgerRevisions.advance(ledgerId)));
-      activeResponse.end(JSON.stringify(loadLedgerContentFiles(ledger, activeDecisionOsRoot)));
+      activeResponse.end(JSON.stringify(hydrateLedgerCardContent(ledger, activeDecisionOsRoot)));
     };
+    const persistLedgerMutationAndRespond = (ledgerId: string, ledgerPath: string, ledger: AnyRecord, mutation: LedgerMutation, activeResponse: ServerResponse): void => {
+      controlRoomProjectionStore?.invalidate(activeProject?.id ?? '');
+      stripHydratedThreadNotes(ledger);
+      writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
+      context.watcher.refreshOwnership();
+      const revision = ledgerRevisions.advance(ledgerId);
+      const cardId = String(mutation.cardPatch?.id ?? mutation.card?.id ?? mutation.cardId ?? mutation.masterTaskId ?? '');
+      const threadId = String(mutation.note?.threadId ?? (mutation.action === 'create-card' && cardId ? `thread-${cardId}` : ''));
+      const changedCard = cardId ? ledgerCardProjection({ decisionOsRoot, ledgerId, cardId }) : null;
+      const changedThread = threadId ? ledgerThreadProjection({ decisionOsRoot, ledgerId, threadId }) : null;
+      const annotationId = String(mutation.annotation?.id ?? mutation.region?.id ?? '');
+      const relationshipId = String(mutation.relationship?.id ?? '');
+      const body = {
+        ok: true,
+        ledgerId,
+        revision,
+        changedCard,
+        changedThread,
+        changedAnnotation: annotationId && Array.isArray(ledger.annotations) ? ledger.annotations.find((entry) => String((entry as AnyRecord).id ?? '') === annotationId) ?? null : null,
+        changedRelationship: relationshipId && Array.isArray(ledger.relationships) ? ledger.relationships.find((entry) => String((entry as AnyRecord).id ?? '') === relationshipId) ?? null : null,
+        removedCardIds: mutation.action === 'delete-card' && cardId ? [cardId] : [],
+        removedZoneIds: mutation.action === 'delete-zones' ? (mutation.zoneIds ?? []) : [],
+        removedGroupIds: mutation.action === 'delete-zones' ? (mutation.groupIds ?? []) : [],
+        removedRelationshipIds: mutation.action === 'delete-relationships' ? (mutation.relationshipIds ?? []) : [],
+      };
+      activeResponse.setHeader(ledgerRevisionHeader, String(revision));
+      activeResponse.end(JSON.stringify(body));
+    };
+    const scopedLedgerRead = url.match(/^\/api\/ledgers\/([^/]+)\/(canvas|navigation|search)$/);
+    const scopedCardRead = url.match(/^\/api\/ledgers\/([^/]+)\/cards\/([^/]+)$/);
+    const scopedThreadRead = url.match(/^\/api\/ledgers\/([^/]+)\/threads\/([^/]+)$/);
+    if (request.method === 'GET' && (scopedLedgerRead || scopedCardRead || scopedThreadRead)) {
+      const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
+      const ledgerId = decodeRouteSegment((scopedLedgerRead ?? scopedCardRead ?? scopedThreadRead)?.[1] ?? '');
+      const projection = scopedLedgerRead?.[2] === 'canvas'
+        ? ledgerCanvasProjection({ decisionOsRoot, ledgerId })
+        : scopedLedgerRead?.[2] === 'navigation'
+          ? ledgerNavigationProjection({ decisionOsRoot, ledgerId })
+          : scopedLedgerRead?.[2] === 'search'
+            ? ledgerSearchProjection({ decisionOsRoot, ledgerId, zoneId: requestUrl.searchParams.get('zoneId') ?? '', query: requestUrl.searchParams.get('q') ?? '' })
+            : scopedCardRead
+              ? ledgerCardProjection({ decisionOsRoot, ledgerId, cardId: decodeRouteSegment(scopedCardRead[2]) })
+              : ledgerThreadProjection({ decisionOsRoot, ledgerId, threadId: decodeRouteSegment(scopedThreadRead?.[2] ?? '') });
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = projection ? 200 : 404;
+      response.end(JSON.stringify(projection ?? { ok: false, error: 'Scoped ledger resource not found.' }));
+      return;
+    }
     if (url === '/api/settings/codex-processes' && request.method === 'GET') {
       const settings = readDecisionOsSettings({ action_payload: { decisionOsRoot: masterDecisionOsRoot }, runtime_state: runtime }).settings as AnyRecord;
       const configured = normalizedConcurrentCodexProcesses(settings.maxConcurrentCodexProcesses) ?? 1;
@@ -405,6 +499,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           description: String(body.description ?? ''),
         });
         projectCatalogCache = { expiresAt: 0, projects: [] };
+        controlRoomProjectionStore?.invalidate();
         projectContext(project.decisionOsRoot, project.id);
         response.statusCode = 201;
         response.setHeader('content-type', 'application/json');
@@ -563,6 +658,15 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.end(JSON.stringify(result));
       return;
     }
+    if (url.startsWith('/api/codex/pipelines/runs/') && url.endsWith('/status') && request.method === 'GET') {
+      const runId = decodeRouteSegment(url.slice('/api/codex/pipelines/runs/'.length, -'/status'.length));
+      const result = readCompactPipelineRunStatusController({ runId, runtime: requestRuntime });
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
+      response.end(JSON.stringify(result));
+      return;
+    }
     if (url.startsWith('/api/codex/pipelines/runs/') && request.method === 'GET') {
       const runId = decodeRouteSegment(url.slice('/api/codex/pipelines/runs/'.length));
       const result = await readCodexPipelineRunController({ action_payload: { runId }, runtime_state: requestRuntime });
@@ -651,6 +755,21 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       });
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));
+      response.end(JSON.stringify(result));
+      return;
+    }
+    if (url.startsWith('/api/codex/skills/runs/') && url.endsWith('/status') && request.method === 'GET') {
+      const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
+      const runId = decodeRouteSegment(url.slice('/api/codex/skills/runs/'.length, -'/status'.length));
+      const result = readCompactSkillRunStatusController({
+        runId,
+        ledgerId: requestUrl.searchParams.get('ledgerId') ?? '',
+        cardId: requestUrl.searchParams.get('cardId') ?? '',
+        runtime: requestRuntime,
+      });
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
       response.end(JSON.stringify(result));
       return;
     }
@@ -934,7 +1053,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           });
           const overview = ensureLedgersCanvasDocument({ decisionOsRoot });
           response.setHeader(ledgerRevisionHeader, String(ledgerRevisions.advance(tabId)));
-          response.end(JSON.stringify(loadLedgerContentFiles(overview.document, decisionOsRoot)));
+          response.end(JSON.stringify(hydrateLedgerCardContent(overview.document, decisionOsRoot)));
           return;
         }
         if (isLedgersCanvas && mutation.action === 'patch-card' && mutation.cardPatch?.id && typeof mutation.cardPatch.title === 'string') {
@@ -965,9 +1084,23 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             return;
           }
           response.setHeader(completionCommitHeader, completion.commitSha);
-          response.setHeader(ledgerRevisionHeader, String(ledgerRevisions.advance(tabId)));
-          response.end(JSON.stringify(loadLedgerContentFiles(ledger, decisionOsRoot)));
+          persistLedgerMutationAndRespond(tabId, ledgerPath, ledger, mutation, response);
           return;
+        }
+        if (mutation.action === 'patch-card' && mutation.cardPatch?.status === 'backlog' && mutation.cardPatch.id) {
+          const card = Array.isArray(ledger.cards) ? ledger.cards.find((entry) => String(entry.id ?? '') === String(mutation.cardPatch?.id)) : null;
+          const pipelineRunId = String(card?.codexQueuedPipelineRunId ?? '');
+          const skillRunId = String(card?.codexActiveRunId ?? card?.codexThreadRunId ?? card?.codexRunId ?? '');
+          const lifecycle = pipelineRunId
+            ? readCompactPipelineRunStatusController({ runId: pipelineRunId, runtime: requestRuntime })
+            : skillRunId
+              ? readCompactSkillRunStatusController({ runId: skillRunId, ledgerId: tabId, cardId: String(mutation.cardPatch.id), runtime: requestRuntime })
+              : null;
+          if (lifecycle && (lifecycle.status === 'pending' || lifecycle.status === 'processing' || lifecycle.status === 'running' || lifecycle.status === 'in_progress')) {
+            response.statusCode = 409;
+            response.end(JSON.stringify({ ok: false, error: 'A queued or running task cannot move to backlog.', status: lifecycle.status }));
+            return;
+          }
         }
         const mutationResult = applyLedgerMutation({ decisionOsRoot, ledgerPath, ledger, mutation });
         if (mutationResult.error) {
@@ -975,7 +1108,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           response.end(JSON.stringify(mutationResult.error.body));
           return;
         }
-        persistLedgerAndRespond(tabId, ledgerPath, ledger, response, decisionOsRoot);
+        persistLedgerMutationAndRespond(tabId, ledgerPath, ledger, mutation, response);
         return;
       }
       if (existsSync(ledgerPath)) {
@@ -983,7 +1116,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         // WHAT: Expose reconciliation revisions only for ledger documents.
         // WHY: The project-state response is not an active canvas ledger.
         if (tabId !== 'state') response.setHeader(ledgerRevisionHeader, String(ledgerRevisions.current(tabId)));
-        response.end(JSON.stringify(tabId === 'state' ? { projectId: activeProject?.id ?? '', projectName: projectNameForDecisionOsRoot(decisionOsRoot), projectColor: activeProject?.color ?? '#38d9e8', ledgers: stateRead.ledgers } : loadLedgerContentFiles(ledger, decisionOsRoot)));
+        response.end(JSON.stringify(tabId === 'state'
+          ? { projectId: activeProject?.id ?? '', projectName: projectNameForDecisionOsRoot(decisionOsRoot), projectColor: activeProject?.color ?? '#38d9e8', ledgers: stateRead.ledgers }
+          : hydrateLedgerCardContent(ledger, decisionOsRoot)));
       } else {
         response.end(JSON.stringify({ ok: false, missing: ledgerPath }));
       }
@@ -1057,6 +1192,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     response.end(JSON.stringify({ ok: true, method: request.method, url }));
   });
   server.on('close', () => {
+    clearInterval(projectCatalogSupervisor);
     for (const context of projectContexts.values()) {
       context.watcher.close();
       context.clients.clear();

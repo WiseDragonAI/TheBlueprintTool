@@ -150,8 +150,8 @@ test('decision-os server hydrates card Markdown content files and keeps JSON lea
       body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'card-a', description: 'Edited body.' } }),
     });
     assert.equal(patchResponse.ok, true);
-    const patched = await patchResponse.json() as { cards: Array<Record<string, any>> };
-    assert.equal(patched.cards[0].comment.what, 'Edited body.');
+    const patched = await patchResponse.json() as { changedCard: Record<string, any> };
+    assert.equal(patched.changedCard.comment.what, 'Edited body.');
 
     const persisted = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { cards: Array<Record<string, any>> };
     assert.equal(persisted.cards[0].comment.what, undefined);
@@ -176,10 +176,11 @@ test('decision-os server creates card and thread Markdown content files for new 
       }),
     });
     assert.equal(createResponse.ok, true);
-    const created = await createResponse.json() as { cards: Array<Record<string, any>>; threadFiles: Record<string, string> };
-    const createdCard = created.cards.find((card) => card.id === 'card-new');
+    const created = await createResponse.json() as { changedCard: Record<string, any>; changedThread: { threadId: string; contentFile: string } };
+    const createdCard = created.changedCard;
     assert.equal(createdCard?.comment.contentFile, '.decision-os/cards/specs/card-new.md');
-    assert.equal(created.threadFiles['thread-card-new'], '.decision-os/threads/specs/thread-card-new.md');
+    assert.equal(created.changedThread.threadId, 'thread-card-new');
+    assert.equal(created.changedThread.contentFile, '.decision-os/threads/specs/thread-card-new.md');
 
     const persisted = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as {
       cards: Array<Record<string, any>>;
@@ -220,9 +221,9 @@ test('decision-os server deletes a card markdown image and its workspace asset',
       body: JSON.stringify({ action: 'delete-card-image', cardId: 'card-a', imageSrc: `/${imageSource}` }),
     });
     assert.equal(deleteResponse.ok, true);
-    const patched = await deleteResponse.json() as { cards: Array<Record<string, any>> };
-    assert.doesNotMatch(patched.cards[0].comment.what, /carousel-delete\.png/);
-    assert.match(patched.cards[0].comment.what, /carousel-keep\.png/);
+    const patched = await deleteResponse.json() as { changedCard: Record<string, any> };
+    assert.doesNotMatch(patched.changedCard.comment.what, /carousel-delete\.png/);
+    assert.match(patched.changedCard.comment.what, /carousel-keep\.png/);
     assert.equal(existsSync(imageFile), false);
     assert.doesNotMatch(readFileSync(join(workspace, '.decision-os', 'cards', 'specs', 'card-a.md'), 'utf8'), /carousel-delete\.png/);
   } finally {

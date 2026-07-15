@@ -109,6 +109,7 @@ export function openMobileThread(card, zoneColor) {
   canvasState.threadPinOnRender = true;
   renderThreadPanel();
   updateLaunchReadiness();
+  void refreshThreadLedger();
 }
 
 export function closeMobileThread() {
@@ -130,10 +131,18 @@ export function closeMobileThread() {
 }
 
 async function refreshThreadLedger() {
-  const ledger = await onLedgerRefresh(currentLedgerId);
+  const threadId = String(canvasState.threadId || '');
+  if (!currentLedgerId || !threadId) return;
+  const response = await fetch(projectScopedRequestPath(`/api/ledgers/${encodeURIComponent(currentLedgerId)}/threads/${encodeURIComponent(threadId)}`, currentProjectId), { cache: 'no-store' });
+  if (!response.ok) return;
+  const slice = await response.json();
+  const ledger = canvasState.activeLedger;
   if (!ledger) return;
-  canvasState.activeLedger = ledger;
-  if (currentCard) currentCard = ledger.cards?.find((card) => String(card.id) === String(currentCard.id)) ?? currentCard;
+  ledger.threadFiles = { ...(ledger.threadFiles || {}), ...(slice.threadFiles || {}) };
+  ledger.notes = { ...(ledger.notes || {}), ...(slice.notes || {}) };
+  ledger.deletedNoteIds = { ...(ledger.deletedNoteIds || {}), ...(slice.deletedNoteIds || {}) };
+  const refreshed = await onLedgerRefresh(currentLedgerId);
+  if (refreshed?.cards && currentCard) currentCard = refreshed.cards.find((card) => String(card.id) === String(currentCard.id)) ?? currentCard;
   renderThreadPanel();
   updateLaunchReadiness();
 }

@@ -26,7 +26,7 @@ export async function enterLedgerController(ledgerId: string, options: { replace
   const loaded = await loadActiveLedgerState({
     activeTab: ledgerId,
     canvasMode: 'ledger',
-    endpoint: `/decision-os/${ledgerId}`,
+    endpoint: `/api/ledgers/${encodeURIComponent(ledgerId)}/canvas`,
     ledgerStateId: ledgerId
   });
   if (!loaded) {

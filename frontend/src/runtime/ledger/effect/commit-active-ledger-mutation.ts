@@ -22,9 +22,10 @@ export type ActiveLedgerMutation = {
   imageSrc?: string;
   cardPatch?: {
     id: string;
-    status?: 'todo' | 'done';
+    status?: 'todo' | 'backlog' | 'done';
     title?: string;
     description?: string;
+    queueRank?: number;
     imageSizes?: Record<string, { width?: number; height?: number }>;
     codexRunModel?: CodexModel;
     codexRunEffort?: CodexEffort;
@@ -92,7 +93,16 @@ export async function commitActiveLedgerMutation(mutation: ActiveLedgerMutation,
     telemetry('commit-ledger-edit-failed', { activeTab: state.activeTab, action: mutation.action, authority: 'server' });
     return false;
   }
-  const ledger = await response.json().catch(() => null);
+  const payload = await response.json().catch(() => null) as Record<string, unknown> | null;
+  let ledger: unknown = payload;
+  if (payload?.ok === true && typeof payload.ledgerId === 'string') {
+    if ((mutation.action === 'patch-geometry' || mutation.action === 'patch-viewport') && state.activeLedger) {
+      ledger = state.activeLedger;
+    } else {
+      const snapshot = await fetch(`/api/ledgers/${encodeURIComponent(payload.ledgerId)}/canvas`, { cache: 'no-store' }).catch(() => undefined);
+      ledger = snapshot?.ok ? await snapshot.json().catch(() => null) : null;
+    }
+  }
   if (!ledger || typeof ledger !== 'object' || Array.isArray(ledger)) {
     recordActiveLedgerLoadFailure({ request, source: `server-ledger-mutation:${mutation.action}`, reason: 'invalid-ledger' });
     return false;

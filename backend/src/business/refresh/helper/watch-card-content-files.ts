@@ -3,22 +3,23 @@
  * WHY: Direct file patches must refresh browser card content without requiring a manual reload.
  */
 import { existsSync, mkdirSync, readdirSync, statSync, watch, type FSWatcher } from 'node:fs';
-import { extname, join, relative, resolve } from 'node:path';
+import { extname, join, resolve } from 'node:path';
 import {
-  resolveCardContentChange,
+  buildContentOwnershipIndex,
   type CardContentChange
 } from './resolve-card-content-change.js';
 
 export { resolveCardContentChange } from './resolve-card-content-change.js';
 export type { CardContentChange } from './resolve-card-content-change.js';
 
-export function watchCardContentFiles(input: { decisionOsRoot: string; onChange: (event: CardContentChange) => void }): { close(): void; watchedDirectories: number } {
+export function watchCardContentFiles(input: { decisionOsRoot: string; onChange: (event: CardContentChange) => void }): { close(): void; refreshOwnership(): void; watchedDirectories: number } {
   const roots = [
     { directory: resolve(input.decisionOsRoot, 'cards'), kind: 'card-content' as const },
     { directory: resolve(input.decisionOsRoot, 'threads'), kind: 'thread-content' as const },
   ];
   const watchers = new Map<string, FSWatcher>();
   const pendingEvents = new Map<string, NodeJS.Timeout>();
+  let ownership = buildContentOwnershipIndex(input.decisionOsRoot);
 
   function emitFile(file: string, kind: CardContentChange['kind']): void {
     // WHAT: Ignore non-Markdown watcher events at the transport boundary.
@@ -30,8 +31,7 @@ export function watchCardContentFiles(input: { decisionOsRoot: string; onChange:
     if (existingTimer) clearTimeout(existingTimer);
     pendingEvents.set(file, setTimeout(() => {
       pendingEvents.delete(file);
-      const contentFile = `.decision-os/${relative(input.decisionOsRoot, file)}`;
-      const change = resolveCardContentChange({ decisionOsRoot: input.decisionOsRoot, change: { contentFile, file, kind } });
+      const change = ownership.get(resolve(file));
       // WHAT: Publish only an exactly owned content-file change.
       // WHY: Missing or ambiguous ownership must not refresh a guessed ledger.
       if (change) input.onChange(change);
@@ -74,6 +74,9 @@ export function watchCardContentFiles(input: { decisionOsRoot: string; onChange:
       pendingEvents.clear();
       for (const watcher of watchers.values()) watcher.close();
       watchers.clear();
+    },
+    refreshOwnership() {
+      ownership = buildContentOwnershipIndex(input.decisionOsRoot);
     },
     get watchedDirectories() {
       return watchers.size;

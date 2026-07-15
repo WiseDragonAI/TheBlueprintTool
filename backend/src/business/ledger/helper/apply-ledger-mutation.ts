@@ -5,7 +5,7 @@
 import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-ledger-notes.js';
 import { relationshipReferencesCard } from './relationship-references-card.js';
 import { deleteCardMarkdownImage, duplicateCardContentFile, externalizeCardContent, readCardDescription, sameMarkdownImageSource, writeCardDescriptionFile } from './card-content-file.js';
-import { hydrateLedgerThreadNotes, writeThreadNotesFile } from './thread-content-file.js';
+import { hydrateLedgerThreadNotesFor, writeThreadNotesFile } from './thread-content-file.js';
 import { codexEffortOptions, codexModelOptions, type CodexEffort, type CodexModel } from '../../../../../shared/schemas/codex-pipeline-types.js';
 
 export type LedgerMutation = {
@@ -14,7 +14,7 @@ export type LedgerMutation = {
   cardId?: string;
   masterTaskId?: string;
   imageSrc?: string;
-  cardPatch?: { id?: string; status?: string; title?: string; description?: string; imageSizes?: Record<string, { width?: number; height?: number }>; codexRunModel?: CodexModel; codexRunEffort?: CodexEffort };
+  cardPatch?: { id?: string; status?: string; title?: string; description?: string; queueRank?: number; imageSizes?: Record<string, { width?: number; height?: number }>; codexRunModel?: CodexModel; codexRunEffort?: CodexEffort };
   annotation?: Record<string, unknown>;
   relationship?: Record<string, unknown>;
   zoneIds?: string[];
@@ -49,7 +49,9 @@ export function applyLedgerMutation(input: {
   mutation: LedgerMutation;
 }): { ok: boolean; ledger: Record<string, unknown>; error?: MutationError } {
   const { decisionOsRoot, ledgerPath, ledger, mutation } = input;
-  hydrateLedgerThreadNotes(ledger, decisionOsRoot);
+  if (['append-note', 'update-note', 'delete-note'].includes(String(mutation.action)) && mutation.note?.threadId) {
+    hydrateLedgerThreadNotesFor(ledger, decisionOsRoot, mutation.note.threadId);
+  }
   let mutationError: MutationError | undefined;
 
   const voiceMetadata = (note: Record<string, unknown> | undefined): Record<string, unknown> => ({
@@ -94,7 +96,7 @@ export function applyLedgerMutation(input: {
   if (mutation.action === 'patch-card' && mutation.cardPatch?.id) {
     const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === mutation.cardPatch?.id);
     const includesStatus = mutation.cardPatch.status !== undefined;
-    const validStatus = mutation.cardPatch.status === 'todo' || mutation.cardPatch.status === 'done' || mutation.cardPatch.status === 'delayed';
+    const validStatus = mutation.cardPatch.status === 'todo' || mutation.cardPatch.status === 'done' || mutation.cardPatch.status === 'backlog';
     const includesCodexPreference = mutation.cardPatch.codexRunModel !== undefined || mutation.cardPatch.codexRunEffort !== undefined;
     const validCodexPreference = typeof mutation.cardPatch.codexRunModel === 'string'
       && (codexModelOptions as readonly string[]).includes(mutation.cardPatch.codexRunModel)
@@ -109,7 +111,7 @@ export function applyLedgerMutation(input: {
     if (!mutationError && includesStatus && !validStatus) {
       mutationError = {
         statusCode: 400,
-        body: { ok: false, error: 'Card status must be todo, delayed, or done.' },
+        body: { ok: false, error: 'Card status must be todo, backlog, or done.' },
       };
     }
     if (!mutationError) {
@@ -117,6 +119,14 @@ export function applyLedgerMutation(input: {
       if (card && typeof mutation.cardPatch.title === 'string') card.title = mutation.cardPatch.title;
       if (card && typeof mutation.cardPatch.description === 'string') {
         writeCardDescriptionFile({ decisionOsRoot, card, description: mutation.cardPatch.description, ledgerPath });
+      }
+      if (card && Number.isInteger(mutation.cardPatch.queueRank) && Number(mutation.cardPatch.queueRank) > 0) {
+        const rank = Number(mutation.cardPatch.queueRank);
+        const markdown = readCardDescription({ decisionOsRoot, card });
+        const nextMarkdown = /^\s*(?:\*\*)?Queue rank(?:\*\*)?\s*:/im.test(markdown)
+          ? markdown.replace(/^\s*(?:\*\*)?Queue rank(?:\*\*)?\s*:.*$/im, `Queue rank: ${rank}`)
+          : markdown.replace(/^(\s*(?:\*\*)?Waiting since(?:\*\*)?\s*:.*)$/im, `$1\nQueue rank: ${rank}`);
+        writeCardDescriptionFile({ decisionOsRoot, card, description: nextMarkdown, ledgerPath });
       }
       if (card && mutation.cardPatch.imageSizes && typeof mutation.cardPatch.imageSizes === 'object') card.imageSizes = mutation.cardPatch.imageSizes;
       if (card && validCodexPreference) {

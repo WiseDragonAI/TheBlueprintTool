@@ -1,8 +1,9 @@
-const CONTROL_ROOM_TABS = new Set(['queue', 'active', 'delayed']);
+const CONTROL_ROOM_TABS = new Set(['queue', 'active', 'backlog']);
 
 export function parseControlRoomRoute(url) {
   const parsed = new URL(url, 'http://decision-os.local');
   const requestedTab = parsed.searchParams.get('tab');
+  const canonicalTab = requestedTab === 'delayed' ? 'backlog' : requestedTab;
   let anchor = '';
   try {
     anchor = decodeURIComponent(parsed.hash.slice(1));
@@ -10,7 +11,7 @@ export function parseControlRoomRoute(url) {
     anchor = '';
   }
   return {
-    tab: CONTROL_ROOM_TABS.has(requestedTab) ? requestedTab : 'queue',
+    tab: CONTROL_ROOM_TABS.has(canonicalTab) ? canonicalTab : 'queue',
     anchor: anchor.startsWith('task-') ? anchor : ''
   };
 }

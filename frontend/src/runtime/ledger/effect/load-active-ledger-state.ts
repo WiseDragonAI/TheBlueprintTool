@@ -24,7 +24,7 @@ export async function loadActiveLedgerState(options?: LoadActiveLedgerStateOptio
   const canvasMode = loadOptions.canvasMode ?? state.canvasMode;
   const activeTab = loadOptions.activeTab ?? state.activeTab;
   const ledgerStateId = loadOptions.ledgerStateId ?? (canvasMode === 'ledgers' ? 'ledgers-canvas' : activeTab);
-  const endpoint = loadOptions.endpoint ?? (canvasMode === 'ledgers' ? '/decision-os/ledgers-canvas' : ledgerEndpointForTab(activeTab));
+  const endpoint = loadOptions.endpoint ?? (canvasMode === 'ledgers' ? '/decision-os/ledgers-canvas' : `/api/ledgers/${encodeURIComponent(activeTab)}/canvas`);
   const request = beginActiveLedgerRequest(ledgerStateId);
   if (!endpoint) {
     recordActiveLedgerLoadFailure({ request, source: 'load-active-ledger-state', reason: 'missing-ledger-tab' });

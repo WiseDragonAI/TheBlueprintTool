@@ -301,7 +301,7 @@ test('active ledger load keeps server geometry authoritative over stale browser 
   };
 
   (globalThis as any).fetch = async (url: string) => {
-    assert.equal(url, '/decision-os/specs');
+    assert.equal(url, '/api/ledgers/specs/canvas');
     return {
       ok: true,
       async json() {
@@ -362,7 +362,7 @@ test('active ledger refresh keeps local canvas geometry and viewport while accep
   };
 
   (globalThis as any).fetch = async (url: string) => {
-    assert.equal(url, '/decision-os/specs');
+    assert.equal(url, '/api/ledgers/specs/canvas');
     return {
       ok: true,
       async json() {
@@ -422,7 +422,7 @@ test('active ledger refresh keeps viewport moves made while the server load is i
   let resolveFetch!: (response: { ok: boolean; json(): Promise<Record<string, unknown>> }) => void;
   const fetchStarted = new Promise<void>((resolveStarted) => {
     (globalThis as any).fetch = async (url: string) => {
-      assert.equal(url, '/decision-os/specs');
+      assert.equal(url, '/api/ledgers/specs/canvas');
       resolveStarted();
       return new Promise((resolve) => {
         resolveFetch = resolve;
@@ -493,7 +493,7 @@ test('same-ledger active load preserves selected records and prunes missing reco
   };
 
   (globalThis as any).fetch = async (url: string) => {
-    assert.equal(url, '/decision-os/specs');
+    assert.equal(url, '/api/ledgers/specs/canvas');
     return {
       ok: true,
       async json() {
@@ -701,8 +701,8 @@ test('a response from the previous route epoch cannot replace the newly entered 
   const specsResponse = deferredResponse();
   const dataResponse = deferredResponse();
   globalThis.fetch = ((url: string) => {
-    if (url === '/decision-os/specs') return specsResponse.promise;
-    if (url === '/decision-os/data') return dataResponse.promise;
+    if (url === '/api/ledgers/specs/canvas') return specsResponse.promise;
+    if (url === '/api/ledgers/data/canvas') return dataResponse.promise;
     throw new Error(`Unexpected URL: ${url}`);
   }) as typeof fetch;
 
@@ -710,7 +710,7 @@ test('a response from the previous route epoch cannot replace the newly entered 
   const newRouteLoad = loadActiveLedgerState({
     activeTab: 'data',
     canvasMode: 'ledger',
-    endpoint: '/decision-os/data',
+    endpoint: '/api/ledgers/data/canvas',
     ledgerStateId: 'data'
   });
   dataResponse.resolve(ledgerResponse({

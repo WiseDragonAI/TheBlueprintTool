@@ -7,7 +7,7 @@ import { isAbsolute, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { applyLedgerMutation, type LedgerMutation } from '@backend/business/ledger/helper/apply-ledger-mutation.js';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
-import { hydrateLedgerThreadNotes, stripHydratedThreadNotes } from '@backend/business/ledger/helper/thread-content-file.js';
+import { hydrateLedgerThreadNotesFor, stripHydratedThreadNotes } from '@backend/business/ledger/helper/thread-content-file.js';
 import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-ledger-notes.js';
 import { callOpenaiTranscription } from '@backend/business/transcription/effect/call-openai-transcription.js';
 import { persistUploadedVoiceAudio } from '@backend/business/transcription/effect/persist-uploaded-voice-audio.js';
@@ -105,7 +105,7 @@ export function applyNotePatch(input: {
 }): { ok: boolean; error?: string; stale?: boolean } {
   const context = resolveLedgerContext({ runtime: input.runtime, ledgerId: input.ledgerId });
   if (!context.ok) return { ok: false, error: context.error };
-  hydrateLedgerThreadNotes(context.ledger, context.decisionOsRoot);
+  hydrateLedgerThreadNotesFor(context.ledger, context.decisionOsRoot, input.threadId);
   const incomingRevision = Number(input.note.revision ?? 0);
   const currentNote = (normalizeLedgerNotes(context.ledger)[input.threadId] ?? []).find((note) => String(note.id ?? '') === String(input.note.id ?? ''));
   const currentRevision = Number(currentNote?.revision ?? 0);
@@ -161,7 +161,7 @@ export function readVoiceTranscriptionStatusController(input: { action_payload?:
   if (!ledgerId || !threadId || !id) return { ok: false, statusCode: 400, error: 'ledgerId, threadId, and noteId are required.' };
   const context = resolveLedgerContext({ runtime, ledgerId });
   if (!context.ok) return { ok: false, statusCode: context.statusCode ?? 404, error: context.error };
-  hydrateLedgerThreadNotes(context.ledger, context.decisionOsRoot);
+  hydrateLedgerThreadNotesFor(context.ledger, context.decisionOsRoot, threadId);
   const notes = normalizeLedgerNotes(context.ledger)[threadId];
   if (!Array.isArray(notes)) return { ok: false, statusCode: 404, error: 'Thread not found.' };
   const note = notes.find((entry) => String(entry.id ?? '') === id);

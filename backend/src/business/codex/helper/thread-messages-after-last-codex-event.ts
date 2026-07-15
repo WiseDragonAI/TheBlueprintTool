@@ -2,7 +2,7 @@
  * WHAT: Selects operator thread messages written after the latest persisted Codex event for one run.
  * WHY: Continuation controllers need message-boundary derivation separate from process-spawn behavior.
  */
-import { hydrateLedgerThreadNotes } from '@backend/business/ledger/helper/thread-content-file.js';
+import { hydrateLedgerThreadNotesFor } from '@backend/business/ledger/helper/thread-content-file.js';
 import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-ledger-notes.js';
 import { isCodexThreadArtifactNote } from './is-codex-thread-artifact-note.js';
 
@@ -24,8 +24,8 @@ export function threadMessagesAfterLastCodexEvent(input: {
   runId: string;
   traceId?: string;
 }): ThreadMessageContinuation {
-  hydrateLedgerThreadNotes(input.ledger, input.decisionOsRoot);
   const threadId = `thread-${input.cardId}`;
+  hydrateLedgerThreadNotesFor(input.ledger, input.decisionOsRoot, threadId);
   const notes = normalizeLedgerNotes(input.ledger)[threadId] ?? [];
   let latestCompletedIndex = -1;
   let latestCodexIndex = -1;

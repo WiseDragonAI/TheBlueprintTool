@@ -8,7 +8,7 @@ import { basename, dirname, extname, isAbsolute, relative, resolve } from 'node:
 import { randomUUID } from 'node:crypto';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
 import { externalizeCardContent, resolveCardContentFile } from '@backend/business/ledger/helper/card-content-file.js';
-import { formatThreadMarkdown, hydrateLedgerThreadNotes, resolveThreadContentFile, stripHydratedThreadNotes, writeThreadNotesFile } from '@backend/business/ledger/helper/thread-content-file.js';
+import { formatThreadMarkdown, hydrateLedgerThreadNotesFor, resolveThreadContentFile, stripHydratedThreadNotes, writeThreadNotesFile } from '@backend/business/ledger/helper/thread-content-file.js';
 import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-ledger-notes.js';
 import { flushCardSkillRunEventIngestor } from '../effect/flush-card-skill-run-event-ingestor.js';
 import { createCardSkillRunEventIngestor } from '../effect/ingest-card-skill-run-events.js';
@@ -107,7 +107,7 @@ function cardContentFile(input: { decisionOsRoot: string; card: AnyRecord; ledge
 }
 
 function threadContentFile(input: { decisionOsRoot: string; ledger: AnyRecord; ledgerPath: string; threadId: string }): string {
-  hydrateLedgerThreadNotes(input.ledger, input.decisionOsRoot);
+  hydrateLedgerThreadNotesFor(input.ledger, input.decisionOsRoot, input.threadId);
   const notes = normalizeLedgerNotes(input.ledger)[input.threadId] ?? [];
   writeThreadNotesFile({ decisionOsRoot: input.decisionOsRoot, ledger: input.ledger, ledgerPath: input.ledgerPath, threadId: input.threadId, notes });
   const threadFiles = input.ledger.threadFiles && typeof input.ledger.threadFiles === 'object' ? input.ledger.threadFiles as Record<string, unknown> : {};
@@ -115,7 +115,7 @@ function threadContentFile(input: { decisionOsRoot: string; ledger: AnyRecord; l
 }
 
 function threadMarkdownForPrompt(input: { decisionOsRoot: string; ledger: AnyRecord; threadId: string }): { markdown: string; operatorNoteTimestamp: string } | null {
-  hydrateLedgerThreadNotes(input.ledger, input.decisionOsRoot);
+  hydrateLedgerThreadNotesFor(input.ledger, input.decisionOsRoot, input.threadId);
   const notes = (normalizeLedgerNotes(input.ledger)[input.threadId] ?? [])
     .filter((note) => !isCodexThreadArtifactNote(note));
   let operatorNote: AnyRecord | undefined;

@@ -159,6 +159,14 @@ export function hydrateLedgerThreadNotes(ledger: AnyRecord, decisionOsRoot: stri
   return ledger;
 }
 
+export function hydrateLedgerThreadNotesFor(ledger: AnyRecord, decisionOsRoot: string, threadId: string): AnyRecord {
+  const threadFiles = isRecord(ledger.threadFiles) ? ledger.threadFiles as Record<string, unknown> : {};
+  const file = resolveThreadContentFile(decisionOsRoot, threadFiles[threadId]);
+  if (!file || !existsSync(file)) return ledger;
+  normalizeNotesMap(ledger)[threadId] = parseThreadMarkdown(readFileSync(file, 'utf8'));
+  return ledger;
+}
+
 export function writeThreadNotesFile(input: { decisionOsRoot: string; ledger: AnyRecord; ledgerPath: string; threadId: string; notes: AnyRecord[] }): void {
   const threadFiles = normalizeThreadFiles(input.ledger);
   const contentFile = threadFiles[input.threadId] ?? threadContentFileRef(input.ledgerPath, input.threadId);

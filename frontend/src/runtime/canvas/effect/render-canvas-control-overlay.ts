@@ -127,7 +127,7 @@ function syncCardControls(group: HTMLElement, card: HTMLElement): boolean {
   if (!card.classList.contains('ledger-node')) return false;
   const cardId = card.dataset.cardId ?? '';
   if (!cardId) return false;
-  const persistedStatus = card.dataset.cardStatus === 'done' ? 'done' : card.dataset.cardStatus === 'delayed' ? 'delayed' : 'todo';
+  const persistedStatus = card.dataset.cardStatus === 'done' ? 'done' : card.dataset.cardStatus === 'backlog' ? 'backlog' : 'todo';
   const visibleStatus = card.dataset.cardWorkStatus === 'processing' ? 'processing' : persistedStatus;
   const cardZoneColor = card.dataset.cardZoneColor || card.style.getPropertyValue('--card-zone-color').trim();
   group.className = 'canvas-control canvas-control--card';
