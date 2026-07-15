@@ -326,8 +326,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(ledgerContentEvents, /resumeExternallyStartedCardSkillRun/);
   assert.match(ledgerContentEvents, /reason\.startsWith\('codex-'\)/);
   assert.match(ledgerContentEvents, /reason\.endsWith\('-started'\)/);
-  assert.match(threadNotes, /codexNoteClass\(note\)/);
-  assert.match(threadNotes, /is-codex-run-event/);
+  assert.match(threadNotes, /!isCodexThreadArtifactNote\(note\)/);
   assert.doesNotMatch(controlOverlay, /selection\.cardIds/);
   assert.match(controlOverlay, /export function hideCanvasControlOverlay\(\): void \{[\s\S]*existingControlOverlay\(\)\?\.replaceChildren\(\);[\s\S]*\}/);
   assert.match(controlOverlay, /function controlsDisabled\(\): boolean \{[\s\S]*classList\?\.contains\('low-detail'\)/);

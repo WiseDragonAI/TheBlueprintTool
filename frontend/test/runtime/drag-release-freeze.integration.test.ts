@@ -618,8 +618,8 @@ test('active card drag keeps its private pointer snapshot while reconciliation p
   };
 
   (globalThis as unknown as { fetch: unknown }).fetch = async (url: string, init?: RequestInit) => {
-    assert.equal(url, '/decision-os/specs');
     if (init?.method === 'PATCH') {
+      assert.equal(url, '/decision-os/specs');
       const body = JSON.parse(String(init.body ?? '{}'));
       patchBodies.push(body);
       return {
@@ -629,6 +629,7 @@ test('active card drag keeps its private pointer snapshot while reconciliation p
         }
       };
     }
+    assert.equal(url, '/api/ledgers/specs/canvas');
     return {
       ok: true,
       async json() {
@@ -680,8 +681,8 @@ test('multi-selection drag commits its pointer snapshot without replacing newer 
   let resolveLoad!: (response: { ok: boolean; json(): Promise<Record<string, unknown>> }) => void;
   const loadStarted = new Promise<void>((resolveStarted) => {
     (globalThis as unknown as { fetch: unknown }).fetch = async (url: string, init?: RequestInit) => {
-      assert.equal(url, '/decision-os/specs');
       if (init?.method === 'PATCH') {
+        assert.equal(url, '/decision-os/specs');
         const body = JSON.parse(String(init.body ?? '{}'));
         patchBodies.push(body);
         return {
@@ -691,6 +692,7 @@ test('multi-selection drag commits its pointer snapshot without replacing newer 
           }
         };
       }
+      assert.equal(url, '/api/ledgers/specs/canvas');
       resolveStarted();
       return new Promise((resolve) => {
         resolveLoad = resolve;

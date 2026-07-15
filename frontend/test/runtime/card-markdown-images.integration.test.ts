@@ -34,7 +34,7 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   assert.match(mediaRenderer, /ledger-card-media-carousel/);
   assert.match(mediaRenderer, /renderFullscreenButton/);
   assert.match(mediaRenderer, /is-fullscreen-control-visible/);
-  assert.match(mediaRenderer, /openLedgerCardImageViewer\(\{ alt: image\.alt, source: image\.src, trigger: button \}\)/);
+  assert.match(mediaRenderer, /openLedgerCardImageViewer\(\{ alt: image\.alt, source: projectScopedRequestPath\(image\.src\), trigger: button \}\)/);
   assert.match(imageViewer, /assets\/vendor\/panzoom-4\.6\.2\.es\.js/);
   assert.match(imageViewer, /minScale:\s*0\.3/);
   assert.match(imageViewer, /maxScale:\s*50/);

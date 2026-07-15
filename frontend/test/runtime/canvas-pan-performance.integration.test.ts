@@ -749,7 +749,7 @@ test('manual runtime refresh preserves an active pan pointer and allows pan to c
   const ledgerFetchStarted = new Promise<void>((resolveStarted) => {
     (globalThis as unknown as { fetch: unknown }).fetch = async (url: string) => {
       if (url === '/decision-os/data') return { ok: true, async json() { return {}; } };
-      assert.equal(url, '/decision-os/specs');
+      assert.equal(url, '/api/ledgers/specs/canvas');
       resolveStarted();
       return new Promise((resolve) => {
         resolveLedger = resolve;
@@ -800,7 +800,7 @@ test('wheel zoom racing same-ledger load keeps latest viewport in memory and del
   let resolveLedger!: (response: { ok: boolean; json(): Promise<Record<string, unknown>> }) => void;
   const ledgerFetchStarted = new Promise<void>((resolveStarted) => {
     (globalThis as unknown as { fetch: unknown }).fetch = async (url: string) => {
-      assert.equal(url, '/decision-os/specs');
+      assert.equal(url, '/api/ledgers/specs/canvas');
       resolveStarted();
       return new Promise((resolve) => {
         resolveLedger = resolve;
