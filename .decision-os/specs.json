@@ -8854,8 +8854,16 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784102041211-3da93106",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784102041211-3da93106.md"
+      "codexQueuedPipelineRunId": "codex-skill-1784102449328-4013af50",
+      "codexQueuedRunId": "codex-skill-1784102449328-4013af50",
+      "codexActiveRunId": "codex-skill-1784102449328-4013af50",
+      "codexRunId": "codex-skill-1784102449328-4013af50",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784102449328-4013af50.md",
+      "codexPipelineRunId": "codex-skill-1784102449328-4013af50",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexSkillName": "retrospect-and-close-task"
     },
     {
       "id": "card-79fefde6-99a4-4c0d-a3cb-78d5877b0f63",
@@ -8970,7 +8978,7 @@
       "title": "Prevent Codex relaunch after server restart",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10402,
       "y": 78888,
       "w": 360,
@@ -9017,11 +9025,18 @@
       },
       "facts": [],
       "fields": [],
-      "codexActiveRunId": "codex-skill-1784046175787-e74dbf4a",
+      "codexActiveRunId": "codex-skill-1784102461109-528217de",
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784046175787-e74dbf4a",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784046175787-e74dbf4a.md"
+      "codexQueuedPipelineRunId": "codex-skill-1784102461109-528217de",
+      "codexQueuedRunId": "codex-skill-1784102461109-528217de",
+      "codexRunId": "codex-skill-1784102461109-528217de",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784102461109-528217de.md",
+      "codexPipelineRunId": "codex-skill-1784102461109-528217de",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexSkillName": "retrospect-and-close-task"
     },
     {
       "id": "card-codex-skill-1784046263126-8dea61f9",
@@ -9554,6 +9569,56 @@
       "codexActiveRunId": "codex-skill-1784102317950-aef624f7",
       "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784102317950-aef624f7.md",
       "codexPipelineRunId": "codex-skill-1784102317950-aef624f7",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexSkillName": "retrospect-and-close-task"
+    },
+    {
+      "id": "card-codex-skill-1784102449328-4013af50",
+      "title": "retrospect-and-close-task result",
+      "cardType": "codex-skill-run",
+      "x": -9946,
+      "y": 76848,
+      "w": 700,
+      "h": 260,
+      "status": "todo",
+      "codexRunId": "codex-skill-1784102449328-4013af50",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-codex-skill-1784102449328-4013af50.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784102449328-4013af50",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784102449328-4013af50.md",
+      "codexPipelineRunId": "codex-skill-1784102449328-4013af50",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexSkillName": "retrospect-and-close-task"
+    },
+    {
+      "id": "card-codex-skill-1784102461109-528217de",
+      "title": "retrospect-and-close-task result",
+      "cardType": "codex-skill-run",
+      "x": -9946,
+      "y": 79908,
+      "w": 700,
+      "h": 260,
+      "status": "todo",
+      "codexRunId": "codex-skill-1784102461109-528217de",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-codex-skill-1784102461109-528217de.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784102461109-528217de",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784102461109-528217de.md",
+      "codexPipelineRunId": "codex-skill-1784102461109-528217de",
       "codexPipelineName": "retrospect-and-close-task run",
       "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
       "codexPipelineStepName": "retrospect-and-close-task",
@@ -10243,6 +10308,18 @@
       "id": "rel-codex-skill-1784102317950-aef624f7-1",
       "from": "card-1e597b5f-2ad9-4370-98f8-2c2ec78218ca",
       "to": "card-codex-skill-1784102317950-aef624f7",
+      "label": "retrospect-and-close-task"
+    },
+    {
+      "id": "rel-codex-skill-1784102449328-4013af50-1",
+      "from": "card-7d2090c9-0a50-4e6d-a164-2dee515e4a55",
+      "to": "card-codex-skill-1784102449328-4013af50",
+      "label": "retrospect-and-close-task"
+    },
+    {
+      "id": "rel-codex-skill-1784102461109-528217de-1",
+      "from": "card-7b6bc749-87a5-4d63-90e5-d4b21bccaaad",
+      "to": "card-codex-skill-1784102461109-528217de",
       "label": "retrospect-and-close-task"
     }
   ],
@@ -11334,7 +11411,9 @@
     "thread-card-b85c6294-593d-4870-8c6e-ec559386df3c": ".decision-os/threads/specs/thread-card-b85c6294-593d-4870-8c6e-ec559386df3c.md",
     "thread-card-1adba778-1e57-4160-858e-e9ebfec1999a": ".decision-os/threads/specs/thread-card-1adba778-1e57-4160-858e-e9ebfec1999a.md",
     "thread-card-codex-skill-1784102291288-1aebdab5": ".decision-os/threads/specs/thread-card-codex-skill-1784102291288-1aebdab5.md",
-    "thread-card-codex-skill-1784102317950-aef624f7": ".decision-os/threads/specs/thread-card-codex-skill-1784102317950-aef624f7.md"
+    "thread-card-codex-skill-1784102317950-aef624f7": ".decision-os/threads/specs/thread-card-codex-skill-1784102317950-aef624f7.md",
+    "thread-card-codex-skill-1784102449328-4013af50": ".decision-os/threads/specs/thread-card-codex-skill-1784102449328-4013af50.md",
+    "thread-card-codex-skill-1784102461109-528217de": ".decision-os/threads/specs/thread-card-codex-skill-1784102461109-528217de.md"
   },
   "deletedNoteIds": {
     "thread-card-7074d33a-39da-42a1-b470-673cbe221def": [
