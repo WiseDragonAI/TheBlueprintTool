@@ -12,12 +12,9 @@ import { retryVoiceTranscription } from '/canvas-src/runtime/voice/effect/retry-
 import { uploadThreadFileController } from '/canvas-src/runtime/thread/controller/upload-thread-file-controller.js';
 import { pasteThreadImageController } from '/canvas-src/runtime/thread/controller/paste-thread-image-controller.js';
 import { requestThreadCodexProcess } from '/canvas-src/runtime/codex/effect/request-thread-codex-process.js';
-import { requestCardSkillRunContinue } from '/canvas-src/runtime/codex/effect/request-card-skill-run-continue.js';
-import { requestCardSkillRunStatus } from '/canvas-src/runtime/codex/effect/request-card-skill-run-status.js';
 import { bindThreadCodexRunLog, unbindThreadCodexRunLog } from '/canvas-src/runtime/codex/effect/bind-thread-codex-run-log.js';
 import { cardCodexThreadRunId } from '/canvas-src/runtime/codex/helper/card-codex-thread-run-id.js';
 import { syncThreadCodexRunControls } from '/canvas-src/runtime/thread/effect/sync-thread-codex-run-controls.js';
-import { resumeExternallyStartedCardSkillRun } from '/canvas-src/runtime/codex/effect/poll-card-skill-run.js';
 import { stopThreadCodexRunController } from '/canvas-src/runtime/codex/controller/stop-thread-codex-run-controller.js';
 import { confirmThreadCodexSessionDeletionController } from '/canvas-src/runtime/codex/controller/confirm-thread-codex-session-deletion-controller.js';
 import { deleteThreadCodexSessionController } from '/canvas-src/runtime/codex/controller/delete-thread-codex-session-controller.js';
@@ -170,39 +167,6 @@ async function startCodex(button) {
   updateLaunchReadiness();
   if (button.disabled) return;
   button.disabled = true;
-  const existingRunId = cardCodexThreadRunId(currentCard);
-  if (existingRunId) {
-    bindThreadCodexRunLog({ projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId: existingRunId });
-    const summary = await requestCardSkillRunStatus({ projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(currentCard.id), runId: existingRunId });
-    if (summary.active || summary.status === 'pending') return;
-    if (!summary.ok) {
-      button.disabled = false;
-      return;
-    }
-    const continued = await requestCardSkillRunContinue({
-      ledgerId: currentLedgerId,
-      cardId: String(currentCard.id),
-      runId: existingRunId,
-      codexModel: button.dataset.codexModel,
-      codexEffort: button.dataset.codexEffort
-    });
-    if (!continued.ok) {
-      button.disabled = false;
-      return;
-    }
-    const continuedAt = String(continued.run?.startedAt || new Date().toISOString());
-    resumeExternallyStartedCardSkillRun({ projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(currentCard.id), runId: existingRunId });
-    const continuedStatus = String(continued.status || continued.run?.status || 'running');
-    hydrateThreadRun(existingRunId, continuedAt, continuedStatus, continued.queuePosition);
-    await onCodexStarted({
-      ledgerId: currentLedgerId,
-      cardId: String(currentCard.id),
-      startedAt: continuedAt
-    });
-    await refreshThreadLedger();
-    bindThreadCodexRunLog({ projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId: existingRunId });
-    return;
-  }
   const result = await requestThreadCodexProcess({
     ledgerId: currentLedgerId,
     threadId: canvasState.threadId,
