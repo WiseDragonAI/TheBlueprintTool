@@ -153,7 +153,8 @@ function terminalStatus(stdoutFile: string): 'complete' | 'failed' | 'cancelled'
     try {
       const event = JSON.parse(line) as AnyRecord;
       const type = String(event.type ?? '');
-      if (type === 'turn.completed') status = 'complete';
+      if (type === 'thread.started' || type === 'turn.started') status = null;
+      else if (type === 'turn.completed') status = 'complete';
       else if (/cancelled|canceled/i.test(type)) status = 'cancelled';
       else if (/^(?:thread|turn|run)\.failed$/i.test(type)) status = 'failed';
     } catch {
