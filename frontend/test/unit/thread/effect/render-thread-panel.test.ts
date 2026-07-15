@@ -481,11 +481,12 @@ test('generated skill-result threads bind and render their durable card run id',
   }
 });
 
-test('queued thread runs hide launch controls and render their queue position without elapsed time', async () => {
+test('queued thread runs keep authoritative launch controls and render their queue position without elapsed time', async () => {
   const previousFetch = globalThis.fetch;
   const { heading, codexLog } = installDom();
   const { state } = await import('../../../../src/runtime/state.js');
   const { renderThreadPanel } = await import('../../../../src/runtime/thread/effect/render-thread-panel.js');
+  const { syncThreadCodexRunControls } = await import('../../../../src/runtime/thread/effect/sync-thread-codex-run-controls.js');
   const runId = 'codex-skill-queued';
   const threadId = 'thread-card-a';
   const summary = {
@@ -516,13 +517,21 @@ test('queued thread runs hide launch controls and render their queue position wi
 
     renderThreadPanel();
 
-    assert.equal(heading.querySelector('.thread-actions')?.hidden, true);
-    assert.equal(heading.dataset.codexRunning, 'true');
-    assert.equal(heading.dataset.codexStatus, 'pending');
+    assert.equal(heading.querySelector('.thread-actions')?.hidden, false);
+    assert.equal(heading.dataset.codexRunning, 'false');
+    assert.equal(heading.dataset.codexStatus, '');
     assert.equal(codexLog.querySelector('.terminal-button__label')?.textContent, 'CANCEL');
     assert.ok(codexLog.querySelectorAll('dd').map((element) => element.textContent).includes('Queued · position 3'));
     assert.equal(codexLog.querySelector('[data-codex-log-elapsed]'), null);
     assert.equal(codexLog.querySelector('.codex-log-waiting')?.textContent, 'Queued · position 3. Codex will start when capacity is available.');
+
+    syncThreadCodexRunControls({ threadId, status: 'running', active: false });
+    assert.equal(heading.querySelector('.thread-actions')?.hidden, false);
+    assert.equal(heading.dataset.codexRunning, 'false');
+
+    syncThreadCodexRunControls({ threadId, status: 'running', active: true });
+    assert.equal(heading.querySelector('.thread-actions')?.hidden, true);
+    assert.equal(heading.dataset.codexRunning, 'true');
   } finally {
     globalThis.fetch = previousFetch;
     state.threadId = '';

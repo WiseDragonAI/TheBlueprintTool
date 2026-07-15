@@ -142,6 +142,7 @@ function consumeThreadRunSummary(input: { threadId: string; runId: string; summa
   syncThreadCodexRunControls({
     threadId: input.threadId,
     status: input.summary.ok ? input.summary.status : 'unknown',
+    active: input.summary.ok ? input.summary.active : false,
     queuePosition: input.summary.queuePosition,
   });
   void import('../../thread/effect/render-thread-codex-log.js').then(({ renderThreadCodexLog }) => renderThreadCodexLog());
