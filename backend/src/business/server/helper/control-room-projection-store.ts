@@ -148,7 +148,8 @@ function buildProjectSlice(input: { project: DecisionOsProject; runtime: AnyReco
     if (metadataDependency) dependencies.push(metadataDependency);
   }
   const pipelineRuns = readCodexPipelineStore({ decisionOsRoot: project.decisionOsRoot }).store.runs as unknown as AnyRecord[];
-  const queuedRuns = readCodexProcessQueue(project.decisionOsRoot) as unknown as AnyRecord[];
+  const queuedRuns = (readCodexProcessQueue(project.decisionOsRoot) as unknown as AnyRecord[])
+    .filter((run) => run.status === 'pending');
   for (const ledgerEntry of project.ledgers) {
       const ledgerPath = resolve(project.decisionOsRoot, ledgerEntry.ledgerFile.replace(/^\.decision-os\//, ''));
       const ledgerDependency = dependency(ledgerPath);
