@@ -1199,7 +1199,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     response.setHeader('content-type', 'application/json');
     response.end(JSON.stringify({ ok: true, method: request.method, url }));
   });
+  const codexQueueScanTimer = setInterval(() => {
+    void scheduleGlobalCodexProcesses().catch(() => undefined);
+  }, 1_000);
+  codexQueueScanTimer.unref?.();
   server.on('close', () => {
+    clearInterval(codexQueueScanTimer);
     clearInterval(projectCatalogSupervisor);
     for (const context of projectContexts.values()) {
       context.watcher.close();

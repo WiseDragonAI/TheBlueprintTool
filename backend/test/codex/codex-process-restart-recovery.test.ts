@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
-import { readCodexProcessQueue } from '@backend/business/codex/helper/codex-process-queue.js';
+import { enqueueCodexThreadProcess, readCodexProcessQueue } from '@backend/business/codex/helper/codex-process-queue.js';
 
 async function closeServer(server: Server): Promise<void> {
   if (!server.listening) return;
@@ -97,6 +97,58 @@ test('server startup drains pending Codex work discovered after an empty project
     assert.equal(readFileSync(invocationFile, 'utf8'), 'started');
     await waitForQueueToDrain(queuedDecisionOsRoot);
     assert.deepEqual(readCodexProcessQueue(queuedDecisionOsRoot), []);
+  } finally {
+    await closeServer(server);
+    if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
+    else process.env.CODEX_BIN = previousCodexBin;
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('server queue scanner launches pending work added after startup', async () => {
+  const previousCodexBin = process.env.CODEX_BIN;
+  const home = mkdtempSync(join(tmpdir(), 'decision-os-recurring-queue-scan-'));
+  const decisionOsRoot = createProject(home, {
+    cards: [{ id: 'card-late', title: 'Late queued card', codexThreadRunId: 'run-late', comment: { what: 'Late body.' }, facts: [], fields: [] }],
+    annotations: [],
+    relationships: [],
+    notes: {},
+    threadFiles: { 'thread-card-late': '.decision-os/threads/specs/thread-card-late.md' },
+  });
+  const threadDirectory = join(decisionOsRoot, 'threads', 'specs');
+  mkdirSync(threadDirectory, { recursive: true });
+  writeFileSync(join(threadDirectory, 'thread-card-late.md'), [
+    '# OPERATOR',
+    '<!-- decision-os:note {"id":"note-late","timestamp":"2026-07-15T06:00:00.000Z"} -->',
+    '',
+    'Launch after startup.',
+  ].join('\n'));
+  const invocationFile = join(home, 'invoked-late.txt');
+  const fakeCodex = join(home, 'fake-codex-late.mjs');
+  writeFileSync(fakeCodex, [
+    '#!/usr/bin/env node',
+    'import { writeFileSync } from "node:fs";',
+    `writeFileSync(${JSON.stringify(invocationFile)}, "started");`,
+    'process.stdin.resume();',
+    'process.stdin.on("end", () => console.log(JSON.stringify({ type: "turn.completed" })));',
+  ].join('\n'));
+  chmodSync(fakeCodex, 0o755);
+  process.env.CODEX_BIN = fakeCodex;
+  const runtime: Record<string, unknown> = { decisionOsRoot };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+
+  try {
+    enqueueCodexThreadProcess({
+      decisionOsRoot,
+      id: 'run-late',
+      createdAt: new Date().toISOString(),
+      payload: { ledgerId: 'specs', threadId: 'thread-card-late', cardId: 'card-late' },
+    });
+    await waitForFile(invocationFile, decisionOsRoot);
+    assert.equal(readFileSync(invocationFile, 'utf8'), 'started');
+    await waitForQueueToDrain(decisionOsRoot);
   } finally {
     await closeServer(server);
     if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
