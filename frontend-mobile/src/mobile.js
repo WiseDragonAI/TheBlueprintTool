@@ -7,6 +7,7 @@ import { activeAge, activeStopwatch, cardCodexRunId, deriveControlRoom, parseMas
 import { controlRoomPath, parseControlRoomRoute } from './mobile-control-room-route.js';
 import { cardPathForProject, ledgerPathForProject, parseProjectRoute, parseProjectScope, projectPath, zonePathForProject } from './mobile-project-route.js';
 import { projectSettingsValues, saveProjectSettingsRequest } from './mobile-project-settings.js';
+import { committedProjectColor, hexToHsv, hsvToHex, projectColorPickerGradients } from './mobile-project-color-picker.js';
 import { codexProcessLimitRange, loadCodexProcessSettings, saveCodexProcessSettings, stepCodexProcessLimit } from './mobile-codex-settings.js';
 import { createProjectRequest } from './mobile-project-creation.js';
 import { installProjectRequestScope, projectScopedRequestPath } from '/canvas-src/runtime/project/helper/project-request-scope.js';
@@ -49,6 +50,13 @@ const deleteMasterTaskModal = document.querySelector('.delete-master-task-modal'
 const newTaskProjectModal = document.querySelector('.new-task-project-modal');
 const projectSettingsModal = document.querySelector('.project-settings-modal');
 const projectSettingsForm = document.querySelector('.project-settings-form');
+const projectColorPickerModal = document.querySelector('.project-color-picker-modal');
+const projectSettingsColorInput = document.querySelector('#project-settings-color');
+const projectColorSliders = {
+  hue: document.querySelector('#project-color-hue'),
+  saturation: document.querySelector('#project-color-saturation'),
+  value: document.querySelector('#project-color-value'),
+};
 const creationForm = document.querySelector('.creation-form');
 let creationKind = '';
 let controlRoomScrollFrame = 0;
@@ -56,6 +64,75 @@ let queuePersistenceSequence = 0;
 let queueSortable = null;
 let controlRoomEventSource = null;
 let controlRoomRefreshTimer = 0;
+let projectColorPickerOriginal = '';
+let projectColorPickerDirty = false;
+
+function createProjectColorSlider(element, start, maximum) {
+  window.noUiSlider.create(element, {
+    start,
+    step: 1,
+    connect: false,
+    range: { min: 0, max: maximum },
+    keyboardSupport: true,
+    ariaFormat: {
+      to: (value) => String(Math.round(value)),
+      from: (value) => Number(value),
+    },
+  });
+  element.querySelector('[role="slider"]')?.setAttribute('aria-labelledby', element.getAttribute('aria-labelledby'));
+}
+
+createProjectColorSlider(projectColorSliders.hue, 0, 360);
+createProjectColorSlider(projectColorSliders.saturation, 70, 100);
+createProjectColorSlider(projectColorSliders.value, 80, 100);
+
+function projectColorPickerHsv() {
+  return {
+    hue: Number(projectColorSliders.hue.noUiSlider.get()),
+    saturation: Number(projectColorSliders.saturation.noUiSlider.get()),
+    value: Number(projectColorSliders.value.noUiSlider.get()),
+  };
+}
+
+function renderProjectColorPicker() {
+  const hsv = projectColorPickerHsv();
+  const gradients = projectColorPickerGradients(hsv);
+  projectColorSliders.hue.style.background = gradients.hue;
+  projectColorSliders.saturation.style.background = gradients.saturation;
+  projectColorSliders.value.style.background = gradients.value;
+  projectColorPickerModal.style.setProperty('--project-color-picker-color', hsvToHex(hsv));
+}
+
+function renderProjectSettingsColorField(color) {
+  const normalized = String(color).toLowerCase();
+  document.querySelector('.project-settings-color-trigger').style.setProperty('--project-settings-color', normalized);
+  document.querySelector('.project-settings-color-value').textContent = normalized;
+}
+
+function openProjectColorPicker() {
+  projectColorPickerOriginal = projectSettingsColorInput.value;
+  projectColorPickerDirty = false;
+  const hsv = hexToHsv(projectColorPickerOriginal);
+  projectColorSliders.hue.noUiSlider.set(hsv.hue);
+  projectColorSliders.saturation.noUiSlider.set(hsv.saturation);
+  projectColorSliders.value.noUiSlider.set(hsv.value);
+  renderProjectColorPicker();
+  projectColorPickerModal.showModal();
+  window.requestAnimationFrame(() => projectColorSliders.hue.querySelector('[role="slider"]')?.focus());
+}
+
+function closeProjectColorPicker() {
+  projectColorPickerModal.close();
+  window.requestAnimationFrame(() => document.querySelector('.project-settings-color-trigger').focus());
+}
+
+Object.values(projectColorSliders).forEach((element) => {
+  element.noUiSlider.on('update', renderProjectColorPicker);
+  element.noUiSlider.on('start', () => { projectColorPickerDirty = true; });
+  element.noUiSlider.on('slide', () => { projectColorPickerDirty = true; });
+  element.noUiSlider.on('change', () => { projectColorPickerDirty = true; });
+});
+renderProjectColorPicker();
 
 function projectFetch(url, options = {}, projectId = state.resourceProjectId) {
   return fetch(projectScopedRequestPath(url, projectId), options);
@@ -424,7 +501,8 @@ function openProjectSettings() {
   const values = projectSettingsValues(project);
   document.querySelector('#project-settings-name').value = values.name;
   document.querySelector('#project-settings-description').value = values.description;
-  document.querySelector('#project-settings-color').value = values.color;
+  projectSettingsColorInput.value = values.color;
+  renderProjectSettingsColorField(values.color);
   document.querySelector('.project-settings-error').hidden = true;
   projectSettingsModal.showModal();
   document.querySelector('#project-settings-name').focus();
@@ -446,7 +524,7 @@ async function submitProjectSettings() {
       values: {
         name: document.querySelector('#project-settings-name').value,
         description: document.querySelector('#project-settings-description').value,
-        color: document.querySelector('#project-settings-color').value,
+        color: projectSettingsColorInput.value,
       },
     });
     state.projects = result.projects;
@@ -1385,6 +1463,18 @@ document.querySelector('.open-project-button').addEventListener('click', () => {
   navigate(ledgerPathForProject(state.viewedProjectId));
 });
 document.querySelector('.project-settings-button').addEventListener('click', openProjectSettings);
+document.querySelector('.project-settings-color-trigger').addEventListener('click', openProjectColorPicker);
+document.querySelector('.project-color-picker-cancel').addEventListener('click', closeProjectColorPicker);
+document.querySelector('.project-color-picker-set').addEventListener('click', () => {
+  const color = committedProjectColor(projectColorPickerOriginal, projectColorPickerHsv(), projectColorPickerDirty);
+  projectSettingsColorInput.value = color;
+  renderProjectSettingsColorField(color);
+  closeProjectColorPicker();
+});
+projectColorPickerModal.addEventListener('cancel', (event) => {
+  event.preventDefault();
+  closeProjectColorPicker();
+});
 document.querySelector('.project-settings-cancel').addEventListener('click', () => {
   if (!projectSettingsModal.dataset.busy) projectSettingsModal.close();
 });

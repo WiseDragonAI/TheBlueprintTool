@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="/canvas-assets/canvas/terminal-chat.css" />
     <link rel="stylesheet" href="/canvas-assets/canvas/terminal-chat-controls.css" />
     <link rel="stylesheet" href="/canvas-assets/canvas/thread.css" />
+    <link rel="stylesheet" href="/assets/vendor/nouislider-15.8.1.min.css" />
     <link rel="stylesheet" href="/assets/mobile.css" />
   </head>
   <body>
@@ -273,16 +274,46 @@
             <span>Description</span>
             <textarea id="project-settings-description" name="description" rows="6" maxlength="1000"></textarea>
           </label>
-          <label class="creation-field">
+          <div class="creation-field">
             <span>Color</span>
-            <input id="project-settings-color" name="color" type="color" value="#38d9e8" />
-          </label>
+            <button class="project-settings-color-trigger" type="button" aria-haspopup="dialog" aria-controls="project-color-picker-modal">
+              <span class="project-settings-color-swatch" aria-hidden="true"></span>
+              <span class="project-settings-color-value">#38d9e8</span>
+            </button>
+            <input id="project-settings-color" name="color" type="hidden" value="#38d9e8" />
+          </div>
           <p class="project-settings-error" role="alert" hidden></p>
           <footer>
             <button class="project-settings-cancel" type="button">Cancel</button>
             <button class="project-settings-save primary-button" type="submit">Save</button>
           </footer>
         </form>
+      </dialog>
+
+      <dialog id="project-color-picker-modal" class="project-color-picker-modal" aria-labelledby="project-color-picker-title">
+        <section class="project-color-picker-sheet">
+          <h2 id="project-color-picker-title">Select color</h2>
+          <div class="project-color-slider-field">
+            <span id="project-color-hue-label">Hue</span>
+            <div id="project-color-hue" class="project-color-slider" aria-labelledby="project-color-hue-label"></div>
+          </div>
+          <div class="project-color-slider-field">
+            <span id="project-color-saturation-label">Saturation</span>
+            <div id="project-color-saturation" class="project-color-slider" aria-labelledby="project-color-saturation-label"></div>
+          </div>
+          <div class="project-color-slider-field">
+            <span id="project-color-value-label">Value</span>
+            <div id="project-color-value" class="project-color-slider" aria-labelledby="project-color-value-label"></div>
+          </div>
+          <div class="project-color-picker-choice">
+            <span>Chosen color</span>
+            <span class="project-color-picker-swatch" aria-hidden="true"></span>
+          </div>
+          <footer>
+            <button class="project-color-picker-cancel" type="button">Cancel</button>
+            <button class="project-color-picker-set" type="button">Set</button>
+          </footer>
+        </section>
       </dialog>
 
       <dialog class="codex-modal process-modal" aria-labelledby="process-title">
@@ -337,6 +368,7 @@
     <script src="/canvas-assets/vendor/highlight.min.js"></script>
     <script src="/assets/vendor/sortable-1.15.7.min.js"></script>
     <script src="/assets/vendor/embla-carousel-8.6.0.umd.js"></script>
+    <script src="/assets/vendor/nouislider-15.8.1.min.js"></script>
     <script type="module" src="/src/mobile.js"></script>
   </body>
 </html>
