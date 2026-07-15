@@ -9363,7 +9363,7 @@
       "title": "Recover queued Codex runs after server restart",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10402,
       "y": 83988,
       "w": 360,
@@ -9384,7 +9384,7 @@
       "title": "Trace startup queue recovery and capture the root cause",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10012,
       "y": 83988,
       "w": 340,
@@ -9400,7 +9400,7 @@
       "title": "Implement automatic draining of recovered Codex queue items",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -9632,
       "y": 83988,
       "w": 340,
@@ -9416,7 +9416,7 @@
       "title": "Verify restart recovery and integrate the fix",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10012,
       "y": 84398,
       "w": 340,
@@ -9426,6 +9426,27 @@
       },
       "facts": [],
       "fields": []
+    },
+    {
+      "id": "card-1adba778-1e57-4160-858e-e9ebfec1999a",
+      "title": "New task intake",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10402,
+      "y": 85008,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-1adba778-1e57-4160-858e-e9ebfec1999a.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784101247888-69504337",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784101247888-69504337",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784101247888-69504337.md"
     }
   ],
   "relationships": [
@@ -11060,6 +11081,16 @@
       "color": "#4846bd",
       "label": "Codex restart queue recovery",
       "comments": []
+    },
+    {
+      "id": "zone-1dbfe6ac-c29c-439a-907d-edf38bd5c91b",
+      "x": -10462,
+      "y": 84948,
+      "width": 1200,
+      "height": 900,
+      "color": "#4846bd",
+      "label": "New task intake",
+      "comments": []
     }
   ],
   "notes": {},
@@ -11159,7 +11190,8 @@
     "thread-card-1e597b5f-2ad9-4370-98f8-2c2ec78218ca": ".decision-os/threads/specs/thread-card-1e597b5f-2ad9-4370-98f8-2c2ec78218ca.md",
     "thread-card-85e19584-9173-4380-85e2-34c02e41e31f": ".decision-os/threads/specs/thread-card-85e19584-9173-4380-85e2-34c02e41e31f.md",
     "thread-card-0cf226d4-e34c-46a6-9608-dc4f3561420a": ".decision-os/threads/specs/thread-card-0cf226d4-e34c-46a6-9608-dc4f3561420a.md",
-    "thread-card-b85c6294-593d-4870-8c6e-ec559386df3c": ".decision-os/threads/specs/thread-card-b85c6294-593d-4870-8c6e-ec559386df3c.md"
+    "thread-card-b85c6294-593d-4870-8c6e-ec559386df3c": ".decision-os/threads/specs/thread-card-b85c6294-593d-4870-8c6e-ec559386df3c.md",
+    "thread-card-1adba778-1e57-4160-858e-e9ebfec1999a": ".decision-os/threads/specs/thread-card-1adba778-1e57-4160-858e-e9ebfec1999a.md"
   },
   "deletedNoteIds": {
     "thread-card-7074d33a-39da-42a1-b470-673cbe221def": [
