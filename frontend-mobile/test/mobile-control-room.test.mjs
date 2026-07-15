@@ -284,6 +284,18 @@ test('keeps scoped Control Room filters while project editing moves to dedicated
   assert.match(mobile, /state\.projects\.find\(\(entry\) => entry\.id === state\.resourceProjectId\)\?\.name \|\| project\.projectName/);
 });
 
+test('uses the pinned app-owned HSV picker with the Brave slider hierarchy', () => {
+  assert.match(html, /nouislider-15\.8\.1\.min\.css/);
+  assert.match(html, /nouislider-15\.8\.1\.min\.js/);
+  assert.match(html, /id="project-color-hue"/);
+  assert.match(html, /id="project-color-saturation"/);
+  assert.match(html, /id="project-color-value"/);
+  assert.match(html, /class="project-color-picker-swatch"/);
+  assert.match(mobile, /hexToHsv\(projectColorPickerOriginal\)/);
+  assert.match(mobile, /committedProjectColor\(projectColorPickerOriginal, projectColorPickerHsv\(\), projectColorPickerDirty\)/);
+  assert.match(styles, /clip-path: polygon\(50% 0, 100% 27%, 100% 100%, 0 100%, 0 27%\)/);
+});
+
 test('creates projects from the projects catalog with the shared creation control', () => {
   assert.match(html, /class="create-button create-project-button"[^>]*>\+ Project<\/button>/);
   assert.match(html, /id="creation-name"[^>]*required[^>]*maxlength="120"/);
