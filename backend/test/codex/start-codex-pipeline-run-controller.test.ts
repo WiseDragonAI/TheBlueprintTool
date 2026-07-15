@@ -257,7 +257,7 @@ test('workspace capacity runs two pipelines concurrently and promotes the FIFO q
     '  setTimeout(() => {',
     '    console.log(JSON.stringify({ type: "turn.completed" }));',
     `    appendFileSync(${JSON.stringify(lifecycleFile)}, "end" + String.fromCharCode(10));`,
-    '  }, 150);',
+    '  }, 500);',
     '});',
   ].join('\n'));
   chmodSync(fakeCodex, 0o755);

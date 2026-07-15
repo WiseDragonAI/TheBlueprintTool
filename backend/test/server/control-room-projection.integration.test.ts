@@ -42,8 +42,14 @@ test('serves one compact multi-project Control Room projection and refreshes one
     assert.equal(first.queue[0].markdown, undefined);
     assert.equal(first.dependencies, undefined);
     assert.equal(first.projectSlices, undefined);
-    const second = await fetch(`${baseUrl}/api/control-room`).then((response) => response.json()) as Record<string, any>;
+    const warmStartedAt = performance.now();
+    const secondResponse = await fetch(`${baseUrl}/api/control-room`);
+    const warmElapsedMs = performance.now() - warmStartedAt;
+    const second = await secondResponse.json() as Record<string, any>;
     assert.equal(second.revision, first.revision);
+    assert.ok(warmElapsedMs < 100, `warm Control Room response took ${warmElapsedMs.toFixed(1)}ms`);
+    const notModified = await fetch(`${baseUrl}/api/control-room`, { headers: { 'if-none-match': firstResponse.headers.get('etag') ?? '' } });
+    assert.equal(notModified.status, 304);
     const compactText = await fetch(`${baseUrl}/api/codex/skills/runs/codex-skill-test/status?ledgerId=tasks&cardId=worker`).then((response) => response.text());
     const compact = JSON.parse(compactText) as Record<string, any>;
     assert.equal(compact.status, 'running');

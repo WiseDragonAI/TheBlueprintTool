@@ -875,7 +875,7 @@ test('externally started Codex runs clear terminal widget cache and restart poll
     await waitFor(() => continuationBodies.length === 1);
     assert.equal(continuationBodies[0].newSession, true);
     assert.equal(continuationBodies[0].codexModel, 'gpt-5.6-sol');
-    assert.equal(continuationBodies[0].codexEffort, 'high');
+    assert.equal(continuationBodies[0].codexEffort, 'medium');
   } finally {
     (globalThis as unknown as { document?: unknown }).document = previousDocument;
     (globalThis as unknown as { window?: unknown }).window = previousWindow;
