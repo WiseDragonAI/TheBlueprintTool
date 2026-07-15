@@ -254,6 +254,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     projectRuntime.globalCodexProcessCapacity = globalCodexProcessCapacity;
     projectRuntime.globalCodexRunningProcessCount = globalCodexRunningProcessCount;
     projectRuntime.globalCodexQueuePosition = globalCodexQueuePosition;
+    let watcher: ReturnType<typeof watchCardContentFiles> | null = null;
     const broadcast = (message: string): void => {
       for (const client of clients) client.write(message);
       for (const client of globalContentEventClients) client.write(message);
@@ -277,6 +278,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     };
     const publishLedger = (event: AnyRecord): void => {
       controlRoomProjectionStore?.invalidate(projectId);
+      watcher?.refreshOwnership();
       const ledgerId = String(event.ledgerId ?? '');
       if (ledgerId) revisions.advance(ledgerId);
       broadcast(`event: ledger-content-change\ndata: ${JSON.stringify({ ...event, projectId })}\n\n`);
@@ -307,10 +309,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         threadId: String(event.threadId ?? ''), runId: String(event.runId ?? ''), onCardContentChange: publishCard, onLedgerChange: publishLedger
       });
     };
-    const context: ProjectContext = {
-      clients, revisions, runtime: projectRuntime, publishCard, publishLedger,
-      watcher: watchCardContentFiles({ decisionOsRoot: activeDecisionOsRoot, onChange: publishCard })
-    };
+    watcher = watchCardContentFiles({ decisionOsRoot: activeDecisionOsRoot, onChange: publishCard });
+    const context: ProjectContext = { clients, revisions, runtime: projectRuntime, publishCard, publishLedger, watcher };
     projectContexts.set(activeDecisionOsRoot, context);
     recoverCodexProcessQueue(activeDecisionOsRoot);
     void resumeCodexPipelineRuns({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime }).catch(() => undefined);
