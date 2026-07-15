@@ -17,7 +17,7 @@ import { formatUnansweredThreads } from '../helper/format-unanswered-threads.js'
 import { resolveLedgerCardContext, resolveLedgerZoneCardsContext } from '../helper/resolve-ledger-zone-context.js';
 import { hydrateLedgerCardContent, writeCardCommentContent } from '../helper/card-content-file.js';
 import { formatMasterTaskValidation, validateMasterTasks } from '../helper/validate-master-tasks.js';
-import { hydrateLedgerThreadNotes, stripHydratedThreadNotes } from '../helper/thread-content-file.js';
+import { hydrateLedgerThreadNotesFor, stripHydratedThreadNotes } from '../helper/thread-content-file.js';
 import { resolveMasterTaskGate, resolveSessionContext } from '../helper/resolve-session-context.js';
 
 type JsonObject = Record<string, unknown>;
@@ -295,8 +295,6 @@ export async function manageLedgerJsonController(
     };
     return { ok: true, value: JSON.stringify(output, null, 2) };
   }
-  await hydrateLedgerThreadNotes(ledger.value, actionPayload.ledgerJsonFile, fs);
-
   if (actionPayload.ledgerCommand === 'validate-master-tasks') {
     const hydratedLedger = await hydrateLedgerCardContent(ledger.value, actionPayload.ledgerJsonFile, fs);
     const report = validateMasterTasks(hydratedLedger, actionPayload.cardOperation?.cardId);
@@ -357,6 +355,7 @@ export async function manageLedgerJsonController(
   }
 
   if (actionPayload.ledgerCommand === 'answer') {
+    await hydrateLedgerThreadNotesFor(ledger.value, actionPayload.ledgerJsonFile, actionPayload.answerOperation?.threadId ?? '', fs);
     const answered = await appendThreadAnswer(ledger.value, actionPayload.answerOperation, actionPayload.ledgerJsonFile, fs);
     if (!answered.ok) {
       telemetry('manage-ledger-json-rejected', { error: answered.error });

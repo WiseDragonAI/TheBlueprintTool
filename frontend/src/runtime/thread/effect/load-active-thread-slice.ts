@@ -3,7 +3,6 @@
  * WHY: Thread lifecycle events must not replace or rerender the live canvas ledger.
  */
 import { currentLedgerStateId } from '../../ledger/helper/current-ledger-state-id.js';
-import { ledgerEndpointForTab } from '../../ledger/helper/ledger-endpoint-for-tab.js';
 import { mergeLocalThreadNotes } from '../../ledger/helper/merge-local-thread-notes.js';
 import { normalizeDeletedNoteIds } from '../../ledger/helper/normalize-deleted-note-ids.js';
 import { normalizeLedgerNotes } from '../../ledger/helper/normalize-ledger-notes.js';
@@ -65,14 +64,7 @@ export async function loadActiveThreadSlice(scope: ThreadContentRefreshScope): P
     return false;
   }
   const activeLedgerAtRequest = state.activeLedger as AnyRecord;
-  const endpoint = ledgerEndpointForTab(String(state.activeTab ?? ''));
-  // WHAT: Stop when the active route has no ledger endpoint.
-  // WHY: A thread slice cannot be loaded independently of its owning ledger document.
-  if (!endpoint) {
-    telemetry('thread-content-refresh-skipped', { reason: 'missing-ledger-endpoint', ...scope });
-    return false;
-  }
-
+  const endpoint = `/api/ledgers/${encodeURIComponent(scope.ledgerId)}/threads/${encodeURIComponent(scope.threadId)}`;
   const response = await fetch(endpoint).catch(() => undefined);
   // WHAT: Preserve the current thread on network and non-success responses.
   // WHY: Failed refreshes must not clear visible notes.

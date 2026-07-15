@@ -90,3 +90,25 @@ export function resolveCardContentChange(input: {
   }
   return owners.length === 1 ? owners[0] : null;
 }
+
+export function buildContentOwnershipIndex(decisionOsRoot: string): Map<string, CardContentChange> {
+  const candidates = new Map<string, CardContentChange[]>();
+  const add = (file: string | null, event: CardContentChange): void => {
+    if (!file) return;
+    candidates.set(file, [...(candidates.get(file) ?? []), event]);
+  };
+  for (const { ledgerId, ledger } of ledgerDocuments(decisionOsRoot)) {
+    for (const card of Array.isArray(ledger.cards) ? ledger.cards : []) {
+      if (!isRecord(card) || !isRecord(card.comment) || typeof card.comment.contentFile !== 'string') continue;
+      const file = resolvedContentFile(decisionOsRoot, card.comment.contentFile);
+      if (file) add(file, { contentFile: card.comment.contentFile, file, kind: 'card-content', ledgerId });
+    }
+    const threadFiles = isRecord(ledger.threadFiles) ? ledger.threadFiles : {};
+    for (const [threadId, contentFile] of Object.entries(threadFiles)) {
+      if (typeof contentFile !== 'string') continue;
+      const file = resolvedContentFile(decisionOsRoot, contentFile);
+      if (file) add(file, { contentFile, file, kind: 'thread-content', ledgerId, threadId });
+    }
+  }
+  return new Map([...candidates].flatMap(([file, owners]) => owners.length === 1 ? [[file, owners[0]] as const] : []));
+}

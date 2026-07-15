@@ -142,6 +142,21 @@ export async function hydrateLedgerThreadNotes(ledger: unknown, ledgerJsonFile: 
   return ledger;
 }
 
+export async function hydrateLedgerThreadNotesFor(ledger: unknown, ledgerJsonFile: string, threadId: string, fs?: FileSystemPort): Promise<unknown> {
+  if (!isRecord(ledger) || !isRecord(ledger.threadFiles)) return ledger;
+  const contentFile = ledger.threadFiles[threadId];
+  const file = resolveContentFile(ledgerJsonFile, contentFile);
+  if (!file) return ledger;
+  const notes = isRecord(ledger.notes) ? ledger.notes as Record<string, unknown> : {};
+  try {
+    notes[threadId] = parseThreadMarkdown(await readText(file, fs));
+    ledger.notes = notes;
+  } catch {
+    // Partial ledgers may reference a thread file that has not been created yet.
+  }
+  return ledger;
+}
+
 export async function writeThreadNotesFile(input: { ledger: JsonObject; ledgerJsonFile: string; threadId: string; notes: JsonObject[]; fs?: FileSystemPort }): Promise<void> {
   const threadFiles = isRecord(input.ledger.threadFiles) ? { ...input.ledger.threadFiles } as Record<string, string> : {};
   const contentFile = threadFiles[input.threadId] ?? threadContentFileRef(input.ledgerJsonFile, input.threadId);

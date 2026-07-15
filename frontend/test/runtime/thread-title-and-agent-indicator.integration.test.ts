@@ -83,7 +83,7 @@ test('resolve-card-work-status derives processing from latest operator notes and
     assert.equal(resolveCardWorkStatus({ id: 'card-a' }), 'todo');
     assert.equal(resolveCardWorkStatus({ id: 'card-b' }), 'processing');
     assert.equal(resolveCardWorkStatus({ id: 'card-c', status: 'done' }), 'done');
-    assert.equal(resolveCardWorkStatus({ id: 'card-d', status: 'delayed' }), 'delayed');
+    assert.equal(resolveCardWorkStatus({ id: 'card-d', status: 'backlog' }), 'backlog');
     assert.equal(resolveCardWorkStatus({ id: 'card-d' }), 'processing');
     assert.equal(resolveCardWorkStatus({ id: 'card-new' }), 'todo');
   } finally {

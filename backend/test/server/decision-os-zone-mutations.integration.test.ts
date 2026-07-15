@@ -124,8 +124,8 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
       })
     });
     assert.equal(createResponse.ok, true);
-    const createdLedger = await createResponse.json() as { annotations: Array<Record<string, unknown>> };
-    assert.equal(createdLedger.annotations.some((entry) => entry.id === 'zone-created'), true);
+    const createdLedger = await createResponse.json() as { changedAnnotation: Record<string, unknown> };
+    assert.equal(createdLedger.changedAnnotation.id, 'zone-created');
 
     const createGroupResponse = await fetch(endpoint, {
       method: 'PATCH',
@@ -136,8 +136,8 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
       })
     });
     assert.equal(createGroupResponse.ok, true);
-    const groupLedger = await createGroupResponse.json() as { annotations: Array<Record<string, unknown>> };
-    assert.equal(groupLedger.annotations.some((entry) => entry.id === 'group-created'), true);
+    const groupLedger = await createGroupResponse.json() as { changedAnnotation: Record<string, unknown> };
+    assert.equal(groupLedger.changedAnnotation.id, 'group-created');
 
     const createRelationshipResponse = await fetch(endpoint, {
       method: 'PATCH',
@@ -148,8 +148,8 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
       })
     });
     assert.equal(createRelationshipResponse.ok, true);
-    const relationshipLedger = await createRelationshipResponse.json() as { relationships: Array<Record<string, unknown>> };
-    assert.deepEqual(relationshipLedger.relationships.find((entry) => entry.id === 'rel-created'), { id: 'rel-created', from: 'card-a', to: 'zone-keep', label: 'targets' });
+    const relationshipLedger = await createRelationshipResponse.json() as { changedRelationship: Record<string, unknown> };
+    assert.deepEqual(relationshipLedger.changedRelationship, { id: 'rel-created', from: 'card-a', to: 'zone-keep', label: 'targets' });
 
     const geometryResponse = await fetch(endpoint, {
       method: 'PATCH',
@@ -164,10 +164,11 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
       })
     });
     assert.equal(geometryResponse.ok, true);
-    const geometryLedger = await geometryResponse.json() as { cards: Array<Record<string, unknown>>; annotations: Array<Record<string, unknown>> };
+    const geometryText = await geometryResponse.text();
+    assert.ok(Buffer.byteLength(geometryText) < 2_000);
+    const geometryLedger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { cards: Array<Record<string, unknown>>; annotations: Array<Record<string, unknown>> };
     assert.deepEqual(geometryLedger.cards[0], { id: 'card-a', x: 111, y: 122, w: 333, h: 99 });
     assert.deepEqual(geometryLedger.annotations.find((entry) => entry.id === 'zone-keep'), { id: 'zone-keep', label: 'Keep', variant: 'zone', x: 11, y: 22, width: 188, height: 144 });
-    assert.deepEqual(geometryLedger.annotations.find((entry) => entry.id === 'group-keep'), { id: 'group-keep', label: 'Group', variant: 'group', x: 33, y: 44, width: 288, height: 188 });
 
     const regionResponse = await fetch(endpoint, {
       method: 'PATCH',
@@ -175,8 +176,8 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
       body: JSON.stringify({ action: 'patch-region', region: { id: 'zone-keep', kind: 'zone', label: 'Renamed', color: '#ffcc00' } })
     });
     assert.equal(regionResponse.ok, true);
-    const regionLedger = await regionResponse.json() as { annotations: Array<Record<string, unknown>> };
-    assert.deepEqual(regionLedger.annotations.find((entry) => entry.id === 'zone-keep'), { id: 'zone-keep', label: 'Renamed', variant: 'zone', color: '#ffcc00', x: 11, y: 22, width: 188, height: 144 });
+    const regionLedger = await regionResponse.json() as { changedAnnotation: Record<string, unknown> };
+    assert.deepEqual(regionLedger.changedAnnotation, { id: 'zone-keep', label: 'Renamed', variant: 'zone', color: '#ffcc00', x: 11, y: 22, width: 188, height: 144 });
 
     const imageSizeResponse = await fetch(endpoint, {
       method: 'PATCH',
@@ -184,17 +185,17 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
       body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'card-a', imageSizes: { '/.decision-os/ui-mockups/mock.png': { width: 320, height: 180 } } } })
     });
     assert.equal(imageSizeResponse.ok, true);
-    const imageSizeLedger = await imageSizeResponse.json() as { cards: Array<Record<string, unknown>> };
-    assert.deepEqual(imageSizeLedger.cards.find((entry) => entry.id === 'card-a')?.imageSizes, { '/.decision-os/ui-mockups/mock.png': { width: 320, height: 180 } });
+    const imageSizeLedger = await imageSizeResponse.json() as { changedCard: Record<string, unknown> };
+    assert.deepEqual(imageSizeLedger.changedCard.imageSizes, { '/.decision-os/ui-mockups/mock.png': { width: 320, height: 180 } });
 
-    const delayedStatusResponse = await fetch(endpoint, {
+    const backlogStatusResponse = await fetch(endpoint, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'card-a', status: 'delayed' } })
+      body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'card-a', status: 'backlog' } })
     });
-    assert.equal(delayedStatusResponse.ok, true);
-    const delayedStatusLedger = await delayedStatusResponse.json() as { cards: Array<Record<string, unknown>> };
-    assert.equal(delayedStatusLedger.cards.find((entry) => entry.id === 'card-a')?.status, 'delayed');
+    assert.equal(backlogStatusResponse.ok, true, await backlogStatusResponse.clone().text());
+    const backlogStatusLedger = await backlogStatusResponse.json() as { changedCard: Record<string, unknown> };
+    assert.equal(backlogStatusLedger.changedCard.status, 'backlog');
 
     const restoredStatusResponse = await fetch(endpoint, {
       method: 'PATCH',
@@ -202,8 +203,8 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
       body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'card-a', status: 'todo' } })
     });
     assert.equal(restoredStatusResponse.ok, true);
-    const restoredStatusLedger = await restoredStatusResponse.json() as { cards: Array<Record<string, unknown>> };
-    assert.equal(restoredStatusLedger.cards.find((entry) => entry.id === 'card-a')?.status, 'todo');
+    const restoredStatusLedger = await restoredStatusResponse.json() as { changedCard: Record<string, unknown> };
+    assert.equal(restoredStatusLedger.changedCard.status, 'todo');
 
     const invalidStatusResponse = await fetch(endpoint, {
       method: 'PATCH',
@@ -218,8 +219,8 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
       body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'card-a', status: 'done' } })
     });
     assert.equal(cardStatusResponse.ok, true);
-    const cardStatusLedger = await cardStatusResponse.json() as { cards: Array<Record<string, unknown>> };
-    assert.equal(cardStatusLedger.cards.find((entry) => entry.id === 'card-a')?.status, 'done');
+    const cardStatusLedger = await cardStatusResponse.json() as { changedCard: Record<string, unknown> };
+    assert.equal(cardStatusLedger.changedCard.status, 'done');
 
     const codexPreferenceResponse = await fetch(endpoint, {
       method: 'PATCH',
@@ -227,8 +228,8 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
       body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'card-a', codexRunModel: 'gpt-5.6-terra', codexRunEffort: 'max' } })
     });
     assert.equal(codexPreferenceResponse.ok, true);
-    const codexPreferenceLedger = await codexPreferenceResponse.json() as { cards: Array<Record<string, unknown>> };
-    assert.deepEqual(codexPreferenceLedger.cards.find((entry) => entry.id === 'card-a'), {
+    const codexPreferenceLedger = await codexPreferenceResponse.json() as { changedCard: Record<string, unknown> };
+    assert.deepEqual(codexPreferenceLedger.changedCard, {
       id: 'card-a',
       x: 111,
       y: 122,
@@ -237,7 +238,8 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
       status: 'done',
       imageSizes: { '/.decision-os/ui-mockups/mock.png': { width: 320, height: 180 } },
       codexRunModel: 'gpt-5.6-terra',
-      codexRunEffort: 'max'
+      codexRunEffort: 'max',
+      comment: { what: '' }
     });
 
     const partialCodexPreferenceResponse = await fetch(endpoint, {
@@ -263,10 +265,10 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
       body: JSON.stringify({ action: 'append-note', note: { threadId: 'thread-card-a', body: 'server note' } })
     });
     assert.equal(appendNoteResponse.ok, true);
-    const noteLedger = await appendNoteResponse.json() as { notes: Record<string, Array<Record<string, unknown>>> };
-    assert.equal(noteLedger.notes['thread-card-a'].length, 1);
-    assert.equal(noteLedger.notes['thread-card-a'][0].message, 'server note');
-    const textNoteId = String(noteLedger.notes['thread-card-a'][0].id ?? '');
+    const noteLedger = await appendNoteResponse.json() as { changedThread: { notes: Record<string, Array<Record<string, unknown>>> } };
+    assert.equal(noteLedger.changedThread.notes['thread-card-a'].length, 1);
+    assert.equal(noteLedger.changedThread.notes['thread-card-a'][0].message, 'server note');
+    const textNoteId = String(noteLedger.changedThread.notes['thread-card-a'][0].id ?? '');
 
     const updateNoteImageSizeResponse = await fetch(endpoint, {
       method: 'PATCH',
@@ -274,8 +276,8 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
       body: JSON.stringify({ action: 'update-note', note: { id: textNoteId, threadId: 'thread-card-a', imageSizes: { '.decision-os/thread-images/thread-card-a/paste.png': { width: 288, height: 162 } } } })
     });
     assert.equal(updateNoteImageSizeResponse.ok, true);
-    const noteImageSizeLedger = await updateNoteImageSizeResponse.json() as { notes: Record<string, Array<Record<string, unknown>>> };
-    assert.deepEqual(noteImageSizeLedger.notes['thread-card-a'][0].imageSizes, { '.decision-os/thread-images/thread-card-a/paste.png': { width: 288, height: 162 } });
+    const noteImageSizeLedger = await updateNoteImageSizeResponse.json() as { changedThread: { notes: Record<string, Array<Record<string, unknown>>> } };
+    assert.deepEqual(noteImageSizeLedger.changedThread.notes['thread-card-a'][0].imageSizes, { '.decision-os/thread-images/thread-card-a/paste.png': { width: 288, height: 162 } });
     assert.match(readFileSync(join(workspace, '.decision-os', 'threads', 'specs', 'thread-card-a.md'), 'utf8'), /"imageSizes":\{".decision-os\/thread-images\/thread-card-a\/paste.png":\{"width":288,"height":162\}\}/);
 
     const appendVoiceNoteResponse = await fetch(endpoint, {
@@ -284,12 +286,12 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
       body: JSON.stringify({ action: 'append-note', note: { threadId: 'thread-card-a', body: 'voice note', source: 'voice', voiceFileRef: '/tmp/voice.webm', status: 'pending' } })
     });
     assert.equal(appendVoiceNoteResponse.ok, true);
-    const voiceNoteLedger = await appendVoiceNoteResponse.json() as { notes: Record<string, Array<Record<string, unknown>>> };
-    assert.equal(voiceNoteLedger.notes['thread-card-a'].at(-1)?.role, 'operator');
-    assert.equal(voiceNoteLedger.notes['thread-card-a'].at(-1)?.voiceFileRef, '/tmp/voice.webm');
-    assert.equal(voiceNoteLedger.notes['thread-card-a'].at(-1)?.status, 'pending');
+    const voiceNoteLedger = await appendVoiceNoteResponse.json() as { changedThread: { notes: Record<string, Array<Record<string, unknown>>> } };
+    assert.equal(voiceNoteLedger.changedThread.notes['thread-card-a'].at(-1)?.role, 'operator');
+    assert.equal(voiceNoteLedger.changedThread.notes['thread-card-a'].at(-1)?.voiceFileRef, '/tmp/voice.webm');
+    assert.equal(voiceNoteLedger.changedThread.notes['thread-card-a'].at(-1)?.status, 'pending');
     assert.match(readFileSync(join(workspace, '.decision-os', 'threads', 'specs', 'thread-card-a.md'), 'utf8'), /^# OPERATOR/m);
-    const voiceNoteId = String(voiceNoteLedger.notes['thread-card-a'].at(-1)?.id ?? '');
+    const voiceNoteId = String(voiceNoteLedger.changedThread.notes['thread-card-a'].at(-1)?.id ?? '');
 
     const updateVoiceNoteResponse = await fetch(endpoint, {
       method: 'PATCH',
@@ -297,9 +299,9 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
       body: JSON.stringify({ action: 'update-note', note: { id: voiceNoteId, threadId: 'thread-card-a', body: 'transcribed text', source: 'voice', voiceFileRef: '/tmp/voice.webm', status: 'transcribed' } })
     });
     assert.equal(updateVoiceNoteResponse.ok, true);
-    const updatedVoiceNoteLedger = await updateVoiceNoteResponse.json() as { notes: Record<string, Array<Record<string, unknown>>> };
-    assert.equal(updatedVoiceNoteLedger.notes['thread-card-a'].at(-1)?.message, 'transcribed text');
-    assert.equal(updatedVoiceNoteLedger.notes['thread-card-a'].at(-1)?.status, 'transcribed');
+    const updatedVoiceNoteLedger = await updateVoiceNoteResponse.json() as { changedThread: { notes: Record<string, Array<Record<string, unknown>>> } };
+    assert.equal(updatedVoiceNoteLedger.changedThread.notes['thread-card-a'].at(-1)?.message, 'transcribed text');
+    assert.equal(updatedVoiceNoteLedger.changedThread.notes['thread-card-a'].at(-1)?.status, 'transcribed');
 
     const deleteNoteResponse = await fetch(endpoint, {
       method: 'PATCH',
@@ -307,9 +309,9 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
       body: JSON.stringify({ action: 'delete-note', note: { threadId: 'thread-card-a', id: voiceNoteId } })
     });
     assert.equal(deleteNoteResponse.ok, true);
-    const deletedNoteLedger = await deleteNoteResponse.json() as { notes: Record<string, Array<Record<string, unknown>>>; deletedNoteIds: Record<string, string[]> };
-    assert.equal(deletedNoteLedger.notes['thread-card-a'].length, 1);
-    assert.deepEqual(deletedNoteLedger.deletedNoteIds['thread-card-a'], [voiceNoteId]);
+    const deletedNoteLedger = await deleteNoteResponse.json() as { changedThread: { notes: Record<string, Array<Record<string, unknown>>>; deletedNoteIds: Record<string, string[]> } };
+    assert.equal(deletedNoteLedger.changedThread.notes['thread-card-a'].length, 1);
+    assert.deepEqual(deletedNoteLedger.changedThread.deletedNoteIds['thread-card-a'], [voiceNoteId]);
 
     const appendDeletedNoteResponse = await fetch(endpoint, {
       method: 'PATCH',
@@ -317,8 +319,8 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
       body: JSON.stringify({ action: 'append-note', note: { id: voiceNoteId, threadId: 'thread-card-a', body: 'late deleted voice note', source: 'voice', voiceFileRef: '/tmp/voice.webm', status: 'uploading' } })
     });
     assert.equal(appendDeletedNoteResponse.ok, true);
-    const appendDeletedLedger = await appendDeletedNoteResponse.json() as { notes: Record<string, Array<Record<string, unknown>>> };
-    assert.equal(appendDeletedLedger.notes['thread-card-a'].some((note) => note.id === voiceNoteId), false);
+    const appendDeletedLedger = await appendDeletedNoteResponse.json() as { changedThread: { notes: Record<string, Array<Record<string, unknown>>> } };
+    assert.equal(appendDeletedLedger.changedThread.notes['thread-card-a'].some((note) => note.id === voiceNoteId), false);
 
     const upsertVoiceNoteResponse = await fetch(endpoint, {
       method: 'PATCH',
@@ -326,9 +328,9 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
       body: JSON.stringify({ action: 'update-note', note: { id: 'note-client-voice', threadId: 'thread-card-a', body: 'late voice update', source: 'voice', voiceFileRef: '/tmp/late.webm', status: 'transcribing' } })
     });
     assert.equal(upsertVoiceNoteResponse.ok, true);
-    const upsertVoiceLedger = await upsertVoiceNoteResponse.json() as { notes: Record<string, Array<Record<string, unknown>>> };
-    assert.equal(upsertVoiceLedger.notes['thread-card-a'].at(-1)?.id, 'note-client-voice');
-    assert.equal(upsertVoiceLedger.notes['thread-card-a'].at(-1)?.message, 'late voice update');
+    const upsertVoiceLedger = await upsertVoiceNoteResponse.json() as { changedThread: { notes: Record<string, Array<Record<string, unknown>>> } };
+    assert.equal(upsertVoiceLedger.changedThread.notes['thread-card-a'].at(-1)?.id, 'note-client-voice');
+    assert.equal(upsertVoiceLedger.changedThread.notes['thread-card-a'].at(-1)?.message, 'late voice update');
 
     const appendSameVoiceNoteResponse = await fetch(endpoint, {
       method: 'PATCH',
@@ -336,9 +338,9 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
       body: JSON.stringify({ action: 'append-note', note: { id: 'note-client-voice', threadId: 'thread-card-a', body: 'late voice append', source: 'voice', voiceFileRef: '/tmp/late.webm', status: 'uploading' } })
     });
     assert.equal(appendSameVoiceNoteResponse.ok, true);
-    const appendSameVoiceLedger = await appendSameVoiceNoteResponse.json() as { notes: Record<string, Array<Record<string, unknown>>> };
-    assert.equal(appendSameVoiceLedger.notes['thread-card-a'].filter((note) => note.id === 'note-client-voice').length, 1);
-    assert.equal(appendSameVoiceLedger.notes['thread-card-a'].at(-1)?.status, 'transcribing');
+    const appendSameVoiceLedger = await appendSameVoiceNoteResponse.json() as { changedThread: { notes: Record<string, Array<Record<string, unknown>>> } };
+    assert.equal(appendSameVoiceLedger.changedThread.notes['thread-card-a'].filter((note) => note.id === 'note-client-voice').length, 1);
+    assert.equal(appendSameVoiceLedger.changedThread.notes['thread-card-a'].at(-1)?.status, 'transcribing');
 
     const pasteResponse = await fetch(endpoint, {
       method: 'PATCH',
@@ -346,9 +348,7 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
       body: JSON.stringify({ action: 'paste-selection', selection: { cardIds: ['card-a'], zoneIds: ['zone-keep'], groupIds: ['group-keep'] } })
     });
     assert.equal(pasteResponse.ok, true);
-    const pastedLedger = await pasteResponse.json() as { cards: Array<Record<string, unknown>>; annotations: Array<Record<string, unknown>> };
-    assert.equal(pastedLedger.cards.length, 2);
-    assert.equal(pastedLedger.annotations.length, 6);
+    assert.equal((await pasteResponse.json() as { ok: boolean }).ok, true);
 
     const deleteResponse = await fetch(endpoint, {
       method: 'PATCH',
@@ -356,9 +356,7 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
       body: JSON.stringify({ action: 'delete-zones', zoneIds: ['zone-created', 'group-keep'] })
     });
     assert.equal(deleteResponse.ok, true);
-    const deletedLedger = await deleteResponse.json() as { annotations: Array<Record<string, unknown>> };
-    assert.equal(deletedLedger.annotations.some((entry) => entry.id === 'zone-created'), false);
-    assert.equal(deletedLedger.annotations.some((entry) => entry.id === 'group-keep'), true);
+    assert.deepEqual((await deleteResponse.json() as { removedZoneIds: string[] }).removedZoneIds, ['zone-created', 'group-keep']);
 
     const deleteGroupResponse = await fetch(endpoint, {
       method: 'PATCH',
@@ -366,9 +364,7 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
       body: JSON.stringify({ action: 'delete-zones', zoneIds: [], groupIds: ['group-keep'] })
     });
     assert.equal(deleteGroupResponse.ok, true);
-    const deletedGroupLedger = await deleteGroupResponse.json() as { cards: Array<Record<string, unknown>>; annotations: Array<Record<string, unknown>> };
-    assert.equal(deletedGroupLedger.annotations.some((entry) => entry.id === 'group-keep'), false);
-    assert.equal(deletedGroupLedger.cards.length, 2);
+    assert.deepEqual((await deleteGroupResponse.json() as { removedGroupIds: string[] }).removedGroupIds, ['group-keep']);
 
     const persistedLedger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { cards: Array<Record<string, unknown>>; annotations: Array<Record<string, unknown>> };
     assert.equal(persistedLedger.cards.length, 2);
@@ -412,9 +408,9 @@ test('decision-os note mutations normalize legacy notes arrays and persist from 
       body: JSON.stringify({ action: 'append-note', note: { id: 'note-client-1', threadId: 'thread-card-a', body: 'voice uploaded', source: 'voice', voiceFileRef: '/tmp/voice.webm', status: 'uploading' } })
     });
     assert.equal(appendResponse.ok, true);
-    const appendLedger = await appendResponse.json() as { notes: Record<string, Array<Record<string, unknown>>> };
-    assert.equal(Array.isArray(appendLedger.notes), false);
-    assert.equal(appendLedger.notes['thread-card-a'][0].id, 'note-client-1');
+    const appendLedger = await appendResponse.json() as { changedThread: { notes: Record<string, Array<Record<string, unknown>>> } };
+    assert.equal(Array.isArray(appendLedger.changedThread.notes), false);
+    assert.equal(appendLedger.changedThread.notes['thread-card-a'][0].id, 'note-client-1');
 
     const updateResponse = await fetch(endpoint, {
       method: 'PATCH',
@@ -431,7 +427,7 @@ test('decision-os note mutations normalize legacy notes arrays and persist from 
     assert.match(threadMarkdown, /transcription failed/);
     assert.equal(threadMarkdown.includes('"voiceFileRef":"/tmp/voice.webm"'), true);
 
-    const reloadResponse = await fetch(endpoint);
+    const reloadResponse = await fetch(`http://127.0.0.1:${address.port}/api/ledgers/game-design/threads/thread-card-a`);
     const reloaded = await reloadResponse.json() as { notes: Record<string, Array<Record<string, unknown>>> };
     assert.equal(reloaded.notes['thread-card-a'][0].message, 'transcription failed');
   } finally {

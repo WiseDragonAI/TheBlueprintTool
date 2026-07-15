@@ -70,7 +70,7 @@ export function parseMasterTaskMarkdown({ cardId, title, projectId = '', project
     ledgerId: String(ledgerId),
     ledgerTitle: String(ledgerTitle),
     ledger,
-    status: cardStatus === 'delayed' ? 'task-delayed' : cardStatus === 'done' ? 'task-complete' : ((codexQueued || codexProcessing) ? 'task-active' : 'task-waiting'),
+    status: cardStatus === 'backlog' ? 'task-backlog' : cardStatus === 'done' ? 'task-complete' : ((codexQueued || codexProcessing) ? 'task-active' : 'task-waiting'),
     codexRunId: String(codexRunId),
     codexPipelineRunId: String(codexPipelineRunId),
     codexStatus: normalizedCodexStatus,
@@ -122,7 +122,7 @@ export function deriveControlRoom(cards) {
   return {
     queue: eligible.filter((task) => task.status === 'task-waiting').sort(compare),
     active: eligible.filter((task) => task.status === 'task-active').sort(compare),
-    delayed: eligible.filter((task) => task.status === 'task-delayed').sort(compare),
+    backlog: eligible.filter((task) => task.status === 'task-backlog').sort(compare),
     ledgers: Array.from(new Set(eligible.map((task) => task.ledger))).sort((a, b) => a.localeCompare(b)),
     diagnostics: parsed.filter((task) => !task.valid && task.masterTask)
   };

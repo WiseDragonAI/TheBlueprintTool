@@ -3,7 +3,7 @@
  * WHY: Durable lifecycle ingestion must update only the thread file and its ownership metadata.
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { hydrateLedgerThreadNotes, stripHydratedThreadNotes, writeThreadNotesFile } from '@backend/business/ledger/helper/thread-content-file.js';
+import { hydrateLedgerThreadNotesFor, stripHydratedThreadNotes, writeThreadNotesFile } from '@backend/business/ledger/helper/thread-content-file.js';
 import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-ledger-notes.js';
 import { type NormalizedRunEvent } from '../helper/card-skill-run-event-types.js';
 import { resolveCardSkillRunOwnership } from '../helper/resolve-card-skill-run-ownership.js';
@@ -43,7 +43,7 @@ export function persistCardSkillRunEvents(input: {
     ? ledger.threadFiles as Record<string, unknown>
     : {};
   const previousThreadFile = String(existingThreadFiles[threadId] ?? '');
-  hydrateLedgerThreadNotes(ledger, input.decisionOsRoot);
+  hydrateLedgerThreadNotesFor(ledger, input.decisionOsRoot, threadId);
   const notesByThread = normalizeLedgerNotes(ledger);
   const notes = notesByThread[threadId] ?? [];
   const byId = new Map(notes.map((note) => [String(note.id ?? ''), note]));

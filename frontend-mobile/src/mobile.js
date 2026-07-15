@@ -3,7 +3,7 @@ import { ledgerCardBody } from '/canvas-src/runtime/ledger/helper/ledger-card-bo
 import { saveLedgerCardMediaCarouselSlide } from '/canvas-src/runtime/ledger/helper/persist-ledger-card-media-carousel.js';
 import { initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './mobile-thread.js';
 import { initializeMobileCodex, openMobileCodexLibrary, setMobileCodexContext } from './mobile-codex.js';
-import { activeAge, activeStopwatch, cardCodexRunId, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from './mobile-control-room.js';
+import { activeAge, activeStopwatch, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus } from './mobile-control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from './mobile-control-room-route.js';
 import { cardPathForProject, ledgerPathForProject, parseProjectRoute, parseProjectScope, projectPath, zonePathForProject } from './mobile-project-route.js';
 import { projectSettingsValues, saveProjectSettingsRequest } from './mobile-project-settings.js';
@@ -56,6 +56,8 @@ let queuePersistenceSequence = 0;
 let queueSortable = null;
 let controlRoomEventSource = null;
 let controlRoomRefreshTimer = 0;
+let controlRoomEtag = '';
+let cardSearchTimer = 0;
 
 function projectFetch(url, options = {}, projectId = state.resourceProjectId) {
   return fetch(projectScopedRequestPath(url, projectId), options);
@@ -102,12 +104,7 @@ function cardPath(ledgerId, zoneId, cardId) {
 }
 
 function pathForTask(task) {
-  const ledger = state.controlRoom?.documents?.find((entry) => entry.projectId === task.projectId && entry.ledgerId === task.ledgerId)?.document;
-  const previous = state.ledger;
-  state.ledger = ledger;
-  const zone = ledgerZones().find((entry) => entry.cards.some((card) => String(card.id) === task.cardId));
-  state.ledger = previous;
-  return cardPathForProject(task.projectId, task.ledgerId, zone?.id ?? 'ungrouped', task.cardId);
+  return cardPathForProject(task.projectId, task.ledgerId, task.zoneId || 'ungrouped', task.cardId);
 }
 
 function navigate(path, replace = false) {
@@ -161,7 +158,29 @@ async function ledgerMutation(ledgerId, mutation, projectId = state.resourceProj
   }, projectId);
   const payload = await response.json().catch(() => null);
   if (!response.ok || payload?.ok === false) throw new Error(payload?.error || `Request failed with HTTP ${response.status}.`);
-  return payload;
+  if (!payload?.ok || projectId !== state.resourceProjectId || ledgerId !== state.activeLedgerId || !state.ledger) return payload;
+  if (payload.changedCard) {
+    const cards = Array.isArray(state.ledger.cards) ? state.ledger.cards : [];
+    state.ledger.cards = cards.some((card) => String(card.id) === String(payload.changedCard.id))
+      ? cards.map((card) => String(card.id) === String(payload.changedCard.id) ? payload.changedCard : card)
+      : [...cards, payload.changedCard];
+  }
+  if (Array.isArray(payload.removedCardIds) && payload.removedCardIds.length) {
+    const removed = new Set(payload.removedCardIds.map(String));
+    state.ledger.cards = (state.ledger.cards ?? []).filter((card) => !removed.has(String(card.id)));
+  }
+  if (payload.changedAnnotation) {
+    const annotations = Array.isArray(state.ledger.annotations) ? state.ledger.annotations : [];
+    state.ledger.annotations = annotations.some((entry) => String(entry.id) === String(payload.changedAnnotation.id))
+      ? annotations.map((entry) => String(entry.id) === String(payload.changedAnnotation.id) ? payload.changedAnnotation : entry)
+      : [...annotations, payload.changedAnnotation];
+  }
+  if (payload.changedThread) {
+    state.ledger.threadFiles = { ...(state.ledger.threadFiles ?? {}), ...(payload.changedThread.threadFiles ?? {}) };
+    state.ledger.notes = { ...(state.ledger.notes ?? {}), ...(payload.changedThread.notes ?? {}) };
+    state.ledger.deletedNoteIds = { ...(state.ledger.deletedNoteIds ?? {}), ...(payload.changedThread.deletedNoteIds ?? {}) };
+  }
+  return state.ledger;
 }
 
 function nextZoneRect() {
@@ -600,7 +619,7 @@ function taskRow(task, index) {
       runtimeStatus.textContent = 'Running';
     }
   }
-  const age = task.status === 'task-delayed' ? 'delayed' : task.status === 'task-active' ? activeAge(task.activeSince) : waitingAge(task.waitingSince);
+  const age = task.status === 'task-backlog' ? 'backlog' : task.status === 'task-active' ? activeAge(task.activeSince) : waitingAge(task.waitingSince);
   const process = task.codexProcessing ? ` · Codex ${task.codexRunId}` : '';
   if (!active) {
     summary.querySelector('.task-meta').textContent = `${task.projectName} · ${task.ledger} · ${age}${process}`;
@@ -632,14 +651,7 @@ function taskRow(task, index) {
     button.addEventListener('click', () => {
       const target = state.controlRoom.allTasks.find((candidate) => candidate.projectId === task.projectId && candidate.cardId === subtask.cardId && candidate.ledgerId === task.ledgerId);
       if (target) navigate(pathForTask(target));
-      else {
-        const ledger = state.controlRoom.documents.find((entry) => entry.projectId === task.projectId && entry.ledgerId === task.ledgerId)?.document;
-        const previous = state.ledger;
-        state.ledger = ledger;
-        const zone = ledgerZones().find((entry) => entry.cards.some((card) => String(card.id) === subtask.cardId));
-        state.ledger = previous;
-        navigate(cardPathForProject(task.projectId, task.ledgerId, zone?.id ?? 'ungrouped', subtask.cardId));
-      }
+      else navigate(cardPathForProject(task.projectId, task.ledgerId, subtask.zoneId || 'ungrouped', subtask.cardId));
     });
     return button;
   });
@@ -716,10 +728,19 @@ function renderControlRoom() {
   elements['control-empty'].textContent = {
     queue: 'No waiting tasks',
     active: 'No active tasks',
-    delayed: 'No delayed tasks'
+    backlog: 'No backlog tasks'
   }[state.controlTab] ?? 'No tasks';
-  elements['control-diagnostics'].hidden = true;
-  elements['control-diagnostics'].replaceChildren();
+  const diagnostics = Array.isArray(state.controlRoom?.diagnostics) ? state.controlRoom.diagnostics : [];
+  const messages = [
+    ...(state.controlRoom?.stale ? [`Showing cached revision ${state.controlRoom.revision}; the server is rebuilding.`] : []),
+    ...diagnostics.map((entry) => Array.isArray(entry?.diagnostics) ? entry.diagnostics.join(' · ') : asText(entry?.message)).filter(Boolean)
+  ];
+  elements['control-diagnostics'].hidden = messages.length === 0;
+  elements['control-diagnostics'].replaceChildren(...messages.map((message) => {
+    const row = document.createElement('p');
+    row.textContent = message;
+    return row;
+  }));
   setView('control-room-view');
   document.title = 'Control room · Decision OS';
   const { anchor } = parseControlRoomRoute(location.href);
@@ -741,48 +762,12 @@ function persistControlRoomScrollAnchor() {
 }
 
 async function loadControlRoom() {
-  const documents = await Promise.all(state.projects.flatMap((project) => project.ledgers.map(async (ledger) => ({
-    projectId: project.id,
-    projectName: project.name,
-    projectColor: project.color,
-    ledgerId: ledger.id,
-    ledgerTitle: ledger.title,
-    document: await projectFetch(`/decision-os/${encodeURIComponent(ledger.id)}`, { cache: 'no-store' }, project.id).then((response) => {
-      if (!response.ok) throw new Error(`Could not load ${project.name}/${ledger.title} (${response.status}).`);
-      return response.json();
-    })
-  }))));
-  const allTasks = (await Promise.all(documents.flatMap(({ projectId, projectName, projectColor, ledgerId, ledgerTitle, document }) => {
-    const cards = document.cards ?? [];
-    return cards.map(async (card) => {
-      const markdown = ledgerCardBody(card);
-      const runId = cardCodexRunId(card);
-      const pipelineRunId = String(card.codexQueuedPipelineRunId ?? '').trim();
-      let codexStatus = '';
-      let codexStartedAt = '';
-      let codexQueuePosition = null;
-      if (pipelineRunId) {
-        const response = await projectFetch(`/api/codex/pipelines/runs/${encodeURIComponent(pipelineRunId)}`, { cache: 'no-store' }, projectId);
-        if (response.ok) {
-          const payload = await response.json();
-          codexStatus = String(payload.run?.status ?? payload.status ?? '');
-          codexStartedAt = String(payload.activeSkill?.startedAt ?? payload.run?.resumedAt ?? payload.run?.startedAt ?? '');
-          codexQueuePosition = Number.isInteger(payload.queuePosition) ? payload.queuePosition : null;
-        }
-      } else if (runId && /#task-active\b/i.test(markdown)) {
-        const response = await projectFetch(`/api/codex/skills/runs/${encodeURIComponent(runId)}?ledgerId=${encodeURIComponent(ledgerId)}&cardId=${encodeURIComponent(card.id)}&since=0`, { cache: 'no-store' }, projectId);
-        if (response.ok) {
-          const payload = await response.json();
-          codexStatus = String(payload.run?.status ?? payload.status ?? '');
-          codexStartedAt = String(payload.run?.startedAt ?? payload.startedAt ?? '');
-          codexQueuePosition = Number.isInteger(payload.queuePosition) ? payload.queuePosition : null;
-        }
-      }
-      const threadNotes = document.notes?.[`thread-${card.id}`] ?? [];
-      return { cardId: card.id, title: card.title, projectId, projectName, projectColor, ledgerId, ledgerTitle, markdown, cardStatus: card.status, cards, threadNotes, codexRunId: runId, codexPipelineRunId: pipelineRunId, codexStatus, codexStartedAt, codexQueuePosition };
-    });
-  }))).flat();
-  state.controlRoom = { ...deriveControlRoom(allTasks), allTasks, documents };
+  const response = await fetch('/api/control-room', { cache: 'no-store', headers: controlRoomEtag ? { 'if-none-match': controlRoomEtag } : {} });
+  if (response.status === 304 && state.controlRoom) return false;
+  if (!response.ok) throw new Error(`Could not load the Control Room (${response.status}).`);
+  state.controlRoom = await response.json();
+  controlRoomEtag = response.headers.get('etag') ?? '';
+  return true;
 }
 
 function subscribeControlRoomEvents() {
@@ -792,8 +777,12 @@ function subscribeControlRoomEvents() {
     clearTimeout(controlRoomRefreshTimer);
     controlRoomRefreshTimer = window.setTimeout(async () => {
       if (location.pathname !== '/') return;
-      await loadControlRoom();
-      renderControlRoom();
+      try {
+        if (await loadControlRoom()) renderControlRoom();
+      } catch (cause) {
+        elements['control-diagnostics'].hidden = false;
+        elements['control-diagnostics'].textContent = cause instanceof Error ? cause.message : 'Control Room refresh failed.';
+      }
     }, 80);
   };
   controlRoomEventSource.addEventListener('ledger-content-change', refresh);
@@ -804,18 +793,16 @@ async function persistQueueOrder() {
   const sequence = ++queuePersistenceSequence;
   const reordered = filteredControlTasks();
   const mutations = reordered.map((task, index) => {
-    const markdown = withQueueRank(task.markdown, index + 1);
-    task.markdown = markdown;
     task.queueRank = index + 1;
     const source = state.controlRoom.allTasks.find((candidate) => candidate.projectId === task.projectId && candidate.cardId === task.cardId && candidate.ledgerId === task.ledgerId);
-    if (source) source.markdown = markdown;
-    return { task, markdown };
+    if (source) source.queueRank = index + 1;
+    return { task, queueRank: index + 1 };
   });
   renderControlRoom();
   try {
-    await Promise.all(mutations.map(({ task, markdown }) => ledgerMutation(task.ledgerId, {
+    await Promise.all(mutations.map(({ task, queueRank }) => ledgerMutation(task.ledgerId, {
       action: 'patch-card',
-      cardPatch: { id: task.cardId, description: markdown }
+      cardPatch: { id: task.cardId, queueRank }
     }, task.projectId)));
   } catch (error) {
     if (sequence !== queuePersistenceSequence) return;
@@ -827,7 +814,7 @@ async function persistQueueOrder() {
 }
 
 async function activateMasterTask({ ledgerId, cardId, startedAt }) {
-  const ledger = await projectFetch(`/decision-os/${encodeURIComponent(ledgerId)}`, { cache: 'no-store' }).then((response) => response.json());
+  const ledger = await projectFetch(`/api/ledgers/${encodeURIComponent(ledgerId)}/canvas`, { cache: 'no-store' }).then((response) => response.json());
   const card = ledger.cards?.find((entry) => String(entry.id) === String(cardId));
   if (!card || !parseMasterCandidate(card)) return ledger;
   return ledgerMutation(ledgerId, {
@@ -845,7 +832,7 @@ async function createTaskIntake(projectId) {
   if (state.resourceProjectId !== projectId) throw new Error('The project is no longer available.');
   const ledgerRef = state.ledgers.find((entry) => entry.title === state.controlFilter || entry.id === state.controlFilter) ?? state.ledgers[0];
   if (!ledgerRef) throw new Error('Create a ledger before starting a task.');
-  const ledger = await projectFetch(`/decision-os/${encodeURIComponent(ledgerRef.id)}`, { cache: 'no-store' }).then((response) => response.json());
+  const ledger = await projectFetch(`/api/ledgers/${encodeURIComponent(ledgerRef.id)}/canvas`, { cache: 'no-store' }).then((response) => response.json());
   state.ledger = ledger;
   state.activeLedgerId = ledgerRef.id;
   const rect = nextZoneRect();
@@ -948,6 +935,7 @@ function renderCards(cards) {
   const query = state.query.trim().toLocaleLowerCase();
   const filtered = cards.filter((card) => {
     if (!query) return true;
+    if (card.serverMatch === true) return true;
     return [card.title, ledgerCardBody(card)]
       .some((value) => asText(value).toLocaleLowerCase().includes(query));
   });
@@ -1112,22 +1100,22 @@ function renderCard(card) {
     }));
     const completion = document.createElement('section');
     completion.className = 'master-task-completion';
-    const delayed = card.status === 'delayed';
+    const backlog = card.status === 'backlog';
     const delayButton = document.createElement('button');
     delayButton.type = 'button';
     delayButton.className = 'delay-master-task-button';
-    delayButton.textContent = delayed ? 'Restore to queue' : 'Move to backlog';
+    delayButton.textContent = backlog ? 'Restore to queue' : 'Move to backlog';
     delayButton.disabled = card.status === 'done';
     delayButton.addEventListener('click', async () => {
-      const nextStatus = delayed ? 'todo' : 'delayed';
+      const nextStatus = backlog ? 'todo' : 'backlog';
       delayButton.disabled = true;
-      delayButton.textContent = delayed ? 'Restoring task…' : 'Moving to backlog…';
+      delayButton.textContent = backlog ? 'Restoring task…' : 'Moving to backlog…';
       try {
         state.ledger = await ledgerMutation(state.activeLedgerId, { action: 'patch-card', cardPatch: { id: card.id, status: nextStatus } });
-        navigate(controlRoomPath(nextStatus === 'delayed' ? 'delayed' : 'queue'), true);
+        navigate(controlRoomPath(nextStatus === 'backlog' ? 'backlog' : 'queue'), true);
       } catch (cause) {
         delayButton.disabled = false;
-        delayButton.textContent = delayed ? 'Restore to queue' : 'Move to backlog';
+        delayButton.textContent = backlog ? 'Restore to queue' : 'Move to backlog';
         elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Master task status update failed.';
         setView('error-view');
       }
@@ -1233,7 +1221,7 @@ function renderZone(zone) {
 }
 
 async function loadLedger(ledgerId) {
-  const response = await projectFetch(`/decision-os/${encodeURIComponent(ledgerId)}`, { cache: 'no-store' });
+  const response = await projectFetch(`/api/ledgers/${encodeURIComponent(ledgerId)}/navigation`, { cache: 'no-store' });
   if (!response.ok) throw new Error(`The server returned HTTP ${response.status}.`);
   const ledger = await response.json();
   if (!ledger || !Array.isArray(ledger.cards)) throw new Error('The ledger response does not contain a card list.');
@@ -1247,7 +1235,7 @@ async function loadLedger(ledgerId) {
     ledgers: state.ledgers,
     onCodexStarted: activateMasterTask,
     onLedgerRefresh: async (activeLedgerId) => {
-      const refreshed = await projectFetch(`/decision-os/${encodeURIComponent(activeLedgerId)}`, { cache: 'no-store' }).then((result) => result.ok ? result.json() : null);
+      const refreshed = await projectFetch(`/api/ledgers/${encodeURIComponent(activeLedgerId)}/navigation`, { cache: 'no-store' }).then((result) => result.ok ? result.json() : null);
       if (refreshed && activeLedgerId === state.activeLedgerId) state.ledger = refreshed;
       return refreshed;
     }
@@ -1345,10 +1333,13 @@ async function loadRoute() {
     const zones = ledgerZones();
     const zone = zoneMarker === 'zones' ? zones.find((entry) => String(entry.id) === requestedZone) : null;
     if (zone && cardMarker === 'cards' && requestedCard) {
-      const card = zone.cards.find((entry) => String(entry.id) === requestedCard);
+      const detailResponse = await projectFetch(`/api/ledgers/${encodeURIComponent(ledgerId)}/cards/${encodeURIComponent(requestedCard)}`, { cache: 'no-store' });
+      const card = detailResponse.ok ? await detailResponse.json() : null;
       if (card) {
+        state.ledger.cards = state.ledger.cards.map((entry) => String(entry.id) === requestedCard ? card : entry);
         state.activeZoneId = asText(zone.id);
         state.activeZoneColor = asText(zone.color);
+        syncMobileThreadContext({ projectId: state.resourceProjectId, ledgerId, ledger: state.ledger, ledgers: state.ledgers, onCodexStarted: activateMasterTask });
         renderCard(card);
       }
       else navigate(zonePath(ledgerId, zone.id), true);
@@ -1430,7 +1421,19 @@ creationForm.addEventListener('submit', (event) => {
 });
 elements['card-search'].addEventListener('input', (event) => {
   state.query = event.target.value;
-  renderCards(state.ledger?.cards ?? []);
+  clearTimeout(cardSearchTimer);
+  if (!state.query.trim()) {
+    const zone = ledgerZones().find((entry) => String(entry.id) === state.activeZoneId);
+    renderCards(zone?.cards ?? []);
+    return;
+  }
+  cardSearchTimer = window.setTimeout(async () => {
+    const query = new URLSearchParams({ zoneId: state.activeZoneId, q: state.query });
+    const response = await projectFetch(`/api/ledgers/${encodeURIComponent(state.activeLedgerId)}/search?${query}`, { cache: 'no-store' });
+    if (!response.ok) return;
+    const result = await response.json();
+    renderCards(Array.isArray(result.matches) ? result.matches : []);
+  }, 120);
 });
 window.addEventListener('popstate', () => loadRoute());
 window.addEventListener('decision-os:codex-run-enqueued', () => { void loadRoute(); });
