@@ -28,6 +28,10 @@
 - **Don't.** `Add headers or query params: x-ledger-id, x-thread-id, x-card-id, x-note-id, x-queue-codex.`
 - **Do.** `Add required headers to /api/voice-upload: x-ledger-id, x-thread-id, x-card-id, x-note-id, x-queue-codex.`
 
+### Task Closure Authorization
+
+- Unless explicitly instructed by the operator or the active skill, agents must not close tasks or mark cards `done`.
+
 ### Reference Component Fidelity
 
 - **Trigger.** When the operator names an existing widget or component as the visual reference, inspect that component's rendered structure and every CSS rule controlling its surface, icon, label, casing, spacing, and states before implementation.
