@@ -234,7 +234,6 @@ node bin/decision-os-workload-status.mjs
 - Full suite once after implementation and focused tests pass.
 - Failure: rerun smallest failing scope.
 - Passing check: do not repeat after docs-only edits.
-- Keep project default test concurrency.
 
 ## Card Image Assets
 

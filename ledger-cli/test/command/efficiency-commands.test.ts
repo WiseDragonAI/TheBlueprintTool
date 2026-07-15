@@ -77,6 +77,28 @@ test('master-task apply preserves lifecycle metadata, generates ids, and persist
   }
 });
 
+test('execution profile exposes admission and focused verification commands without a concurrency override', async () => {
+  const { decisionOs, ledger } = fixture();
+  const backendModules = join(decisionOs, '..', 'backend', 'node_modules');
+  const backendTsx = join(backendModules, 'tsx', 'dist', 'esm');
+  mkdirSync(backendTsx, { recursive: true });
+  writeFileSync(join(backendTsx, 'index.mjs'), '');
+  const previousRoot = process.env.DECISION_OS_LEDGER_ROOT;
+  process.env.DECISION_OS_LEDGER_ROOT = decisionOs;
+  try {
+    const result = await manageLedgerJsonController({ ledgerCommand: 'execution-profile', ledgerJsonFile: ledger });
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      const value = JSON.parse(String(result.value));
+      assert.equal(value.commands.admission, 'node bin/decision-os-workload-status.mjs');
+      assert.equal(value.commands.focusedTests.length, 2);
+      assert.equal(value.commands.focusedTests.every((command: string) => !command.includes('test-concurrency')), true);
+    }
+  } finally {
+    if (previousRoot === undefined) delete process.env.DECISION_OS_LEDGER_ROOT; else process.env.DECISION_OS_LEDGER_ROOT = previousRoot;
+  }
+});
+
 test('bounded run events returns only the requested event type from one catalog run', () => {
   const root = mkdtempSync(join(tmpdir(), 'decision-os-events-'));
   const decisionOs = join(root, 'project', '.decision-os');

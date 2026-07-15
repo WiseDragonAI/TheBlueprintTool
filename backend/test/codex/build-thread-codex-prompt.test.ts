@@ -16,7 +16,7 @@ test('thread Codex prompt uses a direct scoped contract without triggering open-
     threadMarkdown: '# OPERATOR\n\nImplement this request.\n',
     runSummaryFile: '/workspace/.decision-os/runs/codex-skills/specs/run.md',
     operatorNoteTimestamp: '2026-07-08T01:00:00.000Z',
-    context: { version: 2, card: { id: 'card-a', markdown: '# Card A\n' }, thread: { id: 'thread-card-a', markdown: '# OPERATOR\n\nImplement this request.\n' } },
+    context: { version: 2, card: { id: 'card-a', markdown: '# Card A\n' }, thread: { id: 'thread-card-a', markdown: '# OPERATOR\n\nImplement this request.\n' }, actions: { executionProfile: { command: 'ledger-cli execution-profile --ledger "$DECISION_OS_LEDGER_FILE" --json' } } },
   });
 
   assert.match(prompt.developerInstructions, /^Decision OS card run:/);
@@ -35,6 +35,7 @@ test('thread Codex prompt uses a direct scoped contract without triggering open-
 
   assert.match(prompt.taskContext, /Execute the operator request from this Decision OS thread\./);
   assert.match(prompt.taskContext, /Decision OS context:/);
+  assert.match(prompt.taskContext, /ledger-cli execution-profile/);
   assert.match(prompt.taskContext, /Implement this request\./);
   assert.match(prompt.taskContext, /# Card A/);
   assert.doesNotMatch(prompt.taskContext, /^## [A-Z]\./m);
