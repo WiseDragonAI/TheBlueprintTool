@@ -21,7 +21,7 @@ import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand, resolve
 import { codexCapacityResumeDelayMs, isTransientCodexCapacityFailure, readCodexSessionId } from '../helper/transient-codex-capacity-failure.js';
 import { decisionOsCodexEnvironment } from '../helper/decision-os-codex-runtime.js';
 import { projectCardCodexRun } from '../helper/project-card-codex-run.js';
-import { enqueueCodexThreadProcess, removeCodexProcessQueueItem } from '../helper/codex-process-queue.js';
+import { enqueueCodexThreadProcess, recordCodexProcessQueueItemProcess, removeCodexProcessQueueItem } from '../helper/codex-process-queue.js';
 import { scheduleCodexProcesses, unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
 import { readCardSkillRunController } from './read-card-skill-run-controller.js';
 import { createTerminalCodexProcessReconciler, type TerminalCodexStatus } from '../helper/reconcile-terminal-codex-process.js';
@@ -307,6 +307,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
       stdio: ['pipe', 'pipe', 'pipe'],
       detached: process.platform !== 'win32',
     });
+    recordCodexProcessQueueItemProcess({ decisionOsRoot, id: runId, processId: child.pid ?? 0, stdoutFile, stderrFile });
     const stdout = createWriteStream(stdoutFile, { flags: 'a' });
     const stderr = createWriteStream(stderrFile, { flags: 'a' });
     let terminalEventStatus: TerminalCodexStatus | null = null;

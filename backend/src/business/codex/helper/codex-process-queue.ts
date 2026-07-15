@@ -15,6 +15,10 @@ export type CodexProcessQueueItem = {
   startedAt: string | null;
   interruptedAt: string | null;
   interruptionReason: string;
+  processId: number;
+  processStartTime: string;
+  stdoutFile: string;
+  stderrFile: string;
   payload: AnyRecord;
 };
 
@@ -37,6 +41,10 @@ function normalizeItem(value: unknown): CodexProcessQueueItem | null {
     startedAt: typeof item.startedAt === 'string' ? item.startedAt : null,
     interruptedAt: status === 'interrupted' && typeof item.interruptedAt === 'string' ? item.interruptedAt : null,
     interruptionReason: status === 'interrupted' ? String(item.interruptionReason ?? codexProcessRestartInterruptionReason) : '',
+    processId: Math.max(0, Number(item.processId ?? 0) || 0),
+    processStartTime: String(item.processStartTime ?? ''),
+    stdoutFile: String(item.stdoutFile ?? ''),
+    stderrFile: String(item.stderrFile ?? ''),
     payload: item.payload && typeof item.payload === 'object' ? item.payload as AnyRecord : {},
   };
 }
@@ -63,13 +71,13 @@ export function writeCodexProcessQueue(decisionOsRoot: string, items: readonly C
 }
 
 export function enqueueCodexThreadProcess(input: { decisionOsRoot: string; id: string; createdAt: string; payload: AnyRecord }): CodexProcessQueueItem {
-  const item: CodexProcessQueueItem = { id: input.id, kind: 'thread', status: 'pending', createdAt: input.createdAt, startedAt: null, interruptedAt: null, interruptionReason: '', payload: input.payload };
+  const item: CodexProcessQueueItem = { id: input.id, kind: 'thread', status: 'pending', createdAt: input.createdAt, startedAt: null, interruptedAt: null, interruptionReason: '', processId: 0, processStartTime: '', stdoutFile: '', stderrFile: '', payload: input.payload };
   writeCodexProcessQueue(input.decisionOsRoot, [...readCodexProcessQueue(input.decisionOsRoot), item]);
   return item;
 }
 
 export function enqueueCodexContinuation(input: { decisionOsRoot: string; id: string; createdAt: string; payload: AnyRecord }): CodexProcessQueueItem {
-  const item: CodexProcessQueueItem = { id: input.id, kind: 'continuation', status: 'pending', createdAt: input.createdAt, startedAt: null, interruptedAt: null, interruptionReason: '', payload: input.payload };
+  const item: CodexProcessQueueItem = { id: input.id, kind: 'continuation', status: 'pending', createdAt: input.createdAt, startedAt: null, interruptedAt: null, interruptionReason: '', processId: 0, processStartTime: '', stdoutFile: '', stderrFile: '', payload: input.payload };
   writeCodexProcessQueue(input.decisionOsRoot, [...readCodexProcessQueue(input.decisionOsRoot), item]);
   return item;
 }
@@ -92,38 +100,212 @@ export function removeCodexProcessQueueItem(decisionOsRoot: string, id: string):
   if (after.length !== before.length) writeCodexProcessQueue(decisionOsRoot, after);
 }
 
-export function recoverCodexProcessQueue(decisionOsRoot: string): void {
+function procStartTime(pid: number): string {
+  if (pid <= 0 || process.platform !== 'linux') return '';
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
+    const close = stat.lastIndexOf(')');
+    return close >= 0 ? stat.slice(close + 2).trim().split(/\s+/)[19] ?? '' : '';
+  } catch {
+    return '';
+  }
+}
+
+export function codexProcessIdentity(pid: number): string {
+  if (pid <= 0) return '';
+  const identity = procStartTime(pid);
+  if (process.platform === 'linux') return identity;
+  try {
+    process.kill(pid, 0);
+    return String(pid);
+  } catch {
+    return '';
+  }
+}
+
+export function isSameCodexProcess(pid: number, startTime: string): boolean {
+  if (pid <= 0 || !startTime) return false;
+  return codexProcessIdentity(pid) === startTime;
+}
+
+export function recordCodexProcessQueueItemProcess(input: { decisionOsRoot: string; id: string; processId: number; stdoutFile: string; stderrFile: string }): CodexProcessQueueItem | null {
+  let selected: CodexProcessQueueItem | null = null;
+  const items = readCodexProcessQueue(input.decisionOsRoot).map((item) => {
+    if (item.id !== input.id || item.status !== 'running') return item;
+    selected = {
+      ...item,
+      processId: input.processId,
+      processStartTime: codexProcessIdentity(input.processId),
+      stdoutFile: input.stdoutFile,
+      stderrFile: input.stderrFile,
+    };
+    return selected;
+  });
+  if (selected) writeCodexProcessQueue(input.decisionOsRoot, items);
+  return selected;
+}
+
+function terminalStatus(stdoutFile: string): 'complete' | 'failed' | 'cancelled' | null {
+  if (!stdoutFile || !existsSync(stdoutFile)) return null;
+  let status: 'complete' | 'failed' | 'cancelled' | null = null;
+  for (const line of readFileSync(stdoutFile, 'utf8').replace(/\r\n?/g, '\n').split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const event = JSON.parse(line) as AnyRecord;
+      const type = String(event.type ?? '');
+      if (type === 'turn.completed') status = 'complete';
+      else if (/cancelled|canceled/i.test(type)) status = 'cancelled';
+      else if (/^(?:thread|turn|run)\.failed$/i.test(type)) status = 'failed';
+    } catch {
+      // A partial final line is not a terminal event.
+    }
+  }
+  return status;
+}
+
+function safeSegment(value: unknown): string {
+  return String(value || 'untitled').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled';
+}
+
+function runFiles(decisionOsRoot: string, item: CodexProcessQueueItem): { stdoutFile: string; stderrFile: string } {
+  const runId = String(item.payload.runId ?? item.id);
+  const ledgerId = String(item.payload.ledgerId ?? 'untitled');
+  const directory = resolve(decisionOsRoot, 'runs', 'codex-skills', safeSegment(ledgerId));
+  return {
+    stdoutFile: item.stdoutFile || resolve(directory, `${safeSegment(runId)}.jsonl`),
+    stderrFile: item.stderrFile || resolve(directory, `${safeSegment(runId)}.log`),
+  };
+}
+
+function recoveredContinuation(item: CodexProcessQueueItem): CodexProcessQueueItem {
+  if (item.kind === 'continuation') return {
+    ...item,
+    status: 'pending',
+    startedAt: null,
+    interruptedAt: null,
+    interruptionReason: '',
+    processId: 0,
+    processStartTime: '',
+    payload: { ...item.payload, restartRecovery: true },
+  };
+  return {
+    ...item,
+    kind: 'continuation',
+    status: 'pending',
+    startedAt: null,
+    interruptedAt: null,
+    interruptionReason: '',
+    processId: 0,
+    processStartTime: '',
+    payload: {
+      ledgerId: item.payload.ledgerId,
+      cardId: item.payload.cardId,
+      runId: item.id,
+      newSession: false,
+      codexModel: item.payload.codexModel,
+      codexEffort: item.payload.codexEffort,
+      traceId: item.payload.traceId,
+      restartRecovery: true,
+    },
+  };
+}
+
+function stopAdoptedMonitor(runtime: AnyRecord, id: string): void {
+  const monitors = runtime.codexAdoptedProcessMonitors instanceof Map
+    ? runtime.codexAdoptedProcessMonitors as Map<string, NodeJS.Timeout>
+    : null;
+  const timer = monitors?.get(id);
+  if (timer) clearInterval(timer);
+  monitors?.delete(id);
+}
+
+function scheduleAfterAdoptedSettlement(runtime: AnyRecord): void {
+  const schedule = runtime.scheduleCodexProcesses;
+  if (typeof schedule === 'function') void Promise.resolve(schedule()).catch(() => undefined);
+}
+
+function monitorAdoptedProcess(decisionOsRoot: string, runtime: AnyRecord, item: CodexProcessQueueItem): void {
+  let monitors = runtime.codexAdoptedProcessMonitors instanceof Map
+    ? runtime.codexAdoptedProcessMonitors as Map<string, NodeJS.Timeout>
+    : null;
+  if (!monitors) {
+    monitors = new Map<string, NodeJS.Timeout>();
+    Object.defineProperty(runtime, 'codexAdoptedProcessMonitors', { value: monitors, writable: true, configurable: true, enumerable: false });
+  }
+  if (monitors.has(item.id)) return;
+  const runId = String(item.payload.runId ?? item.id);
+  const timer = setInterval(() => {
+    const current = readCodexProcessQueue(decisionOsRoot).find((entry) => entry.id === item.id && entry.status === 'running');
+    if (!current) {
+      stopAdoptedMonitor(runtime, item.id);
+      return;
+    }
+    const settled = terminalStatus(current.stdoutFile);
+    const runs = runtime.codexSkillRuns && typeof runtime.codexSkillRuns === 'object'
+      ? runtime.codexSkillRuns as Record<string, AnyRecord>
+      : {};
+    runtime.codexSkillRuns = runs;
+    if (settled) {
+      runs[runId] = { ...(runs[runId] ?? {}), status: settled, adopted: false, finishedAt: new Date().toISOString() };
+      removeCodexProcessQueueItem(decisionOsRoot, current.id);
+      stopAdoptedMonitor(runtime, current.id);
+      if (typeof runtime.onCodexRunSettled === 'function') runtime.onCodexRunSettled({
+        ledgerId: current.payload.ledgerId,
+        cardId: current.payload.cardId,
+        outputCardId: current.payload.cardId,
+        threadId: `thread-${String(current.payload.cardId ?? '')}`,
+        runId,
+        status: settled,
+      });
+      scheduleAfterAdoptedSettlement(runtime);
+      return;
+    }
+    if (isSameCodexProcess(current.processId, current.processStartTime)) return;
+    writeCodexProcessQueue(decisionOsRoot, readCodexProcessQueue(decisionOsRoot).map((entry) => entry.id === current.id ? recoveredContinuation(entry) : entry));
+    delete runs[runId];
+    stopAdoptedMonitor(runtime, current.id);
+    scheduleAfterAdoptedSettlement(runtime);
+  }, 250);
+  timer.unref?.();
+  monitors.set(item.id, timer);
+}
+
+export function recoverCodexProcessQueue(decisionOsRoot: string, runtime?: AnyRecord): void {
   const items = readCodexProcessQueue(decisionOsRoot);
   if (!items.some((item) => item.status === 'running')) return;
-  writeCodexProcessQueue(decisionOsRoot, items.map((item): CodexProcessQueueItem => {
-    if (item.status !== 'running') return item;
-    if (item.kind === 'continuation') return {
-      ...item,
-      status: 'pending',
-      startedAt: null,
-      interruptedAt: null,
-      interruptionReason: '',
-      payload: { ...item.payload, restartRecovery: true },
-    };
-    return {
-      ...item,
-      kind: 'continuation',
-      status: 'pending',
-      startedAt: null,
-      interruptedAt: null,
-      interruptionReason: '',
-      payload: {
+  const runs = runtime && runtime.codexSkillRuns && typeof runtime.codexSkillRuns === 'object'
+    ? runtime.codexSkillRuns as Record<string, AnyRecord>
+    : {};
+  if (runtime) runtime.codexSkillRuns = runs;
+  const recovered = items.flatMap((item): CodexProcessQueueItem[] => {
+    if (item.status !== 'running') return [item];
+    const runId = String(item.payload.runId ?? item.id);
+    const files = runFiles(decisionOsRoot, item);
+    const settled = terminalStatus(files.stdoutFile);
+    if (settled) {
+      runs[runId] = { ...(runs[runId] ?? {}), id: runId, status: settled, pid: item.processId, adopted: false, finishedAt: new Date().toISOString() };
+      return [];
+    }
+    if (isSameCodexProcess(item.processId, item.processStartTime)) {
+      runs[runId] = {
+        ...(runs[runId] ?? {}),
+        id: runId,
         ledgerId: item.payload.ledgerId,
-        cardId: item.payload.cardId,
-        runId: item.id,
-        newSession: false,
-        codexModel: item.payload.codexModel,
-        codexEffort: item.payload.codexEffort,
-        traceId: item.payload.traceId,
-        restartRecovery: true,
-      },
-    };
-  }));
+        outputCardId: item.payload.cardId,
+        stdoutFile: files.stdoutFile,
+        stderrFile: files.stderrFile,
+        pid: item.processId,
+        status: 'running',
+        startedAt: item.startedAt,
+        adopted: true,
+        queueItemId: item.id,
+      };
+      if (runtime) monitorAdoptedProcess(decisionOsRoot, runtime, item);
+      return [item];
+    }
+    return [recoveredContinuation(item)];
+  });
+  writeCodexProcessQueue(decisionOsRoot, recovered);
 }
 
 export function codexProcessQueuePosition(decisionOsRoot: string, id: string): number | null {
