@@ -20,7 +20,7 @@ import { threadMessagesAfterLastCodexEvent } from '../helper/thread-messages-aft
 import { readCardSkillRunController } from './read-card-skill-run-controller.js';
 import { decisionOsCodexEnvironment } from '../helper/decision-os-codex-runtime.js';
 import { randomUUID } from 'node:crypto';
-import { enqueueCodexContinuation, removeCodexProcessQueueItem } from '../helper/codex-process-queue.js';
+import { enqueueCodexContinuation, recordCodexProcessQueueItemProcess, removeCodexProcessQueueItem } from '../helper/codex-process-queue.js';
 import { scheduleCodexProcesses, unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
 import { createTerminalCodexProcessReconciler, type TerminalCodexStatus } from '../helper/reconcile-terminal-codex-process.js';
 import { clearCardCodexActiveRun } from '../helper/clear-card-codex-active-run.js';
@@ -151,7 +151,8 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   const cardId = String(payload.cardId ?? '').trim();
   const runId = String(payload.runId ?? '').trim();
   const traceId = String(payload.traceId ?? '');
-  const newSession = payload.newSession === true;
+  let newSession = payload.newSession === true;
+  const restartRecovery = payload.restartRecovery === true;
   const queueDispatch = payload.queueDispatch === true;
   const queueItemId = optionalText(payload.queueItemId);
   const fail = (statusCode: number, error: string, extra: AnyRecord = {}): AnyRecord => {
@@ -179,6 +180,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   const stdoutFile = resolve(runDirectory, `${safeSegment(runId)}.jsonl`);
   const stderrFile = resolve(runDirectory, `${safeSegment(runId)}.log`);
   const sessionId = readRunSessionId(stdoutFile);
+  if (restartRecovery && !sessionId) newSession = true;
   logCodexContinueDebug('run-files-resolved', { traceId, ledgerId, cardId, runId, newSession, runDirectory, stdoutFile, stderrFile, stdoutLineCount: runFileLineCount(stdoutFile), stderrBytes: existsSync(stderrFile) ? readFileSync(stderrFile, 'utf8').length : 0, sessionId });
   if (!newSession && !sessionId) return fail(409, 'Codex session id was not captured for this run.');
 
@@ -271,6 +273,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     stdio: ['pipe', 'pipe', 'pipe'],
     detached: process.platform !== 'win32',
   });
+  if (queueItemId) recordCodexProcessQueueItemProcess({ decisionOsRoot, id: queueItemId, processId: child.pid ?? 0, stdoutFile, stderrFile });
   const stdout = createWriteStream(stdoutFile, { flags: 'a' });
   const stderr = createWriteStream(stderrFile, { flags: 'a' });
   let terminalEventStatus: TerminalCodexStatus | null = null;

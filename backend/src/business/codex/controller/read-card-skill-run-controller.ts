@@ -13,6 +13,7 @@ import { readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import { readCodexProcessQueue } from '../helper/codex-process-queue.js';
 import { unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
 import { resolveCardSkillRunOwnership } from '../helper/resolve-card-skill-run-ownership.js';
+import { runtimeCodexRunOwnsLiveProcess } from '../helper/runtime-codex-run-owns-live-process.js';
 
 type AnyRecord = Record<string, unknown>;
 type RunStatus = 'pending' | 'running' | 'complete' | 'failed' | 'cancelled' | 'unknown';
@@ -243,7 +244,7 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     skillName: persistedSkill?.skillName ?? '',
     pipelineStatus: persistedPipelineRun?.status ?? null,
     status,
-    active: inMemoryStatus === 'running',
+    active: runtimeCodexRunOwnsLiveProcess(runtime, runId),
     interruptedAt: interruptedProcess?.interruptedAt ?? null,
     queuePosition: status === 'pending' && queuedProcess ? unifiedCodexQueuePosition({ decisionOsRoot, id: queuedProcess.id, createdAt: queuedProcess.createdAt, runtime }) : null,
     startedAt: new Date(runSegmentStartedAtMs({ runtime, runId, stderrFile })).toISOString(),

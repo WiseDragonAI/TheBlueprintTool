@@ -28,6 +28,10 @@
 - **Don't.** `Add headers or query params: x-ledger-id, x-thread-id, x-card-id, x-note-id, x-queue-codex.`
 - **Do.** `Add required headers to /api/voice-upload: x-ledger-id, x-thread-id, x-card-id, x-note-id, x-queue-codex.`
 
+### Task Closure Authorization
+
+- Unless explicitly instructed by the operator or the active skill, agents must not close master tasks or mark master-task cards `done`.
+
 ### Reference Component Fidelity
 
 - **Trigger.** When the operator names an existing widget or component as the visual reference, inspect that component's rendered structure and every CSS rule controlling its surface, icon, label, casing, spacing, and states before implementation.
@@ -234,6 +238,7 @@ node bin/decision-os-workload-status.mjs
 - Full suite once after implementation and focused tests pass.
 - Failure: rerun smallest failing scope.
 - Passing check: do not repeat after docs-only edits.
+- On mobile, test and typecheck commands must use no more than `3`-way parallelism.
 
 ## Card Image Assets
 

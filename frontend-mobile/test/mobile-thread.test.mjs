@@ -98,19 +98,15 @@ test('mobile thread routes jump-to-bottom into persistent bottom following', () 
   assert.match(source, /action === 'jump-thread-bottom'\) pinThreadFeedToLastMessage\(\{ follow: true \}\)/);
 });
 
-test('mobile thread launch continues a terminal or orphaned Codex run', () => {
-  assert.match(source, /cardCodexThreadRunId\(currentCard\)/);
-  assert.match(source, /requestCardSkillRunStatus\(/);
-  assert.match(source, /if \(summary\.active \|\| summary\.status === 'pending'\) return/);
-  assert.doesNotMatch(source, /summary\.status === 'unknown'/);
-  assert.match(source, /requestCardSkillRunContinue\(\{/);
-  assert.match(source, /runId: existingRunId/);
-  assert.match(source, /resumeExternallyStartedCardSkillRun\(\{ projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String\(currentCard\.id\), runId: existingRunId \}\)/);
+test('mobile thread launch always dispatches an authoritative fresh run', () => {
+  assert.doesNotMatch(source, /requestCardSkillRunStatus|requestCardSkillRunContinue|resumeExternallyStartedCardSkillRun/);
+  assert.match(source, /const result = await requestThreadCodexProcess\(\{/);
+  assert.match(source, /threadId: canvasState\.threadId/);
+  assert.match(source, /cardId: String\(currentCard\.id\)/);
   assert.match(source, /function hydrateThreadRun\(runId, startedAt, status, queuePosition\)/);
   assert.match(source, /canvasState\.threadRunSummaryByThreadId\[threadId\] = \{/);
   assert.match(source, /active: status === 'running'/);
   assert.match(source, /queuePosition: Number\.isInteger\(queuePosition\) \? queuePosition : null/);
-  assert.match(source, /hydrateThreadRun\(existingRunId, continuedAt, continuedStatus, continued\.queuePosition\);[\s\S]*await refreshThreadLedger\(\)/);
   assert.match(source, /bindThreadCodexRunLog\([^;]+runId \}\);\n  const status = String\(result\.run\?\.status \|\| 'running'\);\n  hydrateThreadRun\(runId, startedAt, status, result\.queuePosition\);[\s\S]*await refreshThreadLedger\(\)/);
 });
 
@@ -120,7 +116,6 @@ test('closing a mobile thread unregisters its project-scoped Codex run consumer'
   assert.match(closeMobileThread, /cardCodexThreadRunId\(currentCard\)/);
   assert.match(closeMobileThread, /unbindThreadCodexRunLog\(\{[\s\S]*projectId: currentProjectId/);
   assert.match(source, /bindThreadCodexRunLog\(\{ projectId: currentProjectId/);
-  assert.match(source, /requestCardSkillRunStatus\(\{ projectId: currentProjectId/);
 });
 
 test('mobile Codex Log uses one action-and-metrics row for queued, running, resumable, and idle runs', () => {

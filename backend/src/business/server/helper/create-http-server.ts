@@ -215,26 +215,34 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const index = pending.findIndex((entry) => entry.id === id);
     return index < 0 ? 1 : index + 1;
   };
+  let globalCodexScheduleRequested = false;
   const scheduleGlobalCodexProcesses = (): Promise<AnyRecord> => {
+    globalCodexScheduleRequested = true;
     const active = runtime.globalCodexSchedulePromise;
     if (active instanceof Promise) return active as Promise<AnyRecord>;
     const schedule = (async (): Promise<AnyRecord> => {
       const launched: AnyRecord[] = [];
-      const capacity = globalCodexProcessCapacity();
-      while (globalCodexRunningProcessCount() < capacity) {
-        const candidate = [...projectContexts.entries()]
-          .map(([root, context]) => ({ root, context, createdAt: nextPendingCodexProcessCreatedAt(root) }))
-          .filter((entry): entry is { root: string; context: ProjectContext; createdAt: string } => Boolean(entry.createdAt))
-          .sort((left, right) => left.createdAt.localeCompare(right.createdAt))[0];
-        if (!candidate) break;
-        const result = await scheduleCodexProcesses({ decisionOsRoot: candidate.root, runtime: candidate.context.runtime, launchLimit: 1 });
-        const localLaunches = Array.isArray(result.launched) ? result.launched as AnyRecord[] : [];
-        launched.push(...localLaunches);
-        if (localLaunches.length === 0 || result.ok === false) break;
-      }
+      let capacity = globalCodexProcessCapacity();
+      do {
+        globalCodexScheduleRequested = false;
+        await Promise.resolve();
+        capacity = globalCodexProcessCapacity();
+        while (globalCodexRunningProcessCount() < capacity) {
+          const candidate = [...projectContexts.entries()]
+            .map(([root, context]) => ({ root, context, createdAt: nextPendingCodexProcessCreatedAt(root) }))
+            .filter((entry): entry is { root: string; context: ProjectContext; createdAt: string } => Boolean(entry.createdAt))
+            .sort((left, right) => left.createdAt.localeCompare(right.createdAt))[0];
+          if (!candidate) break;
+          const result = await scheduleCodexProcesses({ decisionOsRoot: candidate.root, runtime: candidate.context.runtime, launchLimit: 1 });
+          const localLaunches = Array.isArray(result.launched) ? result.launched as AnyRecord[] : [];
+          launched.push(...localLaunches);
+          if (localLaunches.length === 0 || result.ok === false) break;
+        }
+      } while (globalCodexScheduleRequested);
       return { ok: launched.every((entry) => entry.ok !== false), launched, capacity };
     })().finally(() => {
       if (runtime.globalCodexSchedulePromise === schedule) delete runtime.globalCodexSchedulePromise;
+      if (globalCodexScheduleRequested) void scheduleGlobalCodexProcesses().catch(() => undefined);
     });
     Object.defineProperty(runtime, 'globalCodexSchedulePromise', { value: schedule, writable: true, configurable: true, enumerable: false });
     return schedule;
@@ -312,7 +320,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     watcher = watchCardContentFiles({ decisionOsRoot: activeDecisionOsRoot, onChange: publishCard });
     const context: ProjectContext = { clients, revisions, runtime: projectRuntime, publishCard, publishLedger, watcher };
     projectContexts.set(activeDecisionOsRoot, context);
-    recoverCodexProcessQueue(activeDecisionOsRoot);
+    recoverCodexProcessQueue(activeDecisionOsRoot, projectRuntime);
     void resumeCodexPipelineRuns({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime }).catch(() => undefined);
     return context;
   };
@@ -1191,7 +1199,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     response.setHeader('content-type', 'application/json');
     response.end(JSON.stringify({ ok: true, method: request.method, url }));
   });
+  const codexQueueScanTimer = setInterval(() => {
+    void scheduleGlobalCodexProcesses().catch(() => undefined);
+  }, 1_000);
+  codexQueueScanTimer.unref?.();
   server.on('close', () => {
+    clearInterval(codexQueueScanTimer);
     clearInterval(projectCatalogSupervisor);
     for (const context of projectContexts.values()) {
       context.watcher.close();
