@@ -77,6 +77,31 @@ test('master-task apply preserves lifecycle metadata, generates ids, and persist
   }
 });
 
+test('execution profile puts tests and typechecks behind the verification lease', async () => {
+  const { decisionOs, ledger } = fixture();
+  const workspace = join(decisionOs, '..');
+  const backendModules = join(workspace, 'backend', 'node_modules');
+  mkdirSync(join(backendModules, 'tsx', 'dist', 'esm'), { recursive: true });
+  mkdirSync(join(backendModules, '.bin'), { recursive: true });
+  writeFileSync(join(backendModules, 'tsx', 'dist', 'esm', 'index.mjs'), '');
+  writeFileSync(join(backendModules, '.bin', 'tsc'), '');
+  const previousRoot = process.env.DECISION_OS_LEDGER_ROOT;
+  process.env.DECISION_OS_LEDGER_ROOT = decisionOs;
+  try {
+    const result = await manageLedgerJsonController({ ledgerCommand: 'execution-profile', ledgerJsonFile: ledger });
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      const profile = JSON.parse(String(result.value));
+      assert.equal(profile.commands.verificationLease, 'node bin/decision-os-verify.mjs -- <command> [args...]');
+      assert.ok(profile.commands.typechecks.every((command: string) => command.includes('decision-os-verify.mjs')));
+      assert.ok(profile.commands.focusedTests.every((command: string) => command.includes('decision-os-verify.mjs')));
+      assert.ok(profile.commands.focusedTests.every((command: string) => command.includes('--test-concurrency=3')));
+    }
+  } finally {
+    if (previousRoot === undefined) delete process.env.DECISION_OS_LEDGER_ROOT; else process.env.DECISION_OS_LEDGER_ROOT = previousRoot;
+  }
+});
+
 test('bounded run events returns only the requested event type from one catalog run', () => {
   const root = mkdtempSync(join(tmpdir(), 'decision-os-events-'));
   const decisionOs = join(root, 'project', '.decision-os');
