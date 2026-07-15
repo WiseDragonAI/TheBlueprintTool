@@ -555,7 +555,7 @@ test('card skill run route measures active resumed segment from the latest persi
   }
 });
 
-test('server startup reports an interrupted thread run as failed without relaunching it', async () => {
+test('server startup resumes a claimed thread run from its durable Codex session', async () => {
   const originalCwd = process.cwd();
   const previousCodexBin = process.env.CODEX_BIN;
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-interrupted-thread-run-'));
@@ -574,6 +574,7 @@ test('server startup reports an interrupted thread run as failed without relaunc
       id: cardId,
       title: 'Interrupted thread run',
       codexThreadRunId: runId,
+      codexThreadRunOutputFile: `.decision-os/runs/codex-skills/specs/${runId}.md`,
       comment: { what: 'Thread body.' },
       facts: [],
       fields: []
@@ -583,10 +584,11 @@ test('server startup reports an interrupted thread run as failed without relaunc
     notes: {}
   }, null, 2));
   writeFileSync(join(runDirectory, `${runId}.jsonl`), [
-    JSON.stringify({ type: 'thread.started' }),
+    JSON.stringify({ type: 'thread.started', thread_id: 'session-restart1' }),
     JSON.stringify({ type: 'turn.started' }),
   ].join('\n'));
   writeFileSync(join(runDirectory, `${runId}.log`), '');
+  writeFileSync(join(runDirectory, `${runId}.md`), '# Thread Codex Run\n\nStatus: processing\n');
   writeFileSync(join(decisionOsRoot, 'codex-process-queue.json'), JSON.stringify({
     version: 1,
     items: [{
@@ -614,22 +616,19 @@ test('server startup reports an interrupted thread run as failed without relaunc
   const address = server.address() as AddressInfo;
 
   try {
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    assert.equal(existsSync(invocationFile), false);
-    const recovered = readCodexProcessQueue(decisionOsRoot);
-    assert.equal(recovered[0]?.status, 'interrupted');
-    assert.equal(recovered[0]?.startedAt !== null, true);
-    assert.equal(recovered[0]?.interruptedAt !== null, true);
+    await waitForText(invocationFile, 'relaunched');
+    assert.equal(readFileSync(invocationFile, 'utf8'), 'relaunched');
+    const queueDeadline = Date.now() + 3000;
+    while (Date.now() < queueDeadline && readCodexProcessQueue(decisionOsRoot).length > 0) await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.deepEqual(readCodexProcessQueue(decisionOsRoot), []);
 
     const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${cardId}`);
     assert.equal(response.status, 200);
     const body = await response.json() as { status: string; active: boolean; queuePosition: number | null; interruptedAt: string | null; error: string };
-    assert.equal(body.status, 'failed');
+    assert.equal(body.status, 'complete');
     assert.equal(body.active, false);
     assert.equal(body.queuePosition, null);
-    assert.equal(typeof body.interruptedAt, 'string');
-    assert.match(body.error, /server restarted/i);
-    assert.match(body.error, /not relaunched/i);
+    assert.equal(body.interruptedAt, null);
   } finally {
     server.close();
     process.chdir(originalCwd);

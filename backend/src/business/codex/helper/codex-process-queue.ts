@@ -18,7 +18,7 @@ export type CodexProcessQueueItem = {
   payload: AnyRecord;
 };
 
-export const codexProcessRestartInterruptionReason = 'Decision OS server restarted while this Codex process was running. The process was not relaunched.';
+export const codexProcessRestartInterruptionReason = 'Decision OS server restarted while this Codex process was running.';
 
 function filePath(decisionOsRoot: string): string {
   return resolve(decisionOsRoot, 'codex-process-queue.json');
@@ -95,13 +95,35 @@ export function removeCodexProcessQueueItem(decisionOsRoot: string, id: string):
 export function recoverCodexProcessQueue(decisionOsRoot: string): void {
   const items = readCodexProcessQueue(decisionOsRoot);
   if (!items.some((item) => item.status === 'running')) return;
-  const interruptedAt = new Date().toISOString();
-  writeCodexProcessQueue(decisionOsRoot, items.map((item) => item.status === 'running' ? {
-    ...item,
-    status: 'interrupted',
-    interruptedAt,
-    interruptionReason: codexProcessRestartInterruptionReason,
-  } : item));
+  writeCodexProcessQueue(decisionOsRoot, items.map((item): CodexProcessQueueItem => {
+    if (item.status !== 'running') return item;
+    if (item.kind === 'continuation') return {
+      ...item,
+      status: 'pending',
+      startedAt: null,
+      interruptedAt: null,
+      interruptionReason: '',
+      payload: { ...item.payload, restartRecovery: true },
+    };
+    return {
+      ...item,
+      kind: 'continuation',
+      status: 'pending',
+      startedAt: null,
+      interruptedAt: null,
+      interruptionReason: '',
+      payload: {
+        ledgerId: item.payload.ledgerId,
+        cardId: item.payload.cardId,
+        runId: item.id,
+        newSession: false,
+        codexModel: item.payload.codexModel,
+        codexEffort: item.payload.codexEffort,
+        traceId: item.payload.traceId,
+        restartRecovery: true,
+      },
+    };
+  }));
 }
 
 export function codexProcessQueuePosition(decisionOsRoot: string, id: string): number | null {
