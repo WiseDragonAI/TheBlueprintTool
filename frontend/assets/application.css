@@ -154,6 +154,7 @@ body.menu-open .nav-scrim { opacity: 1; pointer-events: auto; }
 .project-detail-metadata dt { color: var(--muted); }
 .project-detail-metadata dd { margin: 0; overflow-wrap: anywhere; }
 .control-room { padding-bottom: 82px; }
+.control-command { display: contents; }
 .control-sticky { position: sticky; top: 64px; z-index: 15; margin: -20px -14px 16px; padding: 18px 14px 12px; border-bottom: 1px solid var(--line); background: rgba(9,10,12,.96); backdrop-filter: blur(18px); }
 .control-filters { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
 .control-filters[hidden] { display: none; }
@@ -459,7 +460,8 @@ dialog[open]::backdrop { animation: scrim-in var(--motion-view) ease; }
   .ledger-nav { position: sticky; top: 64px; z-index: 10; width: auto; height: calc(100dvh - 64px); padding: 22px 14px; transform: none; }
   .content { padding: 34px 30px 70px; }
   .control-room { padding-bottom: 0; }
-  .control-sticky { display: grid; gap: 12px; margin: -34px -30px 20px; padding: 22px 30px 16px; }
+  .control-command { position: sticky; top: 64px; z-index: 15; display: grid; gap: 12px; margin: -34px -30px 20px; padding: 22px 30px 16px; border-bottom: 1px solid var(--line); background: rgba(9,10,12,.96); backdrop-filter: blur(18px); }
+  .control-sticky { position: static; z-index: auto; display: grid; gap: 12px; margin: 0; padding: 0; border: 0; background: transparent; backdrop-filter: none; }
   .control-tabs { position: static; display: flex; width: fit-content; max-width: 100%; gap: 8px; padding: 0; border: 0; background: transparent; backdrop-filter: none; }
   .control-tabs button { min-width: 112px; min-height: 44px; padding: 7px 14px; }
   .control-tabs .new-task-button { margin-left: 6px; }
