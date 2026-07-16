@@ -31,9 +31,11 @@ let currentProjectId = '';
 let currentLedgerId = '';
 let onLedgerRefresh = async () => null;
 let onCodexStarted = async () => null;
+let onQuickVoiceSubmitted = async () => null;
 let initialized = false;
 let eventSource = null;
 let eventSourceUrl = '';
+let quickVoiceCapture = false;
 
 const handleMobileThreadSessionDeletion = createMobileThreadSessionDeletionHandler({
   modal: () => document.querySelector('.confirm-modal'),
@@ -82,6 +84,7 @@ export function syncMobileThreadContext(input) {
   currentLedgerId = String(input.ledgerId ?? '');
   onLedgerRefresh = input.onLedgerRefresh ?? onLedgerRefresh;
   onCodexStarted = input.onCodexStarted ?? onCodexStarted;
+  onQuickVoiceSubmitted = input.onQuickVoiceSubmitted ?? onQuickVoiceSubmitted;
   canvasState.canvasMode = 'ledger';
   canvasState.activeTab = currentLedgerId;
   canvasState.activeLedgerId = currentLedgerId;
@@ -129,6 +132,40 @@ export function closeMobileThread() {
   canvasState.threadPanelOpen = false;
   document.querySelector('.thread-panel').hidden = true;
   document.querySelector('.mobile-thread-inspector').hidden = true;
+}
+
+async function startQuickVoiceComment() {
+  if (!currentCard || canvasState.voice.recording) return;
+  const button = document.querySelector('.quick-voice-comment-button');
+  button.disabled = true;
+  button.setAttribute('aria-busy', 'true');
+  quickVoiceCapture = true;
+  openMobileThread(currentCard, getComputedStyle(document.querySelector('#card-view')).getPropertyValue('--zone-color').trim());
+  await startVoiceRecording();
+  if (canvasState.voice.recording) return;
+  quickVoiceCapture = false;
+  button.disabled = false;
+  button.removeAttribute('aria-busy');
+}
+
+function cancelQuickVoiceComment() {
+  quickVoiceCapture = false;
+  const button = document.querySelector('.quick-voice-comment-button');
+  button.disabled = false;
+  button.removeAttribute('aria-busy');
+  cancelVoiceRecording();
+}
+
+async function stopQuickVoiceComment(event) {
+  const submitted = await stopVoiceRecording({ queueCodex: quickVoiceCapture || event.shiftKey });
+  if (!quickVoiceCapture) return;
+  quickVoiceCapture = false;
+  const button = document.querySelector('.quick-voice-comment-button');
+  button.disabled = false;
+  button.removeAttribute('aria-busy');
+  if (!submitted) return;
+  closeMobileThread();
+  await onQuickVoiceSubmitted();
 }
 
 async function refreshThreadLedger() {
@@ -220,6 +257,7 @@ export function initializeMobileThread() {
   document.querySelector('.thread-open-button').addEventListener('click', () => {
     if (currentCard) openMobileThread(currentCard, getComputedStyle(document.querySelector('#card-view')).getPropertyValue('--zone-color').trim());
   });
+  document.querySelector('.quick-voice-comment-button').addEventListener('click', () => void startQuickVoiceComment());
   document.querySelector('.thread-close-button').addEventListener('click', closeMobileThread);
   document.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-action]');
@@ -227,9 +265,9 @@ export function initializeMobileThread() {
     const action = button.dataset.action;
     if (await handleMobileThreadSessionDeletion({ action, button })) return;
     if (action === 'voice-toggle') {
-      if (canvasState.voice.recording) await stopVoiceRecording({ queueCodex: event.shiftKey });
+      if (canvasState.voice.recording) await stopQuickVoiceComment(event);
       else await startVoiceRecording();
-    } else if (action === 'voice-cancel') cancelVoiceRecording();
+    } else if (action === 'voice-cancel') cancelQuickVoiceComment();
     else if (action === 'voice-retry') await retryVoiceTranscription({ threadId: button.dataset.threadId, noteId: button.dataset.noteId, voiceFileRef: button.dataset.voiceFileRef });
     else if (action === 'thread-file-picker') button.closest('.terminal-composer')?.querySelector('.thread-file-input')?.click();
     else if (action === 'toggle-thread-text') expandMobileThreadComposer(button);
@@ -259,7 +297,7 @@ export function initializeMobileThread() {
   document.addEventListener('keydown', async (event) => {
     if (document.querySelector('.thread-panel')?.hidden !== false) return;
     if (event.key === 'Escape') {
-      if (canvasState.voice.recording) cancelVoiceRecording();
+      if (canvasState.voice.recording) cancelQuickVoiceComment();
       else closeMobileThread();
     }
     if (event.key === 'Enter' && event.ctrlKey && event.target.closest('.thread-draft')) {
@@ -282,4 +320,6 @@ export function initializeMobileThread() {
 
 export function setMobileThreadCard(card) {
   currentCard = card;
+  const labels = Array.isArray(card?.labels) ? card.labels.map(String) : [];
+  document.querySelector('.quick-voice-comment-button').hidden = !labels.some((label) => label === 'master-task' || label === 'subtask');
 }

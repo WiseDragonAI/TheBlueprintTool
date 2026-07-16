@@ -938,7 +938,14 @@ async function createTaskIntake(projectId) {
   state.ledger = updated;
   state.activeZoneId = zone.id;
   state.activeZoneColor = zone.color;
-  syncMobileThreadContext({ projectId, ledgerId: ledgerRef.id, ledger: updated, ledgers: state.ledgers, onCodexStarted: activateMasterTask });
+  syncMobileThreadContext({
+    projectId,
+    ledgerId: ledgerRef.id,
+    ledger: updated,
+    ledgers: state.ledgers,
+    onCodexStarted: activateMasterTask,
+    onQuickVoiceSubmitted: () => navigate(controlRoomPath('queue'), true)
+  });
   navigate(cardPath(ledgerRef.id, zone.id, cardId));
   openMobileThread(card, zone.color);
 }
@@ -1327,6 +1334,7 @@ async function loadLedger(ledgerId) {
     ledger,
     ledgers: state.ledgers,
     onCodexStarted: activateMasterTask,
+    onQuickVoiceSubmitted: () => navigate(controlRoomPath('queue'), true),
     onLedgerRefresh: async (activeLedgerId) => {
       const refreshed = await projectFetch(`/api/ledgers/${encodeURIComponent(activeLedgerId)}/navigation`, { cache: 'no-store' }).then((result) => result.ok ? result.json() : null);
       if (refreshed && activeLedgerId === state.activeLedgerId) state.ledger = refreshed;
@@ -1432,7 +1440,14 @@ async function loadRoute() {
         state.ledger.cards = state.ledger.cards.map((entry) => String(entry.id) === requestedCard ? card : entry);
         state.activeZoneId = asText(zone.id);
         state.activeZoneColor = asText(zone.color);
-        syncMobileThreadContext({ projectId: state.resourceProjectId, ledgerId, ledger: state.ledger, ledgers: state.ledgers, onCodexStarted: activateMasterTask });
+        syncMobileThreadContext({
+          projectId: state.resourceProjectId,
+          ledgerId,
+          ledger: state.ledger,
+          ledgers: state.ledgers,
+          onCodexStarted: activateMasterTask,
+          onQuickVoiceSubmitted: () => navigate(controlRoomPath('queue'), true)
+        });
         renderCard(card);
       }
       else navigate(zonePath(ledgerId, zone.id), true);

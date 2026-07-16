@@ -352,7 +352,8 @@ test('request-transcription keeps optimistic upload status separate from provide
 
   try {
     state.threadId = 'thread-card-a';
-    await requestTranscription(new Blob(['abc'], { type: 'audio/webm' }));
+    const accepted = await requestTranscription(new Blob(['abc'], { type: 'audio/webm' }));
+    assert.equal(accepted, true);
     assert.equal(state.voice.transcriptionStatus, 'idle');
     assert.equal(state.voice.voiceFileRef, '/tmp/voice.webm');
     assert.equal(status.textContent, 'idle');
