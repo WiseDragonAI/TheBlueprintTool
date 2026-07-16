@@ -1,28 +1,14 @@
 /**
- * WHAT: Selects and boots the shared non-canvas feature view for the canonical route.
- * WHY: One frontend entry must serve desktop operations and compact resource navigation.
+ * WHAT: Mounts the responsive application and starts its complete feature runtime.
+ * WHY: The former mobile implementation is the source of truth for every non-canvas viewport.
  */
-import { renderApplicationError, renderApplicationShell } from '../effect/render-application-shell.js';
-import { renderControlRoomView } from '../../features/control-room/controller/render-control-room-view.js';
-import { renderProjectDetail, renderProjectsIndex } from '../../features/projects/controller/render-projects-view.js';
-import { renderAggregateLedgers, renderCompactResource, renderLibrary, renderSettings } from '../../features/resources/controller/render-resource-view.js';
-import { routeScope } from '../../runtime/navigation/helper/route-scope.js';
-import { installProjectRequestScope } from '../../runtime/project/helper/project-request-scope.js';
+import { renderResponsiveApplicationShell } from '../component/render-responsive-application-shell.js';
 
 export async function bootApplication(): Promise<void> {
-  installProjectRequestScope();
-  const container = renderApplicationShell();
-  const scope = routeScope(location.pathname);
-  try {
-    if (scope.view === 'control-room') await renderControlRoomView(container);
-    else if (scope.view === 'projects') await renderProjectsIndex(container);
-    else if (scope.view === 'project') await renderProjectDetail(container, scope.projectId);
-    else if (scope.view === 'ledgers' && !scope.projectId) await renderAggregateLedgers(container);
-    else if (scope.view === 'settings') await renderSettings(container);
-    else if (scope.view === 'skills' || scope.view === 'pipelines') await renderLibrary(container, scope.view);
-    else if (scope.projectId) await renderCompactResource(container, scope);
-    else throw new Error('Unknown application route.');
-  } catch (error) {
-    renderApplicationError(container, error);
-  }
+  const responsiveStyles = document.querySelector<HTMLLinkElement>('#responsive-application-styles');
+  // WHAT: Activate application styles only after route selection chooses the responsive surface.
+  // WHY: The mobile control system must not leak into the dedicated desktop canvas presentation.
+  if (responsiveStyles) responsiveStyles.media = 'all';
+  renderResponsiveApplicationShell();
+  await import('../responsive/application.js');
 }

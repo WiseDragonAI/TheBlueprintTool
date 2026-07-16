@@ -1,11 +1,14 @@
 <!doctype html>
+<!-- WHAT: Hosts the desktop canvas and the inert responsive application template in one frontend entry. -->
+<!-- WHY: Route and viewport selection must not require separate frontend repositories or documents. -->
 <html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Project | Ledger</title>
     <link rel="stylesheet" href="/assets/canvas.css">
-    <link rel="stylesheet" href="/assets/application.css">
+    <link rel="stylesheet" href="/assets/vendor/nouislider-15.8.1.min.css">
+    <link id="responsive-application-styles" rel="stylesheet" href="/assets/application.css" media="not all">
     <link rel="stylesheet" href="/assets/vendor/highlight-atom-one-dark.css">
   </head>
   <body>
@@ -190,7 +193,364 @@
       <dialog class="pipeline-skill-picker-modal skill-modal" aria-labelledby="pipeline-skill-picker-modal-title"></dialog>
       <dialog class="skill-library-editor-modal codex-editor-modal" aria-labelledby="skill-library-editor-modal-title"></dialog>
     </main>
+    <template id="responsive-application-shell">
+      <div class="app-shell shell">
+        <header class="topbar">
+          <button class="icon-button menu-button" type="button" aria-label="Open navigation" aria-expanded="false">☰</button>
+          <a class="brand" href="/" aria-label="Control room home">
+            <span class="brand-mark">D</span>
+            <span><strong id="project-name">decision-os</strong><small>Control room</small></span>
+          </a>
+          <button class="icon-button refresh-button" type="button" aria-label="Refresh ledger">↻</button>
+        </header>
+
+        <div class="layout">
+          <nav class="ledger-nav" aria-label="Application navigation">
+            <div class="nav-heading">
+              <span>Navigation</span>
+              <button class="icon-button close-menu-button" type="button" aria-label="Close navigation">×</button>
+            </div>
+            <div id="ledger-links" class="ledger-links"></div>
+            <button class="nav-server-restart-button" type="button">Restart server</button>
+          </nav>
+          <button class="nav-scrim" type="button" aria-label="Close navigation"></button>
+
+          <main class="content" tabindex="-1">
+            <section id="loading-view" class="state-view">
+              <span class="spinner" aria-hidden="true"></span>
+              <p>Loading ledgers…</p>
+            </section>
+
+            <section id="error-view" class="state-view" hidden>
+              <div class="state-icon">!</div>
+              <h1>Could not load this ledger</h1>
+              <p id="error-message"></p>
+              <button class="primary-button retry-button" type="button">Try again</button>
+            </section>
+
+            <section id="empty-view" class="state-view" hidden>
+              <div class="state-icon">◇</div>
+              <h1>No ledgers found</h1>
+              <p>Add a ledger to <code>.decision-os/state.json</code> to begin.</p>
+            </section>
+
+            <section id="overview-view" hidden>
+              <div class="ledger-header">
+                <div>
+                  <p class="eyebrow">Workspace</p>
+                  <h1>Ledgers</h1>
+                  <p id="overview-summary" class="muted"></p>
+                </div>
+                <button class="create-button create-ledger-button" type="button">+ Ledger</button>
+              </div>
+              <div id="overview-ledgers" class="overview-ledgers"></div>
+            </section>
+
+            <section id="projects-view" class="projects-view" hidden>
+              <div class="ledger-header">
+                <div>
+                  <p class="eyebrow">Workspaces</p>
+                  <h1>Projects</h1>
+                  <p id="projects-summary" class="muted"></p>
+                </div>
+                <button class="create-button create-project-button" type="button">+ Project</button>
+              </div>
+              <div id="project-list" class="project-list"></div>
+            </section>
+
+            <section id="project-detail-view" class="project-detail-view" hidden>
+              <button class="back-to-projects-button back-button" type="button">← Back to projects</button>
+              <div class="project-detail-header">
+                <span id="project-detail-color" class="project-detail-color" aria-hidden="true"></span>
+                <div>
+                  <p class="eyebrow">Project</p>
+                  <h1 id="project-detail-name"></h1>
+                  <p id="project-detail-description" class="muted"></p>
+                </div>
+              </div>
+              <div class="project-detail-actions">
+                <button class="open-project-button primary-button" type="button">Open project</button>
+                <button class="project-settings-button" type="button">Settings</button>
+              </div>
+              <dl class="project-detail-metadata">
+                <dt>Status</dt><dd id="project-detail-status"></dd>
+                <dt>Path</dt><dd id="project-detail-path"></dd>
+              </dl>
+            </section>
+
+            <section id="settings-view" class="settings-view" hidden>
+              <div class="ledger-header">
+                <div>
+                  <p class="eyebrow">Runtime</p>
+                  <h1>Settings</h1>
+                  <p class="muted">Configure the server-wide Codex process capacity.</p>
+                </div>
+              </div>
+              <form class="codex-process-settings-form settings-panel">
+                <fieldset class="codex-process-limit-field">
+                  <legend>Maximum concurrent Codex processes</legend>
+                  <div class="codex-process-stepper">
+                    <button class="codex-icon codex-settings-increase" type="button" aria-label="Increase maximum concurrent Codex processes">↑</button>
+                    <output id="codex-settings-limit" aria-live="polite">1</output>
+                    <button class="codex-icon codex-settings-decrease" type="button" aria-label="Decrease maximum concurrent Codex processes" disabled>↓</button>
+                  </div>
+                </fieldset>
+                <p class="muted settings-help">New launches wait in FIFO order after this number of Codex processes are running.</p>
+                <p id="codex-settings-message" class="settings-message" role="status"></p>
+                <button class="primary-button codex-settings-save" type="submit">Save settings</button>
+              </form>
+            </section>
+
+            <section id="control-room-view" class="control-room" hidden>
+              <div class="control-sticky">
+                <div id="control-project-filters" class="control-filters" aria-label="Filter tasks by project"></div>
+                <div id="control-filters" class="control-filters" aria-label="Filter tasks by ledger"></div>
+              </div>
+              <div id="control-task-list" class="control-task-list"></div>
+              <p id="control-empty" class="control-empty" hidden></p>
+              <details id="control-diagnostics" class="control-diagnostics" hidden><summary>Markdown diagnostics</summary></details>
+              <nav class="control-tabs" aria-label="Task status">
+                <button type="button" data-control-tab="queue" role="tab" aria-selected="true"><span>Queue</span><small>0 tasks</small></button>
+                <button type="button" data-control-tab="active" role="tab" aria-selected="false"><span>Active</span><small>0 tasks</small></button>
+                <button type="button" data-control-tab="backlog" role="tab" aria-selected="false"><span>Backlog</span><small>0 tasks</small></button>
+                <button class="new-task-button" type="button"><span>+ New task</span><small>Create</small></button>
+              </nav>
+            </section>
+
+            <section id="ledger-view" hidden>
+              <div class="ledger-header">
+                <div>
+                  <p class="eyebrow">Ledger</p>
+                  <h1 id="ledger-title"></h1>
+                  <p id="ledger-summary" class="muted"></p>
+                </div>
+                <button class="create-button create-zone-button" type="button">+ Zone</button>
+              </div>
+              <div id="zone-list" class="zone-list"></div>
+            </section>
+
+            <section id="zone-view" hidden>
+              <button class="back-to-ledger-button back-button" type="button">← Back to zones</button>
+              <div class="ledger-header">
+                <div>
+                  <p class="eyebrow">Zone</p>
+                  <h1 id="zone-title"></h1>
+                  <p id="zone-summary" class="muted"></p>
+                </div>
+                <button class="create-button create-card-button" type="button">+ Card</button>
+                <label class="search-field">
+                  <span aria-hidden="true">⌕</span>
+                  <input id="card-search" type="search" inputmode="search" placeholder="Search cards" autocomplete="off" />
+                </label>
+              </div>
+              <div id="card-list" class="card-list"></div>
+              <p id="no-results" class="no-results" hidden>No cards match this search.</p>
+            </section>
+
+            <article id="card-view" class="card-detail" hidden>
+              <div class="card-detail-header">
+                <div class="card-detail-actions">
+                  <button class="back-to-zone-button back-button" type="button">← Back</button>
+                  <button class="process-card-button" type="button">Process card</button>
+                  <button class="thread-open-button" type="button">Thread</button>
+                </div>
+                <h1 id="card-title"></h1>
+              </div>
+              <div id="card-body" class="card-body"></div>
+            </article>
+          </main>
+        </div>
+
+        <aside class="panel mobile-thread-inspector" aria-label="Card thread" hidden>
+          <section class="thread-panel agent-chat phone" hidden>
+            <div class="thread-chat-shell">
+              <main class="chat">
+                <header class="thread-heading">
+                  <div class="thread-toolbar">
+                    <div class="thread-tabs" role="tablist" aria-label="Thread views">
+                      <button id="thread-tab-thread" class="thread-tab" type="button" role="tab" aria-selected="true" aria-controls="thread-panel-thread" tabindex="0">Thread</button>
+                      <button id="thread-tab-codex-log" class="thread-tab" type="button" role="tab" aria-selected="false" aria-controls="thread-panel-codex-log" tabindex="-1">Codex Log</button>
+                    </div>
+                    <button class="thread-close-button" type="button" aria-label="Close thread">×</button>
+                  </div>
+                  <div class="thread-actions"></div>
+                </header>
+                <div class="thread-tab-panels">
+                  <section id="thread-panel-thread" class="thread-tab-panel thread-conversation-panel" role="tabpanel" aria-labelledby="thread-tab-thread">
+                    <div class="thread-conversation-scroll"><section class="thread-feed" aria-live="polite"></section></div>
+                  </section>
+                  <section id="thread-panel-codex-log" class="thread-tab-panel thread-log-panel" role="tabpanel" aria-labelledby="thread-tab-codex-log" hidden>
+                    <div class="thread-log-scroll"><section class="thread-codex-log"></section></div>
+                  </section>
+                </div>
+              </main>
+            </div>
+            <footer class="io voice-panel"></footer>
+          </section>
+        </aside>
+
+        <dialog class="confirm-modal mobile-confirm-modal">
+          <p>Delete this note?</p>
+          <button type="button" data-action="delete-note">Delete note</button>
+          <button type="button" data-action="cancel-delete">Cancel</button>
+        </dialog>
+
+        <dialog class="delete-master-task-modal mobile-confirm-modal" aria-labelledby="delete-master-task-title">
+          <h2 id="delete-master-task-title">Delete master task?</h2>
+          <p>This permanently removes the master task card. Its linked subtask cards are kept.</p>
+          <button class="confirm-delete-master-task-button" type="button">Delete master task</button>
+          <button class="cancel-delete-master-task-button" type="button">Cancel</button>
+        </dialog>
+
+        <dialog class="new-task-project-modal" aria-labelledby="new-task-project-title">
+          <section class="new-task-project-sheet">
+            <header>
+              <p class="eyebrow">New task</p>
+              <h2 id="new-task-project-title">Choose a project</h2>
+              <p class="muted">The task and its Codex run will use this project workspace.</p>
+            </header>
+            <div class="new-task-project-list"></div>
+            <p class="new-task-project-error" role="alert" hidden></p>
+            <footer><button class="new-task-project-cancel" type="button">Cancel</button></footer>
+          </section>
+        </dialog>
+
+        <dialog class="creation-modal" aria-labelledby="creation-title">
+          <form method="dialog" class="creation-form">
+            <header>
+              <p class="eyebrow" id="creation-kind">Create</p>
+              <h2 id="creation-title"></h2>
+            </header>
+            <label class="creation-field">
+              <span>Name</span>
+              <input id="creation-name" name="name" required maxlength="120" autocomplete="off" />
+            </label>
+            <label class="creation-field creation-description-field" hidden>
+              <span id="creation-description-label">Description</span>
+              <textarea id="creation-description" name="description" rows="6" maxlength="1000"></textarea>
+            </label>
+            <label class="creation-field creation-color-field" hidden>
+              <span>Color</span>
+              <input id="creation-color" name="color" type="color" value="#38d9e8" />
+            </label>
+            <p class="creation-error" role="alert" hidden></p>
+            <footer>
+              <button class="creation-cancel" type="button">Cancel</button>
+              <button class="creation-submit primary-button" type="submit">Create</button>
+            </footer>
+          </form>
+        </dialog>
+
+        <dialog class="project-settings-modal" aria-labelledby="project-settings-title">
+          <form class="project-settings-form">
+            <header>
+              <p class="eyebrow">Project</p>
+              <h2 id="project-settings-title">Settings</h2>
+            </header>
+            <label class="creation-field">
+              <span>Name</span>
+              <input id="project-settings-name" name="name" required maxlength="120" autocomplete="off" />
+            </label>
+            <label class="creation-field">
+              <span>Description</span>
+              <textarea id="project-settings-description" name="description" rows="6" maxlength="1000"></textarea>
+            </label>
+            <div class="creation-field">
+              <span>Color</span>
+              <button class="project-settings-color-trigger" type="button" aria-haspopup="dialog" aria-controls="project-color-picker-modal">
+                <span class="project-settings-color-swatch" aria-hidden="true"></span>
+                <span class="project-settings-color-value">#38d9e8</span>
+              </button>
+              <input id="project-settings-color" name="color" type="hidden" value="#38d9e8" />
+            </div>
+            <p class="project-settings-error" role="alert" hidden></p>
+            <footer>
+              <button class="project-settings-cancel" type="button">Cancel</button>
+              <button class="project-settings-save primary-button" type="submit">Save</button>
+            </footer>
+          </form>
+        </dialog>
+
+        <dialog id="project-color-picker-modal" class="project-color-picker-modal" aria-labelledby="project-color-picker-title">
+          <section class="project-color-picker-sheet">
+            <h2 id="project-color-picker-title">Select color</h2>
+            <div class="project-color-slider-field">
+              <span id="project-color-hue-label">Hue</span>
+              <div id="project-color-hue" class="project-color-slider" aria-labelledby="project-color-hue-label"></div>
+            </div>
+            <div class="project-color-slider-field">
+              <span id="project-color-saturation-label">Saturation</span>
+              <div id="project-color-saturation" class="project-color-slider" aria-labelledby="project-color-saturation-label"></div>
+            </div>
+            <div class="project-color-slider-field">
+              <span id="project-color-value-label">Value</span>
+              <div id="project-color-value" class="project-color-slider" aria-labelledby="project-color-value-label"></div>
+            </div>
+            <div class="project-color-picker-choice">
+              <span>Chosen color</span>
+              <span class="project-color-picker-swatch" aria-hidden="true"></span>
+            </div>
+            <footer>
+              <button class="project-color-picker-cancel" type="button">Cancel</button>
+              <button class="project-color-picker-set" type="button">Set</button>
+            </footer>
+          </section>
+        </dialog>
+
+        <dialog class="codex-modal process-modal" aria-labelledby="process-title">
+          <section class="codex-sheet">
+            <header><button class="codex-back process-close" type="button" aria-label="Close card processing">×</button><div><p class="eyebrow">Card processing</p><h2 id="process-title">Process card</h2></div></header>
+            <div class="codex-tabs" role="tablist" aria-label="Processing library"><button type="button" data-process-tab="skills" aria-selected="true">Skills</button><button type="button" data-process-tab="pipelines" aria-selected="false">Pipelines</button></div>
+            <div class="codex-library-controls">
+              <label class="codex-library-search"><span aria-hidden="true">⌕</span><input class="process-search" type="search" placeholder="Search library" aria-label="Search processing library"></label>
+              <div class="process-project-filters codex-filter-row" aria-label="Filter processing library by project"></div>
+              <div class="process-tag-filters codex-filter-row" aria-label="Filter processing library by tag"></div>
+              <button class="process-filter-clear codex-filter-clear" type="button">Clear filters</button>
+            </div>
+            <p class="codex-message process-message" role="status"></p>
+            <div class="process-library codex-list"></div>
+            <section class="process-detail" hidden></section>
+          </section>
+        </dialog>
+
+        <dialog class="codex-modal pipelines-modal" aria-labelledby="pipelines-title">
+          <section class="codex-sheet">
+            <header><button class="codex-back pipelines-close" type="button" aria-label="Close pipelines">×</button><div><p class="eyebrow">Library</p><h2 id="pipelines-title">Pipelines</h2></div><button class="primary-button pipeline-new" type="button">New</button></header>
+            <div class="codex-library-controls">
+              <label class="codex-library-search"><span aria-hidden="true">⌕</span><input class="pipelines-search" type="search" placeholder="Search pipelines" aria-label="Search pipelines"></label>
+              <div class="pipelines-project-filters codex-filter-row" aria-label="Filter pipelines by project"></div>
+              <div class="pipelines-tag-filters codex-filter-row" aria-label="Filter pipelines by tag"></div>
+              <button class="pipelines-filter-clear codex-filter-clear" type="button">Clear filters</button>
+            </div>
+            <p class="codex-message pipelines-message" role="status"></p>
+            <div class="pipeline-library codex-list"></div>
+          </section>
+        </dialog>
+
+        <dialog class="codex-modal pipeline-editor-modal" aria-labelledby="pipeline-editor-title">
+          <form class="codex-sheet pipeline-editor-form">
+            <header><button class="codex-back pipeline-editor-back" type="button" aria-label="Back to pipelines">←</button><div><p class="eyebrow">Pipeline</p><h2 id="pipeline-editor-title">Edit pipeline</h2></div><button class="primary-button pipeline-save" type="submit">Save</button></header>
+            <p class="codex-message pipeline-editor-message" role="alert"></p>
+            <label class="codex-field"><span>Name</span><input name="pipeline-name" required maxlength="120"></label>
+            <label class="codex-field"><span>Purpose</span><textarea name="pipeline-purpose" rows="3"></textarea></label>
+            <div class="pipeline-steps"></div>
+            <button class="codex-secondary pipeline-add-step" type="button">+ Add step</button>
+          </form>
+        </dialog>
+
+        <dialog class="codex-modal skill-picker-modal" aria-labelledby="skill-picker-title">
+          <section class="codex-sheet">
+            <header><button class="codex-back skill-picker-back" type="button" aria-label="Back to pipeline editor">←</button><div><p class="eyebrow">Step skill</p><h2 id="skill-picker-title">Add skill</h2></div></header>
+            <p class="codex-message skill-picker-message" role="alert"></p>
+            <div class="skill-picker-list codex-list"></div>
+          </section>
+        </dialog>
+      </div>
+    </template>
     <script src="/assets/vendor/highlight.min.js"></script>
+    <script src="/assets/vendor/sortable-1.15.7.min.js"></script>
+    <script src="/assets/vendor/embla-carousel-8.6.0.umd.js"></script>
+    <script src="/assets/vendor/nouislider-15.8.1.min.js"></script>
     <script type="module" src="/src/runtime/canvas-runtime.ts"></script>
   </body>
 </html>
