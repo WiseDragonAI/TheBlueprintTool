@@ -10331,7 +10331,7 @@
       "title": "Recover queued Codex runs after server restart",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "master-task"
       ],
