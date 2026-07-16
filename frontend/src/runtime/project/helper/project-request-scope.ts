@@ -11,6 +11,9 @@ function pathnameOf(input: string): string {
 function globallyScoped(pathname: string): boolean {
   return pathname === '/decision-os/projects'
     || pathname.startsWith('/decision-os/projects/')
+    || pathname === '/decision-os/projects-canvas'
+    || pathname === '/api/control-room'
+    || pathname === '/api/control-room-events'
     || pathname === '/api/server/restart';
 }
 

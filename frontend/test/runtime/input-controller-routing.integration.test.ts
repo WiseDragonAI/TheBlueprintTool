@@ -73,7 +73,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   const actionClick = source('frontend/src/runtime/input/controller/handle-action-click.ts');
   assert.match(actionClick, /action === 'toggle-rail'[\s\S]*toggleRail\(actionTarget\)/);
   assert.match(actionClick, /if \(event\.ctrlKey \|\| event\.metaKey\) \{[\s\S]*openLedgersCanvasInNewTab\(\);[\s\S]*return;/);
-  assert.match(actionClick, /window\.open\('\/ledgers', '_blank', 'noopener'\)/);
+  assert.match(actionClick, /const url = projectLedgersPath\(state\.projectId\);[\s\S]*window\.open\(url, '_blank', 'noopener'\)/);
   assert.match(actionClick, /applyRailCollapsedState\(collapsed, button\)/);
   assert.match(actionClick, /persistState\(\)/);
   assert.match(actionClick, /editRegionController/);

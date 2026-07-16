@@ -9,7 +9,8 @@ import { minCanvasZoomScale } from '../helper/canvas-zoom-constants.js';
 export function renderLedgersIndicator(): void {
   if (!canvas) return;
   let indicator = canvas.querySelector(':scope > .ledgers-min-zoom-indicator') as HTMLButtonElement | null;
-  const visible = state.canvasMode === 'ledger' && Number(state.viewport.scale) <= minCanvasZoomScale + 0.00001;
+  const visible = (state.canvasMode === 'ledger' || state.canvasMode === 'ledgers')
+    && Number(state.viewport.scale) <= minCanvasZoomScale + 0.00001;
   if (!visible) {
     indicator?.remove();
     return;
@@ -18,8 +19,8 @@ export function renderLedgersIndicator(): void {
     indicator = document.createElement('button');
     indicator.className = 'ledgers-min-zoom-indicator';
     indicator.type = 'button';
-    indicator.dataset.action = 'open-ledgers-canvas';
-    indicator.textContent = 'Ledgers';
     canvas.append(indicator);
   }
+  indicator.dataset.action = state.canvasMode === 'ledger' ? 'open-ledgers-canvas' : 'open-projects-canvas';
+  indicator.textContent = state.canvasMode === 'ledger' ? 'Ledgers' : 'Projects';
 }

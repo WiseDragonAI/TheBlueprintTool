@@ -15,9 +15,12 @@ import { activeLedgers } from '../../ledger/helper/active-ledgers.js';
 import { renderTabRegistry } from '../effect/render-tab-registry.js';
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { projectLedgerPath } from '../helper/route-scope.js';
 
 export async function enterLedgerController(ledgerId: string, options: { replace?: boolean; canonicalMinScale?: boolean } = {}): Promise<void> {
   if (!activeLedgers().some((ledger) => ledger.id === ledgerId)) return;
+  const projectId = String(state.projectId ?? '').trim();
+  if (!projectId) return;
   const previousRoute = { canvasMode: state.canvasMode, activeTab: state.activeTab };
   const reconciliationSnapshot = snapshotLedgerReconciliationRoute();
   const navigationEpoch = advanceLedgerRouteEpoch(ledgerId);
@@ -26,7 +29,7 @@ export async function enterLedgerController(ledgerId: string, options: { replace
   const loaded = await loadActiveLedgerState({
     activeTab: ledgerId,
     canvasMode: 'ledger',
-    endpoint: `/api/ledgers/${encodeURIComponent(ledgerId)}/canvas`,
+    endpoint: `/p/${encodeURIComponent(projectId)}/api/ledgers/${encodeURIComponent(ledgerId)}/canvas`,
     ledgerStateId: ledgerId
   });
   if (!loaded) {
@@ -45,9 +48,11 @@ export async function enterLedgerController(ledgerId: string, options: { replace
     Object.assign(state.viewport, viewport);
     state.viewports = { ...(state.viewports ?? {}), [ledgerId]: { ...viewport } };
   }
-  if (options.replace) history.replaceState?.({}, '', `/${ledgerId}`);
-  else if (window.location.pathname !== `/${ledgerId}`) history.pushState?.({}, '', `/${ledgerId}`);
+  const destination = projectLedgerPath(projectId, ledgerId);
+  if (options.replace) history.replaceState?.({}, '', destination);
+  else if (window.location.pathname !== destination) history.pushState?.({}, '', destination);
   canvas.classList.remove('ledgers-canvas-mode');
+  canvas.classList.remove('projects-canvas-mode');
   renderTabRegistry();
   renderCanvasSurface();
   telemetry('enter-ledger-controller', { ledgerId, canonicalMinScale: options.canonicalMinScale !== false });

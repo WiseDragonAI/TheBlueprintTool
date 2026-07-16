@@ -14,6 +14,9 @@ test('ledgers canvas route and endpoint resolve separately from real ledgers', (
     state.ledgers = [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }];
     state.ledgerTabs = state.ledgers;
     assert.equal(routeCanvasMode('/ledgers'), 'ledgers');
+    assert.equal(routeCanvasMode('/projects'), 'projects');
+    assert.equal(routeCanvasMode('/p/project-a/ledgers'), 'ledgers');
+    assert.equal(routeCanvasMode('/p/project-a/ledgers/specs'), 'ledger');
     assert.equal(routeCanvasMode('/specs'), 'ledger');
     state.canvasMode = 'ledgers';
     assert.equal(ledgerEndpointForTab('specs'), '/decision-os/ledgers-canvas');

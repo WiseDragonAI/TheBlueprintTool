@@ -16,6 +16,7 @@ import { renderLedgersIndicator } from './render-ledgers-indicator.js';
 
 export function renderCanvasSurface(options: { renderThreadPanel?: boolean } = {}): void {
   canvas.classList.toggle('ledgers-canvas-mode', state.canvasMode === 'ledgers');
+  canvas.classList.toggle('projects-canvas-mode', state.canvasMode === 'projects');
   renderLedgerSurface();
   applyViewportTransform();
   renderSelectionState();

@@ -73,7 +73,7 @@ export type CommitActiveLedgerMutationOptions = {
 
 export async function commitActiveLedgerMutation(mutation: ActiveLedgerMutation, options: CommitActiveLedgerMutationOptions = {}): Promise<boolean> {
   const endpoint = ledgerEndpointForTab(state.activeTab);
-  const ledgerStateId = state.canvasMode === 'ledgers' ? 'ledgers-canvas' : state.activeTab;
+  const ledgerStateId = state.canvasMode === 'projects' ? 'projects-canvas' : state.canvasMode === 'ledgers' ? 'ledgers-canvas' : state.activeTab;
   const request = beginActiveLedgerRequest(ledgerStateId);
   if (!endpoint) {
     recordActiveLedgerLoadFailure({ request, source: `server-ledger-mutation:${mutation.action}`, reason: 'missing-ledger-tab' });

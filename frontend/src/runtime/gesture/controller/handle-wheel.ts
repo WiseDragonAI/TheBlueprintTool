@@ -9,7 +9,9 @@ import { scheduleViewportTransform } from '../../canvas/effect/schedule-viewport
 import { scheduleViewportPersistence } from '../../persistence/effect/schedule-viewport-persistence.js';
 import { enterLedgersCanvasController } from '../../navigation/controller/enter-ledgers-canvas-controller.js';
 import { enterLedgerController } from '../../navigation/controller/enter-ledger-controller.js';
+import { enterProjectsCanvasController } from '../../navigation/controller/enter-projects-canvas-controller.js';
 import { resolveHoveredOverviewTargetLedger } from '../../ledger/helper/resolve-overview-target-ledger.js';
+import { resolveHoveredOverviewTargetProject } from '../../project/helper/resolve-overview-target-project.js';
 import { point } from '../helper/point.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { shouldCaptureWheelTarget } from '../helper/should-capture-wheel-target.js';
@@ -54,6 +56,10 @@ export function handleWheel(event: WheelEvent): void {
       void enterLedgersCanvasController();
       return;
     }
+    if (state.canvasMode === 'ledgers' && oldScale <= minCanvasZoomScale + 0.00001 && event.deltaY > 0) {
+      void enterProjectsCanvasController();
+      return;
+    }
     const anchoredCanvasPoint = {
       x: (pointer.x - state.viewport.x) / oldScale,
       y: (pointer.y - state.viewport.y) / oldScale
@@ -63,6 +69,13 @@ export function handleWheel(event: WheelEvent): void {
       const targetLedgerId = resolveHoveredOverviewTargetLedger(event.target);
       if (targetLedgerId) {
         void enterLedgerController(targetLedgerId, { canonicalMinScale: true });
+        return;
+      }
+    }
+    if (state.canvasMode === 'projects' && oldScale < ledgerOpenZoomThreshold && nextScale >= ledgerOpenZoomThreshold) {
+      const targetProjectId = resolveHoveredOverviewTargetProject(event.target);
+      if (targetProjectId) {
+        void enterLedgersCanvasController({ projectId: targetProjectId });
         return;
       }
     }

@@ -4,6 +4,8 @@
  */
 import { bootSurface } from './boot/controller/boot-surface.js';
 import { state } from './state.js';
+import { routeScope } from './navigation/helper/route-scope.js';
+import { bootApplication } from '../app/controller/boot-application.js';
 
 declare global {
   interface Window {
@@ -15,4 +17,9 @@ declare global {
 window.__coreState = state;
 window.__coreTelemetry = [];
 
-bootSurface();
+const scope = routeScope(window.location.pathname);
+const wideCanvas = window.matchMedia?.('(min-width: 761px)').matches !== false;
+const canvasRoute = scope.view === 'projects'
+  || Boolean(scope.projectId && ['ledgers', 'ledger', 'card'].includes(scope.view));
+if (wideCanvas && canvasRoute) bootSurface();
+else void bootApplication();

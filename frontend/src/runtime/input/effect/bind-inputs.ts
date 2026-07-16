@@ -25,6 +25,8 @@ import { selectThread } from '../../thread/effect/select-thread.js';
 import { enterLedgersCanvasController } from '../../navigation/controller/enter-ledgers-canvas-controller.js';
 import { enterLedgerController } from '../../navigation/controller/enter-ledger-controller.js';
 import { routeCanvasMode } from '../../navigation/helper/route-canvas-mode.js';
+import { routeScope } from '../../navigation/helper/route-scope.js';
+import { enterProjectsCanvasController } from '../../navigation/controller/enter-projects-canvas-controller.js';
 import { routeTab } from '../../navigation/helper/route-tab.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 
@@ -95,8 +97,12 @@ export function bindInputs(): void {
     state.viewports = { ...(state.viewports ?? {}), [state.activeTab]: { ...state.viewport } };
     persistState();
     state.canvasMode = routeCanvasMode(window.location.pathname);
-    if (state.canvasMode === 'ledgers') {
-      void enterLedgersCanvasController({ replace: true });
+    const scope = routeScope(window.location.pathname);
+    state.projectId = scope.projectId;
+    if (state.canvasMode === 'projects') {
+      void enterProjectsCanvasController({ replace: true });
+    } else if (state.canvasMode === 'ledgers') {
+      void enterLedgersCanvasController({ replace: true, projectId: scope.projectId });
     } else {
       const nextLedger = routeTab(window.location.pathname);
       telemetry('browser-route-change', { activeTab: nextLedger });

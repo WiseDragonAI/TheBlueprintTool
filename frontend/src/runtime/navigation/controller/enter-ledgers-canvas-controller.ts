@@ -10,17 +10,23 @@ import { renderTabRegistry } from '../effect/render-tab-registry.js';
 import { persistState } from '../../persistence/effect/persist-state.js';
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { projectLedgersPath } from '../helper/route-scope.js';
 
-export async function enterLedgersCanvasController(options: { replace?: boolean } = {}): Promise<void> {
+export async function enterLedgersCanvasController(options: { replace?: boolean; projectId?: string } = {}): Promise<void> {
+  const projectId = String(options.projectId ?? state.projectId ?? '').trim();
+  // WHAT: Refuse a project overview transition without explicit ownership.
+  // WHY: Unscoped ledgers endpoints are ambiguous in a multi-project server.
+  if (!projectId) return;
   state.viewports = { ...(state.viewports ?? {}), [state.activeTab]: { ...state.viewport } };
   persistState();
   const previousCanvasMode = state.canvasMode;
   const reconciliationSnapshot = snapshotLedgerReconciliationRoute();
   const navigationEpoch = advanceLedgerRouteEpoch('ledgers-canvas');
   state.canvasMode = 'ledgers';
+  state.projectId = projectId;
   const loaded = await loadActiveLedgerState({
     canvasMode: 'ledgers',
-    endpoint: '/decision-os/ledgers-canvas',
+    endpoint: `/p/${encodeURIComponent(projectId)}/decision-os/ledgers-canvas`,
     ledgerStateId: 'ledgers-canvas'
   });
   if (!loaded) {
@@ -32,8 +38,9 @@ export async function enterLedgersCanvasController(options: { replace?: boolean 
     }
     return;
   }
-  if (options.replace) history.replaceState?.({}, '', '/ledgers');
-  else if (window.location.pathname !== '/ledgers') history.pushState?.({}, '', '/ledgers');
+  const destination = projectLedgersPath(projectId);
+  if (options.replace) history.replaceState?.({}, '', destination);
+  else if (window.location.pathname !== destination) history.pushState?.({}, '', destination);
   canvas.classList.add('ledgers-canvas-mode');
   renderTabRegistry();
   renderCanvasSurface();

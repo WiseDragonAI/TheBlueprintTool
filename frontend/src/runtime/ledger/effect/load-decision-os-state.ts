@@ -3,6 +3,7 @@ import { renderTabRegistry } from '../../navigation/effect/render-tab-registry.j
 import { routeCanvasMode } from '../../navigation/helper/route-canvas-mode.js';
 import { routeTab } from '../../navigation/helper/route-tab.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { projectLedgerPath } from '../../navigation/helper/route-scope.js';
 
 export async function loadDecisionOsState(): Promise<void> {
   const response = await fetch('/decision-os/state').catch(() => undefined);
@@ -31,7 +32,7 @@ export async function loadDecisionOsState(): Promise<void> {
   if (state.canvasMode === 'ledger' && !state.ledgers.some((ledger: { id: string }) => ledger.id === state.activeTab)) {
     state.activeTab = state.ledgers[0]?.id ?? state.activeTab;
     state.activeLedgerId = state.activeTab;
-    history.replaceState?.({}, '', `/${state.activeTab}`);
+    if (state.projectId) history.replaceState?.({}, '', projectLedgerPath(state.projectId, state.activeTab));
   }
   telemetry('load-decision-os-state', { ok: true, ledgers: state.ledgers.map((ledger: { id: string }) => ledger.id), canvasMode: state.canvasMode });
   renderTabRegistry();

@@ -49,6 +49,7 @@ export type ThreadRunDisclosureState = Record<string, boolean>;
 
 export const state: any = {
   routePath: globalThis.window?.location?.pathname ?? '/',
+  projectId: '',
   projectName: 'Project',
   projectColor: '#38d9e8',
   canvasMode: 'ledger',

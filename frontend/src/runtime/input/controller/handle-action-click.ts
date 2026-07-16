@@ -33,6 +33,8 @@ import { stopVoiceRecording } from '../../voice/controller/stop-voice-recording.
 import { cancelVoiceRecording } from '../../voice/controller/cancel-voice-recording.js';
 import { retryVoiceTranscription } from '../../voice/effect/retry-voice-transcription.js';
 import { enterLedgersCanvasController } from '../../navigation/controller/enter-ledgers-canvas-controller.js';
+import { enterProjectsCanvasController } from '../../navigation/controller/enter-projects-canvas-controller.js';
+import { projectLedgersPath } from '../../navigation/helper/route-scope.js';
 import { applyRailCollapsedState } from '../../toolbox/effect/apply-rail-collapsed-state.js';
 import { persistState } from '../../persistence/effect/persist-state.js';
 import { openCardProcessModal } from '../../codex/effect/render-card-process-modal.js';
@@ -51,8 +53,9 @@ function toggleRail(button: HTMLElement): void {
 }
 
 function openLedgersCanvasInNewTab(): void {
-  window.open('/ledgers', '_blank', 'noopener');
-  telemetry('open-ledgers-canvas-new-tab', { url: '/ledgers' });
+  const url = projectLedgersPath(state.projectId);
+  window.open(url, '_blank', 'noopener');
+  telemetry('open-ledgers-canvas-new-tab', { url });
 }
 
 export async function handleActionClick(event: MouseEvent): Promise<void> {
@@ -71,6 +74,10 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
       return;
     }
     await enterLedgersCanvasController();
+    return;
+  }
+  if (action === 'open-projects-canvas') {
+    await enterProjectsCanvasController();
     return;
   }
   if (action === 'toggle-rail') {

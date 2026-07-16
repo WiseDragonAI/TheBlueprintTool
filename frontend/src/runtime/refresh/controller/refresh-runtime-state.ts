@@ -13,12 +13,15 @@ import { routeCanvasMode } from '../../navigation/helper/route-canvas-mode.js';
 import { routeTab } from '../../navigation/helper/route-tab.js';
 import { applyRailCollapsedState } from '../../toolbox/effect/apply-rail-collapsed-state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { routeScope } from '../../navigation/helper/route-scope.js';
 
 export async function refreshRuntimeState(): Promise<void> {
   telemetry('subscribe-server-refresh', { specId: '50000006', source: 'refresh-button' });
   const nextCanvasMode = routeCanvasMode(window.location.pathname);
+  const nextScope = routeScope(window.location.pathname);
+  state.projectId = nextScope.projectId;
   const nextActiveTab = nextCanvasMode === 'ledger' ? routeTab(window.location.pathname) : state.activeTab;
-  const nextLedgerStateId = nextCanvasMode === 'ledgers' ? 'ledgers-canvas' : nextActiveTab;
+  const nextLedgerStateId = nextCanvasMode === 'projects' ? 'projects-canvas' : nextCanvasMode === 'ledgers' ? 'ledgers-canvas' : nextActiveTab;
   const localViewport = state.activeLedger && state.activeLedgerId === nextLedgerStateId ? { ...state.viewport } : null;
   const persisted = readPersistedState();
   state.canvasMode = nextCanvasMode;

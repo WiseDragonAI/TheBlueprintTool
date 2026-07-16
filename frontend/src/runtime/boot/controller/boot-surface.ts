@@ -13,9 +13,14 @@ import { routeCanvasMode } from '../../navigation/helper/route-canvas-mode.js';
 import { routeTab } from '../../navigation/helper/route-tab.js';
 import { applyRailCollapsedState } from '../../toolbox/effect/apply-rail-collapsed-state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { installProjectRequestScope } from '../../project/helper/project-request-scope.js';
+import { routeScope } from '../../navigation/helper/route-scope.js';
 
 export function bootSurface(): void {
+  installProjectRequestScope();
   const persisted = readPersistedState();
+  const scope = routeScope(window.location.pathname);
+  state.projectId = scope.projectId;
   state.canvasMode = routeCanvasMode(window.location.pathname);
   state.activeTab = routeTab(window.location.pathname);
   state.activeLedgerId = state.activeTab;
@@ -31,9 +36,14 @@ export function bootSurface(): void {
   state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
   telemetry('clear-transient-selection', { reason: 'boot' });
   bindInputs();
-  subscribeLedgerContentEvents();
+  if (state.canvasMode !== 'projects') subscribeLedgerContentEvents();
   renderTabRegistry();
-  void loadDecisionOsState().then(loadActiveLedgerState).then(() => renderCanvasSurface());
+  if (state.canvasMode === 'projects') {
+    void loadActiveLedgerState({ canvasMode: 'projects', endpoint: '/decision-os/projects-canvas', ledgerStateId: 'projects-canvas' })
+      .then(() => renderCanvasSurface());
+  } else {
+    void loadDecisionOsState().then(loadActiveLedgerState).then(() => renderCanvasSurface());
+  }
   renderCanvasSurface();
   renderThreadPanel();
 }

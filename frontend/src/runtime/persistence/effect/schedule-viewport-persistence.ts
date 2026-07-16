@@ -10,7 +10,7 @@ export function scheduleViewportPersistence(delayMs = 140): void {
   if (viewportPersistenceTimer) clearTimeout(viewportPersistenceTimer);
   viewportPersistenceTimer = setTimeout(() => {
     viewportPersistenceTimer = null;
-    if (state.canvasMode === 'ledgers') {
+    if (state.canvasMode === 'ledgers' || state.canvasMode === 'projects') {
       void sendActiveLedgerMutation({ action: 'patch-viewport', viewport: { ...state.viewport } });
     }
     const persisted = readPersistedState();

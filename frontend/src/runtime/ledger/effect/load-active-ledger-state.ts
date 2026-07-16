@@ -14,7 +14,7 @@ import { ledgerEndpointForTab } from '../helper/ledger-endpoint-for-tab.js';
 
 type LoadActiveLedgerStateOptions = {
   activeTab?: string;
-  canvasMode?: 'ledger' | 'ledgers';
+  canvasMode?: 'ledger' | 'ledgers' | 'projects';
   endpoint?: string;
   ledgerStateId?: string;
 };
@@ -23,8 +23,8 @@ export async function loadActiveLedgerState(options?: LoadActiveLedgerStateOptio
   const loadOptions = (options ?? {}) as LoadActiveLedgerStateOptions;
   const canvasMode = loadOptions.canvasMode ?? state.canvasMode;
   const activeTab = loadOptions.activeTab ?? state.activeTab;
-  const ledgerStateId = loadOptions.ledgerStateId ?? (canvasMode === 'ledgers' ? 'ledgers-canvas' : activeTab);
-  const endpoint = loadOptions.endpoint ?? (canvasMode === 'ledgers' ? '/decision-os/ledgers-canvas' : `/api/ledgers/${encodeURIComponent(activeTab)}/canvas`);
+  const ledgerStateId = loadOptions.ledgerStateId ?? (canvasMode === 'projects' ? 'projects-canvas' : canvasMode === 'ledgers' ? 'ledgers-canvas' : activeTab);
+  const endpoint = loadOptions.endpoint ?? (canvasMode === 'projects' ? '/decision-os/projects-canvas' : canvasMode === 'ledgers' ? '/decision-os/ledgers-canvas' : `/api/ledgers/${encodeURIComponent(activeTab)}/canvas`);
   const request = beginActiveLedgerRequest(ledgerStateId);
   if (!endpoint) {
     recordActiveLedgerLoadFailure({ request, source: 'load-active-ledger-state', reason: 'missing-ledger-tab' });
@@ -55,7 +55,7 @@ export async function loadActiveLedgerState(options?: LoadActiveLedgerStateOptio
   if (localViewport) {
     Object.assign(state.viewport, localViewport);
     if (canvasMode === 'ledger') state.viewports = { ...(state.viewports ?? {}), [activeTab]: { ...localViewport } };
-  } else if (canvasMode === 'ledgers') {
+  } else if (canvasMode === 'ledgers' || canvasMode === 'projects') {
     Object.assign(state.viewport, (ledger as Record<string, any>).viewport ?? state.viewport);
   } else {
     Object.assign(state.viewport, state.viewports?.[activeTab] ?? (ledger as Record<string, any>).viewport ?? state.viewport);
