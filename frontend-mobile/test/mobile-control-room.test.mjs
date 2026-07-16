@@ -50,6 +50,19 @@ test('uses JSON labels, status, and relationships when legacy Markdown is stale'
   assert.deepEqual(parsed.subtasks.map((entry) => entry.cardId), ['card-r', 'card-b']);
 });
 
+test('uses canonical ledger context and thread time when JSON master Markdown has no lifecycle header', () => {
+  const parsed = parseMasterTaskMarkdown(task({
+    labels: ['master-task'],
+    relationships: [],
+    cards: [],
+    threadNotes: [{ role: 'operator', timestamp: '2026-07-10T11:15:00.000Z' }],
+    markdown: '## A. Result\n\n1. Complete.'
+  }));
+  assert.equal(parsed.valid, true);
+  assert.equal(parsed.ledger, 'Tasks');
+  assert.equal(parsed.waitingSince, '2026-07-10T11:15:00.000Z');
+});
+
 test('restarts waiting age from the latest timestamped thread message', () => {
   const parsed = parseMasterTaskMarkdown(task({
     threadNotes: [

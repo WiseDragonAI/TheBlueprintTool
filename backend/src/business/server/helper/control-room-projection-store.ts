@@ -82,7 +82,8 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   const labelLines = markdown.split('\n').filter((line) => /^\s*(?:#[a-z][a-z0-9-]*\s*)+$/i.test(line));
   const legacyLabels = new Set(Array.from(labelLines.join('\n').matchAll(/#([a-z][a-z0-9-]*)\b/gi), (match) => match[1].toLowerCase()));
   if (!jsonLabels.includes('master-task') && (hasJsonTaskLabel || !legacyLabels.has('master-task'))) return null;
-  const ledgerName = markdown.match(/^\s*(?:\*\*)?Ledger(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
+  const legacyLedgerName = markdown.match(/^\s*(?:\*\*)?Ledger(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
+  const ledgerName = jsonLabels.includes('master-task') ? input.ledgerEntry.title : legacyLedgerName;
   const waitingText = markdown.match(/^\s*(?:\*\*)?Waiting since(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
   const activeText = markdown.match(/^\s*(?:\*\*)?Active since(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
   const rankText = markdown.match(/^\s*(?:\*\*)?Queue rank(?:\*\*)?\s*:\s*(\d+)\s*$/im)?.[1] ?? '';
@@ -109,7 +110,7 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   const diagnostics: string[] = [];
   if (jsonLabels.includes('master-task') && jsonLabels.includes('subtask')) diagnostics.push('invalid_master_label');
   if (!ledgerName) diagnostics.push('missing Ledger');
-  if (!waitingText || !Number.isFinite(waitingTime)) diagnostics.push('invalid Waiting since');
+  if (!Number.isFinite(waitingTime)) diagnostics.push('invalid Waiting since');
   if (rank !== null && (!Number.isInteger(rank) || rank < 1)) diagnostics.push('invalid Queue rank');
   if (jsonLabels.includes('master-task')) {
     for (const relationship of relationships) {

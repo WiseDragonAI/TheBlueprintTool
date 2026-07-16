@@ -14,7 +14,7 @@ test('serves one compact multi-project Control Room projection and refreshes one
   mkdirSync(join(decisionOsRoot, 'cards', 'tasks'), { recursive: true });
   mkdirSync(join(decisionOsRoot, 'threads', 'tasks'), { recursive: true });
   writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }] }));
-  writeFileSync(join(decisionOsRoot, 'cards', 'tasks', 'master.md'), 'Ledger: Tasks\nWaiting since: 2026-07-14T10:00:00.000Z\n\n## A. Goal\n\n1. First title.\n\n## B. Subtasks\n\n1. [Child](card:child)\n');
+  writeFileSync(join(decisionOsRoot, 'cards', 'tasks', 'master.md'), '## A. Goal\n\n1. First title.\n\n## B. Subtasks\n\n1. [Child](card:child)\n');
   writeFileSync(join(decisionOsRoot, 'threads', 'tasks', 'thread-master.md'), '# OPERATOR\n<!-- decision-os:note {"id":"n1","timestamp":"2026-07-14T10:01:00.000Z"} -->\n\nStart.\n');
   writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
     cards: [
@@ -41,7 +41,9 @@ test('serves one compact multi-project Control Room projection and refreshes one
     assert.equal(first.queue[0].zoneId, 'zone-a');
     assert.equal(first.queue[0].complete, 1);
     assert.equal(first.queue[0].subtasks[0].cardId, 'child');
+    assert.equal(first.queue[0].ledger, 'Tasks');
     assert.equal(first.queue[0].waitingSince, '2026-07-14T10:01:00.000Z');
+    assert.equal(first.queue[0].valid, true);
     assert.equal(first.queue[0].markdown, undefined);
     assert.equal(first.dependencies, undefined);
     assert.equal(first.projectSlices, undefined);
