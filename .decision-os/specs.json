@@ -8220,8 +8220,7 @@
       "codexRunEffort": "medium",
       "labels": [
         "master-task"
-      ],
-      "codexActiveRunId": "codex-skill-1784208602199-96ff0f80"
+      ]
     },
     {
       "id": "card-codex-skill-1784022826105-454fe26f",
@@ -10486,11 +10485,16 @@
     },
     {
       "id": "card-a4c81cea-0c42-4221-9891-fe57013a4149",
-      "title": "New task intake",
+      "title": "Restore desktop task detail layout and keyboard shortcuts",
       "cardType": "note",
       "domainId": "specs",
       "status": "todo",
       "labels": [
+        "frontend",
+        "bug",
+        "desktop",
+        "keyboard",
+        "task-list",
         "master-task"
       ],
       "x": -10402,
@@ -10499,6 +10503,159 @@
       "h": 240,
       "comment": {
         "contentFile": ".decision-os/cards/specs/card-a4c81cea-0c42-4221-9891-fe57013a4149.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784208710216-a4e8be86",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784208710216-a4e8be86.md"
+    },
+    {
+      "id": "card-1d94a0d1-c8d6-4250-806d-3c4dab49c11e",
+      "title": "Fix desktop thread image URL regression",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 93168,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-1d94a0d1-c8d6-4250-806d-3c4dab49c11e.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784208762343-b3ab8028",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784208762343-b3ab8028.md"
+    },
+    {
+      "id": "card-a71a1180-dbe0-4094-ac4f-d57f00ee7304",
+      "title": "Keep desktop task detail visible beside its thread",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "frontend",
+        "bug",
+        "desktop",
+        "code",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 92148,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-a71a1180-dbe0-4094-ac4f-d57f00ee7304.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-5e333070-67e3-4f23-825f-e304a105b5a2",
+      "title": "Restore responsive task thread shortcuts",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "frontend",
+        "bug",
+        "keyboard",
+        "code",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 92148,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-5e333070-67e3-4f23-825f-e304a105b5a2.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-19a46b90-5284-42a9-83a2-5c3077977f54",
+      "title": "Cover desktop split layout and shortcut routing in the browser",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "frontend",
+        "browser",
+        "regression",
+        "test",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 92558,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-19a46b90-5284-42a9-83a2-5c3077977f54.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-a8ea673d-d88b-436b-9e40-78151572e814",
+      "title": "Normalize project-scoped pasted-image references",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 93168,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-a8ea673d-d88b-436b-9e40-78151572e814.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-6201b159-7e11-4f72-b93d-eede7b61a79b",
+      "title": "Verify desktop pasted-image rendering and persistence",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 93168,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-6201b159-7e11-4f72-b93d-eede7b61a79b.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-7ee15497-0a6e-4d5e-a8fd-cd983b50a380",
+      "title": "New task intake",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 94188,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-7ee15497-0a6e-4d5e-a8fd-cd983b50a380.md"
       },
       "facts": [],
       "fields": []
@@ -11410,6 +11567,36 @@
       "from": "card-232dc127-2c65-4632-af7c-97003f595ce4",
       "to": "card-codex-skill-1784205406944-60080cc0",
       "label": "retrospect-and-close-task"
+    },
+    {
+      "id": "rel-a7e2b89a-3839-4389-8193-8cb328da2ad5",
+      "from": "card-a4c81cea-0c42-4221-9891-fe57013a4149",
+      "to": "card-a71a1180-dbe0-4094-ac4f-d57f00ee7304",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-c04f07af-7ad9-4ca1-b525-ff2249bfba46",
+      "from": "card-a4c81cea-0c42-4221-9891-fe57013a4149",
+      "to": "card-5e333070-67e3-4f23-825f-e304a105b5a2",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-4ba7cb50-987d-4e28-85e0-d81a68228e53",
+      "from": "card-a4c81cea-0c42-4221-9891-fe57013a4149",
+      "to": "card-19a46b90-5284-42a9-83a2-5c3077977f54",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-17054b7e-1b16-410e-ada2-ffc6eba2a0c4",
+      "from": "card-1d94a0d1-c8d6-4250-806d-3c4dab49c11e",
+      "to": "card-a8ea673d-d88b-436b-9e40-78151572e814",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-0399c713-0e88-4647-9639-cf5c0df38fe4",
+      "from": "card-1d94a0d1-c8d6-4250-806d-3c4dab49c11e",
+      "to": "card-6201b159-7e11-4f72-b93d-eede7b61a79b",
+      "label": "subtask"
     }
   ],
   "annotations": [
@@ -12466,6 +12653,26 @@
       "width": 1200,
       "height": 900,
       "color": "#fb7185",
+      "label": "Desktop task detail and shortcut restoration",
+      "comments": []
+    },
+    {
+      "id": "zone-f9c1eb8d-d097-4d3f-8ef8-d2e5e22ea469",
+      "x": -10462,
+      "y": 93108,
+      "width": 1200,
+      "height": 900,
+      "color": "#fb7185",
+      "label": "Desktop thread image URL regression",
+      "comments": []
+    },
+    {
+      "id": "zone-011dc06e-4208-4f78-88be-74ebb2e40f09",
+      "x": -10462,
+      "y": 94128,
+      "width": 1200,
+      "height": 900,
+      "color": "#fb7185",
       "label": "New task intake",
       "comments": []
     }
@@ -12584,7 +12791,9 @@
     "thread-card-b85c6294-593d-4870-8c6e-ec559386df3c": ".decision-os/threads/specs/thread-card-b85c6294-593d-4870-8c6e-ec559386df3c.md",
     "thread-card-codex-skill-1784205397104-79897826": ".decision-os/threads/specs/thread-card-codex-skill-1784205397104-79897826.md",
     "thread-card-codex-skill-1784205406944-60080cc0": ".decision-os/threads/specs/thread-card-codex-skill-1784205406944-60080cc0.md",
-    "thread-card-a4c81cea-0c42-4221-9891-fe57013a4149": ".decision-os/threads/specs/thread-card-a4c81cea-0c42-4221-9891-fe57013a4149.md"
+    "thread-card-a4c81cea-0c42-4221-9891-fe57013a4149": ".decision-os/threads/specs/thread-card-a4c81cea-0c42-4221-9891-fe57013a4149.md",
+    "thread-card-1d94a0d1-c8d6-4250-806d-3c4dab49c11e": ".decision-os/threads/specs/thread-card-1d94a0d1-c8d6-4250-806d-3c4dab49c11e.md",
+    "thread-card-7ee15497-0a6e-4d5e-a8fd-cd983b50a380": ".decision-os/threads/specs/thread-card-7ee15497-0a6e-4d5e-a8fd-cd983b50a380.md"
   },
   "deletedNoteIds": {
     "thread-card-7074d33a-39da-42a1-b470-673cbe221def": [
