@@ -1,0 +1,12 @@
+{
+  "projects": {
+    "Lg": {
+      "color": "#312d9c"
+    },
+    "30e99761-6971-4350-9dbf-9ebcfb057aec": {
+      "name": "Search",
+      "description": "Random searches",
+      "color": "#a78bfa"
+    }
+  }
+}

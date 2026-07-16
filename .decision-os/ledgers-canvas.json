@@ -73,6 +73,70 @@
       "comment": {
         "what": "Ledger: Next Features"
       }
+    },
+    {
+      "id": "ledger-card:new-ledger",
+      "targetLedgerId": "new-ledger",
+      "cardType": "ledger",
+      "domainId": "ledgers",
+      "title": "New Ledger",
+      "ledgerFile": ".decision-os/new-ledger.json",
+      "status": "todo",
+      "x": -2149.2770817460637,
+      "y": -486.1787796795426,
+      "w": 403.02230244105067,
+      "h": 383.52124428805735,
+      "comment": {
+        "what": "Ledger: New Ledger"
+      }
+    },
+    {
+      "id": "ledger-card:tasks",
+      "targetLedgerId": "tasks",
+      "cardType": "ledger",
+      "domainId": "ledgers",
+      "title": "Tasks",
+      "ledgerFile": ".decision-os/tasks.json",
+      "status": "todo",
+      "x": 460,
+      "y": 280,
+      "w": 360,
+      "h": 180,
+      "comment": {
+        "what": "Ledger: Tasks"
+      }
+    },
+    {
+      "id": "ledger-card:design-notes",
+      "targetLedgerId": "design-notes",
+      "cardType": "ledger",
+      "domainId": "ledgers",
+      "title": "Design Notes",
+      "ledgerFile": ".decision-os/design-notes.json",
+      "status": "todo",
+      "x": 920,
+      "y": 280,
+      "w": 360,
+      "h": 180,
+      "comment": {
+        "what": "Ledger: Design Notes"
+      }
+    },
+    {
+      "id": "ledger-card:design-notes-2",
+      "targetLedgerId": "design-notes-2",
+      "cardType": "ledger",
+      "domainId": "ledgers",
+      "title": "Design Notes",
+      "ledgerFile": ".decision-os/design-notes-2.json",
+      "status": "todo",
+      "x": 40,
+      "y": 50,
+      "w": 360,
+      "h": 180,
+      "comment": {
+        "what": "Ledger: Design Notes"
+      }
     }
   ],
   "annotations": [],

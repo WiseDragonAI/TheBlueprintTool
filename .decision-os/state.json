@@ -23,6 +23,30 @@
       "title": "Tasks System",
       "ledgerFile": ".decision-os/tasks-system.json",
       "cardId": "ledger-card:tasks-system"
+    },
+    {
+      "id": "new-ledger",
+      "title": "New Ledger",
+      "ledgerFile": ".decision-os/new-ledger.json",
+      "cardId": "ledger-card:new-ledger"
+    },
+    {
+      "id": "tasks",
+      "title": "Tasks",
+      "ledgerFile": ".decision-os/tasks.json",
+      "cardId": "ledger-card:tasks"
+    },
+    {
+      "id": "design-notes",
+      "title": "Design Notes",
+      "ledgerFile": ".decision-os/design-notes.json",
+      "cardId": "ledger-card:design-notes"
+    },
+    {
+      "id": "design-notes-2",
+      "title": "Design Notes",
+      "ledgerFile": ".decision-os/design-notes-2.json",
+      "cardId": "ledger-card:design-notes-2"
     }
   ]
 }
