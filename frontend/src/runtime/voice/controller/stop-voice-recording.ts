@@ -12,7 +12,7 @@ import { flushPendingLedgerContentRefresh } from '../../refresh/effect/subscribe
 import { threadCodexCardId } from '../../codex/helper/thread-codex-card-id.js';
 import { releaseVoiceRecordingWakeLock } from '../effect/hold-voice-recording-wake-lock.js';
 
-export async function stopVoiceRecording(input: { queueCodex?: boolean } = {}): Promise<void> {
+export async function stopVoiceRecording(input: { queueCodex?: boolean } = {}): Promise<boolean> {
   if (state.voice.animationFrameId) cancelAnimationFrame(state.voice.animationFrameId);
   const threadId = String(state.voice.threadId || state.threadId || 'conversation-ledger');
   const recorder = state.voice.recorder as MediaRecorder | undefined;
@@ -45,7 +45,7 @@ export async function stopVoiceRecording(input: { queueCodex?: boolean } = {}): 
   telemetry('render-voice-status', { status: state.voice.transcriptionStatus, durationMs: state.voice.durationMs });
   renderVoiceStatus();
   flushPendingLedgerContentRefresh();
-  await requestTranscription(audio, {
+  return requestTranscription(audio, {
     threadId,
     cardId: threadCodexCardId(state.activeLedger, threadId),
     queueCodex: input.queueCodex
