@@ -10040,7 +10040,7 @@
       "title": "Implement reliable master-task status management",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10402,
       "y": 89088,
       "w": 360,
@@ -10052,11 +10052,19 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784194374581-b1a99832",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784194374581-b1a99832.md",
       "labels": [
         "master-task"
-      ]
+      ],
+      "codexQueuedPipelineRunId": "codex-skill-1784205406944-60080cc0",
+      "codexQueuedRunId": "codex-skill-1784205406944-60080cc0",
+      "codexActiveRunId": "codex-skill-1784205406944-60080cc0",
+      "codexRunId": "codex-skill-1784205406944-60080cc0",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784205406944-60080cc0.md",
+      "codexPipelineRunId": "codex-skill-1784205406944-60080cc0",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexSkillName": "retrospect-and-close-task"
     },
     {
       "id": "card-46f748f8-1822-414f-a04b-c7265f3b8aba",
@@ -10261,7 +10269,7 @@
       "title": "Audit and Restore Lost Master Tasks",
       "cardType": "note",
       "domainId": "specs",
-      "status": "done",
+      "status": "todo",
       "labels": [
         "master-task"
       ],
@@ -10338,27 +10346,16 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784101794025-b91c2f04",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784101794025-b91c2f04.md"
-    },
-    {
-      "id": "card-06258606-7583-460b-a85e-aeac5bf4e07d",
-      "title": "New task intake",
-      "cardType": "note",
-      "domainId": "specs",
-      "status": "todo",
-      "labels": [
-        "master-task"
-      ],
-      "x": -10402,
-      "y": 69708,
-      "w": 360,
-      "h": 240,
-      "comment": {
-        "contentFile": ".decision-os/cards/specs/card-06258606-7583-460b-a85e-aeac5bf4e07d.md"
-      },
-      "facts": [],
-      "fields": []
+      "codexQueuedPipelineRunId": "codex-skill-1784205397104-79897826",
+      "codexQueuedRunId": "codex-skill-1784205397104-79897826",
+      "codexActiveRunId": "codex-skill-1784205397104-79897826",
+      "codexRunId": "codex-skill-1784205397104-79897826",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784205397104-79897826.md",
+      "codexPipelineRunId": "codex-skill-1784205397104-79897826",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexSkillName": "retrospect-and-close-task"
     },
     {
       "id": "card-f28ac3de-6019-4001-8ba0-3b7da89c63e4",
@@ -10403,7 +10400,7 @@
       "title": "Verify post-restart projection diagnostics",
       "cardType": "note",
       "domainId": "specs",
-      "status": "done",
+      "status": "todo",
       "labels": [
         "subtask"
       ],
@@ -10416,6 +10413,56 @@
       },
       "facts": [],
       "fields": []
+    },
+    {
+      "id": "card-codex-skill-1784205397104-79897826",
+      "title": "retrospect-and-close-task result",
+      "cardType": "codex-skill-run",
+      "x": -9946,
+      "y": 83988,
+      "w": 700,
+      "h": 260,
+      "status": "todo",
+      "codexRunId": "codex-skill-1784205397104-79897826",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-codex-skill-1784205397104-79897826.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784205397104-79897826",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784205397104-79897826.md",
+      "codexPipelineRunId": "codex-skill-1784205397104-79897826",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexSkillName": "retrospect-and-close-task"
+    },
+    {
+      "id": "card-codex-skill-1784205406944-60080cc0",
+      "title": "retrospect-and-close-task result",
+      "cardType": "codex-skill-run",
+      "x": -9946,
+      "y": 89088,
+      "w": 700,
+      "h": 260,
+      "status": "todo",
+      "codexRunId": "codex-skill-1784205406944-60080cc0",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-codex-skill-1784205406944-60080cc0.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784205406944-60080cc0",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784205406944-60080cc0.md",
+      "codexPipelineRunId": "codex-skill-1784205406944-60080cc0",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexSkillName": "retrospect-and-close-task"
     }
   ],
   "relationships": [
@@ -11312,6 +11359,18 @@
       "from": "card-9ee8b280-6ef1-4ac6-9543-1ddeb106ed3a",
       "to": "card-5cd21c88-608e-484c-bd01-461745681248",
       "label": "subtask"
+    },
+    {
+      "id": "rel-codex-skill-1784205397104-79897826-1",
+      "from": "card-b85c6294-593d-4870-8c6e-ec559386df3c",
+      "to": "card-codex-skill-1784205397104-79897826",
+      "label": "retrospect-and-close-task"
+    },
+    {
+      "id": "rel-codex-skill-1784205406944-60080cc0-1",
+      "from": "card-232dc127-2c65-4632-af7c-97003f595ce4",
+      "to": "card-codex-skill-1784205406944-60080cc0",
+      "label": "retrospect-and-close-task"
     }
   ],
   "annotations": [
@@ -12474,7 +12533,8 @@
     "thread-card-426d69c8-8c1b-482d-94dc-7653cabdd7ed": ".decision-os/threads/specs/thread-card-426d69c8-8c1b-482d-94dc-7653cabdd7ed.md",
     "thread-card-9ee8b280-6ef1-4ac6-9543-1ddeb106ed3a": ".decision-os/threads/specs/thread-card-9ee8b280-6ef1-4ac6-9543-1ddeb106ed3a.md",
     "thread-card-b85c6294-593d-4870-8c6e-ec559386df3c": ".decision-os/threads/specs/thread-card-b85c6294-593d-4870-8c6e-ec559386df3c.md",
-    "thread-card-06258606-7583-460b-a85e-aeac5bf4e07d": ".decision-os/threads/specs/thread-card-06258606-7583-460b-a85e-aeac5bf4e07d.md"
+    "thread-card-codex-skill-1784205397104-79897826": ".decision-os/threads/specs/thread-card-codex-skill-1784205397104-79897826.md",
+    "thread-card-codex-skill-1784205406944-60080cc0": ".decision-os/threads/specs/thread-card-codex-skill-1784205406944-60080cc0.md"
   },
   "deletedNoteIds": {
     "thread-card-7074d33a-39da-42a1-b470-673cbe221def": [
