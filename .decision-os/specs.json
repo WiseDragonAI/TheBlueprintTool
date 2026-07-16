@@ -8214,13 +8214,14 @@
       },
       "facts": [],
       "fields": [],
-      "codexThreadRunId": "codex-skill-1784200016497-c07a94e6",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784200016497-c07a94e6.md",
+      "codexThreadRunId": "codex-skill-1784208602199-96ff0f80",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784208602199-96ff0f80.md",
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
       "labels": [
         "master-task"
-      ]
+      ],
+      "codexActiveRunId": "codex-skill-1784208602199-96ff0f80"
     },
     {
       "id": "card-codex-skill-1784022826105-454fe26f",
