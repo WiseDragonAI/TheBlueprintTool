@@ -11,7 +11,8 @@ export function parseMasterTaskMarkdown({ cardId, title, labels: cardLabels = []
   const labelLines = source.split('\n').filter((line) => /^\s*(?:#[a-z][a-z0-9-]*\s*)+$/i.test(line));
   const labels = new Set(Array.from(labelLines.join('\n').matchAll(/#([a-z][a-z0-9-]*)\b/gi), (match) => match[1].toLowerCase()));
   const masterTask = jsonLabels.includes('master-task') || (!hasJsonTaskLabel && labels.has('master-task'));
-  const ledger = source.match(/^\s*(?:\*\*)?Ledger(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
+  const legacyLedger = source.match(/^\s*(?:\*\*)?Ledger(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
+  const ledger = jsonLabels.includes('master-task') ? String(ledgerTitle ?? '').trim() : legacyLedger;
   const waitingText = source.match(/^\s*(?:\*\*)?Waiting since(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
   const latestThreadTime = threadNotes.reduce((latest, note) => {
     const timestamp = Date.parse(String(note?.timestamp ?? ''));
@@ -28,7 +29,7 @@ export function parseMasterTaskMarkdown({ cardId, title, labels: cardLabels = []
   if (!masterTask) diagnostics.push('missing master-task label');
   if (jsonLabels.includes('master-task') && jsonLabels.includes('subtask')) diagnostics.push('invalid_master_label');
   if (!ledger) diagnostics.push('missing Ledger');
-  if (!waitingText || !Number.isFinite(waitingTime)) diagnostics.push('invalid Waiting since');
+  if (!Number.isFinite(waitingTime)) diagnostics.push('invalid Waiting since');
   if (queueRank !== null && (!Number.isInteger(queueRank) || queueRank < 1)) diagnostics.push('invalid Queue rank');
 
   const subtasks = [];
