@@ -20,6 +20,6 @@ window.__coreTelemetry = [];
 const scope = routeScope(window.location.pathname);
 const wideCanvas = window.matchMedia?.('(min-width: 761px)').matches !== false;
 const canvasRoute = scope.view === 'projects'
-  || Boolean(scope.projectId && ['ledgers', 'ledger', 'card'].includes(scope.view));
+  || Boolean(scope.projectId && ['ledgers', 'ledger'].includes(scope.view));
 if (wideCanvas && canvasRoute) bootSurface();
 else void bootApplication();

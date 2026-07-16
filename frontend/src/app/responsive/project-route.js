@@ -21,6 +21,17 @@ export function parseProjectRoute(pathname) {
   return { view: 'invalid', projectId: '' };
 }
 
+export function isProjectCardPath(pathname) {
+  const scope = parseProjectScope(pathname);
+  const [section, ledgerId, zoneMarker, zoneId, cardMarker, cardId] = scope?.segments ?? [];
+  return section === 'ledgers'
+    && Boolean(ledgerId)
+    && zoneMarker === 'zones'
+    && Boolean(zoneId)
+    && cardMarker === 'cards'
+    && Boolean(cardId);
+}
+
 export function projectBasePath(projectId) {
   return `/p/${encodeURIComponent(projectId)}`;
 }

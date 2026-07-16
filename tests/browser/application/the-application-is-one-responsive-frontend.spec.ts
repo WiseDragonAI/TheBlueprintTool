@@ -102,11 +102,39 @@ test('The responsive application preserves the mobile Control Room and expands t
     await desktop.getByRole('button', { name: 'Control Room' }).click();
     await desktop.waitForURL(`${server.url}/`);
     await desktop.locator('#control-room-view:not([hidden])').waitFor({ state: 'visible' });
+
+    const cardRoute = await resolveResponsiveCardRoute(server.url);
+    await desktop.goto(`${server.url}${cardRoute}`, { waitUntil: 'domcontentloaded' });
+    await desktop.locator('#card-view:not([hidden])').waitFor({ state: 'visible' });
+    assert.equal(await desktop.locator('.app-shell').isVisible(), true);
+    assert.equal(await desktop.locator('.canvas').count(), 0);
+    assert.equal(await desktop.getByRole('button', { name: '← Back' }).isVisible(), true);
+    assert.deepEqual(desktopErrors, []);
   } finally {
     await browser?.close();
     await stopDecisionOsServer(server.process);
   }
 });
+
+async function resolveResponsiveCardRoute(serverUrl: string): Promise<string> {
+  const catalog = await fetch(`${serverUrl}/decision-os/projects`).then((response) => response.json()) as {
+    projects?: Array<{ id: string; root: string; ledgers?: Array<{ id: string }> }>;
+  };
+  const project = catalog.projects?.find((candidate) => candidate.root === repoRoot);
+  assert.ok(project, 'The test workspace must be registered in its project catalog.');
+  for (const ledger of project.ledgers ?? []) {
+    const canvas = await fetch(`${serverUrl}/p/${encodeURIComponent(project.id)}/api/ledgers/${encodeURIComponent(ledger.id)}/canvas`).then((response) => response.json()) as {
+      annotations?: Array<{ id?: string; variant?: string; color?: string }>;
+      cards?: Array<{ id?: string }>;
+    };
+    const zone = canvas.annotations?.find((candidate) => candidate.id && candidate.variant !== 'group' && typeof candidate.color === 'string');
+    const card = canvas.cards?.find((candidate) => candidate.id);
+    if (zone?.id && card?.id) {
+      return `/p/${encodeURIComponent(project.id)}/ledgers/${encodeURIComponent(ledger.id)}/zones/${encodeURIComponent(zone.id)}/cards/${encodeURIComponent(card.id)}`;
+    }
+  }
+  assert.fail('The test workspace must expose one card and one zone for responsive card routing.');
+}
 
 function collectPageErrors(page: Page): string[] {
   const errors: string[] = [];

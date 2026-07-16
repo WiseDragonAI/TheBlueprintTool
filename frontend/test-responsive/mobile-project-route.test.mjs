@@ -1,7 +1,7 @@
 /** WHAT: Preserves canonical responsive project resource routes. WHY: Compact views and desktop canvas views must address the same identities. */
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { cardPathForProject, ledgerPathForProject, parseProjectRoute, parseProjectScope, projectPath, zonePathForProject } from '../src/app/responsive/project-route.js';
+import { cardPathForProject, isProjectCardPath, ledgerPathForProject, parseProjectRoute, parseProjectScope, projectPath, zonePathForProject } from '../src/app/responsive/project-route.js';
 
 test('parses project index and detail routes', () => {
   assert.deepEqual(parseProjectRoute('/projects'), { view: 'index', projectId: '' });
@@ -17,4 +17,7 @@ test('builds the complete encoded project route hierarchy', () => {
   assert.equal(ledgerPathForProject('dev/project a', 'specs'), '/p/dev%2Fproject%20a/ledgers/specs');
   assert.equal(zonePathForProject('a', 'specs', 'zone 1'), '/p/a/ledgers/specs/zones/zone%201');
   assert.equal(cardPathForProject('a', 'specs', 'zone 1', 'card/1'), '/p/a/ledgers/specs/zones/zone%201/cards/card%2F1');
+  assert.equal(isProjectCardPath('/p/a/ledgers/specs/zones/zone%201/cards/card%2F1'), true);
+  assert.equal(isProjectCardPath('/p/a/ledgers/specs'), false);
+  assert.equal(isProjectCardPath('/projects'), false);
 });

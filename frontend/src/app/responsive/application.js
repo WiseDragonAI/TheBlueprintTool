@@ -9,7 +9,7 @@ import { initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobi
 import { initializeMobileCodex, openMobileCodexLibrary, setMobileCodexContext } from './codex.js';
 import { activeAge, activeStopwatch, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus } from './control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from './control-room-route.js';
-import { cardPathForProject, ledgerPathForProject, parseProjectRoute, parseProjectScope, projectPath, zonePathForProject } from './project-route.js';
+import { cardPathForProject, isProjectCardPath, ledgerPathForProject, parseProjectRoute, parseProjectScope, projectPath, zonePathForProject } from './project-route.js';
 import { projectSettingsValues, saveProjectSettingsRequest } from './project-settings.js';
 import { committedProjectColor, hexToHsv, hsvToHex, projectColorPickerGradients } from './project-color-picker.js';
 import { codexProcessLimitRange, loadCodexProcessSettings, saveCodexProcessSettings, stepCodexProcessLimit } from './codex-settings.js';
@@ -192,7 +192,8 @@ function navigate(path, replace = false) {
   const destination = new URL(path, location.origin);
   const projectScope = parseProjectScope(destination.pathname);
   const desktopCanvasRoute = window.matchMedia?.('(min-width: 761px)').matches === true
-    && (destination.pathname === '/projects' || projectScope?.segments[0] === 'ledgers');
+    && (destination.pathname === '/projects'
+      || (projectScope?.segments[0] === 'ledgers' && !isProjectCardPath(destination.pathname)));
   // WHAT: Reload through the unified entry when a wide viewport enters a canvas-owned route.
   // WHY: Canvas initialization is intentionally desktop-only and must replace the responsive runtime.
   if (desktopCanvasRoute) {
