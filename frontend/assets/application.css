@@ -458,6 +458,11 @@ dialog[open]::backdrop { animation: scrim-in var(--motion-view) ease; }
   .layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); }
   .ledger-nav { position: sticky; top: 64px; z-index: 10; width: auto; height: calc(100dvh - 64px); padding: 22px 14px; transform: none; }
   .content { padding: 34px 30px 70px; }
+  .control-room { padding-bottom: 0; }
+  .control-sticky { display: grid; gap: 12px; margin: -34px -30px 20px; padding: 22px 30px 16px; }
+  .control-tabs { position: static; display: flex; width: fit-content; max-width: 100%; gap: 8px; padding: 0; border: 0; background: transparent; backdrop-filter: none; }
+  .control-tabs button { min-width: 112px; min-height: 44px; padding: 7px 14px; }
+  .control-tabs .new-task-button { margin-left: 6px; }
   .ledger-header { grid-template-columns: minmax(0, 1fr) minmax(250px, 340px); align-items: end; }
   .card-list, .overview-ledgers, .zone-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .project-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }

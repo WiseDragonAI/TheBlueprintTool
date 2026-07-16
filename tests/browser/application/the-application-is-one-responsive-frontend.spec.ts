@@ -65,6 +65,7 @@ test('The responsive application preserves the mobile Control Room and expands t
       const nav = document.querySelector<HTMLElement>('.ledger-nav');
       const layout = document.querySelector<HTMLElement>('.layout');
       const tabs = document.querySelector<HTMLElement>('.control-tabs');
+      const sticky = document.querySelector<HTMLElement>('.control-sticky');
       const navRect = nav?.getBoundingClientRect();
       return {
         visibleView: document.querySelector<HTMLElement>('main.content > :not([hidden])')?.id ?? '',
@@ -72,6 +73,8 @@ test('The responsive application preserves the mobile Control Room and expands t
         navVisible: Boolean(navRect && navRect.left >= 0 && navRect.width >= 240),
         columns: layout ? getComputedStyle(layout).gridTemplateColumns : '',
         tabsPosition: tabs ? getComputedStyle(tabs).position : '',
+        tabsInCommandHeader: Boolean(sticky && tabs && sticky.contains(tabs)),
+        tabsBottomGap: tabs ? innerHeight - tabs.getBoundingClientRect().bottom : 0,
         bodyWidth: document.body.scrollWidth,
         viewportWidth: innerWidth,
         mobileMenuVisible: document.querySelector<HTMLElement>('.menu-button') ? getComputedStyle(document.querySelector<HTMLElement>('.menu-button')!).display !== 'none' : true,
@@ -81,7 +84,9 @@ test('The responsive application preserves the mobile Control Room and expands t
     assert.equal(desktopLayout.navPosition, 'sticky');
     assert.equal(desktopLayout.navVisible, true);
     assert.match(desktopLayout.columns, /^250px /);
-    assert.equal(desktopLayout.tabsPosition, 'fixed');
+    assert.equal(desktopLayout.tabsPosition, 'static');
+    assert.equal(desktopLayout.tabsInCommandHeader, true);
+    assert.ok(desktopLayout.tabsBottomGap > 300);
     assert.equal(desktopLayout.bodyWidth, desktopLayout.viewportWidth);
     assert.equal(desktopLayout.mobileMenuVisible, false);
     assert.deepEqual(desktopErrors, []);
@@ -94,6 +99,9 @@ test('The responsive application preserves the mobile Control Room and expands t
     await desktop.waitForURL(`${server.url}/projects`);
     await desktop.waitForFunction(() => window.__coreState?.canvasMode === 'projects');
     assert.equal(await desktop.locator('.canvas').isVisible(), true);
+    await desktop.getByRole('button', { name: 'Control Room' }).click();
+    await desktop.waitForURL(`${server.url}/`);
+    await desktop.locator('#control-room-view:not([hidden])').waitFor({ state: 'visible' });
   } finally {
     await browser?.close();
     await stopDecisionOsServer(server.process);

@@ -80,6 +80,11 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     await enterProjectsCanvasController();
     return;
   }
+  if (action === 'open-control-room') {
+    telemetry('open-control-room', { url: '/' });
+    window.location.assign('/');
+    return;
+  }
   if (action === 'toggle-rail') {
     toggleRail(actionTarget);
     return;

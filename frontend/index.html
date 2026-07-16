@@ -21,6 +21,7 @@
         <button class="tool" type="button" data-tool="group" title="Group" data-spec="53d49146 90d84349"><span>◎</span><span>Group</span></button>
         <button class="tool" type="button" data-tool="relationship" title="Relationship" data-spec="61bea65c 9bd42e71"><span>↗</span><span>Link</span></button>
         <button class="tool" type="button" data-action="resize" title="Resize selected cards"><span>↕</span><span>Resize</span></button>
+        <button class="tool" type="button" data-action="open-control-room" title="Control Room" aria-label="Control Room"><span>⌂</span><span>Control</span></button>
         <button class="tool" type="button" data-action="open-ledgers-canvas" title="Ledgers"><span>▦</span><span>Ledgers</span></button>
         <button class="tool" type="button" data-action="open-pipelines-modal" title="Pipelines"><span>⌁</span><span>Pipelines</span></button>
         <button class="tool" type="button" data-action="refresh" title="Refresh" data-spec="cfed85d3 50000006"><span>⟳</span><span>Refresh</span></button>
@@ -305,16 +306,16 @@
               <div class="control-sticky">
                 <div id="control-project-filters" class="control-filters" aria-label="Filter tasks by project"></div>
                 <div id="control-filters" class="control-filters" aria-label="Filter tasks by ledger"></div>
+                <nav class="control-tabs" aria-label="Task status">
+                  <button type="button" data-control-tab="queue" role="tab" aria-selected="true"><span>Queue</span><small>0 tasks</small></button>
+                  <button type="button" data-control-tab="active" role="tab" aria-selected="false"><span>Active</span><small>0 tasks</small></button>
+                  <button type="button" data-control-tab="backlog" role="tab" aria-selected="false"><span>Backlog</span><small>0 tasks</small></button>
+                  <button class="new-task-button" type="button"><span>+ New task</span><small>Create</small></button>
+                </nav>
               </div>
               <div id="control-task-list" class="control-task-list"></div>
               <p id="control-empty" class="control-empty" hidden></p>
               <details id="control-diagnostics" class="control-diagnostics" hidden><summary>Markdown diagnostics</summary></details>
-              <nav class="control-tabs" aria-label="Task status">
-                <button type="button" data-control-tab="queue" role="tab" aria-selected="true"><span>Queue</span><small>0 tasks</small></button>
-                <button type="button" data-control-tab="active" role="tab" aria-selected="false"><span>Active</span><small>0 tasks</small></button>
-                <button type="button" data-control-tab="backlog" role="tab" aria-selected="false"><span>Backlog</span><small>0 tasks</small></button>
-                <button class="new-task-button" type="button"><span>+ New task</span><small>Create</small></button>
-              </nav>
             </section>
 
             <section id="ledger-view" hidden>
