@@ -25,12 +25,14 @@ test('thread Codex prompt uses a direct scoped contract without triggering open-
   assert.match(prompt.developerInstructions, /master-task-apply/);
   assert.match(prompt.developerInstructions, /master-task-progress --plan-stdin --json/);
   assert.match(prompt.developerInstructions, /JSON status and `subtask` relationships are authoritative/);
-  assert.match(prompt.developerInstructions, /master-task-complete --card-id card-a/);
+  assert.doesNotMatch(prompt.developerInstructions, /master-task-complete/);
+  assert.match(prompt.developerInstructions, /Never close or mark the master task done from a normal card run/);
+  assert.match(prompt.developerInstructions, /direct operator action or an explicitly invoked closeout skill/);
   assert.match(prompt.developerInstructions, /master-task-gate[^\n]+card-a/);
   assert.match(prompt.developerInstructions, /--thread-id thread-card-a --message-stdin/);
   assert.match(prompt.developerInstructions, /workspace `AGENTS\.md` Markdown contract/);
   assert.ok(prompt.developerInstructions.length < 700);
-  assert.doesNotMatch(prompt.developerInstructions, /card-context|do not|never|locate the CLI/i);
+  assert.doesNotMatch(prompt.developerInstructions, /card-context|locate the CLI/i);
   assert.doesNotMatch(prompt.developerInstructions, /Scope|Contract|Acceptance Criteria/);
   assert.doesNotMatch(prompt.developerInstructions, /# Card A|Implement this request/);
   assert.doesNotMatch(prompt.developerInstructions, /treat-open-notes|open notes|You are treating/i);
