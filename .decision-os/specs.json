@@ -10270,7 +10270,7 @@
       "title": "Audit and Restore Lost Master Tasks",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "master-task"
       ],
@@ -10286,8 +10286,7 @@
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
       "codexThreadRunId": "codex-skill-1784204458229-024a24ce",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784204458229-024a24ce.md",
-      "codexActiveRunId": "codex-skill-1784204458229-024a24ce"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784204458229-024a24ce.md"
     },
     {
       "id": "card-d3f5fbfb-3f68-42aa-b4f5-7267ce6ad4cb",
@@ -10401,7 +10400,7 @@
       "title": "Verify post-restart projection diagnostics",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "subtask"
       ],
