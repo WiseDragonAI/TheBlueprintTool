@@ -6,9 +6,9 @@
 @import url('./canvas/shell.css');
 @import url('./canvas/canvas-layer.css');
 @import url('./canvas/objects.css');
-@import url('./canvas/terminal-button.css');
-@import url('./canvas/terminal-chat.css');
-@import url('./canvas/terminal-chat-controls.css');
-@import url('./canvas/thread.css');
+@import url('./shared/terminal-button.css');
+@import url('./shared/terminal-chat.css');
+@import url('./shared/terminal-chat-controls.css');
+@import url('./shared/thread.css');
 @import url('./canvas/dialogs.css');
 @import url('./canvas/debug.css');

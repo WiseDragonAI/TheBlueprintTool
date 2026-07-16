@@ -2,7 +2,7 @@
  * WHAT: Owns the accumulating ledger and thread refresh queue lifecycle.
  * WHY: Refresh branching, deferral, draining, and recovery belong in one controller outside the SSE transport effect.
  */
-import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
+import { renderCanvasSurface } from '../../surface/effect/canvas-surface-effects.js';
 import { resizeChangedCardToContent as measureChangedCardToContent } from '../../card/effect/resize-selected-cards-to-content.js';
 import { commitActiveLedgerMutation } from '../../ledger/effect/commit-active-ledger-mutation.js';
 import { loadActiveLedgerState } from '../../ledger/effect/load-active-ledger-state.js';

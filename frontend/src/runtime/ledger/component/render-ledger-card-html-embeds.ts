@@ -10,7 +10,7 @@ import {
   readLedgerCardMediaCarouselSlide,
   saveLedgerCardMediaCarouselSlide
 } from '../helper/persist-ledger-card-media-carousel.js';
-import { scheduleCanvasMediaOverlayRender } from '../../canvas/effect/render-canvas-media-overlay.js';
+import { scheduleCanvasMediaOverlayRender } from '../../surface/effect/canvas-surface-effects.js';
 import { state } from '../../state.js';
 import { activeLedgers } from '../helper/active-ledgers.js';
 import { projectScopedRequestPath } from '../../project/helper/project-request-scope.js';

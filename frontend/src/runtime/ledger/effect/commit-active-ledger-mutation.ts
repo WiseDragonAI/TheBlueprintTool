@@ -3,7 +3,7 @@
  * WHY: A successful server response must not replace newer route or local geometry state.
  */
 import { state } from '../../state.js';
-import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
+import { renderCanvasSurface } from '../../surface/effect/canvas-surface-effects.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { geometryRevisionSnapshot } from '../helper/active-ledger-geometry.js';
 import { ledgerEndpointForTab } from '../helper/ledger-endpoint-for-tab.js';

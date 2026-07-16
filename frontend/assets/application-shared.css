@@ -1,0 +1,8 @@
+/**
+ * WHAT: Exposes thread and terminal component styles shared by the responsive application and canvas.
+ * WHY: The application must not activate the canvas stylesheet to render shared conversation controls.
+ */
+@import url('./shared/terminal-button.css');
+@import url('./shared/terminal-chat.css');
+@import url('./shared/terminal-chat-controls.css');
+@import url('./shared/thread.css');

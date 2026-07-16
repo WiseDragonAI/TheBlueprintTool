@@ -7,7 +7,7 @@ import { hydratePersistedGeometry } from '../../persistence/effect/hydrate-persi
 import { loadActiveLedgerState } from '../../ledger/effect/load-active-ledger-state.js';
 import { advanceLedgerRouteEpoch } from '../../ledger/effect/reconcile-active-ledger-state.js';
 import { readPersistedState } from '../../persistence/helper/read-persisted-state.js';
-import { renderCanvasSurface } from '../../canvas/effect/render-canvas-surface.js';
+import { renderCanvasSurface } from '../../surface/effect/canvas-surface-effects.js';
 import { renderTabRegistry } from '../../navigation/effect/render-tab-registry.js';
 import { routeCanvasMode } from '../../navigation/helper/route-canvas-mode.js';
 import { routeTab } from '../../navigation/helper/route-tab.js';

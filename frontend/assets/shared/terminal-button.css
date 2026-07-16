@@ -1,6 +1,6 @@
 /*
  * WHAT: Defines the shared terminal button component and send/stop/nav variants.
- * WHY: The mockup needs one reusable button language instead of local copies.
+ * WHY: Canvas and responsive application controls need one reusable button language instead of local copies.
  */
 
 .terminal-button {

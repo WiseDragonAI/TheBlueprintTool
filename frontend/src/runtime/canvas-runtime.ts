@@ -4,8 +4,10 @@
  */
 import { bootSurface } from './boot/controller/boot-surface.js';
 import { state } from './state.js';
-import { routeScope } from './navigation/helper/route-scope.js';
-import { bootApplication } from '../app/controller/boot-application.js';
+import { scheduleCanvasMediaOverlayRender } from './canvas/effect/render-canvas-media-overlay.js';
+import { renderCanvasControlOverlay } from './canvas/effect/render-canvas-control-overlay.js';
+import { renderCanvasSurface } from './canvas/effect/render-canvas-surface.js';
+import { installCanvasSurfaceEffects } from './surface/effect/canvas-surface-effects.js';
 
 declare global {
   interface Window {
@@ -16,10 +18,9 @@ declare global {
 
 window.__coreState = state;
 window.__coreTelemetry = [];
-
-const scope = routeScope(window.location.pathname);
-const wideCanvas = window.matchMedia?.('(min-width: 761px)').matches !== false;
-const canvasRoute = scope.view === 'projects'
-  || Boolean(scope.projectId && ['ledgers', 'ledger'].includes(scope.view));
-if (wideCanvas && canvasRoute) bootSurface();
-else void bootApplication();
+installCanvasSurfaceEffects({
+  renderCanvasControlOverlay,
+  renderCanvasSurface,
+  scheduleCanvasMediaOverlayRender,
+});
+bootSurface();

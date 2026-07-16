@@ -1,18 +1,17 @@
 <!doctype html>
-<!-- WHAT: Hosts the desktop canvas and the inert responsive application template in one frontend entry. -->
-<!-- WHY: Route and viewport selection must not require separate frontend repositories or documents. -->
+<!-- WHAT: Hosts inert component templates behind a neutral surface bootstrap. -->
+<!-- WHY: Route selection must mount exactly one UI without exposing the canvas as the default document. -->
 <html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Project | Ledger</title>
-    <link rel="stylesheet" href="/assets/canvas.css">
-    <link rel="stylesheet" href="/assets/vendor/nouislider-15.8.1.min.css">
-    <link id="responsive-application-styles" rel="stylesheet" href="/assets/application.css" media="not all">
+    <style>html,body{min-height:100%;margin:0;background:#090a0c;color-scheme:dark}</style>
     <link rel="stylesheet" href="/assets/vendor/highlight-atom-one-dark.css">
   </head>
   <body>
-    <main class="shell" aria-label="Core canvas workspace">
+    <template id="canvas-surface-shell">
+      <main class="shell" aria-label="Core canvas workspace">
       <aside class="rail" id="toolbox-rail" aria-label="Toolbox">
         <button class="tool rail-toggle" type="button" data-action="toggle-rail" title="Collapse toolbox" aria-controls="toolbox-rail" aria-expanded="true"><span>‹</span><span class="rail-toggle-label">Collapse</span></button>
         <button class="tool active" type="button" data-tool="select" title="Select" data-spec="40000007"><span>↖</span><span>Select</span></button>
@@ -193,7 +192,8 @@
       <dialog class="pipeline-editor-modal codex-editor-modal" aria-labelledby="pipeline-editor-modal-title"></dialog>
       <dialog class="pipeline-skill-picker-modal skill-modal" aria-labelledby="pipeline-skill-picker-modal-title"></dialog>
       <dialog class="skill-library-editor-modal codex-editor-modal" aria-labelledby="skill-library-editor-modal-title"></dialog>
-    </main>
+      </main>
+    </template>
     <template id="responsive-application-shell">
       <div class="app-shell shell">
         <header class="topbar">
@@ -549,9 +549,6 @@
       </div>
     </template>
     <script src="/assets/vendor/highlight.min.js"></script>
-    <script src="/assets/vendor/sortable-1.15.7.min.js"></script>
-    <script src="/assets/vendor/embla-carousel-8.6.0.umd.js"></script>
-    <script src="/assets/vendor/nouislider-15.8.1.min.js"></script>
-    <script type="module" src="/src/runtime/canvas-runtime.ts"></script>
+    <script type="module" src="/src/runtime/surface-runtime.ts"></script>
   </body>
 </html>

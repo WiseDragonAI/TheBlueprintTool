@@ -1,6 +1,6 @@
 /*
  * WHAT: Scoped DroidFleet terminal shell styles copied from `feat/mockup-terminal-chatlog`.
- * WHY: The right-side agent chat must match the terminal mock branch, not a generic chat panel.
+ * WHY: Canvas and responsive thread surfaces share the terminal shell instead of maintaining copies.
  */
 
 .agent-chat.phone {
