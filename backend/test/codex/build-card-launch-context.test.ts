@@ -20,4 +20,5 @@ test('card launch context exposes the execution profile action', () => {
   const actions = context.actions as Record<string, { command: string }>;
   assert.equal(actions.executionProfile.command, 'ledger-cli execution-profile --ledger "$DECISION_OS_LEDGER_FILE" --json');
   assert.match(actions.masterTaskApply.command, /ledger-cli master-task-apply/);
+  assert.match(actions.masterTaskProgress.command, /ledger-cli master-task-progress/);
 });

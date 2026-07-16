@@ -31,6 +31,25 @@ test('parses the canonical master-task markdown without another data model', () 
   assert.equal(parsed.nextSubtask.cardId, 'card-b');
 });
 
+test('uses JSON labels, status, and relationships when legacy Markdown is stale', () => {
+  const parsed = parseMasterTaskMarkdown(task({
+    labels: ['master-task'],
+    relationships: [
+      { id: 'rel-r', from: 'card-a', to: 'card-r', label: 'subtask' },
+      { id: 'rel-b', from: 'card-a', to: 'card-b', label: 'subtask' },
+    ],
+    cards: [
+      { id: 'card-r', title: 'Research', status: 'done', labels: ['subtask'] },
+      { id: 'card-b', title: 'Build', status: 'todo', labels: ['subtask'] },
+    ],
+    markdown: '#master-task #task-complete\n\nLedger: Tasks\nWaiting since: 2026-07-10T10:00:00.000Z\n\n## Subtasks\n\n1. [Research](card:card-r) — Status: pending',
+  }));
+  assert.equal(parsed.valid, true);
+  assert.equal(parsed.status, 'task-waiting');
+  assert.equal(parsed.complete, 1);
+  assert.deepEqual(parsed.subtasks.map((entry) => entry.cardId), ['card-r', 'card-b']);
+});
+
 test('restarts waiting age from the latest timestamped thread message', () => {
   const parsed = parseMasterTaskMarkdown(task({
     threadNotes: [
@@ -171,7 +190,7 @@ test('Control Room resolves Process Card runs through the shared current-run poi
 test('ignores task tag examples in ordinary Markdown prose', () => {
   const parsed = parseMasterTaskMarkdown(task({ markdown: 'This specification documents `#master-task`, `#task-waiting`, and `#task-active`.' }));
   assert.equal(parsed.valid, false);
-  assert.equal(parsed.diagnostics.includes('missing #master-task'), true);
+  assert.equal(parsed.diagnostics.includes('missing master-task label'), true);
   assert.equal(deriveControlRoom([{ ...task(), markdown: parsed.markdown }]).diagnostics.length, 0);
 });
 

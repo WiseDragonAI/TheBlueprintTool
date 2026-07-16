@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import type { Result } from '../../../lib/types.js';
 import { resolveCardZone } from './resolve-ledger-zone-context.js';
+import { stripLegacyTaskProjection, withCanonicalTaskLabel } from './master-task-model.js';
 import { validateMasterTasks } from './validate-master-tasks.js';
 
 type JsonObject = Record<string, unknown>;
@@ -59,7 +60,8 @@ export function applyMasterTaskPlan(input: { ledgerJsonFile: string; planJson: s
   const existingIds = new Set([...cards, ...relationships].map((entry) => String(entry.id ?? '')));
   const nextId = (prefix: 'card' | 'rel'): string => { let value = id(prefix); while (existingIds.has(value)) value = id(prefix); existingIds.add(value); return value; };
   const created = plan.subtasks.map((subtask, index) => ({ id: nextId('card'), relationshipId: nextId('rel'), ...subtask, index }));
-  const links = created.map((item, index) => `${index + 1}. [${item.title}](card:${item.id}) — Status: pending`).join('\n');
+  const links = created.map((item, index) => `${index + 1}. [${item.title}](card:${item.id})`).join('\n');
+  Object.assign(master, withCanonicalTaskLabel(master, 'master-task'));
   master.title = plan.title;
   zone.label = plan.zoneTitle || plan.title;
   const domainId = String(master.domainId ?? 'specs');
@@ -71,20 +73,24 @@ export function applyMasterTaskPlan(input: { ledgerJsonFile: string; planJson: s
   const masterFile = resolve(input.ledgerJsonFile, '../..', masterRef);
   const existingMasterMarkdown = existsSync(masterFile) ? readFileSync(masterFile, 'utf8') : '';
   const lifecycleHeader = existingMasterMarkdown.match(/^[\s\S]*?(?=^##\s)/m)?.[0]?.trimEnd();
-  if (!plan.masterMarkdown && !lifecycleHeader?.includes('#master-task')) return { ok: false, error: 'Existing master Markdown has no preservable #master-task lifecycle header.' };
+  if (!plan.masterMarkdown && !lifecycleHeader) return { ok: false, error: 'Existing master Markdown has no preservable metadata header.' };
   const body = plan.masterMarkdown ?? renderSections(plan.sections ?? []);
   const projected = plan.masterMarkdown ? body : `${lifecycleHeader}\n\n${body}`;
   const masterMarkdown = /(?:^|\n)## [A-Z]\. Subtasks\s*\n[\s\S]*$/m.test(projected)
     ? projected.replace(/((?:^|\n)## [A-Z]\. Subtasks\s*\n)[\s\S]*$/m, `$1\n${links}\n`)
     : `${projected.trimEnd()}\n\n---\n\n## ${String.fromCharCode(65 + (plan.sections?.length ?? 25))}. Subtasks\n\n${links}\n`;
-  files.set(masterFile, masterMarkdown);
+  files.set(masterFile, stripLegacyTaskProjection(masterMarkdown));
   master.comment = { ...masterComment, contentFile: masterRef };
   for (const item of created) {
     const contentFile = `.decision-os/cards/${safe(domainId)}/${item.id}.md`;
-    cards.push({ id: item.id, title: item.title, cardType: 'note', domainId, status: 'todo', x: baseX + (item.index % 2) * 380, y: baseY + Math.floor(item.index / 2) * 410, w: 340, h: 380, comment: { contentFile }, facts: [], fields: [] });
+    cards.push({ id: item.id, title: item.title, cardType: 'note', domainId, status: 'todo', labels: ['subtask'], x: baseX + (item.index % 2) * 380, y: baseY + Math.floor(item.index / 2) * 410, w: 340, h: 380, comment: { contentFile }, facts: [], fields: [] });
     relationships.push({ id: item.relationshipId, from: plan.masterCardId, to: item.id, label: 'subtask' });
     const subtaskMarkdown = item.markdown ?? renderSections(item.sections ?? []);
     files.set(resolve(input.ledgerJsonFile, '../..', contentFile), subtaskMarkdown.trimEnd() + '\n');
+  }
+  for (const relationship of relationships.filter((entry) => String(entry.from ?? '') === plan.masterCardId && String(entry.label ?? '') === 'subtask')) {
+    const child = cards.find((card) => String(card.id ?? '') === String(relationship.to ?? ''));
+    if (child) Object.assign(child, withCanonicalTaskLabel(child, 'subtask'));
   }
   const nextLedger = { ...ledger, cards, relationships, annotations };
   const validationLedger = { ...nextLedger, cards: cards.map((card) => {
