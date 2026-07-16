@@ -19,7 +19,7 @@ function id(prefix: 'card' | 'rel'): string { return `${prefix}-${randomUUID()}`
 function safe(value: string): string { return value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled'; }
 
 function sections(value: unknown): Section[] {
-  return Array.isArray(value) ? value.filter(record).map((item) => ({ title: String(item.title ?? '').trim(), markdown: String(item.markdown ?? '').trim() })).filter((item) => item.title && item.markdown) : [];
+  return Array.isArray(value) ? value.filter(record).map((item) => ({ title: String(item.title ?? '').trim().replace(/^(?:[A-Z]\.\s+)+/i, ''), markdown: String(item.markdown ?? '').trim() })).filter((item) => item.title && item.markdown) : [];
 }
 
 function renderSections(value: Section[]): string {

@@ -453,6 +453,7 @@ test('completes all linked cards from the master-task detail', () => {
   assert.match(mobile, /return returnPath\.startsWith\('\/'\) \? returnPath : controlRoomPath\('queue'\)/);
   assert.match(mobile, /completeButton\.textContent = card\.status === 'done' \? 'Master task complete' : 'Complete master task'/);
   assert.match(mobile, /overview\.append\(status, heading, subtasks, completion\)/);
+  assert.match(mobile, /elements\['card-body'\]\.replaceChildren\(overview, content\)/);
   assert.doesNotMatch(mobile, /complete-master-subtask|masterTaskId=|Mark task as done/);
   assert.match(styles, /\.complete-master-task-button \{ width: 100%; min-height: 52px;/);
 });
