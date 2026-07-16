@@ -1,12 +1,23 @@
 {
+  "version": 2,
   "projects": {
-    "Lg": {
-      "color": "#312d9c"
+    "ZGVjaXNpb24tb3M": {
+      "id": "ZGVjaXNpb24tb3M",
+      "relativePath": ".",
+      "name": "decision-os",
+      "description": "",
+      "color": "#38d9e8",
+      "registeredAt": "2026-07-16T13:08:27.310Z",
+      "cardId": "project-card:ZGVjaXNpb24tb3M"
     },
     "30e99761-6971-4350-9dbf-9ebcfb057aec": {
+      "id": "30e99761-6971-4350-9dbf-9ebcfb057aec",
+      "relativePath": "Search",
       "name": "Search",
       "description": "Random searches",
-      "color": "#a78bfa"
+      "color": "#a78bfa",
+      "registeredAt": "2026-07-16T13:08:27.311Z",
+      "cardId": "project-card:30e99761-6971-4350-9dbf-9ebcfb057aec"
     }
   }
 }

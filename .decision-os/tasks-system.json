@@ -92,7 +92,9 @@
         "what": "Show a floating left-side panel when the active selection has no cards, zones, or groups. Match the thread panel positioning and chrome, but keep it focused on queue status and trigger controls."
       },
       "facts": [],
-      "fields": []
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
     },
     {
       "id": "queue-awaiting-cards-source",
