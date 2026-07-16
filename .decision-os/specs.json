@@ -10463,6 +10463,25 @@
       "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
       "codexPipelineStepName": "retrospect-and-close-task",
       "codexSkillName": "retrospect-and-close-task"
+    },
+    {
+      "id": "card-ae7bb1da-08b9-4f79-83e0-b0586afada7b",
+      "title": "RCA: Codex broken-pipe crash on phone",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "rca"
+      ],
+      "x": -9186,
+      "y": 94600,
+      "w": 700,
+      "h": 900,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-ae7bb1da-08b9-4f79-83e0-b0586afada7b.md"
+      },
+      "facts": [],
+      "fields": []
     }
   ],
   "relationships": [
