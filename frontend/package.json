@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "TSX_TSCONFIG_PATH=tsconfig.json node --test --import tsx \"test/**/*.test.ts\"",
+    "test": "TSX_TSCONFIG_PATH=tsconfig.json node --test --import tsx \"test/**/*.test.ts\" \"test-responsive/*.test.mjs\"",
     "test:integration": "find test -path \"*/unit/*\" -prune -o -name \"*.test.ts\" -print | xargs env TSX_TSCONFIG_PATH=tsconfig.json node --test --import tsx",
     "test:unit": "find test/unit -name \"*.test.ts\" -print | xargs env TSX_TSCONFIG_PATH=tsconfig.json node --test --import tsx",
     "typecheck": "tsc -p tsconfig.json --noEmit"
