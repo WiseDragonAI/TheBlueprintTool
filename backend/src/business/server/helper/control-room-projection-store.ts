@@ -120,6 +120,9 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
     }
   }
   const complete = subtasks.filter((subtask) => subtask.status === 'complete').length;
+  const activeSince = processing
+    ? (run.pipelineRunId ? text(run.startedAt) || activeText : activeText || text(run.startedAt))
+    : activeText;
   return {
     valid: diagnostics.length === 0, masterTask: true, diagnostics,
     cardId: text(input.card.id), title: text(input.card.title) || `Card ${text(input.card.id)}`,
@@ -129,8 +132,8 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
     codexRunId: run.runId, codexPipelineRunId: run.pipelineRunId, codexStatus: run.status,
     codexProcessing: processing, codexQueued: queued, codexQueuePosition: queued ? run.queuePosition : null,
     waitingSince: Number.isFinite(latestThreadTime) ? new Date(latestThreadTime).toISOString() : waitingText,
-    waitingTime, activeSince: processing && run.pipelineRunId && run.startedAt ? run.startedAt : activeText,
-    activeTime: Date.parse(processing && run.pipelineRunId && run.startedAt ? text(run.startedAt) : activeText), queueRank: rank,
+    waitingTime, activeSince,
+    activeTime: Date.parse(activeSince), queueRank: rank,
     subtasks, complete, nextSubtask: subtasks.find((subtask) => subtask.status !== 'complete') ?? null,
   };
 }
