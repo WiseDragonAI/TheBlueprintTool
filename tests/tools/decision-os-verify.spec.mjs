@@ -26,6 +26,35 @@ test('verification command rejects compound shell admission', () => {
   assert.throws(() => verificationCommand(['--', 'sh', '-lc', 'npm test & npm test']), /one direct command/);
 });
 
+test('verification command owns the default Node test concurrency', () => {
+  assert.deepEqual(
+    verificationCommand(['--', process.execPath, '--test', '--import', 'tsx', 'test/example.test.ts']),
+    [process.execPath, '--test-concurrency=3', '--test', '--import', 'tsx', 'test/example.test.ts'],
+  );
+});
+
+test('verification command caps explicit Node test concurrency at three', () => {
+  assert.deepEqual(
+    verificationCommand(['--', process.execPath, '--test', '--test-concurrency=8', 'test/example.test.ts']),
+    [process.execPath, '--test', '--test-concurrency=3', 'test/example.test.ts'],
+  );
+  assert.deepEqual(
+    verificationCommand(['--', process.execPath, '--test', '--test-concurrency', '8', 'test/example.test.ts']),
+    [process.execPath, '--test', '--test-concurrency', '3', 'test/example.test.ts'],
+  );
+});
+
+test('verification command preserves lower Node test concurrency and non-test commands', () => {
+  assert.deepEqual(
+    verificationCommand(['--', process.execPath, '--test', '--test-concurrency=1', 'test/example.test.ts']),
+    [process.execPath, '--test', '--test-concurrency=1', 'test/example.test.ts'],
+  );
+  assert.deepEqual(
+    verificationCommand(['--', process.execPath, '--check', 'bin/example.mjs']),
+    [process.execPath, '--check', 'bin/example.mjs'],
+  );
+});
+
 test('verification lease serializes simultaneous commands', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'decision-os-verification-'));
   const lockFile = join(directory, 'verification.lock');
