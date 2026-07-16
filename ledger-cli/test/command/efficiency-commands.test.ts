@@ -95,7 +95,7 @@ test('master-task progress writes content, labels, verified status, reply, and g
   const progress = applyMasterTaskProgress({ ledgerJsonFile: ledger, planJson: JSON.stringify({
     masterCardId: 'master',
     updates: [
-      { cardId: 'master', markdown: '#master-task #task-active\n\nLedger: Specs\nWaiting since: 2026-01-01T00:00:00.000Z\n\n## A. Result\n\n1. **State:** Implemented.\n\n## B. Subtasks\n\n1. [Child](card:' + childId + ') — Status: pending' },
+      { cardId: 'master', markdown: '#master-task #task-active\n\nLedger: Specs\nWaiting since: 2026-01-01T00:00:00.000Z\n\n## A. Result\n\n1. **State:** Implemented.\n\n## B. Subtasks\n\n1. [Stale title](card:' + childId + ') — Status: pending' },
       { cardId: childId, sections: [{ title: 'Result', markdown: '1. **State:** Verified.' }] },
     ],
     verifiedSubtaskIds: [childId],
@@ -109,7 +109,9 @@ test('master-task progress writes content, labels, verified status, reply, and g
   assert.equal(persisted.cards.find((card) => card.id === 'master')?.status, 'todo');
   assert.equal(persisted.cards.find((card) => card.id === childId)?.status, 'done');
   assert.deepEqual(persisted.cards.find((card) => card.id === childId)?.labels, ['subtask']);
-  assert.doesNotMatch(readFileSync(join(decisionOs, 'cards', 'specs', 'master.md'), 'utf8'), /#master-task|#task-active|Status:/);
+  const masterMarkdown = readFileSync(join(decisionOs, 'cards', 'specs', 'master.md'), 'utf8');
+  assert.doesNotMatch(masterMarkdown, /#master-task|#task-active|Status:|Stale title/);
+  assert.match(masterMarkdown, new RegExp(`1\\. \\[Child\\]\\(card:${childId}\\)`));
   assert.match(readFileSync(join(decisionOs, 'threads', 'specs', 'thread-master.md'), 'utf8'), /# AGENT[\s\S]*Implementation verified\./);
   } finally {
     if (previousRoot === undefined) delete process.env.DECISION_OS_LEDGER_ROOT; else process.env.DECISION_OS_LEDGER_ROOT = previousRoot;

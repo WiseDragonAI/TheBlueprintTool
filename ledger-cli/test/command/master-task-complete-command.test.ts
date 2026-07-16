@@ -27,14 +27,29 @@ test('master-task-complete sends one canonical project-scoped request', async ()
   }, async (url, init) => {
     calls.push({ url, init });
     return { headers: new Headers({ 'x-decision-os-completion-commit': 'abc123' }), ok: true, status: 200, text: async () => '{"cards":[]}' };
-  });
+  }, async () => ({ ok: true, value: JSON.stringify({ version: 2, ready: true, discrepancies: [] }) }));
 
   assert.equal(result.ok, true);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, 'http://127.0.0.1:50150/p/project%2Fa/decision-os/specs');
   assert.equal(calls[0].init.method, 'PATCH');
   assert.deepEqual(JSON.parse(String(calls[0].init.body)), { action: 'complete-master-task', masterTaskId: 'master-a' });
-  if (result.ok) assert.deepEqual(JSON.parse(result.value), { version: 1, completed: true, projectId: 'project/a', ledgerId: 'specs', masterCardId: 'master-a', commitSha: 'abc123' });
+  if (result.ok) assert.deepEqual(JSON.parse(result.value), {
+    version: 2,
+    completed: true,
+    projectId: 'project/a',
+    ledgerId: 'specs',
+    masterCardId: 'master-a',
+    commitSha: 'abc123',
+    gate: { version: 2, ready: true, discrepancies: [] },
+  });
+});
+
+test('master-task-complete reports a failed post-transaction gate without hiding completion', async () => {
+  const result = await completeMasterTask({
+    cardId: 'master-a', ledgerJsonFile: '/workspace/.decision-os/specs.json', projectId: 'project-a', serverUrl: 'http://127.0.0.1:50150',
+  }, async () => ({ headers: new Headers(), ok: true, status: 200, text: async () => '{}' }), async () => ({ ok: false, error: 'gate unavailable' }));
+  assert.deepEqual(result, { ok: false, error: 'Master task completed, but its post-transaction gate failed: gate unavailable' });
 });
 
 test('master-task-complete returns the canonical route failure', async () => {

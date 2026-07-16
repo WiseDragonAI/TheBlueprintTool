@@ -22,6 +22,22 @@ function renderSections(value: Section[]): string {
   return value.map((section, index) => `## ${String.fromCharCode(65 + index)}. ${section.title}\n\n${section.markdown}`).join('\n\n---\n\n');
 }
 
+function projectSubtaskLinks(markdown: string, links: string): string {
+  const source = stripLegacyTaskProjection(markdown).trimEnd();
+  const lines = source.split('\n');
+  const headingIndex = lines.findIndex((line) => /^##\s+(?:[A-Z]\.\s+)?Subtasks\s*$/i.test(line));
+  if (headingIndex < 0) {
+    const sectionCount = lines.filter((line) => /^##\s+/.test(line)).length;
+    const letter = String.fromCharCode(65 + Math.min(sectionCount, 25));
+    return `${source}\n\n---\n\n## ${letter}. Subtasks\n\n${links}\n`;
+  }
+  const nextHeading = lines.findIndex((line, index) => index > headingIndex && /^##\s+/.test(line));
+  const before = lines.slice(0, headingIndex + 1).join('\n').trimEnd();
+  if (nextHeading < 0) return `${before}\n\n${links}\n`;
+  const after = lines.slice(nextHeading).join('\n').replace(/^\n+/, '');
+  return `${before}\n\n${links}\n\n---\n\n${after.trimEnd()}\n`;
+}
+
 function parsePlan(value: string): Result<Plan> {
   try {
     const source = JSON.parse(value) as JsonObject;
@@ -97,6 +113,14 @@ export function applyMasterTaskProgress(input: { ledgerJsonFile: string; planJso
     if (update.labels) cards[index].labels = [...new Set(update.labels.filter((label) => label !== 'master-task' && label !== 'subtask').concat(update.cardId === plan.masterCardId ? 'master-task' : 'subtask'))];
     files.set(file, `${stripLegacyTaskProjection(update.markdown ?? renderSections(update.sections ?? [])).trimEnd()}\n`);
   }
+  const canonicalLinks = relationships.map((relationship, index) => {
+    const childId = String(relationship.to ?? '');
+    const child = cards.find((card) => String(card.id ?? '') === childId)!;
+    return `${index + 1}. [${String(child.title ?? childId)}](card:${childId})`;
+  }).join('\n');
+  if (!masterFile) return { ok: false, error: `Card has no canonical content file: ${plan.masterCardId}` };
+  const pendingMasterMarkdown = files.get(masterFile) ?? masterMarkdown;
+  files.set(masterFile, projectSubtaskLinks(pendingMasterMarkdown, canonicalLinks));
 
   const threadId = `thread-${plan.masterCardId}`;
   const threadFiles = record(ledger.threadFiles) ? ledger.threadFiles : {};
