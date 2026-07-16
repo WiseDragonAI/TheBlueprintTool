@@ -1,0 +1,529 @@
+{
+  "modelName": "bugs",
+  "diagramSize": {
+    "width": 5200,
+    "height": 2600
+  },
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "scale": 1
+  },
+  "cards": [
+    {
+      "id": "card-0b1aed1f-c9f5-4154-ab9a-a26058426b5c",
+      "title": "New card",
+      "cardType": "note",
+      "domainId": "bugs",
+      "status": "todo",
+      "x": 3438.2098395023777,
+      "y": -470.81928022581076,
+      "w": 896,
+      "h": 4917,
+      "comment": {
+        "contentFile": ".decision-os/cards/bugs/card-0b1aed1f-c9f5-4154-ab9a-a26058426b5c.md"
+      },
+      "codexThreadRunId": "codex-skill-1783610702748-b1123a49",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/bugs/codex-skill-1783610702748-b1123a49.md"
+    },
+    {
+      "id": "card-codex-skill-1783611210436-8e41c0b2",
+      "title": "task-list result",
+      "cardType": "codex-skill-run",
+      "x": 4430.209839502378,
+      "y": -470.81928022581076,
+      "w": 896,
+      "h": 1842,
+      "status": "todo",
+      "comment": {
+        "contentFile": ".decision-os/cards/bugs/card-codex-skill-1783611210436-8e41c0b2.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-codex-skill-1783611516537-418c85ec",
+      "title": "task-dependency result",
+      "cardType": "codex-skill-run",
+      "x": 5422.209839502378,
+      "y": -533.6734408025541,
+      "w": 896,
+      "h": 3465,
+      "status": "todo",
+      "comment": {
+        "contentFile": ".decision-os/cards/bugs/card-codex-skill-1783611516537-418c85ec.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-codex-skill-1783611906212-ccbb6031",
+      "title": "task-group-completeness result",
+      "cardType": "codex-skill-run",
+      "x": 5424.2876689339955,
+      "y": -3054.673440802554,
+      "w": 896,
+      "h": 2473,
+      "status": "todo",
+      "comment": {
+        "contentFile": ".decision-os/cards/bugs/card-codex-skill-1783611906212-ccbb6031.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-codex-skill-1783614296635-41b41034",
+      "title": "implementation-orchestrator result",
+      "cardType": "codex-skill-run",
+      "x": 6411.696201117057,
+      "y": -535.8419392734006,
+      "w": 1063,
+      "h": 3087,
+      "status": "todo",
+      "comment": {
+        "contentFile": ".decision-os/cards/bugs/card-codex-skill-1783614296635-41b41034.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexThreadRunId": "codex-skill-1783615373416-7b40cb4e",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/bugs/codex-skill-1783615373416-7b40cb4e.md"
+    },
+    {
+      "id": "card-codex-skill-1783658144311-18cf0e37",
+      "title": "code-quality-improver result",
+      "cardType": "codex-skill-run",
+      "x": 7570.696201117057,
+      "y": -535.8419392734006,
+      "w": 1063,
+      "h": 1907,
+      "status": "todo",
+      "comment": {
+        "contentFile": ".decision-os/cards/bugs/card-codex-skill-1783658144311-18cf0e37.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-4132d930-9286-432e-9c6d-5d542fc1c69b",
+      "title": "Expand",
+      "cardType": "note",
+      "domainId": "bugs",
+      "status": "todo",
+      "x": 8942.132573104349,
+      "y": -535.1106002167492,
+      "w": 1356,
+      "h": 3989,
+      "comment": {
+        "contentFile": ".decision-os/cards/bugs/card-4132d930-9286-432e-9c6d-5d542fc1c69b.md"
+      },
+      "codexThreadRunId": "codex-skill-1783664442785-5ab9e3aa",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/bugs/codex-skill-1783664442785-5ab9e3aa.md"
+    },
+    {
+      "id": "card-codex-skill-1783665476180-55d33e92",
+      "title": "task-list result",
+      "cardType": "codex-skill-run",
+      "x": 10394.132573104349,
+      "y": -535.1106002167492,
+      "w": 1356,
+      "h": 2810,
+      "status": "todo",
+      "comment": {
+        "contentFile": ".decision-os/cards/bugs/card-codex-skill-1783665476180-55d33e92.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-codex-skill-1783666797142-a67ce4bc",
+      "title": "task-dependency result",
+      "cardType": "codex-skill-run",
+      "x": 11846.132573104349,
+      "y": -535.1106002167492,
+      "w": 1356,
+      "h": 4420,
+      "status": "done",
+      "comment": {
+        "contentFile": ".decision-os/cards/bugs/card-codex-skill-1783666797142-a67ce4bc.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-codex-skill-1783667213600-4470fb4b",
+      "title": "implementation-orchestrator result",
+      "cardType": "codex-skill-run",
+      "x": 13298.132573104349,
+      "y": -535.1106002167492,
+      "w": 1356,
+      "h": 3660,
+      "status": "done",
+      "comment": {
+        "contentFile": ".decision-os/cards/bugs/card-codex-skill-1783667213600-4470fb4b.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-df1e558e-6f14-43bc-9d09-1a98e37d9ef0",
+      "title": "Bug: New Card Selection Opens Ledger Thread",
+      "cardType": "note",
+      "domainId": "bugs",
+      "status": "todo",
+      "x": 3442.412344798522,
+      "y": -5296.026885865574,
+      "w": 1688,
+      "h": 830,
+      "comment": {
+        "contentFile": ".decision-os/cards/bugs/card-df1e558e-6f14-43bc-9d09-1a98e37d9ef0.md"
+      },
+      "codexThreadRunId": "codex-skill-1783667953816-1d44777d",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/bugs/codex-skill-1783667953816-1d44777d.md"
+    },
+    {
+      "id": "card-codex-skill-1783673777495-c20b76d4",
+      "title": "code-quality-improver result",
+      "cardType": "codex-skill-run",
+      "x": 14750.132573104349,
+      "y": -535.1106002167492,
+      "w": 1356,
+      "h": 1640,
+      "status": "done",
+      "comment": {
+        "contentFile": ".decision-os/cards/bugs/card-codex-skill-1783673777495-c20b76d4.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-codex-skill-1783674933055-f8a3b891",
+      "title": "run-test-and-fix result",
+      "cardType": "codex-skill-run",
+      "x": 16202.132573104349,
+      "y": -535.1106002167492,
+      "w": 1356,
+      "h": 2250,
+      "status": "done",
+      "comment": {
+        "contentFile": ".decision-os/cards/bugs/card-codex-skill-1783674933055-f8a3b891.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "xhigh"
+    },
+    {
+      "id": "card-codex-skill-1783676933025-5580e569",
+      "title": "task-list result",
+      "cardType": "codex-skill-run",
+      "x": 5226.412344798522,
+      "y": -5296.026885865574,
+      "w": 1688,
+      "h": 669,
+      "status": "todo",
+      "comment": {
+        "contentFile": ".decision-os/cards/bugs/card-codex-skill-1783676933025-5580e569.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-codex-skill-1783677359105-116e92d2",
+      "title": "task-dependency result",
+      "cardType": "codex-skill-run",
+      "x": 7010.412344798522,
+      "y": -5296.026885865574,
+      "w": 1688,
+      "h": 1109,
+      "status": "todo",
+      "comment": {
+        "contentFile": ".decision-os/cards/bugs/card-codex-skill-1783677359105-116e92d2.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-codex-skill-1783677758658-54919b14",
+      "title": "implementation-orchestrator result",
+      "cardType": "codex-skill-run",
+      "x": 8794.412344798522,
+      "y": -5296.026885865574,
+      "w": 1688,
+      "h": 1450,
+      "status": "todo",
+      "comment": {
+        "contentFile": ".decision-os/cards/bugs/card-codex-skill-1783677758658-54919b14.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-codex-skill-1783680838228-1c5bee79",
+      "title": "run-test-and-fix result",
+      "cardType": "codex-skill-run",
+      "x": 10578.412344798522,
+      "y": -5296.026885865574,
+      "w": 1688,
+      "h": 1465,
+      "status": "todo",
+      "comment": {
+        "contentFile": ".decision-os/cards/bugs/card-codex-skill-1783680838228-1c5bee79.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-codex-skill-1783685254132-f607f3c8",
+      "title": "implementation-commit result",
+      "cardType": "codex-skill-run",
+      "x": 12362.412344798522,
+      "y": -5296.026885865574,
+      "w": 1688,
+      "h": 1052,
+      "status": "done",
+      "comment": {
+        "contentFile": ".decision-os/cards/bugs/card-codex-skill-1783685254132-f607f3c8.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-codex-skill-1783685641626-2a71a1ce",
+      "title": "code-quality-improver result",
+      "cardType": "codex-skill-run",
+      "x": 14146.412344798522,
+      "y": -5296.026885865574,
+      "w": 1688,
+      "h": 861,
+      "status": "done",
+      "comment": {
+        "contentFile": ".decision-os/cards/bugs/card-codex-skill-1783685641626-2a71a1ce.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-codex-skill-1783687219283-a4455341",
+      "title": "implementation-commit result",
+      "cardType": "codex-skill-run",
+      "x": 15930.412344798522,
+      "y": -5296.026885865574,
+      "w": 1688,
+      "h": 1045,
+      "status": "done",
+      "comment": {
+        "contentFile": ".decision-os/cards/bugs/card-codex-skill-1783687219283-a4455341.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-fd0e6f45-3620-4621-9d96-d9d1636db48d",
+      "title": "Persist and Synchronize Codex Run Preferences",
+      "cardType": "note",
+      "domainId": "bugs",
+      "status": "todo",
+      "x": 3413.331755797168,
+      "y": 4901.316296102514,
+      "w": 1141,
+      "h": 1758,
+      "comment": {
+        "contentFile": ".decision-os/cards/bugs/card-fd0e6f45-3620-4621-9d96-d9d1636db48d.md"
+      },
+      "codexThreadRunId": "codex-skill-1783696782074-c935e6fd",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/bugs/codex-skill-1783696782074-c935e6fd.md",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "high"
+    },
+    {
+      "id": "card-codex-skill-1783701052834-97c8b248",
+      "title": "simply-execute result",
+      "cardType": "codex-skill-run",
+      "x": 4650.331755797168,
+      "y": 4901.316296102514,
+      "w": 964,
+      "h": 1600,
+      "status": "todo",
+      "codexPipelineRunId": "codex-skill-1783701052834-97c8b248",
+      "codexPipelineStepId": "temporary-step-simply-execute",
+      "codexPipelineStepName": "simply-execute",
+      "codexPipelineName": "simply-execute run",
+      "codexRunId": "codex-skill-1783701052834-97c8b248",
+      "codexSkillName": "simply-execute",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "comment": {
+        "contentFile": ".decision-os/cards/bugs/card-codex-skill-1783701052834-97c8b248.md"
+      },
+      "facts": [],
+      "fields": []
+    }
+  ],
+  "annotations": [
+    {
+      "id": "zone-4391b4b5-1f2e-47dc-aa1e-e14d606e5f28",
+      "label": "Rollbacks",
+      "variant": "zone",
+      "color": "#aa761d",
+      "x": 3342,
+      "y": -3151,
+      "width": 14312,
+      "height": 7693
+    },
+    {
+      "id": "zone-23a64656-237d-4a51-9b6a-b4f8a01d60bc",
+      "label": "New card - badly selected",
+      "variant": "zone",
+      "color": "#55b8ff",
+      "x": 3318.844503812907,
+      "y": -5444.943144426085,
+      "width": 14505.351713513846,
+      "height": 1688.2233620954744
+    },
+    {
+      "id": "zone-1e745760-50b7-4373-8970-e541d98c1d52",
+      "label": "Codex model and effort sync + default",
+      "variant": "zone",
+      "color": "#ff6857",
+      "x": 3352.8662539394736,
+      "y": 4791.9683906344235,
+      "width": 3191.9335086202022,
+      "height": 1938.2005869420937
+    }
+  ],
+  "relationships": [
+    {
+      "id": "rel-card-0b1aed1f-c9f5-4154-ab9a-a26058426b5c-card-codex-skill-1783611210436-8e41c0b2",
+      "from": "card-0b1aed1f-c9f5-4154-ab9a-a26058426b5c",
+      "to": "card-codex-skill-1783611210436-8e41c0b2",
+      "label": "task-list"
+    },
+    {
+      "id": "rel-card-codex-skill-1783611210436-8e41c0b2-card-codex-skill-1783611516537-418c85ec",
+      "from": "card-codex-skill-1783611210436-8e41c0b2",
+      "to": "card-codex-skill-1783611516537-418c85ec",
+      "label": "task-dependency"
+    },
+    {
+      "id": "rel-card-codex-skill-1783611516537-418c85ec-card-codex-skill-1783611906212-ccbb6031",
+      "from": "card-codex-skill-1783611516537-418c85ec",
+      "to": "card-codex-skill-1783611906212-ccbb6031",
+      "label": "task-group-completeness"
+    },
+    {
+      "id": "rel-card-codex-skill-1783611516537-418c85ec-card-codex-skill-1783614296635-41b41034",
+      "from": "card-codex-skill-1783611516537-418c85ec",
+      "to": "card-codex-skill-1783614296635-41b41034",
+      "label": "implementation-orchestrator"
+    },
+    {
+      "id": "rel-card-codex-skill-1783614296635-41b41034-card-codex-skill-1783658144311-18cf0e37",
+      "from": "card-codex-skill-1783614296635-41b41034",
+      "to": "card-codex-skill-1783658144311-18cf0e37",
+      "label": "code-quality-improver"
+    },
+    {
+      "id": "rel-card-4132d930-9286-432e-9c6d-5d542fc1c69b-card-codex-skill-1783665476180-55d33e92",
+      "from": "card-4132d930-9286-432e-9c6d-5d542fc1c69b",
+      "to": "card-codex-skill-1783665476180-55d33e92",
+      "label": "task-list"
+    },
+    {
+      "id": "rel-card-codex-skill-1783665476180-55d33e92-card-codex-skill-1783666797142-a67ce4bc",
+      "from": "card-codex-skill-1783665476180-55d33e92",
+      "to": "card-codex-skill-1783666797142-a67ce4bc",
+      "label": "task-dependency"
+    },
+    {
+      "id": "rel-card-codex-skill-1783666797142-a67ce4bc-card-codex-skill-1783667213600-4470fb4b",
+      "from": "card-codex-skill-1783666797142-a67ce4bc",
+      "to": "card-codex-skill-1783667213600-4470fb4b",
+      "label": "implementation-orchestrator"
+    },
+    {
+      "id": "rel-card-codex-skill-1783667213600-4470fb4b-card-codex-skill-1783673777495-c20b76d4",
+      "from": "card-codex-skill-1783667213600-4470fb4b",
+      "to": "card-codex-skill-1783673777495-c20b76d4",
+      "label": "code-quality-improver"
+    },
+    {
+      "id": "rel-card-codex-skill-1783673777495-c20b76d4-card-codex-skill-1783674933055-f8a3b891",
+      "from": "card-codex-skill-1783673777495-c20b76d4",
+      "to": "card-codex-skill-1783674933055-f8a3b891",
+      "label": "run-test-and-fix"
+    },
+    {
+      "id": "rel-card-df1e558e-6f14-43bc-9d09-1a98e37d9ef0-card-codex-skill-1783676933025-5580e569",
+      "from": "card-df1e558e-6f14-43bc-9d09-1a98e37d9ef0",
+      "to": "card-codex-skill-1783676933025-5580e569",
+      "label": "task-list"
+    },
+    {
+      "id": "rel-card-codex-skill-1783676933025-5580e569-card-codex-skill-1783677359105-116e92d2",
+      "from": "card-codex-skill-1783676933025-5580e569",
+      "to": "card-codex-skill-1783677359105-116e92d2",
+      "label": "task-dependency"
+    },
+    {
+      "id": "rel-card-codex-skill-1783677359105-116e92d2-card-codex-skill-1783677758658-54919b14",
+      "from": "card-codex-skill-1783677359105-116e92d2",
+      "to": "card-codex-skill-1783677758658-54919b14",
+      "label": "implementation-orchestrator"
+    },
+    {
+      "id": "rel-card-codex-skill-1783677758658-54919b14-card-codex-skill-1783680838228-1c5bee79",
+      "from": "card-codex-skill-1783677758658-54919b14",
+      "to": "card-codex-skill-1783680838228-1c5bee79",
+      "label": "run-test-and-fix"
+    },
+    {
+      "id": "rel-card-codex-skill-1783680838228-1c5bee79-card-codex-skill-1783685254132-f607f3c8",
+      "from": "card-codex-skill-1783680838228-1c5bee79",
+      "to": "card-codex-skill-1783685254132-f607f3c8",
+      "label": "implementation-commit"
+    },
+    {
+      "id": "rel-card-codex-skill-1783685254132-f607f3c8-card-codex-skill-1783685641626-2a71a1ce",
+      "from": "card-codex-skill-1783685254132-f607f3c8",
+      "to": "card-codex-skill-1783685641626-2a71a1ce",
+      "label": "code-quality-improver"
+    },
+    {
+      "id": "rel-card-codex-skill-1783685641626-2a71a1ce-card-codex-skill-1783687219283-a4455341",
+      "from": "card-codex-skill-1783685641626-2a71a1ce",
+      "to": "card-codex-skill-1783687219283-a4455341",
+      "label": "implementation-commit"
+    },
+    {
+      "id": "rel-codex-skill-1783701052834-97c8b248-1",
+      "from": "card-fd0e6f45-3620-4621-9d96-d9d1636db48d",
+      "to": "card-codex-skill-1783701052834-97c8b248",
+      "label": "simply-execute"
+    }
+  ],
+  "notes": {},
+  "threadFiles": {
+    "thread-card-0b1aed1f-c9f5-4154-ab9a-a26058426b5c": ".decision-os/threads/bugs/thread-card-0b1aed1f-c9f5-4154-ab9a-a26058426b5c.md",
+    "thread-card-codex-skill-1783611210436-8e41c0b2": ".decision-os/threads/bugs/thread-card-codex-skill-1783611210436-8e41c0b2.md",
+    "thread-card-codex-skill-1783611516537-418c85ec": ".decision-os/threads/bugs/thread-card-codex-skill-1783611516537-418c85ec.md",
+    "thread-card-codex-skill-1783611906212-ccbb6031": ".decision-os/threads/bugs/thread-card-codex-skill-1783611906212-ccbb6031.md",
+    "thread-card-codex-skill-1783614296635-41b41034": ".decision-os/threads/bugs/thread-card-codex-skill-1783614296635-41b41034.md",
+    "thread-card-codex-skill-1783658144311-18cf0e37": ".decision-os/threads/bugs/thread-card-codex-skill-1783658144311-18cf0e37.md",
+    "thread-card-4132d930-9286-432e-9c6d-5d542fc1c69b": ".decision-os/threads/bugs/thread-card-4132d930-9286-432e-9c6d-5d542fc1c69b.md",
+    "thread-card-codex-skill-1783665476180-55d33e92": ".decision-os/threads/bugs/thread-card-codex-skill-1783665476180-55d33e92.md",
+    "thread-card-codex-skill-1783666797142-a67ce4bc": ".decision-os/threads/bugs/thread-card-codex-skill-1783666797142-a67ce4bc.md",
+    "thread-card-codex-skill-1783667213600-4470fb4b": ".decision-os/threads/bugs/thread-card-codex-skill-1783667213600-4470fb4b.md",
+    "thread-card-df1e558e-6f14-43bc-9d09-1a98e37d9ef0": ".decision-os/threads/bugs/thread-card-df1e558e-6f14-43bc-9d09-1a98e37d9ef0.md",
+    "thread-card-codex-skill-1783673777495-c20b76d4": ".decision-os/threads/bugs/thread-card-codex-skill-1783673777495-c20b76d4.md",
+    "thread-card-codex-skill-1783674933055-f8a3b891": ".decision-os/threads/bugs/thread-card-codex-skill-1783674933055-f8a3b891.md",
+    "thread-card-codex-skill-1783676933025-5580e569": ".decision-os/threads/bugs/thread-card-codex-skill-1783676933025-5580e569.md",
+    "thread-card-codex-skill-1783677359105-116e92d2": ".decision-os/threads/bugs/thread-card-codex-skill-1783677359105-116e92d2.md",
+    "thread-card-codex-skill-1783677758658-54919b14": ".decision-os/threads/bugs/thread-card-codex-skill-1783677758658-54919b14.md",
+    "thread-card-codex-skill-1783680838228-1c5bee79": ".decision-os/threads/bugs/thread-card-codex-skill-1783680838228-1c5bee79.md",
+    "thread-card-codex-skill-1783685254132-f607f3c8": ".decision-os/threads/bugs/thread-card-codex-skill-1783685254132-f607f3c8.md",
+    "thread-card-codex-skill-1783685641626-2a71a1ce": ".decision-os/threads/bugs/thread-card-codex-skill-1783685641626-2a71a1ce.md",
+    "thread-card-codex-skill-1783687219283-a4455341": ".decision-os/threads/bugs/thread-card-codex-skill-1783687219283-a4455341.md",
+    "thread-card-fd0e6f45-3620-4621-9d96-d9d1636db48d": ".decision-os/threads/bugs/thread-card-fd0e6f45-3620-4621-9d96-d9d1636db48d.md",
+    "thread-card-codex-skill-1783701052834-97c8b248": ".decision-os/threads/bugs/thread-card-codex-skill-1783701052834-97c8b248.md"
+  }
+}

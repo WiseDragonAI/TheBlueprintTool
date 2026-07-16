@@ -1,4 +1,14 @@
 # AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783429520950-bad8c87c-line-1","timestamp":"2026-07-08T07:41:55.911Z","status":"running","codexRunId":"codex-skill-1783429520950-bad8c87c","codexLine":"1","codexKind":"run_status","codexEventType":"thread.started"} -->
+
+Codex thread started.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783429520950-bad8c87c-line-2","timestamp":"2026-07-08T07:41:55.911Z","status":"running","codexRunId":"codex-skill-1783429520950-bad8c87c","codexLine":"2","codexKind":"run_status","codexEventType":"turn.started"} -->
+
+Codex turn started.
+
+# AGENT
 <!-- decision-os:note {"id":"codex-codex-skill-1783429520950-bad8c87c-line-3","timestamp":"2026-07-07T13:05:20.953Z","status":"Codex message","codexRunId":"codex-skill-1783429520950-bad8c87c","codexLine":"3","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_0"} -->
 
 I’ll use the `human-context-synthesis` skill and write only the target Markdown card. I’m treating the pasted source card as the locked source set, so I won’t inspect or mutate ledger JSON.
@@ -16,7 +26,7 @@ Status: in_progress
 Status: completed
 Exit code: 0
 
-```text
+````text
 ---
 name: human-context-synthesis
 description: Turn source-backed facts into concise human-readable context for a specific audience. Use when Codex must synthesize a corpus, extraction register, card, report, repo notes, PRD discovery, documentation, or feature inventory into a reader-facing summary about what the subject is for, what people can do with it, how they use it, key features, controls, workflows, surfaces, affordances, and only the supporting system facts that matter to that reader.
@@ -125,7 +135,7 @@ Before finishing, verify:
 - no section exists only because it sounds generally useful.
 /home/jbb/dev/EditorBP/decision-os
 -rw-rw-r-- 1 jbb jbb 132 Jul  7 20:05 /home/jbb/dev/EditorBP/decision-os/.decision-os/cards/tasks-system/card-codex-skill-1783429520950-bad8c87c.md
-```
+````
 
 # AGENT
 <!-- decision-os:note {"id":"codex-codex-skill-1783429520950-bad8c87c-line-6","timestamp":"2026-07-07T13:05:20.956Z","status":"Codex message","codexRunId":"codex-skill-1783429520950-bad8c87c","codexLine":"6","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_2"} -->
@@ -145,14 +155,14 @@ Status: in_progress
 Status: completed
 Exit code: 0
 
-```text
+````text
 # human-context-synthesis result
 
 Status: processing
 
 Source card: Decision OS Context
 Codex run: codex-skill-1783429520950-bad8c87c
-```
+````
 
 # AGENT
 <!-- decision-os:note {"id":"codex-codex-skill-1783429520950-bad8c87c-line-9","timestamp":"2026-07-07T13:05:20.959Z","status":"in_progress","codexRunId":"codex-skill-1783429520950-bad8c87c","codexLine":"9","codexKind":"file_change","codexEventType":"item.started","codexItemId":"item_4"} -->
@@ -182,7 +192,7 @@ Status: in_progress
 Status: completed
 Exit code: 0
 
-```text
+````text
 # Decision OS Human Context
 
 Allowed source set: source card `card-0b144d6a-16a1-4cc2-9b9f-32aabafd5b4a`, titled `Decision OS Context`.
@@ -266,7 +276,7 @@ Reader: the operator deciding how to use and continue the current `decision-os` 
 2. `B` = Technical Context from the source card.
 3. `C` = UX Context from the source card.
 4. `D` = Context Boundaries from the source card.
-```
+````
 
 # AGENT
 <!-- decision-os:note {"id":"codex-codex-skill-1783429520950-bad8c87c-line-14","timestamp":"2026-07-07T13:05:20.964Z","status":"Codex message","codexRunId":"codex-skill-1783429520950-bad8c87c","codexLine":"14","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_7"} -->
