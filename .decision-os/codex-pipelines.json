@@ -1,0 +1,503 @@
+{
+  "version": 1,
+  "pipelines": [
+    {
+      "id": "codex-pipeline-8ef91e42",
+      "name": "Post-Implementation",
+      "purpose": "Once the implementation is done, we run quality improver, tests, commit then finally a report.",
+      "stepIds": [
+        "codex-step-7ba49949",
+        "codex-step-96890b2b",
+        "codex-step-63aa08e7"
+      ],
+      "createdAt": "2026-07-10T12:48:26.656Z",
+      "updatedAt": "2026-07-10T12:48:26.656Z"
+    }
+  ],
+  "steps": [
+    {
+      "id": "codex-step-7ba49949",
+      "name": "Quality",
+      "purpose": "quality",
+      "skills": [
+        {
+          "id": "codex-step-skill-955cb647",
+          "skillName": "code-quality-improver",
+          "codexModel": "gpt-5.6-sol",
+          "codexEffort": "xhigh"
+        }
+      ],
+      "createdAt": "2026-07-10T12:48:26.656Z",
+      "updatedAt": "2026-07-10T12:48:26.656Z"
+    },
+    {
+      "id": "codex-step-96890b2b",
+      "name": "Tests",
+      "purpose": "tests",
+      "skills": [
+        {
+          "id": "codex-step-skill-8ac83dab",
+          "skillName": "run-test-and-fix",
+          "codexModel": "gpt-5.6-sol",
+          "codexEffort": "xhigh"
+        }
+      ],
+      "createdAt": "2026-07-10T12:48:26.656Z",
+      "updatedAt": "2026-07-10T12:48:26.656Z"
+    },
+    {
+      "id": "codex-step-63aa08e7",
+      "name": "Commit and report",
+      "purpose": "Finalization",
+      "skills": [
+        {
+          "id": "codex-step-skill-066b01b8",
+          "skillName": "implementation-commit",
+          "codexModel": "gpt-5.6-sol",
+          "codexEffort": "medium"
+        },
+        {
+          "id": "codex-step-skill-481f6662",
+          "skillName": "implementation-report",
+          "codexModel": "gpt-5.6-sol",
+          "codexEffort": "xhigh"
+        }
+      ],
+      "createdAt": "2026-07-10T12:48:26.656Z",
+      "updatedAt": "2026-07-10T12:48:26.656Z"
+    }
+  ],
+  "runs": [
+    {
+      "id": "codex-pipeline-1783687748321-1210d27d",
+      "pipelineId": "codex-pipeline-8ef91e42",
+      "pipelineName": "Post-Implementation",
+      "temporary": false,
+      "ledgerId": "ux",
+      "sourceCardId": "card-codex-skill-1783675746962-60884f4b",
+      "sourceCardTitle": "implementation-orchestrator result",
+      "status": "cancelled",
+      "steps": [
+        {
+          "id": "codex-pipeline-1783687748321-1210d27d-step-1",
+          "stepId": "codex-step-7ba49949",
+          "name": "Quality",
+          "purpose": "quality",
+          "outputCardId": "card-codex-pipeline-1783687748321-1210d27d-step-1",
+          "status": "cancelled",
+          "skills": [
+            {
+              "id": "codex-pipeline-1783687748321-1210d27d-step-1-skill-1",
+              "pipelineSkillId": "codex-step-skill-955cb647",
+              "skillName": "code-quality-improver",
+              "runId": "codex-skill-1783687748321-d4c393a4",
+              "status": "cancelled",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "xhigh",
+              "stdoutFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/ux/codex-skill-1783687748321-d4c393a4.jsonl",
+              "stderrFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/ux/codex-skill-1783687748321-d4c393a4.log",
+              "startedAt": "2026-07-10T12:49:45.176Z",
+              "finishedAt": "2026-07-10T12:49:57.401Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-10T12:49:45.176Z",
+          "finishedAt": "2026-07-10T12:49:57.391Z",
+          "error": ""
+        },
+        {
+          "id": "codex-pipeline-1783687748321-1210d27d-step-2",
+          "stepId": "codex-step-96890b2b",
+          "name": "Tests",
+          "purpose": "tests",
+          "outputCardId": "card-codex-pipeline-1783687748321-1210d27d-step-2",
+          "status": "pending",
+          "skills": [
+            {
+              "id": "codex-pipeline-1783687748321-1210d27d-step-2-skill-1",
+              "pipelineSkillId": "codex-step-skill-8ac83dab",
+              "skillName": "run-test-and-fix",
+              "runId": "codex-skill-1783687748321-c4ea1658",
+              "status": "pending",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "xhigh",
+              "stdoutFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/ux/codex-skill-1783687748321-c4ea1658.jsonl",
+              "stderrFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/ux/codex-skill-1783687748321-c4ea1658.log",
+              "startedAt": null,
+              "finishedAt": null,
+              "error": ""
+            }
+          ],
+          "startedAt": null,
+          "finishedAt": null,
+          "error": ""
+        },
+        {
+          "id": "codex-pipeline-1783687748321-1210d27d-step-3",
+          "stepId": "codex-step-63aa08e7",
+          "name": "Commit and report",
+          "purpose": "Finalization",
+          "outputCardId": "card-codex-pipeline-1783687748321-1210d27d-step-3",
+          "status": "pending",
+          "skills": [
+            {
+              "id": "codex-pipeline-1783687748321-1210d27d-step-3-skill-1",
+              "pipelineSkillId": "codex-step-skill-066b01b8",
+              "skillName": "implementation-commit",
+              "runId": "codex-skill-1783687748321-ef796821",
+              "status": "pending",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "medium",
+              "stdoutFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/ux/codex-skill-1783687748321-ef796821.jsonl",
+              "stderrFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/ux/codex-skill-1783687748321-ef796821.log",
+              "startedAt": null,
+              "finishedAt": null,
+              "error": ""
+            },
+            {
+              "id": "codex-pipeline-1783687748321-1210d27d-step-3-skill-2",
+              "pipelineSkillId": "codex-step-skill-481f6662",
+              "skillName": "implementation-report",
+              "runId": "codex-skill-1783687748321-99854af1",
+              "status": "pending",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "xhigh",
+              "stdoutFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/ux/codex-skill-1783687748321-99854af1.jsonl",
+              "stderrFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/ux/codex-skill-1783687748321-99854af1.log",
+              "startedAt": null,
+              "finishedAt": null,
+              "error": ""
+            }
+          ],
+          "startedAt": null,
+          "finishedAt": null,
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-10T12:49:08.321Z",
+      "updatedAt": "2026-07-10T12:49:57.401Z",
+      "startedAt": "2026-07-10T12:49:45.176Z",
+      "finishedAt": "2026-07-10T12:49:57.391Z",
+      "resumedAt": "2026-07-10T12:49:45.171Z",
+      "error": ""
+    },
+    {
+      "id": "codex-pipeline-1783688836866-ad0fcd4b",
+      "pipelineId": "codex-pipeline-8ef91e42",
+      "pipelineName": "Post-Implementation",
+      "temporary": false,
+      "ledgerId": "ux",
+      "sourceCardId": "card-codex-skill-1783675746962-60884f4b",
+      "sourceCardTitle": "implementation-orchestrator result",
+      "status": "complete",
+      "steps": [
+        {
+          "id": "codex-pipeline-1783688836866-ad0fcd4b-step-1",
+          "stepId": "codex-step-7ba49949",
+          "name": "Quality",
+          "purpose": "quality",
+          "outputCardId": "card-codex-pipeline-1783688836866-ad0fcd4b-step-1",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-pipeline-1783688836866-ad0fcd4b-step-1-skill-1",
+              "pipelineSkillId": "codex-step-skill-955cb647",
+              "skillName": "code-quality-improver",
+              "runId": "codex-skill-1783688836866-d4caebed",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "xhigh",
+              "stdoutFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/ux/codex-skill-1783688836866-d4caebed.jsonl",
+              "stderrFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/ux/codex-skill-1783688836866-d4caebed.log",
+              "startedAt": "2026-07-10T13:07:17.068Z",
+              "finishedAt": "2026-07-10T13:15:54.615Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-10T13:07:17.068Z",
+          "finishedAt": "2026-07-10T13:15:54.615Z",
+          "error": ""
+        },
+        {
+          "id": "codex-pipeline-1783688836866-ad0fcd4b-step-2",
+          "stepId": "codex-step-96890b2b",
+          "name": "Tests",
+          "purpose": "tests",
+          "outputCardId": "card-codex-pipeline-1783688836866-ad0fcd4b-step-2",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-pipeline-1783688836866-ad0fcd4b-step-2-skill-1",
+              "pipelineSkillId": "codex-step-skill-8ac83dab",
+              "skillName": "run-test-and-fix",
+              "runId": "codex-skill-1783688836866-ba2cd313",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "xhigh",
+              "stdoutFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/ux/codex-skill-1783688836866-ba2cd313.jsonl",
+              "stderrFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/ux/codex-skill-1783688836866-ba2cd313.log",
+              "startedAt": "2026-07-10T13:15:54.617Z",
+              "finishedAt": "2026-07-10T13:19:55.761Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-10T13:15:54.617Z",
+          "finishedAt": "2026-07-10T13:16:56.765Z",
+          "error": ""
+        },
+        {
+          "id": "codex-pipeline-1783688836866-ad0fcd4b-step-3",
+          "stepId": "codex-step-63aa08e7",
+          "name": "Commit and report",
+          "purpose": "Finalization",
+          "outputCardId": "card-codex-pipeline-1783688836866-ad0fcd4b-step-3",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-pipeline-1783688836866-ad0fcd4b-step-3-skill-1",
+              "pipelineSkillId": "codex-step-skill-066b01b8",
+              "skillName": "implementation-commit",
+              "runId": "codex-skill-1783688836866-46d7e6ca",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "medium",
+              "stdoutFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/ux/codex-skill-1783688836866-46d7e6ca.jsonl",
+              "stderrFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/ux/codex-skill-1783688836866-46d7e6ca.log",
+              "startedAt": "2026-07-10T13:19:55.763Z",
+              "finishedAt": "2026-07-10T13:21:57.124Z",
+              "error": ""
+            },
+            {
+              "id": "codex-pipeline-1783688836866-ad0fcd4b-step-3-skill-2",
+              "pipelineSkillId": "codex-step-skill-481f6662",
+              "skillName": "implementation-report",
+              "runId": "codex-skill-1783688836867-0e4a9dd2",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "xhigh",
+              "stdoutFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/ux/codex-skill-1783688836867-0e4a9dd2.jsonl",
+              "stderrFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/ux/codex-skill-1783688836867-0e4a9dd2.log",
+              "startedAt": "2026-07-10T13:21:57.126Z",
+              "finishedAt": "2026-07-10T13:23:57.570Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-10T13:19:55.763Z",
+          "finishedAt": "2026-07-10T13:23:57.570Z",
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-10T13:07:16.866Z",
+      "updatedAt": "2026-07-10T13:23:57.570Z",
+      "startedAt": "2026-07-10T13:07:17.068Z",
+      "finishedAt": "2026-07-10T13:23:57.570Z",
+      "resumedAt": null,
+      "error": ""
+    },
+    {
+      "id": "codex-pipeline-1783693845820-12a529f3",
+      "pipelineId": "codex-pipeline-8ef91e42",
+      "pipelineName": "Post-Implementation",
+      "temporary": false,
+      "ledgerId": "tasks-system",
+      "sourceCardId": "card-codex-skill-1783677425436-5b265c7f",
+      "sourceCardTitle": "implementation-orchestrator result",
+      "status": "complete",
+      "steps": [
+        {
+          "id": "codex-pipeline-1783693845820-12a529f3-step-1",
+          "stepId": "codex-step-7ba49949",
+          "name": "Quality",
+          "purpose": "quality",
+          "outputCardId": "card-codex-pipeline-1783693845820-12a529f3-step-1",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-pipeline-1783693845820-12a529f3-step-1-skill-1",
+              "pipelineSkillId": "codex-step-skill-955cb647",
+              "skillName": "code-quality-improver",
+              "runId": "codex-skill-1783693845820-f6524c92",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "xhigh",
+              "stdoutFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/tasks-system/codex-skill-1783693845820-f6524c92.jsonl",
+              "stderrFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/tasks-system/codex-skill-1783693845820-f6524c92.log",
+              "startedAt": "2026-07-10T14:30:46.006Z",
+              "finishedAt": "2026-07-10T14:40:01.450Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-10T14:30:46.006Z",
+          "finishedAt": "2026-07-10T14:40:01.450Z",
+          "error": ""
+        },
+        {
+          "id": "codex-pipeline-1783693845820-12a529f3-step-2",
+          "stepId": "codex-step-96890b2b",
+          "name": "Tests",
+          "purpose": "tests",
+          "outputCardId": "card-codex-pipeline-1783693845820-12a529f3-step-2",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-pipeline-1783693845820-12a529f3-step-2-skill-1",
+              "pipelineSkillId": "codex-step-skill-8ac83dab",
+              "skillName": "run-test-and-fix",
+              "runId": "codex-skill-1783693845820-8bb4fe4e",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "xhigh",
+              "stdoutFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/tasks-system/codex-skill-1783693845820-8bb4fe4e.jsonl",
+              "stderrFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/tasks-system/codex-skill-1783693845820-8bb4fe4e.log",
+              "startedAt": "2026-07-10T14:40:01.452Z",
+              "finishedAt": "2026-07-10T14:46:58.131Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-10T14:40:01.452Z",
+          "finishedAt": "2026-07-10T14:40:43.484Z",
+          "error": ""
+        },
+        {
+          "id": "codex-pipeline-1783693845820-12a529f3-step-3",
+          "stepId": "codex-step-63aa08e7",
+          "name": "Commit and report",
+          "purpose": "Finalization",
+          "outputCardId": "card-codex-pipeline-1783693845820-12a529f3-step-3",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-pipeline-1783693845820-12a529f3-step-3-skill-1",
+              "pipelineSkillId": "codex-step-skill-066b01b8",
+              "skillName": "implementation-commit",
+              "runId": "codex-skill-1783693845820-a1bacbd3",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "medium",
+              "stdoutFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/tasks-system/codex-skill-1783693845820-a1bacbd3.jsonl",
+              "stderrFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/tasks-system/codex-skill-1783693845820-a1bacbd3.log",
+              "startedAt": "2026-07-10T14:46:58.138Z",
+              "finishedAt": "2026-07-10T14:48:25.573Z",
+              "error": ""
+            },
+            {
+              "id": "codex-pipeline-1783693845820-12a529f3-step-3-skill-2",
+              "pipelineSkillId": "codex-step-skill-481f6662",
+              "skillName": "implementation-report",
+              "runId": "codex-skill-1783693845820-080a7571",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "xhigh",
+              "stdoutFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/tasks-system/codex-skill-1783693845820-080a7571.jsonl",
+              "stderrFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/tasks-system/codex-skill-1783693845820-080a7571.log",
+              "startedAt": "2026-07-10T14:48:25.575Z",
+              "finishedAt": "2026-07-10T14:49:19.613Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-10T14:46:58.138Z",
+          "finishedAt": "2026-07-10T14:49:19.613Z",
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-10T14:30:45.820Z",
+      "updatedAt": "2026-07-10T14:49:19.613Z",
+      "startedAt": "2026-07-10T14:30:46.006Z",
+      "finishedAt": "2026-07-10T14:49:19.613Z",
+      "resumedAt": null,
+      "error": ""
+    },
+    {
+      "id": "codex-skill-1783695871406-24cf389e",
+      "pipelineId": null,
+      "pipelineName": "simply-execute run",
+      "temporary": true,
+      "ledgerId": "skills",
+      "sourceCardId": "card-44811f32-2b0b-4fa8-89bf-394730ba4fe6",
+      "sourceCardTitle": "New card",
+      "status": "complete",
+      "steps": [
+        {
+          "id": "codex-skill-1783695871406-24cf389e-step-1",
+          "stepId": "temporary-step-simply-execute",
+          "name": "simply-execute",
+          "purpose": "Run simply-execute once.",
+          "outputCardId": "card-codex-skill-1783695871406-24cf389e",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-skill-1783695871406-24cf389e-step-1-skill-1",
+              "pipelineSkillId": "temporary-skill-simply-execute",
+              "skillName": "simply-execute",
+              "runId": "codex-skill-1783695871406-24cf389e",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "high",
+              "stdoutFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/skills/codex-skill-1783695871406-24cf389e.jsonl",
+              "stderrFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/skills/codex-skill-1783695871406-24cf389e.log",
+              "startedAt": "2026-07-10T15:04:31.852Z",
+              "finishedAt": "2026-07-10T15:11:41.185Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-10T15:04:31.852Z",
+          "finishedAt": "2026-07-10T15:11:41.185Z",
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-10T15:04:31.406Z",
+      "updatedAt": "2026-07-10T15:11:41.185Z",
+      "startedAt": "2026-07-10T15:04:31.852Z",
+      "finishedAt": "2026-07-10T15:11:41.185Z",
+      "resumedAt": null,
+      "error": ""
+    },
+    {
+      "id": "codex-skill-1783701052834-97c8b248",
+      "pipelineId": null,
+      "pipelineName": "simply-execute run",
+      "temporary": true,
+      "ledgerId": "bugs",
+      "sourceCardId": "card-fd0e6f45-3620-4621-9d96-d9d1636db48d",
+      "sourceCardTitle": "Persist and Synchronize Codex Run Preferences",
+      "status": "complete",
+      "steps": [
+        {
+          "id": "codex-skill-1783701052834-97c8b248-step-1",
+          "stepId": "temporary-step-simply-execute",
+          "name": "simply-execute",
+          "purpose": "Run simply-execute once.",
+          "outputCardId": "card-codex-skill-1783701052834-97c8b248",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-skill-1783701052834-97c8b248-step-1-skill-1",
+              "pipelineSkillId": "temporary-skill-simply-execute",
+              "skillName": "simply-execute",
+              "runId": "codex-skill-1783701052834-97c8b248",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "high",
+              "stdoutFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/bugs/codex-skill-1783701052834-97c8b248.jsonl",
+              "stderrFile": "/home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/bugs/codex-skill-1783701052834-97c8b248.log",
+              "startedAt": "2026-07-10T16:30:53.017Z",
+              "finishedAt": "2026-07-10T16:40:16.427Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-10T16:30:53.017Z",
+          "finishedAt": "2026-07-10T16:40:16.427Z",
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-10T16:30:52.834Z",
+      "updatedAt": "2026-07-10T16:40:16.427Z",
+      "startedAt": "2026-07-10T16:30:53.017Z",
+      "finishedAt": "2026-07-10T16:40:16.427Z",
+      "resumedAt": null,
+      "error": ""
+    }
+  ],
+  "skillLibrary": [],
+  "activeWorkspaceRun": null
+}

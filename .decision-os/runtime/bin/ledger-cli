@@ -1,0 +1,2 @@
+#!/bin/sh
+exec '/home/jbb/.nvm/versions/node/v25.9.0/bin/node' '/home/jbb/dev/EditorBP/decision-os/bin/ledger-cli.mjs' "$@"
