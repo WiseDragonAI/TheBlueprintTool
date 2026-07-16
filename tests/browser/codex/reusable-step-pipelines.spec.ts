@@ -150,7 +150,8 @@ test('Reusable step pipelines preserve defaults and publish visible execution pr
     page.on('pageerror', (error) => console.error('Browser page error:', error));
     const resizedCardIds = new Set<string>();
     page.on('request', (request) => {
-      if (request.method() !== 'PATCH' || request.url() !== `${server?.url}/decision-os/specs`) return;
+      const requestPath = new URL(request.url()).pathname;
+      if (request.method() !== 'PATCH' || !requestPath.endsWith('/decision-os/specs')) return;
       try {
         const body = request.postDataJSON() as { action?: string; geometry?: { cards?: Record<string, unknown> } };
         if (body.action === 'patch-geometry') Object.keys(body.geometry?.cards ?? {}).forEach((cardId) => resizedCardIds.add(cardId));
@@ -303,7 +304,7 @@ async function runCancelRestartAndFailPipeline(page: Page, resizedCardIds: Set<s
   const inheritedCardId = await cardIdForWidget(inheritedWidget);
   await waitFor(() => resizedCardIds.has(inheritedCardId), `Expected completed step ${inheritedCardId} to resize after its lifecycle event.`);
 
-  await explicitWidget.getByRole('button', { name: 'Cancel Codex run', exact: true }).click();
+  await explicitWidget.getByRole('button', { name: 'Stop Codex run', exact: true }).click();
   await explicitWidget.locator('[data-codex-run-status]').filter({ hasText: 'CANCELLED' }).waitFor({ state: 'visible', timeout: 15_000 });
   await explicitWidget.getByRole('button', { name: 'Restart the complete pipeline', exact: true }).waitFor({ state: 'visible' });
   await explicitWidget.getByRole('button', { name: 'Restart the complete pipeline', exact: true }).click();
@@ -315,11 +316,14 @@ async function runCancelRestartAndFailPipeline(page: Page, resizedCardIds: Set<s
 }
 
 function pipelineWidget(page: Page, pipelineName: string, stepName: string): Locator {
-  return page.locator('.codex-run-widget').filter({ has: page.locator('[data-codex-run-context]', { hasText: `${pipelineName} › ${stepName}` }) });
+  // WHAT: Address the generated output card when a pipeline run is also projected onto its source card.
+  // WHY: Source-card projection feeds its Codex Log, while lifecycle controls and result geometry belong to the generated card.
+  return page.locator(`.card:not([data-card-id="${sourceCardId}"]) .codex-run-widget`)
+    .filter({ has: page.locator('[data-codex-run-context]', { hasText: `${pipelineName} › ${stepName}` }) });
 }
 
 async function cardIdForWidget(widget: Locator): Promise<string> {
-  return widget.evaluate((element) => (element.closest<HTMLElement>('[data-card-id]')?.dataset.cardId ?? ''));
+  return widget.evaluate((element) => ((element as HTMLElement).dataset.codexCardId ?? ''));
 }
 
 async function openProcessCard(page: Page): Promise<void> {

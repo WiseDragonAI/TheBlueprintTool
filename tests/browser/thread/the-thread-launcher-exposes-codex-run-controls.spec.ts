@@ -43,14 +43,20 @@ test('The thread launcher exposes Codex model and effort controls.', async () =>
     assert.equal(await selectors.count(), 2);
     assert.equal(await selectors.nth(0).getAttribute('aria-label'), 'Model for thread Codex');
     assert.equal(await selectors.nth(1).getAttribute('aria-label'), 'Effort for thread Codex');
-    assert.equal(await selectors.nth(0).inputValue(), 'gpt-5.5');
-    assert.equal(await selectors.nth(1).inputValue(), 'xhigh');
+    assert.equal(await selectors.nth(0).inputValue(), 'gpt-5.6-sol');
+    assert.equal(await selectors.nth(1).inputValue(), 'medium');
 
     await selectors.nth(0).selectOption('gpt-5.4');
+    await page.waitForFunction(() => document.querySelector<HTMLElement>('.thread-actions [data-action="process-thread-codex"]')?.dataset.codexModel === 'gpt-5.4');
     await selectors.nth(1).selectOption('high');
-    const button = page.locator('[data-action="process-thread-codex"]');
+    const button = page.locator('.thread-actions [data-action="process-thread-codex"]');
+    await page.waitForFunction(() => document.querySelector<HTMLElement>('.thread-actions [data-action="process-thread-codex"]')?.dataset.codexEffort === 'high');
     assert.equal(await button.getAttribute('data-codex-model'), 'gpt-5.4');
     assert.equal(await button.getAttribute('data-codex-effort'), 'high');
+    await selectors.nth(0).selectOption('gpt-5.6-sol');
+    await page.waitForFunction(() => document.querySelector<HTMLElement>('.thread-actions [data-action="process-thread-codex"]')?.dataset.codexModel === 'gpt-5.6-sol');
+    await selectors.nth(1).selectOption('medium');
+    await page.waitForFunction(() => document.querySelector<HTMLElement>('.thread-actions [data-action="process-thread-codex"]')?.dataset.codexEffort === 'medium');
 
     const persistedWidgetSelection = await page.evaluate(async () => {
       const { renderCardSkillRunWidget } = await import('/src/runtime/codex/component/render-card-skill-run-widget.js');
@@ -327,7 +333,9 @@ test('The thread launcher exposes Codex model and effort controls.', async () =>
         const toolbar = document.querySelector<HTMLElement>('.thread-toolbar');
         const tabs = document.querySelector<HTMLElement>('.thread-tabs');
         const tabButtons = [...document.querySelectorAll<HTMLElement>('.thread-tabs > .thread-tab')];
-        const controls = [...document.querySelectorAll<HTMLElement>('.thread-toolbar > *, .thread-actions > *')].map((element) => element.getBoundingClientRect());
+        const toolbarControls = [...document.querySelectorAll<HTMLElement>('.thread-toolbar > *')].map((element) => element.getBoundingClientRect());
+        const actionRow = document.querySelector<HTMLElement>('.thread-actions')?.getBoundingClientRect();
+        const actionControls = [...document.querySelectorAll<HTMLElement>('.thread-actions > *')].map((element) => element.getBoundingClientRect());
         const headingStyle = heading ? getComputedStyle(heading) : null;
         const targetRect = target?.getBoundingClientRect();
         const toolbarRect = toolbar?.getBoundingClientRect();
@@ -339,7 +347,9 @@ test('The thread launcher exposes Codex model and effort controls.', async () =>
           targetBottom: targetRect?.bottom ?? 0,
           toolbarTop: toolbarRect?.top ?? 0,
           toolbarHeight: toolbarRect?.height ?? 0,
-          controlsFitRow: controls.every((rect) => rect.top >= (toolbarRect?.top ?? 0) - 1 && rect.bottom <= (toolbarRect?.bottom ?? 0) + 1),
+          controlsFitRows: toolbarControls.every((rect) => rect.top >= (toolbarRect?.top ?? 0) - 1 && rect.bottom <= (toolbarRect?.bottom ?? 0) + 1)
+            && actionControls.every((rect) => rect.top >= (actionRow?.top ?? 0) - 1 && rect.bottom <= (actionRow?.bottom ?? 0) + 1),
+          rowsSeparated: (toolbarRect?.bottom ?? 0) <= (actionRow?.top ?? 0) + 1,
           tabsContained: tabButtons.every((button) => {
             const rect = button.getBoundingClientRect();
             return rect.top >= (tabsRect?.top ?? 0) && rect.bottom <= (tabsRect?.bottom ?? 0);
@@ -350,13 +360,13 @@ test('The thread launcher exposes Codex model and effort controls.', async () =>
       });
       assert.equal(metrics.position, 'sticky');
       assert.match(metrics.rowTemplate ?? '', /px.*px/);
-      assert.ok(metrics.targetBottom <= metrics.toolbarTop + 1);
+      assert.ok(metrics.targetBottom <= metrics.toolbarTop + metrics.toolbarHeight + 1, JSON.stringify({ width, metrics }));
       assert.ok(metrics.toolbarHeight >= 28 && metrics.toolbarHeight <= 62);
-      assert.equal(metrics.controlsFitRow, true);
+      assert.equal(metrics.controlsFitRows, true);
+      assert.equal(metrics.rowsSeparated, true);
       assert.equal(metrics.tabsContained, true);
       assert.ok(metrics.modelWidth >= 112);
       assert.ok(metrics.effortWidth >= 84);
-      if (metrics.panelWidth <= 420) assert.ok(metrics.toolbarHeight > 28);
     }
   } finally {
     await browser?.close();

@@ -537,20 +537,23 @@ test('thread codex process route anchors the run widget on the source card and s
     assert.equal(Object.keys(runtime.codexSkillRuns as Record<string, unknown>).length, runCountBeforeRejection);
 
     appendFileSync(threadPath, '\n# OPERATOR\n<!-- decision-os:note {"id":"note-operator-duplicate","timestamp":"2026-07-08T01:05:00.000Z"} -->\n\nContinue the existing session.\n', 'utf8');
-    const duplicateResponse = await fetch(`${baseUrl}/api/codex/threads/process`, {
+    const replacementResponse = await fetch(`${baseUrl}/api/codex/threads/process`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ ledgerId: 'specs', threadId: 'thread-card-a', cardId: 'card-a' })
     });
-    assert.equal(duplicateResponse.status, 409);
-    const duplicate = await duplicateResponse.json() as { ok: boolean; error: string; runId: string };
-    assert.equal(duplicate.ok, false);
-    assert.equal(duplicate.runId, body.run.id);
-    assert.match(duplicate.error, /continue the existing run/i);
-    assert.equal(readFileSync(launchesFile, 'utf8').trim().split('\n').length, launchCountBeforeRejection);
+    assert.equal(replacementResponse.status, 202);
+    const replacement = await replacementResponse.json() as { ok: boolean; run: { id: string } };
+    assert.equal(replacement.ok, true);
+    assert.notEqual(replacement.run.id, body.run.id);
+    await waitForCondition(() => {
+      const runs = runtime.codexSkillRuns as Record<string, { status?: string; settledAt?: string }> | undefined;
+      return runs?.[replacement.run.id]?.status === 'complete' && Boolean(runs[replacement.run.id]?.settledAt);
+    }, 'the authoritative replacement thread run to settle');
+    assert.equal(readFileSync(launchesFile, 'utf8').trim().split('\n').length, launchCountBeforeRejection + 1);
 
     appendFileSync(threadPath, '\n# OPERATOR\n<!-- decision-os:note {"id":"note-operator-hung-wrapper","timestamp":"2026-07-08T01:06:00.000Z"} -->\n\nHang after terminal.\n', 'utf8');
-    const continuedResponse = await fetch(`${baseUrl}/api/codex/skills/runs/${body.run.id}/continue`, {
+    const continuedResponse = await fetch(`${baseUrl}/api/codex/skills/runs/${replacement.run.id}/continue`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ ledgerId: 'specs', cardId: 'card-a', codexModel: 'gpt-5.4', codexEffort: 'medium' })
@@ -558,18 +561,18 @@ test('thread codex process route anchors the run widget on the source card and s
     assert.equal(continuedResponse.status, 202);
     await waitForCondition(() => {
       const runs = runtime.codexSkillRuns as Record<string, { status?: string; settledAt?: string }> | undefined;
-      return runs?.[body.run.id]?.status === 'complete' && Boolean(runs[body.run.id]?.settledAt);
+      return runs?.[replacement.run.id]?.status === 'complete' && Boolean(runs[replacement.run.id]?.settledAt);
     }, 'the terminal event to settle the hung Codex wrapper');
-    assert.equal(readCodexProcessQueue(join(workspace, '.decision-os')).some((item) => String(item.payload.runId ?? item.id) === body.run.id), false);
-    const reconciledStatus = await fetch(`${baseUrl}/api/codex/skills/runs/${body.run.id}?ledgerId=specs&cardId=card-a&since=0`).then((result) => result.json()) as { status: string; active: boolean; latestEvent: { type: string } };
+    assert.equal(readCodexProcessQueue(join(workspace, '.decision-os')).some((item) => String(item.payload.runId ?? item.id) === replacement.run.id), false);
+    const reconciledStatus = await fetch(`${baseUrl}/api/codex/skills/runs/${replacement.run.id}?ledgerId=specs&cardId=card-a&since=0`).then((result) => result.json()) as { status: string; active: boolean; latestEvent: { type: string } };
     assert.equal(reconciledStatus.status, 'complete');
     assert.equal(reconciledStatus.active, false);
     assert.equal(reconciledStatus.latestEvent.type, 'turn.completed');
     const settledCard = (JSON.parse(readFileSync(ledgerPath, 'utf8')) as { cards: Array<Record<string, unknown>> }).cards.find((entry) => entry.id === 'card-a');
     assert.equal(settledCard?.codexActiveRunId, undefined);
-    assert.equal(settledCard?.codexThreadRunId, body.run.id);
+    assert.equal(settledCard?.codexThreadRunId, replacement.run.id);
     await waitForCondition(
-      () => eventCollector?.events.filter((event) => event.reason === 'codex-thread-settled' && event.runId === body.run.id && event.status === 'complete').length === 2,
+      () => eventCollector?.events.filter((event) => event.reason === 'codex-thread-settled' && event.runId === replacement.run.id && event.status === 'complete').length === 2,
       'one terminal ledger event per thread settlement',
     );
   } finally {
