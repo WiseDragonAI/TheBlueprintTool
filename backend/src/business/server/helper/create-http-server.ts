@@ -486,6 +486,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
               : ledgerThreadProjection({ decisionOsRoot, ledgerId, threadId: decodeRouteSegment(scopedThreadRead?.[2] ?? '') });
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
+      response.setHeader(ledgerRevisionHeader, String(ledgerRevisions.current(ledgerId)));
       response.statusCode = projection ? 200 : 404;
       response.end(JSON.stringify(projection ?? { ok: false, error: 'Scoped ledger resource not found.' }));
       return;

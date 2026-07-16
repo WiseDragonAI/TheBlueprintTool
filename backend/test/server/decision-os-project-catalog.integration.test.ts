@@ -83,7 +83,7 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
     const projectPage = await fetch(`${baseUrl}/projects/${encodeURIComponent(catalog.projects[0].id)}`);
     assert.equal(projectPage.status, 200);
     assert.match(projectPage.headers.get('content-type') ?? '', /text\/html/);
-    assert.match(await projectPage.text(), /src\/main\.js/);
+    assert.match(await projectPage.text(), /src\/runtime\/canvas-runtime\.ts/);
 
     const settingsPage = await fetch(`${baseUrl}/settings`);
     assert.equal(settingsPage.status, 200);

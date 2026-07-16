@@ -160,3 +160,20 @@ test('thread note image resize survives stale server ledger merges', () => {
     state.activeLedger = previousLedger;
   }
 });
+
+test('canvas projections without thread slices preserve the loaded conversation', () => {
+  const previousLedger = state.activeLedger;
+  try {
+    state.activeLedger = {
+      notes: {
+        'thread-card-a': [{ id: 'note-agent', role: 'agent', message: 'Persisted answer.' }]
+      }
+    };
+
+    const merged = mergeLocalThreadNotes({ cards: [] });
+
+    assert.deepEqual(merged?.notes['thread-card-a'], [{ id: 'note-agent', role: 'agent', message: 'Persisted answer.' }]);
+  } finally {
+    state.activeLedger = previousLedger;
+  }
+});

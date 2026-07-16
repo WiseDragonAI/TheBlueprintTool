@@ -45,6 +45,7 @@ export function mergeLocalThreadNotes(
   for (const [threadId, notes] of Object.entries(localNotes as Record<string, Array<Record<string, any>>>)) {
     if (!includesThread(threadId, options.threadId)) continue;
     if (!Array.isArray(notes)) continue;
+    const incomingIncludesThreadSlice = Object.prototype.hasOwnProperty.call(nextNotes, threadId);
     const deletedSet = new Set((nextDeleted[threadId] ?? []).map((id) => String(id)));
     const merged = Array.isArray(nextNotes[threadId]) ? [...nextNotes[threadId]] : [];
     for (const localNote of notes) {
@@ -60,7 +61,9 @@ export function mergeLocalThreadNotes(
           imageSizes: { ...existingImageSizes, ...localImageSizes }
         };
       }
-      if (!localNote?.optimistic) continue;
+      // WHAT: Preserve every loaded thread note when the incoming canvas projection intentionally omits thread slices.
+      // WHY: A ledger lifecycle refresh must not erase the independently loaded active conversation.
+      if (incomingIncludesThreadSlice && !localNote?.optimistic) continue;
       if (existingIndex >= 0) merged[existingIndex] = { ...merged[existingIndex], ...localNote };
       else merged.push(localNote);
     }

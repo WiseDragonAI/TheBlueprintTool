@@ -15,6 +15,8 @@ import { applyRailCollapsedState } from '../../toolbox/effect/apply-rail-collaps
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { installProjectRequestScope } from '../../project/helper/project-request-scope.js';
 import { routeScope } from '../../navigation/helper/route-scope.js';
+import { selectThread } from '../../thread/effect/select-thread.js';
+import { openThreadPanel } from '../../thread/effect/open-thread-panel.js';
 
 export function bootSurface(): void {
   installProjectRequestScope();
@@ -42,7 +44,16 @@ export function bootSurface(): void {
     void loadActiveLedgerState({ canvasMode: 'projects', endpoint: '/decision-os/projects-canvas', ledgerStateId: 'projects-canvas' })
       .then(() => renderCanvasSurface());
   } else {
-    void loadDecisionOsState().then(loadActiveLedgerState).then(() => renderCanvasSurface());
+    void loadDecisionOsState().then(loadActiveLedgerState).then(() => {
+      // WHAT: Materialize a canonical card deep link after its ledger has loaded.
+      // WHY: Desktop card URLs must open the same resource identity that compact routes render directly.
+      if (scope.view === 'card' && scope.cardId && state.activeLedger?.cards?.some((card: Record<string, unknown>) => String(card.id ?? '') === scope.cardId)) {
+        state.selection = { cardIds: [scope.cardId], zoneIds: [], groupIds: [] };
+        selectThread(`thread-${scope.cardId}`);
+        openThreadPanel();
+      }
+      renderCanvasSurface();
+    });
   }
   renderCanvasSurface();
   renderThreadPanel();

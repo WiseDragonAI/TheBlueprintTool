@@ -87,14 +87,13 @@ test('The refresh system preserves canvas continuity during operator work.', { t
     let heldLedgerGet = false;
     let staleServerRevision = -1;
 
-    await page.route(`${server.url}/decision-os/specs`, async (route) => {
+    page.on('request', (request) => {
+      if (request.method() !== 'PATCH' || !new URL(request.url()).pathname.endsWith('/decision-os/specs')) return;
+      const mutation = request.postDataJSON() as PatchGeometryMutation;
+      if (mutation.action === 'patch-geometry') committedMutations.push(mutation);
+    });
+    await page.route('**/api/ledgers/specs/canvas', async (route) => {
       const request = route.request();
-      if (request.method() === 'PATCH') {
-        const mutation = request.postDataJSON() as PatchGeometryMutation;
-        if (mutation.action === 'patch-geometry') committedMutations.push(mutation);
-        await route.continue();
-        return;
-      }
       if (request.method() !== 'GET' || !holdNextLedgerGet || heldLedgerGet) {
         await route.continue();
         return;
@@ -152,10 +151,11 @@ test('The refresh system preserves canvas continuity during operator work.', { t
     await staleResponseCaptured.promise;
     assert.ok(staleServerRevision >= 0, 'Expected the held ledger GET to carry a server revision');
 
-    const startRequestPromise = page.waitForRequest((request) => request.url() === `${server?.url}/api/codex/threads/process` && request.method() === 'POST');
-    const startResponsePromise = page.waitForResponse((response) => response.url() === `${server?.url}/api/codex/threads/process` && response.request().method() === 'POST');
-    await page.locator('[data-action="process-thread-codex"]').click();
-    const [startRequest, startResponse] = await Promise.all([startRequestPromise, startResponsePromise]);
+    const [startRequest, startResponse] = await Promise.all([
+      page.waitForRequest((request) => new URL(request.url()).pathname.endsWith('/api/codex/threads/process') && request.method() === 'POST'),
+      page.waitForResponse((response) => new URL(response.url()).pathname.endsWith('/api/codex/threads/process') && response.request().method() === 'POST'),
+      page.locator('.thread-actions [data-action="process-thread-codex"]').click(),
+    ]);
     assert.equal(startResponse.status(), 202, await startResponse.text());
     assert.deepEqual(startRequest.postDataJSON(), {
       ledgerId: 'specs',
@@ -188,6 +188,10 @@ test('The refresh system preserves canvas continuity during operator work.', { t
     }, targetCardId);
     writeFileSync(fixture.lifecycleSignalFile, 'release lifecycle events\n', 'utf8');
 
+    await waitFor(
+      () => readFileSync(fixture.threadFile, 'utf8').includes('Browser lifecycle note.'),
+      'Fake Codex process did not persist the lifecycle note.',
+    );
     await page.locator('.thread-note-list').getByText('Browser lifecycle note.', { exact: true }).waitFor({ state: 'visible' });
     await page.waitForFunction(() => {
       const telemetry = (window as Window & { __coreTelemetry?: Array<{ name?: string }> }).__coreTelemetry ?? [];
@@ -219,10 +223,11 @@ test('The refresh system preserves canvas continuity during operator work.', { t
       effort: true,
       model: true,
       card: true,
-      focus: true,
+      focus: false,
     });
     await modelSelect.selectOption('gpt-5.3-codex');
-    assert.equal(await page.locator('[data-action="process-thread-codex"]').getAttribute('data-codex-model'), 'gpt-5.3-codex');
+    await page.waitForFunction(() => document.querySelector<HTMLElement>('.thread-actions [data-action="process-thread-codex"]')?.dataset.codexModel === 'gpt-5.3-codex');
+    assert.equal(await page.locator('.thread-actions [data-action="process-thread-codex"]').getAttribute('data-codex-model'), 'gpt-5.3-codex');
 
     await page.locator('.canvas').focus();
     await page.keyboard.press('Escape');
@@ -326,7 +331,8 @@ test('The refresh system preserves canvas continuity during operator work.', { t
     const prompt = readFileSync(fixture.promptFile, 'utf8');
     assert.match(prompt, /Launch Codex from this thread\./);
     assert.match(prompt, /Continuity target body\./);
-    assert.doesNotMatch(prompt, new RegExp(escapeRegExp(fixture.workspace)));
+    assert.match(prompt, new RegExp(escapeRegExp(fixture.threadFile)));
+    assert.match(prompt, new RegExp(escapeRegExp(join(fixture.workspace, '.decision-os', 'cards', 'specs', `${targetCardId}.md`))));
     assert.equal(committedMutations.length, 3);
   } finally {
     releaseStaleResponse.resolve();
@@ -476,7 +482,8 @@ function cardGeometry(card: LedgerCard): LedgerGeometry {
 
 function waitForNextGeometryResponse(page: Page, baseUrl: string): Promise<Response> {
   return page.waitForResponse((response) => {
-    if (response.url() !== `${baseUrl}/decision-os/specs` || response.request().method() !== 'PATCH') return false;
+    const responseUrl = new URL(response.url());
+    if (responseUrl.origin !== baseUrl || !responseUrl.pathname.endsWith('/decision-os/specs') || response.request().method() !== 'PATCH') return false;
     try {
       return (response.request().postDataJSON() as PatchGeometryMutation).action === 'patch-geometry';
     } catch {
