@@ -3,6 +3,7 @@ tmp/
 .decision-os/runs/
 .decision-os/voice-uploads/
 .decision-os/.settings.json
+.decision-os/runtime/
 .decision-os/**/*.png
 .decision-os/**/*.jpg
 .decision-os/**/*.jpeg
@@ -10,6 +11,7 @@ tmp/
 .decision-os/**/*.webp
 .decision-os/**/*.avif
 .worktrees/
+.tmp-retrospect-approved/
 generator-cli/.worktrees/
 generator-cli/dist/
 generator-cli/node_modules/
