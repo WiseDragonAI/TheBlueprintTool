@@ -6,12 +6,12 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { applyLedgerMutation, type LedgerMutation } from './apply-ledger-mutation.js';
-import { readCardDescription } from './card-content-file.js';
 import { stripHydratedThreadNotes } from './thread-content-file.js';
 
 type AnyRecord = Record<string, unknown>;
 type Ledger = AnyRecord & {
   cards?: AnyRecord[];
+  relationships?: AnyRecord[];
   threadFiles?: Record<string, string>;
 };
 type MutationError = { statusCode: number; body: AnyRecord };
@@ -56,11 +56,9 @@ export function commitMasterTaskCompletion(input: {
 
   const ledgerSnapshot = JSON.parse(JSON.stringify(input.ledger)) as Ledger;
   const ledgerText = readFileSync(input.ledgerPath, 'utf8');
-  const masterMarkdown = readCardDescription({ decisionOsRoot: input.decisionOsRoot, card: masterTask });
-  const subtaskIds = Array.from(
-    masterMarkdown.matchAll(/^\s*\d+[.)]\s+\[[^\]]+\]\(card:([^)]+)\)(?:\s+[—-]\s+Status:\s*.*?)?\s*$/gim),
-    (match) => match[1].trim(),
-  );
+  const subtaskIds = Array.isArray(input.ledger.relationships) ? input.ledger.relationships
+    .filter((relationship) => String(relationship.from ?? '') === masterTaskId && String(relationship.label ?? '') === 'subtask')
+    .map((relationship) => String(relationship.to ?? '')) : [];
   const cardIds = [masterTaskId, ...subtaskIds];
   const cards = cardIds.map((cardId) => (input.ledger.cards ?? []).find((card) => String(card.id ?? '') === cardId));
   if (cards.some((card) => !card)) {

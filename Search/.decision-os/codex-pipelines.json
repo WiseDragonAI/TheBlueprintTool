@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "pipelines": [],
+  "steps": [],
+  "runs": [],
+  "skillLibrary": [
+    {
+      "skillName": "retrospect-and-close-task",
+      "favorite": true,
+      "tags": [
+        "Implementation"
+      ],
+      "defaultCodexModel": null,
+      "defaultCodexEffort": null,
+      "updatedAt": "2026-07-15T07:09:58.955Z"
+    }
+  ],
+  "activeWorkspaceRun": null
+}

@@ -1,0 +1,875 @@
+{
+  "version": 1,
+  "pipelines": [],
+  "steps": [],
+  "runs": [
+    {
+      "id": "codex-skill-1784018258381-36965334",
+      "pipelineId": null,
+      "pipelineName": "retrospect-and-close-task run",
+      "temporary": true,
+      "ledgerId": "specs",
+      "sourceCardId": "card-6d2f0eb3-9ad3-41b7-a17f-5bf6c292400e",
+      "sourceCardTitle": "Centralize Decision OS memories",
+      "status": "complete",
+      "steps": [
+        {
+          "id": "codex-skill-1784018258381-36965334-step-1",
+          "stepId": "temporary-step-retrospect-and-close-task",
+          "name": "retrospect-and-close-task",
+          "purpose": "Run retrospect-and-close-task once.",
+          "outputCardId": "card-codex-skill-1784018258381-36965334",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-skill-1784018258381-36965334-step-1-skill-1",
+              "pipelineSkillId": "temporary-skill-retrospect-and-close-task",
+              "skillName": "retrospect-and-close-task",
+              "runId": "codex-skill-1784018258381-36965334",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "medium",
+              "stdoutFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784018258381-36965334.jsonl",
+              "stderrFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784018258381-36965334.log",
+              "startedAt": "2026-07-14T08:37:38.433Z",
+              "finishedAt": "2026-07-14T08:42:29.983Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-14T08:37:38.433Z",
+          "finishedAt": "2026-07-14T08:42:29.983Z",
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-14T08:37:38.382Z",
+      "updatedAt": "2026-07-14T08:42:29.983Z",
+      "startedAt": "2026-07-14T08:37:38.433Z",
+      "finishedAt": "2026-07-14T08:42:29.983Z",
+      "resumedAt": null,
+      "error": ""
+    },
+    {
+      "id": "codex-skill-1784022826105-454fe26f",
+      "pipelineId": null,
+      "pipelineName": "retrospect-and-close-task run",
+      "temporary": true,
+      "ledgerId": "specs",
+      "sourceCardId": "card-34288c99-cf14-4d5f-8840-83bc957c9a36",
+      "sourceCardTitle": "Synchronized Server Skills",
+      "status": "complete",
+      "steps": [
+        {
+          "id": "codex-skill-1784022826105-454fe26f-step-1",
+          "stepId": "temporary-step-retrospect-and-close-task",
+          "name": "retrospect-and-close-task",
+          "purpose": "Run retrospect-and-close-task once.",
+          "outputCardId": "card-codex-skill-1784022826105-454fe26f",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-skill-1784022826105-454fe26f-step-1-skill-1",
+              "pipelineSkillId": "temporary-skill-retrospect-and-close-task",
+              "skillName": "retrospect-and-close-task",
+              "runId": "codex-skill-1784022826105-454fe26f",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "medium",
+              "stdoutFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784022826105-454fe26f.jsonl",
+              "stderrFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784022826105-454fe26f.log",
+              "startedAt": "2026-07-14T09:53:46.185Z",
+              "finishedAt": "2026-07-14T09:58:25.602Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-14T09:53:46.185Z",
+          "finishedAt": "2026-07-14T09:58:25.602Z",
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-14T09:53:46.106Z",
+      "updatedAt": "2026-07-14T09:58:25.602Z",
+      "startedAt": "2026-07-14T09:53:46.185Z",
+      "finishedAt": "2026-07-14T09:58:25.602Z",
+      "resumedAt": null,
+      "error": ""
+    },
+    {
+      "id": "codex-skill-1784025223185-fbfecff9",
+      "pipelineId": null,
+      "pipelineName": "retrospect-and-close-task run",
+      "temporary": true,
+      "ledgerId": "specs",
+      "sourceCardId": "card-6d2f0eb3-9ad3-41b7-a17f-5bf6c292400e",
+      "sourceCardTitle": "Centralize Decision OS memories",
+      "status": "complete",
+      "steps": [
+        {
+          "id": "codex-skill-1784025223185-fbfecff9-step-1",
+          "stepId": "temporary-step-retrospect-and-close-task",
+          "name": "retrospect-and-close-task",
+          "purpose": "Run retrospect-and-close-task once.",
+          "outputCardId": "card-codex-skill-1784025223185-fbfecff9",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-skill-1784025223185-fbfecff9-step-1-skill-1",
+              "pipelineSkillId": "temporary-skill-retrospect-and-close-task",
+              "skillName": "retrospect-and-close-task",
+              "runId": "codex-skill-1784025223185-fbfecff9",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "medium",
+              "stdoutFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784025223185-fbfecff9.jsonl",
+              "stderrFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784025223185-fbfecff9.log",
+              "startedAt": "2026-07-14T10:33:43.243Z",
+              "finishedAt": "2026-07-14T10:38:36.557Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-14T10:33:43.243Z",
+          "finishedAt": "2026-07-14T10:38:36.557Z",
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-14T10:33:43.185Z",
+      "updatedAt": "2026-07-14T10:38:36.557Z",
+      "startedAt": "2026-07-14T10:33:43.243Z",
+      "finishedAt": "2026-07-14T10:38:36.557Z",
+      "resumedAt": null,
+      "error": ""
+    },
+    {
+      "id": "codex-skill-1784028440832-9e097f9b",
+      "pipelineId": null,
+      "pipelineName": "retrospect-and-close-task run",
+      "temporary": true,
+      "ledgerId": "specs",
+      "sourceCardId": "card-e28f0b44-7ad8-40cf-82af-cb1d626282cd",
+      "sourceCardTitle": "Unify Skill Processing with Codex Execution",
+      "status": "complete",
+      "steps": [
+        {
+          "id": "codex-skill-1784028440832-9e097f9b-step-1",
+          "stepId": "temporary-step-retrospect-and-close-task",
+          "name": "retrospect-and-close-task",
+          "purpose": "Run retrospect-and-close-task once.",
+          "outputCardId": "card-codex-skill-1784028440832-9e097f9b",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-skill-1784028440832-9e097f9b-step-1-skill-1",
+              "pipelineSkillId": "temporary-skill-retrospect-and-close-task",
+              "skillName": "retrospect-and-close-task",
+              "runId": "codex-skill-1784028440832-9e097f9b",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "medium",
+              "stdoutFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784028440832-9e097f9b.jsonl",
+              "stderrFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784028440832-9e097f9b.log",
+              "startedAt": "2026-07-14T11:27:20.952Z",
+              "finishedAt": "2026-07-14T11:30:21.783Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-14T11:27:20.952Z",
+          "finishedAt": "2026-07-14T11:30:21.783Z",
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-14T11:27:20.834Z",
+      "updatedAt": "2026-07-14T11:30:21.783Z",
+      "startedAt": "2026-07-14T11:27:20.952Z",
+      "finishedAt": "2026-07-14T11:30:21.783Z",
+      "resumedAt": null,
+      "error": ""
+    },
+    {
+      "id": "codex-skill-1784030180133-084a9051",
+      "pipelineId": null,
+      "pipelineName": "retrospect-and-close-task run",
+      "temporary": true,
+      "ledgerId": "specs",
+      "sourceCardId": "card-34288c99-cf14-4d5f-8840-83bc957c9a36",
+      "sourceCardTitle": "Synchronized Server Skills",
+      "status": "complete",
+      "steps": [
+        {
+          "id": "codex-skill-1784030180133-084a9051-step-1",
+          "stepId": "temporary-step-retrospect-and-close-task",
+          "name": "retrospect-and-close-task",
+          "purpose": "Run retrospect-and-close-task once.",
+          "outputCardId": "card-codex-skill-1784030180133-084a9051",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-skill-1784030180133-084a9051-step-1-skill-1",
+              "pipelineSkillId": "temporary-skill-retrospect-and-close-task",
+              "skillName": "retrospect-and-close-task",
+              "runId": "codex-skill-1784030180133-084a9051",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "medium",
+              "stdoutFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784030180133-084a9051.jsonl",
+              "stderrFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784030180133-084a9051.log",
+              "startedAt": "2026-07-14T11:56:20.218Z",
+              "finishedAt": "2026-07-14T11:59:49.040Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-14T11:56:20.218Z",
+          "finishedAt": "2026-07-14T11:59:49.040Z",
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-14T11:56:20.134Z",
+      "updatedAt": "2026-07-14T11:59:49.040Z",
+      "startedAt": "2026-07-14T11:56:20.218Z",
+      "finishedAt": "2026-07-14T11:59:49.040Z",
+      "resumedAt": null,
+      "error": ""
+    },
+    {
+      "id": "codex-skill-1784030813931-2012791e",
+      "pipelineId": null,
+      "pipelineName": "retrospect-and-close-task run",
+      "temporary": true,
+      "ledgerId": "specs",
+      "sourceCardId": "card-5ebfd7ed-0197-420d-b524-cbed39993737",
+      "sourceCardTitle": "Replace Codex launch button with Run control",
+      "status": "complete",
+      "steps": [
+        {
+          "id": "codex-skill-1784030813931-2012791e-step-1",
+          "stepId": "temporary-step-retrospect-and-close-task",
+          "name": "retrospect-and-close-task",
+          "purpose": "Run retrospect-and-close-task once.",
+          "outputCardId": "card-codex-skill-1784030813931-2012791e",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-skill-1784030813931-2012791e-step-1-skill-1",
+              "pipelineSkillId": "temporary-skill-retrospect-and-close-task",
+              "skillName": "retrospect-and-close-task",
+              "runId": "codex-skill-1784030813931-2012791e",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "medium",
+              "stdoutFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784030813931-2012791e.jsonl",
+              "stderrFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784030813931-2012791e.log",
+              "startedAt": "2026-07-14T12:06:53.997Z",
+              "finishedAt": "2026-07-14T12:11:16.676Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-14T12:06:53.997Z",
+          "finishedAt": "2026-07-14T12:11:16.676Z",
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-14T12:06:53.931Z",
+      "updatedAt": "2026-07-14T12:11:16.676Z",
+      "startedAt": "2026-07-14T12:06:53.997Z",
+      "finishedAt": "2026-07-14T12:11:16.676Z",
+      "resumedAt": null,
+      "error": ""
+    },
+    {
+      "id": "codex-skill-1784031700776-454fe9e9",
+      "pipelineId": null,
+      "pipelineName": "retrospect-and-close-task run",
+      "temporary": true,
+      "ledgerId": "specs",
+      "sourceCardId": "card-6d2f0eb3-9ad3-41b7-a17f-5bf6c292400e",
+      "sourceCardTitle": "Centralize Decision OS memories",
+      "status": "complete",
+      "steps": [
+        {
+          "id": "codex-skill-1784031700776-454fe9e9-step-1",
+          "stepId": "temporary-step-retrospect-and-close-task",
+          "name": "retrospect-and-close-task",
+          "purpose": "Run retrospect-and-close-task once.",
+          "outputCardId": "card-codex-skill-1784031700776-454fe9e9",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-skill-1784031700776-454fe9e9-step-1-skill-1",
+              "pipelineSkillId": "temporary-skill-retrospect-and-close-task",
+              "skillName": "retrospect-and-close-task",
+              "runId": "codex-skill-1784031700776-454fe9e9",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "medium",
+              "stdoutFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784031700776-454fe9e9.jsonl",
+              "stderrFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784031700776-454fe9e9.log",
+              "startedAt": "2026-07-14T12:21:40.847Z",
+              "finishedAt": "2026-07-14T12:26:27.281Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-14T12:21:40.847Z",
+          "finishedAt": "2026-07-14T12:26:27.281Z",
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-14T12:21:40.777Z",
+      "updatedAt": "2026-07-14T12:26:27.281Z",
+      "startedAt": "2026-07-14T12:21:40.847Z",
+      "finishedAt": "2026-07-14T12:26:27.281Z",
+      "resumedAt": null,
+      "error": ""
+    },
+    {
+      "id": "codex-skill-1784036508459-8926cc1f",
+      "pipelineId": null,
+      "pipelineName": "retrospect-and-close-task run",
+      "temporary": true,
+      "ledgerId": "specs",
+      "sourceCardId": "card-5ebfd7ed-0197-420d-b524-cbed39993737",
+      "sourceCardTitle": "Replace Codex launch button with Run control",
+      "status": "complete",
+      "steps": [
+        {
+          "id": "codex-skill-1784036508459-8926cc1f-step-1",
+          "stepId": "temporary-step-retrospect-and-close-task",
+          "name": "retrospect-and-close-task",
+          "purpose": "Run retrospect-and-close-task once.",
+          "outputCardId": "card-codex-skill-1784036508459-8926cc1f",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-skill-1784036508459-8926cc1f-step-1-skill-1",
+              "pipelineSkillId": "temporary-skill-retrospect-and-close-task",
+              "skillName": "retrospect-and-close-task",
+              "runId": "codex-skill-1784036508459-8926cc1f",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "medium",
+              "stdoutFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784036508459-8926cc1f.jsonl",
+              "stderrFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784036508459-8926cc1f.log",
+              "startedAt": "2026-07-14T13:41:48.529Z",
+              "finishedAt": "2026-07-14T13:44:59.979Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-14T13:41:48.529Z",
+          "finishedAt": "2026-07-14T13:44:59.979Z",
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-14T13:41:48.459Z",
+      "updatedAt": "2026-07-14T13:44:59.979Z",
+      "startedAt": "2026-07-14T13:41:48.529Z",
+      "finishedAt": "2026-07-14T13:44:59.979Z",
+      "resumedAt": null,
+      "error": ""
+    },
+    {
+      "id": "codex-skill-1784037279472-474ce8cd",
+      "pipelineId": null,
+      "pipelineName": "retrospect-and-close-task run",
+      "temporary": true,
+      "ledgerId": "specs",
+      "sourceCardId": "card-5ebfd7ed-0197-420d-b524-cbed39993737",
+      "sourceCardTitle": "Replace Codex launch button with Run control",
+      "status": "complete",
+      "steps": [
+        {
+          "id": "codex-skill-1784037279472-474ce8cd-step-1",
+          "stepId": "temporary-step-retrospect-and-close-task",
+          "name": "retrospect-and-close-task",
+          "purpose": "Run retrospect-and-close-task once.",
+          "outputCardId": "card-codex-skill-1784037279472-474ce8cd",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-skill-1784037279472-474ce8cd-step-1-skill-1",
+              "pipelineSkillId": "temporary-skill-retrospect-and-close-task",
+              "skillName": "retrospect-and-close-task",
+              "runId": "codex-skill-1784037279472-474ce8cd",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "medium",
+              "stdoutFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784037279472-474ce8cd.jsonl",
+              "stderrFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784037279472-474ce8cd.log",
+              "startedAt": "2026-07-14T13:54:39.540Z",
+              "finishedAt": "2026-07-14T13:56:56.378Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-14T13:54:39.540Z",
+          "finishedAt": "2026-07-14T13:56:56.378Z",
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-14T13:54:39.472Z",
+      "updatedAt": "2026-07-14T13:56:56.378Z",
+      "startedAt": "2026-07-14T13:54:39.540Z",
+      "finishedAt": "2026-07-14T13:56:56.378Z",
+      "resumedAt": null,
+      "error": ""
+    },
+    {
+      "id": "codex-skill-1784046263126-8dea61f9",
+      "pipelineId": null,
+      "pipelineName": "retrospect-and-close-task run",
+      "temporary": true,
+      "ledgerId": "specs",
+      "sourceCardId": "card-ee15cea8-cd78-48b5-8434-e50a24c4725c",
+      "sourceCardTitle": "Replace Done with Delayed in Control Room",
+      "status": "complete",
+      "steps": [
+        {
+          "id": "codex-skill-1784046263126-8dea61f9-step-1",
+          "stepId": "temporary-step-retrospect-and-close-task",
+          "name": "retrospect-and-close-task",
+          "purpose": "Run retrospect-and-close-task once.",
+          "outputCardId": "card-codex-skill-1784046263126-8dea61f9",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-skill-1784046263126-8dea61f9-step-1-skill-1",
+              "pipelineSkillId": "temporary-skill-retrospect-and-close-task",
+              "skillName": "retrospect-and-close-task",
+              "runId": "codex-skill-1784046263126-8dea61f9",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "medium",
+              "stdoutFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784046263126-8dea61f9.jsonl",
+              "stderrFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784046263126-8dea61f9.log",
+              "startedAt": "2026-07-14T16:28:15.439Z",
+              "finishedAt": "2026-07-14T16:32:46.439Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-14T16:28:15.439Z",
+          "finishedAt": "2026-07-14T16:32:46.439Z",
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-14T16:24:23.126Z",
+      "updatedAt": "2026-07-14T16:32:46.439Z",
+      "startedAt": "2026-07-14T16:28:15.439Z",
+      "finishedAt": "2026-07-14T16:32:46.439Z",
+      "resumedAt": null,
+      "error": ""
+    },
+    {
+      "id": "codex-skill-1784047137979-57bc97d8",
+      "pipelineId": null,
+      "pipelineName": "retrospect-and-close-task run",
+      "temporary": true,
+      "ledgerId": "specs",
+      "sourceCardId": "card-e28f0b44-7ad8-40cf-82af-cb1d626282cd",
+      "sourceCardTitle": "Unify Skill Processing with Codex Execution",
+      "status": "complete",
+      "steps": [
+        {
+          "id": "codex-skill-1784047137979-57bc97d8-step-1",
+          "stepId": "temporary-step-retrospect-and-close-task",
+          "name": "retrospect-and-close-task",
+          "purpose": "Run retrospect-and-close-task once.",
+          "outputCardId": "card-codex-skill-1784047137979-57bc97d8",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-skill-1784047137979-57bc97d8-step-1-skill-1",
+              "pipelineSkillId": "temporary-skill-retrospect-and-close-task",
+              "skillName": "retrospect-and-close-task",
+              "runId": "codex-skill-1784047137979-57bc97d8",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "medium",
+              "stdoutFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784047137979-57bc97d8.jsonl",
+              "stderrFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784047137979-57bc97d8.log",
+              "startedAt": "2026-07-14T16:38:58.054Z",
+              "finishedAt": "2026-07-14T16:44:46.991Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-14T16:38:58.054Z",
+          "finishedAt": "2026-07-14T16:44:46.991Z",
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-14T16:38:57.979Z",
+      "updatedAt": "2026-07-14T16:44:46.991Z",
+      "startedAt": "2026-07-14T16:38:58.054Z",
+      "finishedAt": "2026-07-14T16:44:46.991Z",
+      "resumedAt": null,
+      "error": ""
+    },
+    {
+      "id": "codex-skill-1784047681152-4f93da75",
+      "pipelineId": null,
+      "pipelineName": "retrospect-and-close-task run",
+      "temporary": true,
+      "ledgerId": "specs",
+      "sourceCardId": "card-79fefde6-99a4-4c0d-a3cb-78d5877b0f63",
+      "sourceCardTitle": "Propagate project colors through task hierarchies",
+      "status": "complete",
+      "steps": [
+        {
+          "id": "codex-skill-1784047681152-4f93da75-step-1",
+          "stepId": "temporary-step-retrospect-and-close-task",
+          "name": "retrospect-and-close-task",
+          "purpose": "Run retrospect-and-close-task once.",
+          "outputCardId": "card-codex-skill-1784047681152-4f93da75",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-skill-1784047681152-4f93da75-step-1-skill-1",
+              "pipelineSkillId": "temporary-skill-retrospect-and-close-task",
+              "skillName": "retrospect-and-close-task",
+              "runId": "codex-skill-1784047681152-4f93da75",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "medium",
+              "stdoutFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784047681152-4f93da75.jsonl",
+              "stderrFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784047681152-4f93da75.log",
+              "startedAt": "2026-07-14T16:48:01.223Z",
+              "finishedAt": "2026-07-14T16:52:31.707Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-14T16:48:01.223Z",
+          "finishedAt": "2026-07-14T16:52:31.707Z",
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-14T16:48:01.153Z",
+      "updatedAt": "2026-07-14T16:52:31.707Z",
+      "startedAt": "2026-07-14T16:48:01.223Z",
+      "finishedAt": "2026-07-14T16:52:31.707Z",
+      "resumedAt": null,
+      "error": ""
+    },
+    {
+      "id": "codex-skill-1784102291288-1aebdab5",
+      "pipelineId": null,
+      "pipelineName": "retrospect-and-close-task run",
+      "temporary": true,
+      "ledgerId": "specs",
+      "sourceCardId": "card-d18c1157-d5cd-4a53-b743-9a6aa278dbd3",
+      "sourceCardTitle": "Align Control Room active timers with current Codex runs",
+      "status": "complete",
+      "steps": [
+        {
+          "id": "codex-skill-1784102291288-1aebdab5-step-1",
+          "stepId": "temporary-step-retrospect-and-close-task",
+          "name": "retrospect-and-close-task",
+          "purpose": "Run retrospect-and-close-task once.",
+          "outputCardId": "card-codex-skill-1784102291288-1aebdab5",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-skill-1784102291288-1aebdab5-step-1-skill-1",
+              "pipelineSkillId": "temporary-skill-retrospect-and-close-task",
+              "skillName": "retrospect-and-close-task",
+              "runId": "codex-skill-1784102291288-1aebdab5",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "medium",
+              "stdoutFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784102291288-1aebdab5.jsonl",
+              "stderrFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784102291288-1aebdab5.log",
+              "startedAt": "2026-07-15T07:58:11.348Z",
+              "finishedAt": "2026-07-15T08:05:22.649Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-15T07:58:11.348Z",
+          "finishedAt": "2026-07-15T08:05:22.649Z",
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-15T07:58:11.288Z",
+      "updatedAt": "2026-07-15T08:05:22.689Z",
+      "startedAt": "2026-07-15T07:58:11.348Z",
+      "finishedAt": "2026-07-15T08:05:22.649Z",
+      "resumedAt": null,
+      "error": ""
+    },
+    {
+      "id": "codex-skill-1784102317950-aef624f7",
+      "pipelineId": null,
+      "pipelineName": "retrospect-and-close-task run",
+      "temporary": true,
+      "ledgerId": "specs",
+      "sourceCardId": "card-1e597b5f-2ad9-4370-98f8-2c2ec78218ca",
+      "sourceCardTitle": "Fix stale Codex run settlement and client refresh",
+      "status": "complete",
+      "steps": [
+        {
+          "id": "codex-skill-1784102317950-aef624f7-step-1",
+          "stepId": "temporary-step-retrospect-and-close-task",
+          "name": "retrospect-and-close-task",
+          "purpose": "Run retrospect-and-close-task once.",
+          "outputCardId": "card-codex-skill-1784102317950-aef624f7",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-skill-1784102317950-aef624f7-step-1-skill-1",
+              "pipelineSkillId": "temporary-skill-retrospect-and-close-task",
+              "skillName": "retrospect-and-close-task",
+              "runId": "codex-skill-1784102317950-aef624f7",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "medium",
+              "stdoutFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784102317950-aef624f7.jsonl",
+              "stderrFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784102317950-aef624f7.log",
+              "startedAt": "2026-07-15T07:58:38.002Z",
+              "finishedAt": "2026-07-15T08:00:23.991Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-15T07:58:38.002Z",
+          "finishedAt": "2026-07-15T08:00:23.991Z",
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-15T07:58:37.950Z",
+      "updatedAt": "2026-07-15T08:00:23.991Z",
+      "startedAt": "2026-07-15T07:58:38.002Z",
+      "finishedAt": "2026-07-15T08:00:23.991Z",
+      "resumedAt": null,
+      "error": ""
+    },
+    {
+      "id": "codex-skill-1784102449328-4013af50",
+      "pipelineId": null,
+      "pipelineName": "retrospect-and-close-task run",
+      "temporary": true,
+      "ledgerId": "specs",
+      "sourceCardId": "card-7d2090c9-0a50-4e6d-a164-2dee515e4a55",
+      "sourceCardTitle": "Make retrospective skill complete master tasks atomically",
+      "status": "complete",
+      "steps": [
+        {
+          "id": "codex-skill-1784102449328-4013af50-step-1",
+          "stepId": "temporary-step-retrospect-and-close-task",
+          "name": "retrospect-and-close-task",
+          "purpose": "Run retrospect-and-close-task once.",
+          "outputCardId": "card-codex-skill-1784102449328-4013af50",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-skill-1784102449328-4013af50-step-1-skill-1",
+              "pipelineSkillId": "temporary-skill-retrospect-and-close-task",
+              "skillName": "retrospect-and-close-task",
+              "runId": "codex-skill-1784102449328-4013af50",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "medium",
+              "stdoutFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784102449328-4013af50.jsonl",
+              "stderrFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784102449328-4013af50.log",
+              "startedAt": "2026-07-15T08:00:49.393Z",
+              "finishedAt": "2026-07-15T08:02:49.926Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-15T08:00:49.393Z",
+          "finishedAt": "2026-07-15T08:02:49.926Z",
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-15T08:00:49.328Z",
+      "updatedAt": "2026-07-15T08:02:49.926Z",
+      "startedAt": "2026-07-15T08:00:49.393Z",
+      "finishedAt": "2026-07-15T08:02:49.926Z",
+      "resumedAt": null,
+      "error": ""
+    },
+    {
+      "id": "codex-skill-1784102461109-528217de",
+      "pipelineId": null,
+      "pipelineName": "retrospect-and-close-task run",
+      "temporary": true,
+      "ledgerId": "specs",
+      "sourceCardId": "card-7b6bc749-87a5-4d63-90e5-d4b21bccaaad",
+      "sourceCardTitle": "Initialize and hydrate mobile project colors",
+      "status": "complete",
+      "steps": [
+        {
+          "id": "codex-skill-1784102461109-528217de-step-1",
+          "stepId": "temporary-step-retrospect-and-close-task",
+          "name": "retrospect-and-close-task",
+          "purpose": "Run retrospect-and-close-task once.",
+          "outputCardId": "card-codex-skill-1784102461109-528217de",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-skill-1784102461109-528217de-step-1-skill-1",
+              "pipelineSkillId": "temporary-skill-retrospect-and-close-task",
+              "skillName": "retrospect-and-close-task",
+              "runId": "codex-skill-1784102461109-528217de",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "medium",
+              "stdoutFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784102461109-528217de.jsonl",
+              "stderrFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784102461109-528217de.log",
+              "startedAt": "2026-07-15T08:01:01.161Z",
+              "finishedAt": "2026-07-15T08:02:44.959Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-15T08:01:01.161Z",
+          "finishedAt": "2026-07-15T08:02:44.959Z",
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-15T08:01:01.110Z",
+      "updatedAt": "2026-07-15T08:02:44.959Z",
+      "startedAt": "2026-07-15T08:01:01.161Z",
+      "finishedAt": "2026-07-15T08:02:44.959Z",
+      "resumedAt": null,
+      "error": ""
+    },
+    {
+      "id": "codex-skill-1784106020584-da48808a",
+      "pipelineId": null,
+      "pipelineName": "retrospect-and-close-task run",
+      "temporary": true,
+      "ledgerId": "specs",
+      "sourceCardId": "card-2b8e7eb3-e798-45e0-8c30-22eb2c3f8b14",
+      "sourceCardTitle": "Make operator-triggered Codex runs authoritative",
+      "status": "complete",
+      "steps": [
+        {
+          "id": "codex-skill-1784106020584-da48808a-step-1",
+          "stepId": "temporary-step-retrospect-and-close-task",
+          "name": "retrospect-and-close-task",
+          "purpose": "Run retrospect-and-close-task once.",
+          "outputCardId": "card-codex-skill-1784106020584-da48808a",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-skill-1784106020584-da48808a-step-1-skill-1",
+              "pipelineSkillId": "temporary-skill-retrospect-and-close-task",
+              "skillName": "retrospect-and-close-task",
+              "runId": "codex-skill-1784106020584-da48808a",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "medium",
+              "stdoutFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784106020584-da48808a.jsonl",
+              "stderrFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784106020584-da48808a.log",
+              "startedAt": "2026-07-15T09:00:20.679Z",
+              "finishedAt": "2026-07-15T09:02:21.832Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-15T09:00:20.679Z",
+          "finishedAt": "2026-07-15T09:02:21.832Z",
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-15T09:00:20.584Z",
+      "updatedAt": "2026-07-15T09:02:21.832Z",
+      "startedAt": "2026-07-15T09:00:20.679Z",
+      "finishedAt": "2026-07-15T09:02:21.832Z",
+      "resumedAt": null,
+      "error": ""
+    },
+    {
+      "id": "codex-skill-1784106035742-137b1c2d",
+      "pipelineId": null,
+      "pipelineName": "retrospect-and-close-task run",
+      "temporary": true,
+      "ledgerId": "specs",
+      "sourceCardId": "card-e2b65d2f-801d-4739-b4d2-befcada9ba1b",
+      "sourceCardTitle": "Diagnose Why an Active Task Cannot Be Relaunched",
+      "status": "complete",
+      "steps": [
+        {
+          "id": "codex-skill-1784106035742-137b1c2d-step-1",
+          "stepId": "temporary-step-retrospect-and-close-task",
+          "name": "retrospect-and-close-task",
+          "purpose": "Run retrospect-and-close-task once.",
+          "outputCardId": "card-codex-skill-1784106035742-137b1c2d",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-skill-1784106035742-137b1c2d-step-1-skill-1",
+              "pipelineSkillId": "temporary-skill-retrospect-and-close-task",
+              "skillName": "retrospect-and-close-task",
+              "runId": "codex-skill-1784106035742-137b1c2d",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "medium",
+              "stdoutFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784106035742-137b1c2d.jsonl",
+              "stderrFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784106035742-137b1c2d.log",
+              "startedAt": "2026-07-15T09:00:35.810Z",
+              "finishedAt": "2026-07-15T09:02:11.779Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-15T09:00:35.810Z",
+          "finishedAt": "2026-07-15T09:02:11.779Z",
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-15T09:00:35.742Z",
+      "updatedAt": "2026-07-15T09:02:11.779Z",
+      "startedAt": "2026-07-15T09:00:35.810Z",
+      "finishedAt": "2026-07-15T09:02:11.779Z",
+      "resumedAt": null,
+      "error": ""
+    },
+    {
+      "id": "codex-skill-1784117802727-5aaa34ec",
+      "pipelineId": null,
+      "pipelineName": "retrospect-and-close-task run",
+      "temporary": true,
+      "ledgerId": "specs",
+      "sourceCardId": "card-2164c008-359f-40ac-8abf-505ee5b5fe38",
+      "sourceCardTitle": "Build Stable Server State Projections",
+      "status": "complete",
+      "steps": [
+        {
+          "id": "codex-skill-1784117802727-5aaa34ec-step-1",
+          "stepId": "temporary-step-retrospect-and-close-task",
+          "name": "retrospect-and-close-task",
+          "purpose": "Run retrospect-and-close-task once.",
+          "outputCardId": "card-codex-skill-1784117802727-5aaa34ec",
+          "status": "complete",
+          "skills": [
+            {
+              "id": "codex-skill-1784117802727-5aaa34ec-step-1-skill-1",
+              "pipelineSkillId": "temporary-skill-retrospect-and-close-task",
+              "skillName": "retrospect-and-close-task",
+              "runId": "codex-skill-1784117802727-5aaa34ec",
+              "status": "complete",
+              "codexModel": "gpt-5.6-sol",
+              "codexEffort": "medium",
+              "stdoutFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784117802727-5aaa34ec.jsonl",
+              "stderrFile": "/data/data/com.termux/files/home/decision-os/.decision-os/runs/codex-skills/specs/codex-skill-1784117802727-5aaa34ec.log",
+              "startedAt": "2026-07-15T12:16:42.971Z",
+              "finishedAt": "2026-07-15T12:19:38.963Z",
+              "error": ""
+            }
+          ],
+          "startedAt": "2026-07-15T12:16:42.971Z",
+          "finishedAt": "2026-07-15T12:19:38.963Z",
+          "error": ""
+        }
+      ],
+      "createdAt": "2026-07-15T12:16:42.728Z",
+      "updatedAt": "2026-07-15T12:19:38.963Z",
+      "startedAt": "2026-07-15T12:16:42.971Z",
+      "finishedAt": "2026-07-15T12:19:38.963Z",
+      "resumedAt": null,
+      "error": ""
+    }
+  ],
+  "skillLibrary": [
+    {
+      "skillName": "retrospect-and-close-task",
+      "favorite": true,
+      "tags": [
+        "Implementation"
+      ],
+      "defaultCodexModel": null,
+      "defaultCodexEffort": null,
+      "updatedAt": "2026-07-15T07:09:58.921Z"
+    }
+  ],
+  "activeWorkspaceRun": null
+}

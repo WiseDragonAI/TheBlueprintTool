@@ -3,16 +3,21 @@
  * WHY: Agents need one card-id command without constructing project-scoped HTTP requests.
  */
 import { basename } from 'node:path';
+import { readFileSync } from 'node:fs';
 import type { Result } from '../../../lib/types.js';
+import { resolveMasterTaskGate } from './resolve-session-context.js';
 
 type Request = (input: string, init: RequestInit) => Promise<Pick<Response, 'headers' | 'ok' | 'status' | 'text'>>;
+type Gate = (input: { ledgerJsonFile: string; cardId: string }) => Promise<Result<string>>;
+
+const resolvePostCompletionGate: Gate = async (input) => resolveMasterTaskGate({ ...input, ledger: JSON.parse(readFileSync(input.ledgerJsonFile, 'utf8')) });
 
 export async function completeMasterTask(input: {
   cardId?: string;
   ledgerJsonFile: string;
   projectId?: string;
   serverUrl?: string;
-}, request: Request = fetch): Promise<Result<string>> {
+}, request: Request = fetch, gate: Gate = resolvePostCompletionGate): Promise<Result<string>> {
   const cardId = String(input.cardId ?? '').trim();
   const projectId = String(input.projectId ?? process.env.DECISION_OS_PROJECT_ID ?? '').trim();
   const serverUrl = String(input.serverUrl ?? process.env.DECISION_OS_SERVER_URL ?? '').trim().replace(/\/$/, '');
@@ -38,8 +43,15 @@ export async function completeMasterTask(input: {
   const body = await response.text();
   if (!response.ok) return { ok: false, error: `Master task completion failed (${response.status}): ${body}` };
   const commitSha = response.headers.get('x-decision-os-completion-commit') ?? '';
+  let gateResult: Result<string>;
+  try {
+    gateResult = await gate({ ledgerJsonFile: ledgerFile, cardId });
+  } catch (error) {
+    return { ok: false, error: `Master task completed, but its post-transaction gate failed: ${error instanceof Error ? error.message : String(error)}` };
+  }
+  if (!gateResult.ok) return { ok: false, error: `Master task completed, but its post-transaction gate failed: ${gateResult.error}` };
   return {
     ok: true,
-    value: JSON.stringify({ version: 1, completed: true, projectId, ledgerId, masterCardId: cardId, commitSha }, null, 2),
+    value: JSON.stringify({ version: 2, completed: true, projectId, ledgerId, masterCardId: cardId, commitSha, gate: JSON.parse(gateResult.value) }, null, 2),
   };
 }

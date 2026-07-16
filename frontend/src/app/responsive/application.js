@@ -7,7 +7,7 @@ import { ledgerCardBody } from '/src/runtime/ledger/helper/ledger-card-body.js';
 import { saveLedgerCardMediaCarouselSlide } from '/src/runtime/ledger/helper/persist-ledger-card-media-carousel.js';
 import { initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './thread.js';
 import { initializeMobileCodex, openMobileCodexLibrary, setMobileCodexContext } from './codex.js';
-import { activeAge, activeStopwatch, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus } from './control-room.js';
+import { activeAge, activeStopwatch, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge } from './control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from './control-room-route.js';
 import { cardPathForProject, isProjectCardPath, ledgerPathForProject, parseProjectRoute, parseProjectScope, projectPath, zonePathForProject } from './project-route.js';
 import { projectSettingsValues, saveProjectSettingsRequest } from './project-settings.js';
@@ -906,18 +906,16 @@ async function persistQueueOrder() {
   }
 }
 
-async function activateMasterTask({ ledgerId, cardId, startedAt }) {
+async function activateMasterTask({ ledgerId, cardId }) {
   const ledger = await projectFetch(`/api/ledgers/${encodeURIComponent(ledgerId)}/canvas`, { cache: 'no-store' }).then((response) => response.json());
   const card = ledger.cards?.find((entry) => String(entry.id) === String(cardId));
   if (!card || !parseMasterCandidate(card)) return ledger;
-  return ledgerMutation(ledgerId, {
-    action: 'patch-card',
-    cardPatch: { id: cardId, description: withActiveStatus(ledgerCardBody(card), startedAt) }
-  });
+  return ledger;
 }
 
 function parseMasterCandidate(card) {
-  return /^\s*(?:#[a-z][a-z0-9-]*\s*)*#master-task\b(?:\s*#[a-z][a-z0-9-]*)*\s*$/im.test(ledgerCardBody(card));
+  const labels = Array.isArray(card?.labels) ? card.labels.map(String) : [];
+  return labels.includes('master-task') || (!labels.some((label) => label === 'master-task' || label === 'subtask') && /^\s*(?:#[a-z][a-z0-9-]*\s*)*#master-task\b(?:\s*#[a-z][a-z0-9-]*)*\s*$/im.test(ledgerCardBody(card)));
 }
 
 async function createTaskIntake(projectId) {
@@ -934,8 +932,8 @@ async function createTaskIntake(projectId) {
   await ledgerMutation(ledgerRef.id, { action: 'create-zone', annotation: zone });
   const cardId = objectId('card');
   const timestamp = new Date().toISOString();
-  const markdown = `#master-task #task-waiting\n\nLedger: ${ledgerRef.title}\nWaiting since: ${timestamp}\n\n## Intake\n\nDescribe the task in this thread, attach the required files, then launch Codex. Categorize the task, keep this mandatory new zone, rename this master task and zone, create actionable subtask cards in this zone, and write canonical card links and statuses under \`## Subtasks\`.\n\n## Subtasks\n`;
-  const card = { id: cardId, title: 'New task intake', cardType: 'note', domainId: ledgerRef.id, status: 'todo', x: rect.x + 60, y: rect.y + 60, w: 360, h: 240, comment: { what: markdown }, facts: [], fields: [] };
+  const markdown = `Ledger: ${ledgerRef.title}\nWaiting since: ${timestamp}\n\n## Intake\n\nDescribe the task in this thread, attach the required files, then launch Codex. Categorize the task, keep this mandatory new zone, rename this master task and zone, create actionable subtask cards in this zone, and write canonical relationship-backed card links under \`## Subtasks\`.\n\n## Subtasks\n`;
+  const card = { id: cardId, title: 'New task intake', cardType: 'note', domainId: ledgerRef.id, status: 'todo', labels: ['master-task'], x: rect.x + 60, y: rect.y + 60, w: 360, h: 240, comment: { what: markdown }, facts: [], fields: [] };
   const updated = await ledgerMutation(ledgerRef.id, { action: 'create-card', card });
   state.ledger = updated;
   state.activeZoneId = zone.id;
@@ -1159,7 +1157,9 @@ function renderCard(card) {
     ledgerTitle: state.ledgers.find((entry) => entry.id === state.activeLedgerId)?.title ?? state.activeLedgerId,
     markdown,
     cardStatus: card.status,
-    cards: state.ledger?.cards ?? []
+    labels: card.labels ?? [],
+    cards: state.ledger?.cards ?? [],
+    relationships: state.ledger?.relationships ?? []
   });
   const backButton = document.querySelector('.back-to-zone-button');
   backButton.textContent = '← Back';

@@ -324,7 +324,9 @@
       "h": 900,
       "comment": {
         "contentFile": ".decision-os/cards/tasks-system/card-f07bf88f-75dd-4336-8c3b-b460ed1a92b6.md"
-      }
+      },
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium"
     },
     {
       "id": "card-summary-data-model",

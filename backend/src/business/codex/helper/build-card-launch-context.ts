@@ -39,6 +39,7 @@ function compactCard(card: AnyRecord): AnyRecord {
     status: String(card.status ?? ''),
     domainId: String(card.domainId ?? ''),
     cardType: String(card.cardType ?? ''),
+    labels: Array.isArray(card.labels) ? card.labels.map(String) : [],
     runId: String(card.codexThreadRunId ?? card.codexPipelineRunId ?? ''),
     runOutputFile: String(card.codexThreadRunOutputFile ?? ''),
   };
@@ -83,7 +84,17 @@ export function buildCardLaunchContext(input: {
           sections: [{ title: 'string', markdown: 'string' }],
           subtasks: [{ title: 'string', sections: [{ title: 'string', markdown: 'string' }] }],
         },
-        generated: ['cardIds', 'relationshipIds', 'lifecycleHeader', 'subtaskLinks'],
+        generated: ['cardIds', 'relationshipIds', 'canonicalTaskLabels', 'subtaskLinks'],
+      },
+      masterTaskProgress: {
+        command: 'ledger-cli master-task-progress --ledger "$DECISION_OS_LEDGER_FILE" --plan-stdin --json',
+        input: {
+          masterCardId: input.cardId,
+          updates: [{ cardId: 'card-id', sections: [{ title: 'string', markdown: 'string' }], labels: ['string'] }],
+          verifiedSubtaskIds: ['card-id'],
+          reply: 'agent markdown',
+        },
+        generated: ['canonicalTaskLabels', 'verifiedStatuses', 'threadNote', 'gate'],
       },
     },
   };

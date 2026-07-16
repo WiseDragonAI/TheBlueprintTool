@@ -38,3 +38,8 @@ I split the card into three durable cards:
 3. `Summary CLI Maintenance` takes the former E section and adds the proposed `missing-summaries` and `stale-summaries` commands, with the watcher contract for updating `card.updatedAt` when a Markdown companion file changes.
 
 I did not change card statuses.
+
+# OPERATOR
+<!-- decision-os:note {"id":"note-1783745898685-3adbc60b7b7f88","timestamp":"2026-07-11T04:58:18.870Z","voiceFileRef":"/data/data/com.termux/files/home/TheBlueprintTool/.decision-os/voice-uploads/voice-1783745898762-00f6e251-e332-4700-b982-fe59a9e8dde8.wav","status":"transcribed","transcriptionStartedAt":"2026-07-11T05:43:59.873Z"} -->
+
+Et donc, là on fait un test pour voir si la capture de voix fonctionne.

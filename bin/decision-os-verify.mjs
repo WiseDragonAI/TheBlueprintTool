@@ -13,6 +13,40 @@ const decisionOsRoot = basename(dirname(scriptRepoRoot)) === '.worktrees'
   ? dirname(dirname(scriptRepoRoot))
   : scriptRepoRoot;
 const forbiddenShells = new Set(['bash', 'dash', 'fish', 'sh', 'zsh']);
+const maxNodeTestConcurrency = 3;
+
+function ownsNodeTestRunner(command) {
+  return ['node', 'nodejs'].includes(basename(command[0])) && command.slice(1).includes('--test');
+}
+
+function boundedNodeTestCommand(command) {
+  if (!ownsNodeTestRunner(command)) return command;
+  const bounded = [command[0]];
+  let concurrencyFound = false;
+  for (let index = 1; index < command.length; index += 1) {
+    const argument = command[index];
+    if (argument === '--test-concurrency') {
+      const requested = Number.parseInt(command[index + 1] ?? '', 10);
+      bounded.push(argument, String(Number.isInteger(requested) && requested > 0
+        ? Math.min(requested, maxNodeTestConcurrency)
+        : maxNodeTestConcurrency));
+      index += 1;
+      concurrencyFound = true;
+      continue;
+    }
+    if (argument.startsWith('--test-concurrency=')) {
+      const requested = Number.parseInt(argument.slice('--test-concurrency='.length), 10);
+      bounded.push(`--test-concurrency=${Number.isInteger(requested) && requested > 0
+        ? Math.min(requested, maxNodeTestConcurrency)
+        : maxNodeTestConcurrency}`);
+      concurrencyFound = true;
+      continue;
+    }
+    bounded.push(argument);
+  }
+  if (!concurrencyFound) bounded.splice(1, 0, `--test-concurrency=${maxNodeTestConcurrency}`);
+  return bounded;
+}
 
 export function verificationLockFile(env = process.env) {
   return resolve(env.DECISION_OS_VERIFICATION_LOCK || resolve(decisionOsRoot, '.decision-os', 'runtime', 'verification.lock'));
@@ -25,7 +59,7 @@ export function verificationCommand(argv) {
   if (forbiddenShells.has(basename(command[0]))) {
     throw new Error('Verification lease accepts one direct command; shell wrappers are not allowed.');
   }
-  return command;
+  return boundedNodeTestCommand(command);
 }
 
 export async function runVerification(argv = process.argv.slice(2), env = process.env) {

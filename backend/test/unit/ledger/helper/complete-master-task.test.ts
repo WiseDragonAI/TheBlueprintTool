@@ -21,6 +21,10 @@ test('completes every linked subtask and the master-task lifecycle', () => {
       { id: 'subtask-a', status: 'todo' },
       { id: 'subtask-b', status: 'todo' },
     ],
+    relationships: [
+      { id: 'rel-a', from: 'master-a', to: 'subtask-a', label: 'subtask' },
+      { id: 'rel-b', from: 'master-a', to: 'subtask-b', label: 'subtask' },
+    ],
   };
 
   try {
@@ -33,9 +37,9 @@ test('completes every linked subtask and the master-task lifecycle', () => {
     assert.equal(result.error, undefined);
     assert.deepEqual(ledger.cards.map((card) => card.status), ['done', 'done', 'done']);
     const markdown = readFileSync(join(decisionOsRoot, 'cards', 'specs', 'master-a.md'), 'utf8');
-    assert.match(markdown, /^#master-task #task-complete$/m);
+    assert.doesNotMatch(markdown, /#master-task|#task-complete|— Status:/);
     assert.match(markdown, /^Completed at: \d{4}-\d{2}-\d{2}T/m);
-    assert.equal(markdown.match(/— Status: complete/g)?.length, 2);
+    assert.deepEqual(ledger.cards.map((card) => (card as { labels?: string[] }).labels), [['master-task'], ['subtask'], ['subtask']]);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }
@@ -49,6 +53,7 @@ test('rejects completion when a canonical subtask link is unresolved', () => {
       cards: [
         { id: 'master-a', status: 'todo', comment: { what: '#master-task #task-active\n\n## B. Subtasks\n\n1. [Missing](card:missing-a) — Status: waiting' } },
       ],
+      relationships: [{ id: 'rel-a', from: 'master-a', to: 'missing-a', label: 'subtask' }],
     };
     const result = applyLedgerMutation({
       decisionOsRoot,
@@ -87,7 +92,7 @@ test('completes a direct-treatment master task with no linked subtask cards', ()
     assert.equal(result.error, undefined);
     assert.equal(ledger.cards[0]?.status, 'done');
     const markdown = readFileSync(join(decisionOsRoot, 'cards', 'specs', 'master-direct.md'), 'utf8');
-    assert.match(markdown, /^#master-task #task-complete$/m);
+    assert.doesNotMatch(markdown, /#master-task|#task-complete/);
     assert.match(markdown, /^Completed at: \d{4}-\d{2}-\d{2}T/m);
     assert.match(markdown, /\*\*Direct treatment:\*\*/);
   } finally {
