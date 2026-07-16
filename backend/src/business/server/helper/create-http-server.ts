@@ -20,7 +20,8 @@ import { normalizeLedgerNotes } from './normalize-ledger-notes.js';
 import { hydrateLedgerCardContent } from '../../ledger/helper/card-content-file.js';
 import { stripHydratedThreadNotes, writeThreadNotesFile } from '../../ledger/helper/thread-content-file.js';
 import { migrateBacklogStatus } from '../../ledger/helper/migrate-backlog-status.js';
-import { resolveCardContentChange, watchCardContentFiles, type CardContentChange } from '../../refresh/helper/watch-card-content-files.js';
+import { resolveCardContentChange, type CardContentChange } from '../../refresh/helper/watch-card-content-files.js';
+import { watchProjectFiles } from '../../refresh/helper/watch-project-files.js';
 import { applyLedgerMutation, type LedgerMutation } from '../../ledger/helper/apply-ledger-mutation.js';
 import { commitMasterTaskCompletion } from '../../ledger/helper/commit-master-task-completion.js';
 import { createLinkedLedger } from '../../ledger/helper/create-linked-ledger.js';
@@ -48,12 +49,14 @@ import { restartCodexPipelineRunController } from '../../codex/controller/restar
 import { resumeCodexPipelineRuns } from '../../codex/helper/resume-codex-pipeline-runs.js';
 import { recoverCodexProcessQueue } from '../../codex/helper/codex-process-queue.js';
 import { nextPendingCodexProcessCreatedAt, pendingCodexProcessEntries, runningCodexProcessCount, scheduleCodexProcesses } from '../../codex/helper/codex-process-scheduler.js';
-import { createDecisionOsProject, discoverDecisionOsProjects, resolveCatalogProject, saveProjectMetadata } from './project-catalog.js';
+import { resolveCatalogProject } from './project-catalog.js';
+import { createProjectCatalogStore } from './project-catalog-store.js';
 import { isGlobalProjectEndpoint, isProjectSensitiveEndpoint, parseProjectUrlScope } from './project-url-scope.js';
 import { ensureLedgerCliShim } from '../../codex/helper/decision-os-codex-runtime.js';
 import { ensureDecisionOsMemoryStore } from './ensure-decision-os-memory-store.js';
 import { createControlRoomProjectionStore } from './control-room-projection-store.js';
 import { ledgerCanvasProjection, ledgerCardProjection, ledgerNavigationProjection, ledgerSearchProjection, ledgerThreadProjection } from './ledger-read-models.js';
+import { ensureProjectsCanvasDocument } from './ensure-projects-canvas-document.js';
 
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
@@ -198,7 +201,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     runtime: AnyRecord;
     publishCard: (event: CardContentChange | AnyRecord) => void;
     publishLedger: (event: AnyRecord) => void;
-    watcher: ReturnType<typeof watchCardContentFiles>;
+    watcher: ReturnType<typeof watchProjectFiles>;
   };
   const projectContexts = new Map<string, ProjectContext>();
   let controlRoomProjectionStore: ReturnType<typeof createControlRoomProjectionStore> | null = null;
@@ -262,7 +265,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     projectRuntime.globalCodexProcessCapacity = globalCodexProcessCapacity;
     projectRuntime.globalCodexRunningProcessCount = globalCodexRunningProcessCount;
     projectRuntime.globalCodexQueuePosition = globalCodexQueuePosition;
-    let watcher: ReturnType<typeof watchCardContentFiles> | null = null;
+    let watcher: ReturnType<typeof watchProjectFiles> | null = null;
     const broadcast = (message: string): void => {
       for (const client of clients) client.write(message);
       for (const client of globalContentEventClients) client.write(message);
@@ -317,41 +320,44 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         threadId: String(event.threadId ?? ''), runId: String(event.runId ?? ''), onCardContentChange: publishCard, onLedgerChange: publishLedger
       });
     };
-    watcher = watchCardContentFiles({ decisionOsRoot: activeDecisionOsRoot, onChange: publishCard });
+    watcher = watchProjectFiles({
+      decisionOsRoot: activeDecisionOsRoot,
+      onContentChange: publishCard,
+      onProjectChange: publishLedger,
+    });
     const context: ProjectContext = { clients, revisions, runtime: projectRuntime, publishCard, publishLedger, watcher };
     projectContexts.set(activeDecisionOsRoot, context);
     recoverCodexProcessQueue(activeDecisionOsRoot, projectRuntime);
     void resumeCodexPipelineRuns({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime }).catch(() => undefined);
     return context;
   };
-  let projectCatalogCache = { expiresAt: 0, projects: [] as ReturnType<typeof discoverDecisionOsProjects> };
-  const projectCatalog = (): ReturnType<typeof discoverDecisionOsProjects> => {
-    const now = Date.now();
-    if (projectCatalogCache.expiresAt > now) return projectCatalogCache.projects;
-    const projects = discoverDecisionOsProjects({ masterRoot, masterDecisionOsRoot });
-    projectCatalogCache = { expiresAt: now + 5000, projects };
-    return projects;
-  };
+  const projectCatalogStore = createProjectCatalogStore({ masterRoot, masterDecisionOsRoot });
+  const projectCatalog = () => projectCatalogStore.projects();
   controlRoomProjectionStore = createControlRoomProjectionStore({
     cacheFile: resolve(masterDecisionOsRoot, 'cache', 'control-room-v3.json'),
     runtimeForRoot: (root) => projectContexts.get(root)?.runtime ?? {},
   });
-  for (const project of projectCatalog()) projectContext(project.decisionOsRoot, project.id);
-  const reconcileProjectCatalog = (): void => {
-    projectCatalogCache = { expiresAt: 0, projects: [] };
-    const discovered = projectCatalog();
-    const activeRoots = new Set(discovered.map((project) => project.decisionOsRoot));
-    for (const project of discovered) projectContext(project.decisionOsRoot, project.id);
+  for (const project of projectCatalog()) {
+    // WHAT: Start runtimes only for paths that passed registry validation.
+    // WHY: An unavailable registration must remain visible without recreating directories through watcher setup.
+    if (project.available) projectContext(project.decisionOsRoot, project.id);
+  }
+  const reconcileProjectRuntimes = (): void => {
+    const registered = projectCatalog();
+    const activeRoots = new Set(registered.filter((project) => project.available).map((project) => project.decisionOsRoot));
+    for (const project of registered) {
+      // WHAT: Reconcile only validated project roots.
+      // WHY: Missing registrations remain catalog diagnostics rather than implicit directory creation requests.
+      if (project.available) projectContext(project.decisionOsRoot, project.id);
+    }
     for (const [root, context] of projectContexts) {
       if (activeRoots.has(root)) continue;
       context.watcher.close();
       context.clients.clear();
       projectContexts.delete(root);
     }
-    controlRoomProjectionStore?.reconcile(discovered);
+    controlRoomProjectionStore?.reconcile(registered);
   };
-  const projectCatalogSupervisor = setInterval(reconcileProjectCatalog, 30_000);
-  projectCatalogSupervisor.unref();
   const server = createServer(async (request, response) => {
     const requestPath = (request.url ?? '/').split('?')[0];
     const projectScope = parseProjectUrlScope(requestPath);
@@ -374,9 +380,19 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.end(JSON.stringify({ ok: false, error: 'Unknown project id.' }));
       return;
     }
+    if (projectScope && activeProject && !activeProject.available) {
+      response.statusCode = 503;
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ ok: false, error: activeProject.diagnostic, projectId: activeProject.id }));
+      return;
+    }
     if (!projectScope && url === '/api/control-room' && request.method === 'GET') {
-      for (const project of projects) projectContext(project.decisionOsRoot, project.id);
-      const projection = controlRoomProjectionStore.get(projects);
+      for (const project of projects) {
+        // WHAT: Hydrate only available project contexts before projection reads.
+        // WHY: Control Room must preserve unavailable catalog entries without touching absent paths.
+        if (project.available) projectContext(project.decisionOsRoot, project.id);
+      }
+      const projection = controlRoomProjectionStore.get(projects.filter((project) => project.available));
       const etag = `"${String(projection.fingerprint)}"`;
       if (request.headers['if-none-match'] === etag) {
         response.statusCode = 304;
@@ -415,6 +431,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const persistLedgerAndRespond = (ledgerId: string, ledgerPath: string, ledger: AnyRecord, activeResponse: ServerResponse, activeDecisionOsRoot = decisionOsRoot): void => {
       controlRoomProjectionStore?.invalidate(activeProject?.id ?? '');
       stripHydratedThreadNotes(ledger);
+      context.watcher.ignoreNext(ledgerPath);
       writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
       context.watcher.refreshOwnership();
       activeResponse.setHeader(ledgerRevisionHeader, String(ledgerRevisions.advance(ledgerId)));
@@ -423,6 +440,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const persistLedgerMutationAndRespond = (ledgerId: string, ledgerPath: string, ledger: AnyRecord, mutation: LedgerMutation, activeResponse: ServerResponse): void => {
       controlRoomProjectionStore?.invalidate(activeProject?.id ?? '');
       stripHydratedThreadNotes(ledger);
+      context.watcher.ignoreNext(ledgerPath);
       writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
       context.watcher.refreshOwnership();
       const revision = ledgerRevisions.advance(ledgerId);
@@ -496,19 +514,70 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.end(JSON.stringify({ projects }));
       return;
     }
+    if (url === '/decision-os/projects-canvas' && request.method === 'GET') {
+      const canvas = ensureProjectsCanvasDocument({ masterDecisionOsRoot, projects });
+      const summaries = new Map(projects.map((project) => [project.id, {
+        ledgerCount: project.ledgers.length,
+        available: project.available,
+        diagnostic: project.diagnostic,
+      }]));
+      const document = {
+        ...canvas.document,
+        cards: (canvas.document.cards as AnyRecord[]).map((card) => ({
+          ...card,
+          projectSummary: summaries.get(String(card.targetProjectId ?? '')) ?? null,
+        })),
+      };
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify(document));
+      return;
+    }
+    if (url === '/decision-os/projects-canvas' && request.method === 'PATCH') {
+      const bodyBuffer = await readRequestBuffer(request);
+      try {
+        const mutation = JSON.parse(bodyBuffer.toString('utf8') || '{}') as LedgerMutation;
+        const canvas = ensureProjectsCanvasDocument({ masterDecisionOsRoot, projects });
+        if (mutation.action === 'delete-card' && mutation.cardId) {
+          const card = (canvas.document.cards as AnyRecord[]).find((entry) => String(entry.id ?? '') === mutation.cardId);
+          const projectId = String(card?.targetProjectId ?? '');
+          if (!projectId) throw new Error('Project card is not registered.');
+          projectCatalogStore.unregister(projectId);
+          reconcileProjectRuntimes();
+          controlRoomProjectionStore?.invalidate(projectId);
+          const updated = ensureProjectsCanvasDocument({ masterDecisionOsRoot, projects: projectCatalog() });
+          response.setHeader('content-type', 'application/json');
+          response.end(JSON.stringify(updated.document));
+          return;
+        }
+        if (mutation.action !== 'patch-geometry' && mutation.action !== 'patch-viewport') {
+          throw new Error('Projects canvas accepts geometry, viewport, and unregister mutations only.');
+        }
+        const result = applyLedgerMutation({
+          decisionOsRoot: masterDecisionOsRoot,
+          ledgerPath: canvas.path,
+          ledger: canvas.document,
+          mutation,
+        });
+        if (!result.ok) throw new Error(String(result.error?.body?.error ?? 'Projects canvas mutation failed.'));
+        writeFileSync(canvas.path, JSON.stringify(result.ledger, null, 2));
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify(result.ledger));
+      } catch (error) {
+        response.statusCode = 400;
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : 'Projects canvas mutation failed.' }));
+      }
+      return;
+    }
     if (url === '/decision-os/projects' && request.method === 'POST') {
       const bodyBuffer = await readRequestBuffer(request);
       try {
         const body = JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
-        const project = createDecisionOsProject({
-          masterRoot,
-          masterDecisionOsRoot,
-          name: String(body.name ?? ''),
-          description: String(body.description ?? ''),
-        });
-        projectCatalogCache = { expiresAt: 0, projects: [] };
+        const project = typeof body.path === 'string'
+          ? projectCatalogStore.register(body.path)
+          : projectCatalogStore.create(String(body.name ?? ''), String(body.description ?? ''));
         controlRoomProjectionStore?.invalidate();
-        projectContext(project.decisionOsRoot, project.id);
+        reconcileProjectRuntimes();
         response.statusCode = 201;
         response.setHeader('content-type', 'application/json');
         response.end(JSON.stringify({ ok: true, project }));
@@ -524,21 +593,37 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const bodyBuffer = await readRequestBuffer(request);
       try {
         const body = JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
-        const project = saveProjectMetadata({
-          masterDecisionOsRoot,
-          projects,
-          projectId,
-          name: String(body.name ?? ''),
-          description: String(body.description ?? ''),
-          color: String(body.color ?? ''),
-        });
-        projectCatalogCache = { expiresAt: 0, projects: [] };
+        const project = typeof body.relativePath === 'string'
+          ? projectCatalogStore.relink(projectId, body.relativePath)
+          : projectCatalogStore.update(
+            projectId,
+            String(body.name ?? ''),
+            String(body.description ?? ''),
+            String(body.color ?? ''),
+          );
+        reconcileProjectRuntimes();
+        controlRoomProjectionStore?.invalidate(projectId);
         response.setHeader('content-type', 'application/json');
         response.end(JSON.stringify({ ok: true, project }));
       } catch (error) {
         response.statusCode = 400;
         response.setHeader('content-type', 'application/json');
         response.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : 'Project update failed.' }));
+      }
+      return;
+    }
+    if (url.startsWith('/decision-os/projects/') && request.method === 'DELETE') {
+      const projectId = decodeRouteSegment(url.slice('/decision-os/projects/'.length));
+      try {
+        const project = projectCatalogStore.unregister(projectId);
+        reconcileProjectRuntimes();
+        controlRoomProjectionStore?.invalidate(projectId);
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ ok: true, project, filesDeleted: false }));
+      } catch (error) {
+        response.statusCode = 400;
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : 'Project unregister failed.' }));
       }
       return;
     }
@@ -1205,7 +1290,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   codexQueueScanTimer.unref?.();
   server.on('close', () => {
     clearInterval(codexQueueScanTimer);
-    clearInterval(projectCatalogSupervisor);
     for (const context of projectContexts.values()) {
       context.watcher.close();
       context.clients.clear();

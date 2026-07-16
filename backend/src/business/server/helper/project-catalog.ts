@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, relative, resolve, sep } from 'node:path';
 import { createLinkedLedger } from '../../ledger/helper/create-linked-ledger.js';
+import { readProjectRegistry, type ProjectRegistryEntry } from './project-registry.js';
 
 export type DecisionOsProject = {
   id: string;
@@ -16,6 +17,8 @@ export type DecisionOsProject = {
   description: string;
   color: string;
   ledgers: Array<{ id: string; title: string; ledgerFile: string }>;
+  available: boolean;
+  diagnostic: string;
 };
 
 type ProjectMetadata = { name: string; description: string; color: string };
@@ -61,6 +64,67 @@ function stableProjectId(decisionOsRoot: string, relativePath: string): string {
   writeFileSync(temporary, `${JSON.stringify({ id }, null, 2)}\n`);
   renameSync(temporary, identityFile);
   return id;
+}
+
+export function projectFromRegisteredPath(input: { masterRoot: string; entry: ProjectRegistryEntry }): DecisionOsProject {
+  const masterRoot = realpathSync(input.masterRoot);
+  const configuredRoot = resolve(masterRoot, input.entry.relativePath);
+  const configuredRelativePath = normalizedRelative(masterRoot, configuredRoot) || '.';
+  // WHAT: Reject a persisted path that is lexically outside the configured root.
+  // WHY: An unavailable path still must not escape containment before realpath validation is possible.
+  if (configuredRelativePath === '..' || configuredRelativePath.startsWith('../')) throw new Error('Registered project path escapes the catalog root.');
+  let root = configuredRoot;
+  try {
+    root = realpathSync(configuredRoot);
+  } catch {
+    return {
+      id: input.entry.id,
+      name: input.entry.name,
+      description: input.entry.description,
+      relativePath: input.entry.relativePath,
+      root,
+      decisionOsRoot: resolve(root, '.decision-os'),
+      color: validColor(input.entry.color) ? input.entry.color.toLowerCase() : defaultColors[0],
+      ledgers: [],
+      available: false,
+      diagnostic: `Registered project path is unavailable: ${input.entry.relativePath}`,
+    };
+  }
+  const relativePath = normalizedRelative(masterRoot, root) || '.';
+  // WHAT: Enforce the registry containment boundary after resolving symlinks.
+  // WHY: Persisted relative paths must never grant access outside the configured server root.
+  if (relativePath === '..' || relativePath.startsWith('../')) throw new Error('Registered project path escapes the catalog root.');
+  const decisionOsRoot = resolve(root, '.decision-os');
+  if (!existsSync(resolve(decisionOsRoot, 'state.json'))) {
+    return {
+      id: input.entry.id,
+      name: input.entry.name,
+      description: input.entry.description,
+      relativePath,
+      root,
+      decisionOsRoot,
+      color: validColor(input.entry.color) ? input.entry.color.toLowerCase() : defaultColors[0],
+      ledgers: [],
+      available: false,
+      diagnostic: `Registered project state is unavailable: ${input.entry.relativePath}`,
+    };
+  }
+  const id = stableProjectId(decisionOsRoot, relativePath);
+  // WHAT: Reject identity drift instead of silently changing a registered URL.
+  // WHY: Project identity must remain stable across moves and server restarts.
+  if (input.entry.id && input.entry.id !== id) throw new Error(`Registered project identity mismatch: ${input.entry.relativePath}`);
+  return {
+    id,
+    name: input.entry.name.trim() || basename(root),
+    description: input.entry.description,
+    relativePath,
+    root,
+    decisionOsRoot,
+    color: validColor(input.entry.color) ? input.entry.color.toLowerCase() : defaultColors[0],
+    ledgers: ledgersFor(decisionOsRoot),
+    available: true,
+    diagnostic: '',
+  };
 }
 
 function settingsFile(masterDecisionOsRoot: string): string {
@@ -135,6 +199,8 @@ export function discoverDecisionOsProjects(input: { masterRoot: string; masterDe
       decisionOsRoot,
       color: configuredColor.toLowerCase(),
       ledgers: ledgersFor(decisionOsRoot),
+      available: true,
+      diagnostic: '',
     };
   });
   const nestedProjects = projects.filter((project) => project.relativePath !== '.');
@@ -166,19 +232,21 @@ export function createDecisionOsProject(input: {
   try {
     mkdirSync(decisionOsRoot, { recursive: true });
     writeFileSync(resolve(decisionOsRoot, 'state.json'), `${JSON.stringify({ ledgers: [] }, null, 2)}\n`);
-    writeFileSync(resolve(decisionOsRoot, 'project.json'), `${JSON.stringify({ id: randomUUID() }, null, 2)}\n`);
+    const id = randomUUID();
+    writeFileSync(resolve(decisionOsRoot, 'project.json'), `${JSON.stringify({ id }, null, 2)}\n`);
     createLinkedLedger({ decisionOsRoot, title: 'tasks' });
-    const projects = discoverDecisionOsProjects({ masterRoot, masterDecisionOsRoot: input.masterDecisionOsRoot });
-    const created = projects.find((project) => project.root === projectRoot);
-    if (!created) throw new Error('Created project was not discovered in the catalog.');
-    return saveProjectMetadata({
-      masterDecisionOsRoot: input.masterDecisionOsRoot,
-      projects,
-      projectId: created.id,
+    return {
+      id,
       name,
       description,
-      color: created.color,
-    });
+      relativePath: normalizedRelative(masterRoot, projectRoot),
+      root: projectRoot,
+      decisionOsRoot,
+      color: defaultColors[0],
+      ledgers: ledgersFor(decisionOsRoot),
+      available: true,
+      diagnostic: '',
+    };
   } catch (error) {
     rmSync(projectRoot, { recursive: true, force: true });
     throw error;
@@ -202,6 +270,9 @@ export function saveProjectMetadata(input: {
   if (name.length > 120) throw new Error('Project name must not exceed 120 characters.');
   if (description.length > 1000) throw new Error('Project description must not exceed 1000 characters.');
   if (!validColor(color)) throw new Error('Project color must be a six-digit hex color.');
+  // WHAT: Let ProjectCatalogStore commit versioned registry updates as one authoritative write.
+  // WHY: The legacy metadata writer has no path fields and would otherwise erase registry membership.
+  if (readProjectRegistry(input.masterDecisionOsRoot)) return { ...project, name, description, color };
   const settings = readSettings(input.masterDecisionOsRoot);
   const migratedProjects = { ...settings.projects };
   for (const [id, legacyColor] of Object.entries(settings.colors ?? {})) {
