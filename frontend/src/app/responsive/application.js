@@ -1248,7 +1248,9 @@ function renderCard(card) {
     });
     completion.append(delayButton, completeButton, deleteButton);
     overview.append(status, heading, subtasks, completion);
-    elements['card-body'].replaceChildren(content, overview);
+    // The relationship-backed task summary is the navigation surface for a master task.
+    // Keep it ahead of the narrative so linked cards remain visible on long mobile cards.
+    elements['card-body'].replaceChildren(overview, content);
   } else elements['card-body'].replaceChildren(content);
   initializeMobileCarousels(elements['card-body']);
   elements['card-view'].style.setProperty('--zone-color', state.activeZoneColor || 'var(--accent)');
