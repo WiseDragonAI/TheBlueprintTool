@@ -38,10 +38,37 @@ function registryEntry(project: DecisionOsProject, registeredAt = new Date().toI
 }
 
 function registryFromProjects(projects: DecisionOsProject[]): ProjectRegistry {
+  const identities = new Set<string>();
+  const paths = new Set<string>();
+  for (const project of projects) {
+    if (identities.has(project.id)) throw new Error(`Duplicate project identity in migration manifest: ${project.id}`);
+    if (paths.has(project.relativePath)) throw new Error(`Duplicate project path in migration manifest: ${project.relativePath}`);
+    identities.add(project.id);
+    paths.add(project.relativePath);
+  }
   return {
     version: 2,
     projects: Object.fromEntries(projects.map((project) => [project.id, registryEntry(project)])),
   };
+}
+
+export function migrateLegacyProjectRegistry(input: {
+  masterRoot: string;
+  masterDecisionOsRoot: string;
+  apply: boolean;
+}): { applied: boolean; backup: string | null; registry: ProjectRegistry } {
+  const current = readProjectRegistry(input.masterDecisionOsRoot);
+  if (current) return { applied: false, backup: null, registry: current };
+  const projects = discoverDecisionOsProjects({
+    masterRoot: input.masterRoot,
+    masterDecisionOsRoot: input.masterDecisionOsRoot,
+    persistIdentities: input.apply,
+  });
+  const registry = registryFromProjects(projects);
+  if (!input.apply) return { applied: false, backup: null, registry };
+  const backup = backupLegacyProjectRegistry(input.masterDecisionOsRoot);
+  writeProjectRegistry(input.masterDecisionOsRoot, registry);
+  return { applied: true, backup, registry };
 }
 
 export type ProjectCatalogStore = ReturnType<typeof createProjectCatalogStore>;
@@ -52,9 +79,7 @@ export function createProjectCatalogStore(input: { masterRoot: string; masterDec
   // WHAT: Seed the authoritative registry once when upgrading a legacy workspace.
   // WHY: Existing installations need one compatibility migration before runtime scans can stop.
   if (!registry) {
-    backupLegacyProjectRegistry(input.masterDecisionOsRoot);
-    registry = registryFromProjects(discoverDecisionOsProjects({ masterRoot, masterDecisionOsRoot: input.masterDecisionOsRoot }));
-    writeProjectRegistry(input.masterDecisionOsRoot, registry);
+    registry = migrateLegacyProjectRegistry({ masterRoot, masterDecisionOsRoot: input.masterDecisionOsRoot, apply: true }).registry;
   }
 
   let projects: DecisionOsProject[] = [];

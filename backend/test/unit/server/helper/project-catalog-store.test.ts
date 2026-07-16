@@ -4,10 +4,10 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createProjectCatalogStore } from '@backend/business/server/helper/project-catalog-store.js';
+import { createProjectCatalogStore, migrateLegacyProjectRegistry } from '@backend/business/server/helper/project-catalog-store.js';
 
 function createProject(root: string, relativePath: string, id: string): void {
   const decisionOsRoot = join(root, relativePath, '.decision-os');
@@ -55,6 +55,32 @@ test('backs up legacy project metadata before writing the versioned registry', (
   const backup = readdirSync(masterDecisionOsRoot).find((entry) => entry.startsWith('projects.json.legacy-') && entry.endsWith('.backup'));
   assert.ok(backup);
   assert.equal(readFileSync(join(masterDecisionOsRoot, backup), 'utf8'), legacy);
+});
+
+test('previews migration without writing identities or the registry', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-registry-preview-'));
+  const masterDecisionOsRoot = join(root, '.decision-os');
+  createProject(root, 'candidate', 'candidate-id');
+  rmSync(join(root, 'candidate', '.decision-os', 'project.json'));
+
+  const result = migrateLegacyProjectRegistry({ masterRoot: root, masterDecisionOsRoot, apply: false });
+
+  assert.equal(result.applied, false);
+  assert.equal(Object.keys(result.registry.projects).length, 1);
+  assert.equal(existsSync(join(root, 'candidate', '.decision-os', 'project.json')), false);
+  assert.equal(existsSync(join(masterDecisionOsRoot, 'projects.json')), false);
+});
+
+test('rejects identity collisions before applying a migration', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-registry-collision-'));
+  createProject(root, 'candidate-a', 'duplicate-id');
+  createProject(root, 'candidate-b', 'duplicate-id');
+
+  assert.throws(
+    () => migrateLegacyProjectRegistry({ masterRoot: root, masterDecisionOsRoot: join(root, '.decision-os'), apply: false }),
+    /Duplicate project identity/,
+  );
+  assert.equal(existsSync(join(root, '.decision-os', 'projects.json')), false);
 });
 
 test('creates and updates projects without rediscovering unregistered directories', () => {

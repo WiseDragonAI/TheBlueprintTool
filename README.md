@@ -163,6 +163,8 @@ curl -sS -I http://127.0.0.1:50150/
 
 The Control Room is always `/`; project catalog and aggregate ledger pages are `/projects` and `/ledgers`. Project-owned resources use `/p/:projectId/ledgers/...`, and project-sensitive APIs use the same `/p/:projectId` prefix. The server resolves membership from the versioned `.decision-os/projects.json` registry and reconstructs registered project views from filesystem watchers. Each project stores its durable URL identity in `.decision-os/project.json`. Register, relink, and unregister projects explicitly from `/projects`; unregistering never deletes project files. A one-time legacy migration creates a timestamped backup before writing the versioned registry.
 
+Preview the one-time registry manifest with `decision-os-projects-migrate`. Apply it from the server root with `decision-os-projects-migrate --apply`; apply mode creates the legacy backup before writing project identities and the atomic version `2` registry.
+
 ## Card Markdown Images
 
 Card markdown supports image syntax in descriptions and field tabs:

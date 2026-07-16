@@ -50,7 +50,7 @@ function projectId(relativePath: string): string {
   return Buffer.from(relativePath || '.', 'utf8').toString('base64url');
 }
 
-function stableProjectId(decisionOsRoot: string, relativePath: string): string {
+function stableProjectId(decisionOsRoot: string, relativePath: string, persistIdentity = true): string {
   const identityFile = resolve(decisionOsRoot, 'project.json');
   try {
     const identity = JSON.parse(readFileSync(identityFile, 'utf8')) as ProjectIdentity;
@@ -60,6 +60,7 @@ function stableProjectId(decisionOsRoot: string, relativePath: string): string {
     // Existing projects receive their legacy URL id on first discovery.
   }
   const id = projectId(relativePath);
+  if (!persistIdentity) return id;
   const temporary = `${identityFile}.tmp-${process.pid}-${Date.now()}`;
   writeFileSync(temporary, `${JSON.stringify({ id }, null, 2)}\n`);
   renameSync(temporary, identityFile);
@@ -160,7 +161,7 @@ function ledgersFor(decisionOsRoot: string): DecisionOsProject['ledgers'] {
   }
 }
 
-export function discoverDecisionOsProjects(input: { masterRoot: string; masterDecisionOsRoot: string }): DecisionOsProject[] {
+export function discoverDecisionOsProjects(input: { masterRoot: string; masterDecisionOsRoot: string; persistIdentities?: boolean }): DecisionOsProject[] {
   const masterRoot = realpathSync(input.masterRoot);
   const settings = readSettings(input.masterDecisionOsRoot);
   const candidates: string[] = [];
@@ -180,7 +181,7 @@ export function discoverDecisionOsProjects(input: { masterRoot: string; masterDe
   const projects = candidates.map((root, index) => {
     const relativePath = normalizedRelative(masterRoot, root) || '.';
     const decisionOsRoot = resolve(root, '.decision-os');
-    const id = stableProjectId(decisionOsRoot, relativePath);
+    const id = stableProjectId(decisionOsRoot, relativePath, input.persistIdentities !== false);
     const metadata = settings.projects?.[id];
     const fallbackName = basename(root);
     const configuredName = typeof metadata?.name === 'string' ? metadata.name.trim() : '';
