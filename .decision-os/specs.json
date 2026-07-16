@@ -10004,7 +10004,7 @@
     },
     {
       "id": "card-232dc127-2c65-4632-af7c-97003f595ce4",
-      "title": "Study reliable master-task status management",
+      "title": "Implement reliable master-task status management",
       "cardType": "note",
       "domainId": "specs",
       "status": "todo",
@@ -10019,11 +10019,12 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784183895138-cbbf5f02",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784183895138-cbbf5f02.md",
+      "codexThreadRunId": "codex-skill-1784190284389-df4c2927",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784190284389-df4c2927.md",
       "labels": [
         "master-task"
-      ]
+      ],
+      "codexActiveRunId": "codex-skill-1784190284389-df4c2927"
     },
     {
       "id": "card-46f748f8-1822-414f-a04b-c7265f3b8aba",
@@ -10087,7 +10088,7 @@
       "title": "Reconcile uncommitted repository state",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "x": -10402,
       "y": 90108,
       "w": 360,
@@ -10099,9 +10100,8 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784184386360-48e7cbe5",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784184386360-48e7cbe5.md",
-      "codexActiveRunId": "codex-skill-1784184386360-48e7cbe5"
+      "codexThreadRunId": "codex-skill-1784190358749-05405766",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784190358749-05405766.md"
     },
     {
       "id": "card-a8c79f8b-fb3b-4f26-82ea-3e922074f380",
@@ -10166,6 +10166,63 @@
       },
       "facts": [],
       "fields": []
+    },
+    {
+      "id": "card-31f3451a-4a55-4086-af92-b51861496d27",
+      "title": "Implement JSON-authoritative master-task CLI transactions",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10012,
+      "y": 89088,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-31f3451a-4a55-4086-af92-b51861496d27.md"
+      },
+      "facts": [],
+      "fields": [],
+      "labels": [
+        "subtask"
+      ]
+    },
+    {
+      "id": "card-36a28cf8-80c9-4e88-a538-8b098ea93619",
+      "title": "Migrate Control Room and completion to JSON authority",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -9632,
+      "y": 89088,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-36a28cf8-80c9-4e88-a538-8b098ea93619.md"
+      },
+      "facts": [],
+      "fields": [],
+      "labels": [
+        "subtask"
+      ]
+    },
+    {
+      "id": "card-5bf73521-071b-437b-a68b-e89a8988d880",
+      "title": "Update agent lifecycle instructions and verify migration",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "x": -10012,
+      "y": 89498,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-5bf73521-071b-437b-a68b-e89a8988d880.md"
+      },
+      "facts": [],
+      "fields": [],
+      "labels": [
+        "subtask"
+      ]
     }
   ],
   "relationships": [
@@ -10995,6 +11052,24 @@
       "id": "rel-976ea7a3-c0cc-41fe-afa9-e4cc623d8673",
       "from": "card-426d69c8-8c1b-482d-94dc-7653cabdd7ed",
       "to": "card-3a15b322-da2d-4306-a2cb-de6ac4c0dc73",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-437db328-a97e-4335-baf5-4782ec10f1c2",
+      "from": "card-232dc127-2c65-4632-af7c-97003f595ce4",
+      "to": "card-31f3451a-4a55-4086-af92-b51861496d27",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-2ba674eb-e5b4-4ca4-9265-43bfefd3024c",
+      "from": "card-232dc127-2c65-4632-af7c-97003f595ce4",
+      "to": "card-36a28cf8-80c9-4e88-a538-8b098ea93619",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-3a7c060b-41d3-4b50-981a-1b5e6af8aa51",
+      "from": "card-232dc127-2c65-4632-af7c-97003f595ce4",
+      "to": "card-5bf73521-071b-437b-a68b-e89a8988d880",
       "label": "subtask"
     }
   ],
@@ -12022,7 +12097,7 @@
       "width": 1200,
       "height": 900,
       "color": "#4846bd",
-      "label": "Master-task status reliability study",
+      "label": "Reliable master-task status management",
       "comments": []
     },
     {
