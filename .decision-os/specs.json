@@ -10261,7 +10261,7 @@
       "title": "Audit and Restore Lost Master Tasks",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "master-task"
       ],
@@ -10274,11 +10274,11 @@
       },
       "facts": [],
       "fields": [],
-      "codexActiveRunId": "codex-skill-1784202900017-b1104489",
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784202900017-b1104489",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784202900017-b1104489.md"
+      "codexThreadRunId": "codex-skill-1784204458229-024a24ce",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784204458229-024a24ce.md",
+      "codexActiveRunId": "codex-skill-1784204458229-024a24ce"
     },
     {
       "id": "card-d3f5fbfb-3f68-42aa-b4f5-7267ce6ad4cb",
@@ -10356,6 +10356,63 @@
       "h": 240,
       "comment": {
         "contentFile": ".decision-os/cards/specs/card-06258606-7583-460b-a85e-aeac5bf4e07d.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-f28ac3de-6019-4001-8ba0-3b7da89c63e4",
+      "title": "Reconstruct the stale-server failure chain",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "labels": [
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 91128,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-f28ac3de-6019-4001-8ba0-3b7da89c63e4.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-0dbe52fc-a455-4ef5-8b03-af0a250ff78c",
+      "title": "Make JSON master projections metadata-authoritative",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "labels": [
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 91128,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-0dbe52fc-a455-4ef5-8b03-af0a250ff78c.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-5cd21c88-608e-484c-bd01-461745681248",
+      "title": "Verify post-restart projection diagnostics",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "labels": [
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 91538,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-5cd21c88-608e-484c-bd01-461745681248.md"
       },
       "facts": [],
       "fields": []
@@ -11236,6 +11293,24 @@
       "id": "rel-18e7b186-33d6-4e16-b771-a3ac45652245",
       "from": "card-b85c6294-593d-4870-8c6e-ec559386df3c",
       "to": "card-7dad8c3e-9bdd-4ee4-89c4-1799151ca22d",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-424fbcce-21d2-4a3b-8e41-d945e809f727",
+      "from": "card-9ee8b280-6ef1-4ac6-9543-1ddeb106ed3a",
+      "to": "card-f28ac3de-6019-4001-8ba0-3b7da89c63e4",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-03ab4222-a2fb-49c8-8673-5f30c433c10b",
+      "from": "card-9ee8b280-6ef1-4ac6-9543-1ddeb106ed3a",
+      "to": "card-0dbe52fc-a455-4ef5-8b03-af0a250ff78c",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-5976abb2-6ddd-45a1-80b3-b662abdd99a8",
+      "from": "card-9ee8b280-6ef1-4ac6-9543-1ddeb106ed3a",
+      "to": "card-5cd21c88-608e-484c-bd01-461745681248",
       "label": "subtask"
     }
   ],
