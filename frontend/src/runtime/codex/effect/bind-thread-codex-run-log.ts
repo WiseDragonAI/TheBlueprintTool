@@ -3,86 +3,16 @@
  * WHY: Log hydration must survive panel rerenders without creating another timer or ledger write.
  */
 import { state } from '../../state.js';
-import { codexRunDurationLabel, liveCodexRunElapsedMs } from '../helper/live-codex-run-elapsed-ms.js';
 import { mergeThreadRunEvents, type ThreadRunLogEvent } from '../helper/thread-run-log.js';
 import { bindCardSkillRunLogConsumer } from './poll-card-skill-run.js';
 import type { CardSkillRunSummary } from './request-card-skill-run-status.js';
+import { stopThreadCodexRunClock, syncThreadCodexRunClock } from './sync-thread-codex-run-clock.js';
+
+export { syncThreadCodexRunClock } from './sync-thread-codex-run-clock.js';
 
 function recordState(name: string): Record<string, any> {
   if (!state[name] || typeof state[name] !== 'object' || Array.isArray(state[name])) state[name] = {};
   return state[name] as Record<string, any>;
-}
-
-type ThreadRunClock = {
-  threadId: string;
-  runId: string;
-  sampledAtMs: number;
-  sampledElapsedMs: number;
-  timer: ReturnType<typeof setTimeout> | null;
-};
-
-const threadRunClocks = new Map<string, ThreadRunClock>();
-
-function stopThreadCodexRunClock(threadId: string): void {
-  const clock = threadRunClocks.get(threadId);
-  if (clock?.timer) clearTimeout(clock.timer);
-  threadRunClocks.delete(threadId);
-}
-
-function paintThreadCodexRunClock(clock: ThreadRunClock): void {
-  const summary = recordState('threadRunSummaryByThreadId')[clock.threadId] as CardSkillRunSummary | undefined;
-  const activeRunId = String(recordState('threadRunIdByThreadId')[clock.threadId] ?? '');
-  if (!summary || summary.status !== 'running' || activeRunId !== clock.runId) {
-    stopThreadCodexRunClock(clock.threadId);
-    return;
-  }
-
-  const nowMs = Date.now();
-  const elapsedMs = Math.max(
-    liveCodexRunElapsedMs(summary, nowMs),
-    clock.sampledElapsedMs + Math.max(0, nowMs - clock.sampledAtMs),
-  );
-  if (String(state.threadId ?? '') === clock.threadId && typeof document !== 'undefined') {
-    const panel = document.querySelector<HTMLElement>('.thread-panel');
-    const status = document.querySelector<HTMLElement>('.thread-codex-log .codex-log-status');
-    const elapsed = status?.querySelector<HTMLElement>('[data-codex-log-elapsed]');
-    if (panel && !panel.hidden && status?.dataset.runId === clock.runId && elapsed) {
-      const label = codexRunDurationLabel(elapsedMs);
-      if (elapsed.textContent !== label) elapsed.textContent = label;
-    }
-  }
-
-  if (clock.timer) return;
-  const delayMs = Math.max(50, 1010 - (elapsedMs % 1000));
-  clock.timer = setTimeout(() => {
-    clock.timer = null;
-    paintThreadCodexRunClock(clock);
-  }, delayMs);
-}
-
-export function syncThreadCodexRunClock(input: { threadId: string; runId: string; summary: CardSkillRunSummary }): void {
-  const existing = threadRunClocks.get(input.threadId);
-  if (input.summary.status !== 'running') {
-    stopThreadCodexRunClock(input.threadId);
-    return;
-  }
-  if (existing && existing.runId !== input.runId) stopThreadCodexRunClock(input.threadId);
-  const nowMs = Date.now();
-  const activeClock = threadRunClocks.get(input.threadId);
-  const carriedElapsedMs = activeClock
-    ? activeClock.sampledElapsedMs + Math.max(0, nowMs - activeClock.sampledAtMs)
-    : 0;
-  const clock = activeClock ?? {
-    threadId: input.threadId,
-    runId: input.runId,
-    sampledAtMs: nowMs,
-    sampledElapsedMs: 0,
-    timer: null,
-  };
-  clock.sampledElapsedMs = Math.max(carriedElapsedMs, liveCodexRunElapsedMs(input.summary, nowMs));
-  clock.sampledAtMs = nowMs;
-  threadRunClocks.set(input.threadId, clock);
-  paintThreadCodexRunClock(clock);
 }
 
 function updateAnnouncement(threadId: string, summary: CardSkillRunSummary, changedEvents: ThreadRunLogEvent[]): void {

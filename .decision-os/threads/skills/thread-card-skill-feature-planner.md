@@ -4404,3 +4404,309 @@ Summary: Added `## C. Skill Content` to `.decision-os/cards/skills/card-skill-fe
 
 Codex run cancelled: terminated by operator
 ````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783503301885-0800fad0-line-80","timestamp":"2026-07-08T09:39:28.430Z","status":"Codex message","codexRunId":"codex-skill-1783503301885-0800fad0","codexLine":"80","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_5"} -->
+
+I’m replacing section C now with the full extracted source text, not a summary. The only wrapper I’m keeping is a single numbered item so the card still conforms to the decision-os format; the skill itself will be inside the section as a complete Markdown block.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783503301885-0800fad0-line-81","timestamp":"2026-07-08T09:39:28.430Z","status":"in_progress","codexRunId":"codex-skill-1783503301885-0800fad0","codexLine":"81","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_6","codexTool":"/usr/bin/zsh -lc 'date -u +%Y-%m-%dT%H:%M:%SZ'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'date -u +%Y-%m-%dT%H:%M:%SZ'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783503301885-0800fad0-line-82","timestamp":"2026-07-08T09:39:28.430Z","status":"completed","codexRunId":"codex-skill-1783503301885-0800fad0","codexLine":"82","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_6","codexTool":"/usr/bin/zsh -lc 'date -u +%Y-%m-%dT%H:%M:%SZ'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'date -u +%Y-%m-%dT%H:%M:%SZ'`
+Status: completed
+Exit code: 0
+
+````text
+2026-07-08T09:38:39Z
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783503301885-0800fad0-line-83","timestamp":"2026-07-08T09:39:28.430Z","status":"in_progress","codexRunId":"codex-skill-1783503301885-0800fad0","codexLine":"83","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_7","codexTool":"/usr/bin/zsh -lc 'date +%s%3N'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'date +%s%3N'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783503301885-0800fad0-line-84","timestamp":"2026-07-08T09:39:28.430Z","status":"completed","codexRunId":"codex-skill-1783503301885-0800fad0","codexLine":"84","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_7","codexTool":"/usr/bin/zsh -lc 'date +%s%3N'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'date +%s%3N'`
+Status: completed
+Exit code: 0
+
+````text
+1783503519819
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783503301885-0800fad0-line-85","timestamp":"2026-07-08T09:39:28.430Z","status":"in_progress","codexRunId":"codex-skill-1783503301885-0800fad0","codexLine":"85","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_8","codexTool":"/usr/bin/zsh -lc 'openssl rand -hex 4'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'openssl rand -hex 4'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783503301885-0800fad0-line-86","timestamp":"2026-07-08T09:39:28.430Z","status":"completed","codexRunId":"codex-skill-1783503301885-0800fad0","codexLine":"86","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_8","codexTool":"/usr/bin/zsh -lc 'openssl rand -hex 4'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'openssl rand -hex 4'`
+Status: completed
+Exit code: 0
+
+````text
+97454770
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783503301885-0800fad0-line-87","timestamp":"2026-07-08T09:39:28.430Z","status":"in_progress","codexRunId":"codex-skill-1783503301885-0800fad0","codexLine":"87","codexKind":"file_change","codexEventType":"item.started","codexItemId":"item_9"} -->
+
+- /home/jbb/dev/EditorBP/decision-os/.decision-os/cards/skills/card-skill-feature-planner.md: update
+- /home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.md: update
+- /home/jbb/dev/EditorBP/decision-os/.decision-os/threads/skills/thread-card-skill-feature-planner.md: update
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783503301885-0800fad0-line-88","timestamp":"2026-07-08T09:39:28.430Z","status":"completed","codexRunId":"codex-skill-1783503301885-0800fad0","codexLine":"88","codexKind":"file_change","codexEventType":"item.completed","codexItemId":"item_9"} -->
+
+- /home/jbb/dev/EditorBP/decision-os/.decision-os/cards/skills/card-skill-feature-planner.md: update
+- /home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.md: update
+- /home/jbb/dev/EditorBP/decision-os/.decision-os/threads/skills/thread-card-skill-feature-planner.md: update
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783503301885-0800fad0-line-89","timestamp":"2026-07-08T09:39:28.430Z","status":"Codex message","codexRunId":"codex-skill-1783503301885-0800fad0","codexLine":"89","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_10"} -->
+
+Section C now contains the full source prompt instead of the explanation. I’m doing one narrow readback to confirm the complete extracted skill is visible and that the run summary no longer carries the interrupted/cancelled wording.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783503301885-0800fad0-line-90","timestamp":"2026-07-08T09:39:28.430Z","status":"in_progress","codexRunId":"codex-skill-1783503301885-0800fad0","codexLine":"90","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_11","codexTool":"/usr/bin/zsh -lc \"sed -n '1,120p' /home/jbb/dev/EditorBP/decision-os/.decision-os/cards/skills/card-skill-feature-planner.md\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "sed -n '1,120p' /home/jbb/dev/EditorBP/decision-os/.decision-os/cards/skills/card-skill-feature-planner.md"`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783503301885-0800fad0-line-91","timestamp":"2026-07-08T09:39:28.430Z","status":"completed","codexRunId":"codex-skill-1783503301885-0800fad0","codexLine":"91","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_11","codexTool":"/usr/bin/zsh -lc \"sed -n '1,120p' /home/jbb/dev/EditorBP/decision-os/.decision-os/cards/skills/card-skill-feature-planner.md\"","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc "sed -n '1,120p' /home/jbb/dev/EditorBP/decision-os/.decision-os/cards/skills/card-skill-feature-planner.md"`
+Status: completed
+Exit code: 0
+
+`````text
+## A. Why Kept
+
+1. **Best single-feature implementation planner.** `feature/planner` produces the implementation plan for one feature issue.
+2. **Output.** It creates `Spec`, `Codebase Impact Intent`, `Dependency Blockers`, and `Ideal Control-flow DAG`.
+3. **Use.** Use it after `feature/analyzer` when the needed output is a feature-level implementation DAG.
+
+---
+
+## B. Boundary
+
+1. **No child issues.** It does not create child issues.
+2. **One feature.** It is for one feature issue, not a whole product or epic pipeline.
+3. **Implementation handoff.** Its output should feed implementation, audit, and verification steps in the feature pipeline.
+
+---
+
+## C. Skill Content
+
+1. **Full extracted skill from `/home/jbb/dev/DroidFleet/factory/prompts/feature/planner.md`.**
+
+````markdown
+Your role is to execute feature end-to-end, production grade, following exactly the intent of the ticket body provided below.
+
+## A. Supreme User Intent
+
+{{TICKET_BODY}}
+
+---
+
+## B. Required Workflow
+
+1. Create a working document in a gitignored location before starting analysis.
+2. Perform a static analysis of the codebase to identify deltas between the ticket body **supreme** intent and the current codebase, and because the working document already exists, run the analysis incrementally and update that document immediately whenever you find a micro-scope delta; follow this instruction verbatim.
+
+---
+
+## C. Output Note Format
+
+Post exactly one note:
+
+```markdown
+## Implementation Plan
+
+### Spec
+- Spec A: ...
+  - Spec A1: ...
+- Spec B: ...
+
+### Codebase Impact Intent
+| File/Module | Action (create/modify/delete) | Intent |
+|---|---|---|
+| `path/to/file` | modify | ... |
+
+### Dependency Blockers
+- None
+or
+- <blocker> -> <resolution path>
+
+### Ideal Control-flow DAG
+[Node A] ---> [Node B]
+```
+
+---
+
+## D. Hard Rules
+
+1) Build the `Spec` section strictly from `Supreme Operator Intent`.
+2) Do not modify issue labels in this stage, do not create new issues, only create a new note.
+3) If obvious critical requirements are missing, add them only when needed to improve production-grade alignment with that intent.
+4) Never remove, weaken, or alter `Supreme User Intent`.
+
+---
+
+## Tools
+
+- `mcp__git-mcp__create_issue_note`
+````
+`````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783503301885-0800fad0-line-92","timestamp":"2026-07-08T09:39:28.430Z","status":"in_progress","codexRunId":"codex-skill-1783503301885-0800fad0","codexLine":"92","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_12","codexTool":"/usr/bin/zsh -lc 'tail -60 /home/jbb/dev/EditorBP/decision-os/.decision-os/threads/skills/thread-card-skill-feature-planner.md'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'tail -60 /home/jbb/dev/EditorBP/decision-os/.decision-os/threads/skills/thread-card-skill-feature-planner.md'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783503301885-0800fad0-line-93","timestamp":"2026-07-08T09:39:28.430Z","status":"completed","codexRunId":"codex-skill-1783503301885-0800fad0","codexLine":"93","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_12","codexTool":"/usr/bin/zsh -lc 'tail -60 /home/jbb/dev/EditorBP/decision-os/.decision-os/threads/skills/thread-card-skill-feature-planner.md'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'tail -60 /home/jbb/dev/EditorBP/decision-os/.decision-os/threads/skills/thread-card-skill-feature-planner.md'`
+Status: completed
+Exit code: 0
+
+`````text
+Exit code: 0
+
+````text
+## A. Why Kept
+
+1. **Best single-feature implementation planner.** `feature/planner` produces the implementation plan for one feature issue.
+2. **Output.** It creates `Spec`, `Codebase Impact Intent`, `Dependency Blockers`, and `Ideal Control-flow DAG`.
+3. **Use.** Use it after `feature/analyzer` when the needed output is a feature-level implementation DAG.
+
+---
+
+## B. Boundary
+
+1. **No child issues.** It does not create child issues.
+2. **One feature.** It is for one feature issue, not a whole product or epic pipeline.
+3. **Implementation handoff.** Its output should feed implementation, audit, and verification steps in the feature pipeline.
+
+---
+
+## C. Skill Content
+
+1. **Source prompt.** The authoritative planner prompt is `/home/jbb/dev/DroidFleet/factory/prompts/feature/planner.md`.
+2. **Role.** `feature/planner` executes feature planning end to end, production grade, following exactly the intent of the provided ticket body.
+3. **Input.** The prompt injects the ticket body as `{{TICKET_BODY}}` under `## A. Supreme User Intent`.
+4. **Working document.** Before analysis, create a working document in a gitignored location.
+5. **Static analysis.** Identify deltas between the ticket body's **supreme** intent and the current codebase; because the working document already exists, update it immediately whenever a micro-scope delta is found.
+6. **Output note.** Post exactly one GitLab issue note with `## Implementation Plan`, then `### Spec`, `### Codebase Impact Intent`, `### Dependency Blockers`, and `### Ideal Control-flow DAG`.
+7. **Spec rule.** Build the `Spec` section strictly from `Supreme Operator Intent`.
+8. **Stage boundary.** Do not modify issue labels in this stage, do not create new issues, and only create a new note.
+9. **Critical requirement rule.** Add obvious critical requirements only when needed to improve production-grade alignment with the supreme intent.
+10. **Intent preservation.** Never remove, weaken, or alter `Supreme User Intent`.
+11. **Tool.** Use `mcp__git-mcp__create_issue_note` to post the planner note.
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783503301885-0800fad0-line-78","timestamp":"2026-07-08T09:38:27.956Z","status":"in_progress","codexRunId":"codex-skill-1783503301885-0800fad0","codexLine":"78","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_4","codexTool":"/usr/bin/zsh -lc \"sed -n '1,120p' /home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.md 2>/dev/null || true\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "sed -n '1,120p' /home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.md 2>/dev/null || true"`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783503301885-0800fad0-line-79","timestamp":"2026-07-08T09:38:27.956Z","status":"completed","codexRunId":"codex-skill-1783503301885-0800fad0","codexLine":"79","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_4","codexTool":"/usr/bin/zsh -lc \"sed -n '1,120p' /home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.md 2>/dev/null || true\"","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc "sed -n '1,120p' /home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.md 2>/dev/null || true"`
+Status: completed
+Exit code: 0
+
+````text
+# Thread Codex Run
+
+Status: completed
+Source card: Skill Card / feature-planner
+Source thread: thread-card-skill-feature-planner
+Codex run: codex-skill-1783503301885-0800fad0
+
+Summary: Added `## C. Skill Content` to `.decision-os/cards/skills/card-skill-feature-planner.md` from `/home/jbb/dev/DroidFleet/factory/prompts/feature/planner.md`, then appended the scoped agent reply to `thread-card-skill-feature-planner`.
+---
+
+Codex run cancelled: terminated by operator
+````
+`````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783503301885-0800fad0-line-94","timestamp":"2026-07-08T09:39:28.430Z","status":"in_progress","codexRunId":"codex-skill-1783503301885-0800fad0","codexLine":"94","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_13","codexTool":"/usr/bin/zsh -lc \"sed -n '1,40p' /home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.md\""} -->
+
+**Tool call** `/usr/bin/zsh -lc "sed -n '1,40p' /home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.md"`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783503301885-0800fad0-line-95","timestamp":"2026-07-08T09:39:28.430Z","status":"completed","codexRunId":"codex-skill-1783503301885-0800fad0","codexLine":"95","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_13","codexTool":"/usr/bin/zsh -lc \"sed -n '1,40p' /home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.md\"","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc "sed -n '1,40p' /home/jbb/dev/EditorBP/decision-os/.decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.md"`
+Status: completed
+Exit code: 0
+
+````text
+# Thread Codex Run
+
+Status: completed
+Source card: Skill Card / feature-planner
+Source thread: thread-card-skill-feature-planner
+Codex run: codex-skill-1783503301885-0800fad0
+
+Summary: Replaced `## C. Skill Content` in `.decision-os/cards/skills/card-skill-feature-planner.md` with the full extracted `feature/planner` prompt from `/home/jbb/dev/DroidFleet/factory/prompts/feature/planner.md`, then appended the scoped agent reply to `thread-card-skill-feature-planner`.
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783503301885-0800fad0-line-96","timestamp":"2026-07-08T09:39:28.430Z","status":"Codex message","codexRunId":"codex-skill-1783503301885-0800fad0","codexLine":"96","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_14"} -->
+
+The readback confirms section C now shows the full extracted skill prompt, including the nested `Implementation Plan` template. I’m making the focused commit now, limited to this card/thread/run treatment.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783503301885-0800fad0-line-97","timestamp":"2026-07-08T09:39:28.430Z","status":"in_progress","codexRunId":"codex-skill-1783503301885-0800fad0","codexLine":"97","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_15","codexTool":"/usr/bin/zsh -lc 'git add .decision-os/cards/skills/card-skill-feature-planner.md .decision-os/threads/skills/thread-card-skill-feature-planner.md .decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.md .decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.jsonl .decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.log && git commit -m \"Add full feature planner skill content\"'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git add .decision-os/cards/skills/card-skill-feature-planner.md .decision-os/threads/skills/thread-card-skill-feature-planner.md .decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.md .decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.jsonl .decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.log && git commit -m "Add full feature planner skill content"'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783503301885-0800fad0-line-98","timestamp":"2026-07-08T09:39:28.430Z","status":"completed","codexRunId":"codex-skill-1783503301885-0800fad0","codexLine":"98","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_15","codexTool":"/usr/bin/zsh -lc 'git add .decision-os/cards/skills/card-skill-feature-planner.md .decision-os/threads/skills/thread-card-skill-feature-planner.md .decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.md .decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.jsonl .decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.log && git commit -m \"Add full feature planner skill content\"'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git add .decision-os/cards/skills/card-skill-feature-planner.md .decision-os/threads/skills/thread-card-skill-feature-planner.md .decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.md .decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.jsonl .decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.log && git commit -m "Add full feature planner skill content"'`
+Status: completed
+Exit code: 0
+
+````text
+[main bb76055] Add full feature planner skill content
+ 5 files changed, 4577 insertions(+)
+ create mode 100644 .decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.jsonl
+ create mode 100644 .decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.log
+ create mode 100644 .decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.md
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783503301885-0800fad0-line-99","timestamp":"2026-07-08T09:39:28.430Z","status":"Codex message","codexRunId":"codex-skill-1783503301885-0800fad0","codexLine":"99","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_16"} -->
+
+Done. I replaced section `## C. Skill Content` with the full extracted `feature/planner` prompt from `/home/jbb/dev/DroidFleet/factory/prompts/feature/planner.md`, including the nested output-note template.
+
+I appended the scoped thread reply, updated the run summary, and committed the focused change as `bb76055` (`Add full feature planner skill content`).
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783503301885-0800fad0-line-100","timestamp":"2026-07-08T09:39:28.430Z","status":"complete","codexRunId":"codex-skill-1783503301885-0800fad0","codexLine":"100","codexKind":"run_status","codexEventType":"turn.completed"} -->
+
+Codex turn completed.

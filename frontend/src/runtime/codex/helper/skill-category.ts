@@ -70,6 +70,7 @@ const categoryBySkillName: Record<string, SkillCategory> = {
   'hooked-model': 'Product',
   'human-context-synthesis': 'Research',
   imagegen: 'Artifacts',
+  'implementation-commit': 'Implementation',
   'implementation-orchestrator': 'Implementation',
   improveticket: 'Writing',
   'interaction-physics': 'Interface',
