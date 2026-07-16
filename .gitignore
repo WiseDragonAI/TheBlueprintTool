@@ -4,6 +4,8 @@ tmp/
 .decision-os/voice-uploads/
 .decision-os/.settings.json
 .decision-os/runtime/
+**/.decision-os/codex-process-queue.json
+**/.decision-os/migrations/
 .decision-os/**/*.png
 .decision-os/**/*.jpg
 .decision-os/**/*.jpeg
