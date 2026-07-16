@@ -28,6 +28,18 @@ Fais-moi un rapport sur l'état de ce qui n'est pas commis dans le repository. N
 3. **Full report:** recorded in the master card `card-426d69c8-8c1b-482d-94dc-7653cabdd7ed`. No repository content was staged, committed, deleted, restored, or cleaned during this audit.
 
 # OPERATOR
-<!-- decision-os:note {"id":"note-1784184378748-a962f56fe12d2","timestamp":"2026-07-16T06:46:19.072Z","voiceFileRef":"/data/data/com.termux/files/home/decision-os/.decision-os/voice-uploads/voice-1784184379039-f161c87d-d87f-4cd9-a758-c51ce70f5793.wav","status":"transcribed","transcriptionStartedAt":"2026-07-16T06:46:19.082Z","uploadReceivedAt":"2026-07-16T06:46:19.038Z","audioPersistedAt":"2026-07-16T06:46:19.061Z","acceptedAt":"2026-07-16T06:46:19.062Z","providerStartedAt":"2026-07-16T06:46:19.082Z","providerSettledAt":"2026-07-16T06:46:24.438Z","completedAt":"2026-07-16T06:46:24.457Z","revision":4} -->
+<!-- decision-os:note {"id":"note-1784184378748-a962f56fe12d2","timestamp":"2026-07-16T06:46:19.072Z","voiceFileRef":"/data/data/com.termux/files/home/decision-os/.decision-os/voice-uploads/voice-1784184379039-f161c87d-d87f-4cd9-a758-c51ce70f5793.wav","status":"transcribed","transcriptionStartedAt":"2026-07-16T06:46:19.082Z"} -->
 
 Alors effectivement, il y a du gitignore à faire. Effectivement, au niveau de la doc, donc ça veut dire les cards, les ledgers, les threads, il y a une analyse à faire pour pouvoir grouper et faire des commits qui ont du sens. Et d'ailleurs, il faudra les relier à leur commit d'implémentation, parce que c'est probablement des documents qui ont été créés avant qu'on mette le système de complete card, puisque ce système, tu vas vérifier, mais il est censé gérer les commits de documentation aussi. Donc les gitignore, analyser les commits pour avoir des beaux commits de documentation. Et il faut aussi analyser les worktrie, parce que normalement, les worktrie sont censés être fermés après l'implémentation. Donc si on a dix worktrie qui ne sont pas fermés, ça veut dire que soit l'implémentation n'est pas terminée, soit l'agent n'a pas fermé le worktrie. Donc dans tous les deux cas, il faut absolument vérifier ce que c'est, parce que idéalement, on doit arriver à zéro worktrie une fois qu'on a fini notre travail.
+
+# AGENT
+<!-- decision-os:note {"id":"note-agent-1784185071619-963a08d1","timestamp":"2026-07-16T06:57:51.619Z"} -->
+
+## A. Outcome
+
+1. **Repository hygiene:** no product code is uncommitted. Durable Decision OS records are committed, and verified local-only runtime state is ignored.
+2. **Documentation history:** the root reconciliation is commit `61894ad`; the nested Search settings are isolated in `669feef`. The backfilled records retain direct references to `197` implementation commits.
+3. **Ignore rules:** commits `511a173` and `32d76ba` cover runtime launchers/plans/locks, temporary skill staging, the live process queue, and migration markers.
+4. **Worktrees:** Git has one primary checkout, zero auxiliary worktrees, zero stale registrations, zero worktree directories, and only the `main` local branch.
+5. **Completion-system finding:** `master-task-complete` does commit documentation, but only the ledger, master card, subtask cards, and master thread. Standalone cards, child threads, global projections, and pipeline stores explain the remaining backlog.
+6. **Full evidence:** recorded in the master card.
