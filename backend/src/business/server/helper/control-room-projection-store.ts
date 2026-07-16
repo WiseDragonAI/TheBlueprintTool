@@ -17,7 +17,7 @@ type Projection = AnyRecord & { schemaVersion: number; projectorVersion: string;
 type ProjectSlice = { projectId: string; project: AnyRecord; tasks: AnyRecord[]; dependencies: Dependency[]; fingerprint: string };
 
 const schemaVersion = 4;
-const projectorVersion = 'control-room-v4-json-master-tasks';
+const projectorVersion = 'control-room-v5-json-master-context';
 
 function records(value: unknown): AnyRecord[] {
   return Array.isArray(value) ? value.filter((entry): entry is AnyRecord => Boolean(entry && typeof entry === 'object')) : [];
