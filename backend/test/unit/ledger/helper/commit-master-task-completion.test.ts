@@ -10,7 +10,7 @@ function git(root: string, args: string[]): string {
   return execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim();
 }
 
-function fixture(): { workspace: string; decisionOsRoot: string; ledgerPath: string; ledger: Record<string, unknown> & { cards: Array<Record<string, unknown>>; threadFiles: Record<string, string> } } {
+function fixture(): { workspace: string; decisionOsRoot: string; ledgerPath: string; ledger: Record<string, unknown> & { cards: Array<Record<string, unknown>>; relationships: Array<Record<string, unknown>>; threadFiles: Record<string, string> } } {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-completion-commit-'));
   const decisionOsRoot = join(workspace, '.decision-os');
   mkdirSync(join(decisionOsRoot, 'cards', 'specs'), { recursive: true });
@@ -22,6 +22,7 @@ function fixture(): { workspace: string; decisionOsRoot: string; ledgerPath: str
       { id: 'master-a', title: 'Ship completion', status: 'todo', domainId: 'specs', comment: { contentFile: '.decision-os/cards/specs/master-a.md' } },
       { id: 'subtask-a', title: 'Child', status: 'todo', domainId: 'specs', comment: { contentFile: '.decision-os/cards/specs/subtask-a.md' } },
     ],
+    relationships: [{ id: 'rel-a', from: 'master-a', to: 'subtask-a', label: 'subtask' }],
     threadFiles: { 'thread-master-a': '.decision-os/threads/specs/thread-master-a.md' },
   };
   writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
@@ -62,7 +63,7 @@ test('commits only the completed ledger, canonical cards, and master thread', (t
       '.decision-os/threads/specs/thread-master-a.md',
     ],
   );
-  assert.match(readFileSync(join(context.decisionOsRoot, 'cards', 'specs', 'master-a.md'), 'utf8'), /^#master-task #task-complete$/m);
+  assert.doesNotMatch(readFileSync(join(context.decisionOsRoot, 'cards', 'specs', 'master-a.md'), 'utf8'), /#master-task|#task-complete|— Status:/);
   assert.deepEqual(context.ledger.cards.map((card) => card.status), ['done', 'done']);
   assert.deepEqual(git(context.workspace, ['status', '--short']).split('\n').sort(), [' M unrelated.txt', 'M  staged.txt']);
   assert.equal(git(context.workspace, ['check-ignore', '.decision-os/ui-mockups/ignored.png']), '.decision-os/ui-mockups/ignored.png');

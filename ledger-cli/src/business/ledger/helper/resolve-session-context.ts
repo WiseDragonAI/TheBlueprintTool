@@ -28,6 +28,7 @@ function compactCard(entry: { metadata: JsonObject; contentFile: string; absolut
       status: text(entry.metadata.status),
       domainId: text(entry.metadata.domainId),
       cardType: text(entry.metadata.cardType),
+      labels: Array.isArray(entry.metadata.labels) ? entry.metadata.labels.map(String) : [],
     },
     contentFile: entry.contentFile,
     run: {
@@ -125,7 +126,17 @@ export async function resolveSessionContext(input: { ledger: unknown; ledgerJson
           subtasks: [{ title: 'string', sections: [{ title: 'string', markdown: 'string' }] }],
         },
         preserved: ['lifecycleHeader', 'timestamps', 'geometry'],
-        generated: ['cardIds', 'relationshipIds', 'subtaskLinks'],
+        generated: ['cardIds', 'relationshipIds', 'canonicalTaskLabels', 'subtaskLinks'],
+      },
+      masterTaskProgress: {
+        command: 'ledger-cli master-task-progress --ledger "$DECISION_OS_LEDGER_FILE" --plan-stdin --json',
+        input: {
+          masterCardId: input.cardId,
+          updates: [{ cardId: 'card-id', sections: [{ title: 'string', markdown: 'string' }], labels: ['string'] }],
+          verifiedSubtaskIds: ['card-id'],
+          reply: 'agent markdown',
+        },
+        generated: ['canonicalTaskLabels', 'verifiedStatuses', 'threadNote', 'gate'],
       },
     },
   }, null, 2) };
@@ -135,7 +146,12 @@ export async function resolveMasterTaskGate(input: { ledger: unknown; ledgerJson
   const context = await resolveSessionContext({ ...input, includeDocuments: true });
   if (!context.ok) return context;
   const value = JSON.parse(context.value) as JsonObject;
-  const linkedCards = Array.isArray(value.linkedCards) ? value.linkedCards.filter(record) : [];
+  const allLinkedCards = Array.isArray(value.linkedCards) ? value.linkedCards.filter(record) : [];
+  const relationships = Array.isArray(value.relationships) ? value.relationships.filter(record) : [];
+  const canonicalIds = new Set(relationships
+    .filter((relationship) => text(relationship.from) === input.cardId && text(relationship.label) === 'subtask')
+    .map((relationship) => text(relationship.to)));
+  const linkedCards = allLinkedCards.filter((linked) => canonicalIds.has(text(record(linked.metadata) ? linked.metadata.id : '')));
   const validation = record(value.validation) ? value.validation : {};
   const discrepancies: string[] = [];
   if (Array.isArray(validation.errors) && validation.errors.length > 0) discrepancies.push('invalid_master_task');
@@ -147,16 +163,5 @@ export async function resolveMasterTaskGate(input: { ledger: unknown; ledgerJson
   const threadMarkdown = text(thread.markdown);
   const invalidRoles = threadMarkdown.split('\n').filter((line) => /^#\s+/.test(line) && !/^#\s+(?:OPERATOR|AGENT)\s*$/i.test(line));
   if (invalidRoles.length > 0) discrepancies.push('invalid_thread_role');
-  const card = record(value.card) ? value.card : {};
-  const masterMarkdown = text(card.markdown);
-  const staleProjections: string[] = [];
-  for (const linked of linkedCards) {
-    const metadata = record(linked.metadata) ? linked.metadata : {};
-    const cardId = text(metadata.id);
-    const projection = masterMarkdown.match(new RegExp(`\\(card:${cardId.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\)[^\\n]*Status:\\s*([^\\n]+)`, 'i'))?.[1]?.trim().toLowerCase();
-    const expected = text(metadata.status) === 'done' ? 'complete' : 'pending';
-    if (projection && projection !== expected) staleProjections.push(cardId);
-  }
-  if (staleProjections.length > 0) discrepancies.push(...staleProjections.map((id) => `stale_subtask_projection:${id}`));
-  return { ok: true, value: JSON.stringify({ version: 1, ready: discrepancies.length === 0, discrepancies, threadRolesValid: invalidRoles.length === 0, staleProjections, context: value }, null, 2) };
+  return { ok: true, value: JSON.stringify({ version: 2, ready: discrepancies.length === 0, discrepancies, threadRolesValid: invalidRoles.length === 0, context: value }, null, 2) };
 }

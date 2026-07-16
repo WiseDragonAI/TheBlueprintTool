@@ -142,27 +142,38 @@ export function applyLedgerMutation(input: {
       mutationError = { statusCode: 404, body: { ok: false, error: 'Master task not found.' } };
     } else {
       const markdown = readCardDescription({ decisionOsRoot, card: masterTask });
-      const subtaskLine = /^(\s*\d+[.)]\s+\[[^\]]+\]\(card:([^)]+)\))(?:\s+[—-]\s+Status:\s*.*?)?\s*$/gim;
-      const subtaskIds = Array.from(markdown.matchAll(subtaskLine), (match) => match[2].trim());
+      const taskLabels = (card: Record<string, unknown>): string[] => Array.isArray(card.labels) ? card.labels.map(String) : [];
+      const hasTaskLabel = (card: Record<string, unknown>): boolean => taskLabels(card).some((label) => label === 'master-task' || label === 'subtask');
+      const subtaskIds = (ledger.relationships ?? [])
+        .filter((relationship) => String(relationship.from ?? '') === masterTaskId && String(relationship.label ?? '') === 'subtask')
+        .map((relationship) => String(relationship.to ?? ''));
       const linkedSubtasks = subtaskIds.map((id) => (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === id));
-      if (!/^\s*(?:#[a-z][a-z0-9-]*\s*)*#master-task\b/im.test(markdown)) {
+      const legacyMaster = /^\s*(?:#[a-z][a-z0-9-]*\s*)*#master-task\b/im.test(markdown);
+      if (taskLabels(masterTask).includes('subtask') || (!taskLabels(masterTask).includes('master-task') && (hasTaskLabel(masterTask) || !legacyMaster))) {
         mutationError = { statusCode: 400, body: { ok: false, error: 'The requested card is not a canonical master task.' } };
       } else if (linkedSubtasks.some((card) => !card)) {
-        mutationError = { statusCode: 400, body: { ok: false, error: 'Every canonical subtask link must resolve to a ledger card.' } };
+        mutationError = { statusCode: 400, body: { ok: false, error: 'Every canonical subtask relationship must resolve to a ledger card.' } };
+      } else if (linkedSubtasks.some((card) => card && hasTaskLabel(card) && (!taskLabels(card).includes('subtask') || taskLabels(card).includes('master-task')))) {
+        mutationError = { statusCode: 400, body: { ok: false, error: 'Every canonical subtask relationship must target a subtask-labeled card.' } };
       } else {
-        for (const subtask of linkedSubtasks) subtask!.status = 'done';
+        masterTask.labels = [...new Set(taskLabels(masterTask).filter((label) => label !== 'subtask').concat('master-task'))];
+        for (const subtask of linkedSubtasks) {
+          subtask!.labels = [...new Set(taskLabels(subtask!).filter((label) => label !== 'master-task').concat('subtask'))];
+          subtask!.status = 'done';
+        }
         masterTask.status = 'done';
         const completedAt = new Date().toISOString();
-        let completedMarkdown = markdown
-          .replace(/^(\s*(?:#[a-z][a-z0-9-]*\s*)*#master-task\b[^\n]*)$/im, (line) => `${line.replace(/\s*#task-(?:waiting|active|complete)\b/gi, '')} #task-complete`)
-          .replace(subtaskLine, '$1 — Status: complete');
+        let completedMarkdown = markdown.replace(/(\(card:[^)]+\))\s+[—-]\s+Status:\s*[^\n]+/gi, '$1');
+        completedMarkdown = completedMarkdown.split('\n').map((line) => /^\s*(?:#[a-z][a-z0-9-]*\s*)+$/i.test(line)
+          ? line.replace(/(?:^|\s+)#(?:master-task|task-(?:waiting|active|complete))\b/gi, '').replace(/\s+/g, ' ').trim()
+          : line).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
         if (/^\s*(?:\*\*)?Completed at(?:\*\*)?\s*:/im.test(completedMarkdown)) {
           completedMarkdown = completedMarkdown.replace(/^\s*(?:\*\*)?Completed at(?:\*\*)?\s*:.*$/im, `Completed at: ${completedAt}`);
         } else {
           const activeLine = /^\s*(?:\*\*)?Active since(?:\*\*)?\s*:.*$/im;
           completedMarkdown = activeLine.test(completedMarkdown)
             ? completedMarkdown.replace(activeLine, (line) => `${line}\nCompleted at: ${completedAt}`)
-            : completedMarkdown.replace(/^(\s*(?:#[a-z][a-z0-9-]*\s*)*#master-task\b[^\n]*)$/im, `$1\n\nCompleted at: ${completedAt}`);
+            : `Completed at: ${completedAt}\n\n${completedMarkdown}`;
         }
         writeCardDescriptionFile({
           decisionOsRoot,

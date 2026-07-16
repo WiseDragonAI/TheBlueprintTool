@@ -427,7 +427,8 @@ test('thread codex process route anchors the run widget on the source card and s
     assert.ok(developerArgument);
     const developerInstructions = JSON.parse(developerArgument.slice('developer_instructions='.length)) as string;
     assert.match(developerInstructions, /^Decision OS card run:/);
-    assert.match(developerInstructions, /Ledger writes use ledger-cli/);
+    assert.match(developerInstructions, /`ledger-cli` writes only/);
+    assert.match(developerInstructions, /master-task-progress --plan-stdin --json/);
     assert.doesNotMatch(developerInstructions, /session-context/);
     assert.match(developerInstructions, /--message-stdin/);
     assert.ok(developerInstructions.length < 800);

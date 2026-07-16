@@ -1,16 +1,16 @@
-const STATUS_LABELS = ['task-waiting', 'task-active', 'task-complete'];
-
 export function cardCodexRunId(card) {
   return String(card?.codexActiveRunId ?? '').trim()
     || String(card?.codexThreadRunId ?? '').trim()
     || String(card?.codexRunId ?? '').trim();
 }
 
-export function parseMasterTaskMarkdown({ cardId, title, projectId = '', projectName = '', projectColor = '', ledgerId, ledgerTitle, markdown, cardStatus = 'todo', cards = [], threadNotes = [], codexRunId = '', codexPipelineRunId = '', codexStatus = '', codexStartedAt = '', codexQueuePosition = null }) {
+export function parseMasterTaskMarkdown({ cardId, title, labels: cardLabels = [], relationships = [], projectId = '', projectName = '', projectColor = '', ledgerId, ledgerTitle, markdown, cardStatus = 'todo', cards = [], threadNotes = [], codexRunId = '', codexPipelineRunId = '', codexStatus = '', codexStartedAt = '', codexQueuePosition = null }) {
   const source = String(markdown ?? '').replace(/\r\n?/g, '\n');
+  const jsonLabels = Array.isArray(cardLabels) ? cardLabels.map(String) : [];
+  const hasJsonTaskLabel = jsonLabels.some((label) => label === 'master-task' || label === 'subtask');
   const labelLines = source.split('\n').filter((line) => /^\s*(?:#[a-z][a-z0-9-]*\s*)+$/i.test(line));
   const labels = new Set(Array.from(labelLines.join('\n').matchAll(/#([a-z][a-z0-9-]*)\b/gi), (match) => match[1].toLowerCase()));
-  const statuses = STATUS_LABELS.filter((status) => labels.has(status));
+  const masterTask = jsonLabels.includes('master-task') || (!hasJsonTaskLabel && labels.has('master-task'));
   const ledger = source.match(/^\s*(?:\*\*)?Ledger(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
   const waitingText = source.match(/^\s*(?:\*\*)?Waiting since(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
   const latestThreadTime = threadNotes.reduce((latest, note) => {
@@ -25,27 +25,28 @@ export function parseMasterTaskMarkdown({ cardId, title, projectId = '', project
   const rankText = source.match(/^\s*(?:\*\*)?Queue rank(?:\*\*)?\s*:\s*(\d+)\s*$/im)?.[1] ?? '';
   const queueRank = rankText ? Number(rankText) : null;
   const diagnostics = [];
-  if (!labels.has('master-task')) diagnostics.push('missing #master-task');
-  if (statuses.length !== 1) diagnostics.push('expected exactly one task status label');
+  if (!masterTask) diagnostics.push('missing master-task label');
+  if (jsonLabels.includes('master-task') && jsonLabels.includes('subtask')) diagnostics.push('invalid_master_label');
   if (!ledger) diagnostics.push('missing Ledger');
   if (!waitingText || !Number.isFinite(waitingTime)) diagnostics.push('invalid Waiting since');
-  if (statuses[0] === 'task-active' && (!activeText || !Number.isFinite(activeTime))) diagnostics.push('invalid Active since');
   if (queueRank !== null && (!Number.isInteger(queueRank) || queueRank < 1)) diagnostics.push('invalid Queue rank');
 
   const subtasks = [];
-  const subtaskHeading = /^##\s+(?:[A-Z]\.\s+)?Subtasks\s*$/im;
-  const sectionStart = source.search(subtaskHeading);
-  const afterHeading = sectionStart < 0 ? '' : source.slice(sectionStart).replace(subtaskHeading, '').replace(/^\n/, '');
-  const section = afterHeading.split(/^##\s+/m, 1)[0];
-  for (const line of section.split('\n')) {
-    const match = line.match(/^\s*\d+[.)]\s+\[([^\]]+)]\(card:([^)]+)\)\s+[—-]\s+Status:\s*(.+?)\s*$/i);
-    if (match) {
-      const linked = cards.find((card) => String(card.id) === match[2].trim());
-      subtasks.push({ title: match[1].trim(), cardId: match[2].trim(), status: linked?.status === 'done' ? 'complete' : 'waiting' });
-      continue;
+  if (jsonLabels.includes('master-task')) {
+    for (const relationship of relationships.filter((entry) => String(entry?.from) === String(cardId) && String(entry?.label) === 'subtask')) {
+      const linked = cards.find((card) => String(card.id) === String(relationship.to));
+      subtasks.push({ title: String(linked?.title || `Card ${relationship.to}`), cardId: String(relationship.to), status: linked?.status === 'done' ? 'complete' : 'waiting' });
+      if (!linked) diagnostics.push(`missing_subtask:${relationship.to}`);
+      else if (!Array.isArray(linked.labels) || !linked.labels.map(String).includes('subtask') || linked.labels.map(String).includes('master-task')) diagnostics.push(`invalid_subtask_label:${relationship.to}`);
     }
-    const link = line.match(/^\s*\d+[.)]\s+\[([^\]]+)]\(card:([^)]+)\)\s*$/i);
-    if (link) {
+  } else {
+    const subtaskHeading = /^##\s+(?:[A-Z]\.\s+)?Subtasks\s*$/im;
+    const sectionStart = source.search(subtaskHeading);
+    const afterHeading = sectionStart < 0 ? '' : source.slice(sectionStart).replace(subtaskHeading, '').replace(/^\n/, '');
+    const section = afterHeading.split(/^##\s+/m, 1)[0];
+    for (const line of section.split('\n')) {
+      const link = line.match(/^\s*\d+[.)]\s+\[([^\]]+)]\(card:([^)]+)\)(?:\s+[—-]\s+Status:\s*.+?)?\s*$/i);
+      if (!link) continue;
       const linked = cards.find((card) => String(card.id) === link[2].trim());
       subtasks.push({ title: link[1].trim(), cardId: link[2].trim(), status: linked?.status === 'done' ? 'complete' : 'waiting' });
     }
@@ -60,7 +61,7 @@ export function parseMasterTaskMarkdown({ cardId, title, projectId = '', project
   const displayedActiveTime = codexProcessing && Number.isFinite(currentRunStartedTime) ? currentRunStartedTime : activeTime;
   return {
     valid: diagnostics.length === 0,
-    masterTask: labels.has('master-task'),
+    masterTask,
     diagnostics,
     cardId: String(cardId),
     title: String(title || `Card ${cardId}`),

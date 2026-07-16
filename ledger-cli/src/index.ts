@@ -15,6 +15,7 @@ export { appendThreadAnswer } from './business/ledger/helper/append-thread-answe
 export { findUnansweredThreads } from './business/ledger/helper/find-unanswered-threads.js';
 export { formatUnansweredThreads } from './business/ledger/helper/format-unanswered-threads.js';
 export { formatMasterTaskValidation, validateMasterTasks } from './business/ledger/helper/validate-master-tasks.js';
+export { applyMasterTaskProgress } from './business/ledger/helper/apply-master-task-progress.js';
 export { manageAssetsController } from './business/assets/controller/manage-assets.js';
 export { manageDecisionOsMigrationController } from './business/migration/controller/manage-decision-os-migration.js';
 export { buildAssetGcReport } from './business/assets/helper/build-asset-gc-report.js';

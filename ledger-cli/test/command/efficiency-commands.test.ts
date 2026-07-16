@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { manageLedgerJsonController } from '../../src/business/ledger/controller/manage-ledger-json.js';
 import { applyMasterTaskPlan } from '../../src/business/ledger/helper/apply-master-task-plan.js';
+import { applyMasterTaskProgress } from '../../src/business/ledger/helper/apply-master-task-progress.js';
 import { auditCodexRuns } from '../../src/business/ledger/helper/audit-codex-runs.js';
 import { resolveCodexRunEvents } from '../../src/business/ledger/helper/resolve-codex-run-events.js';
 
@@ -64,14 +65,68 @@ test('master-task apply preserves lifecycle metadata, generates ids, and persist
       subtasks: [{ title: 'Child', sections: [{ title: 'Implementation Detail', markdown: '1. **Objective:** Implement it.' }] }],
     }) });
     assert.equal(result.ok, true, result.ok ? undefined : result.error);
-    const persisted = JSON.parse(readFileSync(ledger, 'utf8')) as { cards: Array<{ id: string; title: string }>; relationships: unknown[] };
+    const persisted = JSON.parse(readFileSync(ledger, 'utf8')) as { cards: Array<{ id: string; title: string; labels: string[] }>; relationships: unknown[] };
     assert.equal(persisted.cards.length, 2);
     assert.match(persisted.cards[1].id, /^card-[0-9a-f-]{36}$/);
     assert.equal(persisted.relationships.length, 1);
+    assert.deepEqual(persisted.cards.map((card) => card.labels), [['master-task'], ['subtask']]);
     const masterMarkdown = readFileSync(join(decisionOs, 'cards', 'specs', 'master.md'), 'utf8');
     assert.match(masterMarkdown, /Waiting since: 2026-01-01T00:00:00.000Z/);
     assert.match(masterMarkdown, /## A\. Decision/);
+    assert.doesNotMatch(masterMarkdown, /#master-task|#task-active|Status:/);
     assert.match(readFileSync(join(ledger, '../..', `.decision-os/cards/specs/${persisted.cards[1].id}.md`), 'utf8'), /Implement it/);
+  } finally {
+    if (previousRoot === undefined) delete process.env.DECISION_OS_LEDGER_ROOT; else process.env.DECISION_OS_LEDGER_ROOT = previousRoot;
+  }
+});
+
+test('master-task progress writes content, labels, verified status, reply, and gate atomically', () => {
+  const { decisionOs, ledger } = fixture();
+  const previousRoot = process.env.DECISION_OS_LEDGER_ROOT;
+  process.env.DECISION_OS_LEDGER_ROOT = decisionOs;
+  try {
+  const applied = applyMasterTaskPlan({ ledgerJsonFile: ledger, planJson: JSON.stringify({
+    masterCardId: 'master', title: 'Master', sections: [{ title: 'Decision', markdown: '1. **Choice:** Build it.' }],
+    subtasks: [{ title: 'Child', sections: [{ title: 'Scope', markdown: '1. **Objective:** Build it.' }] }],
+  }) });
+  assert.equal(applied.ok, true);
+  if (!applied.ok) return;
+  const childId = JSON.parse(applied.value).subtasks[0].cardId as string;
+  const progress = applyMasterTaskProgress({ ledgerJsonFile: ledger, planJson: JSON.stringify({
+    masterCardId: 'master',
+    updates: [
+      { cardId: 'master', markdown: '#master-task #task-active\n\nLedger: Specs\nWaiting since: 2026-01-01T00:00:00.000Z\n\n## A. Result\n\n1. **State:** Implemented.\n\n## B. Subtasks\n\n1. [Child](card:' + childId + ') — Status: pending' },
+      { cardId: childId, sections: [{ title: 'Result', markdown: '1. **State:** Verified.' }] },
+    ],
+    verifiedSubtaskIds: [childId],
+    reply: 'Implementation verified.',
+  }) });
+  assert.equal(progress.ok, true, progress.ok ? undefined : progress.error);
+  if (!progress.ok) return;
+  const value = JSON.parse(progress.value);
+  assert.deepEqual(value.gate, { ready: true, discrepancies: [] });
+  const persisted = JSON.parse(readFileSync(ledger, 'utf8')) as { cards: Array<{ id: string; status: string; labels: string[] }> };
+  assert.equal(persisted.cards.find((card) => card.id === 'master')?.status, 'todo');
+  assert.equal(persisted.cards.find((card) => card.id === childId)?.status, 'done');
+  assert.deepEqual(persisted.cards.find((card) => card.id === childId)?.labels, ['subtask']);
+  assert.doesNotMatch(readFileSync(join(decisionOs, 'cards', 'specs', 'master.md'), 'utf8'), /#master-task|#task-active|Status:/);
+  assert.match(readFileSync(join(decisionOs, 'threads', 'specs', 'thread-master.md'), 'utf8'), /# AGENT[\s\S]*Implementation verified\./);
+  } finally {
+    if (previousRoot === undefined) delete process.env.DECISION_OS_LEDGER_ROOT; else process.env.DECISION_OS_LEDGER_ROOT = previousRoot;
+  }
+});
+
+test('master-task progress rejects an invalid update without changing any file', () => {
+  const { decisionOs, ledger } = fixture();
+  const previousRoot = process.env.DECISION_OS_LEDGER_ROOT;
+  process.env.DECISION_OS_LEDGER_ROOT = decisionOs;
+  try {
+  const before = [ledger, join(decisionOs, 'cards', 'specs', 'master.md'), join(decisionOs, 'threads', 'specs', 'thread-master.md')].map((file) => readFileSync(file, 'utf8'));
+  const result = applyMasterTaskProgress({ ledgerJsonFile: ledger, planJson: JSON.stringify({
+    masterCardId: 'master', updates: [{ cardId: 'outside', markdown: 'Changed.' }], verifiedSubtaskIds: [], reply: 'Reply.',
+  }) });
+  assert.equal(result.ok, false);
+  assert.deepEqual([ledger, join(decisionOs, 'cards', 'specs', 'master.md'), join(decisionOs, 'threads', 'specs', 'thread-master.md')].map((file) => readFileSync(file, 'utf8')), before);
   } finally {
     if (previousRoot === undefined) delete process.env.DECISION_OS_LEDGER_ROOT; else process.env.DECISION_OS_LEDGER_ROOT = previousRoot;
   }

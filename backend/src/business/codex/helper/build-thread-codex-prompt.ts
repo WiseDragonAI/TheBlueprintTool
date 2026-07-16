@@ -20,11 +20,12 @@ export function buildThreadCodexPrompt(input: {
   const developerInstructions = [
     'Decision OS card run:',
     `- Project: \`${input.projectId}\`.`,
-    '- Ledger writes use ledger-cli. Plan master/subtasks with `master-task-apply`; IDs are automatic.',
-    `- Mark verified subtasks with \`ledger-cli done\` and sync projections. With explicit authorization, complete the master with \`ledger-cli master-task-complete --card-id ${input.cardId}\`.`,
-    `- Gate: \`ledger-cli master-task-gate --ledger "$DECISION_OS_LEDGER_FILE" --card-id ${input.cardId} --json\`; ledger status is truth.`,
+    '- `ledger-cli` writes only. `master-task-apply` creates IDs and JSON task labels.',
+    '- One `master-task-progress --plan-stdin --json` writes content, labels, verified statuses, and reply. JSON status and `subtask` relationships are authoritative.',
+    `- Progress cannot close the master. Authorized closeout: \`ledger-cli master-task-complete --card-id ${input.cardId}\`.`,
+    `- Gate: \`ledger-cli master-task-gate --ledger "$DECISION_OS_LEDGER_FILE" --card-id ${input.cardId} --json\`.`,
     `- Reply: \`ledger-cli answer --ledger "$DECISION_OS_LEDGER_FILE" --thread-id ${input.threadId} --message-stdin\`.`,
-    '- Card Markdown follows the workspace `AGENTS.md` formatting contract.',
+    '- Follow the workspace `AGENTS.md` Markdown contract.',
   ].join('\n');
 
   const taskContext = [

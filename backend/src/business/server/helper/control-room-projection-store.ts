@@ -16,8 +16,8 @@ type Dependency = { path: string; size: number; mtimeMs: number; sha256: string 
 type Projection = AnyRecord & { schemaVersion: number; projectorVersion: string; revision: number; generatedAt: string; fingerprint: string };
 type ProjectSlice = { projectId: string; project: AnyRecord; tasks: AnyRecord[]; dependencies: Dependency[]; fingerprint: string };
 
-const schemaVersion = 3;
-const projectorVersion = 'control-room-v3-project-slices';
+const schemaVersion = 4;
+const projectorVersion = 'control-room-v4-json-master-tasks';
 
 function records(value: unknown): AnyRecord[] {
   return Array.isArray(value) ? value.filter((entry): entry is AnyRecord => Boolean(entry && typeof entry === 'object')) : [];
@@ -77,10 +77,11 @@ function runtimeStatus(input: { card: AnyRecord; runtime: AnyRecord; pipelineRun
 
 function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsProject['ledgers'][number]; ledger: AnyRecord; card: AnyRecord; runtime: AnyRecord; pipelineRuns: AnyRecord[]; queuedRuns: AnyRecord[] }): AnyRecord | null {
   const markdown = readCardDescription({ decisionOsRoot: input.project.decisionOsRoot, card: input.card }).replace(/\r\n?/g, '\n');
+  const jsonLabels = Array.isArray(input.card.labels) ? input.card.labels.map(String) : [];
+  const hasJsonTaskLabel = jsonLabels.some((label) => label === 'master-task' || label === 'subtask');
   const labelLines = markdown.split('\n').filter((line) => /^\s*(?:#[a-z][a-z0-9-]*\s*)+$/i.test(line));
-  const labels = new Set(Array.from(labelLines.join('\n').matchAll(/#([a-z][a-z0-9-]*)\b/gi), (match) => match[1].toLowerCase()));
-  if (!labels.has('master-task')) return null;
-  const sourceStatuses = ['task-waiting', 'task-active', 'task-complete'].filter((status) => labels.has(status));
+  const legacyLabels = new Set(Array.from(labelLines.join('\n').matchAll(/#([a-z][a-z0-9-]*)\b/gi), (match) => match[1].toLowerCase()));
+  if (!jsonLabels.includes('master-task') && (hasJsonTaskLabel || !legacyLabels.has('master-task'))) return null;
   const ledgerName = markdown.match(/^\s*(?:\*\*)?Ledger(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
   const waitingText = markdown.match(/^\s*(?:\*\*)?Waiting since(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
   const activeText = markdown.match(/^\s*(?:\*\*)?Active since(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
@@ -99,19 +100,24 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   const status = cardStatus === 'backlog' ? 'task-backlog' : cardStatus === 'done' ? 'task-complete' : processing || queued ? 'task-active' : 'task-waiting';
   const cards = records(input.ledger.cards);
   const subtasks: AnyRecord[] = [];
-  const sectionMatch = markdown.match(/^##\s+(?:[A-Z]\.\s+)?Subtasks\s*$([\s\S]*?)(?=^##\s+|\s*$)/im);
-  for (const line of text(sectionMatch?.[1]).split('\n')) {
-    const match = line.match(/^\s*\d+[.)]\s+\[([^\]]+)]\(card:([^)]+)\)(?:\s+[—-]\s+Status:\s*(.+?))?\s*$/i);
-    if (!match) continue;
-    const linked = cards.find((card) => text(card.id) === match[2].trim());
-    subtasks.push({ title: match[1].trim(), cardId: match[2].trim(), status: linked?.status === 'done' ? 'complete' : 'waiting', zoneId: linked ? zoneIdFor(linked, input.ledger) : 'ungrouped' });
+  const relationships = records(input.ledger.relationships).filter((relationship) => text(relationship.from) === text(input.card.id) && text(relationship.label) === 'subtask');
+  for (const relationship of relationships) {
+    const cardId = text(relationship.to);
+    const linked = cards.find((card) => text(card.id) === cardId);
+    subtasks.push({ title: text(linked?.title) || `Card ${cardId}`, cardId, status: linked?.status === 'done' ? 'complete' : 'waiting', zoneId: linked ? zoneIdFor(linked, input.ledger) : 'ungrouped' });
   }
   const diagnostics: string[] = [];
-  if (sourceStatuses.length !== 1) diagnostics.push('expected exactly one task status label');
+  if (jsonLabels.includes('master-task') && jsonLabels.includes('subtask')) diagnostics.push('invalid_master_label');
   if (!ledgerName) diagnostics.push('missing Ledger');
   if (!waitingText || !Number.isFinite(waitingTime)) diagnostics.push('invalid Waiting since');
-  if (sourceStatuses[0] === 'task-active' && (!activeText || !Number.isFinite(Date.parse(activeText)))) diagnostics.push('invalid Active since');
   if (rank !== null && (!Number.isInteger(rank) || rank < 1)) diagnostics.push('invalid Queue rank');
+  if (jsonLabels.includes('master-task')) {
+    for (const relationship of relationships) {
+      const child = cards.find((card) => text(card.id) === text(relationship.to));
+      if (!child) diagnostics.push(`missing_subtask:${text(relationship.to)}`);
+      else if (!Array.isArray(child.labels) || !child.labels.map(String).includes('subtask') || child.labels.map(String).includes('master-task')) diagnostics.push(`invalid_subtask_label:${text(relationship.to)}`);
+    }
+  }
   const complete = subtasks.filter((subtask) => subtask.status === 'complete').length;
   return {
     valid: diagnostics.length === 0, masterTask: true, diagnostics,

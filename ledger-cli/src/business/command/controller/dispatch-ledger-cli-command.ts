@@ -10,6 +10,7 @@ import { manageLedgerJsonController } from '../../ledger/controller/manage-ledge
 import { manageAssetsController } from '../../assets/controller/manage-assets.js';
 import { manageDecisionOsMigrationController } from '../../migration/controller/manage-decision-os-migration.js';
 import { applyMasterTaskPlan } from '../../ledger/helper/apply-master-task-plan.js';
+import { applyMasterTaskProgress } from '../../ledger/helper/apply-master-task-progress.js';
 import { auditCodexRuns } from '../../ledger/helper/audit-codex-runs.js';
 import { resolveCodexRunEvents } from '../../ledger/helper/resolve-codex-run-events.js';
 import { completeMasterTask } from '../../ledger/helper/complete-master-task.js';
@@ -64,6 +65,15 @@ export async function dispatchLedgerCliCommandController(
     let planJson = '';
     for await (const chunk of process.stdin) planJson += String(chunk);
     const result = applyMasterTaskPlan({ ledgerJsonFile: command.ledgerJsonFile, planJson });
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+
+  if (command.mode === 'master-task-progress') {
+    if (!command.masterTaskOperation?.planStdin) return { ok: false, error: 'master-task-progress requires --plan-stdin.' };
+    let planJson = '';
+    for await (const chunk of process.stdin) planJson += String(chunk);
+    const result = applyMasterTaskProgress({ ledgerJsonFile: command.ledgerJsonFile, planJson });
     if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
     return result;
   }
