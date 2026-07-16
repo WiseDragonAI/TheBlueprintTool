@@ -2,6 +2,8 @@ tmp/
 /node_modules/
 .decision-os/runs/
 .decision-os/voice-uploads/
+.decision-os/cache/
+.decision-os/memories.sqlite3
 .decision-os/.settings.json
 .decision-os/runtime/
 **/.decision-os/codex-process-queue.json

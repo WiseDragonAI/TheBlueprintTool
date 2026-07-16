@@ -20,6 +20,7 @@ test('skillCategories exposes the compact modal taxonomy', () => {
 test('categoryForSkill maps known skills and leaves custom skills explicit', () => {
   assert.equal(categoryForSkill('over-engineering-analysis'), 'Architecture');
   assert.equal(categoryForSkill('frontend-design'), 'Implementation');
+  assert.equal(categoryForSkill('implementation-commit'), 'Implementation');
   assert.equal(categoryForSkill('implementation-orchestrator'), 'Implementation');
   assert.equal(categoryForSkill('task-list'), 'Implementation');
   assert.equal(categoryForSkill('task-dependency'), 'Implementation');
