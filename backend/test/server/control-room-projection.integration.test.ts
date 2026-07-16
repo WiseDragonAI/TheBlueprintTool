@@ -36,6 +36,7 @@ test('serves one compact multi-project Control Room projection and refreshes one
     const firstText = await firstResponse.text();
     const first = JSON.parse(firstText) as Record<string, any>;
     assert.equal(firstResponse.ok, true, firstText);
+    assert.equal(first.projectorVersion, 'control-room-v5-json-master-context');
     assert.ok(Buffer.byteLength(firstText) < 250_000);
     assert.equal(first.queue.length, 1);
     assert.equal(first.queue[0].zoneId, 'zone-a');
