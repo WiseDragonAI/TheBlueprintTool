@@ -10482,6 +10482,25 @@
       },
       "facts": [],
       "fields": []
+    },
+    {
+      "id": "card-a4c81cea-0c42-4221-9891-fe57013a4149",
+      "title": "New task intake",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 92148,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-a4c81cea-0c42-4221-9891-fe57013a4149.md"
+      },
+      "facts": [],
+      "fields": []
     }
   ],
   "relationships": [
@@ -12438,6 +12457,16 @@
       "color": "#4846bd",
       "label": "Lost Master Task Recovery",
       "comments": []
+    },
+    {
+      "id": "zone-f3bd7f62-5b75-4a71-943b-3cf5fd13ebc3",
+      "x": -10462,
+      "y": 92088,
+      "width": 1200,
+      "height": 900,
+      "color": "#fb7185",
+      "label": "New task intake",
+      "comments": []
     }
   ],
   "notes": {},
@@ -12553,7 +12582,8 @@
     "thread-card-9ee8b280-6ef1-4ac6-9543-1ddeb106ed3a": ".decision-os/threads/specs/thread-card-9ee8b280-6ef1-4ac6-9543-1ddeb106ed3a.md",
     "thread-card-b85c6294-593d-4870-8c6e-ec559386df3c": ".decision-os/threads/specs/thread-card-b85c6294-593d-4870-8c6e-ec559386df3c.md",
     "thread-card-codex-skill-1784205397104-79897826": ".decision-os/threads/specs/thread-card-codex-skill-1784205397104-79897826.md",
-    "thread-card-codex-skill-1784205406944-60080cc0": ".decision-os/threads/specs/thread-card-codex-skill-1784205406944-60080cc0.md"
+    "thread-card-codex-skill-1784205406944-60080cc0": ".decision-os/threads/specs/thread-card-codex-skill-1784205406944-60080cc0.md",
+    "thread-card-a4c81cea-0c42-4221-9891-fe57013a4149": ".decision-os/threads/specs/thread-card-a4c81cea-0c42-4221-9891-fe57013a4149.md"
   },
   "deletedNoteIds": {
     "thread-card-7074d33a-39da-42a1-b470-673cbe221def": [
