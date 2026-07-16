@@ -499,11 +499,13 @@ function renderProjects() {
     button.innerHTML = '<span class="project-card-copy"><span class="project-card-heading"><strong></strong><small></small></span><span class="project-card-description"></span><code></code></span><span class="row-arrow">›</span>';
     button.querySelector('strong').textContent = project.name;
     const badge = button.querySelector('small');
-    badge.hidden = true;
+    badge.hidden = !project.remote;
+    badge.textContent = project.online ? (project.ownerNodeLabel || project.ownerNodeId) : 'Owner offline';
     button.querySelector('.project-card-description').textContent = project.description || 'No description provided.';
-    button.querySelector('code').textContent = project.relativePath;
+    button.querySelector('code').textContent = project.remote ? `Owned by ${project.ownerNodeLabel || project.ownerNodeId}` : project.relativePath;
     button.setAttribute('aria-label', project.name);
-    button.addEventListener('click', () => navigate(projectPath(project.id)));
+    button.disabled = project.remote && !project.online;
+    if (!button.disabled) button.addEventListener('click', () => navigate(projectPath(project.id)));
     return button;
   }));
   setView('projects-view');
@@ -523,8 +525,11 @@ function renderProjectDetail(project) {
   elements['project-detail-description'].textContent = project.description || 'No description provided.';
   elements['project-detail-color'].style.setProperty('--project-color', project.color);
   elements['project-detail-color'].style.backgroundColor = project.color;
-  elements['project-detail-status'].textContent = `${project.ledgers.length} ${project.ledgers.length === 1 ? 'ledger' : 'ledgers'}`;
-  elements['project-detail-path'].textContent = project.relativePath;
+  elements['project-detail-status'].textContent = project.remote && !project.online
+    ? 'Owner offline'
+    : `${project.ledgers.length} ${project.ledgers.length === 1 ? 'ledger' : 'ledgers'}`;
+  elements['project-detail-path'].textContent = project.remote ? `Owned by ${project.ownerNodeLabel || project.ownerNodeId}` : project.relativePath;
+  document.querySelector('.project-settings-button').hidden = Boolean(project.remote);
   setView('project-detail-view');
   document.title = `${project.name} · Projects`;
 }
