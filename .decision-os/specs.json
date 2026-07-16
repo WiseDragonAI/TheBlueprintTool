@@ -8218,7 +8218,6 @@
       "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784200016497-c07a94e6.md",
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexActiveRunId": "codex-skill-1784200016497-c07a94e6",
       "labels": [
         "master-task"
       ]
@@ -9413,7 +9412,10 @@
         "contentFile": ".decision-os/cards/specs/card-bbba9c8c-a7b5-4316-9dad-697808154491.md"
       },
       "facts": [],
-      "fields": []
+      "fields": [],
+      "labels": [
+        "subtask"
+      ]
     },
     {
       "id": "card-4c37f170-35b2-49cd-9b54-b4c5cb1faa1c",
@@ -9429,7 +9431,10 @@
         "contentFile": ".decision-os/cards/specs/card-4c37f170-35b2-49cd-9b54-b4c5cb1faa1c.md"
       },
       "facts": [],
-      "fields": []
+      "fields": [],
+      "labels": [
+        "subtask"
+      ]
     },
     {
       "id": "card-7dad8c3e-9bdd-4ee4-89c4-1799151ca22d",
@@ -9445,7 +9450,10 @@
         "contentFile": ".decision-os/cards/specs/card-7dad8c3e-9bdd-4ee4-89c4-1799151ca22d.md"
       },
       "facts": [],
-      "fields": []
+      "fields": [],
+      "labels": [
+        "subtask"
+      ]
     },
     {
       "id": "card-1adba778-1e57-4160-858e-e9ebfec1999a",
@@ -10247,6 +10255,110 @@
       "labels": [
         "subtask"
       ]
+    },
+    {
+      "id": "card-9ee8b280-6ef1-4ac6-9543-1ddeb106ed3a",
+      "title": "Audit and Restore Lost Master Tasks",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 91128,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-9ee8b280-6ef1-4ac6-9543-1ddeb106ed3a.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784202900017-b1104489",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784202900017-b1104489",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784202900017-b1104489.md"
+    },
+    {
+      "id": "card-d3f5fbfb-3f68-42aa-b4f5-7267ce6ad4cb",
+      "title": "Audit completion transactions for lost task state",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "labels": [
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 91128,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-d3f5fbfb-3f68-42aa-b4f5-7267ce6ad4cb.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-13e08430-4ca8-4365-be21-285f81e906b4",
+      "title": "Restore missing master cards and relationships",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "labels": [
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 91128,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-13e08430-4ca8-4365-be21-285f81e906b4.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-b85c6294-593d-4870-8c6e-ec559386df3c",
+      "title": "Recover queued Codex runs after server restart",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 83988,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-b85c6294-593d-4870-8c6e-ec559386df3c.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784101794025-b91c2f04",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784101794025-b91c2f04.md"
+    },
+    {
+      "id": "card-06258606-7583-460b-a85e-aeac5bf4e07d",
+      "title": "New task intake",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 69708,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-06258606-7583-460b-a85e-aeac5bf4e07d.md"
+      },
+      "facts": [],
+      "fields": []
     }
   ],
   "relationships": [
@@ -11094,6 +11206,36 @@
       "id": "rel-3a7c060b-41d3-4b50-981a-1b5e6af8aa51",
       "from": "card-232dc127-2c65-4632-af7c-97003f595ce4",
       "to": "card-5bf73521-071b-437b-a68b-e89a8988d880",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-1671a1fd-1225-4985-bbcb-a11a53e7fcc3",
+      "from": "card-9ee8b280-6ef1-4ac6-9543-1ddeb106ed3a",
+      "to": "card-d3f5fbfb-3f68-42aa-b4f5-7267ce6ad4cb",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-8f5ff216-5358-4b49-98f6-589fb9a3c30c",
+      "from": "card-9ee8b280-6ef1-4ac6-9543-1ddeb106ed3a",
+      "to": "card-13e08430-4ca8-4365-be21-285f81e906b4",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-c38ddc6f-5f7f-4ae4-8ac0-19830ad0c2cd",
+      "from": "card-b85c6294-593d-4870-8c6e-ec559386df3c",
+      "to": "card-bbba9c8c-a7b5-4316-9dad-697808154491",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-acebd4be-113d-4186-bd2e-11983bee506d",
+      "from": "card-b85c6294-593d-4870-8c6e-ec559386df3c",
+      "to": "card-4c37f170-35b2-49cd-9b54-b4c5cb1faa1c",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-18e7b186-33d6-4e16-b771-a3ac45652245",
+      "from": "card-b85c6294-593d-4870-8c6e-ec559386df3c",
+      "to": "card-7dad8c3e-9bdd-4ee4-89c4-1799151ca22d",
       "label": "subtask"
     }
   ],
@@ -12133,6 +12275,16 @@
       "color": "#4846bd",
       "label": "Uncommitted repository state reconciliation",
       "comments": []
+    },
+    {
+      "id": "zone-cd8f55fd-ff89-493e-ba7f-5a281b10bbc4",
+      "x": -10462,
+      "y": 91068,
+      "width": 1200,
+      "height": 900,
+      "color": "#4846bd",
+      "label": "Lost Master Task Recovery",
+      "comments": []
     }
   ],
   "notes": {},
@@ -12244,7 +12396,10 @@
     "thread-card-codex-skill-1784106035742-137b1c2d": ".decision-os/threads/specs/thread-card-codex-skill-1784106035742-137b1c2d.md",
     "thread-card-codex-skill-1784117802727-5aaa34ec": ".decision-os/threads/specs/thread-card-codex-skill-1784117802727-5aaa34ec.md",
     "thread-card-232dc127-2c65-4632-af7c-97003f595ce4": ".decision-os/threads/specs/thread-card-232dc127-2c65-4632-af7c-97003f595ce4.md",
-    "thread-card-426d69c8-8c1b-482d-94dc-7653cabdd7ed": ".decision-os/threads/specs/thread-card-426d69c8-8c1b-482d-94dc-7653cabdd7ed.md"
+    "thread-card-426d69c8-8c1b-482d-94dc-7653cabdd7ed": ".decision-os/threads/specs/thread-card-426d69c8-8c1b-482d-94dc-7653cabdd7ed.md",
+    "thread-card-9ee8b280-6ef1-4ac6-9543-1ddeb106ed3a": ".decision-os/threads/specs/thread-card-9ee8b280-6ef1-4ac6-9543-1ddeb106ed3a.md",
+    "thread-card-b85c6294-593d-4870-8c6e-ec559386df3c": ".decision-os/threads/specs/thread-card-b85c6294-593d-4870-8c6e-ec559386df3c.md",
+    "thread-card-06258606-7583-460b-a85e-aeac5bf4e07d": ".decision-os/threads/specs/thread-card-06258606-7583-460b-a85e-aeac5bf4e07d.md"
   },
   "deletedNoteIds": {
     "thread-card-7074d33a-39da-42a1-b470-673cbe221def": [
