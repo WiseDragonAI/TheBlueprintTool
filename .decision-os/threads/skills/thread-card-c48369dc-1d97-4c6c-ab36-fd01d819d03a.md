@@ -8602,3 +8602,45 @@ I’m appending the scoped answer now: yes, there are ticket skills worth rememb
 <!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-196","timestamp":"2026-07-08T09:52:38.342Z","status":"Codex message","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"196","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_22"} -->
 
 I’m committing the scoped text update now. I’m not staging `skills.json`, geometry changes, or unrelated run artifacts.
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-197","timestamp":"2026-07-08T09:52:41.509Z","status":"in_progress","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"197","codexKind":"tool_call","codexEventType":"item.started","codexItemId":"item_23","codexTool":"/usr/bin/zsh -lc 'git add .decision-os/cards/skills/card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md .decision-os/cards/skills/card-skill-ticket-solver.md .decision-os/threads/skills/thread-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md .decision-os/runs/codex-skills/skills/codex-skill-1783500587763-e734fec7.md && git commit -m \"Document ticket skill path\"'"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git add .decision-os/cards/skills/card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md .decision-os/cards/skills/card-skill-ticket-solver.md .decision-os/threads/skills/thread-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md .decision-os/runs/codex-skills/skills/codex-skill-1783500587763-e734fec7.md && git commit -m "Document ticket skill path"'`
+Status: in_progress
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-198","timestamp":"2026-07-08T09:52:41.510Z","status":"completed","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"198","codexKind":"tool_call","codexEventType":"item.completed","codexItemId":"item_23","codexTool":"/usr/bin/zsh -lc 'git add .decision-os/cards/skills/card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md .decision-os/cards/skills/card-skill-ticket-solver.md .decision-os/threads/skills/thread-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md .decision-os/runs/codex-skills/skills/codex-skill-1783500587763-e734fec7.md && git commit -m \"Document ticket skill path\"'","codexExitCode":"0"} -->
+
+**Tool call** `/usr/bin/zsh -lc 'git add .decision-os/cards/skills/card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md .decision-os/cards/skills/card-skill-ticket-solver.md .decision-os/threads/skills/thread-card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md .decision-os/runs/codex-skills/skills/codex-skill-1783500587763-e734fec7.md && git commit -m "Document ticket skill path"'`
+Status: completed
+Exit code: 0
+
+````text
+[main 1757475] Document ticket skill path
+ 4 files changed, 1346 insertions(+), 1 deletion(-)
+````
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-199","timestamp":"2026-07-08T09:52:45.469Z","status":"Codex message","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"199","codexKind":"agent_message","codexEventType":"item.completed","codexItemId":"item_24"} -->
+
+Handled.
+
+I did not add more skill cards. I updated the existing shortlist to note that the useful ticket-adjacent skills are:
+
+`openticket`, `improveticket`, and `ticket/improver`.
+
+They are worth remembering as ticket intake/normalization steps before `ticket-solver`, but they are not implementation skills, so they stay as notes rather than extra cards.
+
+Updated:
+- `Skill Building / Planning`
+- `Skill Card / ticket-solver`
+- scoped thread reply
+- run summary
+
+Committed as `1757475` (`Document ticket skill path`).
+
+# AGENT
+<!-- decision-os:note {"id":"codex-codex-skill-1783500587763-e734fec7-line-200","timestamp":"2026-07-08T09:52:45.469Z","status":"complete","codexRunId":"codex-skill-1783500587763-e734fec7","codexLine":"200","codexKind":"run_status","codexEventType":"turn.completed"} -->
+
+Codex turn completed.
