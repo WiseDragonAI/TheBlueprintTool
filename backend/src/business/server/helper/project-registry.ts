@@ -2,7 +2,7 @@
  * WHAT: Persists the authoritative versioned list of projects owned by one Decision OS server.
  * WHY: Normal server work must resolve registered projects without recursively scanning its launch root.
  */
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 export type ProjectRegistryEntry = {
@@ -22,6 +22,14 @@ export type ProjectRegistry = {
 
 export function projectRegistryFile(masterDecisionOsRoot: string): string {
   return resolve(masterDecisionOsRoot, 'projects.json');
+}
+
+export function backupLegacyProjectRegistry(masterDecisionOsRoot: string): string | null {
+  const source = projectRegistryFile(masterDecisionOsRoot);
+  if (!existsSync(source)) return null;
+  const backup = `${source}.legacy-${new Date().toISOString().replaceAll(':', '-')}.backup`;
+  copyFileSync(source, backup);
+  return backup;
 }
 
 export function readProjectRegistry(masterDecisionOsRoot: string): ProjectRegistry | null {

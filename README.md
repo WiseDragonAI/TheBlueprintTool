@@ -147,10 +147,10 @@ Codex child processes receive `DECISION_OS_LEDGER_ROOT` as the filesystem bounda
 
 ## Termux Home Master Server
 
-Launch Decision OS from the Termux home to recursively discover every nested project directory that contains `.decision-os`:
+Launch Decision OS from the Termux home to serve the projects registered in its `.decision-os/projects.json` catalog:
 
 ```bash
-setsid sh -c 'cd /data/data/com.termux/files/home && exec env PORT=50150 DECISION_OS_FRONTEND_ROOT=/data/data/com.termux/files/home/decision-os/frontend-mobile /data/data/com.termux/files/home/decision-os/bin/decision-os-server.mjs >> /tmp/decision-os-home-50150.log 2>&1' </dev/null >/dev/null 2>&1 &
+setsid sh -c 'cd /data/data/com.termux/files/home && exec env PORT=50150 DECISION_OS_FRONTEND_ROOT=/data/data/com.termux/files/home/decision-os/frontend /data/data/com.termux/files/home/decision-os/bin/decision-os-server.mjs >> /tmp/decision-os-home-50150.log 2>&1' </dev/null >/dev/null 2>&1 &
 ```
 
 Verify the process, project catalog, and Control Room route:
@@ -161,7 +161,7 @@ curl -sS http://127.0.0.1:50150/decision-os/projects
 curl -sS -I http://127.0.0.1:50150/
 ```
 
-The Control Room is always `/`; project catalog and aggregate ledger pages are `/projects` and `/ledgers`. Project-owned resources use `/p/:projectId/ledgers/...`, and project-sensitive APIs use the same `/p/:projectId` prefix. The server scans through intermediate directories without Decision OS data. Each project stores its durable URL identity in `.decision-os/project.json`, while display metadata remains in the master scope at `/data/data/com.termux/files/home/.decision-os/projects.json`.
+The Control Room is always `/`; project catalog and aggregate ledger pages are `/projects` and `/ledgers`. Project-owned resources use `/p/:projectId/ledgers/...`, and project-sensitive APIs use the same `/p/:projectId` prefix. The server resolves membership from the versioned `.decision-os/projects.json` registry and reconstructs registered project views from filesystem watchers. Each project stores its durable URL identity in `.decision-os/project.json`. Register, relink, and unregister projects explicitly from `/projects`; unregistering never deletes project files. A one-time legacy migration creates a timestamped backup before writing the versioned registry.
 
 ## Card Markdown Images
 

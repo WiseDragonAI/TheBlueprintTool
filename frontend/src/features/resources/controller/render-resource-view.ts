@@ -4,6 +4,7 @@
  */
 import { projectPath, readProjects, requestJson } from '../../../data/decision-os-api.js';
 import type { RouteScope } from '../../../runtime/navigation/helper/route-scope.js';
+import { openCompactThread } from '../../threads/controller/open-compact-thread.js';
 
 function cardsFrom(value: unknown): Array<Record<string, unknown>> {
   return Array.isArray(value) ? value.filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === 'object')) : [];
@@ -42,10 +43,13 @@ export async function renderCompactResource(container: HTMLElement, scope: Route
   if (scope.view === 'card') {
     const card = await requestJson<Record<string, unknown>>(projectPath(scope.projectId, `/api/ledgers/${encodeURIComponent(scope.ledgerId)}/cards/${encodeURIComponent(scope.cardId)}`));
     const body = String((card.comment as Record<string, unknown> | undefined)?.what ?? '');
-    container.innerHTML = '<a class="back-link">← Ledger</a><article class="resource-card"><h1></h1><pre></pre></article>';
+    container.innerHTML = '<a class="back-link">← Ledger</a><article class="resource-card"><header><h1></h1><button class="open-thread-button" type="button">Open thread</button></header><pre></pre></article>';
     (container.querySelector('.back-link') as HTMLAnchorElement).href = `/p/${encodeURIComponent(scope.projectId)}/ledgers/${encodeURIComponent(scope.ledgerId)}`;
     (container.querySelector('h1') as HTMLElement).textContent = String(card.title ?? scope.cardId);
     (container.querySelector('pre') as HTMLElement).textContent = body;
+    container.querySelector('.open-thread-button')?.addEventListener('click', () => {
+      void openCompactThread({ projectId: scope.projectId, ledgerId: scope.ledgerId, cardId: scope.cardId });
+    });
     return;
   }
   const navigation = await requestJson<Record<string, unknown>>(projectPath(scope.projectId, `/api/ledgers/${encodeURIComponent(scope.ledgerId)}/navigation`));

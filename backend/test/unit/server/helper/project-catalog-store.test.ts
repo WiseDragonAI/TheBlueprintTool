@@ -4,7 +4,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createProjectCatalogStore } from '@backend/business/server/helper/project-catalog-store.js';
@@ -41,6 +41,20 @@ test('migrates once, then changes membership only through explicit lifecycle ope
   assert.equal(removed.id, 'second-id');
   assert.equal(existsSync(join(root, 'moved', '.decision-os', 'state.json')), true);
   assert.deepEqual(store.projects().map((project) => project.id), ['initial-id']);
+});
+
+test('backs up legacy project metadata before writing the versioned registry', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-registry-backup-'));
+  const masterDecisionOsRoot = join(root, '.decision-os');
+  mkdirSync(masterDecisionOsRoot, { recursive: true });
+  const legacy = JSON.stringify({ projects: { legacy: { name: 'Legacy' } } });
+  writeFileSync(join(masterDecisionOsRoot, 'projects.json'), legacy);
+
+  createProjectCatalogStore({ masterRoot: root, masterDecisionOsRoot });
+
+  const backup = readdirSync(masterDecisionOsRoot).find((entry) => entry.startsWith('projects.json.legacy-') && entry.endsWith('.backup'));
+  assert.ok(backup);
+  assert.equal(readFileSync(join(masterDecisionOsRoot, backup), 'utf8'), legacy);
 });
 
 test('creates and updates projects without rediscovering unregistered directories', () => {

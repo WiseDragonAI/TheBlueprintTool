@@ -210,6 +210,8 @@ export function createControlRoomProjectionStore(input: { cacheFile: string; run
   let dirtyAll = true;
   let revision = 0;
   let lastReconcileAt = 0;
+  let latestProjects: DecisionOsProject[] = [];
+  let rebuildScheduled = false;
   try {
     const persisted = JSON.parse(readFileSync(input.cacheFile, 'utf8')) as Projection;
     if (persisted.schemaVersion === schemaVersion && persisted.projectorVersion === projectorVersion) {
@@ -248,10 +250,35 @@ export function createControlRoomProjectionStore(input: { cacheFile: string; run
     lastReconcileAt = Date.now();
     return next;
   };
+  const schedulePublish = (): void => {
+    if (rebuildScheduled || latestProjects.length === 0) return;
+    rebuildScheduled = true;
+    queueMicrotask(() => {
+      rebuildScheduled = false;
+      try {
+        publish(latestProjects);
+      } catch (cause) {
+        if (!current) return;
+        current = aggregateProjection({
+          slices: latestProjects.map((project) => slices.get(project.id)).filter((slice): slice is ProjectSlice => Boolean(slice)),
+          revision,
+          stale: true,
+          error: cause instanceof Error ? cause.message : String(cause),
+        });
+      }
+    });
+  };
   return {
     get(projects) {
+      latestProjects = projects;
       if (Date.now() - lastReconcileAt >= 30_000) this.reconcile(projects);
       if (!dirtyAll && dirtyProjects.size === 0 && current) return current;
+      // WHAT: Build synchronously only when no usable projection exists yet.
+      // WHY: Normal Control Room reads must return the watcher-maintained snapshot without scanning project files.
+      if (current) {
+        schedulePublish();
+        return current;
+      }
       try {
         return publish(projects);
       } catch (cause) {
@@ -262,8 +289,10 @@ export function createControlRoomProjectionStore(input: { cacheFile: string; run
     invalidate(projectId) {
       if (projectId) dirtyProjects.add(projectId);
       else dirtyAll = true;
+      schedulePublish();
     },
     reconcile(projects) {
+      latestProjects = projects;
       if (!current) { dirtyAll = true; lastReconcileAt = Date.now(); return true; }
       let changed = false;
       for (const slice of slices.values()) {
@@ -281,6 +310,7 @@ export function createControlRoomProjectionStore(input: { cacheFile: string; run
       const catalogChanged = projectIds.size !== cachedProjectIds.size || [...projectIds].some((id) => !cachedProjectIds.has(id));
       if (catalogChanged) dirtyAll = true;
       lastReconcileAt = Date.now();
+      if (changed || catalogChanged) schedulePublish();
       return changed || catalogChanged;
     },
   };

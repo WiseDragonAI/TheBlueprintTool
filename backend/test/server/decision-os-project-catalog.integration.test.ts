@@ -22,7 +22,7 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
   createProject(home, 'dev/project-b', 'Project B Specs');
   const runtime: Record<string, unknown> = {};
   const repositoryRoot = basename(process.cwd()) === 'backend' ? join(process.cwd(), '..') : process.cwd();
-  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: home, decisionOsFrontendRoot: join(repositoryRoot, 'frontend-mobile') }, runtime_state: runtime });
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: home, decisionOsFrontendRoot: join(repositoryRoot, 'frontend') }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -83,7 +83,11 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
     const projectPage = await fetch(`${baseUrl}/projects/${encodeURIComponent(catalog.projects[0].id)}`);
     assert.equal(projectPage.status, 200);
     assert.match(projectPage.headers.get('content-type') ?? '', /text\/html/);
-    assert.match(await projectPage.text(), /id="project-detail-view"/);
+    assert.match(await projectPage.text(), /src\/main\.js/);
+
+    const settingsPage = await fetch(`${baseUrl}/settings`);
+    assert.equal(settingsPage.status, 200);
+    assert.match(settingsPage.headers.get('content-type') ?? '', /text\/html/);
 
     const projectA = catalog.projects.find((project) => project.name === 'project-a')!;
     const ledgerResponse = await fetch(`${baseUrl}/p/${projectA.id}/decision-os/specs`);

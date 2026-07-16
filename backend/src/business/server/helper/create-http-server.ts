@@ -337,6 +337,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     cacheFile: resolve(masterDecisionOsRoot, 'cache', 'control-room-v3.json'),
     runtimeForRoot: (root) => projectContexts.get(root)?.runtime ?? {},
   });
+  // WHAT: Build the first projection during startup, then let project watchers maintain it.
+  // WHY: Control Room requests must read a ready snapshot instead of traversing every registered project.
+  controlRoomProjectionStore.get(projectCatalog().filter((project) => project.available));
   for (const project of projectCatalog()) {
     // WHAT: Start runtimes only for paths that passed registry validation.
     // WHY: An unavailable registration must remain visible without recreating directories through watcher setup.
@@ -1217,15 +1220,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       }
       return;
     }
-    const isCanvasSourceRoute = url.startsWith('/canvas-src/');
-    const isCanvasAssetRoute = url.startsWith('/canvas-assets/');
     const isFrontendModuleRoute = url.startsWith('/assets/') || url.startsWith('/src/');
     // WHAT: Serve `/shared/*` imports from the source tree beside the configured frontend root.
     // WHY: Browser modules consume authoritative shared schemas whose `.js` URLs must resolve to sibling `.ts` sources.
     const isSharedModuleRoute = url.startsWith('/shared/');
-    const isStaticModuleRoute = isFrontendModuleRoute || isSharedModuleRoute || isCanvasSourceRoute || isCanvasAssetRoute;
+    const isStaticModuleRoute = isFrontendModuleRoute || isSharedModuleRoute;
     const routeTabId = url.split('/').filter(Boolean)[0] ?? '';
-    if (!projectScope && request.method === 'GET' && routeTabId && !['projects', 'ledgers', 'pipelines', 'skills', 'control-room'].includes(routeTabId)) {
+    if (!projectScope && request.method === 'GET' && routeTabId && !['projects', 'ledgers', 'pipelines', 'skills', 'settings', 'control-room'].includes(routeTabId)) {
       const matches = projects.filter((project) => project.ledgers.some((ledger) => ledger.id === routeTabId));
       if (matches.length === 1) {
         const fallbackProject = matches[0];
@@ -1250,23 +1251,16 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       || /^\/projects\/[^/]+$/.test(requestPath)
       || requestPath === '/ledgers'
       || requestPath === '/pipelines'
-      || requestPath === '/skills';
+      || requestPath === '/skills'
+      || requestPath === '/settings';
     const isScopedAppRoute = Boolean(projectScope && projectScope.scopedPath.startsWith('/ledgers'));
     const isAppRoute = isGlobalAppRoute || isScopedAppRoute;
     const staticModuleRoot = isSharedModuleRoute
       ? resolve(frontendRoot, '..', 'shared')
-      : isCanvasSourceRoute
-        ? resolve(frontendRoot, '..', 'frontend', 'src')
-        : isCanvasAssetRoute
-          ? resolve(frontendRoot, '..', 'frontend', 'assets')
-          : frontendRoot;
+      : frontendRoot;
     const staticModuleRequest = isSharedModuleRoute
       ? url.slice('/shared/'.length)
-      : isCanvasSourceRoute
-        ? url.slice('/canvas-src/'.length)
-        : isCanvasAssetRoute
-          ? url.slice('/canvas-assets/'.length)
-          : url.slice(1);
+      : url.slice(1);
     const requestedPath = isStaticModuleRoute ? resolve(staticModuleRoot, staticModuleRequest) : resolve(frontendRoot, 'index.html');
     const relativeStaticModulePath = relative(staticModuleRoot, requestedPath);
     // WHAT: Accept a static module path only when it remains below its selected source root.

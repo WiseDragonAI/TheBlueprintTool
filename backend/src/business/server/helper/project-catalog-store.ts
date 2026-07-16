@@ -12,6 +12,7 @@ import {
   type DecisionOsProject,
 } from './project-catalog.js';
 import {
+  backupLegacyProjectRegistry,
   readProjectRegistry,
   writeProjectRegistry,
   type ProjectRegistry,
@@ -51,6 +52,7 @@ export function createProjectCatalogStore(input: { masterRoot: string; masterDec
   // WHAT: Seed the authoritative registry once when upgrading a legacy workspace.
   // WHY: Existing installations need one compatibility migration before runtime scans can stop.
   if (!registry) {
+    backupLegacyProjectRegistry(input.masterDecisionOsRoot);
     registry = registryFromProjects(discoverDecisionOsProjects({ masterRoot, masterDecisionOsRoot: input.masterDecisionOsRoot }));
     writeProjectRegistry(input.masterDecisionOsRoot, registry);
   }

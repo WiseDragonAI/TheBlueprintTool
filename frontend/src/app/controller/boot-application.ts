@@ -7,8 +7,10 @@ import { renderControlRoomView } from '../../features/control-room/controller/re
 import { renderProjectDetail, renderProjectsIndex } from '../../features/projects/controller/render-projects-view.js';
 import { renderAggregateLedgers, renderCompactResource, renderLibrary, renderSettings } from '../../features/resources/controller/render-resource-view.js';
 import { routeScope } from '../../runtime/navigation/helper/route-scope.js';
+import { installProjectRequestScope } from '../../runtime/project/helper/project-request-scope.js';
 
 export async function bootApplication(): Promise<void> {
+  installProjectRequestScope();
   const container = renderApplicationShell();
   const scope = routeScope(location.pathname);
   try {
