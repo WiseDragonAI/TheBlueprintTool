@@ -22,7 +22,7 @@ function requestOptions(input: VoiceTranscriptionRequest | string | undefined): 
   return typeof input === 'string' ? { threadId: input } : input ?? {};
 }
 
-export async function requestTranscription(audio: Blob | null, input: VoiceTranscriptionRequest | string = {}): Promise<void> {
+export async function requestTranscription(audio: Blob | null, input: VoiceTranscriptionRequest | string = {}): Promise<boolean> {
   const options = requestOptions(input);
   const threadId = options.threadId || state.threadId || 'conversation-ledger';
   if (!state.threadId) state.threadId = threadId;
@@ -31,7 +31,7 @@ export async function requestTranscription(audio: Blob | null, input: VoiceTrans
     appendOptimisticThreadNote({ threadId, body: 'Voice recording produced no audio.', status: 'capture failed', error: 'No audio captured' });
     telemetry('request-transcription', { configured: false, reason: 'empty-audio', threadId });
     renderVoiceStatus();
-    return;
+    return false;
   }
   state.voice.transcriptionStatus = 'uploading voice';
   telemetry('request-transcription', { configured: true, model: 'gpt-4o-mini-transcribe', threadId, queueCodex: Boolean(options.queueCodex) });
@@ -53,9 +53,9 @@ export async function requestTranscription(audio: Blob | null, input: VoiceTrans
     state.voice.transcriptionStatus = `voice save failed: ${message}`;
     telemetry('voice-upload-storage-failed', { noteId, threadId, error: message });
     renderVoiceStatus();
-    return;
+    return false;
   }
   patchOptimisticThreadNote({ threadId, noteId, localVoiceUploadId: noteId });
   telemetry('voice-upload-persisted', { noteId, threadId, size: audio.size, type: audio.type });
-  await submitPendingVoiceUpload(noteId);
+  return submitPendingVoiceUpload(noteId);
 }

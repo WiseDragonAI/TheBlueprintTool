@@ -1,18 +1,17 @@
 <!doctype html>
-<!-- WHAT: Hosts the desktop canvas and the inert responsive application template in one frontend entry. -->
-<!-- WHY: Route and viewport selection must not require separate frontend repositories or documents. -->
+<!-- WHAT: Hosts inert component templates behind a neutral surface bootstrap. -->
+<!-- WHY: Route selection must mount exactly one UI without exposing the canvas as the default document. -->
 <html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Project | Ledger</title>
-    <link rel="stylesheet" href="/assets/canvas.css">
-    <link rel="stylesheet" href="/assets/vendor/nouislider-15.8.1.min.css">
-    <link id="responsive-application-styles" rel="stylesheet" href="/assets/application.css" media="not all">
+    <style>html,body{min-height:100%;margin:0;background:#090a0c;color-scheme:dark}</style>
     <link rel="stylesheet" href="/assets/vendor/highlight-atom-one-dark.css">
   </head>
   <body>
-    <main class="shell" aria-label="Core canvas workspace">
+    <template id="canvas-surface-shell">
+      <main class="shell" aria-label="Core canvas workspace">
       <aside class="rail" id="toolbox-rail" aria-label="Toolbox">
         <button class="tool rail-toggle" type="button" data-action="toggle-rail" title="Collapse toolbox" aria-controls="toolbox-rail" aria-expanded="true"><span>‹</span><span class="rail-toggle-label">Collapse</span></button>
         <button class="tool active" type="button" data-tool="select" title="Select" data-spec="40000007"><span>↖</span><span>Select</span></button>
@@ -193,7 +192,8 @@
       <dialog class="pipeline-editor-modal codex-editor-modal" aria-labelledby="pipeline-editor-modal-title"></dialog>
       <dialog class="pipeline-skill-picker-modal skill-modal" aria-labelledby="pipeline-skill-picker-modal-title"></dialog>
       <dialog class="skill-library-editor-modal codex-editor-modal" aria-labelledby="skill-library-editor-modal-title"></dialog>
-    </main>
+      </main>
+    </template>
     <template id="responsive-application-shell">
       <div class="app-shell shell">
         <header class="topbar">
@@ -303,9 +303,11 @@
             </section>
 
             <section id="control-room-view" class="control-room" hidden>
-              <div class="control-sticky">
-                <div id="control-project-filters" class="control-filters" aria-label="Filter tasks by project"></div>
-                <div id="control-filters" class="control-filters" aria-label="Filter tasks by ledger"></div>
+              <div class="control-command">
+                <div class="control-sticky">
+                  <div id="control-project-filters" class="control-filters" aria-label="Filter tasks by project"></div>
+                  <div id="control-filters" class="control-filters" aria-label="Filter tasks by ledger"></div>
+                </div>
                 <nav class="control-tabs" aria-label="Task status">
                   <button type="button" data-control-tab="queue" role="tab" aria-selected="true"><span>Queue</span><small>0 tasks</small></button>
                   <button type="button" data-control-tab="active" role="tab" aria-selected="false"><span>Active</span><small>0 tasks</small></button>
@@ -358,6 +360,9 @@
                 <h1 id="card-title"></h1>
               </div>
               <div id="card-body" class="card-body"></div>
+              <button class="quick-voice-comment-button terminal-button" type="button" aria-label="Record a voice comment and queue Codex" title="Voice comment → Codex" hidden>
+                <svg class="terminal-button__icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></svg>
+              </button>
             </article>
           </main>
         </div>
@@ -549,9 +554,6 @@
       </div>
     </template>
     <script src="/assets/vendor/highlight.min.js"></script>
-    <script src="/assets/vendor/sortable-1.15.7.min.js"></script>
-    <script src="/assets/vendor/embla-carousel-8.6.0.umd.js"></script>
-    <script src="/assets/vendor/nouislider-15.8.1.min.js"></script>
-    <script type="module" src="/src/runtime/canvas-runtime.ts"></script>
+    <script type="module" src="/src/runtime/surface-runtime.ts"></script>
   </body>
 </html>

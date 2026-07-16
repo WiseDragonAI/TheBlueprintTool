@@ -1,6 +1,6 @@
 /**
  * WHAT: Thread inspector and voice note controls.
- * WHY: Inspector presentation is independent from canvas object rendering.
+ * WHY: Inspector presentation is shared while remaining independent from canvas object rendering.
  */
 .thread-panel {
   margin: 0;

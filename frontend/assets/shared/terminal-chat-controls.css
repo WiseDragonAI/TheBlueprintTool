@@ -1,6 +1,6 @@
 /*
  * WHAT: Provides the copied control dock, waveform, meter, and attachment strip styling.
- * WHY: Terminal footer controls are their own surface and must stay below file-size limits.
+ * WHY: Terminal footer controls are shared by both operator surfaces and stay below file-size limits.
  */
 
 .agent-chat .io { flex: 0 0 auto; padding: 0 10px 10px; }

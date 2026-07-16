@@ -40,8 +40,8 @@ export function ledgerCanvasProjection(input: { decisionOsRoot: string; ledgerId
 export function ledgerNavigationProjection(input: { decisionOsRoot: string; ledgerId: string }): AnyRecord | null {
   const source = readLedgerSource(input);
   if (!source) return null;
-  const cards = records(source.ledger.cards).map((card) => ({ id: card.id, title: card.title, status: card.status, x: card.x, y: card.y, w: card.w, h: card.h }));
-  return { id: source.ledger.id ?? input.ledgerId, annotations: source.ledger.annotations ?? [], cards };
+  const cards = records(source.ledger.cards).map((card) => ({ id: card.id, title: card.title, status: card.status, labels: card.labels, x: card.x, y: card.y, w: card.w, h: card.h }));
+  return { id: source.ledger.id ?? input.ledgerId, annotations: source.ledger.annotations ?? [], relationships: source.ledger.relationships ?? [], cards };
 }
 
 export function ledgerCardProjection(input: { decisionOsRoot: string; ledgerId: string; cardId: string }): AnyRecord | null {

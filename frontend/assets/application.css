@@ -154,6 +154,7 @@ body.menu-open .nav-scrim { opacity: 1; pointer-events: auto; }
 .project-detail-metadata dt { color: var(--muted); }
 .project-detail-metadata dd { margin: 0; overflow-wrap: anywhere; }
 .control-room { padding-bottom: 82px; }
+.control-command { display: contents; }
 .control-sticky { position: sticky; top: 64px; z-index: 15; margin: -20px -14px 16px; padding: 18px 14px 12px; border-bottom: 1px solid var(--line); background: rgba(9,10,12,.96); backdrop-filter: blur(18px); }
 .control-filters { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
 .control-filters[hidden] { display: none; }
@@ -226,6 +227,22 @@ h1 { margin: 0; font-size: clamp(28px, 8vw, 44px); line-height: 1.08; letter-spa
 .card-detail-header { display: grid; gap: 18px; padding: 0 0 22px 14px; border-bottom: 1px solid var(--line); border-left: 4px solid var(--zone-color, var(--accent)); }
 .card-detail-header h1 { width: 100%; font-size: clamp(24px, 7vw, 34px); }
 .thread-open-button { min-height: 44px; padding: 0 14px; color: color-mix(in srgb, var(--zone-color, var(--accent)), white 46%); }
+.quick-voice-comment-button {
+  --terminal-button-color: color-mix(in srgb, var(--zone-color, var(--accent)), white 34%);
+  --terminal-button-gradient-shadow: linear-gradient(90deg, color-mix(in srgb, var(--zone-color, var(--accent)), transparent 38%), color-mix(in srgb, var(--zone-color, var(--accent)), transparent 68%));
+  position: fixed;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  z-index: 20;
+  width: 60px;
+  min-width: 60px;
+  height: 60px;
+  min-height: 60px;
+  padding: 0;
+  border-radius: 50%;
+}
+.quick-voice-comment-button .terminal-button__icon { width: 25px; height: 25px; flex-basis: 25px; }
+.quick-voice-comment-button:disabled { cursor: wait; opacity: .72; }
 .card-detail-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .card-detail-actions button { min-width: 0; padding-inline: 8px; }
 .process-card-button { min-height: 44px; padding: 0 14px; color: var(--accent); background: var(--control-bg-primary); }
@@ -459,7 +476,8 @@ dialog[open]::backdrop { animation: scrim-in var(--motion-view) ease; }
   .ledger-nav { position: sticky; top: 64px; z-index: 10; width: auto; height: calc(100dvh - 64px); padding: 22px 14px; transform: none; }
   .content { padding: 34px 30px 70px; }
   .control-room { padding-bottom: 0; }
-  .control-sticky { display: grid; gap: 12px; margin: -34px -30px 20px; padding: 22px 30px 16px; }
+  .control-command { position: sticky; top: 64px; z-index: 15; display: grid; gap: 12px; margin: -34px -30px 20px; padding: 22px 30px 16px; border-bottom: 1px solid var(--line); background: rgba(9,10,12,.96); backdrop-filter: blur(18px); }
+  .control-sticky { position: static; z-index: auto; display: grid; gap: 12px; margin: 0; padding: 0; border: 0; background: transparent; backdrop-filter: none; }
   .control-tabs { position: static; display: flex; width: fit-content; max-width: 100%; gap: 8px; padding: 0; border: 0; background: transparent; backdrop-filter: none; }
   .control-tabs button { min-width: 112px; min-height: 44px; padding: 7px 14px; }
   .control-tabs .new-task-button { margin-left: 6px; }

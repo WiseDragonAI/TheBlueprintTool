@@ -4,7 +4,7 @@
  */
 import { state } from '../../state.js';
 import { connectedCardIds } from '../../relationship/helper/connected-card-ids.js';
-import { renderCanvasControlOverlay } from '../../canvas/effect/render-canvas-control-overlay.js';
+import { renderCanvasControlOverlay } from '../../surface/effect/canvas-surface-effects.js';
 
 export function renderSelectionState(options: { renderControls?: boolean } = {}): void {
   // Visible chrome always follows live selection; pointer snapshots are gesture-only operands.

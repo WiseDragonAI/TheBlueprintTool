@@ -61,8 +61,8 @@ test('master-task apply preserves lifecycle metadata, generates ids, and persist
   try {
     const result = applyMasterTaskPlan({ ledgerJsonFile: ledger, planJson: JSON.stringify({
       masterCardId: 'master', title: 'Renamed', zoneTitle: 'Renamed',
-      sections: [{ title: 'Decision', markdown: '1. **Choice:** Build it.' }],
-      subtasks: [{ title: 'Child', sections: [{ title: 'Implementation Detail', markdown: '1. **Objective:** Implement it.' }] }],
+      sections: [{ title: 'H. Decision', markdown: '1. **Choice:** Build it.' }],
+      subtasks: [{ title: 'Child', sections: [{ title: 'A. Implementation Detail', markdown: '1. **Objective:** Implement it.' }] }],
     }) });
     assert.equal(result.ok, true, result.ok ? undefined : result.error);
     const persisted = JSON.parse(readFileSync(ledger, 'utf8')) as { cards: Array<{ id: string; title: string; labels: string[] }>; relationships: unknown[] };
@@ -73,8 +73,11 @@ test('master-task apply preserves lifecycle metadata, generates ids, and persist
     const masterMarkdown = readFileSync(join(decisionOs, 'cards', 'specs', 'master.md'), 'utf8');
     assert.match(masterMarkdown, /Waiting since: 2026-01-01T00:00:00.000Z/);
     assert.match(masterMarkdown, /## A\. Decision/);
+    assert.doesNotMatch(masterMarkdown, /## A\. H\./);
     assert.doesNotMatch(masterMarkdown, /#master-task|#task-active|Status:/);
-    assert.match(readFileSync(join(ledger, '../..', `.decision-os/cards/specs/${persisted.cards[1].id}.md`), 'utf8'), /Implement it/);
+    const subtaskMarkdown = readFileSync(join(ledger, '../..', `.decision-os/cards/specs/${persisted.cards[1].id}.md`), 'utf8');
+    assert.match(subtaskMarkdown, /## A\. Implementation Detail/);
+    assert.doesNotMatch(subtaskMarkdown, /## A\. A\./);
   } finally {
     if (previousRoot === undefined) delete process.env.DECISION_OS_LEDGER_ROOT; else process.env.DECISION_OS_LEDGER_ROOT = previousRoot;
   }
@@ -96,7 +99,7 @@ test('master-task progress writes content, labels, verified status, reply, and g
     masterCardId: 'master',
     updates: [
       { cardId: 'master', markdown: '#master-task #task-active\n\nLedger: Specs\nWaiting since: 2026-01-01T00:00:00.000Z\n\n## A. Result\n\n1. **State:** Implemented.\n\n## B. Subtasks\n\n1. [Stale title](card:' + childId + ') — Status: pending' },
-      { cardId: childId, sections: [{ title: 'Result', markdown: '1. **State:** Verified.' }] },
+      { cardId: childId, sections: [{ title: 'B. Result', markdown: '1. **State:** Verified.' }] },
     ],
     verifiedSubtaskIds: [childId],
     reply: 'Implementation verified.',
@@ -112,6 +115,9 @@ test('master-task progress writes content, labels, verified status, reply, and g
   const masterMarkdown = readFileSync(join(decisionOs, 'cards', 'specs', 'master.md'), 'utf8');
   assert.doesNotMatch(masterMarkdown, /#master-task|#task-active|Status:|Stale title/);
   assert.match(masterMarkdown, new RegExp(`1\\. \\[Child\\]\\(card:${childId}\\)`));
+  const childMarkdown = readFileSync(join(ledger, '../..', `.decision-os/cards/specs/${childId}.md`), 'utf8');
+  assert.match(childMarkdown, /## A\. Result/);
+  assert.doesNotMatch(childMarkdown, /## A\. B\./);
   assert.match(readFileSync(join(decisionOs, 'threads', 'specs', 'thread-master.md'), 'utf8'), /# AGENT[\s\S]*Implementation verified\./);
   } finally {
     if (previousRoot === undefined) delete process.env.DECISION_OS_LEDGER_ROOT; else process.env.DECISION_OS_LEDGER_ROOT = previousRoot;
