@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -73,7 +73,12 @@ function migrateLegacyDestination(database) {
 }
 
 export function memoryDatabasePath(root) {
-  return resolve(required(root, 'root'), '.decision-os', 'memories.sqlite3');
+  const requestedRoot = resolve(required(root, 'root'));
+  const nestedRepository = resolve(requestedRoot, 'decision-os');
+  const repositoryRoot = existsSync(resolve(nestedRepository, 'tool', 'memory', 'memory.mjs'))
+    ? nestedRepository
+    : requestedRoot;
+  return resolve(repositoryRoot, '.decision-os', 'memories.sqlite3');
 }
 
 export function ensureMemoryStore(root) {
