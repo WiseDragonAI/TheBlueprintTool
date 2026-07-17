@@ -27,14 +27,13 @@ test('quick voice stop queues Codex and returns to the canonical Queue route aft
   assert.match(application, /onQuickVoiceSubmitted: navigateVoiceSubmission/);
 });
 
-test('desktop Shift+X leaves after durable persistence while normal X stays on the card', () => {
+test('desktop Shift+X awaits the queued upload and keeps the card thread open', () => {
   const thread = source('frontend/src/app/responsive/thread.js');
   const shortcut = thread.match(/export async function handleResponsiveThreadShortcut\(event\) \{[\s\S]*?\n\}/)?.[0] ?? '';
 
-  assert.match(shortcut, /const queueCodex = event\.shiftKey;/);
-  assert.match(shortcut, /queueCodex: true,[\s\S]*onPersisted: \(\) => void finishQueuedVoiceSubmission\(true\)/);
-  assert.match(shortcut, /else \{[\s\S]*await stopVoiceRecording\(\)/);
-  assert.doesNotMatch(shortcut, /await stopVoiceRecording\(\{ queueCodex/);
+  assert.match(shortcut, /await stopVoiceRecording\(\{ queueCodex: event\.shiftKey \}\)/);
+  assert.doesNotMatch(shortcut, /onPersisted/);
+  assert.doesNotMatch(shortcut, /finishQueuedVoiceSubmission/);
 });
 
 test('persisted voice navigation returns directly without an animated handoff', () => {
