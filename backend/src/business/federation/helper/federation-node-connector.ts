@@ -344,7 +344,23 @@ export function createFederationNodeConnector(input: {
     if (connectionStartedAt === null) connectionStartedAt = Date.now();
     setPhase(reconnectAttempt > 0 ? 'retrying' : 'connecting');
     const active = new WebSocket(webSocketUrl(settings), { headers: { authorization: `Bearer ${settings.nodeCredential}` } });
+    let retryAllowed = true;
     socket = active;
+    const stopForAuthenticationFailure = (statusCode: number): void => {
+      retryAllowed = false;
+      lastError = `Relay rejected node authentication (${statusCode}). Save valid federation credentials to reconnect.`;
+      clearConnectTimer();
+      if (socket === active) socket = null;
+      connectedAt = null;
+      lastDisconnectedAt = Date.now();
+      lastCloseCode = null;
+      lastCloseReason = `HTTP ${statusCode}`;
+      connectionStartedAt = null;
+      nextRetryAt = null;
+      for (const requestId of requesterStreams.keys()) failRequester(requestId, 502, 'federation_authentication', lastError);
+      for (const stream of remoteNodes.values()) stream.online = false;
+      setPhase('disconnected');
+    };
     connectTimer = setTimeout(() => {
       if (socket !== active || active.readyState === WebSocket.OPEN) return;
       lastError = `Relay connection attempt timed out after ${connectTimeoutMs / 1_000} seconds.`;
@@ -374,9 +390,17 @@ export function createFederationNodeConnector(input: {
         await handleFrame(JSON.parse(text) as RelayFrame);
       }).catch(() => undefined);
     });
-    active.addEventListener('error', (event) => {
-      const error = 'error' in event && event.error instanceof Error ? event.error.message : '';
-      if (error) lastError = error;
+    active.on('error', (error) => {
+      const authentication = error.message.match(/^Unexpected server response: (401|403)$/);
+      if (authentication) stopForAuthenticationFailure(Number(authentication[1]));
+      else if (retryAllowed && error.message) lastError = error.message;
+    });
+    active.on('unexpected-response', (_request, response) => {
+      if (response.statusCode === 401 || response.statusCode === 403) {
+        stopForAuthenticationFailure(response.statusCode);
+      }
+      response.resume();
+      active.terminate();
     });
     active.addEventListener('close', (event) => {
       if (socket !== active) return;
@@ -386,11 +410,14 @@ export function createFederationNodeConnector(input: {
       lastDisconnectedAt = Date.now();
       lastCloseCode = event.code;
       lastCloseReason = event.reason;
-      if (event.code === 4001) lastError = 'Another server connected with this node ID. Each running server needs a unique node identity.';
+      if (event.code === 4001) {
+        retryAllowed = false;
+        lastError = 'Another server connected with this node ID. Save a unique node identity to reconnect this server.';
+      }
       else if (!lastError && event.reason) lastError = event.reason;
       for (const requestId of requesterStreams.keys()) failRequester(requestId, 502, 'federation_outcome_unknown', 'Relay disconnected before the owner response completed.');
       for (const stream of remoteNodes.values()) stream.online = false;
-      if (!stopped) {
+      if (!stopped && retryAllowed) {
         const delay = Math.min(30_000, 1_000 * 2 ** reconnectAttempt) * (0.75 + Math.random() * 0.5);
         reconnectAttempt += 1;
         nextRetryAt = Date.now() + delay;
@@ -398,6 +425,8 @@ export function createFederationNodeConnector(input: {
         reconnectTimer = setTimeout(connect, delay);
         reconnectTimer.unref?.();
       } else {
+        connectionStartedAt = null;
+        nextRetryAt = null;
         setPhase(settings ? 'disconnected' : 'not_configured');
       }
     });
