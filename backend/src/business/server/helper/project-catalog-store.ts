@@ -18,11 +18,21 @@ import {
   type ProjectRegistry,
   type ProjectRegistryEntry,
 } from './project-registry.js';
+import { resolveProjectDirectory } from './project-directory-browser.js';
 
 const defaultColors = ['#38d9e8', '#a78bfa', '#fb7185', '#fbbf24', '#34d399', '#60a5fa'];
 
 function normalizedRelative(root: string, candidate: string): string {
   return relative(root, candidate).split(sep).join('/') || '.';
+}
+
+function projectIdentity(directory: string): string {
+  try {
+    const identity = JSON.parse(readFileSync(resolve(directory, '.decision-os', 'project.json'), 'utf8')) as { id?: string };
+    return String(identity.id ?? '').trim();
+  } catch {
+    return '';
+  }
 }
 
 function registryEntry(project: DecisionOsProject, registeredAt = new Date().toISOString()): ProjectRegistryEntry {
@@ -106,8 +116,14 @@ export function createProjectCatalogStore(input: { masterRoot: string; masterDec
       projects.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
       return project;
     },
-    create(name: string, description: string): DecisionOsProject {
-      const project = createDecisionOsProject({ masterRoot, masterDecisionOsRoot: input.masterDecisionOsRoot, name, description });
+    create(name: string, description: string, directory = ''): DecisionOsProject {
+      if (directory) {
+        const selected = resolveProjectDirectory({ masterRoot, path: directory });
+        if (Object.values(registry.projects).some((entry) => entry.relativePath === selected.path)) throw new Error('Project directory is already registered.');
+        const identity = projectIdentity(selected.absolutePath);
+        if (identity && registry.projects[identity]) throw new Error('Project id is already registered.');
+      }
+      const project = createDecisionOsProject({ masterRoot, masterDecisionOsRoot: input.masterDecisionOsRoot, name, description, directory });
       registry.projects[project.id] = registryEntry(project);
       persist();
       return projects.find((entry) => entry.id === project.id)!;

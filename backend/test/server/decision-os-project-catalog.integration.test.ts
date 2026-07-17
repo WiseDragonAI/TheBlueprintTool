@@ -20,6 +20,8 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
   createProject(home, 'admin', 'Admin Specs');
   createProject(home, 'dev/project-a', 'Project A Specs');
   createProject(home, 'dev/project-b', 'Project B Specs');
+  mkdirSync(join(home, 'source-existing'));
+  writeFileSync(join(home, 'source-existing', 'README.md'), '# Existing source\n');
   const runtime: Record<string, unknown> = {};
   const repositoryRoot = basename(process.cwd()) === 'backend' ? join(process.cwd(), '..') : process.cwd();
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: home, decisionOsFrontendRoot: join(repositoryRoot, 'frontend') }, runtime_state: runtime });
@@ -32,6 +34,25 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
     const catalog = await catalogResponse.json() as { projects: Array<{ id: string; name: string; description: string; color: string; relativePath: string; root: string }> };
     assert.deepEqual(catalog.projects.map((project) => project.relativePath), ['admin', 'dev/project-a', 'dev/project-b']);
     assert.deepEqual(catalog.projects.map((project) => project.name), ['admin', 'project-a', 'project-b']);
+
+    const rootListingResponse = await fetch(`${baseUrl}/decision-os/directories?path=.`);
+    assert.equal(rootListingResponse.status, 200);
+    const rootListing = await rootListingResponse.json() as { listing: { directories: Array<{ name: string; path: string }> } };
+    assert.deepEqual(rootListing.listing.directories.map((directory) => directory.name), ['admin', 'dev', 'source-existing']);
+    const traversalListing = await fetch(`${baseUrl}/decision-os/directories?path=..`);
+    assert.equal(traversalListing.status, 400);
+
+    const existingSourceCreation = await fetch(`${baseUrl}/decision-os/projects`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Existing Source', description: 'Selected from disk', directory: 'source-existing' }),
+    });
+    assert.equal(existingSourceCreation.status, 201);
+    const existingSource = await existingSourceCreation.json() as { project: { name: string; relativePath: string } };
+    assert.equal(existingSource.project.name, 'Existing Source');
+    assert.equal(existingSource.project.relativePath, 'source-existing');
+    assert.equal(readFileSync(join(home, 'source-existing', 'README.md'), 'utf8'), '# Existing source\n');
+    assert.equal(existsSync(join(home, 'source-existing', '.git')), true);
+    assert.equal(existsSync(join(home, 'source-existing', '.decision-os', 'state.json')), true);
 
     const creation = await fetch(`${baseUrl}/decision-os/projects`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Project Gamma', description: 'Created from the catalog' })

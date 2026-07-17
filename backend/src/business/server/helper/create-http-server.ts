@@ -52,6 +52,7 @@ import { recoverCodexProcessQueue } from '../../codex/helper/codex-process-queue
 import { nextPendingCodexProcessCreatedAt, pendingCodexProcessEntries, runningCodexProcessCount, scheduleCodexProcesses } from '../../codex/helper/codex-process-scheduler.js';
 import { resolveCatalogProject } from './project-catalog.js';
 import { createProjectCatalogStore } from './project-catalog-store.js';
+import { listProjectDirectories } from './project-directory-browser.js';
 import { isGlobalProjectEndpoint, isProjectSensitiveEndpoint, parseProjectUrlScope } from './project-url-scope.js';
 import { ensureLedgerCliShim } from '../../codex/helper/decision-os-codex-runtime.js';
 import { ensureDecisionOsMemoryStore } from './ensure-decision-os-memory-store.js';
@@ -892,6 +893,19 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       request.on('close', () => projectSyncEventClients.delete(response));
       return;
     }
+    if (url === '/decision-os/directories' && request.method === 'GET') {
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      try {
+        const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
+        const listing = listProjectDirectories({ masterRoot, path: requestUrl.searchParams.get('path') ?? '.' });
+        response.end(JSON.stringify({ ok: true, listing }));
+      } catch (error) {
+        response.statusCode = 400;
+        response.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : 'Directory listing failed.' }));
+      }
+      return;
+    }
     if (url === '/decision-os/projects' && request.method === 'GET') {
       const localOwner = federation.localOwner();
       response.setHeader('content-type', 'application/json');
@@ -964,9 +978,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const bodyBuffer = await readRequestBuffer(request);
       try {
         const body = JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
-        const project = typeof body.path === 'string'
-          ? projectCatalogStore.register(body.path)
-          : projectCatalogStore.create(String(body.name ?? ''), String(body.description ?? ''));
+        const project = typeof body.directory === 'string'
+          ? projectCatalogStore.create(String(body.name ?? ''), String(body.description ?? ''), body.directory)
+          : typeof body.path === 'string'
+            ? projectCatalogStore.register(body.path)
+            : projectCatalogStore.create(String(body.name ?? ''), String(body.description ?? ''));
         federation.publishManifest();
         controlRoomProjectionStore?.invalidate();
         reconcileProjectRuntimes();

@@ -528,6 +528,24 @@
               <span id="creation-description-label">Description</span>
               <textarea id="creation-description" name="description" rows="6" maxlength="1000"></textarea>
             </label>
+            <div class="creation-field creation-directory-field" hidden>
+              <span>Project directory</span>
+              <div class="creation-directory-control">
+                <input id="creation-directory-display" type="text" readonly placeholder="Choose a directory" aria-label="Project directory" aria-describedby="creation-directory-help" />
+                <input id="creation-directory" name="directory" type="hidden" />
+                <button class="creation-directory-browse" type="button">Browse</button>
+              </div>
+              <small id="creation-directory-help">Choose an existing directory below this server's catalog root.</small>
+              <section class="creation-directory-browser" aria-label="Project directory browser" hidden>
+                <header>
+                  <button class="creation-directory-parent" type="button" aria-label="Open parent directory">↑</button>
+                  <nav class="creation-directory-breadcrumbs" aria-label="Current directory"></nav>
+                </header>
+                <p class="creation-directory-status" role="status" aria-live="polite"></p>
+                <div class="creation-directory-list"></div>
+                <button class="creation-directory-select primary-button" type="button">Use this directory</button>
+              </section>
+            </div>
             <label class="creation-field creation-color-field" hidden>
               <span>Color</span>
               <input id="creation-color" name="color" type="color" value="#38d9e8" />

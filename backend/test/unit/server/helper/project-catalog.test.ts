@@ -116,6 +116,52 @@ test('creates one initialized catalog project and persists its metadata', () => 
   assert.equal(overview.cards.some((card) => card.id === 'ledger-card:tasks' && card.targetLedgerId === 'tasks'), true);
   assert.deepEqual(created.ledgers, [{ id: 'tasks', title: 'tasks', ledgerFile: '.decision-os/tasks.json' }]);
   assert.equal(JSON.parse(readFileSync(join(root, 'Project Alpha', '.decision-os', 'project.json'), 'utf8')).id, created.id);
+  assert.equal(existsSync(join(root, 'Project Alpha', '.git')), true);
+});
+
+test('initializes an existing source directory without replacing its files', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-existing-project-create-'));
+  const selected = join(root, 'existing-source');
+  mkdirSync(selected);
+  writeFileSync(join(selected, 'README.md'), '# Existing source\n');
+
+  const created = createDecisionOsProject({
+    masterRoot: root,
+    masterDecisionOsRoot: join(root, '.decision-os'),
+    name: 'Existing Source',
+    description: 'Selected from the directory browser',
+    directory: 'existing-source',
+  });
+
+  assert.equal(created.relativePath, 'existing-source');
+  assert.equal(created.name, 'Existing Source');
+  assert.equal(readFileSync(join(selected, 'README.md'), 'utf8'), '# Existing source\n');
+  assert.equal(existsSync(join(selected, '.git')), true);
+  assert.equal(existsSync(join(selected, '.decision-os', 'state.json')), true);
+});
+
+test('preserves existing Git metadata and Decision OS state', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-preserved-project-create-'));
+  const selected = join(root, 'configured-source');
+  mkdirSync(join(selected, '.git'), { recursive: true });
+  writeFileSync(join(selected, '.git', 'sentinel'), 'keep');
+  mkdirSync(join(selected, '.decision-os'), { recursive: true });
+  const existingState = JSON.stringify({ ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }] });
+  writeFileSync(join(selected, '.decision-os', 'state.json'), existingState);
+  writeFileSync(join(selected, '.decision-os', 'project.json'), JSON.stringify({ id: 'preserved-id' }));
+
+  const created = createDecisionOsProject({
+    masterRoot: root,
+    masterDecisionOsRoot: join(root, '.decision-os'),
+    name: 'Configured Source',
+    description: '',
+    directory: 'configured-source',
+  });
+
+  assert.equal(created.id, 'preserved-id');
+  assert.equal(readFileSync(join(selected, '.git', 'sentinel'), 'utf8'), 'keep');
+  assert.equal(readFileSync(join(selected, '.decision-os', 'state.json'), 'utf8'), existingState);
+  assert.equal(existsSync(join(selected, '.decision-os', 'tasks.json')), false);
 });
 
 test('rejects unsafe and colliding project names without creating partial directories', () => {

@@ -14,6 +14,7 @@ export function parseProjectUrlScope(pathname: string): ProjectUrlScope | null {
 export function isGlobalProjectEndpoint(pathname: string): boolean {
   return pathname === '/decision-os/projects'
     || pathname.startsWith('/decision-os/projects/')
+    || pathname === '/decision-os/directories'
     || pathname === '/decision-os/projects-canvas'
     || pathname === '/api/control-room-events'
     || pathname === '/api/project-sync'

@@ -16,7 +16,7 @@ import { committedProjectColor, hexToHsv, hsvToHex, projectColorPickerGradients 
 import { codexProcessLimitRange, loadCodexProcessSettings, saveCodexProcessSettings, stepCodexProcessLimit } from './codex-settings.js';
 import { loadFederationSettings, saveFederationSettings } from './federation-settings.js';
 import { hydrateFederationForm } from './federation-form-hydration.js';
-import { createProjectRequest } from './project-creation.js';
+import { createProjectRequest, loadProjectDirectoryRequest } from './project-creation.js';
 import { installProjectRequestScope, projectScopedRequestPath } from '/src/runtime/project/helper/project-request-scope.js';
 import { projectFilterChipPresentation, projectFilterGroups, projectFilterIncludes } from './project-filter-chip.js';
 
@@ -72,6 +72,7 @@ const projectColorSliders = {
 };
 const creationForm = document.querySelector('.creation-form');
 let creationKind = '';
+let projectDirectoryListing = null;
 let controlRoomScrollFrame = 0;
 let queuePersistenceSequence = 0;
 let queuePersistenceActive = false;
@@ -305,11 +306,96 @@ function openCreationModal(kind) {
   document.querySelector('#creation-description').placeholder = kind === 'card' ? 'Markdown is supported' : 'Optional';
   document.querySelector('#creation-description-label').textContent = kind === 'project' ? 'Description (optional)' : 'Description';
   document.querySelector('.creation-description-field').hidden = kind !== 'card' && kind !== 'project';
+  const directoryField = document.querySelector('.creation-directory-field');
+  directoryField.hidden = kind !== 'project';
+  creationModal.classList.toggle('project-creation-modal', kind === 'project');
+  document.querySelector('#creation-directory').value = '';
+  document.querySelector('#creation-directory-display').value = '';
+  document.querySelector('.creation-directory-browser').hidden = true;
+  projectDirectoryListing = null;
   document.querySelector('.creation-color-field').hidden = kind !== 'zone';
   if (kind === 'zone') document.querySelector('#creation-color').value = state.projects.find((project) => project.id === state.resourceProjectId)?.color || defaultAccent;
   document.querySelector('.creation-submit').textContent = submit;
   document.querySelector('.creation-error').hidden = true;
   creationModal.showModal();
+  name.focus();
+}
+
+function directoryBreadcrumbButton(label, path) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = label;
+  button.addEventListener('click', () => void loadProjectDirectory(path));
+  return button;
+}
+
+function renderProjectDirectoryListing(listing) {
+  projectDirectoryListing = listing;
+  const parent = document.querySelector('.creation-directory-parent');
+  parent.disabled = listing.parentPath === null;
+  const breadcrumbs = document.querySelector('.creation-directory-breadcrumbs');
+  breadcrumbs.replaceChildren(directoryBreadcrumbButton('Catalog', '.'));
+  if (listing.path !== '.') {
+    const segments = listing.path.split('/').filter(Boolean);
+    let path = '';
+    for (const segment of segments) {
+      path = path ? `${path}/${segment}` : segment;
+      breadcrumbs.append(directoryBreadcrumbButton(segment, path));
+    }
+  }
+  const list = document.querySelector('.creation-directory-list');
+  list.replaceChildren();
+  for (const directory of listing.directories) {
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.className = 'creation-directory-option';
+    option.setAttribute('aria-label', `Open ${directory.name}`);
+    const icon = document.createElement('span');
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = '▸';
+    const label = document.createElement('span');
+    label.textContent = directory.name;
+    const badges = document.createElement('span');
+    badges.className = 'creation-directory-badges';
+    for (const badgeText of [directory.hasGit ? 'Git' : '', directory.hasDecisionOs ? 'Decision OS' : ''].filter(Boolean)) {
+      const badge = document.createElement('span');
+      badge.className = 'creation-directory-badge';
+      badge.textContent = badgeText;
+      badges.append(badge);
+    }
+    option.append(icon, label, badges);
+    option.addEventListener('click', () => void loadProjectDirectory(directory.path));
+    list.append(option);
+  }
+  const status = document.querySelector('.creation-directory-status');
+  status.textContent = listing.directories.length
+    ? `${listing.directories.length} directories · ${listing.absolutePath}`
+    : `No child directories · ${listing.absolutePath}`;
+  document.querySelector('.creation-directory-select').disabled = false;
+}
+
+async function loadProjectDirectory(path = '.') {
+  const browser = document.querySelector('.creation-directory-browser');
+  const status = document.querySelector('.creation-directory-status');
+  browser.hidden = false;
+  status.textContent = 'Loading directories…';
+  document.querySelector('.creation-directory-list').replaceChildren();
+  document.querySelector('.creation-directory-select').disabled = true;
+  try {
+    renderProjectDirectoryListing(await loadProjectDirectoryRequest({ fetchImpl: fetch, path }));
+  } catch (cause) {
+    projectDirectoryListing = null;
+    status.textContent = cause instanceof Error ? cause.message : 'Directory listing failed.';
+  }
+}
+
+function applyProjectDirectorySelection() {
+  if (!projectDirectoryListing) return;
+  document.querySelector('#creation-directory').value = projectDirectoryListing.path;
+  document.querySelector('#creation-directory-display').value = projectDirectoryListing.absolutePath;
+  document.querySelector('.creation-directory-browser').hidden = true;
+  const name = document.querySelector('#creation-name');
+  if (!name.value.trim()) name.value = projectDirectoryListing.name;
   name.focus();
 }
 
@@ -407,8 +493,8 @@ async function createLedger(name) {
   navigate(ledgerPath(payload.tab.id));
 }
 
-async function createProject(name, description) {
-  const project = await createProjectRequest({ fetchImpl: fetch, name, description });
+async function createProject(name, description, directory) {
+  const project = await createProjectRequest({ fetchImpl: fetch, name, description, directory });
   state.projects = [...state.projects, project].sort((left, right) => left.relativePath.localeCompare(right.relativePath));
   setMobileCodexContext({ projects: state.projects });
   navigate(projectPath(project.id));
@@ -459,7 +545,11 @@ async function submitCreation() {
   submit.disabled = true;
   error.hidden = true;
   try {
-    if (creationKind === 'project') await createProject(name, document.querySelector('#creation-description').value);
+    if (creationKind === 'project') {
+      const directory = document.querySelector('#creation-directory').value;
+      if (!directory) throw new Error('Choose a project directory.');
+      await createProject(name, document.querySelector('#creation-description').value, directory);
+    }
     if (creationKind === 'ledger') await createLedger(name);
     if (creationKind === 'zone') await createZone(name, document.querySelector('#creation-color').value);
     if (creationKind === 'card') await createCard(name, document.querySelector('#creation-description').value.trim());
@@ -2153,6 +2243,11 @@ document.querySelector('.back-to-zone-button').addEventListener('click', (event)
 });
 document.querySelector('.create-ledger-button').addEventListener('click', () => openCreationModal('ledger'));
 document.querySelector('.create-project-button').addEventListener('click', () => openCreationModal('project'));
+document.querySelector('.creation-directory-browse').addEventListener('click', () => void loadProjectDirectory(document.querySelector('#creation-directory').value || '.'));
+document.querySelector('.creation-directory-parent').addEventListener('click', () => {
+  if (projectDirectoryListing?.parentPath !== null) void loadProjectDirectory(projectDirectoryListing?.parentPath || '.');
+});
+document.querySelector('.creation-directory-select').addEventListener('click', applyProjectDirectorySelection);
 document.querySelector('.create-zone-button').addEventListener('click', () => openCreationModal('zone'));
 document.querySelector('.create-card-button').addEventListener('click', () => openCreationModal('card'));
 document.querySelectorAll('.new-task-button').forEach((button) => button.addEventListener('click', openNewTaskProjectModal));
