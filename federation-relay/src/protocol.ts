@@ -17,6 +17,7 @@ export type RelayFrame = {
   type: string;
   requestId?: string;
   to?: string;
+  from?: string;
   direction?: 'request' | 'response';
   bytes?: number;
   data?: string;
@@ -29,6 +30,10 @@ export type RelayFrame = {
   nodes?: Array<{ nodeId: string; nodeLabel: string; online: boolean; projects: ProjectManifest[] }>;
   code?: string;
   message?: string;
+  replicaVersion?: 1;
+  projectId?: string;
+  resource?: string;
+  revision?: string;
 };
 
 export function parseFrame(value: string): RelayFrame {

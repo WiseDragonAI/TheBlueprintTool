@@ -94,6 +94,7 @@ let federationSettingsLoadGeneration = 0;
 let projectColorPickerOriginal = '';
 let projectColorPickerDirty = false;
 let projectSyncEventSource = null;
+let replicaRetryTimer = 0;
 
 function createProjectColorSlider(element, start, maximum) {
   window.noUiSlider.create(element, {
@@ -237,6 +238,66 @@ function pathForTask(task) {
   return cardPathForProject(task.projectId, task.ledgerId, task.zoneId || 'ungrouped', task.cardId);
 }
 
+function taskForCurrentRoute() {
+  const scope = parseProjectScope(location.pathname);
+  const [, ledgerId, , , , cardId] = scope?.segments ?? [];
+  return (state.controlRoom?.allTasks ?? []).find((task) => task.projectId === scope?.projectId && task.ledgerId === ledgerId && task.cardId === cardId) ?? null;
+}
+
+function renderTaskReplicaShell(task, replica = task?.replica) {
+  const scope = parseProjectScope(location.pathname);
+  const [, ledgerId, , zoneId, , cardId] = scope?.segments ?? [];
+  const project = state.projects.find((entry) => entry.id === scope?.projectId);
+  if (project) setResourceProject(project.id);
+  state.activeLedgerId = ledgerId || task?.ledgerId || '';
+  state.activeZoneId = zoneId || task?.zoneId || 'ungrouped';
+  state.activeZoneColor = task?.projectColor || project?.color || defaultAccent;
+  state.activeCardId = cardId || task?.cardId || '';
+  setMobileCodexContext({ projectId: state.resourceProjectId, ledgerId: state.activeLedgerId, cardId: state.activeCardId });
+  const status = replica?.status || 'synchronizing';
+  const label = {
+    replicated: 'Refreshing the local replica…',
+    synchronizing: 'Synchronizing this task from its owner…',
+    stale: 'Refreshing stale task data…',
+    blocked: 'Task synchronization is blocked. Retrying…',
+    offline: 'The owner is offline. Waiting for a retained replica…'
+  }[status] || 'Synchronizing this task…';
+  elements['card-title'].textContent = task?.title || 'Loading task';
+  const backButton = document.querySelector('.back-to-zone-button');
+  backButton.replaceChildren(document.createTextNode('← Back'));
+  backButton.dataset.destination = 'control-room';
+  const shell = document.createElement('section');
+  shell.className = 'task-replica-skeleton';
+  shell.dataset.replicaStatus = status;
+  shell.setAttribute('role', 'status');
+  shell.setAttribute('aria-live', 'polite');
+  shell.innerHTML = '<p class="task-replica-message"></p><div></div><div></div><div></div>';
+  shell.querySelector('.task-replica-message').textContent = replica?.message || label;
+  elements['card-body'].replaceChildren(shell);
+  elements['card-view'].style.setProperty('--zone-color', state.activeZoneColor || 'var(--accent)');
+  elements['card-view'].style.setProperty('--accent', state.activeZoneColor || defaultAccent);
+  setView('card-view');
+  document.title = `${elements['card-title'].textContent} · ${project?.name || state.projectName}`;
+}
+
+function commitRouteView() {
+  if (location.pathname === '/' && state.controlRoom) {
+    state.controlTab = parseControlRoomRoute(location.href).tab;
+    renderControlRoom();
+    return true;
+  }
+  if (isProjectCardPath(location.pathname)) {
+    const task = taskForCurrentRoute();
+    const scope = parseProjectScope(location.pathname);
+    const [, ledgerId, , , , cardId] = scope?.segments ?? [];
+    const cached = state.activeLedgerId === ledgerId && state.ledger?.cards?.find((card) => String(card.id) === cardId && ledgerCardBody(card));
+    if (cached) renderCard(cached);
+    else renderTaskReplicaShell(task);
+    return true;
+  }
+  return false;
+}
+
 function navigate(path, replace = false) {
   const destination = new URL(path, location.origin);
   const currentLocation = `${location.pathname}${location.search}${location.hash}`;
@@ -255,7 +316,9 @@ function navigate(path, replace = false) {
   const returnPath = `${location.pathname}${location.search}${location.hash}`;
   history[replace ? 'replaceState' : 'pushState']({ returnPath }, '', path);
   closeMenu();
-  return loadRoute();
+  const retained = commitRouteView();
+  void loadRoute({ retainView: retained });
+  return true;
 }
 
 async function navigateVoiceSubmission() {
@@ -265,12 +328,12 @@ async function navigateVoiceSubmission() {
 async function navigateTaskBack(destination) {
   const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
   if (typeof document.startViewTransition !== 'function' || reducedMotion) {
-    await navigate(destination);
+    navigate(destination);
     return;
   }
   document.documentElement.dataset.taskBackHandoff = 'true';
   try {
-    const transition = document.startViewTransition(() => navigate(destination));
+    const transition = document.startViewTransition(() => { navigate(destination); });
     await transition.finished;
   } finally {
     delete document.documentElement.dataset.taskBackHandoff;
@@ -1136,6 +1199,14 @@ function taskRow(task, tab, index) {
   if (summary.querySelector('.task-meta')) {
     summary.querySelector('.task-meta').textContent = `${task.projectName} · ${taskOwner} · ${task.ledger} · ${age}${process}`;
   }
+  if (task.remote || task.replica) {
+    const replica = document.createElement('span');
+    replica.className = `task-replica-status is-${task.replica?.status || (task.ownerOnline === false ? 'offline' : 'synchronizing')}`;
+    replica.textContent = task.replica?.status || (task.ownerOnline === false ? 'offline' : 'synchronizing');
+    replica.title = task.replica?.message || '';
+    if (task.replica?.status === 'synchronizing') replica.setAttribute('aria-live', 'polite');
+    summary.querySelector('.task-copy').append(replica);
+  }
   const nextSubtask = !executing ? summary.querySelector('.task-next') : null;
   if (nextSubtask) nextSubtask.textContent = `Next: ${task.nextSubtask.title}`;
   if (task.diagnostics.length) {
@@ -1318,6 +1389,10 @@ function subscribeControlRoomEvents() {
   };
   controlRoomEventSource.addEventListener('ledger-content-change', refresh);
   controlRoomEventSource.addEventListener('card-content-change', refresh);
+  controlRoomEventSource.addEventListener('federation-replica-change', () => {
+    refresh();
+    if (isProjectCardPath(location.pathname)) void loadRoute({ retainView: true });
+  });
 }
 
 function queueQueueOrderPersistence() {
@@ -1962,8 +2037,9 @@ async function loadLedger(ledgerId) {
   });
 }
 
-async function loadRoute() {
-  setView('loading-view');
+async function loadRoute({ retainView = false } = {}) {
+  if (!retainView) setView('loading-view');
+  window.clearTimeout(replicaRetryTimer);
   try {
     const catalogResponse = await fetch('/decision-os/projects', { cache: 'no-store' });
     if (!catalogResponse.ok) throw new Error(`The project catalog returned HTTP ${catalogResponse.status}.`);
@@ -2026,6 +2102,12 @@ async function loadRoute() {
     if (!routeProject) throw new Error('Project not found.');
     if (state.resourceProjectId !== routeProject.id) setResourceProject(routeProject.id);
     const response = await projectFetch('/decision-os/state', { cache: 'no-store' });
+    if (response.status === 202) {
+      const pending = await response.json();
+      renderTaskReplicaShell(taskForCurrentRoute(), pending.replica);
+      replicaRetryTimer = window.setTimeout(() => void loadRoute({ retainView: true }), 500);
+      return;
+    }
     if (!response.ok) throw new Error(`The server returned HTTP ${response.status}.`);
     const project = await response.json();
     state.projectName = state.projects.find((entry) => entry.id === state.resourceProjectId)?.name || project.projectName || state.projectName;
@@ -2054,6 +2136,12 @@ async function loadRoute() {
     const zone = zoneMarker === 'zones' ? zones.find((entry) => String(entry.id) === requestedZone) : null;
     if (zone && cardMarker === 'cards' && requestedCard) {
       const detailResponse = await projectFetch(`/api/ledgers/${encodeURIComponent(ledgerId)}/cards/${encodeURIComponent(requestedCard)}`, { cache: 'no-store' });
+      if (detailResponse.status === 202) {
+        const pending = await detailResponse.json();
+        renderTaskReplicaShell(taskForCurrentRoute(), pending.replica);
+        replicaRetryTimer = window.setTimeout(() => void loadRoute({ retainView: true }), 500);
+        return;
+      }
       const card = detailResponse.ok ? await detailResponse.json() : null;
       if (card) {
         state.ledger.cards = state.ledger.cards.map((entry) => String(entry.id) === requestedCard ? card : entry);
@@ -2079,6 +2167,19 @@ async function loadRoute() {
       renderLedger();
     }
   } catch (error) {
+    if (retainView) {
+      const task = taskForCurrentRoute();
+      if (task) {
+        renderTaskReplicaShell(task, { status: 'blocked', message: error instanceof Error ? error.message : 'Task synchronization failed.' });
+        replicaRetryTimer = window.setTimeout(() => void loadRoute({ retainView: true }), 1500);
+        return;
+      }
+      if (location.pathname === '/' && state.controlRoom) {
+        elements['control-diagnostics'].hidden = false;
+        elements['control-diagnostics'].textContent = error instanceof Error ? error.message : 'Control Room refresh failed.';
+        return;
+      }
+    }
     elements['error-message'].textContent = error instanceof Error ? error.message : 'Unknown loading error.';
     setView('error-view');
   }
@@ -2190,7 +2291,10 @@ elements['card-search'].addEventListener('input', (event) => {
   }, 120);
 });
 window.addEventListener('popstate', () => {
-  if (closeCardDetail()) void loadRoute();
+  if (closeCardDetail()) {
+    const retained = commitRouteView();
+    void loadRoute({ retainView: retained });
+  }
 });
 window.addEventListener('decision-os:codex-run-enqueued', () => { void loadRoute(); });
 window.addEventListener('scroll', persistControlRoomScrollAnchor, { passive: true });
