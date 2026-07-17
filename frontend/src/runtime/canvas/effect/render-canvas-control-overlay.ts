@@ -134,6 +134,27 @@ function syncCardControls(group: HTMLElement, card: HTMLElement): boolean {
   group.dataset.cardId = cardId;
   if (cardZoneColor) group.style.setProperty('--card-zone-color', cardZoneColor);
   else group.style.removeProperty('--card-zone-color');
+  if (card.dataset.cardType === 'project' && card.dataset.targetProjectId) {
+    const settings = document.createElement('button');
+    settings.className = 'project-card-settings-toggle terminal-button terminal-button--compact';
+    settings.type = 'button';
+    settings.dataset.action = 'open-project-settings';
+    settings.dataset.cardId = cardId;
+    settings.dataset.projectId = card.dataset.targetProjectId;
+    settings.title = 'Settings';
+    settings.setAttribute('aria-label', 'Settings');
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    icon.setAttribute('viewBox', '0 0 24 24');
+    icon.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M10.8 3h2.4l.6 2.2a7 7 0 0 1 1.5.9l2.2-.6 1.2 2.1-1.6 1.6c.1.5.2 1.1.2 1.8s-.1 1.3-.2 1.8l1.6 1.6-1.2 2.1-2.2-.6a7 7 0 0 1-1.5.9l-.6 2.2h-2.4l-.6-2.2a7 7 0 0 1-1.5-.9l-2.2.6-1.2-2.1 1.6-1.6A7 7 0 0 1 6.7 11c0-.7.1-1.3.2-1.8L5.3 7.6l1.2-2.1 2.2.6a7 7 0 0 1 1.5-.9L10.8 3Zm1.2 5a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z');
+    icon.append(path);
+    const label = document.createElement('span');
+    label.textContent = 'Settings';
+    settings.append(icon, label);
+    group.replaceChildren(settings);
+    return placeControlGroup(group, card, 'right');
+  }
   const edit = document.createElement('button');
   edit.className = 'icon-button terminal-button terminal-button--compact';
   edit.type = 'button';

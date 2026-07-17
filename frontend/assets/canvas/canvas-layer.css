@@ -126,6 +126,23 @@
   text-transform: uppercase;
 }
 
+.canvas-control .project-card-settings-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  min-width: 82px;
+  padding: 0 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.canvas-control .project-card-settings-toggle svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
 .canvas-control .icon-button,
 .canvas-control .zone-color-edit {
   width: 28px;

@@ -14,4 +14,6 @@ export const pipelinesModal = runtimeDocument?.querySelector('.pipelines-modal')
 export const pipelineEditorModal = runtimeDocument?.querySelector('.pipeline-editor-modal') as HTMLDialogElement;
 export const pipelineSkillPickerModal = runtimeDocument?.querySelector('.pipeline-skill-picker-modal') as HTMLDialogElement;
 export const skillLibraryEditorModal = runtimeDocument?.querySelector('.skill-library-editor-modal') as HTMLDialogElement;
+export const projectSettingsModal = runtimeDocument?.querySelector('.project-settings-modal') as HTMLDialogElement;
+export const projectColorPickerModal = runtimeDocument?.querySelector('.project-color-picker-modal') as HTMLDialogElement;
 export const SVG_NS = 'http://www.w3.org/2000/svg';

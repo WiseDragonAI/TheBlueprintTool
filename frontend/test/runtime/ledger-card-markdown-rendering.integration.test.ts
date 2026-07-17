@@ -357,7 +357,7 @@ test('runtime loads vendored highlight.js assets before canvas boot', () => {
   const vendorScript = readFileSync(new URL('frontend/assets/vendor/highlight.min.js', root), 'utf8');
   const vendorContext: { hljs?: { getLanguage?: (language: string) => unknown } } = {};
   assert.match(index, /\/assets\/vendor\/highlight-atom-one-dark\.css/);
-  assert.match(index, /\/assets\/vendor\/highlight\.min\.js[\s\S]*\/src\/runtime\/canvas-runtime\.ts/);
+  assert.match(index, /\/assets\/vendor\/highlight\.min\.js[\s\S]*\/src\/runtime\/surface-runtime\.ts/);
   assert.equal(existsSync(new URL('frontend/assets/vendor/highlight.min.js', root)), true);
   assert.equal(existsSync(new URL('frontend/assets/vendor/highlight-atom-one-dark.css', root)), true);
   assert.doesNotMatch(codeBlockCss, /\.ledger-card-code-block\s*\{[^}]*--card-zone-color/s);
@@ -500,6 +500,14 @@ test('ledger card detail title exposes a hover edit action beside the title', ()
       comment: { what: 'Ledger title edit target.' }
     });
     const ledgerButton = findElementByClass(ledgerCard, 'ledger-card-title-edit-button') as FakeElement;
+    const projectCard = renderDetail({
+      id: 'project-card:decision-os',
+      targetProjectId: 'decision-os',
+      cardType: 'project',
+      title: 'Decision OS',
+      description: 'Project settings target.'
+    });
+    const projectRow = findElementByClass(projectCard, 'ledger-card-title-row') as FakeElement;
 
     assert.equal(row.children[0], title);
     assert.equal(row.children[1], button);
@@ -510,6 +518,8 @@ test('ledger card detail title exposes a hover edit action beside the title', ()
     assert.equal(button.attributes['aria-label'], 'Edit card title');
     assert.equal(button.textContent, '✎');
     assert.equal(ledgerButton.attributes['aria-label'], 'Edit ledger name');
+    assert.equal(projectRow.children.length, 1);
+    assert.equal(findElementByClass(projectCard, 'card-status-indicator'), undefined);
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
   }
