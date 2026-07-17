@@ -155,6 +155,37 @@ function persistLedger(context: PipelineLedgerContext): void {
   writeFileSync(context.ledgerPath, JSON.stringify(context.ledger, null, 2), 'utf8');
 }
 
+function reconcilePipelineExecution(context: PipelineLedgerContext, run: CodexPipelineRun): void {
+  const executionStatus = run.status === 'pending' ? 'pending' : run.status === 'running' ? 'running' : '';
+  const skillRunIds = new Set(run.steps.flatMap((step) => step.skills.map((skill) => skill.runId)));
+  let changed = false;
+  for (const card of context.ledger.cards ?? []) {
+    const ownsPipeline = String(card.codexQueuedPipelineRunId ?? '') === run.id
+      || String(card.codexPipelineRunId ?? '') === run.id;
+    if (!ownsPipeline || String(card.executionRunId ?? '') !== run.id) continue;
+    if (executionStatus) {
+      if (card.executionStatus !== executionStatus) {
+        card.executionStatus = executionStatus;
+        changed = true;
+      }
+      continue;
+    }
+    if (card.executionStatus !== undefined) {
+      delete card.executionStatus;
+      changed = true;
+    }
+    if (card.executionRunId !== undefined) {
+      delete card.executionRunId;
+      changed = true;
+    }
+    if (skillRunIds.has(String(card.codexActiveRunId ?? ''))) {
+      delete card.codexActiveRunId;
+      changed = true;
+    }
+  }
+  if (changed) persistLedger(context);
+}
+
 function cardContent(input: { context: PipelineLedgerContext; decisionOsRoot: string; cardId: string }): string {
   const hydrated = hydrateLedgerCardContent(
     JSON.parse(JSON.stringify(input.context.ledger)),
@@ -303,7 +334,10 @@ export function reassessPipelineAfterSkill(input: {
     runtime: input.runtime,
     ledgerId: persisted.ledgerId,
   });
-  if (context) hydrateLedgerCardContent(context.ledger, input.decisionOsRoot);
+  if (context) {
+    reconcilePipelineExecution(context, persisted);
+    hydrateLedgerCardContent(context.ledger, input.decisionOsRoot);
+  }
   return persisted;
 }
 

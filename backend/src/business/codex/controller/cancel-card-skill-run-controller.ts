@@ -6,6 +6,7 @@ import type { ChildProcess } from 'node:child_process';
 import { resolve } from 'node:path';
 import { cancelCodexPipelineRunController } from './cancel-codex-pipeline-run-controller.js';
 import { readCodexProcessQueue, removeCodexProcessQueueItem } from '../helper/codex-process-queue.js';
+import { clearCardCodexExecutionForLedger } from '../helper/clear-card-codex-execution.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -36,6 +37,7 @@ export async function cancelCardSkillRunController(input: { action_payload?: Any
     const queued = readCodexProcessQueue(decisionOsRoot).find((item) => item.id === runId || String(item.payload.runId ?? '') === runId);
     if (queued) removeCodexProcessQueueItem(decisionOsRoot, queued.id);
     Object.assign(run, { status: 'cancelled', finishedAt: new Date().toISOString() });
+    clearCardCodexExecutionForLedger({ decisionOsRoot, ledgerId, cardId, runId, runtime });
     return { ok: true, statusCode: 202, status: 'cancelled', run: publicRun(run) };
   }
   if (String(run.status ?? '') !== 'running') {

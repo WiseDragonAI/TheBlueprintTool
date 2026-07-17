@@ -24,7 +24,7 @@ import { projectCardCodexRun } from '../helper/project-card-codex-run.js';
 import { enqueueCodexThreadProcess, recordCodexProcessQueueItemProcess, removeCodexProcessQueueItem } from '../helper/codex-process-queue.js';
 import { scheduleCodexProcesses, unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
 import { createTerminalCodexProcessReconciler, type TerminalCodexStatus } from '../helper/reconcile-terminal-codex-process.js';
-import { clearCardCodexActiveRun } from '../helper/clear-card-codex-active-run.js';
+import { clearCardCodexExecution } from '../helper/clear-card-codex-execution.js';
 import { runtimeCodexRunOwnsLiveProcess } from '../helper/runtime-codex-run-owns-live-process.js';
 import { readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import { cancelCodexPipelineRunController } from './cancel-codex-pipeline-run-controller.js';
@@ -264,6 +264,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
     codexModel: command.model,
     codexEffort: command.effort,
     ownership: 'thread',
+    executionStatus: queueDispatch ? 'running' : 'pending',
   });
   stripHydratedThreadNotes(ledger);
   writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2), 'utf8');
@@ -373,7 +374,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
         flushCardSkillRunEventIngestor(runEventIngestor, runId);
         updateRuntimeRun(runtime, runId, { settledAt: new Date().toISOString() });
         removeCodexProcessQueueItem(decisionOsRoot, runId);
-        clearCardCodexActiveRun({ ledgerPath, cardId, runId });
+        clearCardCodexExecution({ ledgerPath, cardId, runId });
         const schedule = runtime.scheduleCodexProcesses;
         if (typeof schedule === 'function') void schedule();
         notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, status: 'failed' });
@@ -414,7 +415,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
         appendRunStatus(runSummaryFile, status, detail);
         updateRuntimeRun(runtime, runId, { status, exitCode, finishedAt, settledAt: new Date().toISOString() });
         removeCodexProcessQueueItem(decisionOsRoot, runId);
-        clearCardCodexActiveRun({ ledgerPath, cardId, runId });
+        clearCardCodexExecution({ ledgerPath, cardId, runId });
         const schedule = runtime.scheduleCodexProcesses;
         if (typeof schedule === 'function') void schedule();
         if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');

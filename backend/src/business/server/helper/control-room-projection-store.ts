@@ -18,8 +18,8 @@ type Dependency = { path: string; size: number; mtimeMs: number; sha256: string 
 type Projection = AnyRecord & { schemaVersion: number; projectorVersion: string; revision: number; generatedAt: string; fingerprint: string };
 type ProjectSlice = { projectId: string; project: AnyRecord; tasks: AnyRecord[]; dependencies: Dependency[]; fingerprint: string };
 
-const schemaVersion = 4;
-const projectorVersion = 'control-room-v5-json-master-context';
+const schemaVersion = 5;
+const projectorVersion = 'control-room-v6-execution-status';
 
 function records(value: unknown): AnyRecord[] {
   return Array.isArray(value) ? value.filter((entry): entry is AnyRecord => Boolean(entry && typeof entry === 'object')) : [];
@@ -34,6 +34,10 @@ function dependency(file: string): Dependency | null {
   const stat = statSync(file);
   if (!stat.isFile()) return null;
   return { path: file, size: stat.size, mtimeMs: stat.mtimeMs, sha256: createHash('sha256').update(readFileSync(file)).digest('hex') };
+}
+
+function watchedDependency(file: string): Dependency {
+  return dependency(file) ?? { path: file, size: -1, mtimeMs: -1, sha256: '' };
 }
 
 function overlapArea(card: AnyRecord, zone: AnyRecord): number {
@@ -59,6 +63,9 @@ function zoneIdFor(card: AnyRecord, ledger: AnyRecord): string {
 }
 
 function runtimeStatus(input: { card: AnyRecord; runtime: AnyRecord; pipelineRuns: AnyRecord[]; queuedRuns: AnyRecord[] }): AnyRecord {
+  const persistedExecutionStatus = ['pending', 'running'].includes(text(input.card.executionStatus))
+    ? text(input.card.executionStatus)
+    : '';
   const runId = text(input.card.codexActiveRunId) || text(input.card.codexThreadRunId) || text(input.card.codexRunId);
   const pipelineRunId = text(input.card.codexQueuedPipelineRunId);
   if (pipelineRunId) {
@@ -66,14 +73,14 @@ function runtimeStatus(input: { card: AnyRecord; runtime: AnyRecord; pipelineRun
     const steps = records(run?.steps);
     const activeStep = steps.find((step) => ['pending', 'running'].includes(text(step.status)));
     const activeSkill = records(activeStep?.skills).find((skill) => ['pending', 'running'].includes(text(skill.status)));
-    const status = text(run?.status) || 'unknown';
+    const status = persistedExecutionStatus || text(run?.status) || 'unknown';
     const queueIndex = input.queuedRuns.findIndex((entry) => text(entry.id) === pipelineRunId || text((entry.payload as AnyRecord | undefined)?.runId) === pipelineRunId);
     return { runId, pipelineRunId, status, startedAt: text(run?.resumedAt) || text(run?.createdAt) || text(run?.startedAt) || text(activeSkill?.startedAt) || text(activeStep?.startedAt), queuePosition: status === 'pending' && queueIndex >= 0 ? queueIndex + 1 : null };
   }
   const runtimeRuns = input.runtime.codexSkillRuns && typeof input.runtime.codexSkillRuns === 'object' ? input.runtime.codexSkillRuns as Record<string, AnyRecord> : {};
   const live = runtimeRuns[runId] ?? {};
   const queueIndex = input.queuedRuns.findIndex((entry) => text(entry.id) === runId || text((entry.payload as AnyRecord | undefined)?.runId) === runId);
-  const status = text(live.status) || (queueIndex >= 0 ? 'pending' : 'unknown');
+  const status = persistedExecutionStatus || text(live.status) || (queueIndex >= 0 ? 'pending' : 'unknown');
   const stderrFile = text(live.stderrFile);
   const stdoutFile = text(live.stdoutFile);
   const log = stderrFile && existsSync(stderrFile) ? readFileSync(stderrFile, 'utf8') : '';
@@ -99,7 +106,7 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   const legacyLedgerName = markdown.match(/^\s*(?:\*\*)?Ledger(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
   const ledgerName = jsonLabels.includes('master-task') ? input.ledgerEntry.title : legacyLedgerName;
   const waitingText = markdown.match(/^\s*(?:\*\*)?Waiting since(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
-  const activeText = markdown.match(/^\s*(?:\*\*)?Active since(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
+  const executionText = markdown.match(/^\s*(?:\*\*)?Active since(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
   const rankText = markdown.match(/^\s*(?:\*\*)?Queue rank(?:\*\*)?\s*:\s*(\d+)\s*$/im)?.[1] ?? '';
   const threadId = `thread-${text(input.card.id)}`;
   const threadRef = input.ledger.threadFiles && typeof input.ledger.threadFiles === 'object' ? (input.ledger.threadFiles as AnyRecord)[threadId] : '';
@@ -109,10 +116,10 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   const waitingTime = Number.isFinite(latestThreadTime) ? latestThreadTime : Date.parse(waitingText);
   const rank = rankText ? Number(rankText) : null;
   const run = runtimeStatus({ card: input.card, runtime: input.runtime, pipelineRuns: input.pipelineRuns, queuedRuns: input.queuedRuns });
-  const processing = ['processing', 'running', 'in_progress'].includes(text(run.status));
-  const queued = run.status === 'pending' && Number.isInteger(run.queuePosition) && Number(run.queuePosition) > 0;
+  const processing = run.status === 'running' || (!text(input.card.executionStatus) && ['processing', 'in_progress'].includes(text(run.status)));
+  const queued = run.status === 'pending';
   const cardStatus = text(input.card.status) || 'todo';
-  const status = cardStatus === 'backlog' ? 'task-backlog' : cardStatus === 'done' ? 'task-complete' : processing || queued ? 'task-active' : 'task-waiting';
+  const status = cardStatus === 'backlog' ? 'task-backlog' : cardStatus === 'done' ? 'task-complete' : processing || queued ? 'task-execution' : 'task-waiting';
   const cards = records(input.ledger.cards);
   const subtasks: AnyRecord[] = [];
   const relationships = records(input.ledger.relationships).filter((relationship) => text(relationship.from) === text(input.card.id) && text(relationship.label) === 'subtask');
@@ -134,7 +141,7 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
     }
   }
   const complete = subtasks.filter((subtask) => subtask.status === 'complete').length;
-  const activeSince = processing ? (run.turnPending ? '' : text(run.startedAt) || activeText) : activeText;
+  const executionSince = processing ? (run.turnPending ? '' : text(run.startedAt) || executionText) : executionText;
   return {
     valid: diagnostics.length === 0, masterTask: true, diagnostics,
     cardId: text(input.card.id), title: text(input.card.title) || `Card ${text(input.card.id)}`,
@@ -142,10 +149,11 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
     ledgerId: input.ledgerEntry.id, ledgerTitle: input.ledgerEntry.title, ledger: ledgerName,
     zoneId: zoneIdFor(input.card, input.ledger), status,
     codexRunId: run.runId, codexPipelineRunId: run.pipelineRunId, codexStatus: run.status,
+    executionStatus: processing ? 'running' : queued ? 'pending' : '',
     codexProcessing: processing, codexQueued: queued, codexQueuePosition: queued ? run.queuePosition : null,
     waitingSince: Number.isFinite(latestThreadTime) ? new Date(latestThreadTime).toISOString() : waitingText,
-    waitingTime, activeSince,
-    activeTime: Date.parse(activeSince), queueRank: rank,
+    waitingTime, executionSince,
+    executionTime: Date.parse(executionSince), queueRank: rank,
     subtasks, complete, nextSubtask: subtasks.find((subtask) => subtask.status !== 'complete') ?? null,
   };
 }
@@ -172,6 +180,8 @@ function buildProjectSlice(input: { project: DecisionOsProject; runtime: AnyReco
   const pipelineRuns = readCodexPipelineStore({ decisionOsRoot: project.decisionOsRoot }).store.runs as unknown as AnyRecord[];
   const queuedRuns = (readCodexProcessQueue(project.decisionOsRoot) as unknown as AnyRecord[])
     .filter((run) => run.status === 'pending');
+  dependencies.push(watchedDependency(resolve(project.decisionOsRoot, 'codex-pipelines.json')));
+  dependencies.push(watchedDependency(resolve(project.decisionOsRoot, 'codex-process-queue.json')));
   for (const ledgerEntry of project.ledgers) {
       const ledgerPath = resolve(project.decisionOsRoot, ledgerEntry.ledgerFile.replace(/^\.decision-os\//, ''));
       const ledgerDependency = dependency(ledgerPath);
@@ -209,7 +219,7 @@ function aggregateProjection(input: { slices: ProjectSlice[]; revision: number; 
   return {
     schemaVersion, projectorVersion, revision: input.revision, generatedAt: new Date().toISOString(), fingerprint, stale: input.stale === true,
     queue: tasks.filter((task) => task.status === 'task-waiting').sort(compareTasks),
-    active: tasks.filter((task) => task.status === 'task-active').sort(compareTasks),
+    exec: tasks.filter((task) => task.status === 'task-execution').sort(compareTasks),
     backlog: tasks.filter((task) => task.status === 'task-backlog').sort(compareTasks),
     done: tasks.filter((task) => task.status === 'task-complete').sort(compareTasks),
     allTasks: tasks,
@@ -238,7 +248,9 @@ export function createControlRoomProjectionStore(input: { cacheFile: string; run
     const persisted = JSON.parse(readFileSync(input.cacheFile, 'utf8')) as Projection;
     if (persisted.schemaVersion === schemaVersion && persisted.projectorVersion === projectorVersion) {
       const persistedSlices = records(persisted.projectSlices) as unknown as ProjectSlice[];
-      const valid = persistedSlices.length > 0 && persistedSlices.every((slice) => slice.dependencies.every((entry) => dependency(entry.path)?.sha256 === entry.sha256));
+      const valid = persistedSlices.length > 0 && persistedSlices.every((slice) => slice.dependencies.every((entry) => (
+        entry.size < 0 ? !existsSync(entry.path) : dependency(entry.path)?.sha256 === entry.sha256
+      )));
       if (valid) {
         for (const slice of persistedSlices) slices.set(slice.projectId, slice);
         current = persisted;
@@ -319,6 +331,7 @@ export function createControlRoomProjectionStore(input: { cacheFile: string; run
       let changed = false;
       for (const slice of slices.values()) {
         if (slice.dependencies.some((entry) => {
+          if (entry.size < 0) return existsSync(entry.path);
           if (!existsSync(entry.path)) return true;
           const next = statSync(entry.path);
           return next.size !== entry.size || next.mtimeMs !== entry.mtimeMs;

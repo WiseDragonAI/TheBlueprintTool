@@ -128,6 +128,11 @@ test('saved pipeline creates all step cards and runs five isolated skills strict
     assert.equal(queuedBody.run.status, 'pending');
     assert.equal(queuedBody.queuePosition, 1);
     const queuedPipelineRunId = queuedBody.run.id as string;
+    const pendingLedger = JSON.parse(readFileSync(join(decisionOsRoot, 'specs.json'), 'utf8')) as Record<string, any>;
+    const pendingSourceCard = pendingLedger.cards.find((card: Record<string, any>) => card.id === 'source-card');
+    assert.equal(pendingSourceCard.executionStatus, 'pending');
+    assert.equal(pendingSourceCard.executionRunId, queuedPipelineRunId);
+    assert.equal(pendingSourceCard.codexQueuedPipelineRunId, queuedPipelineRunId);
 
     const completed = await waitFor(() => {
       const run = readCodexPipelineStore({ decisionOsRoot }).store.runs.find((entry) => entry.id === pipelineRunId);
@@ -154,8 +159,11 @@ test('saved pipeline creates all step cards and runs five isolated skills strict
     const generated = ledger.cards.filter((card: Record<string, any>) => card.codexPipelineRunId === completed.id);
     assert.equal(generated.length, 3);
     const sourceCard = ledger.cards.find((card: Record<string, any>) => card.id === 'source-card');
-    assert.equal(sourceCard.codexQueuedPipelineRunId, queuedPipelineRunId);
-    assert.match(sourceCard.codexQueuedRunId, /^codex-skill-/);
+    assert.equal(sourceCard.executionStatus, undefined);
+    assert.equal(sourceCard.executionRunId, undefined);
+    assert.equal(sourceCard.codexActiveRunId, undefined);
+    assert.equal(sourceCard.codexQueuedPipelineRunId, undefined);
+    assert.equal(sourceCard.codexQueuedRunId, undefined);
     assert.equal(generated.every((card: Record<string, any>) => card.w === 700), true);
     assert.deepEqual(ledger.relationships.slice(-3).map((relationship: Record<string, any>) => relationship.label), ['One', 'Two', 'Three']);
   } finally {

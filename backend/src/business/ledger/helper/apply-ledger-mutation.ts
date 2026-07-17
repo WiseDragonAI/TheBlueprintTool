@@ -165,7 +165,7 @@ export function applyLedgerMutation(input: {
         const completedAt = new Date().toISOString();
         let completedMarkdown = markdown.replace(/(\(card:[^)]+\))\s+[—-]\s+Status:\s*[^\n]+/gi, '$1');
         completedMarkdown = completedMarkdown.split('\n').map((line) => /^\s*(?:#[a-z][a-z0-9-]*\s*)+$/i.test(line)
-          ? line.replace(/(?:^|\s+)#(?:master-task|task-(?:waiting|active|complete))\b/gi, '').replace(/\s+/g, ' ').trim()
+          ? line.replace(/(?:^|\s+)#(?:master-task|task-(?:waiting|active|execution|complete))\b/gi, '').replace(/\s+/g, ' ').trim()
           : line).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
         if (/^\s*(?:\*\*)?Completed at(?:\*\*)?\s*:/im.test(completedMarkdown)) {
           completedMarkdown = completedMarkdown.replace(/^\s*(?:\*\*)?Completed at(?:\*\*)?\s*:.*$/im, `Completed at: ${completedAt}`);

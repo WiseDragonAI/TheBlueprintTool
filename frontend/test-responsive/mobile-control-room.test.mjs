@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { activeAge, activeStopwatch, cardCodexRunId, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withActiveStatus, withQueueRank } from '../src/app/responsive/control-room.js';
+import { executionAge, executionStopwatch, cardCodexRunId, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withExecutionStatus, withQueueRank } from '../src/app/responsive/control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from '../src/app/responsive/control-room-route.js';
 
 const [mobile, html, styles, embla, panzoom] = await Promise.all([
@@ -82,17 +82,17 @@ test('ignores malformed thread timestamps and retains the card waiting timestamp
   assert.equal(parsed.waitingTime, Date.parse('2026-07-10T10:00:00.000Z'));
 });
 
-test('derives waiting, active, and backlog tabs with FIFO and ranked priority', () => {
+test('derives waiting, execution, and backlog tabs with FIFO and ranked priority', () => {
   const result = deriveControlRoom([
     task({ cardId: 'newer', markdown: task().markdown.replace('10T10', '11T10') }),
     task({ cardId: 'oldest' }),
     task({ cardId: 'ranked', markdown: `${task().markdown.replace('10T10', '12T10')}\nQueue rank: 1` }),
-    task({ cardId: 'active', codexRunId: 'run-active', codexStatus: 'processing', markdown: task().markdown.replace('#task-waiting', '#task-active').replace('Waiting since:', 'Active since: 2026-07-10T10:30:00.000Z\nWaiting since:') }),
+    task({ cardId: 'active', codexRunId: 'run-active', codexStatus: 'processing', markdown: task().markdown.replace('#task-waiting', '#task-execution').replace('Waiting since:', 'Active since: 2026-07-10T10:30:00.000Z\nWaiting since:') }),
     task({ cardId: 'backlog', cardStatus: 'backlog' }),
     task({ cardId: 'done', cardStatus: 'done', markdown: task().markdown.replace('#task-waiting', '#task-complete') })
   ]);
   assert.deepEqual(result.queue.map((entry) => entry.cardId), ['ranked', 'oldest', 'newer']);
-  assert.deepEqual(result.active.map((entry) => entry.cardId), ['active']);
+  assert.deepEqual(result.exec.map((entry) => entry.cardId), ['active']);
   assert.deepEqual(result.backlog.map((entry) => entry.cardId), ['backlog']);
   assert.equal(result.queue.some((entry) => entry.cardId === 'done'), false);
   assert.deepEqual(result.ledgers, ['Tasks']);
@@ -100,7 +100,7 @@ test('derives waiting, active, and backlog tabs with FIFO and ranked priority', 
 
 test('renders dynamic task totals in every Control Room status tab', () => {
   assert.match(html, /data-control-tab="queue"[\s\S]*?<small>0 tasks<\/small>/);
-  assert.match(html, /data-control-tab="active"[\s\S]*?<small>0 tasks<\/small>/);
+  assert.match(html, /data-control-tab="exec"[\s\S]*?<small>0 tasks<\/small>/);
   assert.match(html, /data-control-tab="backlog"[\s\S]*?<small>0 tasks<\/small>/);
   assert.doesNotMatch(html, /data-control-tab="done"/);
   assert.match(mobile, /const count = controlTaskCount\(button\.dataset\.controlTab\)/);
@@ -112,7 +112,7 @@ test('mobile card inline code changes color without replacing the surrounding fo
 });
 
 test('round-trips the mobile Control Room tab and task scroll anchor through the URL', () => {
-  assert.deepEqual(parseControlRoomRoute('https://example.test/?tab=active#task-card-a'), { tab: 'active', anchor: 'task-card-a' });
+  assert.deepEqual(parseControlRoomRoute('https://example.test/?tab=active#task-card-a'), { tab: 'exec', anchor: 'task-card-a' });
   assert.equal(controlRoomPath('backlog', 'task-card-b'), '/?tab=backlog#task-card-b');
 });
 
@@ -128,31 +128,31 @@ test('persists Control Room tab navigation and the nearest task anchor in browse
   assert.match(mobile, /document\.getElementById\(anchor\)\?\.scrollIntoView\(\{ block: 'start' \}\)/);
 });
 
-test('shows task-active only while its Codex process is running', () => {
-  const markdown = task().markdown.replace('#task-waiting', '#task-active').replace('Waiting since:', 'Active since: 2026-07-10T10:30:00.000Z\nWaiting since:');
+test('shows task-execution only while its Codex process is running', () => {
+  const markdown = task().markdown.replace('#task-waiting', '#task-execution').replace('Waiting since:', 'Active since: 2026-07-10T10:30:00.000Z\nWaiting since:');
   const result = deriveControlRoom([
     task({ cardId: 'running', markdown, codexRunId: 'run-123', codexStatus: 'processing' }),
     task({ cardId: 'stopped', markdown, codexRunId: 'run-456', codexStatus: 'complete' })
   ]);
-  assert.deepEqual(result.active.map((entry) => entry.cardId), ['running']);
+  assert.deepEqual(result.exec.map((entry) => entry.cardId), ['running']);
   assert.deepEqual(result.queue.map((entry) => entry.cardId), ['stopped']);
-  assert.equal(result.active[0].codexRunId, 'run-123');
+  assert.equal(result.exec[0].codexRunId, 'run-123');
   assert.match(mobile, /Codex \$\{task\.codexRunId\}/);
 });
 
-test('anchors an active pipeline task to its logical launch instead of a recovered process segment', () => {
+test('anchors an executing pipeline task to its logical launch instead of a recovered process segment', () => {
   const firstActivation = '2026-07-10T10:30:00.000Z';
   const currentRunStartedAt = '2026-07-10T10:35:07.000Z';
-  const markdown = task().markdown.replace('#task-waiting', '#task-active').replace('Waiting since:', `Active since: ${firstActivation}\nWaiting since:`);
+  const markdown = task().markdown.replace('#task-waiting', '#task-execution').replace('Waiting since:', `Active since: ${firstActivation}\nWaiting since:`);
   const parsed = parseMasterTaskMarkdown(task({
     markdown,
     codexRunId: 'run-current',
     codexStatus: 'running',
     codexStartedAt: currentRunStartedAt
   }));
-  assert.equal(parsed.activeSince, currentRunStartedAt);
-  assert.equal(parsed.activeTime, Date.parse(currentRunStartedAt));
-  assert.equal(activeStopwatch(parsed.activeSince, Date.parse('2026-07-10T10:37:12.000Z')), '02:05');
+  assert.equal(parsed.executionSince, currentRunStartedAt);
+  assert.equal(parsed.executionTime, Date.parse(currentRunStartedAt));
+  assert.equal(executionStopwatch(parsed.executionSince, Date.parse('2026-07-10T10:37:12.000Z')), '02:05');
   assert.match(mobile, /fetch\('\/api\/control-room', \{ cache: 'no-store', headers:/);
   assert.doesNotMatch(mobile, /api\/codex\/pipelines\/runs\/\$\{encodeURIComponent\(pipelineRunId\)\}/);
   assert.doesNotMatch(mobile, /api\/codex\/skills\/runs\/\$\{encodeURIComponent\(runId\)\}/);
@@ -160,28 +160,40 @@ test('anchors an active pipeline task to its logical launch instead of a recover
 
 test('keeps a direct Codex task anchored to its persisted logical launch across process recovery', () => {
   const logicalLaunch = '2026-07-10T10:30:00.000Z';
-  const markdown = task().markdown.replace('#task-waiting', '#task-active').replace('Waiting since:', `Active since: ${logicalLaunch}\nWaiting since:`);
+  const markdown = task().markdown.replace('#task-waiting', '#task-execution').replace('Waiting since:', `Active since: ${logicalLaunch}\nWaiting since:`);
   const parsed = parseMasterTaskMarkdown(task({
     markdown,
     codexRunId: 'run-current',
     codexStatus: 'running'
   }));
-  assert.equal(parsed.activeSince, logicalLaunch);
-  assert.equal(activeStopwatch(parsed.activeSince, Date.parse('2026-07-10T10:37:12.000Z')), '07:12');
+  assert.equal(parsed.executionSince, logicalLaunch);
+  assert.equal(executionStopwatch(parsed.executionSince, Date.parse('2026-07-10T10:37:12.000Z')), '07:12');
   assert.doesNotMatch(mobile, /codexStartedAt = String\(payload\.startedAt/);
 });
 
-test('shows queued Codex pipelines in Active with their one-based position', () => {
+test('shows queued Codex pipelines in Exec with their one-based position', () => {
   const result = deriveControlRoom([task({
     codexPipelineRunId: 'pipeline-queued',
     codexStatus: 'pending',
     codexQueuePosition: 2
   })]);
   assert.equal(result.queue.length, 0);
-  assert.equal(result.active[0].codexQueued, true);
-  assert.equal(result.active[0].codexQueuePosition, 2);
+  assert.equal(result.exec[0].codexQueued, true);
+  assert.equal(result.exec[0].codexQueuePosition, 2);
   assert.match(mobile, /Queued · position \$\{task\.codexQueuePosition\}/);
   assert.match(styles, /\.task-queue-position \{[^}]*white-space: nowrap/);
+});
+
+test('keeps persisted pending execution in Exec before queue position hydration', () => {
+  const result = deriveControlRoom([task({
+    executionStatus: 'pending',
+    codexStatus: 'unknown',
+    codexQueuePosition: null,
+  })]);
+  assert.equal(result.queue.length, 0);
+  assert.equal(result.exec.length, 1);
+  assert.equal(result.exec[0].executionStatus, 'pending');
+  assert.equal(result.exec[0].codexQueuePosition, null);
 });
 
 test('Control Room resolves Process Card runs through the shared current-run pointer', () => {
@@ -193,30 +205,30 @@ test('Control Room resolves Process Card runs through the shared current-run poi
   assert.equal(processCardRunId, 'codex-skill-pipeline');
   assert.equal(cardCodexRunId({ codexThreadRunId: 'codex-skill-thread' }), 'codex-skill-thread');
   assert.equal(cardCodexRunId({ codexRunId: 'codex-skill-card' }), 'codex-skill-card');
-  const markdown = task().markdown.replace('#task-waiting', '#task-active').replace('Waiting since:', 'Active since: 2026-07-10T10:30:00.000Z\nWaiting since:');
+  const markdown = task().markdown.replace('#task-waiting', '#task-execution').replace('Waiting since:', 'Active since: 2026-07-10T10:30:00.000Z\nWaiting since:');
   const result = deriveControlRoom([task({ markdown, codexRunId: processCardRunId, codexStatus: 'running' })]);
-  assert.deepEqual(result.active.map((entry) => entry.cardId), ['card-a']);
+  assert.deepEqual(result.exec.map((entry) => entry.cardId), ['card-a']);
   assert.equal(result.queue.length, 0);
   assert.match(mobile, /state\.controlRoom = await response\.json\(\)/);
   assert.doesNotMatch(mobile, /const runId = cardCodexRunId\(card\)/);
 });
 
 test('ignores task tag examples in ordinary Markdown prose', () => {
-  const parsed = parseMasterTaskMarkdown(task({ markdown: 'This specification documents `#master-task`, `#task-waiting`, and `#task-active`.' }));
+  const parsed = parseMasterTaskMarkdown(task({ markdown: 'This specification documents `#master-task`, `#task-waiting`, and `#task-execution`.' }));
   assert.equal(parsed.valid, false);
   assert.equal(parsed.diagnostics.includes('missing master-task label'), true);
   assert.equal(deriveControlRoom([{ ...task(), markdown: parsed.markdown }]).diagnostics.length, 0);
 });
 
-test('transitions a canonical master task to active with its launch timestamp', () => {
+test('transitions a canonical master task to execution with its launch timestamp', () => {
   const startedAt = '2026-07-12T06:35:14.888Z';
-  const markdown = withActiveStatus(task().markdown, startedAt);
-  assert.match(markdown, /^#master-task #task-active$/m);
+  const markdown = withExecutionStatus(task().markdown, startedAt);
+  assert.match(markdown, /^#master-task #task-execution$/m);
   assert.match(markdown, /^Active since: 2026-07-12T06:35:14.888Z$/m);
   const parsed = parseMasterTaskMarkdown(task({ markdown }));
   assert.equal(parsed.valid, true);
-  assert.equal(parsed.activeSince, startedAt);
-  assert.equal(activeAge(startedAt, Date.parse('2026-07-12T06:40:14.888Z')), '5m active');
+  assert.equal(parsed.executionSince, startedAt);
+  assert.equal(executionAge(startedAt, Date.parse('2026-07-12T06:40:14.888Z')), '5m executing');
 });
 
 test('reports invalid canonical markdown and rewrites queue rank in place', () => {
@@ -232,7 +244,7 @@ test('keeps malformed master tasks visible in the control room with diagnostics'
   const malformed = task({
     cardId: 'malformed',
     cardStatus: 'backlog',
-    markdown: '#master-task #task-waiting #task-active\n\nLedger: Tasks\n\n## Subtasks\n'
+    markdown: '#master-task #task-waiting #task-execution\n\nLedger: Tasks\n\n## Subtasks\n'
   });
   const result = deriveControlRoom([malformed]);
   assert.deepEqual(result.backlog.map((entry) => entry.cardId), ['malformed']);
@@ -252,19 +264,19 @@ test('formats a stable waiting age', () => {
   assert.equal(waitingAge('2026-07-10T10:00:00.000Z', Date.parse('2026-07-12T10:00:00.000Z')), '2d waiting');
 });
 
-test('formats the exact active Codex session duration as a minute-second stopwatch', () => {
-  assert.equal(activeStopwatch('2026-07-12T10:00:00.000Z', Date.parse('2026-07-12T10:03:07.999Z')), '03:07');
-  assert.equal(activeStopwatch('2026-07-12T10:00:00.000Z', Date.parse('2026-07-12T11:02:03.000Z')), '62:03');
+test('formats the exact executing Codex session duration as a minute-second stopwatch', () => {
+  assert.equal(executionStopwatch('2026-07-12T10:00:00.000Z', Date.parse('2026-07-12T10:03:07.999Z')), '03:07');
+  assert.equal(executionStopwatch('2026-07-12T10:00:00.000Z', Date.parse('2026-07-12T11:02:03.000Z')), '62:03');
 });
 
-test('renders active tasks as compact direct links with owner metadata and no disclosure details', () => {
+test('renders executing tasks as compact direct links with owner metadata and no disclosure details', () => {
   assert.match(mobile, /runtimeStatus\.className = 'task-stopwatch'/);
   assert.match(mobile, /summary\.addEventListener\('click'[\s\S]*navigate\(pathForTask\(task\)\)/);
-  assert.match(mobile, /if \(active\) \{[\s\S]*article\.append\(summary\);[\s\S]*return article;/);
+  assert.match(mobile, /if \(executing\) \{[\s\S]*article\.append\(summary\);[\s\S]*return article;/);
 });
 
 test('opens queued master tasks directly without building disclosure content', () => {
-  assert.match(mobile, /const directNavigation = active \|\| queue;/);
+  assert.match(mobile, /const directNavigation = executing \|\| queue;/);
   assert.match(mobile, /if \(directNavigation\) \{[\s\S]*navigate\(pathForTask\(task\)\)[\s\S]*article\.append\(summary\);[\s\S]*return article;/);
   assert.match(mobile, /\$\{queue \? '' : '<span class="task-chevron">⌄<\/span>'\}/);
   assert.match(mobile, /initializeQueueSortable\(\)/);

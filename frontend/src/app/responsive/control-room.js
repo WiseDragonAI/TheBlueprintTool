@@ -8,7 +8,7 @@ export function cardCodexRunId(card) {
     || String(card?.codexRunId ?? '').trim();
 }
 
-export function parseMasterTaskMarkdown({ cardId, title, labels: cardLabels = [], relationships = [], projectId = '', projectName = '', projectColor = '', ledgerId, ledgerTitle, markdown, cardStatus = 'todo', cards = [], threadNotes = [], codexRunId = '', codexPipelineRunId = '', codexStatus = '', codexStartedAt = '', codexQueuePosition = null }) {
+export function parseMasterTaskMarkdown({ cardId, title, labels: cardLabels = [], relationships = [], projectId = '', projectName = '', projectColor = '', ledgerId, ledgerTitle, markdown, cardStatus = 'todo', cards = [], threadNotes = [], codexRunId = '', codexPipelineRunId = '', codexStatus = '', codexStartedAt = '', codexQueuePosition = null, executionStatus = '' }) {
   const source = String(markdown ?? '').replace(/\r\n?/g, '\n');
   const jsonLabels = Array.isArray(cardLabels) ? cardLabels.map(String) : [];
   const hasJsonTaskLabel = jsonLabels.some((label) => label === 'master-task' || label === 'subtask');
@@ -25,8 +25,8 @@ export function parseMasterTaskMarkdown({ cardId, title, labels: cardLabels = []
   // A waiting period restarts whenever either participant adds a thread message.
   // The card field remains the durable fallback for tasks without a timestamped thread.
   const waitingTime = Number.isFinite(latestThreadTime) ? latestThreadTime : Date.parse(waitingText);
-  const activeText = source.match(/^\s*(?:\*\*)?Active since(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
-  const activeTime = Date.parse(activeText);
+  const executionText = source.match(/^\s*(?:\*\*)?Active since(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
+  const executionTime = Date.parse(executionText);
   const rankText = source.match(/^\s*(?:\*\*)?Queue rank(?:\*\*)?\s*:\s*(\d+)\s*$/im)?.[1] ?? '';
   const queueRank = rankText ? Number(rankText) : null;
   const diagnostics = [];
@@ -58,12 +58,15 @@ export function parseMasterTaskMarkdown({ cardId, title, labels: cardLabels = []
   }
   const complete = subtasks.filter((task) => /^(?:complete|completed|done)$/i.test(task.status)).length;
   const normalizedCodexStatus = String(codexStatus).toLowerCase();
-  const codexProcessing = ['processing', 'running', 'in_progress'].includes(normalizedCodexStatus);
-  const codexQueued = normalizedCodexStatus === 'pending' && Number.isInteger(codexQueuePosition) && codexQueuePosition > 0;
+  const normalizedExecutionStatus = ['pending', 'running'].includes(String(executionStatus))
+    ? String(executionStatus)
+    : normalizedCodexStatus === 'pending' ? 'pending' : ['processing', 'running', 'in_progress'].includes(normalizedCodexStatus) ? 'running' : '';
+  const codexProcessing = normalizedExecutionStatus === 'running';
+  const codexQueued = normalizedExecutionStatus === 'pending';
   const currentRunStartedAt = String(codexStartedAt || '').trim();
   const currentRunStartedTime = Date.parse(currentRunStartedAt);
-  const displayedActiveSince = codexProcessing && Number.isFinite(currentRunStartedTime) ? currentRunStartedAt : activeText;
-  const displayedActiveTime = codexProcessing && Number.isFinite(currentRunStartedTime) ? currentRunStartedTime : activeTime;
+  const displayedExecutionSince = codexProcessing && Number.isFinite(currentRunStartedTime) ? currentRunStartedAt : executionText;
+  const displayedExecutionTime = codexProcessing && Number.isFinite(currentRunStartedTime) ? currentRunStartedTime : executionTime;
   return {
     valid: diagnostics.length === 0,
     masterTask,
@@ -76,17 +79,18 @@ export function parseMasterTaskMarkdown({ cardId, title, labels: cardLabels = []
     ledgerId: String(ledgerId),
     ledgerTitle: String(ledgerTitle),
     ledger,
-    status: cardStatus === 'backlog' ? 'task-backlog' : cardStatus === 'done' ? 'task-complete' : ((codexQueued || codexProcessing) ? 'task-active' : 'task-waiting'),
+    status: cardStatus === 'backlog' ? 'task-backlog' : cardStatus === 'done' ? 'task-complete' : ((codexQueued || codexProcessing) ? 'task-execution' : 'task-waiting'),
     codexRunId: String(codexRunId),
     codexPipelineRunId: String(codexPipelineRunId),
     codexStatus: normalizedCodexStatus,
+    executionStatus: normalizedExecutionStatus,
     codexProcessing,
     codexQueued,
     codexQueuePosition: codexQueued ? codexQueuePosition : null,
     waitingSince: Number.isFinite(latestThreadTime) ? new Date(latestThreadTime).toISOString() : waitingText,
     waitingTime,
-    activeSince: displayedActiveSince,
-    activeTime: displayedActiveTime,
+    executionSince: displayedExecutionSince,
+    executionTime: displayedExecutionTime,
     queueRank,
     subtasks,
     complete,
@@ -95,12 +99,12 @@ export function parseMasterTaskMarkdown({ cardId, title, labels: cardLabels = []
   };
 }
 
-export function withActiveStatus(markdown, timestamp) {
+export function withExecutionStatus(markdown, timestamp) {
   const source = String(markdown ?? '').replace(/\r\n?/g, '\n');
   const lines = source.split('\n');
   const labelIndex = lines.findIndex((line) => /^\s*(?:#[a-z][a-z0-9-]*\s*)+$/i.test(line) && /#master-task\b/i.test(line));
   if (labelIndex < 0) return source;
-  lines[labelIndex] = lines[labelIndex].replace(/#task-(?:waiting|active|complete)\b/gi, '').replace(/\s+/g, ' ').trimEnd() + ' #task-active';
+  lines[labelIndex] = lines[labelIndex].replace(/#task-(?:waiting|active|execution|complete)\b/gi, '').replace(/\s+/g, ' ').trimEnd() + ' #task-execution';
   const activeIndex = lines.findIndex((line) => /^\s*(?:\*\*)?Active since(?:\*\*)?\s*:/i.test(line));
   const activeLine = `Active since: ${timestamp}`;
   if (activeIndex >= 0) lines[activeIndex] = activeLine;
@@ -127,7 +131,7 @@ export function deriveControlRoom(cards) {
   };
   return {
     queue: eligible.filter((task) => task.status === 'task-waiting').sort(compare),
-    active: eligible.filter((task) => task.status === 'task-active').sort(compare),
+    exec: eligible.filter((task) => task.status === 'task-execution').sort(compare),
     backlog: eligible.filter((task) => task.status === 'task-backlog').sort(compare),
     ledgers: Array.from(new Set(eligible.map((task) => task.ledger))).sort((a, b) => a.localeCompare(b)),
     diagnostics: parsed.filter((task) => !task.valid && task.masterTask)
@@ -171,11 +175,11 @@ export function waitingAge(timestamp, now = Date.now()) {
   return `${Math.floor(hours / 24)}d waiting`;
 }
 
-export function activeAge(timestamp, now = Date.now()) {
-  return waitingAge(timestamp, now).replace(/ waiting$/, ' active');
+export function executionAge(timestamp, now = Date.now()) {
+  return waitingAge(timestamp, now).replace(/ waiting$/, ' executing');
 }
 
-export function activeStopwatch(timestamp, now = Date.now()) {
+export function executionStopwatch(timestamp, now = Date.now()) {
   const elapsedSeconds = Math.floor(Math.max(0, now - Date.parse(timestamp)) / 1000);
   const minutes = Math.floor(elapsedSeconds / 60);
   const seconds = elapsedSeconds % 60;
