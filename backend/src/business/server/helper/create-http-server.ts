@@ -74,6 +74,8 @@ import {
 } from '../../federation/helper/federated-library-cache.js';
 import { federatedControlRoomProjection } from './federated-control-room-projection.js';
 import { migrateLegacyProjectPipelines } from '../../codex/helper/server-pipeline-catalog.js';
+import { applyCodexSkillMetadataOwner, migrateCodexSkillMetadataOwner } from '../../codex/helper/codex-skill-metadata-owner.js';
+import { readCodexPipelineStore } from '../../codex/helper/codex-pipeline-store.js';
 import { createProjectSyncStore } from '../../project-sync/helper/project-sync-store.js';
 import { isNetworkGitOrigin, readRepositoryOriginIdentity, readRepositorySyncStatus } from '../../project-sync/helper/repository-sync-status.js';
 import { createProjectSyncController } from '../../project-sync/controller/start-project-sync.js';
@@ -407,6 +409,24 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     masterDecisionOsRoot,
     ...projectCatalog().filter((project) => project.available).map((project) => project.decisionOsRoot),
   ];
+  const availableServerSkillNames = readCodexSkillCatalog({ decisionOsRoot: masterDecisionOsRoot, runtime }).skills.map((skill) => skill.name);
+  migrateCodexSkillMetadataOwner({
+    ownerDecisionOsRoot: masterDecisionOsRoot,
+    sourceDecisionOsRoots: localDecisionOsRoots(),
+    availableSkillNames: availableServerSkillNames,
+  });
+  const ownedSkillMetadata = () => new Map(
+    readCodexPipelineStore({ decisionOsRoot: masterDecisionOsRoot, availableSkillNames: availableServerSkillNames })
+      .store.skillLibrary.map((record) => [record.skillName, record]),
+  );
+  const applyOwnedSkillMetadata = <T extends { name: string; favorite?: boolean; tags?: string[] }>(skill: T): T =>
+    applyCodexSkillMetadataOwner(skill, ownedSkillMetadata());
+  const applyOwnedSkillDetail = (result: AnyRecord): AnyRecord => {
+    const skill = result.skill;
+    return result.ok === true && skill && typeof skill === 'object'
+      ? { ...result, skill: applyOwnedSkillMetadata(skill as AnyRecord & { name: string; favorite?: boolean; tags?: string[] }) }
+      : result;
+  };
   const parseFederationResponse = <T>(result: { status: number; body: Buffer }, label: string): T => {
     if (result.status !== 200) throw new Error(`${label} returned HTTP ${result.status}.`);
     try { return JSON.parse(result.body.toString('utf8')) as T; }
@@ -1338,7 +1358,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     }
     if (url.startsWith('/api/codex/skill-library/') && request.method === 'GET') {
       const skillName = decodeRouteSegment(url.slice('/api/codex/skill-library/'.length));
-      const result = readCodexSkillLibraryController({ action_payload: { skillName }, runtime_state: requestRuntime });
+      const result = applyOwnedSkillDetail(readCodexSkillLibraryController({ action_payload: { skillName }, runtime_state: requestRuntime }));
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
       response.end(JSON.stringify(result));
@@ -1354,7 +1374,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           return {};
         }
       })();
-      const result = saveCodexSkillLibraryController({ action_payload: { ...savePayload, skillName }, runtime_state: requestRuntime });
+      const metadataOnly = Object.keys(savePayload).length > 0
+        && Object.keys(savePayload).every((key) => key === 'favorite' || key === 'tags');
+      const saveRuntime = metadataOnly
+        ? { ...requestRuntime, decisionOsRoot: masterDecisionOsRoot, projectId: '' }
+        : requestRuntime;
+      const result = applyOwnedSkillDetail(saveCodexSkillLibraryController({ action_payload: { ...savePayload, skillName }, runtime_state: saveRuntime }));
       if (result.ok === true && Object.prototype.hasOwnProperty.call(savePayload, 'markdown')) federation.publishManifest();
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
@@ -1365,7 +1390,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const skillRuntime = url === '/api/codex/server-skills'
         ? { ...requestRuntime, decisionOsRoot: masterDecisionOsRoot, projectId: '' }
         : requestRuntime;
-      const skills = readCodexSkillCatalog({ decisionOsRoot: String(skillRuntime.decisionOsRoot), runtime: skillRuntime }).skills;
+      const catalog = readCodexSkillCatalog({ decisionOsRoot: String(skillRuntime.decisionOsRoot), runtime: skillRuntime }).skills;
+      const metadata = url === '/api/codex/server-skills' ? null : ownedSkillMetadata();
+      const skills = metadata ? catalog.map((skill) => applyCodexSkillMetadataOwner(skill, metadata)) : catalog;
       response.setHeader('content-type', 'application/json');
       response.statusCode = 200;
       response.end(JSON.stringify({ ok: true, skills, availableTags: codexSkillTags }));
