@@ -13227,9 +13227,6 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "executionStatus": "running",
-      "executionRunId": "codex-skill-1784301138950-27021ec1",
-      "codexActiveRunId": "codex-skill-1784301138950-27021ec1",
       "codexRunId": "codex-skill-1784301138950-27021ec1",
       "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784301138950-27021ec1.md",
       "codexPipelineRunId": "codex-skill-1784301138950-27021ec1",
@@ -14059,8 +14056,12 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784294198031-29e2ed45",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784294198031-29e2ed45.md"
+      "codexThreadRunId": "codex-skill-1784301285757-cb5a9f5f",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784301285757-cb5a9f5f.md",
+      "codexActiveRunId": "codex-skill-1784301285757-cb5a9f5f",
+      "executionStatus": "running",
+      "executionRunId": "codex-skill-1784301285757-cb5a9f5f",
+      "codexActiveExecutionId": "codex-execution-1784301285768-778fff5f"
     },
     {
       "id": "card-codex-skill-1784292634000-81923844",
@@ -14447,7 +14448,7 @@
       "title": "Push main branch to origin",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "repository-operation",
         "push",
@@ -14659,30 +14660,6 @@
       "fields": []
     },
     {
-      "id": "card-df2d835e-50bf-4504-aa30-566ac67619dd",
-      "title": "Recover failed project synchronizations",
-      "cardType": "note",
-      "domainId": "specs",
-      "status": "todo",
-      "labels": [
-        "bug",
-        "master-task"
-      ],
-      "x": -10402,
-      "y": 133968,
-      "w": 360,
-      "h": 240,
-      "comment": {
-        "contentFile": ".decision-os/cards/specs/card-df2d835e-50bf-4504-aa30-566ac67619dd.md"
-      },
-      "facts": [],
-      "fields": [],
-      "codexRunModel": "gpt-5.6-sol",
-      "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784300748803-d6076a24",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784300748803-d6076a24.md"
-    },
-    {
       "id": "card-050214a3-ed47-4020-bbf7-e8f440d5683a",
       "title": "Make project-sync locks reconcilable and cancellable",
       "cardType": "note",
@@ -14760,9 +14737,6 @@
       },
       "facts": [],
       "fields": [],
-      "codexActiveRunId": "codex-skill-1784301138950-27021ec1",
-      "executionStatus": "running",
-      "executionRunId": "codex-skill-1784301138950-27021ec1",
       "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784301138950-27021ec1.md",
       "codexPipelineRunId": "codex-skill-1784301138950-27021ec1",
       "codexPipelineName": "retrospect-and-close-task run",
@@ -16525,24 +16499,6 @@
       "label": "subtask"
     },
     {
-      "id": "rel-2271cc05-923b-4cff-8b54-a6246fe3783d",
-      "from": "card-df2d835e-50bf-4504-aa30-566ac67619dd",
-      "to": "card-050214a3-ed47-4020-bbf7-e8f440d5683a",
-      "label": "subtask"
-    },
-    {
-      "id": "rel-efbb02b6-bfbe-4908-996e-0052e1371215",
-      "from": "card-df2d835e-50bf-4504-aa30-566ac67619dd",
-      "to": "card-2311cdff-c9b9-4247-9bbe-94b61e1b1b52",
-      "label": "subtask"
-    },
-    {
-      "id": "rel-f955ffd0-471b-439d-91a6-3b32f55fdd17",
-      "from": "card-df2d835e-50bf-4504-aa30-566ac67619dd",
-      "to": "card-83c3872d-d27a-46af-81f0-64e0cc1b56a2",
-      "label": "subtask"
-    },
-    {
       "id": "rel-codex-skill-1784301138950-27021ec1-1",
       "from": "card-50cbfca8-47c3-460e-acad-bd4bd3c7062c",
       "to": "card-codex-skill-1784301138950-27021ec1",
@@ -18203,7 +18159,6 @@
     "thread-card-1904363a-d446-4dfa-a638-e65a30cde12c": ".decision-os/threads/specs/thread-card-1904363a-d446-4dfa-a638-e65a30cde12c.md",
     "thread-card-e9169320-5637-41e6-8e3f-f01cdac68bb8": ".decision-os/threads/specs/thread-card-e9169320-5637-41e6-8e3f-f01cdac68bb8.md",
     "thread-card-3595f568-b6c1-4e1c-a2f5-27a1c36d0651": ".decision-os/threads/specs/thread-card-3595f568-b6c1-4e1c-a2f5-27a1c36d0651.md",
-    "thread-card-df2d835e-50bf-4504-aa30-566ac67619dd": ".decision-os/threads/specs/thread-card-df2d835e-50bf-4504-aa30-566ac67619dd.md",
     "thread-card-codex-skill-1784301138950-27021ec1": ".decision-os/threads/specs/thread-card-codex-skill-1784301138950-27021ec1.md"
   },
   "deletedNoteIds": {
