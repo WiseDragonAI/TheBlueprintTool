@@ -594,6 +594,14 @@ test('thread log consumer shares one advancing poller across rerenders and stops
     await runNextTimer(0);
     assert.deepEqual(received, ['current:running']);
     assert.equal(requests[0], '/api/codex/skills/runs/codex-skill-6000-shared?ledgerId=specs&cardId=card-shared&since=0');
+    const lateEventLines: number[][] = [];
+    bindCardSkillRunLogConsumer({
+      ...input,
+      consumerId: 'thread-log:late-thread-card-shared',
+      onSummary: (summary) => lateEventLines.push(summary.events.map((event) => event.line)),
+    });
+    assert.deepEqual(lateEventLines, [[2]]);
+    assert.equal(requests.length, 1);
     assert.deepEqual([...timers.values()].map((timer) => timer.delay), [1000]);
     await runNextTimer(1000);
     assert.deepEqual(received, ['current:running', 'current:complete']);

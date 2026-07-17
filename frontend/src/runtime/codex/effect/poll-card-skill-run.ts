@@ -25,6 +25,7 @@ type Poller = {
   element: HTMLElement | null;
   consumers: Map<string, (summary: CardSkillRunSummary) => void>;
   historyEvents: CardSkillRunSummary['events'];
+  lastSummary: CardSkillRunSummary | null;
   since: number;
   startedAtMs: number;
   timer: ReturnType<typeof setTimeout> | null;
@@ -435,6 +436,7 @@ async function continueRun(poller: Poller, newSession: boolean): Promise<void> {
   poller.terminal = false;
   poller.since = 0;
   poller.historyEvents = [];
+  poller.lastSummary = null;
   poller.detachedChecks = 0;
   poller.startedAtMs = Date.now();
   terminalSummaries.delete(key);
@@ -525,6 +527,7 @@ async function poll(poller: Poller): Promise<void> {
       setText(poller.element, '[data-codex-run-latest]', summary.error || 'Run unavailable');
     }
     terminalSummaries.set(key, summary);
+    poller.lastSummary = summary;
     notifyConsumers(poller, summary);
     debugContinue(poller.continueTraceId, 'poll-error-stopping', pollerDebugState(poller));
     stopPoller(key);
@@ -534,6 +537,7 @@ async function poll(poller: Poller): Promise<void> {
   if (summary.status === 'running' && summaryStartedAt) poller.startedAtMs = summaryStartedAt;
   poller.since = Math.max(poller.since, summary.nextSince, summary.lineCount);
   accumulateRunEvents(poller, summary.events);
+  poller.lastSummary = { ...summary, events: [...poller.historyEvents] };
   if (poller.element) paintWidget(poller.element, summary);
   notifyConsumers(poller, summary);
   telemetry('codex-skill-run-polled', { runId: poller.runId, status: summary.status, lineCount: summary.lineCount });
@@ -561,6 +565,7 @@ export function resumeExternallyStartedCardSkillRun(input: PollerIdentity): bool
   if (!poller) return false;
   poller.continueInFlight = false;
   poller.historyEvents = [];
+  poller.lastSummary = null;
   paintExternallyStartedRun(poller);
   pollers.set(key, poller);
   schedulePoll(poller, 0);
@@ -587,6 +592,7 @@ export function bindCardSkillRunLogConsumer(input: {
   const existing = pollers.get(key);
   if (existing) {
     existing.consumers = consumers;
+    if (existing.lastSummary) input.onSummary(existing.lastSummary);
     if (!existing.timer && !existing.inFlight) schedulePoll(existing, 0);
     return;
   }
@@ -598,6 +604,7 @@ export function bindCardSkillRunLogConsumer(input: {
     element: null,
     consumers,
     historyEvents: [],
+    lastSummary: null,
     since: 0,
     startedAtMs: runStartedAt(input.runId),
     timer: null,
@@ -631,7 +638,7 @@ export function bindCardSkillRunWidget(input: PollerIdentity & { element: HTMLEl
   const key = pollerKey(identity);
   const terminalSummary = terminalSummaries.get(key);
   if (terminalSummary) {
-    const poller: Poller = { ...scopedInput, consumers: consumersFor(key), historyEvents: [...terminalSummary.events], since: terminalSummary.lineCount, startedAtMs: runStartedAt(input.runId), timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, continueTraceId: '', detachedChecks: 0, terminal: true };
+    const poller: Poller = { ...scopedInput, consumers: consumersFor(key), historyEvents: [...terminalSummary.events], lastSummary: terminalSummary, since: terminalSummary.lineCount, startedAtMs: runStartedAt(input.runId), timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, continueTraceId: '', detachedChecks: 0, terminal: true };
     pollers.set(key, poller);
     paintWidget(input.element, terminalSummary);
     bindCancelButton(poller);
@@ -653,7 +660,7 @@ export function bindCardSkillRunWidget(input: PollerIdentity & { element: HTMLEl
     if (!existing.timer && !existing.inFlight) schedulePoll(existing, 0);
     return;
   }
-  const poller: Poller = { ...scopedInput, consumers: consumersFor(key), historyEvents: [], since: 0, startedAtMs: runStartedAt(input.runId), timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, continueTraceId: '', detachedChecks: 0, terminal: false };
+  const poller: Poller = { ...scopedInput, consumers: consumersFor(key), historyEvents: [], lastSummary: null, since: 0, startedAtMs: runStartedAt(input.runId), timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, continueTraceId: '', detachedChecks: 0, terminal: false };
   pollers.set(key, poller);
   bindCancelButton(poller);
   bindContinueButton(poller);

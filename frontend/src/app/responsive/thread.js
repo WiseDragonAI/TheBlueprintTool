@@ -26,6 +26,7 @@ import { deleteThreadCodexSessionController } from '/src/runtime/codex/controlle
 import { collapseMobileThreadComposer, expandMobileThreadComposer } from './thread-composer.js';
 import { createMobileThreadSessionDeletionHandler, resetMobileThreadConfirmationModal } from './thread-session-deletion.js';
 import { projectScopedRequestPath } from '/src/runtime/project/helper/project-request-scope.js';
+import { reconcileResponsiveThreadLedger } from './thread-ledger-reconciliation.js';
 
 let currentCard = null;
 let currentProjectId = '';
@@ -196,19 +197,23 @@ async function stopQuickVoiceComment(event) {
   await onQuickVoiceSubmitted();
 }
 
-async function refreshThreadLedger() {
+async function refreshThreadLedger(optimisticRunId = '') {
   const threadId = String(canvasState.threadId || '');
   if (!currentLedgerId || !threadId) return;
   const response = await fetch(projectScopedRequestPath(`/api/ledgers/${encodeURIComponent(currentLedgerId)}/threads/${encodeURIComponent(threadId)}`, currentProjectId), { cache: 'no-store' });
   if (!response.ok) return;
   const slice = await response.json();
-  const ledger = canvasState.activeLedger;
-  if (!ledger) return;
-  ledger.threadFiles = { ...(ledger.threadFiles || {}), ...(slice.threadFiles || {}) };
-  ledger.notes = { ...(ledger.notes || {}), ...(slice.notes || {}) };
-  ledger.deletedNoteIds = { ...(ledger.deletedNoteIds || {}), ...(slice.deletedNoteIds || {}) };
   const refreshed = await onLedgerRefresh(currentLedgerId);
-  if (refreshed?.cards && currentCard) currentCard = refreshed.cards.find((card) => String(card.id) === String(currentCard.id)) ?? currentCard;
+  const reconciled = reconcileResponsiveThreadLedger({
+    activeLedger: canvasState.activeLedger,
+    refreshedLedger: refreshed,
+    slice,
+    currentCard,
+    optimisticRunId,
+  });
+  if (!reconciled.ledger) return;
+  canvasState.activeLedger = reconciled.ledger;
+  currentCard = reconciled.card;
   renderThreadPanel();
   updateLaunchReadiness();
 }
@@ -257,7 +262,7 @@ async function startCodex(button) {
     cardId: String(currentCard.id),
     startedAt
   });
-  await refreshThreadLedger();
+  await refreshThreadLedger(runId);
   if (runId) bindThreadCodexRunLog({ projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId });
 }
 
