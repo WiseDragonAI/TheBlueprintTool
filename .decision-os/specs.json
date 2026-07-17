@@ -8204,7 +8204,7 @@
       "title": "Study Federated Decision OS Environments",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "backlog",
       "x": -10402,
       "y": 68688,
       "w": 360,
@@ -10519,7 +10519,7 @@
       "title": "Analyze Codex run lifecycle and status consistency",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "backlog",
       "labels": [
         "master-task"
       ],
@@ -11077,7 +11077,7 @@
       "title": "Create Server-Wide Pipelines",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "backlog",
       "labels": [
         "master-task"
       ],
@@ -11889,7 +11889,11 @@
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
       "codexThreadRunId": "codex-skill-1784279155863-9226dd66",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784279155863-9226dd66.md"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784279155863-9226dd66.md",
+      "executionStatus": "running",
+      "codexActiveRunId": "codex-skill-1784279155863-9226dd66",
+      "codexActiveExecutionId": "codex-execution-1784289217564-83304b80",
+      "executionRunId": "codex-skill-1784279155863-9226dd66"
     },
     {
       "id": "card-faeb4dca-6582-47d3-b1f4-5389a089c719",
@@ -12644,10 +12648,10 @@
       "codexRunEffort": "medium",
       "codexThreadRunId": "codex-skill-1784286292443-0239c27c",
       "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784286292443-0239c27c.md",
-      "executionStatus": "running",
-      "codexActiveRunId": "codex-skill-1784286292443-0239c27c",
-      "codexActiveExecutionId": "codex-execution-1784288422013-872e6ab8",
-      "executionRunId": "codex-skill-1784286292443-0239c27c"
+      "codexQueuedPipelineRunId": "codex-skill-1784291362396-3764fdee",
+      "codexQueuedRunId": "codex-skill-1784291362396-3764fdee",
+      "executionStatus": "pending",
+      "executionRunId": "codex-skill-1784291362396-3764fdee"
     },
     {
       "id": "card-216524c4-cf41-4b50-a8aa-a696b71dc0f6",
@@ -12674,7 +12678,7 @@
     },
     {
       "id": "card-0fecda0d-a333-4116-99c5-9f7a604f22d2",
-      "title": "Keep Shift+X voice upload in the active thread",
+      "title": "Keep Shift+X voice upload independent from card navigation",
       "cardType": "note",
       "domainId": "specs",
       "status": "todo",
@@ -12693,11 +12697,7 @@
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
       "codexThreadRunId": "codex-skill-1784288527235-7b479619",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784288527235-7b479619.md",
-      "executionStatus": "pending",
-      "codexActiveRunId": "codex-skill-1784288527235-7b479619",
-      "codexActiveExecutionId": "codex-execution-1784288520185-2d032b49",
-      "executionRunId": "codex-skill-1784288527235-7b479619"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784288527235-7b479619.md"
     },
     {
       "id": "card-8b0d8113-c0a8-4ce6-a10a-d1637cb037e4",
@@ -12725,7 +12725,7 @@
       "title": "Cover local and federated Queue ordering regressions",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "bug",
         "test",
@@ -12866,7 +12866,7 @@
     },
     {
       "id": "card-c2294c71-cb87-49d6-8886-002cd0f6b036",
-      "title": "Study Full Exec Pipeline Stage Labels",
+      "title": "Design Full Exec Complex Execution Lifecycle",
       "cardType": "note",
       "domainId": "specs",
       "status": "todo",
@@ -12886,8 +12886,8 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784286826569-fd2f2391",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784286826569-fd2f2391.md"
+      "codexThreadRunId": "codex-skill-1784288909138-f45f7fa2",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784288909138-f45f7fa2.md"
     },
     {
       "id": "card-016ae17d-4342-44f2-981d-04de1a1e2dfc",
@@ -12896,6 +12896,9 @@
       "domainId": "specs",
       "status": "todo",
       "labels": [
+        "implementation",
+        "frontend",
+        "control-room",
         "master-task"
       ],
       "x": -10402,
@@ -12910,11 +12913,7 @@
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
       "codexThreadRunId": "codex-skill-1784286914605-c5205218",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784286914605-c5205218.md",
-      "executionStatus": "running",
-      "codexActiveRunId": "codex-skill-1784286914605-c5205218",
-      "codexActiveExecutionId": "codex-execution-1784288438697-63f47f2b",
-      "executionRunId": "codex-skill-1784286914605-c5205218"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784286914605-c5205218.md"
     },
     {
       "id": "card-fa299e7b-0ebc-41ea-9ef2-17df867e6b3f",
@@ -12988,6 +12987,7 @@
       "labels": [
         "frontend",
         "keyboard-navigation",
+        "verified",
         "master-task"
       ],
       "x": -10402,
@@ -13002,11 +13002,7 @@
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
       "codexThreadRunId": "codex-skill-1784287000343-1a3b0616",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784287000343-1a3b0616.md",
-      "executionStatus": "running",
-      "codexActiveRunId": "codex-skill-1784287000343-1a3b0616",
-      "codexActiveExecutionId": "codex-execution-1784288467762-c26b4106",
-      "executionRunId": "codex-skill-1784287000343-1a3b0616"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784287000343-1a3b0616.md"
     },
     {
       "id": "card-603acaa4-34c6-4a59-aaba-1a681c650311",
@@ -13037,11 +13033,12 @@
       "title": "Implement the two-step Escape transition",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "frontend",
         "keyboard-navigation",
         "code",
+        "verified",
         "subtask"
       ],
       "x": -10012,
@@ -13059,12 +13056,13 @@
       "title": "Render the Back shortcut hint",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "frontend",
         "keyboard-navigation",
         "code",
         "ux",
+        "verified",
         "subtask"
       ],
       "x": -9632,
@@ -13082,11 +13080,12 @@
       "title": "Add Escape navigation regression coverage",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "frontend",
         "keyboard-navigation",
         "test",
+        "verified",
         "subtask"
       ],
       "x": -10012,
@@ -13127,7 +13126,7 @@
       "title": "Preserve Control Room column scroll",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "master-task"
       ],
@@ -13142,8 +13141,16 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784287203094-029915af",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784287203094-029915af.md"
+      "executionStatus": "running",
+      "executionRunId": "codex-skill-1784291353486-1830b14d",
+      "codexActiveRunId": "codex-skill-1784291353486-1830b14d",
+      "codexRunId": "codex-skill-1784291353486-1830b14d",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784291353486-1830b14d.md",
+      "codexPipelineRunId": "codex-skill-1784291353486-1830b14d",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexSkillName": "retrospect-and-close-task"
     },
     {
       "id": "card-50cbfca8-47c3-460e-acad-bd4bd3c7062c",
@@ -13163,22 +13170,24 @@
       },
       "facts": [],
       "fields": [],
-      "codexActiveRunId": "codex-skill-1784287329181-cc959638",
-      "executionStatus": "running",
-      "executionRunId": "codex-skill-1784287329181-cc959638",
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
       "codexThreadRunId": "codex-skill-1784287329181-cc959638",
       "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784287329181-cc959638.md",
-      "codexActiveExecutionId": "codex-execution-1784288311324-02c10b48"
+      "executionStatus": "running",
+      "codexActiveRunId": "codex-skill-1784287329181-cc959638",
+      "codexActiveExecutionId": "codex-execution-1784291234051-9828c645",
+      "executionRunId": "codex-skill-1784287329181-cc959638"
     },
     {
       "id": "card-9e1dc6dc-7903-4d4a-9370-ab7d89681407",
       "title": "Build canonical repository filter groups",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
+        "implementation",
+        "frontend",
         "subtask"
       ],
       "x": -10012,
@@ -13196,8 +13205,11 @@
       "title": "Apply repository groups to Control Room filtering",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
+        "implementation",
+        "frontend",
+        "control-room",
         "subtask"
       ],
       "x": -9632,
@@ -13215,8 +13227,11 @@
       "title": "Cover grouped filters and verify the served interaction",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
+        "test",
+        "frontend",
+        "control-room",
         "subtask"
       ],
       "x": -10012,
@@ -13337,7 +13352,7 @@
       "title": "Add in-memory scroll state for Kanban columns",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "subtask"
       ],
@@ -13356,7 +13371,7 @@
       "title": "Restore column scroll across rerenders and task return",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "subtask"
       ],
@@ -13375,7 +13390,7 @@
       "title": "Add Control Room scroll regressions",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "subtask"
       ],
@@ -13394,8 +13409,10 @@
       "title": "Expose safe skill reference documents",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
+        "backend",
+        "verified",
         "subtask"
       ],
       "x": -10012,
@@ -13415,6 +13432,8 @@
       "domainId": "specs",
       "status": "todo",
       "labels": [
+        "frontend",
+        "verified",
         "subtask"
       ],
       "x": -9632,
@@ -13434,6 +13453,8 @@
       "domainId": "specs",
       "status": "todo",
       "labels": [
+        "verification",
+        "verified",
         "subtask"
       ],
       "x": -10012,
@@ -13442,6 +13463,394 @@
       "h": 380,
       "comment": {
         "contentFile": ".decision-os/cards/specs/card-c3123d02-6d2e-4cbb-8de3-7dc697ebb81e.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-c3a65879-7f81-45fc-9424-26aa781f2647",
+      "title": "Add transcribing-before-launch execution state",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "bug",
+        "backend",
+        "frontend",
+        "voice",
+        "implemented",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 116628,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-c3a65879-7f81-45fc-9424-26aa781f2647.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-c078ecda-66ec-41a2-8af3-7fe5141d643a",
+      "title": "Create projects from a selected local directory",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 125808,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-c078ecda-66ec-41a2-8af3-7fe5141d643a.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784289189449-5e5c9277",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784289189449-5e5c9277.md",
+      "executionStatus": "pending",
+      "codexActiveRunId": "codex-skill-1784289189449-5e5c9277",
+      "codexActiveExecutionId": "codex-execution-1784291438472-5a66d0e7",
+      "executionRunId": "codex-skill-1784289189449-5e5c9277"
+    },
+    {
+      "id": "card-82f0b14a-a296-4184-903b-fd14c0111c36",
+      "title": "Create Spec Clarification Skill",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "pipeline",
+        "skill",
+        "specification",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 117648,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-82f0b14a-a296-4184-903b-fd14c0111c36.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-3dfae988-93c3-46a0-92e4-f42ae7354365",
+      "title": "Add Choice Questions and Pipeline Resume",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "pipeline",
+        "ux",
+        "frontend",
+        "backend",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 117648,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-3dfae988-93c3-46a0-92e4-f42ae7354365.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-e2723f59-f242-47c8-86e3-b5c20a752f83",
+      "title": "Create Memory-Informed Task Review Skill",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "pipeline",
+        "skill",
+        "memory",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 118058,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-e2723f59-f242-47c8-86e3-b5c20a752f83.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-fe53223c-7286-49f9-a225-2a877e93f6f6",
+      "title": "Expand Over-Engineering Skill with Adversarial Extremes",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "pipeline",
+        "skill",
+        "architecture",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 118058,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-fe53223c-7286-49f9-a225-2a877e93f6f6.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-fd57d8d7-0828-4970-abed-c6425bcdaa27",
+      "title": "Rebuild Full Exec Complex Pipeline",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "pipeline",
+        "backend",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 118468,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-fd57d8d7-0828-4970-abed-c6425bcdaa27.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-cb58de98-001e-45ce-b5e2-fd8305dc7bf9",
+      "title": "Route Voice Notes to Simple or Complex Execution",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "pipeline",
+        "voice",
+        "backend",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 118468,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-cb58de98-001e-45ce-b5e2-fd8305dc7bf9.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-c8a81837-7259-476b-b35e-841e2286329b",
+      "title": "Add QA Gate and Feedback Restart",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "pipeline",
+        "qa",
+        "frontend",
+        "backend",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 118878,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-c8a81837-7259-476b-b35e-841e2286329b.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-9b39f073-519f-4a44-afd3-bdce1507ada7",
+      "title": "Capture Post-QA Lessons in Shared Memory",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "pipeline",
+        "skill",
+        "memory",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 118878,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-9b39f073-519f-4a44-afd3-bdce1507ada7.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-12e63948-ba9b-45ba-b56f-ac6774d0fc27",
+      "title": "Show Execution Stage Labels on Master Tasks",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "pipeline",
+        "frontend",
+        "backend",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 119288,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-12e63948-ba9b-45ba-b56f-ac6774d0fc27.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-13c30821-a46f-444a-ada1-812d09bc8b52",
+      "title": "Add bounded directory discovery API",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "labels": [
+        "backend",
+        "filesystem",
+        "security",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 125808,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-13c30821-a46f-444a-ada1-812d09bc8b52.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-a742e70f-d9f7-40b9-8cc0-a82d032501c1",
+      "title": "Initialize selected directory as a project",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "labels": [
+        "backend",
+        "git",
+        "project-lifecycle",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 125808,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-a742e70f-d9f7-40b9-8cc0-a82d032501c1.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-6f837463-48c3-48c1-a05d-820d33f4542f",
+      "title": "Add project directory picker to creation modal",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "labels": [
+        "frontend",
+        "accessibility",
+        "project-creation",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 126218,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-6f837463-48c3-48c1-a05d-820d33f4542f.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-e15e86ab-6b96-435f-8e7a-e1befa9c49d4",
+      "title": "Verify and integrate local directory creation",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "labels": [
+        "verification",
+        "browser-test",
+        "integration",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 126218,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-e15e86ab-6b96-435f-8e7a-e1befa9c49d4.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-codex-skill-1784291353486-1830b14d",
+      "title": "retrospect-and-close-task result",
+      "cardType": "codex-skill-run",
+      "x": -9946,
+      "y": 122748,
+      "w": 700,
+      "h": 260,
+      "status": "todo",
+      "codexRunId": "codex-skill-1784291353486-1830b14d",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-codex-skill-1784291353486-1830b14d.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784291353486-1830b14d",
+      "executionStatus": "running",
+      "executionRunId": "codex-skill-1784291353486-1830b14d",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784291353486-1830b14d.md",
+      "codexPipelineRunId": "codex-skill-1784291353486-1830b14d",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexSkillName": "retrospect-and-close-task"
+    },
+    {
+      "id": "card-codex-skill-1784291362396-3764fdee",
+      "title": "retrospect-and-close-task result",
+      "cardType": "codex-skill-run",
+      "x": -9946,
+      "y": 113568,
+      "w": 700,
+      "h": 260,
+      "status": "todo",
+      "codexPipelineRunId": "codex-skill-1784291362396-3764fdee",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexRunId": "codex-skill-1784291362396-3764fdee",
+      "codexSkillName": "retrospect-and-close-task",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-codex-skill-1784291362396-3764fdee.md"
       },
       "facts": [],
       "fields": []
@@ -14941,6 +15350,102 @@
       "from": "card-50cbfca8-47c3-460e-acad-bd4bd3c7062c",
       "to": "card-c3123d02-6d2e-4cbb-8de3-7dc697ebb81e",
       "label": "subtask"
+    },
+    {
+      "id": "rel-1a2dd1bd-1ed1-42f6-952e-07b291faf146",
+      "from": "card-0fecda0d-a333-4116-99c5-9f7a604f22d2",
+      "to": "card-c3a65879-7f81-45fc-9424-26aa781f2647",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-ee531e7e-aeb1-44f0-8613-b16ed14be888",
+      "from": "card-c2294c71-cb87-49d6-8886-002cd0f6b036",
+      "to": "card-82f0b14a-a296-4184-903b-fd14c0111c36",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-7d04627e-02a2-4fb1-8172-94cf1eab9669",
+      "from": "card-c2294c71-cb87-49d6-8886-002cd0f6b036",
+      "to": "card-3dfae988-93c3-46a0-92e4-f42ae7354365",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-61c21253-a408-44bf-8276-2d5a45118d27",
+      "from": "card-c2294c71-cb87-49d6-8886-002cd0f6b036",
+      "to": "card-e2723f59-f242-47c8-86e3-b5c20a752f83",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-df5f091a-f4eb-4d78-9a74-a7733def041e",
+      "from": "card-c2294c71-cb87-49d6-8886-002cd0f6b036",
+      "to": "card-fe53223c-7286-49f9-a225-2a877e93f6f6",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-2f7c1bc5-970c-47d6-9640-87e00acf1749",
+      "from": "card-c2294c71-cb87-49d6-8886-002cd0f6b036",
+      "to": "card-fd57d8d7-0828-4970-abed-c6425bcdaa27",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-f0f1f0fc-cccb-4e89-9f76-927fce13938c",
+      "from": "card-c2294c71-cb87-49d6-8886-002cd0f6b036",
+      "to": "card-cb58de98-001e-45ce-b5e2-fd8305dc7bf9",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-511c82d4-4368-4c81-9572-c1fe38ed0c0c",
+      "from": "card-c2294c71-cb87-49d6-8886-002cd0f6b036",
+      "to": "card-c8a81837-7259-476b-b35e-841e2286329b",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-a680e7ab-ffc6-42f7-b0c9-81d70c19bcf2",
+      "from": "card-c2294c71-cb87-49d6-8886-002cd0f6b036",
+      "to": "card-9b39f073-519f-4a44-afd3-bdce1507ada7",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-e61997f7-ddc8-4f78-b0bc-bf71c5fb938a",
+      "from": "card-c2294c71-cb87-49d6-8886-002cd0f6b036",
+      "to": "card-12e63948-ba9b-45ba-b56f-ac6774d0fc27",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-7c79e4ab-ce74-4028-91ec-e86d6552a9a6",
+      "from": "card-c078ecda-66ec-41a2-8af3-7fe5141d643a",
+      "to": "card-13c30821-a46f-444a-ada1-812d09bc8b52",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-a024d074-52a9-41a9-9d7b-eb01e579ec94",
+      "from": "card-c078ecda-66ec-41a2-8af3-7fe5141d643a",
+      "to": "card-a742e70f-d9f7-40b9-8cc0-a82d032501c1",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-7b7c3f39-7038-46fc-bd26-ea158b6c38b8",
+      "from": "card-c078ecda-66ec-41a2-8af3-7fe5141d643a",
+      "to": "card-6f837463-48c3-48c1-a05d-820d33f4542f",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-a59965c4-06c3-410c-a80a-f805c8a74b95",
+      "from": "card-c078ecda-66ec-41a2-8af3-7fe5141d643a",
+      "to": "card-e15e86ab-6b96-435f-8e7a-e1befa9c49d4",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-codex-skill-1784291353486-1830b14d-1",
+      "from": "card-dc631595-1c61-4852-88d1-bf6ef845ea11",
+      "to": "card-codex-skill-1784291353486-1830b14d",
+      "label": "retrospect-and-close-task"
+    },
+    {
+      "id": "rel-codex-skill-1784291362396-3764fdee-1",
+      "from": "card-8b1412c6-9cfb-4501-a39b-3b0b8ee4bdc5",
+      "to": "card-codex-skill-1784291362396-3764fdee",
+      "label": "retrospect-and-close-task"
     }
   ],
   "annotations": [
@@ -16257,7 +16762,7 @@
       "width": 1200,
       "height": 900,
       "color": "#895cfa",
-      "label": "Shift+X voice upload lifecycle",
+      "label": "Shift+X voice launch lifecycle",
       "comments": []
     },
     {
@@ -16267,7 +16772,7 @@
       "width": 1200,
       "height": 900,
       "color": "#895cfa",
-      "label": "Full Exec Pipeline Stage Label Study",
+      "label": "Full Exec Complex Execution Lifecycle",
       "comments": []
     },
     {
@@ -16338,6 +16843,16 @@
       "height": 900,
       "color": "#895cfa",
       "label": "New task intake",
+      "comments": []
+    },
+    {
+      "id": "zone-ce328a8a-3b00-49af-a099-2595b2fdce5d",
+      "x": -10462,
+      "y": 125748,
+      "width": 1200,
+      "height": 900,
+      "color": "#895cfa",
+      "label": "Local directory project creation",
       "comments": []
     }
   ],
@@ -16487,7 +17002,10 @@
     "thread-card-603acaa4-34c6-4a59-aaba-1a681c650311": ".decision-os/threads/specs/thread-card-603acaa4-34c6-4a59-aaba-1a681c650311.md",
     "thread-card-4b25514a-b85e-4ef0-913e-236d3f504cb5": ".decision-os/threads/specs/thread-card-4b25514a-b85e-4ef0-913e-236d3f504cb5.md",
     "thread-card-dc631595-1c61-4852-88d1-bf6ef845ea11": ".decision-os/threads/specs/thread-card-dc631595-1c61-4852-88d1-bf6ef845ea11.md",
-    "thread-card-50cbfca8-47c3-460e-acad-bd4bd3c7062c": ".decision-os/threads/specs/thread-card-50cbfca8-47c3-460e-acad-bd4bd3c7062c.md"
+    "thread-card-50cbfca8-47c3-460e-acad-bd4bd3c7062c": ".decision-os/threads/specs/thread-card-50cbfca8-47c3-460e-acad-bd4bd3c7062c.md",
+    "thread-card-c078ecda-66ec-41a2-8af3-7fe5141d643a": ".decision-os/threads/specs/thread-card-c078ecda-66ec-41a2-8af3-7fe5141d643a.md",
+    "thread-card-codex-skill-1784291353486-1830b14d": ".decision-os/threads/specs/thread-card-codex-skill-1784291353486-1830b14d.md",
+    "thread-card-codex-skill-1784291362396-3764fdee": ".decision-os/threads/specs/thread-card-codex-skill-1784291362396-3764fdee.md"
   },
   "deletedNoteIds": {
     "thread-card-7074d33a-39da-42a1-b470-673cbe221def": [
