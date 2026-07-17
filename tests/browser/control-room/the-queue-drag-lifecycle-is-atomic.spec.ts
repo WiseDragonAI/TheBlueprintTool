@@ -15,6 +15,7 @@ import { chromium, type Browser, type Page } from '@playwright/test';
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const chromiumExecutablePath = '/snap/bin/chromium';
 const queueArtifactSelector = '.queue-task-fallback, .queue-task-ghost, .queue-task-chosen, .queue-task-dragging';
+const queueTaskSelector = '[data-control-column-list="queue"] > .control-task';
 
 test('queue reorder stays atomic across pointer, touch, refresh, cancellation, success, and rejection', { timeout: 60_000 }, async () => {
   const workspace = createQueueWorkspace();
@@ -32,15 +33,22 @@ test('queue reorder stays atomic across pointer, touch, refresh, cancellation, s
     page.on('pageerror', (error) => pageErrors.push(error.message));
     page.on('request', (request) => { if (request.method() === 'PATCH') patchRequests.push(request.url()); });
     await openQueue(page, server.url);
-    const projectId = await page.locator('.control-task').first().evaluate((row) => decodeURIComponent(String((row as HTMLElement).dataset.taskId).split('--')[0]));
+    const projectId = await page.locator(queueTaskSelector).first().evaluate((row) => decodeURIComponent(String((row as HTMLElement).dataset.taskId).split('--')[0]));
 
-    let releasePersistence!: () => void;
-    const persistenceGate = new Promise<void>((resolveGate) => { releasePersistence = resolveGate; });
+    let persistenceHeld = true;
+    const heldRoutes: Array<{ continue(): Promise<void> }> = [];
+    const releasePersistence = async () => {
+      persistenceHeld = false;
+      await Promise.all(heldRoutes.splice(0).map((route) => route.continue()));
+    };
     let heldMutations = 0;
     await page.route('**/decision-os/tasks', async (route) => {
       if (!isQueueRankMutation(route.request())) return route.continue();
       heldMutations += 1;
-      await persistenceGate;
+      if (persistenceHeld) {
+        heldRoutes.push(route);
+        return;
+      }
       await route.continue();
     });
     await dragWithMouse(page, 0, 2);
@@ -49,11 +57,20 @@ test('queue reorder stays atomic across pointer, touch, refresh, cancellation, s
       assert.fail(`Queue persistence did not start. PATCH requests: ${JSON.stringify(patchRequests)}. Page errors: ${JSON.stringify(pageErrors)}.`);
     });
     assert.equal(heldMutations, 1, 'optimistic order must render before the first sequential persistence request resolves');
-    releasePersistence();
-    await waitForPersistedRanks(workspace.cardsRoot, { alpha: 3, beta: 1, gamma: 2 });
+    await assertCanonicalQueue(page, 3);
+
+    await page.waitForTimeout(220);
+    await page.mouse.move(1, 1);
+    await dragWithMouse(page, 2, 0);
+    await waitForOrder(page, ['Alpha', 'Beta', 'Gamma']);
+    assert.equal(heldMutations, 1, 'the second optimistic reorder must queue behind the active persistence batch');
+    await releasePersistence();
+    await waitForPersistedRanks(workspace.cardsRoot, { alpha: 1, beta: 2, gamma: 3 });
+    await assertCanonicalQueue(page, 3);
     await page.unroute('**/decision-os/tasks');
+
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await waitForOrder(page, ['Beta', 'Gamma', 'Alpha']);
+    await waitForOrder(page, ['Alpha', 'Beta', 'Gamma']);
     await assertCanonicalQueue(page, 3);
 
     await page.route('**/decision-os/tasks', async (route) => {
@@ -62,11 +79,11 @@ test('queue reorder stays atomic across pointer, touch, refresh, cancellation, s
     });
     await dragWithMouse(page, 0, 2);
     await page.locator('#error-view:not([hidden])').waitFor({ state: 'visible' });
-    await waitForOrder(page, ['Beta', 'Gamma', 'Alpha']);
+    await waitForOrder(page, ['Alpha', 'Beta', 'Gamma']);
     await assertCanonicalQueue(page, 3);
     await page.unroute('**/decision-os/tasks');
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await waitForOrder(page, ['Beta', 'Gamma', 'Alpha']);
+    await waitForOrder(page, ['Alpha', 'Beta', 'Gamma']);
 
     await beginMouseDrag(page, 0, 1);
     await page.waitForSelector('body > .queue-task-fallback');
@@ -77,7 +94,7 @@ test('queue reorder stays atomic across pointer, touch, refresh, cancellation, s
     });
     assert.equal((await titleMutation).ok, true);
     await page.waitForTimeout(180);
-    assert.equal(await page.locator('#control-task-list > .control-task').count(), 3, 'live refresh must not remount the queue during a drag');
+    assert.equal(await page.locator(queueTaskSelector).count(), 3, 'live refresh must not remount the queue during a drag');
     await page.mouse.up();
     await page.getByText('Gamma refreshed', { exact: true }).waitFor();
     await assertCanonicalQueue(page, 3);
@@ -92,7 +109,7 @@ test('queue reorder stays atomic across pointer, touch, refresh, cancellation, s
     await openQueue(touchPage, server.url);
     const beforeTouch = await queueOrder(touchPage);
     await dragWithTouch(touchPage, 0, 1);
-    await touchPage.waitForFunction((before) => JSON.stringify([...document.querySelectorAll('.control-task strong')].map((node) => node.textContent)) !== JSON.stringify(before), beforeTouch);
+    await touchPage.waitForFunction(({ selector, before }) => JSON.stringify([...document.querySelectorAll(`${selector} strong`)].map((node) => node.textContent)) !== JSON.stringify(before), { selector: queueTaskSelector, before: beforeTouch });
     await assertCanonicalQueue(touchPage, 3);
     await touchContext.close();
   } finally {
@@ -105,12 +122,12 @@ test('queue reorder stays atomic across pointer, touch, refresh, cancellation, s
 async function openQueue(page: Page, url: string): Promise<void> {
   await page.goto(url, { waitUntil: 'domcontentloaded' });
   await page.locator('#control-room-view:not([hidden])').waitFor({ state: 'visible' });
-  await page.waitForFunction(() => document.querySelectorAll('.control-task').length === 3);
+  await page.waitForFunction((selector) => document.querySelectorAll(selector).length === 3, queueTaskSelector);
 }
 
 async function beginMouseDrag(page: Page, from: number, to: number): Promise<void> {
-  const source = await page.locator('.control-task').nth(from).boundingBox();
-  const target = await page.locator('.control-task').nth(to).boundingBox();
+  const source = await page.locator(queueTaskSelector).nth(from).boundingBox();
+  const target = await page.locator(queueTaskSelector).nth(to).boundingBox();
   assert.ok(source && target);
   await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
   await page.mouse.down();
@@ -123,8 +140,8 @@ async function dragWithMouse(page: Page, from: number, to: number): Promise<void
 }
 
 async function dragWithTouch(page: Page, from: number, to: number): Promise<void> {
-  const source = await page.locator('.control-task').nth(from).boundingBox();
-  const target = await page.locator('.control-task').nth(to).boundingBox();
+  const source = await page.locator(queueTaskSelector).nth(from).boundingBox();
+  const target = await page.locator(queueTaskSelector).nth(to).boundingBox();
   assert.ok(source && target);
   const session = await page.context().newCDPSession(page);
   const start = { x: source.x + source.width / 2, y: source.y + source.height / 2 };
@@ -138,15 +155,15 @@ async function dragWithTouch(page: Page, from: number, to: number): Promise<void
 }
 
 async function queueOrder(page: Page): Promise<string[]> {
-  return page.locator('.control-task strong').allTextContents();
+  return page.locator(`${queueTaskSelector} strong`).allTextContents();
 }
 
 async function waitForOrder(page: Page, expected: string[]): Promise<void> {
-  await page.waitForFunction((order) => JSON.stringify([...document.querySelectorAll('.control-task strong')].map((node) => node.textContent)) === JSON.stringify(order), expected);
+  await page.waitForFunction(({ selector, order }) => JSON.stringify([...document.querySelectorAll(`${selector} strong`)].map((node) => node.textContent)) === JSON.stringify(order), { selector: queueTaskSelector, order: expected });
 }
 
 async function assertCanonicalQueue(page: Page, expectedRows: number): Promise<void> {
-  await page.waitForFunction(({ selector, count }) => document.querySelectorAll(selector).length === 0 && document.querySelectorAll('#control-task-list > .control-task').length === count, { selector: queueArtifactSelector, count: expectedRows });
+  await page.waitForFunction(({ artifactSelector, taskSelector, count }) => document.querySelectorAll(artifactSelector).length === 0 && document.querySelectorAll(taskSelector).length === count, { artifactSelector: queueArtifactSelector, taskSelector: queueTaskSelector, count: expectedRows });
   assert.equal(await page.locator('body > .control-task').count(), 0);
 }
 
