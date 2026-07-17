@@ -9,6 +9,17 @@ import {
   readCodexPipelineStore,
   writeCodexPipelineStore,
 } from '@backend/business/codex/helper/codex-pipeline-store.js';
+import { migrateLegacyProjectPipelines, readScopedCodexPipelineStores } from '@backend/business/codex/helper/server-pipeline-catalog.js';
+
+function pipelineFixture(id: string, stepId: string, name = id): Record<string, unknown> {
+  return {
+    pipelines: [{ id, name, purpose: '', stepIds: [stepId], createdAt: 'one', updatedAt: 'one' }],
+    steps: [{ id: stepId, name: stepId, purpose: '', skills: [], createdAt: 'one', updatedAt: 'one' }],
+    runs: [],
+    skillLibrary: [],
+    activeWorkspaceRun: null,
+  };
+}
 
 test('pipeline store starts empty and preserves ordered reusable definitions across a durable round-trip', () => {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-pipeline-store-'));
@@ -142,5 +153,71 @@ test('an invalid store file is reported without corrupting or rewriting it', () 
     assert.equal(readFileSync(file, 'utf8'), '{invalid-json');
   } finally {
     rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('server pipeline catalog takes precedence while retaining non-conflicting project definitions', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-scoped-pipelines-'));
+  const serverDecisionOsRoot = join(root, '.decision-os');
+  const projectDecisionOsRoot = join(root, 'project', '.decision-os');
+  try {
+    writeCodexPipelineStore({ decisionOsRoot: serverDecisionOsRoot, store: pipelineFixture('shared', 'server-step', 'Server') });
+    writeCodexPipelineStore({
+      decisionOsRoot: projectDecisionOsRoot,
+      store: {
+        ...pipelineFixture('shared', 'project-step', 'Project'),
+        pipelines: [
+          ...(pipelineFixture('shared', 'project-step', 'Project').pipelines as unknown[]),
+          { id: 'local', name: 'Local', purpose: '', stepIds: ['local-step'], createdAt: 'one', updatedAt: 'one' },
+        ],
+        steps: [
+          ...(pipelineFixture('shared', 'project-step', 'Project').steps as unknown[]),
+          { id: 'local-step', name: 'Local step', purpose: '', skills: [], createdAt: 'one', updatedAt: 'one' },
+        ],
+      },
+    });
+    const scoped = readScopedCodexPipelineStores({
+      decisionOsRoot: projectDecisionOsRoot,
+      runtime: { serverRoot: root },
+    });
+    assert.deepEqual(scoped.pipelines.map((pipeline) => [pipeline.id, pipeline.name, pipeline.scope]), [
+      ['shared', 'Server', 'server'],
+      ['local', 'Local', 'project'],
+    ]);
+    assert.deepEqual(scoped.steps.map((step) => [step.id, step.scope]), [
+      ['server-step', 'server'],
+      ['project-step', 'project'],
+      ['local-step', 'project'],
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('legacy project pipelines migrate once into a new server catalog and future project pipelines stay local', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-migrate-pipelines-'));
+  const serverDecisionOsRoot = join(root, '.decision-os');
+  const firstProject = join(root, 'a', '.decision-os');
+  const secondProject = join(root, 'b', '.decision-os');
+  try {
+    writeCodexPipelineStore({ decisionOsRoot: firstProject, store: pipelineFixture('first', 'first-step') });
+    writeCodexPipelineStore({ decisionOsRoot: secondProject, store: pipelineFixture('second', 'second-step') });
+    const migrated = migrateLegacyProjectPipelines({
+      serverDecisionOsRoot,
+      projectDecisionOsRoots: [secondProject, firstProject],
+    });
+    assert.deepEqual(migrated, { migratedPipelineIds: ['first', 'second'], retainedCollisionIds: [] });
+    assert.deepEqual(readCodexPipelineStore({ decisionOsRoot: serverDecisionOsRoot }).store.pipelines.map((pipeline) => pipeline.id), ['first', 'second']);
+    assert.deepEqual(readCodexPipelineStore({ decisionOsRoot: firstProject }).store.pipelines, []);
+    assert.deepEqual(readCodexPipelineStore({ decisionOsRoot: secondProject }).store.pipelines, []);
+
+    writeCodexPipelineStore({ decisionOsRoot: firstProject, store: pipelineFixture('future-local', 'future-step') });
+    assert.deepEqual(migrateLegacyProjectPipelines({ serverDecisionOsRoot, projectDecisionOsRoots: [firstProject] }), {
+      migratedPipelineIds: [],
+      retainedCollisionIds: [],
+    });
+    assert.equal(readCodexPipelineStore({ decisionOsRoot: firstProject }).store.pipelines[0].id, 'future-local');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });

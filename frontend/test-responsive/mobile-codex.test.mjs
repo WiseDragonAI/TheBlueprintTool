@@ -88,7 +88,9 @@ test('catalog, save, run, invalid-reference, and warning messages stay actionabl
   assert.match(script, /message\('\.pipeline-editor-message', formatError\(error\), true\)/);
 });
 
-test('global skills and pipelines flatten managed project libraries without a project gate', () => {
+test('global skills and pipelines combine the server catalog with managed project libraries', () => {
+  assert.match(script, /jsonRequest\('\/api\/codex\/server-pipelines'\)/);
+  assert.match(script, /jsonRequest\('\/api\/codex\/server-skills'\)/);
   assert.match(script, /Promise\.allSettled\(state\.projects\.map/);
   assert.match(script, /const bySkill = new Map\(\)/);
   assert.match(script, /existing\.projects\.push\(library\.project\)/);
@@ -109,11 +111,15 @@ test('library surfaces expose search, project filters, tag filters, and clearing
   assert.match(styles, /\.codex-filter-row \{[^}]*overflow-x: auto/);
 });
 
-test('global pipeline editing remains scoped to the owning project', () => {
-  assert.match(script, /if \(pipeline\?\.projectId\) state\.projectId = pipeline\.projectId/);
-  assert.match(script, /item\.projectId !== state\.projectId/);
+test('global pipeline editing creates server definitions at All projects and preserves local ownership', () => {
+  assert.match(script, /pipeline\?\.scope === 'server'/);
+  assert.match(script, /state\.projectFilter === 'All' \? 'server' : 'project'/);
+  assert.match(script, /editor\.scope === 'server' \? '\/api\/codex\/server-pipelines' : '\/api\/codex\/pipelines'/);
+  assert.match(script, /state\.projectFilter === 'All' \? '' : state\.projectFilter/);
+  assert.doesNotMatch(script, /if \(state\.projectFilter === 'All'\) return/);
+  assert.match(script, /item\.scope !== 'server'/);
   assert.match(script, /project\.id === state\.projectId/);
-  assert.match(script, /state\.projectFilter === 'All'/);
+  assert.match(script, /projects: state\.projects/);
 });
 
 test('skill libraries share favorite ordering, colored categories, and scope-specific detail actions', () => {

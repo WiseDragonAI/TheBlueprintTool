@@ -4,7 +4,7 @@
  */
 const modelOptions = ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.2'];
 const effortOptions = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
-const state = { projectId: '', projects: [], ledgerId: '', cardId: '', skills: [], availableTags: [], tagSaving: false, pipelines: [], steps: [], processTab: 'skills', libraryScope: 'project', query: '', projectFilter: 'All', tagFilter: 'All', selected: null, editor: null, pickerStepId: '' };
+const state = { projectId: '', projects: [], ledgerId: '', cardId: '', skills: [], serverSkills: [], availableTags: [], tagSaving: false, pipelines: [], steps: [], processTab: 'skills', libraryScope: 'project', query: '', projectFilter: 'All', tagFilter: 'All', selected: null, editor: null, pickerStepId: '' };
 const el = (selector) => document.querySelector(selector);
 const uid = (prefix) => `${prefix}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
 const message = (selector, text, bad = false) => { const node = el(selector); node.textContent = text; node.classList.toggle('error', bad); };
@@ -45,16 +45,20 @@ function filteredRecords(records) {
   return state.processTab === 'skills' ? sortSkillsByFavorite(filtered) : filtered;
 }
 async function loadGlobalLibraries() {
-  const results = await Promise.allSettled(state.projects.map(async (project) => {
+  const [serverResult, results] = await Promise.all([
+    Promise.all([jsonRequest('/api/codex/server-skills'), jsonRequest('/api/codex/server-pipelines')]),
+    Promise.allSettled(state.projects.map(async (project) => {
     const [skills, pipelines] = await Promise.all([
       jsonRequest('/api/codex/skills', undefined, project.id),
       jsonRequest('/api/codex/pipelines', undefined, project.id)
     ]);
     return { project, skills: skills.skills || [], availableTags: skills.availableTags || [], pipelines: pipelines.pipelines || [], steps: pipelines.steps || [], issues: pipelines.issues || [] };
-  }));
+    }))
+  ]);
+  const [serverSkills, serverPipelines] = serverResult;
   const loaded = results.filter((result) => result.status === 'fulfilled').map((result) => result.value);
   if (!loaded.length && state.projects.length) throw new Error('Could not load any project libraries.');
-  state.availableTags = [...new Set(loaded.flatMap((library) => library.availableTags))];
+  state.availableTags = [...new Set([...(serverSkills.availableTags || []), ...loaded.flatMap((library) => library.availableTags)])];
   if (!state.availableTags.length) state.availableTags = [...skillCategories];
   const bySkill = new Map();
   for (const library of loaded) {
@@ -70,12 +74,19 @@ async function loadGlobalLibraries() {
     }
   }
   state.skills = [...bySkill.values()].sort((left, right) => left.name.localeCompare(right.name));
-  state.pipelines = loaded.flatMap(({ project, pipelines }) => pipelines.map((pipeline) => ({ ...pipeline, projectId: project.id, projectName: project.name, projectColor: project.color })));
-  state.steps = loaded.flatMap(({ project, steps }) => steps.map((step) => ({ ...step, projectId: project.id })));
+  state.serverSkills = Array.isArray(serverSkills.skills) ? serverSkills.skills : [];
+  state.pipelines = [
+    ...(serverPipelines.pipelines || []).map((pipeline) => ({ ...pipeline, scope: 'server', projectId: '', projectName: 'Server', projectColor: '#38d9e8', projects: state.projects })),
+    ...loaded.flatMap(({ project, pipelines }) => pipelines.filter((pipeline) => pipeline.scope !== 'server').map((pipeline) => ({ ...pipeline, scope: 'project', projectId: project.id, projectName: project.name, projectColor: project.color })))
+  ];
+  state.steps = [
+    ...(serverPipelines.steps || []).map((step) => ({ ...step, scope: 'server', projectId: '' })),
+    ...loaded.flatMap(({ project, steps }) => steps.filter((step) => step.scope !== 'server').map((step) => ({ ...step, scope: 'project', projectId: project.id })))
+  ];
   return { issues: loaded.flatMap((library) => library.issues), failedProjects: results.length - loaded.length };
 }
 function button(label, className, action) { const node = document.createElement('button'); node.type = 'button'; node.className = className; node.textContent = label; node.addEventListener('click', action); return node; }
-function pipelineSteps(pipeline) { return pipeline.stepIds.map((id) => state.steps.find((step) => step.id === id && (!pipeline.projectId || step.projectId === pipeline.projectId))).filter(Boolean); }
+function pipelineSteps(pipeline) { return pipeline.stepIds.map((id) => state.steps.find((step) => step.id === id && step.scope === pipeline.scope && (pipeline.scope === 'server' || step.projectId === pipeline.projectId))).filter(Boolean); }
 function renderFilterChips(containerSelector, values, selected, className, onSelect) {
   const container = el(containerSelector);
   container.replaceChildren(...values.map((value) => {
@@ -278,17 +289,17 @@ function renderPipelineLibrary() {
   const pipelines = filteredRecords(state.pipelines);
   state.processTab = priorTab;
   const create = el('.pipeline-new');
-  create.disabled = state.projectFilter === 'All';
-  create.title = create.disabled ? 'Choose a project filter to create a pipeline.' : '';
+  create.disabled = false;
+  create.title = state.projectFilter === 'All' ? 'Create a server-wide pipeline.' : 'Create a pipeline for this project.';
   el('.pipeline-library').replaceChildren(...pipelines.map((pipeline) => {
     const node = button('', 'codex-list-item', () => openEditor(pipeline)); const title = document.createElement('strong'); title.textContent = pipeline.name; const copy = document.createElement('span'); copy.textContent = pipeline.purpose || `${pipeline.stepIds.length} steps`; const metadata = document.createElement('small'); metadata.textContent = `${pipeline.projectName} · ${pipelineTags(pipeline).join(' · ')}`; node.style.borderInlineStartColor = pipeline.projectColor; node.append(title, copy, metadata); return node;
   }));
   if (!pipelines.length) message('.pipelines-message', state.pipelines.length ? 'No matching pipelines.' : 'No saved pipelines.');
 }
 function clonePipeline(pipeline) {
-  return { id: pipeline?.id || uid('codex-pipeline'), existingId: pipeline?.id || '', name: pipeline?.name || '', purpose: pipeline?.purpose || '', steps: pipeline ? pipelineSteps(pipeline).map((step) => ({ ...step, skills: step.skills.map((skill) => ({ ...skill })) })) : [] };
+  return { id: pipeline?.id || uid('codex-pipeline'), existingId: pipeline?.id || '', scope: pipeline?.scope || (state.projectFilter === 'All' ? 'server' : 'project'), name: pipeline?.name || '', purpose: pipeline?.purpose || '', steps: pipeline ? pipelineSteps(pipeline).map((step) => ({ ...step, skills: step.skills.map((skill) => ({ ...skill })) })) : [] };
 }
-function openEditor(pipeline = null) { if (pipeline?.projectId) state.projectId = pipeline.projectId; state.editor = clonePipeline(pipeline); el('.pipelines-modal').close(); el('.pipeline-editor-modal').showModal(); renderEditor(); }
+function openEditor(pipeline = null) { if (pipeline?.scope === 'server') state.projectId = ''; else if (pipeline?.projectId) state.projectId = pipeline.projectId; state.editor = clonePipeline(pipeline); el('.pipelines-modal').close(); el('.pipeline-editor-modal').showModal(); renderEditor(); }
 function move(items, index, delta) { const target = index + delta; if (target < 0 || target >= items.length) return; [items[index], items[target]] = [items[target], items[index]]; }
 function renderEditor() {
   const editor = state.editor; const form = el('.pipeline-editor-form'); form.elements['pipeline-name'].value = editor.name; form.elements['pipeline-purpose'].value = editor.purpose;
@@ -310,7 +321,7 @@ function renderStepSkill(step, skill, index) {
   const effort = document.createElement('select'); effort.setAttribute('aria-label', `${skill.skillName} effort`); effort.append(option('', 'Inherit effort'), ...effortOptions.map((item) => option(item))); effort.value = skill.codexEffort || ''; effort.addEventListener('change', () => { skill.codexEffort = effort.value || null; });
   const controls = document.createElement('span'); const up = button('↑', 'codex-icon', () => { move(step.skills, index, -1); renderEditor(); }); up.disabled = index === 0; up.setAttribute('aria-label', 'Move skill earlier'); const down = button('↓', 'codex-icon', () => { move(step.skills, index, 1); renderEditor(); }); down.disabled = index === step.skills.length - 1; down.setAttribute('aria-label', 'Move skill later'); const remove = button('×', 'codex-icon', () => { step.skills.splice(index, 1); renderEditor(); }); remove.setAttribute('aria-label', 'Remove skill'); controls.append(up, down, remove); node.append(title, model, effort, controls); return node;
 }
-function openSkillPicker(stepId) { state.pickerStepId = stepId; el('.pipeline-editor-modal').close(); el('.skill-picker-modal').showModal(); const skills = state.skills.filter((skill) => !skill.projects?.length || skill.projects.some((project) => project.id === state.projectId)); message('.skill-picker-message', skills.length ? '' : 'No skills are available.'); el('.skill-picker-list').replaceChildren(...skills.map((skill) => button(skill.name, 'codex-list-item', () => { const step = state.editor.steps.find((item) => item.id === stepId); step.skills.push({ id: uid('codex-pipeline-skill'), skillName: skill.name, codexModel: null, codexEffort: null }); closePicker(); })) ); }
+function openSkillPicker(stepId) { state.pickerStepId = stepId; el('.pipeline-editor-modal').close(); el('.skill-picker-modal').showModal(); const skills = state.editor.scope === 'server' ? state.serverSkills : state.skills.filter((skill) => !skill.projects?.length || skill.projects.some((project) => project.id === state.projectId)); message('.skill-picker-message', skills.length ? '' : 'No skills are available.'); el('.skill-picker-list').replaceChildren(...skills.map((skill) => button(skill.name, 'codex-list-item', () => { const step = state.editor.steps.find((item) => item.id === stepId); step.skills.push({ id: uid('codex-pipeline-skill'), skillName: skill.name, codexModel: null, codexEffort: null }); closePicker(); })) ); }
 function closePicker() { el('.skill-picker-modal').close(); el('.pipeline-editor-modal').showModal(); renderEditor(); }
 async function saveEditor() {
   const editor = state.editor; const form = el('.pipeline-editor-form'); editor.name = form.elements['pipeline-name'].value.trim(); editor.purpose = form.elements['pipeline-purpose'].value.trim();
@@ -318,7 +329,7 @@ async function saveEditor() {
   const save = el('.pipeline-save'); setBusy(save, true); message('.pipeline-editor-message', 'Saving…');
   const pipeline = { id: editor.id, name: editor.name, purpose: editor.purpose, stepIds: editor.steps.map((step) => step.id) };
   const steps = editor.steps.map((step) => ({ id: step.id, name: step.name.trim(), purpose: step.purpose.trim(), skills: step.skills }));
-  try { const url = editor.existingId ? `/api/codex/pipelines/${encodeURIComponent(editor.existingId)}` : '/api/codex/pipelines'; const body = await jsonRequest(url, { method: editor.existingId ? 'PUT' : 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pipeline, steps }) }); const project = state.projects.find((item) => item.id === state.projectId); const savedPipelines = (body.pipelines || []).map((item) => ({ ...item, projectId: state.projectId, projectName: project?.name || '', projectColor: project?.color || '#20242b' })); const savedSteps = (body.steps || []).map((item) => ({ ...item, projectId: state.projectId })); if (state.libraryScope === 'global') { state.pipelines = [...state.pipelines.filter((item) => item.projectId !== state.projectId), ...savedPipelines]; state.steps = [...state.steps.filter((item) => item.projectId !== state.projectId), ...savedSteps]; } else { state.pipelines = savedPipelines; state.steps = savedSteps; } el('.pipeline-editor-modal').close(); el('.pipelines-modal').showModal(); renderPipelineLibrary(); message('.pipelines-message', body.issues?.map((issue) => issue.message).join(' ') || 'Pipeline saved.'); }
+  try { const base = editor.scope === 'server' ? '/api/codex/server-pipelines' : '/api/codex/pipelines'; const url = editor.existingId ? `${base}/${encodeURIComponent(editor.existingId)}` : base; const body = await jsonRequest(url, { method: editor.existingId ? 'PUT' : 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pipeline, steps, scope: editor.scope }) }, editor.scope === 'server' ? '' : state.projectId); const project = state.projects.find((item) => item.id === state.projectId); const savedPipelines = (body.pipelines || []).map((item) => ({ ...item, scope: editor.scope, projectId: editor.scope === 'server' ? '' : state.projectId, projectName: editor.scope === 'server' ? 'Server' : (project?.name || ''), projectColor: editor.scope === 'server' ? '#38d9e8' : (project?.color || '#20242b'), ...(editor.scope === 'server' ? { projects: state.projects } : {}) })); const savedSteps = (body.steps || []).map((item) => ({ ...item, scope: editor.scope, projectId: editor.scope === 'server' ? '' : state.projectId })); if (state.libraryScope === 'global') { state.pipelines = [...state.pipelines.filter((item) => editor.scope === 'server' ? item.scope !== 'server' : item.projectId !== state.projectId), ...savedPipelines]; state.steps = [...state.steps.filter((item) => editor.scope === 'server' ? item.scope !== 'server' : item.projectId !== state.projectId), ...savedSteps]; } else { state.pipelines = savedPipelines; state.steps = savedSteps; } el('.pipeline-editor-modal').close(); el('.pipelines-modal').showModal(); renderPipelineLibrary(); message('.pipelines-message', body.issues?.map((issue) => issue.message).join(' ') || 'Pipeline saved.'); }
   catch (error) { message('.pipeline-editor-message', formatError(error), true); } finally { setBusy(save, false); }
 }
 export function setMobileCodexContext(context) {
@@ -354,7 +365,7 @@ export function initializeMobileCodex() {
   el('.process-filter-clear').addEventListener('click', () => { state.query = ''; state.projectFilter = 'All'; state.tagFilter = 'All'; renderProcessList(); });
   el('.pipelines-search').addEventListener('input', (event) => { state.query = event.target.value; renderPipelineLibrary(); event.target.focus(); });
   el('.pipelines-filter-clear').addEventListener('click', () => { state.query = ''; state.projectFilter = 'All'; state.tagFilter = 'All'; renderPipelineLibrary(); });
-  el('.pipeline-new').addEventListener('click', () => { if (state.projectFilter === 'All') return; state.projectId = state.projectFilter; openEditor(); }); el('.pipeline-editor-back').addEventListener('click', () => { el('.pipeline-editor-modal').close(); el('.pipelines-modal').showModal(); });
+  el('.pipeline-new').addEventListener('click', () => { state.projectId = state.projectFilter === 'All' ? '' : state.projectFilter; openEditor(); }); el('.pipeline-editor-back').addEventListener('click', () => { el('.pipeline-editor-modal').close(); el('.pipelines-modal').showModal(); });
   el('.pipeline-add-step').addEventListener('click', () => { state.editor.steps.push({ id: uid('codex-step'), name: `Step ${state.editor.steps.length + 1}`, purpose: '', skills: [] }); renderEditor(); });
   el('.pipeline-editor-form').addEventListener('submit', (event) => { event.preventDefault(); void saveEditor(); }); el('.skill-picker-back').addEventListener('click', closePicker);
 }
