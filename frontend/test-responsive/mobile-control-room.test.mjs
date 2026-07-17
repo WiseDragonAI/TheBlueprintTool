@@ -303,12 +303,14 @@ test('delegates touch sorting and animation to vendored SortableJS', () => {
 });
 
 test('persists optimistic ranks without a success reload and reconciles the latest failure', () => {
-  const persistence = mobile.slice(mobile.indexOf('async function persistQueueOrder()'), mobile.indexOf('async function activateMasterTask'));
+  const persistence = mobile.slice(mobile.indexOf('function queueQueueOrderPersistence()'), mobile.indexOf('async function activateMasterTask'));
   assert.doesNotMatch(persistence, /task\.markdown|withQueueRank/);
-  assert.match(persistence, /task\.queueRank = index \+ 1/);
+  assert.match(persistence, /if \(task\.queueRank === queueRank\) return \[\]/);
+  assert.match(persistence, /task\.queueRank = queueRank/);
   assert.match(persistence, /cardPatch: \{ id: task\.cardId, queueRank \}/);
-  assert.match(persistence, /renderControlRoom\(\);[\s\S]*try \{/);
-  assert.doesNotMatch(persistence.match(/try \{[\s\S]*?\} catch/)[0], /loadControlRoom/);
+  assert.match(persistence, /queuePersistenceTail = queuePersistenceTail\.then/);
+  assert.match(persistence, /return persistQueueOrder\(mutations\)/);
+  assert.doesNotMatch(persistence.slice(0, persistence.indexOf('void queuePersistenceTail.then')), /renderControlRoom\(\)/);
   assert.match(persistence, /for \(const \{ task, queueRank \} of mutations\)/);
   assert.doesNotMatch(persistence, /Promise\.all/);
   assert.match(persistence, /sequence !== queuePersistenceSequence/);
@@ -316,8 +318,9 @@ test('persists optimistic ranks without a success reload and reconciles the late
 });
 
 test('defers authoritative Control Room refreshes until the queue gesture settles', () => {
-  assert.match(mobile, /deferDuringQueueDrag && queueDragInProgress\(\)[\s\S]*pendingControlRoomRefresh = true/);
-  assert.match(mobile, /refreshControlRoomFromEvent\(\)[\s\S]*queueDragInProgress\(\)[\s\S]*pendingControlRoomRefresh = true/);
+  assert.match(mobile, /queueRefreshBlocked\(\)[\s\S]*queueDragInProgress\(\) \|\| queuePersistenceActive/);
+  assert.match(mobile, /deferDuringQueueDrag && queueRefreshBlocked\(\)[\s\S]*pendingControlRoomRefresh = true/);
+  assert.match(mobile, /refreshControlRoomFromEvent\(\)[\s\S]*queueRefreshBlocked\(\)[\s\S]*pendingControlRoomRefresh = true/);
   assert.match(mobile, /flushPendingControlRoomRefresh/);
 });
 

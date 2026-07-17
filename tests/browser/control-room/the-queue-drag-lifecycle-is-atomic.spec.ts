@@ -34,13 +34,20 @@ test('queue reorder stays atomic across pointer, touch, refresh, cancellation, s
     await openQueue(page, server.url);
     const projectId = await page.locator('.control-task').first().evaluate((row) => decodeURIComponent(String((row as HTMLElement).dataset.taskId).split('--')[0]));
 
-    let releasePersistence!: () => void;
-    const persistenceGate = new Promise<void>((resolveGate) => { releasePersistence = resolveGate; });
+    let persistenceHeld = true;
+    const heldRoutes: Array<{ continue(): Promise<void> }> = [];
+    const releasePersistence = async () => {
+      persistenceHeld = false;
+      await Promise.all(heldRoutes.splice(0).map((route) => route.continue()));
+    };
     let heldMutations = 0;
     await page.route('**/decision-os/tasks', async (route) => {
       if (!isQueueRankMutation(route.request())) return route.continue();
       heldMutations += 1;
-      await persistenceGate;
+      if (persistenceHeld) {
+        heldRoutes.push(route);
+        return;
+      }
       await route.continue();
     });
     await dragWithMouse(page, 0, 2);
@@ -49,11 +56,20 @@ test('queue reorder stays atomic across pointer, touch, refresh, cancellation, s
       assert.fail(`Queue persistence did not start. PATCH requests: ${JSON.stringify(patchRequests)}. Page errors: ${JSON.stringify(pageErrors)}.`);
     });
     assert.equal(heldMutations, 1, 'optimistic order must render before the first sequential persistence request resolves');
-    releasePersistence();
-    await waitForPersistedRanks(workspace.cardsRoot, { alpha: 3, beta: 1, gamma: 2 });
+    await assertCanonicalQueue(page, 3);
+
+    await page.waitForTimeout(220);
+    await page.mouse.move(1, 1);
+    await dragWithMouse(page, 2, 0);
+    await waitForOrder(page, ['Alpha', 'Beta', 'Gamma']);
+    assert.equal(heldMutations, 1, 'the second optimistic reorder must queue behind the active persistence batch');
+    await releasePersistence();
+    await waitForPersistedRanks(workspace.cardsRoot, { alpha: 1, beta: 2, gamma: 3 });
+    await assertCanonicalQueue(page, 3);
     await page.unroute('**/decision-os/tasks');
+
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await waitForOrder(page, ['Beta', 'Gamma', 'Alpha']);
+    await waitForOrder(page, ['Alpha', 'Beta', 'Gamma']);
     await assertCanonicalQueue(page, 3);
 
     await page.route('**/decision-os/tasks', async (route) => {
@@ -62,11 +78,11 @@ test('queue reorder stays atomic across pointer, touch, refresh, cancellation, s
     });
     await dragWithMouse(page, 0, 2);
     await page.locator('#error-view:not([hidden])').waitFor({ state: 'visible' });
-    await waitForOrder(page, ['Beta', 'Gamma', 'Alpha']);
+    await waitForOrder(page, ['Alpha', 'Beta', 'Gamma']);
     await assertCanonicalQueue(page, 3);
     await page.unroute('**/decision-os/tasks');
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await waitForOrder(page, ['Beta', 'Gamma', 'Alpha']);
+    await waitForOrder(page, ['Alpha', 'Beta', 'Gamma']);
 
     await beginMouseDrag(page, 0, 1);
     await page.waitForSelector('body > .queue-task-fallback');

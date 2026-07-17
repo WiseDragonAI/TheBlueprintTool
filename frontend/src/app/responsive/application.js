@@ -73,6 +73,7 @@ let creationKind = '';
 let controlRoomScrollFrame = 0;
 let queuePersistenceSequence = 0;
 let queuePersistenceActive = false;
+let queuePersistenceTail = Promise.resolve(true);
 let queueSortable = null;
 let queueDragActive = false;
 let queueDragSettling = false;
@@ -845,17 +846,23 @@ function taskIdentity(task) {
 }
 
 function syncQueueFromDom() {
-  const orderedIds = [...elements['control-task-list'].querySelectorAll('.control-task')].map((row) => row.dataset.taskId);
+  const rows = [...elements['control-task-list'].querySelectorAll('.control-task')];
+  const orderedIds = rows.map((row) => row.dataset.taskId);
   const visible = filteredControlTasks();
   const byId = new Map(visible.map((task) => [taskIdentity(task), task]));
   const reordered = orderedIds.map((taskId) => byId.get(taskId)).filter(Boolean);
   const visibleIds = new Set(visible.map(taskIdentity));
   let replacementIndex = 0;
   state.controlRoom.queue = state.controlRoom.queue.map((task) => visibleIds.has(taskIdentity(task)) ? reordered[replacementIndex++] : task);
+  rows.forEach((row, index) => row.classList.toggle('next-task', index === 0));
 }
 
 function queueDragInProgress() {
   return queueDragActive || queueDragSettling;
+}
+
+function queueRefreshBlocked() {
+  return queueDragInProgress() || queuePersistenceActive;
 }
 
 function removeQueueDragArtifacts() {
@@ -872,17 +879,15 @@ function removeQueueDragArtifacts() {
 async function settleQueueDrag({ persist = false, rerender = false } = {}) {
   removeQueueDragArtifacts();
   if (rerender) renderControlRoom();
-  let persisted = true;
   try {
-    if (persist) persisted = await persistQueueOrder();
+    if (persist) queueQueueOrderPersistence();
   } finally {
     removeQueueDragArtifacts();
     queueDragActive = false;
     queueDragSettling = false;
     queueDragInterrupted = false;
-    if (!persisted) pendingControlRoomRefresh = false;
+    initializeQueueSortable();
     await flushPendingControlRoomRefresh();
-    if (!queueSortable) initializeQueueSortable();
   }
 }
 
@@ -900,7 +905,7 @@ function interruptQueueDrag() {
 function initializeQueueSortable() {
   queueSortable?.destroy();
   queueSortable = null;
-  if (queuePersistenceActive || state.controlTab !== 'queue' || filteredControlTasks().length < 2 || typeof globalThis.Sortable !== 'function') return;
+  if (state.controlTab !== 'queue' || filteredControlTasks().length < 2 || typeof globalThis.Sortable !== 'function') return;
   queueSortable = globalThis.Sortable.create(elements['control-task-list'], {
     animation: 180,
     draggable: '.control-task',
@@ -1140,7 +1145,7 @@ async function loadControlRoom({ force = false, deferDuringQueueDrag = false } =
   if (!response.ok) throw new Error(`Could not load the Control Room (${response.status}).`);
   const nextControlRoom = await response.json();
   const nextEtag = response.headers.get('etag') ?? '';
-  if (deferDuringQueueDrag && queueDragInProgress()) {
+  if (deferDuringQueueDrag && queueRefreshBlocked()) {
     pendingControlRoomRefresh = true;
     return false;
   }
@@ -1150,7 +1155,7 @@ async function loadControlRoom({ force = false, deferDuringQueueDrag = false } =
 }
 
 async function refreshControlRoomFromEvent() {
-  if (queueDragInProgress()) {
+  if (queueRefreshBlocked()) {
     pendingControlRoomRefresh = true;
     return;
   }
@@ -1163,7 +1168,7 @@ async function refreshControlRoomFromEvent() {
 }
 
 async function flushPendingControlRoomRefresh() {
-  if (!pendingControlRoomRefresh || queueDragInProgress()) return;
+  if (!pendingControlRoomRefresh || queueRefreshBlocked()) return;
   pendingControlRoomRefresh = false;
   await refreshControlRoomFromEvent();
 }
@@ -1182,17 +1187,40 @@ function subscribeControlRoomEvents() {
   controlRoomEventSource.addEventListener('card-content-change', refresh);
 }
 
-async function persistQueueOrder() {
+function queueQueueOrderPersistence() {
   const sequence = ++queuePersistenceSequence;
   queuePersistenceActive = true;
   const reordered = filteredControlTasks();
-  const mutations = reordered.map((task, index) => {
-    task.queueRank = index + 1;
+  const mutations = reordered.flatMap((task, index) => {
+    const queueRank = index + 1;
+    if (task.queueRank === queueRank) return [];
+    task.queueRank = queueRank;
     const source = state.controlRoom.allTasks.find((candidate) => candidate.projectId === task.projectId && candidate.cardId === task.cardId && candidate.ledgerId === task.ledgerId);
-    if (source) source.queueRank = index + 1;
-    return { task, queueRank: index + 1 };
+    if (source) source.queueRank = queueRank;
+    return [{ task, queueRank }];
   });
-  renderControlRoom();
+  queuePersistenceTail = queuePersistenceTail.then(async (previousSucceeded) => {
+    if (!previousSucceeded) return false;
+    return persistQueueOrder(mutations);
+  });
+  void queuePersistenceTail.then(async (persisted) => {
+    if (sequence !== queuePersistenceSequence) return;
+    try {
+      if (!persisted) {
+        pendingControlRoomRefresh = false;
+        await loadControlRoom({ force: true });
+        renderControlRoom();
+        setView('error-view');
+      }
+    } finally {
+      if (!persisted) queuePersistenceTail = Promise.resolve(true);
+      queuePersistenceActive = false;
+      await flushPendingControlRoomRefresh();
+    }
+  });
+}
+
+async function persistQueueOrder(mutations) {
   try {
     for (const { task, queueRank } of mutations) {
       await ledgerMutation(task.ledgerId, {
@@ -1202,14 +1230,8 @@ async function persistQueueOrder() {
     }
     return true;
   } catch (error) {
-    if (sequence !== queuePersistenceSequence) return false;
-    await loadControlRoom({ force: true });
-    renderControlRoom();
     elements['error-message'].textContent = error instanceof Error ? error.message : 'Queue order persistence failed.';
-    setView('error-view');
     return false;
-  } finally {
-    queuePersistenceActive = false;
   }
 }
 
