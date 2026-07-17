@@ -153,8 +153,14 @@ export async function handleResponsiveThreadShortcut(event) {
     if (!canvasState.threadPanelOpen && currentCard) openMobileThread(currentCard, getComputedStyle(document.querySelector('#card-view')).getPropertyValue('--zone-color').trim());
     if (canvasState.voice.recording) {
       const queueCodex = event.shiftKey;
-      const submitted = await stopVoiceRecording({ queueCodex });
-      if (queueCodex) await finishQueuedVoiceSubmission(submitted);
+      if (queueCodex) {
+        void stopVoiceRecording({
+          queueCodex: true,
+          onPersisted: () => void finishQueuedVoiceSubmission(true),
+        });
+      } else {
+        await stopVoiceRecording();
+      }
     } else void startVoiceRecording();
     return true;
   }

@@ -16,6 +16,7 @@ export type VoiceTranscriptionRequest = {
   threadId?: string;
   cardId?: string;
   queueCodex?: boolean;
+  onPersisted?: () => void;
 };
 
 function requestOptions(input: VoiceTranscriptionRequest | string | undefined): VoiceTranscriptionRequest {
@@ -57,5 +58,6 @@ export async function requestTranscription(audio: Blob | null, input: VoiceTrans
   }
   patchOptimisticThreadNote({ threadId, noteId, localVoiceUploadId: noteId });
   telemetry('voice-upload-persisted', { noteId, threadId, size: audio.size, type: audio.type });
+  options.onPersisted?.();
   return submitPendingVoiceUpload(noteId);
 }

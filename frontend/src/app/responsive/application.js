@@ -227,19 +227,7 @@ function navigate(path, replace = false) {
 }
 
 async function navigateVoiceSubmission() {
-  const destination = controlRoomPath('queue');
-  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
-  if (typeof document.startViewTransition !== 'function' || reducedMotion) {
-    await navigate(destination, true);
-    return;
-  }
-  document.documentElement.dataset.voiceHandoff = 'true';
-  try {
-    const transition = document.startViewTransition(() => navigate(destination, true));
-    await transition.finished;
-  } finally {
-    delete document.documentElement.dataset.voiceHandoff;
-  }
+  await navigate(controlRoomPath('queue'), true);
 }
 
 async function navigateTaskBack(destination) {
