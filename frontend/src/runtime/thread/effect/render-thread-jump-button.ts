@@ -8,6 +8,7 @@ import { saveThreadScrollPosition, scheduleThreadViewportPersistence, threadScro
 
 const threadJumpScrollHandlers = new WeakMap<HTMLElement, EventListener>();
 const previousScrollTop = new WeakMap<HTMLElement, number>();
+const renderSuppressedScrollTracking = new WeakSet<HTMLElement>();
 
 function activeSurface(): ThreadPanelTab {
   return state.threadActiveTabByThreadId?.[String(state.threadId ?? '')] === 'codex-log' ? 'codex-log' : 'thread';
@@ -32,6 +33,18 @@ function threadJumpButton(): HTMLButtonElement | null {
   return document.querySelector('.thread-panel .thread-jump-bottom') as HTMLButtonElement | null;
 }
 
+export function suppressThreadScrollTrackingThroughNextFrame(surface: ThreadPanelTab): void {
+  const chat = threadScrollElement(surface);
+  if (!chat) return;
+  renderSuppressedScrollTracking.add(chat);
+  const release = () => renderSuppressedScrollTracking.delete(chat);
+  if (typeof globalThis.requestAnimationFrame === 'function') {
+    globalThis.requestAnimationFrame(() => globalThis.requestAnimationFrame(release));
+  } else {
+    globalThis.setTimeout(release, 0);
+  }
+}
+
 export function syncThreadJumpButtonVisibility(options: { persistScroll?: boolean } = {}): void {
   const chat = threadChatElement();
   const button = threadJumpButton();
@@ -44,9 +57,11 @@ export function syncThreadJumpButtonVisibility(options: { persistScroll?: boolea
   const bottomDistance = Math.max(0, maxScrollTop - scrollTop);
   const lastTop = previousScrollTop.get(chat) ?? scrollTop;
   previousScrollTop.set(chat, scrollTop);
-  saveThreadScrollPosition(String(state.threadId ?? ''), surface, { persist: false });
-  if (options.persistScroll) scheduleThreadViewportPersistence();
-  if (bottomDistance > 72 && scrollTop < lastTop) setThreadFollowBottom(String(state.threadId ?? ''), false, surface);
+  if (!renderSuppressedScrollTracking.has(chat)) {
+    saveThreadScrollPosition(String(state.threadId ?? ''), surface, { persist: false });
+    if (options.persistScroll) scheduleThreadViewportPersistence();
+    if (bottomDistance > 72 && scrollTop < lastTop) setThreadFollowBottom(String(state.threadId ?? ''), false, surface);
+  }
   if (button.dataset.action === 'close-thread-text') {
     button.hidden = false;
     button.setAttribute('aria-hidden', 'false');
