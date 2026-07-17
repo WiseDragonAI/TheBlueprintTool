@@ -284,7 +284,7 @@ test('renders every Control Room task as the same direct-link card without discl
 
 test('uses the full desktop pane and gives every Kanban column its own vertical scroll', () => {
   assert.match(styles, /\.content:has\(> \.control-room:not\(\[hidden\]\)\) \{[^}]*max-width: none;[^}]*height: calc\(100dvh - 64px\);[^}]*overflow: hidden;/);
-  assert.match(styles, /\.control-room:not\(\[hidden\]\) \{[^}]*grid-template-rows: auto minmax\(0, 1fr\) auto auto auto;[^}]*min-height: 0;[^}]*height: 100%;/);
+  assert.match(styles, /\.control-room:not\(\[hidden\]\) \{[^}]*grid-template-rows: max-content minmax\(0, 1fr\) auto auto auto;[^}]*min-height: 0;[^}]*height: 100%;/);
   assert.match(styles, /\.control-task-list \{[^}]*align-items: stretch;[^}]*min-height: 0;/);
   assert.match(styles, /\.control-task-column-list \{[^}]*min-height: 0;[^}]*overflow-y: auto;[^}]*overscroll-behavior: contain;[^}]*scrollbar-gutter: stable;/);
 });
@@ -410,7 +410,7 @@ test('requires an explicit project choice before creating a new task intake', ()
   assert.match(html, /id="new-task-project-panel" class="new-task-project-list" role="tabpanel"/);
   assert.match(projectPicker, /const defaultNode = nodes\.find\(\(node\) => node\.local\) \?\? nodes\[0\]/);
   assert.match(projectPicker, /label\.textContent = node\.label;[\s\S]*presence\.textContent = node\.online \? 'Online' : 'Offline'/);
-  assert.match(projectPicker, /button\.textContent = project\.name/);
+  assert.match(projectPicker, /label\.textContent = project\.name;[\s\S]*button\.append\(label\)/);
   assert.doesNotMatch(projectPicker, /projectPresenceLabel\(project\)|project\.id\}`|aria-label.*project\.id/);
   assert.doesNotMatch(projectPicker, /project\.relativePath|Project workspace/);
   assert.match(styles, /\.new-task-node-tabs \{[^}]*display: flex;[^}]*overflow-x: auto/);
@@ -533,7 +533,7 @@ test('deletes a master task from its detail after explicit confirmation', () => 
   assert.match(styles, /\.delete-master-task-button \{ width: 100%; min-height: 52px; margin-top: 12px;/);
 });
 
-test('keeps four mobile actions and adds desktop board controls with shared key hints', () => {
+test('keeps four mobile actions and scopes project and node shortcuts to the desktop task-creation modal', () => {
   assert.match(mobile, /destination\('Control room', controlRoomPath\(state\.controlTab\), 'dashboard', 'control-room'\)/);
   assert.match(mobile, /destination\('Projects', projectPath\(\), 'folder', 'projects'\)/);
   assert.match(mobile, /destination\('Ledgers', '\/ledgers', 'book', 'ledgers'\)/);
@@ -546,10 +546,15 @@ test('keeps four mobile actions and adds desktop board controls with shared key 
   assert.match(html, /data-control-tab="backlog"[\s\S]*class="new-task-button mobile-new-task-button"/);
   assert.match(styles, /grid-template-columns: repeat\(4, 1fr\)/);
   assert.match(html, /desktop-new-task-button terminal-button terminal-button--action[\s\S]*terminal-button__key">X/);
-  assert.match(mobile, /if \(project\.id !== 'All' && index <= 9\) button\.append\(shortcutKey\(String\(index\)\)\)/);
-  assert.match(mobile, /node-filter-cycle terminal-button terminal-button--nav/);
-  assert.match(mobile, /desktopControlRoom[\s\S]*key === 'c'[\s\S]*cycleControlRoomNode\(\)[\s\S]*\/\^\[1-9\]\$\/[\s\S]*selectControlProject\(project\.id\)[\s\S]*key === 'x'/);
-  assert.match(styles, /\.project-filter-chip \.terminal-button__key/);
+  assert.match(mobile, /new-task-project-option'[\s\S]*button\.append\(shortcutKey\(String\(index \+ 1\)\)\)/);
+  assert.match(mobile, /tab\.append\(shortcutKey\('C'\), label, presence\)/);
+  assert.match(mobile, /newTaskProjectModal\.onkeydown = \(event\)[\s\S]*key === 'c'[\s\S]*selectNode\(nodes\[next\], true\)[\s\S]*\/\^\[1-9\]\$\/[\s\S]*option\.click\(\)/);
+  assert.match(mobile, /desktopControlRoom[\s\S]*!newTaskProjectModal\.open[\s\S]*key === 'x'/);
+  assert.doesNotMatch(mobile, /controlRoomNodes|cycleControlRoomNode|controlNodeIndex/);
+  assert.doesNotMatch(styles, /\.project-filter-chip \.terminal-button__key|\.node-filter-cycle/);
+  assert.match(styles, /\.new-task-node-tab\[aria-selected="true"\] \.terminal-button__key,[\s\S]*\.new-task-project-option \.terminal-button__key \{ display: inline-flex; \}/);
+  assert.match(styles, /\.control-room:not\(\[hidden\]\) \{[^}]*grid-template-rows: max-content minmax\(0, 1fr\)/);
+  assert.match(styles, /\.control-command \{[^}]*align-self: start;[^}]*align-content: start;[^}]*height: fit-content;/);
   assert.match(html, /class="nav-server-restart-button"/);
   assert.match(mobile, /fetch\('\/api\/server\/restart', \{ method: 'POST' \}\)/);
 });
