@@ -11296,7 +11296,7 @@
       "title": "Persist queued Codex tasks in Execution",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "bug",
         "master-task"
@@ -11518,7 +11518,8 @@
       "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784278157234-600c95a9.md",
       "codexActiveRunId": "codex-skill-1784278157234-600c95a9",
       "executionStatus": "running",
-      "executionRunId": "codex-skill-1784278157234-600c95a9"
+      "executionRunId": "codex-skill-1784278157234-600c95a9",
+      "codexActiveExecutionId": "codex-execution-1784278369325-678da2ca"
     },
     {
       "id": "card-52581263-0881-49af-8450-81cf862c464b",
@@ -11737,8 +11738,8 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784272682447-40512bfd",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784272682447-40512bfd.md"
+      "codexThreadRunId": "codex-skill-1784278385140-fc7bf96f",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784278385140-fc7bf96f.md"
     },
     {
       "id": "card-12bbd526-e1be-4ac9-a0ee-016349226ebb",
@@ -11792,7 +11793,7 @@
       "title": "Define project-chip presentation and contrast",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "subtask"
       ],
@@ -11811,7 +11812,7 @@
       "title": "Render simplified project chips and remote marker",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "subtask"
       ],
@@ -11830,7 +11831,7 @@
       "title": "Add project-chip regression coverage",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "subtask"
       ],
@@ -11869,7 +11870,8 @@
       "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784278101601-911447f2.md",
       "codexActiveRunId": "codex-skill-1784278101601-911447f2",
       "executionStatus": "running",
-      "executionRunId": "codex-skill-1784278101601-911447f2"
+      "executionRunId": "codex-skill-1784278101601-911447f2",
+      "codexActiveExecutionId": "codex-execution-1784278366019-4f8ed62d"
     },
     {
       "id": "card-ca692962-43ef-4af0-984a-f56936cb17d5",
@@ -11983,8 +11985,12 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784275866195-25838c0e",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784275866195-25838c0e.md"
+      "codexThreadRunId": "codex-skill-1784278407536-6e175c02",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784278407536-6e175c02.md",
+      "codexActiveRunId": "codex-skill-1784278407536-6e175c02",
+      "executionStatus": "running",
+      "executionRunId": "codex-skill-1784278407536-6e175c02",
+      "codexActiveExecutionId": "codex-execution-1784278407543-7974a418"
     },
     {
       "id": "card-6afb0ac2-5a96-47c4-a190-b5a209fa9c33",
@@ -12347,11 +12353,12 @@
     },
     {
       "id": "card-579cca1e-0eea-4ab0-af0e-18e8bf9c5792",
-      "title": "New task intake",
+      "title": "Build Desktop Three-Lane Control Room",
       "cardType": "note",
       "domainId": "specs",
       "status": "todo",
       "labels": [
+        "implementation",
         "master-task"
       ],
       "x": -10402,
@@ -12362,7 +12369,13 @@
         "contentFile": ".decision-os/cards/specs/card-579cca1e-0eea-4ab0-af0e-18e8bf9c5792.md"
       },
       "facts": [],
-      "fields": []
+      "fields": [],
+      "executionStatus": "pending",
+      "executionRunId": "codex-skill-1784278581973-56fe12d0",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784278581973-56fe12d0",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784278581973-56fe12d0.md"
     },
     {
       "id": "card-2569332f-f2ca-463c-b674-621de507b4bd",
@@ -12379,6 +12392,90 @@
       "h": 240,
       "comment": {
         "contentFile": ".decision-os/cards/specs/card-2569332f-f2ca-463c-b674-621de507b4bd.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-cf40c6df-b05a-41bf-a09b-7e864a553eb1",
+      "title": "Render desktop Backlog, Queue, and Exec lanes",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "implementation",
+        "code",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 109488,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-cf40c6df-b05a-41bf-a09b-7e864a553eb1.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-4c93e946-7d7b-4e74-8e88-15dc3553b1f8",
+      "title": "Move tasks between Backlog and Queue with SortableJS",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "implementation",
+        "code",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 109488,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-4c93e946-7d7b-4e74-8e88-15dc3553b1f8.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-1f464e62-dbe8-4551-82f2-cda15a780e5e",
+      "title": "Add responsive Control Room regressions",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "implementation",
+        "test",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 109898,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-1f464e62-dbe8-4551-82f2-cda15a780e5e.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-1c05a286-8809-47ff-9492-b9ccb1862829",
+      "title": "Verify the served desktop drag workflow",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "implementation",
+        "scenario",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 109898,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-1c05a286-8809-47ff-9492-b9ccb1862829.md"
       },
       "facts": [],
       "fields": []
@@ -13674,6 +13771,30 @@
       "from": "card-bb8a0fb0-099f-4026-aff9-f68871957b98",
       "to": "card-f9f280be-6b3d-4138-a60d-6a299ac40ef2",
       "label": "subtask"
+    },
+    {
+      "id": "rel-a8132b72-7991-414d-94b7-300840c287bd",
+      "from": "card-579cca1e-0eea-4ab0-af0e-18e8bf9c5792",
+      "to": "card-cf40c6df-b05a-41bf-a09b-7e864a553eb1",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-ea617683-c230-4507-a2d5-080f92719f80",
+      "from": "card-579cca1e-0eea-4ab0-af0e-18e8bf9c5792",
+      "to": "card-4c93e946-7d7b-4e74-8e88-15dc3553b1f8",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-95ee556a-0834-494b-998a-8594a6cc25f3",
+      "from": "card-579cca1e-0eea-4ab0-af0e-18e8bf9c5792",
+      "to": "card-1f464e62-dbe8-4551-82f2-cda15a780e5e",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-fdb31c51-386d-40f1-8b9c-fb35167ecad3",
+      "from": "card-579cca1e-0eea-4ab0-af0e-18e8bf9c5792",
+      "to": "card-1c05a286-8809-47ff-9492-b9ccb1862829",
+      "label": "subtask"
     }
   ],
   "annotations": [
@@ -14920,7 +15041,7 @@
       "width": 1200,
       "height": 900,
       "color": "#895cfa",
-      "label": "New task intake",
+      "label": "Desktop Three-Lane Control Room",
       "comments": []
     },
     {
