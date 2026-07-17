@@ -15,6 +15,7 @@ export async function bootApplication(): Promise<void> {
     loadSurfaceScripts([
       { id: 'responsive-sortable-script', src: '/assets/vendor/sortable-1.15.7.min.js' },
       { id: 'responsive-embla-script', src: '/assets/vendor/embla-carousel-8.6.0.umd.js' },
+      { id: 'responsive-interact-script', src: '/assets/vendor/interact-1.10.27.min.js' },
       { id: 'responsive-nouislider-script', src: '/assets/vendor/nouislider-15.8.1.min.js' },
     ]),
   ]);

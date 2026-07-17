@@ -5,12 +5,14 @@ import test from 'node:test';
 import { executionAge, executionStopwatch, cardCodexRunId, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withExecutionStatus, withQueueRank } from '../src/app/responsive/control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from '../src/app/responsive/control-room-route.js';
 
-const [mobile, html, styles, embla, panzoom] = await Promise.all([
+const [mobile, html, styles, bootApplication, embla, panzoom, mediaRenderer] = await Promise.all([
   readFile(new URL('../src/app/responsive/application.js', import.meta.url), 'utf8'),
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
   readFile(new URL('../assets/application.css', import.meta.url), 'utf8'),
+  readFile(new URL('../src/app/controller/boot-application.ts', import.meta.url), 'utf8'),
   readFile(new URL('../assets/vendor/embla-carousel-8.6.0.umd.js', import.meta.url), 'utf8'),
-  readFile(new URL('../assets/vendor/panzoom-4.6.2.es.js', import.meta.url), 'utf8')
+  readFile(new URL('../assets/vendor/panzoom-4.6.2.es.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/runtime/ledger/component/render-ledger-card-media.ts', import.meta.url), 'utf8')
 ]);
 
 const task = (overrides = {}) => ({
@@ -209,7 +211,7 @@ test('Control Room resolves Process Card runs through the shared current-run poi
   const result = deriveControlRoom([task({ markdown, codexRunId: processCardRunId, codexStatus: 'running' })]);
   assert.deepEqual(result.exec.map((entry) => entry.cardId), ['card-a']);
   assert.equal(result.queue.length, 0);
-  assert.match(mobile, /state\.controlRoom = await response\.json\(\)/);
+  assert.match(mobile, /const nextControlRoom = await response\.json\(\)[\s\S]*state\.controlRoom = nextControlRoom/);
   assert.doesNotMatch(mobile, /const runId = cardCodexRunId\(card\)/);
 });
 
@@ -269,22 +271,22 @@ test('formats the exact executing Codex session duration as a minute-second stop
   assert.equal(executionStopwatch('2026-07-12T10:00:00.000Z', Date.parse('2026-07-12T11:02:03.000Z')), '62:03');
 });
 
-test('renders executing tasks as compact direct links with owner metadata and no disclosure details', () => {
+test('renders every Control Room task as the same direct-link card without disclosure details', () => {
   assert.match(mobile, /runtimeStatus\.className = 'task-stopwatch'/);
   assert.match(mobile, /summary\.addEventListener\('click'[\s\S]*navigate\(pathForTask\(task\)\)/);
-  assert.match(mobile, /if \(executing\) \{[\s\S]*article\.append\(summary\);[\s\S]*return article;/);
-});
-
-test('opens queued master tasks directly without building disclosure content', () => {
-  assert.match(mobile, /const directNavigation = executing \|\| queue;/);
-  assert.match(mobile, /if \(directNavigation\) \{[\s\S]*navigate\(pathForTask\(task\)\)[\s\S]*article\.append\(summary\);[\s\S]*return article;/);
-  assert.match(mobile, /\$\{queue \? '' : '<span class="task-chevron">⌄<\/span>'\}/);
+  const row = mobile.slice(mobile.indexOf('function taskRow('), mobile.indexOf('function renderControlRoom()'));
+  assert.doesNotMatch(row, /aria-expanded|control-task-details|task-chevron|subtask-row/);
+  assert.match(row, /article\.append\(summary\);[\s\S]*return article;/);
+  assert.match(mobile, /\['queue', 'exec', 'backlog'\]\.map/);
+  assert.match(styles, /grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(mobile, /initializeQueueSortable\(\)/);
 });
 
 test('delegates touch sorting and animation to vendored SortableJS', () => {
-  assert.match(html, /sortable-1\.15\.7\.min\.js/);
-  assert.match(mobile, /globalThis\.Sortable\.create\(elements\['control-task-list'\]/);
+  assert.match(bootApplication, /sortable-1\.15\.7\.min\.js/);
+  assert.match(mobile, /globalThis\.Sortable\.create\(list,/);
+  assert.match(mobile, /name: 'control-room-workflow'/);
+  assert.match(mobile, /sort: list\.dataset\.controlColumnList === 'queue'/);
   assert.match(mobile, /animation:\s*180/);
   assert.match(mobile, /forceFallback:\s*true/);
   assert.match(mobile, /fallbackOnBody:\s*true/);
@@ -292,26 +294,51 @@ test('delegates touch sorting and animation to vendored SortableJS', () => {
   assert.match(mobile, /delay:\s*300/);
   assert.match(mobile, /delayOnTouchOnly:\s*true/);
   assert.match(mobile, /touchStartThreshold:\s*8/);
-  assert.match(mobile, /onEnd\(event\)[\s\S]*syncQueueFromDom\(\)[\s\S]*queueMicrotask\(\(\) => void persistQueueOrder\(\)\)/);
+  assert.match(mobile, /onStart\(event\)[\s\S]*queueDragActive = true/);
+  assert.match(mobile, /onEnd\(event\)[\s\S]*persistControlTaskPlacement[\s\S]*syncQueueFromDom\(\)[\s\S]*settleQueueDrag/);
+  assert.match(mobile, /pointercancel[\s\S]*interruptQueueDrag/);
+  assert.match(mobile, /touchcancel[\s\S]*interruptQueueDrag/);
+  assert.match(mobile, /removeQueueDragArtifacts/);
   assert.doesNotMatch(mobile, /setPointerCapture|pointermove|control-task-placeholder|task-drag-handle/);
   assert.match(styles, /\.queue-task-fallback[^}]*opacity:\s*1\s*!important/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
 });
 
 test('persists optimistic ranks without a success reload and reconciles the latest failure', () => {
-  const persistence = mobile.slice(mobile.indexOf('async function persistQueueOrder()'), mobile.indexOf('async function activateMasterTask'));
+  const persistence = mobile.slice(mobile.indexOf('function queueQueueOrderPersistence()'), mobile.indexOf('async function activateMasterTask'));
   assert.doesNotMatch(persistence, /task\.markdown|withQueueRank/);
-  assert.match(persistence, /task\.queueRank = index \+ 1/);
+  assert.match(persistence, /if \(task\.queueRank === queueRank\) return \[\]/);
+  assert.match(persistence, /task\.queueRank = queueRank/);
   assert.match(persistence, /cardPatch: \{ id: task\.cardId, queueRank \}/);
-  assert.match(persistence, /renderControlRoom\(\);[\s\S]*try \{/);
-  assert.doesNotMatch(persistence.match(/try \{[\s\S]*?\} catch/)[0], /loadControlRoom/);
+  assert.match(persistence, /queuePersistenceTail = queuePersistenceTail\.then/);
+  assert.match(persistence, /return persistQueueOrder\(mutations\)/);
+  assert.doesNotMatch(persistence.slice(0, persistence.indexOf('void queuePersistenceTail.then')), /renderControlRoom\(\)/);
+  assert.match(persistence, /for \(const \{ task, queueRank \} of mutations\)/);
+  assert.doesNotMatch(persistence, /Promise\.all/);
   assert.match(persistence, /sequence !== queuePersistenceSequence/);
-  assert.match(persistence, /await loadControlRoom\(\);[\s\S]*setView\('error-view'\)/);
+  assert.match(persistence, /await loadControlRoom\(\{ force: true \}\);[\s\S]*setView\('error-view'\)/);
+});
+
+test('persists optimistic Queue and Backlog placement and reconciles rejected changes', () => {
+  const persistence = mobile.slice(mobile.indexOf('async function persistControlTaskPlacement'), mobile.indexOf('async function activateMasterTask'));
+  assert.match(persistence, /state\.controlRoom\[sourceTab\] = source\.filter/);
+  assert.match(persistence, /target\.splice\(insertionIndex, 0, task\)/);
+  assert.match(persistence, /cardPatch: \{ id: task\.cardId, status: targetTab === 'backlog' \? 'backlog' : 'todo' \}/);
+  assert.match(persistence, /if \(targetTab === 'queue'\) queueQueueOrderPersistence\(\)/);
+  assert.match(persistence, /catch \(error\)[\s\S]*await loadControlRoom\(\{ force: true \}\)[\s\S]*renderControlRoom\(\)/);
+  assert.match(mobile, /dataset\.controlColumnList !== 'exec'/);
+});
+
+test('defers authoritative Control Room refreshes until the queue gesture settles', () => {
+  assert.match(mobile, /queueRefreshBlocked\(\)[\s\S]*queueDragInProgress\(\) \|\| queuePersistenceActive/);
+  assert.match(mobile, /deferDuringQueueDrag && queueRefreshBlocked\(\)[\s\S]*pendingControlRoomRefresh = true/);
+  assert.match(mobile, /refreshControlRoomFromEvent\(\)[\s\S]*queueRefreshBlocked\(\)[\s\S]*pendingControlRoomRefresh = true/);
+  assert.match(mobile, /flushPendingControlRoomRefresh/);
 });
 
 test('omits the next-subtask subtitle when no actionable subtask exists', () => {
   assert.doesNotMatch(mobile, /No actionable subtask/);
-  assert.match(mobile, /task\.nextSubtask \? '<span class="task-next"><\/span>' : ''/);
+  assert.match(mobile, /task\.nextSubtask \|\| executing \? '<span class="task-next"><\/span>' : ''/);
   assert.match(mobile, /if \(nextSubtask\) nextSubtask\.textContent = `Next: \$\{task\.nextSubtask\.title\}`/);
 });
 
@@ -334,8 +361,8 @@ test('keeps scoped Control Room filters while project editing moves to dedicated
 });
 
 test('uses the pinned app-owned HSV picker with the Brave slider hierarchy', () => {
-  assert.match(html, /nouislider-15\.8\.1\.min\.css/);
-  assert.match(html, /nouislider-15\.8\.1\.min\.js/);
+  assert.match(bootApplication, /nouislider-15\.8\.1\.min\.css/);
+  assert.match(bootApplication, /nouislider-15\.8\.1\.min\.js/);
   assert.match(html, /id="project-color-hue"/);
   assert.match(html, /id="project-color-saturation"/);
   assert.match(html, /id="project-color-value"/);
@@ -368,7 +395,7 @@ test('derives resource request scope exclusively from canonical URLs', () => {
 test('requires an explicit project choice before creating a new task intake', () => {
   assert.match(html, /class="new-task-project-modal"/);
   assert.match(html, /The task and its Codex run will use this project workspace\./);
-  assert.match(mobile, /document\.querySelector\('\.new-task-button'\)\.addEventListener\('click', openNewTaskProjectModal\)/);
+  assert.match(mobile, /document\.querySelectorAll\('\.new-task-button'\)\.forEach\(\(button\) => button\.addEventListener\('click', openNewTaskProjectModal\)\)/);
   assert.match(mobile, /await createTaskIntake\(project\.id\)/);
   assert.match(mobile, /async function createTaskIntake\(projectId\) \{\s*setResourceProject\(projectId\)/);
   const projectPicker = mobile.slice(mobile.indexOf('function openNewTaskProjectModal()'), mobile.indexOf('function cardOverlapArea'));
@@ -418,7 +445,7 @@ test('lays mobile carousel controls over the image with touch-safe navigation', 
 });
 
 test('drives mobile carousels with pinned dependency-free Embla physics', () => {
-  assert.match(html, /\/assets\/vendor\/embla-carousel-8\.6\.0\.umd\.js/);
+  assert.match(bootApplication, /\/assets\/vendor\/embla-carousel-8\.6\.0\.umd\.js/);
   assert.match(embla, /\.EmblaCarousel=/);
   assert.match(mobile, /carouselDriver: 'external'/);
   assert.match(mobile, /globalThis\.EmblaCarousel\(shell, \{/);
@@ -463,7 +490,19 @@ test('parses letter-prefixed card sections from the decision-os formatting contr
 test('routes master-task cards back to the control room and regular cards back to their zone', () => {
   assert.match(mobile, /backButton\.textContent = '← Back'/);
   assert.match(mobile, /backButton\.dataset\.destination = parsedTask\.masterTask \? 'control-room' : 'zone'/);
-  assert.match(mobile, /dataset\.destination === 'control-room' \? controlRoomPath\(state\.controlTab\) : zonePath/);
+  assert.match(mobile, /const controlRoomDestination = event\.currentTarget\.dataset\.destination === 'control-room';[\s\S]*const destination = controlRoomDestination \? controlRoomPath\(state\.controlTab\) : zonePath/);
+});
+
+test('renders and persists the shared carousel resize handle in a Control Room master-card detail', () => {
+  assert.match(mobile, /cardId: parsedTask\.masterTask \? String\(card\.id\) : undefined/);
+  assert.match(mobile, /mediaSurface: parsedTask\.masterTask \? 'detail' : 'thread'/);
+  assert.match(mobile, /onImageResize: parsedTask\.masterTask \? persistCardImageResize : undefined/);
+  assert.match(mobile, /cardPatch: \{ id: card\.id, imageSizes: card\.imageSizes \}/);
+  assert.match(mobile, /card\.imageSizes = previousImageSizes;\s*if \(state\.activeCardId === String\(card\.id\)\) renderCard\(card\)/);
+  assert.match(mediaRenderer, /const cardResizeHandle = mediaSurface !== 'thread' \? renderCardImageResizeHandle/);
+  assert.match(bootApplication, /responsive-interact-script[^\n]*interact-1\.10\.27\.min\.js/);
+  assert.match(styles, /\.ledger-card-media-shell > \.ledger-card-media-resize-handle\s*\{[^}]*position: absolute;[^}]*width: 28px;[^}]*height: 28px;[^}]*cursor: ew-resize;[^}]*touch-action: none;/s);
+  assert.match(styles, /\.ledger-card-media-resize-handle::before\s*\{[^}]*width: 16px;[^}]*height: 16px;[^}]*content: "";/s);
 });
 
 test('completes all linked cards from the master-task detail', () => {
@@ -487,7 +526,7 @@ test('deletes a master task from its detail after explicit confirmation', () => 
   assert.match(styles, /\.delete-master-task-button \{ width: 100%; min-height: 52px; margin-top: 12px;/);
 });
 
-test('uses global application destinations and keeps new task as the fourth control-room action', () => {
+test('keeps four mobile actions and adds desktop board controls with shared key hints', () => {
   assert.match(mobile, /destination\('Control room', controlRoomPath\(state\.controlTab\), 'dashboard', 'control-room'\)/);
   assert.match(mobile, /destination\('Projects', projectPath\(\), 'folder', 'projects'\)/);
   assert.match(mobile, /destination\('Ledgers', '\/ledgers', 'book', 'ledgers'\)/);
@@ -497,8 +536,13 @@ test('uses global application destinations and keeps new task as the fourth cont
   assert.match(styles, /svg\[data-nav-icon="dashboard"\]/);
   assert.doesNotMatch(html, /class="icon-button pipelines-button"/);
   assert.doesNotMatch(html, /class="control-heading"|class="live-dot"/);
-  assert.match(html, /data-control-tab="backlog"[\s\S]*class="new-task-button"/);
+  assert.match(html, /data-control-tab="backlog"[\s\S]*class="new-task-button mobile-new-task-button"/);
   assert.match(styles, /grid-template-columns: repeat\(4, 1fr\)/);
+  assert.match(html, /desktop-new-task-button terminal-button terminal-button--action[\s\S]*terminal-button__key">X/);
+  assert.match(mobile, /if \(project\.id !== 'All' && index <= 9\) button\.append\(shortcutKey\(String\(index\)\)\)/);
+  assert.match(mobile, /node-filter-cycle terminal-button terminal-button--nav/);
+  assert.match(mobile, /desktopControlRoom[\s\S]*key === 'c'[\s\S]*cycleControlRoomNode\(\)[\s\S]*\/\^\[1-9\]\$\/[\s\S]*selectControlProject\(project\.id\)[\s\S]*key === 'x'/);
+  assert.match(styles, /\.project-filter-chip \.terminal-button__key/);
   assert.match(html, /class="nav-server-restart-button"/);
   assert.match(mobile, /fetch\('\/api\/server\/restart', \{ method: 'POST' \}\)/);
 });

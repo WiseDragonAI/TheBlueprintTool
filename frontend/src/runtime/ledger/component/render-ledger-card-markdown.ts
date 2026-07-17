@@ -13,7 +13,7 @@ type LedgerCardMarkdownOptions = {
   cardId?: string;
   carouselDriver?: 'internal' | 'external';
   imageSizes?: LedgerCardImageSizes;
-  mediaSurface?: 'card' | 'thread';
+  mediaSurface?: 'card' | 'detail' | 'thread';
   onImageResize?: (source: string, dimensions: { width: number; height: number }) => void;
 };
 

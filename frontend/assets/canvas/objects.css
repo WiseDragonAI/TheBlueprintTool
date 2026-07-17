@@ -1054,27 +1054,15 @@
   visibility: hidden;
 }
 
-.ledger-card-media-shell::after {
-  position: absolute;
-  right: 5px;
-  bottom: 5px;
-  width: 12px;
-  height: 12px;
-  content: "";
-  pointer-events: none;
-  background:
-    linear-gradient(135deg, transparent 0 44%, color-mix(in srgb, var(--card-zone-color), white 22%) 45% 55%, transparent 56%),
-    linear-gradient(135deg, transparent 0 68%, color-mix(in srgb, var(--card-zone-color), white 12%) 69% 78%, transparent 79%);
-  opacity: 0.82;
-}
-
-.ledger-card-media-resize-handle {
+.ledger-card-media-shell > .ledger-card-media-resize-handle {
   position: absolute;
   right: 0;
   bottom: 0;
   z-index: 8;
   width: 28px;
+  min-width: 28px;
   height: 28px;
+  min-height: 28px;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -1082,6 +1070,45 @@
   cursor: ew-resize;
   touch-action: none;
   background: transparent;
+}
+
+.ledger-card-media-resize-handle::before {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 16px;
+  height: 16px;
+  border: 1px solid color-mix(in srgb, var(--card-zone-color), white 58%);
+  border-radius: 3px;
+  content: "";
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, transparent 0 35%, currentColor 36% 45%, transparent 46% 57%, currentColor 58% 67%, transparent 68%),
+    color-mix(in srgb, var(--card-zone-color), rgba(2, 4, 7, 0.92) 72%);
+  box-shadow:
+    0 0 0 1px rgba(2, 4, 7, 0.78),
+    0 2px 6px rgba(0, 0, 0, 0.42);
+  color: color-mix(in srgb, var(--card-zone-color), white 72%);
+}
+
+.card .ledger-card-media-resize-handle:hover,
+.card .ledger-card-media-resize-handle:focus-visible {
+  border-color: transparent;
+  background: transparent;
+  color: inherit;
+  transform: none;
+}
+
+.ledger-card-media-resize-handle:hover::before,
+.ledger-card-media-resize-handle:focus-visible::before {
+  border-color: white;
+  background:
+    linear-gradient(135deg, transparent 0 35%, currentColor 36% 45%, transparent 46% 57%, currentColor 58% 67%, transparent 68%),
+    color-mix(in srgb, var(--card-zone-color), rgba(2, 4, 7, 0.82) 54%);
+}
+
+.ledger-card-media-resize-handle:active::before {
+  transform: scale(0.92);
 }
 
 .ledger-card-media-resize-handle:focus-visible {

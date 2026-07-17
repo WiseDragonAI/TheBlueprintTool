@@ -11,6 +11,7 @@ const sharedThreadCss = await readFile(new URL('../../frontend/assets/shared/thr
 const applicationSource = await readFile(new URL('../src/app/responsive/application.js', import.meta.url), 'utf8');
 const applicationCss = await readFile(new URL('../assets/application.css', import.meta.url), 'utf8');
 const { collapseMobileThreadComposer, expandMobileThreadComposer } = await import('../src/app/responsive/thread-composer.js');
+const { voiceRetryInput } = await import('../src/app/responsive/thread-voice-retry.js');
 
 test('mobile Text action replaces jump with close, then collapses without clearing the draft', () => {
   const classNames = new Set(['terminal-composer', 'is-mobile-text-collapsed']);
@@ -124,6 +125,25 @@ test('mobile thread uses the shared renderer that owns the local voice progress 
   assert.match(sharedThreadRenderer, /syncVoiceProgressClock\(\);/);
 });
 
+test('responsive voice retry forwards the locally preserved upload identity', () => {
+  const input = voiceRetryInput({
+    dataset: {
+      threadId: 'thread-card-a',
+      noteId: 'note-local',
+      voiceFileRef: '',
+      localVoiceUploadId: 'note-local',
+    },
+  });
+
+  assert.deepEqual(input, {
+    threadId: 'thread-card-a',
+    noteId: 'note-local',
+    voiceFileRef: '',
+    localVoiceUploadId: 'note-local',
+  });
+  assert.match(source, /action === 'voice-retry'\) await retryVoiceTranscription\(voiceRetryInput\(button\)\)/);
+});
+
 test('mobile thread routes jump-to-bottom into persistent bottom following', () => {
   assert.match(source, /import \{ pinThreadFeedToLastMessage \} from '\/src\/runtime\/thread\/effect\/pin-thread-feed-to-last-message\.js';/);
   assert.match(source, /action === 'jump-thread-bottom'\) pinThreadFeedToLastMessage\(\{ follow: true \}\)/);
@@ -200,19 +220,22 @@ test('every desktop card opens through one thread lifecycle while mobile cards s
   assert.doesNotMatch(applicationSource, /await navigate\(cardPath\(ledgerRef\.id, zone\.id, cardId\)\);\n  openMobileThread/);
 });
 
-test('mobile Codex Log uses one action-and-metrics row for queued, running, resumable, and idle runs', () => {
-  assert.match(sharedCodexStatus, /strip\.append\(renderRunAction\(/);
+test('mobile Codex Log makes queued work read-only while preserving actions for other run states', () => {
+  assert.match(sharedCodexStatus, /if \(!queued\) strip\.append\(renderRunAction\(/);
   assert.match(sharedCodexStatus, /summary\?\.ok === true && summary\.active === true && status === 'running'/);
   assert.match(sharedCodexStatus, /threadCodexStopState\(input\.runId\)\.pending/);
   assert.match(sharedCodexLog, /const stopError = threadCodexStopState\(runId\)\.error/);
   assert.doesNotMatch(sharedCodexStatus, /\['Status', status\]/);
-  assert.match(sharedCodexStatus, /input\.running \? 'STOP' : input\.queued \? 'CANCEL' : input\.runId \? 'RESUME' : 'START'/);
+  assert.match(sharedCodexStatus, /input\.running \? 'STOP' : input\.runId \? 'RESUME' : 'START'/);
   assert.match(sharedCodexStatus, /button\.dataset\.action = occupied \? 'stop-thread-codex' : 'process-thread-codex'/);
   assert.match(sharedCodexStatus, /icon\.textContent = occupied \? '■' : input\.runId \? '↻' : '▶'/);
   assert.match(sharedCodexStatus, /`Queued · position \$\{summary\.queuePosition\}`/);
-  assert.match(sharedCodexLog, /Codex will start when capacity is available/);
+  assert.match(sharedCodexLog, /Waiting for Codex capacity/);
   assert.match(sharedCodexStatus, /terminal-button--stop' : 'terminal-button--send'/);
   assert.match(sharedThreadCss, /\.codex-log-status\s*{[^}]*grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/s);
+  assert.match(sharedThreadCss, /\.codex-log-status\[data-run-status="pending"\]\s*{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/s);
+  assert.match(sharedThreadCss, /\.thread-tab\[data-run-status="pending"\]::before\s*{[^}]*animation:\s*thread-codex-log-queued/s);
+  assert.match(sharedThreadCss, /\.codex-log-queue-indicator i\s*{[^}]*animation:\s*codex-log-queue-dot/s);
   assert.match(sharedThreadCss, /\.codex-log-action-button\s*{[^}]*max-width:\s*64px;[^}]*height:\s*56px;/s);
   assert.doesNotMatch(sharedThreadCss, /\.codex-log-run-action\s*{[^}]*grid-column:\s*1 \/ -1/s);
   assert.match(sharedCodexLog, /if \(!runId\) \{[\s\S]*renderThreadCodexLogStatus\(\{ summary: null, card, runId: '', threadId \}\)/);

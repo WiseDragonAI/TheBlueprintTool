@@ -18,6 +18,7 @@ import { loadFederationSettings, saveFederationSettings } from './federation-set
 import { hydrateFederationForm } from './federation-form-hydration.js';
 import { createProjectRequest } from './project-creation.js';
 import { installProjectRequestScope, projectScopedRequestPath } from '/src/runtime/project/helper/project-request-scope.js';
+import { projectFilterChipPresentation } from './project-filter-chip.js';
 
 installProjectRequestScope();
 
@@ -38,6 +39,7 @@ const state = {
   projectFilter: 'All',
   controlFilter: 'All',
   projectSyncRuns: [],
+  controlNodeIndex: 0,
 };
 
 const elements = Object.fromEntries([
@@ -55,7 +57,6 @@ const elements = Object.fromEntries([
 const asText = (value) => value == null ? '' : typeof value === 'string' ? value : JSON.stringify(value, null, 2);
 const defaultAccent = '#38d9e8';
 const projectOwnerLabel = (project) => project.ownerNodeLabel || project.ownerNodeId || 'This server';
-const projectPresenceLabel = (project) => `${projectOwnerLabel(project)} · ${project.online === false ? 'Offline' : 'Online'}`;
 const routeParts = () => parseProjectScope(location.pathname)?.segments ?? [];
 const creationModal = document.querySelector('.creation-modal');
 const deleteMasterTaskModal = document.querySelector('.delete-master-task-modal');
@@ -73,7 +74,14 @@ const creationForm = document.querySelector('.creation-form');
 let creationKind = '';
 let controlRoomScrollFrame = 0;
 let queuePersistenceSequence = 0;
-let queueSortable = null;
+let queuePersistenceActive = false;
+let queueSortables = [];
+let queuePersistenceTail = Promise.resolve(true);
+let queueDragActive = false;
+let queueDragSettling = false;
+let queueDragInterrupted = false;
+let queueDragOrigin = null;
+let pendingControlRoomRefresh = false;
 let controlRoomEventSource = null;
 let controlRoomRefreshTimer = 0;
 let controlRoomEtag = '';
@@ -921,8 +929,8 @@ function renderGlobalLedgers() {
   document.title = 'Ledgers · Decision OS';
 }
 
-function filteredControlTasks() {
-  const tasks = state.controlRoom?.[state.controlTab] ?? [];
+function filteredControlTasks(tab = state.controlTab) {
+  const tasks = state.controlRoom?.[tab] ?? [];
   const projectTasks = state.projectFilter === 'All' ? tasks : tasks.filter((task) => task.projectId === state.projectFilter);
   return state.controlFilter === 'All' ? projectTasks : projectTasks.filter((task) => task.ledgerId === state.controlFilter);
 }
@@ -932,22 +940,78 @@ function taskIdentity(task) {
 }
 
 function syncQueueFromDom() {
-  const orderedIds = [...elements['control-task-list'].querySelectorAll('.control-task')].map((row) => row.dataset.taskId);
-  const visible = filteredControlTasks();
+  const queueList = elements['control-task-list'].querySelector('[data-control-column-list="queue"]');
+  const rows = [...(queueList?.querySelectorAll('.control-task') ?? [])];
+  const orderedIds = rows.map((row) => row.dataset.taskId);
+  const visible = filteredControlTasks('queue');
   const byId = new Map(visible.map((task) => [taskIdentity(task), task]));
   const reordered = orderedIds.map((taskId) => byId.get(taskId)).filter(Boolean);
   const visibleIds = new Set(visible.map(taskIdentity));
   let replacementIndex = 0;
   state.controlRoom.queue = state.controlRoom.queue.map((task) => visibleIds.has(taskIdentity(task)) ? reordered[replacementIndex++] : task);
+  rows.forEach((row, index) => row.classList.toggle('next-task', index === 0));
+}
+
+function destroyQueueSortables() {
+  queueSortables.forEach((sortable) => sortable.destroy());
+  queueSortables = [];
+}
+
+function queueDragInProgress() {
+  return queueDragActive || queueDragSettling;
+}
+
+function queueRefreshBlocked() {
+  return queueDragInProgress() || queuePersistenceActive;
+}
+
+function removeQueueDragArtifacts() {
+  const taskList = elements['control-task-list'];
+  document.querySelectorAll('.queue-task-fallback, .queue-task-ghost, .queue-task-chosen, .queue-task-dragging').forEach((node) => {
+    if (node.classList.contains('control-task') && !taskList.contains(node)) {
+      node.remove();
+      return;
+    }
+    node.classList.remove('queue-task-fallback', 'queue-task-ghost', 'queue-task-chosen', 'queue-task-dragging');
+  });
+}
+
+async function settleQueueDrag({ persist = false, rerender = false } = {}) {
+  removeQueueDragArtifacts();
+  if (rerender) renderControlRoom();
+  try {
+    if (persist) queueQueueOrderPersistence();
+  } finally {
+    removeQueueDragArtifacts();
+    queueDragActive = false;
+    queueDragSettling = false;
+    queueDragInterrupted = false;
+    initializeQueueSortable();
+    await flushPendingControlRoomRefresh();
+  }
+}
+
+function interruptQueueDrag() {
+  if (!queueDragActive) return;
+  queueDragInterrupted = true;
+  queueDragActive = false;
+  queueDragSettling = true;
+  destroyQueueSortables();
+  queueMicrotask(() => void settleQueueDrag({ rerender: true }));
 }
 
 function initializeQueueSortable() {
-  queueSortable?.destroy();
-  queueSortable = null;
-  if (state.controlTab !== 'queue' || filteredControlTasks().length < 2 || typeof globalThis.Sortable !== 'function') return;
-  queueSortable = globalThis.Sortable.create(elements['control-task-list'], {
+  destroyQueueSortables();
+  if (typeof globalThis.Sortable !== 'function') return;
+  const desktop = window.matchMedia('(min-width: 760px)').matches;
+  const lists = [...elements['control-task-list'].querySelectorAll('[data-control-column-list]')]
+    .filter((list) => desktop || list.dataset.controlColumnList === 'queue')
+    .filter((list) => list.dataset.controlColumnList !== 'exec');
+  queueSortables = lists.map((list) => globalThis.Sortable.create(list, {
     animation: 180,
     draggable: '.control-task',
+    group: desktop ? { name: 'control-room-workflow', pull: true, put: true } : undefined,
+    sort: list.dataset.controlColumnList === 'queue',
     forceFallback: true,
     fallbackOnBody: true,
     fallbackTolerance: 4,
@@ -958,13 +1022,41 @@ function initializeQueueSortable() {
     dragClass: 'queue-task-dragging',
     ghostClass: 'queue-task-ghost',
     fallbackClass: 'queue-task-fallback',
+    onStart(event) {
+      queueDragActive = true;
+      queueDragSettling = false;
+      queueDragInterrupted = false;
+      queueDragOrigin = {
+        tab: event.from.dataset.controlColumnList,
+        taskId: event.item.dataset.taskId,
+      };
+    },
     onEnd(event) {
-      if (event.oldIndex === event.newIndex) return;
-      syncQueueFromDom();
-      queueMicrotask(() => void persistQueueOrder());
+      queueDragActive = false;
+      if (queueDragInterrupted) return;
+      queueDragSettling = true;
+      const sourceTab = queueDragOrigin?.tab;
+      const targetTab = event.to.dataset.controlColumnList;
+      const taskId = queueDragOrigin?.taskId;
+      queueDragOrigin = null;
+      const placementChanged = sourceTab && targetTab && sourceTab !== targetTab;
+      const orderChanged = targetTab === 'queue' && event.oldIndex !== event.newIndex;
+      if (placementChanged) {
+        queueMicrotask(() => void persistControlTaskPlacement({ taskId, sourceTab, targetTab, newIndex: event.newIndex }));
+        return;
+      }
+      if (orderChanged) syncQueueFromDom();
+      queueMicrotask(() => void settleQueueDrag({ persist: orderChanged }));
     }
-  });
+  }));
 }
+
+document.addEventListener('pointercancel', interruptQueueDrag, true);
+document.addEventListener('touchcancel', interruptQueueDrag, true);
+window.addEventListener('blur', interruptQueueDrag);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) interruptQueueDrag();
+});
 
 function controlTaskCount(tab) {
   const tasks = state.controlRoom?.[tab] ?? [];
@@ -972,9 +1064,39 @@ function controlTaskCount(tab) {
   return state.controlFilter === 'All' ? projectTasks.length : projectTasks.filter((task) => task.ledgerId === state.controlFilter).length;
 }
 
-function taskRow(task, index) {
+function controlRoomNodes() {
+  return [...state.projects.reduce((groups, project) => {
+    const nodeId = project.ownerNodeId || 'local';
+    const existing = groups.get(nodeId);
+    if (existing) existing.projects.push(project);
+    else groups.set(nodeId, { nodeId, label: projectOwnerLabel(project), projects: [project] });
+    return groups;
+  }, new Map()).values()];
+}
+
+function shortcutKey(value) {
+  const key = document.createElement('span');
+  key.className = 'terminal-button__key';
+  key.textContent = value;
+  return key;
+}
+
+function selectControlProject(projectId) {
+  state.projectFilter = projectId;
+  state.controlFilter = 'All';
+  renderControlRoom();
+}
+
+function cycleControlRoomNode() {
+  const nodes = controlRoomNodes();
+  if (nodes.length < 2) return;
+  state.controlNodeIndex = (state.controlNodeIndex + 1) % nodes.length;
+  selectControlProject('All');
+}
+
+function taskRow(task, tab, index) {
   const article = document.createElement('article');
-  article.className = `control-task${index === 0 && state.controlTab === 'queue' ? ' next-task' : ''}`;
+  article.className = `control-task${index === 0 && tab === 'queue' ? ' next-task' : ''}`;
   article.id = `task-${taskIdentity(task)}`;
   article.dataset.taskId = taskIdentity(task);
   article.draggable = false;
@@ -983,16 +1105,11 @@ function taskRow(task, index) {
   summary.className = 'control-task-summary';
   article.style.borderInlineStartColor = task.projectColor || 'transparent';
   article.style.setProperty('--accent', task.projectColor || defaultAccent);
-  const executing = state.controlTab === 'exec';
-  const queue = state.controlTab === 'queue';
-  const directNavigation = executing || queue;
-  if (!directNavigation) summary.setAttribute('aria-expanded', 'false');
-  summary.innerHTML = executing
-    ? `<span class="task-copy"><strong></strong><span class="task-meta"></span></span><span class="task-runtime-status"></span>`
-    : `<span class="task-copy"><strong></strong><span class="task-meta"></span>${task.nextSubtask ? '<span class="task-next"></span>' : ''}</span>${queue ? '' : '<span class="task-chevron">⌄</span>'}`;
+  const executing = tab === 'exec';
+  summary.innerHTML = `<span class="task-copy"><strong></strong><span class="task-meta"></span>${task.nextSubtask || executing ? '<span class="task-next"></span>' : ''}</span>`;
   summary.querySelector('strong').textContent = task.title;
   if (executing) {
-    const runtimeStatus = summary.querySelector('.task-runtime-status');
+    const runtimeStatus = summary.querySelector('.task-next');
     if (task.codexQueued) {
       runtimeStatus.className = 'task-queue-position';
       runtimeStatus.textContent = Number.isInteger(task.codexQueuePosition)
@@ -1012,10 +1129,8 @@ function taskRow(task, index) {
   if (summary.querySelector('.task-meta')) {
     summary.querySelector('.task-meta').textContent = `${task.projectName} · ${taskOwner} · ${task.ledger} · ${age}${process}`;
   }
-  if (!executing) {
-    const nextSubtask = summary.querySelector('.task-next');
-    if (nextSubtask) nextSubtask.textContent = `Next: ${task.nextSubtask.title}`;
-  }
+  const nextSubtask = !executing ? summary.querySelector('.task-next') : null;
+  if (nextSubtask) nextSubtask.textContent = `Next: ${task.nextSubtask.title}`;
   if (task.diagnostics.length) {
     article.classList.add('has-diagnostics');
     const diagnostic = document.createElement('span');
@@ -1023,65 +1138,61 @@ function taskRow(task, index) {
     diagnostic.textContent = task.diagnostics.join(' · ');
     summary.querySelector('.task-copy').append(diagnostic);
   }
-  if (directNavigation) {
-    summary.addEventListener('click', () => navigate(pathForTask(task)));
-    article.append(summary);
-    return article;
-  }
-  const details = document.createElement('section');
-  details.className = 'control-task-details';
-  details.hidden = true;
-  const subtasks = task.subtasks.map((subtask) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'subtask-row';
-    button.innerHTML = '<span></span><small></small>';
-    button.querySelector('span').textContent = subtask.title;
-    button.querySelector('small').textContent = subtask.status;
-    button.addEventListener('click', () => {
-      const target = state.controlRoom.allTasks.find((candidate) => candidate.projectId === task.projectId && candidate.cardId === subtask.cardId && candidate.ledgerId === task.ledgerId);
-      if (target) navigate(pathForTask(target));
-      else navigate(cardPathForProject(task.projectId, task.ledgerId, subtask.zoneId || 'ungrouped', subtask.cardId));
-    });
-    return button;
-  });
-  const actions = document.createElement('div');
-  actions.className = 'task-actions';
-  const open = document.createElement('button');
-  open.type = 'button';
-  open.textContent = 'Open master task';
-  open.addEventListener('click', () => navigate(pathForTask(task)));
-  actions.append(open);
-  details.append(...subtasks, actions);
-  summary.addEventListener('click', () => {
-    details.hidden = !details.hidden;
-    summary.setAttribute('aria-expanded', String(!details.hidden));
-  });
-  article.append(summary, details);
+  summary.addEventListener('click', () => navigate(pathForTask(task)));
+  article.append(summary);
   return article;
 }
 
 function renderControlRoom() {
-  queueSortable?.destroy();
-  queueSortable = null;
+  destroyQueueSortables();
   state.activeLedgerId = '';
   state.activeZoneId = '';
   renderLedgerLinks();
-  const projectFilters = [{ id: 'All', name: 'All projects', color: '#20242b' }, ...state.projects];
+  const nodes = controlRoomNodes();
+  state.controlNodeIndex = nodes.length ? state.controlNodeIndex % nodes.length : 0;
+  const activeNode = nodes[state.controlNodeIndex];
+  const projectFilters = [{ id: 'All', name: 'All projects', color: '#20242b' }, ...(activeNode?.projects ?? state.projects)];
   if (!projectFilters.some((project) => project.id === state.projectFilter)) state.projectFilter = 'All';
   const showProjectFilters = state.projectFilter === 'All';
-  const projectButtons = projectFilters.map((project) => {
+  const projectButtons = projectFilters.map((project, index) => {
+    const presentation = projectFilterChipPresentation(project);
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `project-filter-chip${project.id === 'All' ? ' all-projects-filter' : ''}`;
-    button.textContent = project.id === 'All' ? project.name : `${project.name} · ${projectPresenceLabel(project)}`;
+    const label = document.createElement('span');
+    label.className = 'project-filter-label';
+    label.textContent = presentation.label;
+    button.append(label);
+    if (project.id !== 'All' && index <= 9) button.append(shortcutKey(String(index)));
     button.title = project.id === 'All' ? project.name : `${project.name} (${project.id}) owned by ${projectOwnerLabel(project)}`;
     button.disabled = project.online === false;
     button.setAttribute('aria-pressed', String(project.id === state.projectFilter));
     button.style.setProperty('--project-color', project.color);
-    button.addEventListener('click', () => { state.projectFilter = project.id; state.controlFilter = 'All'; renderControlRoom(); });
+    button.style.setProperty('--project-foreground', presentation.foreground);
+    if (presentation.showRemoteMarker) {
+      const remoteIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      remoteIcon.classList.add('project-filter-remote-icon');
+      remoteIcon.setAttribute('aria-hidden', 'true');
+      remoteIcon.setAttribute('viewBox', '0 0 16 16');
+      remoteIcon.innerHTML = '<path d="M5.5 3.5h-2v9h9v-2M8 3.5h4.5V8M12 4 7 9" />';
+      button.append(remoteIcon);
+    }
+    button.addEventListener('click', () => selectControlProject(project.id));
     return button;
   });
+  if (nodes.length > 1) {
+    const nodeCycle = document.createElement('button');
+    nodeCycle.type = 'button';
+    nodeCycle.className = 'node-filter-cycle terminal-button terminal-button--nav';
+    nodeCycle.append(shortcutKey('C'));
+    const label = document.createElement('span');
+    label.className = 'terminal-button__label';
+    label.textContent = activeNode?.label ?? 'Node';
+    nodeCycle.append(label);
+    nodeCycle.title = 'Show projects from the next node';
+    nodeCycle.addEventListener('click', cycleControlRoomNode);
+    projectButtons.push(nodeCycle);
+  }
   elements['control-project-filters'].hidden = !showProjectFilters;
   elements['control-project-filters'].replaceChildren(...(showProjectFilters ? projectButtons : []));
   const scopedLedgers = state.projects.find((project) => project.id === state.projectFilter)?.ledgers ?? [];
@@ -1113,15 +1224,34 @@ function renderControlRoom() {
     const count = controlTaskCount(button.dataset.controlTab);
     button.querySelector('small').textContent = `${count} ${count === 1 ? 'task' : 'tasks'}`;
   });
-  const tasks = filteredControlTasks();
-  elements['control-task-list'].replaceChildren(...tasks.map(taskRow));
+  const columns = ['queue', 'exec', 'backlog'].map((tab) => {
+    const tasks = filteredControlTasks(tab);
+    const column = document.createElement('section');
+    column.className = 'control-task-column';
+    column.dataset.controlColumn = tab;
+    column.dataset.active = String(tab === state.controlTab);
+    const heading = document.createElement('header');
+    heading.className = 'control-task-column-header';
+    const title = document.createElement('h2');
+    title.textContent = { queue: 'Queue', exec: 'Exec', backlog: 'Backlog' }[tab];
+    const count = document.createElement('small');
+    count.textContent = String(tasks.length);
+    heading.append(title, count);
+    const list = document.createElement('div');
+    list.className = 'control-task-column-list';
+    list.dataset.controlColumnList = tab;
+    list.replaceChildren(...tasks.map((task, index) => taskRow(task, tab, index)));
+    const empty = document.createElement('p');
+    empty.className = 'control-column-empty';
+    empty.hidden = tasks.length > 0;
+    empty.textContent = { queue: 'No waiting tasks', exec: 'No executing tasks', backlog: 'No backlog tasks' }[tab];
+    list.append(empty);
+    column.append(heading, list);
+    return column;
+  });
+  elements['control-task-list'].replaceChildren(...columns);
   initializeQueueSortable();
-  elements['control-empty'].hidden = tasks.length > 0;
-  elements['control-empty'].textContent = {
-    queue: 'No waiting tasks',
-    exec: 'No executing tasks',
-    backlog: 'No backlog tasks'
-  }[state.controlTab] ?? 'No tasks';
+  elements['control-empty'].hidden = true;
   const diagnostics = Array.isArray(state.controlRoom?.diagnostics) ? state.controlRoom.diagnostics : [];
   const messages = [
     ...(state.controlRoom?.stale ? [`Showing cached revision ${state.controlRoom.revision}; the server is rebuilding.`] : []),
@@ -1153,13 +1283,38 @@ function persistControlRoomScrollAnchor() {
   });
 }
 
-async function loadControlRoom() {
-  const response = await fetch('/api/control-room', { cache: 'no-store', headers: controlRoomEtag ? { 'if-none-match': controlRoomEtag } : {} });
+async function loadControlRoom({ force = false, deferDuringQueueDrag = false } = {}) {
+  const response = await fetch('/api/control-room', { cache: 'no-store', headers: !force && controlRoomEtag ? { 'if-none-match': controlRoomEtag } : {} });
   if (response.status === 304 && state.controlRoom) return false;
   if (!response.ok) throw new Error(`Could not load the Control Room (${response.status}).`);
-  state.controlRoom = await response.json();
-  controlRoomEtag = response.headers.get('etag') ?? '';
+  const nextControlRoom = await response.json();
+  const nextEtag = response.headers.get('etag') ?? '';
+  if (deferDuringQueueDrag && queueRefreshBlocked()) {
+    pendingControlRoomRefresh = true;
+    return false;
+  }
+  state.controlRoom = nextControlRoom;
+  controlRoomEtag = nextEtag;
   return true;
+}
+
+async function refreshControlRoomFromEvent() {
+  if (queueRefreshBlocked()) {
+    pendingControlRoomRefresh = true;
+    return;
+  }
+  try {
+    if (await loadControlRoom({ deferDuringQueueDrag: true })) renderControlRoom();
+  } catch (cause) {
+    elements['control-diagnostics'].hidden = false;
+    elements['control-diagnostics'].textContent = cause instanceof Error ? cause.message : 'Control Room refresh failed.';
+  }
+}
+
+async function flushPendingControlRoomRefresh() {
+  if (!pendingControlRoomRefresh || queueRefreshBlocked()) return;
+  pendingControlRoomRefresh = false;
+  await refreshControlRoomFromEvent();
 }
 
 function subscribeControlRoomEvents() {
@@ -1167,41 +1322,97 @@ function subscribeControlRoomEvents() {
   controlRoomEventSource = new EventSource('/api/control-room-events');
   const refresh = () => {
     clearTimeout(controlRoomRefreshTimer);
-    controlRoomRefreshTimer = window.setTimeout(async () => {
+    controlRoomRefreshTimer = window.setTimeout(() => {
       if (location.pathname !== '/') return;
-      try {
-        if (await loadControlRoom()) renderControlRoom();
-      } catch (cause) {
-        elements['control-diagnostics'].hidden = false;
-        elements['control-diagnostics'].textContent = cause instanceof Error ? cause.message : 'Control Room refresh failed.';
-      }
+      void refreshControlRoomFromEvent();
     }, 80);
   };
   controlRoomEventSource.addEventListener('ledger-content-change', refresh);
   controlRoomEventSource.addEventListener('card-content-change', refresh);
 }
 
-async function persistQueueOrder() {
+function queueQueueOrderPersistence() {
   const sequence = ++queuePersistenceSequence;
-  const reordered = filteredControlTasks();
-  const mutations = reordered.map((task, index) => {
-    task.queueRank = index + 1;
+  queuePersistenceActive = true;
+  const reordered = filteredControlTasks('queue');
+  const mutations = reordered.flatMap((task, index) => {
+    const queueRank = index + 1;
+    if (task.queueRank === queueRank) return [];
+    task.queueRank = queueRank;
     const source = state.controlRoom.allTasks.find((candidate) => candidate.projectId === task.projectId && candidate.cardId === task.cardId && candidate.ledgerId === task.ledgerId);
-    if (source) source.queueRank = index + 1;
-    return { task, queueRank: index + 1 };
+    if (source) source.queueRank = queueRank;
+    return [{ task, queueRank }];
   });
+  queuePersistenceTail = queuePersistenceTail.then(async (previousSucceeded) => {
+    if (!previousSucceeded) return false;
+    return persistQueueOrder(mutations);
+  });
+  void queuePersistenceTail.then(async (persisted) => {
+    if (sequence !== queuePersistenceSequence) return;
+    try {
+      if (!persisted) {
+        pendingControlRoomRefresh = false;
+        await loadControlRoom({ force: true });
+        renderControlRoom();
+        setView('error-view');
+      }
+    } finally {
+      if (!persisted) queuePersistenceTail = Promise.resolve(true);
+      queuePersistenceActive = false;
+      await flushPendingControlRoomRefresh();
+    }
+  });
+}
+
+async function persistQueueOrder(mutations) {
+  try {
+    for (const { task, queueRank } of mutations) {
+      await ledgerMutation(task.ledgerId, {
+        action: 'patch-card',
+        cardPatch: { id: task.cardId, queueRank }
+      }, task.projectId);
+    }
+    return true;
+  } catch (error) {
+    elements['error-message'].textContent = error instanceof Error ? error.message : 'Queue order persistence failed.';
+    return false;
+  }
+}
+
+async function persistControlTaskPlacement({ taskId, sourceTab, targetTab, newIndex }) {
+  const source = state.controlRoom?.[sourceTab] ?? [];
+  const task = source.find((candidate) => taskIdentity(candidate) === taskId);
+  if (!task || !['queue', 'backlog'].includes(sourceTab) || !['queue', 'backlog'].includes(targetTab)) {
+    await loadControlRoom({ force: true });
+    await settleQueueDrag({ rerender: true });
+    return;
+  }
+  state.controlRoom[sourceTab] = source.filter((candidate) => candidate !== task);
+  const target = state.controlRoom[targetTab];
+  const visibleTarget = filteredControlTasks(targetTab);
+  const before = visibleTarget[newIndex];
+  const after = visibleTarget[newIndex - 1];
+  const insertionIndex = before
+    ? target.indexOf(before)
+    : after ? target.indexOf(after) + 1 : target.length;
+  target.splice(insertionIndex, 0, task);
+  task.status = targetTab === 'backlog' ? 'task-backlog' : 'task-waiting';
+  const canonical = state.controlRoom.allTasks.find((candidate) => taskIdentity(candidate) === taskId);
+  if (canonical) canonical.status = task.status;
   renderControlRoom();
   try {
-    await Promise.all(mutations.map(({ task, queueRank }) => ledgerMutation(task.ledgerId, {
+    await ledgerMutation(task.ledgerId, {
       action: 'patch-card',
-      cardPatch: { id: task.cardId, queueRank }
-    }, task.projectId)));
+      cardPatch: { id: task.cardId, status: targetTab === 'backlog' ? 'backlog' : 'todo' }
+    }, task.projectId);
+    if (targetTab === 'queue') queueQueueOrderPersistence();
   } catch (error) {
-    if (sequence !== queuePersistenceSequence) return;
-    await loadControlRoom();
+    await loadControlRoom({ force: true });
     renderControlRoom();
-    elements['error-message'].textContent = error instanceof Error ? error.message : 'Queue order persistence failed.';
-    setView('error-view');
+    elements['control-diagnostics'].hidden = false;
+    elements['control-diagnostics'].textContent = error instanceof Error ? error.message : 'Task placement persistence failed.';
+  } finally {
+    await settleQueueDrag();
   }
 }
 
@@ -1535,7 +1746,27 @@ function renderCard(card) {
   backButton.textContent = '← Back';
   backButton.dataset.destination = parsedTask.masterTask ? 'control-room' : 'zone';
   destroyMobileCarousels(elements['card-body']);
-  const content = renderLedgerCardMarkdown(parsedTask.masterTask ? visibleMasterTaskMarkdown(markdown) : markdown, { imageSizes, mediaSurface: 'thread', carouselDriver: 'external' });
+  const persistCardImageResize = async (source, dimensions) => {
+    const previousImageSizes = card.imageSizes && typeof card.imageSizes === 'object' ? { ...card.imageSizes } : {};
+    card.imageSizes = { ...previousImageSizes, [source]: dimensions };
+    try {
+      state.ledger = await ledgerMutation(state.activeLedgerId, {
+        action: 'patch-card',
+        cardPatch: { id: card.id, imageSizes: card.imageSizes }
+      });
+    } catch (cause) {
+      card.imageSizes = previousImageSizes;
+      if (state.activeCardId === String(card.id)) renderCard(card);
+      elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Carousel resize failed.';
+    }
+  };
+  const content = renderLedgerCardMarkdown(parsedTask.masterTask ? visibleMasterTaskMarkdown(markdown) : markdown, {
+    cardId: parsedTask.masterTask ? String(card.id) : undefined,
+    imageSizes,
+    mediaSurface: parsedTask.masterTask ? 'detail' : 'thread',
+    carouselDriver: 'external',
+    onImageResize: parsedTask.masterTask ? persistCardImageResize : undefined
+  });
   if (parsedTask.masterTask) {
     const overview = document.createElement('section');
     overview.className = 'task-overview';
@@ -1899,7 +2130,7 @@ document.querySelector('.create-ledger-button').addEventListener('click', () => 
 document.querySelector('.create-project-button').addEventListener('click', () => openCreationModal('project'));
 document.querySelector('.create-zone-button').addEventListener('click', () => openCreationModal('zone'));
 document.querySelector('.create-card-button').addEventListener('click', () => openCreationModal('card'));
-document.querySelector('.new-task-button').addEventListener('click', openNewTaskProjectModal);
+document.querySelectorAll('.new-task-button').forEach((button) => button.addEventListener('click', openNewTaskProjectModal));
 document.querySelector('.new-task-project-cancel').addEventListener('click', () => {
   if (!newTaskProjectModal.dataset.busy) newTaskProjectModal.close();
 });
@@ -1941,8 +2172,38 @@ window.addEventListener('scroll', persistControlRoomScrollAnchor, { passive: tru
 window.addEventListener('keydown', async (event) => {
   const target = event.target instanceof HTMLElement ? event.target : null;
   if (isCardEditingKeyboardTarget(target)) return;
+  const desktopControlRoom = location.pathname === '/'
+    && !elements['control-room-view'].hidden
+    && window.matchMedia('(min-width: 760px)').matches
+    && !event.ctrlKey && !event.metaKey && !event.altKey;
+  if (desktopControlRoom && !event.repeat && !event.shiftKey) {
+    const key = event.key.toLowerCase();
+    if (key === 'c' && controlRoomNodes().length > 1) {
+      event.preventDefault();
+      cycleControlRoomNode();
+      return;
+    }
+    if (/^[1-9]$/.test(key)) {
+      const project = controlRoomNodes()[state.controlNodeIndex]?.projects[Number(key) - 1];
+      if (project && project.online !== false) {
+        event.preventDefault();
+        selectControlProject(project.id);
+        return;
+      }
+    }
+    const shortcutControl = key === 'x' ? document.querySelector('.desktop-new-task-button') : null;
+    if (shortcutControl && !shortcutControl.disabled) {
+      event.preventDefault();
+      shortcutControl.click();
+      return;
+    }
+  }
   if (await handleResponsiveThreadShortcut(event)) return;
   if (event.key === 'Escape' && document.body.classList.contains('menu-open')) closeMenu();
+});
+
+window.matchMedia('(min-width: 760px)').addEventListener('change', () => {
+  if (location.pathname === '/' && !elements['control-room-view'].hidden) renderControlRoom();
 });
 
 initializeMobileThread();
