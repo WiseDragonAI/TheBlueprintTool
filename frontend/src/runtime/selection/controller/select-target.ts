@@ -6,7 +6,15 @@ import { selectThread } from '../../thread/effect/select-thread.js';
 import { threadIdForTarget } from '../../thread/helper/thread-id-for-target.js';
 import { renderSelectionState } from '../effect/render-selection-state.js';
 import { renderThreadPanel } from '../../thread/effect/render-thread-panel.js';
+import { openThreadPanel } from '../../thread/effect/open-thread-panel.js';
 import { renderTelemetry } from '../../telemetry/effect/render-telemetry.js';
+import { cardLabels } from '../../ledger/helper/card-labels.js';
+
+function isMasterTaskCard(id: string): boolean {
+  const cards = Array.isArray(state.activeLedger?.cards) ? state.activeLedger.cards as Array<Record<string, unknown>> : [];
+  const card = cards.find((entry) => String(entry.id ?? '') === id);
+  return Boolean(card && cardLabels(card).includes('master-task'));
+}
 
 export function selectTarget(kind: string, id: string, additive: boolean): void {
   if (!id) return;
@@ -34,6 +42,7 @@ export function selectTarget(kind: string, id: string, additive: boolean): void 
     telemetry('resolve-group-membership', { groupId: id, selection: state.selection });
   }
   renderSelectionState();
-  if (state.threadPanelOpen || state.activeTool === 'thread') renderThreadPanel();
+  if (!additive && kind === 'card' && isMasterTaskCard(id)) openThreadPanel();
+  else if (state.threadPanelOpen || state.activeTool === 'thread') renderThreadPanel();
   else renderTelemetry();
 }
