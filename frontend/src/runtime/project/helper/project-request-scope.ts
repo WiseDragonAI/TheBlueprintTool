@@ -38,7 +38,8 @@ export function projectScopedRequestPath(input: string, value = projectIdFromLoc
     parsed.pathname = `${projectBasePath(value)}${parsed.pathname}`;
     return parsed.toString();
   }
-  return `${projectBasePath(value)}${path}`;
+  const rootRelativePath = path.startsWith('.decision-os/') ? `/${path}` : path;
+  return `${projectBasePath(value)}${rootRelativePath}`;
 }
 
 export function installProjectRequestScope(): void {

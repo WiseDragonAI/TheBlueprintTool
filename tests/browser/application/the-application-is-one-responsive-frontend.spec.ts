@@ -23,10 +23,9 @@ test('The responsive application preserves the mobile Control Room and expands t
       executablePath: existsSync(chromiumExecutablePath) ? chromiumExecutablePath : undefined,
       args: [
         '--no-sandbox',
-        '--no-zygote',
-        '--single-process',
         '--disable-dev-shm-usage',
         '--disable-gpu',
+        ...(process.platform === 'android' ? ['--no-zygote', '--single-process'] : []),
         '--use-fake-device-for-media-stream',
         '--use-fake-ui-for-media-stream',
       ],
@@ -119,6 +118,10 @@ test('The responsive application preserves the mobile Control Room and expands t
     assert.equal(await desktop.getByRole('button', { name: '← Back' }).isVisible(), true);
     await desktop.getByRole('button', { name: 'Thread', exact: true }).click();
     await desktop.locator('.mobile-thread-inspector:not([hidden])').waitFor({ state: 'visible' });
+    await desktop.waitForFunction(() => {
+      const inspector = document.querySelector<HTMLElement>('.mobile-thread-inspector');
+      return Boolean(inspector && getComputedStyle(inspector).transform === 'none');
+    });
     const desktopThreadLayout = await desktop.evaluate(() => {
       const card = document.querySelector<HTMLElement>('#card-view');
       const inspector = document.querySelector<HTMLElement>('.mobile-thread-inspector');
@@ -143,6 +146,20 @@ test('The responsive application preserves the mobile Control Room and expands t
     await desktop.locator('.mobile-thread-inspector').waitFor({ state: 'hidden' });
     assert.equal(await desktop.evaluate(() => document.body.classList.contains('card-thread-open')), false);
 
+    await mobile.goto(`${server.url}${cardRoute}`, { waitUntil: 'domcontentloaded' });
+    await mobile.locator('#card-view:not([hidden])').waitFor({ state: 'visible' });
+    await mobile.getByRole('button', { name: 'Thread', exact: true }).click();
+    await mobile.locator('.mobile-thread-inspector:not([hidden])').waitFor({ state: 'visible' });
+    await mobile.waitForFunction(() => {
+      const inspector = document.querySelector<HTMLElement>('.mobile-thread-inspector');
+      return Boolean(inspector && getComputedStyle(inspector).transform === 'none');
+    });
+    const mobileThreadLayout = await mobile.locator('.mobile-thread-inspector').evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+    });
+    assert.deepEqual(mobileThreadLayout, { left: 0, top: 0, width: 390, height: 844 });
+
     await desktop.keyboard.press('a');
     await desktop.locator('.mobile-thread-inspector:not([hidden])').waitFor({ state: 'visible' });
     await desktop.keyboard.press('a');
@@ -150,25 +167,16 @@ test('The responsive application preserves the mobile Control Room and expands t
     await draft.waitFor({ state: 'visible' });
     assert.equal(await draft.evaluate((element) => element === document.activeElement), true);
     await desktop.keyboard.press('x');
-    assert.equal(await desktop.evaluate(() => window.__coreState?.voice?.recording === true), false);
+    assert.equal(await desktop.locator('.voice-panel').evaluate((element) => element.classList.contains('recording')), false);
     await draft.evaluate((element) => (element as HTMLElement).blur());
     await desktop.keyboard.press('x');
-    await desktop.waitForFunction(() => window.__coreState?.voice?.recording === true);
+    await desktop.locator('.voice-panel.recording').waitFor({ state: 'visible' });
     await desktop.keyboard.press('Escape');
-    await desktop.waitForFunction(() => window.__coreState?.voice?.recording === false);
+    await desktop.waitForFunction(() => !document.querySelector('.voice-panel')?.classList.contains('recording'));
     assert.equal(await desktop.locator('.mobile-thread-inspector').isVisible(), true);
     await desktop.keyboard.press('Escape');
     await desktop.locator('.mobile-thread-inspector').waitFor({ state: 'hidden' });
 
-    await mobile.goto(`${server.url}${cardRoute}`, { waitUntil: 'domcontentloaded' });
-    await mobile.locator('#card-view:not([hidden])').waitFor({ state: 'visible' });
-    await mobile.getByRole('button', { name: 'Thread', exact: true }).click();
-    await mobile.locator('.mobile-thread-inspector:not([hidden])').waitFor({ state: 'visible' });
-    const mobileThreadLayout = await mobile.locator('.mobile-thread-inspector').evaluate((element) => {
-      const rect = element.getBoundingClientRect();
-      return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
-    });
-    assert.deepEqual(mobileThreadLayout, { left: 0, top: 0, width: 390, height: 844 });
     assert.deepEqual(desktopErrors, []);
     assert.deepEqual(mobileErrors, []);
   } finally {
