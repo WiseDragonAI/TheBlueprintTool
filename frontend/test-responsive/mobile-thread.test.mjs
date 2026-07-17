@@ -124,7 +124,13 @@ test('mobile thread launch always dispatches an authoritative fresh run', () => 
   assert.match(source, /canvasState\.threadRunSummaryByThreadId\[threadId\] = \{/);
   assert.match(source, /active: status === 'running'/);
   assert.match(source, /queuePosition: Number\.isInteger\(queuePosition\) \? queuePosition : null/);
-  assert.match(source, /bindThreadCodexRunLog\([^;]+runId \}\);\n  const status = String\(result\.run\?\.status \|\| 'running'\);\n  hydrateThreadRun\(runId, startedAt, status, result\.queuePosition\);[\s\S]*await refreshThreadLedger\(\)/);
+  assert.match(source, /bindThreadCodexRunLog\([^;]+runId \}\);\n  const status = String\(result\.run\?\.status \|\| 'running'\);\n  hydrateThreadRun\(runId, startedAt, status, result\.queuePosition\);[\s\S]*await refreshThreadLedger\(runId\)/);
+});
+
+test('mobile thread reconciles the refreshed ledger before rerendering an accepted run', () => {
+  assert.match(source, /const reconciled = reconcileResponsiveThreadLedger\(\{/);
+  assert.match(source, /canvasState\.activeLedger = reconciled\.ledger;\n  currentCard = reconciled\.card;\n  renderThreadPanel\(\);/);
+  assert.match(source, /await refreshThreadLedger\(runId\);/);
 });
 
 test('closing a mobile thread unregisters its project-scoped Codex run consumer', () => {
