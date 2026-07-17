@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -277,6 +278,61 @@ test('server skill tags persist as project metadata without editing synchronized
     const persisted = JSON.parse(readFileSync(join(decisionOsRoot, 'codex-pipelines.json'), 'utf8')) as Record<string, any>;
     assert.deepEqual(persisted.skillLibrary[0].tags, ['Interface']);
   } finally {
+    rmSync(serverRoot, { recursive: true, force: true });
+  }
+});
+
+test('server skill metadata routes persist to the server owner instead of project replicas', async () => {
+  const serverRoot = mkdtempSync(join(tmpdir(), 'decision-os-server-skill-owner-'));
+  const masterDecisionOsRoot = join(serverRoot, '.decision-os');
+  const childDecisionOsRoot = join(serverRoot, 'projects', 'child', '.decision-os');
+  const skillFile = join(serverRoot, '.skills', 'server-owned-skill', 'SKILL.md');
+  mkdirSync(masterDecisionOsRoot, { recursive: true });
+  mkdirSync(childDecisionOsRoot, { recursive: true });
+  mkdirSync(join(skillFile, '..'), { recursive: true });
+  writeFileSync(skillFile, markdown('server-owned-skill', 'Server-owned metadata fixture'));
+  writeFileSync(join(masterDecisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
+  writeFileSync(join(childDecisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
+
+  const runtime: Record<string, any> = {};
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: serverRoot }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+  try {
+    const saveResponse = await fetch(`${baseUrl}/api/codex/server-skills/server-owned-skill`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ favorite: true, tags: ['Interface'] }),
+    });
+    assert.equal(saveResponse.status, 200);
+    const saved = await saveResponse.json() as Record<string, any>;
+    assert.equal(saved.skill.favorite, true);
+    assert.deepEqual(saved.skill.tags, ['Interface']);
+
+    const persisted = JSON.parse(readFileSync(join(masterDecisionOsRoot, 'codex-pipelines.json'), 'utf8')) as Record<string, any>;
+    assert.deepEqual(persisted.skillLibrary.map((record: Record<string, any>) => ({
+      skillName: record.skillName,
+      favorite: record.favorite,
+      tags: record.tags,
+    })), [{ skillName: 'server-owned-skill', favorite: true, tags: ['Interface'] }]);
+    assert.equal(existsSync(join(childDecisionOsRoot, 'codex-pipelines.json')), false);
+
+    const reloadResponse = await fetch(`${baseUrl}/api/codex/server-skills/server-owned-skill`);
+    assert.equal(reloadResponse.status, 200);
+    const reloaded = await reloadResponse.json() as Record<string, any>;
+    assert.equal(reloaded.skill.favorite, true);
+    assert.deepEqual(reloaded.skill.tags, ['Interface']);
+
+    const rejectedResponse = await fetch(`${baseUrl}/api/codex/server-skills/server-owned-skill`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ markdown: '# Not allowed' }),
+    });
+    assert.equal(rejectedResponse.status, 400);
+  } finally {
+    await closeServer(server);
     rmSync(serverRoot, { recursive: true, force: true });
   }
 });

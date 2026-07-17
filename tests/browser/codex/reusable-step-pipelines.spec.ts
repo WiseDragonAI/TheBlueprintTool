@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { chromium, type Browser, type Locator, type Page } from '@playwright/test';
+import { chromium, type Browser, type Locator, type Page, type Route } from '@playwright/test';
 import { assertFrontendSpec } from '../../../frontend/src/test/spec-assertions.js';
 
 type BrowserFixture = {
@@ -207,7 +207,7 @@ test('Skills Library keeps canonical Markdown in a bounded scroll view above per
     assert.equal(cardPresentation.activationTransform, 'none');
     assert.ok(cardPresentation.activationHeight + 1 >= cardPresentation.activationScrollHeight,
       `Card content overflowed its surface (${cardPresentation.activationHeight} < ${cardPresentation.activationScrollHeight}).`);
-    const detailResponsePromise = page.waitForResponse((response) => response.url().includes(`/api/codex/skill-library/${skillName}`));
+    const detailResponsePromise = page.waitForResponse((response) => response.url().includes(`/api/codex/server-skills/${skillName}`));
     await firstSkill.click();
     const detailResponse = await detailResponsePromise;
     const detailPayload = await detailResponse.json();
@@ -268,6 +268,87 @@ test('Skills Library keeps canonical Markdown in a bounded scroll view above per
     await reference.click();
     assert.equal(await reference.getAttribute('aria-expanded'), 'true');
     assert.equal(await library.getByText('Reference content is readable.', { exact: true }).isVisible(), true);
+
+    const metadataPath = `/api/codex/server-skills/${skillName}`;
+    const metadataPattern = `**${metadataPath}`;
+    let releaseFavoriteSave = () => {};
+    let observeFavoriteRequest = () => {};
+    const favoriteSaveRelease = new Promise<void>((resolveRelease) => { releaseFavoriteSave = resolveRelease; });
+    const favoriteRequestObserved = new Promise<void>((resolveObserved) => { observeFavoriteRequest = resolveObserved; });
+    const delayFavoriteSave = async (route: Route) => {
+      if (route.request().method() !== 'PUT' || route.request().postDataJSON()?.favorite !== false) return route.continue();
+      observeFavoriteRequest();
+      await favoriteSaveRelease;
+      await route.continue();
+    };
+    await page.route(metadataPattern, delayFavoriteSave);
+    const favoriteSavePromise = page.waitForResponse((response) => response.request().method() === 'PUT' && new URL(response.url()).pathname === metadataPath);
+    await library.getByRole('button', { name: 'Remove from favorites', exact: true }).click();
+    await favoriteRequestObserved;
+    assert.equal(await library.getByRole('button', { name: 'Add to favorites', exact: true }).getAttribute('aria-pressed'), 'false');
+    releaseFavoriteSave();
+    const favoriteSave = await favoriteSavePromise;
+    await page.unroute(metadataPattern, delayFavoriteSave);
+    assert.equal(favoriteSave.status(), 200);
+    assert.equal((await favoriteSave.json()).skill.favorite, false);
+
+    const tagChoice = library.getByRole('button', { name: 'Set Interface tag', exact: true });
+    await tagChoice.waitFor({ state: 'visible' });
+    const tagSavePromise = page.waitForResponse((response) => response.request().method() === 'PUT' && new URL(response.url()).pathname === metadataPath);
+    await tagChoice.click();
+    const tagSave = await tagSavePromise;
+    assert.equal(tagSave.status(), 200);
+    assert.deepEqual((await tagSave.json()).skill.tags, ['Interface']);
+
+    const persistedAfterSave = JSON.parse(readFileSync(join(fixture.workspace, '.decision-os', 'codex-pipelines.json'), 'utf8'));
+    const persistedRecord = persistedAfterSave.skillLibrary.find((record: { skillName: string }) => record.skillName === skillName);
+    assert.deepEqual({ favorite: persistedRecord.favorite, tags: persistedRecord.tags }, { favorite: false, tags: ['Interface'] });
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await library.waitFor({ state: 'visible' });
+    await page.waitForFunction(() => document.querySelectorAll('.process-library .codex-list-item').length >= 3);
+    const reloadedSkill = library.locator('.process-library .codex-list-item').filter({ hasText: skillName });
+    await reloadedSkill.waitFor({ state: 'visible' });
+    assert.equal(await reloadedSkill.locator('.skill-favorite-star').count(), 0);
+    assert.equal(await reloadedSkill.getByText('Interface', { exact: true }).count(), 1);
+
+    const reloadedDetailPromise = page.waitForResponse((response) => new URL(response.url()).pathname === metadataPath && response.request().method() === 'GET');
+    await reloadedSkill.click();
+    await reloadedDetailPromise;
+    assert.equal(await library.getByRole('button', { name: 'Add to favorites', exact: true }).getAttribute('aria-pressed'), 'false');
+    assert.equal(await library.getByRole('button', { name: 'Set Interface tag', exact: true }).getAttribute('aria-pressed'), 'true');
+
+    let releaseRejectedTagSave = () => {};
+    let observeRejectedTagRequest = () => {};
+    const rejectedTagRelease = new Promise<void>((resolveRelease) => { releaseRejectedTagSave = resolveRelease; });
+    const rejectedTagObserved = new Promise<void>((resolveObserved) => { observeRejectedTagRequest = resolveObserved; });
+    const rejectTagSave = async (route: Route) => {
+      if (route.request().method() !== 'PUT' || route.request().postDataJSON()?.tags?.[0] !== 'Architecture') return route.continue();
+      observeRejectedTagRequest();
+      await rejectedTagRelease;
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'Forced persistence rejection.' }) });
+    };
+    await page.route(metadataPattern, rejectTagSave);
+    const rejectedTagResponse = page.waitForResponse((response) => response.request().method() === 'PUT' && new URL(response.url()).pathname === metadataPath);
+    await library.getByRole('button', { name: 'Set Architecture tag', exact: true }).click();
+    await rejectedTagObserved;
+    assert.equal(await library.getByRole('button', { name: 'Set Architecture tag', exact: true }).getAttribute('aria-pressed'), 'true');
+    releaseRejectedTagSave();
+    assert.equal((await rejectedTagResponse).status(), 500);
+    await page.unroute(metadataPattern, rejectTagSave);
+    await page.waitForFunction(() => document.querySelector<HTMLButtonElement>('[aria-label="Set Interface tag"]')?.getAttribute('aria-pressed') === 'true');
+    assert.equal(await library.getByRole('button', { name: 'Set Architecture tag', exact: true }).getAttribute('aria-pressed'), 'false');
+    const persistedAfterRejection = JSON.parse(readFileSync(join(fixture.workspace, '.decision-os', 'codex-pipelines.json'), 'utf8'));
+    assert.deepEqual(persistedAfterRejection.skillLibrary.find((record: { skillName: string }) => record.skillName === skillName).tags, ['Interface']);
+
+    const restoreFavoritePromise = page.waitForResponse((response) => response.request().method() === 'PUT' && new URL(response.url()).pathname === metadataPath);
+    await library.getByRole('button', { name: 'Add to favorites', exact: true }).click();
+    assert.equal((await (await restoreFavoritePromise).json()).skill.favorite, true);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await library.waitFor({ state: 'visible' });
+    const firstReloadedSkill = library.locator('.process-library .codex-list-item').first();
+    assert.match(await firstReloadedSkill.locator('strong').textContent() ?? '', new RegExp(`^${skillName}`));
+    assert.equal(await firstReloadedSkill.locator('.skill-favorite-star').count(), 1);
   } finally {
     await browser?.close();
     if (server) await stopDecisionOsServer(server.process);

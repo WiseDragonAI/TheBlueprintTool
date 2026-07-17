@@ -1306,6 +1306,36 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.end(JSON.stringify(result));
       return;
     }
+    if (url.startsWith('/api/codex/server-skills/') && request.method === 'GET') {
+      const skillName = decodeRouteSegment(url.slice('/api/codex/server-skills/'.length));
+      const skillRuntime = { ...requestRuntime, decisionOsRoot: masterDecisionOsRoot, projectId: '' };
+      const result = readCodexSkillLibraryController({ action_payload: { skillName }, runtime_state: skillRuntime });
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
+      response.end(JSON.stringify(result));
+      return;
+    }
+    if (url.startsWith('/api/codex/server-skills/') && request.method === 'PUT') {
+      const skillName = decodeRouteSegment(url.slice('/api/codex/server-skills/'.length));
+      const bodyBuffer = await readRequestBuffer(request);
+      const savePayload = (() => {
+        try {
+          return JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
+        } catch {
+          return {};
+        }
+      })();
+      const metadataOnly = Object.keys(savePayload).length > 0
+        && Object.keys(savePayload).every((key) => key === 'favorite' || key === 'tags');
+      const skillRuntime = { ...requestRuntime, decisionOsRoot: masterDecisionOsRoot, projectId: '' };
+      const result = metadataOnly
+        ? saveCodexSkillLibraryController({ action_payload: { ...savePayload, skillName }, runtime_state: skillRuntime })
+        : { ok: false, statusCode: 400, error: 'Server skill updates accept only favorite and tags.', skillName };
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
+      response.end(JSON.stringify(result));
+      return;
+    }
     if (url.startsWith('/api/codex/skill-library/') && request.method === 'GET') {
       const skillName = decodeRouteSegment(url.slice('/api/codex/skill-library/'.length));
       const result = readCodexSkillLibraryController({ action_payload: { skillName }, runtime_state: requestRuntime });
