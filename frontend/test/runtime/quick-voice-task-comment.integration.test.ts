@@ -32,8 +32,8 @@ test('desktop Shift+X awaits queued upload acceptance before navigating to Exec'
   const shortcut = thread.match(/export async function handleResponsiveThreadShortcut\(event\) \{[\s\S]*?\n\}/)?.[0] ?? '';
 
   assert.match(shortcut, /const queueCodex = event\.shiftKey;/);
-  assert.match(shortcut, /await stopVoiceRecording\(\{ queueCodex \}\)/);
-  assert.match(shortcut, /if \(queueCodex\) await finishQueuedVoiceSubmission\(submitted\)/);
+  assert.match(shortcut, /const submitted = await stopVoiceRecording\(\{ queueCodex \}\);/);
+  assert.match(shortcut, /if \(queueCodex\) await finishQueuedVoiceSubmission\(submitted\);/);
   assert.doesNotMatch(shortcut, /onPersisted/);
 });
 

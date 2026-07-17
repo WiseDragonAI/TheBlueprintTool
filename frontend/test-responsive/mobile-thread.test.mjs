@@ -108,8 +108,8 @@ test('desktop Shift+X queues Codex after server acceptance and returns to Contro
   const shortcut = source.match(/export async function handleResponsiveThreadShortcut\(event\) \{[\s\S]*?\n\}/)?.[0] ?? '';
 
   assert.match(shortcut, /const queueCodex = event\.shiftKey;/);
-  assert.match(shortcut, /await stopVoiceRecording\(\{ queueCodex \}\)/);
-  assert.match(shortcut, /if \(queueCodex\) await finishQueuedVoiceSubmission\(submitted\)/);
+  assert.match(shortcut, /const submitted = await stopVoiceRecording\(\{ queueCodex \}\);/);
+  assert.match(shortcut, /if \(queueCodex\) await finishQueuedVoiceSubmission\(submitted\);/);
   assert.doesNotMatch(shortcut, /onPersisted/);
   assert.match(applicationSource, /await navigate\(controlRoomPath\('exec'\), true\)/);
 });
