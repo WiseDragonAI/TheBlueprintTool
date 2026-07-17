@@ -10,6 +10,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cancelCardSkillRunController } from '@backend/business/codex/controller/cancel-card-skill-run-controller.js';
+import { readCardSkillRunController } from '@backend/business/codex/controller/read-card-skill-run-controller.js';
 import {
   enqueueCodexThreadProcess,
   markCodexProcessQueueItemRunning,
@@ -57,6 +58,13 @@ test('cancels a live run through its PID and start identity when the runtime chi
   };
 
   try {
+    const status = await readCardSkillRunController({
+      action_payload: { ledgerId: 'specs', cardId, runId, since: 0 },
+      runtime_state: runtime,
+    });
+    assert.equal(status.status, 'running');
+    assert.equal(status.active, true);
+
     const result = await cancelCardSkillRunController({
       action_payload: { ledgerId: 'specs', cardId, runId },
       runtime_state: runtime,
