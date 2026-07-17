@@ -297,6 +297,7 @@ function formatError(error) { const refs = error.body?.invalidReferences; return
 async function openProcess() {
   if (!state.ledgerId || !state.cardId) return;
   state.libraryScope = 'project'; state.query = ''; state.projectFilter = 'All'; state.tagFilter = 'All';
+  el('.process-resynchronize').hidden = true;
   el('.process-modal').showModal(); setMobileCodexView(document, 'library', { global: false, libraryTitle: 'Process card' }); message('.process-message', 'Loading libraries…');
   try { const result = await loadLibraries(); message('.process-message', result.issues?.map((issue) => issue.message).join(' ') || ''); renderProcessList(); }
   catch (error) { message('.process-message', error.message, true); el('.process-library').replaceChildren(); }
@@ -304,6 +305,7 @@ async function openProcess() {
 async function openSkills() {
   state.processTab = 'skills';
   state.libraryScope = 'global'; state.query = ''; state.projectFilter = 'All'; state.tagFilter = 'All';
+  el('.process-resynchronize').hidden = false;
   document.querySelectorAll('[data-process-tab]').forEach((tab) => tab.setAttribute('aria-selected', String(tab.dataset.processTab === 'skills')));
   el('.process-modal').showModal(); setMobileCodexView(document, 'library', { global: true, libraryTitle: 'Skill library' });
   message('.process-message', 'Loading skill library…');
@@ -316,6 +318,21 @@ async function openPipelines() {
   message('.pipelines-message', 'Loading pipelines…');
   try { const result = await loadGlobalLibraries(); renderPipelineLibrary(); message('.pipelines-message', result.failedProjects ? `${result.failedProjects} project libraries could not be loaded.` : (state.pipelines.length ? `${state.pipelines.length} pipelines` : 'No saved pipelines.'), result.failedProjects > 0); }
   catch (error) { message('.pipelines-message', error.message, true); el('.pipeline-library').replaceChildren(); }
+}
+async function resynchronizeGlobalLibraries(button, messageSelector, render) {
+  setBusy(button, true);
+  message(messageSelector, 'Synchronizing skills, then pipelines…');
+  try {
+    const result = await jsonRequest('/api/federation/libraries/synchronize', { method: 'POST' });
+    await loadGlobalLibraries();
+    render();
+    const peers = Number(result.synchronizedPeerCount || 0);
+    message(messageSelector, `Skills and pipelines synchronized with ${peers} online ${peers === 1 ? 'node' : 'nodes'}.`);
+  } catch (error) {
+    message(messageSelector, error.message, true);
+  } finally {
+    setBusy(button, false);
+  }
 }
 function renderPipelineLibrary() {
   const priorTab = state.processTab; state.processTab = 'pipelines';
@@ -394,6 +411,8 @@ export function initializeMobileCodex() {
     }
     el('.process-modal').close();
   }); el('.pipelines-close').addEventListener('click', () => el('.pipelines-modal').close());
+  el('.process-resynchronize').addEventListener('click', (event) => { void resynchronizeGlobalLibraries(event.currentTarget, '.process-message', renderProcessList); });
+  el('.pipelines-resynchronize').addEventListener('click', (event) => { void resynchronizeGlobalLibraries(event.currentTarget, '.pipelines-message', renderPipelineLibrary); });
   document.querySelectorAll('[data-process-tab]').forEach((tab) => tab.addEventListener('click', () => { state.processTab = tab.dataset.processTab; state.query = ''; state.tagFilter = 'All'; document.querySelectorAll('[data-process-tab]').forEach((item) => item.setAttribute('aria-selected', String(item === tab))); setMobileCodexView(document, 'library', { global: state.libraryScope === 'global', libraryTitle: state.processTab === 'skills' ? 'Skill library' : 'Pipelines' }); message('.process-message', ''); renderProcessList(); }));
   el('.process-search').addEventListener('input', (event) => { state.query = event.target.value; renderProcessList(); event.target.focus(); });
   el('.process-filter-clear').addEventListener('click', () => { state.query = ''; state.projectFilter = 'All'; state.tagFilter = 'All'; renderProcessList(); });

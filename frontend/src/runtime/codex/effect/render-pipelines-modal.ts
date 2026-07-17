@@ -12,6 +12,7 @@ import { pipelinesModal } from '../../dom.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { loadCodexPipelines } from './load-codex-pipelines.js';
 import { openPipelineEditor } from './render-pipeline-editor-modal.js';
+import { requestFederatedLibrarySynchronization } from './request-federated-library-synchronization.js';
 import type { CodexPipelineSaveResult } from './request-codex-pipeline-save.js';
 
 export type PipelineLibraryState = {
@@ -21,6 +22,8 @@ export type PipelineLibraryState = {
   issues: readonly CodexPipelineStoreIssue[];
   expandedPipelineId: string;
   loading: boolean;
+  synchronizing: boolean;
+  synchronizationMessage: string;
   error: string;
   onLibraryChanged?: (result: CodexPipelineSaveResult) => void | Promise<void>;
 };
@@ -32,6 +35,8 @@ export const pipelineLibraryState: PipelineLibraryState = {
   issues: [],
   expandedPipelineId: '',
   loading: false,
+  synchronizing: false,
+  synchronizationMessage: '',
   error: '',
 };
 
@@ -170,7 +175,15 @@ export function renderPipelinesModal(): void {
   copy.replaceChildren(kicker, title, subtitle);
   const actions = document.createElement('div');
   actions.className = 'codex-head-actions';
+  const synchronize = button(
+    pipelineLibraryState.synchronizing ? 'Synchronizing…' : 'Resynchronize',
+    () => { void resynchronizePipelinesModalLibraries(); },
+    'ghost-button',
+    'pipeline-library-resynchronize',
+  );
+  synchronize.disabled = pipelineLibraryState.synchronizing;
   actions.replaceChildren(
+    synchronize,
     button('New pipeline', () => openEditorForPipeline(), 'primary-action', 'pipeline-library-new'),
     button('×', closePipelinesModal, 'plain-close', 'pipeline-library-close'),
   );
@@ -209,10 +222,10 @@ export function renderPipelinesModal(): void {
   footer.className = 'codex-modal-actions pipeline-library-footer';
   const issueCount = pipelineLibraryState.invalidReferences.length + pipelineLibraryState.issues.length;
   const status = document.createElement('p');
-  status.className = issueCount > 0 ? 'codex-inline-warning' : 'codex-form-notice';
-  status.textContent = issueCount > 0
+  status.className = !pipelineLibraryState.synchronizationMessage && issueCount > 0 ? 'codex-inline-warning' : 'codex-form-notice';
+  status.textContent = pipelineLibraryState.synchronizationMessage || (issueCount > 0
     ? `${issueCount} library warning${issueCount === 1 ? '' : 's'} detected. Expand and edit affected pipelines.`
-    : `${pipelineLibraryState.pipelines.length} saved pipeline${pipelineLibraryState.pipelines.length === 1 ? '' : 's'}`;
+    : `${pipelineLibraryState.pipelines.length} saved pipeline${pipelineLibraryState.pipelines.length === 1 ? '' : 's'}`);
   footer.replaceChildren(status, button('Close', closePipelinesModal));
   pipelinesModal.replaceChildren(head, content, footer);
   if (focusKey) {
@@ -225,7 +238,9 @@ export function renderPipelinesModal(): void {
 export async function openPipelinesModal(input: { onLibraryChanged?: PipelineLibraryState['onLibraryChanged'] } = {}): Promise<void> {
   pipelineLibraryState.onLibraryChanged = input.onLibraryChanged;
   pipelineLibraryState.loading = true;
+  pipelineLibraryState.synchronizing = false;
   pipelineLibraryState.error = '';
+  pipelineLibraryState.synchronizationMessage = '';
   renderPipelinesModal();
   showLibrary();
   telemetry('codex-pipelines-modal-open', {});
@@ -253,6 +268,43 @@ export async function refreshPipelinesModal(): Promise<void> {
     pipelineLibraryState.expandedPipelineId = result.pipelines[0]?.id ?? '';
   }
   renderPipelinesModal();
+}
+
+export async function resynchronizePipelinesModalLibraries(): Promise<boolean> {
+  if (pipelineLibraryState.synchronizing) return false;
+  const generation = ++libraryLoadGeneration;
+  pipelineLibraryState.synchronizing = true;
+  pipelineLibraryState.error = '';
+  pipelineLibraryState.synchronizationMessage = 'Synchronizing skills, then pipelines…';
+  renderPipelinesModal();
+  const synchronization = await requestFederatedLibrarySynchronization();
+  if (generation !== libraryLoadGeneration) return false;
+  if (!synchronization.ok) {
+    pipelineLibraryState.synchronizing = false;
+    pipelineLibraryState.synchronizationMessage = '';
+    pipelineLibraryState.error = synchronization.error || 'Could not synchronize federation libraries.';
+    renderPipelinesModal();
+    return false;
+  }
+  pipelineLibraryState.loading = true;
+  renderPipelinesModal();
+  const result = await loadCodexPipelines();
+  if (generation !== libraryLoadGeneration) return false;
+  pipelineLibraryState.synchronizing = false;
+  pipelineLibraryState.loading = false;
+  if (!result.ok) {
+    pipelineLibraryState.synchronizationMessage = '';
+    pipelineLibraryState.error = result.error || 'Could not load saved pipelines.';
+    renderPipelinesModal();
+    return false;
+  }
+  pipelineLibraryState.pipelines = result.pipelines;
+  pipelineLibraryState.steps = result.steps;
+  pipelineLibraryState.invalidReferences = result.invalidReferences;
+  pipelineLibraryState.issues = result.issues;
+  pipelineLibraryState.synchronizationMessage = `Skills and pipelines synchronized with ${synchronization.synchronizedPeerCount} online ${synchronization.synchronizedPeerCount === 1 ? 'node' : 'nodes'}.`;
+  renderPipelinesModal();
+  return true;
 }
 
 export function togglePipelineExpanded(pipelineId: string): void {
