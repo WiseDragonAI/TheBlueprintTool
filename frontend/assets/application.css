@@ -510,12 +510,16 @@ dialog[open]::backdrop { animation: scrim-in var(--motion-view) ease; }
 @keyframes scrim-in { from { opacity: 0; } }
 html[data-voice-handoff="true"]::view-transition-old(root) { animation: voice-handoff-out 180ms cubic-bezier(.4, 0, 1, 1) both; }
 html[data-voice-handoff="true"]::view-transition-new(root) { animation: voice-handoff-in 280ms cubic-bezier(.16, 1, .3, 1) both; }
+html[data-task-back-handoff="true"]::view-transition-old(root) { animation: task-back-fade-out 140ms cubic-bezier(.4, 0, 1, 1) both; }
+html[data-task-back-handoff="true"]::view-transition-new(root) { animation: task-back-fade-in 180ms cubic-bezier(.16, 1, .3, 1) both; }
 @keyframes voice-handoff-out {
   to { opacity: 0; transform: translateY(-10px) scale(.992); filter: blur(4px); }
 }
 @keyframes voice-handoff-in {
   from { opacity: 0; transform: translateY(8px) scale(1.006); filter: blur(3px); }
 }
+@keyframes task-back-fade-out { to { opacity: 0; } }
+@keyframes task-back-fade-in { from { opacity: 0; } }
 
 @media (min-width: 760px) {
   body.card-thread-open .app-shell { margin-right: clamp(420px, 33vw, 620px); }
@@ -546,5 +550,5 @@ html[data-voice-handoff="true"]::view-transition-new(root) { animation: voice-ha
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
   :where(button, .ledger-link, .overview-ledger):active { transform: none; }
   .ledger-nav, .mobile-thread-inspector, dialog[open], .control-task-details { transform: none; }
-  html[data-voice-handoff="true"]::view-transition-old(root), html[data-voice-handoff="true"]::view-transition-new(root) { animation: none; }
+  html[data-voice-handoff="true"]::view-transition-old(root), html[data-voice-handoff="true"]::view-transition-new(root), html[data-task-back-handoff="true"]::view-transition-old(root), html[data-task-back-handoff="true"]::view-transition-new(root) { animation: none; }
 }
