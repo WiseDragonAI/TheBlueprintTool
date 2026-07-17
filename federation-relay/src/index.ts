@@ -78,19 +78,37 @@ export class FederationRelay extends DurableObject<Env> {
     });
   }
 
+  private activeSockets(): WebSocket[] {
+    return this.ctx.getWebSockets().filter((socket) => socket.readyState === WebSocket.OPEN);
+  }
+
   private socket(nodeId: string): WebSocket | undefined {
-    return this.ctx.getWebSockets().find((candidate) => (candidate.deserializeAttachment() as SocketIdentity | null)?.nodeId === nodeId);
+    return this.activeSockets().find((candidate) => (candidate.deserializeAttachment() as SocketIdentity | null)?.nodeId === nodeId);
+  }
+
+  private sendSocket(socket: WebSocket, frame: RelayFrame): void {
+    if (socket.readyState !== WebSocket.OPEN) return;
+    try {
+      socket.send(JSON.stringify(frame));
+    } catch {
+      // A peer can enter CLOSING between the readyState check and send.
+    }
   }
 
   private send(nodeId: string, frame: RelayFrame): void {
-    this.socket(nodeId)?.send(JSON.stringify(frame));
+    const socket = this.socket(nodeId);
+    if (socket) this.sendSocket(socket, frame);
   }
 
   private async publishCatalog(): Promise<void> {
-    const online = new Set(this.ctx.getWebSockets().map((socket) => (socket.deserializeAttachment() as SocketIdentity).nodeId));
+    const sockets = this.activeSockets();
+    const online = new Set(sockets.flatMap((socket) => {
+      const identity = socket.deserializeAttachment() as SocketIdentity | null;
+      return identity?.nodeId ? [identity.nodeId] : [];
+    }));
     const nodes = [...this.manifests].map(([nodeId, projects]) => ({ nodeId, nodeLabel: this.nodeLabels.get(nodeId) || nodeId, projects, online: online.has(nodeId) }));
     const frame: RelayFrame = { version: 1, type: 'catalog', nodes };
-    for (const socket of this.ctx.getWebSockets()) socket.send(JSON.stringify(frame));
+    for (const socket of sockets) this.sendSocket(socket, frame);
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -137,8 +155,8 @@ export class FederationRelay extends DurableObject<Env> {
         return;
       }
       if (frame.type === 'content-change') {
-        for (const target of this.ctx.getWebSockets()) {
-          if (target !== socket) target.send(JSON.stringify({ version: 1, type: 'content-change' } satisfies RelayFrame));
+        for (const target of this.activeSockets()) {
+          if (target !== socket) this.sendSocket(target, { version: 1, type: 'content-change' });
         }
         return;
       }

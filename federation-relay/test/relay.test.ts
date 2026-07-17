@@ -37,6 +37,19 @@ function nextFrame(socket: WebSocket, predicate: (frame: Frame) => boolean): Pro
 }
 
 describe('federation relay', () => {
+  it('replaces a same-node socket without failing the new handshake', async () => {
+    const federationId = `replacement-${crypto.randomUUID()}`;
+    const credential = await createNode(federationId, 'workstation');
+    const first = await connect(federationId, 'workstation', credential);
+    const firstClosed = new Promise<CloseEvent>((resolve) => first.addEventListener('close', resolve, { once: true }));
+
+    const replacement = await connect(federationId, 'workstation', credential);
+
+    await expect(firstClosed).resolves.toMatchObject({ code: 4001, reason: 'replaced' });
+    expect(replacement.readyState).toBe(WebSocket.OPEN);
+    replacement.close(1000, 'test_complete');
+  });
+
   it('authenticates nodes, publishes the shared catalog, and relays a credit-bounded stream', async () => {
     const federationId = `test-${crypto.randomUUID()}`;
     const [credentialA, credentialB] = await Promise.all([
