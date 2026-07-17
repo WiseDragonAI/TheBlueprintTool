@@ -158,3 +158,66 @@ test('rebuilds a cached Exec projection when the process queue file appears', as
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('orders one multi-project Queue by explicit rank and newest waiting time', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-control-room-queue-order-'));
+  const createProject = (id: string, cards: Array<{ id: string; waitingSince: string; queueRank?: number }>): DecisionOsProject => {
+    const projectRoot = join(root, id);
+    const decisionOsRoot = join(projectRoot, '.decision-os');
+    mkdirSync(join(decisionOsRoot, 'cards', 'tasks'), { recursive: true });
+    for (const card of cards) {
+      writeFileSync(join(decisionOsRoot, 'cards', 'tasks', `${card.id}.md`), [
+        `Waiting since: ${card.waitingSince}`,
+        ...(card.queueRank ? [`Queue rank: ${card.queueRank}`] : []),
+        '',
+        '## A. Work',
+        '',
+        '1. Waiting.',
+        '',
+      ].join('\n'));
+    }
+    writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
+      cards: cards.map((card) => ({
+        id: card.id, title: card.id, status: 'todo', labels: ['master-task'],
+        comment: { contentFile: `.decision-os/cards/tasks/${card.id}.md` },
+      })),
+      annotations: [], relationships: [], threadFiles: {},
+    }));
+    return {
+      id, name: id, relativePath: id, root: projectRoot, decisionOsRoot,
+      description: '', color: '#123456', available: true, diagnostic: '',
+      ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+    };
+  };
+  const projects = [
+    createProject('project-a', [
+      { id: 'ranked-oldest', waitingSince: '2026-07-17T10:00:00.000Z', queueRank: 1 },
+      { id: 'middle', waitingSince: '2026-07-17T12:00:00.000Z' },
+    ]),
+    createProject('project-b', [
+      { id: 'newest', waitingSince: '2026-07-17T13:00:00.000Z' },
+      { id: 'oldest', waitingSince: '2026-07-17T11:00:00.000Z' },
+    ]),
+  ];
+  const store = createControlRoomProjectionStore({
+    cacheFile: join(root, 'control-room.json'),
+    runtimeForRoot: () => ({}),
+  });
+
+  try {
+    const projection = store.get(projects) as Record<string, any>;
+    assert.deepEqual(projection.queue.map((task: Record<string, unknown>) => task.cardId), [
+      'ranked-oldest',
+      'newest',
+      'middle',
+      'oldest',
+    ]);
+    assert.deepEqual(projection.queue.slice(1).map((task: Record<string, unknown>) => task.projectId), [
+      'project-b',
+      'project-a',
+      'project-b',
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
