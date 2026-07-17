@@ -160,6 +160,20 @@ function appendExecutionLog(input: { stream: HTMLElement; events: ThreadRunLogEv
   }
 }
 
+function renderQueuedWaiting(queuePosition: number | null | undefined): HTMLElement {
+  const waiting = document.createElement('p');
+  waiting.className = 'codex-log-waiting is-queued';
+  waiting.setAttribute('role', 'status');
+  const indicator = document.createElement('span');
+  indicator.className = 'codex-log-queue-indicator';
+  indicator.setAttribute('aria-hidden', 'true');
+  indicator.append(...[0, 1, 2].map(() => document.createElement('i')));
+  const message = document.createElement('span');
+  message.textContent = `Queued${Number.isInteger(queuePosition) ? ` · position ${queuePosition}` : ''}. Waiting for Codex capacity.`;
+  waiting.append(indicator, message);
+  return waiting;
+}
+
 export function renderThreadCodexLog(): void {
   const root = document.querySelector('.thread-codex-log') as HTMLElement | null;
   // WHAT: Skip the final DOM effect when the thread log surface is not mounted.
@@ -230,14 +244,15 @@ export function renderThreadCodexLog(): void {
   // WHAT: Render a waiting state only for an available run without received events.
   // WHY: An unavailable response already provides its actionable failure message.
   if (events.length === 0 && summary?.ok !== false) {
-    const waiting = document.createElement('p');
-    waiting.className = 'codex-log-waiting';
-    waiting.textContent = summary?.status === 'pending'
-      ? `Queued${Number.isInteger(summary.queuePosition) ? ` · position ${summary.queuePosition}` : ''}. Codex will start when capacity is available.`
-      : 'Waiting for Codex output.';
+    const waiting = summary?.status === 'pending' ? renderQueuedWaiting(summary.queuePosition) : document.createElement('p');
+    if (summary?.status !== 'pending') {
+      waiting.className = 'codex-log-waiting';
+      waiting.textContent = 'Waiting for Codex output.';
+    }
     stream.append(waiting);
   }
-  root.append(stream, renderDeleteSession({ cardId: String(card.id ?? ''), runId, threadId }));
+  root.append(stream);
+  if (summary?.status !== 'pending') root.append(renderDeleteSession({ cardId: String(card.id ?? ''), runId, threadId }));
 
   const restore = () => {
     // WHAT: Skip scroll restoration when the independent log viewport is absent.

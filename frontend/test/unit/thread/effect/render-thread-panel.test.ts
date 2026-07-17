@@ -481,7 +481,7 @@ test('generated skill-result threads bind and render their durable card run id',
   }
 });
 
-test('queued thread runs keep authoritative launch controls and render their queue position without elapsed time', async () => {
+test('queued thread runs become read-only and render their queue position without elapsed time', async () => {
   const previousFetch = globalThis.fetch;
   const { heading, codexLog } = installDom();
   const { state } = await import('../../../../src/runtime/state.js');
@@ -517,13 +517,16 @@ test('queued thread runs keep authoritative launch controls and render their que
 
     renderThreadPanel();
 
-    assert.equal(heading.querySelector('.thread-actions')?.hidden, false);
-    assert.equal(heading.dataset.codexRunning, 'false');
-    assert.equal(heading.dataset.codexStatus, '');
-    assert.equal(codexLog.querySelector('.terminal-button__label')?.textContent, 'CANCEL');
+    assert.equal(heading.querySelector('.thread-actions')?.hidden, true);
+    assert.equal(heading.dataset.codexRunning, 'true');
+    assert.equal(heading.dataset.codexStatus, 'pending');
+    assert.equal(codexLog.querySelector('.terminal-button__label'), null);
+    assert.equal(codexLog.querySelector('.codex-log-session-footer'), null);
     assert.ok(codexLog.querySelectorAll('dd').map((element) => element.textContent).includes('Queued · position 3'));
     assert.equal(codexLog.querySelector('[data-codex-log-elapsed]'), null);
-    assert.equal(codexLog.querySelector('.codex-log-waiting')?.textContent, 'Queued · position 3. Codex will start when capacity is available.');
+    assert.equal(codexLog.querySelector('.codex-log-waiting.is-queued')?.querySelector('span')?.textContent, '');
+    assert.equal(codexLog.querySelector('.codex-log-waiting.is-queued')?.querySelectorAll('i').length, 3);
+    assert.equal(codexLog.querySelector('.codex-log-waiting.is-queued')?.children[1]?.textContent, 'Queued · position 3. Waiting for Codex capacity.');
 
     syncThreadCodexRunControls({ threadId, status: 'running', active: false });
     assert.equal(heading.querySelector('.thread-actions')?.hidden, false);

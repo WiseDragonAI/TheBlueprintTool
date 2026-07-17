@@ -9,14 +9,15 @@ import { readFileSync } from 'node:fs';
 const root = new URL('../../../', import.meta.url);
 const source = (path: string): string => readFileSync(new URL(path, root), 'utf8');
 
-test('Codex Log renders an always-actionable owned-session footer after the event stream', () => {
+test('Codex Log renders the owned-session footer after the event stream only outside the queue', () => {
   const renderer = source('frontend/src/runtime/thread/effect/render-thread-codex-log.ts');
   assert.match(renderer, /function renderDeleteSession/);
   assert.match(renderer, /button\.dataset\.action = 'confirm-delete-thread-codex-session'/);
-  assert.match(renderer, /root\.append\(stream, renderDeleteSession/);
+  assert.match(renderer, /root\.append\(stream\);/);
+  assert.match(renderer, /if \(summary\?\.status !== 'pending'\) root\.append\(renderDeleteSession/);
   assert.match(renderer, /if \(!runId\)[\s\S]*return;/);
   assert.doesNotMatch(renderer, /renderDeleteSession[\s\S]{0,500}button\.disabled/);
-  const css = source('frontend/assets/canvas/thread.css');
+  const css = source('frontend/assets/shared/thread.css');
   assert.match(css, /\.codex-log-session-footer\s*{[^}]*border-top:/s);
   assert.match(css, /\.codex-log-delete-session\s*{[^}]*min-width:/s);
 });
