@@ -23,7 +23,7 @@ import { randomUUID } from 'node:crypto';
 import { enqueueCodexContinuation, recordCodexProcessQueueItemProcess, removeCodexProcessQueueItem } from '../helper/codex-process-queue.js';
 import { scheduleCodexProcesses, unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
 import { createTerminalCodexProcessReconciler, type TerminalCodexStatus } from '../helper/reconcile-terminal-codex-process.js';
-import { clearCardCodexActiveRun } from '../helper/clear-card-codex-active-run.js';
+import { clearCardCodexExecution } from '../helper/clear-card-codex-execution.js';
 
 type AnyRecord = Record<string, unknown>;
 type ProcessStatus = 'running' | 'complete' | 'failed' | 'cancelled';
@@ -216,6 +216,9 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     ? resolveCodexCommand({ workspaceRoot, runtime, codexModel, codexEffort })
     : resolveCodexResumeCommand({ workspaceRoot, runtime, sessionId, codexModel, codexEffort });
   if (card) {
+    card.codexActiveRunId = runId;
+    card.executionStatus = queueDispatch ? 'running' : 'pending';
+    card.executionRunId = runId;
     card.codexRunModel = command.model;
     card.codexRunEffort = command.effort;
     stripHydratedThreadNotes(ledger);
@@ -341,7 +344,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       flushCardSkillRunEventIngestor(runEventIngestor, runId);
       updateRuntimeRun(runtime, runId, { settledAt: new Date().toISOString() });
       if (queueItemId) removeCodexProcessQueueItem(decisionOsRoot, queueItemId);
-      clearCardCodexActiveRun({ ledgerPath, cardId, runId });
+      clearCardCodexExecution({ ledgerPath, cardId, runId });
       const schedule = runtime.scheduleCodexProcesses;
       if (typeof schedule === 'function') void schedule();
       notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, status: 'failed' });
@@ -361,7 +364,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       flushCardSkillRunEventIngestor(runEventIngestor, runId);
       updateRuntimeRun(runtime, runId, { settledAt: new Date().toISOString() });
       if (queueItemId) removeCodexProcessQueueItem(decisionOsRoot, queueItemId);
-      clearCardCodexActiveRun({ ledgerPath, cardId, runId });
+      clearCardCodexExecution({ ledgerPath, cardId, runId });
       const schedule = runtime.scheduleCodexProcesses;
       if (typeof schedule === 'function') void schedule();
       notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, status, exitCode });

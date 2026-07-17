@@ -98,6 +98,17 @@ test('terminal JSONL wins over a surviving process identity during restart recov
     const stderrFile = resolve(root, 'run-complete.log');
     writeFileSync(stdoutFile, [JSON.stringify({ type: 'turn.started' }), JSON.stringify({ type: 'turn.completed' })].join('\n'));
     writeFileSync(stderrFile, '');
+    writeFileSync(resolve(root, 'state.json'), JSON.stringify({
+      ledgers: [{ id: 'specs', ledgerFile: '.decision-os/specs.json' }],
+    }));
+    writeFileSync(resolve(root, 'specs.json'), JSON.stringify({
+      cards: [{
+        id: 'card-a',
+        codexActiveRunId: 'run-complete',
+        executionStatus: 'running',
+        executionRunId: 'run-complete',
+      }],
+    }));
     enqueueCodexThreadProcess({
       decisionOsRoot: root,
       id: 'run-complete',
@@ -112,6 +123,7 @@ test('terminal JSONL wins over a surviving process identity during restart recov
 
     assert.deepEqual(readCodexProcessQueue(root), []);
     assert.equal(((runtime.codexSkillRuns as Record<string, Record<string, unknown>>)['run-complete']).status, 'complete');
+    assert.deepEqual(JSON.parse(readFileSync(resolve(root, 'specs.json'), 'utf8')).cards, [{ id: 'card-a' }]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

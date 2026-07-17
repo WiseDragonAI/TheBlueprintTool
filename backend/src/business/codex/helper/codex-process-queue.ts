@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { clearCardCodexExecutionForLedger } from './clear-card-codex-execution.js';
 
 type AnyRecord = Record<string, unknown>;
 export type CodexProcessQueueItem = {
@@ -287,6 +288,13 @@ function monitorAdoptedProcess(decisionOsRoot: string, runtime: AnyRecord, item:
     runtime.codexSkillRuns = runs;
     if (settled) {
       runs[runId] = { ...(runs[runId] ?? {}), status: settled, adopted: false, finishedAt: new Date().toISOString() };
+      clearCardCodexExecutionForLedger({
+        decisionOsRoot,
+        ledgerId: String(current.payload.ledgerId ?? ''),
+        cardId: String(current.payload.cardId ?? ''),
+        runId,
+        runtime,
+      });
       removeCodexProcessQueueItem(decisionOsRoot, current.id);
       stopAdoptedMonitor(runtime, current.id);
       if (typeof runtime.onCodexRunSettled === 'function') runtime.onCodexRunSettled({
@@ -324,6 +332,13 @@ export function recoverCodexProcessQueue(decisionOsRoot: string, runtime?: AnyRe
     const settled = terminalStatus(files.stdoutFile);
     if (settled) {
       runs[runId] = { ...(runs[runId] ?? {}), id: runId, status: settled, pid: item.processId, adopted: false, finishedAt: new Date().toISOString() };
+      clearCardCodexExecutionForLedger({
+        decisionOsRoot,
+        ledgerId: String(item.payload.ledgerId ?? ''),
+        cardId: String(item.payload.cardId ?? ''),
+        runId,
+        runtime,
+      });
       return [];
     }
     if (item.status === 'interrupted') {

@@ -19,6 +19,9 @@ export function federatedControlRoomProjection(input: {
       const localProjectId = String(task.projectId ?? '');
       return {
         ...task,
+        status: task.status === 'task-active' ? 'task-execution' : task.status,
+        executionSince: task.executionSince ?? task.activeSince,
+        executionTime: task.executionTime ?? task.activeTime,
         projectId: owner.remote ? `${owner.nodeId}:${localProjectId}` : localProjectId,
         localProjectId,
         ownerNodeId: owner.nodeId,
@@ -27,11 +30,14 @@ export function federatedControlRoomProjection(input: {
         remote: owner.remote,
       };
     };
-    const list = (key: string): AnyRecord[] => Array.isArray(projection[key]) ? (projection[key] as unknown[]).map(qualifyTask) : [];
+    const list = (key: string, legacyKey = ''): AnyRecord[] => {
+      const values = Array.isArray(projection[key]) ? projection[key] : legacyKey && Array.isArray(projection[legacyKey]) ? projection[legacyKey] : [];
+      return (values as unknown[]).map(qualifyTask);
+    };
     const projects = Array.isArray(projection.projects) ? projection.projects as AnyRecord[] : [];
     return {
       ...projection,
-      queue: list('queue'), active: list('active'), backlog: list('backlog'), done: list('done'), allTasks: list('allTasks'),
+      queue: list('queue'), exec: list('exec', 'active'), backlog: list('backlog'), done: list('done'), allTasks: list('allTasks'),
       diagnostics: Array.isArray(projection.diagnostics) ? projection.diagnostics : [],
       projects: projects.map((project) => ({
         ...project,
@@ -44,7 +50,7 @@ export function federatedControlRoomProjection(input: {
     qualify(input.localProjection, input.localOwner),
     ...input.remoteProjections.map(({ projection, owner }) => qualify(projection, owner)),
   ];
-  const mergedLists = Object.fromEntries(['queue', 'active', 'backlog', 'done', 'allTasks'].map((key) => [
+  const mergedLists = Object.fromEntries(['queue', 'exec', 'backlog', 'done', 'allTasks'].map((key) => [
     key,
     projections.flatMap((projection) => Array.isArray(projection[key]) ? projection[key] as unknown[] : []),
   ]));

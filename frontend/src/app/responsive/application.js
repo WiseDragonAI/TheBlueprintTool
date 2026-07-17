@@ -7,7 +7,7 @@ import { ledgerCardBody } from '/src/runtime/ledger/helper/ledger-card-body.js';
 import { saveLedgerCardMediaCarouselSlide } from '/src/runtime/ledger/helper/persist-ledger-card-media-carousel.js';
 import { handleResponsiveThreadShortcut, initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './thread.js';
 import { initializeMobileCodex, openMobileCodexLibrary, setMobileCodexContext } from './codex.js';
-import { activeAge, activeStopwatch, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge } from './control-room.js';
+import { executionAge, executionStopwatch, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge } from './control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from './control-room-route.js';
 import { cardPathForProject, isProjectCardPath, ledgerPathForProject, parseProjectRoute, parseProjectScope, projectPath, zonePathForProject } from './project-route.js';
 import { projectSettingsValues, saveProjectSettingsRequest } from './project-settings.js';
@@ -853,34 +853,36 @@ function taskRow(task, index) {
   summary.className = 'control-task-summary';
   article.style.borderInlineStartColor = task.projectColor || 'transparent';
   article.style.setProperty('--accent', task.projectColor || defaultAccent);
-  const active = state.controlTab === 'active';
+  const executing = state.controlTab === 'exec';
   const queue = state.controlTab === 'queue';
-  const directNavigation = active || queue;
+  const directNavigation = executing || queue;
   if (!directNavigation) summary.setAttribute('aria-expanded', 'false');
-  summary.innerHTML = active
+  summary.innerHTML = executing
     ? `<span class="task-copy"><strong></strong><span class="task-meta"></span></span><span class="task-runtime-status"></span>`
     : `<span class="task-copy"><strong></strong><span class="task-meta"></span>${task.nextSubtask ? '<span class="task-next"></span>' : ''}</span>${queue ? '' : '<span class="task-chevron">⌄</span>'}`;
   summary.querySelector('strong').textContent = task.title;
-  if (active) {
+  if (executing) {
     const runtimeStatus = summary.querySelector('.task-runtime-status');
     if (task.codexQueued) {
       runtimeStatus.className = 'task-queue-position';
-      runtimeStatus.textContent = `Queued · position ${task.codexQueuePosition}`;
-    } else if (task.activeSince) {
+      runtimeStatus.textContent = Number.isInteger(task.codexQueuePosition)
+        ? `Queued · position ${task.codexQueuePosition}`
+        : 'Queued · waiting for execution';
+    } else if (task.executionSince) {
       runtimeStatus.className = 'task-stopwatch';
-      runtimeStatus.dataset.activeSince = task.activeSince;
-      runtimeStatus.textContent = activeStopwatch(task.activeSince);
+      runtimeStatus.dataset.executionSince = task.executionSince;
+      runtimeStatus.textContent = executionStopwatch(task.executionSince);
     } else {
       runtimeStatus.textContent = 'Running';
     }
   }
-  const age = task.status === 'task-backlog' ? 'backlog' : task.status === 'task-active' ? activeAge(task.activeSince) : waitingAge(task.waitingSince);
+  const age = task.status === 'task-backlog' ? 'backlog' : task.status === 'task-execution' ? executionAge(task.executionSince) : waitingAge(task.waitingSince);
   const process = task.codexProcessing ? ` · Codex ${task.codexRunId}` : '';
   const taskOwner = task.ownerNodeLabel || task.ownerNodeId || state.projects.find((project) => project.id === task.projectId)?.ownerNodeLabel || 'This server';
   if (summary.querySelector('.task-meta')) {
     summary.querySelector('.task-meta').textContent = `${task.projectName} · ${taskOwner} · ${task.ledger} · ${age}${process}`;
   }
-  if (!active) {
+  if (!executing) {
     const nextSubtask = summary.querySelector('.task-next');
     if (nextSubtask) nextSubtask.textContent = `Next: ${task.nextSubtask.title}`;
   }
@@ -987,7 +989,7 @@ function renderControlRoom() {
   elements['control-empty'].hidden = tasks.length > 0;
   elements['control-empty'].textContent = {
     queue: 'No waiting tasks',
-    active: 'No active tasks',
+    exec: 'No executing tasks',
     backlog: 'No backlog tasks'
   }[state.controlTab] ?? 'No tasks';
   const diagnostics = Array.isArray(state.controlRoom?.diagnostics) ? state.controlRoom.diagnostics : [];
@@ -1336,6 +1338,7 @@ function renderCard(card) {
     ledgerTitle: state.ledgers.find((entry) => entry.id === state.activeLedgerId)?.title ?? state.activeLedgerId,
     markdown,
     cardStatus: card.status,
+    executionStatus: card.executionStatus,
     labels: card.labels ?? [],
     cards: state.ledger?.cards ?? [],
     relationships: state.ledger?.relationships ?? []
@@ -1747,8 +1750,8 @@ window.addEventListener('keydown', async (event) => {
 initializeMobileThread();
 initializeMobileCodex();
 window.setInterval(() => {
-  document.querySelectorAll('.task-stopwatch[data-active-since]').forEach((stopwatch) => {
-    stopwatch.textContent = activeStopwatch(stopwatch.dataset.activeSince);
+  document.querySelectorAll('.task-stopwatch[data-execution-since]').forEach((stopwatch) => {
+    stopwatch.textContent = executionStopwatch(stopwatch.dataset.executionSince);
   });
 }, 1000);
 void loadRoute();

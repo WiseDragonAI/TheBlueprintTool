@@ -294,6 +294,8 @@ test('card skill process route creates a linked output card and launches codex',
     };
     const replacedSource = replacedLedger.cards.find((card) => card.id === 'source-card');
     assert.equal(replacedSource?.codexActiveRunId, undefined);
+    assert.equal(replacedSource?.executionStatus, undefined);
+    assert.equal(replacedSource?.executionRunId, undefined);
     assert.equal(replacedSource?.codexThreadRunId, threadBody.run.id);
     assert.equal(replacedSource?.codexRunId, undefined);
     assert.equal(replacedSource?.codexRunOutputFile, undefined);
