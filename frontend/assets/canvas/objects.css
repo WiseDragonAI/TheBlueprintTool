@@ -1054,13 +1054,15 @@
   visibility: hidden;
 }
 
-.ledger-card-media-resize-handle {
+.ledger-card-media-shell > .ledger-card-media-resize-handle {
   position: absolute;
   right: 0;
   bottom: 0;
   z-index: 8;
   width: 28px;
+  min-width: 28px;
   height: 28px;
+  min-height: 28px;
   padding: 0;
   border: 0;
   border-radius: 0;

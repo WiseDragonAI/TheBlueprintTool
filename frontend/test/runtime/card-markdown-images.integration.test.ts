@@ -159,7 +159,7 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   assert.match(source('frontend/src/runtime/ledger/component/append-inline-nodes.ts'), /Math\.round\(frame\.offsetWidth\)/);
   assert.doesNotMatch(source('frontend/src/runtime/ledger/component/append-inline-nodes.ts'), /getBoundingClientRect\(\)\.(width|height)/);
   assert.match(css, /\.ledger-card-media-shell\s*{[^}]*--ledger-card-media-slider-row-height:\s*7px;[^}]*--ledger-card-media-slide-nav-height:\s*22px;[^}]*--ledger-card-media-title-row-min-height:\s*22px;[^}]*--ledger-card-media-title-slider-gap:\s*6px;[^}]*--ledger-card-media-bottom-inset:\s*8px;[^}]*max-width:\s*100%;[^}]*aspect-ratio:\s*var\(--ledger-card-media-aspect-ratio, 4 \/ 3\);[^}]*resize:\s*horizontal;/s);
-  assert.match(css, /\.ledger-card-media-resize-handle\s*{[^}]*width:\s*28px;[^}]*height:\s*28px;[^}]*cursor:\s*ew-resize;[^}]*touch-action:\s*none;/s);
+  assert.match(css, /\.ledger-card-media-shell > \.ledger-card-media-resize-handle\s*{[^}]*position:\s*absolute;[^}]*width:\s*28px;[^}]*min-width:\s*28px;[^}]*height:\s*28px;[^}]*min-height:\s*28px;[^}]*cursor:\s*ew-resize;[^}]*touch-action:\s*none;/s);
   assert.match(css, /\.ledger-card-media-resize-handle::before\s*{[^}]*width:\s*16px;[^}]*height:\s*16px;[^}]*border:[^}]*content:\s*"";[^}]*background:[^}]*box-shadow:/s);
   assert.match(css, /\.ledger-card-media-resize-handle:hover::before,[\s\S]*\.ledger-card-media-resize-handle:focus-visible::before\s*{/);
   assert.match(css, /\.ledger-card-media-track\s*{[^}]*scroll-snap-type:\s*x mandatory;/s);
