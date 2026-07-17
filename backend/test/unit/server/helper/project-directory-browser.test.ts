@@ -22,8 +22,8 @@ test('lists one directory level with project metadata and stable ordering', () =
     assert.equal(listing.absolutePath, root);
     assert.equal(listing.parentPath, null);
     assert.deepEqual(listing.directories, [
-      { name: 'Alpha', path: 'Alpha', hasDecisionOs: true, hasGit: true },
-      { name: 'zeta', path: 'zeta', hasDecisionOs: false, hasGit: false },
+      { name: 'Alpha', path: 'Alpha', absolutePath: join(root, 'Alpha'), hasDecisionOs: true, hasGit: true },
+      { name: 'zeta', path: 'zeta', absolutePath: join(root, 'zeta'), hasDecisionOs: false, hasGit: false },
     ]);
     assert.equal(listProjectDirectories({ masterRoot: root, path: 'Alpha' }).parentPath, '.');
   } finally {

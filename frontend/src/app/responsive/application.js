@@ -72,7 +72,10 @@ const projectColorSliders = {
 };
 const creationForm = document.querySelector('.creation-form');
 let creationKind = '';
-let projectDirectoryListing = null;
+let projectDirectoryListings = new Map();
+let expandedProjectDirectories = new Set();
+let loadingProjectDirectories = new Set();
+let selectedProjectDirectory = '';
 let controlRoomScrollFrame = 0;
 let controlRoomColumnScrollFrame = 0;
 const controlRoomColumnScrollTop = { queue: 0, exec: 0, backlog: 0 };
@@ -384,7 +387,10 @@ function openCreationModal(kind) {
   document.querySelector('#creation-directory').value = '';
   document.querySelector('#creation-directory-display').value = '';
   document.querySelector('.creation-directory-browser').hidden = true;
-  projectDirectoryListing = null;
+  projectDirectoryListings = new Map();
+  expandedProjectDirectories = new Set();
+  loadingProjectDirectories = new Set();
+  selectedProjectDirectory = '';
   document.querySelector('.creation-color-field').hidden = kind !== 'zone';
   if (kind === 'zone') document.querySelector('#creation-color').value = state.projects.find((project) => project.id === state.resourceProjectId)?.color || defaultAccent;
   document.querySelector('.creation-submit').textContent = submit;
@@ -393,82 +399,124 @@ function openCreationModal(kind) {
   name.focus();
 }
 
-function directoryBreadcrumbButton(label, path) {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.textContent = label;
-  button.addEventListener('click', () => void loadProjectDirectory(path));
-  return button;
+function projectDirectoryBadges(directory) {
+  const badges = document.createElement('span');
+  badges.className = 'creation-directory-badges';
+  for (const badgeText of [directory.hasGit ? 'Git' : '', directory.hasDecisionOs ? 'Decision OS' : ''].filter(Boolean)) {
+    const badge = document.createElement('span');
+    badge.className = 'creation-directory-badge';
+    badge.textContent = badgeText;
+    badges.append(badge);
+  }
+  return badges;
 }
 
-function renderProjectDirectoryListing(listing) {
-  projectDirectoryListing = listing;
-  const parent = document.querySelector('.creation-directory-parent');
-  parent.disabled = listing.parentPath === null;
-  const breadcrumbs = document.querySelector('.creation-directory-breadcrumbs');
-  breadcrumbs.replaceChildren(directoryBreadcrumbButton('Catalog', '.'));
-  if (listing.path !== '.') {
-    const segments = listing.path.split('/').filter(Boolean);
-    let path = '';
-    for (const segment of segments) {
-      path = path ? `${path}/${segment}` : segment;
-      breadcrumbs.append(directoryBreadcrumbButton(segment, path));
-    }
+function selectDirectoryTreeItem(directory) {
+  selectedProjectDirectory = directory.path;
+  document.querySelector('#creation-directory').value = directory.path;
+  document.querySelector('#creation-directory-display').value = directory.absolutePath;
+  const name = document.querySelector('#creation-name');
+  if (!name.value.trim()) name.value = directory.name;
+  renderProjectDirectoryTree();
+}
+
+async function toggleProjectDirectory(directory) {
+  if (expandedProjectDirectories.has(directory.path)) {
+    expandedProjectDirectories.delete(directory.path);
+    renderProjectDirectoryTree();
+    return;
   }
-  const list = document.querySelector('.creation-directory-list');
-  list.replaceChildren();
-  for (const directory of listing.directories) {
-    const option = document.createElement('button');
-    option.type = 'button';
-    option.className = 'creation-directory-option';
-    option.setAttribute('aria-label', `Open ${directory.name}`);
-    const icon = document.createElement('span');
-    icon.setAttribute('aria-hidden', 'true');
-    icon.textContent = '▸';
-    const label = document.createElement('span');
-    label.textContent = directory.name;
-    const badges = document.createElement('span');
-    badges.className = 'creation-directory-badges';
-    for (const badgeText of [directory.hasGit ? 'Git' : '', directory.hasDecisionOs ? 'Decision OS' : ''].filter(Boolean)) {
-      const badge = document.createElement('span');
-      badge.className = 'creation-directory-badge';
-      badge.textContent = badgeText;
-      badges.append(badge);
+  expandedProjectDirectories.add(directory.path);
+  renderProjectDirectoryTree();
+  if (!projectDirectoryListings.has(directory.path)) await loadProjectDirectory(directory.path);
+}
+
+function projectDirectoryNode(directory, level) {
+  const item = document.createElement('div');
+  item.className = 'creation-directory-treeitem';
+  item.dataset.path = directory.path;
+  item.setAttribute('role', 'treeitem');
+  item.setAttribute('aria-level', String(level));
+  item.setAttribute('aria-expanded', String(expandedProjectDirectories.has(directory.path)));
+  item.setAttribute('aria-selected', String(selectedProjectDirectory === directory.path));
+  item.tabIndex = selectedProjectDirectory === directory.path || (!selectedProjectDirectory && level === 1) ? 0 : -1;
+
+  const row = document.createElement('div');
+  row.className = 'creation-directory-row';
+  row.style.setProperty('--tree-depth', String(level - 1));
+  const disclosure = document.createElement('button');
+  disclosure.type = 'button';
+  disclosure.className = 'creation-directory-disclosure';
+  disclosure.setAttribute('aria-label', `${expandedProjectDirectories.has(directory.path) ? 'Collapse' : 'Expand'} ${directory.name}`);
+  disclosure.textContent = loadingProjectDirectories.has(directory.path) ? '…' : expandedProjectDirectories.has(directory.path) ? '▾' : '▸';
+  disclosure.addEventListener('click', (event) => {
+    event.stopPropagation();
+    void toggleProjectDirectory(directory);
+  });
+  const label = document.createElement('span');
+  label.className = 'creation-directory-name';
+  label.textContent = directory.name;
+  row.append(disclosure, label, projectDirectoryBadges(directory));
+  row.addEventListener('click', () => selectDirectoryTreeItem(directory));
+  item.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      selectDirectoryTreeItem(directory);
+    } else if (event.key === 'ArrowRight' && !expandedProjectDirectories.has(directory.path)) {
+      event.preventDefault();
+      void toggleProjectDirectory(directory);
+    } else if (event.key === 'ArrowLeft' && expandedProjectDirectories.has(directory.path)) {
+      event.preventDefault();
+      void toggleProjectDirectory(directory);
     }
-    option.append(icon, label, badges);
-    option.addEventListener('click', () => void loadProjectDirectory(directory.path));
-    list.append(option);
+  });
+  item.append(row);
+
+  const listing = projectDirectoryListings.get(directory.path);
+  if (expandedProjectDirectories.has(directory.path) && listing) {
+    const group = document.createElement('div');
+    group.setAttribute('role', 'group');
+    group.append(...listing.directories.map((child) => projectDirectoryNode(child, level + 1)));
+    item.append(group);
   }
-  const status = document.querySelector('.creation-directory-status');
-  status.textContent = listing.directories.length
-    ? `${listing.directories.length} directories · ${listing.absolutePath}`
-    : `No child directories · ${listing.absolutePath}`;
-  document.querySelector('.creation-directory-select').disabled = false;
+  return item;
+}
+
+function renderProjectDirectoryTree() {
+  const rootListing = projectDirectoryListings.get('.');
+  const tree = document.querySelector('.creation-directory-tree');
+  if (!rootListing) {
+    tree.replaceChildren();
+    return;
+  }
+  tree.replaceChildren(projectDirectoryNode({
+    path: rootListing.path,
+    absolutePath: rootListing.absolutePath,
+    name: rootListing.name || 'Catalog',
+    hasGit: rootListing.hasGit,
+    hasDecisionOs: rootListing.hasDecisionOs,
+  }, 1));
 }
 
 async function loadProjectDirectory(path = '.') {
   const browser = document.querySelector('.creation-directory-browser');
   const status = document.querySelector('.creation-directory-status');
   browser.hidden = false;
-  status.textContent = 'Loading directories…';
-  document.querySelector('.creation-directory-list').replaceChildren();
-  document.querySelector('.creation-directory-select').disabled = true;
+  loadingProjectDirectories.add(path);
+  if (path === '.') expandedProjectDirectories.add('.');
+  status.textContent = path === '.' ? 'Loading directories…' : `Loading ${path}…`;
+  renderProjectDirectoryTree();
   try {
-    renderProjectDirectoryListing(await loadProjectDirectoryRequest({ fetchImpl: fetch, path }));
+    const listing = await loadProjectDirectoryRequest({ fetchImpl: fetch, path });
+    projectDirectoryListings.set(path, listing);
+    status.textContent = 'Expand folders and select the project directory.';
   } catch (cause) {
-    projectDirectoryListing = null;
+    expandedProjectDirectories.delete(path);
     status.textContent = cause instanceof Error ? cause.message : 'Directory listing failed.';
+  } finally {
+    loadingProjectDirectories.delete(path);
+    renderProjectDirectoryTree();
   }
-}
-
-function applyProjectDirectorySelection() {
-  if (!projectDirectoryListing) return;
-  document.querySelector('#creation-directory').value = projectDirectoryListing.path;
-  document.querySelector('#creation-directory-display').value = projectDirectoryListing.absolutePath;
-  document.querySelector('.creation-directory-browser').hidden = true;
-  const name = document.querySelector('#creation-name');
-  if (!name.value.trim()) name.value = projectDirectoryListing.name;
-  name.focus();
 }
 
 async function ledgerMutation(ledgerId, mutation, projectId = state.resourceProjectId) {
@@ -2388,11 +2436,7 @@ document.querySelector('.back-to-zone-button').addEventListener('click', (event)
 });
 document.querySelector('.create-ledger-button').addEventListener('click', () => openCreationModal('ledger'));
 document.querySelector('.create-project-button').addEventListener('click', () => openCreationModal('project'));
-document.querySelector('.creation-directory-browse').addEventListener('click', () => void loadProjectDirectory(document.querySelector('#creation-directory').value || '.'));
-document.querySelector('.creation-directory-parent').addEventListener('click', () => {
-  if (projectDirectoryListing?.parentPath !== null) void loadProjectDirectory(projectDirectoryListing?.parentPath || '.');
-});
-document.querySelector('.creation-directory-select').addEventListener('click', applyProjectDirectorySelection);
+document.querySelector('.creation-directory-browse').addEventListener('click', () => void loadProjectDirectory('.'));
 document.querySelector('.create-zone-button').addEventListener('click', () => openCreationModal('zone'));
 document.querySelector('.create-card-button').addEventListener('click', () => openCreationModal('card'));
 document.querySelectorAll('.new-task-button').forEach((button) => button.addEventListener('click', openNewTaskProjectModal));

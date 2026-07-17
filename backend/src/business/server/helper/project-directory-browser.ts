@@ -15,6 +15,7 @@ export type ProjectDirectoryListing = {
   directories: Array<{
     name: string;
     path: string;
+    absolutePath: string;
     hasDecisionOs: boolean;
     hasGit: boolean;
   }>;
@@ -54,6 +55,7 @@ export function listProjectDirectories(input: { masterRoot: string; path: string
       return [{
         name: entry.name,
         path,
+        absolutePath,
         hasDecisionOs: existsSync(resolve(absolutePath, '.decision-os', 'state.json')),
         hasGit: existsSync(resolve(absolutePath, '.git')),
       }];
