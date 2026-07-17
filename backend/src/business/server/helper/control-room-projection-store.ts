@@ -9,6 +9,7 @@ import { readCardDescription } from '../../ledger/helper/card-content-file.js';
 import { parseThreadMarkdown, resolveThreadContentFile } from '../../ledger/helper/thread-content-file.js';
 import { readCodexPipelineStore } from '../../codex/helper/codex-pipeline-store.js';
 import { readCodexProcessQueue } from '../../codex/helper/codex-process-queue.js';
+import { latestCodexSessionStartedAtMs } from '../../codex/helper/codex-run-segment-marker.js';
 import type { DecisionOsProject } from './project-catalog.js';
 
 type AnyRecord = Record<string, unknown>;
@@ -72,7 +73,12 @@ function runtimeStatus(input: { card: AnyRecord; runtime: AnyRecord; pipelineRun
   const live = runtimeRuns[runId] ?? {};
   const queueIndex = input.queuedRuns.findIndex((entry) => text(entry.id) === runId || text((entry.payload as AnyRecord | undefined)?.runId) === runId);
   const status = text(live.status) || (queueIndex >= 0 ? 'pending' : 'unknown');
-  return { runId, pipelineRunId: '', status, startedAt: text(live.startedAt), queuePosition: status === 'pending' && queueIndex >= 0 ? queueIndex + 1 : null };
+  const stderrFile = text(live.stderrFile);
+  const sessionStartedAtMs = stderrFile && existsSync(stderrFile)
+    ? latestCodexSessionStartedAtMs({ log: readFileSync(stderrFile, 'utf8'), runId })
+    : 0;
+  const startedAt = sessionStartedAtMs > 0 ? new Date(sessionStartedAtMs).toISOString() : text(live.startedAt);
+  return { runId, pipelineRunId: '', status, startedAt, queuePosition: status === 'pending' && queueIndex >= 0 ? queueIndex + 1 : null };
 }
 
 function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsProject['ledgers'][number]; ledger: AnyRecord; card: AnyRecord; runtime: AnyRecord; pipelineRuns: AnyRecord[]; queuedRuns: AnyRecord[] }): AnyRecord | null {
@@ -120,9 +126,7 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
     }
   }
   const complete = subtasks.filter((subtask) => subtask.status === 'complete').length;
-  const activeSince = processing
-    ? (run.pipelineRunId ? text(run.startedAt) || activeText : activeText || text(run.startedAt))
-    : activeText;
+  const activeSince = processing ? text(run.startedAt) || activeText : activeText;
   return {
     valid: diagnostics.length === 0, masterTask: true, diagnostics,
     cardId: text(input.card.id), title: text(input.card.title) || `Card ${text(input.card.id)}`,
