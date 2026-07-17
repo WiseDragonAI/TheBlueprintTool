@@ -48,7 +48,7 @@ test('project filters merge terminal copies by origin and logical project identi
     },
     {
       id: 'phone:decision-os', localProjectId: 'decision-os', name: 'decision-os', color: '#a78bfa',
-      originFingerprint: 'same-origin', remote: true, online: true,
+      originFingerprint: '', remote: true, online: true,
       ledgers: [{ id: 'specs', title: 'Specs from phone' }, { id: 'tasks', title: 'Tasks' }],
     },
     {
@@ -71,6 +71,21 @@ test('project filters merge terminal copies by origin and logical project identi
   assert.equal(projectFilterIncludes(decisionOs, 'decision-os'), true);
   assert.equal(projectFilterIncludes(decisionOs, 'phone:decision-os'), true);
   assert.equal(projectFilterIncludes(decisionOs, 'search'), false);
+});
+
+test('a conflicting remote origin cannot join the local logical project', () => {
+  const groups = projectFilterGroups([
+    {
+      id: 'decision-os', localProjectId: 'decision-os', name: 'decision-os', color: '#895cfa',
+      originFingerprint: 'workstation-origin', remote: false,
+    },
+    {
+      id: 'phone:decision-os', localProjectId: 'decision-os', name: 'decision-os', color: '#a78bfa',
+      originFingerprint: 'different-origin', remote: true,
+    },
+  ]);
+
+  assert.equal(groups.length, 2);
 });
 
 test('projects without an origin fingerprint remain distinct', () => {
