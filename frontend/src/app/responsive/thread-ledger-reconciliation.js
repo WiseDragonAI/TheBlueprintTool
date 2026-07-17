@@ -12,9 +12,15 @@ export function reconcileResponsiveThreadLedger(input) {
   ledger.deletedNoteIds = { ...(ledger.deletedNoteIds || {}), ...(slice.deletedNoteIds || {}) };
 
   const cardId = String(input.currentCard?.id ?? '');
-  const card = cardId
-    ? ledger.cards?.find((entry) => String(entry.id ?? '') === cardId) ?? input.currentCard
+  const refreshedCard = cardId
+    ? ledger.cards?.find((entry) => String(entry.id ?? '') === cardId) ?? null
+    : null;
+  const card = refreshedCard
+    ? { ...(input.currentCard || {}), ...refreshedCard }
     : input.currentCard ?? null;
+  if (card && refreshedCard && Array.isArray(ledger.cards)) {
+    ledger.cards = ledger.cards.map((entry) => String(entry.id ?? '') === cardId ? card : entry);
+  }
   const optimisticRunId = String(input.optimisticRunId ?? '').trim();
   if (card && optimisticRunId) {
     card.codexActiveRunId = optimisticRunId;

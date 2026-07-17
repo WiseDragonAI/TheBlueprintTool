@@ -14,7 +14,11 @@ test('navigation projection preserves canonical master-task relationships and la
   }));
   writeFileSync(join(decisionOsRoot, 'specs.json'), JSON.stringify({
     cards: [
-      { id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], x: 1, y: 2, w: 3, h: 4 },
+      {
+        id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], x: 1, y: 2, w: 3, h: 4,
+        codexActiveRunId: 'codex-skill-running', codexThreadRunId: 'codex-skill-running',
+        codexRunModel: 'gpt-5.6-sol', codexRunEffort: 'medium', executionStatus: 'running', executionRunId: 'codex-skill-running',
+      },
       { id: 'child', title: 'Child', status: 'done', labels: ['subtask'], x: 5, y: 6, w: 7, h: 8 },
     ],
     annotations: [],
@@ -25,6 +29,12 @@ test('navigation projection preserves canonical master-task relationships and la
     const projection = ledgerNavigationProjection({ decisionOsRoot, ledgerId: 'specs' });
     assert.deepEqual(projection?.relationships, [{ id: 'rel-a', from: 'master', to: 'child', label: 'subtask' }]);
     assert.deepEqual((projection?.cards as Array<Record<string, unknown>>).map((card) => card.labels), [['master-task'], ['subtask']]);
+    assert.deepEqual((projection?.cards as Array<Record<string, unknown>>)[0], {
+      id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], x: 1, y: 2, w: 3, h: 4,
+      codexActiveRunId: 'codex-skill-running', codexThreadRunId: 'codex-skill-running', codexRunId: null,
+      codexRunModel: 'gpt-5.6-sol', codexRunEffort: 'medium', executionStatus: 'running', executionRunId: 'codex-skill-running',
+    });
+    assert.equal((projection?.cards as Array<Record<string, unknown>>)[1].codexThreadRunId, null);
     assert.equal('comment' in (projection?.cards as Array<Record<string, unknown>>)[0], false);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
