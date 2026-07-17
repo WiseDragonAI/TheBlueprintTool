@@ -12377,7 +12377,7 @@
       "title": "Build the Control Room Kanban and Keyboard Navigation",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "master-task"
       ],
@@ -12392,12 +12392,16 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784285884987-0de797e0",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784285884987-0de797e0.md",
-      "codexQueuedPipelineRunId": "codex-skill-1784292677187-5ba99ee1",
-      "codexQueuedRunId": "codex-skill-1784292677187-5ba99ee1",
-      "executionStatus": "pending",
-      "executionRunId": "codex-skill-1784292677187-5ba99ee1"
+      "executionStatus": "running",
+      "executionRunId": "codex-skill-1784292677187-5ba99ee1",
+      "codexActiveRunId": "codex-skill-1784292677187-5ba99ee1",
+      "codexRunId": "codex-skill-1784292677187-5ba99ee1",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784292677187-5ba99ee1.md",
+      "codexPipelineRunId": "codex-skill-1784292677187-5ba99ee1",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexSkillName": "retrospect-and-close-task"
     },
     {
       "id": "card-cf40c6df-b05a-41bf-a09b-7e864a553eb1",
@@ -12507,7 +12511,7 @@
       "title": "Persist connected Queue and Backlog drag interactions",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "subtask"
       ],
@@ -12526,7 +12530,7 @@
       "title": "Add Control Room keyboard shortcuts and key hints",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "subtask"
       ],
@@ -12545,7 +12549,7 @@
       "title": "Verify Control Room Kanban behavior",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "subtask"
       ],
@@ -13044,9 +13048,6 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "executionStatus": "running",
-      "executionRunId": "codex-skill-1784292634000-81923844",
-      "codexActiveRunId": "codex-skill-1784292634000-81923844",
       "codexRunId": "codex-skill-1784292634000-81923844",
       "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784292634000-81923844.md",
       "codexPipelineRunId": "codex-skill-1784292634000-81923844",
@@ -14084,9 +14085,6 @@
       },
       "facts": [],
       "fields": [],
-      "codexActiveRunId": "codex-skill-1784292634000-81923844",
-      "executionStatus": "running",
-      "executionRunId": "codex-skill-1784292634000-81923844",
       "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784292634000-81923844.md",
       "codexPipelineRunId": "codex-skill-1784292634000-81923844",
       "codexPipelineName": "retrospect-and-close-task run",
@@ -14103,19 +14101,23 @@
       "w": 700,
       "h": 260,
       "status": "todo",
-      "codexPipelineRunId": "codex-skill-1784292677187-5ba99ee1",
-      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
-      "codexPipelineStepName": "retrospect-and-close-task",
-      "codexPipelineName": "retrospect-and-close-task run",
       "codexRunId": "codex-skill-1784292677187-5ba99ee1",
-      "codexSkillName": "retrospect-and-close-task",
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
       "comment": {
         "contentFile": ".decision-os/cards/specs/card-codex-skill-1784292677187-5ba99ee1.md"
       },
       "facts": [],
-      "fields": []
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784292677187-5ba99ee1",
+      "executionStatus": "running",
+      "executionRunId": "codex-skill-1784292677187-5ba99ee1",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784292677187-5ba99ee1.md",
+      "codexPipelineRunId": "codex-skill-1784292677187-5ba99ee1",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexSkillName": "retrospect-and-close-task"
     },
     {
       "id": "card-codex-skill-1784292696820-04541d43",
@@ -14352,7 +14354,14 @@
         "contentFile": ".decision-os/cards/specs/card-1904363a-d446-4dfa-a638-e65a30cde12c.md"
       },
       "facts": [],
-      "fields": []
+      "fields": [],
+      "executionStatus": "pending",
+      "codexActiveRunId": "codex-skill-1784293203554-2faebbcb",
+      "executionRunId": "codex-skill-1784293203554-2faebbcb",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784293203554-2faebbcb",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784293203554-2faebbcb.md"
     }
   ],
   "relationships": [
