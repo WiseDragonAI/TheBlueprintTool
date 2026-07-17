@@ -71,6 +71,12 @@ import {
 } from '../../federation/helper/federated-library-cache.js';
 import { federatedControlRoomProjection } from './federated-control-room-projection.js';
 import { migrateLegacyProjectPipelines } from '../../codex/helper/server-pipeline-catalog.js';
+import { createProjectSyncStore } from '../../project-sync/helper/project-sync-store.js';
+import { isNetworkGitOrigin, readRepositoryOriginIdentity, readRepositorySyncStatus } from '../../project-sync/helper/repository-sync-status.js';
+import { createProjectSyncController } from '../../project-sync/controller/start-project-sync.js';
+import { startProjectSyncCodex } from '../../project-sync/controller/start-project-sync-codex.js';
+import { verifyProjectSyncPhase } from '../../project-sync/helper/verify-project-sync-phase.js';
+import type { ProjectSyncRun, ProjectSyncRole } from '../../project-sync/helper/project-sync-types.js';
 
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
@@ -209,6 +215,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   }
   runtime.memoryDatabasePath = ensureDecisionOsMemoryStore(masterDecisionOsRoot);
   const globalContentEventClients = new Set<ServerResponse>();
+  const projectSyncEventClients = new Set<ServerResponse>();
   type ProjectContext = {
     clients: Set<ServerResponse>;
     revisions: ReturnType<typeof createLedgerRevisionTracker>;
@@ -221,12 +228,15 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const projectCatalogStore = createProjectCatalogStore({ masterRoot, masterDecisionOsRoot });
   let controlRoomProjectionStore: ReturnType<typeof createControlRoomProjectionStore> | null = null;
   let federation: ReturnType<typeof createFederationNodeConnector> | null = null;
+  let projectSyncController: ReturnType<typeof createProjectSyncController> | null = null;
+  let projectSyncCodexRunningProcessCount = 0;
+  let projectSyncSlotTail = Promise.resolve();
   const globalCodexProcessCapacity = (): number => {
     const settings = runtime.decisionOsSettings && typeof runtime.decisionOsSettings === 'object' ? runtime.decisionOsSettings as AnyRecord : {};
     return normalizedConcurrentCodexProcesses(process.env.CODEX_MAX_CONCURRENT_PROCESSES ?? settings.maxConcurrentCodexProcesses ?? 1) ?? 1;
   };
   const globalCodexRunningProcessCount = (): number => [...projectContexts.values()]
-    .reduce((count, context) => count + runningCodexProcessCount({ codexSkillRuns: context.runtime.codexSkillRuns }), 0);
+    .reduce((count, context) => count + runningCodexProcessCount({ codexSkillRuns: context.runtime.codexSkillRuns }), projectSyncCodexRunningProcessCount);
   const globalCodexQueuePosition = (id: string): number => {
     const pending = [...projectContexts.keys()].flatMap((root, rootOrder) => pendingCodexProcessEntries(root)
       .map((entry) => ({ ...entry, order: rootOrder * 2_000_000 + entry.order })))
@@ -281,6 +291,24 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     projectRuntime.globalCodexProcessCapacity = globalCodexProcessCapacity;
     projectRuntime.globalCodexRunningProcessCount = globalCodexRunningProcessCount;
     projectRuntime.globalCodexQueuePosition = globalCodexQueuePosition;
+    projectRuntime.acquireProjectSyncCodexSlot = async (): Promise<() => void> => {
+      let unlockQueue: () => void = () => undefined;
+      const previous = projectSyncSlotTail;
+      projectSyncSlotTail = new Promise<void>((resolveSlot) => { unlockQueue = resolveSlot; });
+      await previous;
+      while (globalCodexRunningProcessCount() >= globalCodexProcessCapacity()) {
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
+      }
+      projectSyncCodexRunningProcessCount += 1;
+      unlockQueue();
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        projectSyncCodexRunningProcessCount = Math.max(0, projectSyncCodexRunningProcessCount - 1);
+        void scheduleGlobalCodexProcesses().catch(() => undefined);
+      };
+    };
     let watcher: ReturnType<typeof watchProjectFiles> | null = null;
     const broadcast = (message: string): void => {
       for (const client of clients) client.write(message);
@@ -428,8 +456,27 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     onRemoteContentChange: () => {
       for (const client of globalContentEventClients) client.write('event: ledger-content-change\ndata: {"remote":true}\n\n');
     },
-    onRemoteCatalogChange: () => { void synchronizeFederatedLibraries().catch(() => undefined); },
+    onRemoteCatalogChange: () => {
+      void synchronizeFederatedLibraries().catch(() => undefined);
+      projectSyncController?.resume();
+    },
   });
+  const projectSyncStore = createProjectSyncStore({ decisionOsRoot: masterDecisionOsRoot });
+  const publishProjectSyncRun = (run: ProjectSyncRun): void => {
+    const message = `event: project-sync\ndata: ${JSON.stringify(run)}\n\n`;
+    for (const client of projectSyncEventClients) client.write(message);
+  };
+  projectSyncController = createProjectSyncController({
+    masterRoot,
+    localNodeId: () => federation!.localOwner().ownerNodeId,
+    projects: projectCatalog,
+    catalog: projectCatalogStore,
+    federation: federation!,
+    store: projectSyncStore,
+    runtimeForProject: (project) => projectContext(project.decisionOsRoot, project.id).runtime,
+    onRunChange: publishProjectSyncRun,
+  });
+  projectSyncController.resume();
   Object.defineProperty(runtime, 'federationNodeConnector', { value: federation, configurable: true, enumerable: false });
   controlRoomProjectionStore = createControlRoomProjectionStore({
     cacheFile: resolve(masterDecisionOsRoot, 'cache', 'control-room-v3.json'),
@@ -698,11 +745,145 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.end(JSON.stringify(result.ok === true ? { ok: true, ...federation.status() } : result));
       return;
     }
+    if (url === '/api/project-sync/repository-status' && request.method === 'GET') {
+      const projectId = new URL(request.url ?? '/', 'http://127.0.0.1').searchParams.get('projectId') ?? '';
+      const project = projects.find((entry) => entry.id === projectId && entry.available);
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      if (!project) {
+        response.statusCode = 404;
+        response.end(JSON.stringify({ ok: false, error: 'Local project is unavailable.' }));
+        return;
+      }
+      try {
+        const snapshot = readRepositorySyncStatus(project.root);
+        if (request.headers['x-decision-os-federation-node'] && !isNetworkGitOrigin(snapshot.originUrl)) {
+          throw new Error('Federated synchronization requires a network Git origin.');
+        }
+        response.end(JSON.stringify({ ok: true, projectId, snapshot }));
+      }
+      catch (error) {
+        response.statusCode = 409;
+        response.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : 'Repository preflight failed.' }));
+      }
+      return;
+    }
+    if (url === '/api/project-sync/role' && request.method === 'POST') {
+      const bodyBuffer = await readRequestBuffer(request);
+      response.setHeader('content-type', 'application/json');
+      try {
+        const body = JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
+        const authenticatedNodeId = String(request.headers['x-decision-os-federation-node'] ?? '');
+        if (!authenticatedNodeId || authenticatedNodeId !== String(body.initiatorNodeId ?? '')) throw new Error('Federation participant authentication failed.');
+        const project = projects.find((entry) => entry.id === String(body.projectId ?? '') && entry.available);
+        if (!project) throw new Error('Local project is unavailable.');
+        const role = String(body.role ?? '') as ProjectSyncRole;
+        if (!['source-publisher', 'initiator-reconciler', 'source-finalizer'].includes(role)) throw new Error('Invalid project synchronization role.');
+        const snapshot = body.snapshot as ReturnType<typeof readRepositorySyncStatus>;
+        if (!snapshot || snapshot.originFingerprint !== readRepositorySyncStatus(project.root).originFingerprint) throw new Error('Project synchronization snapshot identity mismatch.');
+        if (String(body.originFingerprint ?? '') !== snapshot.originFingerprint) throw new Error('Project synchronization origin lock identity mismatch.');
+        projectSyncStore.acquireLock(snapshot.originFingerprint, String(body.syncId ?? ''));
+        const codex = await startProjectSyncCodex({
+          projectRoot: project.root,
+          runtime: projectContext(project.decisionOsRoot, project.id).runtime,
+          syncId: String(body.syncId ?? ''),
+          nodeId: federation.localOwner().ownerNodeId,
+          initiatorNodeId: String(body.initiatorNodeId ?? ''),
+          role,
+          requiredSha: String(body.requiredSha ?? '') || undefined,
+          snapshot,
+        });
+        const verified = verifyProjectSyncPhase({ projectRoot: project.root, role, requiredSha: String(body.requiredSha ?? '') || undefined, result: codex.result });
+        response.end(JSON.stringify({ ok: true, ...codex, snapshot: verified }));
+      } catch (error) {
+        response.statusCode = 409;
+        response.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : 'Project synchronization role failed.' }));
+      }
+      return;
+    }
+    if (url === '/api/project-sync/lock-release' && request.method === 'POST') {
+      const bodyBuffer = await readRequestBuffer(request);
+      response.setHeader('content-type', 'application/json');
+      try {
+        const body = JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
+        if (!String(request.headers['x-decision-os-federation-node'] ?? '')) throw new Error('Federation participant authentication failed.');
+        projectSyncStore.releaseLock(String(body.originFingerprint ?? ''), String(body.syncId ?? ''));
+        response.end(JSON.stringify({ ok: true }));
+      } catch {
+        response.statusCode = 400;
+        response.end(JSON.stringify({ ok: false, error: 'Invalid project synchronization lock release.' }));
+      }
+      return;
+    }
+    if (url === '/api/project-sync' && request.method === 'POST') {
+      const bodyBuffer = await readRequestBuffer(request);
+      response.setHeader('content-type', 'application/json');
+      try {
+        const body = JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
+        const sourceId = String(body.sourceProjectId ?? '');
+        const allProjects = [
+          ...projects.map((project) => {
+            let originFingerprint = '';
+            try { originFingerprint = readRepositoryOriginIdentity(project.root).originFingerprint; } catch { /* surfaced by admission below */ }
+            return { ...project, ...federation.localOwner(), remote: false, localProjectId: project.id, originFingerprint };
+          }),
+          ...federation.remoteProjects(),
+        ];
+        const source = allProjects.find((entry) => entry.id === sourceId);
+        if (!source) throw new Error('Unknown source project.');
+        const admitted = projectSyncController.start(source, String(body.idempotencyKey ?? request.headers['idempotency-key'] ?? sourceId));
+        response.statusCode = admitted.duplicate ? 200 : 202;
+        response.end(JSON.stringify({ ok: true, duplicate: admitted.duplicate, run: admitted.run }));
+      } catch (error) {
+        response.statusCode = 409;
+        response.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : 'Project synchronization admission failed.' }));
+      }
+      return;
+    }
+    if (url === '/api/project-sync' && request.method === 'GET') {
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ ok: true, runs: projectSyncStore.list() }));
+      return;
+    }
+    if (url.startsWith('/api/project-sync/') && url.endsWith('/retry') && request.method === 'POST') {
+      const syncId = decodeRouteSegment(url.slice('/api/project-sync/'.length, -'/retry'.length));
+      response.setHeader('content-type', 'application/json');
+      try {
+        const run = projectSyncController.retry(syncId);
+        response.statusCode = 202;
+        response.end(JSON.stringify({ ok: true, run }));
+      } catch (error) {
+        response.statusCode = 409;
+        response.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : 'Project synchronization retry failed.' }));
+      }
+      return;
+    }
+    if (url.startsWith('/api/project-sync/') && url !== '/api/project-sync/events' && url !== '/api/project-sync/role' && url !== '/api/project-sync/repository-status' && request.method === 'GET') {
+      const syncId = decodeRouteSegment(url.slice('/api/project-sync/'.length));
+      const run = projectSyncStore.read(syncId);
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = run ? 200 : 404;
+      response.end(JSON.stringify(run ? { ok: true, run } : { ok: false, error: 'Unknown project synchronization run.' }));
+      return;
+    }
+    if (url === '/api/project-sync/events' && request.method === 'GET') {
+      response.writeHead(200, { 'cache-control': 'no-store', connection: 'keep-alive', 'content-type': 'text/event-stream' });
+      response.write(': connected\n\n');
+      projectSyncEventClients.add(response);
+      request.on('close', () => projectSyncEventClients.delete(response));
+      return;
+    }
     if (url === '/decision-os/projects' && request.method === 'GET') {
       const localOwner = federation.localOwner();
       response.setHeader('content-type', 'application/json');
       response.end(JSON.stringify({ projects: [
-        ...projects.map((project) => ({ ...project, ...localOwner, remote: false, localProjectId: project.id })),
+        ...projects.map((project) => {
+          let originFingerprint = '';
+          try { originFingerprint = readRepositoryOriginIdentity(project.root).originFingerprint; } catch { /* Non-Git projects remain visible. */ }
+          return { ...project, ...localOwner, remote: false, localProjectId: project.id, originFingerprint };
+        }),
         ...federation.remoteProjects(),
       ] }));
       return;
@@ -1444,7 +1625,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const isSharedModuleRoute = url.startsWith('/shared/');
     const isStaticModuleRoute = isFrontendModuleRoute || isSharedModuleRoute;
     const routeTabId = url.split('/').filter(Boolean)[0] ?? '';
-    if (!projectScope && request.method === 'GET' && routeTabId && !['projects', 'ledgers', 'pipelines', 'skills', 'settings', 'control-room'].includes(routeTabId)) {
+    if (!projectScope && request.method === 'GET' && routeTabId && !['projects', 'projects-canvas', 'ledgers', 'pipelines', 'skills', 'settings', 'control-room'].includes(routeTabId)) {
       const matches = projects.filter((project) => project.ledgers.some((ledger) => ledger.id === routeTabId));
       if (matches.length === 1) {
         const fallbackProject = matches[0];
@@ -1466,6 +1647,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     }
     const isGlobalAppRoute = requestPath === '/'
       || requestPath === '/projects'
+      || requestPath === '/projects-canvas'
       || /^\/projects\/[^/]+$/.test(requestPath)
       || requestPath === '/ledgers'
       || requestPath === '/pipelines'
@@ -1507,6 +1689,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       context.clients.clear();
     }
     globalContentEventClients.clear();
+    projectSyncEventClients.clear();
     federation.stop();
   });
   server.on('listening', () => {

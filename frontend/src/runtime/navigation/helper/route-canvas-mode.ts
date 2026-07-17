@@ -6,7 +6,7 @@ import { routeScope } from './route-scope.js';
 
 export function routeCanvasMode(path: string): 'ledger' | 'ledgers' | 'projects' {
   const scope = routeScope(path);
-  if (scope.view === 'projects') return 'projects';
+  if (scope.view === 'projects-canvas') return 'projects';
   if (scope.view === 'ledgers') return 'ledgers';
   return 'ledger';
 }

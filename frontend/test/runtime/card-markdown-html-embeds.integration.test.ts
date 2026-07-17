@@ -45,7 +45,7 @@ test('card markdown html directives render as sandboxed ledger-scoped iframe med
   assert.match(css, /\.ledger-card-html-frame\s*{[\s\S]*color-scheme:\s*dark;/);
   assert.match(css, /\.ledger-card-html-invalid\s*{[\s\S]*overflow-wrap:\s*anywhere;/);
   assert.match(css, /\.ledger-card-media-shell\s*{[^}]*resize:\s*horizontal;/s);
-  assert.match(css, /\.ledger-card-media-shell::after\s*{/);
+  assert.match(css, /\.ledger-card-media-resize-handle::before\s*{/);
   assert.match(overlayRenderer, /function isHtmlEmbedShell\(shell: HTMLElement\): boolean \{/);
   assert.match(overlayRenderer, /if \(isHtmlEmbedShell\(shell\)\) return null;/);
   assert.match(overlayRenderer, /if \(isHtmlEmbedShell\(shell\)\) continue;/);

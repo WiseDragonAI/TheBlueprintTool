@@ -542,6 +542,7 @@
             <header>
               <p class="eyebrow">Project</p>
               <h2 id="project-settings-title">Settings</h2>
+              <p class="project-settings-owner muted"></p>
             </header>
             <label class="creation-field">
               <span>Name</span>
@@ -560,12 +561,18 @@
               <input id="project-settings-color" name="color" type="hidden" value="#38d9e8" />
             </div>
             <p class="project-settings-error" role="alert" hidden></p>
+            <section class="project-settings-sync-panel" aria-labelledby="project-sync-title">
+              <h3 id="project-sync-title">Repository synchronization</h3>
+              <p class="project-settings-sync-status muted" aria-live="polite">No synchronization has been started from this node.</p>
+              <button class="project-settings-sync" type="button">Synchronize project</button>
+            </section>
             <footer>
               <button class="project-settings-cancel" type="button">Cancel</button>
               <button class="project-settings-save primary-button" type="submit">Save</button>
             </footer>
           </form>
         </dialog>
+        <aside class="project-sync-notifications" aria-live="polite" aria-label="Project synchronization notifications"></aside>
 
         <dialog id="project-color-picker-modal" class="project-color-picker-modal" aria-labelledby="project-color-picker-title">
           <section class="project-color-picker-sheet">

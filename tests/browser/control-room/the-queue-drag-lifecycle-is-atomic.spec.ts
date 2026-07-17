@@ -123,6 +123,10 @@ async function openQueue(page: Page, url: string): Promise<void> {
   await page.goto(url, { waitUntil: 'domcontentloaded' });
   await page.locator('#control-room-view:not([hidden])').waitFor({ state: 'visible' });
   await page.waitForFunction((selector) => document.querySelectorAll(selector).length === 3, queueTaskSelector);
+  await page.waitForFunction((selector) => {
+    const list = document.querySelector(selector)?.parentElement;
+    return Boolean(list && (globalThis as typeof globalThis & { Sortable?: { get(element: Element): unknown } }).Sortable?.get(list));
+  }, queueTaskSelector);
 }
 
 async function beginMouseDrag(page: Page, from: number, to: number): Promise<void> {

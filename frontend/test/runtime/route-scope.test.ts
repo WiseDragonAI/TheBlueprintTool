@@ -21,7 +21,9 @@ test('parses global and project-scoped application routes', () => {
 test('serializes canonical canvas hierarchy routes', () => {
   assert.equal(projectLedgersPath('project 1'), '/p/project%201/ledgers');
   assert.equal(projectLedgerPath('project 1', 'specs data'), '/p/project%201/ledgers/specs%20data');
-  assert.equal(routeCanvasMode('/projects'), 'projects');
+  assert.equal(routeCanvasMode('/projects'), 'ledger');
+  assert.equal(routeScope('/projects-canvas').view, 'projects-canvas');
+  assert.equal(routeCanvasMode('/projects-canvas'), 'projects');
   assert.equal(routeCanvasMode('/p/project/ledgers'), 'ledgers');
   assert.equal(routeCanvasMode('/p/project/ledgers/specs'), 'ledger');
 });

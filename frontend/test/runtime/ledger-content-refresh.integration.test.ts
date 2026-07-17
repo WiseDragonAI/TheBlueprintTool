@@ -338,7 +338,20 @@ class FakeEventSource {
 test('voice recording defers scoped thread and ledger refresh work in one queue', async () => {
   installRuntimeDom();
   resetRuntimeState();
-  const { requestLedgerContentRefresh, requestThreadContentRefresh } = await import('../../src/runtime/refresh/effect/subscribe-ledger-content-events.js');
+  const [
+    { requestLedgerContentRefresh, requestThreadContentRefresh },
+    { installCanvasSurfaceEffects },
+    { renderCanvasSurface }
+  ] = await Promise.all([
+    import('../../src/runtime/refresh/effect/subscribe-ledger-content-events.js'),
+    import('../../src/runtime/surface/effect/canvas-surface-effects.js'),
+    import('../../src/runtime/canvas/effect/render-canvas-surface.js')
+  ]);
+  installCanvasSurfaceEffects({
+    renderCanvasSurface,
+    renderCanvasControlOverlay: () => undefined,
+    scheduleCanvasMediaOverlayRender: () => undefined
+  });
   state.voice.recording = true;
   const scope = { ledgerId: 'specs', threadId: 'thread-card-a', contentFile: '.decision-os/threads/specs/thread-card-a.md' };
 

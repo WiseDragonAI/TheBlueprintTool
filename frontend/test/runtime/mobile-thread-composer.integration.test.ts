@@ -8,8 +8,8 @@ test('mobile thread composer defaults to a voice-first dock and expands text ent
   const composer = source('frontend/src/runtime/voice/component/terminal-composer.ts');
   const controlDock = source('frontend/src/runtime/voice/component/control-dock.ts');
   const actionClick = source('frontend/src/runtime/input/controller/handle-action-click.ts');
-  const threadCss = source('frontend/assets/canvas/thread.css');
-  const buttonCss = source('frontend/assets/canvas/terminal-button.css');
+  const threadCss = source('frontend/assets/shared/thread.css');
+  const buttonCss = source('frontend/assets/shared/terminal-button.css');
 
   assert.match(composer, /data-action="submit-thread-draft"/);
   assert.match(composer, /class="terminal-composer is-mobile-text-collapsed"/);

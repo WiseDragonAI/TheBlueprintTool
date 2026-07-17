@@ -52,3 +52,21 @@ export async function saveProjectSettingsRequest({ fetchImpl, projects, projectI
     projects: projects.map((entry) => entry.id === payload.project.id ? payload.project : entry),
   };
 }
+
+export async function startProjectSyncRequest({ fetchImpl, sourceProjectId, idempotencyKey }) {
+  const response = await fetchImpl('/api/project-sync', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'idempotency-key': idempotencyKey },
+    body: JSON.stringify({ sourceProjectId, idempotencyKey }),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload?.run) throw new Error(payload?.error || `Request failed with HTTP ${response.status}.`);
+  return payload.run;
+}
+
+export async function loadProjectSyncRuns(fetchImpl) {
+  const response = await fetchImpl('/api/project-sync', { cache: 'no-store' });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !Array.isArray(payload?.runs)) throw new Error(payload?.error || `Request failed with HTTP ${response.status}.`);
+  return payload.runs;
+}

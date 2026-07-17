@@ -19,6 +19,7 @@ export type DecisionOsProject = {
   ledgers: Array<{ id: string; title: string; ledgerFile: string }>;
   available: boolean;
   diagnostic: string;
+  originFingerprint?: string;
 };
 
 type ProjectMetadata = { name: string; description: string; color: string };

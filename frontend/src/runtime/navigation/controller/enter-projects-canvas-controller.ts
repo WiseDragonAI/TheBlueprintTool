@@ -29,8 +29,8 @@ export async function enterProjectsCanvasController(options: { replace?: boolean
     }
     return;
   }
-  if (options.replace) history.replaceState?.({}, '', '/projects');
-  else if (window.location.pathname !== '/projects') history.pushState?.({}, '', '/projects');
+  if (options.replace) history.replaceState?.({}, '', '/projects-canvas');
+  else if (window.location.pathname !== '/projects-canvas') history.pushState?.({}, '', '/projects-canvas');
   canvas.classList.remove('ledgers-canvas-mode');
   canvas.classList.add('projects-canvas-mode');
   renderCanvasSurface();

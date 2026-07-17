@@ -7,8 +7,9 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { once } from 'node:events';
 import WebSocket from 'ws';
 import type { DecisionOsProject } from '../../server/helper/project-catalog.js';
+import { readRepositoryOriginIdentity } from '../../project-sync/helper/repository-sync-status.js';
 
-type ProjectManifest = Pick<DecisionOsProject, 'id' | 'name' | 'description' | 'color' | 'ledgers'>;
+type ProjectManifest = Pick<DecisionOsProject, 'id' | 'name' | 'description' | 'color' | 'ledgers' | 'originFingerprint'>;
 type RelayFrame = {
   version: 1;
   type: string;
@@ -166,7 +167,11 @@ export function createFederationNodeConnector(input: {
 
   const manifest = (): ProjectManifest[] => input.localProjects()
     .filter((project) => project.available)
-    .map(({ id, name, description, color, ledgers }) => ({ id, name, description, color, ledgers }));
+    .map(({ id, name, description, color, ledgers, root }) => {
+      let fingerprint = '';
+      try { fingerprint = readRepositoryOriginIdentity(root).originFingerprint; } catch { /* Non-Git projects remain visible but cannot synchronize. */ }
+      return { id, name, description, color, ledgers, originFingerprint: fingerprint };
+    });
 
   const settleInternal = (stream: RequesterStream, status: number, headers: Record<string, string>, body: Buffer): void => {
     stream.resolve?.({ status, headers, body });
@@ -324,7 +329,7 @@ export function createFederationNodeConnector(input: {
     }
   };
 
-  const openRequest = (ownerNodeId: string, path: string): { requestId: string; response: Promise<InternalResponse> } => {
+  const openRequest = (ownerNodeId: string, path: string, options: { method?: string; body?: Buffer; headers?: Record<string, string> } = {}): { requestId: string; response: Promise<InternalResponse> } => {
     if (!settings || !remoteNodes.get(ownerNodeId)?.online || socket?.readyState !== WebSocket.OPEN) {
       return { requestId: '', response: Promise.resolve({ status: 503, headers: { 'content-type': 'application/json' }, body: Buffer.from('{"ok":false,"error":"owner_offline"}') }) };
     }
@@ -335,7 +340,22 @@ export function createFederationNodeConnector(input: {
       requestCredit: new CreditGate(), settled: false, status: 502, headers: {}, chunks: [], bytes: 0,
       resolve: resolveResponse,
     });
-    send({ version: 1, type: 'request-open', requestId, to: ownerNodeId, method: 'GET', path, headers: {} });
+    const method = String(options.method ?? 'GET').toUpperCase();
+    const body = options.body ?? Buffer.alloc(0);
+    if (body.byteLength > maximumBodyBytes) return { requestId: '', response: Promise.resolve({ status: 413, headers: { 'content-type': 'application/json' }, body: Buffer.from('{"ok":false,"error":"federation_body_limit"}') }) };
+    send({
+      version: 1,
+      type: 'request-open',
+      requestId,
+      to: ownerNodeId,
+      method,
+      path,
+      headers: { ...options.headers, 'x-decision-os-federation-node': settings.nodeId },
+    });
+    for (let offset = 0; offset < body.byteLength; offset += chunkBytes) {
+      const chunk = body.subarray(offset, Math.min(body.byteLength, offset + chunkBytes));
+      send({ version: 1, type: 'request-chunk', requestId, data: chunk.toString('base64') });
+    }
     send({ version: 1, type: 'request-end', requestId });
     return { requestId, response };
   };
@@ -545,8 +565,8 @@ export function createFederationNodeConnector(input: {
       }
       send({ version: 1, type: 'request-end', requestId });
     },
-    async request(ownerNodeId: string, path: string): Promise<InternalResponse> {
-      return openRequest(ownerNodeId, path).response;
+    async request(ownerNodeId: string, path: string, options?: { method?: string; body?: Buffer; headers?: Record<string, string> }): Promise<InternalResponse> {
+      return openRequest(ownerNodeId, path, options).response;
     },
   };
 }
