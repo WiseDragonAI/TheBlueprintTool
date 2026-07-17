@@ -59,6 +59,12 @@ test('materializes complete skill packages locally before importing pipeline def
 
     assert.deepEqual(importFederatedSkillSnapshot({ serverRoot: target, snapshot: exportFederatedSkillSnapshot(source) }).imported, []);
     assert.deepEqual(importFederatedPipelineSnapshot({ decisionOsRoot: join(target, '.decision-os'), snapshot: exportFederatedPipelineSnapshot(sourceDecisionOsRoot) }).imported, []);
+
+    writeFileSync(join(source, '.skills', 'remote-analysis', 'references', 'guide.md'), '# Updated guide\n');
+    const changedSnapshot = exportFederatedSkillSnapshot(source);
+    assert.notEqual(changedSnapshot.skills[0].revision, manifest.skills[0].revision);
+    assert.deepEqual(importFederatedSkillSnapshot({ serverRoot: target, snapshot: changedSnapshot }).imported, ['remote-analysis']);
+    assert.equal(readFileSync(join(target, '.skills', 'remote-analysis', 'references', 'guide.md'), 'utf8'), '# Updated guide\n');
   } finally {
     if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
     else process.env.CODEX_HOME = previousCodexHome;
