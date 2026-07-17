@@ -1738,8 +1738,18 @@ function renderCard(card) {
     relationships: state.ledger?.relationships ?? []
   });
   const backButton = document.querySelector('.back-to-zone-button');
-  backButton.textContent = '← Back';
+  backButton.replaceChildren(document.createTextNode('← Back'));
   backButton.dataset.destination = parsedTask.masterTask ? 'control-room' : 'zone';
+  if (parsedTask.masterTask) {
+    const key = shortcutKey('Esc');
+    key.setAttribute('aria-hidden', 'true');
+    backButton.append(key);
+    backButton.setAttribute('aria-keyshortcuts', 'Escape');
+    backButton.title = 'Back (Esc)';
+  } else {
+    backButton.removeAttribute('aria-keyshortcuts');
+    backButton.removeAttribute('title');
+  }
   destroyMobileCarousels(elements['card-body']);
   const persistCardImageResize = async (source, dimensions) => {
     const previousImageSizes = card.imageSizes && typeof card.imageSizes === 'object' ? { ...card.imageSizes } : {};
@@ -2166,7 +2176,10 @@ window.addEventListener('decision-os:codex-run-enqueued', () => { void loadRoute
 window.addEventListener('scroll', persistControlRoomScrollAnchor, { passive: true });
 window.addEventListener('keydown', async (event) => {
   const target = event.target instanceof HTMLElement ? event.target : null;
-  if (isCardEditingKeyboardTarget(target)) return;
+  const desktopThreadDraftEscape = event.key === 'Escape'
+    && window.matchMedia('(min-width: 760px)').matches
+    && target?.closest('.thread-draft');
+  if (isCardEditingKeyboardTarget(target) && !desktopThreadDraftEscape) return;
   const desktopControlRoom = location.pathname === '/'
     && !elements['control-room-view'].hidden
     && !newTaskProjectModal.open

@@ -27,7 +27,7 @@ test('mobile card detail keeps its three navigation controls in one row before t
   assert.match(html, /card-detail-actions[\s\S]*back-to-zone-button[\s\S]*process-card-button[\s\S]*thread-open-button[\s\S]*id="card-title"/);
   assert.match(styles, /\.card-detail-actions \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(styles, /\.card-detail-header h1 \{[^}]*width: 100%[^}]*font-size: clamp\(24px, 7vw, 34px\)/);
-  assert.match(mobile, /backButton\.textContent = '← Back'/);
+  assert.match(mobile, /backButton\.replaceChildren\(document\.createTextNode\('← Back'\)\)/);
 });
 
 test('dynamic navigation library actions use delegated event handling', () => {

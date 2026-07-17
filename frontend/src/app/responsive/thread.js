@@ -143,6 +143,7 @@ export function closeMobileThread() {
 export async function handleResponsiveThreadShortcut(event) {
   if (document.querySelector('#card-view')?.hidden !== false) return false;
   const key = event.key.toLowerCase();
+  const desktop = window.matchMedia('(min-width: 760px)').matches;
   if (key === 'a') {
     event.preventDefault();
     if (canvasState.threadPanelOpen) focusThreadDraft();
@@ -160,10 +161,24 @@ export async function handleResponsiveThreadShortcut(event) {
     else void startVoiceRecording();
     return true;
   }
+  if (key === 'escape' && canvasState.voice.recording) {
+    event.preventDefault();
+    cancelQuickVoiceComment();
+    return true;
+  }
+  if (key === 'escape' && desktop && event.target instanceof HTMLElement && event.target.closest('.thread-draft')) {
+    event.preventDefault();
+    event.target.blur();
+    return true;
+  }
+  if (key === 'escape' && desktop && currentCard?.labels?.includes('master-task')) {
+    event.preventDefault();
+    document.querySelector('.back-to-zone-button')?.click();
+    return true;
+  }
   if (key === 'escape' && canvasState.threadPanelOpen) {
     event.preventDefault();
-    if (canvasState.voice.recording) cancelQuickVoiceComment();
-    else closeMobileThread();
+    closeMobileThread();
     return true;
   }
   return false;
