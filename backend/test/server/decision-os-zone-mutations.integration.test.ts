@@ -52,10 +52,10 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
     assert.equal(imageUploadResponse.status, 201);
     const imageUpload = await imageUploadResponse.json() as { ok: boolean; imageFileRef: string; markdown: string };
     assert.equal(imageUpload.ok, true);
-    assert.match(imageUpload.imageFileRef, /^\.decision-os\/thread-images\/thread-card-a\/paste-.*\.png$/);
+    assert.match(imageUpload.imageFileRef, /^\/\.decision-os\/thread-images\/thread-card-a\/paste-.*\.png$/);
     assert.equal(imageUpload.markdown, `![Pasted image](${imageUpload.imageFileRef})`);
-    assert.deepEqual(readFileSync(join(workspace, imageUpload.imageFileRef)), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
-    const pastedAssetResponse = await fetch(`http://127.0.0.1:${address.port}/${imageUpload.imageFileRef}`);
+    assert.deepEqual(readFileSync(join(workspace, imageUpload.imageFileRef.slice(1))), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    const pastedAssetResponse = await fetch(`http://127.0.0.1:${address.port}${imageUpload.imageFileRef}`);
     assert.equal(pastedAssetResponse.ok, true);
     assert.equal(pastedAssetResponse.headers.get('content-type'), 'image/png');
 
