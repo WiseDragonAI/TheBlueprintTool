@@ -27,6 +27,7 @@ import { collapseMobileThreadComposer, expandMobileThreadComposer } from './thre
 import { createMobileThreadSessionDeletionHandler, resetMobileThreadConfirmationModal } from './thread-session-deletion.js';
 import { projectScopedRequestPath } from '/src/runtime/project/helper/project-request-scope.js';
 import { reconcileResponsiveThreadLedger } from './thread-ledger-reconciliation.js';
+import { voiceRetryInput } from './thread-voice-retry.js';
 
 let currentCard = null;
 let currentProjectId = '';
@@ -314,7 +315,7 @@ export function initializeMobileThread() {
       if (canvasState.voice.recording) await stopQuickVoiceComment(event);
       else await startVoiceRecording();
     } else if (action === 'voice-cancel') cancelQuickVoiceComment();
-    else if (action === 'voice-retry') await retryVoiceTranscription({ threadId: button.dataset.threadId, noteId: button.dataset.noteId, voiceFileRef: button.dataset.voiceFileRef });
+    else if (action === 'voice-retry') await retryVoiceTranscription(voiceRetryInput(button));
     else if (action === 'thread-file-picker') button.closest('.terminal-composer')?.querySelector('.thread-file-input')?.click();
     else if (action === 'toggle-thread-text') expandMobileThreadComposer(button);
     else if (action === 'close-thread-text') {

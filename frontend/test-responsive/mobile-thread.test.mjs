@@ -11,6 +11,7 @@ const sharedThreadCss = await readFile(new URL('../../frontend/assets/shared/thr
 const applicationSource = await readFile(new URL('../src/app/responsive/application.js', import.meta.url), 'utf8');
 const applicationCss = await readFile(new URL('../assets/application.css', import.meta.url), 'utf8');
 const { collapseMobileThreadComposer, expandMobileThreadComposer } = await import('../src/app/responsive/thread-composer.js');
+const { voiceRetryInput } = await import('../src/app/responsive/thread-voice-retry.js');
 
 test('mobile Text action replaces jump with close, then collapses without clearing the draft', () => {
   const classNames = new Set(['terminal-composer', 'is-mobile-text-collapsed']);
@@ -122,6 +123,25 @@ test('mobile thread uses the shared renderer that owns the local voice progress 
   assert.match(sharedThreadRenderer, /import \{ syncVoiceProgressClock \} from '\.\.\/\.\.\/voice\/effect\/run-voice-progress-clock\.js';/);
   assert.match(sharedThreadRenderer, /spinner\.dataset\.voicePhaseStartedAt = phaseStartedAt/);
   assert.match(sharedThreadRenderer, /syncVoiceProgressClock\(\);/);
+});
+
+test('responsive voice retry forwards the locally preserved upload identity', () => {
+  const input = voiceRetryInput({
+    dataset: {
+      threadId: 'thread-card-a',
+      noteId: 'note-local',
+      voiceFileRef: '',
+      localVoiceUploadId: 'note-local',
+    },
+  });
+
+  assert.deepEqual(input, {
+    threadId: 'thread-card-a',
+    noteId: 'note-local',
+    voiceFileRef: '',
+    localVoiceUploadId: 'note-local',
+  });
+  assert.match(source, /action === 'voice-retry'\) await retryVoiceTranscription\(voiceRetryInput\(button\)\)/);
 });
 
 test('mobile thread routes jump-to-bottom into persistent bottom following', () => {
