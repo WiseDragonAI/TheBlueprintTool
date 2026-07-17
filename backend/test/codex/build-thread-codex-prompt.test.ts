@@ -44,3 +44,23 @@ test('thread Codex prompt uses a direct scoped contract without triggering open-
   assert.match(prompt.taskContext, /# Card A/);
   assert.doesNotMatch(prompt.taskContext, /^## [A-Z]\./m);
 });
+
+test('voice Run prompt explicitly disallows skills', () => {
+  const prompt = buildThreadCodexPrompt({
+    workspaceRoot: '/workspace',
+    projectId: 'project-a',
+    ledgerFile: '/workspace/.decision-os/specs.json',
+    cardId: 'card-a',
+    cardTitle: 'Card A',
+    cardMarkdownFile: '/workspace/.decision-os/cards/specs/card-a.md',
+    cardMarkdown: '# Card A\n',
+    threadId: 'thread-card-a',
+    threadMarkdownFile: '/workspace/.decision-os/threads/specs/thread-card-a.md',
+    threadMarkdown: '# OPERATOR\n\nRun directly.\n',
+    runSummaryFile: '/workspace/.decision-os/runs/codex-skills/specs/run.md',
+    operatorNoteTimestamp: '2026-07-08T01:00:00.000Z',
+    context: {},
+    disallowSkills: true,
+  });
+  assert.match(prompt.developerInstructions, /Do not invoke or use any skill for this run/);
+});

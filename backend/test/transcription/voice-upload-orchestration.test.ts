@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
+import { readCodexPipelineStore, writeCodexPipelineStore } from '@backend/business/codex/helper/codex-pipeline-store.js';
 
 async function waitForText(file: string, text: string): Promise<void> {
   const started = Date.now();
@@ -17,7 +18,17 @@ async function waitForText(file: string, text: string): Promise<void> {
   assert.fail(`Timed out waiting for ${text} in ${file}`);
 }
 
-function voiceUploadForm(input: { transcript: string; queueCodex?: boolean; noteId?: string; ledgerId?: string | null; threadId?: string | null; cardId?: string | null }): FormData {
+async function waitForPipelineComplete(decisionOsRoot: string, pipelineId: string): Promise<void> {
+  const started = Date.now();
+  while (Date.now() - started < 3000) {
+    const run = readCodexPipelineStore({ decisionOsRoot }).store.runs.find((entry) => entry.pipelineId === pipelineId);
+    if (run?.status === 'complete') return;
+    await new Promise((resolve) => setTimeout(resolve, 30));
+  }
+  assert.fail(`Timed out waiting for pipeline ${pipelineId} to complete`);
+}
+
+function voiceUploadForm(input: { transcript: string; queueCodex?: boolean; launchMode?: 'send' | 'run' | 'pipeline'; noteId?: string; ledgerId?: string | null; threadId?: string | null; cardId?: string | null }): FormData {
   const form = new FormData();
   const ledgerId = input.ledgerId === undefined ? 'specs' : input.ledgerId;
   const threadId = input.threadId === undefined ? 'thread-card-a' : input.threadId;
@@ -28,6 +39,7 @@ function voiceUploadForm(input: { transcript: string; queueCodex?: boolean; note
   if (cardId !== null) form.append('cardId', cardId);
   form.append('noteId', input.noteId ?? 'note-voice-1');
   form.append('queueCodex', input.queueCodex ? 'true' : 'false');
+  if (input.launchMode) form.append('launchMode', input.launchMode);
   form.append('transcriptionText', input.transcript);
   form.append('awaitCompletion', 'true');
   return form;
@@ -172,6 +184,69 @@ test('voice upload transcribes on the backend and starts Codex when the card has
     await waitForText(inputFile, 'Backend-owned transcript.');
     const ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { cards: Array<{ id: string; codexThreadRunId?: string }> };
     assert.match(ledger.cards.find((card) => card.id === 'card-a')?.codexThreadRunId ?? '', /^codex-skill-/);
+  } finally {
+    server.close();
+    process.chdir(originalCwd);
+    if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
+    else process.env.CODEX_BIN = previousCodexBin;
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('voice Pipeline mode starts the pipeline configured in Settings', async () => {
+  const originalCwd = process.cwd();
+  const previousCodexBin = process.env.CODEX_BIN;
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-voice-pipeline-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  const fakeCodex = join(workspace, 'fake-codex.mjs');
+  mkdirSync(join(workspace, '.skills', 'alpha'), { recursive: true });
+  mkdirSync(decisionOsRoot, { recursive: true });
+  writeFileSync(join(workspace, '.skills', 'alpha', 'SKILL.md'), '---\nname: alpha\ndescription: Pipeline test skill\n---\n');
+  writeFileSync(join(decisionOsRoot, '.settings.json'), JSON.stringify({ voicePipelineId: 'voice-pipeline' }));
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }] }, null, 2));
+  writeFileSync(join(decisionOsRoot, 'specs.json'), JSON.stringify({
+    cards: [{ id: 'card-a', title: 'Voice Card', comment: { what: 'Existing body' }, facts: [], fields: [] }],
+    annotations: [], relationships: [], notes: {}
+  }, null, 2));
+  const now = '2026-07-17T00:00:00.000Z';
+  writeCodexPipelineStore({
+    decisionOsRoot,
+    availableSkillNames: ['alpha'],
+    store: {
+      pipelines: [{ id: 'voice-pipeline', name: 'Voice pipeline', purpose: 'Voice action', stepIds: ['voice-step'], createdAt: now, updatedAt: now }],
+      steps: [{ id: 'voice-step', name: 'Voice step', purpose: '', createdAt: now, updatedAt: now, skills: [{ id: 'alpha-config', skillName: 'alpha', codexModel: null, codexEffort: null }] }],
+      runs: [], skillLibrary: [], activeWorkspaceRun: null
+    }
+  });
+  writeFileSync(fakeCodex, [
+    '#!/usr/bin/env node',
+    'import { writeFileSync } from "node:fs";',
+    'let input = "";',
+    'process.stdin.on("data", (chunk) => { input += chunk; });',
+    'process.stdin.on("end", () => {',
+    '  const output = (input.match(/Write the final result to this Markdown file: (.+)/) || [])[1] || "";',
+    '  if (output.trim()) writeFileSync(output.trim(), "# Pipeline result\\n");',
+    '  console.log(JSON.stringify({ type: "turn.completed" }));',
+    '});'
+  ].join('\n'));
+  chmodSync(fakeCodex, 0o755);
+  process.chdir(workspace);
+  process.env.CODEX_BIN = fakeCodex;
+  const runtime: Record<string, unknown> = {};
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  try {
+    const response = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/voice-upload`, {
+      method: 'POST',
+      body: voiceUploadForm({ transcript: 'Pipeline transcript.', launchMode: 'pipeline', noteId: 'note-voice-pipeline' })
+    });
+    assert.equal(response.status, 202);
+    const body = await response.json() as { body: { ok: boolean; launchMode: string } };
+    assert.equal(body.body.ok, true);
+    assert.equal(body.body.launchMode, 'pipeline');
+    assert.equal(readCodexPipelineStore({ decisionOsRoot }).store.runs.some((run) => run.pipelineId === 'voice-pipeline'), true);
+    await waitForPipelineComplete(decisionOsRoot, 'voice-pipeline');
   } finally {
     server.close();
     process.chdir(originalCwd);

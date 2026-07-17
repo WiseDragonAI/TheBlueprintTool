@@ -115,7 +115,7 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     openThreadPanel();
   }
   if (action === 'voice-toggle') {
-    if (state.voice.recording) await stopVoiceRecording({ queueCodex: event.shiftKey });
+    if (state.voice.recording) await stopVoiceRecording({ launchMode: event.ctrlKey ? 'pipeline' : event.shiftKey ? 'run' : 'send' });
     else void startVoiceRecording();
   }
   if (action === 'thread-file-picker') {
@@ -292,12 +292,12 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     void startVoiceRecording();
   }
   if (action === 'voice-stop') {
-    await stopVoiceRecording({ queueCodex: event.shiftKey });
+    await stopVoiceRecording({ launchMode: (actionTarget.dataset.launchMode as 'send' | 'run' | 'pipeline' | undefined) ?? 'send' });
   }
   if (action === 'confirm-delete') await deleteZoneController();
   if (action === 'cancel-delete') modal.close?.();
   if (action === 'shortcut-help') {
-    telemetry('open-shortcut-help', { shortcuts: ['A', 'X', 'Shift+X', 'Escape', 'Delete', 'Ctrl+C', 'Ctrl+V', 'Ctrl+D'] });
+    telemetry('open-shortcut-help', { shortcuts: ['A', 'X', 'Shift+X', 'Ctrl+X', 'Escape', 'Delete', 'Ctrl+C', 'Ctrl+V', 'Ctrl+D'] });
     shortcutModal.showModal?.();
     return;
   }

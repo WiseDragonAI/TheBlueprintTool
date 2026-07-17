@@ -12,6 +12,11 @@ test('buildCardSkillContinuePrompt keeps the compact payload for a resumed sessi
   assert.doesNotMatch(prompt, /previous Codex session is intentionally unavailable/);
 });
 
+test('buildCardSkillContinuePrompt disallows skills for a voice Run continuation', () => {
+  const prompt = buildCardSkillContinuePrompt({ messages, disallowSkills: true });
+  assert.match(prompt, /Do not invoke or use any skill for this continuation/);
+});
+
 test('buildCardSkillContinuePrompt reconstructs durable context for a new session', () => {
   const prompt = buildCardSkillContinuePrompt({
     messages,

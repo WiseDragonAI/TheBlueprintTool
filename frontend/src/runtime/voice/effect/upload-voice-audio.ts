@@ -17,6 +17,7 @@ export type VoiceTranscriptionResult = {
   error?: string;
   status?: number;
   queueCodex?: boolean;
+  launchMode?: 'send' | 'run' | 'pipeline';
   revision?: number;
   lifecycleStatus?: string;
   uploadReceivedAt?: string;
@@ -31,6 +32,7 @@ export type VoiceUploadOptions = {
   cardId?: string;
   noteId?: string;
   queueCodex?: boolean;
+  launchMode?: 'send' | 'run' | 'pipeline';
 };
 
 function uploadOptions(input: VoiceUploadOptions | string | undefined): VoiceUploadOptions {
@@ -66,8 +68,10 @@ export async function uploadVoiceAudio(audio: Blob, input: VoiceUploadOptions | 
   form.append('threadId', threadId);
   form.append('cardId', cardIdFromThread(threadId, options.cardId));
   form.append('noteId', options.noteId ?? '');
-  form.append('queueCodex', options.queueCodex ? 'true' : 'false');
-  telemetry('upload-voice-audio', { optimistic: true, preserved: true, size: audio.size, type: audio.type, threadId, queueCodex: Boolean(options.queueCodex) });
+  const launchMode = options.launchMode ?? (options.queueCodex ? 'run' : 'send');
+  form.append('launchMode', launchMode);
+  form.append('queueCodex', launchMode === 'run' ? 'true' : 'false');
+  telemetry('upload-voice-audio', { optimistic: true, preserved: true, size: audio.size, type: audio.type, threadId, launchMode });
   const response = await fetch(projectScopedRequestPath('/api/voice-upload'), {
     method: 'POST',
     body: form
@@ -85,6 +89,7 @@ export async function uploadVoiceAudio(audio: Blob, input: VoiceUploadOptions | 
   };
   if (body.noteId) result.noteId = String(body.noteId);
   if (body.queueCodex === true) result.queueCodex = true;
+  if (body.launchMode === 'send' || body.launchMode === 'run' || body.launchMode === 'pipeline') result.launchMode = body.launchMode;
   if (Number.isFinite(Number(body.revision)) && Number(body.revision) > 0) result.revision = Number(body.revision);
   if (body.status) result.lifecycleStatus = String(body.status);
   if (body.uploadReceivedAt) result.uploadReceivedAt = String(body.uploadReceivedAt);

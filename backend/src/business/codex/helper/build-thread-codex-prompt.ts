@@ -16,6 +16,7 @@ export function buildThreadCodexPrompt(input: {
   runSummaryFile: string;
   operatorNoteTimestamp: string;
   context: Record<string, unknown>;
+  disallowSkills?: boolean;
 }): { developerInstructions: string; taskContext: string } {
   const developerInstructions = [
     'Decision OS card run:',
@@ -23,6 +24,7 @@ export function buildThreadCodexPrompt(input: {
     '- `ledger-cli` writes only. `master-task-apply` creates IDs and JSON task labels.',
     '- One `master-task-progress --plan-stdin --json` writes content, labels, verified statuses, and reply. JSON status and `subtask` relationships are authoritative.',
     '- Never close or mark the master task done from a normal card run. Leave it open for direct operator action or an explicitly invoked closeout skill.',
+    ...(input.disallowSkills ? ['- Do not invoke or use any skill for this run. Execute the operator request directly.'] : []),
     `- Gate: \`ledger-cli master-task-gate --ledger "$DECISION_OS_LEDGER_FILE" --card-id ${input.cardId} --json\`.`,
     `- Reply: \`ledger-cli answer --ledger "$DECISION_OS_LEDGER_FILE" --thread-id ${input.threadId} --message-stdin\`.`,
     '- Follow the workspace `AGENTS.md` Markdown contract.',

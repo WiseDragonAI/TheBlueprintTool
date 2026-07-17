@@ -23,6 +23,8 @@ export function saveCodexProcessSettings(input: {
   decisionOsRoot: string;
   runtime: AnyRecord;
   maxConcurrentCodexProcesses: unknown;
+  voicePipelineId?: unknown;
+  availableVoicePipelineIds?: readonly string[];
 }): AnyRecord {
   const value = normalizedConcurrentCodexProcesses(input.maxConcurrentCodexProcesses);
   if (value === null) return {
@@ -38,11 +40,16 @@ export function saveCodexProcessSettings(input: {
     return { ok: false, statusCode: 500, error: `Could not read project settings: ${error instanceof Error ? error.message : String(error)}.` };
   }
   const temporaryFile = resolve(input.decisionOsRoot, `.settings-${process.pid}-${randomUUID()}.tmp`);
+  const hasVoicePipelineId = typeof input.voicePipelineId === 'string';
+  const voicePipelineId = hasVoicePipelineId ? String(input.voicePipelineId).trim() : String(settings.voicePipelineId ?? '');
+  if (input.availableVoicePipelineIds && voicePipelineId && !input.availableVoicePipelineIds.includes(voicePipelineId)) {
+    return { ok: false, statusCode: 400, error: 'voicePipelineId must identify an available pipeline.' };
+  }
   try {
-    writeFileSync(temporaryFile, `${JSON.stringify({ ...settings, maxConcurrentCodexProcesses: value }, null, 2)}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+    writeFileSync(temporaryFile, `${JSON.stringify({ ...settings, maxConcurrentCodexProcesses: value, ...(hasVoicePipelineId ? { voicePipelineId } : {}) }, null, 2)}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
     renameSync(temporaryFile, settingsFile);
     const refreshed = readDecisionOsSettings({ action_payload: { decisionOsRoot: input.decisionOsRoot }, runtime_state: input.runtime });
-    return { ok: true, statusCode: 200, maxConcurrentCodexProcesses: value, settings: refreshed.settings };
+    return { ok: true, statusCode: 200, maxConcurrentCodexProcesses: value, voicePipelineId, settings: refreshed.settings };
   } catch (error) {
     return { ok: false, statusCode: 500, error: `Could not save project settings: ${error instanceof Error ? error.message : String(error)}.` };
   } finally {

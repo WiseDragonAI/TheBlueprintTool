@@ -12,6 +12,23 @@
   align-items: stretch;
   min-width: 0;
 }
+.agent-chat .voice-action--run,
+.agent-chat .voice-action--pipeline { display: none; }
+
+@media (max-width: 760px) {
+  .agent-chat .control-dock {
+    height: 140px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: 66px 66px;
+  }
+  .agent-chat .voice-cancel-control { grid-column: 1; grid-row: 1; }
+  .agent-chat .wave-panel { grid-column: 2 / 4; grid-row: 1; }
+  .agent-chat .meter-panel { display: none; }
+  .agent-chat .voice-action { display: inline-flex; grid-row: 2; width: 100%; }
+  .agent-chat .voice-action--send { grid-column: 1; }
+  .agent-chat .voice-action--run { grid-column: 2; }
+  .agent-chat .voice-action--pipeline { grid-column: 3; }
+}
 
 .agent-chat .wave-panel,
 .agent-chat .meter-track {

@@ -107,7 +107,7 @@ test('responsive card threads own desktop split geometry and documented entry sh
 test('desktop Shift+X queues Codex only after the voice upload completes and keeps the card thread open', () => {
   const shortcut = source.match(/export async function handleResponsiveThreadShortcut\(event\) \{[\s\S]*?\n\}/)?.[0] ?? '';
 
-  assert.match(shortcut, /await stopVoiceRecording\(\{ queueCodex: event\.shiftKey \}\)/);
+  assert.match(shortcut, /await stopVoiceRecording\(\{ launchMode: event\.ctrlKey \? 'pipeline' : event\.shiftKey \? 'run' : 'send' \}\)/);
   assert.doesNotMatch(shortcut, /onPersisted/);
   assert.doesNotMatch(shortcut, /finishQueuedVoiceSubmission/);
 });

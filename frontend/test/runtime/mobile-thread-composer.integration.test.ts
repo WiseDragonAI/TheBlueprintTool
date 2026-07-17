@@ -17,7 +17,9 @@ test('mobile thread composer defaults to a voice-first dock and expands text ent
   assert.match(composer, /terminal-button__icon/);
   assert.match(composer, /viewBox="0 0 24 24"/);
   assert.match(controlDock, /data-action="voice-cancel"[\s\S]*terminal-button__key">Esc<[\s\S]*terminal-button__icon/);
-  assert.match(controlDock, /data-action="voice-toggle"[\s\S]*terminal-button__key">X<[\s\S]*terminal-button__icon/);
+  assert.match(controlDock, /data-action="voice-stop" data-launch-mode="send"[\s\S]*terminal-button__label">SEND/);
+  assert.match(controlDock, /data-action="voice-stop" data-launch-mode="run"[\s\S]*terminal-button__label">RUN/);
+  assert.match(controlDock, /data-action="voice-stop" data-launch-mode="pipeline"[\s\S]*terminal-button__label">PIPELINE/);
   assert.match(buttonCss, /\.terminal-button__icon\s*\{[\s\S]*stroke:\s*currentColor/);
   assert.match(actionClick, /action === 'submit-thread-draft'/);
   assert.match(actionClick, /await submitThreadDraft\(\)/);

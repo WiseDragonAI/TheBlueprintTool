@@ -708,8 +708,17 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     if (url === '/api/settings/codex-processes' && request.method === 'GET') {
       const settings = readDecisionOsSettings({ action_payload: { decisionOsRoot: masterDecisionOsRoot }, runtime_state: runtime }).settings as AnyRecord;
       const configured = normalizedConcurrentCodexProcesses(settings.maxConcurrentCodexProcesses) ?? 1;
+      const pipelineCatalog = listCodexPipelinesController({ runtime_state: { ...runtime, decisionOsRoot: masterDecisionOsRoot, projectId: '' } });
+      const pipelines = Array.isArray(pipelineCatalog.pipelines) ? pipelineCatalog.pipelines as AnyRecord[] : [];
       response.setHeader('content-type', 'application/json');
-      response.end(JSON.stringify({ ok: true, maxConcurrentCodexProcesses: Number.isInteger(configured) ? configured : 1, minimum: 1, maximum: 32 }));
+      response.end(JSON.stringify({
+        ok: true,
+        maxConcurrentCodexProcesses: Number.isInteger(configured) ? configured : 1,
+        voicePipelineId: String(settings.voicePipelineId ?? ''),
+        pipelines: pipelines.map((pipeline) => ({ id: String(pipeline.id ?? ''), name: String(pipeline.name ?? pipeline.id ?? '') })),
+        minimum: 1,
+        maximum: 32
+      }));
       return;
     }
     if (url === '/api/settings/codex-processes' && request.method === 'PATCH') {
@@ -720,7 +729,15 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       } catch {
         body = {};
       }
-      const result = saveCodexProcessSettings({ decisionOsRoot: masterDecisionOsRoot, runtime, maxConcurrentCodexProcesses: body.maxConcurrentCodexProcesses });
+      const pipelineCatalog = listCodexPipelinesController({ runtime_state: { ...runtime, decisionOsRoot: masterDecisionOsRoot, projectId: '' } });
+      const pipelines = Array.isArray(pipelineCatalog.pipelines) ? pipelineCatalog.pipelines as AnyRecord[] : [];
+      const result = saveCodexProcessSettings({
+        decisionOsRoot: masterDecisionOsRoot,
+        runtime,
+        maxConcurrentCodexProcesses: body.maxConcurrentCodexProcesses,
+        voicePipelineId: body.voicePipelineId,
+        availableVoicePipelineIds: pipelines.map((pipeline) => String(pipeline.id ?? '')).filter(Boolean)
+      });
       if (result.ok === true) void scheduleGlobalCodexProcesses();
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
@@ -1405,6 +1422,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const result = await startVoiceUploadOrchestrationController({
         action_payload: {
           ...fields,
+          voicePipelineId: String((readDecisionOsSettings({ action_payload: { decisionOsRoot: masterDecisionOsRoot }, runtime_state: runtime }).settings as AnyRecord).voicePipelineId ?? ''),
           audioBuffer: audio?.buffer ?? bodyBuffer,
           mimeType: audio?.mimeType ?? (contentType || 'audio/webm'),
           onCardContentChange: publishCardContentChange,
@@ -1478,6 +1496,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const result = await startVoiceRetryOrchestrationController({
         action_payload: {
           ...retryPayload,
+          voicePipelineId: String((readDecisionOsSettings({ action_payload: { decisionOsRoot: masterDecisionOsRoot }, runtime_state: runtime }).settings as AnyRecord).voicePipelineId ?? ''),
           threadId: request.headers['x-thread-id'] ?? retryPayload.threadId ?? '',
           onCardContentChange: publishCardContentChange,
           onLedgerChange: publishLedgerContentChange

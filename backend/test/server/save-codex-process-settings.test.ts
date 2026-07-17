@@ -18,6 +18,16 @@ test('saves the process limit while preserving unrelated project settings', () =
     });
     assert.equal(saveCodexProcessSettings({ decisionOsRoot, runtime, maxConcurrentCodexProcesses: 0 }).statusCode, 400);
     assert.equal(saveCodexProcessSettings({ decisionOsRoot, runtime, maxConcurrentCodexProcesses: 33 }).statusCode, 400);
+    const withPipeline = saveCodexProcessSettings({
+      decisionOsRoot,
+      runtime,
+      maxConcurrentCodexProcesses: 4,
+      voicePipelineId: 'pipeline-a',
+      availableVoicePipelineIds: ['pipeline-a']
+    });
+    assert.equal(withPipeline.voicePipelineId, 'pipeline-a');
+    assert.equal(JSON.parse(readFileSync(resolve(decisionOsRoot, '.settings.json'), 'utf8')).voicePipelineId, 'pipeline-a');
+    assert.equal(saveCodexProcessSettings({ decisionOsRoot, runtime, maxConcurrentCodexProcesses: 4, voicePipelineId: 'missing', availableVoicePipelineIds: ['pipeline-a'] }).statusCode, 400);
   } finally {
     rmSync(decisionOsRoot, { recursive: true, force: true });
   }

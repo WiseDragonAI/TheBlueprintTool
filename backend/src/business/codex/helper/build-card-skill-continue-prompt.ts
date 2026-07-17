@@ -37,13 +37,14 @@ function formatMessage(note: AnyRecord, index: number, total: number): string {
   return lines.join('\n');
 }
 
-export function buildCardSkillContinuePrompt(input: { messages: AnyRecord[]; newSessionContext?: NewSessionContext }): string {
+export function buildCardSkillContinuePrompt(input: { messages: AnyRecord[]; newSessionContext?: NewSessionContext; disallowSkills?: boolean }): string {
   const messages = input.messages.map((message, index) => formatMessage(message, index + 1, input.messages.length)).join('\n\n');
   if (input.newSessionContext) {
     const context = input.newSessionContext;
     return [
       'Start a new Codex session for an existing decision-os run.',
       'The previous Codex session is unavailable. Continue from the current Decision OS context below.',
+      ...(input.disallowSkills ? ['Do not invoke or use any skill for this continuation.'] : []),
       '',
       'Decision OS context:',
       '```json',
@@ -55,6 +56,7 @@ export function buildCardSkillContinuePrompt(input: { messages: AnyRecord[]; new
   }
   return [
     'Continue the session with the additional information:',
+    ...(input.disallowSkills ? ['Do not invoke or use any skill for this continuation.'] : []),
     '',
     messages,
   ].join('\n');
