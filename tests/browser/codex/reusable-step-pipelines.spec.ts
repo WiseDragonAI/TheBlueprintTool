@@ -184,10 +184,35 @@ test('Skills Library keeps canonical Markdown in a bounded scroll view above per
 
     const firstSkill = library.locator('.process-library .codex-list-item').first();
     assert.match(await firstSkill.locator('strong').textContent() ?? '', new RegExp(`^${skillName}`));
+    const cardPresentation = await firstSkill.evaluate((activation) => {
+      const card = activation.parentElement;
+      const activationStyle = getComputedStyle(activation);
+      const cardStyle = card ? getComputedStyle(card) : undefined;
+      return {
+        cardTag: card?.tagName ?? '',
+        cardBackground: cardStyle?.backgroundColor ?? '',
+        cardShadow: cardStyle?.boxShadow ?? '',
+        activationBackground: activationStyle.backgroundColor,
+        activationShadow: activationStyle.boxShadow,
+        activationTransform: activationStyle.transform,
+        activationHeight: activation.getBoundingClientRect().height,
+        activationScrollHeight: activation.scrollHeight,
+      };
+    });
+    assert.equal(cardPresentation.cardTag, 'ARTICLE');
+    assert.notEqual(cardPresentation.cardBackground, 'rgba(0, 0, 0, 0)');
+    assert.equal(cardPresentation.cardShadow, 'none');
+    assert.equal(cardPresentation.activationBackground, 'rgba(0, 0, 0, 0)');
+    assert.equal(cardPresentation.activationShadow, 'none');
+    assert.equal(cardPresentation.activationTransform, 'none');
+    assert.ok(cardPresentation.activationHeight + 1 >= cardPresentation.activationScrollHeight,
+      `Card content overflowed its surface (${cardPresentation.activationHeight} < ${cardPresentation.activationScrollHeight}).`);
     const detailResponsePromise = page.waitForResponse((response) => response.url().includes(`/api/codex/skill-library/${skillName}`));
     await firstSkill.click();
     const detailResponse = await detailResponsePromise;
-    assert.equal(detailResponse.status(), 200, await detailResponse.text());
+    const detailPayload = await detailResponse.json();
+    assert.equal(detailResponse.status(), 200, JSON.stringify(detailPayload));
+    assert.deepEqual(detailPayload.skill.references?.map((reference: { name: string }) => reference.name), ['guide.md']);
     assert.deepEqual(pageErrors, []);
 
     await library.getByRole('heading', { name: 'SKILL.md', exact: true }).waitFor({ state: 'visible' });
@@ -227,7 +252,19 @@ test('Skills Library keeps canonical Markdown in a bounded scroll view above per
     assert.match(geometry.markdownBackground, /linear-gradient/);
     assert.notEqual(geometry.markdownShadow, 'none');
     const reference = library.getByRole('button', { name: 'guide.md', exact: true });
+    await reference.waitFor({ state: 'attached' });
+    await reference.scrollIntoViewIfNeeded();
     await reference.waitFor({ state: 'visible' });
+    const referencePresentation = await reference.evaluate((activation) => ({
+      cardTag: activation.parentElement?.tagName ?? '',
+      cardBackground: activation.parentElement ? getComputedStyle(activation.parentElement).backgroundColor : '',
+      activationBackground: getComputedStyle(activation).backgroundColor,
+      activationShadow: getComputedStyle(activation).boxShadow,
+    }));
+    assert.equal(referencePresentation.cardTag, 'ARTICLE');
+    assert.notEqual(referencePresentation.cardBackground, 'rgba(0, 0, 0, 0)');
+    assert.equal(referencePresentation.activationBackground, 'rgba(0, 0, 0, 0)');
+    assert.equal(referencePresentation.activationShadow, 'none');
     await reference.click();
     assert.equal(await reference.getAttribute('aria-expanded'), 'true');
     assert.equal(await library.getByText('Reference content is readable.', { exact: true }).isVisible(), true);

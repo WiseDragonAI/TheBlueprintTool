@@ -135,6 +135,8 @@ test('global pipeline editing creates server definitions at All projects and pre
 test('skill libraries share favorite ordering, colored categories, and scope-specific detail actions', () => {
   assert.match(script, /sortSkillsByFavorite\(filtered\)/);
   assert.match(script, /renderSkillLibraryItemContent\(record\)/);
+  assert.match(script, /document\.createElement\('article'\); card\.className = 'codex-list-card'/);
+  assert.match(script, /card\.append\(node\); return card/);
   assert.match(script, /decorateSkillCategoryLabel\(chip, value\.category\)/);
   assert.match(script, /state\.libraryScope === 'global'/);
   assert.match(script, /record\.favorite \? '★' : '☆'/);
@@ -164,6 +166,9 @@ test('skill libraries share favorite ordering, colored categories, and scope-spe
   assert.match(styles, /\.skill-category-filter \{[^}]*background: var\(--skill-category-color\)/);
   assert.match(styles, /\.skill-favorite-toggle\[aria-pressed="true"\] \{[^}]*color: #fbbf24/);
   assert.match(styles, /\.skill-tag-choice\[aria-pressed="true"\]/);
+  assert.match(styles, /\.codex-list-card \{[^}]*box-shadow/);
+  assert.match(styles, /\.codex-list-item \{[^}]*background: transparent;[^}]*box-shadow: none/);
+  assert.match(styles, /\.skill-reference-toggle \{[^}]*background: transparent;[^}]*box-shadow: none/);
   assert.match(styles, /\.process-modal \{ height: min\(80dvh, 860px\); \}/);
   assert.match(styles, /\.skill-detail-scroll \{[^}]*overflow-y: auto/);
   assert.doesNotMatch(styles, /\.skill-markdown-section \.ledger-card-body[^}]*background:/);
