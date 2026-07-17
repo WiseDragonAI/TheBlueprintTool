@@ -88,13 +88,13 @@ test('catalog, save, run, invalid-reference, and warning messages stay actionabl
   assert.match(script, /message\('\.pipeline-editor-message', formatError\(error\), true\)/);
 });
 
-test('global skills and pipelines combine the server catalog with managed project libraries', () => {
+test('global skills and pipelines read only the connection-synchronized local server catalogs', () => {
   assert.match(script, /jsonRequest\('\/api\/codex\/server-pipelines'\)/);
   assert.match(script, /jsonRequest\('\/api\/codex\/server-skills'\)/);
-  assert.match(script, /Promise\.allSettled\(state\.projects\.map/);
-  assert.match(script, /const bySkill = new Map\(\)/);
-  assert.match(script, /existing\.projects\.push\(library\.project\)/);
-  assert.match(script, /projectId: project\.id, projectName: project\.name, projectColor: project\.color/);
+  assert.doesNotMatch(script, /Promise\.allSettled\(state\.projects\.map/);
+  assert.match(script, /Library views must never fan out to remote projects/);
+  assert.match(script, /state\.skills = \(serverSkills\.skills \|\| \[\]\)/);
+  assert.match(script, /failedProjects: 0/);
   assert.doesNotMatch(script, /Choose the project whose (?:skill library|pipelines)/);
 });
 

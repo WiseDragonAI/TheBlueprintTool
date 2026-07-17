@@ -59,6 +59,16 @@ import { createControlRoomProjectionStore } from './control-room-projection-stor
 import { ledgerCanvasProjection, ledgerCardProjection, ledgerNavigationProjection, ledgerSearchProjection, ledgerThreadProjection } from './ledger-read-models.js';
 import { ensureProjectsCanvasDocument } from './ensure-projects-canvas-document.js';
 import { createFederationNodeConnector } from '../../federation/helper/federation-node-connector.js';
+import {
+  exportFederatedPipelineSnapshot,
+  exportFederatedSkillManifest,
+  exportFederatedSkillSnapshot,
+  importFederatedPipelineSnapshot,
+  importFederatedSkillSnapshot,
+  type FederatedPipelineSnapshot,
+  type FederatedSkillManifest,
+  type FederatedSkillSnapshot,
+} from '../../federation/helper/federated-library-cache.js';
 import { federatedControlRoomProjection } from './federated-control-room-projection.js';
 import { migrateLegacyProjectPipelines } from '../../codex/helper/server-pipeline-catalog.js';
 
@@ -354,6 +364,63 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   });
   const projectCatalog = () => projectCatalogStore.projects();
   let federationServerPort = port;
+  let federationSyncRequested = false;
+  let federationSyncPromise: Promise<void> | null = null;
+  const localWorkspaceRoots = (): string[] => [
+    masterRoot,
+    ...projectCatalog().filter((project) => project.available).map((project) => project.root),
+  ];
+  const localDecisionOsRoots = (): string[] => [
+    masterDecisionOsRoot,
+    ...projectCatalog().filter((project) => project.available).map((project) => project.decisionOsRoot),
+  ];
+  const parseFederationResponse = <T>(result: { status: number; body: Buffer }, label: string): T => {
+    if (result.status !== 200) throw new Error(`${label} returned HTTP ${result.status}.`);
+    try { return JSON.parse(result.body.toString('utf8')) as T; }
+    catch { throw new Error(`${label} returned invalid JSON.`); }
+  };
+  const synchronizeFederatedLibraries = (): Promise<void> => {
+    federationSyncRequested = true;
+    if (federationSyncPromise) return federationSyncPromise;
+    const run = (async () => {
+      do {
+        federationSyncRequested = false;
+        const peers = federation?.nodes().filter((node) => node.online) ?? [];
+        // WHAT: Complete skill materialization is the first synchronization phase.
+        // WHY: Pipeline validation and every Process Card consumer require local skill packages.
+        for (const peer of peers) {
+          const manifest = parseFederationResponse<FederatedSkillManifest>(
+            await federation!.request(peer.nodeId, '/api/federation/skills-manifest'),
+            `${peer.nodeLabel} skill manifest`,
+          );
+          const local = new Map(exportFederatedSkillManifest(masterRoot, localWorkspaceRoots()).skills.map((skill) => [skill.name, skill.revision]));
+          for (const skill of manifest.skills) {
+            if (local.get(skill.name) === skill.revision) continue;
+            const snapshot = parseFederationResponse<FederatedSkillSnapshot>(
+              await federation!.request(peer.nodeId, `/api/federation/skills-snapshot?name=${encodeURIComponent(skill.name)}`),
+              `${peer.nodeLabel} skill ${skill.name}`,
+            );
+            importFederatedSkillSnapshot({ serverRoot: masterRoot, snapshot });
+          }
+        }
+        // WHAT: Pipeline definitions synchronize only after every available skill package is local.
+        // WHY: The persisted pipeline catalog must normalize against the complete local skill set.
+        for (const peer of peers) {
+          const snapshot = parseFederationResponse<FederatedPipelineSnapshot>(
+            await federation!.request(peer.nodeId, '/api/federation/pipelines-snapshot'),
+            `${peer.nodeLabel} pipeline snapshot`,
+          );
+          importFederatedPipelineSnapshot({ decisionOsRoot: masterDecisionOsRoot, snapshot });
+        }
+      } while (federationSyncRequested);
+    })().finally(() => {
+      if (federationSyncPromise === run) federationSyncPromise = null;
+      if (federationSyncRequested) void synchronizeFederatedLibraries().catch(() => undefined);
+    });
+    federationSyncPromise = run;
+    Object.defineProperty(runtime, 'federatedLibrarySyncPromise', { value: run, writable: true, configurable: true, enumerable: false });
+    return run;
+  };
   federation = createFederationNodeConnector({
     settings: runtime.decisionOsSettings,
     localProjects: projectCatalog,
@@ -361,6 +428,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     onRemoteContentChange: () => {
       for (const client of globalContentEventClients) client.write('event: ledger-content-change\ndata: {"remote":true}\n\n');
     },
+    onRemoteCatalogChange: () => { void synchronizeFederatedLibraries().catch(() => undefined); },
   });
   Object.defineProperty(runtime, 'federationNodeConnector', { value: federation, configurable: true, enumerable: false });
   controlRoomProjectionStore = createControlRoomProjectionStore({
@@ -562,6 +630,32 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.setHeader(ledgerRevisionHeader, String(ledgerRevisions.current(ledgerId)));
       response.statusCode = projection ? 200 : 404;
       response.end(JSON.stringify(projection ?? { ok: false, error: 'Scoped ledger resource not found.' }));
+      return;
+    }
+    if (!projectScope && url === '/api/federation/skills-manifest' && request.method === 'GET') {
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify(exportFederatedSkillManifest(masterRoot, localWorkspaceRoots())));
+      return;
+    }
+    if (!projectScope && url === '/api/federation/skills-snapshot' && request.method === 'GET') {
+      const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
+      const skillName = requestUrl.searchParams.get('name')?.trim() ?? '';
+      if (!skillName) {
+        response.statusCode = 400;
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ ok: false, error: 'Skill name is required.' }));
+        return;
+      }
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify(exportFederatedSkillSnapshot(masterRoot, new Set([skillName]), localWorkspaceRoots())));
+      return;
+    }
+    if (!projectScope && url === '/api/federation/pipelines-snapshot' && request.method === 'GET') {
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify(exportFederatedPipelineSnapshot(localDecisionOsRoots())));
       return;
     }
     if (url === '/api/settings/codex-processes' && request.method === 'GET') {
@@ -816,6 +910,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         }
       })();
       const result = saveCodexPipelineController({ action_payload: { ...savePayload, operation: 'create', ...(url === '/api/codex/server-pipelines' ? { scope: 'server' } : {}) }, runtime_state: requestRuntime });
+      if (result.ok === true) federation.publishManifest();
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 201));
       response.end(JSON.stringify(result));
@@ -883,6 +978,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         }
       })();
       const result = saveCodexPipelineController({ action_payload: { ...savePayload, pipelineId, operation: 'update' }, runtime_state: requestRuntime });
+      if (result.ok === true) federation.publishManifest();
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
       response.end(JSON.stringify(result));
@@ -899,6 +995,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         }
       })();
       const result = saveCodexPipelineController({ action_payload: { ...savePayload, pipelineId, operation: 'update', scope: 'server' }, runtime_state: requestRuntime });
+      if (result.ok === true) federation.publishManifest();
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
       response.end(JSON.stringify(result));
@@ -923,6 +1020,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         }
       })();
       const result = saveCodexSkillLibraryController({ action_payload: { ...savePayload, skillName }, runtime_state: requestRuntime });
+      if (result.ok === true && Object.prototype.hasOwnProperty.call(savePayload, 'markdown')) federation.publishManifest();
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
       response.end(JSON.stringify(result));
