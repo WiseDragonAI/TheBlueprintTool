@@ -1,9 +1,8 @@
 /**
- * WHAT: Starts a selected card skill run and refreshes the active canvas.
- * WHY: The new output card and relationship are server-authored ledger state.
+ * WHAT: Starts a selected card skill run and reports server acceptance.
+ * WHY: The caller owns the post-acceptance route transition.
  */
 import { state } from '../../state.js';
-import { refreshRuntimeState } from '../../refresh/controller/refresh-runtime-state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { requestCardSkillProcess } from '../effect/request-card-skill-process.js';
 
@@ -16,7 +15,6 @@ export async function processCardSkillController(input: { cardId: string; skillN
     telemetry('codex-skill-process-failed', { ledgerId, cardId: input.cardId, skillName: input.skillName, codexModel: input.codexModel ?? '', codexEffort: input.codexEffort ?? '', error: result.error ?? '' });
     return false;
   }
-  await refreshRuntimeState();
   telemetry('codex-skill-process-created-card', { ledgerId, cardId: input.cardId, skillName: input.skillName, codexModel: input.codexModel ?? '', codexEffort: input.codexEffort ?? '', run: result.run?.id ?? '' });
   return true;
 }

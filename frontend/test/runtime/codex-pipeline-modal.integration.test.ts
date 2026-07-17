@@ -152,10 +152,14 @@ class FakeDocument {
 }
 
 const fakeDocument = new FakeDocument();
+const assignedLocations: string[] = [];
 
 (globalThis as unknown as { window: unknown }).window = {
   __coreTelemetry: [],
   dispatchEvent() {},
+  location: {
+    assign(path: string) { assignedLocations.push(path); },
+  },
 };
 (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
   constructor(_name: string, public detail: unknown = undefined) {}
@@ -544,6 +548,37 @@ test('direct skill defaults remain inherited until the operator sets a one-run o
     assert.equal(await processSelectedCardSkill(), false);
     assert.equal(bodies[1].codexModel, 'gpt-5.6-sol');
     assert.equal('codexEffort' in bodies[1], false);
+  } finally {
+    globalThis.fetch = previousFetch;
+    state.activeTab = previousTab;
+  }
+});
+
+test('successful direct skill launches return to the canonical Control Room Exec route', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousTab = state.activeTab;
+  try {
+    state.activeTab = 'specs';
+    Object.assign(processModalState, {
+      cardId: 'card-source',
+      skills: catalog,
+      selectedSkillName: 'analysis',
+      sourceContentMissing: false,
+      processing: false,
+      error: '',
+      codexModelExplicit: false,
+      codexEffortExplicit: false,
+    });
+    fakeDocument.processModal.open = true;
+    assignedLocations.length = 0;
+    globalThis.fetch = (async (url: string) => {
+      assert.equal(url, '/api/codex/skills/process');
+      return new Response(JSON.stringify({ ok: true, run: { id: 'run-direct' } }), { status: 202 });
+    }) as typeof fetch;
+
+    assert.equal(await processSelectedCardSkill(), true);
+    assert.equal(fakeDocument.processModal.open, false);
+    assert.deepEqual(assignedLocations, ['/?tab=exec']);
   } finally {
     globalThis.fetch = previousFetch;
     state.activeTab = previousTab;

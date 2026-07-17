@@ -8,6 +8,7 @@ import type {
   CodexPipelineStep,
   CodexPipelineStoreIssue,
 } from '../../../../../shared/schemas/codex-pipeline-types.js';
+import { controlRoomPath } from '../../../app/responsive/control-room-route.js';
 import { processModal } from '../../dom.js';
 import { refreshRuntimeState } from '../../refresh/controller/refresh-runtime-state.js';
 import { state } from '../../state.js';
@@ -727,6 +728,7 @@ export async function processSelectedCardSkill(): Promise<boolean> {
     return false;
   }
   closeCardProcessModal();
+  window.location.assign(controlRoomPath('exec'));
   return true;
 }
 
