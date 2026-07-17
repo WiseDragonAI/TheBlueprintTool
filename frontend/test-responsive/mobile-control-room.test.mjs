@@ -397,12 +397,13 @@ test('creates projects from the projects catalog with the shared creation contro
   assert.match(html, /id="creation-name"[^>]*required[^>]*maxlength="120"/);
   assert.match(html, /id="creation-description"[^>]*maxlength="1000"/);
   assert.match(html, /class="creation-directory-browser"[^>]*aria-label="Project directory browser"/);
-  assert.match(html, /class="creation-directory-breadcrumbs"[^>]*aria-label="Current directory"/);
-  assert.match(html, /class="creation-directory-select primary-button"[^>]*>Use this directory</);
+  assert.match(html, /class="creation-directory-tree"[^>]*role="tree"[^>]*aria-label="Directories"/);
+  assert.doesNotMatch(html, /Use this directory/);
   assert.match(mobile, /project: \['New project', 'Project name', 'Create project'\]/);
   assert.match(mobile, /kind !== 'card' && kind !== 'project'/);
   assert.match(mobile, /await createProjectRequest\(\{ fetchImpl: fetch, name, description, directory \}\)/);
-  assert.match(mobile, /loadProjectDirectoryRequest\(\{ fetchImpl: fetch, path \}\)/);
+  assert.match(mobile, /projectDirectoryListings\.set\(path, listing\)/);
+  assert.match(mobile, /aria-expanded/);
   assert.match(mobile, /if \(!directory\) throw new Error\('Choose a project directory\.'\)/);
   assert.match(mobile, /state\.projects = \[\.\.\.state\.projects, project\]\.sort/);
   assert.match(mobile, /navigate\(projectPath\(project\.id\)\)/);

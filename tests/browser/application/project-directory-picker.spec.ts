@@ -42,9 +42,15 @@ test('project creation selects a server directory and initializes missing Git an
     await modal.getByRole('button', { name: 'Browse', exact: true }).click();
     const directoryBrowser = modal.getByRole('region', { name: 'Project directory browser', exact: true });
     await directoryBrowser.waitFor({ state: 'visible' });
-    await directoryBrowser.locator('.creation-directory-option').filter({ hasText: 'Sample Source' }).click();
-    await directoryBrowser.locator('.creation-directory-option').filter({ hasText: 'Nested Folder' }).waitFor({ state: 'visible' });
-    await directoryBrowser.getByRole('button', { name: 'Use this directory', exact: true }).click();
+    const sourceTreeItem = directoryBrowser.locator('.creation-directory-treeitem[data-path="Sample Source"]');
+    await sourceTreeItem.waitFor({ state: 'visible' });
+    assert.equal(await sourceTreeItem.evaluate((element) => element.tagName), 'DIV');
+    assert.equal(await sourceTreeItem.locator(':scope > .creation-directory-row').evaluate((element) => getComputedStyle(element).height), '28px');
+    await sourceTreeItem.getByRole('button', { name: 'Expand Sample Source', exact: true }).click();
+    await directoryBrowser.locator('.creation-directory-treeitem[data-path="Sample Source/Nested Folder"]').waitFor({ state: 'visible' });
+    assert.equal(await sourceTreeItem.getAttribute('aria-expanded'), 'true');
+    await sourceTreeItem.locator(':scope > .creation-directory-row').click();
+    assert.equal(await sourceTreeItem.getAttribute('aria-selected'), 'true');
 
     assert.equal(await modal.getByLabel('Project directory', { exact: true }).inputValue(), sourceDirectory);
     assert.equal(await modal.getByLabel('Name', { exact: true }).inputValue(), 'Sample Source');
