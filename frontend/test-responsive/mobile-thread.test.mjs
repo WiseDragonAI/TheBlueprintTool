@@ -103,6 +103,18 @@ test('responsive card threads own desktop split geometry and documented entry sh
   assert.match(applicationSource, /await handleResponsiveThreadShortcut\(event\)/);
 });
 
+test('desktop Shift+X closes the accepted card thread and returns to the Control Room Queue', () => {
+  const shortcut = source.match(/export async function handleResponsiveThreadShortcut\(event\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+  const handoff = source.match(/async function finishQueuedVoiceSubmission\(submitted\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+
+  assert.match(shortcut, /const queueCodex = event\.shiftKey;/);
+  assert.match(shortcut, /const submitted = await stopVoiceRecording\(\{ queueCodex \}\);/);
+  assert.match(shortcut, /if \(queueCodex\) await finishQueuedVoiceSubmission\(submitted\);/);
+  assert.match(handoff, /if \(!submitted\) return;/);
+  assert.match(handoff, /closeMobileThread\(\);\n  await onQuickVoiceSubmitted\(\);/);
+  assert.match(applicationSource, /onQuickVoiceSubmitted: \(\) => navigate\(controlRoomPath\('queue'\), true\)/);
+});
+
 test('mobile thread uses the shared renderer that owns the local voice progress clock', () => {
   assert.match(source, /import \{ renderThreadPanel \} from '\/src\/runtime\/thread\/effect\/render-thread-panel\.js';/);
   assert.match(sharedThreadRenderer, /import \{ syncVoiceProgressClock \} from '\.\.\/\.\.\/voice\/effect\/run-voice-progress-clock\.js';/);

@@ -150,8 +150,11 @@ export async function handleResponsiveThreadShortcut(event) {
   if (key === 'x') {
     event.preventDefault();
     if (!canvasState.threadPanelOpen && currentCard) openMobileThread(currentCard, getComputedStyle(document.querySelector('#card-view')).getPropertyValue('--zone-color').trim());
-    if (canvasState.voice.recording) await stopVoiceRecording({ queueCodex: event.shiftKey });
-    else void startVoiceRecording();
+    if (canvasState.voice.recording) {
+      const queueCodex = event.shiftKey;
+      const submitted = await stopVoiceRecording({ queueCodex });
+      if (queueCodex) await finishQueuedVoiceSubmission(submitted);
+    } else void startVoiceRecording();
     return true;
   }
   if (key === 'escape' && canvasState.threadPanelOpen) {
@@ -161,6 +164,12 @@ export async function handleResponsiveThreadShortcut(event) {
     return true;
   }
   return false;
+}
+
+async function finishQueuedVoiceSubmission(submitted) {
+  if (!submitted) return;
+  closeMobileThread();
+  await onQuickVoiceSubmitted();
 }
 
 async function startQuickVoiceComment() {
@@ -192,9 +201,7 @@ async function stopQuickVoiceComment(event) {
   const button = document.querySelector('.quick-voice-comment-button');
   button.disabled = false;
   button.removeAttribute('aria-busy');
-  if (!submitted) return;
-  closeMobileThread();
-  await onQuickVoiceSubmitted();
+  await finishQueuedVoiceSubmission(submitted);
 }
 
 async function refreshThreadLedger(optimisticRunId = '') {

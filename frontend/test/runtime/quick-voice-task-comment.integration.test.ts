@@ -21,6 +21,17 @@ test('quick voice stop queues Codex and returns to the canonical Queue route aft
 
   assert.match(thread, /openMobileThread\(currentCard[\s\S]*await startVoiceRecording\(\)/);
   assert.match(thread, /stopVoiceRecording\(\{ queueCodex: quickVoiceCapture \|\| event\.shiftKey \}\)/);
+  assert.match(thread, /await finishQueuedVoiceSubmission\(submitted\)/);
   assert.match(thread, /if \(!submitted\) return;[\s\S]*closeMobileThread\(\);[\s\S]*await onQuickVoiceSubmitted\(\)/);
   assert.match(application, /onQuickVoiceSubmitted: \(\) => navigate\(controlRoomPath\('queue'\), true\)/);
+});
+
+test('desktop Shift+X uses the accepted quick voice handoff while normal X stays on the card', () => {
+  const thread = source('frontend/src/app/responsive/thread.js');
+  const shortcut = thread.match(/export async function handleResponsiveThreadShortcut\(event\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+
+  assert.match(shortcut, /const queueCodex = event\.shiftKey;/);
+  assert.match(shortcut, /stopVoiceRecording\(\{ queueCodex \}\)/);
+  assert.match(shortcut, /if \(queueCodex\) await finishQueuedVoiceSubmission\(submitted\)/);
+  assert.doesNotMatch(shortcut, /if \(!queueCodex\) await finishQueuedVoiceSubmission/);
 });
