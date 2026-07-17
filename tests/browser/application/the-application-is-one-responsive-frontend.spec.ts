@@ -14,7 +14,7 @@ import { chromium, type Browser, type Page } from '@playwright/test';
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const chromiumExecutablePath = '/snap/bin/chromium';
 
-test('The responsive application preserves the mobile Control Room and expands the same shell on desktop.', { timeout: 30_000 }, async () => {
+test('The responsive application preserves the mobile Control Room and expands the same shell on desktop.', { timeout: 60_000 }, async () => {
   const server = await startDecisionOsServer();
   let browser: Browser | undefined;
   try {
@@ -104,6 +104,15 @@ test('The responsive application preserves the mobile Control Room and expands t
 
     await desktop.locator('.ledger-nav').getByRole('link', { name: 'Projects' }).click();
     await desktop.waitForURL(`${server.url}/projects`);
+    await desktop.locator('#projects-view:not([hidden])').waitFor({ state: 'visible' });
+    assert.equal(await desktop.locator('.canvas').count(), 0);
+    const firstProject = desktop.locator('.project-card:not(:disabled)').first();
+    await firstProject.click();
+    await desktop.locator('.project-settings-modal[open]').waitFor({ state: 'visible' });
+    assert.equal(await desktop.getByRole('button', { name: 'Synchronize project' }).isVisible(), true);
+    await desktop.getByRole('button', { name: 'Cancel' }).click();
+
+    await desktop.goto(`${server.url}/projects-canvas`, { waitUntil: 'domcontentloaded' });
     await desktop.waitForFunction(() => window.__coreState?.canvasMode === 'projects');
     assert.equal(await desktop.locator('.canvas').isVisible(), true);
     await desktop.getByRole('button', { name: 'Control Room' }).click();
@@ -197,9 +206,10 @@ async function resolveResponsiveCardRoute(serverUrl: string): Promise<string> {
       cards?: Array<{ id?: string }>;
     };
     const zone = canvas.annotations?.find((candidate) => candidate.id && candidate.variant !== 'group' && typeof candidate.color === 'string');
-    const card = canvas.cards?.find((candidate) => candidate.id);
-    if (zone?.id && card?.id) {
-      return `/p/${encodeURIComponent(project.id)}/ledgers/${encodeURIComponent(ledger.id)}/zones/${encodeURIComponent(zone.id)}/cards/${encodeURIComponent(card.id)}`;
+    for (const card of canvas.cards ?? []) {
+      if (!zone?.id || !card.id) continue;
+      const thread = await fetch(`${serverUrl}/p/${encodeURIComponent(project.id)}/api/ledgers/${encodeURIComponent(ledger.id)}/threads/${encodeURIComponent(`thread-${card.id}`)}`);
+      if (thread.ok) return `/p/${encodeURIComponent(project.id)}/ledgers/${encodeURIComponent(ledger.id)}/zones/${encodeURIComponent(zone.id)}/cards/${encodeURIComponent(card.id)}`;
     }
   }
   assert.fail('The test workspace must expose one card and one zone for responsive card routing.');
@@ -208,8 +218,11 @@ async function resolveResponsiveCardRoute(serverUrl: string): Promise<string> {
 function collectPageErrors(page: Page): string[] {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
+  page.on('response', (response) => {
+    if (response.status() >= 400) errors.push(`HTTP ${response.status()} ${response.url()}`);
+  });
   page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text());
+    if (message.type() === 'error' && !message.text().startsWith('Failed to load resource:')) errors.push(message.text());
   });
   return errors;
 }

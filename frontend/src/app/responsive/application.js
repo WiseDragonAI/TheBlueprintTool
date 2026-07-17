@@ -10,7 +10,7 @@ import { initializeMobileCodex, openMobileCodexLibrary, setMobileCodexContext } 
 import { executionAge, executionStopwatch, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge } from './control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from './control-room-route.js';
 import { cardPathForProject, isProjectCardPath, ledgerPathForProject, parseProjectRoute, parseProjectScope, projectPath, zonePathForProject } from './project-route.js';
-import { projectSettingsValues, saveProjectSettingsRequest } from './project-settings.js';
+import { loadProjectSyncRuns, projectSettingsValues, saveProjectSettingsRequest, startProjectSyncRequest } from './project-settings.js';
 import { isCardEditingKeyboardTarget } from '/src/runtime/input/helper/is-card-editing-keyboard-target.js';
 import { committedProjectColor, hexToHsv, hsvToHex, projectColorPickerGradients } from './project-color-picker.js';
 import { codexProcessLimitRange, loadCodexProcessSettings, saveCodexProcessSettings, stepCodexProcessLimit } from './codex-settings.js';
@@ -36,7 +36,8 @@ const state = {
   viewedProjectId: '',
   controlTab: 'queue',
   projectFilter: 'All',
-  controlFilter: 'All'
+  controlFilter: 'All',
+  projectSyncRuns: [],
 };
 
 const elements = Object.fromEntries([
@@ -84,6 +85,7 @@ let federationFormDirty = false;
 let federationSettingsLoadGeneration = 0;
 let projectColorPickerOriginal = '';
 let projectColorPickerDirty = false;
+let projectSyncEventSource = null;
 
 function createProjectColorSlider(element, start, maximum) {
   window.noUiSlider.create(element, {
@@ -234,7 +236,7 @@ function navigate(path, replace = false) {
   if (currentLocation !== nextLocation && !closeCardDetail()) return false;
   const projectScope = parseProjectScope(destination.pathname);
   const desktopCanvasRoute = window.matchMedia?.('(min-width: 761px)').matches === true
-    && (destination.pathname === '/projects'
+    && (destination.pathname === '/projects-canvas'
       || (projectScope?.segments[0] === 'ledgers' && !isProjectCardPath(destination.pathname)));
   // WHAT: Reload through the unified entry when a wide viewport enters a canvas-owned route.
   // WHY: Canvas initialization is intentionally desktop-only and must replace the responsive runtime.
@@ -700,7 +702,10 @@ function renderProjects() {
     button.querySelector('code').textContent = `Owned by ${projectOwnerLabel(project)} · ${project.id}`;
     button.setAttribute('aria-label', `${project.name}, ${projectPresenceLabel(project)}`);
     button.disabled = project.remote && !project.online;
-    if (!button.disabled) button.addEventListener('click', () => navigate(projectPath(project.id)));
+    if (!button.disabled) button.addEventListener('click', () => {
+      state.viewedProjectId = project.id;
+      openProjectSettings();
+    });
     return button;
   }));
   setView('projects-view');
@@ -733,13 +738,100 @@ function openProjectSettings() {
   const project = state.projects.find((entry) => entry.id === state.viewedProjectId);
   if (!project) return;
   const values = projectSettingsValues(project);
-  document.querySelector('#project-settings-name').value = values.name;
-  document.querySelector('#project-settings-description').value = values.description;
+  const name = document.querySelector('#project-settings-name');
+  const description = document.querySelector('#project-settings-description');
+  name.value = values.name;
+  description.value = values.description;
+  name.disabled = Boolean(project.remote);
+  description.disabled = Boolean(project.remote);
   projectSettingsColorInput.value = values.color;
+  document.querySelector('.project-settings-color-trigger').disabled = Boolean(project.remote);
+  document.querySelector('.project-settings-save').hidden = Boolean(project.remote);
+  document.querySelector('.project-settings-owner').textContent = `${projectPresenceLabel(project)} · ${project.id}`;
+  const sync = document.querySelector('.project-settings-sync');
+  sync.disabled = !project.originFingerprint || project.online === false;
+  sync.dataset.projectId = project.id;
+  renderProjectSyncStatus(project.id);
   renderProjectSettingsColorField(values.color);
   document.querySelector('.project-settings-error').hidden = true;
   projectSettingsModal.showModal();
-  document.querySelector('#project-settings-name').focus();
+  (project.remote ? sync : name).focus();
+}
+
+function projectSyncRunFor(projectId) {
+  const project = state.projects.find((entry) => entry.id === projectId);
+  if (!project) return null;
+  return state.projectSyncRuns.find((run) => run.sourceNodeId === project.ownerNodeId && run.sourceProjectId === project.localProjectId)
+    || state.projectSyncRuns.find((run) => run.initiatorProjectId === project.localProjectId)
+    || null;
+}
+
+function renderProjectSyncStatus(projectId = state.viewedProjectId) {
+  const status = document.querySelector('.project-settings-sync-status');
+  if (!status) return;
+  const run = projectSyncRunFor(projectId);
+  status.textContent = run
+    ? run.phase === 'failed' ? `Failed · ${run.error?.message || 'Review the run evidence.'}` : `Sync ${run.phase.replaceAll('_', ' ')} · ${run.syncId}`
+    : 'No synchronization has been started from this node.';
+  status.dataset.phase = run?.phase || 'idle';
+  const button = document.querySelector('.project-settings-sync');
+  if (button) button.disabled = Boolean(run && !['complete', 'failed'].includes(run.phase));
+}
+
+function notifyProjectSync(run) {
+  if (!['complete', 'failed'].includes(run.phase)) return;
+  const existing = document.querySelector(`[data-sync-notification="${CSS.escape(run.syncId)}"]`);
+  if (existing) return;
+  const notification = document.createElement('button');
+  notification.type = 'button';
+  notification.className = 'project-sync-notification';
+  notification.dataset.syncNotification = run.syncId;
+  notification.textContent = run.phase === 'complete' ? 'Project synchronization complete.' : `Project synchronization failed: ${run.error?.message || 'Unknown failure.'}`;
+  notification.addEventListener('click', () => {
+    const project = state.projects.find((entry) => entry.localProjectId === run.initiatorProjectId || entry.localProjectId === run.sourceProjectId);
+    if (project) {
+      state.viewedProjectId = project.id;
+      openProjectSettings();
+    }
+    notification.remove();
+  });
+  document.querySelector('.project-sync-notifications').append(notification);
+}
+
+async function refreshProjectSyncRuns() {
+  try {
+    state.projectSyncRuns = await loadProjectSyncRuns(fetch);
+    renderProjectSyncStatus();
+    state.projectSyncRuns.forEach(notifyProjectSync);
+  } catch { /* Connection recovery is driven by the next SSE event or route load. */ }
+}
+
+async function startSelectedProjectSync() {
+  const project = state.projects.find((entry) => entry.id === state.viewedProjectId);
+  if (!project) return;
+  const button = document.querySelector('.project-settings-sync');
+  button.disabled = true;
+  try {
+    const run = await startProjectSyncRequest({ fetchImpl: fetch, sourceProjectId: project.id, idempotencyKey: `${project.id}:${project.originFingerprint}` });
+    state.projectSyncRuns = [run, ...state.projectSyncRuns.filter((entry) => entry.syncId !== run.syncId)];
+    renderProjectSyncStatus(project.id);
+  } catch (error) {
+    const status = document.querySelector('.project-settings-sync-status');
+    status.textContent = error instanceof Error ? error.message : 'Synchronization could not start.';
+    status.dataset.phase = 'failed';
+    button.disabled = false;
+  }
+}
+
+function subscribeProjectSyncEvents() {
+  if (projectSyncEventSource || typeof EventSource === 'undefined') return;
+  projectSyncEventSource = new EventSource('/api/project-sync/events');
+  projectSyncEventSource.addEventListener('project-sync', (event) => {
+    const run = JSON.parse(event.data);
+    state.projectSyncRuns = [run, ...state.projectSyncRuns.filter((entry) => entry.syncId !== run.syncId)];
+    renderProjectSyncStatus();
+    notifyProjectSync(run);
+  });
 }
 
 async function submitProjectSettings() {
@@ -1756,6 +1848,7 @@ document.querySelector('.open-project-button').addEventListener('click', () => {
   navigate(ledgerPathForProject(state.viewedProjectId));
 });
 document.querySelector('.project-settings-button').addEventListener('click', openProjectSettings);
+document.querySelector('.project-settings-sync').addEventListener('click', () => void startSelectedProjectSync());
 document.querySelector('.project-settings-color-trigger').addEventListener('click', openProjectColorPicker);
 document.querySelector('.project-color-picker-cancel').addEventListener('click', closeProjectColorPicker);
 document.querySelector('.project-color-picker-set').addEventListener('click', () => {
@@ -1854,6 +1947,8 @@ window.addEventListener('keydown', async (event) => {
 
 initializeMobileThread();
 initializeMobileCodex();
+subscribeProjectSyncEvents();
+void refreshProjectSyncRuns();
 window.setInterval(() => {
   document.querySelectorAll('.task-stopwatch[data-execution-since]').forEach((stopwatch) => {
     stopwatch.textContent = executionStopwatch(stopwatch.dataset.executionSince);

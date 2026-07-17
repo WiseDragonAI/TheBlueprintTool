@@ -3,7 +3,7 @@
  * WHY: Compact and canvas presentations must consume one semantic URL contract.
  */
 export type RouteScope = {
-  view: 'control-room' | 'projects' | 'project' | 'ledgers' | 'ledger' | 'card' | 'settings' | 'skills' | 'pipelines' | 'unknown';
+  view: 'control-room' | 'projects' | 'projects-canvas' | 'project' | 'ledgers' | 'ledger' | 'card' | 'settings' | 'skills' | 'pipelines' | 'unknown';
   projectId: string;
   ledgerId: string;
   zoneId: string;
@@ -23,6 +23,7 @@ export function routeScope(path: string): RouteScope {
   const empty = { projectId: '', ledgerId: '', zoneId: '', cardId: '' };
   if (route.length === 0) return { view: 'control-room', ...empty };
   if (route[0] === 'projects' && route.length === 1) return { view: 'projects', ...empty };
+  if (route[0] === 'projects-canvas' && route.length === 1) return { view: 'projects-canvas', ...empty };
   if (route[0] === 'projects' && route[1]) return { view: 'project', ...empty, projectId: route[1] };
   if (route[0] === 'ledgers' && route.length === 1) return { view: 'ledgers', ...empty };
   if (route[0] === 'settings') return { view: 'settings', ...empty };

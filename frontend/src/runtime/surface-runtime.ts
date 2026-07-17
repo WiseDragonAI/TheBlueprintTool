@@ -7,7 +7,7 @@ import { loadSurfaceScripts, loadSurfaceStylesheets } from './surface/helper/loa
 
 const scope = routeScope(window.location.pathname);
 const wideCanvas = window.matchMedia?.('(min-width: 761px)').matches !== false;
-const canvasRoute = scope.view === 'projects'
+const canvasRoute = scope.view === 'projects-canvas'
   || Boolean(scope.projectId && ['ledgers', 'ledger'].includes(scope.view));
 
 if (wideCanvas && canvasRoute) {
