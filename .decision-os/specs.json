@@ -10488,7 +10488,7 @@
       "title": "Restore desktop task detail layout and keyboard shortcuts",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "frontend",
         "bug",
