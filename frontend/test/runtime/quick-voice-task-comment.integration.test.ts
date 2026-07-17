@@ -20,7 +20,8 @@ test('quick voice stop queues Codex and returns to the canonical Exec route afte
   const application = source('frontend/src/app/responsive/application.js');
 
   assert.match(thread, /openMobileThread\(currentCard[\s\S]*await startVoiceRecording\(\)/);
-  assert.match(thread, /stopVoiceRecording\(\{ launchMode: quickVoiceCapture \|\| event\.shiftKey \? 'run' : 'send' \}\)/);
+  assert.match(thread, /const selectedLaunchMode = wasQuickVoiceCapture \? 'run' : launchMode;/);
+  assert.match(thread, /stopVoiceRecording\(\{ launchMode: selectedLaunchMode \}\)/);
   assert.match(thread, /await finishQueuedVoiceSubmission\(submitted\)/);
   assert.match(thread, /if \(!submitted\) return;[\s\S]*await onQuickVoiceSubmitted\(\)/);
   assert.doesNotMatch(thread.match(/async function finishQueuedVoiceSubmission\(submitted\) \{[\s\S]*?\n\}/)?.[0] ?? '', /closeMobileThread\(\)/);
