@@ -4,7 +4,7 @@
  */
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { projectIdFromLocation } from '../../project/helper/project-request-scope.js';
-import { requestCardSkillRunStatus, type CardSkillRunSummary } from './request-card-skill-run-status.js';
+import { requestCardSkillRunStatus, type CardSkillRunStatus, type CardSkillRunSummary } from './request-card-skill-run-status.js';
 import { requestCardSkillRunCancel } from './request-card-skill-run-cancel.js';
 import { requestCardSkillRunContinue } from './request-card-skill-run-continue.js';
 import { activeCardCodexRunPreference } from '../helper/card-codex-run-preference.js';
@@ -576,6 +576,8 @@ export function bindCardSkillRunLogConsumer(input: {
   ledgerId: string;
   cardId: string;
   runId: string;
+  expectedExecutionId?: string;
+  expectedStatus?: CardSkillRunStatus;
   consumerId: string;
   onSummary: (summary: CardSkillRunSummary) => void;
 }): void {
@@ -583,7 +585,13 @@ export function bindCardSkillRunLogConsumer(input: {
   const key = pollerKey(identity);
   const consumers = consumersFor(key);
   consumers.set(input.consumerId, input.onSummary);
-  const terminalSummary = terminalSummaries.get(key);
+  const cachedTerminalSummary = terminalSummaries.get(key);
+  const expectedExecutionId = String(input.expectedExecutionId ?? '');
+  const expectsLiveExecution = input.expectedStatus === 'pending' || input.expectedStatus === 'running';
+  const terminalSummaryIsStale = Boolean(cachedTerminalSummary)
+    && ((expectedExecutionId && cachedTerminalSummary?.executionId !== expectedExecutionId) || expectsLiveExecution);
+  if (terminalSummaryIsStale) terminalSummaries.delete(key);
+  const terminalSummary = terminalSummaryIsStale ? undefined : cachedTerminalSummary;
   if (terminalSummary) {
     input.onSummary(terminalSummary);
     return;

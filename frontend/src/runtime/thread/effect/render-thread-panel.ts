@@ -36,6 +36,23 @@ function threadCodexPreference(threadId: string): CardCodexRunPreference {
   return cardCodexRunPreference(card);
 }
 
+function threadCodexHydration(threadId: string): { status: string; active: boolean; queuePosition?: number | null } {
+  const { card } = activeThreadCard(threadId);
+  const summary = state.threadRunSummaryByThreadId?.[threadId] as { ok?: boolean; active?: boolean; status?: string; executionId?: string; queuePosition?: number | null } | undefined;
+  const persistedStatus = String(card?.executionStatus ?? '');
+  const persistedExecutionId = String(card?.codexActiveExecutionId ?? '');
+  const summaryMatchesExecution = !persistedExecutionId || summary?.executionId === persistedExecutionId;
+  if ((persistedStatus === 'pending' || persistedStatus === 'running')
+    && (!summaryMatchesExecution || summary?.status !== persistedStatus)) {
+    return { status: persistedStatus, active: persistedStatus === 'running' };
+  }
+  return {
+    status: summary?.ok === true ? String(summary.status ?? '') : 'unknown',
+    active: summary?.ok === true ? summary.active === true : false,
+    queuePosition: summary?.queuePosition,
+  };
+}
+
 function activeTabState(): Record<string, ThreadPanelTab> {
   if (!state.threadActiveTabByThreadId || typeof state.threadActiveTabByThreadId !== 'object' || Array.isArray(state.threadActiveTabByThreadId)) {
     state.threadActiveTabByThreadId = {};
@@ -106,8 +123,7 @@ function renderThreadActions(threadId: string): void {
       effort.value = threadCodexEffort;
       effort.title = `Effort: ${threadCodexEffort}`;
     }
-    const summary = state.threadRunSummaryByThreadId?.[threadId] as { ok?: boolean; active?: boolean; status?: string; queuePosition?: number | null } | undefined;
-    syncThreadCodexRunControls({ threadId, status: summary?.ok === true ? String(summary.status ?? '') : 'unknown', active: summary?.ok === true ? summary.active === true : false, queuePosition: summary?.queuePosition });
+    syncThreadCodexRunControls({ threadId, ...threadCodexHydration(threadId) });
     return;
   }
   actions.replaceChildren();
@@ -158,8 +174,7 @@ function renderThreadActions(threadId: string): void {
   });
   const effortSelect = effort.querySelector('select') as HTMLSelectElement;
   actions.append(model, effort, button);
-  const summary = state.threadRunSummaryByThreadId?.[threadId] as { ok?: boolean; active?: boolean; status?: string; queuePosition?: number | null } | undefined;
-  syncThreadCodexRunControls({ threadId, status: summary?.ok === true ? String(summary.status ?? '') : 'unknown', active: summary?.ok === true ? summary.active === true : false, queuePosition: summary?.queuePosition });
+  syncThreadCodexRunControls({ threadId, ...threadCodexHydration(threadId) });
 }
 
 function tabButton(tab: ThreadPanelTab): HTMLButtonElement | null {
@@ -221,7 +236,16 @@ function bindActiveThreadRun(threadId: string): void {
   const { cardId, card } = activeThreadCard(threadId);
   const runId = card ? cardCodexRunId(card) : '';
   const ledgerId = String(state.activeTab ?? '').trim();
-  if (ledgerId && cardId && runId) bindThreadCodexRunLog({ ledgerId, cardId, threadId, runId });
+  if (ledgerId && cardId && runId) bindThreadCodexRunLog({
+    ledgerId,
+    cardId,
+    threadId,
+    runId,
+    expectedExecutionId: String(card?.codexActiveExecutionId ?? ''),
+    expectedStatus: String(card?.executionStatus ?? '') === 'pending' ? 'pending'
+      : String(card?.executionStatus ?? '') === 'running' ? 'running'
+        : undefined,
+  });
 }
 
 export function renderThreadPanel(): void {
