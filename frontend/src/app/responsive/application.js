@@ -46,7 +46,8 @@ const elements = Object.fromEntries([
   'zone-list', 'zone-view', 'zone-title', 'zone-summary', 'card-search', 'card-list',
   'no-results', 'card-view', 'card-title', 'card-body', 'control-room-view', 'control-project-filters', 'control-filters',
   'control-task-list', 'control-empty', 'control-diagnostics', 'codex-settings-limit', 'codex-settings-message',
-  'federation-connection-status', 'federation-peer-list', 'federation-settings-message'
+  'federation-connection-status', 'federation-state-duration', 'federation-attempt-timeout', 'federation-last-connection',
+  'federation-last-issue', 'federation-peer-list', 'federation-settings-message'
 ].map((id) => [id, document.getElementById(id)]));
 
 const asText = (value) => value == null ? '' : typeof value === 'string' ? value : JSON.stringify(value, null, 2);
@@ -75,6 +76,9 @@ let controlRoomEventSource = null;
 let controlRoomRefreshTimer = 0;
 let controlRoomEtag = '';
 let cardSearchTimer = 0;
+let federationStatusRefreshTimer = 0;
+let federationStatusClockTimer = 0;
+let latestFederationSettings = null;
 let projectColorPickerOriginal = '';
 let projectColorPickerDirty = false;
 
@@ -164,6 +168,13 @@ function setResourceProject(projectId) {
 function setView(name) {
   for (const id of ['loading-view', 'error-view', 'empty-view', 'projects-view', 'project-detail-view', 'settings-view', 'overview-view', 'control-room-view', 'ledger-view', 'zone-view', 'card-view']) {
     elements[id].hidden = id !== name;
+  }
+  if (name !== 'settings-view') {
+    window.clearTimeout(federationStatusRefreshTimer);
+    window.clearInterval(federationStatusClockTimer);
+    federationStatusRefreshTimer = 0;
+    federationStatusClockTimer = 0;
+    latestFederationSettings = null;
   }
 }
 
@@ -490,15 +501,80 @@ function renderSettings() {
   void loadFederationConnectionSettings();
 }
 
+function compactDuration(milliseconds) {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return hours > 0
+    ? `${hours}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`
+    : `${minutes}m ${String(seconds).padStart(2, '0')}s`;
+}
+
+function elapsedSince(settings, timestamp) {
+  if (!timestamp) return 0;
+  const serverElapsed = Math.max(0, Number(settings.observedAt || Date.now()) - Number(timestamp));
+  return serverElapsed + Math.max(0, Date.now() - Number(settings.receivedAt || Date.now()));
+}
+
+function connectionPhase(settings) {
+  if (settings.connected) return 'connected';
+  if (!settings.configured) return 'not_configured';
+  return ['connecting', 'retrying', 'disconnected'].includes(settings.phase) ? settings.phase : 'connecting';
+}
+
+function renderFederationStatusClock() {
+  const settings = latestFederationSettings;
+  if (!settings) return;
+  const phase = connectionPhase(settings);
+  const status = elements['federation-connection-status'];
+  const label = status.querySelector('strong');
+  const summary = status.querySelector('small');
+  const attempt = Math.max(1, Number(settings.reconnectAttempt || 0) + 1);
+  const phaseStartedAt = phase === 'connected'
+    ? settings.connectedAt
+    : settings.connectionStartedAt || settings.phaseSince;
+  const duration = compactDuration(elapsedSince(settings, phaseStartedAt));
+  const retryIn = settings.nextRetryAt
+    ? compactDuration(Math.max(0, Number(settings.nextRetryAt) - Number(settings.observedAt || Date.now()) - (Date.now() - settings.receivedAt)))
+    : '';
+  const labels = { connected: 'Connected', connecting: 'Connecting', retrying: 'Retrying', disconnected: 'Not connected', not_configured: 'Not configured' };
+  label.textContent = labels[phase];
+  summary.textContent = phase === 'connected'
+    ? `Online for ${duration}`
+    : phase === 'connecting'
+      ? `Attempt ${attempt} · ${duration}`
+      : phase === 'retrying'
+        ? `Attempt ${attempt}${retryIn ? ` · retry in ${retryIn}` : ''}`
+        : phase === 'not_configured' ? 'Connection settings required' : `Offline for ${duration}`;
+  status.dataset.state = phase;
+  elements['federation-state-duration'].textContent = phase === 'connected'
+    ? `Connected for ${duration}`
+    : phase === 'retrying'
+      ? `Retrying for ${duration}${retryIn ? `; next attempt in ${retryIn}` : ''}`
+      : phase === 'connecting'
+        ? `Connecting for ${duration}`
+        : phase === 'not_configured' ? 'Not configured' : `Disconnected for ${duration}`;
+}
+
 function renderFederationConnection(settings) {
+  settings.receivedAt = Date.now();
+  latestFederationSettings = settings;
   const form = document.querySelector('.federation-settings-form');
   form.elements.relayUrl.value = settings.relayUrl || '';
   form.elements.federationId.value = settings.federationId || '';
   form.elements.nodeId.value = settings.nodeId || '';
   form.elements.nodeLabel.value = settings.nodeLabel || '';
   form.elements.nodeCredential.value = '';
-  elements['federation-connection-status'].textContent = settings.connected ? 'Connected' : settings.configured ? 'Connecting' : 'Not configured';
-  elements['federation-connection-status'].dataset.connected = String(Boolean(settings.connected));
+  renderFederationStatusClock();
+  elements['federation-attempt-timeout'].textContent = settings.connectTimeoutMs
+    ? `${Math.round(settings.connectTimeoutMs / 1000)} seconds per attempt`
+    : 'Not reported by this server';
+  elements['federation-last-connection'].textContent = settings.lastConnectedAt
+    ? new Date(settings.lastConnectedAt).toLocaleString()
+    : 'Never connected since server start';
+  const close = settings.lastCloseCode ? ` (code ${settings.lastCloseCode}${settings.lastCloseReason ? `: ${settings.lastCloseReason}` : ''})` : '';
+  elements['federation-last-issue'].textContent = settings.lastError ? `${settings.lastError}${close}` : 'None';
   elements['federation-peer-list'].replaceChildren(...(settings.peers || []).map((peer) => {
     const row = document.createElement('div');
     row.className = 'federation-peer';
@@ -513,12 +589,21 @@ function renderFederationConnection(settings) {
 }
 
 async function loadFederationConnectionSettings() {
+  window.clearTimeout(federationStatusRefreshTimer);
   elements['federation-settings-message'].textContent = 'Loading…';
   try {
     renderFederationConnection(await loadFederationSettings(fetch));
     elements['federation-settings-message'].textContent = '';
+    if (!federationStatusClockTimer) federationStatusClockTimer = window.setInterval(renderFederationStatusClock, 1000);
+    const refreshDelay = latestFederationSettings?.connected ? 10_000 : 2_000;
+    federationStatusRefreshTimer = window.setTimeout(() => {
+      if (!elements['settings-view'].hidden) void loadFederationConnectionSettings();
+    }, refreshDelay);
   } catch (error) {
     elements['federation-settings-message'].textContent = error instanceof Error ? error.message : 'Could not load federation settings.';
+    federationStatusRefreshTimer = window.setTimeout(() => {
+      if (!elements['settings-view'].hidden) void loadFederationConnectionSettings();
+    }, 5_000);
   }
 }
 

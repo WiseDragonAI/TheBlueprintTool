@@ -48,6 +48,9 @@ const protocolVersion = 1;
 const chunkBytes = 64 * 1024;
 const creditWindowBytes = 1024 * 1024;
 const maximumBodyBytes = 25 * 1024 * 1024;
+const connectTimeoutMs = 10_000;
+
+type FederationConnectionPhase = 'not_configured' | 'connecting' | 'retrying' | 'connected' | 'disconnected';
 
 function configuredSettings(value: unknown): FederationSettings | null {
   const settings = value && typeof value === 'object' ? value as Record<string, unknown> : {};
@@ -130,9 +133,30 @@ export function createFederationNodeConnector(input: {
   const remoteNodes = new Map<string, { nodeLabel: string; online: boolean; projects: ProjectManifest[] }>();
   let socket: WebSocket | null = null;
   let reconnectTimer: NodeJS.Timeout | null = null;
+  let connectTimer: NodeJS.Timeout | null = null;
   let stopped = false;
   let reconnectAttempt = 0;
   let messageQueue = Promise.resolve();
+  let phase: FederationConnectionPhase = settings ? 'disconnected' : 'not_configured';
+  let phaseSince = Date.now();
+  let connectionStartedAt: number | null = null;
+  let connectedAt: number | null = null;
+  let lastConnectedAt: number | null = null;
+  let lastDisconnectedAt: number | null = null;
+  let nextRetryAt: number | null = null;
+  let lastError = '';
+  let lastCloseCode: number | null = null;
+  let lastCloseReason = '';
+
+  const setPhase = (value: FederationConnectionPhase): void => {
+    if (phase !== value) phaseSince = Date.now();
+    phase = value;
+  };
+
+  const clearConnectTimer = (): void => {
+    if (connectTimer) clearTimeout(connectTimer);
+    connectTimer = null;
+  };
 
   const send = (frame: RelayFrame): void => {
     if (!socket || socket.readyState !== WebSocket.OPEN) throw new Error('Federation relay is offline.');
@@ -316,10 +340,28 @@ export function createFederationNodeConnector(input: {
 
   const connect = (): void => {
     if (!settings || stopped) return;
+    nextRetryAt = null;
+    if (connectionStartedAt === null) connectionStartedAt = Date.now();
+    setPhase(reconnectAttempt > 0 ? 'retrying' : 'connecting');
     const active = new WebSocket(webSocketUrl(settings), { headers: { authorization: `Bearer ${settings.nodeCredential}` } });
     socket = active;
+    connectTimer = setTimeout(() => {
+      if (socket !== active || active.readyState === WebSocket.OPEN) return;
+      lastError = `Relay connection attempt timed out after ${connectTimeoutMs / 1_000} seconds.`;
+      active.terminate();
+    }, connectTimeoutMs);
+    connectTimer.unref?.();
     active.addEventListener('open', () => {
+      clearConnectTimer();
       reconnectAttempt = 0;
+      connectedAt = Date.now();
+      lastConnectedAt = connectedAt;
+      connectionStartedAt = null;
+      nextRetryAt = null;
+      lastError = '';
+      lastCloseCode = null;
+      lastCloseReason = '';
+      setPhase('connected');
       send({ version: 1, type: 'manifest', nodeLabel: settings?.nodeLabel, projects: manifest() });
     });
     active.addEventListener('message', (event) => {
@@ -332,26 +374,53 @@ export function createFederationNodeConnector(input: {
         await handleFrame(JSON.parse(text) as RelayFrame);
       }).catch(() => undefined);
     });
-    active.addEventListener('error', () => undefined);
-    active.addEventListener('close', () => {
+    active.addEventListener('error', (event) => {
+      const error = 'error' in event && event.error instanceof Error ? event.error.message : '';
+      if (error) lastError = error;
+    });
+    active.addEventListener('close', (event) => {
       if (socket !== active) return;
+      clearConnectTimer();
       socket = null;
+      connectedAt = null;
+      lastDisconnectedAt = Date.now();
+      lastCloseCode = event.code;
+      lastCloseReason = event.reason;
+      if (event.code === 4001) lastError = 'Another server connected with this node ID. Each running server needs a unique node identity.';
+      else if (!lastError && event.reason) lastError = event.reason;
       for (const requestId of requesterStreams.keys()) failRequester(requestId, 502, 'federation_outcome_unknown', 'Relay disconnected before the owner response completed.');
       for (const stream of remoteNodes.values()) stream.online = false;
       if (!stopped) {
         const delay = Math.min(30_000, 1_000 * 2 ** reconnectAttempt) * (0.75 + Math.random() * 0.5);
         reconnectAttempt += 1;
+        nextRetryAt = Date.now() + delay;
+        setPhase('retrying');
         reconnectTimer = setTimeout(connect, delay);
         reconnectTimer.unref?.();
+      } else {
+        setPhase(settings ? 'disconnected' : 'not_configured');
       }
     });
   };
 
   return {
     get configured(): boolean { return Boolean(settings); },
-    status(): { configured: boolean; connected: boolean; socketState: number | null; relayUrl: string; federationId: string; nodeId: string; nodeLabel: string; credentialConfigured: boolean; peers: Array<{ nodeId: string; nodeLabel: string; online: boolean; projectCount: number }> } {
+    status() {
       return {
         configured: Boolean(settings), connected: socket?.readyState === WebSocket.OPEN, socketState: socket?.readyState ?? null,
+        phase,
+        observedAt: Date.now(),
+        phaseSince,
+        connectionStartedAt,
+        connectedAt,
+        lastConnectedAt,
+        lastDisconnectedAt,
+        reconnectAttempt,
+        nextRetryAt,
+        connectTimeoutMs,
+        lastError,
+        lastCloseCode,
+        lastCloseReason,
         relayUrl: settings?.relayUrl ?? '', federationId: settings?.federationId ?? '', nodeId: settings?.nodeId ?? '', nodeLabel: settings?.nodeLabel ?? '', credentialConfigured: Boolean(settings?.nodeCredential),
         peers: [...remoteNodes].map(([nodeId, node]) => ({ nodeId, nodeLabel: node.nodeLabel, online: node.online, projectCount: node.projects.length })),
       };
@@ -360,17 +429,28 @@ export function createFederationNodeConnector(input: {
     stop(): void {
       stopped = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+      clearConnectTimer();
       for (const requestId of requesterStreams.keys()) failRequester(requestId, 502, 'federation_reconfigured', 'Federation connection was reconfigured.');
       for (const stream of ownerStreams.values()) stream.abort.abort();
       ownerStreams.clear();
       socket?.close(1000, 'server_stopped');
       socket = null;
+      connectedAt = null;
+      nextRetryAt = null;
+      connectionStartedAt = null;
       remoteNodes.clear();
+      setPhase(settings ? 'disconnected' : 'not_configured');
     },
     reconfigure(value: unknown): void {
       this.stop();
       settings = configuredSettings(value);
       stopped = false;
+      reconnectAttempt = 0;
+      lastError = '';
+      lastCloseCode = null;
+      lastCloseReason = '';
+      setPhase(settings ? 'disconnected' : 'not_configured');
       connect();
     },
     publishManifest(): void {
