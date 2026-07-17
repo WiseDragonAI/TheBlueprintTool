@@ -129,6 +129,9 @@ export async function startPipelineRun(input: {
     });
   }
   const sharedSchedule = input.runtime.scheduleCodexProcesses;
+  if (run.executionMode === 'federated') {
+    return { ok: true, statusCode: 202, run, skillRun: null, queuePosition: null, maxConcurrentCodexProcesses: 0 };
+  }
   const schedule = typeof sharedSchedule === 'function'
     ? await sharedSchedule()
     : await scheduleCodexProcesses({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime });
@@ -182,6 +185,20 @@ export async function startTemporaryPipelineRun(input: {
         updatedAt: now,
       }],
     },
+  });
+}
+
+export async function startFederatedPipelineRun(input: {
+  decisionOsRoot: string;
+  runtime: AnyRecord;
+  ledgerId: string;
+  sourceCardId: string;
+  definition: PipelineDefinition;
+  onLedgerChange?: unknown;
+}): Promise<AnyRecord> {
+  return startPipelineRun({
+    ...input,
+    definition: { ...input.definition, executionMode: 'federated' },
   });
 }
 

@@ -7,6 +7,7 @@ import { resolve } from 'node:path';
 import type { CodexPipeline, CodexPipelineStep, CodexPipelineStoreNormalization } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import { pipelineStoreFile, readCodexPipelineStore, writeCodexPipelineStore } from './codex-pipeline-store.js';
 import { runtimeServerRoot } from './server-skill-context.js';
+import { projectSynchronizationPipelineDefinition } from '../../project-sync/helper/project-sync-pipeline-definition.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -113,4 +114,29 @@ export function migrateLegacyProjectPipelines(input: {
     store: { ...server.store, pipelines, steps },
   });
   return { migratedPipelineIds, retainedCollisionIds };
+}
+
+export function ensureServerPipelines(input: {
+  serverDecisionOsRoot: string;
+  availableSkillNames?: Iterable<string>;
+}): { createdPipelineIds: string[] } {
+  const normalized = readCodexPipelineStore({
+    decisionOsRoot: input.serverDecisionOsRoot,
+    availableSkillNames: input.availableSkillNames,
+  });
+  const builtIn = projectSynchronizationPipelineDefinition();
+  if (normalized.store.pipelines.some((pipeline) => pipeline.id === builtIn.pipeline.id)) {
+    return { createdPipelineIds: [] };
+  }
+  const existingStepIds = new Set(normalized.store.steps.map((step) => step.id));
+  writeCodexPipelineStore({
+    decisionOsRoot: input.serverDecisionOsRoot,
+    availableSkillNames: input.availableSkillNames,
+    store: {
+      ...normalized.store,
+      pipelines: [...normalized.store.pipelines, builtIn.pipeline],
+      steps: [...normalized.store.steps, ...builtIn.steps.filter((step) => !existingStepIds.has(step.id))],
+    },
+  });
+  return { createdPipelineIds: [builtIn.pipeline.id] };
 }

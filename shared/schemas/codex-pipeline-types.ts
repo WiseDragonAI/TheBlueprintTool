@@ -61,6 +61,12 @@ export type CodexPipelineRunSkill = {
   readonly startedAt: string | null;
   readonly finishedAt: string | null;
   readonly error: string;
+  readonly executor?: {
+    readonly kind: 'federated';
+    readonly nodeId: string;
+    readonly projectId: string;
+    readonly role: string;
+  };
 };
 
 export type CodexPipelineRunStep = {
@@ -81,6 +87,7 @@ export type CodexPipelineRun = {
   readonly pipelineId: string | null;
   readonly pipelineName: string;
   readonly temporary: boolean;
+  readonly executionMode?: 'local' | 'federated';
   readonly ledgerId: string;
   readonly sourceCardId: string;
   readonly sourceCardTitle: string;

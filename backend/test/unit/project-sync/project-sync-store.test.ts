@@ -27,6 +27,12 @@ test('persists symmetric participants, deduplicates active origins, and restores
     assert.equal(restored?.initiatorNodeId, 'node-a');
     assert.equal(restored?.sourceNodeId, 'node-b');
     assert.equal(restored?.phase, 'preflight');
+    const sameRequest = createProjectSyncStore({ decisionOsRoot: root }).admit({
+      idempotencyKey: 'request-a', initiatorNodeId: 'node-a', sourceNodeId: 'node-b',
+      initiatorProjectId: '', sourceProjectId: 'project-b', originFingerprint: 'f'.repeat(64),
+    });
+    assert.equal(sameRequest.duplicate, true);
+    assert.equal(sameRequest.run.syncId, first.run.syncId);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

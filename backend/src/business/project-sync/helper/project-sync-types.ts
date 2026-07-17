@@ -21,6 +21,10 @@ export type ProjectSyncRun = {
   initiatorProjectId: string;
   sourceProjectId: string;
   originFingerprint: string;
+  taskProjectId: string;
+  ledgerId: string;
+  masterCardId: string;
+  pipelineRunId: string;
   phase: ProjectSyncPhase;
   createdAt: string;
   updatedAt: string;

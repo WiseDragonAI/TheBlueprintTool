@@ -462,11 +462,7 @@ body:has(.new-task-project-modal[open]) { overflow: hidden; }
 .project-settings-owner { margin: 4px 0 0; }
 .project-settings-sync-panel { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-deep); }
 .project-settings-sync-panel h3, .project-settings-sync-panel p { margin: 0; }
-.project-settings-sync-status { overflow-wrap: anywhere; font-size: 13px; }
-.project-settings-sync-status[data-phase="failed"] { color: var(--danger); }
 .project-settings-sync { justify-self: start; }
-.project-sync-notifications { position: fixed; z-index: 40; right: 18px; bottom: 18px; display: grid; width: min(380px, calc(100vw - 36px)); gap: 10px; }
-.project-sync-notification { padding: 14px 16px; border-color: var(--accent); color: var(--text); background: var(--panel); box-shadow: 0 12px 30px #0009; text-align: left; }
 .project-settings-cancel { min-height: 44px; padding: 0 16px; }
 .project-settings-color-trigger { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 7px 12px; text-align: left; }
 .project-settings-color-swatch { width: 34px; height: 34px; border: 1px solid rgba(255,255,255,.48); border-radius: 3px; background: var(--project-settings-color, var(--accent)); box-shadow: inset 0 0 0 2px rgba(0,0,0,.3); }

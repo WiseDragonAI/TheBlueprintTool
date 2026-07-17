@@ -648,7 +648,7 @@ export function scheduleCodexPipelineRuns(input: {
     const runs = input.runtime.codexSkillRuns && typeof input.runtime.codexSkillRuns === 'object' ? input.runtime.codexSkillRuns as Record<string, AnyRecord> : {};
     const running = Object.values(runs).filter((run) => run.status === 'running').length;
     if (running >= capacity) break;
-    const next = store.runs.find((run) => run.status === 'pending');
+    const next = store.runs.find((run) => run.status === 'pending' && run.executionMode !== 'federated');
     if (!next) break;
     const launch = runNextPipelineSkill({
       decisionOsRoot: input.decisionOsRoot,
@@ -664,6 +664,151 @@ export function scheduleCodexPipelineRuns(input: {
     queuedRunIds: finalStore.runs.filter((run) => run.status === 'pending').map((run) => run.id),
     capacity,
   };
+}
+
+export async function executeFederatedPipelineSkill(input: {
+  decisionOsRoot: string;
+  runtime: AnyRecord;
+  pipelineRunId: string;
+  executor: NonNullable<CodexPipelineRunSkill['executor']>;
+  execute: (skill: CodexPipelineRunSkill) => Promise<Record<string, unknown>>;
+}): Promise<{ run: CodexPipelineRun; skill: CodexPipelineRunSkill; result: Record<string, unknown> }> {
+  const current = reassessPipelineAfterSkill({
+    decisionOsRoot: input.decisionOsRoot,
+    runtime: input.runtime,
+    pipelineRunId: input.pipelineRunId,
+  });
+  if (!current || current.executionMode !== 'federated') throw new Error('Federated pipeline run not found.');
+  const next = findNextSkill(current);
+  if (!next) throw new Error('Federated pipeline has no pending skill.');
+  const targetedStore = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot });
+  writeCodexPipelineStore({
+    decisionOsRoot: input.decisionOsRoot,
+    store: {
+      ...targetedStore.store,
+      runs: targetedStore.store.runs.map((run) => run.id !== current.id ? run : {
+        ...run,
+        steps: run.steps.map((step) => ({
+          ...step,
+          skills: step.skills.map((skill) => skill.runId === next.skill.runId ? { ...skill, executor: input.executor } : skill),
+        })),
+      }),
+    },
+  });
+  const startedAt = new Date().toISOString();
+  const started = markPipelineSkillStarted({
+    decisionOsRoot: input.decisionOsRoot,
+    pipelineRunId: current.id,
+    skillRunId: next.skill.runId,
+    startedAt,
+  });
+  if (!started) throw new Error('Federated pipeline skill could not be started.');
+  const step = started.steps.find((entry) => entry.id === next.step.id)!;
+  const skill = step.skills.find((entry) => entry.runId === next.skill.runId)!;
+  const context = resolvePipelineLedgerContext({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, ledgerId: started.ledgerId });
+  if (!context) throw new Error('Federated pipeline ledger could not be loaded.');
+  projectPipelineSkillRun({ decisionOsRoot: input.decisionOsRoot, context, step, skill, pipelineRun: started });
+  mkdirSync(dirname(skill.stdoutFile), { recursive: true });
+  const outputFile = outputFileForCard(context, input.decisionOsRoot, step.outputCardId);
+  try {
+    const result = await input.execute(skill);
+    writeFileSync(skill.stdoutFile, `${JSON.stringify(result)}\n`, 'utf8');
+    if (outputFile) appendRunStatus(outputFile, 'complete', `federated executor ${String(result.executorNodeId ?? 'local')}`);
+    const run = reassessPipelineAfterSkill({
+      decisionOsRoot: input.decisionOsRoot,
+      runtime: input.runtime,
+      pipelineRunId: started.id,
+      skillRunId: skill.runId,
+      settledStatus: 'complete',
+    });
+    if (!run) throw new Error('Federated pipeline completion could not be persisted.');
+    return { run, skill, result };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    writeFileSync(skill.stderrFile, `${message}\n`, 'utf8');
+    if (outputFile) appendRunStatus(outputFile, 'failed', message);
+    reassessPipelineAfterSkill({
+      decisionOsRoot: input.decisionOsRoot,
+      runtime: input.runtime,
+      pipelineRunId: started.id,
+      skillRunId: skill.runId,
+      settledStatus: 'failed',
+      error: message,
+    });
+    throw error;
+  }
+}
+
+function nestedJsonObjects(value: unknown): Record<string, unknown>[] {
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? [parsed as Record<string, unknown>, ...nestedJsonObjects(parsed)]
+        : [];
+    } catch {
+      return [];
+    }
+  }
+  if (Array.isArray(value)) return value.flatMap(nestedJsonObjects);
+  if (value && typeof value === 'object') return Object.values(value as Record<string, unknown>).flatMap(nestedJsonObjects);
+  return [];
+}
+
+export async function executePipelineSkillInWorkspace(input: {
+  workspaceRoot: string;
+  decisionOsRoot: string;
+  runtime: AnyRecord;
+  skillName: string;
+  skillRunId: string;
+  ledgerFile: string;
+  context: AnyRecord;
+}): Promise<{ codexRunId: string; result: Record<string, unknown> }> {
+  const serverSkill = resolveServerSkillContext({
+    decisionOsRoot: input.decisionOsRoot,
+    runtime: input.runtime,
+    skillName: input.skillName,
+  });
+  if (!serverSkill) throw new Error(`Server pipeline skill is unavailable: ${input.skillName}.`);
+  const command = resolveCodexCommand({ workspaceRoot: input.workspaceRoot, runtime: input.runtime });
+  const prompt = [
+    serverSkill.markdown,
+    '',
+    '## Injected execution context',
+    '',
+    'Execute this pipeline step in the current repository. Treat this JSON as authoritative runtime input:',
+    JSON.stringify(input.context, null, 2),
+  ].join('\n');
+  const acquire = input.runtime.acquireProjectSyncCodexSlot;
+  const release = typeof acquire === 'function' ? await (acquire as () => Promise<() => void>)() : () => undefined;
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn(command.command, command.args, {
+      cwd: input.workspaceRoot,
+      env: decisionOsCodexEnvironment({ runtime: input.runtime, decisionOsRoot: input.decisionOsRoot, ledgerFile: input.ledgerFile }),
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.once('error', (error) => { release(); reject(error); });
+    child.once('close', (code) => {
+      release();
+      if (code !== 0) return reject(new Error(`Pipeline skill ${input.skillName} exited with code ${code}: ${stderr.trim() || 'no diagnostic'}`));
+      const candidates = stdout.split('\n').filter(Boolean).flatMap((line) => {
+        try { return nestedJsonObjects(JSON.parse(line)); } catch { return nestedJsonObjects(line); }
+      });
+      const result = candidates.reverse().find((entry) => 'status' in entry && ('headSha' in entry || 'blocker' in entry));
+      if (!result) return reject(new Error(`Pipeline skill ${input.skillName} did not return the required JSON evidence.`));
+      if (!['complete', 'completed'].includes(String(result.status ?? '').toLowerCase())) {
+        return reject(new Error(String(result.blocker ?? `Pipeline skill ${input.skillName} did not complete.`)));
+      }
+      resolvePromise({ codexRunId: input.skillRunId, result });
+    });
+    child.stdin.end(prompt);
+  });
 }
 
 export function pipelineRunLogAvailability(skill: CodexPipelineRunSkill): {

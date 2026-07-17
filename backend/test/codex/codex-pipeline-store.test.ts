@@ -8,8 +8,8 @@ import {
   pipelineStoreFile,
   readCodexPipelineStore,
   writeCodexPipelineStore,
-} from '@backend/business/codex/helper/codex-pipeline-store.js';
-import { migrateLegacyProjectPipelines, readScopedCodexPipelineStores } from '@backend/business/codex/helper/server-pipeline-catalog.js';
+} from '../../src/business/codex/helper/codex-pipeline-store.js';
+import { ensureServerPipelines, migrateLegacyProjectPipelines, readScopedCodexPipelineStores } from '../../src/business/codex/helper/server-pipeline-catalog.js';
 
 function pipelineFixture(id: string, stepId: string, name = id): Record<string, unknown> {
   return {
@@ -89,6 +89,33 @@ test('pipeline store starts empty and preserves ordered reusable definitions acr
     assert.deepEqual(loaded.store.skillLibrary[0].tags, ['Research']);
     assert.equal(loaded.invalidReferences.length, 0);
     assert.equal(readFileSync(pipelineStoreFile(decisionOsRoot), 'utf8').includes(workspace), false);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('server catalog seeds the synchronization pipeline once and preserves operator edits', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-server-pipeline-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  const skills = ['project-sync-source-publisher', 'project-sync-initiator-reconciler', 'project-sync-source-finalizer'];
+  try {
+    assert.deepEqual(ensureServerPipelines({ serverDecisionOsRoot: decisionOsRoot, availableSkillNames: skills }).createdPipelineIds, ['project-synchronization']);
+    const seeded = readCodexPipelineStore({ decisionOsRoot, availableSkillNames: skills });
+    assert.deepEqual(seeded.store.pipelines[0].stepIds, [
+      'project-synchronization-source-publish',
+      'project-synchronization-initiator-reconcile',
+      'project-synchronization-source-finalize',
+    ]);
+    writeCodexPipelineStore({
+      decisionOsRoot,
+      availableSkillNames: skills,
+      store: {
+        ...seeded.store,
+        pipelines: seeded.store.pipelines.map((pipeline) => pipeline.id === 'project-synchronization' ? { ...pipeline, name: 'Operator synchronization' } : pipeline),
+      },
+    });
+    assert.deepEqual(ensureServerPipelines({ serverDecisionOsRoot: decisionOsRoot, availableSkillNames: skills }).createdPipelineIds, []);
+    assert.equal(readCodexPipelineStore({ decisionOsRoot, availableSkillNames: skills }).store.pipelines[0].name, 'Operator synchronization');
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }
