@@ -92,15 +92,17 @@ function renderProcessList() {
   renderLibraryFilters(records, renderProcessList);
   const visible = filteredRecords(records);
   list.replaceChildren(...visible.map((record) => {
+    const card = document.createElement('article'); card.className = 'codex-list-card';
+    card.style.setProperty('--skill-category-color', colorForSkillTag(recordTags(record)[0] || 'Uncategorized'));
     const node = button('', 'codex-list-item', () => { void renderProcessDetail(record); });
-    if (state.processTab === 'skills') { node.replaceChildren(...renderSkillLibraryItemContent(record)); return node; }
+    if (state.processTab === 'skills') { node.replaceChildren(...renderSkillLibraryItemContent(record)); card.append(node); return card; }
     const title = document.createElement('strong'); title.textContent = record.name;
     const detail = document.createElement('span');
     detail.textContent = state.processTab === 'skills' ? (record.description || `${record.source} skill`) : (record.purpose || `${record.stepIds.length} steps`);
     const labels = document.createElement('span'); labels.className = 'codex-list-labels';
     for (const project of recordProjects(record)) { const label = document.createElement('small'); label.className = 'project-record-label'; label.textContent = project.name; label.style.setProperty('--project-color', project.color); labels.append(label); }
     for (const category of recordTags(record)) { const label = document.createElement('small'); label.textContent = category; decorateSkillCategoryLabel(label, category); labels.append(label); }
-    node.append(title, detail, labels); return node;
+    node.append(title, detail, labels); card.append(node); return card;
   }));
   message('.process-message', visible.length ? `${visible.length} ${state.processTab}` : records.length ? `No matching ${state.processTab}.` : `No ${state.processTab} are available.`);
 }
@@ -137,6 +139,7 @@ function renderSkillReferences(references) {
       state.selectedReference = state.selectedReference === reference.name ? '' : reference.name;
       section.replaceWith(renderSkillReferences(references));
     });
+    toggle.setAttribute('aria-label', reference.name);
     const expanded = state.selectedReference === reference.name;
     toggle.setAttribute('aria-expanded', String(expanded));
     card.append(toggle);
@@ -427,7 +430,7 @@ export function initializeMobileCodex() {
   el('.pipeline-editor-form').addEventListener('submit', (event) => { event.preventDefault(); void saveEditor(); }); el('.skill-picker-back').addEventListener('click', closePicker);
 }
 import { projectScopedRequestPath } from '/src/runtime/project/helper/project-request-scope.js';
-import { decorateSkillCategoryLabel, skillInstructionMarkdown, sortSkillsByFavorite, tagsForSkill } from '/src/runtime/codex/helper/skill-library-presentation.js';
+import { colorForSkillTag, decorateSkillCategoryLabel, skillInstructionMarkdown, sortSkillsByFavorite, tagsForSkill } from '/src/runtime/codex/helper/skill-library-presentation.js';
 import { skillCategories } from '/src/runtime/codex/helper/skill-category.js';
 import { renderSkillLibraryItemContent } from '/src/runtime/codex/component/render-skill-library-item-content.js';
 import { renderLedgerCardMarkdown } from '/src/runtime/ledger/component/render-ledger-card-markdown.js';
