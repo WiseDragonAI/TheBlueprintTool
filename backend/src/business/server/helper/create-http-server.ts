@@ -57,6 +57,7 @@ import { ensureDecisionOsMemoryStore } from './ensure-decision-os-memory-store.j
 import { createControlRoomProjectionStore } from './control-room-projection-store.js';
 import { ledgerCanvasProjection, ledgerCardProjection, ledgerNavigationProjection, ledgerSearchProjection, ledgerThreadProjection } from './ledger-read-models.js';
 import { ensureProjectsCanvasDocument } from './ensure-projects-canvas-document.js';
+import { createFederationNodeConnector } from '../../federation/helper/federation-node-connector.js';
 
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
@@ -333,6 +334,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   };
   const projectCatalogStore = createProjectCatalogStore({ masterRoot, masterDecisionOsRoot });
   const projectCatalog = () => projectCatalogStore.projects();
+  let federationServerPort = port;
+  const federation = createFederationNodeConnector({
+    settings: runtime.decisionOsSettings,
+    localProjects: projectCatalog,
+    localServerUrl: () => `http://127.0.0.1:${federationServerPort}`,
+  });
+  Object.defineProperty(runtime, 'federationNodeConnector', { value: federation, configurable: true, enumerable: false });
   controlRoomProjectionStore = createControlRoomProjectionStore({
     cacheFile: resolve(masterDecisionOsRoot, 'cache', 'control-room-v3.json'),
     runtimeForRoot: (root) => projectContexts.get(root)?.runtime ?? {},
@@ -368,6 +376,19 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.statusCode = 400;
       response.setHeader('content-type', 'application/json');
       response.end(JSON.stringify({ ok: false, error: 'Malformed project URL.' }));
+      return;
+    }
+    if (projectScope && projectScope.projectId.includes(':')) {
+      const separator = projectScope.projectId.indexOf(':');
+      const ownerNodeId = projectScope.projectId.slice(0, separator);
+      const localProjectId = projectScope.projectId.slice(separator + 1);
+      if (!ownerNodeId || !localProjectId) {
+        response.statusCode = 404;
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ ok: false, error: 'owner_or_project_unknown' }));
+        return;
+      }
+      await federation.proxy(request, response, ownerNodeId, localProjectId, projectScope.scopedPath);
       return;
     }
     const url = projectScope && isProjectSensitiveEndpoint(projectScope.scopedPath) ? projectScope.scopedPath : requestPath;
@@ -515,7 +536,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     }
     if (url === '/decision-os/projects' && request.method === 'GET') {
       response.setHeader('content-type', 'application/json');
-      response.end(JSON.stringify({ projects }));
+      response.end(JSON.stringify({ projects: [...projects, ...federation.remoteProjects()] }));
       return;
     }
     if (url === '/decision-os/projects-canvas' && request.method === 'GET') {
@@ -580,6 +601,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         const project = typeof body.path === 'string'
           ? projectCatalogStore.register(body.path)
           : projectCatalogStore.create(String(body.name ?? ''), String(body.description ?? ''));
+        federation.publishManifest();
         controlRoomProjectionStore?.invalidate();
         reconcileProjectRuntimes();
         response.statusCode = 201;
@@ -1290,6 +1312,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       context.clients.clear();
     }
     globalContentEventClients.clear();
+    federation.stop();
+  });
+  server.on('listening', () => {
+    const address = server.address();
+    if (address && typeof address === 'object') federationServerPort = address.port;
+    federation.start();
   });
   server.listen(port, String(payload.host ?? '127.0.0.1'));
   runtime.server = server;
