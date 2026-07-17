@@ -6,6 +6,7 @@ import type { CodexSkillSummary } from './load-codex-skills.js';
 
 export type CodexSkillLibraryDetail = CodexSkillSummary & {
   markdown: string;
+  references: Array<{ name: string; markdown: string }>;
 };
 
 export type CodexSkillLibraryLoadResult = {

@@ -4,7 +4,8 @@
  */
 const modelOptions = ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.2'];
 const effortOptions = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
-const state = { projectId: '', projects: [], ledgerId: '', cardId: '', skills: [], serverSkills: [], availableTags: [], tagSaving: false, pipelines: [], steps: [], processTab: 'skills', libraryScope: 'project', query: '', projectFilter: 'All', tagFilter: 'All', selected: null, editor: null, pickerStepId: '' };
+const state = { projectId: '', projects: [], ledgerId: '', cardId: '', skills: [], serverSkills: [], skillDetails: new Map(), selectedReference: '', availableTags: [], tagSaving: false, pipelines: [], steps: [], processTab: 'skills', libraryScope: 'project', query: '', projectFilter: 'All', tagFilter: 'All', selected: null, editor: null, pickerStepId: '' };
+let processDetailGeneration = 0;
 const el = (selector) => document.querySelector(selector);
 const uid = (prefix) => `${prefix}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
 const message = (selector, text, bad = false) => { const node = el(selector); node.textContent = text; node.classList.toggle('error', bad); };
@@ -91,7 +92,7 @@ function renderProcessList() {
   renderLibraryFilters(records, renderProcessList);
   const visible = filteredRecords(records);
   list.replaceChildren(...visible.map((record) => {
-    const node = button('', 'codex-list-item', () => renderProcessDetail(record));
+    const node = button('', 'codex-list-item', () => { void renderProcessDetail(record); });
     if (state.processTab === 'skills') { node.replaceChildren(...renderSkillLibraryItemContent(record)); return node; }
     const title = document.createElement('strong'); title.textContent = record.name;
     const detail = document.createElement('span');
@@ -120,8 +121,66 @@ function renderSkillTagChoices(record) {
   fieldset.append(legend, choices);
   return fieldset;
 }
-function renderProcessDetail(record) {
+function renderSkillDocument(skill) {
+  const section = document.createElement('section'); section.className = 'skill-markdown-section';
+  const heading = document.createElement('h4'); heading.textContent = 'SKILL.md';
+  section.append(heading, renderLedgerCardMarkdown(skillInstructionMarkdown(skill.markdown)));
+  return section;
+}
+function renderSkillReferences(references) {
+  const section = document.createElement('section'); section.className = 'skill-reference-map';
+  const heading = document.createElement('h4'); heading.textContent = 'Related references';
+  const cards = document.createElement('div'); cards.className = 'skill-reference-cards';
+  for (const reference of references) {
+    const card = document.createElement('article'); card.className = 'skill-reference-card';
+    const toggle = button(reference.name, 'skill-reference-toggle', () => {
+      state.selectedReference = state.selectedReference === reference.name ? '' : reference.name;
+      section.replaceWith(renderSkillReferences(references));
+    });
+    const expanded = state.selectedReference === reference.name;
+    toggle.setAttribute('aria-expanded', String(expanded));
+    card.append(toggle);
+    if (expanded) {
+      const content = renderLedgerCardMarkdown(reference.markdown); content.classList.add('skill-reference-content');
+      card.append(content);
+    }
+    cards.append(card);
+  }
+  section.append(heading, cards);
+  return section;
+}
+function renderLoadedSkillDetail(container, skill) {
+  container.querySelector('.skill-markdown-section')?.remove();
+  container.querySelector('.skill-reference-map')?.remove();
+  const controls = container.querySelector('.skill-tags-field');
+  const documentSection = renderSkillDocument(skill);
+  container.insertBefore(documentSection, controls);
+  if (skill.references?.length) container.insertBefore(renderSkillReferences(skill.references), controls);
+}
+async function hydrateGlobalSkillDetail(record, container, generation) {
+  const key = `${record.source || ''}:${record.name}:${record.revision || ''}`;
+  const cached = state.skillDetails.get(key);
+  if (cached) {
+    renderLoadedSkillDetail(container, cached);
+    return;
+  }
+  message('.process-detail-message', 'Loading SKILL.md…');
+  try {
+    const projectId = recordProjects(record)[0]?.id || state.projectId;
+    const result = await jsonRequest(`/api/codex/skill-library/${encodeURIComponent(record.name)}`, undefined, projectId);
+    if (generation !== processDetailGeneration || state.selected !== record) return;
+    state.skillDetails.set(key, result.skill);
+    renderLoadedSkillDetail(container, result.skill);
+    message('.process-detail-message', '');
+  } catch (error) {
+    if (generation !== processDetailGeneration || state.selected !== record) return;
+    message('.process-detail-message', error.message, true);
+  }
+}
+async function renderProcessDetail(record) {
+  if (state.selected?.name !== record.name || state.selected?.source !== record.source) state.selectedReference = '';
   state.selected = record;
+  const generation = ++processDetailGeneration;
   if (record.projectId) state.projectId = record.projectId;
   const detail = el('.process-detail'); detail.hidden = false; detail.replaceChildren();
   const viewContext = { global: state.libraryScope === 'global', libraryTitle: state.processTab === 'skills' ? 'Skill library' : 'Pipelines', detailTitle: state.processTab === 'skills' ? 'Skill details' : 'Pipeline details' };
@@ -138,6 +197,7 @@ function renderProcessDetail(record) {
       const status = document.createElement('p'); status.className = 'codex-message process-detail-message'; status.setAttribute('role', 'status');
       detail.append(tagsField, favorite, status);
       setMobileCodexView(document, 'detail', viewContext);
+      await hydrateGlobalSkillDetail(record, detail, generation);
       return;
     }
     const model = document.createElement('select'); model.setAttribute('aria-label', 'Codex model');
@@ -344,7 +404,8 @@ export function initializeMobileCodex() {
   el('.pipeline-editor-form').addEventListener('submit', (event) => { event.preventDefault(); void saveEditor(); }); el('.skill-picker-back').addEventListener('click', closePicker);
 }
 import { projectScopedRequestPath } from '/src/runtime/project/helper/project-request-scope.js';
-import { decorateSkillCategoryLabel, sortSkillsByFavorite, tagsForSkill } from '/src/runtime/codex/helper/skill-library-presentation.js';
+import { decorateSkillCategoryLabel, skillInstructionMarkdown, sortSkillsByFavorite, tagsForSkill } from '/src/runtime/codex/helper/skill-library-presentation.js';
 import { skillCategories } from '/src/runtime/codex/helper/skill-category.js';
 import { renderSkillLibraryItemContent } from '/src/runtime/codex/component/render-skill-library-item-content.js';
+import { renderLedgerCardMarkdown } from '/src/runtime/ledger/component/render-ledger-card-markdown.js';
 import { setMobileCodexView } from './codex-view.js';
