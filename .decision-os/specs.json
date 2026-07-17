@@ -7913,7 +7913,7 @@
       "title": "Add Cooperative Test Admission Runbooks",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "backlog",
       "x": -9980,
       "y": 4500,
       "w": 340,
@@ -9460,7 +9460,7 @@
       "title": "Make worktree verification one-command and environment-safe",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "backlog",
       "x": -10402,
       "y": 85008,
       "w": 360,
@@ -9752,7 +9752,7 @@
       "title": "Analyze stored lesson trends",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "backlog",
       "x": -10402,
       "y": 88068,
       "w": 360,
@@ -10900,10 +10900,7 @@
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
       "codexThreadRunId": "codex-skill-1784262890285-4bef1068",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784262890285-4bef1068.md",
-      "codexActiveRunId": "codex-skill-1784262890285-4bef1068",
-      "executionStatus": "running",
-      "executionRunId": "codex-skill-1784262890285-4bef1068"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784262890285-4bef1068.md"
     },
     {
       "id": "card-cf200179-fb3b-4bd6-8914-6a701f60cb5f",
@@ -11276,7 +11273,7 @@
       "title": "Preserve Codex Session Timers Across Server Restarts",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "master-task"
       ],
@@ -11323,7 +11320,7 @@
       "title": "Bind Control Room timers to the durable Codex session start",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "subtask"
       ],
@@ -11426,7 +11423,7 @@
       "title": "Explain Current Test Failures",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "backlog",
       "labels": [
         "diagnosis",
         "test-suite",
@@ -11476,6 +11473,8 @@
       "domainId": "specs",
       "status": "todo",
       "labels": [
+        "backend",
+        "federation",
         "master-task"
       ],
       "x": -10402,
@@ -11490,10 +11489,7 @@
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
       "codexThreadRunId": "codex-skill-1784267353444-c323c7ca",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784267353444-c323c7ca.md",
-      "codexActiveRunId": "codex-skill-1784267353444-c323c7ca",
-      "executionStatus": "running",
-      "executionRunId": "codex-skill-1784267353444-c323c7ca"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784267353444-c323c7ca.md"
     },
     {
       "id": "card-7ae8cc5b-5f16-4d10-9638-22f098c701fa",
@@ -11518,19 +11514,21 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784267466940-d8335914",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784267466940-d8335914.md",
-      "codexActiveRunId": "codex-skill-1784267466940-d8335914",
+      "codexThreadRunId": "codex-skill-1784278157234-600c95a9",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784278157234-600c95a9.md",
+      "codexActiveRunId": "codex-skill-1784278157234-600c95a9",
       "executionStatus": "running",
-      "executionRunId": "codex-skill-1784267466940-d8335914"
+      "executionRunId": "codex-skill-1784278157234-600c95a9"
     },
     {
       "id": "card-52581263-0881-49af-8450-81cf862c464b",
-      "title": "Define federated library identity and replica state",
+      "title": "Materialize federated libraries in canonical local stores",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
+        "backend",
+        "federation",
         "subtask"
       ],
       "x": -10012,
@@ -11545,11 +11543,13 @@
     },
     {
       "id": "card-082d4629-cd99-4f0c-820a-91f7ac0373b6",
-      "title": "Build safe skill and pipeline snapshots",
+      "title": "Build safe complete-package federation snapshots",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
+        "backend",
+        "security",
         "subtask"
       ],
       "x": -9632,
@@ -11564,11 +11564,13 @@
     },
     {
       "id": "card-bedd5f22-963b-4556-9fc4-d9f973a4b5f7",
-      "title": "Synchronize libraries on federation membership and revision changes",
+      "title": "Synchronize local libraries on federation catalog changes",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
+        "backend",
+        "federation",
         "subtask"
       ],
       "x": -10012,
@@ -11583,11 +11585,13 @@
     },
     {
       "id": "card-2b1076dc-9bdc-45e9-a3b3-33a0e1b0ec41",
-      "title": "Expose and execute retained federated libraries",
+      "title": "Serve Skills, Pipelines, and Process Card from the local cache",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
+        "frontend",
+        "backend",
         "subtask"
       ],
       "x": -9632,
@@ -11602,11 +11606,13 @@
     },
     {
       "id": "card-274c4253-0677-42f5-b160-3a413737ad94",
-      "title": "Prove multi-node convergence, persistence, and collision handling",
+      "title": "Prove local convergence and offline retention",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
+        "test",
+        "federation",
         "subtask"
       ],
       "x": -10402,
@@ -11624,7 +11630,7 @@
       "title": "Restore the Control Room carousel resize interaction",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "code",
         "frontend",
@@ -11646,7 +11652,7 @@
       "title": "Make carousel size persistence resilient",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "code",
         "frontend",
@@ -11668,7 +11674,7 @@
       "title": "Add carousel resize regression coverage and verify the served surface",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "test",
         "scenario",
@@ -11859,8 +11865,11 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784273055977-5c37167a",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784273055977-5c37167a.md"
+      "codexThreadRunId": "codex-skill-1784278101601-911447f2",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784278101601-911447f2.md",
+      "codexActiveRunId": "codex-skill-1784278101601-911447f2",
+      "executionStatus": "running",
+      "executionRunId": "codex-skill-1784278101601-911447f2"
     },
     {
       "id": "card-ca692962-43ef-4af0-984a-f56936cb17d5",
@@ -12351,6 +12360,25 @@
       "h": 240,
       "comment": {
         "contentFile": ".decision-os/cards/specs/card-579cca1e-0eea-4ab0-af0e-18e8bf9c5792.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-2569332f-f2ca-463c-b674-621de507b4bd",
+      "title": "New task intake",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 110508,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-2569332f-f2ca-463c-b674-621de507b4bd.md"
       },
       "facts": [],
       "fields": []
@@ -14894,6 +14922,16 @@
       "color": "#895cfa",
       "label": "New task intake",
       "comments": []
+    },
+    {
+      "id": "zone-2e6f981b-bea6-4c80-bf64-2213a7fe651d",
+      "x": -10462,
+      "y": 110448,
+      "width": 1200,
+      "height": 900,
+      "color": "#895cfa",
+      "label": "New task intake",
+      "comments": []
     }
   ],
   "notes": {},
@@ -15030,7 +15068,8 @@
     "thread-card-09063d18-dab2-4ce0-8d1c-e62fdbc97cc7": ".decision-os/threads/specs/thread-card-09063d18-dab2-4ce0-8d1c-e62fdbc97cc7.md",
     "thread-card-ca692962-43ef-4af0-984a-f56936cb17d5": ".decision-os/threads/specs/thread-card-ca692962-43ef-4af0-984a-f56936cb17d5.md",
     "thread-card-bb8a0fb0-099f-4026-aff9-f68871957b98": ".decision-os/threads/specs/thread-card-bb8a0fb0-099f-4026-aff9-f68871957b98.md",
-    "thread-card-579cca1e-0eea-4ab0-af0e-18e8bf9c5792": ".decision-os/threads/specs/thread-card-579cca1e-0eea-4ab0-af0e-18e8bf9c5792.md"
+    "thread-card-579cca1e-0eea-4ab0-af0e-18e8bf9c5792": ".decision-os/threads/specs/thread-card-579cca1e-0eea-4ab0-af0e-18e8bf9c5792.md",
+    "thread-card-2569332f-f2ca-463c-b674-621de507b4bd": ".decision-os/threads/specs/thread-card-2569332f-f2ca-463c-b674-621de507b4bd.md"
   },
   "deletedNoteIds": {
     "thread-card-7074d33a-39da-42a1-b470-673cbe221def": [
