@@ -1543,7 +1543,27 @@ function renderCard(card) {
   backButton.textContent = '← Back';
   backButton.dataset.destination = parsedTask.masterTask ? 'control-room' : 'zone';
   destroyMobileCarousels(elements['card-body']);
-  const content = renderLedgerCardMarkdown(parsedTask.masterTask ? visibleMasterTaskMarkdown(markdown) : markdown, { imageSizes, mediaSurface: 'thread', carouselDriver: 'external' });
+  const persistCardImageResize = async (source, dimensions) => {
+    const previousImageSizes = card.imageSizes && typeof card.imageSizes === 'object' ? { ...card.imageSizes } : {};
+    card.imageSizes = { ...previousImageSizes, [source]: dimensions };
+    try {
+      state.ledger = await ledgerMutation(state.activeLedgerId, {
+        action: 'patch-card',
+        cardPatch: { id: card.id, imageSizes: card.imageSizes }
+      });
+    } catch (cause) {
+      card.imageSizes = previousImageSizes;
+      if (state.activeCardId === String(card.id)) renderCard(card);
+      elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Carousel resize failed.';
+    }
+  };
+  const content = renderLedgerCardMarkdown(parsedTask.masterTask ? visibleMasterTaskMarkdown(markdown) : markdown, {
+    cardId: parsedTask.masterTask ? String(card.id) : undefined,
+    imageSizes,
+    mediaSurface: parsedTask.masterTask ? 'detail' : 'thread',
+    carouselDriver: 'external',
+    onImageResize: parsedTask.masterTask ? persistCardImageResize : undefined
+  });
   if (parsedTask.masterTask) {
     const overview = document.createElement('section');
     overview.className = 'task-overview';

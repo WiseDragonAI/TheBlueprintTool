@@ -28,7 +28,7 @@ type LedgerCardMediaOptions = {
   cardId?: string;
   carouselDriver?: 'internal' | 'external';
   imageSizes?: LedgerCardImageSizes;
-  mediaSurface?: 'card' | 'thread';
+  mediaSurface?: 'card' | 'detail' | 'thread';
   onImageResize?: (source: string, dimensions: { width: number; height: number }) => void;
 };
 
@@ -289,7 +289,7 @@ function renderMediaSlide(image: LedgerCardImage, index: number, shell: HTMLElem
     if (index === 0) {
       applyImageAspectRatio(shell, element);
     }
-    if (options.mediaSurface !== 'thread') {
+    if ((options.mediaSurface ?? 'card') === 'card') {
       scheduleLedgerCardMediaLayout(shell);
       scheduleCanvasMediaOverlayRender();
     }
@@ -492,11 +492,12 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
   const externalCarouselDriver = options.carouselDriver === 'external';
   const persistedCarouselStateId = carouselStateId(block, options, isCarousel);
   const mediaSurface = options.mediaSurface ?? 'card';
+  const canvasCardSurface = mediaSurface === 'card';
   const shell = document.createElement('div');
   shell.className = [
     'ledger-card-media-shell',
     isCarousel ? 'ledger-card-media-carousel' : 'ledger-card-media-single',
-    mediaSurface === 'thread' ? 'ledger-card-media-thread' : ''
+    mediaSurface !== 'card' ? 'ledger-card-media-thread' : ''
   ].filter(Boolean).join(' ');
   shell.dataset.ledgerCardMedia = 'true';
   shell.dataset.wheelCapture = 'true';
@@ -508,7 +509,7 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
   const sizeSource = block.images[0]?.src ?? '';
   shell.dataset.imageSizeId = sizeSource;
   applyPersistedDimensions(shell, dimensionsFor(sizeSource, options.imageSizes));
-  if (mediaSurface !== 'thread') watchImageResize(shell, options, sizeSource);
+  if (canvasCardSurface) watchImageResize(shell, options, sizeSource);
 
   const track = document.createElement('div');
   track.className = 'ledger-card-media-track';
@@ -516,7 +517,7 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
   if (!externalCarouselDriver) {
     track.addEventListener('scroll', () => {
       syncMediaCarousel(shell, block.images, track, persistedCarouselStateId);
-      if (mediaSurface !== 'thread') scheduleCanvasMediaOverlayRender();
+      if (canvasCardSurface) scheduleCanvasMediaOverlayRender();
     }, { passive: true });
   }
   for (const [index, image] of block.images.entries()) {
@@ -525,9 +526,9 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
   shell.appendChild(track);
   const threadResizeHandle = mediaSurface === 'thread' ? renderThreadImageResizeHandle(shell, options, sizeSource) : null;
   if (threadResizeHandle) shell.appendChild(threadResizeHandle);
-  const cardResizeHandle = mediaSurface === 'card' ? renderCardImageResizeHandle(shell, options, sizeSource) : null;
+  const cardResizeHandle = mediaSurface !== 'thread' ? renderCardImageResizeHandle(shell, options, sizeSource) : null;
   if (cardResizeHandle) shell.appendChild(cardResizeHandle);
-  if (mediaSurface !== 'thread') {
+  if (canvasCardSurface) {
     watchContainedImageSizing(shell);
     scheduleLedgerCardMediaLayout(shell);
   }
