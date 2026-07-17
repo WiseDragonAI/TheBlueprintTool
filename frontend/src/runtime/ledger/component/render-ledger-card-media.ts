@@ -1,5 +1,5 @@
 import { type LedgerMarkdownBlock } from '../helper/parse-ledger-card-markdown.js';
-import { commitActiveLedgerMutation } from '../effect/commit-active-ledger-mutation.js';
+import { sendActiveLedgerMutation } from '../effect/send-active-ledger-mutation.js';
 import {
   captureLedgerCardMediaHandoffState,
   isLedgerCardMediaResizePersistenceSuppressed,
@@ -16,6 +16,10 @@ import { scheduleCanvasMediaOverlayRender } from '../../surface/effect/canvas-su
 import { state } from '../../state.js';
 import { openLedgerCardImageViewer } from '../effect/open-ledger-card-image-viewer.js';
 import { projectScopedRequestPath } from '../../project/helper/project-request-scope.js';
+import {
+  ensureLedgerCardMediaResizeInteraction,
+  resizeLedgerCardMediaFromKeyboard
+} from '../helper/bind-ledger-card-media-resize.js';
 
 type LedgerCardImage = Extract<LedgerMarkdownBlock, { kind: 'images' }>['images'][number];
 export type LedgerCardImageSizes = Record<string, { width?: number; height?: number }>;
@@ -29,6 +33,7 @@ type LedgerCardMediaOptions = {
 };
 
 const pendingResizeTimers = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
+const pendingResizeRevisions = new WeakMap<HTMLElement, number>();
 
 function watchContainedImageSizing(shell: HTMLElement): void {
   if (typeof ResizeObserver === 'undefined') return;
@@ -66,24 +71,70 @@ function currentCardImageSizes(cardId: string): LedgerCardImageSizes {
     : {};
 }
 
+function currentCard(cardId: string): Record<string, unknown> | undefined {
+  const cards = Array.isArray(state.activeLedger?.cards) ? state.activeLedger.cards as Array<Record<string, unknown>> : [];
+  return cards.find((entry) => String(entry.id ?? '') === cardId);
+}
+
 function mediaLocalMaxWidth(element: HTMLElement): number {
   const promotedMaxWidth = Number(element.dataset.mediaLocalMaxWidth);
   if (Number.isFinite(promotedMaxWidth) && promotedMaxWidth > 0) return promotedMaxWidth;
   return Math.max(1, element.parentElement?.clientWidth || element.offsetWidth || 1);
 }
 
-function persistImageResize(element: HTMLElement, options: LedgerCardMediaOptions, source: string, width: number, height: number): void {
+function restoreConfirmedImageResize(element: HTMLElement, dimensions: { width?: number; height?: number }): void {
+  const promotionScale = Number(element.dataset.mediaPromotionScale);
+  const dimensionScale = Number.isFinite(promotionScale) && promotionScale > 0 ? promotionScale : 1;
+  if (dimensions.width) element.style.width = `${Math.max(96, dimensions.width) * dimensionScale}px`;
+  else if (dimensionScale > 1) element.style.width = `${mediaLocalMaxWidth(element) * dimensionScale}px`;
+  else element.style.removeProperty('width');
+  if (dimensions.width && dimensions.height) {
+    element.style.setProperty('--ledger-card-media-aspect-ratio', `${Math.max(1, dimensions.width)} / ${Math.max(1, dimensions.height)}`);
+  }
+  scheduleLedgerCardMediaLayout(element);
+  scheduleCanvasMediaOverlayRender();
+}
+
+async function persistImageResize(element: HTMLElement, options: LedgerCardMediaOptions, source: string, width: number, height: number): Promise<void> {
   if (!width || !height) return;
   if (options.onImageResize) {
     options.onImageResize(source, { width, height });
     return;
   }
   if (!options.cardId) return;
+  const card = currentCard(options.cardId);
+  if (!card) return;
   const imageSizes = currentCardImageSizes(options.cardId);
   const existing = imageSizes[source] ?? {};
   if (existing.width === width && existing.height === height) return;
+  const previousImageSizes = currentCardImageSizes(options.cardId);
   imageSizes[source] = { width, height };
-  void commitActiveLedgerMutation({ action: 'patch-card', cardPatch: { id: options.cardId, imageSizes } });
+  card.imageSizes = imageSizes;
+  const revision = (pendingResizeRevisions.get(element) ?? 0) + 1;
+  pendingResizeRevisions.set(element, revision);
+  const committed = await sendActiveLedgerMutation({ action: 'patch-card', cardPatch: { id: options.cardId, imageSizes } });
+  if (committed || pendingResizeRevisions.get(element) !== revision) return;
+  const current = currentCard(options.cardId);
+  if (current) current.imageSizes = previousImageSizes;
+  restoreConfirmedImageResize(element, previousImageSizes[source] ?? {});
+}
+
+function renderedImageDimensions(element: HTMLElement): { width: number; height: number } {
+  const promotionScale = Number(element.dataset.mediaPromotionScale);
+  const dimensionScale = Number.isFinite(promotionScale) && promotionScale > 0 ? promotionScale : 1;
+  return {
+    width: Math.min(mediaLocalMaxWidth(element), Math.round(element.offsetWidth / dimensionScale)),
+    height: Math.round(element.offsetHeight / dimensionScale)
+  };
+}
+
+function commitRenderedImageResize(element: HTMLElement, options: LedgerCardMediaOptions, source: string): void {
+  const { width, height } = renderedImageDimensions(element);
+  if (!width || !height) return;
+  const previous = pendingResizeTimers.get(element);
+  if (previous) clearTimeout(previous);
+  pendingResizeTimers.delete(element);
+  void persistImageResize(element, options, source, width, height);
 }
 
 function watchImageResize(element: HTMLElement, options: LedgerCardMediaOptions, source: string): void {
@@ -97,18 +148,32 @@ function watchImageResize(element: HTMLElement, options: LedgerCardMediaOptions,
     if (isLedgerCardMediaResizePersistenceSuppressed(element)) {
       return;
     }
-    const promotionScale = Number(element.dataset.mediaPromotionScale);
-    const dimensionScale = Number.isFinite(promotionScale) && promotionScale > 0 ? promotionScale : 1;
-    const width = Math.min(mediaLocalMaxWidth(element), Math.round(element.offsetWidth / dimensionScale));
-    const height = Math.round(element.offsetHeight / dimensionScale);
+    const { width, height } = renderedImageDimensions(element);
     if (!width || !height) return;
     const previous = pendingResizeTimers.get(element);
     if (previous) clearTimeout(previous);
     pendingResizeTimers.set(element, setTimeout(() => {
-      persistImageResize(element, options, source, width, height);
+      void persistImageResize(element, options, source, width, height);
     }, 350));
   });
   observer.observe(element);
+}
+
+function renderCardImageResizeHandle(element: HTMLElement, options: LedgerCardMediaOptions, source: string): HTMLElement | null {
+  if (!options.cardId) return null;
+  ensureLedgerCardMediaResizeInteraction();
+  const handle = document.createElement('button');
+  handle.className = 'ledger-card-media-resize-handle';
+  handle.type = 'button';
+  handle.setAttribute('aria-label', 'Resize carousel');
+  handle.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    event.stopPropagation();
+    resizeLedgerCardMediaFromKeyboard(handle, event.key === 'ArrowLeft' ? -1 : 1);
+  });
+  element.addEventListener('ledger-card-media-resize-commit', () => commitRenderedImageResize(element, options, source));
+  return handle;
 }
 
 function renderThreadImageResizeHandle(element: HTMLElement, options: LedgerCardMediaOptions, source: string): HTMLElement | null {
@@ -460,6 +525,8 @@ export function renderLedgerCardMedia(block: Extract<LedgerMarkdownBlock, { kind
   shell.appendChild(track);
   const threadResizeHandle = mediaSurface === 'thread' ? renderThreadImageResizeHandle(shell, options, sizeSource) : null;
   if (threadResizeHandle) shell.appendChild(threadResizeHandle);
+  const cardResizeHandle = mediaSurface === 'card' ? renderCardImageResizeHandle(shell, options, sizeSource) : null;
+  if (cardResizeHandle) shell.appendChild(cardResizeHandle);
   if (mediaSurface !== 'thread') {
     watchContainedImageSizing(shell);
     scheduleLedgerCardMediaLayout(shell);

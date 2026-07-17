@@ -23,6 +23,9 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   const css = source('frontend/assets/canvas/objects.css');
   const imageViewer = source('frontend/src/runtime/ledger/effect/open-ledger-card-image-viewer.ts');
   const panzoom = source('frontend/assets/vendor/panzoom-4.6.2.es.js');
+  const resizeInteraction = source('frontend/src/runtime/ledger/helper/bind-ledger-card-media-resize.ts');
+  const surfaceRuntime = source('frontend/src/runtime/surface-runtime.ts');
+  const interact = source('frontend/assets/vendor/interact-1.10.27.min.js');
 
   assert.match(inlineParser, /text\.startsWith\('!\[', start\)/);
   assert.match(inlineParser, /kind:\s*'image'/);
@@ -104,11 +107,22 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   assert.match(mediaLayout, /rawFrameHeight - titleHeight - slidePaddingBottom/);
   assert.match(mediaLayout, /naturalWidth/);
   assert.match(mediaRenderer, /imageSizes\[source\] = \{ width, height \}/);
+  assert.match(mediaRenderer, /card\.imageSizes = imageSizes/);
+  assert.match(mediaRenderer, /if \(committed \|\| pendingResizeRevisions\.get\(element\) !== revision\) return/);
+  assert.match(mediaRenderer, /current\.imageSizes = previousImageSizes/);
+  assert.match(mediaRenderer, /restoreConfirmedImageResize\(element, previousImageSizes\[source\] \?\? \{\}\)/);
+  assert.match(mediaRenderer, /ledger-card-media-resize-commit/);
+  assert.match(mediaRenderer, /aria-label', 'Resize carousel/);
+  assert.match(resizeInteraction, /globalThis\.interact\(handleSelector\)\.draggable/);
+  assert.match(resizeInteraction, /inputScale: promoted \? renderedWidthScale : transformedScale\(shell\)/);
+  assert.match(resizeInteraction, /shell\.style\.width = `\$\{Math\.round\(resize\.localWidth \* resize\.renderedWidthScale\)\}px`/);
+  assert.match(surfaceRuntime, /interact-1\.10\.27\.min\.js/);
+  assert.match(interact, /interact/);
   assert.match(mediaRenderer, /dataset\.mediaPromotionScale/);
   assert.match(mediaRenderer, /Math\.round\(element\.offsetWidth \/ dimensionScale\)/);
   assert.match(mediaRenderer, /Math\.round\(element\.offsetHeight \/ dimensionScale\)/);
   assert.doesNotMatch(mediaRenderer, /getBoundingClientRect\(\)\.(width|height)/);
-  assert.match(mediaRenderer, /commitActiveLedgerMutation\(\{ action: 'patch-card', cardPatch: \{ id: options\.cardId/);
+  assert.match(mediaRenderer, /sendActiveLedgerMutation\(\{ action: 'patch-card', cardPatch: \{ id: options\.cardId/);
   assert.match(mediaRenderer, /const slideCount = track\.children\.length/);
   assert.match(mediaRenderer, /const nextIndex = \(currentIndex \+ direction \+ slideCount\) % slideCount/);
   assert.match(mediaRenderer, /saveLedgerCardMediaCarouselSlide\(stateId, nextIndex, slideCount\)/);
@@ -146,6 +160,7 @@ test('card markdown images render as resizeable aspect-preserving media and adja
   assert.doesNotMatch(source('frontend/src/runtime/ledger/component/append-inline-nodes.ts'), /getBoundingClientRect\(\)\.(width|height)/);
   assert.match(css, /\.ledger-card-media-shell\s*{[^}]*--ledger-card-media-slider-row-height:\s*7px;[^}]*--ledger-card-media-slide-nav-height:\s*22px;[^}]*--ledger-card-media-title-row-min-height:\s*22px;[^}]*--ledger-card-media-title-slider-gap:\s*6px;[^}]*--ledger-card-media-bottom-inset:\s*8px;[^}]*max-width:\s*100%;[^}]*aspect-ratio:\s*var\(--ledger-card-media-aspect-ratio, 4 \/ 3\);[^}]*resize:\s*horizontal;/s);
   assert.match(css, /\.ledger-card-media-shell::after\s*{/);
+  assert.match(css, /\.ledger-card-media-resize-handle\s*{[^}]*width:\s*28px;[^}]*height:\s*28px;[^}]*cursor:\s*ew-resize;[^}]*touch-action:\s*none;/s);
   assert.match(css, /\.ledger-card-media-track\s*{[^}]*scroll-snap-type:\s*x mandatory;/s);
   assert.match(css, /\.ledger-card-media-carousel \.ledger-card-media-track\s*{[^}]*scrollbar-width:\s*none;/s);
   assert.match(css, /\.ledger-card-media-carousel \.ledger-card-media-track\s*{[^}]*touch-action:\s*pan-y;/s);
