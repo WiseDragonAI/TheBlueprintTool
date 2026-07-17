@@ -29,11 +29,12 @@ test('adds and removes mirrored project cards while retaining geometry', () => {
   stored.cards[0].x = 777;
   writeFileSync(path, JSON.stringify(stored));
 
-  const updated = ensureProjectsCanvasDocument({ masterDecisionOsRoot, projects: [{ ...first, name: 'Renamed' }] });
+  const updated = ensureProjectsCanvasDocument({ masterDecisionOsRoot, projects: [{ ...first, name: 'Renamed', color: '#a855f7' }] });
   const cards = updated.document.cards;
 
   assert.equal(cards.length, 1);
   assert.equal(cards[0].id, 'project-card:one');
   assert.equal(cards[0].title, 'Renamed');
+  assert.equal(cards[0].color, '#a855f7');
   assert.equal(cards[0].x, 777);
 });

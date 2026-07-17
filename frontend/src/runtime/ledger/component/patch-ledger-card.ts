@@ -10,12 +10,24 @@ import { cardPersistedWorkStatus, resolveCardWorkStatus } from '../../card/helpe
 import { applyZoneAttributionToCardElement, normalizeZoneAttribution, type ZoneAttribution } from '../helper/zone-attribution-cache.js';
 import { renderLedgerCardDetailLayer, renderLedgerCardOverviewLayer } from './render-ledger-card-detail-layer.js';
 import { renderGeometry } from '../../canvas/helper/render-density.js';
+import { clampReadableHsvColor } from '../../card/effect/render-card-zone-colors.js';
 
 function directChildByClass(element: HTMLElement, className: string): HTMLElement | null {
   for (const child of Array.from(element.children) as HTMLElement[]) {
     if (child.className.split(/\s+/).includes(className)) return child;
   }
   return null;
+}
+
+function applyCardColorOverride(element: HTMLElement, card: Record<string, unknown>): void {
+  const color = typeof card.color === 'string' ? card.color.trim() : '';
+  const readableColor = color ? clampReadableHsvColor(color) : null;
+  if (!readableColor) return;
+  delete element.dataset.cardZoneId;
+  element.dataset.cardZoneColor = color;
+  element.style.setProperty('--card-zone-color', color);
+  element.style.setProperty('--card-code-color', readableColor);
+  element.style.setProperty('--card-readable-color', readableColor);
 }
 
 export function patchLedgerCard(card: Record<string, unknown>, existing?: HTMLElement | null, attribution?: ZoneAttribution | Record<string, unknown> | null): HTMLElement {
@@ -48,6 +60,7 @@ export function patchLedgerCard(card: Record<string, unknown>, existing?: HTMLEl
   if (labels.length > 0) element.dataset.cardLabels = labels.join(',');
   else delete element.dataset.cardLabels;
   applyZoneAttributionToCardElement(element, normalizeZoneAttribution(attribution));
+  applyCardColorOverride(element, card);
   const width = Math.max(220, Number(card.w ?? 280));
   const cardHeight = Number(card.h ?? card.height);
   const fixedHeight = Math.max(132, Number.isFinite(cardHeight) ? cardHeight : 132);

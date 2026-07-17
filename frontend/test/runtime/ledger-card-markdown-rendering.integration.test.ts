@@ -428,6 +428,31 @@ test('ledger cards receive deterministic zone color before tab controls paint', 
   }
 });
 
+test('explicit card color overrides zone inheritance during hydration', () => {
+  const previousDocument = globalThis.document;
+  (globalThis as unknown as { document: unknown }).document = {
+    createElement: (tagName: string) => new FakeElement(tagName),
+    createTextNode: (text: string) => new FakeText(text)
+  };
+
+  try {
+    const card = patchLedgerCard({
+      id: 'project-card:colored',
+      cardType: 'project',
+      targetProjectId: 'colored',
+      title: 'Colored project',
+      color: '#a855f7'
+    }, null, { id: 'zone-owner', color: '#eab308' }) as unknown as FakeElement;
+
+    assert.equal(card.dataset.cardZoneId, undefined);
+    assert.equal(card.dataset.cardZoneColor, '#a855f7');
+    assert.equal(card.style['--card-zone-color'], '#a855f7');
+    assert.match(card.style['--card-readable-color'], /^#[0-9a-f]{6}$/);
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+  }
+});
+
 test('ledger card titles include PascalCase word break opportunities without changing text', () => {
   const previousDocument = globalThis.document;
   (globalThis as unknown as { document: unknown }).document = {
