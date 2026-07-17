@@ -739,3 +739,14 @@ test('modal sources retain loading, empty, read-only, and inherited-value states
   assert.match(editor, /Current default: \$\{input\.effectiveValue\}/);
   assert.match(editor, /Use skill default/);
 });
+
+test('desktop skill and pipeline modals expose manual federation synchronization states', () => {
+  const process = source('frontend/src/runtime/codex/effect/render-card-process-modal.ts');
+  const library = source('frontend/src/runtime/codex/effect/render-pipelines-modal.ts');
+  assert.match(process, /process-resynchronize/);
+  assert.match(process, /requestFederatedLibrarySynchronization\(\)/);
+  assert.match(process, /Synchronizing skills, then pipelines…/);
+  assert.match(library, /pipeline-library-resynchronize/);
+  assert.match(library, /requestFederatedLibrarySynchronization\(\)/);
+  assert.match(library, /synchronizationMessage/);
+});

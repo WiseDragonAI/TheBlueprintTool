@@ -35,3 +35,10 @@ test('projectScopedRequestPath preserves external and already scoped URLs', () =
     else Object.defineProperty(globalThis, 'location', { configurable: true, value: originalLocation });
   }
 });
+
+test('projectScopedRequestPath keeps manual federation synchronization global', () => {
+  assert.equal(
+    projectScopedRequestPath('/api/federation/libraries/synchronize', projectId),
+    '/api/federation/libraries/synchronize'
+  );
+});

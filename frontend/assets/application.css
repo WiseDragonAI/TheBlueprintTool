@@ -496,6 +496,7 @@ body:has(.project-color-picker-modal[open]) { overflow: hidden; }
 .codex-modal::backdrop { background: #000d; backdrop-filter: blur(3px); }
 .codex-sheet { display: flex; flex-direction: column; gap: 16px; min-width: 0; height: 100%; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); overflow-y: auto; }
 .codex-sheet > header { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.codex-header-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .codex-sheet h2, .codex-sheet h3, .codex-sheet p { margin: 0; }
 .codex-back, .codex-icon { min-width: 44px; min-height: 44px; border: 1px solid var(--line); background: var(--panel-strong); }
 .codex-tabs { display: grid; grid-template-columns: 1fr 1fr; }

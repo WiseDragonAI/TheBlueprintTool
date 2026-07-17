@@ -98,6 +98,16 @@ test('global skills and pipelines read only the connection-synchronized local se
   assert.doesNotMatch(script, /Choose the project whose (?:skill library|pipelines)/);
 });
 
+test('global skill and pipeline modals expose ordered manual federation synchronization', () => {
+  assert.match(html, /class="codex-secondary process-resynchronize"[^>]*>Resynchronize<\/button>/);
+  assert.match(html, /class="codex-secondary pipelines-resynchronize"[^>]*>Resynchronize<\/button>/);
+  assert.match(script, /jsonRequest\('\/api\/federation\/libraries\/synchronize', \{ method: 'POST' \}\)/);
+  assert.match(script, /Synchronizing skills, then pipelines…/);
+  assert.match(script, /await loadGlobalLibraries\(\)/);
+  assert.match(script, /setBusy\(button, true\)/);
+  assert.match(script, /setBusy\(button, false\)/);
+});
+
 test('library surfaces expose search, project filters, tag filters, and clearing', () => {
   assert.match(html, /class="process-search"/);
   assert.match(html, /class="process-project-filters codex-filter-row"/);

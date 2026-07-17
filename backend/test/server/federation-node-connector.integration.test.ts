@@ -278,6 +278,18 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     assert.ok(existsSync(join(homeB, '.skills', 'alpha-skill', 'SKILL.md')));
     assert.ok(localLibraries.skills.skills.some((skill) => skill.name === 'alpha-skill'));
 
+    // Direct fixture writes deliberately publish no catalog event: the operator action must initiate reconciliation.
+    federatedLibraryFixture(homeB, 'manual');
+    const manualSynchronization = await fetch(`${baseA}/api/federation/libraries/synchronize`, { method: 'POST' });
+    assert.equal(manualSynchronization.status, 200);
+    assert.deepEqual(await manualSynchronization.json(), { ok: true, synchronizedPeerCount: 1 });
+    const manuallySynchronizedLibraries = await Promise.all([
+      fetch(`${baseA}/api/codex/server-skills`).then((response) => response.json()) as Promise<{ skills: Array<{ name: string }> }>,
+      fetch(`${baseA}/api/codex/server-pipelines`).then((response) => response.json()) as Promise<{ pipelines: Array<{ id: string }> }>,
+    ]);
+    assert.ok(manuallySynchronizedLibraries[0].skills.some((skill) => skill.name === 'manual-skill'));
+    assert.ok(manuallySynchronizedLibraries[1].pipelines.some((pipeline) => pipeline.id === 'manual-pipeline'));
+
     serverB.close();
     await once(serverB, 'close');
     const retainedSkills = await fetch(`${baseA}/p/${encodeURIComponent(catalogA.find((project) => !project.remote)!.id)}/api/codex/skills`).then((response) => response.json()) as { skills: Array<{ name: string }> };
