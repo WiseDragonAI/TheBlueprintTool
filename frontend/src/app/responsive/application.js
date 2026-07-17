@@ -2484,7 +2484,7 @@ window.addEventListener('popstate', () => {
     void loadRoute({ retainView: retained });
   }
 });
-window.addEventListener('decision-os:codex-run-enqueued', () => { void loadRoute(); });
+window.addEventListener('decision-os:codex-run-enqueued', () => { void navigateVoiceSubmission(); });
 window.addEventListener('scroll', persistControlRoomScrollAnchor, { passive: true });
 window.addEventListener('keydown', async (event) => {
   const target = event.target instanceof HTMLElement ? event.target : null;
