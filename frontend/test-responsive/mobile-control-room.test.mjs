@@ -372,10 +372,17 @@ test('requires an explicit project choice before creating a new task intake', ()
   assert.match(mobile, /await createTaskIntake\(project\.id\)/);
   assert.match(mobile, /async function createTaskIntake\(projectId\) \{\s*setResourceProject\(projectId\)/);
   const projectPicker = mobile.slice(mobile.indexOf('function openNewTaskProjectModal()'), mobile.indexOf('function cardOverlapArea'));
-  assert.match(projectPicker, /name\.textContent = project\.name;[\s\S]*owner\.textContent = `\$\{projectPresenceLabel\(project\)\} · \$\{project\.id\}`;[\s\S]*button\.append\(name, owner\)/);
+  assert.match(html, /class="new-task-node-tabs" role="tablist" aria-label="Choose a node"/);
+  assert.match(html, /id="new-task-project-panel" class="new-task-project-list" role="tabpanel"/);
+  assert.match(projectPicker, /const defaultNode = nodes\.find\(\(node\) => node\.local\) \?\? nodes\[0\]/);
+  assert.match(projectPicker, /label\.textContent = node\.label;[\s\S]*presence\.textContent = node\.online \? 'Online' : 'Offline'/);
+  assert.match(projectPicker, /button\.textContent = project\.name/);
+  assert.doesNotMatch(projectPicker, /projectPresenceLabel\(project\)|project\.id\}`|aria-label.*project\.id/);
   assert.doesNotMatch(projectPicker, /project\.relativePath|Project workspace/);
+  assert.match(styles, /\.new-task-node-tabs \{[^}]*display: flex;[^}]*overflow-x: auto/);
+  assert.match(styles, /\.new-task-node-tab\[aria-selected="true"\]/);
   assert.match(styles, /\.new-task-project-list \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
-  assert.match(styles, /\.new-task-project-option \{[^}]*display: grid;[^}]*min-height: 64px;[^}]*padding: 8px 10px;[^}]*text-align: center/);
+  assert.match(styles, /\.new-task-project-option \{[^}]*min-height: 56px;[^}]*padding: 8px 10px;[^}]*text-align: center/);
   assert.match(styles, /\.new-task-project-option \{[^}]*border-inline-start: 4px solid var\(--project-color/);
 });
 

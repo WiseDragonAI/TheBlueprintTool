@@ -1152,50 +1152,109 @@ async function createTaskIntake(projectId) {
 }
 
 function openNewTaskProjectModal() {
+  const tabList = document.querySelector('.new-task-node-tabs');
   const list = document.querySelector('.new-task-project-list');
   const error = document.querySelector('.new-task-project-error');
   const cancel = document.querySelector('.new-task-project-cancel');
+  const nodes = [...state.projects.reduce((groups, project) => {
+    const nodeId = project.ownerNodeId || 'local';
+    const existing = groups.get(nodeId);
+    if (existing) existing.projects.push(project);
+    else groups.set(nodeId, {
+      nodeId,
+      label: projectOwnerLabel(project),
+      online: project.online !== false,
+      local: project.remote !== true,
+      projects: [project],
+    });
+    return groups;
+  }, new Map()).values()];
+  const defaultNode = nodes.find((node) => node.local) ?? nodes[0];
+  let activeNode = defaultNode;
+  let tabButtons = [];
+
   delete newTaskProjectModal.dataset.busy;
   cancel.disabled = false;
   error.hidden = true;
   error.textContent = '';
-  list.replaceChildren(...state.projects.map((project) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'new-task-project-option';
-    button.style.setProperty('--project-color', project.color);
-    const name = document.createElement('strong');
-    name.textContent = project.name;
-    const owner = document.createElement('small');
-    owner.textContent = `${projectPresenceLabel(project)} · ${project.id}`;
-    button.append(name, owner);
-    button.dataset.online = String(project.online !== false);
-    button.disabled = project.online === false;
-    button.setAttribute('aria-label', `${project.name}, ${projectPresenceLabel(project)}, ${project.id}`);
-    button.addEventListener('click', async () => {
-      const options = [...list.querySelectorAll('button')];
-      options.forEach((option) => { option.disabled = true; });
-      newTaskProjectModal.dataset.busy = 'true';
-      cancel.disabled = true;
-      button.setAttribute('aria-busy', 'true');
-      error.hidden = true;
-      try {
-        await createTaskIntake(project.id);
-        delete newTaskProjectModal.dataset.busy;
-        newTaskProjectModal.close();
-      } catch (cause) {
-        error.textContent = cause instanceof Error ? cause.message : 'Task intake creation failed.';
-        error.hidden = false;
-        options.forEach((option) => { option.disabled = option.dataset.online === 'false'; });
-        delete newTaskProjectModal.dataset.busy;
-        cancel.disabled = false;
-        button.removeAttribute('aria-busy');
-      }
+
+  const renderProjects = () => {
+    const projects = activeNode?.projects ?? [];
+    list.replaceChildren(...projects.map((project) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'new-task-project-option';
+      button.style.setProperty('--project-color', project.color);
+      button.textContent = project.name;
+      button.disabled = activeNode.online === false || Boolean(newTaskProjectModal.dataset.busy);
+      button.addEventListener('click', async () => {
+        newTaskProjectModal.dataset.busy = 'true';
+        tabButtons.forEach((tab) => { tab.disabled = true; });
+        [...list.querySelectorAll('button')].forEach((option) => { option.disabled = true; });
+        cancel.disabled = true;
+        button.setAttribute('aria-busy', 'true');
+        error.hidden = true;
+        try {
+          await createTaskIntake(project.id);
+          delete newTaskProjectModal.dataset.busy;
+          newTaskProjectModal.close();
+        } catch (cause) {
+          error.textContent = cause instanceof Error ? cause.message : 'Task intake creation failed.';
+          error.hidden = false;
+          delete newTaskProjectModal.dataset.busy;
+          cancel.disabled = false;
+          tabButtons.forEach((tab) => { tab.disabled = false; });
+          renderProjects();
+        }
+      });
+      return button;
+    }));
+  };
+
+  const selectNode = (node, focus = false) => {
+    activeNode = node;
+    tabButtons.forEach((tab, index) => {
+      const selected = nodes[index] === node;
+      tab.setAttribute('aria-selected', String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+      if (selected) list.setAttribute('aria-labelledby', tab.id);
     });
-    return button;
-  }));
+    renderProjects();
+    if (focus) tabButtons[nodes.indexOf(node)]?.focus();
+  };
+
+  tabButtons = nodes.map((node, index) => {
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.id = `new-task-node-tab-${index}`;
+    tab.className = 'new-task-node-tab';
+    tab.setAttribute('role', 'tab');
+    tab.setAttribute('aria-controls', 'new-task-project-panel');
+    const label = document.createElement('strong');
+    label.textContent = node.label;
+    const presence = document.createElement('small');
+    presence.textContent = node.online ? 'Online' : 'Offline';
+    presence.dataset.online = String(node.online);
+    tab.append(label, presence);
+    tab.addEventListener('click', () => selectNode(node));
+    tab.addEventListener('keydown', (event) => {
+      const current = nodes.indexOf(activeNode);
+      const next = event.key === 'Home' ? 0
+        : event.key === 'End' ? nodes.length - 1
+          : event.key === 'ArrowRight' ? (current + 1) % nodes.length
+            : event.key === 'ArrowLeft' ? (current - 1 + nodes.length) % nodes.length
+              : -1;
+      if (next < 0) return;
+      event.preventDefault();
+      selectNode(nodes[next], true);
+    });
+    return tab;
+  });
+  tabList.replaceChildren(...tabButtons);
+  if (defaultNode) selectNode(defaultNode);
+  else list.replaceChildren();
   newTaskProjectModal.showModal();
-  list.querySelector('button')?.focus();
+  tabButtons.find((tab) => tab.getAttribute('aria-selected') === 'true')?.focus();
 }
 
 function cardOverlapArea(card, zone) {
