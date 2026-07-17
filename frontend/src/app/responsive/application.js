@@ -37,8 +37,7 @@ const state = {
   viewedProjectId: '',
   controlTab: 'queue',
   projectFilter: 'All',
-  controlFilter: 'All',
-  controlNodeIndex: 0
+  controlFilter: 'All'
 };
 
 const elements = Object.fromEntries([
@@ -972,16 +971,6 @@ function controlTaskCount(tab) {
   return state.controlFilter === 'All' ? projectTasks.length : projectTasks.filter((task) => task.ledgerId === state.controlFilter).length;
 }
 
-function controlRoomNodes() {
-  return [...state.projects.reduce((groups, project) => {
-    const nodeId = project.ownerNodeId || 'local';
-    const existing = groups.get(nodeId);
-    if (existing) existing.projects.push(project);
-    else groups.set(nodeId, { nodeId, label: projectOwnerLabel(project), projects: [project] });
-    return groups;
-  }, new Map()).values()];
-}
-
 function shortcutKey(value) {
   const key = document.createElement('span');
   key.className = 'terminal-button__key';
@@ -993,13 +982,6 @@ function selectControlProject(projectId) {
   state.projectFilter = projectId;
   state.controlFilter = 'All';
   renderControlRoom();
-}
-
-function cycleControlRoomNode() {
-  const nodes = controlRoomNodes();
-  if (nodes.length < 2) return;
-  state.controlNodeIndex = (state.controlNodeIndex + 1) % nodes.length;
-  selectControlProject('All');
 }
 
 function taskRow(task, tab, index) {
@@ -1056,22 +1038,15 @@ function renderControlRoom() {
   state.activeLedgerId = '';
   state.activeZoneId = '';
   renderLedgerLinks();
-  const nodes = controlRoomNodes();
-  state.controlNodeIndex = nodes.length ? state.controlNodeIndex % nodes.length : 0;
-  const activeNode = nodes[state.controlNodeIndex];
-  const projectFilters = [{ id: 'All', name: 'All projects', color: '#20242b' }, ...(activeNode?.projects ?? state.projects)];
+  const projectFilters = [{ id: 'All', name: 'All projects', color: '#20242b' }, ...state.projects];
   if (!projectFilters.some((project) => project.id === state.projectFilter)) state.projectFilter = 'All';
   const showProjectFilters = state.projectFilter === 'All';
-  const projectButtons = projectFilters.map((project, index) => {
+  const projectButtons = projectFilters.map((project) => {
     const presentation = projectFilterChipPresentation(project);
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `project-filter-chip${project.id === 'All' ? ' all-projects-filter' : ''}`;
-    const label = document.createElement('span');
-    label.className = 'project-filter-label';
-    label.textContent = presentation.label;
-    button.append(label);
-    if (project.id !== 'All' && index <= 9) button.append(shortcutKey(String(index)));
+    button.textContent = presentation.label;
     button.title = project.id === 'All' ? project.name : `${project.name} (${project.id}) owned by ${projectOwnerLabel(project)}`;
     button.disabled = project.online === false;
     button.setAttribute('aria-pressed', String(project.id === state.projectFilter));
@@ -1088,19 +1063,6 @@ function renderControlRoom() {
     button.addEventListener('click', () => selectControlProject(project.id));
     return button;
   });
-  if (nodes.length > 1) {
-    const nodeCycle = document.createElement('button');
-    nodeCycle.type = 'button';
-    nodeCycle.className = 'node-filter-cycle terminal-button terminal-button--nav';
-    nodeCycle.append(shortcutKey('C'));
-    const label = document.createElement('span');
-    label.className = 'terminal-button__label';
-    label.textContent = activeNode?.label ?? 'Node';
-    nodeCycle.append(label);
-    nodeCycle.title = 'Show projects from the next node';
-    nodeCycle.addEventListener('click', cycleControlRoomNode);
-    projectButtons.push(nodeCycle);
-  }
   elements['control-project-filters'].hidden = !showProjectFilters;
   elements['control-project-filters'].replaceChildren(...(showProjectFilters ? projectButtons : []));
   const scopedLedgers = state.projects.find((project) => project.id === state.projectFilter)?.ledgers ?? [];
@@ -1394,35 +1356,44 @@ function openNewTaskProjectModal() {
   error.hidden = true;
   error.textContent = '';
 
+  const chooseProject = async (project, button) => {
+    newTaskProjectModal.dataset.busy = 'true';
+    tabButtons.forEach((tab) => { tab.disabled = true; });
+    [...list.querySelectorAll('button')].forEach((option) => { option.disabled = true; });
+    cancel.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    error.hidden = true;
+    try {
+      await createTaskIntake(project.id);
+      delete newTaskProjectModal.dataset.busy;
+      newTaskProjectModal.close();
+    } catch (cause) {
+      error.textContent = cause instanceof Error ? cause.message : 'Task intake creation failed.';
+      error.hidden = false;
+      delete newTaskProjectModal.dataset.busy;
+      cancel.disabled = false;
+      tabButtons.forEach((tab) => { tab.disabled = false; });
+      renderProjects();
+    }
+  };
+
   const renderProjects = () => {
     const projects = activeNode?.projects ?? [];
-    list.replaceChildren(...projects.map((project) => {
+    list.replaceChildren(...projects.map((project, index) => {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'new-task-project-option';
       button.style.setProperty('--project-color', project.color);
-      button.textContent = project.name;
+      const label = document.createElement('span');
+      label.className = 'terminal-button__label';
+      label.textContent = project.name;
+      button.append(label);
+      if (index < 9) {
+        button.append(shortcutKey(String(index + 1)));
+        button.title = `Create a task in ${project.name} (${index + 1})`;
+      }
       button.disabled = activeNode.online === false || Boolean(newTaskProjectModal.dataset.busy);
-      button.addEventListener('click', async () => {
-        newTaskProjectModal.dataset.busy = 'true';
-        tabButtons.forEach((tab) => { tab.disabled = true; });
-        [...list.querySelectorAll('button')].forEach((option) => { option.disabled = true; });
-        cancel.disabled = true;
-        button.setAttribute('aria-busy', 'true');
-        error.hidden = true;
-        try {
-          await createTaskIntake(project.id);
-          delete newTaskProjectModal.dataset.busy;
-          newTaskProjectModal.close();
-        } catch (cause) {
-          error.textContent = cause instanceof Error ? cause.message : 'Task intake creation failed.';
-          error.hidden = false;
-          delete newTaskProjectModal.dataset.busy;
-          cancel.disabled = false;
-          tabButtons.forEach((tab) => { tab.disabled = false; });
-          renderProjects();
-        }
-      });
+      button.addEventListener('click', () => void chooseProject(project, button));
       return button;
     }));
   };
@@ -1451,7 +1422,8 @@ function openNewTaskProjectModal() {
     const presence = document.createElement('small');
     presence.textContent = node.online ? 'Online' : 'Offline';
     presence.dataset.online = String(node.online);
-    tab.append(label, presence);
+    tab.append(shortcutKey('C'), label, presence);
+    tab.title = 'Show projects from this node; press C for the next node';
     tab.addEventListener('click', () => selectNode(node));
     tab.addEventListener('keydown', (event) => {
       const current = nodes.indexOf(activeNode);
@@ -1469,6 +1441,22 @@ function openNewTaskProjectModal() {
   tabList.replaceChildren(...tabButtons);
   if (defaultNode) selectNode(defaultNode);
   else list.replaceChildren();
+  newTaskProjectModal.onkeydown = (event) => {
+    if (event.repeat || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
+    const key = event.key.toLowerCase();
+    if (key === 'c' && nodes.length > 1) {
+      event.preventDefault();
+      const next = (nodes.indexOf(activeNode) + 1) % nodes.length;
+      selectNode(nodes[next], true);
+      return;
+    }
+    if (!/^[1-9]$/.test(key)) return;
+    const project = activeNode?.projects[Number(key) - 1];
+    const option = list.querySelectorAll('.new-task-project-option')[Number(key) - 1];
+    if (!project || !option || option.disabled) return;
+    event.preventDefault();
+    option.click();
+  };
   newTaskProjectModal.showModal();
   tabButtons.find((tab) => tab.getAttribute('aria-selected') === 'true')?.focus();
 }
@@ -2081,23 +2069,11 @@ window.addEventListener('keydown', async (event) => {
   if (isCardEditingKeyboardTarget(target)) return;
   const desktopControlRoom = location.pathname === '/'
     && !elements['control-room-view'].hidden
+    && !newTaskProjectModal.open
     && window.matchMedia('(min-width: 760px)').matches
     && !event.ctrlKey && !event.metaKey && !event.altKey;
   if (desktopControlRoom && !event.repeat && !event.shiftKey) {
     const key = event.key.toLowerCase();
-    if (key === 'c' && controlRoomNodes().length > 1) {
-      event.preventDefault();
-      cycleControlRoomNode();
-      return;
-    }
-    if (/^[1-9]$/.test(key)) {
-      const project = controlRoomNodes()[state.controlNodeIndex]?.projects[Number(key) - 1];
-      if (project && project.online !== false) {
-        event.preventDefault();
-        selectControlProject(project.id);
-        return;
-      }
-    }
     const shortcutControl = key === 'x' ? document.querySelector('.desktop-new-task-button') : null;
     if (shortcutControl && !shortcutControl.disabled) {
       event.preventDefault();
