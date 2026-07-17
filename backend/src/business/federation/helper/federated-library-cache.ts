@@ -2,7 +2,7 @@
  * WHAT: Exports and materializes complete federation skill packages and saved pipeline definitions.
  * WHY: Federation libraries must be local before any Skills or Process Card UI reads them.
  */
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   existsSync,
   lstatSync,
@@ -18,7 +18,7 @@ import {
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import type { CodexPipeline, CodexPipelineStep } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import { readCodexPipelineStore, writeCodexPipelineStore } from '../../codex/helper/codex-pipeline-store.js';
-import { parseSkillFrontmatter, scanCodexSkills, skillRevision } from '../../codex/helper/scan-codex-skills.js';
+import { parseSkillFrontmatter, scanCodexSkills } from '../../codex/helper/scan-codex-skills.js';
 
 const snapshotVersion = 1 as const;
 // Base64 expands the package by one third; leave room inside the connector's 25 MiB JSON frame.
@@ -68,6 +68,30 @@ function decodedBytes(files: readonly FederatedSkillFile[]): number {
   return files.reduce((total, file) => total + Buffer.from(file.data, 'base64').byteLength, 0);
 }
 
+function packageRevision(files: readonly FederatedSkillFile[]): string {
+  const hash = createHash('sha256');
+  for (const file of [...files].sort((left, right) => left.path.localeCompare(right.path))) {
+    hash.update(file.path);
+    hash.update('\0');
+    hash.update(String(file.mode));
+    hash.update('\0');
+    hash.update(file.data);
+    hash.update('\0');
+  }
+  return hash.digest('hex');
+}
+
+function packageUpdatedAt(directory: string): Date {
+  let latest = new Date(0);
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const path = resolve(directory, entry.name);
+    if (entry.isSymbolicLink() || lstatSync(path).isSymbolicLink()) continue;
+    const updatedAt = entry.isDirectory() ? packageUpdatedAt(path) : statSync(path).mtime;
+    if (updatedAt > latest) latest = updatedAt;
+  }
+  return latest;
+}
+
 function compareRevision(left: { updatedAt: string; revision: string }, right: { updatedAt: string; revision: string }): number {
   return left.updatedAt.localeCompare(right.updatedAt) || left.revision.localeCompare(right.revision);
 }
@@ -89,11 +113,15 @@ function exportableSkills(serverRoot: string, workspaceRoots: readonly string[])
 export function exportFederatedSkillManifest(serverRoot: string, workspaceRoots: readonly string[] = [serverRoot]): FederatedSkillManifest {
   return {
     version: snapshotVersion,
-    skills: exportableSkills(serverRoot, workspaceRoots).map((skill) => ({
-      name: skill.name,
-      revision: skill.revision,
-      updatedAt: statSync(skill.skillFile).mtime.toISOString(),
-    })),
+    skills: exportableSkills(serverRoot, workspaceRoots).map((skill) => {
+      const packageRoot = dirname(skill.skillFile);
+      const files = collectPackageFiles(packageRoot);
+      return {
+        name: skill.name,
+        revision: packageRevision(files),
+        updatedAt: packageUpdatedAt(packageRoot).toISOString(),
+      };
+    }),
   };
 }
 
@@ -106,8 +134,8 @@ export function exportFederatedSkillSnapshot(serverRoot: string, skillNames?: Re
     if (decodedBytes(files) > maximumSnapshotBytes) throw new Error(`Federated skill package exceeds 18 MiB: ${skill.name}.`);
     return {
       name: skill.name,
-      revision: skill.revision,
-      updatedAt: statSync(skill.skillFile).mtime.toISOString(),
+      revision: packageRevision(files),
+      updatedAt: packageUpdatedAt(packageRoot).toISOString(),
       files,
     };
   });
@@ -127,13 +155,16 @@ function validateSkillPackage(skill: FederatedSkillPackage): { files: Array<{ pa
     seen.add(path);
     const mode = Number(file.mode);
     if (!Number.isInteger(mode) || mode < 0 || mode > 0o777) throw new Error(`Federated skill file mode is invalid: ${skill.name}.`);
-    return { path, bytes: Buffer.from(String(file.data ?? ''), 'base64'), mode };
+    const data = String(file.data ?? '');
+    const bytes = Buffer.from(data, 'base64');
+    if (bytes.toString('base64') !== data) throw new Error(`Federated skill file encoding is invalid: ${skill.name}.`);
+    return { path, bytes, mode };
   });
   if (decodedBytes(skill.files) > maximumSnapshotBytes) throw new Error(`Federated skill package exceeds 18 MiB: ${skill.name}.`);
   const skillFile = files.find((file) => file.path === 'SKILL.md');
   const metadata = skillFile ? parseSkillFrontmatter(skillFile.bytes.toString('utf8')) : null;
   if (!metadata || metadata.name !== skill.name) throw new Error(`Federated skill package has an invalid SKILL.md: ${skill.name}.`);
-  if (skillRevision(skillFile!.bytes.toString('utf8')) !== skill.revision) throw new Error(`Federated skill revision does not match its SKILL.md: ${skill.name}.`);
+  if (packageRevision(skill.files) !== skill.revision) throw new Error(`Federated skill revision does not match its package: ${skill.name}.`);
   return { files, updatedAt };
 }
 
@@ -151,8 +182,8 @@ function replaceSkillDirectory(input: { serverRoot: string; skill: FederatedSkil
       if (!inner || inner.startsWith('..') || isAbsolute(inner)) throw new Error('Federated skill destination escapes its package.');
       mkdirSync(dirname(destination), { recursive: true });
       writeFileSync(destination, file.bytes, { flag: 'wx', mode: file.mode });
+      utimesSync(destination, input.updatedAt, input.updatedAt);
     }
-    utimesSync(resolve(staging, 'SKILL.md'), input.updatedAt, input.updatedAt);
     if (existsSync(target)) {
       renameSync(target, backup);
       backedUp = true;
@@ -171,16 +202,13 @@ export function importFederatedSkillSnapshot(input: { serverRoot: string; snapsh
   const packages = [...input.snapshot.skills]
     .sort((left, right) => left.name.localeCompare(right.name))
     .map((skill) => ({ skill, validated: validateSkillPackage(skill) }));
-  const current = new Map(scanCodexSkills({ workspaceRoot: input.serverRoot, serverRoot: input.serverRoot }).map((skill) => [skill.name, {
-    revision: skill.revision,
-    updatedAt: statSync(skill.skillFile).mtime.toISOString(),
-  }]));
+  const current = new Map(exportFederatedSkillManifest(input.serverRoot).skills.map((skill) => [skill.name, skill]));
   const imported: string[] = [];
   for (const { skill, validated } of packages) {
     const existing = current.get(skill.name);
     if (existing && compareRevision(existing, skill) >= 0) continue;
     replaceSkillDirectory({ serverRoot: input.serverRoot, skill, ...validated });
-    current.set(skill.name, { revision: skill.revision, updatedAt: skill.updatedAt });
+    current.set(skill.name, { name: skill.name, revision: skill.revision, updatedAt: skill.updatedAt });
     imported.push(skill.name);
   }
   return { imported };
