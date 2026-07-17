@@ -216,8 +216,10 @@ test('request-transcription keeps preserved upload retryable when metadata commi
   };
   let uploadCount = 0;
   let persistedBeforeFetch = false;
+  const lifecycle: string[] = [];
   (globalThis as unknown as { fetch: unknown }).fetch = async (_url: string, init?: RequestInit) => {
     uploadCount += 1;
+    lifecycle.push('upload-started');
     const noteId = String((init?.body as FormData).get('noteId') ?? '');
     persistedBeforeFetch = Boolean(await readPendingVoiceUpload(noteId));
     if (uploadCount === 1) return {
@@ -236,10 +238,13 @@ test('request-transcription keeps preserved upload retryable when metadata commi
     state.threadId = 'thread-card-a';
     state.activeTab = 'specs';
     state.activeLedger = { notes: { 'thread-card-a': [] } };
-    await requestTranscription(new Blob(['abc'], { type: 'audio/webm' }));
+    await requestTranscription(new Blob(['abc'], { type: 'audio/webm' }), {
+      onPersisted: () => lifecycle.push('persisted')
+    });
     const note = state.activeLedger.notes['thread-card-a'][0];
     const noteId = String(note.id);
     assert.equal(persistedBeforeFetch, true);
+    assert.deepEqual(lifecycle.slice(0, 2), ['persisted', 'upload-started']);
     assert.equal(note.status, 'upload failed');
     assert.equal(note.voiceFileRef, '/tmp/preserved.webm');
     assert.equal(note.localVoiceUploadId, noteId);

@@ -26,27 +26,22 @@ test('quick voice stop queues Codex and returns to the canonical Queue route aft
   assert.match(application, /onQuickVoiceSubmitted: navigateVoiceSubmission/);
 });
 
-test('desktop Shift+X uses the accepted quick voice handoff while normal X stays on the card', () => {
+test('desktop Shift+X leaves after durable persistence while normal X stays on the card', () => {
   const thread = source('frontend/src/app/responsive/thread.js');
   const shortcut = thread.match(/export async function handleResponsiveThreadShortcut\(event\) \{[\s\S]*?\n\}/)?.[0] ?? '';
 
   assert.match(shortcut, /const queueCodex = event\.shiftKey;/);
-  assert.match(shortcut, /stopVoiceRecording\(\{ queueCodex \}\)/);
-  assert.match(shortcut, /if \(queueCodex\) await finishQueuedVoiceSubmission\(submitted\)/);
-  assert.doesNotMatch(shortcut, /if \(!queueCodex\) await finishQueuedVoiceSubmission/);
+  assert.match(shortcut, /queueCodex: true,[\s\S]*onPersisted: \(\) => void finishQueuedVoiceSubmission\(true\)/);
+  assert.match(shortcut, /else \{[\s\S]*await stopVoiceRecording\(\)/);
+  assert.doesNotMatch(shortcut, /await stopVoiceRecording\(\{ queueCodex/);
 });
 
-test('accepted voice navigation uses a reduced-motion-safe view transition', () => {
+test('persisted voice navigation returns directly without an animated handoff', () => {
   const application = source('frontend/src/app/responsive/application.js');
   const styles = source('frontend/assets/application.css');
 
   assert.match(application, /async function navigateVoiceSubmission\(\)/);
-  assert.match(application, /prefers-reduced-motion: reduce/);
-  assert.match(application, /document\.startViewTransition\(\(\) => navigate\(destination, true\)\)/);
-  assert.match(application, /await transition\.finished/);
-  assert.match(styles, /html\[data-voice-handoff="true"\]::view-transition-old\(root\)/);
-  assert.match(styles, /html\[data-voice-handoff="true"\]::view-transition-new\(root\)/);
-  assert.match(styles, /@keyframes voice-handoff-out/);
-  assert.match(styles, /@keyframes voice-handoff-in/);
-  assert.match(styles, /prefers-reduced-motion: reduce[\s\S]*data-voice-handoff="true"[\s\S]*animation: none/);
+  assert.match(application, /await navigate\(controlRoomPath\('queue'\), true\)/);
+  assert.doesNotMatch(application, /data\.voiceHandoff|startViewTransition\(\(\) => navigate\(destination, true\)\)/);
+  assert.doesNotMatch(styles, /voice-handoff/);
 });
