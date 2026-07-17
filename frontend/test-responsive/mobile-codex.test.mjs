@@ -42,11 +42,12 @@ test('mobile processing guards duplicate submissions and delegates status to the
   assert.doesNotMatch(script, /function poll(?:Skill|Pipeline)/);
 });
 
-test('successful mobile processing closes the nested detail and returns to the card route', () => {
+test('successful responsive processing closes the card through the shared Control Room navigation lifecycle', () => {
   assert.match(script, /function finishProcessLaunch\(detail\)/);
   assert.match(script, /el\('\.process-modal'\)\.close\(\)/);
   assert.match(script, /decision-os:codex-run-enqueued/);
-  assert.match(mobile, /addEventListener\('decision-os:codex-run-enqueued', \(\) => \{ void loadRoute\(\); \}\)/);
+  assert.match(mobile, /addEventListener\('decision-os:codex-run-enqueued', \(\) => \{ void navigateVoiceSubmission\(\); \}\)/);
+  assert.match(mobile, /async function navigateVoiceSubmission\(\) \{\s*await navigate\(controlRoomPath\('exec'\), true\);\s*\}/);
 });
 
 test('mobile pipeline editor supports ordered steps, ordered skills, inheritance, and persistence', () => {
