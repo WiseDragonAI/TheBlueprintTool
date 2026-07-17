@@ -53,6 +53,31 @@ test('targeted reconciliation recovers a missed terminal SSE without reloading t
   }
 });
 
+test('targeted reconciliation scopes status reads to the canonical project URL', async () => {
+  const restore = installRuntime();
+  const previousFetch = globalThis.fetch;
+  const previousLocation = globalThis.location;
+  let requestedUrl = '';
+  Object.defineProperty(globalThis, 'location', {
+    configurable: true,
+    value: new URL('http://decision-os.local/p/project-id/ledgers/specs')
+  });
+  state.activeLedger.notes['thread-card-a'] = [{ id: 'note-a', message: 'Voice uploaded.', voiceFileRef: '/tmp/voice.wav', status: 'transcribing', revision: 2 }];
+  globalThis.fetch = (async (url: string) => {
+    requestedUrl = url;
+    return { ok: true, status: 200, json: async () => ({ ok: true, note: { id: 'note-a', message: 'Recovered transcript.', voiceFileRef: '/tmp/voice.wav', status: 'transcribed', revision: 4 } }) } as Response;
+  }) as typeof fetch;
+  try {
+    await reconcileVoiceTranscription({ ledgerId: 'specs', threadId: 'thread-card-a', noteId: 'note-a' });
+    assert.match(requestedUrl, /^\/p\/project-id\/api\/voice-transcription-status\?/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousLocation === undefined) delete (globalThis as { location?: Location }).location;
+    else Object.defineProperty(globalThis, 'location', { configurable: true, value: previousLocation });
+    restore();
+  }
+});
+
 test('older intermediate revisions cannot replace a terminal voice note', () => {
   const restore = installRuntime();
   state.activeLedger.notes['thread-card-a'] = [{ id: 'note-a', message: 'Final transcript.', voiceFileRef: '/tmp/voice.wav', status: 'transcribed', revision: 4 }];

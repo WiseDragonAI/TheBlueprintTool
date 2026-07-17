@@ -126,6 +126,7 @@ export function createFederationNodeConnector(input: {
   localProjects: () => DecisionOsProject[];
   localServerUrl: () => string;
   onRemoteContentChange?: () => void;
+  onRemoteCatalogChange?: () => void;
 }) {
   let settings = configuredSettings(input.settings);
   const requesterStreams = new Map<string, RequesterStream>();
@@ -237,6 +238,7 @@ export function createFederationNodeConnector(input: {
       for (const node of frame.nodes ?? []) {
         if (node.nodeId !== settings?.nodeId) remoteNodes.set(node.nodeId, { nodeLabel: String(node.nodeLabel || node.nodeId), online: node.online, projects: node.projects });
       }
+      input.onRemoteCatalogChange?.();
       return;
     }
     if (frame.type === 'content-change') {
