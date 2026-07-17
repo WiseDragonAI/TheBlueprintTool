@@ -128,7 +128,7 @@ test('The responsive application preserves the mobile Control Room and expands t
         await route.continue();
         controlRoomContinued();
       });
-      await desktop.getByRole('button', { name: /← Back/ }).click();
+      await desktop.getByRole('button', { name: 'Back', exact: true }).click();
       await desktop.locator('#control-room-view:not([hidden])').waitFor({ state: 'visible' });
       assert.equal(new URL(desktop.url()).pathname, '/', 'Back history and retained Control Room paint before projection revalidation settles');
       releaseControlRoom();
@@ -162,7 +162,7 @@ test('The responsive application preserves the mobile Control Room and expands t
     await desktop.locator('#card-view:not([hidden])').waitFor({ state: 'visible' });
     assert.equal(await desktop.locator('.app-shell').isVisible(), true);
     assert.equal(await desktop.locator('.canvas').count(), 0);
-    assert.equal(await desktop.getByRole('button', { name: '← Back' }).isVisible(), true);
+    assert.equal(await desktop.getByRole('button', { name: 'Back', exact: true }).isVisible(), true);
     await desktop.getByRole('button', { name: 'Thread', exact: true }).click();
     await desktop.locator('.mobile-thread-inspector:not([hidden])').waitFor({ state: 'visible' });
     await desktop.waitForFunction(() => {

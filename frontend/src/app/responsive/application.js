@@ -268,7 +268,13 @@ function renderTaskReplicaShell(task, replica = task?.replica) {
   }[status] || 'Synchronizing this task…';
   elements['card-title'].textContent = task?.title || 'Loading task';
   const backButton = document.querySelector('.back-to-zone-button');
-  backButton.replaceChildren(document.createTextNode('← Back'));
+  const backIcon = document.createElement('span');
+  backIcon.className = 'back-button__icon';
+  backIcon.setAttribute('aria-hidden', 'true');
+  backIcon.textContent = '←';
+  const backLabel = document.createElement('span');
+  backLabel.textContent = 'Back';
+  backButton.replaceChildren(backIcon, backLabel);
   backButton.dataset.destination = 'control-room';
   const shell = document.createElement('section');
   shell.className = 'task-replica-skeleton';
