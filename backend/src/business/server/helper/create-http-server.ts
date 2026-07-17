@@ -1058,7 +1058,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const fileName = `paste-${Date.now()}-${Math.random().toString(16).slice(2)}${extension}`;
       const filePath = resolve(directory, fileName);
       writeFileSync(filePath, imageBuffer);
-      const imageFileRef = `.decision-os/thread-images/${threadId}/${fileName}`;
+      const imageFileRef = `/.decision-os/thread-images/${threadId}/${fileName}`;
       response.statusCode = 201;
       response.end(JSON.stringify({ ok: true, imageFileRef, markdown: `![Pasted image](${imageFileRef})` }));
       return;
