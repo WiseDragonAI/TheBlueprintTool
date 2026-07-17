@@ -5,12 +5,13 @@
 import { renderLedgerCardMarkdown } from '/src/runtime/ledger/component/render-ledger-card-markdown.js';
 import { ledgerCardBody } from '/src/runtime/ledger/helper/ledger-card-body.js';
 import { saveLedgerCardMediaCarouselSlide } from '/src/runtime/ledger/helper/persist-ledger-card-media-carousel.js';
-import { initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './thread.js';
+import { handleResponsiveThreadShortcut, initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './thread.js';
 import { initializeMobileCodex, openMobileCodexLibrary, setMobileCodexContext } from './codex.js';
 import { activeAge, activeStopwatch, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge } from './control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from './control-room-route.js';
 import { cardPathForProject, isProjectCardPath, ledgerPathForProject, parseProjectRoute, parseProjectScope, projectPath, zonePathForProject } from './project-route.js';
 import { projectSettingsValues, saveProjectSettingsRequest } from './project-settings.js';
+import { isCardEditingKeyboardTarget } from '/src/runtime/input/helper/is-card-editing-keyboard-target.js';
 import { committedProjectColor, hexToHsv, hsvToHex, projectColorPickerGradients } from './project-color-picker.js';
 import { codexProcessLimitRange, loadCodexProcessSettings, saveCodexProcessSettings, stepCodexProcessLimit } from './codex-settings.js';
 import { createProjectRequest } from './project-creation.js';
@@ -1560,7 +1561,10 @@ elements['card-search'].addEventListener('input', (event) => {
 window.addEventListener('popstate', () => loadRoute());
 window.addEventListener('decision-os:codex-run-enqueued', () => { void loadRoute(); });
 window.addEventListener('scroll', persistControlRoomScrollAnchor, { passive: true });
-window.addEventListener('keydown', (event) => {
+window.addEventListener('keydown', async (event) => {
+  const target = event.target instanceof HTMLElement ? event.target : null;
+  if (isCardEditingKeyboardTarget(target)) return;
+  if (await handleResponsiveThreadShortcut(event)) return;
   if (event.key === 'Escape' && document.body.classList.contains('menu-open')) closeMenu();
 });
 

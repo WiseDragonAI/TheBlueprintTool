@@ -17,5 +17,6 @@ function targetWithClosest(matches: Record<string, boolean>): HTMLElement {
 test('is-card-editing-keyboard-target matches card editing and contenteditable targets', () => {
   assert.equal(isCardEditingKeyboardTarget(targetWithClosest({ '.card .editing,.card [contenteditable],.ledger-card-description-editor': true })), true);
   assert.equal(isCardEditingKeyboardTarget(targetWithClosest({ '.card .editing,.card [contenteditable],.ledger-card-description-editor': false })), false);
+  assert.equal(isCardEditingKeyboardTarget(targetWithClosest({ 'input,textarea,select,[contenteditable="true"]': true })), true);
   assert.equal(isCardEditingKeyboardTarget(null), false);
 });
