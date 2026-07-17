@@ -120,7 +120,7 @@ export function openMobileThread(card, zoneColor) {
 }
 
 export function closeMobileThread() {
-  if (canvasState.voice.recording) return;
+  if (canvasState.voice.recording) return false;
   saveThreadDraft();
   const runId = currentCard ? cardCodexThreadRunId(currentCard) : '';
   if (currentLedgerId && currentCard && canvasState.threadId && runId) {
@@ -136,6 +136,7 @@ export function closeMobileThread() {
   document.body.classList.remove('card-thread-open');
   document.querySelector('.thread-panel').hidden = true;
   document.querySelector('.mobile-thread-inspector').hidden = true;
+  return true;
 }
 
 export async function handleResponsiveThreadShortcut(event) {
