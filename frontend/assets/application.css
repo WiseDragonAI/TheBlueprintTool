@@ -493,8 +493,10 @@ body:has(.project-color-picker-modal[open]) { overflow: hidden; }
 .overview-ledgers, .zone-list { display: grid; gap: 10px; }
 
 .codex-modal { width: min(100%, 720px); max-width: none; height: min(100dvh, 860px); max-height: none; margin: auto; padding: 0; border: 1px solid var(--line-strong); color: var(--text); background: var(--panel-deep); }
+.process-modal { height: min(80dvh, 860px); }
 .codex-modal::backdrop { background: #000d; backdrop-filter: blur(3px); }
 .codex-sheet { display: flex; flex-direction: column; gap: 16px; min-width: 0; height: 100%; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); overflow-y: auto; }
+.process-modal .codex-sheet { overflow: hidden; }
 .codex-sheet > header { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; }
 .codex-sheet h2, .codex-sheet h3, .codex-sheet p { margin: 0; }
 .codex-back, .codex-icon { min-width: 44px; min-height: 44px; border: 1px solid var(--line); background: var(--panel-strong); }
@@ -510,6 +512,7 @@ body:has(.project-color-picker-modal[open]) { overflow: hidden; }
 .skill-category-filter[aria-pressed="false"] { color: color-mix(in srgb, var(--skill-category-color), white 38%); background: color-mix(in srgb, var(--skill-category-color), transparent 78%); }
 .codex-filter-clear { justify-self: start; min-height: 36px; padding: 0 10px; color: var(--accent); background: transparent; }
 .codex-list { display: grid; gap: 10px; }
+.process-library { min-height: 0; overflow-y: auto; }
 .codex-list-item { display: grid; gap: 6px; width: 100%; min-height: 64px; padding: 12px; border: 1px solid var(--line); text-align: left; background: var(--panel); }
 .codex-list-item span, .codex-list-item small, .codex-message { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
 .skill-result-heading { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; }
@@ -522,11 +525,14 @@ body:has(.project-color-picker-modal[open]) { overflow: hidden; }
 .codex-list-item .skill-favorite-label { color: #17120a; background: #fbbf24; }
 .codex-list-item .skill-source-label { padding-inline: 2px; text-transform: capitalize; }
 .codex-message.error { color: var(--danger); }
-.process-detail { display: grid; gap: 16px; }
+.process-detail { display: grid; gap: 16px; min-height: 0; overflow-y: auto; }
+.process-detail.skill-detail-layout { grid-template-rows: auto auto minmax(0, 1fr) auto; flex: 1 1 auto; overflow: hidden; }
 .skill-detail-title { color: var(--accent); font-size: 20px; line-height: 1.25; overflow-wrap: anywhere; }
+.skill-detail-scroll { --zone-color: var(--accent); min-width: 0; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+.skill-detail-actions { display: grid; gap: 12px; min-width: 0; padding-top: 12px; border-top: 1px solid var(--line); }
 .skill-markdown-section, .skill-reference-map { display: grid; gap: 10px; min-width: 0; }
 .skill-markdown-section > h4, .skill-reference-map > h4 { margin: 0; color: var(--text); font-size: 14px; letter-spacing: .08em; text-transform: uppercase; }
-.skill-markdown-section .ledger-card-body, .skill-reference-content { min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius); background: #080a0d; }
+.skill-markdown-section > .ledger-card-body, .skill-reference-content { min-width: 0; }
 .skill-reference-cards { display: grid; gap: 10px; padding-left: 18px; border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); }
 .skill-reference-card { position: relative; display: grid; gap: 8px; min-width: 0; }
 .skill-reference-card::before { position: absolute; top: 21px; left: -18px; width: 16px; border-top: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); content: ''; }
