@@ -276,6 +276,7 @@ test('renders every Control Room task as the same direct-link card without discl
   assert.match(mobile, /summary\.addEventListener\('click'[\s\S]*navigate\(pathForTask\(task\)\)/);
   const row = mobile.slice(mobile.indexOf('function taskRow('), mobile.indexOf('function renderControlRoom()'));
   assert.doesNotMatch(row, /aria-expanded|control-task-details|task-chevron|subtask-row/);
+  assert.doesNotMatch(styles, /control-task-details|task-chevron/);
   assert.match(row, /article\.append\(summary\);[\s\S]*return article;/);
   assert.match(mobile, /\['queue', 'exec', 'backlog'\]\.map/);
   assert.match(styles, /grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
