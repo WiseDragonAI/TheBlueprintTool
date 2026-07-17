@@ -8220,8 +8220,7 @@
       "codexRunEffort": "medium",
       "labels": [
         "master-task"
-      ],
-      "codexActiveRunId": "codex-skill-1784262780355-9907b20e"
+      ]
     },
     {
       "id": "card-codex-skill-1784022826105-454fe26f",
@@ -10698,25 +10697,6 @@
       "fields": []
     },
     {
-      "id": "card-7ee15497-0a6e-4d5e-a8fd-cd983b50a380",
-      "title": "New task intake",
-      "cardType": "note",
-      "domainId": "specs",
-      "status": "todo",
-      "labels": [
-        "master-task"
-      ],
-      "x": -10402,
-      "y": 94188,
-      "w": 360,
-      "h": 240,
-      "comment": {
-        "contentFile": ".decision-os/cards/specs/card-7ee15497-0a6e-4d5e-a8fd-cd983b50a380.md"
-      },
-      "facts": [],
-      "fields": []
-    },
-    {
       "id": "card-2f7b0843-7638-48fc-a979-76c2903fdc5d",
       "title": "Audit Codex process ownership and persistence",
       "cardType": "note",
@@ -10927,14 +10907,15 @@
       "title": "Bug: Desktop Shift+X voice handoff",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "frontend",
         "bug",
         "desktop",
         "keyboard",
         "voice",
-        "task-list",
+        "animation",
+        "implemented",
         "master-task"
       ],
       "x": -10402,
@@ -11013,14 +10994,16 @@
       "title": "Implement desktop Shift+X accepted-submission navigation",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "frontend",
         "bug",
         "desktop",
         "keyboard",
         "voice",
+        "animation",
         "code",
+        "verified",
         "subtask"
       ],
       "x": -10012,
@@ -11038,14 +11021,16 @@
       "title": "Add desktop Shift+X handoff regression coverage",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "frontend",
         "bug",
         "desktop",
         "keyboard",
         "voice",
+        "animation",
         "test",
+        "verified",
         "subtask"
       ],
       "x": -9632,
@@ -11063,14 +11048,15 @@
       "title": "Verify served desktop voice handoff and background run",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "frontend",
-        "bug",
         "desktop",
         "keyboard",
         "voice",
+        "animation",
         "scenario",
+        "operator-validation",
         "subtask"
       ],
       "x": -10012,
@@ -11090,7 +11076,6 @@
       "domainId": "specs",
       "status": "todo",
       "labels": [
-        "implementation",
         "master-task"
       ],
       "x": -10402,
@@ -11112,10 +11097,8 @@
       "title": "Resolve server-owned pipelines across managed projects",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
-        "implementation",
-        "code",
         "subtask"
       ],
       "x": -10012,
@@ -11135,8 +11118,6 @@
       "domainId": "specs",
       "status": "todo",
       "labels": [
-        "implementation",
-        "code",
         "subtask"
       ],
       "x": -9632,
@@ -11156,8 +11137,6 @@
       "domainId": "specs",
       "status": "todo",
       "labels": [
-        "implementation",
-        "test",
         "subtask"
       ],
       "x": -10012,
@@ -11177,8 +11156,6 @@
       "domainId": "specs",
       "status": "todo",
       "labels": [
-        "implementation",
-        "scenario",
         "subtask"
       ],
       "x": -9632,
@@ -11187,6 +11164,257 @@
       "h": 380,
       "comment": {
         "contentFile": ".decision-os/cards/specs/card-3c921548-1f55-4331-be45-823b4e5aa3ab.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-75f0b9c8-4e06-41a4-88ab-406a5e529d67",
+      "title": "Desktop project-card settings editor",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "frontend",
+        "ux",
+        "task-list",
+        "implemented",
+        "verified",
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 98268,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-75f0b9c8-4e06-41a4-88ab-406a5e529d67.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784266149313-3ef84ea7",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784266149313-3ef84ea7.md"
+    },
+    {
+      "id": "card-9fbece48-c474-468c-8862-d8907d95063d",
+      "title": "Mount and control the shared project settings editor on the canvas surface",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "labels": [
+        "code",
+        "frontend",
+        "project-settings",
+        "implemented",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 98268,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-9fbece48-c474-468c-8862-d8907d95063d.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-f73bc047-e2b1-47ca-8fb4-f8713b3af471",
+      "title": "Replace generic project-card editing controls with one gear Settings control",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "labels": [
+        "code",
+        "frontend",
+        "project-settings",
+        "implemented",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 98268,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-f73bc047-e2b1-47ca-8fb4-f8713b3af471.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-076575b2-ebf4-4414-b00a-283b2ced7e91",
+      "title": "Add project-card settings regressions",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "labels": [
+        "test",
+        "frontend",
+        "project-settings",
+        "verified",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 98678,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-076575b2-ebf4-4414-b00a-283b2ced7e91.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-ab38294e-ff82-4afb-b8c6-fe773f3a2560",
+      "title": "Preserve Codex Session Timers Across Server Restarts",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "implementation",
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 99288,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-ab38294e-ff82-4afb-b8c6-fe773f3a2560.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784264632181-421d6bc8",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784264632181-421d6bc8.md"
+    },
+    {
+      "id": "card-b2753e07-c720-4173-8094-adca2f644f33",
+      "title": "Persist queued Codex tasks in Execution",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "bug",
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 100308,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-b2753e07-c720-4173-8094-adca2f644f33.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784264861753-8f60ecb4",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784264861753-8f60ecb4.md"
+    },
+    {
+      "id": "card-4c97e81f-25f2-4150-b8e1-bacc928cead7",
+      "title": "Bind Control Room timers to the durable Codex session start",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "implementation",
+        "code",
+        "test",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 99288,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-4c97e81f-25f2-4150-b8e1-bacc928cead7.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-2647396a-3617-49aa-920c-c196a8a3d620",
+      "title": "Persist ledger execution status through Codex lifecycle",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "data",
+        "code",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 100308,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-2647396a-3617-49aa-920c-c196a8a3d620.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-21a20cc1-c49e-484e-ac19-013b1149c9ce",
+      "title": "Project durable execution state into Control Room Exec",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "backend",
+        "code",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 100308,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-21a20cc1-c49e-484e-ac19-013b1149c9ce.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-378d4480-07b6-44ba-b0c4-a842cc01ac5a",
+      "title": "Rename the Control Room Active surface to Exec",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "frontend",
+        "code",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 100718,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-378d4480-07b6-44ba-b0c4-a842cc01ac5a.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-36d7a19d-0e56-4601-9a4d-c16a27adf4fb",
+      "title": "Add queued execution reload and transition regressions",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "test",
+        "scenario",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 100718,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-36d7a19d-0e56-4601-9a4d-c16a27adf4fb.md"
       },
       "facts": [],
       "fields": []
@@ -12235,6 +12463,54 @@
       "id": "rel-b1cb5c65-b6ca-4ead-b6a6-510b362286cc",
       "from": "card-ecc57811-4f45-4315-bb3d-d3a951c61f3b",
       "to": "card-3c921548-1f55-4331-be45-823b4e5aa3ab",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-0ccf4ff9-f0c2-4286-9117-6f0a64d75cc4",
+      "from": "card-75f0b9c8-4e06-41a4-88ab-406a5e529d67",
+      "to": "card-9fbece48-c474-468c-8862-d8907d95063d",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-51d6d2da-1730-4ba5-a7e6-789587e7b812",
+      "from": "card-75f0b9c8-4e06-41a4-88ab-406a5e529d67",
+      "to": "card-f73bc047-e2b1-47ca-8fb4-f8713b3af471",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-6d9e9b59-ce4c-4fb2-ae60-85ce39de5e5d",
+      "from": "card-75f0b9c8-4e06-41a4-88ab-406a5e529d67",
+      "to": "card-076575b2-ebf4-4414-b00a-283b2ced7e91",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-7d36dbd3-2fef-47ee-b425-036b234aaf00",
+      "from": "card-ab38294e-ff82-4afb-b8c6-fe773f3a2560",
+      "to": "card-4c97e81f-25f2-4150-b8e1-bacc928cead7",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-646cc159-36d3-4bff-8efb-f0ee163623f1",
+      "from": "card-b2753e07-c720-4173-8094-adca2f644f33",
+      "to": "card-2647396a-3617-49aa-920c-c196a8a3d620",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-e750365f-b691-442e-8915-80267c51d1fc",
+      "from": "card-b2753e07-c720-4173-8094-adca2f644f33",
+      "to": "card-21a20cc1-c49e-484e-ac19-013b1149c9ce",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-cc272360-ac42-4343-9c08-dfe62d2f493f",
+      "from": "card-b2753e07-c720-4173-8094-adca2f644f33",
+      "to": "card-378d4480-07b6-44ba-b0c4-a842cc01ac5a",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-44db2e1b-a270-4c53-b668-0253e448ed5b",
+      "from": "card-b2753e07-c720-4173-8094-adca2f644f33",
+      "to": "card-36d7a19d-0e56-4601-9a4d-c16a27adf4fb",
       "label": "subtask"
     }
   ],
@@ -13364,6 +13640,36 @@
       "color": "#fb7185",
       "label": "Create Server-Wide Pipelines",
       "comments": []
+    },
+    {
+      "id": "zone-59999c0e-f841-4a86-83f4-1743edc003a3",
+      "x": -10462,
+      "y": 98208,
+      "width": 1200,
+      "height": 900,
+      "color": "#fb7185",
+      "label": "Desktop project-card settings editor",
+      "comments": []
+    },
+    {
+      "id": "zone-34845faa-ea9b-4c07-8ffe-b6fd7ea74bec",
+      "x": -10462,
+      "y": 99228,
+      "width": 1200,
+      "height": 900,
+      "color": "#fb7185",
+      "label": "Preserve Codex Session Timers Across Server Restarts",
+      "comments": []
+    },
+    {
+      "id": "zone-faca166d-3019-4f70-ba44-905ef8c43726",
+      "x": -10462,
+      "y": 100248,
+      "width": 1200,
+      "height": 900,
+      "color": "#fb7185",
+      "label": "Codex execution state persistence",
+      "comments": []
     }
   ],
   "notes": {},
@@ -13482,14 +13788,16 @@
     "thread-card-codex-skill-1784205406944-60080cc0": ".decision-os/threads/specs/thread-card-codex-skill-1784205406944-60080cc0.md",
     "thread-card-a4c81cea-0c42-4221-9891-fe57013a4149": ".decision-os/threads/specs/thread-card-a4c81cea-0c42-4221-9891-fe57013a4149.md",
     "thread-card-1d94a0d1-c8d6-4250-806d-3c4dab49c11e": ".decision-os/threads/specs/thread-card-1d94a0d1-c8d6-4250-806d-3c4dab49c11e.md",
-    "thread-card-7ee15497-0a6e-4d5e-a8fd-cd983b50a380": ".decision-os/threads/specs/thread-card-7ee15497-0a6e-4d5e-a8fd-cd983b50a380.md",
     "thread-card-f6904e45-8e15-4691-9619-b17165567797": ".decision-os/threads/specs/thread-card-f6904e45-8e15-4691-9619-b17165567797.md",
     "thread-card-a5950529-82c0-4e6f-880b-0e95f0b81ffc": ".decision-os/threads/specs/thread-card-a5950529-82c0-4e6f-880b-0e95f0b81ffc.md",
     "thread-card-codex-skill-1784216447040-eff225f5": ".decision-os/threads/specs/thread-card-codex-skill-1784216447040-eff225f5.md",
     "thread-card-codex-skill-1784227716339-dbce2763": ".decision-os/threads/specs/thread-card-codex-skill-1784227716339-dbce2763.md",
     "thread-card-9788570b-a768-4abd-b18c-efa900169dd6": ".decision-os/threads/specs/thread-card-9788570b-a768-4abd-b18c-efa900169dd6.md",
     "thread-card-cf200179-fb3b-4bd6-8914-6a701f60cb5f": ".decision-os/threads/specs/thread-card-cf200179-fb3b-4bd6-8914-6a701f60cb5f.md",
-    "thread-card-ecc57811-4f45-4315-bb3d-d3a951c61f3b": ".decision-os/threads/specs/thread-card-ecc57811-4f45-4315-bb3d-d3a951c61f3b.md"
+    "thread-card-ecc57811-4f45-4315-bb3d-d3a951c61f3b": ".decision-os/threads/specs/thread-card-ecc57811-4f45-4315-bb3d-d3a951c61f3b.md",
+    "thread-card-75f0b9c8-4e06-41a4-88ab-406a5e529d67": ".decision-os/threads/specs/thread-card-75f0b9c8-4e06-41a4-88ab-406a5e529d67.md",
+    "thread-card-ab38294e-ff82-4afb-b8c6-fe773f3a2560": ".decision-os/threads/specs/thread-card-ab38294e-ff82-4afb-b8c6-fe773f3a2560.md",
+    "thread-card-b2753e07-c720-4173-8094-adca2f644f33": ".decision-os/threads/specs/thread-card-b2753e07-c720-4173-8094-adca2f644f33.md"
   },
   "deletedNoteIds": {
     "thread-card-7074d33a-39da-42a1-b470-673cbe221def": [
@@ -13509,7 +13817,11 @@
       "note-1784099261692-952daa06b9b158"
     ],
     "thread-card-fe388485-7e75-4392-9117-894936bdb998": [
-      "note-1784100098151-20af017ba0d378"
+      "note-1784100098151-20af017ba0d378",
+      "note-1784265823670-e8e3f855279cf8"
+    ],
+    "thread-card-ecc57811-4f45-4315-bb3d-d3a951c61f3b": [
+      "note-1784264967093-defcf5093bf5a"
     ]
   }
 }
