@@ -869,7 +869,7 @@ test('externally started Codex runs clear terminal widget cache and restart poll
     assert.equal(cachedWidget.nodes['[data-codex-run-model]'].disabled, true);
     assert.equal(cachedWidget.nodes['[data-codex-run-effort]'].disabled, true);
     await waitFor(() => requests.length === 2);
-    assert.equal(requests[1], '/api/codex/skills/runs/codex-skill-3000-cache?ledgerId=specs&cardId=card-a&since=0');
+    assert.equal(requests[1], '/api/codex/skills/runs/codex-skill-3000-cache?ledgerId=specs&cardId=card-a&since=8');
     await waitFor(() => cachedWidget.nodes['[data-codex-run-status]'].textContent === 'COMPLETE');
     cachedWidget.nodes['[data-codex-run-tools]'].textContent = '7';
     cachedWidget.nodes['[data-codex-run-messages]'].textContent = '2';

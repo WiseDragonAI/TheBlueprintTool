@@ -180,6 +180,7 @@ function reconcilePipelineExecution(context: PipelineLedgerContext, run: CodexPi
     }
     if (skillRunIds.has(String(card.codexActiveRunId ?? ''))) {
       delete card.codexActiveRunId;
+      delete card.codexActiveExecutionId;
       changed = true;
     }
   }

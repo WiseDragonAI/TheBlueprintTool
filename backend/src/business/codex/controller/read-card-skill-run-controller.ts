@@ -8,7 +8,7 @@ import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/re
 import { type NormalizedRunEvent } from '../helper/card-skill-run-event-types.js';
 import { normalizeCardSkillRunDiagnostic, normalizeCardSkillRunEvent } from '../helper/normalize-card-skill-run-event.js';
 import { readCardSkillRunEventLines } from '../helper/read-card-skill-run-event-lines.js';
-import { codexRunSegmentMetadata, isCodexRunMarkerLine, latestCodexRunSegmentLog, latestCodexRunSegmentStartedAtMs, latestCodexRunSegmentStartLine, type CodexRunSegmentMetadata } from '../helper/codex-run-segment-marker.js';
+import { codexRunExecutions, codexRunSegmentMetadata, isCodexRunMarkerLine, latestCodexRunSegmentLog, latestCodexRunSegmentStartedAtMs, latestCodexRunSegmentStartLine, type CodexRunExecution, type CodexRunSegmentMetadata } from '../helper/codex-run-segment-marker.js';
 import { readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import { readCodexProcessQueue } from '../helper/codex-process-queue.js';
 import { unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
@@ -125,7 +125,27 @@ function runSegmentStartedAtMs(input: { runtime: AnyRecord; runId: string; stder
   const run = runs[input.runId] ?? {};
   const runtimeStarted = Date.parse(String(run.startedAt ?? ''));
   const log = existsSync(input.stderrFile) ? readFileSync(input.stderrFile, 'utf8') : '';
-  return runtimeStarted || latestCodexRunSegmentStartedAtMs({ log, runId: input.runId }) || runTimestamp(input.runId);
+  const durableExecutionId = codexRunExecutions({ log, runId: input.runId }).at(-1)?.executionId ?? '';
+  if (String(run.executionId ?? '') && String(run.executionId ?? '') !== durableExecutionId) {
+    return runtimeStarted || Date.parse(String(run.createdAt ?? '')) || runTimestamp(input.runId);
+  }
+  return latestCodexRunSegmentStartedAtMs({ log, runId: input.runId }) || runtimeStarted || runTimestamp(input.runId);
+}
+
+function executionHistory(input: { executions: CodexRunExecution[]; events: NormalizedRunEvent[]; currentStatus: RunStatus; active: boolean }): AnyRecord[] {
+  return input.executions.map((execution, index) => {
+    const endLine = input.executions[index + 1]?.startLine ?? (input.events.at(-1)?.line ?? execution.startLine);
+    const executionEvents = input.events.filter((event) => event.line > execution.startLine && event.line <= endLine);
+    const terminal = latestRunEventStatus(executionEvents);
+    const current = index === input.executions.length - 1;
+    const status = current ? input.currentStatus : terminal ?? 'unknown';
+    return {
+      ...execution,
+      endLine: current && input.active ? null : endLine,
+      status,
+      active: current && input.active,
+    };
+  });
 }
 
 function elapsedMs(input: { runtime: AnyRecord; runId: string; status: RunStatus; stdoutFile: string; stderrFile: string }): number {
@@ -189,6 +209,20 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
   const stderrLog = existsSync(stderrFile) ? readFileSync(stderrFile, 'utf8') : '';
   const parsedLines = readCardSkillRunEventLines(stdoutFile);
   const events = parsedLines.map(normalizeCardSkillRunEvent);
+  const executions = codexRunExecutions({ log: stderrLog, runId });
+  const runtimeRun = runtime.codexSkillRuns && typeof runtime.codexSkillRuns === 'object' ? (runtime.codexSkillRuns as Record<string, AnyRecord>)[runId] ?? {} : {};
+  const runtimeExecutionId = String(runtimeRun.executionId ?? '');
+  if (runtimeExecutionId && executions.at(-1)?.executionId !== runtimeExecutionId) {
+    executions.push({
+      executionId: runtimeExecutionId,
+      runId,
+      segment: runtimeRun.newSession === true ? 'restart' : executions.length === 0 ? 'start' : 'continue',
+      startedAt: String(runtimeRun.startedAt ?? runtimeRun.createdAt ?? ''),
+      startLine: parsedLines.at(-1)?.line ?? 0,
+      turnStartedAt: String(runtimeRun.turnStartedAt ?? ''),
+      turnStartLine: 0,
+    });
+  }
   const segmentStartLine = latestCodexRunSegmentStartLine({ log: stderrLog, runId });
   const segmentEvents = events.filter((event) => event.line > segmentStartLine);
   const segmentLog = latestCodexRunSegmentLog({ log: stderrLog, runId });
@@ -204,7 +238,9 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
       : inferredTerminal ?? (interruptedProcess ? 'failed' : inferred));
   // Retain the response field for clients while making explicit that status reads persist nothing.
   const persistedEventCount = 0;
-  const returnedEvents = segmentEvents.filter((event) => event.line > since);
+  // Session history is append-only. Segment filtering is reserved for current-execution
+  // status and counters; the global line cursor always addresses the complete log.
+  const returnedEvents = events.filter((event) => event.line > since);
   const metadata = {
     ...runtimeRunMetadata(runtime, runId),
     ...codexRunSegmentMetadata({ log: stderrLog, runId }),
@@ -230,6 +266,10 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     stdoutFile,
     stderrFile,
   });
+  const active = runtimeCodexRunOwnsLiveProcess(runtime, runId, decisionOsRoot);
+  const currentElapsedMs = elapsedMs({ runtime, runId, status, stdoutFile, stderrFile });
+  const projectedExecutions = executionHistory({ executions, events, currentStatus: status, active });
+  const currentExecution = projectedExecutions.at(-1) ?? null;
   return {
     ok: true,
     statusCode: 200,
@@ -245,11 +285,14 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     skillName: persistedSkill?.skillName ?? '',
     pipelineStatus: persistedPipelineRun?.status ?? null,
     status,
-    active: runtimeCodexRunOwnsLiveProcess(runtime, runId, decisionOsRoot),
+    active,
+    executionId: String(currentExecution?.executionId ?? ''),
+    currentExecution,
+    executions: projectedExecutions,
     interruptedAt: interruptedProcess?.interruptedAt ?? null,
     queuePosition: status === 'pending' && queuedProcess ? unifiedCodexQueuePosition({ decisionOsRoot, id: queuedProcess.id, createdAt: queuedProcess.createdAt, runtime }) : null,
     startedAt: new Date(runSegmentStartedAtMs({ runtime, runId, stderrFile })).toISOString(),
-    elapsedMs: elapsedMs({ runtime, runId, status, stdoutFile, stderrFile }),
+    elapsedMs: currentElapsedMs,
     lineCount: parsedLines.at(-1)?.line ?? 0,
     nextSince: parsedLines.at(-1)?.line ?? 0,
     toolCallCount: uniqueToolCallCount(runId, segmentEvents),

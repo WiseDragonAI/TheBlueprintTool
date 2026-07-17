@@ -94,7 +94,14 @@ export async function deleteThreadCodexSessionController(input: { action_payload
 
   try {
     for (const snapshot of snapshots) rmSync(snapshot.file);
-    if (String(card.codexActiveRunId ?? '') === runId) delete card.codexActiveRunId;
+    if (String(card.codexActiveRunId ?? '') === runId) {
+      delete card.codexActiveRunId;
+      delete card.codexActiveExecutionId;
+      if (String(card.executionRunId ?? '') === runId) {
+        delete card.executionRunId;
+        delete card.executionStatus;
+      }
+    }
     delete card.codexThreadRunId;
     delete card.codexThreadRunOutputFile;
     stripHydratedThreadNotes(ledger);

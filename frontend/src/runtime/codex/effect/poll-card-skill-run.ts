@@ -347,7 +347,6 @@ function setNewSessionButtonState(button: HTMLButtonElement, state: 'ready' | 's
 function paintExternallyStartedRun(poller: Poller, latestLabel = 'Continuing session'): void {
   if (!poller.element) return;
   poller.terminal = false;
-  poller.since = 0;
   poller.detachedChecks = 0;
   poller.startedAtMs = Date.now();
   poller.element.dataset.runStatus = 'running';
@@ -434,9 +433,10 @@ async function continueRun(poller: Poller, newSession: boolean): Promise<void> {
   debugContinue(traceId, 'click', { ...pollerDebugState(poller), newSession, previousSummaryStatus: previousSummary?.status ?? '', previousSummaryLineCount: previousSummary?.lineCount ?? 0 });
   poller.continueInFlight = true;
   poller.terminal = false;
-  poller.since = 0;
-  poller.historyEvents = [];
-  poller.lastSummary = null;
+  // A continuation is a new execution inside the same append-only session.
+  // Keep the global cursor and rendered history while resetting only live execution state.
+  poller.since = Math.max(poller.since, previousSummary?.lineCount ?? 0);
+  if (previousSummary?.events.length && poller.historyEvents.length === 0) poller.historyEvents = [...previousSummary.events];
   poller.detachedChecks = 0;
   poller.startedAtMs = Date.now();
   terminalSummaries.delete(key);
@@ -564,8 +564,7 @@ export function resumeExternallyStartedCardSkillRun(input: PollerIdentity): bool
   const poller = pollers.get(key);
   if (!poller) return false;
   poller.continueInFlight = false;
-  poller.historyEvents = [];
-  poller.lastSummary = null;
+  poller.since = Math.max(poller.since, poller.lastSummary?.lineCount ?? 0);
   paintExternallyStartedRun(poller);
   pollers.set(key, poller);
   schedulePoll(poller, 0);

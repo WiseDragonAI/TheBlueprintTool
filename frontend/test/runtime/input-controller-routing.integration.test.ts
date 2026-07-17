@@ -216,8 +216,8 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(renderThreadPanel, /renderThreadCodexSelect/);
   assert.match(renderThreadPanel, /button\.dataset\.codexModel = threadCodexModel/);
   assert.match(renderThreadPanel, /button\.dataset\.codexEffort = threadCodexEffort/);
+  assert.match(processThreadCodex, /existingRunId[\s\S]*requestCardSkillRunContinue\(\{ ledgerId, cardId, runId: existingRunId/);
   assert.match(processThreadCodex, /requestThreadCodexProcess\(\{ ledgerId, threadId, cardId, codexModel: input\.codexModel, codexEffort: input\.codexEffort \}\)/);
-  assert.doesNotMatch(processThreadCodex, /cardCodexThreadRunId|requestCardSkillRunStatus|requestCardSkillRunContinue/);
   assert.match(threadCss, /\.thread-codex-select\s*{[^}]*height:\s*28px;[^}]*font-family:\s*var\(--mono\);/s);
 
   const canvasLayerCss = source('frontend/assets/canvas/canvas-layer.css');
