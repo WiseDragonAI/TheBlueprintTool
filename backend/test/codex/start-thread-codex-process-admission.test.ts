@@ -4,11 +4,13 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startThreadCodexProcessController } from '@backend/business/codex/controller/start-thread-codex-process-controller.js';
-import { enqueueCodexThreadProcess, readCodexProcessQueue } from '@backend/business/codex/helper/codex-process-queue.js';
+import { cancelCardSkillRunController } from '@backend/business/codex/controller/cancel-card-skill-run-controller.js';
+import { enqueueCodexThreadProcess, markCodexProcessQueueItemRunning, readCodexProcessQueue } from '@backend/business/codex/helper/codex-process-queue.js';
+import { runtimeCodexRunOwnsLiveProcess } from '@backend/business/codex/helper/runtime-codex-run-owns-live-process.js';
 
 type Fixture = {
   workspace: string;
@@ -58,6 +60,15 @@ function fixture(): Fixture {
     '',
   ].join('\n'));
   return { workspace, decisionOsRoot, ledgerPath, cardId, threadId, staleRunId };
+}
+
+async function waitForCondition(predicate: () => boolean, label: string): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.fail(`Timed out waiting for ${label}.`);
 }
 
 test('operator Run supersedes stale card ownership and a pending queue item', async () => {
@@ -124,6 +135,72 @@ test('operator Run is rejected while the card owns a live child process', async 
     assert.equal(ledger.cards[0].codexActiveRunId, context.staleRunId);
     assert.equal(ledger.cards[0].codexThreadRunId, context.staleRunId);
   } finally {
+    rmSync(context.workspace, { recursive: true, force: true });
+  }
+});
+
+test('turn lifecycle updates preserve the live child handle for cancellation', async () => {
+  const context = fixture();
+  const fakeCodex = join(context.workspace, 'fake-codex-live.mjs');
+  const previousCodexBin = process.env.CODEX_BIN;
+  writeFileSync(fakeCodex, [
+    '#!/usr/bin/env node',
+    'process.stdin.resume();',
+    'process.stdin.on("end", () => {',
+    '  console.log(JSON.stringify({ type: "thread.started", thread_id: "session-live" }));',
+    '  console.log(JSON.stringify({ type: "turn.started" }));',
+    '  setInterval(() => {}, 1000);',
+    '});',
+  ].join('\n'));
+  chmodSync(fakeCodex, 0o755);
+  process.env.CODEX_BIN = fakeCodex;
+  const runtime: Record<string, unknown> = { decisionOsRoot: context.decisionOsRoot };
+  enqueueCodexThreadProcess({
+    decisionOsRoot: context.decisionOsRoot,
+    id: context.staleRunId,
+    createdAt: '2026-07-15T08:00:00.000Z',
+    payload: { ledgerId: 'specs', threadId: context.threadId, cardId: context.cardId },
+  });
+  markCodexProcessQueueItemRunning(context.decisionOsRoot, context.staleRunId);
+
+  try {
+    const result = await startThreadCodexProcessController({
+      action_payload: {
+        ledgerId: 'specs',
+        threadId: context.threadId,
+        cardId: context.cardId,
+        reservedRunId: context.staleRunId,
+        queueDispatch: true,
+      },
+      runtime_state: runtime,
+    });
+    assert.equal(result.ok, true);
+    const stdoutFile = String((result.run as Record<string, unknown>).stdoutFile ?? '');
+    await waitForCondition(
+      () => Boolean(stdoutFile && existsSync(stdoutFile) && readFileSync(stdoutFile, 'utf8').includes('turn.started')),
+      'the turn.started event',
+    );
+
+    assert.equal(runtimeCodexRunOwnsLiveProcess(runtime, context.staleRunId), true);
+    const cancellation = await cancelCardSkillRunController({
+      action_payload: { ledgerId: 'specs', cardId: context.cardId, runId: context.staleRunId },
+      runtime_state: runtime,
+    });
+    assert.equal(cancellation.ok, true);
+    assert.equal(cancellation.statusCode, 202);
+    assert.equal(cancellation.status, 'cancelled');
+    await waitForCondition(
+      () => Boolean((runtime.codexSkillRuns as Record<string, { settledAt?: string }>)[context.staleRunId]?.settledAt),
+      'the cancelled child to settle',
+    );
+  } finally {
+    const run = (runtime.codexSkillRuns as Record<string, { child?: { kill?: (signal?: string) => boolean }; settledAt?: string }> | undefined)?.[context.staleRunId];
+    if (!run?.settledAt) {
+      run?.child?.kill?.('SIGKILL');
+      await waitForCondition(() => Boolean(run?.settledAt), 'the test child cleanup');
+    }
+    if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
+    else process.env.CODEX_BIN = previousCodexBin;
     rmSync(context.workspace, { recursive: true, force: true });
   }
 });

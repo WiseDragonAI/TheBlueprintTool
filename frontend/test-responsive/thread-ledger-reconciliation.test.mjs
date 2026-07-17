@@ -17,7 +17,8 @@ test('reconciliation replaces the active ledger before resolving the thread card
   });
 
   assert.equal(result.ledger, refreshedLedger);
-  assert.equal(result.card, refreshedCard);
+  assert.deepEqual(result.card, refreshedCard);
+  assert.equal(result.ledger.cards[0], result.card);
   assert.deepEqual(result.ledger.notes['thread-card-a'], [{ id: 'note-a' }]);
 });
 
@@ -35,4 +36,29 @@ test('reconciliation retains the accepted optimistic run across a stale navigati
 
   assert.equal(result.card.codexActiveRunId, 'codex-skill-accepted');
   assert.equal(result.card.codexThreadRunId, 'codex-skill-accepted');
+});
+
+test('reconciliation preserves detailed run ownership and installs the merged card in the active ledger', () => {
+  const detailedCard = {
+    id: 'card-a',
+    title: 'Detailed title',
+    comment: { what: 'Detailed body' },
+    codexActiveRunId: 'codex-skill-running',
+    codexThreadRunId: 'codex-skill-running',
+  };
+  const navigationCard = { id: 'card-a', title: 'Refreshed title', status: 'todo' };
+  const refreshedLedger = { cards: [navigationCard] };
+
+  const result = reconcileResponsiveThreadLedger({
+    activeLedger: { cards: [detailedCard] },
+    refreshedLedger,
+    slice: {},
+    currentCard: detailedCard,
+  });
+
+  assert.equal(result.card.title, 'Refreshed title');
+  assert.deepEqual(result.card.comment, { what: 'Detailed body' });
+  assert.equal(result.card.codexActiveRunId, 'codex-skill-running');
+  assert.equal(result.card.codexThreadRunId, 'codex-skill-running');
+  assert.equal(result.ledger.cards[0], result.card);
 });

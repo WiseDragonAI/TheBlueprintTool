@@ -67,7 +67,9 @@ function runtimeRuns(runtime: AnyRecord): Record<string, AnyRecord> {
 
 function updateRuntimeRun(runtime: AnyRecord, runId: string, patch: AnyRecord): void {
   const runs = runtimeRuns(runtime);
-  runs[runId] = { ...(runs[runId] ?? {}), ...patch };
+  const current = runs[runId];
+  if (current && typeof current === 'object') Object.assign(current, patch);
+  else runs[runId] = { ...patch };
 }
 
 function attachRuntimeRunChild(runtime: AnyRecord, runId: string, child: ChildProcess): void {
