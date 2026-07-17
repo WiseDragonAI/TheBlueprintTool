@@ -195,7 +195,8 @@ body.menu-open .nav-scrim { opacity: 1; pointer-events: auto; }
 .control-sticky { position: sticky; top: 64px; z-index: 15; margin: -20px -14px 16px; padding: 18px 14px 12px; border-bottom: 1px solid var(--line); background: rgba(9,10,12,.96); backdrop-filter: blur(18px); }
 .control-filters { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
 .control-filters[hidden] { display: none; }
-.project-filter-chip { position: relative; flex: 0 0 auto; min-height: 34px; padding: 5px 12px; border: 1px solid color-mix(in srgb, var(--project-color), white 24%); border-radius: 9px; color: var(--project-foreground); background: var(--project-color); box-shadow: inset 0 1px 0 #ffffff2e, 0 3px 10px color-mix(in srgb, var(--project-color), transparent 65%); font-size: 13px; font-weight: 800; line-height: 1.1; }
+.project-filter-chip { position: relative; display: inline-flex; flex: 0 0 auto; gap: 7px; align-items: center; min-height: 34px; padding: 5px 12px; border: 1px solid color-mix(in srgb, var(--project-color), white 24%); border-radius: 9px; color: var(--project-foreground); background: var(--project-color); box-shadow: inset 0 1px 0 #ffffff2e, 0 3px 10px color-mix(in srgb, var(--project-color), transparent 65%); font-size: 13px; font-weight: 800; line-height: 1.1; }
+.project-filter-chip .terminal-button__key, .node-filter-cycle { display: none; }
 .project-filter-remote-icon { position: absolute; top: 3px; right: 3px; width: 9px; height: 9px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; pointer-events: none; }
 .project-filter-chip[aria-pressed="true"] { outline: 2px solid white; outline-offset: -3px; }
 .all-projects-filter { --project-color: #20242b; border-color: #49515d; box-shadow: inset 0 1px 0 #ffffff1c; }
@@ -204,6 +205,11 @@ body.menu-open .nav-scrim { opacity: 1; pointer-events: auto; }
 .ledger-filter-chip[aria-pressed="true"] { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent), transparent 88%); }
 .filter-clear-button { margin-left: 8px; border-color: color-mix(in srgb, var(--danger), transparent 35%); color: var(--danger); background: color-mix(in srgb, var(--danger), transparent 90%); font-weight: 800; }
 .control-task-list { display: grid; gap: 12px; }
+.control-task-column { display: none; min-width: 0; }
+.control-task-column[data-active="true"] { display: grid; }
+.control-task-column-header { display: none; }
+.control-task-column-list { display: grid; min-height: 84px; gap: 12px; align-content: start; }
+.control-column-empty { margin: 0; padding: 54px 16px; color: var(--muted); text-align: center; }
 .control-task { position: relative; border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: var(--radius); background: linear-gradient(180deg, var(--panel) 0%, var(--panel-deep) 100%); }
 .control-task.next-task { border-color: var(--accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent), transparent 50%), 0 10px 32px #0008; }
 .control-task.has-diagnostics { border-left-color: var(--danger); }
@@ -238,6 +244,7 @@ body.menu-open .nav-scrim { opacity: 1; pointer-events: auto; }
 .control-tabs button small { margin-top: 3px; font-size: 10px; }
 .control-tabs button[aria-selected="true"] { color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
 .control-tabs .new-task-button { color: var(--accent); background: var(--control-bg-primary); }
+.control-board-footer, .desktop-new-task-button { display: none; }
 .state-view { display: grid; place-items: center; min-height: 58vh; padding: 40px 20px; text-align: center; }
 .state-view h1 { margin: 14px 0 6px; font-size: 24px; }
 .state-view p { max-width: 34rem; color: var(--muted); }
@@ -535,9 +542,20 @@ html[data-task-back-handoff="true"]::view-transition-new(root) { animation: task
   .control-room { padding-bottom: 0; }
   .control-command { position: sticky; top: 64px; z-index: 15; display: grid; gap: 12px; margin: -34px -30px 20px; padding: 22px 30px 16px; border-bottom: 1px solid var(--line); background: rgba(9,10,12,.96); backdrop-filter: blur(18px); }
   .control-sticky { position: static; z-index: auto; display: grid; gap: 12px; margin: 0; padding: 0; border: 0; background: transparent; backdrop-filter: none; }
-  .control-tabs { position: static; display: flex; width: fit-content; max-width: 100%; gap: 8px; padding: 0; border: 0; background: transparent; backdrop-filter: none; }
-  .control-tabs button { min-width: 112px; min-height: 44px; padding: 7px 14px; }
-  .control-tabs .new-task-button { margin-left: 6px; }
+  .control-tabs { display: none; }
+  .control-task-list { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: start; }
+  .control-task-column, .control-task-column[data-active="true"] { display: grid; gap: 10px; min-width: 0; }
+  .control-task-column-header { display: flex; align-items: center; justify-content: space-between; min-height: 42px; padding: 0 12px; border-bottom: 1px solid var(--line); }
+  .control-task-column-header h2 { margin: 0; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; }
+  .control-task-column-header small { display: grid; min-width: 24px; height: 24px; padding: 0 6px; place-items: center; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .control-task-column-list { min-height: 180px; padding: 2px; border-radius: var(--radius); }
+  .control-task-summary { padding: 14px; }
+  .task-copy strong { font-size: 15px; }
+  [data-control-column="exec"] .control-task-summary { cursor: pointer; }
+  .project-filter-chip .terminal-button__key { display: inline-flex; color: currentColor; border-color: color-mix(in srgb, currentColor, transparent 45%); background: rgba(0,0,0,.24); }
+  .node-filter-cycle { display: inline-flex; flex: 0 0 auto; }
+  .control-board-footer { position: sticky; bottom: 18px; z-index: 14; display: flex; justify-content: flex-end; margin-top: 18px; pointer-events: none; }
+  .desktop-new-task-button { display: inline-flex; pointer-events: auto; }
   .ledger-header { grid-template-columns: minmax(0, 1fr) minmax(250px, 340px); align-items: end; }
   .card-list, .overview-ledgers, .zone-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .project-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }

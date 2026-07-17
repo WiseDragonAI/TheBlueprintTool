@@ -396,12 +396,17 @@
                   <button type="button" data-control-tab="queue" role="tab" aria-selected="true"><span>Queue</span><small>0 tasks</small></button>
                   <button type="button" data-control-tab="exec" role="tab" aria-selected="false"><span>Exec</span><small>0 tasks</small></button>
                   <button type="button" data-control-tab="backlog" role="tab" aria-selected="false"><span>Backlog</span><small>0 tasks</small></button>
-                  <button class="new-task-button" type="button"><span>+ New task</span><small>Create</small></button>
+                  <button class="new-task-button mobile-new-task-button" type="button"><span>+ New task</span><small>Create</small></button>
                 </nav>
               </div>
               <div id="control-task-list" class="control-task-list"></div>
               <p id="control-empty" class="control-empty" hidden></p>
               <details id="control-diagnostics" class="control-diagnostics" hidden><summary>Markdown diagnostics</summary></details>
+              <div class="control-board-footer">
+                <button class="new-task-button desktop-new-task-button terminal-button terminal-button--action" type="button">
+                  <span class="terminal-button__key">X</span><span class="terminal-button__label">NEW TASK</span>
+                </button>
+              </div>
             </section>
 
             <section id="ledger-view" hidden>
