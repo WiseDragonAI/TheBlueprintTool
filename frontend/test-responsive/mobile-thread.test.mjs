@@ -220,19 +220,22 @@ test('every desktop card opens through one thread lifecycle while mobile cards s
   assert.doesNotMatch(applicationSource, /await navigate\(cardPath\(ledgerRef\.id, zone\.id, cardId\)\);\n  openMobileThread/);
 });
 
-test('mobile Codex Log uses one action-and-metrics row for queued, running, resumable, and idle runs', () => {
-  assert.match(sharedCodexStatus, /strip\.append\(renderRunAction\(/);
+test('mobile Codex Log makes queued work read-only while preserving actions for other run states', () => {
+  assert.match(sharedCodexStatus, /if \(!queued\) strip\.append\(renderRunAction\(/);
   assert.match(sharedCodexStatus, /summary\?\.ok === true && summary\.active === true && status === 'running'/);
   assert.match(sharedCodexStatus, /threadCodexStopState\(input\.runId\)\.pending/);
   assert.match(sharedCodexLog, /const stopError = threadCodexStopState\(runId\)\.error/);
   assert.doesNotMatch(sharedCodexStatus, /\['Status', status\]/);
-  assert.match(sharedCodexStatus, /input\.running \? 'STOP' : input\.queued \? 'CANCEL' : input\.runId \? 'RESUME' : 'START'/);
+  assert.match(sharedCodexStatus, /input\.running \? 'STOP' : input\.runId \? 'RESUME' : 'START'/);
   assert.match(sharedCodexStatus, /button\.dataset\.action = occupied \? 'stop-thread-codex' : 'process-thread-codex'/);
   assert.match(sharedCodexStatus, /icon\.textContent = occupied \? '■' : input\.runId \? '↻' : '▶'/);
   assert.match(sharedCodexStatus, /`Queued · position \$\{summary\.queuePosition\}`/);
-  assert.match(sharedCodexLog, /Codex will start when capacity is available/);
+  assert.match(sharedCodexLog, /Waiting for Codex capacity/);
   assert.match(sharedCodexStatus, /terminal-button--stop' : 'terminal-button--send'/);
   assert.match(sharedThreadCss, /\.codex-log-status\s*{[^}]*grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/s);
+  assert.match(sharedThreadCss, /\.codex-log-status\[data-run-status="pending"\]\s*{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/s);
+  assert.match(sharedThreadCss, /\.thread-tab\[data-run-status="pending"\]::before\s*{[^}]*animation:\s*thread-codex-log-queued/s);
+  assert.match(sharedThreadCss, /\.codex-log-queue-indicator i\s*{[^}]*animation:\s*codex-log-queue-dot/s);
   assert.match(sharedThreadCss, /\.codex-log-action-button\s*{[^}]*max-width:\s*64px;[^}]*height:\s*56px;/s);
   assert.doesNotMatch(sharedThreadCss, /\.codex-log-run-action\s*{[^}]*grid-column:\s*1 \/ -1/s);
   assert.match(sharedCodexLog, /if \(!runId\) \{[\s\S]*renderThreadCodexLogStatus\(\{ summary: null, card, runId: '', threadId \}\)/);

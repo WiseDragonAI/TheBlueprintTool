@@ -8,7 +8,7 @@ import type { CardSkillRunSummary } from '../../codex/effect/request-card-skill-
 import { cardCodexRunPreference } from '../../codex/helper/card-codex-run-preference.js';
 import { clearThreadCodexStopState, threadCodexStopState } from '../../codex/controller/stop-thread-codex-run-controller.js';
 
-function renderRunAction(input: { card: Record<string, unknown>; runId: string; threadId: string; running: boolean; queued: boolean }): HTMLElement {
+function renderRunAction(input: { card: Record<string, unknown>; runId: string; threadId: string; running: boolean }): HTMLElement {
   const item = document.createElement('div');
   item.className = 'codex-log-run-action';
   const term = document.createElement('dt');
@@ -16,7 +16,7 @@ function renderRunAction(input: { card: Record<string, unknown>; runId: string; 
   const description = document.createElement('dd');
   const button = document.createElement('button');
   button.type = 'button';
-  const occupied = input.running || input.queued;
+  const occupied = input.running;
   button.className = `codex-log-action-button terminal-button ${occupied ? 'codex-log-stop terminal-button--stop' : 'terminal-button--send'}`;
   button.dataset.action = occupied ? 'stop-thread-codex' : 'process-thread-codex';
   button.dataset.codexRunId = input.runId;
@@ -25,9 +25,9 @@ function renderRunAction(input: { card: Record<string, unknown>; runId: string; 
   const preference = cardCodexRunPreference(input.card);
   button.dataset.codexModel = preference.model;
   button.dataset.codexEffort = preference.effort;
-  const action = input.running ? 'STOP' : input.queued ? 'CANCEL' : input.runId ? 'RESUME' : 'START';
-  const readyTitle = input.queued ? 'Cancel queued Codex run' : `${action[0]}${action.slice(1).toLowerCase()} Codex run`;
-  const pendingTitle = input.queued ? 'Cancelling queued Codex run' : 'Stopping Codex run';
+  const action = input.running ? 'STOP' : input.runId ? 'RESUME' : 'START';
+  const readyTitle = `${action[0]}${action.slice(1).toLowerCase()} Codex run`;
+  const pendingTitle = 'Stopping Codex run';
   button.title = readyTitle;
   button.setAttribute('aria-label', button.title);
   const icon = document.createElement('span');
@@ -39,7 +39,7 @@ function renderRunAction(input: { card: Record<string, unknown>; runId: string; 
   if (occupied) {
     label.dataset.codexLogStopLabel = '';
     button.dataset.stopReadyLabel = action;
-    button.dataset.stopPendingLabel = input.queued ? 'CANCELLING' : 'STOPPING';
+    button.dataset.stopPendingLabel = 'STOPPING';
     button.dataset.stopReadyTitle = readyTitle;
     button.dataset.stopPendingTitle = pendingTitle;
   }
@@ -66,8 +66,10 @@ export function renderThreadCodexLogStatus(input: { summary: CardSkillRunSummary
   strip.dataset.runId = input.runId;
   const running = summary?.ok === true && summary.active === true && status === 'running';
   const queued = summary?.ok === true && status === 'pending';
-  if (!running && !queued) clearThreadCodexStopState(input.runId);
-  strip.append(renderRunAction({ card: input.card, runId: input.runId, threadId: input.threadId, running, queued }));
+  if (!running) clearThreadCodexStopState(input.runId);
+  // Queued work is scheduler-owned. Keep the status surface read-only until it
+  // starts so an operator cannot accidentally create, cancel, or delete work.
+  if (!queued) strip.append(renderRunAction({ card: input.card, runId: input.runId, threadId: input.threadId, running }));
   const values: Array<[string, string, string?]> = [
     ['Model', summary?.metadata.codexModel || String(input.card.codexRunModel ?? '') || '—'],
     ['Effort', summary?.metadata.codexEffort || String(input.card.codexRunEffort ?? '') || '—'],
