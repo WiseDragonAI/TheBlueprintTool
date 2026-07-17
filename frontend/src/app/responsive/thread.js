@@ -41,6 +41,14 @@ let initialized = false;
 let eventSource = null;
 let eventSourceUrl = '';
 let quickVoiceCapture = false;
+let threadRefreshGeneration = 0;
+let threadPresentationGeneration = Number(document.body.dataset.threadPresentationGeneration || 0);
+
+function bumpThreadPresentationGeneration() {
+  threadPresentationGeneration += 1;
+  document.body.dataset.threadPresentationGeneration = String(threadPresentationGeneration);
+  window.dispatchEvent(new CustomEvent('decision-os:thread-presentation-change', { detail: { generation: threadPresentationGeneration } }));
+}
 
 const handleMobileThreadSessionDeletion = createMobileThreadSessionDeletionHandler({
   modal: () => document.querySelector('.confirm-modal'),
@@ -85,6 +93,8 @@ function hydrateThreadRun(runId, startedAt, status, queuePosition) {
 }
 
 export function syncMobileThreadContext(input) {
+  const contextChanged = currentProjectId !== String(input.projectId ?? '') || currentLedgerId !== String(input.ledgerId ?? '');
+  if (contextChanged) unsubscribeEvents();
   currentProjectId = String(input.projectId ?? '');
   currentLedgerId = String(input.ledgerId ?? '');
   onLedgerRefresh = input.onLedgerRefresh ?? onLedgerRefresh;
@@ -96,14 +106,13 @@ export function syncMobileThreadContext(input) {
   canvasState.activeLedger = input.ledger;
   canvasState.ledgers = input.ledgers;
   canvasState.ledgerTabs = input.ledgers;
-  subscribeEvents();
   if (canvasState.ledgerReconciliation?.routeLedgerStateId !== currentLedgerId) {
     canvasState.ledgerReconciliation.routeLedgerStateId = currentLedgerId;
     canvasState.ledgerReconciliation.routeEpoch += 1;
     canvasState.ledgerReconciliation.lastAppliedServerRevision = -1;
     canvasState.ledgerReconciliation.lastAppliedSequence = 0;
   }
-  if (canvasState.threadPanelOpen) renderThreadPanel();
+  if (canvasState.threadPanelOpen) subscribeEvents();
 }
 
 export function openMobileThread(card, zoneColor) {
@@ -116,12 +125,17 @@ export function openMobileThread(card, zoneColor) {
   selectThread(threadId);
   canvasState.threadPanelOpen = true;
   document.body.classList.add('card-thread-open');
+  bumpThreadPresentationGeneration();
+  if (window.matchMedia?.('(max-width: 760px)').matches === true && history.state?.responsiveThreadLayer?.threadId !== threadId) {
+    history.pushState({ ...history.state, responsiveThreadLayer: { projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(card.id), threadId } }, '', location.href);
+  }
+  subscribeEvents();
   renderThreadPanel();
   updateLaunchReadiness();
   void refreshThreadLedger();
 }
 
-export function closeMobileThread() {
+export function closeMobileThread({ fromHistory = false, discardHistory = false } = {}) {
   if (canvasState.voice.recording) return false;
   saveThreadDraft();
   saveThreadPanelScrollPositions();
@@ -136,9 +150,19 @@ export function closeMobileThread() {
     });
   }
   canvasState.threadPanelOpen = false;
+  threadRefreshGeneration += 1;
+  unsubscribeEvents();
   document.body.classList.remove('card-thread-open');
   document.querySelector('.thread-panel').hidden = true;
   document.querySelector('.mobile-thread-inspector').hidden = true;
+  bumpThreadPresentationGeneration();
+  if (!fromHistory && window.matchMedia?.('(max-width: 760px)').matches === true && history.state?.responsiveThreadLayer) {
+    if (discardHistory) {
+      const nextState = { ...history.state };
+      delete nextState.responsiveThreadLayer;
+      history.replaceState(nextState, '', location.href);
+    } else history.back();
+  }
   return true;
 }
 
@@ -230,12 +254,28 @@ async function stopQuickVoiceComment(launchMode = 'send') {
 }
 
 async function refreshThreadLedger(optimisticRunId = '') {
-  const threadId = String(canvasState.threadId || '');
-  if (!currentLedgerId || !threadId) return;
-  const response = await fetch(projectScopedRequestPath(`/api/ledgers/${encodeURIComponent(currentLedgerId)}/threads/${encodeURIComponent(threadId)}`, currentProjectId), { cache: 'no-store' });
+  const owner = Object.freeze({
+    generation: ++threadRefreshGeneration,
+    projectId: currentProjectId,
+    ledgerId: currentLedgerId,
+    cardId: String(currentCard?.id || ''),
+    threadId: String(canvasState.threadId || ''),
+    panelOpen: canvasState.threadPanelOpen,
+  });
+  const ownsRefresh = () => owner.generation === threadRefreshGeneration
+    && owner.projectId === currentProjectId
+    && owner.ledgerId === currentLedgerId
+    && owner.cardId === String(currentCard?.id || '')
+    && owner.threadId === String(canvasState.threadId || '')
+    && owner.panelOpen === canvasState.threadPanelOpen;
+  if (!owner.ledgerId || !owner.threadId || !owner.panelOpen) return;
+  const response = await fetch(projectScopedRequestPath(`/api/ledgers/${encodeURIComponent(owner.ledgerId)}/threads/${encodeURIComponent(owner.threadId)}`, owner.projectId), { cache: 'no-store' });
+  if (!ownsRefresh()) return;
   if (!response.ok) return;
   const slice = await response.json();
-  const refreshed = await onLedgerRefresh(currentLedgerId);
+  if (!ownsRefresh()) return;
+  const refreshed = await onLedgerRefresh(owner.ledgerId);
+  if (!ownsRefresh()) return;
   const reconciled = reconcileResponsiveThreadLedger({
     activeLedger: canvasState.activeLedger,
     refreshedLedger: refreshed,
@@ -308,12 +348,19 @@ function subscribeEvents() {
   const refresh = (event) => {
     let payload = {};
     try { payload = JSON.parse(event.data || '{}'); } catch {}
+    if (!canvasState.threadPanelOpen) return;
+    if (String(payload.projectId ?? currentProjectId) !== currentProjectId) return;
     if (String(payload.ledgerId ?? '') !== currentLedgerId) return;
-    if (payload.threadId && String(payload.threadId) !== String(canvasState.threadId)) return;
+    if (!payload.threadId || String(payload.threadId) !== String(canvasState.threadId)) return;
     void refreshThreadLedger();
   };
   eventSource.addEventListener('ledger-content-change', refresh);
-  eventSource.addEventListener('card-content-change', refresh);
+}
+
+function unsubscribeEvents() {
+  eventSource?.close();
+  eventSource = null;
+  eventSourceUrl = '';
 }
 
 export function initializeMobileThread() {

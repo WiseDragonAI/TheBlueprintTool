@@ -19,8 +19,8 @@ test('mobile card detail exposes processing and both process libraries', () => {
   assert.match(html, /data-process-tab="pipelines"/);
   assert.match(mobile, /setMobileCodexContext\(\{ projectId: state\.resourceProjectId, ledgerId: state\.activeLedgerId, cardId: state\.activeCardId \}\)/);
   assert.match(script, /projectScopedRequestPath\(url, projectId\)/);
-  assert.match(script, /ledgerId: state\.ledgerId, cardId: state\.cardId, skillName: skill\.name/);
-  assert.match(script, /ledgerId: state\.ledgerId, sourceCardId: state\.cardId, pipelineId: pipeline\.id/);
+  assert.match(script, /ledgerId: launch\.ledgerId, cardId: launch\.cardId, skillName: skill\.name/);
+  assert.match(script, /ledgerId: launch\.ledgerId, sourceCardId: launch\.cardId, pipelineId: pipeline\.id/);
 });
 
 test('mobile card detail keeps its three navigation controls in one row before the title', () => {
@@ -43,11 +43,12 @@ test('mobile processing guards duplicate submissions and delegates status to the
 });
 
 test('successful responsive processing closes the card through the shared Control Room navigation lifecycle', () => {
-  assert.match(script, /function finishProcessLaunch\(detail\)/);
-  assert.match(script, /el\('\.process-modal'\)\.close\(\)/);
+  assert.match(script, /function finishProcessLaunch\(detail, launch\)/);
+  assert.match(script, /const actionOwned = processLaunchOwned\(launch\)/);
   assert.match(script, /decision-os:codex-run-enqueued/);
-  assert.match(mobile, /addEventListener\('decision-os:codex-run-enqueued', \(\) => \{ void navigateVoiceSubmission\(\); \}\)/);
-  assert.match(mobile, /async function navigateVoiceSubmission\(\) \{\s*await navigate\(controlRoomPath\('exec'\), true\);\s*\}/);
+  assert.match(script, /threadPresentationGeneration/);
+  assert.match(mobile, /addEventListener\('decision-os:codex-run-enqueued', \(event\) => \{ void navigateAcceptedProcess\(event\.detail\); \}\)/);
+  assert.match(mobile, /acceptedRunOwnsRoute\(detail, snapshot, threadGeneration\)/);
 });
 
 test('mobile pipeline editor supports ordered steps, ordered skills, inheritance, and persistence', () => {

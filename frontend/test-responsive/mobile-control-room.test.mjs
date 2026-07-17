@@ -155,7 +155,7 @@ test('anchors an executing pipeline task to its logical launch instead of a reco
   assert.equal(parsed.executionSince, currentRunStartedAt);
   assert.equal(parsed.executionTime, Date.parse(currentRunStartedAt));
   assert.equal(executionStopwatch(parsed.executionSince, Date.parse('2026-07-10T10:37:12.000Z')), '02:05');
-  assert.match(mobile, /fetch\('\/api\/control-room', \{ cache: 'no-store', headers:/);
+  assert.match(mobile, /fetch\('\/api\/control-room', \{ cache: 'no-store', signal: owner\?\.signal, headers:/);
   assert.doesNotMatch(mobile, /api\/codex\/pipelines\/runs\/\$\{encodeURIComponent\(pipelineRunId\)\}/);
   assert.doesNotMatch(mobile, /api\/codex\/skills\/runs\/\$\{encodeURIComponent\(runId\)\}/);
 });
