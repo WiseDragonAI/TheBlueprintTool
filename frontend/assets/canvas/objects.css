@@ -1068,6 +1068,27 @@
   opacity: 0.82;
 }
 
+.ledger-card-media-resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 8;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  appearance: none;
+  cursor: ew-resize;
+  touch-action: none;
+  background: transparent;
+}
+
+.ledger-card-media-resize-handle:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--card-zone-color), white 34%);
+  outline-offset: -3px;
+}
+
 .ledger-card-media-track {
   display: flex;
   width: 100%;

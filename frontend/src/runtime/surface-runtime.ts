@@ -16,7 +16,10 @@ if (wideCanvas && canvasRoute) {
       { id: 'canvas-surface-styles', href: '/assets/canvas.css' },
       { id: 'canvas-nouislider-styles', href: '/assets/vendor/nouislider-15.8.1.min.css' },
     ]),
-    loadSurfaceScripts([{ id: 'canvas-nouislider-script', src: '/assets/vendor/nouislider-15.8.1.min.js' }]),
+    loadSurfaceScripts([
+      { id: 'canvas-nouislider-script', src: '/assets/vendor/nouislider-15.8.1.min.js' },
+      { id: 'canvas-interact-script', src: '/assets/vendor/interact-1.10.27.min.js' },
+    ]),
   ]);
   const { renderCanvasSurfaceShell } = await import('./component/render-canvas-surface-shell.js');
   renderCanvasSurfaceShell();
