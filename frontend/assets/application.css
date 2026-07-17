@@ -523,6 +523,14 @@ body:has(.project-color-picker-modal[open]) { overflow: hidden; }
 .codex-message.error { color: var(--danger); }
 .process-detail { display: grid; gap: 16px; }
 .skill-detail-title { color: var(--accent); font-size: 20px; line-height: 1.25; overflow-wrap: anywhere; }
+.skill-markdown-section, .skill-reference-map { display: grid; gap: 10px; min-width: 0; }
+.skill-markdown-section > h4, .skill-reference-map > h4 { margin: 0; color: var(--text); font-size: 14px; letter-spacing: .08em; text-transform: uppercase; }
+.skill-markdown-section .ledger-card-body, .skill-reference-content { min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius); background: #080a0d; }
+.skill-reference-cards { display: grid; gap: 10px; padding-left: 18px; border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); }
+.skill-reference-card { position: relative; display: grid; gap: 8px; min-width: 0; }
+.skill-reference-card::before { position: absolute; top: 21px; left: -18px; width: 16px; border-top: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); content: ''; }
+.skill-reference-toggle { min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--accent); background: var(--panel); text-align: left; overflow-wrap: anywhere; }
+.skill-reference-toggle[aria-expanded="true"] { border-color: var(--accent); }
 .skill-tags-field { min-width: 0; margin: 0; padding: 0; border: 0; }
 .skill-tags-field legend { margin-bottom: 8px; color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; }
 .skill-tag-choices { display: flex; flex-wrap: wrap; gap: 8px; }

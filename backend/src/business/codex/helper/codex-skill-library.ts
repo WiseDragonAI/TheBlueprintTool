@@ -8,14 +8,16 @@ import {
   existsSync,
   lstatSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   renameSync,
   rmSync,
   statSync,
   writeFileSync,
 } from 'node:fs';
+import type { Dirent } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, isAbsolute, relative, resolve } from 'node:path';
+import { dirname, extname, isAbsolute, relative, resolve } from 'node:path';
 import type { CodexEffort, CodexModel, CodexPipelineStoreNormalization } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import { readCodexPipelineStore, writeCodexPipelineStore } from './codex-pipeline-store.js';
 import {
@@ -49,6 +51,12 @@ export type CodexSkillCatalogEntry = {
 };
 
 export type CodexSkillLibraryDetail = CodexSkillCatalogEntry & {
+  markdown: string;
+  references: CodexSkillReference[];
+};
+
+export type CodexSkillReference = {
+  name: string;
   markdown: string;
 };
 
@@ -179,6 +187,55 @@ function catalogEntry(input: {
   };
 }
 
+const referenceExtensions = new Set(['.md', '.markdown', '.txt', '.xml', '.json', '.yaml', '.yml', '.csv', '.tsv']);
+const maximumReferenceBytes = 1_000_000;
+
+function referenceMarkdown(file: string, extension: string): string | null {
+  try {
+    const stats = statSync(file);
+    if (!stats.isFile() || stats.size > maximumReferenceBytes) return null;
+    const content = readFileSync(file, 'utf8');
+    if (content.includes('\0')) return null;
+    if (extension === '.md' || extension === '.markdown') return content;
+    const language = extension.slice(1) || 'text';
+    return `\`\`\`${language}\n${content.replace(/\n?$/, '\n')}\`\`\`\n`;
+  } catch {
+    return null;
+  }
+}
+
+export function readCodexSkillReferences(skillFile: string): CodexSkillReference[] {
+  const referenceRoot = resolve(dirname(skillFile), 'references');
+  if (!existsSync(referenceRoot) || lstatSync(referenceRoot).isSymbolicLink()) return [];
+  const references: CodexSkillReference[] = [];
+  const visit = (directory: string, depth: number): void => {
+    if (depth > 8 || references.length >= 256) return;
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(directory, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name));
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (references.length >= 256) break;
+      const file = resolve(directory, entry.name);
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory()) {
+        visit(file, depth + 1);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const extension = extname(entry.name).toLowerCase();
+      if (!referenceExtensions.has(extension)) continue;
+      const markdown = referenceMarkdown(file, extension);
+      if (markdown === null) continue;
+      references.push({ name: relative(referenceRoot, file).split('\\').join('/'), markdown });
+    }
+  };
+  visit(referenceRoot, 0);
+  return references;
+}
+
 function catalogFromSkills(input: {
   decisionOsRoot: string;
   runtime?: AnyRecord;
@@ -224,7 +281,7 @@ export function readCodexSkillLibraryDetail(input: {
   const catalog = catalogFromSkills({ ...input, workspaceRoot, skills });
   const entry = catalog.skills.find((candidate) => candidate.name === input.skillName);
   if (!entry) return null;
-  return { ...entry, revision: skillRevision(markdown), markdown };
+  return { ...entry, revision: skillRevision(markdown), markdown, references: readCodexSkillReferences(skill.skillFile) };
 }
 
 function defaultModel(value: unknown): CodexModel | null | undefined {

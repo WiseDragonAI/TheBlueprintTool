@@ -43,6 +43,12 @@ test('skill library routes save editable Markdown and defaults without exposing 
   for (const file of [workspaceFile, userFile, systemFile, pluginFile]) mkdirSync(join(file, '..'), { recursive: true });
   mkdirSync(decisionOsRoot, { recursive: true });
   writeFileSync(workspaceFile, markdown('workspace-skill', 'Workspace description'));
+  const referenceRoot = join(workspaceFile, '..', 'references');
+  mkdirSync(join(referenceRoot, 'nested'), { recursive: true });
+  writeFileSync(join(referenceRoot, 'guide.md'), '# Guide\n\nUse the guide.\n');
+  writeFileSync(join(referenceRoot, 'nested', 'schema.json'), '{"type":"object"}\n');
+  writeFileSync(join(referenceRoot, 'asset.png'), Buffer.from([0, 1, 2, 3]));
+  symlinkSync(join(referenceRoot, 'guide.md'), join(referenceRoot, 'linked.md'));
   writeFileSync(userFile, markdown('user-skill', 'User description'));
   writeFileSync(systemFile, markdown('system-skill', 'System description'));
   writeFileSync(pluginFile, markdown('plugin-skill', 'Plugin description'));
@@ -65,6 +71,10 @@ test('skill library routes save editable Markdown and defaults without exposing 
     assert.equal(detail.skill.defaultCodexEffort, null);
     assert.equal(detail.skill.favorite, false);
     assert.deepEqual(detail.skill.tags, []);
+    assert.deepEqual(detail.skill.references, [
+      { name: 'guide.md', markdown: '# Guide\n\nUse the guide.\n' },
+      { name: 'nested/schema.json', markdown: '```json\n{"type":"object"}\n```\n' },
+    ]);
     assert.deepEqual(detail.availableTags, ['Architecture', 'Implementation', 'Interface', 'Writing', 'Marketing', 'Product', 'Research', 'Automation', 'Artifacts', 'Platform']);
     assert.equal('skillFile' in detail.skill, false);
     assert.equal(detailText.includes(workspace), false);

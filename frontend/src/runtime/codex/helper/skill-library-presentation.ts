@@ -33,6 +33,13 @@ export function sortSkillsByFavorite<T extends FavoriteSkill>(skills: readonly T
   return [...skills].sort(compareFavoriteSkills);
 }
 
+export function skillInstructionMarkdown(markdown: string): string {
+  const normalized = String(markdown ?? '').replace(/\r\n?/g, '\n');
+  if (!normalized.startsWith('---\n')) return normalized.trim();
+  const closing = normalized.indexOf('\n---\n', 4);
+  return (closing < 0 ? normalized : normalized.slice(closing + 5)).trim();
+}
+
 export function decorateSkillCategoryLabel(element: HTMLElement, category: string): void {
   if (!element.className.split(/\s+/).includes('skill-category-label')) element.className = `${element.className} skill-category-label`.trim();
   element.style.setProperty('--skill-category-color', category === 'All' ? colorForSkillCategory('All') : colorForSkillTag(category));

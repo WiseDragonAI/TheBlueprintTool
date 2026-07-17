@@ -138,6 +138,61 @@ test('Process card keeps an overflowing skill catalog readable.', { timeout: 30_
   }
 });
 
+test('Skills Library puts favorites first and opens formatted skill references.', { timeout: 45_000 }, async () => {
+  const fixture = createFixture({ extraSkillCount: 2 });
+  let server: ServerHandle | undefined;
+  let browser: Browser | undefined;
+  try {
+    writeFileSync(join(fixture.workspace, '.decision-os', 'codex-pipelines.json'), JSON.stringify({
+      version: 1,
+      pipelines: [],
+      steps: [],
+      runs: [],
+      skillLibrary: [{
+        skillName,
+        favorite: true,
+        tags: [],
+        defaultCodexModel: null,
+        defaultCodexEffort: null,
+        updatedAt: '2026-07-17T00:00:00.000Z',
+      }],
+      activeWorkspaceRun: null,
+    }, null, 2));
+    server = await startDecisionOsServer(fixture);
+    const responsiveSource = await fetch(`${server.url}/src/app/responsive/codex.js`).then((response) => response.text());
+    assert.match(responsiveSource, /Loading SKILL\.md/);
+    browser = await launchBrowser();
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    page.setDefaultTimeout(10_000);
+    const pageErrors: string[] = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+    await page.goto(`${server.url}/skills`, { waitUntil: 'domcontentloaded' });
+    const library = page.locator('.process-modal');
+    await library.waitFor({ state: 'visible' });
+    await page.waitForFunction(() => document.querySelectorAll('.process-library .codex-list-item').length >= 3);
+
+    const firstSkill = library.locator('.process-library .codex-list-item').first();
+    assert.match(await firstSkill.locator('strong').textContent() ?? '', new RegExp(`^${skillName}`));
+    const detailResponsePromise = page.waitForResponse((response) => response.url().includes(`/api/codex/skill-library/${skillName}`));
+    await firstSkill.click();
+    const detailResponse = await detailResponsePromise;
+    assert.equal(detailResponse.status(), 200, await detailResponse.text());
+    assert.deepEqual(pageErrors, []);
+
+    await library.getByRole('heading', { name: 'SKILL.md', exact: true }).waitFor({ state: 'visible' });
+    assert.equal(await library.getByRole('heading', { name: 'Browser fixture', exact: true }).isVisible(), true);
+    const reference = library.getByRole('button', { name: 'guide.md', exact: true });
+    await reference.waitFor({ state: 'visible' });
+    await reference.click();
+    assert.equal(await reference.getAttribute('aria-expanded'), 'true');
+    assert.equal(await library.getByText('Reference content is readable.', { exact: true }).isVisible(), true);
+  } finally {
+    await browser?.close();
+    if (server) await stopDecisionOsServer(server.process);
+    rmSync(fixture.workspace, { recursive: true, force: true });
+  }
+});
+
 test('Reusable step pipelines preserve defaults and publish visible execution progression.', { timeout: 90_000 }, async () => {
   await assertFrontendSpec('Playwright for real browser interaction tests', 'cef65c97', 'canvas');
   const fixture = createFixture();
@@ -386,6 +441,8 @@ function createFixture(options: { extraSkillCount?: number } = {}): BrowserFixtu
     'Write a concise result to the assigned output card.',
     '',
   ].join('\n'), 'utf8');
+  mkdirSync(join(skillDirectory, 'references'), { recursive: true });
+  writeFileSync(join(skillDirectory, 'references', 'guide.md'), '# Guide\n\nReference content is readable.\n', 'utf8');
   for (let index = 1; index <= (options.extraSkillCount ?? 0); index += 1) {
     const extraSkillName = `layout-skill-${String(index).padStart(2, '0')}`;
     const extraSkillDirectory = join(workspace, '.skills', extraSkillName);
@@ -456,8 +513,10 @@ async function startDecisionOsServer(fixture: BrowserFixture): Promise<ServerHan
       ...process.env,
       CODEX_BIN: fixture.fakeCodexFile,
       CODEX_HOME: fixture.codexHome,
+      DECISION_OS_FRONTEND_ROOT: resolve(repoRoot, 'frontend'),
       HOST: '127.0.0.1',
       PORT: String(port),
+      TSX_TSCONFIG_PATH: resolve(repoRoot, 'backend/tsconfig.json'),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

@@ -140,6 +140,11 @@ test('skill libraries share favorite ordering, colored categories, and scope-spe
   assert.match(script, /JSON\.stringify\(\{ tags \}\)/);
   assert.match(script, /JSON\.stringify\(\{ favorite \}\)/);
   assert.match(script, /try \{ await loadGlobalLibraries\(\); \}/);
+  assert.match(script, /Loading SKILL\.md/);
+  assert.match(script, /renderLedgerCardMarkdown\(skillInstructionMarkdown\(skill\.markdown\)\)/);
+  assert.match(script, /Related references/);
+  assert.match(script, /skill-reference-card/);
+  assert.match(script, /aria-expanded/);
   assert.doesNotMatch(sharedRow, /project-record-label|skill-source-label|skill-favorite-label/);
   assert.match(sharedRow, /skill-favorite-star/);
   assert.match(sharedRow, /favorite\.textContent = '★'/);
