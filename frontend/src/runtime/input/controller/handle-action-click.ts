@@ -39,6 +39,7 @@ import { applyRailCollapsedState } from '../../toolbox/effect/apply-rail-collaps
 import { persistState } from '../../persistence/effect/persist-state.js';
 import { openCardProcessModal } from '../../codex/effect/render-card-process-modal.js';
 import { openPipelinesModal } from '../../codex/effect/render-pipelines-modal.js';
+import { openProjectSettingsModal } from '../../project/effect/project-settings-modal.js';
 import { processThreadCodexController } from '../../codex/controller/process-thread-codex-controller.js';
 import { stopThreadCodexRunController } from '../../codex/controller/stop-thread-codex-run-controller.js';
 import { confirmThreadCodexSessionDeletionController } from '../../codex/controller/confirm-thread-codex-session-deletion-controller.js';
@@ -78,6 +79,10 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
   }
   if (action === 'open-projects-canvas') {
     await enterProjectsCanvasController();
+    return;
+  }
+  if (action === 'open-project-settings') {
+    openProjectSettingsModal(actionTarget.dataset.projectId ?? '');
     return;
   }
   if (action === 'open-control-room') {

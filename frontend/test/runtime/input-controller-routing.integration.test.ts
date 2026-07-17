@@ -230,6 +230,11 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(cardDetailRenderer, /edit\.setAttribute\('aria-label', edit\.title\)/);
   assert.match(cardDetailRenderer, /createLedgerCardTitleRow\(card, id\)/);
   assert.match(controlOverlay, /className = 'canvas-control canvas-control--card'/);
+  assert.match(controlOverlay, /card\.dataset\.cardType === 'project' && card\.dataset\.targetProjectId/);
+  assert.match(controlOverlay, /settings\.className = 'project-card-settings-toggle terminal-button terminal-button--compact'/);
+  assert.match(controlOverlay, /settings\.dataset\.action = 'open-project-settings'/);
+  assert.match(controlOverlay, /settings\.setAttribute\('aria-label', 'Settings'\)/);
+  assert.match(controlOverlay, /group\.replaceChildren\(settings\)/);
   assert.match(controlOverlay, /edit\.dataset\.action = 'edit-card-title'/);
   assert.match(controlOverlay, /edit\.title = card\.dataset\.targetLedgerId \? 'Edit ledger name' : 'Edit card title'/);
   assert.match(controlOverlay, /editBody\.dataset\.action = 'edit-card-description'/);
@@ -241,6 +246,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(controlOverlay, /\[skill, renderLedgerCardStatusButton\(cardId, persistedStatus, visibleStatus\), editBody, renderLedgerCardDeleteButton\(cardId\)\]/);
   assert.match(controlOverlay, /renderLedgerCardDeleteButton\(cardId\)/);
   assert.match(actionClick, /if \(action === 'edit-card-title'\)/);
+  assert.match(actionClick, /if \(action === 'open-project-settings'\)[\s\S]*openProjectSettingsModal\(actionTarget\.dataset\.projectId \?\? ''\)/);
   assert.match(actionClick, /beginLedgerCardTitleEdit\(card\)/);
   assert.match(actionClick, /if \(action === 'edit-card-description'\)/);
   assert.match(actionClick, /beginLedgerCardDescriptionEdit\(card\)/);
@@ -349,6 +355,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(canvasLayerCss, /\.canvas-control\.is-visible\s*{[^}]*opacity:\s*1;[^}]*pointer-events:\s*auto;/s);
   assert.match(canvasLayerCss, /\.canvas-control \.terminal-button,[\s\S]*transition:\s*none;/);
   assert.match(canvasLayerCss, /\.canvas-control \.ledger-card-edit-toggle\s*{[^}]*min-width:\s*38px;[^}]*text-transform:\s*uppercase;/s);
+  assert.match(canvasLayerCss, /\.canvas-control \.project-card-settings-toggle\s*{[^}]*min-width:\s*82px;[^}]*text-transform:\s*uppercase;/s);
   assert.match(canvasLayerCss, /\.canvas \.card:not\(\.detail-visible\) \.ledger-card-overview-title\s*{[^}]*padding:\s*4px 6px 0;/s);
   assert.match(canvasLayerCss, /\.canvas \.card:not\(\.detail-visible\) \.ledger-card-detail-layer\s*{[^}]*content-visibility:\s*hidden;/s);
   assert.match(canvasLayerCss, /\.canvas \.card:not\(\.detail-visible\)\[data-card-work-status="processing"\] \.ledger-card-overview-status\s*{[^}]*top:\s*50%;[^}]*left:\s*50%;[^}]*justify-content:\s*center;[^}]*transform:\s*translate\(-50%, -50%\) scale\(var\(--inverse-viewport-scale, 1\)\);/s);
