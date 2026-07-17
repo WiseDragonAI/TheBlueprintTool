@@ -95,6 +95,28 @@ function notifyThreadChange(context: LedgerContext, threadId: string, callback: 
   });
 }
 
+function setQueuedVoiceExecution(input: {
+  runtime: AnyRecord;
+  ledgerId: string;
+  cardId: string;
+  pending: boolean;
+  onLedgerChange?: unknown;
+}): { ok: boolean; error?: string } {
+  const context = resolveLedgerContext({ runtime: input.runtime, ledgerId: input.ledgerId });
+  if (!context.ok) return { ok: false, error: context.error };
+  const card = (context.ledger.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
+  if (!card) return { ok: false, error: 'Thread target card not found.' };
+  if (input.pending) {
+    if (String(card.executionStatus ?? '') !== 'running') card.executionStatus = 'pending';
+  } else if (String(card.executionStatus ?? '') === 'pending' && !optionalText(card.executionRunId)) {
+    delete card.executionStatus;
+  }
+  writeLedger(context);
+  telemetry('voice-codex-execution', { ledgerId: input.ledgerId, cardId: input.cardId, pending: input.pending, executionStatus: String(card.executionStatus ?? '') });
+  notify(input.onLedgerChange, { reason: input.pending ? 'voice-codex-pending' : 'voice-codex-pending-cleared', ledgerId: input.ledgerId, cardId: input.cardId });
+  return { ok: true };
+}
+
 export function applyNotePatch(input: {
   runtime: AnyRecord;
   ledgerId: string;
@@ -406,6 +428,9 @@ async function finishVoiceUploadOrchestration(input: {
     reason: 'voice-transcription-failed'
   });
   lifecycleTelemetry({ noteId: input.noteId, phase: 'failed', at: completedAt, previousAt: providerSettledAt || input.acceptedAt });
+  if (input.queueCodex && input.cardId) {
+    setQueuedVoiceExecution({ runtime: input.runtime, ledgerId: input.ledgerId, cardId: input.cardId, pending: false, onLedgerChange: input.onLedgerChange });
+  }
 }
 
 export async function startVoiceUploadOrchestrationController(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): Promise<AnyRecord> {
@@ -453,6 +478,12 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
     reason: 'voice-uploaded'
   });
   if (!patch.ok) return { ok: false, statusCode: 500, uploaded: true, configured: true, noteId: id, voiceFileRef, error: patch.error ?? 'Voice note commit failed.' };
+  if (queueCodex && cardId) {
+    const execution = setQueuedVoiceExecution({ runtime, ledgerId, cardId, pending: true, onLedgerChange: payload.onLedgerChange });
+    if (!execution.ok) {
+      return { ok: false, statusCode: 404, uploaded: true, configured: true, noteId: id, voiceFileRef, error: execution.error ?? 'Thread target card not found.' };
+    }
+  }
   lifecycleTelemetry({ noteId: id, phase: 'accepted', at: acceptedAt, previousAt: audioPersistedAt });
   const completion = finishVoiceUploadOrchestration({
     payload,
@@ -491,6 +522,9 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
       onCardContentChange: payload.onCardContentChange,
       reason: 'voice-orchestration-failed'
     });
+    if (queueCodex && cardId) {
+      setQueuedVoiceExecution({ runtime, ledgerId, cardId, pending: false, onLedgerChange: payload.onLedgerChange });
+    }
   });
   if (bool(payload.awaitCompletion)) await completion;
   return { ok: true, statusCode: 202, uploaded: true, configured: true, noteId: id, voiceFileRef, status: 'queued', revision: 1, uploadReceivedAt, audioPersistedAt, acceptedAt, queueCodex };

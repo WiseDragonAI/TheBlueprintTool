@@ -15,7 +15,7 @@ test('task details expose the quick voice action only for master tasks and subta
   assert.match(styles, /\.quick-voice-comment-button\s*\{[\s\S]*position:\s*fixed;[\s\S]*right:\s*max\(18px, env\(safe-area-inset-right\)\);[\s\S]*bottom:\s*max\(18px, env\(safe-area-inset-bottom\)\)/);
 });
 
-test('quick voice stop queues Codex and returns to the canonical Queue route after acceptance', () => {
+test('quick voice stop queues Codex and returns to the canonical Exec route after acceptance', () => {
   const thread = source('frontend/src/app/responsive/thread.js');
   const application = source('frontend/src/app/responsive/application.js');
 
@@ -27,13 +27,14 @@ test('quick voice stop queues Codex and returns to the canonical Queue route aft
   assert.match(application, /onQuickVoiceSubmitted: navigateVoiceSubmission/);
 });
 
-test('desktop Shift+X awaits the queued upload and keeps the card thread open', () => {
+test('desktop Shift+X awaits queued upload acceptance before navigating to Exec', () => {
   const thread = source('frontend/src/app/responsive/thread.js');
   const shortcut = thread.match(/export async function handleResponsiveThreadShortcut\(event\) \{[\s\S]*?\n\}/)?.[0] ?? '';
 
-  assert.match(shortcut, /await stopVoiceRecording\(\{ queueCodex: event\.shiftKey \}\)/);
+  assert.match(shortcut, /const queueCodex = event\.shiftKey;/);
+  assert.match(shortcut, /await stopVoiceRecording\(\{ queueCodex \}\)/);
+  assert.match(shortcut, /if \(queueCodex\) await finishQueuedVoiceSubmission\(submitted\)/);
   assert.doesNotMatch(shortcut, /onPersisted/);
-  assert.doesNotMatch(shortcut, /finishQueuedVoiceSubmission/);
 });
 
 test('persisted voice navigation returns directly without an animated handoff', () => {
@@ -41,7 +42,7 @@ test('persisted voice navigation returns directly without an animated handoff', 
   const styles = source('frontend/assets/application.css');
 
   assert.match(application, /async function navigateVoiceSubmission\(\)/);
-  assert.match(application, /await navigate\(controlRoomPath\('queue'\), true\)/);
+  assert.match(application, /await navigate\(controlRoomPath\('exec'\), true\)/);
   assert.doesNotMatch(application, /data\.voiceHandoff|startViewTransition\(\(\) => navigate\(destination, true\)\)/);
   assert.doesNotMatch(styles, /voice-handoff/);
 });

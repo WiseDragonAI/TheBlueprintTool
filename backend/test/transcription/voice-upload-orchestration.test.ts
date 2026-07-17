@@ -17,7 +17,7 @@ async function waitForText(file: string, text: string): Promise<void> {
   assert.fail(`Timed out waiting for ${text} in ${file}`);
 }
 
-function voiceUploadForm(input: { transcript: string; queueCodex?: boolean; noteId?: string; ledgerId?: string | null; threadId?: string | null; cardId?: string | null }): FormData {
+function voiceUploadForm(input: { transcript?: string; queueCodex?: boolean; noteId?: string; ledgerId?: string | null; threadId?: string | null; cardId?: string | null; awaitCompletion?: boolean }): FormData {
   const form = new FormData();
   const ledgerId = input.ledgerId === undefined ? 'specs' : input.ledgerId;
   const threadId = input.threadId === undefined ? 'thread-card-a' : input.threadId;
@@ -28,10 +28,104 @@ function voiceUploadForm(input: { transcript: string; queueCodex?: boolean; note
   if (cardId !== null) form.append('cardId', cardId);
   form.append('noteId', input.noteId ?? 'note-voice-1');
   form.append('queueCodex', input.queueCodex ? 'true' : 'false');
-  form.append('transcriptionText', input.transcript);
-  form.append('awaitCompletion', 'true');
+  if (input.transcript !== undefined) form.append('transcriptionText', input.transcript);
+  if (input.awaitCompletion !== false) form.append('awaitCompletion', 'true');
   return form;
 }
+
+test('queued voice acceptance moves the card to pending execution during transcription and clears it on failure', async () => {
+  const originalCwd = process.cwd();
+  const originalFetch = globalThis.fetch;
+  const previousApiKey = process.env.OPENAI_API_KEY;
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-voice-pending-execution-'));
+  mkdirSync(join(workspace, '.decision-os'), { recursive: true });
+  writeFileSync(join(workspace, '.decision-os', 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }]
+  }, null, 2));
+  writeFileSync(join(workspace, '.decision-os', 'specs.json'), JSON.stringify({
+    cards: [{ id: 'card-a', title: 'Voice Card', comment: { what: 'Existing body' }, facts: [], fields: [] }],
+    annotations: [],
+    relationships: [],
+    notes: {}
+  }, null, 2));
+
+  let settleTranscription: ((response: Response) => void) | undefined;
+  const transcriptionResponse = new Promise<Response>((resolve) => { settleTranscription = resolve; });
+  globalThis.fetch = ((input: string | URL | Request, init?: RequestInit) => {
+    if (String(input) === 'https://api.openai.com/v1/audio/transcriptions') return transcriptionResponse;
+    return originalFetch(input, init);
+  }) as typeof fetch;
+  process.env.OPENAI_API_KEY = 'test-key';
+  process.chdir(workspace);
+  const runtime: Record<string, unknown> = {};
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const address = server.address() as AddressInfo;
+
+  try {
+    const response = await originalFetch(`http://127.0.0.1:${address.port}/api/voice-upload`, {
+      method: 'POST',
+      body: voiceUploadForm({ queueCodex: true, awaitCompletion: false })
+    });
+    assert.equal(response.status, 202);
+    const responseBody = await response.json() as { body: { queueCodex?: boolean } };
+    assert.equal(responseBody.body.queueCodex, true);
+    await waitForText(join(workspace, '.decision-os', 'threads', 'specs', 'thread-card-a.md'), '"status":"transcribing"');
+    let ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { cards: Array<{ executionStatus?: string; executionRunId?: string }> };
+    assert.equal(ledger.cards[0].executionStatus, 'pending');
+    assert.equal(ledger.cards[0].executionRunId, undefined);
+
+    settleTranscription?.(new Response(JSON.stringify({ error: { message: 'provider unavailable' } }), { status: 503, headers: { 'content-type': 'application/json' } }));
+    await waitForText(join(workspace, '.decision-os', 'threads', 'specs', 'thread-card-a.md'), '"status":"transcription failed"');
+    ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { cards: Array<{ executionStatus?: string }> };
+    assert.equal(ledger.cards[0].executionStatus, undefined);
+  } finally {
+    settleTranscription?.(new Response(JSON.stringify({ error: { message: 'test cleanup' } }), { status: 503, headers: { 'content-type': 'application/json' } }));
+    server.close();
+    globalThis.fetch = originalFetch;
+    process.chdir(originalCwd);
+    if (previousApiKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousApiKey;
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('normal voice transcription never marks the card as pending execution', async () => {
+  const originalCwd = process.cwd();
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-voice-normal-transcription-'));
+  mkdirSync(join(workspace, '.decision-os'), { recursive: true });
+  writeFileSync(join(workspace, '.decision-os', 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }]
+  }, null, 2));
+  writeFileSync(join(workspace, '.decision-os', 'specs.json'), JSON.stringify({
+    cards: [{ id: 'card-a', title: 'Voice Card', comment: { what: 'Existing body' }, facts: [], fields: [] }],
+    annotations: [],
+    relationships: [],
+    notes: {}
+  }, null, 2));
+
+  process.chdir(workspace);
+  const runtime: Record<string, unknown> = {};
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const address = server.address() as AddressInfo;
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/voice-upload`, {
+      method: 'POST',
+      body: voiceUploadForm({ transcript: 'Normal voice transcript.', queueCodex: false })
+    });
+    assert.equal(response.status, 202);
+    const ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { cards: Array<{ executionStatus?: string }> };
+    assert.equal(ledger.cards[0].executionStatus, undefined);
+  } finally {
+    server.close();
+    process.chdir(originalCwd);
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
 
 test('voice upload transcribes on the backend without requiring a card id', async () => {
   const originalCwd = process.cwd();

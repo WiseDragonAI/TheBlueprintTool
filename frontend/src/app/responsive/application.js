@@ -259,7 +259,7 @@ function navigate(path, replace = false) {
 }
 
 async function navigateVoiceSubmission() {
-  await navigate(controlRoomPath('queue'), true);
+  await navigate(controlRoomPath('exec'), true);
 }
 
 async function navigateTaskBack(destination) {

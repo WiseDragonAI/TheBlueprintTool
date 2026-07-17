@@ -104,12 +104,14 @@ test('responsive card threads own desktop split geometry and documented entry sh
   assert.match(applicationSource, /await handleResponsiveThreadShortcut\(event\)/);
 });
 
-test('desktop Shift+X queues Codex only after the voice upload completes and keeps the card thread open', () => {
+test('desktop Shift+X queues Codex after server acceptance and returns to Control Room execution', () => {
   const shortcut = source.match(/export async function handleResponsiveThreadShortcut\(event\) \{[\s\S]*?\n\}/)?.[0] ?? '';
 
-  assert.match(shortcut, /await stopVoiceRecording\(\{ queueCodex: event\.shiftKey \}\)/);
+  assert.match(shortcut, /const queueCodex = event\.shiftKey;/);
+  assert.match(shortcut, /await stopVoiceRecording\(\{ queueCodex \}\)/);
+  assert.match(shortcut, /if \(queueCodex\) await finishQueuedVoiceSubmission\(submitted\)/);
   assert.doesNotMatch(shortcut, /onPersisted/);
-  assert.doesNotMatch(shortcut, /finishQueuedVoiceSubmission/);
+  assert.match(applicationSource, /await navigate\(controlRoomPath\('exec'\), true\)/);
 });
 
 test('mobile thread uses the shared renderer that owns the local voice progress clock', () => {
