@@ -303,9 +303,18 @@
               <form class="federation-settings-form settings-panel">
                 <header class="settings-section-header">
                   <div><p class="eyebrow">Federation</p><h2>Connected environments</h2></div>
-                  <span id="federation-connection-status" class="connection-status">Loading…</span>
+                  <div id="federation-connection-status" class="connection-status" data-state="loading" role="status" aria-live="polite">
+                    <span class="connection-indicator" aria-hidden="true"><span class="connection-dot"></span></span>
+                    <span class="connection-status-copy"><strong>Loading…</strong><small>Reading relay state</small></span>
+                  </div>
                 </header>
                 <p class="muted settings-help">This server connects outbound to the relay. Selecting a project always runs its tasks on the environment that owns it.</p>
+                <dl class="federation-connection-details">
+                  <div><dt>Current state</dt><dd id="federation-state-duration">Loading…</dd></div>
+                  <div><dt>Attempt timeout</dt><dd id="federation-attempt-timeout">—</dd></div>
+                  <div><dt>Last connection</dt><dd id="federation-last-connection">—</dd></div>
+                  <div><dt>Last issue</dt><dd id="federation-last-issue">None</dd></div>
+                </dl>
                 <label class="settings-field"><span>Relay URL</span><input id="federation-relay-url" name="relayUrl" type="url" placeholder="https://relay.example.workers.dev" required /></label>
                 <div class="settings-field-row">
                   <label class="settings-field"><span>Federation ID</span><input id="federation-id" name="federationId" autocomplete="off" required /></label>

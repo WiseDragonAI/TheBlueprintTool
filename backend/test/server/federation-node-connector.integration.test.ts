@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
+import { createFederationNodeConnector } from '@backend/business/federation/helper/federation-node-connector.js';
 
 type Frame = { type: string; requestId?: string; to?: string; projects?: unknown[] };
 
@@ -29,6 +30,44 @@ async function waitFor<T>(read: () => Promise<T | null>): Promise<T> {
   }
   throw new Error('Timed out waiting for federation state.');
 }
+
+test('reports duplicate node replacement and retry timing to Settings', async () => {
+  const relayHttp = createServer();
+  const relay = new WebSocketServer({ noServer: true });
+  relayHttp.on('upgrade', (request, socket, head) => relay.handleUpgrade(request, socket, head, (webSocket) => {
+    webSocket.close(4001, 'replaced');
+  }));
+  relayHttp.listen(0, '127.0.0.1');
+  await once(relayHttp, 'listening');
+  const connector = createFederationNodeConnector({
+    settings: {
+      federationRelayUrl: `http://127.0.0.1:${(relayHttp.address() as AddressInfo).port}`,
+      federationId: 'proof',
+      federationNodeId: 'duplicate-node',
+      federationNodeCredential: 'credential',
+    },
+    localProjects: () => [],
+    localServerUrl: () => 'http://127.0.0.1:1',
+  });
+  connector.start();
+  try {
+    const status = await waitFor(async () => {
+      const value = connector.status();
+      return value.lastCloseCode === 4001 && value.phase === 'retrying' ? value : null;
+    });
+    assert.equal(status.connected, false);
+    assert.equal(status.lastCloseReason, 'replaced');
+    assert.match(status.lastError, /unique node identity/);
+    assert.equal(status.reconnectAttempt, 1);
+    assert.ok(Number(status.nextRetryAt) > Number(status.lastDisconnectedAt));
+    assert.equal(status.connectTimeoutMs, 10_000);
+  } finally {
+    connector.stop();
+    relay.close();
+    relayHttp.close();
+    await once(relayHttp, 'close');
+  }
+});
 
 test('two Decision OS nodes expose remote owner state without changing either local project registry', async () => {
   const relayHttp = createServer();
@@ -86,12 +125,25 @@ test('two Decision OS nodes expose remote owner state without changing either lo
     await new Promise((resolve) => setTimeout(resolve, 200));
     assert.ok(runtimeA.federationNodeConnector, `runtime A properties: ${Object.getOwnPropertyNames(runtimeA).join(',')}`);
     assert.ok(runtimeB.federationNodeConnector, `runtime B properties: ${Object.getOwnPropertyNames(runtimeB).join(',')}`);
-    assert.deepEqual((runtimeA.federationNodeConnector as { status(): unknown }).status(), {
-      configured: true, connected: true, socketState: 1, relayUrl, federationId: 'proof', nodeId: 'node-a', nodeLabel: 'node-a', credentialConfigured: true,
+    const statusA = (runtimeA.federationNodeConnector as { status(): Record<string, unknown> }).status();
+    const statusB = (runtimeB.federationNodeConnector as { status(): Record<string, unknown> }).status();
+    assert.deepEqual({
+      configured: statusA.configured, connected: statusA.connected, socketState: statusA.socketState, phase: statusA.phase,
+      relayUrl: statusA.relayUrl, federationId: statusA.federationId, nodeId: statusA.nodeId, nodeLabel: statusA.nodeLabel,
+      credentialConfigured: statusA.credentialConfigured, peers: statusA.peers,
+    }, {
+      configured: true, connected: true, socketState: 1, phase: 'connected', relayUrl, federationId: 'proof', nodeId: 'node-a', nodeLabel: 'node-a', credentialConfigured: true,
       peers: [{ nodeId: 'node-b', nodeLabel: 'node-b', online: true, projectCount: 1 }],
     });
-    assert.deepEqual((runtimeB.federationNodeConnector as { status(): unknown }).status(), {
-      configured: true, connected: true, socketState: 1, relayUrl, federationId: 'proof', nodeId: 'node-b', nodeLabel: 'node-b', credentialConfigured: true,
+    assert.equal(statusA.connectTimeoutMs, 10_000);
+    assert.equal(typeof statusA.connectedAt, 'number');
+    assert.equal(statusA.lastError, '');
+    assert.deepEqual({
+      configured: statusB.configured, connected: statusB.connected, socketState: statusB.socketState, phase: statusB.phase,
+      relayUrl: statusB.relayUrl, federationId: statusB.federationId, nodeId: statusB.nodeId, nodeLabel: statusB.nodeLabel,
+      credentialConfigured: statusB.credentialConfigured, peers: statusB.peers,
+    }, {
+      configured: true, connected: true, socketState: 1, phase: 'connected', relayUrl, federationId: 'proof', nodeId: 'node-b', nodeLabel: 'node-b', credentialConfigured: true,
       peers: [{ nodeId: 'node-a', nodeLabel: 'node-a', online: true, projectCount: 1 }],
     });
     assert.equal(sockets.size, 2, 'both Decision OS connectors reached the relay');
