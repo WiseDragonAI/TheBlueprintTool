@@ -3,12 +3,13 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
 import { createFederationNodeConnector } from '@backend/business/federation/helper/federation-node-connector.js';
+import { writeCodexPipelineStore } from '@backend/business/codex/helper/codex-pipeline-store.js';
 
 type Frame = { type: string; requestId?: string; to?: string; projects?: unknown[] };
 
@@ -19,6 +20,21 @@ function projectHome(name: string): string {
   writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'specs', title: `${name} Specs`, ledgerFile: '.decision-os/specs.json' }] }));
   writeFileSync(join(decisionOsRoot, 'specs.json'), JSON.stringify({ cards: [{ id: `${name}-card`, title: `${name} card`, labels: ['master-task'], status: 'todo' }], annotations: [], relationships: [] }));
   return home;
+}
+
+function federatedLibraryFixture(home: string, suffix: string): void {
+  const skillName = `${suffix}-skill`;
+  const skillDirectory = join(home, '.skills', skillName);
+  mkdirSync(skillDirectory, { recursive: true });
+  writeFileSync(join(skillDirectory, 'SKILL.md'), `---\nname: ${skillName}\ndescription: ${suffix} federation skill\n---\n\n# Instructions\n\nRun ${suffix}.\n`);
+  writeCodexPipelineStore({
+    decisionOsRoot: join(home, '.decision-os'),
+    store: {
+      pipelines: [{ id: `${suffix}-pipeline`, name: `${suffix} pipeline`, purpose: '', stepIds: [`${suffix}-step`], createdAt: '2026-07-17T08:00:00.000Z', updatedAt: '2026-07-17T08:00:00.000Z' }],
+      steps: [{ id: `${suffix}-step`, name: `${suffix} step`, purpose: '', skills: [{ id: `${suffix}-pipeline-skill`, skillName, codexModel: null, codexEffort: null }], createdAt: '2026-07-17T08:00:00.000Z', updatedAt: '2026-07-17T08:00:00.000Z' }],
+      runs: [], skillLibrary: [], activeWorkspaceRun: null,
+    },
+  });
 }
 
 async function waitFor<T>(read: () => Promise<T | null>): Promise<T> {
@@ -108,7 +124,10 @@ test('stops retrying when the relay rejects node authentication', async () => {
   }
 });
 
-test('two Decision OS nodes expose remote owner state without changing either local project registry', async () => {
+test('two Decision OS nodes materialize complete libraries locally and retain them after an owner disconnects', async () => {
+  const previousCodexHome = process.env.CODEX_HOME;
+  const codexHome = mkdtempSync(join(tmpdir(), 'decision-os-federation-codex-home-'));
+  process.env.CODEX_HOME = codexHome;
   const relayHttp = createServer();
   const relay = new WebSocketServer({ noServer: true });
   const sockets = new Map<string, WebSocket>();
@@ -149,6 +168,8 @@ test('two Decision OS nodes expose remote owner state without changing either lo
 
   const homeA = projectHome('alpha');
   const homeB = projectHome('beta');
+  federatedLibraryFixture(homeA, 'alpha');
+  federatedLibraryFixture(homeB, 'beta');
   const runtimeA: Record<string, unknown> = { decisionOsSettings: { federationRelayUrl: relayUrl, federationId: 'proof', federationNodeId: 'node-a', federationNodeCredential: 'credential-a' } };
   const runtimeB: Record<string, unknown> = { decisionOsSettings: { federationRelayUrl: relayUrl, federationId: 'proof', federationNodeId: 'node-b', federationNodeCredential: 'credential-b' } };
   const repositoryRoot = join(process.cwd(), '..');
@@ -243,14 +264,38 @@ test('two Decision OS nodes expose remote owner state without changing either lo
     assert.doesNotMatch(readFileSync(join(homeA, 'alpha', '.decision-os', 'specs.json'), 'utf8'), /mutated by node-a/);
     assert.equal(readFileSync(registryAPath, 'utf8'), registryA);
     assert.equal(readFileSync(registryBPath, 'utf8'), registryB);
-  } finally {
-    serverA.close();
+
+    const localLibraries = await waitFor(async () => {
+      const [skills, pipelines] = await Promise.all([
+        fetch(`${baseA}/api/codex/server-skills`).then((response) => response.json()) as Promise<{ skills: Array<{ name: string }> }>,
+        fetch(`${baseA}/api/codex/server-pipelines`).then((response) => response.json()) as Promise<{ pipelines: Array<{ id: string }> }>,
+      ]);
+      return skills.skills.some((skill) => skill.name === 'beta-skill') && pipelines.pipelines.some((pipeline) => pipeline.id === 'beta-pipeline')
+        ? { skills, pipelines }
+        : null;
+    });
+    assert.ok(existsSync(join(homeA, '.skills', 'beta-skill', 'SKILL.md')));
+    assert.ok(existsSync(join(homeB, '.skills', 'alpha-skill', 'SKILL.md')));
+    assert.ok(localLibraries.skills.skills.some((skill) => skill.name === 'alpha-skill'));
+
     serverB.close();
-    await Promise.all([once(serverA, 'close'), once(serverB, 'close')]);
+    await once(serverB, 'close');
+    const retainedSkills = await fetch(`${baseA}/p/${encodeURIComponent(catalogA.find((project) => !project.remote)!.id)}/api/codex/skills`).then((response) => response.json()) as { skills: Array<{ name: string }> };
+    const retainedPipelines = await fetch(`${baseA}/p/${encodeURIComponent(catalogA.find((project) => !project.remote)!.id)}/api/codex/pipelines`).then((response) => response.json()) as { pipelines: Array<{ id: string }> };
+    assert.ok(retainedSkills.skills.some((skill) => skill.name === 'beta-skill'), 'Process Card skill catalog remains local after beta disconnects');
+    assert.ok(retainedPipelines.pipelines.some((pipeline) => pipeline.id === 'beta-pipeline'), 'Process Card pipeline catalog remains local after beta disconnects');
+  } finally {
+    const closing: Promise<unknown>[] = [];
+    if (serverA.listening) { serverA.close(); closing.push(once(serverA, 'close')); }
+    if (serverB.listening) { serverB.close(); closing.push(once(serverB, 'close')); }
+    await Promise.all(closing);
     relay.close();
     relayHttp.close();
     await once(relayHttp, 'close');
     rmSync(homeA, { recursive: true, force: true });
     rmSync(homeB, { recursive: true, force: true });
+    rmSync(codexHome, { recursive: true, force: true });
+    if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = previousCodexHome;
   }
 });

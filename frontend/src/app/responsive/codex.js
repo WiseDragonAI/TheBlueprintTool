@@ -45,45 +45,19 @@ function filteredRecords(records) {
   return state.processTab === 'skills' ? sortSkillsByFavorite(filtered) : filtered;
 }
 async function loadGlobalLibraries() {
-  const [serverResult, results] = await Promise.all([
-    Promise.all([jsonRequest('/api/codex/server-skills'), jsonRequest('/api/codex/server-pipelines')]),
-    Promise.allSettled(state.projects.map(async (project) => {
-    const [skills, pipelines] = await Promise.all([
-      jsonRequest('/api/codex/skills', undefined, project.id),
-      jsonRequest('/api/codex/pipelines', undefined, project.id)
-    ]);
-    return { project, skills: skills.skills || [], availableTags: skills.availableTags || [], pipelines: pipelines.pipelines || [], steps: pipelines.steps || [], issues: pipelines.issues || [] };
-    }))
+  // Federation materializes skills first and pipelines second into the server-owned local stores.
+  // Library views must never fan out to remote projects during an operator interaction.
+  const [serverSkills, serverPipelines] = await Promise.all([
+    jsonRequest('/api/codex/server-skills'),
+    jsonRequest('/api/codex/server-pipelines')
   ]);
-  const [serverSkills, serverPipelines] = serverResult;
-  const loaded = results.filter((result) => result.status === 'fulfilled').map((result) => result.value);
-  if (!loaded.length && state.projects.length) throw new Error('Could not load any project libraries.');
-  state.availableTags = [...new Set([...(serverSkills.availableTags || []), ...loaded.flatMap((library) => library.availableTags)])];
+  state.availableTags = [...new Set(serverSkills.availableTags || [])];
   if (!state.availableTags.length) state.availableTags = [...skillCategories];
-  const bySkill = new Map();
-  for (const library of loaded) {
-    for (const skill of library.skills) {
-      const key = [skill.name, skill.source, skill.revision].join('\u0000');
-      const existing = bySkill.get(key);
-      if (existing) {
-        existing.projects.push(library.project);
-        existing.favorite ||= skill.favorite === true;
-        if (!existing.tags?.length && skill.tags?.length) existing.tags = [skill.tags[0]];
-      }
-      else bySkill.set(key, { ...skill, projects: [library.project] });
-    }
-  }
-  state.skills = [...bySkill.values()].sort((left, right) => left.name.localeCompare(right.name));
+  state.skills = (serverSkills.skills || []).map((skill) => ({ ...skill, projects: state.projects }));
   state.serverSkills = Array.isArray(serverSkills.skills) ? serverSkills.skills : [];
-  state.pipelines = [
-    ...(serverPipelines.pipelines || []).map((pipeline) => ({ ...pipeline, scope: 'server', projectId: '', projectName: 'Server', projectColor: '#38d9e8', projects: state.projects })),
-    ...loaded.flatMap(({ project, pipelines }) => pipelines.filter((pipeline) => pipeline.scope !== 'server').map((pipeline) => ({ ...pipeline, scope: 'project', projectId: project.id, projectName: project.name, projectColor: project.color })))
-  ];
-  state.steps = [
-    ...(serverPipelines.steps || []).map((step) => ({ ...step, scope: 'server', projectId: '' })),
-    ...loaded.flatMap(({ project, steps }) => steps.filter((step) => step.scope !== 'server').map((step) => ({ ...step, scope: 'project', projectId: project.id })))
-  ];
-  return { issues: loaded.flatMap((library) => library.issues), failedProjects: results.length - loaded.length };
+  state.pipelines = (serverPipelines.pipelines || []).map((pipeline) => ({ ...pipeline, scope: 'server', projectId: '', projectName: 'Server', projectColor: '#38d9e8', projects: state.projects }));
+  state.steps = (serverPipelines.steps || []).map((step) => ({ ...step, scope: 'server', projectId: '' }));
+  return { issues: serverPipelines.issues || [], failedProjects: 0 };
 }
 function button(label, className, action) { const node = document.createElement('button'); node.type = 'button'; node.className = className; node.textContent = label; node.addEventListener('click', action); return node; }
 function pipelineSteps(pipeline) { return pipeline.stepIds.map((id) => state.steps.find((step) => step.id === id && step.scope === pipeline.scope && (pipeline.scope === 'server' || step.projectId === pipeline.projectId))).filter(Boolean); }
