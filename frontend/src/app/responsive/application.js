@@ -18,6 +18,7 @@ import { loadFederationSettings, saveFederationSettings } from './federation-set
 import { hydrateFederationForm } from './federation-form-hydration.js';
 import { createProjectRequest } from './project-creation.js';
 import { installProjectRequestScope, projectScopedRequestPath } from '/src/runtime/project/helper/project-request-scope.js';
+import { projectFilterChipPresentation } from './project-filter-chip.js';
 
 installProjectRequestScope();
 
@@ -54,7 +55,6 @@ const elements = Object.fromEntries([
 const asText = (value) => value == null ? '' : typeof value === 'string' ? value : JSON.stringify(value, null, 2);
 const defaultAccent = '#38d9e8';
 const projectOwnerLabel = (project) => project.ownerNodeLabel || project.ownerNodeId || 'This server';
-const projectPresenceLabel = (project) => `${projectOwnerLabel(project)} · ${project.online === false ? 'Offline' : 'Online'}`;
 const routeParts = () => parseProjectScope(location.pathname)?.segments ?? [];
 const creationModal = document.querySelector('.creation-modal');
 const deleteMasterTaskModal = document.querySelector('.delete-master-task-modal');
@@ -979,14 +979,24 @@ function renderControlRoom() {
   if (!projectFilters.some((project) => project.id === state.projectFilter)) state.projectFilter = 'All';
   const showProjectFilters = state.projectFilter === 'All';
   const projectButtons = projectFilters.map((project) => {
+    const presentation = projectFilterChipPresentation(project);
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `project-filter-chip${project.id === 'All' ? ' all-projects-filter' : ''}`;
-    button.textContent = project.id === 'All' ? project.name : `${project.name} · ${projectPresenceLabel(project)}`;
+    button.textContent = presentation.label;
     button.title = project.id === 'All' ? project.name : `${project.name} (${project.id}) owned by ${projectOwnerLabel(project)}`;
     button.disabled = project.online === false;
     button.setAttribute('aria-pressed', String(project.id === state.projectFilter));
     button.style.setProperty('--project-color', project.color);
+    button.style.setProperty('--project-foreground', presentation.foreground);
+    if (presentation.showRemoteMarker) {
+      const remoteIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      remoteIcon.classList.add('project-filter-remote-icon');
+      remoteIcon.setAttribute('aria-hidden', 'true');
+      remoteIcon.setAttribute('viewBox', '0 0 16 16');
+      remoteIcon.innerHTML = '<path d="M5.5 3.5h-2v9h9v-2M8 3.5h4.5V8M12 4 7 9" />';
+      button.append(remoteIcon);
+    }
     button.addEventListener('click', () => { state.projectFilter = project.id; state.controlFilter = 'All'; renderControlRoom(); });
     return button;
   });
