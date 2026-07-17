@@ -33,12 +33,32 @@ export function createProjectSyncStore(input: { decisionOsRoot: string; now?: ()
     file,
     list(): ProjectSyncRun[] { return Object.values(document.runs).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)); },
     read(syncId: string): ProjectSyncRun | null { return document.runs[syncId] ?? null; },
-    admit(value: Omit<ProjectSyncRun, 'syncId' | 'phase' | 'createdAt' | 'updatedAt' | 'evidence' | 'error'>): { run: ProjectSyncRun; duplicate: boolean } {
-      const duplicate = Object.values(document.runs).find((run) => !terminal.has(run.phase) && (run.idempotencyKey === value.idempotencyKey || run.originFingerprint === value.originFingerprint));
+    attachTask(syncId: string, value: Pick<ProjectSyncRun, 'taskProjectId' | 'ledgerId' | 'masterCardId' | 'pipelineRunId'>): ProjectSyncRun {
+      const run = document.runs[syncId];
+      if (!run) throw new Error('Unknown project synchronization run.');
+      Object.assign(run, value, { updatedAt: now().toISOString() });
+      persist();
+      return run;
+    },
+    admit(value: Omit<ProjectSyncRun, 'syncId' | 'phase' | 'createdAt' | 'updatedAt' | 'evidence' | 'error' | 'taskProjectId' | 'ledgerId' | 'masterCardId' | 'pipelineRunId'>): { run: ProjectSyncRun; duplicate: boolean } {
+      const duplicate = Object.values(document.runs).find((run) => run.idempotencyKey === value.idempotencyKey)
+        ?? Object.values(document.runs).find((run) => !terminal.has(run.phase) && run.originFingerprint === value.originFingerprint);
       if (duplicate) return { run: duplicate, duplicate: true };
       if (document.locks[value.originFingerprint]) throw new Error('Repository origin already has an active synchronization run.');
       const timestamp = now().toISOString();
-      const run: ProjectSyncRun = { ...value, syncId: randomUUID(), phase: 'requested', createdAt: timestamp, updatedAt: timestamp, evidence: {}, error: null };
+      const run: ProjectSyncRun = {
+        ...value,
+        syncId: randomUUID(),
+        taskProjectId: '',
+        ledgerId: '',
+        masterCardId: '',
+        pipelineRunId: '',
+        phase: 'requested',
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        evidence: {},
+        error: null,
+      };
       document.runs[run.syncId] = run;
       document.locks[run.originFingerprint] = run.syncId;
       persist();

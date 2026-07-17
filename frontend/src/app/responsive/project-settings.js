@@ -60,13 +60,15 @@ export async function startProjectSyncRequest({ fetchImpl, sourceProjectId, idem
     body: JSON.stringify({ sourceProjectId, idempotencyKey }),
   });
   const payload = await response.json().catch(() => null);
-  if (!response.ok || !payload?.run) throw new Error(payload?.error || `Request failed with HTTP ${response.status}.`);
-  return payload.run;
-}
-
-export async function loadProjectSyncRuns(fetchImpl) {
-  const response = await fetchImpl('/api/project-sync', { cache: 'no-store' });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok || !Array.isArray(payload?.runs)) throw new Error(payload?.error || `Request failed with HTTP ${response.status}.`);
-  return payload.runs;
+  if (!response.ok || !payload?.run || !payload?.masterCardId || !payload?.ledgerId || !payload?.pipelineRunId || !payload?.projectId) {
+    throw new Error(payload?.error || `Request failed with HTTP ${response.status}.`);
+  }
+  return {
+    run: payload.run,
+    duplicate: payload.duplicate === true,
+    masterCardId: payload.masterCardId,
+    ledgerId: payload.ledgerId,
+    pipelineRunId: payload.pipelineRunId,
+    projectId: payload.projectId,
+  };
 }

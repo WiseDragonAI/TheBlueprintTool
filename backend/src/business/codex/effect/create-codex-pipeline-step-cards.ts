@@ -23,6 +23,7 @@ export function createCodexPipelineStepCards(input: {
     .replace(/[^a-zA-Z0-9._-]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'untitled';
   let previousCardId = input.run.sourceCardId;
+  const synchronizationRun = input.run.pipelineId === 'project-synchronization';
   for (const [index, step] of input.run.steps.entries()) {
     const firstSkill = step.skills[0];
     const card = {
@@ -36,6 +37,7 @@ export function createCodexPipelineStepCards(input: {
       w: 700,
       h: 260,
       status: 'todo',
+      ...(synchronizationRun ? { labels: ['subtask', 'synchronization'] } : {}),
       codexPipelineRunId: input.run.id,
       codexPipelineStepId: step.stepId,
       codexPipelineStepName: step.name,
@@ -59,9 +61,9 @@ export function createCodexPipelineStepCards(input: {
     if (cardMutation.ok === false) return cardMutation.error?.body ?? { error: 'Could not create a pipeline step card.' };
     const relationship = {
       id: `rel-${safeRunId}-${index + 1}`.slice(0, 180),
-      from: previousCardId,
+      from: synchronizationRun ? input.run.sourceCardId : previousCardId,
       to: step.outputCardId,
-      label: step.name,
+      label: synchronizationRun ? 'subtask' : step.name,
     };
     const relationMutation = applyLedgerMutation({
       decisionOsRoot: input.decisionOsRoot,

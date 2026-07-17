@@ -8,7 +8,12 @@ import { basename, dirname, resolve } from 'node:path';
 import type { DecisionOsProject } from '../../server/helper/project-catalog.js';
 import type { ProjectCatalogStore } from '../../server/helper/project-catalog-store.js';
 import type { FederationNodeConnector } from '../../federation/helper/federation-node-connector.js';
-import { startProjectSyncCodex } from './start-project-sync-codex.js';
+import { executeProjectSyncPipelineSkill } from './execute-project-sync-pipeline-skill.js';
+import { executeFederatedPipelineSkill } from '../../codex/helper/codex-pipeline-runner.js';
+import { startFederatedPipelineRun } from '../../codex/controller/start-codex-pipeline-run-controller.js';
+import { projectSynchronizationPipelineDefinition } from '../helper/project-sync-pipeline-definition.js';
+import { admitProjectSyncMasterTask } from '../effect/admit-project-sync-master-task.js';
+import { readCodexPipelineStore } from '../../codex/helper/codex-pipeline-store.js';
 import type { ProjectSyncStore } from '../helper/project-sync-store.js';
 import type { ProjectSyncRole, ProjectSyncRun } from '../helper/project-sync-types.js';
 import { readRepositorySyncStatus, type RepositorySyncStatus } from '../helper/repository-sync-status.js';
@@ -53,27 +58,52 @@ export function createProjectSyncController(input: {
     return parsed<{ snapshot: RepositorySyncStatus }>(response, 'Remote repository preflight').snapshot;
   };
   const runRole = async (nodeId: string, projectId: string, run: ProjectSyncRun, role: ProjectSyncRole, phaseSnapshot: RepositorySyncStatus, requiredSha?: string): Promise<RoleResponse> => {
-    if (nodeId !== input.localNodeId()) {
-      const response = await input.federation.request(nodeId, '/api/project-sync/role', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: Buffer.from(JSON.stringify({ syncId: run.syncId, initiatorNodeId: run.initiatorNodeId, projectId, role, requiredSha, originFingerprint: run.originFingerprint, snapshot: phaseSnapshot })),
-      });
-      return parsed<RoleResponse>(response, `Remote ${role}`);
-    }
-    const project = localProject(projectId);
-    const codex = await startProjectSyncCodex({
-      projectRoot: project.root,
-      runtime: input.runtimeForProject(project),
-      syncId: run.syncId,
-      nodeId,
-      initiatorNodeId: run.initiatorNodeId,
-      role,
-      requiredSha,
-      snapshot: phaseSnapshot,
+    const taskProject = localProject(run.taskProjectId);
+    const executed = await executeFederatedPipelineSkill({
+      decisionOsRoot: taskProject.decisionOsRoot,
+      runtime: input.runtimeForProject(taskProject),
+      pipelineRunId: run.pipelineRunId,
+      executor: { kind: 'federated', nodeId, projectId, role },
+      execute: async (skill) => {
+        if (nodeId !== input.localNodeId()) {
+          const response = await input.federation.request(nodeId, '/api/project-sync/role', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: Buffer.from(JSON.stringify({
+              syncId: run.syncId,
+              initiatorNodeId: run.initiatorNodeId,
+              projectId,
+              role,
+              requiredSha,
+              originFingerprint: run.originFingerprint,
+              snapshot: phaseSnapshot,
+              pipelineRunId: run.pipelineRunId,
+              pipelineSkillRunId: skill.runId,
+              masterTask: { projectId: run.taskProjectId, ledgerId: run.ledgerId, cardId: run.masterCardId },
+            })),
+          });
+          return { ...parsed<RoleResponse>(response, `Remote ${role}`), executorNodeId: nodeId };
+        }
+        const project = localProject(projectId);
+        const codex = await executeProjectSyncPipelineSkill({
+          projectRoot: project.root,
+          runtime: input.runtimeForProject(project),
+          ledgerFile: resolve(project.decisionOsRoot, String(project.ledgers[0]?.ledgerFile ?? '').replace(/^\.decision-os\//, '')),
+          syncId: run.syncId,
+          nodeId,
+          initiatorNodeId: run.initiatorNodeId,
+          role,
+          requiredSha,
+          snapshot: phaseSnapshot,
+          codexRunId: skill.runId,
+          pipelineRunId: run.pipelineRunId,
+          masterTask: { projectId: run.taskProjectId, ledgerId: run.ledgerId, cardId: run.masterCardId },
+        });
+        const verified = verifyProjectSyncPhase({ projectRoot: project.root, role, requiredSha, result: codex.result });
+        return { ...codex, snapshot: verified, executorNodeId: nodeId };
+      },
     });
-    const verified = verifyProjectSyncPhase({ projectRoot: project.root, role, requiredSha, result: codex.result });
-    return { ...codex, snapshot: verified };
+    return executed.result as RoleResponse;
   };
   const findOrMaterializeInitiator = (run: ProjectSyncRun, source: SyncSourceProject, sourceSnapshot: RepositorySyncStatus): DecisionOsProject => {
     for (const project of input.projects().filter((entry) => entry.available)) {
@@ -157,7 +187,7 @@ export function createProjectSyncController(input: {
     }
   };
   return {
-    start(source: SyncSourceProject, idempotencyKey: string): { run: ProjectSyncRun; duplicate: boolean } {
+    async start(source: SyncSourceProject, idempotencyKey: string): Promise<{ run: ProjectSyncRun; duplicate: boolean }> {
       const sourceNodeId = String(source.ownerNodeId ?? input.localNodeId());
       const fingerprint = String(source.originFingerprint ?? '').trim();
       if (!fingerprint) throw new Error('Source project does not advertise a Git-origin fingerprint.');
@@ -171,8 +201,33 @@ export function createProjectSyncController(input: {
         originFingerprint: fingerprint,
       });
       input.onRunChange(admitted.run);
-      if (!admitted.duplicate) void advance(admitted.run, source);
-      return admitted;
+      if (admitted.duplicate && admitted.run.masterCardId && admitted.run.pipelineRunId) return admitted;
+      const taskProject = input.projects().find((entry) => entry.id === source.id && entry.available && entry.ledgers.length > 0)
+        ?? input.projects().find((entry) => entry.available && entry.ledgers.length > 0);
+      if (!taskProject) throw new Error('The initiating node has no project ledger for the synchronization task.');
+      const task = admitProjectSyncMasterTask({ project: taskProject, sourceProjectId: source.id, sourceProjectName: source.name, originFingerprint: fingerprint, syncId: admitted.run.syncId });
+      const definition = projectSynchronizationPipelineDefinition();
+      const existingPipelineRun = readCodexPipelineStore({ decisionOsRoot: taskProject.decisionOsRoot }).store.runs.find((entry) =>
+        entry.pipelineId === definition.pipeline.id && entry.sourceCardId === task.masterCardId
+      );
+      const pipeline = existingPipelineRun ? { ok: true, run: existingPipelineRun } : await startFederatedPipelineRun({
+          decisionOsRoot: taskProject.decisionOsRoot,
+          runtime: input.runtimeForProject(taskProject),
+          ledgerId: task.ledgerId,
+          sourceCardId: task.masterCardId,
+          definition: { pipelineId: definition.pipeline.id, pipelineName: definition.pipeline.name, temporary: false, steps: definition.steps },
+        });
+      if (pipeline.ok !== true || !pipeline.run || typeof pipeline.run !== 'object') throw new Error(String(pipeline.error ?? 'Synchronization pipeline admission failed.'));
+      const pipelineRun = pipeline.run as { id?: unknown };
+      const run = input.store.attachTask(admitted.run.syncId, {
+        taskProjectId: taskProject.id,
+        ledgerId: task.ledgerId,
+        masterCardId: task.masterCardId,
+        pipelineRunId: String(pipelineRun.id ?? ''),
+      });
+      input.onRunChange(run);
+      void advance(run, source);
+      return { run, duplicate: admitted.duplicate };
     },
     retry(syncId: string): ProjectSyncRun {
       const run = input.store.read(syncId);

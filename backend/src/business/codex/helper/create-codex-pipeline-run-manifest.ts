@@ -19,6 +19,7 @@ export type PipelineDefinition = {
   pipelineId: string | null;
   pipelineName: string;
   temporary: boolean;
+  executionMode?: 'local' | 'federated';
   steps: readonly CodexPipelineStep[];
 };
 
@@ -93,6 +94,7 @@ export function createCodexPipelineRunManifest(input: {
     pipelineId: input.definition.pipelineId,
     pipelineName: input.definition.pipelineName,
     temporary: input.definition.temporary,
+    executionMode: input.definition.executionMode ?? 'local',
     ledgerId: input.ledgerId,
     sourceCardId: input.sourceCardId,
     sourceCardTitle: input.sourceCardTitle,

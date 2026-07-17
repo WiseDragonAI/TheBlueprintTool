@@ -73,15 +73,15 @@ import {
   type FederatedSkillSnapshot,
 } from '../../federation/helper/federated-library-cache.js';
 import { federatedControlRoomProjection } from './federated-control-room-projection.js';
-import { migrateLegacyProjectPipelines } from '../../codex/helper/server-pipeline-catalog.js';
+import { ensureServerPipelines, migrateLegacyProjectPipelines } from '../../codex/helper/server-pipeline-catalog.js';
 import { applyCodexSkillMetadataOwner, migrateCodexSkillMetadataOwner } from '../../codex/helper/codex-skill-metadata-owner.js';
 import { readCodexPipelineStore } from '../../codex/helper/codex-pipeline-store.js';
 import { createProjectSyncStore } from '../../project-sync/helper/project-sync-store.js';
 import { isNetworkGitOrigin, readRepositoryOriginIdentity, readRepositorySyncStatus } from '../../project-sync/helper/repository-sync-status.js';
 import { createProjectSyncController } from '../../project-sync/controller/start-project-sync.js';
-import { startProjectSyncCodex } from '../../project-sync/controller/start-project-sync-codex.js';
+import { executeProjectSyncPipelineSkill } from '../../project-sync/controller/execute-project-sync-pipeline-skill.js';
 import { verifyProjectSyncPhase } from '../../project-sync/helper/verify-project-sync-phase.js';
-import type { ProjectSyncRun, ProjectSyncRole } from '../../project-sync/helper/project-sync-types.js';
+import type { ProjectSyncRole } from '../../project-sync/helper/project-sync-types.js';
 
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
@@ -220,7 +220,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   }
   runtime.memoryDatabasePath = ensureDecisionOsMemoryStore(masterDecisionOsRoot);
   const globalContentEventClients = new Set<ServerResponse>();
-  const projectSyncEventClients = new Set<ServerResponse>();
   type ProjectContext = {
     clients: Set<ServerResponse>;
     revisions: ReturnType<typeof createLedgerRevisionTracker>;
@@ -410,6 +409,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     ...projectCatalog().filter((project) => project.available).map((project) => project.decisionOsRoot),
   ];
   const availableServerSkillNames = readCodexSkillCatalog({ decisionOsRoot: masterDecisionOsRoot, runtime }).skills.map((skill) => skill.name);
+  ensureServerPipelines({ serverDecisionOsRoot: masterDecisionOsRoot, availableSkillNames: availableServerSkillNames });
   migrateCodexSkillMetadataOwner({
     ownerDecisionOsRoot: masterDecisionOsRoot,
     sourceDecisionOsRoots: localDecisionOsRoots(),
@@ -529,10 +529,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     },
   });
   const projectSyncStore = createProjectSyncStore({ decisionOsRoot: masterDecisionOsRoot });
-  const publishProjectSyncRun = (run: ProjectSyncRun): void => {
-    const message = `event: project-sync\ndata: ${JSON.stringify(run)}\n\n`;
-    for (const client of projectSyncEventClients) client.write(message);
-  };
   projectSyncController = createProjectSyncController({
     masterRoot,
     localNodeId: () => federation!.localOwner().ownerNodeId,
@@ -541,7 +537,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     federation: federation!,
     store: projectSyncStore,
     runtimeForProject: (project) => projectContext(project.decisionOsRoot, project.id).runtime,
-    onRunChange: publishProjectSyncRun,
+    onRunChange: () => undefined,
   });
   projectSyncController.resume();
   Object.defineProperty(runtime, 'federationNodeConnector', { value: federation, configurable: true, enumerable: false });
@@ -909,15 +905,24 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         if (!snapshot || snapshot.originFingerprint !== readRepositorySyncStatus(project.root).originFingerprint) throw new Error('Project synchronization snapshot identity mismatch.');
         if (String(body.originFingerprint ?? '') !== snapshot.originFingerprint) throw new Error('Project synchronization origin lock identity mismatch.');
         projectSyncStore.acquireLock(snapshot.originFingerprint, String(body.syncId ?? ''));
-        const codex = await startProjectSyncCodex({
+        const masterTask = body.masterTask && typeof body.masterTask === 'object' ? body.masterTask as AnyRecord : {};
+        const codex = await executeProjectSyncPipelineSkill({
           projectRoot: project.root,
           runtime: projectContext(project.decisionOsRoot, project.id).runtime,
+          ledgerFile: resolve(project.decisionOsRoot, String(project.ledgers[0]?.ledgerFile ?? '').replace(/^\.decision-os\//, '')),
           syncId: String(body.syncId ?? ''),
           nodeId: federation.localOwner().ownerNodeId,
           initiatorNodeId: String(body.initiatorNodeId ?? ''),
           role,
           requiredSha: String(body.requiredSha ?? '') || undefined,
           snapshot,
+          codexRunId: String(body.pipelineSkillRunId ?? ''),
+          pipelineRunId: String(body.pipelineRunId ?? ''),
+          masterTask: {
+            projectId: String(masterTask.projectId ?? ''),
+            ledgerId: String(masterTask.ledgerId ?? ''),
+            cardId: String(masterTask.cardId ?? ''),
+          },
         });
         const verified = verifyProjectSyncPhase({ projectRoot: project.root, role, requiredSha: String(body.requiredSha ?? '') || undefined, result: codex.result });
         response.end(JSON.stringify({ ok: true, ...codex, snapshot: verified }));
@@ -957,9 +962,17 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         ];
         const source = allProjects.find((entry) => entry.id === sourceId);
         if (!source) throw new Error('Unknown source project.');
-        const admitted = projectSyncController.start(source, String(body.idempotencyKey ?? request.headers['idempotency-key'] ?? sourceId));
+        const admitted = await projectSyncController.start(source, String(body.idempotencyKey ?? request.headers['idempotency-key'] ?? sourceId));
         response.statusCode = admitted.duplicate ? 200 : 202;
-        response.end(JSON.stringify({ ok: true, duplicate: admitted.duplicate, run: admitted.run }));
+        response.end(JSON.stringify({
+          ok: true,
+          duplicate: admitted.duplicate,
+          masterCardId: admitted.run.masterCardId,
+          ledgerId: admitted.run.ledgerId,
+          pipelineRunId: admitted.run.pipelineRunId,
+          projectId: admitted.run.taskProjectId,
+          run: admitted.run,
+        }));
       } catch (error) {
         response.statusCode = 409;
         response.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : 'Project synchronization admission failed.' }));
@@ -985,20 +998,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       }
       return;
     }
-    if (url.startsWith('/api/project-sync/') && url !== '/api/project-sync/events' && url !== '/api/project-sync/role' && url !== '/api/project-sync/repository-status' && request.method === 'GET') {
+    if (url.startsWith('/api/project-sync/') && url !== '/api/project-sync/role' && url !== '/api/project-sync/repository-status' && request.method === 'GET') {
       const syncId = decodeRouteSegment(url.slice('/api/project-sync/'.length));
       const run = projectSyncStore.read(syncId);
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
       response.statusCode = run ? 200 : 404;
       response.end(JSON.stringify(run ? { ok: true, run } : { ok: false, error: 'Unknown project synchronization run.' }));
-      return;
-    }
-    if (url === '/api/project-sync/events' && request.method === 'GET') {
-      response.writeHead(200, { 'cache-control': 'no-store', connection: 'keep-alive', 'content-type': 'text/event-stream' });
-      response.write(': connected\n\n');
-      projectSyncEventClients.add(response);
-      request.on('close', () => projectSyncEventClients.delete(response));
       return;
     }
     if (url === '/decision-os/directories' && request.method === 'GET') {
@@ -1878,7 +1884,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       context.clients.clear();
     }
     globalContentEventClients.clear();
-    projectSyncEventClients.clear();
     federation.stop();
   });
   server.on('listening', () => {

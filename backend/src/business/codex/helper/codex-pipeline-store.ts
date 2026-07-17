@@ -183,6 +183,15 @@ function normalizePipelines(raw: unknown, issues: CodexPipelineStoreIssue[]): Co
 }
 
 function normalizeRunSkill(input: AnyRecord, stepId: string, index: number): CodexPipelineRunSkill {
+  const executorInput = record(input.executor);
+  const executor = executorInput.kind === 'federated' && text(executorInput.nodeId) && text(executorInput.projectId)
+    ? {
+        kind: 'federated' as const,
+        nodeId: text(executorInput.nodeId),
+        projectId: text(executorInput.projectId),
+        role: text(executorInput.role),
+      }
+    : undefined;
   return {
     id: text(input.id) || `${stepId}-run-skill-${index + 1}`,
     pipelineSkillId: text(input.pipelineSkillId),
@@ -196,6 +205,7 @@ function normalizeRunSkill(input: AnyRecord, stepId: string, index: number): Cod
     startedAt: nullableText(input.startedAt),
     finishedAt: nullableText(input.finishedAt),
     error: text(input.error),
+    ...(executor ? { executor } : {}),
   };
 }
 
@@ -234,6 +244,7 @@ function normalizeRuns(raw: unknown, issues: CodexPipelineStoreIssue[]): CodexPi
       pipelineId: nullableText(input.pipelineId),
       pipelineName: text(input.pipelineName),
       temporary: input.temporary === true,
+      executionMode: input.executionMode === 'federated' ? 'federated' : 'local',
       ledgerId: text(input.ledgerId),
       sourceCardId: text(input.sourceCardId),
       sourceCardTitle: text(input.sourceCardTitle),

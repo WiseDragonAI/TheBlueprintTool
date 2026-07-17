@@ -10,7 +10,7 @@ import { initializeMobileCodex, openMobileCodexLibrary, setMobileCodexContext } 
 import { executionAge, executionStopwatch, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge } from './control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from './control-room-route.js';
 import { cardPathForProject, isProjectCardPath, ledgerPathForProject, parseProjectRoute, parseProjectScope, projectPath, zonePathForProject } from './project-route.js';
-import { loadProjectSyncRuns, projectSettingsValues, saveProjectSettingsRequest, startProjectSyncRequest } from './project-settings.js';
+import { projectSettingsValues, saveProjectSettingsRequest, startProjectSyncRequest } from './project-settings.js';
 import { isCardEditingKeyboardTarget } from '/src/runtime/input/helper/is-card-editing-keyboard-target.js';
 import { committedProjectColor, hexToHsv, hsvToHex, projectColorPickerGradients } from './project-color-picker.js';
 import { codexProcessLimitRange, loadCodexProcessSettings, saveCodexProcessSettings, stepCodexProcessLimit } from './codex-settings.js';
@@ -39,7 +39,6 @@ const state = {
   controlTab: 'queue',
   projectFilter: 'All',
   controlFilter: 'All',
-  projectSyncRuns: [],
 };
 
 const elements = Object.fromEntries([
@@ -101,7 +100,6 @@ let federationFormDirty = false;
 let federationSettingsLoadGeneration = 0;
 let projectColorPickerOriginal = '';
 let projectColorPickerDirty = false;
-let projectSyncEventSource = null;
 let replicaRetryTimer = 0;
 let presentedCardIdentity = '';
 let routeLoadGeneration = 0;
@@ -1012,94 +1010,40 @@ function openProjectSettings() {
   const sync = document.querySelector('.project-settings-sync');
   sync.disabled = !project.originFingerprint || project.online === false;
   sync.dataset.projectId = project.id;
-  renderProjectSyncStatus(project.id);
   renderProjectSettingsColorField(values.color);
-  document.querySelector('.project-settings-error').hidden = true;
+  projectSettingsModal.querySelector('.project-settings-error').hidden = true;
   projectSettingsModal.showModal();
   (project.remote ? sync : name).focus();
-}
-
-function projectSyncRunFor(projectId) {
-  const project = state.projects.find((entry) => entry.id === projectId);
-  if (!project) return null;
-  return state.projectSyncRuns.find((run) => run.sourceNodeId === project.ownerNodeId && run.sourceProjectId === project.localProjectId)
-    || state.projectSyncRuns.find((run) => run.initiatorProjectId === project.localProjectId)
-    || null;
-}
-
-function renderProjectSyncStatus(projectId = state.viewedProjectId) {
-  const status = document.querySelector('.project-settings-sync-status');
-  if (!status) return;
-  const run = projectSyncRunFor(projectId);
-  status.textContent = run
-    ? run.phase === 'failed' ? `Failed · ${run.error?.message || 'Review the run evidence.'}` : `Sync ${run.phase.replaceAll('_', ' ')} · ${run.syncId}`
-    : 'No synchronization has been started from this node.';
-  status.dataset.phase = run?.phase || 'idle';
-  const button = document.querySelector('.project-settings-sync');
-  if (button) button.disabled = Boolean(run && !['complete', 'failed'].includes(run.phase));
-}
-
-function notifyProjectSync(run) {
-  if (!['complete', 'failed'].includes(run.phase)) return;
-  const existing = document.querySelector(`[data-sync-notification="${CSS.escape(run.syncId)}"]`);
-  if (existing) return;
-  const notification = document.createElement('button');
-  notification.type = 'button';
-  notification.className = 'project-sync-notification';
-  notification.dataset.syncNotification = run.syncId;
-  notification.textContent = run.phase === 'complete' ? 'Project synchronization complete.' : `Project synchronization failed: ${run.error?.message || 'Unknown failure.'}`;
-  notification.addEventListener('click', () => {
-    const project = state.projects.find((entry) => entry.localProjectId === run.initiatorProjectId || entry.localProjectId === run.sourceProjectId);
-    if (project) {
-      state.viewedProjectId = project.id;
-      openProjectSettings();
-    }
-    notification.remove();
-  });
-  document.querySelector('.project-sync-notifications').append(notification);
-}
-
-async function refreshProjectSyncRuns() {
-  try {
-    state.projectSyncRuns = await loadProjectSyncRuns(fetch);
-    renderProjectSyncStatus();
-    state.projectSyncRuns.forEach(notifyProjectSync);
-  } catch { /* Connection recovery is driven by the next SSE event or route load. */ }
 }
 
 async function startSelectedProjectSync() {
   const project = state.projects.find((entry) => entry.id === state.viewedProjectId);
   if (!project) return;
   const button = document.querySelector('.project-settings-sync');
+  const error = projectSettingsModal.querySelector('.project-settings-error');
   button.disabled = true;
+  error.hidden = true;
   try {
-    const run = await startProjectSyncRequest({ fetchImpl: fetch, sourceProjectId: project.id, idempotencyKey: `${project.id}:${project.originFingerprint}` });
-    state.projectSyncRuns = [run, ...state.projectSyncRuns.filter((entry) => entry.syncId !== run.syncId)];
-    renderProjectSyncStatus(project.id);
-  } catch (error) {
-    const status = document.querySelector('.project-settings-sync-status');
-    status.textContent = error instanceof Error ? error.message : 'Synchronization could not start.';
-    status.dataset.phase = 'failed';
+    const admission = await startProjectSyncRequest({ fetchImpl: fetch, sourceProjectId: project.id, idempotencyKey: `${project.id}:${project.originFingerprint}` });
+    projectSettingsModal.close();
+    state.projectFilter = 'All';
+    state.controlFilter = 'All';
+    state.controlTab = 'exec';
+    await loadControlRoom({ force: true });
+    const anchor = `task-${taskIdentity({ projectId: admission.projectId, ledgerId: admission.ledgerId, cardId: admission.masterCardId })}`;
+    navigate(controlRoomPath('exec', anchor), true);
+  } catch (cause) {
+    error.textContent = cause instanceof Error ? cause.message : 'Synchronization could not start.';
+    error.hidden = false;
     button.disabled = false;
   }
-}
-
-function subscribeProjectSyncEvents() {
-  if (projectSyncEventSource || typeof EventSource === 'undefined') return;
-  projectSyncEventSource = new EventSource('/api/project-sync/events');
-  projectSyncEventSource.addEventListener('project-sync', (event) => {
-    const run = JSON.parse(event.data);
-    state.projectSyncRuns = [run, ...state.projectSyncRuns.filter((entry) => entry.syncId !== run.syncId)];
-    renderProjectSyncStatus();
-    notifyProjectSync(run);
-  });
 }
 
 async function submitProjectSettings() {
   const project = state.projects.find((entry) => entry.id === state.viewedProjectId);
   if (!project || !projectSettingsForm.reportValidity()) return;
   const save = document.querySelector('.project-settings-save');
-  const error = document.querySelector('.project-settings-error');
+  const error = projectSettingsModal.querySelector('.project-settings-error');
   save.disabled = true;
   save.setAttribute('aria-busy', 'true');
   error.hidden = true;
@@ -2555,8 +2499,6 @@ window.matchMedia('(min-width: 760px)').addEventListener('change', () => {
 
 initializeMobileThread();
 initializeMobileCodex();
-subscribeProjectSyncEvents();
-void refreshProjectSyncRuns();
 window.setInterval(() => {
   document.querySelectorAll('.task-stopwatch[data-execution-since]').forEach((stopwatch) => {
     stopwatch.textContent = executionStopwatch(stopwatch.dataset.executionSince);
