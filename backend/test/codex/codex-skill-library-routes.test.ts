@@ -282,7 +282,7 @@ test('server skill tags persist as project metadata without editing synchronized
   }
 });
 
-test('server skill metadata routes persist to the server owner instead of project replicas', async () => {
+test('server and project skill views share migrated server-owned favorite metadata', async () => {
   const serverRoot = mkdtempSync(join(tmpdir(), 'decision-os-server-skill-owner-'));
   const masterDecisionOsRoot = join(serverRoot, '.decision-os');
   const childDecisionOsRoot = join(serverRoot, 'projects', 'child', '.decision-os');
@@ -293,14 +293,37 @@ test('server skill metadata routes persist to the server owner instead of projec
   writeFileSync(skillFile, markdown('server-owned-skill', 'Server-owned metadata fixture'));
   writeFileSync(join(masterDecisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
   writeFileSync(join(childDecisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
+  writeFileSync(join(childDecisionOsRoot, 'codex-pipelines.json'), JSON.stringify({
+    version: 1,
+    pipelines: [],
+    steps: [],
+    runs: [],
+    skillLibrary: [{
+      skillName: 'server-owned-skill',
+      favorite: true,
+      tags: ['Implementation'],
+      defaultCodexModel: 'gpt-5.4',
+      defaultCodexEffort: 'high',
+      updatedAt: '2026-07-17T12:00:00.000Z',
+    }],
+    activeWorkspaceRun: null,
+  }));
 
   const runtime: Record<string, any> = {};
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: serverRoot }, runtime_state: runtime });
+  assert.equal(runtime.decisionOsRoot, masterDecisionOsRoot);
   const server = runtime.server as Server;
   await once(server, 'listening');
   const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
   try {
+    const catalog = await fetch(`${baseUrl}/decision-os/projects`).then((response) => response.json()) as Record<string, any>;
+    const projectId = catalog.projects.find((project: Record<string, any>) => project.name === 'child').id;
+    const projectSkills = await fetch(`${baseUrl}/p/${encodeURIComponent(projectId)}/api/codex/skills`).then((response) => response.json()) as Record<string, any>;
+    const projectSkill = projectSkills.skills.find((skill: Record<string, any>) => skill.name === 'server-owned-skill');
+    assert.equal(projectSkill.favorite, true);
+    assert.deepEqual(projectSkill.tags, ['Implementation']);
+
     const saveResponse = await fetch(`${baseUrl}/api/codex/server-skills/server-owned-skill`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
@@ -317,13 +340,40 @@ test('server skill metadata routes persist to the server owner instead of projec
       favorite: record.favorite,
       tags: record.tags,
     })), [{ skillName: 'server-owned-skill', favorite: true, tags: ['Interface'] }]);
-    assert.equal(existsSync(join(childDecisionOsRoot, 'codex-pipelines.json')), false);
+    const childAfterServerSave = JSON.parse(readFileSync(join(childDecisionOsRoot, 'codex-pipelines.json'), 'utf8')) as Record<string, any>;
+    assert.deepEqual(childAfterServerSave.skillLibrary[0].tags, ['Implementation']);
+
+    const projectSaveResponse = await fetch(`${baseUrl}/p/${encodeURIComponent(projectId)}/api/codex/skill-library/server-owned-skill`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ favorite: false, tags: ['Architecture'] }),
+    });
+    assert.equal(projectSaveResponse.status, 200);
+    const projectSaved = await projectSaveResponse.json() as Record<string, any>;
+    assert.equal(projectSaved.skill.favorite, false);
+    assert.deepEqual(projectSaved.skill.tags, ['Architecture']);
+    const masterAfterProjectSave = JSON.parse(readFileSync(join(masterDecisionOsRoot, 'codex-pipelines.json'), 'utf8')) as Record<string, any>;
+    assert.deepEqual(masterAfterProjectSave.skillLibrary.map((record: Record<string, any>) => ({
+      skillName: record.skillName,
+      favorite: record.favorite,
+      tags: record.tags,
+    })), [{ skillName: 'server-owned-skill', favorite: false, tags: ['Architecture'] }]);
+
+    const projectReload = await fetch(`${baseUrl}/p/${encodeURIComponent(projectId)}/api/codex/skills`).then((response) => response.json()) as Record<string, any>;
+    const reloadedProjectSkill = projectReload.skills.find((skill: Record<string, any>) => skill.name === 'server-owned-skill');
+    assert.equal(reloadedProjectSkill.favorite, false);
+    assert.deepEqual(reloadedProjectSkill.tags, ['Architecture']);
+    const serverReload = await fetch(`${baseUrl}/api/codex/server-skills`).then((response) => response.json()) as Record<string, any>;
+    const reloadedServerSkill = serverReload.skills.find((skill: Record<string, any>) => skill.name === 'server-owned-skill');
+    assert.equal(reloadedServerSkill.favorite, false);
+    assert.deepEqual(reloadedServerSkill.tags, ['Architecture']);
+    assert.deepEqual(JSON.parse(readFileSync(join(childDecisionOsRoot, 'codex-pipelines.json'), 'utf8')).skillLibrary[0].tags, ['Implementation']);
 
     const reloadResponse = await fetch(`${baseUrl}/api/codex/server-skills/server-owned-skill`);
     assert.equal(reloadResponse.status, 200);
     const reloaded = await reloadResponse.json() as Record<string, any>;
-    assert.equal(reloaded.skill.favorite, true);
-    assert.deepEqual(reloaded.skill.tags, ['Interface']);
+    assert.equal(reloaded.skill.favorite, false);
+    assert.deepEqual(reloaded.skill.tags, ['Architecture']);
 
     const rejectedResponse = await fetch(`${baseUrl}/api/codex/server-skills/server-owned-skill`, {
       method: 'PUT',
