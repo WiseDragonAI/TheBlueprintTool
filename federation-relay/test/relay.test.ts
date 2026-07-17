@@ -1,7 +1,7 @@
 import { SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 
-type Frame = { type: string; requestId?: string; direction?: string; nodes?: Array<{ nodeId: string; online: boolean }> };
+type Frame = { type: string; requestId?: string; direction?: string; nodes?: Array<{ nodeId: string; nodeLabel: string; online: boolean }> };
 
 async function createNode(federationId: string, nodeId: string): Promise<string> {
   const response = await SELF.fetch(`https://relay.test/admin/federations/${federationId}/nodes/${nodeId}`, {
@@ -47,11 +47,16 @@ describe('federation relay', () => {
     const nodeB = await connect(federationId, 'node-b', credentialB);
 
     const catalogReady = nextFrame(nodeA, (frame) => frame.type === 'catalog' && frame.nodes?.length === 2);
-    nodeA.send(JSON.stringify({ version: 1, type: 'manifest', projects: [{ id: 'alpha', name: 'Alpha', description: '', color: '#38d9e8', ledgers: [] }] }));
-    nodeB.send(JSON.stringify({ version: 1, type: 'manifest', projects: [{ id: 'beta', name: 'Beta', description: '', color: '#a78bfa', ledgers: [] }] }));
+    nodeA.send(JSON.stringify({ version: 1, type: 'manifest', nodeLabel: 'Workstation', projects: [{ id: 'alpha', name: 'Alpha', description: '', color: '#38d9e8', ledgers: [] }] }));
+    nodeB.send(JSON.stringify({ version: 1, type: 'manifest', nodeLabel: 'Phone', projects: [{ id: 'beta', name: 'Beta', description: '', color: '#a78bfa', ledgers: [] }] }));
     const catalog = await catalogReady;
     expect(catalog.nodes?.map((node) => node.nodeId).sort()).toEqual(['node-a', 'node-b']);
     expect(catalog.nodes?.every((node) => node.online)).toBe(true);
+    expect(catalog.nodes?.find((node) => node.nodeId === 'node-b')?.nodeLabel).toBe('Phone');
+
+    const remoteChange = nextFrame(nodeB, (frame) => frame.type === 'content-change');
+    nodeA.send(JSON.stringify({ version: 1, type: 'content-change' }));
+    await expect(remoteChange).resolves.toMatchObject({ type: 'content-change' });
 
     const requestId = crypto.randomUUID();
     const ownerOpen = nextFrame(nodeB, (frame) => frame.type === 'request-open' && frame.requestId === requestId);

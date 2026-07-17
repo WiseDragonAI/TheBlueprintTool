@@ -68,11 +68,13 @@ export default {
 export class FederationRelay extends DurableObject<Env> {
   private readonly streams = new Map<string, Stream>();
   private manifests = new Map<string, ProjectManifest[]>();
+  private nodeLabels = new Map<string, string>();
 
   constructor(state: DurableObjectState, env: Env) {
     super(state, env);
     state.blockConcurrencyWhile(async () => {
       this.manifests = new Map((await state.storage.get<Array<[string, ProjectManifest[]]>>('manifests')) ?? []);
+      this.nodeLabels = new Map((await state.storage.get<Array<[string, string]>>('nodeLabels')) ?? []);
     });
   }
 
@@ -86,7 +88,7 @@ export class FederationRelay extends DurableObject<Env> {
 
   private async publishCatalog(): Promise<void> {
     const online = new Set(this.ctx.getWebSockets().map((socket) => (socket.deserializeAttachment() as SocketIdentity).nodeId));
-    const nodes = [...this.manifests].map(([nodeId, projects]) => ({ nodeId, projects, online: online.has(nodeId) }));
+    const nodes = [...this.manifests].map(([nodeId, projects]) => ({ nodeId, nodeLabel: this.nodeLabels.get(nodeId) || nodeId, projects, online: online.has(nodeId) }));
     const frame: RelayFrame = { version: 1, type: 'catalog', nodes };
     for (const socket of this.ctx.getWebSockets()) socket.send(JSON.stringify(frame));
   }
@@ -129,8 +131,15 @@ export class FederationRelay extends DurableObject<Env> {
       frame = parseFrame(text);
       if (frame.type === 'manifest') {
         this.manifests.set(sender, Array.isArray(frame.projects) ? frame.projects : []);
-        await this.ctx.storage.put('manifests', [...this.manifests]);
+        this.nodeLabels.set(sender, String(frame.nodeLabel || sender).slice(0, 120));
+        await this.ctx.storage.put({ manifests: [...this.manifests], nodeLabels: [...this.nodeLabels] });
         await this.publishCatalog();
+        return;
+      }
+      if (frame.type === 'content-change') {
+        for (const target of this.ctx.getWebSockets()) {
+          if (target !== socket) target.send(JSON.stringify({ version: 1, type: 'content-change' } satisfies RelayFrame));
+        }
         return;
       }
       if (frame.type === 'request-open') {

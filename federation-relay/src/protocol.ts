@@ -24,8 +24,9 @@ export type RelayFrame = {
   path?: string;
   headers?: Record<string, string>;
   status?: number;
+  nodeLabel?: string;
   projects?: ProjectManifest[];
-  nodes?: Array<{ nodeId: string; online: boolean; projects: ProjectManifest[] }>;
+  nodes?: Array<{ nodeId: string; nodeLabel: string; online: boolean; projects: ProjectManifest[] }>;
   code?: string;
   message?: string;
 };

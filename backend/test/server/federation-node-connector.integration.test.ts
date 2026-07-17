@@ -16,7 +16,7 @@ function projectHome(name: string): string {
   const decisionOsRoot = join(home, name, '.decision-os');
   mkdirSync(decisionOsRoot, { recursive: true });
   writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'specs', title: `${name} Specs`, ledgerFile: '.decision-os/specs.json' }] }));
-  writeFileSync(join(decisionOsRoot, 'specs.json'), JSON.stringify({ cards: [{ id: `${name}-card`, title: `${name} card` }], annotations: [], relationships: [] }));
+  writeFileSync(join(decisionOsRoot, 'specs.json'), JSON.stringify({ cards: [{ id: `${name}-card`, title: `${name} card`, labels: ['master-task'], status: 'todo' }], annotations: [], relationships: [] }));
   return home;
 }
 
@@ -46,6 +46,10 @@ test('two Decision OS nodes expose remote owner state without changing either lo
         manifests.set(nodeId, frame.projects ?? []);
         const catalog = JSON.stringify({ version: 1, type: 'catalog', nodes: [...manifests].map(([id, projects]) => ({ nodeId: id, online: sockets.has(id), projects })) });
         for (const target of sockets.values()) target.send(catalog);
+        return;
+      }
+      if (frame.type === 'content-change') {
+        for (const [targetId, target] of sockets) if (targetId !== nodeId) target.send(JSON.stringify({ version: 1, type: 'content-change' }));
         return;
       }
       if (frame.type === 'request-open' && frame.requestId && frame.to) {
@@ -82,8 +86,14 @@ test('two Decision OS nodes expose remote owner state without changing either lo
     await new Promise((resolve) => setTimeout(resolve, 200));
     assert.ok(runtimeA.federationNodeConnector, `runtime A properties: ${Object.getOwnPropertyNames(runtimeA).join(',')}`);
     assert.ok(runtimeB.federationNodeConnector, `runtime B properties: ${Object.getOwnPropertyNames(runtimeB).join(',')}`);
-    assert.deepEqual((runtimeA.federationNodeConnector as { status(): unknown }).status(), { configured: true, socketState: 1 });
-    assert.deepEqual((runtimeB.federationNodeConnector as { status(): unknown }).status(), { configured: true, socketState: 1 });
+    assert.deepEqual((runtimeA.federationNodeConnector as { status(): unknown }).status(), {
+      configured: true, connected: true, socketState: 1, relayUrl, federationId: 'proof', nodeId: 'node-a', nodeLabel: 'node-a', credentialConfigured: true,
+      peers: [{ nodeId: 'node-b', nodeLabel: 'node-b', online: true, projectCount: 1 }],
+    });
+    assert.deepEqual((runtimeB.federationNodeConnector as { status(): unknown }).status(), {
+      configured: true, connected: true, socketState: 1, relayUrl, federationId: 'proof', nodeId: 'node-b', nodeLabel: 'node-b', credentialConfigured: true,
+      peers: [{ nodeId: 'node-a', nodeLabel: 'node-a', online: true, projectCount: 1 }],
+    });
     assert.equal(sockets.size, 2, 'both Decision OS connectors reached the relay');
     assert.equal(manifests.size, 2, 'both Decision OS connectors published a manifest');
     const catalogA = await waitFor(async () => {
@@ -94,6 +104,32 @@ test('two Decision OS nodes expose remote owner state without changing either lo
     const remoteBeta = catalogA.find((project) => project.remote && project.name === 'beta')!;
     assert.ok(remoteBeta.id.startsWith('node-b:'));
     assert.ok(catalogB.projects.some((project) => project.remote && project.name === 'alpha'));
+    const controlRoomA = await fetch(`${baseA}/api/control-room`).then((response) => response.json()) as {
+      projects: Array<{ id: string; ownerNodeId: string }>;
+      allTasks: Array<{ projectId: string; ownerNodeId: string; title: string }>;
+      federation: { nodeCount: number; remoteNodeCount: number };
+    };
+    assert.deepEqual(controlRoomA.federation, { nodeCount: 2, remoteNodeCount: 1 });
+    assert.ok(controlRoomA.projects.some((project) => project.id.startsWith('node-b:') && project.ownerNodeId === 'node-b'));
+    assert.ok(controlRoomA.allTasks.some((task) => task.title === 'beta card' && task.projectId.startsWith('node-b:') && task.ownerNodeId === 'node-b'));
+    const settingsA = await fetch(`${baseA}/api/settings/federation`).then((response) => response.json()) as Record<string, unknown>;
+    assert.equal(settingsA.connected, true);
+    assert.equal(settingsA.credentialConfigured, true);
+    assert.equal(Object.hasOwn(settingsA, 'nodeCredential'), false);
+
+    const events = await fetch(`${baseA}/api/control-room-events`);
+    const eventReader = events.body!.getReader();
+    await eventReader.read();
+    const directMutation = await fetch(`${baseB}/p/${encodeURIComponent(catalogB.projects.find((project) => !project.remote)!.id)}/decision-os/specs`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'beta-card', title: 'changed on owner' } }),
+    });
+    assert.equal(directMutation.status, 200);
+    const remoteEvent = await Promise.race([
+      eventReader.read(),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timed out waiting for federated Control Room event.')), 2_000)),
+    ]);
+    assert.match(new TextDecoder().decode(remoteEvent.value), /ledger-content-change/);
+    await eventReader.cancel();
 
     const registryAPath = join(homeA, '.decision-os', 'projects.json');
     const registryBPath = join(homeB, '.decision-os', 'projects.json');
@@ -101,7 +137,7 @@ test('two Decision OS nodes expose remote owner state without changing either lo
     const registryB = readFileSync(registryBPath, 'utf8');
 
     const remoteLedger = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/specs`).then((response) => response.json()) as { cards: Array<{ title: string }> };
-    assert.equal(remoteLedger.cards[0].title, 'beta card');
+    assert.equal(remoteLedger.cards[0].title, 'changed on owner');
     const mutation = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/specs`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
