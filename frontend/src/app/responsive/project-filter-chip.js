@@ -23,12 +23,28 @@ export function projectFilterChipPresentation(project) {
   };
 }
 
-function projectFilterGroupKey(project) {
+function localRepositoryKeys(projects) {
+  const keys = new Map();
+  const ambiguous = new Set();
+  for (const project of projects) {
+    if (project.remote === true) continue;
+    const originFingerprint = String(project.originFingerprint ?? '').trim();
+    const logicalProjectId = String(project.localProjectId ?? project.id ?? '').trim();
+    if (!originFingerprint || !logicalProjectId) continue;
+    const key = `repository:${originFingerprint}:${logicalProjectId}`;
+    if (keys.has(logicalProjectId) && keys.get(logicalProjectId) !== key) ambiguous.add(logicalProjectId);
+    else keys.set(logicalProjectId, key);
+  }
+  for (const logicalProjectId of ambiguous) keys.delete(logicalProjectId);
+  return keys;
+}
+
+function projectFilterGroupKey(project, localKeys) {
   const originFingerprint = String(project.originFingerprint ?? '').trim();
   const logicalProjectId = String(project.localProjectId ?? project.id ?? '').trim();
-  return originFingerprint && logicalProjectId
-    ? `repository:${originFingerprint}:${logicalProjectId}`
-    : `project:${String(project.id ?? '').trim()}`;
+  if (originFingerprint && logicalProjectId) return `repository:${originFingerprint}:${logicalProjectId}`;
+  if (project.remote === true && logicalProjectId && localKeys.has(logicalProjectId)) return localKeys.get(logicalProjectId);
+  return `project:${String(project.id ?? '').trim()}`;
 }
 
 function projectFilterGroupLedgers(projects, canonicalProject) {
@@ -43,9 +59,10 @@ function projectFilterGroupLedgers(projects, canonicalProject) {
 }
 
 export function projectFilterGroups(projects) {
+  const localKeys = localRepositoryKeys(projects);
   const groupedProjects = new Map();
   for (const project of projects) {
-    const key = projectFilterGroupKey(project);
+    const key = projectFilterGroupKey(project, localKeys);
     const members = groupedProjects.get(key) ?? [];
     members.push(project);
     groupedProjects.set(key, members);
