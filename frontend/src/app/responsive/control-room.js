@@ -58,11 +58,12 @@ export function parseMasterTaskMarkdown({ cardId, title, labels: cardLabels = []
   }
   const complete = subtasks.filter((task) => /^(?:complete|completed|done)$/i.test(task.status)).length;
   const normalizedCodexStatus = String(codexStatus).toLowerCase();
-  const normalizedExecutionStatus = ['pending', 'running'].includes(String(executionStatus))
+  const normalizedExecutionStatus = ['transcribing-before-launch', 'pending', 'running'].includes(String(executionStatus))
     ? String(executionStatus)
     : normalizedCodexStatus === 'pending' ? 'pending' : ['processing', 'running', 'in_progress'].includes(normalizedCodexStatus) ? 'running' : '';
   const codexProcessing = normalizedExecutionStatus === 'running';
   const codexQueued = normalizedExecutionStatus === 'pending';
+  const transcribingBeforeLaunch = normalizedExecutionStatus === 'transcribing-before-launch';
   const currentRunStartedAt = String(codexStartedAt || '').trim();
   const currentRunStartedTime = Date.parse(currentRunStartedAt);
   const displayedExecutionSince = codexProcessing && Number.isFinite(currentRunStartedTime) ? currentRunStartedAt : executionText;
@@ -79,13 +80,14 @@ export function parseMasterTaskMarkdown({ cardId, title, labels: cardLabels = []
     ledgerId: String(ledgerId),
     ledgerTitle: String(ledgerTitle),
     ledger,
-    status: cardStatus === 'backlog' ? 'task-backlog' : cardStatus === 'done' ? 'task-complete' : ((codexQueued || codexProcessing) ? 'task-execution' : 'task-waiting'),
+    status: cardStatus === 'backlog' ? 'task-backlog' : cardStatus === 'done' ? 'task-complete' : ((transcribingBeforeLaunch || codexQueued || codexProcessing) ? 'task-execution' : 'task-waiting'),
     codexRunId: String(codexRunId),
     codexPipelineRunId: String(codexPipelineRunId),
     codexStatus: normalizedCodexStatus,
     executionStatus: normalizedExecutionStatus,
     codexProcessing,
     codexQueued,
+    transcribingBeforeLaunch,
     codexQueuePosition: codexQueued ? codexQueuePosition : null,
     waitingSince: Number.isFinite(latestThreadTime) ? new Date(latestThreadTime).toISOString() : waitingText,
     waitingTime,

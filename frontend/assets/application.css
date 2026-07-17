@@ -263,8 +263,8 @@ h1 { margin: 0; font-size: clamp(28px, 8vw, 44px); line-height: 1.08; letter-spa
 .card-row-arrow { color: var(--accent); font-size: 20px; }
 .no-results { padding: 50px 20px; color: var(--muted); text-align: center; }
 
-.back-button { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 14px; color: var(--accent); }
-.back-button .terminal-button__key { color: currentColor; border-color: color-mix(in srgb, currentColor, transparent 58%); background: color-mix(in srgb, currentColor, transparent 90%); }
+.back-button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; color: var(--accent); }
+.back-button__icon { display: inline-grid; width: 14px; height: 14px; place-items: center; flex: 0 0 14px; font-size: 15px; line-height: 1; }
 .card-detail-header { display: grid; gap: 18px; padding: 0 0 22px 14px; border-bottom: 1px solid var(--line); border-left: 4px solid var(--zone-color, var(--accent)); }
 .card-detail-header h1 { width: 100%; font-size: clamp(24px, 7vw, 34px); }
 .thread-open-button { min-height: 44px; padding: 0 14px; color: color-mix(in srgb, var(--zone-color, var(--accent)), white 46%); }

@@ -20,7 +20,7 @@ type Projection = AnyRecord & { schemaVersion: number; projectorVersion: string;
 type ProjectSlice = { projectId: string; project: AnyRecord; tasks: AnyRecord[]; dependencies: Dependency[]; fingerprint: string };
 
 const schemaVersion = 5;
-const projectorVersion = 'control-room-v6-execution-status';
+const projectorVersion = 'control-room-v7-transcribing-before-launch';
 
 function records(value: unknown): AnyRecord[] {
   return Array.isArray(value) ? value.filter((entry): entry is AnyRecord => Boolean(entry && typeof entry === 'object')) : [];
@@ -64,7 +64,7 @@ function zoneIdFor(card: AnyRecord, ledger: AnyRecord): string {
 }
 
 function runtimeStatus(input: { card: AnyRecord; runtime: AnyRecord; pipelineRuns: AnyRecord[]; queuedRuns: AnyRecord[] }): AnyRecord {
-  const persistedExecutionStatus = ['pending', 'running'].includes(text(input.card.executionStatus))
+  const persistedExecutionStatus = ['transcribing-before-launch', 'pending', 'running'].includes(text(input.card.executionStatus))
     ? text(input.card.executionStatus)
     : '';
   const runId = text(input.card.codexActiveRunId) || text(input.card.codexThreadRunId) || text(input.card.codexRunId);
@@ -119,8 +119,9 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   const run = runtimeStatus({ card: input.card, runtime: input.runtime, pipelineRuns: input.pipelineRuns, queuedRuns: input.queuedRuns });
   const processing = run.status === 'running' || (!text(input.card.executionStatus) && ['processing', 'in_progress'].includes(text(run.status)));
   const queued = run.status === 'pending';
+  const transcribingBeforeLaunch = run.status === 'transcribing-before-launch';
   const cardStatus = text(input.card.status) || 'todo';
-  const status = cardStatus === 'backlog' ? 'task-backlog' : cardStatus === 'done' ? 'task-complete' : processing || queued ? 'task-execution' : 'task-waiting';
+  const status = cardStatus === 'backlog' ? 'task-backlog' : cardStatus === 'done' ? 'task-complete' : processing || queued || transcribingBeforeLaunch ? 'task-execution' : 'task-waiting';
   const cards = records(input.ledger.cards);
   const subtasks: AnyRecord[] = [];
   const relationships = records(input.ledger.relationships).filter((relationship) => text(relationship.from) === text(input.card.id) && text(relationship.label) === 'subtask');
@@ -150,7 +151,8 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
     ledgerId: input.ledgerEntry.id, ledgerTitle: input.ledgerEntry.title, ledger: ledgerName,
     zoneId: zoneIdFor(input.card, input.ledger), status,
     codexRunId: run.runId, codexPipelineRunId: run.pipelineRunId, codexStatus: run.status,
-    executionStatus: processing ? 'running' : queued ? 'pending' : '',
+    executionStatus: processing ? 'running' : queued ? 'pending' : transcribingBeforeLaunch ? 'transcribing-before-launch' : '',
+    transcribingBeforeLaunch,
     codexProcessing: processing, codexQueued: queued, codexQueuePosition: queued ? run.queuePosition : null,
     waitingSince: Number.isFinite(latestThreadTime) ? new Date(latestThreadTime).toISOString() : waitingText,
     waitingTime, executionSince,

@@ -8,6 +8,7 @@ const sharedThreadRenderer = await readFile(new URL('../../frontend/src/runtime/
 const sharedCodexStatus = await readFile(new URL('../../frontend/src/runtime/thread/component/render-thread-codex-log-status.ts', import.meta.url), 'utf8');
 const sharedCodexLog = await readFile(new URL('../../frontend/src/runtime/thread/effect/render-thread-codex-log.ts', import.meta.url), 'utf8');
 const sharedThreadCss = await readFile(new URL('../../frontend/assets/shared/thread.css', import.meta.url), 'utf8');
+const sharedTerminalButtonCss = await readFile(new URL('../../frontend/assets/shared/terminal-button.css', import.meta.url), 'utf8');
 const applicationSource = await readFile(new URL('../src/app/responsive/application.js', import.meta.url), 'utf8');
 const applicationCss = await readFile(new URL('../assets/application.css', import.meta.url), 'utf8');
 const { collapseMobileThreadComposer, expandMobileThreadComposer } = await import('../src/app/responsive/thread-composer.js');
@@ -204,10 +205,13 @@ test('every card route exit closes through the shared navigation lifecycle', () 
 test('master-task Back uses a short accessible opacity-only handoff', () => {
   const renderCard = applicationSource.match(/function renderCard\(card\) \{[\s\S]*?\n\}/)?.[0] ?? '';
 
-  assert.match(renderCard, /backButton\.replaceChildren\(document\.createTextNode\('← Back'\)\)/);
+  assert.match(renderCard, /backIcon\.className = 'back-button__icon'[\s\S]*backIcon\.textContent = '←'[\s\S]*backLabel\.textContent = 'Back'[\s\S]*backButton\.replaceChildren\(backIcon, backLabel\)/);
   assert.match(renderCard, /parsedTask\.masterTask[\s\S]*shortcutKey\('Esc'\)[\s\S]*aria-hidden[\s\S]*aria-keyshortcuts', 'Escape'/);
   assert.match(renderCard, /else \{[\s\S]*removeAttribute\('aria-keyshortcuts'\)[\s\S]*removeAttribute\('title'\)/);
-  assert.match(applicationCss, /\.back-button \{[^}]*display: inline-flex;[^}]*gap: 10px/);
+  assert.match(applicationCss, /\.back-button \{[^}]*display: inline-flex;[^}]*gap: 8px/);
+  assert.match(applicationCss, /\.back-button__icon \{[^}]*display: inline-grid;[^}]*width: 14px;[^}]*height: 14px;[^}]*place-items: center;[^}]*line-height: 1/);
+  assert.doesNotMatch(applicationCss, /\.back-button \.terminal-button__key/);
+  assert.match(sharedTerminalButtonCss, /\.terminal-button__key \{[\s\S]*color: #9ea8b5;[\s\S]*border: 1px solid #394047;[\s\S]*background: #0f1318;/);
   assert.match(applicationSource, /dataset\.taskBackHandoff = 'true'/);
   assert.match(applicationSource, /prefers-reduced-motion: reduce/);
   assert.match(applicationCss, /data-task-back-handoff="true"\]::view-transition-old\(root\)[^{]*\{ animation: task-back-fade-out 140ms/);
