@@ -38,7 +38,7 @@ function federatedLibraryFixture(home: string, suffix: string): void {
 }
 
 async function waitFor<T>(read: () => Promise<T | null>): Promise<T> {
-  const deadline = Date.now() + 3_000;
+  const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
     const value = await read();
     if (value) return value;
@@ -160,7 +160,11 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
       sockets.get(target)?.send(JSON.stringify(frame));
       if (frame.type === 'response-end' || frame.type === 'response-error' || frame.type === 'cancel') streams.delete(frame.requestId!);
     });
-    webSocket.on('close', () => sockets.delete(nodeId));
+    webSocket.on('close', () => {
+      sockets.delete(nodeId);
+      const catalog = JSON.stringify({ version: 1, type: 'catalog', nodes: [...manifests].map(([id, projects]) => ({ nodeId: id, online: sockets.has(id), projects })) });
+      for (const target of sockets.values()) target.send(catalog);
+    });
   }));
   relayHttp.listen(0, '127.0.0.1');
   await once(relayHttp, 'listening');
@@ -216,11 +220,18 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     const remoteBeta = catalogA.find((project) => project.remote && project.name === 'beta')!;
     assert.ok(remoteBeta.id.startsWith('node-b:'));
     assert.ok(catalogB.projects.some((project) => project.remote && project.name === 'alpha'));
-    const controlRoomA = await fetch(`${baseA}/api/control-room`).then((response) => response.json()) as {
+    let lastControlRoomA: unknown = null;
+    const controlRoomA = await waitFor(async () => {
+      const body = await fetch(`${baseA}/api/control-room`).then((response) => response.json()) as {
       projects: Array<{ id: string; ownerNodeId: string }>;
-      allTasks: Array<{ projectId: string; ownerNodeId: string; title: string }>;
+      allTasks: Array<{ projectId: string; ownerNodeId: string; title: string; replica?: { status: string } }>;
       federation: { nodeCount: number; remoteNodeCount: number };
-    };
+      };
+      lastControlRoomA = body;
+      return body.allTasks.some((task) => task.title === 'beta card' && task.replica?.status === 'replicated') ? body : null;
+    }).catch((error) => {
+      throw new Error(`${error instanceof Error ? error.message : error}\nLast Control Room projection: ${JSON.stringify(lastControlRoomA)}`);
+    });
     assert.deepEqual(controlRoomA.federation, { nodeCount: 2, remoteNodeCount: 1 });
     assert.ok(controlRoomA.projects.some((project) => project.id.startsWith('node-b:') && project.ownerNodeId === 'node-b'));
     assert.ok(controlRoomA.allTasks.some((task) => task.title === 'beta card' && task.projectId.startsWith('node-b:') && task.ownerNodeId === 'node-b'));
@@ -290,8 +301,22 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     assert.ok(manuallySynchronizedLibraries[0].skills.some((skill) => skill.name === 'manual-skill'));
     assert.ok(manuallySynchronizedLibraries[1].pipelines.some((pipeline) => pipeline.id === 'manual-pipeline'));
 
+    await waitFor(async () => {
+      const response = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/api/ledgers/specs/cards/beta-card`);
+      if (response.status !== 200) return null;
+      const body = await response.json() as { title?: string };
+      return body.title === 'mutated by node-a' ? body : null;
+    });
+
     serverB.close();
     await once(serverB, 'close');
+    const offlineCard = await waitFor(async () => {
+      const response = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/api/ledgers/specs/cards/beta-card`);
+      if (response.status !== 200) return null;
+      const body = await response.json() as { title?: string; replica?: { status?: string } };
+      return body.title === 'mutated by node-a' && body.replica?.status === 'offline' ? body : null;
+    });
+    assert.equal(offlineCard.title, 'mutated by node-a', 'card detail remains readable from the local replica after owner disconnect');
     const retainedSkills = await fetch(`${baseA}/p/${encodeURIComponent(catalogA.find((project) => !project.remote)!.id)}/api/codex/skills`).then((response) => response.json()) as { skills: Array<{ name: string }> };
     const retainedPipelines = await fetch(`${baseA}/p/${encodeURIComponent(catalogA.find((project) => !project.remote)!.id)}/api/codex/pipelines`).then((response) => response.json()) as { pipelines: Array<{ id: string }> };
     assert.ok(retainedSkills.skills.some((skill) => skill.name === 'beta-skill'), 'Process Card skill catalog remains local after beta disconnects');

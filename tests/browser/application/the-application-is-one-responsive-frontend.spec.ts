@@ -100,6 +100,42 @@ test('The responsive application preserves the mobile Control Room and expands t
     assert.equal(desktopLayout.mobileMenuVisible, false);
     assert.deepEqual(desktopErrors, []);
 
+    const firstTask = desktop.locator('.control-task-summary').first();
+    if (await firstTask.count()) {
+      let releaseState!: () => void;
+      let stateContinued!: () => void;
+      const stateGate = new Promise<void>((resolveGate) => { releaseState = resolveGate; });
+      const stateContinuation = new Promise<void>((resolveContinuation) => { stateContinued = resolveContinuation; });
+      await desktop.route('**/decision-os/state', async (route) => {
+        await stateGate;
+        await route.continue();
+        stateContinued();
+      });
+      await firstTask.click();
+      await desktop.locator('#card-view:not([hidden]) .task-replica-skeleton').waitFor({ state: 'visible' });
+      assert.match(new URL(desktop.url()).pathname, /\/cards\//, 'task history commits before project-state revalidation settles');
+      releaseState();
+      await stateContinuation;
+      await desktop.unroute('**/decision-os/state');
+      await desktop.locator('.task-replica-skeleton').waitFor({ state: 'hidden' });
+
+      let releaseControlRoom!: () => void;
+      let controlRoomContinued!: () => void;
+      const controlRoomGate = new Promise<void>((resolveGate) => { releaseControlRoom = resolveGate; });
+      const controlRoomContinuation = new Promise<void>((resolveContinuation) => { controlRoomContinued = resolveContinuation; });
+      await desktop.route('**/api/control-room', async (route) => {
+        await controlRoomGate;
+        await route.continue();
+        controlRoomContinued();
+      });
+      await desktop.getByRole('button', { name: /← Back/ }).click();
+      await desktop.locator('#control-room-view:not([hidden])').waitFor({ state: 'visible' });
+      assert.equal(new URL(desktop.url()).pathname, '/', 'Back history and retained Control Room paint before projection revalidation settles');
+      releaseControlRoom();
+      await controlRoomContinuation;
+      await desktop.unroute('**/api/control-room');
+    }
+
     await mobile.goto(`${server.url}/projects`, { waitUntil: 'domcontentloaded' });
     await mobile.locator('#projects-view:not([hidden])').waitFor({ state: 'visible' });
     assert.equal(await mobile.getByRole('heading', { name: 'Projects' }).isVisible(), true);

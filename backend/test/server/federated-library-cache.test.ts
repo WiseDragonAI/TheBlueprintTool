@@ -93,3 +93,39 @@ test('rejects an escaping skill path without replacing the last local package', 
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('retains a blocked pipeline and validates it when its federated skill arrives later', () => {
+  const previousCodexHome = process.env.CODEX_HOME;
+  const codexHome = mkdtempSync(join(tmpdir(), 'decision-os-federation-recovery-home-'));
+  const source = mkdtempSync(join(tmpdir(), 'decision-os-federation-recovery-source-'));
+  const target = mkdtempSync(join(tmpdir(), 'decision-os-federation-recovery-target-'));
+  try {
+    process.env.CODEX_HOME = codexHome;
+    writeSkill(source, 'late-skill');
+    const sourceDecisionOsRoot = join(source, '.decision-os');
+    const targetDecisionOsRoot = join(target, '.decision-os');
+    writeCodexPipelineStore({
+      decisionOsRoot: sourceDecisionOsRoot,
+      store: {
+        pipelines: [{ id: 'blocked-pipeline', name: 'Blocked pipeline', purpose: '', stepIds: ['blocked-step'], createdAt: '2026-07-17T08:00:00.000Z', updatedAt: '2026-07-17T08:00:00.000Z' }],
+        steps: [{ id: 'blocked-step', name: 'Blocked step', purpose: '', skills: [{ id: 'late', skillName: 'late-skill', codexModel: null, codexEffort: null }], createdAt: '2026-07-17T08:00:00.000Z', updatedAt: '2026-07-17T08:00:00.000Z' }],
+        runs: [], skillLibrary: [], activeWorkspaceRun: null,
+      },
+    });
+    importFederatedPipelineSnapshot({ decisionOsRoot: targetDecisionOsRoot, snapshot: exportFederatedPipelineSnapshot(sourceDecisionOsRoot) });
+    const blocked = readCodexPipelineStore({ decisionOsRoot: targetDecisionOsRoot, availableSkillNames: [] });
+    assert.equal(blocked.store.pipelines[0].id, 'blocked-pipeline');
+    assert.deepEqual(blocked.invalidReferences.map((entry) => entry.reference), ['late-skill']);
+
+    importFederatedSkillSnapshot({ serverRoot: target, snapshot: exportFederatedSkillSnapshot(source) });
+    const recovered = readCodexPipelineStore({ decisionOsRoot: targetDecisionOsRoot, availableSkillNames: ['late-skill'] });
+    assert.equal(recovered.store.pipelines[0].id, 'blocked-pipeline');
+    assert.equal(recovered.invalidReferences.length, 0);
+  } finally {
+    if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = previousCodexHome;
+    rmSync(codexHome, { recursive: true, force: true });
+    rmSync(source, { recursive: true, force: true });
+    rmSync(target, { recursive: true, force: true });
+  }
+});

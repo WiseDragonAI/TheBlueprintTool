@@ -156,8 +156,13 @@ export class FederationRelay extends DurableObject<Env> {
       }
       if (frame.type === 'content-change') {
         for (const target of this.activeSockets()) {
-          if (target !== socket) this.sendSocket(target, { version: 1, type: 'content-change' });
+          if (target !== socket) this.sendSocket(target, { version: 1, type: 'content-change', from: sender, replicaVersion: 1 });
         }
+        return;
+      }
+      if (frame.type === 'replica-priority' || frame.type === 'replica-ack') {
+        if (!frame.to || !this.socket(frame.to)) throw new Error('owner_offline');
+        this.send(frame.to, { ...frame, from: sender, to: undefined, replicaVersion: 1 });
         return;
       }
       if (frame.type === 'request-open') {

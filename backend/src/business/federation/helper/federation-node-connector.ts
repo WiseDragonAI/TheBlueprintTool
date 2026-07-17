@@ -15,6 +15,7 @@ type RelayFrame = {
   type: string;
   requestId?: string;
   to?: string;
+  from?: string;
   direction?: 'request' | 'response';
   bytes?: number;
   data?: string;
@@ -27,6 +28,10 @@ type RelayFrame = {
   nodes?: Array<{ nodeId: string; nodeLabel?: string; online: boolean; projects: ProjectManifest[] }>;
   code?: string;
   message?: string;
+  replicaVersion?: 1;
+  projectId?: string;
+  resource?: string;
+  revision?: string;
 };
 
 export type FederationSettings = {
@@ -126,8 +131,9 @@ export function createFederationNodeConnector(input: {
   settings: unknown;
   localProjects: () => DecisionOsProject[];
   localServerUrl: () => string;
-  onRemoteContentChange?: () => void;
+  onRemoteContentChange?: (nodeId: string) => void;
   onRemoteCatalogChange?: () => void;
+  onReplicaPriority?: (input: { nodeId: string; projectId: string; resource: string }) => void;
 }) {
   let settings = configuredSettings(input.settings);
   const requesterStreams = new Map<string, RequesterStream>();
@@ -247,7 +253,11 @@ export function createFederationNodeConnector(input: {
       return;
     }
     if (frame.type === 'content-change') {
-      input.onRemoteContentChange?.();
+      input.onRemoteContentChange?.(String(frame.from ?? ''));
+      return;
+    }
+    if (frame.type === 'replica-priority') {
+      input.onReplicaPriority?.({ nodeId: String(frame.from ?? ''), projectId: String(frame.projectId ?? ''), resource: String(frame.resource ?? '') });
       return;
     }
     const requestId = String(frame.requestId ?? '');
@@ -509,6 +519,12 @@ export function createFederationNodeConnector(input: {
     },
     publishContentChange(): void {
       if (socket?.readyState === WebSocket.OPEN) send({ version: 1, type: 'content-change' });
+    },
+    publishReplicaPriority(ownerNodeId: string, projectId: string, resource: string): void {
+      if (socket?.readyState === WebSocket.OPEN) send({ version: 1, type: 'replica-priority', replicaVersion: 1, to: ownerNodeId, projectId, resource });
+    },
+    publishReplicaAcknowledgement(ownerNodeId: string, projectId: string, revision: string): void {
+      if (socket?.readyState === WebSocket.OPEN) send({ version: 1, type: 'replica-ack', replicaVersion: 1, to: ownerNodeId, projectId, revision });
     },
     localOwner(): { ownerNodeId: string; ownerNodeLabel: string; online: true } {
       return { ownerNodeId: settings?.nodeId || 'local', ownerNodeLabel: settings?.nodeLabel || 'This server', online: true };

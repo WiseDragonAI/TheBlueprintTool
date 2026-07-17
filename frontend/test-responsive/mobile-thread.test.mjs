@@ -191,7 +191,8 @@ test('every card route exit closes through the shared navigation lifecycle', () 
   assert.match(navigate, /currentLocation !== nextLocation && !closeCardDetail\(\)/);
   assert.match(backHandler, /controlRoomDestination[\s\S]*navigateTaskBack\(destination\)/);
   assert.match(backHandler, /navigate\(destination\)/);
-  assert.match(navigateTaskBack, /startViewTransition\(\(\) => navigate\(destination\)\)/);
+  assert.match(navigateTaskBack, /startViewTransition\(\(\) => \{ navigate\(destination\); \}\)/);
+  assert.doesNotMatch(navigateTaskBack, /startViewTransition\(async/);
   assert.match(applicationSource, /patch-card'[\s\S]*navigate\(controlRoomPath\(nextStatus === 'backlog'/);
   assert.match(applicationSource, /complete-master-task'[\s\S]*navigate\(completionReturnPath\(\), true\)/);
   assert.match(applicationSource, /delete-card'[\s\S]*navigate\(controlRoomPath\(state\.controlTab\), true\)/);

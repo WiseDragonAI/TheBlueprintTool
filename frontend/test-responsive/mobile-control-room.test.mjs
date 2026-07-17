@@ -518,6 +518,25 @@ test('routes master-task cards back to the control room and regular cards back t
   assert.match(mobile, /const controlRoomDestination = event\.currentTarget\.dataset\.destination === 'control-room';[\s\S]*const destination = controlRoomDestination \? controlRoomPath\(state\.controlTab\) : zonePath/);
 });
 
+test('commits retained Control Room and task-shell views before background route reads', () => {
+  const navigate = mobile.match(/function navigate\(path, replace = false\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+  const commitRouteView = mobile.match(/function commitRouteView\(\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+  const loadRoute = mobile.match(/async function loadRoute\(\{ retainView = false \} = \{\}\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+  assert.match(navigate, /history\[replace[\s\S]*commitRouteView\(\)[\s\S]*void loadRoute\(\{ retainView: retained \}\)/);
+  assert.match(commitRouteView, /location\.pathname === '\/' && state\.controlRoom[\s\S]*renderControlRoom\(\)/);
+  assert.match(commitRouteView, /isProjectCardPath\(location\.pathname\)[\s\S]*renderTaskReplicaShell\(task\)/);
+  assert.match(loadRoute, /if \(!retainView\) setView\('loading-view'\)/);
+  assert.match(mobile, /response\.status === 202[\s\S]*renderTaskReplicaShell[\s\S]*loadRoute\(\{ retainView: true \}\)/);
+});
+
+test('renders accessible replica states and task-detail skeletons', () => {
+  assert.match(mobile, /task-replica-status is-\$\{task\.replica/);
+  assert.match(mobile, /shell\.setAttribute\('role', 'status'\)/);
+  assert.match(mobile, /shell\.setAttribute\('aria-live', 'polite'\)/);
+  assert.match(styles, /\.task-replica-skeleton/);
+  assert.match(styles, /@keyframes replica-skeleton/);
+});
+
 test('renders and persists the shared carousel resize handle in a Control Room master-card detail', () => {
   assert.match(mobile, /cardId: parsedTask\.masterTask \? String\(card\.id\) : undefined/);
   assert.match(mobile, /mediaSurface: parsedTask\.masterTask \? 'detail' : 'thread'/);

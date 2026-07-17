@@ -60,6 +60,8 @@ import { createControlRoomProjectionStore } from './control-room-projection-stor
 import { ledgerCanvasProjection, ledgerCardProjection, ledgerNavigationProjection, ledgerSearchProjection, ledgerThreadProjection } from './ledger-read-models.js';
 import { ensureProjectsCanvasDocument } from './ensure-projects-canvas-document.js';
 import { createFederationNodeConnector } from '../../federation/helper/federation-node-connector.js';
+import { createFederationReplicaStore, type FederationReplicaSnapshot } from '../../federation/helper/federation-replica-store.js';
+import { buildFederationTaskReplica } from '../../federation/helper/federation-task-replica.js';
 import {
   exportFederatedPipelineSnapshot,
   exportFederatedSkillManifest,
@@ -392,6 +394,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       .map((project) => project.decisionOsRoot),
   });
   const projectCatalog = () => projectCatalogStore.projects();
+  const federationReplicaStore = createFederationReplicaStore({ decisionOsRoot: masterDecisionOsRoot });
+  const federationReplicaRuns = new Map<string, Promise<void>>();
   let federationServerPort = port;
   let federationSyncRequested = false;
   let federationSyncPromise: Promise<void> | null = null;
@@ -450,16 +454,58 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     Object.defineProperty(runtime, 'federatedLibrarySyncPromise', { value: run, writable: true, configurable: true, enumerable: false });
     return run;
   };
+  const enqueuePeerProjects = (nodeId = '', priority: 'selected' | 'normal' = 'normal', resource = ''): void => {
+    for (const project of federation?.remoteProjects() ?? []) {
+      if (nodeId && project.ownerNodeId !== nodeId) continue;
+      federationReplicaStore.setPeer(project.ownerNodeId, project.ownerNodeLabel, project.online);
+      federationReplicaStore.enqueue(project.ownerNodeId, project.localProjectId, priority, resource);
+    }
+  };
+  const scheduleFederatedTaskReplicas = (nodeId = ''): void => {
+    const nodes = federation?.nodes() ?? [];
+    for (const node of nodes) {
+      federationReplicaStore.setPeer(node.nodeId, node.nodeLabel, node.online);
+      if ((nodeId && node.nodeId !== nodeId) || !node.online || federationReplicaRuns.has(node.nodeId)) continue;
+      const run = (async () => {
+        for (;;) {
+          const pending = federationReplicaStore.next(node.nodeId);
+          if (!pending) break;
+          try {
+            const result = await federation!.request(node.nodeId, `/api/federation/task-replica?projectId=${encodeURIComponent(pending.projectId)}`);
+            const snapshot = parseFederationResponse<FederationReplicaSnapshot>(result, `${node.nodeLabel} task replica`);
+            if (snapshot.version !== 1 || !snapshot.revision) throw new Error(`${node.nodeLabel} returned an invalid task replica.`);
+            federationReplicaStore.complete(node.nodeId, pending.projectId, snapshot);
+            federation!.publishReplicaAcknowledgement(node.nodeId, pending.projectId, snapshot.revision);
+            for (const client of globalContentEventClients) client.write(`event: federation-replica-change\ndata: ${JSON.stringify({ nodeId: node.nodeId, projectId: pending.projectId, revision: snapshot.revision })}\n\n`);
+          } catch (error) {
+            federationReplicaStore.fail(node.nodeId, pending.projectId, error instanceof Error ? error.message : 'Task replica synchronization failed.');
+            break;
+          }
+        }
+      })().finally(() => {
+        federationReplicaRuns.delete(node.nodeId);
+        if (federationReplicaStore.next(node.nodeId)) scheduleFederatedTaskReplicas(node.nodeId);
+      });
+      federationReplicaRuns.set(node.nodeId, run);
+    }
+  };
   federation = createFederationNodeConnector({
     settings: runtime.decisionOsSettings,
     localProjects: projectCatalog,
     localServerUrl: () => `http://127.0.0.1:${federationServerPort}`,
-    onRemoteContentChange: () => {
+    onRemoteContentChange: (nodeId) => {
+      enqueuePeerProjects(nodeId);
+      scheduleFederatedTaskReplicas(nodeId);
       for (const client of globalContentEventClients) client.write('event: ledger-content-change\ndata: {"remote":true}\n\n');
     },
     onRemoteCatalogChange: () => {
       void synchronizeFederatedLibraries().catch(() => undefined);
+      enqueuePeerProjects();
+      scheduleFederatedTaskReplicas();
       projectSyncController?.resume();
+    },
+    onReplicaPriority: ({ nodeId }) => {
+      for (const client of globalContentEventClients) client.write(`event: federation-replica-priority\ndata: ${JSON.stringify({ nodeId })}\n\n`);
     },
   });
   const projectSyncStore = createProjectSyncStore({ decisionOsRoot: masterDecisionOsRoot });
@@ -526,6 +572,36 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         response.end(JSON.stringify({ ok: false, error: 'owner_or_project_unknown' }));
         return;
       }
+      const replica = federationReplicaStore.replica(ownerNodeId, localProjectId);
+      const replicaStatus = federationReplicaStore.status(ownerNodeId, localProjectId);
+      const ledgerRead = projectScope.scopedPath.match(/^\/api\/ledgers\/([^/]+)\/navigation$/);
+      const cardRead = projectScope.scopedPath.match(/^\/api\/ledgers\/([^/]+)\/cards\/([^/]+)$/);
+      const threadRead = projectScope.scopedPath.match(/^\/api\/ledgers\/([^/]+)\/threads\/([^/]+)$/);
+      let replicaBody: unknown = null;
+      if (request.method === 'GET' && replica) {
+        if (projectScope.scopedPath === '/decision-os/state') replicaBody = replica.state;
+        if (ledgerRead) replicaBody = replica.ledgers[decodeRouteSegment(ledgerRead[1])]?.navigation ?? null;
+        if (cardRead) replicaBody = replica.ledgers[decodeRouteSegment(cardRead[1])]?.cards[decodeRouteSegment(cardRead[2])] ?? null;
+        if (threadRead) replicaBody = replica.ledgers[decodeRouteSegment(threadRead[1])]?.threads[decodeRouteSegment(threadRead[2])] ?? null;
+      }
+      const replicaRead = request.method === 'GET' && (projectScope.scopedPath === '/decision-os/state' || ledgerRead || cardRead || threadRead);
+      if (replicaRead && replicaBody) {
+        response.setHeader('cache-control', 'no-store');
+        response.setHeader('content-type', 'application/json');
+        response.setHeader('x-decision-os-replica-status', replicaStatus.status);
+        response.end(JSON.stringify({ ...(replicaBody as AnyRecord), replica: replicaStatus }));
+        return;
+      }
+      if (replicaRead) {
+        federationReplicaStore.enqueue(ownerNodeId, localProjectId, 'selected', projectScope.scopedPath);
+        federation.publishReplicaPriority(ownerNodeId, localProjectId, projectScope.scopedPath);
+        scheduleFederatedTaskReplicas(ownerNodeId);
+        response.statusCode = 202;
+        response.setHeader('cache-control', 'no-store');
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ ok: false, error: 'replica_synchronizing', replica: federationReplicaStore.status(ownerNodeId, localProjectId) }));
+        return;
+      }
       await federation.proxy(request, response, ownerNodeId, localProjectId, projectScope.scopedPath);
       return;
     }
@@ -558,28 +634,14 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const localOwner = federation.localOwner();
       const requestUrl = new URL(request.url ?? '/api/control-room', 'http://127.0.0.1');
       const remoteDiagnostics: AnyRecord[] = [];
-      const remoteProjections = requestUrl.searchParams.get('localOnly') === '1' ? [] : await Promise.all(federation.nodes()
-        .filter((node) => node.online)
-        .map(async (node) => {
-          const result = await federation.request(node.nodeId, '/api/control-room?localOnly=1');
-          if (result.status !== 200) {
-            remoteDiagnostics.push({ valid: false, ownerNodeId: node.nodeId, message: `${node.nodeLabel} Control Room returned HTTP ${result.status}.` });
-            return null;
-          }
-          try {
-            return {
-              projection: JSON.parse(result.body.toString('utf8')) as AnyRecord,
-              owner: { nodeId: node.nodeId, nodeLabel: node.nodeLabel, remote: true },
-            };
-          } catch {
-            remoteDiagnostics.push({ valid: false, ownerNodeId: node.nodeId, message: `${node.nodeLabel} returned an invalid Control Room projection.` });
-            return null;
-          }
-        }));
+      const remoteProjections = requestUrl.searchParams.get('localOnly') === '1' ? [] : federationReplicaStore.peerProjections().map((entry) => ({
+        projection: entry.projection,
+        owner: { nodeId: entry.nodeId, nodeLabel: entry.nodeLabel, remote: true, online: federation.nodes().find((node) => node.nodeId === entry.nodeId)?.online !== false },
+      }));
       const publicProjection = federatedControlRoomProjection({
         localProjection: projection,
         localOwner: { nodeId: localOwner.ownerNodeId, nodeLabel: localOwner.ownerNodeLabel, remote: false },
-        remoteProjections: remoteProjections.filter((entry): entry is { projection: AnyRecord; owner: { nodeId: string; nodeLabel: string; remote: boolean } } => entry !== null),
+        remoteProjections,
         diagnostics: remoteDiagnostics,
       });
       const etag = `"${String(publicProjection.fingerprint)}"`;
@@ -678,6 +740,20 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.setHeader(ledgerRevisionHeader, String(ledgerRevisions.current(ledgerId)));
       response.statusCode = projection ? 200 : 404;
       response.end(JSON.stringify(projection ?? { ok: false, error: 'Scoped ledger resource not found.' }));
+      return;
+    }
+    if (!projectScope && url === '/api/federation/task-replica' && request.method === 'GET') {
+      const projectId = new URL(request.url ?? '/', 'http://127.0.0.1').searchParams.get('projectId') ?? '';
+      const project = projects.find((entry) => entry.id === projectId && entry.available);
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      if (!project) {
+        response.statusCode = 404;
+        response.end(JSON.stringify({ ok: false, error: 'Local project is unavailable.' }));
+        return;
+      }
+      const localProjection = controlRoomProjectionStore.get(projects.filter((entry) => entry.available));
+      response.end(JSON.stringify(buildFederationTaskReplica({ project, projection: localProjection as unknown as AnyRecord })));
       return;
     }
     if (!projectScope && url === '/api/federation/skills-manifest' && request.method === 'GET') {
@@ -927,7 +1003,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           try { originFingerprint = readRepositoryOriginIdentity(project.root).originFingerprint; } catch { /* Non-Git projects remain visible. */ }
           return { ...project, ...localOwner, remote: false, localProjectId: project.id, originFingerprint };
         }),
-        ...federation.remoteProjects(),
+        ...federation.remoteProjects().map((project) => {
+          const replica = federationReplicaStore.status(project.ownerNodeId, project.localProjectId);
+          return { ...project, available: project.online || Boolean(federationReplicaStore.replica(project.ownerNodeId, project.localProjectId)), replica };
+        }),
       ] }));
       return;
     }
@@ -1729,8 +1808,14 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     void scheduleGlobalCodexProcesses().catch(() => undefined);
   }, 1_000);
   codexQueueScanTimer.unref?.();
+  const federationReplicaTimer = setInterval(() => {
+    enqueuePeerProjects();
+    scheduleFederatedTaskReplicas();
+  }, 15_000);
+  federationReplicaTimer.unref?.();
   server.on('close', () => {
     clearInterval(codexQueueScanTimer);
+    clearInterval(federationReplicaTimer);
     for (const context of projectContexts.values()) {
       context.watcher.close();
       context.clients.clear();

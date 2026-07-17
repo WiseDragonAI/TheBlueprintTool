@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { compareControlRoomQueueTasks } from './control-room-queue-order.js';
 
 type AnyRecord = Record<string, unknown>;
-type Owner = { nodeId: string; nodeLabel: string; remote: boolean };
+type Owner = { nodeId: string; nodeLabel: string; remote: boolean; online?: boolean };
 
 export function federatedControlRoomProjection(input: {
   localProjection: AnyRecord;
@@ -27,7 +27,7 @@ export function federatedControlRoomProjection(input: {
         localProjectId,
         ownerNodeId: owner.nodeId,
         ownerNodeLabel: owner.nodeLabel,
-        ownerOnline: true,
+        ownerOnline: owner.online !== false,
         remote: owner.remote,
       };
     };
@@ -43,7 +43,7 @@ export function federatedControlRoomProjection(input: {
       projects: projects.map((project) => ({
         ...project,
         id: owner.remote ? `${owner.nodeId}:${String(project.id ?? '')}` : String(project.id ?? ''),
-        localProjectId: String(project.id ?? ''), ownerNodeId: owner.nodeId, ownerNodeLabel: owner.nodeLabel, online: true, remote: owner.remote,
+        localProjectId: String(project.id ?? ''), ownerNodeId: owner.nodeId, ownerNodeLabel: owner.nodeLabel, online: owner.online !== false, remote: owner.remote,
       })),
     };
   };
