@@ -155,6 +155,8 @@ test('skill libraries share favorite ordering, colored categories, and scope-spe
   assert.match(script, /try \{ await loadGlobalLibraries\(\); \}/);
   assert.match(script, /Loading SKILL\.md/);
   assert.match(script, /renderLedgerCardMarkdown\(skillInstructionMarkdown\(skill\.markdown\)\)/);
+  assert.match(script, /serverSkillPath\(record\.name\)/);
+  assert.doesNotMatch(script, /Promise\.all\(recordProjects\(record\)\.map\(\(project\) => jsonRequest\(`\/api\/codex\/skill-library/);
   assert.match(script, /Related references/);
   assert.match(script, /skill-reference-card/);
   assert.match(script, /aria-expanded/);

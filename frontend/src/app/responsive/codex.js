@@ -34,6 +34,7 @@ function skillTags(skill) { return tagsForSkill(skill); }
 function pipelineTags(pipeline) { return [...new Set(pipelineSteps(pipeline).flatMap((step) => step.skills.flatMap((skill) => skillTags(state.skills.find((item) => item.name === skill.skillName) || { name: skill.skillName }))))]; }
 function recordProjects(record) { return Array.isArray(record.projects) ? record.projects : state.projects.filter((project) => project.id === record.projectId); }
 function recordTags(record) { return state.processTab === 'skills' ? skillTags(record) : pipelineTags(record); }
+function serverSkillPath(skillName) { return `/api/codex/server-skills/${encodeURIComponent(skillName)}`; }
 function filteredRecords(records) {
   const query = state.query.trim().toLowerCase();
   const filtered = records.filter((record) => {
@@ -169,8 +170,7 @@ async function hydrateGlobalSkillDetail(record, container, generation) {
   }
   message('.process-detail-message', 'Loading SKILL.md…');
   try {
-    const projectId = recordProjects(record)[0]?.id || state.projectId;
-    const result = await jsonRequest(`/api/codex/skill-library/${encodeURIComponent(record.name)}`, undefined, projectId);
+    const result = await jsonRequest(serverSkillPath(record.name), undefined, '');
     if (generation !== processDetailGeneration || state.selected !== record) return;
     state.skillDetails.set(key, result.skill);
     renderLoadedSkillDetail(container, result.skill);
@@ -236,9 +236,11 @@ async function toggleGlobalSkillFavorite(record) {
   setBusy(submit, true);
   message('.process-detail-message', favorite ? 'Adding favorite…' : 'Removing favorite…');
   try {
-    await Promise.all(recordProjects(record).map((project) => jsonRequest(`/api/codex/skill-library/${encodeURIComponent(record.name)}`, {
+    const result = await jsonRequest(serverSkillPath(record.name), {
       method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ favorite })
-    }, project.id)));
+    }, '');
+    prior.forEach(({ skill }) => { skill.favorite = result.skill.favorite === true; });
+    record.favorite = result.skill.favorite === true;
     renderProcessList();
     renderProcessDetail(record);
     message('.process-detail-message', favorite ? 'Added to favorites.' : 'Removed from favorites.');
@@ -262,9 +264,12 @@ async function saveGlobalSkillTag(record, tag) {
   renderProcessDetail(record);
   message('.process-detail-message', `Saving ${tag}…`);
   try {
-    await Promise.all(recordProjects(record).map((project) => jsonRequest(`/api/codex/skill-library/${encodeURIComponent(record.name)}`, {
+    const result = await jsonRequest(serverSkillPath(record.name), {
       method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ tags })
-    }, project.id)));
+    }, '');
+    const savedTags = [...(result.skill.tags || [])];
+    prior.forEach(({ skill }) => { skill.tags = savedTags; });
+    record.tags = savedTags;
     state.tagSaving = false;
     renderProcessList();
     renderProcessDetail(record);
