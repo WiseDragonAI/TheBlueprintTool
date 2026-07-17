@@ -156,14 +156,26 @@ test('closing a mobile thread unregisters its project-scoped Codex run consumer'
 test('leaving card detail through Back closes the task-owned thread before navigation', () => {
   const backHandler = applicationSource.match(/document\.querySelector\('\.back-to-zone-button'\)\.addEventListener\('click',[\s\S]*?\n\}\);/)?.[0] ?? '';
   const closeMobileThread = source.match(/export function closeMobileThread\(\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+  const navigateTaskBack = applicationSource.match(/async function navigateTaskBack\(destination\) \{[\s\S]*?\n\}/)?.[0] ?? '';
 
   assert.match(applicationSource, /import \{ closeMobileThread,/);
-  assert.match(backHandler, /if \(!closeMobileThread\(\)\) return;/);
-  assert.match(backHandler, /closeMobileThread\(\)[\s\S]*navigate\(/);
+  assert.match(backHandler, /controlRoomDestination[\s\S]*navigateTaskBack\(destination\)/);
+  assert.match(backHandler, /if \(closeMobileThread\(\)\) navigate\(destination\)/);
+  assert.match(navigateTaskBack, /startViewTransition\(async \(\) => \{[\s\S]*closeMobileThread\(\)[\s\S]*navigate\(destination\)/);
   assert.match(closeMobileThread, /if \(canvasState\.voice\.recording\) return false;/);
   assert.match(closeMobileThread, /canvasState\.threadPanelOpen = false;/);
   assert.match(closeMobileThread, /classList\.remove\('card-thread-open'\)/);
   assert.match(closeMobileThread, /return true;/);
+});
+
+test('master-task Back uses a short accessible opacity-only handoff', () => {
+  assert.match(applicationSource, /dataset\.taskBackHandoff = 'true'/);
+  assert.match(applicationSource, /prefers-reduced-motion: reduce/);
+  assert.match(applicationCss, /data-task-back-handoff="true"\]::view-transition-old\(root\)[^{]*\{ animation: task-back-fade-out 140ms/);
+  assert.match(applicationCss, /data-task-back-handoff="true"\]::view-transition-new\(root\)[^{]*\{ animation: task-back-fade-in 180ms/);
+  assert.match(applicationCss, /@keyframes task-back-fade-out \{ to \{ opacity: 0; \} \}/);
+  assert.match(applicationCss, /@keyframes task-back-fade-in \{ from \{ opacity: 0; \} \}/);
+  assert.match(applicationCss, /@media \(prefers-reduced-motion: reduce\)[\s\S]*data-task-back-handoff="true"\]::view-transition-old\(root\)[\s\S]*animation: none/);
 });
 
 test('desktop master-task detail opens its thread while mobile and ordinary cards stay explicit', () => {

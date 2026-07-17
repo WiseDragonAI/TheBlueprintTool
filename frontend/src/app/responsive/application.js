@@ -238,6 +238,25 @@ async function navigateVoiceSubmission() {
   }
 }
 
+async function navigateTaskBack(destination) {
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+  if (typeof document.startViewTransition !== 'function' || reducedMotion) {
+    if (!closeMobileThread()) return;
+    await navigate(destination);
+    return;
+  }
+  document.documentElement.dataset.taskBackHandoff = 'true';
+  try {
+    const transition = document.startViewTransition(async () => {
+      if (!closeMobileThread()) return;
+      await navigate(destination);
+    });
+    await transition.finished;
+  } finally {
+    delete document.documentElement.dataset.taskBackHandoff;
+  }
+}
+
 function completionReturnPath() {
   const returnPath = asText(history.state?.returnPath);
   return returnPath.startsWith('/') ? returnPath : controlRoomPath('queue');
@@ -1697,8 +1716,13 @@ document.querySelector('.federation-settings-form').addEventListener('submit', (
 document.querySelector('.federation-settings-disconnect').addEventListener('click', () => void submitFederationSettings(false));
 document.querySelector('.back-to-ledger-button').addEventListener('click', () => navigate(ledgerPath(state.activeLedgerId)));
 document.querySelector('.back-to-zone-button').addEventListener('click', (event) => {
-  if (!closeMobileThread()) return;
-  navigate(event.currentTarget.dataset.destination === 'control-room' ? controlRoomPath(state.controlTab) : zonePath(state.activeLedgerId, state.activeZoneId));
+  const controlRoomDestination = event.currentTarget.dataset.destination === 'control-room';
+  const destination = controlRoomDestination ? controlRoomPath(state.controlTab) : zonePath(state.activeLedgerId, state.activeZoneId);
+  if (controlRoomDestination) {
+    void navigateTaskBack(destination);
+    return;
+  }
+  if (closeMobileThread()) navigate(destination);
 });
 document.querySelector('.create-ledger-button').addEventListener('click', () => openCreationModal('ledger'));
 document.querySelector('.create-project-button').addEventListener('click', () => openCreationModal('project'));
