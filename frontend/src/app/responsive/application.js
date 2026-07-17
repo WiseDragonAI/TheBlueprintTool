@@ -15,6 +15,7 @@ import { isCardEditingKeyboardTarget } from '/src/runtime/input/helper/is-card-e
 import { committedProjectColor, hexToHsv, hsvToHex, projectColorPickerGradients } from './project-color-picker.js';
 import { codexProcessLimitRange, loadCodexProcessSettings, saveCodexProcessSettings, stepCodexProcessLimit } from './codex-settings.js';
 import { loadFederationSettings, saveFederationSettings } from './federation-settings.js';
+import { hydrateFederationForm } from './federation-form-hydration.js';
 import { createProjectRequest } from './project-creation.js';
 import { installProjectRequestScope, projectScopedRequestPath } from '/src/runtime/project/helper/project-request-scope.js';
 
@@ -79,6 +80,8 @@ let cardSearchTimer = 0;
 let federationStatusRefreshTimer = 0;
 let federationStatusClockTimer = 0;
 let latestFederationSettings = null;
+let federationFormDirty = false;
+let federationSettingsLoadGeneration = 0;
 let projectColorPickerOriginal = '';
 let projectColorPickerDirty = false;
 
@@ -170,6 +173,7 @@ function setView(name) {
     elements[id].hidden = id !== name;
   }
   if (name !== 'settings-view') {
+    federationSettingsLoadGeneration += 1;
     window.clearTimeout(federationStatusRefreshTimer);
     window.clearInterval(federationStatusClockTimer);
     federationStatusRefreshTimer = 0;
@@ -492,13 +496,18 @@ async function loadCodexSettings() {
 }
 
 function renderSettings() {
+  const enteringSettings = elements['settings-view'].hidden;
+  if (enteringSettings) {
+    federationFormDirty = false;
+    federationSettingsLoadGeneration += 1;
+  }
   state.resourceProjectId = '';
   setMobileCodexContext({ projectId: '', ledgerId: '', cardId: '' });
   renderLedgerLinks();
   renderCodexProcessLimit(elements['codex-settings-limit'].value);
   setView('settings-view');
   void loadCodexSettings();
-  void loadFederationConnectionSettings();
+  void loadFederationConnectionSettings({ hydrateForm: enteringSettings, generation: federationSettingsLoadGeneration });
 }
 
 function compactDuration(milliseconds) {
@@ -557,15 +566,16 @@ function renderFederationStatusClock() {
         : phase === 'not_configured' ? 'Not configured' : `Disconnected for ${duration}`;
 }
 
-function renderFederationConnection(settings) {
+function hydrateFederationFormFromSettings(settings, force = false) {
+  const form = document.querySelector('.federation-settings-form');
+  const hydrated = hydrateFederationForm(form, settings, { dirty: federationFormDirty, force });
+  if (hydrated) federationFormDirty = false;
+}
+
+function renderFederationConnection(settings, { hydrateForm = false, forceHydration = false } = {}) {
   settings.receivedAt = Date.now();
   latestFederationSettings = settings;
-  const form = document.querySelector('.federation-settings-form');
-  form.elements.relayUrl.value = settings.relayUrl || '';
-  form.elements.federationId.value = settings.federationId || '';
-  form.elements.nodeId.value = settings.nodeId || '';
-  form.elements.nodeLabel.value = settings.nodeLabel || '';
-  form.elements.nodeCredential.value = '';
+  if (hydrateForm) hydrateFederationFormFromSettings(settings, forceHydration);
   renderFederationStatusClock();
   elements['federation-attempt-timeout'].textContent = settings.connectTimeoutMs
     ? `${Math.round(settings.connectTimeoutMs / 1000)} seconds per attempt`
@@ -588,21 +598,24 @@ function renderFederationConnection(settings) {
   document.querySelector('.federation-settings-disconnect').disabled = !settings.configured;
 }
 
-async function loadFederationConnectionSettings() {
+async function loadFederationConnectionSettings({ hydrateForm = false, generation = federationSettingsLoadGeneration } = {}) {
   window.clearTimeout(federationStatusRefreshTimer);
-  elements['federation-settings-message'].textContent = 'Loading…';
+  if (hydrateForm) elements['federation-settings-message'].textContent = 'Loading…';
   try {
-    renderFederationConnection(await loadFederationSettings(fetch));
+    const settings = await loadFederationSettings(fetch);
+    if (generation !== federationSettingsLoadGeneration || elements['settings-view'].hidden) return;
+    renderFederationConnection(settings, { hydrateForm });
     elements['federation-settings-message'].textContent = '';
     if (!federationStatusClockTimer) federationStatusClockTimer = window.setInterval(renderFederationStatusClock, 1000);
     const refreshDelay = latestFederationSettings?.connected ? 10_000 : 2_000;
     federationStatusRefreshTimer = window.setTimeout(() => {
-      if (!elements['settings-view'].hidden) void loadFederationConnectionSettings();
+      if (!elements['settings-view'].hidden) void loadFederationConnectionSettings({ generation });
     }, refreshDelay);
   } catch (error) {
+    if (generation !== federationSettingsLoadGeneration || elements['settings-view'].hidden) return;
     elements['federation-settings-message'].textContent = error instanceof Error ? error.message : 'Could not load federation settings.';
     federationStatusRefreshTimer = window.setTimeout(() => {
-      if (!elements['settings-view'].hidden) void loadFederationConnectionSettings();
+      if (!elements['settings-view'].hidden) void loadFederationConnectionSettings({ generation });
     }, 5_000);
   }
 }
@@ -615,7 +628,7 @@ async function submitFederationSettings(enabled = true) {
   try {
     const values = Object.fromEntries(new FormData(form));
     const result = await saveFederationSettings(fetch, { enabled, ...values });
-    renderFederationConnection(result);
+    renderFederationConnection(result, { hydrateForm: true, forceHydration: true });
     elements['federation-settings-message'].textContent = enabled ? 'Settings saved. Connection is updating.' : 'Federation disconnected.';
     await loadRoute();
   } catch (error) {
@@ -1693,6 +1706,9 @@ document.querySelector('.codex-process-settings-form').addEventListener('submit'
 document.querySelector('.federation-settings-form').addEventListener('submit', (event) => {
   event.preventDefault();
   void submitFederationSettings(true);
+});
+document.querySelector('.federation-settings-form').addEventListener('input', () => {
+  federationFormDirty = true;
 });
 document.querySelector('.federation-settings-disconnect').addEventListener('click', () => void submitFederationSettings(false));
 document.querySelector('.back-to-ledger-button').addEventListener('click', () => navigate(ledgerPath(state.activeLedgerId)));
