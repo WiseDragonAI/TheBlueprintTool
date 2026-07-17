@@ -485,6 +485,14 @@ dialog[open]::backdrop { animation: scrim-in var(--motion-view) ease; }
 @keyframes modal-in { from { opacity: 0; transform: translateY(14px) scale(.985); } }
 @keyframes panel-in { from { opacity: 0; transform: translateX(12px); } }
 @keyframes scrim-in { from { opacity: 0; } }
+html[data-voice-handoff="true"]::view-transition-old(root) { animation: voice-handoff-out 180ms cubic-bezier(.4, 0, 1, 1) both; }
+html[data-voice-handoff="true"]::view-transition-new(root) { animation: voice-handoff-in 280ms cubic-bezier(.16, 1, .3, 1) both; }
+@keyframes voice-handoff-out {
+  to { opacity: 0; transform: translateY(-10px) scale(.992); filter: blur(4px); }
+}
+@keyframes voice-handoff-in {
+  from { opacity: 0; transform: translateY(8px) scale(1.006); filter: blur(3px); }
+}
 
 @media (min-width: 760px) {
   body.card-thread-open .app-shell { margin-right: clamp(420px, 33vw, 620px); }
@@ -515,4 +523,5 @@ dialog[open]::backdrop { animation: scrim-in var(--motion-view) ease; }
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
   :where(button, .ledger-link, .overview-ledger):active { transform: none; }
   .ledger-nav, .mobile-thread-inspector, dialog[open], .control-task-details { transform: none; }
+  html[data-voice-handoff="true"]::view-transition-old(root), html[data-voice-handoff="true"]::view-transition-new(root) { animation: none; }
 }

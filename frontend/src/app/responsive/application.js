@@ -208,7 +208,23 @@ function navigate(path, replace = false) {
   const returnPath = `${location.pathname}${location.search}${location.hash}`;
   history[replace ? 'replaceState' : 'pushState']({ returnPath }, '', path);
   closeMenu();
-  void loadRoute();
+  return loadRoute();
+}
+
+async function navigateVoiceSubmission() {
+  const destination = controlRoomPath('queue');
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+  if (typeof document.startViewTransition !== 'function' || reducedMotion) {
+    await navigate(destination, true);
+    return;
+  }
+  document.documentElement.dataset.voiceHandoff = 'true';
+  try {
+    const transition = document.startViewTransition(() => navigate(destination, true));
+    await transition.finished;
+  } finally {
+    delete document.documentElement.dataset.voiceHandoff;
+  }
 }
 
 function completionReturnPath() {
@@ -1010,7 +1026,7 @@ async function createTaskIntake(projectId) {
     ledger: updated,
     ledgers: state.ledgers,
     onCodexStarted: activateMasterTask,
-    onQuickVoiceSubmitted: () => navigate(controlRoomPath('queue'), true)
+    onQuickVoiceSubmitted: navigateVoiceSubmission
   });
   navigate(cardPath(ledgerRef.id, zone.id, cardId));
   openMobileThread(card, zone.color);
@@ -1407,7 +1423,7 @@ async function loadLedger(ledgerId) {
     ledger,
     ledgers: state.ledgers,
     onCodexStarted: activateMasterTask,
-    onQuickVoiceSubmitted: () => navigate(controlRoomPath('queue'), true),
+    onQuickVoiceSubmitted: navigateVoiceSubmission,
     onLedgerRefresh: async (activeLedgerId) => {
       const refreshed = await projectFetch(`/api/ledgers/${encodeURIComponent(activeLedgerId)}/navigation`, { cache: 'no-store' }).then((result) => result.ok ? result.json() : null);
       if (refreshed && activeLedgerId === state.activeLedgerId) state.ledger = refreshed;
@@ -1519,7 +1535,7 @@ async function loadRoute() {
           ledger: state.ledger,
           ledgers: state.ledgers,
           onCodexStarted: activateMasterTask,
-          onQuickVoiceSubmitted: () => navigate(controlRoomPath('queue'), true)
+          onQuickVoiceSubmitted: navigateVoiceSubmission
         });
         renderCard(card);
       }

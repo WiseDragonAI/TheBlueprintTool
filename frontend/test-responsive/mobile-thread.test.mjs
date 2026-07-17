@@ -112,7 +112,7 @@ test('desktop Shift+X closes the accepted card thread and returns to the Control
   assert.match(shortcut, /if \(queueCodex\) await finishQueuedVoiceSubmission\(submitted\);/);
   assert.match(handoff, /if \(!submitted\) return;/);
   assert.match(handoff, /closeMobileThread\(\);\n  await onQuickVoiceSubmitted\(\);/);
-  assert.match(applicationSource, /onQuickVoiceSubmitted: \(\) => navigate\(controlRoomPath\('queue'\), true\)/);
+  assert.match(applicationSource, /onQuickVoiceSubmitted: navigateVoiceSubmission/);
 });
 
 test('mobile thread uses the shared renderer that owns the local voice progress clock', () => {
