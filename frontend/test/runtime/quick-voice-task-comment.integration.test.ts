@@ -22,7 +22,8 @@ test('quick voice stop queues Codex and returns to the canonical Queue route aft
   assert.match(thread, /openMobileThread\(currentCard[\s\S]*await startVoiceRecording\(\)/);
   assert.match(thread, /stopVoiceRecording\(\{ queueCodex: quickVoiceCapture \|\| event\.shiftKey \}\)/);
   assert.match(thread, /await finishQueuedVoiceSubmission\(submitted\)/);
-  assert.match(thread, /if \(!submitted\) return;[\s\S]*closeMobileThread\(\);[\s\S]*await onQuickVoiceSubmitted\(\)/);
+  assert.match(thread, /if \(!submitted\) return;[\s\S]*await onQuickVoiceSubmitted\(\)/);
+  assert.doesNotMatch(thread.match(/async function finishQueuedVoiceSubmission\(submitted\) \{[\s\S]*?\n\}/)?.[0] ?? '', /closeMobileThread\(\)/);
   assert.match(application, /onQuickVoiceSubmitted: navigateVoiceSubmission/);
 });
 
