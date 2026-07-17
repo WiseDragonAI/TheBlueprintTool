@@ -456,7 +456,12 @@ function projectDirectoryNode(directory, level) {
   const label = document.createElement('span');
   label.className = 'creation-directory-name';
   label.textContent = directory.name;
-  row.append(disclosure, label, projectDirectoryBadges(directory));
+  const link = document.createElement('span');
+  link.className = 'creation-directory-link';
+  link.hidden = !directory.isSymbolicLink;
+  link.setAttribute('aria-label', 'Symbolic link');
+  link.textContent = '↗';
+  row.append(disclosure, label, link, projectDirectoryBadges(directory));
   row.addEventListener('click', () => selectDirectoryTreeItem(directory));
   item.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' || event.key === ' ') {

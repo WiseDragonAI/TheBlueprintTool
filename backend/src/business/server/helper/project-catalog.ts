@@ -78,8 +78,11 @@ export function projectFromRegisteredPath(input: { masterRoot: string; entry: Pr
   // WHY: An unavailable path still must not escape containment before realpath validation is possible.
   if (configuredRelativePath === '..' || configuredRelativePath.startsWith('../')) throw new Error('Registered project path escapes the catalog root.');
   let root = configuredRoot;
+  let relativePath = configuredRelativePath;
   try {
-    root = realpathSync(configuredRoot);
+    const selected = resolveProjectDirectory({ masterRoot, path: configuredRelativePath });
+    root = selected.absolutePath;
+    relativePath = selected.path;
   } catch {
     return {
       id: input.entry.id,
@@ -94,10 +97,6 @@ export function projectFromRegisteredPath(input: { masterRoot: string; entry: Pr
       diagnostic: `Registered project path is unavailable: ${input.entry.relativePath}`,
     };
   }
-  const relativePath = normalizedRelative(masterRoot, root) || '.';
-  // WHAT: Enforce the registry containment boundary after resolving symlinks.
-  // WHY: Persisted relative paths must never grant access outside the configured server root.
-  if (relativePath === '..' || relativePath.startsWith('../')) throw new Error('Registered project path escapes the catalog root.');
   const decisionOsRoot = resolve(root, '.decision-os');
   if (!existsSync(resolve(decisionOsRoot, 'state.json'))) {
     return {
@@ -230,9 +229,9 @@ export function createDecisionOsProject(input: {
   const { name, description } = validateProjectCreationInput(input.name, input.description);
   const masterRoot = realpathSync(input.masterRoot);
   const selectedDirectory = String(input.directory ?? '').trim();
-  const projectRoot = selectedDirectory
-    ? resolveProjectDirectory({ masterRoot, path: selectedDirectory }).absolutePath
-    : resolve(masterRoot, name);
+  const selected = selectedDirectory ? resolveProjectDirectory({ masterRoot, path: selectedDirectory }) : null;
+  const projectRoot = selected ? selected.absolutePath : resolve(masterRoot, name);
+  const projectRelativePath = selected?.path ?? normalizedRelative(masterRoot, projectRoot);
   if (!selectedDirectory && dirname(projectRoot) !== masterRoot) throw new Error('Project directory must be directly below the catalog root.');
   if (!selectedDirectory && existsSync(projectRoot)) throw new Error('A file or directory already exists with this project name.');
 
@@ -262,12 +261,12 @@ export function createDecisionOsProject(input: {
       writeFileSync(resolve(decisionOsRoot, 'project.json'), `${JSON.stringify({ id: randomUUID() }, null, 2)}\n`);
       createLinkedLedger({ decisionOsRoot, title: 'tasks' });
     }
-    const id = stableProjectId(decisionOsRoot, normalizedRelative(masterRoot, projectRoot));
+    const id = stableProjectId(decisionOsRoot, projectRelativePath);
     return {
       id,
       name,
       description,
-      relativePath: normalizedRelative(masterRoot, projectRoot),
+      relativePath: projectRelativePath,
       root: projectRoot,
       decisionOsRoot,
       color: defaultColors[0],

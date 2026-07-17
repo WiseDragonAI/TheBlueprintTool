@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -15,11 +15,14 @@ import { chromium, type Browser } from '@playwright/test';
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const chromiumExecutablePath = '/snap/bin/chromium';
 
-test('project creation selects a server directory and initializes missing Git and Decision OS state', { timeout: 45_000 }, async () => {
+test('project creation follows a catalog symlink and initializes its external target', { timeout: 45_000 }, async () => {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-project-directory-browser-'));
-  const sourceDirectory = join(workspace, 'Sample Source');
+  const externalWorkspace = mkdtempSync(join(tmpdir(), 'decision-os-project-directory-target-'));
+  const sourceDirectory = join(externalWorkspace, 'Ardaria_57');
+  const linkedDirectory = join(workspace, 'Ardaria_57');
   mkdirSync(join(sourceDirectory, 'Nested Folder'), { recursive: true });
   writeFileSync(join(sourceDirectory, 'README.md'), '# Existing source\n');
+  symlinkSync(sourceDirectory, linkedDirectory);
   let server: { process: ChildProcess; url: string } | undefined;
   let browser: Browser | undefined;
   try {
@@ -42,24 +45,25 @@ test('project creation selects a server directory and initializes missing Git an
     await modal.getByRole('button', { name: 'Browse', exact: true }).click();
     const directoryBrowser = modal.getByRole('region', { name: 'Project directory browser', exact: true });
     await directoryBrowser.waitFor({ state: 'visible' });
-    const sourceTreeItem = directoryBrowser.locator('.creation-directory-treeitem[data-path="Sample Source"]');
+    const sourceTreeItem = directoryBrowser.locator('.creation-directory-treeitem[data-path="Ardaria_57"]');
     await sourceTreeItem.waitFor({ state: 'visible' });
     assert.equal(await sourceTreeItem.evaluate((element) => element.tagName), 'DIV');
     assert.equal(await sourceTreeItem.locator(':scope > .creation-directory-row').evaluate((element) => getComputedStyle(element).height), '28px');
-    await sourceTreeItem.getByRole('button', { name: 'Expand Sample Source', exact: true }).click();
-    await directoryBrowser.locator('.creation-directory-treeitem[data-path="Sample Source/Nested Folder"]').waitFor({ state: 'visible' });
+    assert.equal(await sourceTreeItem.getByLabel('Symbolic link', { exact: true }).isVisible(), true);
+    await sourceTreeItem.getByRole('button', { name: 'Expand Ardaria_57', exact: true }).click();
+    await directoryBrowser.locator('.creation-directory-treeitem[data-path="Ardaria_57/Nested Folder"]').waitFor({ state: 'visible' });
     assert.equal(await sourceTreeItem.getAttribute('aria-expanded'), 'true');
     await sourceTreeItem.locator(':scope > .creation-directory-row').click();
     assert.equal(await sourceTreeItem.getAttribute('aria-selected'), 'true');
 
-    assert.equal(await modal.getByLabel('Project directory', { exact: true }).inputValue(), sourceDirectory);
-    assert.equal(await modal.getByLabel('Name', { exact: true }).inputValue(), 'Sample Source');
+    assert.equal(await modal.getByLabel('Project directory', { exact: true }).inputValue(), linkedDirectory);
+    assert.equal(await modal.getByLabel('Name', { exact: true }).inputValue(), 'Ardaria_57');
     await modal.getByLabel('Description (optional)', { exact: true }).fill('Selected existing source');
     await modal.getByRole('button', { name: 'Create project', exact: true }).click();
     await page.waitForURL(/\/projects\/[a-zA-Z0-9_-]+$/);
     await page.locator('#project-detail-view:not([hidden])').waitFor({ state: 'visible' });
 
-    assert.equal(await page.locator('#project-detail-name').textContent(), 'Sample Source');
+    assert.equal(await page.locator('#project-detail-name').textContent(), 'Ardaria_57');
     assert.equal(readFileSync(join(sourceDirectory, 'README.md'), 'utf8'), '# Existing source\n');
     assert.equal(existsSync(join(sourceDirectory, '.git')), true);
     assert.equal(existsSync(join(sourceDirectory, '.decision-os', 'state.json')), true);
@@ -68,6 +72,7 @@ test('project creation selects a server directory and initializes missing Git an
     await browser?.close();
     if (server) await stopDecisionOsServer(server.process);
     rmSync(workspace, { recursive: true, force: true });
+    rmSync(externalWorkspace, { recursive: true, force: true });
   }
 });
 

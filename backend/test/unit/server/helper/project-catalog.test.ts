@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createDecisionOsProject, discoverDecisionOsProjects, resolveCatalogProject, saveProjectMetadata } from '@backend/business/server/helper/project-catalog.js';
@@ -138,6 +138,29 @@ test('initializes an existing source directory without replacing its files', () 
   assert.equal(readFileSync(join(selected, 'README.md'), 'utf8'), '# Existing source\n');
   assert.equal(existsSync(join(selected, '.git')), true);
   assert.equal(existsSync(join(selected, '.decision-os', 'state.json')), true);
+});
+
+test('initializes and identifies a project through a catalog symbolic link', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-symlink-catalog-'));
+  const externalRoot = mkdtempSync(join(tmpdir(), 'decision-os-symlink-target-'));
+  const target = join(externalRoot, 'Ardaria_57');
+  mkdirSync(target);
+  writeFileSync(join(target, 'README.md'), '# Linked source\n');
+  symlinkSync(target, join(root, 'Ardaria_57'));
+
+  const created = createDecisionOsProject({
+    masterRoot: root,
+    masterDecisionOsRoot: join(root, '.decision-os'),
+    name: 'Ardaria 57',
+    description: 'Selected through the catalog link',
+    directory: 'Ardaria_57',
+  });
+
+  assert.equal(created.relativePath, 'Ardaria_57');
+  assert.equal(created.root, target);
+  assert.equal(readFileSync(join(target, 'README.md'), 'utf8'), '# Linked source\n');
+  assert.equal(existsSync(join(target, '.git')), true);
+  assert.equal(existsSync(join(target, '.decision-os', 'state.json')), true);
 });
 
 test('preserves existing Git metadata and Decision OS state', () => {
