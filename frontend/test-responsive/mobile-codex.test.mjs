@@ -155,12 +155,18 @@ test('skill libraries share favorite ordering, colored categories, and scope-spe
   assert.match(script, /Related references/);
   assert.match(script, /skill-reference-card/);
   assert.match(script, /aria-expanded/);
+  assert.match(script, /skill-detail-scroll/);
+  assert.match(script, /skill-detail-actions/);
+  assert.match(script, /detail\.classList\.remove\('skill-detail-layout'\)/);
   assert.doesNotMatch(sharedRow, /project-record-label|skill-source-label|skill-favorite-label/);
   assert.match(sharedRow, /skill-favorite-star/);
   assert.match(sharedRow, /favorite\.textContent = '★'/);
   assert.match(styles, /\.skill-category-filter \{[^}]*background: var\(--skill-category-color\)/);
   assert.match(styles, /\.skill-favorite-toggle\[aria-pressed="true"\] \{[^}]*color: #fbbf24/);
   assert.match(styles, /\.skill-tag-choice\[aria-pressed="true"\]/);
+  assert.match(styles, /\.process-modal \{ height: min\(80dvh, 860px\); \}/);
+  assert.match(styles, /\.skill-detail-scroll \{[^}]*overflow-y: auto/);
+  assert.doesNotMatch(styles, /\.skill-markdown-section \.ledger-card-body[^}]*background:/);
   assert.match(styles, /\.codex-list-item \.project-record-label, \.codex-list-item \.skill-category-label[^}]*padding: 4px 7px/);
 });
 
