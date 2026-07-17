@@ -91,6 +91,9 @@ test('opening a mobile thread does not focus the draft and raise the software ke
 });
 
 test('responsive card threads own desktop split geometry and documented entry shortcuts', () => {
+  const shortcut = source.match(/export async function handleResponsiveThreadShortcut\(event\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+  const keydown = applicationSource.match(/window\.addEventListener\('keydown', async \(event\) => \{[\s\S]*?\n\}\);/)?.[0] ?? '';
+
   assert.match(applicationCss, /body\.card-thread-open \.app-shell \{ margin-right: clamp\(420px, 33vw, 620px\); \}/);
   assert.match(applicationCss, /\.mobile-thread-inspector \{[\s\S]*width: clamp\(420px, 33vw, 620px\);/);
   assert.match(applicationCss, /@media \(max-width: 759px\) \{[\s\S]*body:has\(\.mobile-thread-inspector \.thread-panel:not\(\[hidden\]\)\) \{ overflow: hidden; \}/);
@@ -99,8 +102,12 @@ test('responsive card threads own desktop split geometry and documented entry sh
   assert.match(source, /export async function handleResponsiveThreadShortcut\(event\)/);
   assert.match(source, /key === 'a'[\s\S]*canvasState\.threadPanelOpen\) focusThreadDraft\(\)/);
   assert.match(source, /key === 'x'[\s\S]*startVoiceRecording\(\)/);
-  assert.match(source, /key === 'escape' && canvasState\.threadPanelOpen[\s\S]*cancelQuickVoiceComment\(\)[\s\S]*closeMobileThread\(\)/);
-  assert.match(applicationSource, /if \(isCardEditingKeyboardTarget\(target\)\) return;/);
+  assert.match(shortcut, /key === 'escape' && canvasState\.voice\.recording[\s\S]*cancelQuickVoiceComment\(\)/);
+  assert.match(shortcut, /key === 'escape' && desktop && event\.target instanceof HTMLElement && event\.target\.closest\('\.thread-draft'\)[\s\S]*event\.target\.blur\(\)/);
+  assert.match(shortcut, /key === 'escape' && desktop && currentCard\?\.labels\?\.includes\('master-task'\)[\s\S]*querySelector\('\.back-to-zone-button'\)\?\.click\(\)/);
+  assert.match(shortcut, /key === 'escape' && canvasState\.threadPanelOpen[\s\S]*closeMobileThread\(\)/);
+  assert.match(keydown, /desktopThreadDraftEscape = event\.key === 'Escape'[\s\S]*target\?\.closest\('\.thread-draft'\)/);
+  assert.match(keydown, /isCardEditingKeyboardTarget\(target\) && !desktopThreadDraftEscape/);
   assert.match(applicationSource, /await handleResponsiveThreadShortcut\(event\)/);
 });
 
@@ -195,6 +202,12 @@ test('every card route exit closes through the shared navigation lifecycle', () 
 });
 
 test('master-task Back uses a short accessible opacity-only handoff', () => {
+  const renderCard = applicationSource.match(/function renderCard\(card\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+
+  assert.match(renderCard, /backButton\.replaceChildren\(document\.createTextNode\('← Back'\)\)/);
+  assert.match(renderCard, /parsedTask\.masterTask[\s\S]*shortcutKey\('Esc'\)[\s\S]*aria-hidden[\s\S]*aria-keyshortcuts', 'Escape'/);
+  assert.match(renderCard, /else \{[\s\S]*removeAttribute\('aria-keyshortcuts'\)[\s\S]*removeAttribute\('title'\)/);
+  assert.match(applicationCss, /\.back-button \{[^}]*display: inline-flex;[^}]*gap: 10px/);
   assert.match(applicationSource, /dataset\.taskBackHandoff = 'true'/);
   assert.match(applicationSource, /prefers-reduced-motion: reduce/);
   assert.match(applicationCss, /data-task-back-handoff="true"\]::view-transition-old\(root\)[^{]*\{ animation: task-back-fade-out 140ms/);
