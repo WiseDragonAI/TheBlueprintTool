@@ -542,8 +542,15 @@ body:has(.project-color-picker-modal[open]) { overflow: hidden; }
 .skill-category-filter[aria-pressed="false"] { color: color-mix(in srgb, var(--skill-category-color), white 38%); background: color-mix(in srgb, var(--skill-category-color), transparent 78%); }
 .codex-filter-clear { justify-self: start; min-height: 36px; padding: 0 10px; color: var(--accent); background: transparent; }
 .codex-list { display: grid; gap: 10px; }
-.process-library { min-height: 0; overflow-y: auto; }
-.codex-list-item { display: grid; gap: 6px; width: 100%; min-height: 64px; padding: 12px; border: 1px solid var(--line); text-align: left; background: var(--panel); }
+.process-library { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
+.codex-list-card { --skill-category-color: var(--accent); position: relative; flex: 0 0 auto; overflow: hidden; border: 1px solid var(--line); border-radius: 2px; background: rgba(255,255,255,.025); box-shadow: none; transition: border-color var(--motion-fast) ease, background-color var(--motion-fast) ease; }
+.codex-list-card::before { position: absolute; inset: 0 auto 0 0; width: 3px; background: color-mix(in srgb, var(--skill-category-color), transparent 18%); content: ''; }
+.codex-list-card:focus-within { border-color: var(--skill-category-color); outline: 2px solid color-mix(in srgb, var(--skill-category-color), transparent 35%); outline-offset: 2px; }
+.codex-list-item { display: grid; gap: 7px; width: 100%; min-height: 0; padding: 13px 14px 13px 17px; border: 0; border-radius: 0; color: var(--text); background: transparent; box-shadow: none; font-weight: 400; text-align: left; transform: none; transition: none; }
+.codex-list-item:is(:hover, :focus-visible, :active) { outline: 0; background: transparent; box-shadow: none; filter: none; transform: none; }
+@media (hover: hover) and (pointer: fine) {
+  .codex-list-card:has(.codex-list-item:hover) { border-color: color-mix(in srgb, var(--skill-category-color), var(--line) 45%); background: color-mix(in srgb, var(--skill-category-color), transparent 96%); }
+}
 .codex-list-item span, .codex-list-item small, .codex-message { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
 .skill-result-heading { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; }
 .codex-list-item .skill-result-name { overflow-wrap: anywhere; color: color-mix(in srgb, var(--skill-category-color), white 34%); font-size: 16px; line-height: 1.25; }
@@ -564,10 +571,14 @@ body:has(.project-color-picker-modal[open]) { overflow: hidden; }
 .skill-markdown-section > h4, .skill-reference-map > h4 { margin: 0; color: var(--text); font-size: 14px; letter-spacing: .08em; text-transform: uppercase; }
 .skill-markdown-section > .ledger-card-body, .skill-reference-content { min-width: 0; }
 .skill-reference-cards { display: grid; gap: 10px; padding-left: 18px; border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); }
-.skill-reference-card { position: relative; display: grid; gap: 8px; min-width: 0; }
+.skill-reference-card { position: relative; display: grid; gap: 8px; min-width: 0; border: 1px solid var(--line); border-radius: 2px; background: rgba(255,255,255,.025); }
 .skill-reference-card::before { position: absolute; top: 21px; left: -18px; width: 16px; border-top: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); content: ''; }
-.skill-reference-toggle { min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--accent); background: var(--panel); text-align: left; overflow-wrap: anywhere; }
-.skill-reference-toggle[aria-expanded="true"] { border-color: var(--accent); }
+.skill-reference-card:has(.skill-reference-toggle[aria-expanded="true"]) { border-color: color-mix(in srgb, var(--accent), var(--line) 35%); }
+.skill-reference-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 10px 12px; border: 0; border-radius: 0; color: var(--accent); background: transparent; box-shadow: none; text-align: left; transform: none; overflow-wrap: anywhere; }
+.skill-reference-toggle::after { flex: 0 0 auto; color: var(--muted); content: '›'; font-size: 20px; font-weight: 400; line-height: 1; transition: transform var(--motion-fast) var(--ease-out); }
+.skill-reference-toggle[aria-expanded="true"]::after { transform: rotate(90deg); }
+.skill-reference-toggle:is(:hover, :focus-visible, :active) { background: transparent; box-shadow: none; filter: none; transform: none; }
+.skill-reference-toggle:focus-visible { outline-offset: -3px; }
 .skill-tags-field { min-width: 0; margin: 0; padding: 0; border: 0; }
 .skill-tags-field legend { margin-bottom: 8px; color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; }
 .skill-tag-choices { display: flex; flex-wrap: wrap; gap: 8px; }
