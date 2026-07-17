@@ -152,17 +152,8 @@ export async function handleResponsiveThreadShortcut(event) {
   if (key === 'x') {
     event.preventDefault();
     if (!canvasState.threadPanelOpen && currentCard) openMobileThread(currentCard, getComputedStyle(document.querySelector('#card-view')).getPropertyValue('--zone-color').trim());
-    if (canvasState.voice.recording) {
-      const queueCodex = event.shiftKey;
-      if (queueCodex) {
-        void stopVoiceRecording({
-          queueCodex: true,
-          onPersisted: () => void finishQueuedVoiceSubmission(true),
-        });
-      } else {
-        await stopVoiceRecording();
-      }
-    } else void startVoiceRecording();
+    if (canvasState.voice.recording) await stopVoiceRecording({ queueCodex: event.shiftKey });
+    else void startVoiceRecording();
     return true;
   }
   if (key === 'escape' && canvasState.threadPanelOpen) {
