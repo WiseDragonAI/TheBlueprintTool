@@ -149,8 +149,8 @@ test('responsive voice retry forwards the locally preserved upload identity', ()
 });
 
 test('mobile thread routes jump-to-bottom into persistent bottom following', () => {
-  assert.match(source, /import \{ pinThreadFeedToLastMessage \} from '\/src\/runtime\/thread\/effect\/pin-thread-feed-to-last-message\.js';/);
-  assert.match(source, /action === 'jump-thread-bottom'\) pinThreadFeedToLastMessage\(\{ follow: true \}\)/);
+  assert.match(source, /import \{ pinThreadSurfaceToBottom \} from '\/src\/runtime\/thread\/effect\/pin-thread-feed-to-last-message\.js';/);
+  assert.match(source, /action === 'jump-thread-bottom'[\s\S]*pinThreadSurfaceToBottom\(surface, \{ follow: true \}\)/);
 });
 
 test('mobile thread launch always dispatches an authoritative fresh run', () => {

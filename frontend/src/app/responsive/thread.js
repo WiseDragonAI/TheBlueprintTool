@@ -5,7 +5,7 @@
 import { state as canvasState } from '/src/runtime/state.js';
 import { selectThread } from '/src/runtime/thread/effect/select-thread.js';
 import { renderThreadPanel } from '/src/runtime/thread/effect/render-thread-panel.js';
-import { pinThreadFeedToLastMessage } from '/src/runtime/thread/effect/pin-thread-feed-to-last-message.js';
+import { pinThreadSurfaceToBottom } from '/src/runtime/thread/effect/pin-thread-feed-to-last-message.js';
 import { syncThreadJumpButtonVisibility } from '/src/runtime/thread/effect/render-thread-jump-button.js';
 import { submitThreadDraft } from '/src/runtime/thread/effect/submit-thread-draft.js';
 import { saveThreadDraft } from '/src/runtime/thread/effect/persist-thread-draft.js';
@@ -28,6 +28,8 @@ import { createMobileThreadSessionDeletionHandler, resetMobileThreadConfirmation
 import { projectScopedRequestPath } from '/src/runtime/project/helper/project-request-scope.js';
 import { reconcileResponsiveThreadLedger } from './thread-ledger-reconciliation.js';
 import { voiceRetryInput } from './thread-voice-retry.js';
+import { hydrateThreadViewportState, saveThreadPanelScrollPositions } from '/src/runtime/thread/effect/persist-thread-scroll.js';
+import { readPersistedState } from '/src/runtime/persistence/helper/read-persisted-state.js';
 
 let currentCard = null;
 let currentProjectId = '';
@@ -114,7 +116,6 @@ export function openMobileThread(card, zoneColor) {
   selectThread(threadId);
   canvasState.threadPanelOpen = true;
   document.body.classList.add('card-thread-open');
-  canvasState.threadPinOnRender = true;
   renderThreadPanel();
   updateLaunchReadiness();
   void refreshThreadLedger();
@@ -123,6 +124,7 @@ export function openMobileThread(card, zoneColor) {
 export function closeMobileThread() {
   if (canvasState.voice.recording) return false;
   saveThreadDraft();
+  saveThreadPanelScrollPositions();
   const runId = currentCard ? cardCodexThreadRunId(currentCard) : '';
   if (currentLedgerId && currentCard && canvasState.threadId && runId) {
     unbindThreadCodexRunLog({
@@ -311,6 +313,7 @@ function subscribeEvents() {
 export function initializeMobileThread() {
   if (initialized) return;
   initialized = true;
+  hydrateThreadViewportState(readPersistedState());
   document.querySelector('.thread-open-button').addEventListener('click', () => {
     if (currentCard) openMobileThread(currentCard, getComputedStyle(document.querySelector('#card-view')).getPropertyValue('--zone-color').trim());
   });
@@ -332,7 +335,10 @@ export function initializeMobileThread() {
       if (collapseMobileThreadComposer(button)) syncThreadJumpButtonVisibility();
     }
     else if (action === 'submit-thread-draft') await appendTextNote();
-    else if (action === 'jump-thread-bottom') pinThreadFeedToLastMessage({ follow: true });
+    else if (action === 'jump-thread-bottom') {
+      const surface = canvasState.threadActiveTabByThreadId?.[String(canvasState.threadId || '')] === 'codex-log' ? 'codex-log' : 'thread';
+      pinThreadSurfaceToBottom(surface, { follow: true });
+    }
     else if (action === 'process-thread-codex') await startCodex(button);
     else if (action === 'stop-thread-codex') await stopThreadCodexRunController({
       button,

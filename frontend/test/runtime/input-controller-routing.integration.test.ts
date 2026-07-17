@@ -94,9 +94,9 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(actionClick, /action === 'thread-file-picker'/);
   assert.match(actionClick, /querySelector\('\.thread-file-input'\)/);
   assert.match(actionClick, /action === 'jump-thread-bottom'/);
-  assert.match(actionClick, /pinThreadFeedToLastMessage\(\{ follow: true \}\)/);
+  assert.match(actionClick, /pinThreadSurfaceToBottom\(surface, \{ follow: true \}\)/);
   assert.match(actionClick, /action === 'process-thread-codex'[\s\S]*codexModel: actionTarget\.dataset\.codexModel[\s\S]*codexEffort: actionTarget\.dataset\.codexEffort/);
-  assert.doesNotMatch(actionClick, /pinThreadFeedToLastMessage\(\{ behavior: 'smooth' \}\)/);
+  assert.doesNotMatch(actionClick, /pinThreadSurfaceToBottom\(surface, \{ behavior: 'smooth' \}\)/);
   assert.doesNotMatch(actionClick, /beginZoneLabelEdit/);
   assert.doesNotMatch(actionClick, /deleteSelectedZones/);
   assert.doesNotMatch(actionClick, /commitActiveLedgerMutation/);

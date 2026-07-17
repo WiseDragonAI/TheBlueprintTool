@@ -5,7 +5,8 @@
 import { state, type ThreadPanelTab } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { saveThreadDraft } from './persist-thread-draft.js';
-import { hasSavedThreadScrollPosition, saveThreadPanelScrollPositions } from './persist-thread-scroll.js';
+import { saveThreadPanelScrollPositions } from './persist-thread-scroll.js';
+import { isThreadFollowingBottom, setThreadFollowBottom } from '../helper/thread-follow-bottom.js';
 
 function activeTabState(): Record<string, ThreadPanelTab> {
   if (!state.threadActiveTabByThreadId || typeof state.threadActiveTabByThreadId !== 'object' || Array.isArray(state.threadActiveTabByThreadId)) {
@@ -26,7 +27,11 @@ export function selectThread(threadId: string): void {
   state.threadId = threadId;
   const tabs = activeTabState();
   if (threadId && tabs[threadId] !== 'codex-log') tabs[threadId] = 'thread';
-  state.threadPinOnRender = !hasSavedThreadScrollPosition(threadId);
+  const activeTab = tabs[threadId];
+  if (isThreadFollowingBottom(threadId, activeTab)) {
+    setThreadFollowBottom(threadId, true, activeTab);
+    state.threadPinOnRender = true;
+  } else state.threadPinOnRender = false;
   state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
   telemetry('resolve-thread-target', { threadId, previousThreadId });
 }
