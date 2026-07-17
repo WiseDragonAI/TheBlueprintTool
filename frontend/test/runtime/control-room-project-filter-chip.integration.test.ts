@@ -9,12 +9,13 @@ import { readFileSync } from 'node:fs';
 const root = new URL('../../../', import.meta.url);
 const source = (path: string): string => readFileSync(new URL(path, root), 'utf8');
 
-test('Control Room renders name-only project chips with remote-only foreground-aware icons', () => {
+test('Control Room renders project chips with desktop key hints and remote-only foreground-aware icons', () => {
   const application = source('frontend/src/app/responsive/application.js');
   const css = source('frontend/assets/application.css');
 
   assert.match(application, /const presentation = projectFilterChipPresentation\(project\)/);
-  assert.match(application, /button\.textContent = presentation\.label/);
+  assert.match(application, /label\.className = 'project-filter-label';[\s\S]*label\.textContent = presentation\.label;[\s\S]*button\.append\(label\)/);
+  assert.match(application, /project\.id !== 'All' && index <= 9[\s\S]*shortcutKey\(String\(index\)\)/);
   assert.doesNotMatch(application, /button\.textContent[^\n]*(ownerNodeLabel|projectPresenceLabel|Online|Offline)/);
   assert.match(application, /button\.title = project\.id === 'All'[\s\S]*projectOwnerLabel\(project\)/);
   assert.match(application, /button\.disabled = project\.online === false/);
