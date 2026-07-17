@@ -158,3 +158,38 @@ test('rebuilds a cached Exec projection when the process queue file appears', as
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('projects voice transcription before launch as active without calling it Codex queued', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-control-room-voice-transcribing-'));
+  const decisionOsRoot = join(root, '.decision-os');
+  mkdirSync(join(decisionOsRoot, 'cards', 'tasks'), { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'cards', 'tasks', 'master.md'), '## A. Work\n\n1. Voice launch requested.\n');
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
+    cards: [{
+      id: 'master', title: 'Master', status: 'todo', labels: ['master-task'],
+      executionStatus: 'transcribing-before-launch',
+      comment: { contentFile: '.decision-os/cards/tasks/master.md' },
+    }],
+    annotations: [], relationships: [], threadFiles: {},
+  }));
+  const project: DecisionOsProject = {
+    id: 'project-a', name: 'Project A', relativePath: '.', root, decisionOsRoot,
+    description: '', color: '#123456', available: true, diagnostic: '',
+    ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+  };
+  const store = createControlRoomProjectionStore({
+    cacheFile: join(decisionOsRoot, 'cache', 'control-room.json'),
+    runtimeForRoot: () => ({}),
+  });
+
+  try {
+    const projection = store.get([project]) as Record<string, any>;
+    assert.equal(projection.queue.length, 0);
+    assert.equal(projection.exec.length, 1);
+    assert.equal(projection.exec[0].executionStatus, 'transcribing-before-launch');
+    assert.equal(projection.exec[0].transcribingBeforeLaunch, true);
+    assert.equal(projection.exec[0].codexQueued, false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
