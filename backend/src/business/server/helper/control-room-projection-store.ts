@@ -12,6 +12,7 @@ import { readCodexProcessQueue } from '../../codex/helper/codex-process-queue.js
 import { latestCodexRunSegmentStartedAtMs, latestCodexRunSegmentStartLine, latestCodexRunTurnStartedAtMs } from '../../codex/helper/codex-run-segment-marker.js';
 import { readCardSkillRunEventLines } from '../../codex/helper/read-card-skill-run-event-lines.js';
 import type { DecisionOsProject } from './project-catalog.js';
+import { compareControlRoomQueueTasks } from './control-room-queue-order.js';
 
 type AnyRecord = Record<string, unknown>;
 type Dependency = { path: string; size: number; mtimeMs: number; sha256: string };
@@ -218,7 +219,7 @@ function aggregateProjection(input: { slices: ProjectSlice[]; revision: number; 
   const fingerprint = createHash('sha256').update(JSON.stringify({ schemaVersion, projectorVersion, slices: input.slices.map((slice) => [slice.projectId, slice.fingerprint]) })).digest('hex');
   return {
     schemaVersion, projectorVersion, revision: input.revision, generatedAt: new Date().toISOString(), fingerprint, stale: input.stale === true,
-    queue: tasks.filter((task) => task.status === 'task-waiting').sort(compareTasks),
+    queue: tasks.filter((task) => task.status === 'task-waiting').sort(compareControlRoomQueueTasks),
     exec: tasks.filter((task) => task.status === 'task-execution').sort(compareTasks),
     backlog: tasks.filter((task) => task.status === 'task-backlog').sort(compareTasks),
     done: tasks.filter((task) => task.status === 'task-complete').sort(compareTasks),

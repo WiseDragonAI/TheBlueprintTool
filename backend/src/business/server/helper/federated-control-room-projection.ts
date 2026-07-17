@@ -3,6 +3,7 @@
  * WHY: Project IDs and task rows must remain unambiguous when multiple environments expose equal local project IDs.
  */
 import { createHash } from 'node:crypto';
+import { compareControlRoomQueueTasks } from './control-room-queue-order.js';
 
 type AnyRecord = Record<string, unknown>;
 type Owner = { nodeId: string; nodeLabel: string; remote: boolean };
@@ -55,6 +56,7 @@ export function federatedControlRoomProjection(input: {
     projections.flatMap((projection) => Array.isArray(projection[key]) ? projection[key] as unknown[] : []),
   ]));
   const fingerprints = projections.map((projection) => String(projection.fingerprint ?? ''));
+  mergedLists.queue.sort(compareControlRoomQueueTasks);
   return {
     ...projections[0], ...mergedLists,
     projects: projections.flatMap((projection) => Array.isArray(projection.projects) ? projection.projects as unknown[] : []),
