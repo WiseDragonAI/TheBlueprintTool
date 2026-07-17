@@ -209,7 +209,7 @@ test('Control Room resolves Process Card runs through the shared current-run poi
   const result = deriveControlRoom([task({ markdown, codexRunId: processCardRunId, codexStatus: 'running' })]);
   assert.deepEqual(result.exec.map((entry) => entry.cardId), ['card-a']);
   assert.equal(result.queue.length, 0);
-  assert.match(mobile, /state\.controlRoom = await response\.json\(\)/);
+  assert.match(mobile, /const nextControlRoom = await response\.json\(\)[\s\S]*state\.controlRoom = nextControlRoom/);
   assert.doesNotMatch(mobile, /const runId = cardCodexRunId\(card\)/);
 });
 
@@ -292,7 +292,11 @@ test('delegates touch sorting and animation to vendored SortableJS', () => {
   assert.match(mobile, /delay:\s*300/);
   assert.match(mobile, /delayOnTouchOnly:\s*true/);
   assert.match(mobile, /touchStartThreshold:\s*8/);
-  assert.match(mobile, /onEnd\(event\)[\s\S]*syncQueueFromDom\(\)[\s\S]*queueMicrotask\(\(\) => void persistQueueOrder\(\)\)/);
+  assert.match(mobile, /onStart\(\)[\s\S]*queueDragActive = true/);
+  assert.match(mobile, /onEnd\(event\)[\s\S]*syncQueueFromDom\(\)[\s\S]*queueMicrotask\(\(\) => void settleQueueDrag/);
+  assert.match(mobile, /pointercancel[\s\S]*interruptQueueDrag/);
+  assert.match(mobile, /touchcancel[\s\S]*interruptQueueDrag/);
+  assert.match(mobile, /removeQueueDragArtifacts/);
   assert.doesNotMatch(mobile, /setPointerCapture|pointermove|control-task-placeholder|task-drag-handle/);
   assert.match(styles, /\.queue-task-fallback[^}]*opacity:\s*1\s*!important/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
@@ -305,8 +309,16 @@ test('persists optimistic ranks without a success reload and reconciles the late
   assert.match(persistence, /cardPatch: \{ id: task\.cardId, queueRank \}/);
   assert.match(persistence, /renderControlRoom\(\);[\s\S]*try \{/);
   assert.doesNotMatch(persistence.match(/try \{[\s\S]*?\} catch/)[0], /loadControlRoom/);
+  assert.match(persistence, /for \(const \{ task, queueRank \} of mutations\)/);
+  assert.doesNotMatch(persistence, /Promise\.all/);
   assert.match(persistence, /sequence !== queuePersistenceSequence/);
-  assert.match(persistence, /await loadControlRoom\(\);[\s\S]*setView\('error-view'\)/);
+  assert.match(persistence, /await loadControlRoom\(\{ force: true \}\);[\s\S]*setView\('error-view'\)/);
+});
+
+test('defers authoritative Control Room refreshes until the queue gesture settles', () => {
+  assert.match(mobile, /deferDuringQueueDrag && queueDragInProgress\(\)[\s\S]*pendingControlRoomRefresh = true/);
+  assert.match(mobile, /refreshControlRoomFromEvent\(\)[\s\S]*queueDragInProgress\(\)[\s\S]*pendingControlRoomRefresh = true/);
+  assert.match(mobile, /flushPendingControlRoomRefresh/);
 });
 
 test('omits the next-subtask subtitle when no actionable subtask exists', () => {
