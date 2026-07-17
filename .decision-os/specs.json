@@ -11471,7 +11471,7 @@
       "title": "Federate durable skill and pipeline libraries",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "backend",
         "federation",
@@ -11488,12 +11488,16 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784267353444-c323c7ca",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784267353444-c323c7ca.md",
-      "codexQueuedPipelineRunId": "codex-skill-1784292899842-8cc2e034",
-      "codexQueuedRunId": "codex-skill-1784292899842-8cc2e034",
-      "executionStatus": "pending",
-      "executionRunId": "codex-skill-1784292899842-8cc2e034"
+      "executionStatus": "running",
+      "executionRunId": "codex-skill-1784292899842-8cc2e034",
+      "codexActiveRunId": "codex-skill-1784292899842-8cc2e034",
+      "codexRunId": "codex-skill-1784292899842-8cc2e034",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784292899842-8cc2e034.md",
+      "codexPipelineRunId": "codex-skill-1784292899842-8cc2e034",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexSkillName": "retrospect-and-close-task"
     },
     {
       "id": "card-7ae8cc5b-5f16-4d10-9638-22f098c701fa",
@@ -12586,9 +12590,6 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "executionStatus": "running",
-      "executionRunId": "codex-skill-1784292713036-4977c142",
-      "codexActiveRunId": "codex-skill-1784292713036-4977c142",
       "codexRunId": "codex-skill-1784292713036-4977c142",
       "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784292713036-4977c142.md",
       "codexPipelineRunId": "codex-skill-1784292713036-4977c142",
@@ -13234,11 +13235,7 @@
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
       "codexThreadRunId": "codex-skill-1784287329181-cc959638",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784287329181-cc959638.md",
-      "executionStatus": "running",
-      "codexActiveRunId": "codex-skill-1784287329181-cc959638",
-      "codexActiveExecutionId": "codex-execution-1784292414736-ca027240",
-      "executionRunId": "codex-skill-1784287329181-cc959638"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784287329181-cc959638.md"
     },
     {
       "id": "card-9e1dc6dc-7903-4d4a-9370-ab7d89681407",
@@ -14177,9 +14174,6 @@
       },
       "facts": [],
       "fields": [],
-      "codexActiveRunId": "codex-skill-1784292713036-4977c142",
-      "executionStatus": "running",
-      "executionRunId": "codex-skill-1784292713036-4977c142",
       "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784292713036-4977c142.md",
       "codexPipelineRunId": "codex-skill-1784292713036-4977c142",
       "codexPipelineName": "retrospect-and-close-task run",
@@ -14196,19 +14190,23 @@
       "w": 700,
       "h": 260,
       "status": "todo",
-      "codexPipelineRunId": "codex-skill-1784292899842-8cc2e034",
-      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
-      "codexPipelineStepName": "retrospect-and-close-task",
-      "codexPipelineName": "retrospect-and-close-task run",
       "codexRunId": "codex-skill-1784292899842-8cc2e034",
-      "codexSkillName": "retrospect-and-close-task",
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
       "comment": {
         "contentFile": ".decision-os/cards/specs/card-codex-skill-1784292899842-8cc2e034.md"
       },
       "facts": [],
-      "fields": []
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784292899842-8cc2e034",
+      "executionStatus": "running",
+      "executionRunId": "codex-skill-1784292899842-8cc2e034",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784292899842-8cc2e034.md",
+      "codexPipelineRunId": "codex-skill-1784292899842-8cc2e034",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexSkillName": "retrospect-and-close-task"
     },
     {
       "id": "card-07132fde-ffd4-4db4-a2b7-97587637438f",
@@ -14228,13 +14226,14 @@
       },
       "facts": [],
       "fields": [],
-      "executionStatus": "pending",
+      "executionStatus": "running",
       "codexActiveRunId": "codex-skill-1784293070526-5ea5e38a",
       "executionRunId": "codex-skill-1784293070526-5ea5e38a",
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
       "codexThreadRunId": "codex-skill-1784293070526-5ea5e38a",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784293070526-5ea5e38a.md"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784293070526-5ea5e38a.md",
+      "codexActiveExecutionId": "codex-execution-1784293539337-a17e41b6"
     },
     {
       "id": "card-9a7255f2-c390-4798-88cc-89e8579a9c7a",
