@@ -17,10 +17,12 @@ import { installProjectRequestScope } from '../../project/helper/project-request
 import { routeScope } from '../../navigation/helper/route-scope.js';
 import { selectThread } from '../../thread/effect/select-thread.js';
 import { openThreadPanel } from '../../thread/effect/open-thread-panel.js';
+import { hydrateThreadViewportState } from '../../thread/effect/persist-thread-scroll.js';
 
 export function bootSurface(): void {
   installProjectRequestScope();
   const persisted = readPersistedState();
+  hydrateThreadViewportState(persisted);
   const scope = routeScope(window.location.pathname);
   state.projectId = scope.projectId;
   state.canvasMode = routeCanvasMode(window.location.pathname);

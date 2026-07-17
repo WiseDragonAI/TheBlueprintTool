@@ -93,6 +93,7 @@ export const state: any = {
   threadScrollTopByThreadId: {},
   threadFollowBottomByThreadId: {} as Record<string, boolean>,
   threadLogScrollTopByThreadId: {},
+  threadLogFollowBottomByThreadId: {} as Record<string, boolean>,
   threadActiveTabByThreadId: {} as Record<string, ThreadPanelTab>,
   threadRunIdByThreadId: {} as Record<string, string>,
   threadRunSummaryByThreadId: {},

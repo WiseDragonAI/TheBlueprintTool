@@ -8,9 +8,9 @@ import { threadIdForTarget } from '../../src/runtime/thread/helper/thread-id-for
 import { selectThread } from '../../src/runtime/thread/effect/select-thread.js';
 import { closeThreadPanel } from '../../src/runtime/thread/effect/close-thread-panel.js';
 import { restoreThreadDraft, saveThreadDraft } from '../../src/runtime/thread/effect/persist-thread-draft.js';
-import { restoreThreadScrollPosition, saveThreadScrollPosition } from '../../src/runtime/thread/effect/persist-thread-scroll.js';
-import { pinThreadFeedToLastMessage } from '../../src/runtime/thread/effect/pin-thread-feed-to-last-message.js';
-import { isThreadFollowingBottom } from '../../src/runtime/thread/helper/thread-follow-bottom.js';
+import { hydrateThreadViewportState, restoreThreadScrollPosition, saveThreadScrollPosition } from '../../src/runtime/thread/effect/persist-thread-scroll.js';
+import { pinThreadFeedToLastMessage, pinThreadSurfaceToBottom } from '../../src/runtime/thread/effect/pin-thread-feed-to-last-message.js';
+import { isThreadFollowingBottom, setThreadFollowBottom } from '../../src/runtime/thread/helper/thread-follow-bottom.js';
 import { renderThreadJumpButton } from '../../src/runtime/thread/effect/render-thread-jump-button.js';
 import { renderThreadNotes } from '../../src/runtime/thread/effect/render-thread-notes.js';
 import { state } from '../../src/runtime/state.js';
@@ -113,6 +113,7 @@ test('select-thread restores saved thread scroll instead of pinning when returni
   try {
     state.threadId = 'thread-card-a';
     state.threadScrollTopByThreadId = { 'thread-card-b': 42 };
+    state.threadFollowBottomByThreadId = { 'thread-card-b': false };
     state.voice = { recording: false, startedAt: 0, durationMs: 12, level: 0, transcriptionStatus: 'idle' };
     selectThread('thread-card-b');
     assert.equal(state.threadScrollTopByThreadId['thread-card-a'], 184);
@@ -124,6 +125,7 @@ test('select-thread restores saved thread scroll instead of pinning when returni
     (globalThis as unknown as { document: unknown }).document = previousDocument;
     state.threadId = '';
     state.threadScrollTopByThreadId = {};
+    state.threadFollowBottomByThreadId = {};
     delete state.threadPinOnRender;
     state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
   }
@@ -233,6 +235,70 @@ test('thread scroll position persists per thread and restores after layout settl
     (globalThis as unknown as { document: unknown }).document = previousDocument;
     (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = previousRequestAnimationFrame;
     state.threadScrollTopByThreadId = {};
+  }
+});
+
+test('thread viewport state hydrates validated independent follow and offset records', () => {
+  hydrateThreadViewportState({
+    threadScrollTopByThreadId: { 'thread-a': 42, invalid: -1 },
+    threadLogScrollTopByThreadId: { 'thread-a': 84, invalid: 'nope' },
+    threadFollowBottomByThreadId: { 'thread-a': false, invalid: 'false' },
+    threadLogFollowBottomByThreadId: { 'thread-a': true, invalid: 1 },
+  });
+  assert.deepEqual(state.threadScrollTopByThreadId, { 'thread-a': 42 });
+  assert.deepEqual(state.threadLogScrollTopByThreadId, { 'thread-a': 84 });
+  assert.equal(isThreadFollowingBottom('thread-a', 'thread'), false);
+  assert.equal(isThreadFollowingBottom('thread-a', 'codex-log'), true);
+  assert.equal(isThreadFollowingBottom('unseen-thread', 'thread'), true);
+});
+
+test('conversation and Codex Log follow changes persist independently', () => {
+  const previousLocalStorage = globalThis.localStorage;
+  const values = new Map<string, string>();
+  (globalThis as unknown as { localStorage: unknown }).localStorage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => values.set(key, value),
+  };
+  state.threadFollowBottomByThreadId = {};
+  state.threadLogFollowBottomByThreadId = {};
+  try {
+    setThreadFollowBottom('thread-a', false, 'thread');
+    setThreadFollowBottom('thread-a', true, 'codex-log');
+    const persisted = JSON.parse(values.get('decision-os.canvas.state') ?? '{}');
+    assert.deepEqual(persisted.threadFollowBottomByThreadId, { 'thread-a': false });
+    assert.deepEqual(persisted.threadLogFollowBottomByThreadId, { 'thread-a': true });
+  } finally {
+    (globalThis as unknown as { localStorage: unknown }).localStorage = previousLocalStorage;
+    state.threadFollowBottomByThreadId = {};
+    state.threadLogFollowBottomByThreadId = {};
+  }
+});
+
+test('Codex Log pin activates only log follow and scrolls its viewport to newest output', () => {
+  const previousDocument = globalThis.document;
+  const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
+  const log = { scrollTop: 0, scrollHeight: 960, lastElementChild: null };
+  (globalThis as unknown as { document: unknown }).document = {
+    querySelector(selector: string) {
+      if (selector === '.thread-panel .thread-log-scroll') return log;
+      return null;
+    }
+  };
+  (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = undefined;
+  state.threadId = 'thread-log';
+  state.threadFollowBottomByThreadId = { 'thread-log': false };
+  state.threadLogFollowBottomByThreadId = { 'thread-log': false };
+  try {
+    pinThreadSurfaceToBottom('codex-log', { follow: true });
+    assert.equal(log.scrollTop, 960);
+    assert.equal(isThreadFollowingBottom('thread-log', 'codex-log'), true);
+    assert.equal(isThreadFollowingBottom('thread-log', 'thread'), false);
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+    (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = previousRequestAnimationFrame;
+    state.threadId = '';
+    state.threadFollowBottomByThreadId = {};
+    state.threadLogFollowBottomByThreadId = {};
   }
 });
 
@@ -420,10 +486,10 @@ test('render-thread-jump-button shows only when the thread viewport is away from
     assert.equal(button?.attributes['aria-hidden'], 'false');
 
     button!.dataset.action = 'jump-thread-bottom';
-    chat.scrollTop = 560;
+    chat.scrollTop = 500;
     scrollHandler?.(new Event('scroll'));
-    assert.equal((button as TestElement & { hidden: boolean }).hidden, true);
-    assert.equal(button?.attributes['aria-hidden'], 'true');
+    assert.equal((button as TestElement & { hidden: boolean }).hidden, false);
+    assert.equal(button?.attributes['aria-hidden'], 'false');
     assert.equal(isThreadFollowingBottom('thread-jump'), false);
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;

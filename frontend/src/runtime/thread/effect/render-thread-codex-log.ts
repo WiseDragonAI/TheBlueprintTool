@@ -13,6 +13,8 @@ import { renderThreadCodexLogEvent } from '../component/render-thread-codex-log-
 import { renderThreadCodexLogStatus } from '../component/render-thread-codex-log-status.js';
 import { threadCodexStopState } from '../../codex/controller/stop-thread-codex-run-controller.js';
 import { threadCodexSessionDeletionState } from '../../codex/controller/delete-thread-codex-session-controller.js';
+import { isThreadFollowingBottom } from '../helper/thread-follow-bottom.js';
+import { persistThreadViewportState } from './persist-thread-scroll.js';
 
 type DisclosureByThread = Record<string, Record<string, boolean>>;
 
@@ -181,9 +183,8 @@ export function renderThreadCodexLog(): void {
   if (!root) return;
   const viewport = document.querySelector('.thread-log-scroll') as HTMLElement | null;
   const previousTop = Number(viewport?.scrollTop ?? 0);
-  const bottomDistance = Math.max(0, Number(viewport?.scrollHeight ?? 0) - Number(viewport?.clientHeight ?? 0) - previousTop);
-  const wasPinned = bottomDistance <= 8;
   const threadId = String(state.threadId ?? '');
+  const following = isThreadFollowingBottom(threadId, 'codex-log');
   const card = selectedThreadCard(threadId);
   const runId = card ? cardCodexRunId(card) : '';
   root.replaceChildren();
@@ -258,8 +259,9 @@ export function renderThreadCodexLog(): void {
     // WHAT: Skip scroll restoration when the independent log viewport is absent.
     // WHY: The log content can render in isolated test and partial-DOM surfaces.
     if (!viewport) return;
-    viewport.scrollTop = wasPinned ? Number(viewport.scrollHeight ?? 0) : previousTop;
+    viewport.scrollTop = following ? Number(viewport.scrollHeight ?? 0) : previousTop;
     recordState('threadLogScrollTopByThreadId')[threadId] = Math.max(0, Number(viewport.scrollTop ?? 0));
+    persistThreadViewportState();
   };
   restore();
   globalThis.requestAnimationFrame?.(() => restore());

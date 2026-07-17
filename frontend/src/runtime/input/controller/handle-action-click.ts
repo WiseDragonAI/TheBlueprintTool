@@ -21,7 +21,7 @@ import { submitThreadDraft } from '../../thread/effect/submit-thread-draft.js';
 import { deleteNoteController } from '../../thread/controller/delete-note-controller.js';
 import { confirmNoteDeletionController } from '../../thread/controller/confirm-note-deletion-controller.js';
 import { renderThreadPanel } from '../../thread/effect/render-thread-panel.js';
-import { pinThreadFeedToLastMessage } from '../../thread/effect/pin-thread-feed-to-last-message.js';
+import { pinThreadSurfaceToBottom } from '../../thread/effect/pin-thread-feed-to-last-message.js';
 import { refreshRuntimeState } from '../../refresh/controller/refresh-runtime-state.js';
 import { selectTarget } from '../../selection/controller/select-target.js';
 import { selectThread } from '../../thread/effect/select-thread.js';
@@ -132,7 +132,8 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     return;
   }
   if (action === 'jump-thread-bottom') {
-    pinThreadFeedToLastMessage({ follow: true });
+    const surface = state.threadActiveTabByThreadId?.[String(state.threadId ?? '')] === 'codex-log' ? 'codex-log' : 'thread';
+    pinThreadSurfaceToBottom(surface, { follow: true });
     return;
   }
   if (action === 'voice-cancel') cancelVoiceRecording();

@@ -9,6 +9,8 @@ import { normalizeLedgerNotes } from '../../ledger/helper/normalize-ledger-notes
 import { state, type ThreadContentRefreshScope } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { renderThreadNotes } from './render-thread-notes.js';
+import { isThreadFollowingBottom } from '../helper/thread-follow-bottom.js';
+import { pinThreadFeedToLastMessage } from './pin-thread-feed-to-last-message.js';
 
 type AnyRecord = Record<string, any>;
 
@@ -112,6 +114,7 @@ export async function loadActiveThreadSlice(scope: ThreadContentRefreshScope): P
   normalizeLedgerNotes(activeLedgerAtRequest)[threadId] = normalizeLedgerNotes(incomingSlice)[threadId] ?? [];
   normalizeDeletedNoteIds(activeLedgerAtRequest)[threadId] = normalizeDeletedNoteIds(incomingSlice)[threadId] ?? [];
   renderThreadNotes();
+  if (isThreadFollowingBottom(threadId, 'thread')) pinThreadFeedToLastMessage();
   telemetry('thread-content-refresh-applied', {
     ...scope,
     noteCount: normalizeLedgerNotes(activeLedgerAtRequest)[threadId].length

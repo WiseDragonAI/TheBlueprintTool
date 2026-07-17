@@ -15,7 +15,7 @@ import { renderVoiceDock } from '../../voice/effect/render-voice-dock.js';
 import { renderVoiceStatus } from '../../voice/effect/render-voice-status.js';
 import { resolveThreadTargetTitle } from '../helper/resolve-thread-target-title.js';
 import { applyThreadAccent } from './apply-thread-accent.js';
-import { pinThreadFeedToLastMessage } from './pin-thread-feed-to-last-message.js';
+import { pinThreadSurfaceToBottom } from './pin-thread-feed-to-last-message.js';
 import { isThreadFollowingBottom } from '../helper/thread-follow-bottom.js';
 import { restoreThreadDraft } from './persist-thread-draft.js';
 import { restoreThreadScrollPosition, saveThreadScrollPosition } from './persist-thread-scroll.js';
@@ -257,7 +257,7 @@ export function renderThreadPanel(): void {
   const activeThreadId = String(state.threadId ?? '');
   const activeTab = activeThreadPanelTab(activeThreadId);
   const shouldPinThread = Boolean(shouldOpenThread && state.threadPinOnRender);
-  const shouldFollowBottom = Boolean(shouldOpenThread && activeTab === 'thread' && isThreadFollowingBottom(activeThreadId));
+  const shouldFollowBottom = Boolean(shouldOpenThread && isThreadFollowingBottom(activeThreadId, activeTab));
   const sameRenderedThread = activeThreadId && state.renderedThreadId === activeThreadId;
   if (shouldOpenThread && !shouldPinThread && !shouldFollowBottom && sameRenderedThread) saveThreadScrollPosition(activeThreadId, activeTab);
 
@@ -285,7 +285,7 @@ export function renderThreadPanel(): void {
   void restorePendingVoiceUploads(activeThreadId);
   bindActiveThreadRun(activeThreadId);
   renderThreadCodexLog();
-  renderThreadJumpButton(activeTab === 'thread');
+  renderThreadJumpButton(Boolean(activeThreadId));
   state.renderedThreadId = activeThreadId;
   renderVoiceDock({ visible: activeTab === 'thread' });
   if (activeTab === 'thread') {
@@ -296,7 +296,7 @@ export function renderThreadPanel(): void {
 
   if (shouldPinThread || shouldFollowBottom) {
     state.threadPinOnRender = false;
-    pinThreadFeedToLastMessage();
+    pinThreadSurfaceToBottom(activeTab);
   } else if (shouldOpenThread) {
     restoreThreadScrollPosition(activeThreadId, activeTab);
   }

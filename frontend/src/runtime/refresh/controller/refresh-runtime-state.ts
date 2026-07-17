@@ -14,6 +14,7 @@ import { routeTab } from '../../navigation/helper/route-tab.js';
 import { applyRailCollapsedState } from '../../toolbox/effect/apply-rail-collapsed-state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { routeScope } from '../../navigation/helper/route-scope.js';
+import { hydrateThreadViewportState } from '../../thread/effect/persist-thread-scroll.js';
 
 export async function refreshRuntimeState(): Promise<void> {
   telemetry('subscribe-server-refresh', { specId: '50000006', source: 'refresh-button' });
@@ -24,6 +25,7 @@ export async function refreshRuntimeState(): Promise<void> {
   const nextLedgerStateId = nextCanvasMode === 'projects' ? 'projects-canvas' : nextCanvasMode === 'ledgers' ? 'ledgers-canvas' : nextActiveTab;
   const localViewport = state.activeLedger && state.activeLedgerId === nextLedgerStateId ? { ...state.viewport } : null;
   const persisted = readPersistedState();
+  hydrateThreadViewportState(persisted);
   state.canvasMode = nextCanvasMode;
   if (state.canvasMode === 'ledger') state.activeTab = nextActiveTab;
   if (state.ledgerReconciliation.routeLedgerStateId !== nextLedgerStateId) advanceLedgerRouteEpoch(nextLedgerStateId);
