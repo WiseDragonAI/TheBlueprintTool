@@ -10884,7 +10884,7 @@
       "title": "Synchronize desktop master-task and thread-panel lifecycle",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "master-task"
       ],
