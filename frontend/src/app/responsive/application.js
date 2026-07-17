@@ -18,7 +18,7 @@ import { loadFederationSettings, saveFederationSettings } from './federation-set
 import { hydrateFederationForm } from './federation-form-hydration.js';
 import { createProjectRequest } from './project-creation.js';
 import { installProjectRequestScope, projectScopedRequestPath } from '/src/runtime/project/helper/project-request-scope.js';
-import { projectFilterChipPresentation } from './project-filter-chip.js';
+import { projectFilterChipPresentation, projectFilterGroups, projectFilterIncludes } from './project-filter-chip.js';
 
 installProjectRequestScope();
 
@@ -935,9 +935,19 @@ function renderGlobalLedgers() {
   document.title = 'Ledgers · Decision OS';
 }
 
+function selectedControlProjectFilter() {
+  return projectFilterGroups(state.projects).find((project) => project.id === state.projectFilter);
+}
+
+function filterControlTasksByProject(tasks) {
+  if (state.projectFilter === 'All') return tasks;
+  const selectedProject = selectedControlProjectFilter();
+  return tasks.filter((task) => projectFilterIncludes(selectedProject, task.projectId));
+}
+
 function filteredControlTasks(tab = state.controlTab) {
   const tasks = state.controlRoom?.[tab] ?? [];
-  const projectTasks = state.projectFilter === 'All' ? tasks : tasks.filter((task) => task.projectId === state.projectFilter);
+  const projectTasks = filterControlTasksByProject(tasks);
   return state.controlFilter === 'All' ? projectTasks : projectTasks.filter((task) => task.ledgerId === state.controlFilter);
 }
 
@@ -1066,7 +1076,7 @@ document.addEventListener('visibilitychange', () => {
 
 function controlTaskCount(tab) {
   const tasks = state.controlRoom?.[tab] ?? [];
-  const projectTasks = state.projectFilter === 'All' ? tasks : tasks.filter((task) => task.projectId === state.projectFilter);
+  const projectTasks = filterControlTasksByProject(tasks);
   return state.controlFilter === 'All' ? projectTasks.length : projectTasks.filter((task) => task.ledgerId === state.controlFilter).length;
 }
 
@@ -1137,7 +1147,7 @@ function renderControlRoom() {
   state.activeLedgerId = '';
   state.activeZoneId = '';
   renderLedgerLinks();
-  const projectFilters = [{ id: 'All', name: 'All projects', color: '#20242b' }, ...state.projects];
+  const projectFilters = [{ id: 'All', name: 'All projects', color: '#20242b', projects: state.projects }, ...projectFilterGroups(state.projects)];
   if (!projectFilters.some((project) => project.id === state.projectFilter)) state.projectFilter = 'All';
   const showProjectFilters = state.projectFilter === 'All';
   const projectButtons = projectFilters.map((project) => {
@@ -1146,7 +1156,9 @@ function renderControlRoom() {
     button.type = 'button';
     button.className = `project-filter-chip${project.id === 'All' ? ' all-projects-filter' : ''}`;
     button.textContent = presentation.label;
-    button.title = project.id === 'All' ? project.name : `${project.name} (${project.id}) owned by ${projectOwnerLabel(project)}`;
+    button.title = project.id === 'All'
+      ? project.name
+      : `${project.name} owned by ${project.projects.map(projectOwnerLabel).join(', ')}`;
     button.disabled = project.online === false;
     button.setAttribute('aria-pressed', String(project.id === state.projectFilter));
     button.style.setProperty('--project-color', project.color);
@@ -1164,7 +1176,7 @@ function renderControlRoom() {
   });
   elements['control-project-filters'].hidden = !showProjectFilters;
   elements['control-project-filters'].replaceChildren(...(showProjectFilters ? projectButtons : []));
-  const scopedLedgers = state.projects.find((project) => project.id === state.projectFilter)?.ledgers ?? [];
+  const scopedLedgers = projectFilters.find((project) => project.id === state.projectFilter)?.ledgers ?? [];
   const filters = [{ id: 'All', title: 'All ledgers' }, ...scopedLedgers];
   if (!filters.some((filter) => filter.id === state.controlFilter)) state.controlFilter = 'All';
   const ledgerButtons = filters.map((filter) => {

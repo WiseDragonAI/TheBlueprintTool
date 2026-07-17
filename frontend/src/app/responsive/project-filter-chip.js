@@ -1,6 +1,6 @@
 /**
- * WHAT: Derives the visible project-filter chip presentation from catalog data.
- * WHY: Chip content and contrast must remain deterministic without coupling them to DOM rendering.
+ * WHAT: Derives repository-aware project-filter groups and their visible chip presentation.
+ * WHY: Equivalent projects from multiple terminals share one filter while task ownership stays terminal-specific.
  */
 
 const yiqForegroundThreshold = 186;
@@ -21,4 +21,49 @@ export function projectFilterChipPresentation(project) {
     showRemoteMarker: project.remote === true,
     foreground: projectFilterForeground(project.color),
   };
+}
+
+function projectFilterGroupKey(project) {
+  const originFingerprint = String(project.originFingerprint ?? '').trim();
+  const logicalProjectId = String(project.localProjectId ?? project.id ?? '').trim();
+  return originFingerprint && logicalProjectId
+    ? `repository:${originFingerprint}:${logicalProjectId}`
+    : `project:${String(project.id ?? '').trim()}`;
+}
+
+function projectFilterGroupLedgers(projects, canonicalProject) {
+  const orderedProjects = [canonicalProject, ...projects.filter((project) => project !== canonicalProject)];
+  const ledgers = new Map();
+  for (const project of orderedProjects) {
+    for (const ledger of project.ledgers ?? []) {
+      if (!ledgers.has(ledger.id)) ledgers.set(ledger.id, ledger);
+    }
+  }
+  return [...ledgers.values()];
+}
+
+export function projectFilterGroups(projects) {
+  const groupedProjects = new Map();
+  for (const project of projects) {
+    const key = projectFilterGroupKey(project);
+    const members = groupedProjects.get(key) ?? [];
+    members.push(project);
+    groupedProjects.set(key, members);
+  }
+
+  return [...groupedProjects.entries()].map(([id, members]) => {
+    const canonicalProject = members.find((project) => project.remote !== true) ?? members[0];
+    return {
+      ...canonicalProject,
+      id,
+      projects: members,
+      projectIds: members.map((project) => project.id),
+      ledgers: projectFilterGroupLedgers(members, canonicalProject),
+      online: members.some((project) => project.online !== false),
+    };
+  });
+}
+
+export function projectFilterIncludes(group, projectId) {
+  return group?.projectIds?.includes(projectId) === true;
 }
