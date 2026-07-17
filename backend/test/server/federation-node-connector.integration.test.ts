@@ -31,10 +31,12 @@ async function waitFor<T>(read: () => Promise<T | null>): Promise<T> {
   throw new Error('Timed out waiting for federation state.');
 }
 
-test('reports duplicate node replacement and retry timing to Settings', async () => {
+test('stops retrying when another server owns the configured node identity', async () => {
   const relayHttp = createServer();
   const relay = new WebSocketServer({ noServer: true });
+  let connectionCount = 0;
   relayHttp.on('upgrade', (request, socket, head) => relay.handleUpgrade(request, socket, head, (webSocket) => {
+    connectionCount += 1;
     webSocket.close(4001, 'replaced');
   }));
   relayHttp.listen(0, '127.0.0.1');
@@ -53,17 +55,54 @@ test('reports duplicate node replacement and retry timing to Settings', async ()
   try {
     const status = await waitFor(async () => {
       const value = connector.status();
-      return value.lastCloseCode === 4001 && value.phase === 'retrying' ? value : null;
+      return value.lastCloseCode === 4001 && value.phase === 'disconnected' ? value : null;
     });
     assert.equal(status.connected, false);
     assert.equal(status.lastCloseReason, 'replaced');
     assert.match(status.lastError, /unique node identity/);
-    assert.equal(status.reconnectAttempt, 1);
-    assert.ok(Number(status.nextRetryAt) > Number(status.lastDisconnectedAt));
+    assert.equal(status.reconnectAttempt, 0);
+    assert.equal(status.nextRetryAt, null);
     assert.equal(status.connectTimeoutMs, 10_000);
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    assert.equal(connectionCount, 1, 'a replaced connector must not fight the active owner');
   } finally {
     connector.stop();
     relay.close();
+    relayHttp.close();
+    await once(relayHttp, 'close');
+  }
+});
+
+test('stops retrying when the relay rejects node authentication', async () => {
+  const relayHttp = createServer();
+  let connectionCount = 0;
+  relayHttp.on('upgrade', (_request, socket) => {
+    connectionCount += 1;
+    socket.end('HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n');
+  });
+  relayHttp.listen(0, '127.0.0.1');
+  await once(relayHttp, 'listening');
+  const connector = createFederationNodeConnector({
+    settings: {
+      federationRelayUrl: `http://127.0.0.1:${(relayHttp.address() as AddressInfo).port}`,
+      federationId: 'proof',
+      federationNodeId: 'unauthorized-node',
+      federationNodeCredential: 'invalid',
+    },
+    localProjects: () => [],
+    localServerUrl: () => 'http://127.0.0.1:1',
+  });
+  connector.start();
+  try {
+    const status = await waitFor(async () => {
+      const value = connector.status();
+      return value.phase === 'disconnected' && value.lastError.includes('(401)') ? value : null;
+    });
+    assert.equal(status.nextRetryAt, null);
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    assert.equal(connectionCount, 1, 'invalid credentials must wait for explicit correction');
+  } finally {
+    connector.stop();
     relayHttp.close();
     await once(relayHttp, 'close');
   }
@@ -168,6 +207,10 @@ test('two Decision OS nodes expose remote owner state without changing either lo
     assert.equal(settingsA.connected, true);
     assert.equal(settingsA.credentialConfigured, true);
     assert.equal(Object.hasOwn(settingsA, 'nodeCredential'), false);
+    const connectionEpoch = settingsA.connectedAt;
+    const observedAgain = await fetch(`${baseA}/api/settings/federation`).then((response) => response.json()) as Record<string, unknown>;
+    assert.equal(observedAgain.connectedAt, connectionEpoch, 'reading Settings must not recreate the backend connection');
+    assert.equal(sockets.size, 2, 'reading Settings must not open another relay socket');
 
     const events = await fetch(`${baseA}/api/control-room-events`);
     const eventReader = events.body!.getReader();
