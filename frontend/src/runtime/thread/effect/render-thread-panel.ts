@@ -258,8 +258,6 @@ export function renderThreadPanel(): void {
   const activeTab = activeThreadPanelTab(activeThreadId);
   const shouldPinThread = Boolean(shouldOpenThread && state.threadPinOnRender);
   const shouldFollowBottom = Boolean(shouldOpenThread && isThreadFollowingBottom(activeThreadId, activeTab));
-  const sameRenderedThread = activeThreadId && state.renderedThreadId === activeThreadId;
-  if (shouldOpenThread && !shouldPinThread && !shouldFollowBottom && sameRenderedThread) saveThreadScrollPosition(activeThreadId, activeTab);
 
   inspector.hidden = !shouldOpenThread;
   panel.hidden = !shouldOpenThread;
