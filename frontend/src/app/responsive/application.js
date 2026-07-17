@@ -1109,7 +1109,9 @@ function taskRow(task, tab, index) {
   summary.querySelector('strong').textContent = task.title;
   if (executing) {
     const runtimeStatus = summary.querySelector('.task-next');
-    if (task.codexQueued) {
+    if (task.transcribingBeforeLaunch) {
+      runtimeStatus.textContent = 'Transcribing before launch';
+    } else if (task.codexQueued) {
       runtimeStatus.className = 'task-queue-position';
       runtimeStatus.textContent = Number.isInteger(task.codexQueuePosition)
         ? `Queued · position ${task.codexQueuePosition}`
@@ -1122,7 +1124,13 @@ function taskRow(task, tab, index) {
       runtimeStatus.textContent = 'Running';
     }
   }
-  const age = task.status === 'task-backlog' ? 'backlog' : task.status === 'task-execution' ? executionAge(task.executionSince) : waitingAge(task.waitingSince);
+  const age = task.status === 'task-backlog'
+    ? 'backlog'
+    : task.transcribingBeforeLaunch
+      ? waitingAge(task.waitingSince).replace(/ waiting$/, ' transcribing')
+      : task.status === 'task-execution'
+        ? executionAge(task.executionSince)
+        : waitingAge(task.waitingSince);
   const process = task.codexProcessing ? ` · Codex ${task.codexRunId}` : '';
   const taskOwner = task.ownerNodeLabel || task.ownerNodeId || state.projects.find((project) => project.id === task.projectId)?.ownerNodeLabel || 'This server';
   if (summary.querySelector('.task-meta')) {

@@ -45,7 +45,7 @@ function voiceUploadForm(input: { transcript?: string; queueCodex?: boolean; lau
   return form;
 }
 
-test('queued voice acceptance moves the card to pending execution during transcription and clears it on failure', async () => {
+test('queued voice acceptance moves the card to transcribing-before-launch during transcription and clears it on failure', async () => {
   const originalCwd = process.cwd();
   const originalFetch = globalThis.fetch;
   const previousApiKey = process.env.OPENAI_API_KEY;
@@ -85,7 +85,7 @@ test('queued voice acceptance moves the card to pending execution during transcr
     assert.equal(responseBody.body.queueCodex, true);
     await waitForText(join(workspace, '.decision-os', 'threads', 'specs', 'thread-card-a.md'), '"status":"transcribing"');
     let ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { cards: Array<{ executionStatus?: string; executionRunId?: string }> };
-    assert.equal(ledger.cards[0].executionStatus, 'pending');
+    assert.equal(ledger.cards[0].executionStatus, 'transcribing-before-launch');
     assert.equal(ledger.cards[0].executionRunId, undefined);
 
     settleTranscription?.(new Response(JSON.stringify({ error: { message: 'provider unavailable' } }), { status: 503, headers: { 'content-type': 'application/json' } }));
