@@ -623,7 +623,7 @@
 
         <dialog class="codex-modal process-modal" aria-labelledby="process-title">
           <section class="codex-sheet">
-            <header><button class="codex-back process-close" type="button" aria-label="Close card processing">×</button><div><p class="eyebrow">Card processing</p><h2 id="process-title">Process card</h2></div></header>
+            <header><button class="codex-back process-close" type="button" aria-label="Close card processing">×</button><div><p class="eyebrow">Card processing</p><h2 id="process-title">Process card</h2></div><button class="codex-secondary process-resynchronize" type="button" hidden>Resynchronize</button></header>
             <div class="codex-tabs" role="tablist" aria-label="Processing library"><button type="button" data-process-tab="skills" aria-selected="true">Skills</button><button type="button" data-process-tab="pipelines" aria-selected="false">Pipelines</button></div>
             <div class="codex-library-controls">
               <label class="codex-library-search"><span aria-hidden="true">⌕</span><input class="process-search" type="search" placeholder="Search library" aria-label="Search processing library"></label>
@@ -639,7 +639,7 @@
 
         <dialog class="codex-modal pipelines-modal" aria-labelledby="pipelines-title">
           <section class="codex-sheet">
-            <header><button class="codex-back pipelines-close" type="button" aria-label="Close pipelines">×</button><div><p class="eyebrow">Library</p><h2 id="pipelines-title">Pipelines</h2></div><button class="primary-button pipeline-new" type="button">New</button></header>
+            <header><button class="codex-back pipelines-close" type="button" aria-label="Close pipelines">×</button><div><p class="eyebrow">Library</p><h2 id="pipelines-title">Pipelines</h2></div><div class="codex-header-actions"><button class="codex-secondary pipelines-resynchronize" type="button">Resynchronize</button><button class="primary-button pipeline-new" type="button">New</button></div></header>
             <div class="codex-library-controls">
               <label class="codex-library-search"><span aria-hidden="true">⌕</span><input class="pipelines-search" type="search" placeholder="Search pipelines" aria-label="Search pipelines"></label>
               <div class="pipelines-project-filters codex-filter-row" aria-label="Filter pipelines by project"></div>

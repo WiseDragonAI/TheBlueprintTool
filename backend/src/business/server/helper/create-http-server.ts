@@ -706,6 +706,18 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.end(JSON.stringify(exportFederatedPipelineSnapshot(localDecisionOsRoots())));
       return;
     }
+    if (!projectScope && url === '/api/federation/libraries/synchronize' && request.method === 'POST') {
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      try {
+        await synchronizeFederatedLibraries();
+        response.end(JSON.stringify({ ok: true, synchronizedPeerCount: federation.nodes().filter((node) => node.online).length }));
+      } catch (error) {
+        response.statusCode = 502;
+        response.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : 'Federated library synchronization failed.' }));
+      }
+      return;
+    }
     if (url === '/api/settings/codex-processes' && request.method === 'GET') {
       const settings = readDecisionOsSettings({ action_payload: { decisionOsRoot: masterDecisionOsRoot }, runtime_state: runtime }).settings as AnyRecord;
       const configured = normalizedConcurrentCodexProcesses(settings.maxConcurrentCodexProcesses) ?? 1;

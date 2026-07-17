@@ -27,7 +27,7 @@ test('mobile card detail keeps its three navigation controls in one row before t
   assert.match(html, /card-detail-actions[\s\S]*back-to-zone-button[\s\S]*process-card-button[\s\S]*thread-open-button[\s\S]*id="card-title"/);
   assert.match(styles, /\.card-detail-actions \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(styles, /\.card-detail-header h1 \{[^}]*width: 100%[^}]*font-size: clamp\(24px, 7vw, 34px\)/);
-  assert.match(mobile, /backButton\.replaceChildren\(document\.createTextNode\('← Back'\)\)/);
+  assert.match(mobile, /backButton\.replaceChildren\(backIcon, backLabel\)/);
 });
 
 test('dynamic navigation library actions use delegated event handling', () => {
@@ -96,6 +96,16 @@ test('global skills and pipelines read only the connection-synchronized local se
   assert.match(script, /state\.skills = \(serverSkills\.skills \|\| \[\]\)/);
   assert.match(script, /failedProjects: 0/);
   assert.doesNotMatch(script, /Choose the project whose (?:skill library|pipelines)/);
+});
+
+test('global skill and pipeline modals expose ordered manual federation synchronization', () => {
+  assert.match(html, /class="codex-secondary process-resynchronize"[^>]*>Resynchronize<\/button>/);
+  assert.match(html, /class="codex-secondary pipelines-resynchronize"[^>]*>Resynchronize<\/button>/);
+  assert.match(script, /jsonRequest\('\/api\/federation\/libraries\/synchronize', \{ method: 'POST' \}\)/);
+  assert.match(script, /Synchronizing skills, then pipelines…/);
+  assert.match(script, /await loadGlobalLibraries\(\)/);
+  assert.match(script, /setBusy\(button, true\)/);
+  assert.match(script, /setBusy\(button, false\)/);
 });
 
 test('library surfaces expose search, project filters, tag filters, and clearing', () => {

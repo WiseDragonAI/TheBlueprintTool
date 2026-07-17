@@ -17,6 +17,7 @@ function globallyScoped(pathname: string): boolean {
     || pathname === '/api/codex/server-pipelines'
     || pathname.startsWith('/api/codex/server-pipelines/')
     || pathname === '/api/codex/server-skills'
+    || pathname === '/api/federation/libraries/synchronize'
     || pathname === '/api/server/restart';
 }
 

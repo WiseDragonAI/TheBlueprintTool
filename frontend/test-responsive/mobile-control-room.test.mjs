@@ -292,6 +292,16 @@ test('uses the full desktop pane and gives every Kanban column its own vertical 
   assert.match(styles, /\.control-task-column-list \{[^}]*min-height: 0;[^}]*overflow-y: auto;[^}]*overscroll-behavior: contain;[^}]*scrollbar-gutter: stable;/);
 });
 
+test('remembers and restores every Control Room column scroll position in runtime memory', () => {
+  assert.match(mobile, /const controlRoomColumnScrollTop = \{ queue: 0, exec: 0, backlog: 0 \}/);
+  assert.match(mobile, /function rememberControlRoomColumnScroll\(list\)[\s\S]*controlRoomColumnScrollTop\[column\] = Math\.max\(0, scrollTop\)[\s\S]*initializedControlRoomColumns\.add\(column\)/);
+  assert.match(mobile, /function captureControlRoomColumnScroll\(\) \{\s*if \(elements\['control-room-view'\]\.hidden\) return;/);
+  assert.match(mobile, /function renderControlRoom\(\) \{\s*captureControlRoomColumnScroll\(\);[\s\S]*replaceChildren\(\.\.\.columns\);\s*restoreControlRoomColumnScroll\(\);/);
+  assert.match(mobile, /list\.addEventListener\('scroll', \(\) => rememberControlRoomColumnScroll\(list\), \{ passive: true \}\)/);
+  assert.match(mobile, /list\.scrollTop = Math\.min\(controlRoomColumnScrollTop\[column\], maximum\)/);
+  assert.doesNotMatch(mobile, /(?:localStorage|sessionStorage).*controlRoomColumnScrollTop/);
+});
+
 test('delegates touch sorting and animation to vendored SortableJS', () => {
   assert.match(bootApplication, /sortable-1\.15\.7\.min\.js/);
   assert.match(mobile, /globalThis\.Sortable\.create\(list,/);
@@ -503,7 +513,7 @@ test('parses letter-prefixed card sections from the decision-os formatting contr
 });
 
 test('routes master-task cards back to the control room and regular cards back to their zone', () => {
-  assert.match(mobile, /backButton\.replaceChildren\(document\.createTextNode\('← Back'\)\)/);
+  assert.match(mobile, /backButton\.replaceChildren\(backIcon, backLabel\)/);
   assert.match(mobile, /backButton\.dataset\.destination = parsedTask\.masterTask \? 'control-room' : 'zone'/);
   assert.match(mobile, /const controlRoomDestination = event\.currentTarget\.dataset\.destination === 'control-room';[\s\S]*const destination = controlRoomDestination \? controlRoomPath\(state\.controlTab\) : zonePath/);
 });

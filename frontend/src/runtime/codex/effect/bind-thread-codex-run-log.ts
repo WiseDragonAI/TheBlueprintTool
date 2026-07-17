@@ -78,7 +78,15 @@ function consumeThreadRunSummary(input: { threadId: string; runId: string; summa
   void import('../../thread/effect/render-thread-codex-log.js').then(({ renderThreadCodexLog }) => renderThreadCodexLog());
 }
 
-type ThreadCodexRunLogIdentity = { projectId?: string; ledgerId: string; cardId: string; threadId: string; runId: string };
+type ThreadCodexRunLogIdentity = {
+  projectId?: string;
+  ledgerId: string;
+  cardId: string;
+  threadId: string;
+  runId: string;
+  expectedExecutionId?: string;
+  expectedStatus?: CardSkillRunSummary['status'];
+};
 
 export function bindThreadCodexRunLog(input: ThreadCodexRunLogIdentity): void {
   if (!input.ledgerId || !input.cardId || !input.threadId || !input.runId) return;
@@ -90,6 +98,8 @@ export function bindThreadCodexRunLog(input: ThreadCodexRunLogIdentity): void {
     ledgerId: input.ledgerId,
     cardId: input.cardId,
     runId: input.runId,
+    expectedExecutionId: input.expectedExecutionId,
+    expectedStatus: input.expectedStatus,
     consumerId: `thread-log:${input.threadId}`,
     onSummary: (summary) => consumeThreadRunSummary({ threadId: input.threadId, runId: input.runId, summary }),
   });

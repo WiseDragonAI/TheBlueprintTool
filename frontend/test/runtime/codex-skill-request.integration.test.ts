@@ -707,6 +707,61 @@ test('thread log consumer keeps captured project scope and unregisters before a 
   }
 });
 
+test('thread log consumer revalidates a terminal session when the card identifies a newer pending execution', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousWindow = (globalThis as unknown as { window?: unknown }).window;
+  const runId = 'codex-skill-6200-reopened-continuation';
+  const input = {
+    ledgerId: 'specs',
+    cardId: 'card-reopened-continuation',
+    runId,
+    consumerId: 'thread-log:thread-card-reopened-continuation',
+  };
+  const requests: string[] = [];
+  const received: string[] = [];
+  try {
+    (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
+    globalThis.fetch = (async (url: string) => {
+      requests.push(url);
+      const continuing = requests.length > 1;
+      return new Response(JSON.stringify({
+        ok: true,
+        active: false,
+        runId,
+        runKind: 'thread',
+        status: continuing ? 'pending' : 'complete',
+        executionId: continuing ? 'execution-new' : 'execution-old',
+        queuePosition: continuing ? 2 : null,
+        lineCount: 4,
+        nextSince: 4,
+        events: [],
+        diagnostics: [],
+        metadata: {},
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+
+    bindCardSkillRunLogConsumer({ ...input, onSummary: (summary) => received.push(`${summary.executionId}:${summary.status}`) });
+    await waitFor(() => received.length === 1);
+    assert.deepEqual(received, ['execution-old:complete']);
+    unbindCardSkillRunLogConsumer(input);
+
+    bindCardSkillRunLogConsumer({
+      ...input,
+      expectedExecutionId: 'execution-new',
+      expectedStatus: 'pending',
+      onSummary: (summary) => received.push(`${summary.executionId}:${summary.status}`),
+    });
+    assert.deepEqual(received, ['execution-old:complete']);
+    await waitFor(() => received.length === 2);
+    assert.deepEqual(received, ['execution-old:complete', 'execution-new:pending']);
+    assert.equal(requests.length, 2);
+  } finally {
+    unbindCardSkillRunLogConsumer(input);
+    globalThis.fetch = previousFetch;
+    (globalThis as unknown as { window?: unknown }).window = previousWindow;
+  }
+});
+
 test('thread log consumer delivers unavailable state before stopping its timer', async () => {
   const previousFetch = globalThis.fetch;
   try {

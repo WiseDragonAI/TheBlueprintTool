@@ -22,6 +22,7 @@ import { requestCodexPipelineRun } from './request-codex-pipeline-run.js';
 import { openPipelineEditor } from './render-pipeline-editor-modal.js';
 import { openPipelinesModal } from './render-pipelines-modal.js';
 import { openSkillLibraryEditor } from './render-skill-library-editor-modal.js';
+import { requestFederatedLibrarySynchronization } from './request-federated-library-synchronization.js';
 
 export type ProcessModalMode = 'pipelines' | 'skills';
 
@@ -43,12 +44,14 @@ export type ProcessModalState = {
   issues: readonly CodexPipelineStoreIssue[];
   loadingPipelines: boolean;
   loadingSkills: boolean;
+  synchronizingLibraries: boolean;
   processing: boolean;
   sourceContentMissing: boolean;
   metadataError: string;
   skillCatalogError: string;
   error: string;
   saveError: string;
+  synchronizationMessage: string;
 };
 
 export const processModalState: ProcessModalState = {
@@ -69,12 +72,14 @@ export const processModalState: ProcessModalState = {
   issues: [],
   loadingPipelines: false,
   loadingSkills: false,
+  synchronizingLibraries: false,
   processing: false,
   sourceContentMissing: false,
   metadataError: '',
   skillCatalogError: '',
   error: '',
   saveError: '',
+  synchronizationMessage: '',
 };
 
 let processLoadGeneration = 0;
@@ -437,6 +442,7 @@ function renderFeedback(): HTMLElement {
   if (processModalState.skillCatalogError) messages.push({ className: 'codex-form-error', text: processModalState.skillCatalogError });
   if (processModalState.error) messages.push({ className: 'codex-form-error', text: processModalState.error });
   if (processModalState.saveError) messages.push({ className: 'codex-form-error', text: processModalState.saveError });
+  if (processModalState.synchronizationMessage) messages.push({ className: 'codex-form-notice', text: processModalState.synchronizationMessage });
   for (const message of messages) {
     const line = document.createElement('p');
     line.className = message.className;
@@ -503,9 +509,19 @@ export function renderCardProcessModal(): void {
   subtitle.className = 'codex-modal-subtitle';
   subtitle.textContent = 'Run a reusable step pipeline or process this card with one skill.';
   copy.replaceChildren(kicker, title, subtitle);
+  const synchronize = button(
+    processModalState.synchronizingLibraries ? 'Synchronizing…' : 'Resynchronize',
+    () => { void resynchronizeProcessLibraries(); },
+    'ghost-button',
+    'process-resynchronize',
+  );
+  synchronize.disabled = processModalState.synchronizingLibraries;
   const close = button('×', closeCardProcessModal, 'plain-close', 'process-head-close');
   close.setAttribute('aria-label', 'Close Process card');
-  head.replaceChildren(copy, close);
+  const headActions = document.createElement('div');
+  headActions.className = 'codex-head-actions';
+  headActions.replaceChildren(synchronize, close);
+  head.replaceChildren(copy, headActions);
   const controls = renderDirectRunControls();
   processModal.replaceChildren(
     head,
@@ -546,12 +562,14 @@ export async function openCardProcessModal(cardId: string, initialMode: ProcessM
     issues: [],
     loadingPipelines: true,
     loadingSkills: true,
+    synchronizingLibraries: false,
     processing: false,
     sourceContentMissing: !hasProcessSourceContent(normalizedCardId),
     metadataError: '',
     skillCatalogError: '',
     error: '',
     saveError: '',
+    synchronizationMessage: '',
   });
   renderCardProcessModal();
   showProcessModal();
@@ -606,6 +624,53 @@ export function selectProcessSkill(skillName: string, rerender = true): void {
     processModal?.querySelector<HTMLButtonElement>(`[data-process-skill-name="${skillName}"]`)?.focus();
   }
   telemetry('codex-skill-selected', { cardId: processModalState.cardId, skillName });
+}
+
+export async function resynchronizeProcessLibraries(): Promise<boolean> {
+  if (processModalState.synchronizingLibraries || !processModalState.cardId) return false;
+  const generation = ++processLoadGeneration;
+  const cardId = processModalState.cardId;
+  const selectedPipelineId = processModalState.selectedPipelineId;
+  const selectedSkillName = processModalState.selectedSkillName;
+  processModalState.synchronizingLibraries = true;
+  processModalState.loadingPipelines = true;
+  processModalState.loadingSkills = true;
+  processModalState.error = '';
+  processModalState.synchronizationMessage = 'Synchronizing skills, then pipelines…';
+  renderCardProcessModal();
+  const synchronization = await requestFederatedLibrarySynchronization();
+  if (generation !== processLoadGeneration || cardId !== processModalState.cardId) return false;
+  if (!synchronization.ok) {
+    processModalState.synchronizingLibraries = false;
+    processModalState.loadingPipelines = false;
+    processModalState.loadingSkills = false;
+    processModalState.synchronizationMessage = '';
+    processModalState.error = synchronization.error || 'Could not synchronize federation libraries.';
+    renderCardProcessModal();
+    return false;
+  }
+  const [library, skillCatalog] = await Promise.all([loadCodexPipelines(), loadCodexSkillsResult()]);
+  if (generation !== processLoadGeneration || cardId !== processModalState.cardId) return false;
+  processModalState.synchronizingLibraries = false;
+  processModalState.loadingPipelines = false;
+  processModalState.loadingSkills = false;
+  processModalState.skills = skillCatalog.skills;
+  processModalState.skillCatalogError = skillCatalog.ok ? '' : skillCatalog.error || 'Could not load Codex skills.';
+  processModalState.pipelines = library.pipelines;
+  processModalState.steps = library.steps;
+  processModalState.invalidReferences = library.invalidReferences;
+  processModalState.issues = library.issues;
+  processModalState.metadataError = library.ok ? '' : library.error || 'Could not load saved pipelines.';
+  processModalState.selectedPipelineId = library.pipelines.find((pipeline) => pipeline.id === selectedPipelineId)?.id
+    ?? library.pipelines.find(pipelineCanRun)?.id
+    ?? library.pipelines[0]?.id
+    ?? '';
+  const nextSkill = skillCatalog.skills.find((skill) => skill.name === selectedSkillName) ?? skillCatalog.skills[0];
+  if (nextSkill) selectProcessSkill(nextSkill.name, false);
+  const peers = synchronization.synchronizedPeerCount;
+  processModalState.synchronizationMessage = `Skills and pipelines synchronized with ${peers} online ${peers === 1 ? 'node' : 'nodes'}.`;
+  renderCardProcessModal();
+  return library.ok && skillCatalog.ok;
 }
 
 export async function runSelectedPipeline(): Promise<boolean> {
