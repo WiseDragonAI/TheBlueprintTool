@@ -11,7 +11,7 @@ import { restoreThreadDraft, saveThreadDraft } from '../../src/runtime/thread/ef
 import { hydrateThreadViewportState, restoreThreadScrollPosition, saveThreadScrollPosition } from '../../src/runtime/thread/effect/persist-thread-scroll.js';
 import { pinThreadFeedToLastMessage, pinThreadSurfaceToBottom } from '../../src/runtime/thread/effect/pin-thread-feed-to-last-message.js';
 import { isThreadFollowingBottom, setThreadFollowBottom } from '../../src/runtime/thread/helper/thread-follow-bottom.js';
-import { renderThreadJumpButton } from '../../src/runtime/thread/effect/render-thread-jump-button.js';
+import { renderThreadJumpButton, suppressThreadScrollTrackingThroughNextFrame, syncThreadJumpButtonVisibility } from '../../src/runtime/thread/effect/render-thread-jump-button.js';
 import { renderThreadNotes } from '../../src/runtime/thread/effect/render-thread-notes.js';
 import { state } from '../../src/runtime/state.js';
 
@@ -495,6 +495,52 @@ test('render-thread-jump-button shows only when the thread viewport is away from
     (globalThis as unknown as { document: unknown }).document = previousDocument;
     (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = previousRequestAnimationFrame;
     state.threadId = '';
+    state.threadFollowBottomByThreadId = {};
+  }
+});
+
+test('render scroll suppression preserves a paused viewport while notes are replaced', () => {
+  const previousDocument = globalThis.document;
+  const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
+  const frameCallbacks: FrameRequestCallback[] = [];
+  const button = createTestElement('', 'button');
+  button.dataset.action = 'jump-thread-bottom';
+  const chat = {
+    scrollTop: 724,
+    scrollHeight: 1037,
+    clientHeight: 153,
+  };
+  (globalThis as unknown as { document: unknown }).document = {
+    querySelector(selector: string) {
+      if (selector === '.thread-panel .thread-conversation-scroll') return chat;
+      if (selector === '.thread-panel .thread-jump-bottom') return button;
+      return null;
+    }
+  };
+  (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = (callback: FrameRequestCallback) => {
+    frameCallbacks.push(callback);
+    return frameCallbacks.length;
+  };
+  try {
+    state.threadId = 'thread-reload';
+    state.threadScrollTopByThreadId = { 'thread-reload': 724 };
+    state.threadFollowBottomByThreadId = { 'thread-reload': false };
+    suppressThreadScrollTrackingThroughNextFrame('thread');
+
+    chat.scrollTop = 0;
+    syncThreadJumpButtonVisibility({ persistScroll: true });
+    assert.equal(state.threadScrollTopByThreadId['thread-reload'], 724);
+    assert.equal(isThreadFollowingBottom('thread-reload'), false);
+
+    while (frameCallbacks.length > 0) frameCallbacks.shift()?.(0);
+    chat.scrollTop = 500;
+    syncThreadJumpButtonVisibility({ persistScroll: true });
+    assert.equal(state.threadScrollTopByThreadId['thread-reload'], 500);
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+    (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = previousRequestAnimationFrame;
+    state.threadId = '';
+    state.threadScrollTopByThreadId = {};
     state.threadFollowBottomByThreadId = {};
   }
 });
