@@ -485,6 +485,7 @@ test('thread codex process route anchors the run widget on the source card and s
       () => eventCollector?.events.some((event) => event.reason === 'codex-thread-settled' && event.runId === body.run.id && event.status === 'complete') === true,
       'the ordinary thread settlement ledger event',
     );
+    assert.equal(eventCollector.events.some((event) => event.reason === 'codex-turn-started' && event.runId === body.run.id), true);
     const threadBeforePolling = readFileSync(threadPath, 'utf8');
     const lifecycleNotes = parseThreadMarkdown(threadBeforePolling).filter((note) => note.codexRunId === body.run.id);
     assert.deepEqual(lifecycleNotes, []);

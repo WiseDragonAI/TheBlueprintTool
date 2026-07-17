@@ -8,7 +8,7 @@ import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/re
 import { type NormalizedRunEvent } from '../helper/card-skill-run-event-types.js';
 import { normalizeCardSkillRunDiagnostic, normalizeCardSkillRunEvent } from '../helper/normalize-card-skill-run-event.js';
 import { readCardSkillRunEventLines } from '../helper/read-card-skill-run-event-lines.js';
-import { codexRunSegmentMetadata, latestCodexRunSegmentLog, latestCodexRunSegmentStartedAtMs, latestCodexRunSegmentStartLine, type CodexRunSegmentMetadata } from '../helper/codex-run-segment-marker.js';
+import { codexRunSegmentMetadata, isCodexRunMarkerLine, latestCodexRunSegmentLog, latestCodexRunSegmentStartedAtMs, latestCodexRunSegmentStartLine, type CodexRunSegmentMetadata } from '../helper/codex-run-segment-marker.js';
 import { readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import { readCodexProcessQueue } from '../helper/codex-process-queue.js';
 import { unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
@@ -33,6 +33,7 @@ function actionableCodexLog(log: string): string {
   const actionable: string[] = [];
   let suppressPatchContext = false;
   for (const line of lines) {
+    if (isCodexRunMarkerLine(line)) continue;
     if (NON_FATAL_APPLY_PATCH_VERIFICATION_DIAGNOSTIC.test(line)) {
       suppressPatchContext = true;
       continue;
