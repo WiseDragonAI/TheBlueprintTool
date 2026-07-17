@@ -706,6 +706,77 @@ test('direct canvas pointer down clears selection before pointer up', () => {
   assert.doesNotMatch(pointerUp, /targetKind === 'canvas' && moved < 4[\s\S]*clear-transient-selection/);
 });
 
+test('desktop master-task selection opens its thread and canvas deselection closes it', async () => {
+  installCanvasRuntimeDom();
+  const { handlePointerDown } = await import('../../src/runtime/gesture/controller/handle-pointer-down.js');
+  const previousState = {
+    activeLedger: state.activeLedger,
+    activeTool: state.activeTool,
+    pointer: state.pointer,
+    selection: state.selection,
+    threadId: state.threadId,
+    threadPanelOpen: state.threadPanelOpen,
+    voice: state.voice
+  };
+  const masterCard = canvasElement({ cardId: 'master-a' });
+  masterCard.className = 'card ledger-node';
+  const ordinaryCard = canvasElement({ cardId: 'card-b' });
+  ordinaryCard.className = 'card ledger-node';
+  canvasDom.content.append(masterCard, ordinaryCard);
+
+  try {
+    state.activeLedger = {
+      cards: [
+        { id: 'master-a', title: 'Master A', labels: ['master-task'] },
+        { id: 'card-b', title: 'Card B', labels: [] }
+      ],
+      annotations: [],
+      relationships: [],
+      notes: {}
+    };
+    state.activeTool = 'select';
+    state.pointer = null;
+    state.selection = { cardIds: [], zoneIds: [], groupIds: [] };
+    state.threadId = '';
+    state.threadPanelOpen = false;
+    state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
+
+    const masterPointer = canvasPointerEvent(40, 40);
+    (masterPointer as unknown as { target: CanvasFakeElement }).target = masterCard;
+    handlePointerDown(masterPointer);
+
+    assert.deepEqual(state.selection, { cardIds: ['master-a'], zoneIds: [], groupIds: [] });
+    assert.equal(state.threadId, 'thread-master-a');
+    assert.equal(state.threadPanelOpen, true);
+    assert.equal(canvasDom.threadPanel.hidden, false);
+
+    const ordinarySwitchPointer = canvasPointerEvent(180, 40);
+    (ordinarySwitchPointer as unknown as { target: CanvasFakeElement }).target = ordinaryCard;
+    handlePointerDown(ordinarySwitchPointer);
+
+    assert.deepEqual(state.selection, { cardIds: ['card-b'], zoneIds: [], groupIds: [] });
+    assert.equal(state.threadId, 'thread-card-b');
+    assert.equal(state.threadPanelOpen, true);
+
+    handlePointerDown(canvasPointerEvent(500, 400));
+
+    assert.deepEqual(state.selection, { cardIds: [], zoneIds: [], groupIds: [] });
+    assert.equal(state.threadId, '');
+    assert.equal(state.threadPanelOpen, false);
+    assert.equal(canvasDom.threadPanel.hidden, true);
+
+    const ordinaryClosedPointer = canvasPointerEvent(180, 40);
+    (ordinaryClosedPointer as unknown as { target: CanvasFakeElement }).target = ordinaryCard;
+    handlePointerDown(ordinaryClosedPointer);
+
+    assert.deepEqual(state.selection, { cardIds: ['card-b'], zoneIds: [], groupIds: [] });
+    assert.equal(state.threadId, 'thread-card-b');
+    assert.equal(state.threadPanelOpen, false);
+  } finally {
+    Object.assign(state, previousState);
+  }
+});
+
 test('plain pan pointer up does not force a full canvas rerender', () => {
   const pointerUp = source('frontend/src/runtime/gesture/controller/handle-pointer-up.ts');
   assert.match(pointerUp, /const pointerIntent = pointerSession\.intent/);
