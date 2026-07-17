@@ -230,7 +230,6 @@ body.menu-open .nav-scrim { opacity: 1; pointer-events: auto; }
 .task-actions button { flex: 0 0 auto; min-height: 44px; padding: 0 12px; }
 .task-actions button:first-child { border-color: var(--accent); }
 .control-empty { padding: 70px 20px; color: var(--muted); text-align: center; }
-.control-diagnostics { margin-top: 20px; padding: 12px; color: var(--danger); white-space: pre-wrap; font-size: 12px; }
 .control-tabs { position: fixed; inset: auto 0 0; z-index: 25; display: grid; grid-template-columns: repeat(4, 1fr); padding: 7px max(10px, env(safe-area-inset-right)) max(7px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); border-top: 1px solid var(--line); background: rgba(9,10,12,.97); backdrop-filter: blur(18px); }
 .control-tabs { gap: 7px; }
 .control-tabs button { min-height: 52px; color: var(--muted); }
@@ -649,7 +648,7 @@ html[data-task-back-handoff="true"]::view-transition-new(root) { animation: task
   .ledger-nav { position: sticky; top: 64px; z-index: 10; width: auto; height: calc(100dvh - 64px); padding: 22px 14px; transform: none; }
   .content { padding: 34px 30px 70px; }
   .content:has(> .control-room:not([hidden])) { max-width: none; height: calc(100dvh - 64px); padding-bottom: 18px; overflow: hidden; }
-  .control-room:not([hidden]) { display: grid; grid-template-rows: max-content minmax(0, 1fr) auto auto auto; min-height: 0; height: 100%; padding-bottom: 0; }
+  .control-room:not([hidden]) { display: grid; grid-template-rows: max-content minmax(0, 1fr) auto auto; min-height: 0; height: 100%; padding-bottom: 0; }
   .control-command { position: static; z-index: 15; display: grid; align-self: start; align-content: start; gap: 12px; height: fit-content; margin: -34px -30px 20px; padding: 22px 30px 16px; border-bottom: 1px solid var(--line); background: rgba(9,10,12,.96); backdrop-filter: blur(18px); }
   .control-sticky { position: static; z-index: auto; display: grid; align-content: start; gap: 12px; margin: 0; padding: 0; border: 0; background: transparent; backdrop-filter: none; }
   .control-tabs { display: none; }

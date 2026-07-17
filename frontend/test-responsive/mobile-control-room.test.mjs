@@ -277,6 +277,9 @@ test('renders every Control Room task as the same direct-link card without discl
   const row = mobile.slice(mobile.indexOf('function taskRow('), mobile.indexOf('function renderControlRoom()'));
   assert.doesNotMatch(row, /aria-expanded|control-task-details|task-chevron|subtask-row/);
   assert.doesNotMatch(styles, /control-task-details|task-chevron/);
+  assert.doesNotMatch(html, /control-diagnostics|Markdown diagnostics/);
+  assert.doesNotMatch(mobile, /control-diagnostics/);
+  assert.doesNotMatch(styles, /control-diagnostics/);
   assert.match(row, /article\.append\(summary\);[\s\S]*return article;/);
   assert.match(mobile, /\['queue', 'exec', 'backlog'\]\.map/);
   assert.match(styles, /grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
@@ -285,7 +288,7 @@ test('renders every Control Room task as the same direct-link card without discl
 
 test('uses the full desktop pane and gives every Kanban column its own vertical scroll', () => {
   assert.match(styles, /\.content:has\(> \.control-room:not\(\[hidden\]\)\) \{[^}]*max-width: none;[^}]*height: calc\(100dvh - 64px\);[^}]*overflow: hidden;/);
-  assert.match(styles, /\.control-room:not\(\[hidden\]\) \{[^}]*grid-template-rows: max-content minmax\(0, 1fr\) auto auto auto;[^}]*min-height: 0;[^}]*height: 100%;/);
+  assert.match(styles, /\.control-room:not\(\[hidden\]\) \{[^}]*grid-template-rows: max-content minmax\(0, 1fr\) auto auto;[^}]*min-height: 0;[^}]*height: 100%;/);
   assert.match(styles, /\.control-command \{[^}]*position: static;/);
   assert.doesNotMatch(styles, /\.control-command \{[^}]*top: 64px;/);
   assert.match(styles, /\.control-task-list \{[^}]*align-items: stretch;[^}]*min-height: 0;/);
