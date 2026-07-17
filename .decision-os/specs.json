@@ -8214,13 +8214,14 @@
       },
       "facts": [],
       "fields": [],
-      "codexThreadRunId": "codex-skill-1784208602199-96ff0f80",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784208602199-96ff0f80.md",
+      "codexThreadRunId": "codex-skill-1784262780355-9907b20e",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784262780355-9907b20e.md",
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
       "labels": [
         "master-task"
-      ]
+      ],
+      "codexActiveRunId": "codex-skill-1784262780355-9907b20e"
     },
     {
       "id": "card-codex-skill-1784022826105-454fe26f",
@@ -10494,6 +10495,8 @@
         "desktop",
         "keyboard",
         "task-list",
+        "implemented",
+        "verified",
         "master-task"
       ],
       "x": -10402,
@@ -10507,8 +10510,10 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784208710216-a4e8be86",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784208710216-a4e8be86.md"
+      "codexQueuedPipelineRunId": "codex-skill-1784227716339-dbce2763",
+      "codexQueuedRunId": "codex-skill-1784227716339-dbce2763",
+      "codexThreadRunId": "codex-skill-1784262523077-f417beea",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784262523077-f417beea.md"
     },
     {
       "id": "card-f6904e45-8e15-4691-9619-b17165567797",
@@ -10561,7 +10566,7 @@
       "title": "Fix desktop thread image URL regression",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "master-task"
       ],
@@ -10576,20 +10581,22 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784208762343-b3ab8028",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784208762343-b3ab8028.md"
+      "codexThreadRunId": "codex-skill-1784263107999-cc8659e8",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784263107999-cc8659e8.md"
     },
     {
       "id": "card-a71a1180-dbe0-4094-ac4f-d57f00ee7304",
       "title": "Keep desktop task detail visible beside its thread",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "frontend",
         "bug",
         "desktop",
         "code",
+        "implemented",
+        "verified",
         "subtask"
       ],
       "x": -10012,
@@ -10607,12 +10614,14 @@
       "title": "Restore responsive task thread shortcuts",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "frontend",
         "bug",
         "keyboard",
         "code",
+        "implemented",
+        "verified",
         "subtask"
       ],
       "x": -9632,
@@ -10630,12 +10639,14 @@
       "title": "Cover desktop split layout and shortcut routing in the browser",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "frontend",
         "browser",
         "regression",
         "test",
+        "implemented",
+        "verified",
         "subtask"
       ],
       "x": -10012,
@@ -10653,7 +10664,7 @@
       "title": "Normalize project-scoped pasted-image references",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "subtask"
       ],
@@ -10672,7 +10683,7 @@
       "title": "Verify desktop pasted-image rendering and persistence",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "subtask"
       ],
@@ -10862,6 +10873,323 @@
       "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
       "codexPipelineStepName": "retrospect-and-close-task",
       "codexSkillName": "retrospect-and-close-task"
+    },
+    {
+      "id": "card-codex-skill-1784227716339-dbce2763",
+      "title": "task-dependency result",
+      "cardType": "codex-skill-run",
+      "x": -9946,
+      "y": 92148,
+      "w": 700,
+      "h": 260,
+      "status": "todo",
+      "codexRunId": "codex-skill-1784227716339-dbce2763",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-codex-skill-1784227716339-dbce2763.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784227716339-dbce2763",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784227716339-dbce2763.md",
+      "codexPipelineRunId": "codex-skill-1784227716339-dbce2763",
+      "codexPipelineName": "task-dependency run",
+      "codexPipelineStepId": "temporary-step-task-dependency",
+      "codexPipelineStepName": "task-dependency",
+      "codexSkillName": "task-dependency"
+    },
+    {
+      "id": "card-9788570b-a768-4abd-b18c-efa900169dd6",
+      "title": "Synchronize desktop master-task and thread-panel lifecycle",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 95208,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-9788570b-a768-4abd-b18c-efa900169dd6.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784262890285-4bef1068",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784262890285-4bef1068.md"
+    },
+    {
+      "id": "card-cf200179-fb3b-4bd6-8914-6a701f60cb5f",
+      "title": "Bug: Desktop Shift+X voice handoff",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "frontend",
+        "bug",
+        "desktop",
+        "keyboard",
+        "voice",
+        "task-list",
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 96228,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-cf200179-fb3b-4bd6-8914-6a701f60cb5f.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784262936662-608c4459",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784262936662-608c4459.md"
+    },
+    {
+      "id": "card-97b098f2-63ea-4f03-af18-e96cb175f8d6",
+      "title": "Synchronize master-task selection with the thread panel",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 95208,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-97b098f2-63ea-4f03-af18-e96cb175f8d6.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-a0f30885-3c71-43a3-88c1-9c1eb7bc059b",
+      "title": "Add desktop master-task thread lifecycle regression coverage",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 95208,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-a0f30885-3c71-43a3-88c1-9c1eb7bc059b.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-7d22c622-303a-46b6-8690-3f7ab17cbf91",
+      "title": "Verify the complete desktop master-task interaction",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 95618,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-7d22c622-303a-46b6-8690-3f7ab17cbf91.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-c940a1b9-685c-4f61-a7ad-4110de9ba0d9",
+      "title": "Implement desktop Shift+X accepted-submission navigation",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "frontend",
+        "bug",
+        "desktop",
+        "keyboard",
+        "voice",
+        "code",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 96228,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-c940a1b9-685c-4f61-a7ad-4110de9ba0d9.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-d627c046-45d5-42a3-8d98-94de093fc305",
+      "title": "Add desktop Shift+X handoff regression coverage",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "frontend",
+        "bug",
+        "desktop",
+        "keyboard",
+        "voice",
+        "test",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 96228,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-d627c046-45d5-42a3-8d98-94de093fc305.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-1fccd73d-767a-4c5d-b4f7-13ceacf45f78",
+      "title": "Verify served desktop voice handoff and background run",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "frontend",
+        "bug",
+        "desktop",
+        "keyboard",
+        "voice",
+        "scenario",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 96638,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-1fccd73d-767a-4c5d-b4f7-13ceacf45f78.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-ecc57811-4f45-4315-bb3d-d3a951c61f3b",
+      "title": "Create Server-Wide Pipelines",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "implementation",
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 97248,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-ecc57811-4f45-4315-bb3d-d3a951c61f3b.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784263248603-a5933f30",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784263248603-a5933f30.md"
+    },
+    {
+      "id": "card-fff8809f-bbac-409f-83f5-7eedaeb3bd3a",
+      "title": "Resolve server-owned pipelines across managed projects",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "implementation",
+        "code",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 97248,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-fff8809f-bbac-409f-83f5-7eedaeb3bd3a.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-d169d6ee-f916-4ee9-a50e-b39d28c686b1",
+      "title": "Enable server pipeline creation in the global library",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "implementation",
+        "code",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 97248,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-d169d6ee-f916-4ee9-a50e-b39d28c686b1.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-adbcc9f0-9838-45ad-8e48-c127b8d3c26f",
+      "title": "Add server-pipeline catalog and UI regression coverage",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "implementation",
+        "test",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 97658,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-adbcc9f0-9838-45ad-8e48-c127b8d3c26f.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-3c921548-1f55-4331-be45-823b4e5aa3ab",
+      "title": "Verify the served server-wide pipeline workflow",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "implementation",
+        "scenario",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 97658,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-3c921548-1f55-4331-be45-823b4e5aa3ab.md"
+      },
+      "facts": [],
+      "fields": []
     }
   ],
   "relationships": [
@@ -11842,6 +12170,72 @@
       "from": "card-a5950529-82c0-4e6f-880b-0e95f0b81ffc",
       "to": "card-codex-skill-1784216447040-eff225f5",
       "label": "retrospect-and-close-task"
+    },
+    {
+      "id": "rel-codex-skill-1784227716339-dbce2763-1",
+      "from": "card-a4c81cea-0c42-4221-9891-fe57013a4149",
+      "to": "card-codex-skill-1784227716339-dbce2763",
+      "label": "task-dependency"
+    },
+    {
+      "id": "rel-ba0277ff-b17c-40ac-8177-743222f6960e",
+      "from": "card-9788570b-a768-4abd-b18c-efa900169dd6",
+      "to": "card-97b098f2-63ea-4f03-af18-e96cb175f8d6",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-1e2cd588-5c94-4cb8-8598-e1f32181be7d",
+      "from": "card-9788570b-a768-4abd-b18c-efa900169dd6",
+      "to": "card-a0f30885-3c71-43a3-88c1-9c1eb7bc059b",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-a342d5cb-b248-4c3c-8a9a-f98fb3e5b1d6",
+      "from": "card-9788570b-a768-4abd-b18c-efa900169dd6",
+      "to": "card-7d22c622-303a-46b6-8690-3f7ab17cbf91",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-d447303a-6a0f-4b3c-82ae-6c42bc8f1a34",
+      "from": "card-cf200179-fb3b-4bd6-8914-6a701f60cb5f",
+      "to": "card-c940a1b9-685c-4f61-a7ad-4110de9ba0d9",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-c9258e49-2bac-4cb1-9331-06f4a4fec036",
+      "from": "card-cf200179-fb3b-4bd6-8914-6a701f60cb5f",
+      "to": "card-d627c046-45d5-42a3-8d98-94de093fc305",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-aeb04e16-3b70-4043-8e8d-209577eb97ae",
+      "from": "card-cf200179-fb3b-4bd6-8914-6a701f60cb5f",
+      "to": "card-1fccd73d-767a-4c5d-b4f7-13ceacf45f78",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-4b49f1e2-f784-4a5f-9591-1ca7b0059585",
+      "from": "card-ecc57811-4f45-4315-bb3d-d3a951c61f3b",
+      "to": "card-fff8809f-bbac-409f-83f5-7eedaeb3bd3a",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-54e7e1a2-2eb0-41f1-a1f3-6062eaf01405",
+      "from": "card-ecc57811-4f45-4315-bb3d-d3a951c61f3b",
+      "to": "card-d169d6ee-f916-4ee9-a50e-b39d28c686b1",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-567df32c-ecc4-407a-99d1-04164c31b09f",
+      "from": "card-ecc57811-4f45-4315-bb3d-d3a951c61f3b",
+      "to": "card-adbcc9f0-9838-45ad-8e48-c127b8d3c26f",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-b1cb5c65-b6ca-4ead-b6a6-510b362286cc",
+      "from": "card-ecc57811-4f45-4315-bb3d-d3a951c61f3b",
+      "to": "card-3c921548-1f55-4331-be45-823b4e5aa3ab",
+      "label": "subtask"
     }
   ],
   "annotations": [
@@ -12940,6 +13334,36 @@
       "color": "#a78bfa",
       "label": "Quick voice task comments",
       "comments": []
+    },
+    {
+      "id": "zone-19452299-ba90-46b1-a73e-f9701e9e618c",
+      "x": -10462,
+      "y": 95148,
+      "width": 1200,
+      "height": 900,
+      "color": "#fb7185",
+      "label": "Desktop master-task thread lifecycle",
+      "comments": []
+    },
+    {
+      "id": "zone-1380019f-5fce-4046-a7c2-df416b81cb6a",
+      "x": -10462,
+      "y": 96168,
+      "width": 1200,
+      "height": 900,
+      "color": "#fb7185",
+      "label": "Desktop Shift+X voice handoff",
+      "comments": []
+    },
+    {
+      "id": "zone-38437585-8499-47fd-a7bd-8ad240c51d9b",
+      "x": -10462,
+      "y": 97188,
+      "width": 1200,
+      "height": 900,
+      "color": "#fb7185",
+      "label": "Create Server-Wide Pipelines",
+      "comments": []
     }
   ],
   "notes": {},
@@ -13061,7 +13485,11 @@
     "thread-card-7ee15497-0a6e-4d5e-a8fd-cd983b50a380": ".decision-os/threads/specs/thread-card-7ee15497-0a6e-4d5e-a8fd-cd983b50a380.md",
     "thread-card-f6904e45-8e15-4691-9619-b17165567797": ".decision-os/threads/specs/thread-card-f6904e45-8e15-4691-9619-b17165567797.md",
     "thread-card-a5950529-82c0-4e6f-880b-0e95f0b81ffc": ".decision-os/threads/specs/thread-card-a5950529-82c0-4e6f-880b-0e95f0b81ffc.md",
-    "thread-card-codex-skill-1784216447040-eff225f5": ".decision-os/threads/specs/thread-card-codex-skill-1784216447040-eff225f5.md"
+    "thread-card-codex-skill-1784216447040-eff225f5": ".decision-os/threads/specs/thread-card-codex-skill-1784216447040-eff225f5.md",
+    "thread-card-codex-skill-1784227716339-dbce2763": ".decision-os/threads/specs/thread-card-codex-skill-1784227716339-dbce2763.md",
+    "thread-card-9788570b-a768-4abd-b18c-efa900169dd6": ".decision-os/threads/specs/thread-card-9788570b-a768-4abd-b18c-efa900169dd6.md",
+    "thread-card-cf200179-fb3b-4bd6-8914-6a701f60cb5f": ".decision-os/threads/specs/thread-card-cf200179-fb3b-4bd6-8914-6a701f60cb5f.md",
+    "thread-card-ecc57811-4f45-4315-bb3d-d3a951c61f3b": ".decision-os/threads/specs/thread-card-ecc57811-4f45-4315-bb3d-d3a951c61f3b.md"
   },
   "deletedNoteIds": {
     "thread-card-7074d33a-39da-42a1-b470-673cbe221def": [
