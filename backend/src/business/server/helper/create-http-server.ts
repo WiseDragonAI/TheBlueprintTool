@@ -13,6 +13,7 @@ import { continueQueuedVoiceCodexAfterRun, readVoiceTranscriptionStatusControlle
 import { resolveDecisionOsRoot } from './resolve-decision-os-root.js';
 import { readDecisionOsSettings } from './read-decision-os-settings.js';
 import { normalizedConcurrentCodexProcesses, saveCodexProcessSettings } from './save-codex-process-settings.js';
+import { saveFederationSettings } from './save-federation-settings.js';
 import { readRequestBuffer } from './read-request-buffer.js';
 import { parseMultipartFormData } from './parse-multipart-form-data.js';
 import { contentTypeFor } from './content-type-for.js';
@@ -58,6 +59,7 @@ import { createControlRoomProjectionStore } from './control-room-projection-stor
 import { ledgerCanvasProjection, ledgerCardProjection, ledgerNavigationProjection, ledgerSearchProjection, ledgerThreadProjection } from './ledger-read-models.js';
 import { ensureProjectsCanvasDocument } from './ensure-projects-canvas-document.js';
 import { createFederationNodeConnector } from '../../federation/helper/federation-node-connector.js';
+import { federatedControlRoomProjection } from './federated-control-room-projection.js';
 
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
@@ -206,6 +208,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   };
   const projectContexts = new Map<string, ProjectContext>();
   let controlRoomProjectionStore: ReturnType<typeof createControlRoomProjectionStore> | null = null;
+  let federation: ReturnType<typeof createFederationNodeConnector> | null = null;
   const globalCodexProcessCapacity = (): number => {
     const settings = runtime.decisionOsSettings && typeof runtime.decisionOsSettings === 'object' ? runtime.decisionOsSettings as AnyRecord : {};
     return normalizedConcurrentCodexProcesses(process.env.CODEX_MAX_CONCURRENT_PROCESSES ?? settings.maxConcurrentCodexProcesses ?? 1) ?? 1;
@@ -287,6 +290,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       controlRoomProjectionStore?.invalidate(projectId);
       revisions.advance(String(scopedEvent.ledgerId));
       broadcast(`event: card-content-change\ndata: ${JSON.stringify({ ...scopedEvent, projectId })}\n\n`);
+      federation?.publishContentChange();
     };
     const publishLedger = (event: AnyRecord): void => {
       controlRoomProjectionStore?.invalidate(projectId);
@@ -294,6 +298,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const ledgerId = String(event.ledgerId ?? '');
       if (ledgerId) revisions.advance(ledgerId);
       broadcast(`event: ledger-content-change\ndata: ${JSON.stringify({ ...event, projectId })}\n\n`);
+      federation?.publishContentChange();
     };
     projectRuntime.onPipelineLedgerChange = publishLedger;
     projectRuntime.scheduleCodexProcesses = scheduleGlobalCodexProcesses;
@@ -335,10 +340,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const projectCatalogStore = createProjectCatalogStore({ masterRoot, masterDecisionOsRoot });
   const projectCatalog = () => projectCatalogStore.projects();
   let federationServerPort = port;
-  const federation = createFederationNodeConnector({
+  federation = createFederationNodeConnector({
     settings: runtime.decisionOsSettings,
     localProjects: projectCatalog,
     localServerUrl: () => `http://127.0.0.1:${federationServerPort}`,
+    onRemoteContentChange: () => {
+      for (const client of globalContentEventClients) client.write('event: ledger-content-change\ndata: {"remote":true}\n\n');
+    },
   });
   Object.defineProperty(runtime, 'federationNodeConnector', { value: federation, configurable: true, enumerable: false });
   controlRoomProjectionStore = createControlRoomProjectionStore({
@@ -417,14 +425,42 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         if (project.available) projectContext(project.decisionOsRoot, project.id);
       }
       const projection = controlRoomProjectionStore.get(projects.filter((project) => project.available));
-      const etag = `"${String(projection.fingerprint)}"`;
+      const localOwner = federation.localOwner();
+      const requestUrl = new URL(request.url ?? '/api/control-room', 'http://127.0.0.1');
+      const remoteDiagnostics: AnyRecord[] = [];
+      const remoteProjections = requestUrl.searchParams.get('localOnly') === '1' ? [] : await Promise.all(federation.nodes()
+        .filter((node) => node.online)
+        .map(async (node) => {
+          const result = await federation.request(node.nodeId, '/api/control-room?localOnly=1');
+          if (result.status !== 200) {
+            remoteDiagnostics.push({ valid: false, ownerNodeId: node.nodeId, message: `${node.nodeLabel} Control Room returned HTTP ${result.status}.` });
+            return null;
+          }
+          try {
+            return {
+              projection: JSON.parse(result.body.toString('utf8')) as AnyRecord,
+              owner: { nodeId: node.nodeId, nodeLabel: node.nodeLabel, remote: true },
+            };
+          } catch {
+            remoteDiagnostics.push({ valid: false, ownerNodeId: node.nodeId, message: `${node.nodeLabel} returned an invalid Control Room projection.` });
+            return null;
+          }
+        }));
+      const publicProjection = federatedControlRoomProjection({
+        localProjection: projection,
+        localOwner: { nodeId: localOwner.ownerNodeId, nodeLabel: localOwner.ownerNodeLabel, remote: false },
+        remoteProjections: remoteProjections.filter((entry): entry is { projection: AnyRecord; owner: { nodeId: string; nodeLabel: string; remote: boolean } } => entry !== null),
+        diagnostics: remoteDiagnostics,
+      });
+      const etag = `"${String(publicProjection.fingerprint)}"`;
       if (request.headers['if-none-match'] === etag) {
         response.statusCode = 304;
         response.setHeader('etag', etag);
         response.end();
         return;
       }
-      const { dependencies: _dependencies, projectSlices: _projectSlices, ...publicProjection } = projection;
+      delete publicProjection.dependencies;
+      delete publicProjection.projectSlices;
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
       response.setHeader('etag', etag);
@@ -458,6 +494,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       context.watcher.ignoreNext(ledgerPath);
       writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
       context.watcher.refreshOwnership();
+      federation?.publishContentChange();
       activeResponse.setHeader(ledgerRevisionHeader, String(ledgerRevisions.advance(ledgerId)));
       activeResponse.end(JSON.stringify(hydrateLedgerCardContent(ledger, activeDecisionOsRoot)));
     };
@@ -467,6 +504,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       context.watcher.ignoreNext(ledgerPath);
       writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
       context.watcher.refreshOwnership();
+      federation?.publishContentChange();
       const revision = ledgerRevisions.advance(ledgerId);
       const cardId = String(mutation.cardPatch?.id ?? mutation.card?.id ?? mutation.cardId ?? mutation.masterTaskId ?? '');
       const threadId = String(mutation.note?.threadId ?? (mutation.action === 'create-card' && cardId ? `thread-${cardId}` : ''));
@@ -534,9 +572,31 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.end(JSON.stringify(result));
       return;
     }
-    if (url === '/decision-os/projects' && request.method === 'GET') {
+    if (url === '/api/settings/federation' && request.method === 'GET') {
+      response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
-      response.end(JSON.stringify({ projects: [...projects, ...federation.remoteProjects()] }));
+      response.end(JSON.stringify({ ok: true, ...federation.status() }));
+      return;
+    }
+    if (url === '/api/settings/federation' && request.method === 'PATCH') {
+      const bodyBuffer = await readRequestBuffer(request);
+      let body: AnyRecord = {};
+      try { body = JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord; } catch { body = {}; }
+      const result = saveFederationSettings({ decisionOsRoot: masterDecisionOsRoot, runtime, value: body });
+      if (result.ok === true) federation.reconfigure(result.settings);
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
+      response.end(JSON.stringify(result.ok === true ? { ok: true, ...federation.status() } : result));
+      return;
+    }
+    if (url === '/decision-os/projects' && request.method === 'GET') {
+      const localOwner = federation.localOwner();
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ projects: [
+        ...projects.map((project) => ({ ...project, ...localOwner, remote: false, localProjectId: project.id })),
+        ...federation.remoteProjects(),
+      ] }));
       return;
     }
     if (url === '/decision-os/projects-canvas' && request.method === 'GET') {

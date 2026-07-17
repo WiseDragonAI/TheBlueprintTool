@@ -14,6 +14,7 @@ import { projectSettingsValues, saveProjectSettingsRequest } from './project-set
 import { isCardEditingKeyboardTarget } from '/src/runtime/input/helper/is-card-editing-keyboard-target.js';
 import { committedProjectColor, hexToHsv, hsvToHex, projectColorPickerGradients } from './project-color-picker.js';
 import { codexProcessLimitRange, loadCodexProcessSettings, saveCodexProcessSettings, stepCodexProcessLimit } from './codex-settings.js';
+import { loadFederationSettings, saveFederationSettings } from './federation-settings.js';
 import { createProjectRequest } from './project-creation.js';
 import { installProjectRequestScope, projectScopedRequestPath } from '/src/runtime/project/helper/project-request-scope.js';
 
@@ -44,11 +45,14 @@ const elements = Object.fromEntries([
   'overview-view', 'overview-summary', 'overview-ledgers', 'ledger-view', 'ledger-title', 'ledger-summary',
   'zone-list', 'zone-view', 'zone-title', 'zone-summary', 'card-search', 'card-list',
   'no-results', 'card-view', 'card-title', 'card-body', 'control-room-view', 'control-project-filters', 'control-filters',
-  'control-task-list', 'control-empty', 'control-diagnostics', 'codex-settings-limit', 'codex-settings-message'
+  'control-task-list', 'control-empty', 'control-diagnostics', 'codex-settings-limit', 'codex-settings-message',
+  'federation-connection-status', 'federation-peer-list', 'federation-settings-message'
 ].map((id) => [id, document.getElementById(id)]));
 
 const asText = (value) => value == null ? '' : typeof value === 'string' ? value : JSON.stringify(value, null, 2);
 const defaultAccent = '#38d9e8';
+const projectOwnerLabel = (project) => project.ownerNodeLabel || project.ownerNodeId || 'This server';
+const projectPresenceLabel = (project) => `${projectOwnerLabel(project)} · ${project.online === false ? 'Offline' : 'Online'}`;
 const routeParts = () => parseProjectScope(location.pathname)?.segments ?? [];
 const creationModal = document.querySelector('.creation-modal');
 const deleteMasterTaskModal = document.querySelector('.delete-master-task-modal');
@@ -467,6 +471,57 @@ function renderSettings() {
   renderCodexProcessLimit(elements['codex-settings-limit'].value);
   setView('settings-view');
   void loadCodexSettings();
+  void loadFederationConnectionSettings();
+}
+
+function renderFederationConnection(settings) {
+  const form = document.querySelector('.federation-settings-form');
+  form.elements.relayUrl.value = settings.relayUrl || '';
+  form.elements.federationId.value = settings.federationId || '';
+  form.elements.nodeId.value = settings.nodeId || '';
+  form.elements.nodeLabel.value = settings.nodeLabel || '';
+  form.elements.nodeCredential.value = '';
+  elements['federation-connection-status'].textContent = settings.connected ? 'Connected' : settings.configured ? 'Connecting' : 'Not configured';
+  elements['federation-connection-status'].dataset.connected = String(Boolean(settings.connected));
+  elements['federation-peer-list'].replaceChildren(...(settings.peers || []).map((peer) => {
+    const row = document.createElement('div');
+    row.className = 'federation-peer';
+    row.innerHTML = '<span><strong></strong><br><small></small></span><span class="federation-peer-state"></span>';
+    row.querySelector('strong').textContent = peer.nodeLabel || peer.nodeId;
+    row.querySelector('small').textContent = `${peer.nodeId} · ${peer.projectCount} ${peer.projectCount === 1 ? 'project' : 'projects'}`;
+    row.querySelector('.federation-peer-state').textContent = peer.online ? 'Online' : 'Offline';
+    row.querySelector('.federation-peer-state').dataset.online = String(Boolean(peer.online));
+    return row;
+  }));
+  document.querySelector('.federation-settings-disconnect').disabled = !settings.configured;
+}
+
+async function loadFederationConnectionSettings() {
+  elements['federation-settings-message'].textContent = 'Loading…';
+  try {
+    renderFederationConnection(await loadFederationSettings(fetch));
+    elements['federation-settings-message'].textContent = '';
+  } catch (error) {
+    elements['federation-settings-message'].textContent = error instanceof Error ? error.message : 'Could not load federation settings.';
+  }
+}
+
+async function submitFederationSettings(enabled = true) {
+  const form = document.querySelector('.federation-settings-form');
+  const buttons = [...form.querySelectorAll('button')];
+  buttons.forEach((button) => { button.disabled = true; });
+  elements['federation-settings-message'].textContent = enabled ? 'Connecting…' : 'Disconnecting…';
+  try {
+    const values = Object.fromEntries(new FormData(form));
+    const result = await saveFederationSettings(fetch, { enabled, ...values });
+    renderFederationConnection(result);
+    elements['federation-settings-message'].textContent = enabled ? 'Settings saved. Connection is updating.' : 'Federation disconnected.';
+    await loadRoute();
+  } catch (error) {
+    elements['federation-settings-message'].textContent = error instanceof Error ? error.message : 'Could not save federation settings.';
+  } finally {
+    buttons.forEach((button) => { button.disabled = false; });
+  }
 }
 
 async function submitCodexProcessSettings() {
@@ -500,11 +555,11 @@ function renderProjects() {
     button.innerHTML = '<span class="project-card-copy"><span class="project-card-heading"><strong></strong><small></small></span><span class="project-card-description"></span><code></code></span><span class="row-arrow">›</span>';
     button.querySelector('strong').textContent = project.name;
     const badge = button.querySelector('small');
-    badge.hidden = !project.remote;
-    badge.textContent = project.online ? (project.ownerNodeLabel || project.ownerNodeId) : 'Owner offline';
+    badge.hidden = false;
+    badge.textContent = projectPresenceLabel(project);
     button.querySelector('.project-card-description').textContent = project.description || 'No description provided.';
-    button.querySelector('code').textContent = project.remote ? `Owned by ${project.ownerNodeLabel || project.ownerNodeId}` : project.relativePath;
-    button.setAttribute('aria-label', project.name);
+    button.querySelector('code').textContent = `Owned by ${projectOwnerLabel(project)} · ${project.id}`;
+    button.setAttribute('aria-label', `${project.name}, ${projectPresenceLabel(project)}`);
     button.disabled = project.remote && !project.online;
     if (!button.disabled) button.addEventListener('click', () => navigate(projectPath(project.id)));
     return button;
@@ -527,9 +582,9 @@ function renderProjectDetail(project) {
   elements['project-detail-color'].style.setProperty('--project-color', project.color);
   elements['project-detail-color'].style.backgroundColor = project.color;
   elements['project-detail-status'].textContent = project.remote && !project.online
-    ? 'Owner offline'
-    : `${project.ledgers.length} ${project.ledgers.length === 1 ? 'ledger' : 'ledgers'}`;
-  elements['project-detail-path'].textContent = project.remote ? `Owned by ${project.ownerNodeLabel || project.ownerNodeId}` : project.relativePath;
+    ? `${projectOwnerLabel(project)} · Offline`
+    : `${projectPresenceLabel(project)} · ${project.ledgers.length} ${project.ledgers.length === 1 ? 'ledger' : 'ledgers'}`;
+  elements['project-detail-path'].textContent = `Owned by ${projectOwnerLabel(project)} · ${project.id}`;
   document.querySelector('.project-settings-button').hidden = Boolean(project.remote);
   setView('project-detail-view');
   document.title = `${project.name} · Projects`;
@@ -702,7 +757,7 @@ function taskRow(task, index) {
   const directNavigation = active || queue;
   if (!directNavigation) summary.setAttribute('aria-expanded', 'false');
   summary.innerHTML = active
-    ? `<span class="task-copy"><strong></strong></span><span class="task-runtime-status"></span>`
+    ? `<span class="task-copy"><strong></strong><span class="task-meta"></span></span><span class="task-runtime-status"></span>`
     : `<span class="task-copy"><strong></strong><span class="task-meta"></span>${task.nextSubtask ? '<span class="task-next"></span>' : ''}</span>${queue ? '' : '<span class="task-chevron">⌄</span>'}`;
   summary.querySelector('strong').textContent = task.title;
   if (active) {
@@ -720,8 +775,11 @@ function taskRow(task, index) {
   }
   const age = task.status === 'task-backlog' ? 'backlog' : task.status === 'task-active' ? activeAge(task.activeSince) : waitingAge(task.waitingSince);
   const process = task.codexProcessing ? ` · Codex ${task.codexRunId}` : '';
+  const taskOwner = task.ownerNodeLabel || task.ownerNodeId || state.projects.find((project) => project.id === task.projectId)?.ownerNodeLabel || 'This server';
+  if (summary.querySelector('.task-meta')) {
+    summary.querySelector('.task-meta').textContent = `${task.projectName} · ${taskOwner} · ${task.ledger} · ${age}${process}`;
+  }
   if (!active) {
-    summary.querySelector('.task-meta').textContent = `${task.projectName} · ${task.ledger} · ${age}${process}`;
     const nextSubtask = summary.querySelector('.task-next');
     if (nextSubtask) nextSubtask.textContent = `Next: ${task.nextSubtask.title}`;
   }
@@ -783,7 +841,9 @@ function renderControlRoom() {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `project-filter-chip${project.id === 'All' ? ' all-projects-filter' : ''}`;
-    button.textContent = project.name;
+    button.textContent = project.id === 'All' ? project.name : `${project.name} · ${projectPresenceLabel(project)}`;
+    button.title = project.id === 'All' ? project.name : `${project.name} (${project.id}) owned by ${projectOwnerLabel(project)}`;
+    button.disabled = project.online === false;
     button.setAttribute('aria-pressed', String(project.id === state.projectFilter));
     button.style.setProperty('--project-color', project.color);
     button.addEventListener('click', () => { state.projectFilter = project.id; state.controlFilter = 'All'; renderControlRoom(); });
@@ -971,7 +1031,12 @@ function openNewTaskProjectModal() {
     button.style.setProperty('--project-color', project.color);
     const name = document.createElement('strong');
     name.textContent = project.name;
-    button.append(name);
+    const owner = document.createElement('small');
+    owner.textContent = `${projectPresenceLabel(project)} · ${project.id}`;
+    button.append(name, owner);
+    button.dataset.online = String(project.online !== false);
+    button.disabled = project.online === false;
+    button.setAttribute('aria-label', `${project.name}, ${projectPresenceLabel(project)}, ${project.id}`);
     button.addEventListener('click', async () => {
       const options = [...list.querySelectorAll('button')];
       options.forEach((option) => { option.disabled = true; });
@@ -986,7 +1051,7 @@ function openNewTaskProjectModal() {
       } catch (cause) {
         error.textContent = cause instanceof Error ? cause.message : 'Task intake creation failed.';
         error.hidden = false;
-        options.forEach((option) => { option.disabled = false; });
+        options.forEach((option) => { option.disabled = option.dataset.online === 'false'; });
         delete newTaskProjectModal.dataset.busy;
         cancel.disabled = false;
         button.removeAttribute('aria-busy');
@@ -1521,6 +1586,11 @@ document.querySelector('.codex-process-settings-form').addEventListener('submit'
   event.preventDefault();
   void submitCodexProcessSettings();
 });
+document.querySelector('.federation-settings-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  void submitFederationSettings(true);
+});
+document.querySelector('.federation-settings-disconnect').addEventListener('click', () => void submitFederationSettings(false));
 document.querySelector('.back-to-ledger-button').addEventListener('click', () => navigate(ledgerPath(state.activeLedgerId)));
 document.querySelector('.back-to-zone-button').addEventListener('click', (event) => {
   navigate(event.currentTarget.dataset.destination === 'control-room' ? controlRoomPath(state.controlTab) : zonePath(state.activeLedgerId, state.activeZoneId));

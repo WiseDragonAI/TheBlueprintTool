@@ -284,7 +284,7 @@
                 <div>
                   <p class="eyebrow">Runtime</p>
                   <h1>Settings</h1>
-                  <p class="muted">Configure the server-wide Codex process capacity.</p>
+                  <p class="muted">Configure this Decision OS server and its federation connection.</p>
                 </div>
               </div>
               <form class="codex-process-settings-form settings-panel">
@@ -299,6 +299,27 @@
                 <p class="muted settings-help">New launches wait in FIFO order after this number of Codex processes are running.</p>
                 <p id="codex-settings-message" class="settings-message" role="status"></p>
                 <button class="primary-button codex-settings-save" type="submit">Save settings</button>
+              </form>
+              <form class="federation-settings-form settings-panel">
+                <header class="settings-section-header">
+                  <div><p class="eyebrow">Federation</p><h2>Connected environments</h2></div>
+                  <span id="federation-connection-status" class="connection-status">Loading…</span>
+                </header>
+                <p class="muted settings-help">This server connects outbound to the relay. Selecting a project always runs its tasks on the environment that owns it.</p>
+                <label class="settings-field"><span>Relay URL</span><input id="federation-relay-url" name="relayUrl" type="url" placeholder="https://relay.example.workers.dev" required /></label>
+                <div class="settings-field-row">
+                  <label class="settings-field"><span>Federation ID</span><input id="federation-id" name="federationId" autocomplete="off" required /></label>
+                  <label class="settings-field"><span>Node ID</span><input id="federation-node-id" name="nodeId" autocomplete="off" required /></label>
+                </div>
+                <label class="settings-field"><span>Node label</span><input id="federation-node-label" name="nodeLabel" autocomplete="off" placeholder="Workstation" required /></label>
+                <label class="settings-field"><span>Node credential</span><input id="federation-node-credential" name="nodeCredential" type="password" autocomplete="new-password" placeholder="Leave blank to keep the saved credential" /></label>
+                <p class="muted settings-help">Authentication uses a per-node bearer credential over WSS. The saved credential is never returned to this page.</p>
+                <div id="federation-peer-list" class="federation-peer-list" aria-label="Federation environments"></div>
+                <p id="federation-settings-message" class="settings-message" role="status"></p>
+                <div class="settings-actions">
+                  <button class="primary-button federation-settings-save" type="submit">Save and connect</button>
+                  <button class="federation-settings-disconnect" type="button">Disconnect</button>
+                </div>
               </form>
             </section>
 

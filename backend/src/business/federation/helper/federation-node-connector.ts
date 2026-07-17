@@ -21,8 +21,9 @@ type RelayFrame = {
   path?: string;
   headers?: Record<string, string>;
   status?: number;
+  nodeLabel?: string;
   projects?: ProjectManifest[];
-  nodes?: Array<{ nodeId: string; online: boolean; projects: ProjectManifest[] }>;
+  nodes?: Array<{ nodeId: string; nodeLabel?: string; online: boolean; projects: ProjectManifest[] }>;
   code?: string;
   message?: string;
 };
@@ -57,6 +58,12 @@ function configuredSettings(value: unknown): FederationSettings | null {
   const nodeLabel = String(settings.federationNodeLabel ?? nodeId).trim();
   if (!relayUrl || !federationId || !nodeId || !nodeCredential) return null;
   if (![federationId, nodeId].every((entry) => /^[a-zA-Z0-9_-]+$/.test(entry))) return null;
+  try {
+    const parsed = new URL(relayUrl);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+  } catch {
+    return null;
+  }
   return { relayUrl, federationId, nodeId, nodeCredential, nodeLabel: nodeLabel || nodeId };
 }
 
@@ -90,7 +97,17 @@ class CreditGate {
   }
 }
 
-type RequesterStream = { response: ServerResponse; requestCredit: CreditGate; settled: boolean };
+type InternalResponse = { status: number; headers: Record<string, string>; body: Buffer };
+type RequesterStream = {
+  response?: ServerResponse;
+  requestCredit: CreditGate;
+  settled: boolean;
+  status: number;
+  headers: Record<string, string>;
+  chunks: Buffer[];
+  bytes: number;
+  resolve?: (response: InternalResponse) => void;
+};
 type OwnerStream = {
   method: string;
   path: string;
@@ -105,11 +122,12 @@ export function createFederationNodeConnector(input: {
   settings: unknown;
   localProjects: () => DecisionOsProject[];
   localServerUrl: () => string;
+  onRemoteContentChange?: () => void;
 }) {
-  const settings = configuredSettings(input.settings);
+  let settings = configuredSettings(input.settings);
   const requesterStreams = new Map<string, RequesterStream>();
   const ownerStreams = new Map<string, OwnerStream>();
-  const remoteNodes = new Map<string, { online: boolean; projects: ProjectManifest[] }>();
+  const remoteNodes = new Map<string, { nodeLabel: string; online: boolean; projects: ProjectManifest[] }>();
   let socket: WebSocket | null = null;
   let reconnectTimer: NodeJS.Timeout | null = null;
   let stopped = false;
@@ -125,13 +143,20 @@ export function createFederationNodeConnector(input: {
     .filter((project) => project.available)
     .map(({ id, name, description, color, ledgers }) => ({ id, name, description, color, ledgers }));
 
+  const settleInternal = (stream: RequesterStream, status: number, headers: Record<string, string>, body: Buffer): void => {
+    stream.resolve?.({ status, headers, body });
+  };
+
   const failRequester = (requestId: string, status: number, code: string, message: string): void => {
     const stream = requesterStreams.get(requestId);
     if (!stream || stream.settled) return;
     stream.settled = true;
-    stream.response.statusCode = status;
-    stream.response.setHeader('content-type', 'application/json');
-    stream.response.end(JSON.stringify({ ok: false, error: code, message }));
+    const body = Buffer.from(JSON.stringify({ ok: false, error: code, message }));
+    if (stream.response) {
+      stream.response.statusCode = status;
+      stream.response.setHeader('content-type', 'application/json');
+      stream.response.end(body);
+    } else settleInternal(stream, status, { 'content-type': 'application/json' }, body);
     requesterStreams.delete(requestId);
   };
 
@@ -166,13 +191,17 @@ export function createFederationNodeConnector(input: {
       }
       send({ version: 1, type: 'response-end', requestId });
     } catch (error) {
-      send({
-        version: 1,
-        type: 'response-error',
-        requestId,
-        code: error instanceof DOMException && error.name === 'AbortError' ? 'cancelled' : 'owner_request_failed',
-        message: error instanceof Error ? error.message : 'Owner request failed.',
-      });
+      try {
+        send({
+          version: 1,
+          type: 'response-error',
+          requestId,
+          code: error instanceof DOMException && error.name === 'AbortError' ? 'cancelled' : 'owner_request_failed',
+          message: error instanceof Error ? error.message : 'Owner request failed.',
+        });
+      } catch {
+        // The relay can close while an owner-side fetch is being aborted during shutdown.
+      }
     } finally {
       ownerStreams.delete(requestId);
     }
@@ -182,8 +211,12 @@ export function createFederationNodeConnector(input: {
     if (frame.type === 'catalog') {
       remoteNodes.clear();
       for (const node of frame.nodes ?? []) {
-        if (node.nodeId !== settings?.nodeId) remoteNodes.set(node.nodeId, { online: node.online, projects: node.projects });
+        if (node.nodeId !== settings?.nodeId) remoteNodes.set(node.nodeId, { nodeLabel: String(node.nodeLabel || node.nodeId), online: node.online, projects: node.projects });
       }
+      return;
+    }
+    if (frame.type === 'content-change') {
+      input.onRemoteContentChange?.();
       return;
     }
     const requestId = String(frame.requestId ?? '');
@@ -231,19 +264,31 @@ export function createFederationNodeConnector(input: {
     const requester = requesterStreams.get(requestId);
     if (!requester) return;
     if (frame.type === 'response-open') {
-      requester.response.statusCode = Number(frame.status ?? 502);
-      for (const [key, value] of Object.entries(frame.headers ?? {})) requester.response.setHeader(key, value);
+      requester.status = Number(frame.status ?? 502);
+      requester.headers = frame.headers ?? {};
+      if (requester.response) {
+        requester.response.statusCode = requester.status;
+        for (const [key, value] of Object.entries(requester.headers)) requester.response.setHeader(key, value);
+      }
       return;
     }
     if (frame.type === 'response-chunk') {
       const chunk = Buffer.from(String(frame.data ?? ''), 'base64');
-      if (!requester.response.write(chunk)) await once(requester.response, 'drain');
+      requester.bytes += chunk.byteLength;
+      if (requester.bytes > maximumBodyBytes) {
+        failRequester(requestId, 413, 'federation_body_limit', 'Remote response exceeds 25 MiB.');
+        return;
+      }
+      if (requester.response) {
+        if (!requester.response.write(chunk)) await once(requester.response, 'drain');
+      } else requester.chunks.push(chunk);
       send({ version: 1, type: 'credit', requestId, direction: 'response', bytes: chunk.byteLength });
       return;
     }
     if (frame.type === 'response-end') {
       requester.settled = true;
-      requester.response.end();
+      if (requester.response) requester.response.end();
+      else settleInternal(requester, requester.status, requester.headers, Buffer.concat(requester.chunks));
       requesterStreams.delete(requestId);
       return;
     }
@@ -253,13 +298,29 @@ export function createFederationNodeConnector(input: {
     }
   };
 
+  const openRequest = (ownerNodeId: string, path: string): { requestId: string; response: Promise<InternalResponse> } => {
+    if (!settings || !remoteNodes.get(ownerNodeId)?.online || socket?.readyState !== WebSocket.OPEN) {
+      return { requestId: '', response: Promise.resolve({ status: 503, headers: { 'content-type': 'application/json' }, body: Buffer.from('{"ok":false,"error":"owner_offline"}') }) };
+    }
+    const requestId = randomUUID();
+    let resolveResponse: (response: InternalResponse) => void = () => undefined;
+    const response = new Promise<InternalResponse>((resolve) => { resolveResponse = resolve; });
+    requesterStreams.set(requestId, {
+      requestCredit: new CreditGate(), settled: false, status: 502, headers: {}, chunks: [], bytes: 0,
+      resolve: resolveResponse,
+    });
+    send({ version: 1, type: 'request-open', requestId, to: ownerNodeId, method: 'GET', path, headers: {} });
+    send({ version: 1, type: 'request-end', requestId });
+    return { requestId, response };
+  };
+
   const connect = (): void => {
     if (!settings || stopped) return;
     const active = new WebSocket(webSocketUrl(settings), { headers: { authorization: `Bearer ${settings.nodeCredential}` } });
     socket = active;
     active.addEventListener('open', () => {
       reconnectAttempt = 0;
-      send({ version: 1, type: 'manifest', projects: manifest() });
+      send({ version: 1, type: 'manifest', nodeLabel: settings?.nodeLabel, projects: manifest() });
     });
     active.addEventListener('message', (event) => {
       messageQueue = messageQueue.then(async () => {
@@ -273,7 +334,8 @@ export function createFederationNodeConnector(input: {
     });
     active.addEventListener('error', () => undefined);
     active.addEventListener('close', () => {
-      if (socket === active) socket = null;
+      if (socket !== active) return;
+      socket = null;
       for (const requestId of requesterStreams.keys()) failRequester(requestId, 502, 'federation_outcome_unknown', 'Relay disconnected before the owner response completed.');
       for (const stream of remoteNodes.values()) stream.online = false;
       if (!stopped) {
@@ -286,19 +348,42 @@ export function createFederationNodeConnector(input: {
   };
 
   return {
-    configured: Boolean(settings),
-    status(): { configured: boolean; socketState: number | null } {
-      return { configured: Boolean(settings), socketState: socket?.readyState ?? null };
+    get configured(): boolean { return Boolean(settings); },
+    status(): { configured: boolean; connected: boolean; socketState: number | null; relayUrl: string; federationId: string; nodeId: string; nodeLabel: string; credentialConfigured: boolean; peers: Array<{ nodeId: string; nodeLabel: string; online: boolean; projectCount: number }> } {
+      return {
+        configured: Boolean(settings), connected: socket?.readyState === WebSocket.OPEN, socketState: socket?.readyState ?? null,
+        relayUrl: settings?.relayUrl ?? '', federationId: settings?.federationId ?? '', nodeId: settings?.nodeId ?? '', nodeLabel: settings?.nodeLabel ?? '', credentialConfigured: Boolean(settings?.nodeCredential),
+        peers: [...remoteNodes].map(([nodeId, node]) => ({ nodeId, nodeLabel: node.nodeLabel, online: node.online, projectCount: node.projects.length })),
+      };
     },
-    start: connect,
+    start(): void { stopped = false; connect(); },
     stop(): void {
       stopped = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
+      for (const requestId of requesterStreams.keys()) failRequester(requestId, 502, 'federation_reconfigured', 'Federation connection was reconfigured.');
+      for (const stream of ownerStreams.values()) stream.abort.abort();
+      ownerStreams.clear();
       socket?.close(1000, 'server_stopped');
       socket = null;
+      remoteNodes.clear();
+    },
+    reconfigure(value: unknown): void {
+      this.stop();
+      settings = configuredSettings(value);
+      stopped = false;
+      connect();
     },
     publishManifest(): void {
-      if (socket?.readyState === WebSocket.OPEN) send({ version: 1, type: 'manifest', projects: manifest() });
+      if (socket?.readyState === WebSocket.OPEN) send({ version: 1, type: 'manifest', nodeLabel: settings?.nodeLabel, projects: manifest() });
+    },
+    publishContentChange(): void {
+      if (socket?.readyState === WebSocket.OPEN) send({ version: 1, type: 'content-change' });
+    },
+    localOwner(): { ownerNodeId: string; ownerNodeLabel: string; online: true } {
+      return { ownerNodeId: settings?.nodeId || 'local', ownerNodeLabel: settings?.nodeLabel || 'This server', online: true };
+    },
+    nodes(): Array<{ nodeId: string; nodeLabel: string; online: boolean; projectCount: number }> {
+      return [...remoteNodes].map(([nodeId, node]) => ({ nodeId, nodeLabel: node.nodeLabel, online: node.online, projectCount: node.projects.length }));
     },
     remoteProjects(): RemoteDecisionOsProject[] {
       if (!settings) return [];
@@ -307,7 +392,7 @@ export function createFederationNodeConnector(input: {
         id: `${ownerNodeId}:${project.id}`,
         localProjectId: project.id,
         ownerNodeId,
-        ownerNodeLabel: ownerNodeId,
+        ownerNodeLabel: node.nodeLabel,
         remote: true as const,
         online: node.online,
         available: node.online,
@@ -326,7 +411,7 @@ export function createFederationNodeConnector(input: {
       }
       const requestId = randomUUID();
       const requestCredit = new CreditGate();
-      requesterStreams.set(requestId, { response, requestCredit, settled: false });
+      requesterStreams.set(requestId, { response, requestCredit, settled: false, status: 502, headers: {}, chunks: [], bytes: 0 });
       response.on('close', () => {
         if (requesterStreams.has(requestId)) {
           try { send({ version: 1, type: 'cancel', requestId }); } catch { /* Relay already closed. */ }
@@ -348,6 +433,9 @@ export function createFederationNodeConnector(input: {
         await sendChunks(requestId, 'request', chunk, requestCredit);
       }
       send({ version: 1, type: 'request-end', requestId });
+    },
+    async request(ownerNodeId: string, path: string): Promise<InternalResponse> {
+      return openRequest(ownerNodeId, path).response;
     },
   };
 }

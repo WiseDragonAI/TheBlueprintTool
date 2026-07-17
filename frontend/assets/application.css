@@ -128,7 +128,8 @@ body.menu-open .nav-scrim { opacity: 1; pointer-events: auto; }
 
 .content { width: 100%; max-width: 980px; margin: 0 auto; padding: 20px 14px max(50px, env(safe-area-inset-bottom)); outline: 0; }
 .project-list { display: grid; gap: 12px; }
-.settings-panel { display: grid; gap: 18px; max-width: 560px; padding: 20px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
+.settings-view { display: grid; gap: 20px; }
+.settings-panel { display: grid; gap: 18px; width: min(100%, 560px); padding: 20px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
 .codex-process-limit-field { display: grid; gap: 12px; margin: 0; padding: 0; border: 0; }
 .codex-process-limit-field legend { color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; }
 .codex-process-stepper { display: grid; grid-template-columns: 44px minmax(72px, 112px) 44px; gap: 8px; align-items: center; }
@@ -138,6 +139,19 @@ body.menu-open .nav-scrim { opacity: 1; pointer-events: auto; }
 .settings-help, .settings-message { margin: 0; }
 .settings-message { min-height: 20px; color: var(--accent); font-size: 13px; }
 .codex-settings-save { justify-self: start; }
+.settings-section-header, .settings-actions, .federation-peer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.settings-section-header h2, .settings-section-header p { margin: 0; }
+.connection-status { padding: 5px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; }
+.connection-status[data-connected="true"] { border-color: var(--accent); color: var(--accent); }
+.settings-field { display: grid; gap: 7px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.settings-field input { width: 100%; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--text); background: var(--panel-deep); font: inherit; }
+.settings-field-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.federation-peer-list { display: grid; gap: 8px; }
+.federation-peer { padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-deep); }
+.federation-peer small { color: var(--muted); }
+.federation-peer-state[data-online="true"] { color: var(--accent); }
+.federation-settings-disconnect { color: var(--danger); }
+@media (max-width: 540px) { .settings-field-row { grid-template-columns: 1fr; } }
 .project-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; width: 100%; min-height: 112px; padding: 16px; border-inline-start: 4px solid var(--project-color); text-align: left; }
 .project-card-copy, .project-card-description, .project-card code { display: block; min-width: 0; }
 .project-card-heading { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
@@ -339,7 +353,8 @@ h1 { margin: 0; font-size: clamp(28px, 8vw, 44px); line-height: 1.08; letter-spa
 .new-task-project-sheet header { display: grid; gap: 6px; }
 .new-task-project-sheet h2, .new-task-project-sheet p { margin: 0; }
 .new-task-project-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; max-height: min(55dvh, 440px); overflow-y: auto; }
-.new-task-project-option { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 52px; padding: 8px 10px; border-inline-start: 4px solid var(--project-color, var(--accent)); text-align: center; }
+.new-task-project-option { display: grid; gap: 4px; align-content: center; justify-items: center; width: 100%; min-height: 64px; padding: 8px 10px; border-inline-start: 4px solid var(--project-color, var(--accent)); text-align: center; }
+.new-task-project-option small { color: var(--muted); }
 .new-task-project-error { color: var(--danger); font-size: 13px; }
 .new-task-project-sheet footer { display: flex; justify-content: flex-end; }
 .new-task-project-cancel { min-width: 96px; padding-inline: 16px; }
