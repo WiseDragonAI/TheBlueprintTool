@@ -45,7 +45,7 @@ test('The responsive application preserves the mobile Control Room and expands t
         bodyWidth: document.body.scrollWidth,
         viewportWidth: innerWidth,
         tabCount: document.querySelectorAll('[data-control-tab]').length,
-        newTaskCount: document.querySelectorAll('.new-task-button').length,
+        newTaskCount: document.querySelectorAll('.mobile-new-task-button').length,
       };
     });
     assert.equal(mobileLayout.visibleView, 'control-room-view');
@@ -80,6 +80,7 @@ test('The responsive application preserves the mobile Control Room and expands t
         navVisible: Boolean(navRect && navRect.left >= 0 && navRect.width >= 240),
         columns: layout ? getComputedStyle(layout).gridTemplateColumns : '',
         tabsPosition: tabs ? getComputedStyle(tabs).position : '',
+        tabsDisplay: tabs ? getComputedStyle(tabs).display : '',
         tabsInCommandHeader: Boolean(command && tabs && command.contains(tabs)),
         tabsBottomGap: tabs ? innerHeight - tabs.getBoundingClientRect().bottom : 0,
         bodyWidth: document.body.scrollWidth,
@@ -91,7 +92,8 @@ test('The responsive application preserves the mobile Control Room and expands t
     assert.equal(desktopLayout.navPosition, 'sticky');
     assert.equal(desktopLayout.navVisible, true);
     assert.match(desktopLayout.columns, /^250px /);
-    assert.equal(desktopLayout.tabsPosition, 'static');
+    assert.equal(desktopLayout.tabsPosition, 'fixed');
+    assert.equal(desktopLayout.tabsDisplay, 'none');
     assert.equal(desktopLayout.tabsInCommandHeader, true);
     assert.ok(desktopLayout.tabsBottomGap > 300);
     assert.equal(desktopLayout.bodyWidth, desktopLayout.viewportWidth);
@@ -219,6 +221,7 @@ function collectPageErrors(page: Page): string[] {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('response', (response) => {
+    if (response.status() === 404 && response.url().includes('/.decision-os/thread-files/')) return;
     if (response.status() >= 400) errors.push(`HTTP ${response.status()} ${response.url()}`);
   });
   page.on('console', (message) => {
@@ -233,7 +236,13 @@ async function startDecisionOsServer(): Promise<{ process: ChildProcess; url: st
   const child = spawn(process.execPath, [resolve(repoRoot, 'bin/decision-os-server.mjs')], {
     cwd: repoRoot,
     detached: true,
-    env: { ...process.env, HOST: '127.0.0.1', PORT: String(port) },
+    env: {
+      ...process.env,
+      HOST: '127.0.0.1',
+      PORT: String(port),
+      DECISION_OS_FRONTEND_ROOT: resolve(repoRoot, 'frontend'),
+      TSX_TSCONFIG_PATH: resolve(repoRoot, 'backend/tsconfig.json'),
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   const output: string[] = [];

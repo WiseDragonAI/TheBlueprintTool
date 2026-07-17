@@ -41,7 +41,7 @@ test('voice values tick at 30 fps while render remains requestAnimationFrame dri
 });
 
 test('recording voice dock hides the idle thread input status row', () => {
-  const css = readFileSync(new URL('frontend/assets/canvas/thread.css', root), 'utf8');
+  const css = readFileSync(new URL('frontend/assets/shared/thread.css', root), 'utf8');
   assert.match(css, /voice-panel\.recording \.voice-terminal-status[\s\S]*display: none/);
 });
 
@@ -54,7 +54,7 @@ test('voice level calculation preserves quiet input without a threshold gate', (
 
 test('voice capture path disables browser noise gates and visual smoothing', () => {
   const start = readFileSync(new URL('frontend/src/runtime/voice/controller/start-voice-recording.ts', root), 'utf8');
-  const controlsCss = readFileSync(new URL('frontend/assets/canvas/terminal-chat-controls.css', root), 'utf8');
+  const controlsCss = readFileSync(new URL('frontend/assets/shared/terminal-chat-controls.css', root), 'utf8');
   assert.match(start, /noiseSuppression:\s*false/);
   assert.match(start, /autoGainControl:\s*false/);
   assert.match(start, /smoothingTimeConstant\s*=\s*0/);

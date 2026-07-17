@@ -33,10 +33,10 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   assert.equal(lightenColorInHsv('rgb(80, 160, 120)'), 'rgb(123, 247, 185)');
   assert.equal(clampCardCodeColor('#4b00ff'), '#8968d9');
   const shellCss = readFileSync(new URL('frontend/assets/canvas/shell.css', root), 'utf8');
-  const threadCss = readFileSync(new URL('frontend/assets/canvas/thread.css', root), 'utf8');
-  const terminalButtonCss = readFileSync(new URL('frontend/assets/canvas/terminal-button.css', root), 'utf8');
+  const threadCss = readFileSync(new URL('frontend/assets/shared/thread.css', root), 'utf8');
+  const terminalButtonCss = readFileSync(new URL('frontend/assets/shared/terminal-button.css', root), 'utf8');
   const colorRuntime = readFileSync(new URL('frontend/src/runtime/card/effect/render-card-zone-colors.ts', root), 'utf8');
-  const controlsCss = readFileSync(new URL('frontend/assets/canvas/terminal-chat-controls.css', root), 'utf8');
+  const controlsCss = readFileSync(new URL('frontend/assets/shared/terminal-chat-controls.css', root), 'utf8');
   const accentEffect = readFileSync(new URL('frontend/src/runtime/thread/effect/apply-thread-accent.ts', root), 'utf8');
   const threadNotesRenderer = readFileSync(new URL('frontend/src/runtime/thread/effect/render-thread-notes.ts', root), 'utf8');
   const threadPanelRenderer = readFileSync(new URL('frontend/src/runtime/thread/effect/render-thread-panel.ts', root), 'utf8');

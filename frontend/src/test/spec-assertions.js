@@ -53,7 +53,7 @@ function expectedTokens(title, domain, specId) {
   if (text.includes('transcription')) tokens.push('request-transcription', 'transcriptionStatus');
   if (text.includes('server') || text.includes('api') || text.includes('fetch')) tokens.push('createServer', 'application/json');
   if (text.includes('typescript')) tokens.push('.ts');
-  if (text.includes('no bundler')) tokens.push('type=\"module\"', '/src/runtime/canvas-runtime.ts');
+  if (text.includes('no bundler')) tokens.push('type=\"module\"', '/src/runtime/surface-runtime.ts');
   if (text.includes('playwright')) tokens.push('tests/browser');
   if (text.includes('stylesheet') || text.includes('css')) tokens.push('canvas.css');
   if (text.includes('arrow')) tokens.push('marker', 'path');

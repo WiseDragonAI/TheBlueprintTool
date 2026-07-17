@@ -16,7 +16,13 @@ test('desktop Projects opens node-aware settings while zoom-out retains the proj
   const server = spawn(process.execPath, [resolve(repoRoot, 'bin/decision-os-server.mjs')], {
     cwd: repoRoot,
     detached: true,
-    env: { ...process.env, HOST: '127.0.0.1', PORT: String(port) },
+    env: {
+      ...process.env,
+      HOST: '127.0.0.1',
+      PORT: String(port),
+      DECISION_OS_FRONTEND_ROOT: resolve(repoRoot, 'frontend'),
+      TSX_TSCONFIG_PATH: resolve(repoRoot, 'backend/tsconfig.json'),
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   const output: string[] = [];
@@ -35,8 +41,18 @@ test('desktop Projects opens node-aware settings while zoom-out retains the proj
       args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
     });
     const page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
+    page.on('console', (message) => output.push(`browser console: ${message.type()}: ${message.text()}`));
+    page.on('pageerror', (error) => output.push(`browser error: ${error.message}`));
     await page.goto(`${url}/projects`, { waitUntil: 'domcontentloaded' });
-    await page.locator('#projects-view:not([hidden])').waitFor({ state: 'visible' });
+    await page.locator('#projects-view:not([hidden])').waitFor({ state: 'visible', timeout: 10_000 }).catch(async (error) => {
+      const diagnostic = await page.evaluate(() => ({
+        path: location.pathname,
+        bodyClass: document.body.className,
+        projectsView: document.querySelector('#projects-view')?.outerHTML.slice(0, 500),
+        errorView: document.querySelector('#error-view')?.outerHTML.slice(0, 500),
+      }));
+      throw new Error(`${error instanceof Error ? error.message : String(error)}\n${JSON.stringify(diagnostic)}\n${output.join('')}`);
+    });
     assert.equal(await page.locator('.canvas').count(), 0);
     await page.locator('.project-card:not(:disabled)').first().click();
     const modal = page.locator('.project-settings-modal[open]');

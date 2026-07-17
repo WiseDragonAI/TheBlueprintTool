@@ -57,6 +57,7 @@ const elements = Object.fromEntries([
 const asText = (value) => value == null ? '' : typeof value === 'string' ? value : JSON.stringify(value, null, 2);
 const defaultAccent = '#38d9e8';
 const projectOwnerLabel = (project) => project.ownerNodeLabel || project.ownerNodeId || 'This server';
+const projectPresenceLabel = (project) => `${projectOwnerLabel(project)} · ${project.online === false ? 'Offline' : 'Online'}`;
 const routeParts = () => parseProjectScope(location.pathname)?.segments ?? [];
 const creationModal = document.querySelector('.creation-modal');
 const deleteMasterTaskModal = document.querySelector('.delete-master-task-modal');
