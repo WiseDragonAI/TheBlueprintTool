@@ -73,6 +73,9 @@ const projectColorSliders = {
 const creationForm = document.querySelector('.creation-form');
 let creationKind = '';
 let controlRoomScrollFrame = 0;
+let controlRoomColumnScrollFrame = 0;
+const controlRoomColumnScrollTop = { queue: 0, exec: 0, backlog: 0 };
+const initializedControlRoomColumns = new Set();
 let queuePersistenceSequence = 0;
 let queuePersistenceActive = false;
 let queueSortables = [];
@@ -1132,7 +1135,34 @@ function taskRow(task, tab, index) {
   return article;
 }
 
+function rememberControlRoomColumnScroll(list) {
+  const column = list?.dataset?.controlColumnList;
+  if (!Object.hasOwn(controlRoomColumnScrollTop, column)) return;
+  const scrollTop = Number(list.scrollTop);
+  if (!Number.isFinite(scrollTop)) return;
+  controlRoomColumnScrollTop[column] = Math.max(0, scrollTop);
+  initializedControlRoomColumns.add(column);
+}
+
+function captureControlRoomColumnScroll() {
+  if (elements['control-room-view'].hidden) return;
+  elements['control-task-list'].querySelectorAll('.control-task-column-list').forEach(rememberControlRoomColumnScroll);
+}
+
+function restoreControlRoomColumnScroll() {
+  window.cancelAnimationFrame(controlRoomColumnScrollFrame);
+  controlRoomColumnScrollFrame = window.requestAnimationFrame(() => {
+    elements['control-task-list'].querySelectorAll('.control-task-column-list').forEach((list) => {
+      const column = list.dataset.controlColumnList;
+      if (!initializedControlRoomColumns.has(column)) return;
+      const maximum = Math.max(0, Number(list.scrollHeight) - Number(list.clientHeight));
+      list.scrollTop = Math.min(controlRoomColumnScrollTop[column], maximum);
+    });
+  });
+}
+
 function renderControlRoom() {
+  captureControlRoomColumnScroll();
   destroyQueueSortables();
   state.activeLedgerId = '';
   state.activeZoneId = '';
@@ -1209,6 +1239,7 @@ function renderControlRoom() {
     const list = document.createElement('div');
     list.className = 'control-task-column-list';
     list.dataset.controlColumnList = tab;
+    list.addEventListener('scroll', () => rememberControlRoomColumnScroll(list), { passive: true });
     list.replaceChildren(...tasks.map((task, index) => taskRow(task, tab, index)));
     const empty = document.createElement('p');
     empty.className = 'control-column-empty';
@@ -1219,6 +1250,7 @@ function renderControlRoom() {
     return column;
   });
   elements['control-task-list'].replaceChildren(...columns);
+  restoreControlRoomColumnScroll();
   initializeQueueSortable();
   elements['control-empty'].hidden = true;
   const diagnostics = Array.isArray(state.controlRoom?.diagnostics) ? state.controlRoom.diagnostics : [];
@@ -1235,7 +1267,7 @@ function renderControlRoom() {
   setView('control-room-view');
   document.title = 'Control room · Decision OS';
   const { anchor } = parseControlRoomRoute(location.href);
-  if (anchor) window.requestAnimationFrame(() => document.getElementById(anchor)?.scrollIntoView({ block: 'start' }));
+  if (anchor && initializedControlRoomColumns.size === 0) window.requestAnimationFrame(() => document.getElementById(anchor)?.scrollIntoView({ block: 'start' }));
 }
 
 function persistControlRoomScrollAnchor() {
