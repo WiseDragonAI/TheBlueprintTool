@@ -6988,7 +6988,7 @@
       "title": "Codex Tool-Call Efficiency Audit",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "backlog",
       "x": -10402,
       "y": 46248,
       "w": 360,
@@ -10900,7 +10900,10 @@
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
       "codexThreadRunId": "codex-skill-1784262890285-4bef1068",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784262890285-4bef1068.md"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784262890285-4bef1068.md",
+      "codexActiveRunId": "codex-skill-1784262890285-4bef1068",
+      "executionStatus": "running",
+      "executionRunId": "codex-skill-1784262890285-4bef1068"
     },
     {
       "id": "card-cf200179-fb3b-4bd6-8914-6a701f60cb5f",
@@ -10937,8 +10940,9 @@
       "title": "Synchronize master-task selection with the thread panel",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
+        "implementation",
         "subtask"
       ],
       "x": -10012,
@@ -10956,8 +10960,9 @@
       "title": "Add desktop master-task thread lifecycle regression coverage",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
+        "test",
         "subtask"
       ],
       "x": -9632,
@@ -10975,8 +10980,9 @@
       "title": "Verify the complete desktop master-task interaction",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
+        "scenario",
         "subtask"
       ],
       "x": -10012,
@@ -11272,7 +11278,6 @@
       "domainId": "specs",
       "status": "todo",
       "labels": [
-        "implementation",
         "master-task"
       ],
       "x": -10402,
@@ -11320,9 +11325,6 @@
       "domainId": "specs",
       "status": "todo",
       "labels": [
-        "implementation",
-        "code",
-        "test",
         "subtask"
       ],
       "x": -10012,
@@ -11340,7 +11342,7 @@
       "title": "Persist ledger execution status through Codex lifecycle",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "data",
         "code",
@@ -11361,7 +11363,7 @@
       "title": "Project durable execution state into Control Room Exec",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "backend",
         "code",
@@ -11382,7 +11384,7 @@
       "title": "Rename the Control Room Active surface to Exec",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "frontend",
         "code",
@@ -11403,7 +11405,7 @@
       "title": "Add queued execution reload and transition regressions",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "test",
         "scenario",
@@ -11415,6 +11417,940 @@
       "h": 380,
       "comment": {
         "contentFile": ".decision-os/cards/specs/card-36d7a19d-0e56-4601-9a4d-c16a27adf4fb.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-7493b007-899b-49cf-9a5b-c07fb6b35c70",
+      "title": "Explain Current Test Failures",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "diagnosis",
+        "test-suite",
+        "surface-isolation",
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 101328,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-7493b007-899b-49cf-9a5b-c07fb6b35c70.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784266482521-9e068ad5",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784266482521-9e068ad5.md"
+    },
+    {
+      "id": "card-c767c97c-a988-4ba1-a324-271ed87376e5",
+      "title": "Run and classify the failing tests",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "labels": [
+        "diagnosis",
+        "verified",
+        "test-suite",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 101328,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-c767c97c-a988-4ba1-a324-271ed87376e5.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-66a84904-5a44-4c0e-9eab-5aa391f4223f",
+      "title": "Federate durable skill and pipeline libraries",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 102348,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-66a84904-5a44-4c0e-9eab-5aa391f4223f.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784267353444-c323c7ca",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784267353444-c323c7ca.md",
+      "codexActiveRunId": "codex-skill-1784267353444-c323c7ca",
+      "executionStatus": "running",
+      "executionRunId": "codex-skill-1784267353444-c323c7ca"
+    },
+    {
+      "id": "card-7ae8cc5b-5f16-4d10-9638-22f098c701fa",
+      "title": "Restore Control Room carousel resizing and persistence",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "bug",
+        "frontend",
+        "control-room",
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 103368,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-7ae8cc5b-5f16-4d10-9638-22f098c701fa.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784267466940-d8335914",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784267466940-d8335914.md",
+      "codexActiveRunId": "codex-skill-1784267466940-d8335914",
+      "executionStatus": "running",
+      "executionRunId": "codex-skill-1784267466940-d8335914"
+    },
+    {
+      "id": "card-52581263-0881-49af-8450-81cf862c464b",
+      "title": "Define federated library identity and replica state",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 102348,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-52581263-0881-49af-8450-81cf862c464b.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-082d4629-cd99-4f0c-820a-91f7ac0373b6",
+      "title": "Build safe skill and pipeline snapshots",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 102348,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-082d4629-cd99-4f0c-820a-91f7ac0373b6.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-bedd5f22-963b-4556-9fc4-d9f973a4b5f7",
+      "title": "Synchronize libraries on federation membership and revision changes",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 102758,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-bedd5f22-963b-4556-9fc4-d9f973a4b5f7.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-2b1076dc-9bdc-45e9-a3b3-33a0e1b0ec41",
+      "title": "Expose and execute retained federated libraries",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 102758,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-2b1076dc-9bdc-45e9-a3b3-33a0e1b0ec41.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-274c4253-0677-42f5-b160-3a413737ad94",
+      "title": "Prove multi-node convergence, persistence, and collision handling",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -10402,
+      "y": 102758,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-274c4253-0677-42f5-b160-3a413737ad94.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-95f1745d-e1d7-477a-963e-a39df72048df",
+      "title": "Restore the Control Room carousel resize interaction",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "code",
+        "frontend",
+        "control-room",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 103368,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-95f1745d-e1d7-477a-963e-a39df72048df.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-eccf5518-f6a1-46ae-a483-459a55246210",
+      "title": "Make carousel size persistence resilient",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "code",
+        "frontend",
+        "persistence",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 103368,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-eccf5518-f6a1-46ae-a483-459a55246210.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-13c2c80e-a22f-4845-bf40-446383692ad5",
+      "title": "Add carousel resize regression coverage and verify the served surface",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "test",
+        "scenario",
+        "control-room",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 103778,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-13c2c80e-a22f-4845-bf40-446383692ad5.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-2432b12c-a764-49ea-a232-fbdbb0627183",
+      "title": "Simplify new-task project selection by node",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "labels": [
+        "frontend",
+        "ui",
+        "implementation-awaiting-device-verification",
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 104388,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-2432b12c-a764-49ea-a232-fbdbb0627183.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784272601639-e0783f23",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784272601639-e0783f23.md"
+    },
+    {
+      "id": "card-0edbfb94-6a4c-45c0-b44e-0459789866b6",
+      "title": "Simplify project filter chips and adapt text contrast",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 105408,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-0edbfb94-6a4c-45c0-b44e-0459789866b6.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784272682447-40512bfd",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784272682447-40512bfd.md"
+    },
+    {
+      "id": "card-12bbd526-e1be-4ac9-a0ee-016349226ebb",
+      "title": "Build the node-tabbed new-task project selector",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "labels": [
+        "frontend",
+        "ui",
+        "code",
+        "implemented",
+        "needs-device-verification",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 104388,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-12bbd526-e1be-4ac9-a0ee-016349226ebb.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-ade15b80-ea0e-4e73-b3ec-730e78dd4c26",
+      "title": "Add responsive regressions for the node selector",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "labels": [
+        "frontend",
+        "test",
+        "automated-checks-pass",
+        "needs-device-verification",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 104388,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-ade15b80-ea0e-4e73-b3ec-730e78dd4c26.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-b1e2c116-453b-4b18-844c-a0f6f664d244",
+      "title": "Define project-chip presentation and contrast",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 105408,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-b1e2c116-453b-4b18-844c-a0f6f664d244.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-225b5d6e-7e7f-4919-a2f7-92ef66179c78",
+      "title": "Render simplified project chips and remote marker",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 105408,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-225b5d6e-7e7f-4919-a2f7-92ef66179c78.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-95452f09-08e2-4251-b07b-d097f124feed",
+      "title": "Add project-chip regression coverage",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 105818,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-95452f09-08e2-4251-b07b-d097f124feed.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-09063d18-dab2-4ce0-8d1c-e62fdbc97cc7",
+      "title": "Prevent Control Room queue corruption after drag-and-drop",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "bug",
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 106428,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-09063d18-dab2-4ce0-8d1c-e62fdbc97cc7.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784273055977-5c37167a",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784273055977-5c37167a.md"
+    },
+    {
+      "id": "card-ca692962-43ef-4af0-984a-f56936cb17d5",
+      "title": "Feature: Federation Replicas and Instant Task Navigation",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "feature",
+        "federation",
+        "navigation",
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 107448,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-ca692962-43ef-4af0-984a-f56936cb17d5.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784273256919-3d61a578",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784273256919-3d61a578.md"
+    },
+    {
+      "id": "card-faeb4dca-6582-47d3-b1f4-5389a089c719",
+      "title": "Reproduce and trace the queue drag corruption",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "bug",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 106428,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-faeb4dca-6582-47d3-b1f4-5389a089c719.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-9cc50475-421b-4af0-9a83-bcecb1874a63",
+      "title": "Make queue reorder teardown and persistence atomic",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "bug",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 106428,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-9cc50475-421b-4af0-9a83-bcecb1874a63.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-9cebc924-d3c5-4eff-b37c-60736f27f86a",
+      "title": "Add served-surface queue drag regression coverage",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "bug",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 106838,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-9cebc924-d3c5-4eff-b37c-60736f27f86a.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-bb8a0fb0-099f-4026-aff9-f68871957b98",
+      "title": "Federated project synchronization from the desktop Projects page",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "feature",
+        "frontend",
+        "backend",
+        "federation",
+        "git-sync",
+        "task-list",
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 108468,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-bb8a0fb0-099f-4026-aff9-f68871957b98.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784275866195-25838c0e",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784275866195-25838c0e.md"
+    },
+    {
+      "id": "card-6afb0ac2-5a96-47c4-a190-b5a209fa9c33",
+      "title": "T01 — Define replica protocol and transfer priority",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "code",
+        "federation",
+        "protocol",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 107448,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-6afb0ac2-5a96-47c4-a190-b5a209fa9c33.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-4677af11-301c-4e60-a072-e34fb3a4daf3",
+      "title": "T02 — Persist and schedule federation replicas",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "data",
+        "federation",
+        "replication",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 107448,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-4677af11-301c-4e60-a072-e34fb3a4daf3.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-e336240f-67a8-4576-b9fd-24532a05f7d3",
+      "title": "T03 — Synchronize skills before dependent pipelines",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "code",
+        "federation",
+        "codex",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 107858,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-e336240f-67a8-4576-b9fd-24532a05f7d3.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-debc6a66-d45c-4c10-bfc5-bb85423a6c4d",
+      "title": "T04 — Replicate active task cards and threads",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "code",
+        "federation",
+        "tasks",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 107858,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-debc6a66-d45c-4c10-bfc5-bb85423a6c4d.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-cb7a7319-7271-4ac9-8560-a1f8d2c0117b",
+      "title": "T05 — Serve replica-first remote reads and prioritize misses",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "code",
+        "federation",
+        "backend",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 108268,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-cb7a7319-7271-4ac9-8560-a1f8d2c0117b.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-84c164a3-14d5-4690-900c-966f0d177d5c",
+      "title": "T06 — Render route changes immediately from client state",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "code",
+        "navigation",
+        "frontend",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 108268,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-84c164a3-14d5-4690-900c-966f0d177d5c.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-3f25ab45-8232-49f6-81a7-d41eb9cee6b2",
+      "title": "T07 — Show replica synchronization status and task skeletons",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "code",
+        "loading-state",
+        "frontend",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 108678,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-3f25ab45-8232-49f6-81a7-d41eb9cee6b2.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-1cab7a96-3ce0-4366-9154-14276c012003",
+      "title": "T08 — Prove replica ordering, offline reads, and immediate navigation",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "test",
+        "federation",
+        "navigation",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 108678,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-1cab7a96-3ce0-4366-9154-14276c012003.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-e7930c5b-5f27-4e53-8b09-1d7fa669305d",
+      "title": "T01 Open node-aware project settings from the desktop list",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "code",
+        "frontend",
+        "projects",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 108468,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-e7930c5b-5f27-4e53-8b09-1d7fa669305d.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-f5dc1855-9a9a-4e78-a766-cf439c20f5b1",
+      "title": "T02 Add repository sync identity and fixed status snapshots",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "code",
+        "backend",
+        "federation",
+        "git-sync",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 108468,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-f5dc1855-9a9a-4e78-a766-cf439c20f5b1.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-7d32e4e4-ab01-4f31-ad69-d5a7bd36f572",
+      "title": "T03 Persist sync runs and enforce project locks",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "code",
+        "backend",
+        "persistence",
+        "git-sync",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 108878,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-7d32e4e4-ab01-4f31-ad69-d5a7bd36f572.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-6e24adc4-416f-40e0-9d86-9f780a0cb4ff",
+      "title": "T04 Run project-root Codex sync roles with canonical prompts",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "code",
+        "backend",
+        "codex",
+        "git-sync",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 108878,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-6e24adc4-416f-40e0-9d86-9f780a0cb4ff.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-06b1bc39-1a74-4a09-9199-8e05ca21013b",
+      "title": "T05 Orchestrate the no-loss authority sequence",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "code",
+        "backend",
+        "orchestration",
+        "git-sync",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 109288,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-06b1bc39-1a74-4a09-9199-8e05ca21013b.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-392d7276-b024-4e03-a5bd-f9492e593c76",
+      "title": "T06 Carry sync commands and callbacks across federation",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "code",
+        "backend",
+        "federation",
+        "git-sync",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 109288,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-392d7276-b024-4e03-a5bd-f9492e593c76.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-cc553664-46d3-458c-8de2-12f7ba0d041c",
+      "title": "T07 Surface asynchronous status and notifications",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "code",
+        "frontend",
+        "notifications",
+        "git-sync",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 109698,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-cc553664-46d3-458c-8de2-12f7ba0d041c.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-f9f280be-6b3d-4138-a60d-6a299ac40ef2",
+      "title": "T08 Verify protocol, federation, UI, and no-loss guards",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "test",
+        "browser",
+        "federation",
+        "git-sync",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 109698,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-f9f280be-6b3d-4138-a60d-6a299ac40ef2.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-579cca1e-0eea-4ab0-af0e-18e8bf9c5792",
+      "title": "New task intake",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 109488,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-579cca1e-0eea-4ab0-af0e-18e8bf9c5792.md"
       },
       "facts": [],
       "fields": []
@@ -12511,6 +13447,204 @@
       "id": "rel-44db2e1b-a270-4c53-b668-0253e448ed5b",
       "from": "card-b2753e07-c720-4173-8094-adca2f644f33",
       "to": "card-36d7a19d-0e56-4601-9a4d-c16a27adf4fb",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-675bf936-5aa9-49cb-a73d-4f36743af3aa",
+      "from": "card-7493b007-899b-49cf-9a5b-c07fb6b35c70",
+      "to": "card-c767c97c-a988-4ba1-a324-271ed87376e5",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-75d2d105-305b-485e-88a0-47e54b285688",
+      "from": "card-66a84904-5a44-4c0e-9eab-5aa391f4223f",
+      "to": "card-52581263-0881-49af-8450-81cf862c464b",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-31927782-bfec-48ed-9f9c-fcd758dbf536",
+      "from": "card-66a84904-5a44-4c0e-9eab-5aa391f4223f",
+      "to": "card-082d4629-cd99-4f0c-820a-91f7ac0373b6",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-9573946f-60b2-40ec-89d9-2d057c220cac",
+      "from": "card-66a84904-5a44-4c0e-9eab-5aa391f4223f",
+      "to": "card-bedd5f22-963b-4556-9fc4-d9f973a4b5f7",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-a8cf7533-eb10-48a7-a92d-35acba155c60",
+      "from": "card-66a84904-5a44-4c0e-9eab-5aa391f4223f",
+      "to": "card-2b1076dc-9bdc-45e9-a3b3-33a0e1b0ec41",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-8e49c01a-df74-454d-99dd-18142c8fa26d",
+      "from": "card-66a84904-5a44-4c0e-9eab-5aa391f4223f",
+      "to": "card-274c4253-0677-42f5-b160-3a413737ad94",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-a9be3bb3-6a0a-4421-8938-9a74d67b81f5",
+      "from": "card-7ae8cc5b-5f16-4d10-9638-22f098c701fa",
+      "to": "card-95f1745d-e1d7-477a-963e-a39df72048df",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-435039b2-8711-4a9b-b6d2-c44d91144d22",
+      "from": "card-7ae8cc5b-5f16-4d10-9638-22f098c701fa",
+      "to": "card-eccf5518-f6a1-46ae-a483-459a55246210",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-7ad675a2-f686-40ae-b2b6-bc38c54255fe",
+      "from": "card-7ae8cc5b-5f16-4d10-9638-22f098c701fa",
+      "to": "card-13c2c80e-a22f-4845-bf40-446383692ad5",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-9e17d538-f30b-48b4-86ec-0c77cd132a24",
+      "from": "card-2432b12c-a764-49ea-a232-fbdbb0627183",
+      "to": "card-12bbd526-e1be-4ac9-a0ee-016349226ebb",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-d90b4670-413c-4819-82d0-dd21fa4aa5a1",
+      "from": "card-2432b12c-a764-49ea-a232-fbdbb0627183",
+      "to": "card-ade15b80-ea0e-4e73-b3ec-730e78dd4c26",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-cebacc5c-db1e-4671-ad93-3b1fc5703ef6",
+      "from": "card-0edbfb94-6a4c-45c0-b44e-0459789866b6",
+      "to": "card-b1e2c116-453b-4b18-844c-a0f6f664d244",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-2878d474-9466-4b86-9826-6de9ef85f428",
+      "from": "card-0edbfb94-6a4c-45c0-b44e-0459789866b6",
+      "to": "card-225b5d6e-7e7f-4919-a2f7-92ef66179c78",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-c37a8dab-8f70-4a1a-9e4c-4cbe54d3a862",
+      "from": "card-0edbfb94-6a4c-45c0-b44e-0459789866b6",
+      "to": "card-95452f09-08e2-4251-b07b-d097f124feed",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-daf8953c-626b-40e0-a090-9d569683420a",
+      "from": "card-09063d18-dab2-4ce0-8d1c-e62fdbc97cc7",
+      "to": "card-faeb4dca-6582-47d3-b1f4-5389a089c719",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-f31874d9-8889-4231-b198-3c3c560bd319",
+      "from": "card-09063d18-dab2-4ce0-8d1c-e62fdbc97cc7",
+      "to": "card-9cc50475-421b-4af0-9a83-bcecb1874a63",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-611660d8-31ce-4b1b-8061-cfc776e241f8",
+      "from": "card-09063d18-dab2-4ce0-8d1c-e62fdbc97cc7",
+      "to": "card-9cebc924-d3c5-4eff-b37c-60736f27f86a",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-5041d39a-76fe-4f13-af20-047dbe4160ec",
+      "from": "card-ca692962-43ef-4af0-984a-f56936cb17d5",
+      "to": "card-6afb0ac2-5a96-47c4-a190-b5a209fa9c33",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-331900a5-7565-4ea1-9d0f-d4a461a53fda",
+      "from": "card-ca692962-43ef-4af0-984a-f56936cb17d5",
+      "to": "card-4677af11-301c-4e60-a072-e34fb3a4daf3",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-bcf8699e-08f9-485f-805d-b7c0910f5cd6",
+      "from": "card-ca692962-43ef-4af0-984a-f56936cb17d5",
+      "to": "card-e336240f-67a8-4576-b9fd-24532a05f7d3",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-81920cc0-5147-495b-9954-00f56ba43944",
+      "from": "card-ca692962-43ef-4af0-984a-f56936cb17d5",
+      "to": "card-debc6a66-d45c-4c10-bfc5-bb85423a6c4d",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-adac784e-2cda-49a0-9265-3d5326a575f3",
+      "from": "card-ca692962-43ef-4af0-984a-f56936cb17d5",
+      "to": "card-cb7a7319-7271-4ac9-8560-a1f8d2c0117b",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-4e243074-5dfd-4fba-b6d1-255fae97b3cc",
+      "from": "card-ca692962-43ef-4af0-984a-f56936cb17d5",
+      "to": "card-84c164a3-14d5-4690-900c-966f0d177d5c",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-657c4f7a-2728-43f2-b2aa-09e8dd132622",
+      "from": "card-ca692962-43ef-4af0-984a-f56936cb17d5",
+      "to": "card-3f25ab45-8232-49f6-81a7-d41eb9cee6b2",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-5fb24aae-5fea-4648-b841-197db4b85310",
+      "from": "card-ca692962-43ef-4af0-984a-f56936cb17d5",
+      "to": "card-1cab7a96-3ce0-4366-9154-14276c012003",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-36ac44ab-45d1-4371-9aff-24170baa72c1",
+      "from": "card-bb8a0fb0-099f-4026-aff9-f68871957b98",
+      "to": "card-e7930c5b-5f27-4e53-8b09-1d7fa669305d",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-eb6702e2-8de1-4b16-b699-28073343297b",
+      "from": "card-bb8a0fb0-099f-4026-aff9-f68871957b98",
+      "to": "card-f5dc1855-9a9a-4e78-a766-cf439c20f5b1",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-6cfb3d72-cde4-48e0-844c-13930a8dce28",
+      "from": "card-bb8a0fb0-099f-4026-aff9-f68871957b98",
+      "to": "card-7d32e4e4-ab01-4f31-ad69-d5a7bd36f572",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-28965e46-0e55-4f57-b41c-b81820fad3c2",
+      "from": "card-bb8a0fb0-099f-4026-aff9-f68871957b98",
+      "to": "card-6e24adc4-416f-40e0-9d86-9f780a0cb4ff",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-172b51ab-5e37-4459-89d4-4a86771daed7",
+      "from": "card-bb8a0fb0-099f-4026-aff9-f68871957b98",
+      "to": "card-06b1bc39-1a74-4a09-9199-8e05ca21013b",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-d744b660-70ed-4397-9450-4a4267c441bb",
+      "from": "card-bb8a0fb0-099f-4026-aff9-f68871957b98",
+      "to": "card-392d7276-b024-4e03-a5bd-f9492e593c76",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-beee1028-cfa2-4bca-ba69-425a3a7ad62a",
+      "from": "card-bb8a0fb0-099f-4026-aff9-f68871957b98",
+      "to": "card-cc553664-46d3-458c-8de2-12f7ba0d041c",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-32751824-067b-4cfc-9136-bdacc747b717",
+      "from": "card-bb8a0fb0-099f-4026-aff9-f68871957b98",
+      "to": "card-f9f280be-6b3d-4138-a60d-6a299ac40ef2",
       "label": "subtask"
     }
   ],
@@ -13670,6 +14804,96 @@
       "color": "#fb7185",
       "label": "Codex execution state persistence",
       "comments": []
+    },
+    {
+      "id": "zone-1659708a-4d5f-46ac-8929-be193a7391da",
+      "x": -10462,
+      "y": 101268,
+      "width": 1200,
+      "height": 900,
+      "color": "#895cfa",
+      "label": "Test Failure Diagnosis",
+      "comments": []
+    },
+    {
+      "id": "zone-6ba63a99-1c94-4b78-aee6-6572271ad128",
+      "x": -10462,
+      "y": 102288,
+      "width": 1200,
+      "height": 900,
+      "color": "#895cfa",
+      "label": "Federated skill and pipeline synchronization",
+      "comments": []
+    },
+    {
+      "id": "zone-32b39e0b-6116-4f92-8fc0-827427da6e32",
+      "x": -10462,
+      "y": 103308,
+      "width": 1200,
+      "height": 900,
+      "color": "#895cfa",
+      "label": "Control Room carousel resize regression",
+      "comments": []
+    },
+    {
+      "id": "zone-9ea88b36-fed1-40ff-b11b-e1c8aaba98ad",
+      "x": -10462,
+      "y": 104328,
+      "width": 1200,
+      "height": 900,
+      "color": "#895cfa",
+      "label": "New-task node selector",
+      "comments": []
+    },
+    {
+      "id": "zone-ab508253-c40d-4c69-b12b-8148fdd76451",
+      "x": -10462,
+      "y": 105348,
+      "width": 1200,
+      "height": 900,
+      "color": "#895cfa",
+      "label": "Simplify project filter chips and adapt text contrast",
+      "comments": []
+    },
+    {
+      "id": "zone-cb5c1a88-bbaa-4462-831e-0429b488979d",
+      "x": -10462,
+      "y": 106368,
+      "width": 1200,
+      "height": 900,
+      "color": "#895cfa",
+      "label": "Control Room queue drag-and-drop integrity",
+      "comments": []
+    },
+    {
+      "id": "zone-2a7a7be0-f576-45da-8af5-1c027455eb00",
+      "x": -10462,
+      "y": 107388,
+      "width": 1200,
+      "height": 900,
+      "color": "#895cfa",
+      "label": "Federation Replicas and Instant Task Navigation",
+      "comments": []
+    },
+    {
+      "id": "zone-a9e72ef9-466e-49d1-87a2-c046e133bd6b",
+      "x": -10462,
+      "y": 108408,
+      "width": 1200,
+      "height": 900,
+      "color": "#895cfa",
+      "label": "Federated project synchronization",
+      "comments": []
+    },
+    {
+      "id": "zone-79cae480-c9f8-4231-9969-d6cc1b4898b6",
+      "x": -10462,
+      "y": 109428,
+      "width": 1200,
+      "height": 900,
+      "color": "#895cfa",
+      "label": "New task intake",
+      "comments": []
     }
   ],
   "notes": {},
@@ -13797,7 +15021,16 @@
     "thread-card-ecc57811-4f45-4315-bb3d-d3a951c61f3b": ".decision-os/threads/specs/thread-card-ecc57811-4f45-4315-bb3d-d3a951c61f3b.md",
     "thread-card-75f0b9c8-4e06-41a4-88ab-406a5e529d67": ".decision-os/threads/specs/thread-card-75f0b9c8-4e06-41a4-88ab-406a5e529d67.md",
     "thread-card-ab38294e-ff82-4afb-b8c6-fe773f3a2560": ".decision-os/threads/specs/thread-card-ab38294e-ff82-4afb-b8c6-fe773f3a2560.md",
-    "thread-card-b2753e07-c720-4173-8094-adca2f644f33": ".decision-os/threads/specs/thread-card-b2753e07-c720-4173-8094-adca2f644f33.md"
+    "thread-card-b2753e07-c720-4173-8094-adca2f644f33": ".decision-os/threads/specs/thread-card-b2753e07-c720-4173-8094-adca2f644f33.md",
+    "thread-card-7493b007-899b-49cf-9a5b-c07fb6b35c70": ".decision-os/threads/specs/thread-card-7493b007-899b-49cf-9a5b-c07fb6b35c70.md",
+    "thread-card-66a84904-5a44-4c0e-9eab-5aa391f4223f": ".decision-os/threads/specs/thread-card-66a84904-5a44-4c0e-9eab-5aa391f4223f.md",
+    "thread-card-7ae8cc5b-5f16-4d10-9638-22f098c701fa": ".decision-os/threads/specs/thread-card-7ae8cc5b-5f16-4d10-9638-22f098c701fa.md",
+    "thread-card-2432b12c-a764-49ea-a232-fbdbb0627183": ".decision-os/threads/specs/thread-card-2432b12c-a764-49ea-a232-fbdbb0627183.md",
+    "thread-card-0edbfb94-6a4c-45c0-b44e-0459789866b6": ".decision-os/threads/specs/thread-card-0edbfb94-6a4c-45c0-b44e-0459789866b6.md",
+    "thread-card-09063d18-dab2-4ce0-8d1c-e62fdbc97cc7": ".decision-os/threads/specs/thread-card-09063d18-dab2-4ce0-8d1c-e62fdbc97cc7.md",
+    "thread-card-ca692962-43ef-4af0-984a-f56936cb17d5": ".decision-os/threads/specs/thread-card-ca692962-43ef-4af0-984a-f56936cb17d5.md",
+    "thread-card-bb8a0fb0-099f-4026-aff9-f68871957b98": ".decision-os/threads/specs/thread-card-bb8a0fb0-099f-4026-aff9-f68871957b98.md",
+    "thread-card-579cca1e-0eea-4ab0-af0e-18e8bf9c5792": ".decision-os/threads/specs/thread-card-579cca1e-0eea-4ab0-af0e-18e8bf9c5792.md"
   },
   "deletedNoteIds": {
     "thread-card-7074d33a-39da-42a1-b470-673cbe221def": [
