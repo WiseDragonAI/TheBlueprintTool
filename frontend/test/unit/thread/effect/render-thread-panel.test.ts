@@ -546,3 +546,87 @@ test('queued thread runs become read-only and render their queue position withou
     state.threadCoalescedToolsByThreadId = {};
   }
 });
+
+test('a newer durable pending execution hides launch controls before its status request resolves', async () => {
+  const previousFetch = globalThis.fetch;
+  const { heading } = installDom();
+  const { state } = await import('../../../../src/runtime/state.js');
+  const { renderThreadPanel } = await import('../../../../src/runtime/thread/effect/render-thread-panel.js');
+  const runId = 'codex-skill-reopened-pending';
+  const threadId = 'thread-card-reopened';
+  try {
+    globalThis.fetch = (() => new Promise<Response>(() => undefined)) as typeof fetch;
+    state.activeTab = 'specs';
+    state.activeLedger = {
+      cards: [{
+        id: 'card-reopened',
+        title: 'Reopened queued card',
+        codexThreadRunId: runId,
+        codexActiveRunId: runId,
+        codexActiveExecutionId: 'execution-new',
+        executionStatus: 'pending',
+      }],
+      annotations: [], relationships: [], notes: { [threadId]: [] },
+    };
+    state.threadId = threadId;
+    state.renderedThreadId = '';
+    state.threadPanelOpen = true;
+    state.activeTool = 'select';
+    state.threadPinOnRender = false;
+    state.threadScrollTopByThreadId = {};
+    state.threadLogScrollTopByThreadId = {};
+    state.threadActiveTabByThreadId = { [threadId]: 'thread' };
+    state.threadRunIdByThreadId = { [threadId]: runId };
+    state.threadRunSummaryByThreadId = { [threadId]: {
+      ok: true,
+      status: 'complete',
+      active: false,
+      executionId: 'execution-old',
+      queuePosition: null,
+      runId,
+      runKind: 'thread',
+      pipelineRunId: '',
+      pipelineName: '',
+      pipelineStepName: '',
+      skillName: '',
+      pipelineStatus: '',
+      currentExecution: null,
+      executions: [],
+      startedAt: '',
+      elapsedMs: 0,
+      lineCount: 0,
+      nextSince: 0,
+      toolCallCount: 0,
+      agentMessageCount: 0,
+      fileChangeCount: 0,
+      thinkingCount: 0,
+      warningCount: 0,
+      errorCount: 0,
+      transportStatus: 'ok',
+      persistedEventCount: 0,
+      metadata: { sourceCardTitle: '', sourceThreadId: threadId, codexModel: 'gpt-5.6-sol', codexEffort: 'medium' },
+      latestEvent: null,
+      events: [],
+      diagnostics: [],
+    } };
+    state.threadRunEventsByThreadId = { [threadId]: [] };
+    state.threadCoalescedToolsByThreadId = { [threadId]: {} };
+    state.telemetry = [];
+    state.voice = { recording: false, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
+
+    renderThreadPanel();
+
+    assert.equal(heading.querySelector('.thread-actions')?.hidden, true);
+    assert.equal(heading.dataset.codexStatus, 'pending');
+    assert.equal(heading.dataset.codexRunning, 'true');
+  } finally {
+    globalThis.fetch = previousFetch;
+    state.threadId = '';
+    state.activeLedger = null;
+    state.threadActiveTabByThreadId = {};
+    state.threadRunIdByThreadId = {};
+    state.threadRunSummaryByThreadId = {};
+    state.threadRunEventsByThreadId = {};
+    state.threadCoalescedToolsByThreadId = {};
+  }
+});
