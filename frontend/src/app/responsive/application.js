@@ -48,7 +48,7 @@ const elements = Object.fromEntries([
   'overview-view', 'overview-summary', 'overview-ledgers', 'ledger-view', 'ledger-title', 'ledger-summary',
   'zone-list', 'zone-view', 'zone-title', 'zone-summary', 'card-search', 'card-list',
   'no-results', 'card-view', 'card-title', 'card-body', 'control-room-view', 'control-project-filters', 'control-filters',
-  'control-task-list', 'control-empty', 'control-diagnostics', 'codex-settings-limit', 'codex-settings-voice-pipeline', 'codex-settings-message',
+  'control-task-list', 'control-empty', 'codex-settings-limit', 'codex-settings-voice-pipeline', 'codex-settings-message',
   'federation-connection-status', 'federation-state-duration', 'federation-attempt-timeout', 'federation-last-connection',
   'federation-last-issue', 'federation-peer-list', 'federation-settings-message'
 ].map((id) => [id, document.getElementById(id)]));
@@ -1493,17 +1493,6 @@ function renderControlRoom() {
   restoreControlRoomColumnScroll();
   initializeQueueSortable();
   elements['control-empty'].hidden = true;
-  const diagnostics = Array.isArray(state.controlRoom?.diagnostics) ? state.controlRoom.diagnostics : [];
-  const messages = [
-    ...(state.controlRoom?.stale ? [`Showing cached revision ${state.controlRoom.revision}; the server is rebuilding.`] : []),
-    ...diagnostics.map((entry) => Array.isArray(entry?.diagnostics) ? entry.diagnostics.join(' · ') : asText(entry?.message)).filter(Boolean)
-  ];
-  elements['control-diagnostics'].hidden = messages.length === 0;
-  elements['control-diagnostics'].replaceChildren(...messages.map((message) => {
-    const row = document.createElement('p');
-    row.textContent = message;
-    return row;
-  }));
   setView('control-room-view');
   document.title = 'Control room · Decision OS';
   const { anchor } = parseControlRoomRoute(location.href);
@@ -1547,8 +1536,7 @@ async function refreshControlRoomFromEvent() {
   try {
     if (await loadControlRoom({ deferDuringQueueDrag: true })) renderControlRoom();
   } catch (cause) {
-    elements['control-diagnostics'].hidden = false;
-    elements['control-diagnostics'].textContent = cause instanceof Error ? cause.message : 'Control Room refresh failed.';
+    console.error('Control Room refresh failed.', cause);
   }
 }
 
@@ -1654,8 +1642,7 @@ async function persistControlTaskPlacement({ taskId, sourceTab, targetTab, newIn
   } catch (error) {
     await loadControlRoom({ force: true });
     renderControlRoom();
-    elements['control-diagnostics'].hidden = false;
-    elements['control-diagnostics'].textContent = error instanceof Error ? error.message : 'Task placement persistence failed.';
+    console.error('Task placement persistence failed.', error);
   } finally {
     await settleQueueDrag();
   }
@@ -2362,8 +2349,7 @@ async function loadRoute({ retainView = false } = {}) {
         return;
       }
       if (location.pathname === '/' && state.controlRoom) {
-        elements['control-diagnostics'].hidden = false;
-        elements['control-diagnostics'].textContent = error instanceof Error ? error.message : 'Control Room refresh failed.';
+        console.error('Control Room refresh failed.', error);
         return;
       }
     }
