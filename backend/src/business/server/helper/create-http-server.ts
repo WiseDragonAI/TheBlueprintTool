@@ -58,6 +58,7 @@ import { createControlRoomProjectionStore } from './control-room-projection-stor
 import { ledgerCanvasProjection, ledgerCardProjection, ledgerNavigationProjection, ledgerSearchProjection, ledgerThreadProjection } from './ledger-read-models.js';
 import { ensureProjectsCanvasDocument } from './ensure-projects-canvas-document.js';
 import { createFederationNodeConnector } from '../../federation/helper/federation-node-connector.js';
+import { migrateLegacyProjectPipelines } from '../../codex/helper/server-pipeline-catalog.js';
 
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
@@ -333,6 +334,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     return context;
   };
   const projectCatalogStore = createProjectCatalogStore({ masterRoot, masterDecisionOsRoot });
+  migrateLegacyProjectPipelines({
+    serverDecisionOsRoot: masterDecisionOsRoot,
+    projectDecisionOsRoots: projectCatalogStore.projects()
+      .filter((project) => project.available)
+      .map((project) => project.decisionOsRoot),
+  });
   const projectCatalog = () => projectCatalogStore.projects();
   let federationServerPort = port;
   const federation = createFederationNodeConnector({
@@ -721,14 +728,18 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.end(JSON.stringify(result));
       return;
     }
-    if (url === '/api/codex/pipelines' && request.method === 'GET') {
-      const result = listCodexPipelinesController({ runtime_state: requestRuntime });
+    if ((url === '/api/codex/pipelines' || url === '/api/codex/server-pipelines') && request.method === 'GET') {
+      const result = listCodexPipelinesController({
+        runtime_state: url === '/api/codex/server-pipelines'
+          ? { ...requestRuntime, decisionOsRoot: masterDecisionOsRoot, projectId: '' }
+          : requestRuntime,
+      });
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
       response.end(JSON.stringify(result));
       return;
     }
-    if (url === '/api/codex/pipelines' && request.method === 'POST') {
+    if ((url === '/api/codex/pipelines' || url === '/api/codex/server-pipelines') && request.method === 'POST') {
       const bodyBuffer = await readRequestBuffer(request);
       const savePayload = (() => {
         try {
@@ -737,7 +748,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           return {};
         }
       })();
-      const result = saveCodexPipelineController({ action_payload: { ...savePayload, operation: 'create' }, runtime_state: requestRuntime });
+      const result = saveCodexPipelineController({ action_payload: { ...savePayload, operation: 'create', ...(url === '/api/codex/server-pipelines' ? { scope: 'server' } : {}) }, runtime_state: requestRuntime });
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 201));
       response.end(JSON.stringify(result));
@@ -810,6 +821,22 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.end(JSON.stringify(result));
       return;
     }
+    if (url.startsWith('/api/codex/server-pipelines/') && request.method === 'PUT') {
+      const pipelineId = decodeRouteSegment(url.slice('/api/codex/server-pipelines/'.length));
+      const bodyBuffer = await readRequestBuffer(request);
+      const savePayload = (() => {
+        try {
+          return JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
+        } catch {
+          return {};
+        }
+      })();
+      const result = saveCodexPipelineController({ action_payload: { ...savePayload, pipelineId, operation: 'update', scope: 'server' }, runtime_state: requestRuntime });
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
+      response.end(JSON.stringify(result));
+      return;
+    }
     if (url.startsWith('/api/codex/skill-library/') && request.method === 'GET') {
       const skillName = decodeRouteSegment(url.slice('/api/codex/skill-library/'.length));
       const result = readCodexSkillLibraryController({ action_payload: { skillName }, runtime_state: requestRuntime });
@@ -834,8 +861,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.end(JSON.stringify(result));
       return;
     }
-    if (url === '/api/codex/skills' && request.method === 'GET') {
-      const skills = readCodexSkillCatalog({ decisionOsRoot, runtime: requestRuntime }).skills;
+    if ((url === '/api/codex/skills' || url === '/api/codex/server-skills') && request.method === 'GET') {
+      const skillRuntime = url === '/api/codex/server-skills'
+        ? { ...requestRuntime, decisionOsRoot: masterDecisionOsRoot, projectId: '' }
+        : requestRuntime;
+      const skills = readCodexSkillCatalog({ decisionOsRoot: String(skillRuntime.decisionOsRoot), runtime: skillRuntime }).skills;
       response.setHeader('content-type', 'application/json');
       response.statusCode = 200;
       response.end(JSON.stringify({ ok: true, skills, availableTags: codexSkillTags }));

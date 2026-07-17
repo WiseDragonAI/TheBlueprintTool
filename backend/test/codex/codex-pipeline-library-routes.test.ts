@@ -142,3 +142,34 @@ test('pipeline library routes expose empty, create, invalid-reference, conflict,
     rmSync(codexHome, { recursive: true, force: true });
   }
 });
+
+test('server pipeline routes persist explicit server provenance', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-server-pipeline-routes-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  mkdirSync(decisionOsRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
+  const runtime: Record<string, any> = { decisionOsRoot };
+  createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
+  const server = runtime.server as Server;
+  await once(server, 'listening');
+  const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  try {
+    const response = await fetch(`${baseUrl}/api/codex/server-pipelines`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        pipeline: { id: 'server-pipeline', name: 'Server pipeline', purpose: '', stepIds: ['server-step'] },
+        steps: [{ id: 'server-step', name: 'Server step', purpose: '', skills: [] }],
+      }),
+    });
+    assert.equal(response.status, 201, await response.clone().text());
+    const created = await response.json() as Record<string, any>;
+    assert.equal(created.pipeline.scope, 'server');
+    const listed = await fetch(`${baseUrl}/api/codex/server-pipelines`).then((result) => result.json()) as Record<string, any>;
+    assert.deepEqual(listed.pipelines.map((pipeline: Record<string, any>) => [pipeline.id, pipeline.scope]), [['server-pipeline', 'server']]);
+    assert.equal(JSON.parse(readFileSync(join(decisionOsRoot, 'codex-pipelines.json'), 'utf8')).pipelines[0].id, 'server-pipeline');
+  } finally {
+    await closeServer(server);
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});

@@ -311,7 +311,7 @@ test('one catalog-level server skill executes directly and in saved pipelines fr
   mkdirSync(masterDecisionOsRoot, { recursive: true });
   writeFileSync(join(masterDecisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [] }));
   const projects = [join(masterRoot, 'repos', 'one'), join(masterRoot, 'repos', 'two')];
-  for (const workspace of projects) {
+  for (const [projectIndex, workspace] of projects.entries()) {
     const decisionOsRoot = join(workspace, '.decision-os');
     mkdirSync(decisionOsRoot, { recursive: true });
     writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }] }));
@@ -320,7 +320,7 @@ test('one catalog-level server skill executes directly and in saved pipelines fr
       annotations: [], relationships: [], notes: {},
     }));
     const now = '2026-07-13T00:00:00.000Z';
-    writeCodexPipelineStore({
+    if (projectIndex === 0) writeCodexPipelineStore({
       decisionOsRoot, availableSkillNames: ['shared-catalog-skill'],
       store: {
         pipelines: [{ id: 'shared-pipeline', name: 'Shared pipeline', purpose: '', stepIds: ['shared-step'], createdAt: now, updatedAt: now }],
@@ -350,11 +350,15 @@ test('one catalog-level server skill executes directly and in saved pipelines fr
   const catalog = discoverDecisionOsProjects({ masterRoot, masterDecisionOsRoot }).filter((project) => projects.includes(project.root));
   try {
     assert.equal(catalog.length, 2);
+    assert.equal(readCodexPipelineStore({ decisionOsRoot: masterDecisionOsRoot }).store.pipelines[0].id, 'shared-pipeline');
+    assert.equal(catalog.every((project) => readCodexPipelineStore({ decisionOsRoot: project.decisionOsRoot }).store.pipelines.length === 0), true);
     for (const project of catalog) {
       const scoped = `${baseUrl}/p/${encodeURIComponent(project.id)}`;
       const libraryResponse = await fetch(`${scoped}/api/codex/skills`);
       const library = await libraryResponse.json() as Record<string, any>;
       assert.equal(library.skills.some((skill: Record<string, unknown>) => skill.name === 'shared-catalog-skill'), true);
+      const pipelineLibrary = await fetch(`${scoped}/api/codex/pipelines`).then((response) => response.json()) as Record<string, any>;
+      assert.deepEqual(pipelineLibrary.pipelines.map((pipeline: Record<string, unknown>) => [pipeline.id, pipeline.scope]), [['shared-pipeline', 'server']]);
       const directResponse = await fetch(`${scoped}/api/codex/skills/process`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ ledgerId: 'specs', cardId: 'source-card', skillName: 'shared-catalog-skill' }),

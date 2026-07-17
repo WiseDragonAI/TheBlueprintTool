@@ -8,6 +8,7 @@ import { readCodexPipelineStore, writeCodexPipelineStore } from '../helper/codex
 import { isAllowedCodexEffort, isAllowedCodexModel } from '../helper/resolve-codex-command.js';
 import { scanCodexSkills } from '../helper/scan-codex-skills.js';
 import { runtimeServerRoot } from '../helper/server-skill-context.js';
+import { serverPipelineDecisionOsRoot } from '../helper/server-pipeline-catalog.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -86,7 +87,10 @@ export function saveCodexPipelineController(
   const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord };
   const payload = (envelope.action_payload ?? input) as AnyRecord;
   const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
-  const decisionOsRoot = resolve(String(runtime.decisionOsRoot ?? resolve(process.cwd(), '.decision-os')));
+  const requestDecisionOsRoot = resolve(String(runtime.decisionOsRoot ?? resolve(process.cwd(), '.decision-os')));
+  const decisionOsRoot = text(payload.scope) === 'server'
+    ? serverPipelineDecisionOsRoot(runtime, requestDecisionOsRoot)
+    : requestDecisionOsRoot;
   const pipelineInput = record(payload.pipeline);
   if (!pipelineInput) return invalid('A pipeline object is required.');
   const id = text(pipelineInput.id);
@@ -132,9 +136,9 @@ export function saveCodexPipelineController(
     return {
       ok: true,
       statusCode: existing ? 200 : 201,
-      pipeline: normalized.store.pipelines.find((entry) => entry.id === id),
-      pipelines: normalized.store.pipelines,
-      steps: normalized.store.steps,
+      pipeline: { ...normalized.store.pipelines.find((entry) => entry.id === id), scope: text(payload.scope) === 'server' ? 'server' : 'project' },
+      pipelines: normalized.store.pipelines.map((entry) => ({ ...entry, scope: text(payload.scope) === 'server' ? 'server' : 'project' })),
+      steps: normalized.store.steps.map((entry) => ({ ...entry, scope: text(payload.scope) === 'server' ? 'server' : 'project' })),
       hasInvalidReferences: normalized.invalidReferences.length > 0,
       invalidReferences: normalized.invalidReferences,
       issues: normalized.issues,

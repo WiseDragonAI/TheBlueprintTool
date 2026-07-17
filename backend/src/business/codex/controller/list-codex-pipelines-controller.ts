@@ -3,9 +3,9 @@
  * WHY: Pipeline clients need ordered definitions plus repairable invalid-reference metadata.
  */
 import { dirname, resolve } from 'node:path';
-import { readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import { scanCodexSkills } from '../helper/scan-codex-skills.js';
 import { runtimeServerRoot } from '../helper/server-skill-context.js';
+import { readScopedCodexPipelineStores } from '../helper/server-pipeline-catalog.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -16,15 +16,21 @@ export function listCodexPipelinesController(
   const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
   const decisionOsRoot = resolve(String(runtime.decisionOsRoot ?? resolve(process.cwd(), '.decision-os')));
   const availableSkillNames = scanCodexSkills({ workspaceRoot: dirname(decisionOsRoot), serverRoot: runtimeServerRoot(runtime) }).map((skill) => skill.name);
-  const normalized = readCodexPipelineStore({ decisionOsRoot, availableSkillNames });
+  const scoped = readScopedCodexPipelineStores({ decisionOsRoot, runtime, availableSkillNames });
+  const invalidReferences = [
+    ...scoped.server.invalidReferences,
+    ...(scoped.project?.invalidReferences ?? []).filter((reference) =>
+      !scoped.server.store.pipelines.some((pipeline) => pipeline.id === reference.pipelineId)),
+  ];
+  const issues = [...scoped.server.issues, ...(scoped.project?.issues ?? [])];
   return {
     ok: true,
     statusCode: 200,
-    pipelines: normalized.store.pipelines,
-    steps: normalized.store.steps,
-    empty: normalized.store.pipelines.length === 0,
-    hasInvalidReferences: normalized.invalidReferences.length > 0,
-    invalidReferences: normalized.invalidReferences,
-    issues: normalized.issues,
+    pipelines: scoped.pipelines,
+    steps: scoped.steps,
+    empty: scoped.pipelines.length === 0,
+    hasInvalidReferences: invalidReferences.length > 0,
+    invalidReferences,
+    issues,
   };
 }

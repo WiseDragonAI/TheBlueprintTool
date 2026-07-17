@@ -18,6 +18,7 @@ import {
 import { readCodexPipelineStore, writeCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import { scanCodexSkills } from '../helper/scan-codex-skills.js';
 import { runtimeServerRoot } from '../helper/server-skill-context.js';
+import { readScopedCodexPipelineStores } from '../helper/server-pipeline-catalog.js';
 import {
   resolvePipelineLedgerContext,
   type PipelineLedgerContext,
@@ -217,18 +218,20 @@ export async function startCodexPipelineRunController(
     return { ok: false, statusCode: 400, error: 'Missing ledgerId, sourceCardId, or pipelineId.' };
   }
   const availableSkillNames = scanCodexSkills({ workspaceRoot: dirname(decisionOsRoot), serverRoot: runtimeServerRoot(runtime) }).map((skill) => skill.name);
-  const normalized = readCodexPipelineStore({ decisionOsRoot, availableSkillNames });
-  const pipeline = normalized.store.pipelines.find((entry) => entry.id === pipelineId);
+  const scoped = readScopedCodexPipelineStores({ decisionOsRoot, runtime, availableSkillNames });
+  const serverPipeline = scoped.server.store.pipelines.find((entry) => entry.id === pipelineId);
+  const normalized = serverPipeline ? scoped.server : scoped.project;
+  const pipeline = serverPipeline ?? normalized?.store.pipelines.find((entry) => entry.id === pipelineId);
   // WHAT: Return a distinct missing-definition response.
   // WHY: Operators can repair a deleted pipeline separately from invalid references.
   if (!pipeline) return { ok: false, statusCode: 404, error: 'Pipeline not found.', pipelineId };
-  const invalidReferences = normalized.invalidReferences.filter((entry) => entry.pipelineId === pipelineId);
+  const invalidReferences = normalized?.invalidReferences.filter((entry) => entry.pipelineId === pipelineId) ?? [];
   // WHAT: Return every invalid saved reference before constructing the runtime definition.
   // WHY: The editor needs the complete repair set and the runner cannot resolve partial definitions.
   if (invalidReferences.length > 0) {
     return { ok: false, statusCode: 400, error: 'Pipeline contains invalid references.', pipelineId, invalidReferences };
   }
-  const definition = pipelineDefinition({ pipeline, steps: normalized.store.steps });
+  const definition = pipelineDefinition({ pipeline, steps: normalized?.store.steps ?? [] });
   // WHAT: Reject an incomplete ordered definition before the shared start lifecycle.
   // WHY: The runner requires every saved step to be present and ordered.
   if (!definition) return { ok: false, statusCode: 400, error: 'Pipeline contains a missing saved step.', pipelineId };
