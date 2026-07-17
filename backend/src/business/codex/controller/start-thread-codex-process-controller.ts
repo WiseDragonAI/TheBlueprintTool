@@ -256,6 +256,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
     threadMarkdown: threadPrompt.markdown,
     runSummaryFile,
     operatorNoteTimestamp: threadPrompt.operatorNoteTimestamp,
+    disallowSkills: payload.disallowSkills === true,
     context: buildCardLaunchContext({
       projectId: String(runtime.projectId ?? ''),
       ledgerId,

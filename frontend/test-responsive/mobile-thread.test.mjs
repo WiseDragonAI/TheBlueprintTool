@@ -107,9 +107,9 @@ test('responsive card threads own desktop split geometry and documented entry sh
 test('desktop Shift+X queues Codex after server acceptance and returns to Control Room execution', () => {
   const shortcut = source.match(/export async function handleResponsiveThreadShortcut\(event\) \{[\s\S]*?\n\}/)?.[0] ?? '';
 
-  assert.match(shortcut, /const queueCodex = event\.shiftKey;/);
-  assert.match(shortcut, /const submitted = await stopVoiceRecording\(\{ queueCodex \}\);/);
-  assert.match(shortcut, /if \(queueCodex\) await finishQueuedVoiceSubmission\(submitted\);/);
+  assert.match(shortcut, /const launchMode = event\.ctrlKey \? 'pipeline' : event\.shiftKey \? 'run' : 'send';/);
+  assert.match(shortcut, /const submitted = await stopVoiceRecording\(\{ launchMode \}\);/);
+  assert.match(shortcut, /if \(launchMode !== 'send'\) await finishQueuedVoiceSubmission\(submitted\);/);
   assert.doesNotMatch(shortcut, /onPersisted/);
   assert.match(applicationSource, /await navigate\(controlRoomPath\('exec'\), true\)/);
 });

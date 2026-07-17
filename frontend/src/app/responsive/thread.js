@@ -153,9 +153,9 @@ export async function handleResponsiveThreadShortcut(event) {
     event.preventDefault();
     if (!canvasState.threadPanelOpen && currentCard) openMobileThread(currentCard, getComputedStyle(document.querySelector('#card-view')).getPropertyValue('--zone-color').trim());
     if (canvasState.voice.recording) {
-      const queueCodex = event.shiftKey;
-      const submitted = await stopVoiceRecording({ queueCodex });
-      if (queueCodex) await finishQueuedVoiceSubmission(submitted);
+      const launchMode = event.ctrlKey ? 'pipeline' : event.shiftKey ? 'run' : 'send';
+      const submitted = await stopVoiceRecording({ launchMode });
+      if (launchMode !== 'send') await finishQueuedVoiceSubmission(submitted);
     }
     else void startVoiceRecording();
     return true;
@@ -197,7 +197,7 @@ function cancelQuickVoiceComment() {
 }
 
 async function stopQuickVoiceComment(event) {
-  const submitted = await stopVoiceRecording({ queueCodex: quickVoiceCapture || event.shiftKey });
+  const submitted = await stopVoiceRecording({ launchMode: quickVoiceCapture || event.shiftKey ? 'run' : 'send' });
   if (!quickVoiceCapture) return;
   quickVoiceCapture = false;
   const button = document.querySelector('.quick-voice-comment-button');

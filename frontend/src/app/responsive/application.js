@@ -48,7 +48,7 @@ const elements = Object.fromEntries([
   'overview-view', 'overview-summary', 'overview-ledgers', 'ledger-view', 'ledger-title', 'ledger-summary',
   'zone-list', 'zone-view', 'zone-title', 'zone-summary', 'card-search', 'card-list',
   'no-results', 'card-view', 'card-title', 'card-body', 'control-room-view', 'control-project-filters', 'control-filters',
-  'control-task-list', 'control-empty', 'control-diagnostics', 'codex-settings-limit', 'codex-settings-message',
+  'control-task-list', 'control-empty', 'control-diagnostics', 'codex-settings-limit', 'codex-settings-voice-pipeline', 'codex-settings-message',
   'federation-connection-status', 'federation-state-duration', 'federation-attempt-timeout', 'federation-last-connection',
   'federation-last-issue', 'federation-peer-list', 'federation-settings-message'
 ].map((id) => [id, document.getElementById(id)]));
@@ -524,6 +524,12 @@ async function loadCodexSettings() {
   try {
     const settings = await loadCodexProcessSettings(fetch);
     renderCodexProcessLimit(settings.maxConcurrentCodexProcesses);
+    const pipelineSelect = elements['codex-settings-voice-pipeline'];
+    pipelineSelect.replaceChildren(
+      Object.assign(document.createElement('option'), { value: '', textContent: 'Not configured' }),
+      ...(settings.pipelines || []).map((pipeline) => Object.assign(document.createElement('option'), { value: pipeline.id, textContent: pipeline.name }))
+    );
+    pipelineSelect.value = settings.voicePipelineId || '';
     elements['codex-settings-message'].textContent = '';
   } catch (error) {
     elements['codex-settings-message'].textContent = error instanceof Error ? error.message : 'Could not load settings.';
@@ -678,7 +684,7 @@ async function submitCodexProcessSettings() {
   save.disabled = true;
   elements['codex-settings-message'].textContent = '';
   try {
-    const result = await saveCodexProcessSettings(fetch, elements['codex-settings-limit'].value);
+    const result = await saveCodexProcessSettings(fetch, elements['codex-settings-limit'].value, elements['codex-settings-voice-pipeline'].value);
     renderCodexProcessLimit(result.maxConcurrentCodexProcesses);
     elements['codex-settings-message'].textContent = 'Settings saved.';
   } catch (error) {

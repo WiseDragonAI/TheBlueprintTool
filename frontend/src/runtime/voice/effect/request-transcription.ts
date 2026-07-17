@@ -15,6 +15,7 @@ export type VoiceTranscriptionRequest = {
   ledgerId?: string;
   threadId?: string;
   cardId?: string;
+  launchMode?: 'send' | 'run' | 'pipeline';
   queueCodex?: boolean;
   onPersisted?: () => void;
 };
@@ -25,6 +26,7 @@ function requestOptions(input: VoiceTranscriptionRequest | string | undefined): 
 
 export async function requestTranscription(audio: Blob | null, input: VoiceTranscriptionRequest | string = {}): Promise<boolean> {
   const options = requestOptions(input);
+  const launchMode = options.launchMode ?? (options.queueCodex ? 'run' : 'send');
   const threadId = options.threadId || state.threadId || 'conversation-ledger';
   if (!state.threadId) state.threadId = threadId;
   if (!audio || audio.size <= 0) {
@@ -35,7 +37,7 @@ export async function requestTranscription(audio: Blob | null, input: VoiceTrans
     return false;
   }
   state.voice.transcriptionStatus = 'uploading voice';
-  telemetry('request-transcription', { configured: true, model: 'gpt-4o-mini-transcribe', threadId, queueCodex: Boolean(options.queueCodex) });
+  telemetry('request-transcription', { configured: true, model: 'gpt-4o-mini-transcribe', threadId, launchMode });
   renderVoiceStatus();
   const noteId = appendOptimisticThreadNote({ threadId, body: 'Voice note captured. Uploading audio...', status: 'uploading', source: 'voice' });
   try {
@@ -44,7 +46,7 @@ export async function requestTranscription(audio: Blob | null, input: VoiceTrans
       threadId,
       ledgerId: options.ledgerId || currentLedgerStateId(),
       cardId: options.cardId ?? '',
-      queueCodex: Boolean(options.queueCodex),
+      launchMode,
       audio,
       createdAt: new Date().toISOString()
     });

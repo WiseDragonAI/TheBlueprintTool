@@ -34,7 +34,7 @@ test('ctrl-d routes selected card resize through the same controller as the tool
   assert.match(detailSync, /syncViewportCardDetails\(\)/);
   assert.match(resizeEffect, /zone\.style\.height = `\$\{renderedGeometry\.height\}px`/);
   assert.match(resizeEffect, /renderZoneLabelOverlay\(\)/);
-  assert.match(actionClick, /shortcuts:\s*\['A', 'X', 'Shift\+X', 'Escape', 'Delete', 'Ctrl\+C', 'Ctrl\+V', 'Ctrl\+D'\]/);
+  assert.match(actionClick, /shortcuts:\s*\['A', 'X', 'Shift\+X', 'Ctrl\+X', 'Escape', 'Delete', 'Ctrl\+C', 'Ctrl\+V', 'Ctrl\+D'\]/);
   assert.match(index, /<dt>Ctrl\+D<\/dt><dd>Resize selected cards to their content\.<\/dd>/);
   assert.match(index, /data-action="toggle-rail"[^>]*aria-expanded="true"/);
 });

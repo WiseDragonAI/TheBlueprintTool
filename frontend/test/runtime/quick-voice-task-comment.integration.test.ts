@@ -20,7 +20,7 @@ test('quick voice stop queues Codex and returns to the canonical Exec route afte
   const application = source('frontend/src/app/responsive/application.js');
 
   assert.match(thread, /openMobileThread\(currentCard[\s\S]*await startVoiceRecording\(\)/);
-  assert.match(thread, /stopVoiceRecording\(\{ queueCodex: quickVoiceCapture \|\| event\.shiftKey \}\)/);
+  assert.match(thread, /stopVoiceRecording\(\{ launchMode: quickVoiceCapture \|\| event\.shiftKey \? 'run' : 'send' \}\)/);
   assert.match(thread, /await finishQueuedVoiceSubmission\(submitted\)/);
   assert.match(thread, /if \(!submitted\) return;[\s\S]*await onQuickVoiceSubmitted\(\)/);
   assert.doesNotMatch(thread.match(/async function finishQueuedVoiceSubmission\(submitted\) \{[\s\S]*?\n\}/)?.[0] ?? '', /closeMobileThread\(\)/);
@@ -31,9 +31,9 @@ test('desktop Shift+X awaits queued upload acceptance before navigating to Exec'
   const thread = source('frontend/src/app/responsive/thread.js');
   const shortcut = thread.match(/export async function handleResponsiveThreadShortcut\(event\) \{[\s\S]*?\n\}/)?.[0] ?? '';
 
-  assert.match(shortcut, /const queueCodex = event\.shiftKey;/);
-  assert.match(shortcut, /const submitted = await stopVoiceRecording\(\{ queueCodex \}\);/);
-  assert.match(shortcut, /if \(queueCodex\) await finishQueuedVoiceSubmission\(submitted\);/);
+  assert.match(shortcut, /const launchMode = event\.ctrlKey \? 'pipeline' : event\.shiftKey \? 'run' : 'send';/);
+  assert.match(shortcut, /const submitted = await stopVoiceRecording\(\{ launchMode \}\);/);
+  assert.match(shortcut, /if \(launchMode !== 'send'\) await finishQueuedVoiceSubmission\(submitted\);/);
   assert.doesNotMatch(shortcut, /onPersisted/);
 });
 

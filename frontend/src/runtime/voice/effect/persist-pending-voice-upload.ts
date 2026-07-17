@@ -14,7 +14,8 @@ export type PendingVoiceUpload = {
   threadId: string;
   ledgerId: string;
   cardId: string;
-  queueCodex: boolean;
+  launchMode?: 'send' | 'run' | 'pipeline';
+  queueCodex?: boolean;
   audio: Blob;
   createdAt: string;
 };

@@ -19,12 +19,12 @@ export async function loadCodexProcessSettings(fetchImpl) {
   return payload;
 }
 
-export async function saveCodexProcessSettings(fetchImpl, value) {
+export async function saveCodexProcessSettings(fetchImpl, value, voicePipelineId = '') {
   const maxConcurrentCodexProcesses = validateCodexProcessLimit(value);
   const response = await fetchImpl('/api/settings/codex-processes', {
     method: 'PATCH',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ maxConcurrentCodexProcesses }),
+    body: JSON.stringify({ maxConcurrentCodexProcesses, voicePipelineId }),
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok || payload?.ok !== true) throw new Error(payload?.error || `Request failed with HTTP ${response.status}.`);

@@ -164,6 +164,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   const restartRecovery = payload.restartRecovery === true;
   const queueDispatch = payload.queueDispatch === true;
   const queueItemId = optionalText(payload.queueItemId);
+  const disallowSkills = payload.disallowSkills === true;
   const executionId = optionalText(payload.executionId) || `codex-execution-${Date.now()}-${randomUUID().slice(0, 8)}`;
   const fail = (statusCode: number, error: string, extra: AnyRecord = {}): AnyRecord => {
     logCodexContinueDebug('continue-controller-fail', { traceId, ledgerId, cardId, runId, statusCode, error, ...extra });
@@ -237,6 +238,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   }
   const prompt = buildCardSkillContinuePrompt({
     messages,
+    disallowSkills,
     newSessionContext: newSession ? {
       workspaceRoot,
       ledgerFile: ledgerPath,
@@ -263,7 +265,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       decisionOsRoot,
       id: itemId,
       createdAt,
-      payload: { ledgerId, cardId, runId, executionId, newSession, codexModel: command.model, codexEffort: command.effort, traceId },
+      payload: { ledgerId, cardId, runId, executionId, newSession, codexModel: command.model, codexEffort: command.effort, traceId, disallowSkills },
     });
     updateRuntimeRun(runtime, runId, {
       id: runId, ledgerId, outputCardId: cardId, codexModel: command.model, codexEffort: command.effort,

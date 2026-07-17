@@ -20,7 +20,7 @@ test('steps, validates, and saves the server-wide Codex process limit', async ()
   }, '4');
   assert.equal(request.url, '/api/settings/codex-processes');
   assert.equal(request.options.method, 'PATCH');
-  assert.deepEqual(JSON.parse(request.options.body), { maxConcurrentCodexProcesses: 4 });
+  assert.deepEqual(JSON.parse(request.options.body), { maxConcurrentCodexProcesses: 4, voicePipelineId: '' });
   assert.equal(result.maxConcurrentCodexProcesses, 4);
 });
 
@@ -39,6 +39,7 @@ test('exposes the settings screen from burger navigation', () => {
   assert.match(source, /location\.pathname === '\/settings'/);
   assert.match(html, /id="settings-view"/);
   assert.match(html, /Maximum concurrent Codex processes/);
+  assert.match(html, /Voice pipeline/);
   assert.doesNotMatch(html, /id="codex-settings-project"/);
   assert.doesNotMatch(html, /id="codex-settings-limit"[^>]*type="number"/);
   assert.match(html, /class="codex-icon codex-settings-increase"/);
