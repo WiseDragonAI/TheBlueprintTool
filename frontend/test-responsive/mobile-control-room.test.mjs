@@ -5,12 +5,14 @@ import test from 'node:test';
 import { executionAge, executionStopwatch, cardCodexRunId, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withExecutionStatus, withQueueRank } from '../src/app/responsive/control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from '../src/app/responsive/control-room-route.js';
 
-const [mobile, html, styles, embla, panzoom] = await Promise.all([
+const [mobile, html, styles, embla, panzoom, bootApplication, mediaRenderer] = await Promise.all([
   readFile(new URL('../src/app/responsive/application.js', import.meta.url), 'utf8'),
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
   readFile(new URL('../assets/application.css', import.meta.url), 'utf8'),
   readFile(new URL('../assets/vendor/embla-carousel-8.6.0.umd.js', import.meta.url), 'utf8'),
-  readFile(new URL('../assets/vendor/panzoom-4.6.2.es.js', import.meta.url), 'utf8')
+  readFile(new URL('../assets/vendor/panzoom-4.6.2.es.js', import.meta.url), 'utf8'),
+  readFile(new URL('../src/app/controller/boot-application.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../src/runtime/ledger/component/render-ledger-card-media.ts', import.meta.url), 'utf8')
 ]);
 
 const task = (overrides = {}) => ({
@@ -476,6 +478,18 @@ test('routes master-task cards back to the control room and regular cards back t
   assert.match(mobile, /backButton\.textContent = '← Back'/);
   assert.match(mobile, /backButton\.dataset\.destination = parsedTask\.masterTask \? 'control-room' : 'zone'/);
   assert.match(mobile, /dataset\.destination === 'control-room' \? controlRoomPath\(state\.controlTab\) : zonePath/);
+});
+
+test('renders and persists the shared carousel resize handle in a Control Room master-card detail', () => {
+  assert.match(mobile, /cardId: parsedTask\.masterTask \? String\(card\.id\) : undefined/);
+  assert.match(mobile, /mediaSurface: parsedTask\.masterTask \? 'detail' : 'thread'/);
+  assert.match(mobile, /onImageResize: parsedTask\.masterTask \? persistCardImageResize : undefined/);
+  assert.match(mobile, /cardPatch: \{ id: card\.id, imageSizes: card\.imageSizes \}/);
+  assert.match(mobile, /card\.imageSizes = previousImageSizes;\s*if \(state\.activeCardId === String\(card\.id\)\) renderCard\(card\)/);
+  assert.match(mediaRenderer, /const cardResizeHandle = mediaSurface !== 'thread' \? renderCardImageResizeHandle/);
+  assert.match(bootApplication, /responsive-interact-script[^\n]*interact-1\.10\.27\.min\.js/);
+  assert.match(styles, /\.ledger-card-media-shell > \.ledger-card-media-resize-handle\s*\{[^}]*position: absolute;[^}]*width: 28px;[^}]*height: 28px;[^}]*cursor: ew-resize;[^}]*touch-action: none;/s);
+  assert.match(styles, /\.ledger-card-media-resize-handle::before\s*\{[^}]*width: 16px;[^}]*height: 16px;[^}]*content: "";/s);
 });
 
 test('completes all linked cards from the master-task detail', () => {

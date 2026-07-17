@@ -18,7 +18,7 @@ import { projectScopedRequestPath } from '../../project/helper/project-request-s
 type LedgerCardHtmlEmbed = Extract<LedgerMarkdownBlock, { kind: 'htmlEmbeds' }>['embeds'][number];
 type LedgerCardHtmlEmbedOptions = {
   cardId?: string;
-  mediaSurface?: 'card' | 'thread';
+  mediaSurface?: 'card' | 'detail' | 'thread';
 };
 
 function activeLedgerStem(): string {
