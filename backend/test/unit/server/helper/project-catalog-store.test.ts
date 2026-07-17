@@ -99,3 +99,19 @@ test('creates and updates projects without rediscovering unregistered directorie
   assert.equal(updated.color, '#123456');
   assert.equal(store.projects().some((project) => project.id === 'unregistered-id'), false);
 });
+
+test('refreshes one registered project after its ledger registry changes', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-registry-refresh-'));
+  const masterDecisionOsRoot = join(root, '.decision-os');
+  createProject(root, 'project', 'project-id');
+  const store = createProjectCatalogStore({ masterRoot: root, masterDecisionOsRoot });
+  const projectState = join(root, 'project', '.decision-os', 'state.json');
+
+  writeFileSync(projectState, JSON.stringify({
+    ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+  }));
+  const refreshed = store.refresh('project-id');
+
+  assert.deepEqual(refreshed.ledgers, [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }]);
+  assert.deepEqual(store.projects().find((project) => project.id === 'project-id')?.ledgers, refreshed.ledgers);
+});
