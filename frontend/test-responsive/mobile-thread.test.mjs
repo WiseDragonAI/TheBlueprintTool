@@ -166,6 +166,13 @@ test('leaving card detail through Back closes the task-owned thread before navig
   assert.match(closeMobileThread, /return true;/);
 });
 
+test('desktop master-task detail opens its thread while mobile and ordinary cards stay explicit', () => {
+  const renderCard = applicationSource.match(/function renderCard\(card\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+
+  assert.match(renderCard, /parsedTask\.masterTask && window\.matchMedia\?\.\('\(min-width: 761px\)'\)\.matches === true/);
+  assert.match(renderCard, /setView\('card-view'\);[\s\S]*openMobileThread\(card, state\.activeZoneColor \|\| 'var\(--accent\)'\)/);
+});
+
 test('mobile Codex Log uses one action-and-metrics row for queued, running, resumable, and idle runs', () => {
   assert.match(sharedCodexStatus, /strip\.append\(renderRunAction\(/);
   assert.match(sharedCodexStatus, /summary\?\.ok === true && summary\.active === true && status === 'running'/);
