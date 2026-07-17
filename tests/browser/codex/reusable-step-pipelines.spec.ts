@@ -138,7 +138,7 @@ test('Process card keeps an overflowing skill catalog readable.', { timeout: 30_
   }
 });
 
-test('Skills Library puts favorites first and opens formatted skill references.', { timeout: 45_000 }, async () => {
+test('Skills Library keeps canonical Markdown in a bounded scroll view above persistent actions.', { timeout: 45_000 }, async () => {
   const fixture = createFixture({ extraSkillCount: 2 });
   let server: ServerHandle | undefined;
   let browser: Browser | undefined;
@@ -158,11 +158,22 @@ test('Skills Library puts favorites first and opens formatted skill references.'
       }],
       activeWorkspaceRun: null,
     }, null, 2));
+    writeFileSync(join(fixture.workspace, '.skills', skillName, 'SKILL.md'), [
+      '---',
+      `name: ${skillName}`,
+      'description: Browser fixture skill for reusable pipeline verification.',
+      '---',
+      '',
+      '# Browser fixture',
+      '',
+      ...Array.from({ length: 24 }, (_, index) => `## Instruction ${index + 1}\n\nRead and apply this canonical Markdown instruction.`),
+      '',
+    ].join('\n'), 'utf8');
     server = await startDecisionOsServer(fixture);
     const responsiveSource = await fetch(`${server.url}/src/app/responsive/codex.js`).then((response) => response.text());
     assert.match(responsiveSource, /Loading SKILL\.md/);
     browser = await launchBrowser();
-    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     page.setDefaultTimeout(10_000);
     const pageErrors: string[] = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
@@ -181,6 +192,40 @@ test('Skills Library puts favorites first and opens formatted skill references.'
 
     await library.getByRole('heading', { name: 'SKILL.md', exact: true }).waitFor({ state: 'visible' });
     assert.equal(await library.getByRole('heading', { name: 'Browser fixture', exact: true }).isVisible(), true);
+    const geometry = await page.evaluate(() => {
+      const modal = document.querySelector<HTMLElement>('.process-modal');
+      const detail = document.querySelector<HTMLElement>('.process-detail');
+      const scroll = document.querySelector<HTMLElement>('.skill-detail-scroll');
+      const markdown = document.querySelector<HTMLElement>('.skill-markdown-section > .ledger-card-body');
+      const actions = document.querySelector<HTMLElement>('.skill-detail-actions');
+      const favorite = document.querySelector<HTMLElement>('.skill-favorite-toggle');
+      const modalRect = modal?.getBoundingClientRect();
+      const actionsRect = actions?.getBoundingClientRect();
+      const favoriteRect = favorite?.getBoundingClientRect();
+      const markdownStyle = markdown ? getComputedStyle(markdown) : undefined;
+      return {
+        modalHeight: modalRect?.height ?? 0,
+        detailClientHeight: detail?.clientHeight ?? 0,
+        detailScrollHeight: detail?.scrollHeight ?? 0,
+        documentClientHeight: scroll?.clientHeight ?? 0,
+        documentScrollHeight: scroll?.scrollHeight ?? 0,
+        documentOverflowY: scroll ? getComputedStyle(scroll).overflowY : '',
+        actionsInsideModal: (actionsRect?.bottom ?? Infinity) <= (modalRect?.bottom ?? -Infinity),
+        favoriteInsideModal: (favoriteRect?.bottom ?? Infinity) <= (modalRect?.bottom ?? -Infinity),
+        markdownPadding: markdownStyle?.padding ?? '',
+        markdownBackground: markdownStyle?.backgroundImage ?? '',
+        markdownShadow: markdownStyle?.boxShadow ?? '',
+      };
+    });
+    assert.ok(Math.abs(geometry.modalHeight - 720) <= 2, `Expected an 80vh modal, received ${geometry.modalHeight}px.`);
+    assert.equal(geometry.detailScrollHeight, geometry.detailClientHeight, 'The detail shell must not own document overflow.');
+    assert.ok(geometry.documentScrollHeight > geometry.documentClientHeight, 'The Markdown document must own vertical scrolling.');
+    assert.equal(geometry.documentOverflowY, 'auto');
+    assert.equal(geometry.actionsInsideModal, true);
+    assert.equal(geometry.favoriteInsideModal, true);
+    assert.equal(geometry.markdownPadding, '18px');
+    assert.match(geometry.markdownBackground, /linear-gradient/);
+    assert.notEqual(geometry.markdownShadow, 'none');
     const reference = library.getByRole('button', { name: 'guide.md', exact: true });
     await reference.waitFor({ state: 'visible' });
     await reference.click();

@@ -182,7 +182,7 @@ async function renderProcessDetail(record) {
   state.selected = record;
   const generation = ++processDetailGeneration;
   if (record.projectId) state.projectId = record.projectId;
-  const detail = el('.process-detail'); detail.hidden = false; detail.replaceChildren();
+  const detail = el('.process-detail'); detail.hidden = false; detail.classList.remove('skill-detail-layout'); detail.replaceChildren();
   const viewContext = { global: state.libraryScope === 'global', libraryTitle: state.processTab === 'skills' ? 'Skill library' : 'Pipelines', detailTitle: state.processTab === 'skills' ? 'Skill details' : 'Pipeline details' };
   const title = document.createElement('h3'); title.className = 'skill-detail-title'; title.textContent = record.name;
   const purpose = document.createElement('p');
@@ -190,14 +190,18 @@ async function renderProcessDetail(record) {
   detail.append(title, purpose);
   if (state.processTab === 'skills') {
     if (state.libraryScope === 'global') {
+      detail.classList.add('skill-detail-layout');
+      const scroll = document.createElement('div'); scroll.className = 'skill-detail-scroll';
+      const actions = document.createElement('footer'); actions.className = 'skill-detail-actions';
       const tagsField = renderSkillTagChoices(record);
       const favorite = button(record.favorite ? '★' : '☆', 'skill-favorite-toggle', () => { void toggleGlobalSkillFavorite(record); });
       favorite.setAttribute('aria-label', record.favorite ? 'Remove from favorites' : 'Add to favorites');
       favorite.setAttribute('aria-pressed', String(record.favorite === true));
       const status = document.createElement('p'); status.className = 'codex-message process-detail-message'; status.setAttribute('role', 'status');
-      detail.append(tagsField, favorite, status);
+      actions.append(tagsField, favorite, status);
+      detail.append(scroll, actions);
       setMobileCodexView(document, 'detail', viewContext);
-      await hydrateGlobalSkillDetail(record, detail, generation);
+      await hydrateGlobalSkillDetail(record, scroll, generation);
       return;
     }
     const model = document.createElement('select'); model.setAttribute('aria-label', 'Codex model');
