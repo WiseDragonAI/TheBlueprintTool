@@ -208,6 +208,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     watcher: ReturnType<typeof watchProjectFiles>;
   };
   const projectContexts = new Map<string, ProjectContext>();
+  const projectCatalogStore = createProjectCatalogStore({ masterRoot, masterDecisionOsRoot });
   let controlRoomProjectionStore: ReturnType<typeof createControlRoomProjectionStore> | null = null;
   let federation: ReturnType<typeof createFederationNodeConnector> | null = null;
   const globalCodexProcessCapacity = (): number => {
@@ -294,6 +295,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       federation?.publishContentChange();
     };
     const publishLedger = (event: AnyRecord): void => {
+      if (event.kind === 'state') projectCatalogStore.refresh(projectId);
       controlRoomProjectionStore?.invalidate(projectId);
       watcher?.refreshOwnership();
       const ledgerId = String(event.ledgerId ?? '');
@@ -344,7 +346,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     void resumeCodexPipelineRuns({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime }).catch(() => undefined);
     return context;
   };
-  const projectCatalogStore = createProjectCatalogStore({ masterRoot, masterDecisionOsRoot });
   migrateLegacyProjectPipelines({
     serverDecisionOsRoot: masterDecisionOsRoot,
     projectDecisionOsRoots: projectCatalogStore.projects()

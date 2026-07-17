@@ -98,6 +98,14 @@ export function createProjectCatalogStore(input: { masterRoot: string; masterDec
     projects(): DecisionOsProject[] {
       return projects;
     },
+    refresh(projectId: string): DecisionOsProject {
+      const entry = registry.projects[projectId];
+      if (!entry) throw new Error('Unknown project id.');
+      const project = projectFromRegisteredPath({ masterRoot, entry });
+      projects = projects.map((candidate) => candidate.id === projectId ? project : candidate);
+      projects.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+      return project;
+    },
     create(name: string, description: string): DecisionOsProject {
       const project = createDecisionOsProject({ masterRoot, masterDecisionOsRoot: input.masterDecisionOsRoot, name, description });
       registry.projects[project.id] = registryEntry(project);
