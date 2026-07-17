@@ -213,9 +213,15 @@ function cancelQuickVoiceComment() {
   cancelVoiceRecording();
 }
 
-async function stopQuickVoiceComment(event) {
-  const submitted = await stopVoiceRecording({ launchMode: quickVoiceCapture || event.shiftKey ? 'run' : 'send' });
-  if (!quickVoiceCapture) return;
+function voiceLaunchMode(event) {
+  return event.ctrlKey ? 'pipeline' : event.shiftKey ? 'run' : 'send';
+}
+
+async function stopQuickVoiceComment(launchMode = 'send') {
+  const wasQuickVoiceCapture = quickVoiceCapture;
+  const selectedLaunchMode = wasQuickVoiceCapture ? 'run' : launchMode;
+  const submitted = await stopVoiceRecording({ launchMode: selectedLaunchMode });
+  if (!wasQuickVoiceCapture && selectedLaunchMode === 'send') return;
   quickVoiceCapture = false;
   const button = document.querySelector('.quick-voice-comment-button');
   button.disabled = false;
@@ -325,9 +331,10 @@ export function initializeMobileThread() {
     const action = button.dataset.action;
     if (await handleMobileThreadSessionDeletion({ action, button })) return;
     if (action === 'voice-toggle') {
-      if (canvasState.voice.recording) await stopQuickVoiceComment(event);
+      if (canvasState.voice.recording) await stopQuickVoiceComment(voiceLaunchMode(event));
       else await startVoiceRecording();
     } else if (action === 'voice-cancel') cancelQuickVoiceComment();
+    else if (action === 'voice-stop') await stopQuickVoiceComment(button.dataset.launchMode || 'send');
     else if (action === 'voice-retry') await retryVoiceTranscription(voiceRetryInput(button));
     else if (action === 'thread-file-picker') button.closest('.terminal-composer')?.querySelector('.thread-file-input')?.click();
     else if (action === 'toggle-thread-text') expandMobileThreadComposer(button);

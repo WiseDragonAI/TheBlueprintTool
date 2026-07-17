@@ -8,6 +8,7 @@ test('mobile thread composer defaults to a voice-first dock and expands text ent
   const composer = source('frontend/src/runtime/voice/component/terminal-composer.ts');
   const controlDock = source('frontend/src/runtime/voice/component/control-dock.ts');
   const actionClick = source('frontend/src/runtime/input/controller/handle-action-click.ts');
+  const responsiveThread = source('frontend/src/app/responsive/thread.js');
   const threadCss = source('frontend/assets/shared/thread.css');
   const buttonCss = source('frontend/assets/shared/terminal-button.css');
 
@@ -20,6 +21,9 @@ test('mobile thread composer defaults to a voice-first dock and expands text ent
   assert.match(controlDock, /data-action="voice-stop" data-launch-mode="send"[\s\S]*terminal-button__label">SEND/);
   assert.match(controlDock, /data-action="voice-stop" data-launch-mode="run"[\s\S]*terminal-button__label">RUN/);
   assert.match(controlDock, /data-action="voice-stop" data-launch-mode="pipeline"[\s\S]*terminal-button__label">PIPELINE/);
+  assert.match(responsiveThread, /action === 'voice-stop'\) await stopQuickVoiceComment\(button\.dataset\.launchMode \|\| 'send'\)/);
+  assert.match(responsiveThread, /const selectedLaunchMode = wasQuickVoiceCapture \? 'run' : launchMode;[\s\S]*stopVoiceRecording\(\{ launchMode: selectedLaunchMode \}\)/);
+  assert.match(responsiveThread, /if \(!wasQuickVoiceCapture && selectedLaunchMode === 'send'\) return;[\s\S]*await finishQueuedVoiceSubmission\(submitted\)/);
   assert.match(buttonCss, /\.terminal-button__icon\s*\{[\s\S]*stroke:\s*currentColor/);
   assert.match(actionClick, /action === 'submit-thread-draft'/);
   assert.match(actionClick, /await submitThreadDraft\(\)/);
