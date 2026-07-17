@@ -16,7 +16,7 @@ import { hydrateLedgerCardContent, resolveCardContentFile } from '@backend/busin
 import { stripHydratedThreadNotes } from '@backend/business/ledger/helper/thread-content-file.js';
 import { createCardSkillRunEventIngestor } from '../effect/ingest-card-skill-run-events.js';
 import { flushCardSkillRunEventIngestor } from '../effect/flush-card-skill-run-event-ingestor.js';
-import { codexRunSegmentMarker } from './codex-run-segment-marker.js';
+import { codexRunSegmentMarker, codexRunTurnStartedMarker } from './codex-run-segment-marker.js';
 import { readCodexPipelineStore, writeCodexPipelineStore } from './codex-pipeline-store.js';
 import { buildPipelineSkillPrompt } from './build-pipeline-skill-prompt.js';
 import { resolveCodexCommand } from './resolve-codex-command.js';
@@ -441,6 +441,7 @@ export function spawnPipelineSkillProcess(input: {
     runId: input.skill.runId,
     telemetryFile: `${input.skill.stdoutFile}.telemetry.jsonl`,
     projectId: String(input.runtime.projectId ?? ''),
+    onTurnStarted: (event, observedAt) => appendFileSync(input.skill.stderrFile, codexRunTurnStartedMarker({ runId: input.skill.runId, startedAt: observedAt, line: event.line }), 'utf8'),
   });
   const startedAt = input.skill.startedAt ?? new Date().toISOString();
   appendFileSync(input.skill.stderrFile, codexRunSegmentMarker({

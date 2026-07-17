@@ -24,6 +24,7 @@ export function createCardSkillRunEventIngestor(input: {
   telemetryFile?: string;
   projectId?: string;
   onTerminalEvent?: (event: NormalizedRunEvent) => void;
+  onTurnStarted?: (event: NormalizedRunEvent, observedAt: string) => void;
 }): CardSkillRunEventIngestor {
   const decoder = new StringDecoder('utf8');
   const pendingEvents = new Map<number, NormalizedRunEvent>();
@@ -94,6 +95,7 @@ export function createCardSkillRunEventIngestor(input: {
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
       const event = normalizeCardSkillRunEvent({ line, event: parsed as AnyRecord });
       persistTelemetry(parsed as AnyRecord, event);
+      if (event.type === 'turn.started') input.onTurnStarted?.(event, new Date().toISOString());
       if (event.kind === 'run_status' && (event.status === 'complete' || event.status === 'failed' || event.status === 'cancelled')) {
         input.onTerminalEvent?.(event);
       }

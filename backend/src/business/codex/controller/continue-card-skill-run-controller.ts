@@ -13,7 +13,7 @@ import { createCardSkillRunEventIngestor } from '../effect/ingest-card-skill-run
 import { prepareCardSkillRunEventAppend } from '../effect/prepare-card-skill-run-event-append.js';
 import { buildCardSkillContinuePrompt } from '../helper/build-card-skill-continue-prompt.js';
 import { buildCardLaunchContext } from '../helper/build-card-launch-context.js';
-import { codexRunSegmentMarker } from '../helper/codex-run-segment-marker.js';
+import { codexRunSegmentMarker, codexRunTurnStartedMarker } from '../helper/codex-run-segment-marker.js';
 import { resolveCardSkillRunOwnership } from '../helper/resolve-card-skill-run-ownership.js';
 import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand, resolveCodexResumeCommand } from '../helper/resolve-codex-command.js';
 import { threadMessagesAfterLastCodexEvent } from '../helper/thread-messages-after-last-codex-event.js';
@@ -76,7 +76,7 @@ function attachRuntimeRunChild(runtime: AnyRecord, runId: string, child: ChildPr
   Object.defineProperty(run, 'child', { value: child, writable: true, configurable: true, enumerable: false });
 }
 
-function notifyRunSettled(callback: unknown, event: AnyRecord): void {
+function notifyRuntimeCallback(callback: unknown, event: AnyRecord): void {
   if (typeof callback === 'function') callback(event);
 }
 
@@ -283,7 +283,16 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     forceKillGraceMs: runtime.codexTerminalForceKillGraceMs,
     onTerminalStatus: (status) => { terminalEventStatus = status; },
   });
-  const runEventIngestor = createCardSkillRunEventIngestor({ decisionOsRoot, ledgerPath, cardId, runId, startLine: eventStartLine, telemetryFile: `${stdoutFile}.telemetry.jsonl`, projectId: String(runtime.projectId ?? ''), onTerminalEvent: terminalReconciler.observe });
+  const runEventIngestor = createCardSkillRunEventIngestor({
+    decisionOsRoot, ledgerPath, cardId, runId, startLine: eventStartLine,
+    telemetryFile: `${stdoutFile}.telemetry.jsonl`, projectId: String(runtime.projectId ?? ''),
+    onTerminalEvent: terminalReconciler.observe,
+    onTurnStarted: (event, observedAt) => {
+      appendFileSync(stderrFile, codexRunTurnStartedMarker({ runId, startedAt: observedAt, line: event.line }), 'utf8');
+      updateRuntimeRun(runtime, runId, { turnStartedAt: observedAt });
+      notifyRuntimeCallback(runtime.onCodexTurnStarted, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, startedAt: observedAt });
+    },
+  });
   const continuedAt = new Date().toISOString();
   appendFileSync(stderrFile, codexRunSegmentMarker({
     runId,
@@ -344,7 +353,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       clearCardCodexActiveRun({ ledgerPath, cardId, runId });
       const schedule = runtime.scheduleCodexProcesses;
       if (typeof schedule === 'function') void schedule();
-      notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, status: 'failed' });
+      notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, status: 'failed' });
     });
   });
   child.on('close', (exitCode) => {
@@ -364,7 +373,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       clearCardCodexActiveRun({ ledgerPath, cardId, runId });
       const schedule = runtime.scheduleCodexProcesses;
       if (typeof schedule === 'function') void schedule();
-      notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, status, exitCode });
+      notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, status, exitCode });
     });
   });
 

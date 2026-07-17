@@ -303,6 +303,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     };
     projectRuntime.onPipelineLedgerChange = publishLedger;
     projectRuntime.scheduleCodexProcesses = scheduleGlobalCodexProcesses;
+    projectRuntime.onCodexTurnStarted = (event: AnyRecord): void => {
+      publishLedger({
+        reason: 'codex-turn-started', ledgerId: String(event.ledgerId ?? ''), runId: String(event.runId ?? ''),
+        cardId: String(event.cardId ?? ''), threadId: String(event.threadId ?? ''), startedAt: String(event.startedAt ?? '')
+      });
+    };
     projectRuntime.onCodexRunSettled = (event: AnyRecord): void => {
       if (!event.pipelineRunId) {
         publishLedger({

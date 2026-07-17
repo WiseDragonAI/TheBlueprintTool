@@ -15,7 +15,7 @@ import { createCardSkillRunEventIngestor } from '../effect/ingest-card-skill-run
 import { prepareCardSkillRunEventAppend } from '../effect/prepare-card-skill-run-event-append.js';
 import { buildThreadCodexPrompt } from '../helper/build-thread-codex-prompt.js';
 import { buildCardLaunchContext } from '../helper/build-card-launch-context.js';
-import { codexRunSegmentMarker } from '../helper/codex-run-segment-marker.js';
+import { codexRunSegmentMarker, codexRunTurnStartedMarker } from '../helper/codex-run-segment-marker.js';
 import { isCodexThreadArtifactNote } from '../helper/is-codex-thread-artifact-note.js';
 import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand, resolveCodexResumeCommand, type CodexCommand } from '../helper/resolve-codex-command.js';
 import { codexCapacityResumeDelayMs, isTransientCodexCapacityFailure, readCodexSessionId } from '../helper/transient-codex-capacity-failure.js';
@@ -53,7 +53,7 @@ function optionalText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-function notifyRunSettled(callback: unknown, event: AnyRecord): void {
+function notifyRuntimeCallback(callback: unknown, event: AnyRecord): void {
   if (typeof callback === 'function') callback(event);
 }
 
@@ -333,7 +333,16 @@ export async function startThreadCodexProcessController(input: { action_payload?
       forceKillGraceMs: runtime.codexTerminalForceKillGraceMs,
       onTerminalStatus: (status) => { terminalEventStatus = status; },
     });
-    const runEventIngestor = createCardSkillRunEventIngestor({ decisionOsRoot, ledgerPath, cardId, runId, startLine: eventStartLine, telemetryFile: `${stdoutFile}.telemetry.jsonl`, projectId: String(runtime.projectId ?? ''), onTerminalEvent: terminalReconciler.observe });
+    const runEventIngestor = createCardSkillRunEventIngestor({
+      decisionOsRoot, ledgerPath, cardId, runId, startLine: eventStartLine,
+      telemetryFile: `${stdoutFile}.telemetry.jsonl`, projectId: String(runtime.projectId ?? ''),
+      onTerminalEvent: terminalReconciler.observe,
+      onTurnStarted: (event, observedAt) => {
+        appendFileSync(stderrFile, codexRunTurnStartedMarker({ runId, startedAt: observedAt, line: event.line }), 'utf8');
+        updateRuntimeRun(runtime, runId, { turnStartedAt: observedAt });
+        notifyRuntimeCallback(runtime.onCodexTurnStarted, { ledgerId, cardId, threadId, runId, startedAt: observedAt });
+      },
+    });
     appendFileSync(stderrFile, codexRunSegmentMarker({
       runId,
       startedAt: attemptStartedAt,
@@ -367,7 +376,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
         clearCardCodexActiveRun({ ledgerPath, cardId, runId });
         const schedule = runtime.scheduleCodexProcesses;
         if (typeof schedule === 'function') void schedule();
-        notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, status: 'failed' });
+        notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, status: 'failed' });
       });
     });
     child.on('close', (exitCode) => {
@@ -409,7 +418,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
         const schedule = runtime.scheduleCodexProcesses;
         if (typeof schedule === 'function') void schedule();
         if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
-        notifyRunSettled(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, status, exitCode });
+        notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, status, exitCode });
       });
     });
   };
