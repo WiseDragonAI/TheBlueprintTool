@@ -245,7 +245,7 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     skillName: persistedSkill?.skillName ?? '',
     pipelineStatus: persistedPipelineRun?.status ?? null,
     status,
-    active: runtimeCodexRunOwnsLiveProcess(runtime, runId),
+    active: runtimeCodexRunOwnsLiveProcess(runtime, runId, decisionOsRoot),
     interruptedAt: interruptedProcess?.interruptedAt ?? null,
     queuePosition: status === 'pending' && queuedProcess ? unifiedCodexQueuePosition({ decisionOsRoot, id: queuedProcess.id, createdAt: queuedProcess.createdAt, runtime }) : null,
     startedAt: new Date(runSegmentStartedAtMs({ runtime, runId, stderrFile })).toISOString(),

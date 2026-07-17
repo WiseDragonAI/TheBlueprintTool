@@ -206,7 +206,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
   };
   const existingRunId = String(source.codexActiveRunId ?? source.codexThreadRunId ?? source.codexRunId ?? '').trim();
   if (existingRunId && existingRunId !== reservedRunId) {
-    if (queueDispatch || runtimeCodexRunOwnsLiveProcess(runtime, existingRunId)) return {
+    if (queueDispatch || runtimeCodexRunOwnsLiveProcess(runtime, existingRunId, decisionOsRoot)) return {
       ok: false,
       statusCode: 409,
       error: 'Card already owns a live Codex process.',
