@@ -12,6 +12,7 @@ import { createNoteController } from '../../src/runtime/thread/controller/create
 import { loadActiveLedgerState } from '../../src/runtime/ledger/effect/load-active-ledger-state.js';
 import { state } from '../../src/runtime/state.js';
 import { retryVoiceTranscription } from '../../src/runtime/voice/effect/retry-voice-transcription.js';
+import { transcribeUploadedVoiceAudio } from '../../src/runtime/voice/effect/transcribe-uploaded-voice-audio.js';
 import {
   clearPendingVoiceUploadMemoryForTest,
   persistPendingVoiceUpload,
@@ -83,6 +84,60 @@ test('upload-voice-audio posts captured audio to backend upload route', async ()
     (globalThis as unknown as { window: unknown }).window = previousWindow;
     (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
     state.threadId = '';
+  }
+});
+
+test('upload-voice-audio scopes the backend route to the canonical project URL', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousLocation = globalThis.location;
+  const previousWindow = globalThis.window;
+  const previousCustomEvent = globalThis.CustomEvent;
+  let requestedUrl = '';
+  Object.defineProperty(globalThis, 'location', {
+    configurable: true,
+    value: new URL('http://decision-os.local/p/project-id/ledgers/specs/zones/zone-a/cards/card-a')
+  });
+  (globalThis as unknown as { window: unknown }).window = { location: globalThis.location, __coreTelemetry: [], dispatchEvent() {} };
+  (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
+    constructor(_name: string, public options: Record<string, unknown> = {}) {}
+  };
+  globalThis.fetch = (async (url: string) => {
+    requestedUrl = url;
+    return { ok: true, status: 202, json: async () => ({ body: { ok: true, uploaded: true, configured: true, voiceFileRef: '/tmp/voice.webm', text: '' } }) } as Response;
+  }) as typeof fetch;
+
+  try {
+    await uploadVoiceAudio(new Blob(['abc'], { type: 'audio/webm' }), { ledgerId: 'specs', threadId: 'thread-card-a', cardId: 'card-a' });
+    assert.equal(requestedUrl, '/p/project-id/api/voice-upload');
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousLocation === undefined) delete (globalThis as { location?: Location }).location;
+    else Object.defineProperty(globalThis, 'location', { configurable: true, value: previousLocation });
+    (globalThis as unknown as { window: unknown }).window = previousWindow;
+    (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
+  }
+});
+
+test('transcription retry scopes the backend route to the canonical project URL', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousLocation = globalThis.location;
+  let requestedUrl = '';
+  Object.defineProperty(globalThis, 'location', {
+    configurable: true,
+    value: new URL('http://decision-os.local/p/project-id/ledgers/specs')
+  });
+  globalThis.fetch = (async (url: string) => {
+    requestedUrl = url;
+    return { ok: true, status: 202, json: async () => ({ body: { ok: true, uploaded: true, configured: true, voiceFileRef: '/tmp/voice.webm', text: '' } }) } as Response;
+  }) as typeof fetch;
+
+  try {
+    await transcribeUploadedVoiceAudio('/tmp/voice.webm', 'thread-card-a', 'note-a', 'specs');
+    assert.equal(requestedUrl, '/p/project-id/api/transcribe/retry');
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousLocation === undefined) delete (globalThis as { location?: Location }).location;
+    else Object.defineProperty(globalThis, 'location', { configurable: true, value: previousLocation });
   }
 });
 

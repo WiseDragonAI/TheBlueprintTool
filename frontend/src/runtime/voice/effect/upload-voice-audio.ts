@@ -5,6 +5,7 @@
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { state } from '../../state.js';
 import { routeTab } from '../../navigation/helper/route-tab.js';
+import { projectScopedRequestPath } from '../../project/helper/project-request-scope.js';
 
 export type VoiceTranscriptionResult = {
   ok: boolean;
@@ -67,7 +68,7 @@ export async function uploadVoiceAudio(audio: Blob, input: VoiceUploadOptions | 
   form.append('noteId', options.noteId ?? '');
   form.append('queueCodex', options.queueCodex ? 'true' : 'false');
   telemetry('upload-voice-audio', { optimistic: true, preserved: true, size: audio.size, type: audio.type, threadId, queueCodex: Boolean(options.queueCodex) });
-  const response = await fetch('/api/voice-upload', {
+  const response = await fetch(projectScopedRequestPath('/api/voice-upload'), {
     method: 'POST',
     body: form
   }).catch((error) => ({ ok: false, status: 0, json: async () => ({ body: { ok: false, error: error instanceof Error ? error.message : String(error) } }) }));
