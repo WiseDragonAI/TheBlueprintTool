@@ -282,6 +282,13 @@ test('renders every Control Room task as the same direct-link card without discl
   assert.match(mobile, /initializeQueueSortable\(\)/);
 });
 
+test('uses the full desktop pane and gives every Kanban column its own vertical scroll', () => {
+  assert.match(styles, /\.content:has\(> \.control-room:not\(\[hidden\]\)\) \{[^}]*max-width: none;[^}]*height: calc\(100dvh - 64px\);[^}]*overflow: hidden;/);
+  assert.match(styles, /\.control-room:not\(\[hidden\]\) \{[^}]*grid-template-rows: auto minmax\(0, 1fr\) auto auto auto;[^}]*min-height: 0;[^}]*height: 100%;/);
+  assert.match(styles, /\.control-task-list \{[^}]*align-items: stretch;[^}]*min-height: 0;/);
+  assert.match(styles, /\.control-task-column-list \{[^}]*min-height: 0;[^}]*overflow-y: auto;[^}]*overscroll-behavior: contain;[^}]*scrollbar-gutter: stable;/);
+});
+
 test('delegates touch sorting and animation to vendored SortableJS', () => {
   assert.match(bootApplication, /sortable-1\.15\.7\.min\.js/);
   assert.match(mobile, /globalThis\.Sortable\.create\(list,/);
