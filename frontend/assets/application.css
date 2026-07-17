@@ -224,10 +224,6 @@ body.menu-open .nav-scrim { opacity: 1; pointer-events: auto; }
 .task-runtime-status { align-self: center; }
 .task-queue-position { align-self: center; color: var(--accent); font-weight: 800; white-space: nowrap; }
 .task-diagnostic { display: block; margin-top: 10px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--danger), transparent 50%); border-radius: 8px; color: var(--danger); background: color-mix(in srgb, var(--danger), transparent 91%); font-size: 12px; line-height: 1.35; }
-.task-chevron { color: var(--muted); font-size: 20px; }
-.control-task-details { padding: 12px; border-top: 1px solid var(--line); animation: disclosure-in var(--motion-disclosure) var(--ease-out); transform-origin: top; }
-.control-task-summary[aria-expanded="true"] .task-chevron { transform: rotate(90deg); }
-.task-chevron { transition: transform var(--motion-disclosure) var(--ease-out); }
 .subtask-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 48px; margin-bottom: 6px; padding: 8px 12px; text-align: left; }
 .subtask-row small { flex: 0 0 auto; color: var(--accent); text-transform: capitalize; }
 .task-actions { display: flex; gap: 8px; padding-top: 12px; overflow-x: auto; }
@@ -621,6 +617,6 @@ html[data-task-back-handoff="true"]::view-transition-new(root) { animation: task
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
   :where(button, .ledger-link, .overview-ledger):active { transform: none; }
-  .ledger-nav, .mobile-thread-inspector, dialog[open], .control-task-details { transform: none; }
+  .ledger-nav, .mobile-thread-inspector, dialog[open] { transform: none; }
   html[data-task-back-handoff="true"]::view-transition-old(root), html[data-task-back-handoff="true"]::view-transition-new(root) { animation: none; }
 }
