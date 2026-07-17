@@ -53,7 +53,7 @@ test('column scroll survives task refresh, in-app task return, and browser back'
 
     await page.locator(`${columnSelector('queue')} .control-task-summary`).nth(8).evaluate((button) => (button as HTMLButtonElement).click());
     await page.locator('#card-view:not([hidden])').waitFor({ state: 'visible' });
-    await page.getByRole('button', { name: '← Back' }).click();
+    await page.locator('.back-to-zone-button').click();
     await openControlRoom(page, server.url, false);
     await assertColumnScroll(page, queueOnly);
 
