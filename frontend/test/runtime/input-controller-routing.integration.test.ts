@@ -66,6 +66,10 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(keyboard, /cancelVoiceRecording/);
   assert.match(keyboard, /key === 'a'/);
   assert.match(keyboard, /key === 'x'/);
+  assert.match(keyboard, /key === 'delete'/);
+  assert.match(keyboard, /event\.ctrlKey && key === 'c'/);
+  assert.match(keyboard, /event\.ctrlKey && key === 'v'/);
+  assert.match(keyboard, /event\.ctrlKey && key === 'd'/);
   assert.doesNotMatch(keyboard, /deleteSelectedZones/);
   assert.doesNotMatch(keyboard, /commitActiveLedgerMutation/);
   assert.doesNotMatch(keyboard, /showModal\?\.\(/);
@@ -208,7 +212,7 @@ test('browser inputs route ledger commands through runtime controllers before se
 
   const renderThreadPanel = source('frontend/src/runtime/thread/effect/render-thread-panel.ts');
   const processThreadCodex = source('frontend/src/runtime/codex/controller/process-thread-codex-controller.ts');
-  const threadCss = source('frontend/assets/canvas/thread.css');
+  const threadCss = source('frontend/assets/shared/thread.css');
   assert.match(renderThreadPanel, /renderThreadCodexSelect/);
   assert.match(renderThreadPanel, /button\.dataset\.codexModel = threadCodexModel/);
   assert.match(renderThreadPanel, /button\.dataset\.codexEffort = threadCodexEffort/);

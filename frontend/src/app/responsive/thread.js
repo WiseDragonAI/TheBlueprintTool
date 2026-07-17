@@ -9,6 +9,7 @@ import { pinThreadFeedToLastMessage } from '/src/runtime/thread/effect/pin-threa
 import { syncThreadJumpButtonVisibility } from '/src/runtime/thread/effect/render-thread-jump-button.js';
 import { submitThreadDraft } from '/src/runtime/thread/effect/submit-thread-draft.js';
 import { saveThreadDraft } from '/src/runtime/thread/effect/persist-thread-draft.js';
+import { focusThreadDraft } from '/src/runtime/thread/effect/focus-thread-draft.js';
 import { startVoiceRecording } from '/src/runtime/voice/controller/start-voice-recording.js';
 import { stopVoiceRecording } from '/src/runtime/voice/controller/stop-voice-recording.js';
 import { cancelVoiceRecording } from '/src/runtime/voice/controller/cancel-voice-recording.js';
@@ -110,6 +111,7 @@ export function openMobileThread(card, zoneColor) {
   cardView.style.setProperty('--card-zone-color', zoneColor || 'var(--accent)');
   selectThread(threadId);
   canvasState.threadPanelOpen = true;
+  document.body.classList.add('card-thread-open');
   canvasState.threadPinOnRender = true;
   renderThreadPanel();
   updateLaunchReadiness();
@@ -130,8 +132,34 @@ export function closeMobileThread() {
     });
   }
   canvasState.threadPanelOpen = false;
+  document.body.classList.remove('card-thread-open');
   document.querySelector('.thread-panel').hidden = true;
   document.querySelector('.mobile-thread-inspector').hidden = true;
+}
+
+export async function handleResponsiveThreadShortcut(event) {
+  if (document.querySelector('#card-view')?.hidden !== false) return false;
+  const key = event.key.toLowerCase();
+  if (key === 'a') {
+    event.preventDefault();
+    if (canvasState.threadPanelOpen) focusThreadDraft();
+    else if (currentCard) openMobileThread(currentCard, getComputedStyle(document.querySelector('#card-view')).getPropertyValue('--zone-color').trim());
+    return true;
+  }
+  if (key === 'x') {
+    event.preventDefault();
+    if (!canvasState.threadPanelOpen && currentCard) openMobileThread(currentCard, getComputedStyle(document.querySelector('#card-view')).getPropertyValue('--zone-color').trim());
+    if (canvasState.voice.recording) await stopVoiceRecording({ queueCodex: event.shiftKey });
+    else void startVoiceRecording();
+    return true;
+  }
+  if (key === 'escape' && canvasState.threadPanelOpen) {
+    event.preventDefault();
+    if (canvasState.voice.recording) cancelQuickVoiceComment();
+    else closeMobileThread();
+    return true;
+  }
+  return false;
 }
 
 async function startQuickVoiceComment() {
@@ -296,10 +324,6 @@ export function initializeMobileThread() {
   });
   document.addEventListener('keydown', async (event) => {
     if (document.querySelector('.thread-panel')?.hidden !== false) return;
-    if (event.key === 'Escape') {
-      if (canvasState.voice.recording) cancelQuickVoiceComment();
-      else closeMobileThread();
-    }
     if (event.key === 'Enter' && event.ctrlKey && event.target.closest('.thread-draft')) {
       event.preventDefault();
       await appendTextNote();

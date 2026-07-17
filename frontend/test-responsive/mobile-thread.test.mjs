@@ -7,7 +7,9 @@ const source = await readFile(new URL('../src/app/responsive/thread.js', import.
 const sharedThreadRenderer = await readFile(new URL('../../frontend/src/runtime/thread/effect/render-thread-notes.ts', import.meta.url), 'utf8');
 const sharedCodexStatus = await readFile(new URL('../../frontend/src/runtime/thread/component/render-thread-codex-log-status.ts', import.meta.url), 'utf8');
 const sharedCodexLog = await readFile(new URL('../../frontend/src/runtime/thread/effect/render-thread-codex-log.ts', import.meta.url), 'utf8');
-const sharedThreadCss = await readFile(new URL('../../frontend/assets/canvas/thread.css', import.meta.url), 'utf8');
+const sharedThreadCss = await readFile(new URL('../../frontend/assets/shared/thread.css', import.meta.url), 'utf8');
+const applicationSource = await readFile(new URL('../src/app/responsive/application.js', import.meta.url), 'utf8');
+const applicationCss = await readFile(new URL('../assets/application.css', import.meta.url), 'utf8');
 const { collapseMobileThreadComposer, expandMobileThreadComposer } = await import('../src/app/responsive/thread-composer.js');
 
 test('mobile Text action replaces jump with close, then collapses without clearing the draft', () => {
@@ -85,6 +87,20 @@ test('opening a mobile thread does not focus the draft and raise the software ke
 
   assert.match(openMobileThread, /renderThreadPanel\(\);/);
   assert.doesNotMatch(openMobileThread, /\.focus\(\)/);
+});
+
+test('responsive card threads own desktop split geometry and documented entry shortcuts', () => {
+  assert.match(applicationCss, /body\.card-thread-open \.app-shell \{ margin-right: clamp\(420px, 33vw, 620px\); \}/);
+  assert.match(applicationCss, /\.mobile-thread-inspector \{[\s\S]*width: clamp\(420px, 33vw, 620px\);/);
+  assert.match(applicationCss, /@media \(max-width: 759px\) \{[\s\S]*body:has\(\.mobile-thread-inspector \.thread-panel:not\(\[hidden\]\)\) \{ overflow: hidden; \}/);
+  assert.match(source, /document\.body\.classList\.add\('card-thread-open'\)/);
+  assert.match(source, /document\.body\.classList\.remove\('card-thread-open'\)/);
+  assert.match(source, /export async function handleResponsiveThreadShortcut\(event\)/);
+  assert.match(source, /key === 'a'[\s\S]*canvasState\.threadPanelOpen\) focusThreadDraft\(\)/);
+  assert.match(source, /key === 'x'[\s\S]*startVoiceRecording\(\)/);
+  assert.match(source, /key === 'escape' && canvasState\.threadPanelOpen[\s\S]*cancelQuickVoiceComment\(\)[\s\S]*closeMobileThread\(\)/);
+  assert.match(applicationSource, /if \(isCardEditingKeyboardTarget\(target\)\) return;/);
+  assert.match(applicationSource, /await handleResponsiveThreadShortcut\(event\)/);
 });
 
 test('mobile thread uses the shared renderer that owns the local voice progress clock', () => {
