@@ -1758,7 +1758,13 @@ function renderCard(card) {
     relationships: state.ledger?.relationships ?? []
   });
   const backButton = document.querySelector('.back-to-zone-button');
-  backButton.replaceChildren(document.createTextNode('← Back'));
+  const backIcon = document.createElement('span');
+  backIcon.className = 'back-button__icon';
+  backIcon.setAttribute('aria-hidden', 'true');
+  backIcon.textContent = '←';
+  const backLabel = document.createElement('span');
+  backLabel.textContent = 'Back';
+  backButton.replaceChildren(backIcon, backLabel);
   backButton.dataset.destination = parsedTask.masterTask ? 'control-room' : 'zone';
   if (parsedTask.masterTask) {
     const key = shortcutKey('Esc');

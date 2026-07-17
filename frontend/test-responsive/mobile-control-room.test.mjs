@@ -498,7 +498,7 @@ test('parses letter-prefixed card sections from the decision-os formatting contr
 });
 
 test('routes master-task cards back to the control room and regular cards back to their zone', () => {
-  assert.match(mobile, /backButton\.replaceChildren\(document\.createTextNode\('← Back'\)\)/);
+  assert.match(mobile, /backButton\.replaceChildren\(backIcon, backLabel\)/);
   assert.match(mobile, /backButton\.dataset\.destination = parsedTask\.masterTask \? 'control-room' : 'zone'/);
   assert.match(mobile, /const controlRoomDestination = event\.currentTarget\.dataset\.destination === 'control-room';[\s\S]*const destination = controlRoomDestination \? controlRoomPath\(state\.controlTab\) : zonePath/);
 });
