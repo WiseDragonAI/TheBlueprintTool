@@ -955,7 +955,7 @@ test('card skill run continue route resumes the captured session with post-end t
     assert.equal(resumedStatusResponse.status, 200);
     const resumedStatus = await resumedStatusResponse.json() as { persistedEventCount: number; events: Array<{ type: string }> };
     assert.equal(resumedStatus.persistedEventCount, 0);
-    assert.deepEqual(resumedStatus.events.map((event) => event.type), ['turn.started', 'item.completed', 'turn.completed']);
+    assert.deepEqual(resumedStatus.events.map((event) => event.type), ['thread.started', 'turn.completed', 'turn.started', 'item.completed', 'turn.completed']);
     assert.equal(readFileSync(threadFile, 'utf8'), threadBeforeResume);
 
     const threadBeforeFresh = `${threadBeforeResume.trimEnd()}\n\n# OPERATOR\n<!-- decision-os:note {"id":"note-fresh","timestamp":"2026-07-07T17:16:00.000Z"} -->\n\nStart without the previous session context.\n`;
@@ -991,7 +991,7 @@ test('card skill run continue route resumes the captured session with post-end t
     assert.equal(freshStatusResponse.status, 200);
     const freshStatus = await freshStatusResponse.json() as { persistedEventCount: number; events: Array<{ type: string }> };
     assert.equal(freshStatus.persistedEventCount, 0);
-    assert.deepEqual(freshStatus.events.map((event) => event.type), ['thread.started', 'turn.started', 'item.completed', 'turn.completed']);
+    assert.deepEqual(freshStatus.events.map((event) => event.type), ['thread.started', 'turn.completed', 'turn.started', 'item.completed', 'turn.completed', 'thread.started', 'turn.started', 'item.completed', 'turn.completed']);
     assert.equal(readFileSync(threadFile, 'utf8'), threadBeforeFresh);
 
     const threadBeforeLatestResume = `${threadBeforeFresh.trimEnd()}\n\n# OPERATOR\n<!-- decision-os:note {"id":"note-after-fresh","timestamp":"2026-07-07T17:17:00.000Z"} -->\n\nContinue the fresh session.\n`;
@@ -1015,7 +1015,7 @@ test('card skill run continue route resumes the captured session with post-end t
     assert.equal(latestStatusResponse.status, 200);
     const latestStatus = await latestStatusResponse.json() as { persistedEventCount: number; events: Array<{ type: string }> };
     assert.equal(latestStatus.persistedEventCount, 0);
-    assert.deepEqual(latestStatus.events.map((event) => event.type), ['turn.started', 'item.completed', 'turn.completed']);
+    assert.deepEqual(latestStatus.events.map((event) => event.type), ['thread.started', 'turn.completed', 'turn.started', 'item.completed', 'turn.completed', 'thread.started', 'turn.started', 'item.completed', 'turn.completed', 'turn.started', 'item.completed', 'turn.completed']);
     assert.equal(readFileSync(threadFile, 'utf8'), threadBeforeLatestResume);
 
     const interruptedThread = `${threadBeforeLatestResume.trimEnd()}\n\n# AGENT\n<!-- decision-os:note {"id":"codex-${runId}-line-13","timestamp":"2026-07-07T17:18:00.000Z","status":"running","codexRunId":"${runId}","codexLine":"13","codexKind":"run_status","codexEventType":"turn.started"} -->\n\nCodex turn started.\n`;

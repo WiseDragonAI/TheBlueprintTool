@@ -692,6 +692,18 @@
   min-width: 0;
 }
 
+.codex-log-execution-boundary {
+  margin: 5px 0 1px;
+  padding: 6px 8px;
+  border-top: 1px solid rgba(105, 215, 255, 0.35);
+  border-bottom: 1px solid rgba(105, 215, 255, 0.12);
+  color: #9adfff;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .codex-log-event {
   display: grid;
   gap: 5px;

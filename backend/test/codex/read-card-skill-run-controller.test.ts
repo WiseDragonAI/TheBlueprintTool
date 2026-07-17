@@ -520,9 +520,9 @@ test('card skill run route measures active resumed segment from the latest persi
     JSON.stringify({ type: 'turn.completed' }),
   ].join('\n'));
   writeFileSync(logPath, [
-    `decision-os:codex-run-segment ${JSON.stringify({ runId, startedAt: new Date(firstStartedAt).toISOString(), segment: 'start', startLine: 0 })}`,
+    `decision-os:codex-run-segment ${JSON.stringify({ runId, executionId: 'execution-a', startedAt: new Date(firstStartedAt).toISOString(), segment: 'start', startLine: 0 })}`,
     'error: stale failure from the previous session',
-    `decision-os:codex-run-segment ${JSON.stringify({ runId, startedAt: resumedAtIso, segment: 'restart', startLine: 3 })}`,
+    `decision-os:codex-run-segment ${JSON.stringify({ runId, executionId: 'execution-b', startedAt: resumedAtIso, segment: 'restart', startLine: 3 })}`,
   ].join('\n'));
   const fresh = new Date();
   utimesSync(jsonlPath, fresh, fresh);
@@ -538,16 +538,21 @@ test('card skill run route measures active resumed segment from the latest persi
   try {
     const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}`);
     assert.equal(response.status, 200);
-    const body = await response.json() as { ok: boolean; status: string; startedAt: string; elapsedMs: number; toolCallCount: number; agentMessageCount: number; fileChangeCount: number; latestEvent: unknown; events: unknown[] };
+    const body = await response.json() as { ok: boolean; status: string; executionId: string; startedAt: string; elapsedMs: number; toolCallCount: number; agentMessageCount: number; fileChangeCount: number; latestEvent: unknown; events: Array<{ line: number }>; executions: Array<{ executionId: string; startLine: number; status: string }> };
     assert.equal(body.ok, true);
     assert.equal(body.status, 'running');
+    assert.equal(body.executionId, 'execution-b');
     assert.equal(body.startedAt, resumedAtIso);
     assert.ok(body.elapsedMs >= 29000 && body.elapsedMs < 45000);
     assert.equal(body.toolCallCount, 0);
     assert.equal(body.agentMessageCount, 0);
     assert.equal(body.fileChangeCount, 0);
     assert.equal(body.latestEvent, null);
-    assert.deepEqual(body.events, []);
+    assert.deepEqual(body.events.map((event) => event.line), [1, 2, 3]);
+    assert.deepEqual(body.executions.map((execution) => [execution.executionId, execution.startLine, execution.status]), [
+      ['execution-a', 0, 'complete'],
+      ['execution-b', 3, 'running'],
+    ]);
   } finally {
     server.close();
     process.chdir(originalCwd);

@@ -136,6 +136,30 @@ function renderDeleteSession(input: { cardId: string; runId: string; threadId: s
   return footer;
 }
 
+function renderExecutionBoundary(input: { index: number; segment: string; status: string }): HTMLElement {
+  const boundary = document.createElement('p');
+  boundary.className = 'codex-log-execution-boundary';
+  const name = input.segment === 'start' ? 'Initial run' : input.segment === 'restart' ? 'New session' : `Continuation ${input.index}`;
+  boundary.textContent = `${name} · ${input.status.toUpperCase()}`;
+  return boundary;
+}
+
+function appendExecutionLog(input: { stream: HTMLElement; events: ThreadRunLogEvent[]; summary?: CardSkillRunSummary; threadId: string }): void {
+  const executions = input.summary?.executions ?? [];
+  if (executions.length === 0) {
+    for (const block of groupSequentialToolCalls(input.events)) input.stream.append(block.kind === 'tool-group' ? renderToolGroup(block, input.threadId) : renderThreadCodexLogEvent(block.event));
+    return;
+  }
+  for (const [index, execution] of executions.entries()) {
+    const nextStartLine = executions[index + 1]?.startLine ?? Number.POSITIVE_INFINITY;
+    const events = input.events.filter((event) => event.source === 'jsonl'
+      ? event.line > execution.startLine && event.line <= nextStartLine
+      : index === executions.length - 1);
+    input.stream.append(renderExecutionBoundary({ index: index + 1, segment: execution.segment, status: execution.status }));
+    for (const block of groupSequentialToolCalls(events)) input.stream.append(block.kind === 'tool-group' ? renderToolGroup(block, input.threadId) : renderThreadCodexLogEvent(block.event));
+  }
+}
+
 export function renderThreadCodexLog(): void {
   const root = document.querySelector('.thread-codex-log') as HTMLElement | null;
   // WHAT: Skip the final DOM effect when the thread log surface is not mounted.
@@ -202,9 +226,7 @@ export function renderThreadCodexLog(): void {
   }
   const stream = document.createElement('div');
   stream.className = 'codex-log-stream';
-  for (const block of groupSequentialToolCalls(events)) {
-    stream.append(block.kind === 'tool-group' ? renderToolGroup(block, threadId) : renderThreadCodexLogEvent(block.event));
-  }
+  appendExecutionLog({ stream, events, summary, threadId });
   // WHAT: Render a waiting state only for an available run without received events.
   // WHY: An unavailable response already provides its actionable failure message.
   if (events.length === 0 && summary?.ok !== false) {

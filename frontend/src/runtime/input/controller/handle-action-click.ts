@@ -174,6 +174,7 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     const ok = await processThreadCodexController({
       threadId,
       cardId: actionTarget.dataset.codexCardId ?? '',
+      runId: actionTarget.dataset.codexRunId ?? '',
       codexModel: actionTarget.dataset.codexModel ?? '',
       codexEffort: actionTarget.dataset.codexEffort ?? ''
     });

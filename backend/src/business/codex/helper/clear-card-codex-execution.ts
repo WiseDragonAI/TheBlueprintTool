@@ -8,12 +8,14 @@ import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/re
 
 type AnyRecord = Record<string, unknown>;
 
-export function clearCardCodexExecution(input: { ledgerPath: string; cardId: string; runId: string }): boolean {
+export function clearCardCodexExecution(input: { ledgerPath: string; cardId: string; runId: string; executionId?: string }): boolean {
   try {
     const ledger = JSON.parse(readFileSync(input.ledgerPath, 'utf8')) as AnyRecord & { cards?: AnyRecord[] };
     const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
     if (!card || String(card.codexActiveRunId ?? '') !== input.runId) return false;
+    if (input.executionId && String(card.codexActiveExecutionId ?? '') !== input.executionId) return false;
     delete card.codexActiveRunId;
+    delete card.codexActiveExecutionId;
     if (String(card.executionRunId ?? '') === input.runId) {
       delete card.executionStatus;
       delete card.executionRunId;

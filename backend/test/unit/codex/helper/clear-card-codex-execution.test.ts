@@ -46,3 +46,24 @@ test('removes status and ownership when the settling run still owns execution', 
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('does not let an older execution callback clear a continued session', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-clear-stale-execution-'));
+  const ledgerPath = join(root, 'tasks.json');
+  try {
+    writeFileSync(ledgerPath, JSON.stringify({
+      cards: [{
+        id: 'master', codexActiveRunId: 'shared-session', codexActiveExecutionId: 'execution-b',
+        executionStatus: 'running', executionRunId: 'shared-session',
+      }],
+    }));
+
+    assert.equal(clearCardCodexExecution({ ledgerPath, cardId: 'master', runId: 'shared-session', executionId: 'execution-a' }), false);
+    const card = JSON.parse(readFileSync(ledgerPath, 'utf8')).cards[0] as Record<string, unknown>;
+    assert.equal(card.codexActiveRunId, 'shared-session');
+    assert.equal(card.codexActiveExecutionId, 'execution-b');
+    assert.equal(card.executionStatus, 'running');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

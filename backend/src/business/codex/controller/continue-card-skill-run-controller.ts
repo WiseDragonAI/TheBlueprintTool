@@ -67,7 +67,16 @@ function runtimeRunStatus(runtime: AnyRecord, runId: string): string {
 
 function updateRuntimeRun(runtime: AnyRecord, runId: string, patch: AnyRecord): void {
   const runs = runtimeRuns(runtime);
-  runs[runId] = { ...(runs[runId] ?? {}), ...patch };
+  const run = runs[runId];
+  if (run) Object.assign(run, patch);
+  else runs[runId] = { ...patch };
+}
+
+function updateRuntimeExecution(runtime: AnyRecord, runId: string, executionId: string, patch: AnyRecord): boolean {
+  const run = runtimeRuns(runtime)[runId];
+  if (!run || String(run.executionId ?? '') !== executionId) return false;
+  Object.assign(run, patch);
+  return true;
 }
 
 function attachRuntimeRunChild(runtime: AnyRecord, runId: string, child: ChildProcess): void {
@@ -155,6 +164,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   const restartRecovery = payload.restartRecovery === true;
   const queueDispatch = payload.queueDispatch === true;
   const queueItemId = optionalText(payload.queueItemId);
+  const executionId = optionalText(payload.executionId) || `codex-execution-${Date.now()}-${randomUUID().slice(0, 8)}`;
   const fail = (statusCode: number, error: string, extra: AnyRecord = {}): AnyRecord => {
     logCodexContinueDebug('continue-controller-fail', { traceId, ledgerId, cardId, runId, statusCode, error, ...extra });
     return { ok: false, statusCode, error, runId, ...extra };
@@ -217,6 +227,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     : resolveCodexResumeCommand({ workspaceRoot, runtime, sessionId, codexModel, codexEffort });
   if (card) {
     card.codexActiveRunId = runId;
+    card.codexActiveExecutionId = executionId;
     card.executionStatus = queueDispatch ? 'running' : 'pending';
     card.executionRunId = runId;
     card.codexRunModel = command.model;
@@ -252,11 +263,11 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       decisionOsRoot,
       id: itemId,
       createdAt,
-      payload: { ledgerId, cardId, runId, newSession, codexModel: command.model, codexEffort: command.effort, traceId },
+      payload: { ledgerId, cardId, runId, executionId, newSession, codexModel: command.model, codexEffort: command.effort, traceId },
     });
     updateRuntimeRun(runtime, runId, {
       id: runId, ledgerId, outputCardId: cardId, codexModel: command.model, codexEffort: command.effort,
-      status: 'pending', queueItemId: itemId, createdAt,
+      status: 'pending', executionId, queueItemId: itemId, createdAt,
     });
     const schedule = runtime.scheduleCodexProcesses;
     if (typeof schedule === 'function') await schedule();
@@ -291,14 +302,14 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     telemetryFile: `${stdoutFile}.telemetry.jsonl`, projectId: String(runtime.projectId ?? ''),
     onTerminalEvent: terminalReconciler.observe,
     onTurnStarted: (event, observedAt) => {
-      appendFileSync(stderrFile, codexRunTurnStartedMarker({ runId, startedAt: observedAt, line: event.line }), 'utf8');
-      updateRuntimeRun(runtime, runId, { turnStartedAt: observedAt });
-      notifyRuntimeCallback(runtime.onCodexTurnStarted, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, startedAt: observedAt });
+      appendFileSync(stderrFile, codexRunTurnStartedMarker({ runId, executionId, startedAt: observedAt, line: event.line }), 'utf8');
+      if (updateRuntimeExecution(runtime, runId, executionId, { turnStartedAt: observedAt })) notifyRuntimeCallback(runtime.onCodexTurnStarted, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, executionId, startedAt: observedAt });
     },
   });
   const continuedAt = new Date().toISOString();
   appendFileSync(stderrFile, codexRunSegmentMarker({
     runId,
+    executionId,
     startedAt: continuedAt,
     segment: newSession ? 'restart' : 'continue',
     startLine: eventStartLine,
@@ -321,6 +332,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
 
   const run = {
     id: runId,
+    executionId,
     ledgerId,
     outputCardId: cardId,
     sourceCardTitle: String(card?.title ?? cardId),
@@ -347,16 +359,17 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     settled = true;
     const finishedAt = new Date().toISOString();
     logCodexContinueDebug('child-error', { traceId, ledgerId, cardId, runId, message: error.message, finishedAt });
-    appendRunStatus(outputFile, 'failed', `${newSession ? 'new session' : 'resume'} failed: ${error.message}`);
-    updateRuntimeRun(runtime, runId, { status: 'failed', error: error.message, finishedAt });
+    const ownsExecution = updateRuntimeExecution(runtime, runId, executionId, { status: 'failed', error: error.message, finishedAt });
+    if (ownsExecution) appendRunStatus(outputFile, 'failed', `${newSession ? 'new session' : 'resume'} failed: ${error.message}`);
     finishRunStreams(stdout, stderr, () => {
       flushCardSkillRunEventIngestor(runEventIngestor, runId);
-      updateRuntimeRun(runtime, runId, { settledAt: new Date().toISOString() });
+      if (!ownsExecution) return;
+      updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
       if (queueItemId) removeCodexProcessQueueItem(decisionOsRoot, queueItemId);
-      clearCardCodexExecution({ ledgerPath, cardId, runId });
+      clearCardCodexExecution({ ledgerPath, cardId, runId, executionId });
       const schedule = runtime.scheduleCodexProcesses;
       if (typeof schedule === 'function') void schedule();
-      notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, status: 'failed' });
+      notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, executionId, status: 'failed' });
     });
   });
   child.on('close', (exitCode) => {
@@ -366,17 +379,18 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     const status: ProcessStatus = runtimeRunStatus(runtime, runId) === 'cancelled' ? 'cancelled' : terminalEventStatus ?? (exitCode === 0 ? 'complete' : 'failed');
     const detail = status === 'cancelled' ? 'terminated by operator' : `${newSession ? 'new session' : 'resume'} exit code ${exitCode ?? 'unknown'}`;
     logCodexContinueDebug('child-close', { traceId, ledgerId, cardId, runId, exitCode, status, detail, finishedAt });
-    appendRunStatus(outputFile, status, detail);
-    updateRuntimeRun(runtime, runId, { status, exitCode, finishedAt });
+    const ownsExecution = updateRuntimeExecution(runtime, runId, executionId, { status, exitCode, finishedAt });
+    if (ownsExecution) appendRunStatus(outputFile, status, detail);
     finishRunStreams(stdout, stderr, () => {
       if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
       flushCardSkillRunEventIngestor(runEventIngestor, runId);
-      updateRuntimeRun(runtime, runId, { settledAt: new Date().toISOString() });
+      if (!ownsExecution) return;
+      updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
       if (queueItemId) removeCodexProcessQueueItem(decisionOsRoot, queueItemId);
-      clearCardCodexExecution({ ledgerPath, cardId, runId });
+      clearCardCodexExecution({ ledgerPath, cardId, runId, executionId });
       const schedule = runtime.scheduleCodexProcesses;
       if (typeof schedule === 'function') void schedule();
-      notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, status, exitCode });
+      notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, executionId, status, exitCode });
     });
   });
 

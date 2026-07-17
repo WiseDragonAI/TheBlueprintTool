@@ -31,7 +31,7 @@ test('navigation projection preserves canonical master-task relationships and la
     assert.deepEqual((projection?.cards as Array<Record<string, unknown>>).map((card) => card.labels), [['master-task'], ['subtask']]);
     assert.deepEqual((projection?.cards as Array<Record<string, unknown>>)[0], {
       id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], x: 1, y: 2, w: 3, h: 4,
-      codexActiveRunId: 'codex-skill-running', codexThreadRunId: 'codex-skill-running', codexRunId: null,
+      codexActiveRunId: 'codex-skill-running', codexActiveExecutionId: null, codexThreadRunId: 'codex-skill-running', codexRunId: null,
       codexRunModel: 'gpt-5.6-sol', codexRunEffort: 'medium', executionStatus: 'running', executionRunId: 'codex-skill-running',
     });
     assert.equal((projection?.cards as Array<Record<string, unknown>>)[1].codexThreadRunId, null);

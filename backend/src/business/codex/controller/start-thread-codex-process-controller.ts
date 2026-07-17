@@ -72,6 +72,21 @@ function updateRuntimeRun(runtime: AnyRecord, runId: string, patch: AnyRecord): 
   else runs[runId] = { ...patch };
 }
 
+function updateRuntimeExecution(runtime: AnyRecord, runId: string, executionId: string, patch: AnyRecord): boolean {
+  const run = runtimeRuns(runtime)[runId];
+  if (!run || String(run.executionId ?? '') !== executionId) return false;
+  Object.assign(run, patch);
+  return true;
+}
+
+function projectActiveExecution(ledgerPath: string, cardId: string, runId: string, executionId: string): void {
+  const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord & { cards?: AnyRecord[] };
+  const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
+  if (!card || String(card.codexActiveRunId ?? '') !== runId) return;
+  card.codexActiveExecutionId = executionId;
+  writeFileSync(ledgerPath, `${JSON.stringify(ledger, null, 2)}\n`, 'utf8');
+}
+
 function attachRuntimeRunChild(runtime: AnyRecord, runId: string, child: ChildProcess): void {
   const run = runtimeRuns(runtime)[runId];
   if (!run) return;
@@ -316,10 +331,12 @@ export async function startThreadCodexProcessController(input: { action_payload?
   }
 
   const launch = (attemptCommand: CodexCommand, taskInput: string, segment: 'start' | 'continue'): void => {
+    const executionId = `codex-execution-${Date.now()}-${randomUUID().slice(0, 8)}`;
     const eventStartLine = segment === 'start' ? 0 : prepareCardSkillRunEventAppend(stdoutFile);
     const stdoutByteOffset = existsSync(stdoutFile) ? statSync(stdoutFile).size : 0;
     const stderrByteOffset = existsSync(stderrFile) ? statSync(stderrFile).size : 0;
     const attemptStartedAt = new Date().toISOString();
+    projectActiveExecution(ledgerPath, cardId, runId, executionId);
     const child = spawn(attemptCommand.command, attemptCommand.args, {
       cwd: workspaceRoot,
       env: decisionOsCodexEnvironment({ runtime, decisionOsRoot, ledgerFile: ledgerPath }),
@@ -341,13 +358,13 @@ export async function startThreadCodexProcessController(input: { action_payload?
       telemetryFile: `${stdoutFile}.telemetry.jsonl`, projectId: String(runtime.projectId ?? ''),
       onTerminalEvent: terminalReconciler.observe,
       onTurnStarted: (event, observedAt) => {
-        appendFileSync(stderrFile, codexRunTurnStartedMarker({ runId, startedAt: observedAt, line: event.line }), 'utf8');
-        updateRuntimeRun(runtime, runId, { turnStartedAt: observedAt });
-        notifyRuntimeCallback(runtime.onCodexTurnStarted, { ledgerId, cardId, threadId, runId, startedAt: observedAt });
+        appendFileSync(stderrFile, codexRunTurnStartedMarker({ runId, executionId, startedAt: observedAt, line: event.line }), 'utf8');
+        if (updateRuntimeExecution(runtime, runId, executionId, { turnStartedAt: observedAt })) notifyRuntimeCallback(runtime.onCodexTurnStarted, { ledgerId, cardId, threadId, runId, executionId, startedAt: observedAt });
       },
     });
     appendFileSync(stderrFile, codexRunSegmentMarker({
       runId,
+      executionId,
       startedAt: attemptStartedAt,
       segment,
       startLine: eventStartLine,
@@ -358,7 +375,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
         codexEffort: attemptCommand.effort
       }
     }), 'utf8');
-    updateRuntimeRun(runtime, runId, { pid: child.pid ?? 0, status: 'running', transientRetryAt: null });
+    updateRuntimeRun(runtime, runId, { executionId, pid: child.pid ?? 0, status: 'running', startedAt: attemptStartedAt, transientRetryAt: null });
     attachRuntimeRunChild(runtime, runId, child);
     child.stdout.on('data', (chunk: Buffer) => runEventIngestor.ingest(chunk));
     child.stdout.pipe(stdout, { end: false });
@@ -370,16 +387,17 @@ export async function startThreadCodexProcessController(input: { action_payload?
       if (attemptSettled) return;
       attemptSettled = true;
       const finishedAt = new Date().toISOString();
-      appendRunStatus(runSummaryFile, 'failed', error.message);
-      updateRuntimeRun(runtime, runId, { status: 'failed', error: error.message, finishedAt });
+      const ownsExecution = updateRuntimeExecution(runtime, runId, executionId, { status: 'failed', error: error.message, finishedAt });
+      if (ownsExecution) appendRunStatus(runSummaryFile, 'failed', error.message);
       finishRunStreams(stdout, stderr, () => {
         flushCardSkillRunEventIngestor(runEventIngestor, runId);
-        updateRuntimeRun(runtime, runId, { settledAt: new Date().toISOString() });
+        if (!ownsExecution) return;
+        updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
         removeCodexProcessQueueItem(decisionOsRoot, runId);
-        clearCardCodexExecution({ ledgerPath, cardId, runId });
+        clearCardCodexExecution({ ledgerPath, cardId, runId, executionId });
         const schedule = runtime.scheduleCodexProcesses;
         if (typeof schedule === 'function') void schedule();
-        notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, status: 'failed' });
+        notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, executionId, status: 'failed' });
       });
     });
     child.on('close', (exitCode) => {
@@ -387,6 +405,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
       attemptSettled = true;
       finishRunStreams(stdout, stderr, () => {
         flushCardSkillRunEventIngestor(runEventIngestor, runId);
+        if (String(runtimeRuns(runtime)[runId]?.executionId ?? '') !== executionId) return;
         const cancelled = runtimeRunStatus(runtime, runId) === 'cancelled';
         const sessionId = exitCode === 0 || cancelled ? '' : readCodexSessionId(stdoutFile);
         if (!cancelled && exitCode !== 0 && sessionId && isTransientCodexCapacityFailure({
@@ -397,9 +416,9 @@ export async function startThreadCodexProcessController(input: { action_payload?
         })) {
           const retryAt = new Date(Date.now() + codexCapacityResumeDelayMs).toISOString();
           appendRunStatus(runSummaryFile, 'running', `model capacity reached; resuming the same session after ${codexCapacityResumeDelayMs / 1000} seconds`);
-          updateRuntimeRun(runtime, runId, { status: 'running', transientRetryAt: retryAt, exitCode });
+          if (!updateRuntimeExecution(runtime, runId, executionId, { status: 'running', transientRetryAt: retryAt, exitCode })) return;
           setTimeout(() => {
-            if (runtimeRunStatus(runtime, runId) !== 'running') return;
+            if (runtimeRunStatus(runtime, runId) !== 'running' || String(runtimeRuns(runtime)[runId]?.executionId ?? '') !== executionId) return;
             const resumeCommand = resolveCodexResumeCommand({
               workspaceRoot,
               runtime,
@@ -415,13 +434,13 @@ export async function startThreadCodexProcessController(input: { action_payload?
         const status: ProcessStatus = cancelled ? 'cancelled' : terminalEventStatus ?? (exitCode === 0 ? 'complete' : 'failed');
         const detail = status === 'cancelled' ? 'terminated by operator' : `exit code ${exitCode ?? 'unknown'}`;
         appendRunStatus(runSummaryFile, status, detail);
-        updateRuntimeRun(runtime, runId, { status, exitCode, finishedAt, settledAt: new Date().toISOString() });
+        if (!updateRuntimeExecution(runtime, runId, executionId, { status, exitCode, finishedAt, settledAt: new Date().toISOString() })) return;
         removeCodexProcessQueueItem(decisionOsRoot, runId);
-        clearCardCodexExecution({ ledgerPath, cardId, runId });
+        clearCardCodexExecution({ ledgerPath, cardId, runId, executionId });
         const schedule = runtime.scheduleCodexProcesses;
         if (typeof schedule === 'function') void schedule();
         if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
-        notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, status, exitCode });
+        notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, executionId, status, exitCode });
       });
     });
   };

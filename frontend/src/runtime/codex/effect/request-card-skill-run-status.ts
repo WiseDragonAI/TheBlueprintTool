@@ -33,6 +33,19 @@ export type CardSkillRunMetadata = {
   codexEffort: string;
 };
 
+export type CardSkillRunExecution = {
+  executionId: string;
+  runId: string;
+  segment: 'start' | 'continue' | 'restart';
+  startedAt: string;
+  turnStartedAt: string;
+  startLine: number;
+  turnStartLine: number;
+  endLine: number | null;
+  status: CardSkillRunStatus;
+  active: boolean;
+};
+
 export type CardSkillRunSummary = {
   ok: boolean;
   active?: boolean;
@@ -45,6 +58,9 @@ export type CardSkillRunSummary = {
   skillName: string;
   pipelineStatus: CardSkillRunStatus | '';
   status: CardSkillRunStatus;
+  executionId: string;
+  currentExecution: CardSkillRunExecution | null;
+  executions: CardSkillRunExecution[];
   startedAt: string;
   elapsedMs: number;
   lineCount: number;
@@ -101,6 +117,26 @@ function normalizedEvents(value: unknown, runId: string): CardSkillRunEvent[] {
   return value.map((event) => normalizedEvent(event, runId)).filter((event): event is CardSkillRunEvent => Boolean(event));
 }
 
+function normalizedExecution(value: unknown, runId: string): CardSkillRunExecution | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const execution = value as Partial<CardSkillRunExecution>;
+  const status = ['pending', 'running', 'complete', 'failed', 'cancelled', 'unknown'].includes(String(execution.status ?? ''))
+    ? execution.status as CardSkillRunStatus
+    : 'unknown';
+  return {
+    executionId: String(execution.executionId ?? ''),
+    runId: String(execution.runId ?? runId),
+    segment: execution.segment === 'start' || execution.segment === 'restart' ? execution.segment : 'continue',
+    startedAt: String(execution.startedAt ?? ''),
+    turnStartedAt: String(execution.turnStartedAt ?? ''),
+    startLine: Math.max(0, Number(execution.startLine ?? 0) || 0),
+    turnStartLine: Math.max(0, Number(execution.turnStartLine ?? 0) || 0),
+    endLine: execution.endLine === null ? null : Math.max(0, Number(execution.endLine ?? 0) || 0),
+    status,
+    active: execution.active === true,
+  };
+}
+
 function unavailableSummary(runId: string, since: number, error: string): CardSkillRunSummary {
   return {
     ok: false,
@@ -114,6 +150,9 @@ function unavailableSummary(runId: string, since: number, error: string): CardSk
     skillName: '',
     pipelineStatus: '',
     status: 'unknown',
+    executionId: '',
+    currentExecution: null,
+    executions: [],
     startedAt: '',
     elapsedMs: 0,
     lineCount: since,
@@ -146,6 +185,7 @@ export async function requestCardSkillRunStatus(input: { projectId?: string; led
   const metadata = body.metadata && typeof body.metadata === 'object' ? body.metadata : emptyMetadata;
   const events = normalizedEvents(body.events, runId);
   const diagnostics = normalizedEvents(body.diagnostics, runId);
+  const executions = Array.isArray(body.executions) ? body.executions.map((execution) => normalizedExecution(execution, runId)).filter((execution): execution is CardSkillRunExecution => Boolean(execution)) : [];
   return {
     ok: response.ok && body.ok !== false,
     active: body.active === true,
@@ -160,6 +200,9 @@ export async function requestCardSkillRunStatus(input: { projectId?: string; led
       ? String((body as Record<string, unknown>).pipelineStatus) as CardSkillRunStatus
       : '',
     status: body.status ?? 'unknown',
+    executionId: String(body.executionId ?? ''),
+    currentExecution: normalizedExecution(body.currentExecution, runId),
+    executions,
     startedAt: String(body.startedAt ?? ''),
     elapsedMs: Number(body.elapsedMs ?? 0),
     lineCount: Number(body.lineCount ?? 0),
