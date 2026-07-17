@@ -26,6 +26,10 @@ test('migrates once, then changes membership only through explicit lifecycle ope
   assert.equal(migrated.version, 2);
   assert.equal(migrated.projects['initial-id'].relativePath, 'initial');
 
+  createProject(root, 'duplicate-identity', 'initial-id');
+  assert.throws(() => store.create('Duplicate identity', '', 'duplicate-identity'), /id is already registered/);
+  assert.equal(existsSync(join(root, 'duplicate-identity', '.git')), false);
+
   createProject(root, 'not-registered', 'second-id');
   assert.deepEqual(store.projects().map((project) => project.id), ['initial-id']);
 

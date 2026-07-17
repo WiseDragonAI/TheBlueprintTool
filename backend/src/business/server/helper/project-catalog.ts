@@ -3,10 +3,12 @@
  * WHY: A home-scoped server needs stable, validated project roots without trusting request paths.
  */
 import { randomUUID } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, relative, resolve, sep } from 'node:path';
 import { createLinkedLedger } from '../../ledger/helper/create-linked-ledger.js';
 import { readProjectRegistry, type ProjectRegistryEntry } from './project-registry.js';
+import { resolveProjectDirectory } from './project-directory-browser.js';
 
 export type DecisionOsProject = {
   id: string;
@@ -223,20 +225,44 @@ export function createDecisionOsProject(input: {
   masterDecisionOsRoot: string;
   name: string;
   description: string;
+  directory?: string;
 }): DecisionOsProject {
   const { name, description } = validateProjectCreationInput(input.name, input.description);
   const masterRoot = realpathSync(input.masterRoot);
-  const projectRoot = resolve(masterRoot, name);
-  if (dirname(projectRoot) !== masterRoot) throw new Error('Project directory must be directly below the catalog root.');
-  if (existsSync(projectRoot)) throw new Error('A file or directory already exists with this project name.');
+  const selectedDirectory = String(input.directory ?? '').trim();
+  const projectRoot = selectedDirectory
+    ? resolveProjectDirectory({ masterRoot, path: selectedDirectory }).absolutePath
+    : resolve(masterRoot, name);
+  if (!selectedDirectory && dirname(projectRoot) !== masterRoot) throw new Error('Project directory must be directly below the catalog root.');
+  if (!selectedDirectory && existsSync(projectRoot)) throw new Error('A file or directory already exists with this project name.');
 
   const decisionOsRoot = resolve(projectRoot, '.decision-os');
+  const projectRootCreated = !existsSync(projectRoot);
+  const decisionOsStateExisted = existsSync(resolve(decisionOsRoot, 'state.json'));
+  const decisionOsDirectoryExisted = existsSync(decisionOsRoot);
+  let gitCreated = false;
   try {
-    mkdirSync(decisionOsRoot, { recursive: true });
-    writeFileSync(resolve(decisionOsRoot, 'state.json'), `${JSON.stringify({ ledgers: [] }, null, 2)}\n`);
-    const id = randomUUID();
-    writeFileSync(resolve(decisionOsRoot, 'project.json'), `${JSON.stringify({ id }, null, 2)}\n`);
-    createLinkedLedger({ decisionOsRoot, title: 'tasks' });
+    if (projectRootCreated) mkdirSync(projectRoot, { recursive: true });
+    const hasGitMetadata = existsSync(resolve(projectRoot, '.git'));
+    const gitProbe = hasGitMetadata
+      ? null
+      : spawnSync('git', ['-C', projectRoot, 'rev-parse', '--is-inside-work-tree'], { encoding: 'utf8' });
+    if (!hasGitMetadata && gitProbe?.status !== 0) {
+      const gitInitialization = spawnSync('git', ['init', projectRoot], { encoding: 'utf8' });
+      if (gitInitialization.status !== 0) {
+        const diagnostic = String(gitInitialization.stderr ?? gitInitialization.error?.message ?? '').trim();
+        throw new Error(diagnostic || 'Git repository initialization failed.');
+      }
+      gitCreated = true;
+    }
+    if (!decisionOsStateExisted) {
+      if (decisionOsDirectoryExisted) throw new Error('The selected directory contains an incomplete .decision-os directory without state.json.');
+      mkdirSync(decisionOsRoot, { recursive: true });
+      writeFileSync(resolve(decisionOsRoot, 'state.json'), `${JSON.stringify({ ledgers: [] }, null, 2)}\n`);
+      writeFileSync(resolve(decisionOsRoot, 'project.json'), `${JSON.stringify({ id: randomUUID() }, null, 2)}\n`);
+      createLinkedLedger({ decisionOsRoot, title: 'tasks' });
+    }
+    const id = stableProjectId(decisionOsRoot, normalizedRelative(masterRoot, projectRoot));
     return {
       id,
       name,
@@ -250,7 +276,11 @@ export function createDecisionOsProject(input: {
       diagnostic: '',
     };
   } catch (error) {
-    rmSync(projectRoot, { recursive: true, force: true });
+    if (projectRootCreated) rmSync(projectRoot, { recursive: true, force: true });
+    else {
+      if (!decisionOsStateExisted && !decisionOsDirectoryExisted) rmSync(decisionOsRoot, { recursive: true, force: true });
+      if (gitCreated) rmSync(resolve(projectRoot, '.git'), { recursive: true, force: true });
+    }
     throw error;
   }
 }
