@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { loadFederationSettings, saveFederationSettings } from '../src/app/responsive/federation-settings.js';
+import { hydrateFederationForm } from '../src/app/responsive/federation-form-hydration.js';
 
 const markup = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const source = readFileSync(new URL('../src/app/responsive/application.js', import.meta.url), 'utf8');
@@ -29,4 +30,25 @@ test('settings exposes the redacted federation connection and peer inventory', a
   assert.equal(request.url, '/api/settings/federation');
   assert.equal(request.init.method, 'PATCH');
   assert.deepEqual(JSON.parse(request.init.body), { enabled: false });
+});
+
+test('status refresh cannot overwrite an edited federation form', () => {
+  const field = (value) => ({ value });
+  const form = { elements: {
+    relayUrl: field('operator relay'),
+    federationId: field('operator federation'),
+    nodeId: field('operator node'),
+    nodeLabel: field('operator label'),
+    nodeCredential: field('operator credential'),
+  } };
+  const server = { relayUrl: 'server relay', federationId: 'server federation', nodeId: 'server node', nodeLabel: 'server label' };
+
+  assert.equal(hydrateFederationForm(form, server, { dirty: true }), false);
+  assert.deepEqual(Object.fromEntries(Object.entries(form.elements).map(([key, value]) => [key, value.value])), {
+    relayUrl: 'operator relay', federationId: 'operator federation', nodeId: 'operator node', nodeLabel: 'operator label', nodeCredential: 'operator credential',
+  });
+  assert.equal(hydrateFederationForm(form, server, { dirty: true, force: true }), true);
+  assert.equal(form.elements.relayUrl.value, 'server relay');
+  assert.equal(form.elements.nodeCredential.value, '');
+  assert.match(source, /loadFederationConnectionSettings\(\{ generation \}\)/);
 });
