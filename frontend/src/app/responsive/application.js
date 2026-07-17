@@ -5,7 +5,7 @@
 import { renderLedgerCardMarkdown } from '/src/runtime/ledger/component/render-ledger-card-markdown.js';
 import { ledgerCardBody } from '/src/runtime/ledger/helper/ledger-card-body.js';
 import { saveLedgerCardMediaCarouselSlide } from '/src/runtime/ledger/helper/persist-ledger-card-media-carousel.js';
-import { handleResponsiveThreadShortcut, initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './thread.js';
+import { closeMobileThread, handleResponsiveThreadShortcut, initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './thread.js';
 import { initializeMobileCodex, openMobileCodexLibrary, setMobileCodexContext } from './codex.js';
 import { activeAge, activeStopwatch, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge } from './control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from './control-room-route.js';
@@ -1694,6 +1694,7 @@ document.querySelector('.federation-settings-form').addEventListener('submit', (
 document.querySelector('.federation-settings-disconnect').addEventListener('click', () => void submitFederationSettings(false));
 document.querySelector('.back-to-ledger-button').addEventListener('click', () => navigate(ledgerPath(state.activeLedgerId)));
 document.querySelector('.back-to-zone-button').addEventListener('click', (event) => {
+  if (!closeMobileThread()) return;
   navigate(event.currentTarget.dataset.destination === 'control-room' ? controlRoomPath(state.controlTab) : zonePath(state.activeLedgerId, state.activeZoneId));
 });
 document.querySelector('.create-ledger-button').addEventListener('click', () => openCreationModal('ledger'));

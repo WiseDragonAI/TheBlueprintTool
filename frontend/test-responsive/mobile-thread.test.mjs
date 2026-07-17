@@ -153,6 +153,19 @@ test('closing a mobile thread unregisters its project-scoped Codex run consumer'
   assert.match(source, /bindThreadCodexRunLog\(\{ projectId: currentProjectId/);
 });
 
+test('leaving card detail through Back closes the task-owned thread before navigation', () => {
+  const backHandler = applicationSource.match(/document\.querySelector\('\.back-to-zone-button'\)\.addEventListener\('click',[\s\S]*?\n\}\);/)?.[0] ?? '';
+  const closeMobileThread = source.match(/export function closeMobileThread\(\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+
+  assert.match(applicationSource, /import \{ closeMobileThread,/);
+  assert.match(backHandler, /if \(!closeMobileThread\(\)\) return;/);
+  assert.match(backHandler, /closeMobileThread\(\)[\s\S]*navigate\(/);
+  assert.match(closeMobileThread, /if \(canvasState\.voice\.recording\) return false;/);
+  assert.match(closeMobileThread, /canvasState\.threadPanelOpen = false;/);
+  assert.match(closeMobileThread, /classList\.remove\('card-thread-open'\)/);
+  assert.match(closeMobileThread, /return true;/);
+});
+
 test('mobile Codex Log uses one action-and-metrics row for queued, running, resumable, and idle runs', () => {
   assert.match(sharedCodexStatus, /strip\.append\(renderRunAction\(/);
   assert.match(sharedCodexStatus, /summary\?\.ok === true && summary\.active === true && status === 'running'/);
