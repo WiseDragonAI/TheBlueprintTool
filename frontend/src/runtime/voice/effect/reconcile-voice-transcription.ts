@@ -2,6 +2,7 @@ import { currentLedgerStateId } from '../../ledger/helper/current-ledger-state-i
 import { normalizeLedgerNotes } from '../../ledger/helper/normalize-ledger-notes.js';
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { projectScopedRequestPath } from '../../project/helper/project-request-scope.js';
 import {
   isPendingVoiceNote,
   isTerminalVoiceStatus,
@@ -74,7 +75,7 @@ export async function reconcileVoiceTranscription(input: VoiceIdentity): Promise
     return false;
   }
   const query = new URLSearchParams({ ledgerId: input.ledgerId, threadId: input.threadId, noteId: input.noteId });
-  const response = await fetch(`/api/voice-transcription-status?${query.toString()}`, { cache: 'no-store' }).catch(() => undefined);
+  const response = await fetch(projectScopedRequestPath(`/api/voice-transcription-status?${query.toString()}`), { cache: 'no-store' }).catch(() => undefined);
   const payload = response?.ok ? await response.json().catch(() => null) : null;
   const serverNote = payload && typeof payload.note === 'object' ? payload.note as Record<string, unknown> : null;
   const applied = serverNote ? applyVoiceServerNote({ ...input, note: serverNote }) : false;
