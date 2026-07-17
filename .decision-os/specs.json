@@ -11176,7 +11176,7 @@
       "title": "Desktop project-card settings editor",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "frontend",
         "ux",
