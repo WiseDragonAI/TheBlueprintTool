@@ -111,7 +111,8 @@ test('desktop Shift+X closes the persisted card thread and returns directly to t
   assert.match(shortcut, /queueCodex: true,[\s\S]*onPersisted: \(\) => void finishQueuedVoiceSubmission\(true\)/);
   assert.doesNotMatch(shortcut, /await stopVoiceRecording\(\{ queueCodex/);
   assert.match(handoff, /if \(!submitted\) return;/);
-  assert.match(handoff, /closeMobileThread\(\);\n  await onQuickVoiceSubmitted\(\);/);
+  assert.match(handoff, /await onQuickVoiceSubmitted\(\);/);
+  assert.doesNotMatch(handoff, /closeMobileThread\(\)/);
   assert.match(applicationSource, /onQuickVoiceSubmitted: navigateVoiceSubmission/);
   assert.match(applicationSource, /await navigate\(controlRoomPath\('queue'\), true\)/);
 });
@@ -154,15 +155,23 @@ test('closing a mobile thread unregisters its project-scoped Codex run consumer'
   assert.match(source, /bindThreadCodexRunLog\(\{ projectId: currentProjectId/);
 });
 
-test('leaving card detail through Back closes the task-owned thread before navigation', () => {
+test('every card route exit closes through the shared navigation lifecycle', () => {
   const backHandler = applicationSource.match(/document\.querySelector\('\.back-to-zone-button'\)\.addEventListener\('click',[\s\S]*?\n\}\);/)?.[0] ?? '';
   const closeMobileThread = source.match(/export function closeMobileThread\(\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+  const navigate = applicationSource.match(/function navigate\(path, replace = false\) \{[\s\S]*?\n\}/)?.[0] ?? '';
   const navigateTaskBack = applicationSource.match(/async function navigateTaskBack\(destination\) \{[\s\S]*?\n\}/)?.[0] ?? '';
 
   assert.match(applicationSource, /import \{ closeMobileThread,/);
+  assert.match(applicationSource, /function closeCardDetail\(\)/);
+  assert.match(applicationSource, /name !== 'card-view' && name !== 'loading-view' && !closeCardDetail\(\)/);
+  assert.match(navigate, /currentLocation !== nextLocation && !closeCardDetail\(\)/);
   assert.match(backHandler, /controlRoomDestination[\s\S]*navigateTaskBack\(destination\)/);
-  assert.match(backHandler, /if \(closeMobileThread\(\)\) navigate\(destination\)/);
-  assert.match(navigateTaskBack, /startViewTransition\(async \(\) => \{[\s\S]*closeMobileThread\(\)[\s\S]*navigate\(destination\)/);
+  assert.match(backHandler, /navigate\(destination\)/);
+  assert.match(navigateTaskBack, /startViewTransition\(\(\) => navigate\(destination\)\)/);
+  assert.match(applicationSource, /patch-card'[\s\S]*navigate\(controlRoomPath\(nextStatus === 'backlog'/);
+  assert.match(applicationSource, /complete-master-task'[\s\S]*navigate\(completionReturnPath\(\), true\)/);
+  assert.match(applicationSource, /delete-card'[\s\S]*navigate\(controlRoomPath\(state\.controlTab\), true\)/);
+  assert.match(applicationSource, /popstate'[\s\S]*closeCardDetail\(\)[\s\S]*loadRoute\(\)/);
   assert.match(closeMobileThread, /if \(canvasState\.voice\.recording\) return false;/);
   assert.match(closeMobileThread, /canvasState\.threadPanelOpen = false;/);
   assert.match(closeMobileThread, /classList\.remove\('card-thread-open'\)/);
@@ -179,11 +188,16 @@ test('master-task Back uses a short accessible opacity-only handoff', () => {
   assert.match(applicationCss, /@media \(prefers-reduced-motion: reduce\)[\s\S]*data-task-back-handoff="true"\]::view-transition-old\(root\)[\s\S]*animation: none/);
 });
 
-test('desktop master-task detail opens its thread while mobile and ordinary cards stay explicit', () => {
+test('every desktop card opens through one thread lifecycle while mobile cards stay closed', () => {
   const renderCard = applicationSource.match(/function renderCard\(card\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+  const openCardDetail = applicationSource.match(/function openCardDetail\(card\) \{[\s\S]*?\n\}/)?.[0] ?? '';
 
-  assert.match(renderCard, /parsedTask\.masterTask && window\.matchMedia\?\.\('\(min-width: 761px\)'\)\.matches === true/);
-  assert.match(renderCard, /setView\('card-view'\);[\s\S]*openMobileThread\(card, state\.activeZoneColor \|\| 'var\(--accent\)'\)/);
+  assert.match(renderCard, /openCardDetail\(card\)/);
+  assert.match(openCardDetail, /setView\('card-view'\)/);
+  assert.match(openCardDetail, /window\.matchMedia\?\.\('\(min-width: 761px\)'\)\.matches === true[\s\S]*openMobileThread\(card/);
+  assert.match(openCardDetail, /else \{[\s\S]*closeMobileThread\(\)/);
+  assert.doesNotMatch(openCardDetail, /parsedTask\.masterTask/);
+  assert.doesNotMatch(applicationSource, /await navigate\(cardPath\(ledgerRef\.id, zone\.id, cardId\)\);\n  openMobileThread/);
 });
 
 test('mobile Codex Log uses one action-and-metrics row for queued, running, resumable, and idle runs', () => {

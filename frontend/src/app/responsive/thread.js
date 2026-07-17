@@ -175,7 +175,6 @@ export async function handleResponsiveThreadShortcut(event) {
 
 async function finishQueuedVoiceSubmission(submitted) {
   if (!submitted) return;
-  closeMobileThread();
   await onQuickVoiceSubmitted();
 }
 

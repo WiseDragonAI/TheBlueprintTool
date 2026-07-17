@@ -169,6 +169,7 @@ function setResourceProject(projectId) {
 }
 
 function setView(name) {
+  if (name !== 'card-view' && name !== 'loading-view' && !closeCardDetail()) return false;
   for (const id of ['loading-view', 'error-view', 'empty-view', 'projects-view', 'project-detail-view', 'settings-view', 'overview-view', 'control-room-view', 'ledger-view', 'zone-view', 'card-view']) {
     elements[id].hidden = id !== name;
   }
@@ -180,6 +181,7 @@ function setView(name) {
     federationStatusClockTimer = 0;
     latestFederationSettings = null;
   }
+  return true;
 }
 
 function closeMenu() {
@@ -204,12 +206,32 @@ function cardPath(ledgerId, zoneId, cardId) {
   return cardPathForProject(state.resourceProjectId, ledgerId, zoneId, cardId);
 }
 
+function closeCardDetail() {
+  const threadVisible = document.body.classList.contains('card-thread-open');
+  if (!threadVisible) return true;
+  return closeMobileThread();
+}
+
+function openCardDetail(card) {
+  setMobileThreadCard(card);
+  setMobileCodexContext({ projectId: state.resourceProjectId, ledgerId: state.activeLedgerId, cardId: state.activeCardId });
+  setView('card-view');
+  if (window.matchMedia?.('(min-width: 761px)').matches === true) {
+    openMobileThread(card, state.activeZoneColor || 'var(--accent)');
+  } else {
+    closeMobileThread();
+  }
+}
+
 function pathForTask(task) {
   return cardPathForProject(task.projectId, task.ledgerId, task.zoneId || 'ungrouped', task.cardId);
 }
 
 function navigate(path, replace = false) {
   const destination = new URL(path, location.origin);
+  const currentLocation = `${location.pathname}${location.search}${location.hash}`;
+  const nextLocation = `${destination.pathname}${destination.search}${destination.hash}`;
+  if (currentLocation !== nextLocation && !closeCardDetail()) return false;
   const projectScope = parseProjectScope(destination.pathname);
   const desktopCanvasRoute = window.matchMedia?.('(min-width: 761px)').matches === true
     && (destination.pathname === '/projects'
@@ -233,16 +255,12 @@ async function navigateVoiceSubmission() {
 async function navigateTaskBack(destination) {
   const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
   if (typeof document.startViewTransition !== 'function' || reducedMotion) {
-    if (!closeMobileThread()) return;
     await navigate(destination);
     return;
   }
   document.documentElement.dataset.taskBackHandoff = 'true';
   try {
-    const transition = document.startViewTransition(async () => {
-      if (!closeMobileThread()) return;
-      await navigate(destination);
-    });
+    const transition = document.startViewTransition(() => navigate(destination));
     await transition.finished;
   } finally {
     delete document.documentElement.dataset.taskBackHandoff;
@@ -1135,8 +1153,7 @@ async function createTaskIntake(projectId) {
     onCodexStarted: activateMasterTask,
     onQuickVoiceSubmitted: navigateVoiceSubmission
   });
-  navigate(cardPath(ledgerRef.id, zone.id, cardId));
-  openMobileThread(card, zone.color);
+  await navigate(cardPath(ledgerRef.id, zone.id, cardId));
 }
 
 function openNewTaskProjectModal() {
@@ -1509,12 +1526,7 @@ function renderCard(card) {
   initializeMobileCarousels(elements['card-body']);
   elements['card-view'].style.setProperty('--zone-color', state.activeZoneColor || 'var(--accent)');
   elements['card-view'].style.setProperty('--accent', state.activeZoneColor || defaultAccent);
-  setMobileThreadCard(card);
-  setMobileCodexContext({ projectId: state.resourceProjectId, ledgerId: state.activeLedgerId, cardId: state.activeCardId });
-  setView('card-view');
-  if (parsedTask.masterTask && window.matchMedia?.('(min-width: 761px)').matches === true) {
-    openMobileThread(card, state.activeZoneColor || 'var(--accent)');
-  }
+  openCardDetail(card);
   document.title = `${elements['card-title'].textContent} · ${state.projectName}`;
 }
 
@@ -1788,7 +1800,7 @@ document.querySelector('.back-to-zone-button').addEventListener('click', (event)
     void navigateTaskBack(destination);
     return;
   }
-  if (closeMobileThread()) navigate(destination);
+  navigate(destination);
 });
 document.querySelector('.create-ledger-button').addEventListener('click', () => openCreationModal('ledger'));
 document.querySelector('.create-project-button').addEventListener('click', () => openCreationModal('project'));
@@ -1828,7 +1840,9 @@ elements['card-search'].addEventListener('input', (event) => {
     renderCards(Array.isArray(result.matches) ? result.matches : []);
   }, 120);
 });
-window.addEventListener('popstate', () => loadRoute());
+window.addEventListener('popstate', () => {
+  if (closeCardDetail()) void loadRoute();
+});
 window.addEventListener('decision-os:codex-run-enqueued', () => { void loadRoute(); });
 window.addEventListener('scroll', persistControlRoomScrollAnchor, { passive: true });
 window.addEventListener('keydown', async (event) => {
