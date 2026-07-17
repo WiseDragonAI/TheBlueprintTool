@@ -42,7 +42,7 @@ test('persisted voice navigation returns directly without an animated handoff', 
   const styles = source('frontend/assets/application.css');
 
   assert.match(application, /async function navigateVoiceSubmission\(\)/);
-  assert.match(application, /await navigate\(controlRoomPath\('exec'\), true\)/);
+  assert.match(application, /return navigate\(controlRoomPath\('exec'\), true\)/);
   assert.doesNotMatch(application, /data\.voiceHandoff|startViewTransition\(\(\) => navigate\(destination, true\)\)/);
   assert.doesNotMatch(styles, /voice-handoff/);
 });

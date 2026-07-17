@@ -19,6 +19,7 @@ import { hydrateFederationForm } from './federation-form-hydration.js';
 import { createProjectRequest, loadProjectDirectoryRequest } from './project-creation.js';
 import { installProjectRequestScope, projectScopedRequestPath } from '/src/runtime/project/helper/project-request-scope.js';
 import { projectFilterChipPresentation, projectFilterGroups, projectFilterIncludes } from './project-filter-chip.js';
+import { acceptedRunOwnsRoute, captureRouteSnapshot, cardPresentationIdentity, federationEventOwnsCard, sameRouteSnapshot } from './navigation-ownership.js';
 
 installProjectRequestScope();
 
@@ -102,6 +103,27 @@ let projectColorPickerOriginal = '';
 let projectColorPickerDirty = false;
 let projectSyncEventSource = null;
 let replicaRetryTimer = 0;
+let presentedCardIdentity = '';
+let routeLoadGeneration = 0;
+let routeLoadController = null;
+
+function currentRouteSnapshot() {
+  return captureRouteSnapshot(location, parseProjectScope);
+}
+
+function beginRouteLoad() {
+  routeLoadController?.abort();
+  routeLoadController = new AbortController();
+  return Object.freeze({ generation: ++routeLoadGeneration, route: currentRouteSnapshot(), signal: routeLoadController.signal });
+}
+
+function ownsRouteLoad(owner) {
+  return owner.generation === routeLoadGeneration && !owner.signal.aborted && sameRouteSnapshot(owner.route, currentRouteSnapshot());
+}
+
+function requireRouteOwnership(owner) {
+  if (!ownsRouteLoad(owner)) throw new DOMException('Superseded route load.', 'AbortError');
+}
 
 function createProjectColorSlider(element, start, maximum) {
   window.noUiSlider.create(element, {
@@ -191,6 +213,7 @@ function setView(name) {
   for (const id of ['loading-view', 'error-view', 'empty-view', 'projects-view', 'project-detail-view', 'settings-view', 'overview-view', 'control-room-view', 'ledger-view', 'zone-view', 'card-view']) {
     elements[id].hidden = id !== name;
   }
+  if (name !== 'card-view' && name !== 'loading-view') presentedCardIdentity = '';
   if (name !== 'settings-view') {
     federationSettingsLoadGeneration += 1;
     window.clearTimeout(federationStatusRefreshTimer);
@@ -224,21 +247,23 @@ function cardPath(ledgerId, zoneId, cardId) {
   return cardPathForProject(state.resourceProjectId, ledgerId, zoneId, cardId);
 }
 
-function closeCardDetail() {
+function closeCardDetail(options) {
   const threadVisible = document.body.classList.contains('card-thread-open');
   if (!threadVisible) return true;
-  return closeMobileThread();
+  return closeMobileThread(options);
 }
 
 function openCardDetail(card) {
+  const nextIdentity = cardPresentationIdentity(currentRouteSnapshot());
+  const routeEntry = nextIdentity !== presentedCardIdentity;
   setMobileThreadCard(card);
   setMobileCodexContext({ projectId: state.resourceProjectId, ledgerId: state.activeLedgerId, cardId: state.activeCardId });
   setView('card-view');
-  if (window.matchMedia?.('(min-width: 761px)').matches === true) {
-    openMobileThread(card, state.activeZoneColor || 'var(--accent)');
-  } else {
-    closeMobileThread();
+  if (routeEntry) {
+    if (window.matchMedia?.('(min-width: 761px)').matches === true) openMobileThread(card, state.activeZoneColor || 'var(--accent)');
+    else closeMobileThread({ fromHistory: true });
   }
+  presentedCardIdentity = nextIdentity;
 }
 
 function pathForTask(task) {
@@ -315,7 +340,7 @@ function navigate(path, replace = false) {
   const destination = new URL(path, location.origin);
   const currentLocation = `${location.pathname}${location.search}${location.hash}`;
   const nextLocation = `${destination.pathname}${destination.search}${destination.hash}`;
-  if (currentLocation !== nextLocation && !closeCardDetail()) return false;
+  if (currentLocation !== nextLocation && !closeCardDetail({ discardHistory: true })) return false;
   const projectScope = parseProjectScope(destination.pathname);
   const desktopCanvasRoute = window.matchMedia?.('(min-width: 761px)').matches === true
     && (destination.pathname === '/projects-canvas'
@@ -335,7 +360,14 @@ function navigate(path, replace = false) {
 }
 
 async function navigateVoiceSubmission() {
-  await navigate(controlRoomPath('exec'), true);
+  return navigate(controlRoomPath('exec'), true);
+}
+
+async function navigateAcceptedProcess(detail) {
+  const snapshot = currentRouteSnapshot();
+  const threadGeneration = Number(document.body.dataset.threadPresentationGeneration || 0);
+  if (!acceptedRunOwnsRoute(detail, snapshot, threadGeneration)) return false;
+  return navigate(controlRoomPath('exec'), true);
 }
 
 async function navigateTaskBack(destination) {
@@ -1513,11 +1545,13 @@ function persistControlRoomScrollAnchor() {
   });
 }
 
-async function loadControlRoom({ force = false, deferDuringQueueDrag = false } = {}) {
-  const response = await fetch('/api/control-room', { cache: 'no-store', headers: !force && controlRoomEtag ? { 'if-none-match': controlRoomEtag } : {} });
+async function loadControlRoom({ force = false, deferDuringQueueDrag = false, owner = null } = {}) {
+  const response = await fetch('/api/control-room', { cache: 'no-store', signal: owner?.signal, headers: !force && controlRoomEtag ? { 'if-none-match': controlRoomEtag } : {} });
+  if (owner) requireRouteOwnership(owner);
   if (response.status === 304 && state.controlRoom) return false;
   if (!response.ok) throw new Error(`Could not load the Control Room (${response.status}).`);
   const nextControlRoom = await response.json();
+  if (owner) requireRouteOwnership(owner);
   const nextEtag = response.headers.get('etag') ?? '';
   if (deferDuringQueueDrag && queueRefreshBlocked()) {
     pendingControlRoomRefresh = true;
@@ -1558,9 +1592,11 @@ function subscribeControlRoomEvents() {
   };
   controlRoomEventSource.addEventListener('ledger-content-change', refresh);
   controlRoomEventSource.addEventListener('card-content-change', refresh);
-  controlRoomEventSource.addEventListener('federation-replica-change', () => {
+  controlRoomEventSource.addEventListener('federation-replica-change', (event) => {
     refresh();
-    if (isProjectCardPath(location.pathname)) void loadRoute({ retainView: true });
+    let payload = {};
+    try { payload = JSON.parse(event.data || '{}'); } catch {}
+    if (federationEventOwnsCard(payload, currentRouteSnapshot())) void loadRoute({ retainView: true });
   });
 }
 
@@ -2188,10 +2224,12 @@ function renderZone(zone) {
   document.title = `${elements['zone-title'].textContent} · ${state.projectName}`;
 }
 
-async function loadLedger(ledgerId) {
-  const response = await projectFetch(`/api/ledgers/${encodeURIComponent(ledgerId)}/navigation`, { cache: 'no-store' });
+async function loadLedger(ledgerId, owner) {
+  const response = await projectFetch(`/api/ledgers/${encodeURIComponent(ledgerId)}/navigation`, { cache: 'no-store', signal: owner.signal }, owner.route.projectId);
+  requireRouteOwnership(owner);
   if (!response.ok) throw new Error(`The server returned HTTP ${response.status}.`);
   const ledger = await response.json();
+  requireRouteOwnership(owner);
   if (!ledger || !Array.isArray(ledger.cards)) throw new Error('The ledger response does not contain a card list.');
   state.ledger = ledger;
   state.activeLedgerId = ledgerId;
@@ -2204,25 +2242,29 @@ async function loadLedger(ledgerId) {
     onCodexStarted: activateMasterTask,
     onQuickVoiceSubmitted: navigateVoiceSubmission,
     onLedgerRefresh: async (activeLedgerId) => {
-      const refreshed = await projectFetch(`/api/ledgers/${encodeURIComponent(activeLedgerId)}/navigation`, { cache: 'no-store' }).then((result) => result.ok ? result.json() : null);
-      if (refreshed && activeLedgerId === state.activeLedgerId) state.ledger = refreshed;
+      const projectId = state.resourceProjectId;
+      const refreshed = await projectFetch(`/api/ledgers/${encodeURIComponent(activeLedgerId)}/navigation`, { cache: 'no-store' }, projectId).then((result) => result.ok ? result.json() : null);
+      if (refreshed && projectId === state.resourceProjectId && activeLedgerId === state.activeLedgerId) state.ledger = refreshed;
       return refreshed;
     }
   });
 }
 
 async function loadRoute({ retainView = false } = {}) {
+  const owner = beginRouteLoad();
   if (!retainView) setView('loading-view');
   window.clearTimeout(replicaRetryTimer);
   try {
-    const catalogResponse = await fetch('/decision-os/projects', { cache: 'no-store' });
+    const catalogResponse = await fetch('/decision-os/projects', { cache: 'no-store', signal: owner.signal });
+    requireRouteOwnership(owner);
     if (!catalogResponse.ok) throw new Error(`The project catalog returned HTTP ${catalogResponse.status}.`);
     const catalog = await catalogResponse.json();
+    requireRouteOwnership(owner);
     state.projects = Array.isArray(catalog.projects) ? catalog.projects : [];
     document.documentElement.style.setProperty('--accent', defaultAccent);
     document.documentElement.style.setProperty('--accent-strong', defaultAccent);
     setMobileCodexContext({ projects: state.projects });
-    const projectRoute = parseProjectRoute(location.pathname);
+    const projectRoute = parseProjectRoute(owner.route.pathname);
     if (projectRoute?.view === 'index') {
       renderProjects();
       return;
@@ -2240,7 +2282,7 @@ async function loadRoute({ retainView = false } = {}) {
       setView('empty-view');
       return;
     }
-    if (location.pathname === '/') {
+    if (owner.route.pathname === '/') {
       state.resourceProjectId = '';
       setMobileCodexContext({ projectId: '', ledgerId: '', cardId: '' });
       state.projectName = 'Decision OS';
@@ -2249,41 +2291,45 @@ async function loadRoute({ retainView = false } = {}) {
       state.controlTab = route.tab;
       const canonicalPath = controlRoomPath(route.tab, route.anchor);
       if (`${location.pathname}${location.search}${location.hash}` !== canonicalPath) history.replaceState({}, '', canonicalPath);
-      await loadControlRoom();
+      await loadControlRoom({ owner });
+      requireRouteOwnership(owner);
       renderControlRoom();
       subscribeControlRoomEvents();
       return;
     }
-    if (location.pathname === '/ledgers') {
+    if (owner.route.pathname === '/ledgers') {
       renderGlobalLedgers();
       return;
     }
-    if (location.pathname === '/settings') {
+    if (owner.route.pathname === '/settings') {
       renderSettings();
       return;
     }
-    if (location.pathname === '/pipelines' || location.pathname === '/skills') {
+    if (owner.route.pathname === '/pipelines' || owner.route.pathname === '/skills') {
       state.resourceProjectId = '';
       setMobileCodexContext({ projectId: '', ledgerId: '', cardId: '' });
       renderLedgerLinks();
       setView('empty-view');
-      openMobileCodexLibrary(location.pathname.slice(1));
+      openMobileCodexLibrary(owner.route.pathname.slice(1));
       return;
     }
-    const scope = parseProjectScope(location.pathname);
+    const scope = parseProjectScope(owner.route.pathname);
     if (!scope || scope.segments[0] !== 'ledgers') throw new Error('Route not found.');
     const routeProject = state.projects.find((project) => project.id === scope.projectId);
     if (!routeProject) throw new Error('Project not found.');
     if (state.resourceProjectId !== routeProject.id) setResourceProject(routeProject.id);
-    const response = await projectFetch('/decision-os/state', { cache: 'no-store' });
+    const response = await projectFetch('/decision-os/state', { cache: 'no-store', signal: owner.signal }, owner.route.projectId);
+    requireRouteOwnership(owner);
     if (response.status === 202) {
       const pending = await response.json();
+      requireRouteOwnership(owner);
       renderTaskReplicaShell(taskForCurrentRoute(), pending.replica);
       replicaRetryTimer = window.setTimeout(() => void loadRoute({ retainView: true }), 500);
       return;
     }
     if (!response.ok) throw new Error(`The server returned HTTP ${response.status}.`);
     const project = await response.json();
+    requireRouteOwnership(owner);
     state.projectName = state.projects.find((entry) => entry.id === state.resourceProjectId)?.name || project.projectName || state.projectName;
     state.ledgers = Array.isArray(project.ledgers) ? project.ledgers.filter((ledger) => ledger?.id && ledger?.title) : [];
     elements['project-name'].textContent = state.projectName;
@@ -2293,7 +2339,9 @@ async function loadRoute({ retainView = false } = {}) {
       return;
     }
 
-    const [section, requestedLedger, zoneMarker, requestedZone, cardMarker, requestedCard] = routeParts();
+    const { section, ledgerId: requestedLedger, zoneId: requestedZone, cardId: requestedCard } = owner.route;
+    const zoneMarker = requestedZone ? 'zones' : '';
+    const cardMarker = requestedCard ? 'cards' : '';
     if (section === 'ledgers' && !requestedLedger) {
       state.activeLedgerId = '';
       renderLedgerLinks();
@@ -2305,18 +2353,22 @@ async function loadRoute({ retainView = false } = {}) {
       navigate('/ledgers', true);
       return;
     }
-    if (state.activeLedgerId !== ledgerId || !state.ledger) await loadLedger(ledgerId);
+    if (state.activeLedgerId !== ledgerId || !state.ledger) await loadLedger(ledgerId, owner);
+    requireRouteOwnership(owner);
     const zones = ledgerZones();
     const zone = zoneMarker === 'zones' ? zones.find((entry) => String(entry.id) === requestedZone) : null;
     if (zone && cardMarker === 'cards' && requestedCard) {
-      const detailResponse = await projectFetch(`/api/ledgers/${encodeURIComponent(ledgerId)}/cards/${encodeURIComponent(requestedCard)}`, { cache: 'no-store' });
+      const detailResponse = await projectFetch(`/api/ledgers/${encodeURIComponent(ledgerId)}/cards/${encodeURIComponent(requestedCard)}`, { cache: 'no-store', signal: owner.signal }, owner.route.projectId);
+      requireRouteOwnership(owner);
       if (detailResponse.status === 202) {
         const pending = await detailResponse.json();
+        requireRouteOwnership(owner);
         renderTaskReplicaShell(taskForCurrentRoute(), pending.replica);
         replicaRetryTimer = window.setTimeout(() => void loadRoute({ retainView: true }), 500);
         return;
       }
       const card = detailResponse.ok ? await detailResponse.json() : null;
+      requireRouteOwnership(owner);
       if (card) {
         state.ledger.cards = state.ledger.cards.map((entry) => String(entry.id) === requestedCard ? card : entry);
         state.activeZoneId = asText(zone.id);
@@ -2341,6 +2393,7 @@ async function loadRoute({ retainView = false } = {}) {
       renderLedger();
     }
   } catch (error) {
+    if (error?.name === 'AbortError' || !ownsRouteLoad(owner)) return;
     if (retainView) {
       const task = taskForCurrentRoute();
       if (task) {
@@ -2465,12 +2518,12 @@ elements['card-search'].addEventListener('input', (event) => {
   }, 120);
 });
 window.addEventListener('popstate', () => {
-  if (closeCardDetail()) {
+  if (closeCardDetail({ fromHistory: true })) {
     const retained = commitRouteView();
     void loadRoute({ retainView: retained });
   }
 });
-window.addEventListener('decision-os:codex-run-enqueued', () => { void navigateVoiceSubmission(); });
+window.addEventListener('decision-os:codex-run-enqueued', (event) => { void navigateAcceptedProcess(event.detail); });
 window.addEventListener('scroll', persistControlRoomScrollAnchor, { passive: true });
 window.addEventListener('keydown', async (event) => {
   const target = event.target instanceof HTMLElement ? event.target : null;

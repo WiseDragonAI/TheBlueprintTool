@@ -6,6 +6,7 @@ const modelOptions = ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5',
 const effortOptions = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
 const state = { projectId: '', projects: [], ledgerId: '', cardId: '', skills: [], serverSkills: [], skillDetails: new Map(), selectedReference: '', availableTags: [], tagSaving: false, pipelines: [], steps: [], processTab: 'skills', libraryScope: 'project', query: '', projectFilter: 'All', tagFilter: 'All', selected: null, editor: null, pickerStepId: '' };
 let processDetailGeneration = 0;
+let processActionGeneration = 0;
 const el = (selector) => document.querySelector(selector);
 const uid = (prefix) => `${prefix}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
 const message = (selector, text, bad = false) => { const node = el(selector); node.textContent = text; node.classList.toggle('error', bad); };
@@ -284,26 +285,49 @@ async function saveGlobalSkillTag(record, tag) {
     message('.process-detail-message', error.message, true);
   }
 }
+function captureProcessLaunch() {
+  return Object.freeze({
+    generation: ++processActionGeneration,
+    projectId: state.projectId,
+    ledgerId: state.ledgerId,
+    cardId: state.cardId,
+    pathname: location.pathname,
+    threadPresentationGeneration: Number(document.body.dataset.threadPresentationGeneration || 0),
+  });
+}
+function processLaunchOwned(launch) {
+  return launch.generation === processActionGeneration
+    && launch.projectId === state.projectId
+    && launch.ledgerId === state.ledgerId
+    && launch.cardId === state.cardId
+    && launch.pathname === location.pathname
+    && launch.threadPresentationGeneration === Number(document.body.dataset.threadPresentationGeneration || 0);
+}
 async function startSkill(skill, codexModel, codexEffort) {
   const submit = el('.process-start'); setBusy(submit, true); message('.process-message', 'Submitting skill run…');
+  const launch = captureProcessLaunch();
   try {
-    const payload = { ledgerId: state.ledgerId, cardId: state.cardId, skillName: skill.name };
+    const payload = { ledgerId: launch.ledgerId, cardId: launch.cardId, skillName: skill.name };
     if (codexModel) payload.codexModel = codexModel; if (codexEffort) payload.codexEffort = codexEffort;
-    const body = await jsonRequest('/api/codex/skills/process', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
-    finishProcessLaunch({ pipelineRunId: body.pipelineRun?.id || '', queuePosition: body.queuePosition });
+    const body = await jsonRequest('/api/codex/skills/process', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }, launch.projectId);
+    finishProcessLaunch({ pipelineRunId: body.pipelineRun?.id || '', queuePosition: body.queuePosition }, launch);
   } catch (error) { message('.process-message', error.message, true); setBusy(submit, false); }
 }
 async function startPipeline(pipeline) {
   const submit = el('.process-start'); setBusy(submit, true); message('.process-message', 'Submitting pipeline run…');
+  const launch = captureProcessLaunch();
   try {
-    const body = await jsonRequest('/api/codex/pipelines/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ledgerId: state.ledgerId, sourceCardId: state.cardId, pipelineId: pipeline.id }) });
-    finishProcessLaunch({ pipelineRunId: body.run?.id || '', queuePosition: body.queuePosition });
+    const body = await jsonRequest('/api/codex/pipelines/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ledgerId: launch.ledgerId, sourceCardId: launch.cardId, pipelineId: pipeline.id }) }, launch.projectId);
+    finishProcessLaunch({ pipelineRunId: body.run?.id || '', queuePosition: body.queuePosition }, launch);
   } catch (error) { message('.process-message', formatError(error), true); setBusy(submit, false); }
 }
-function finishProcessLaunch(detail) {
-  el('.process-modal').close();
-  setMobileCodexView(document, 'library', { global: false, libraryTitle: 'Process card' });
-  window.dispatchEvent(new CustomEvent('decision-os:codex-run-enqueued', { detail: { ...detail, cardId: state.cardId, ledgerId: state.ledgerId, projectId: state.projectId } }));
+function finishProcessLaunch(detail, launch) {
+  const actionOwned = processLaunchOwned(launch);
+  if (actionOwned) {
+    el('.process-modal').close();
+    setMobileCodexView(document, 'library', { global: false, libraryTitle: 'Process card' });
+  }
+  window.dispatchEvent(new CustomEvent('decision-os:codex-run-enqueued', { detail: { ...detail, ...launch, actionOwned } }));
 }
 function formatError(error) { const refs = error.body?.invalidReferences; return refs?.length ? `${error.message} Invalid references: ${refs.map((item) => item.reference).join(', ')}.` : error.message; }
 async function openProcess() {
@@ -396,10 +420,12 @@ async function saveEditor() {
   catch (error) { message('.pipeline-editor-message', formatError(error), true); } finally { setBusy(save, false); }
 }
 export function setMobileCodexContext(context) {
+  const priorIdentity = `${state.projectId}:${state.ledgerId}:${state.cardId}`;
   if ('projectId' in context) state.projectId = String(context.projectId || '');
   if (Array.isArray(context.projects)) state.projects = context.projects;
   if ('ledgerId' in context) state.ledgerId = String(context.ledgerId || '');
   if ('cardId' in context) state.cardId = String(context.cardId || '');
+  if (priorIdentity !== `${state.projectId}:${state.ledgerId}:${state.cardId}`) processActionGeneration += 1;
   el('.process-card-button').disabled = !state.cardId;
 }
 export function openMobileCodexLibrary(kind) {
@@ -422,6 +448,7 @@ export function initializeMobileCodex() {
       return;
     }
     el('.process-modal').close();
+    processActionGeneration += 1;
   }); el('.pipelines-close').addEventListener('click', () => el('.pipelines-modal').close());
   el('.process-resynchronize').addEventListener('click', (event) => { void resynchronizeGlobalLibraries(event.currentTarget, '.process-message', renderProcessList); });
   el('.pipelines-resynchronize').addEventListener('click', (event) => { void resynchronizeGlobalLibraries(event.currentTarget, '.pipelines-message', renderPipelineLibrary); });

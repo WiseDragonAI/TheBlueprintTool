@@ -119,7 +119,7 @@ test('desktop Shift+X queues Codex after server acceptance and returns to Contro
   assert.match(shortcut, /const submitted = await stopVoiceRecording\(\{ launchMode \}\);/);
   assert.match(shortcut, /if \(launchMode !== 'send'\) await finishQueuedVoiceSubmission\(submitted\);/);
   assert.doesNotMatch(shortcut, /onPersisted/);
-  assert.match(applicationSource, /await navigate\(controlRoomPath\('exec'\), true\)/);
+  assert.match(applicationSource, /async function navigateAcceptedProcess\(detail\)[\s\S]*acceptedRunOwnsRoute\(detail, snapshot, threadGeneration\)[\s\S]*navigate\(controlRoomPath\('exec'\), true\)/);
 });
 
 test('mobile thread uses the shared renderer that owns the local voice progress clock', () => {
@@ -172,7 +172,7 @@ test('mobile thread reconciles the refreshed ledger before rerendering an accept
 });
 
 test('closing a mobile thread unregisters its project-scoped Codex run consumer', () => {
-  const closeMobileThread = source.match(/export function closeMobileThread\(\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+  const closeMobileThread = source.match(/export function closeMobileThread\([^\n]*\) \{[\s\S]*?\n\}/)?.[0] ?? '';
   assert.match(source, /import \{ bindThreadCodexRunLog, unbindThreadCodexRunLog \}/);
   assert.match(closeMobileThread, /cardCodexThreadRunId\(currentCard\)/);
   assert.match(closeMobileThread, /unbindThreadCodexRunLog\(\{[\s\S]*projectId: currentProjectId/);
@@ -181,14 +181,14 @@ test('closing a mobile thread unregisters its project-scoped Codex run consumer'
 
 test('every card route exit closes through the shared navigation lifecycle', () => {
   const backHandler = applicationSource.match(/document\.querySelector\('\.back-to-zone-button'\)\.addEventListener\('click',[\s\S]*?\n\}\);/)?.[0] ?? '';
-  const closeMobileThread = source.match(/export function closeMobileThread\(\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+  const closeMobileThread = source.match(/export function closeMobileThread\([^\n]*\) \{[\s\S]*?\n\}/)?.[0] ?? '';
   const navigate = applicationSource.match(/function navigate\(path, replace = false\) \{[\s\S]*?\n\}/)?.[0] ?? '';
   const navigateTaskBack = applicationSource.match(/async function navigateTaskBack\(destination\) \{[\s\S]*?\n\}/)?.[0] ?? '';
 
   assert.match(applicationSource, /import \{ closeMobileThread,/);
-  assert.match(applicationSource, /function closeCardDetail\(\)/);
+  assert.match(applicationSource, /function closeCardDetail\(options\)/);
   assert.match(applicationSource, /name !== 'card-view' && name !== 'loading-view' && !closeCardDetail\(\)/);
-  assert.match(navigate, /currentLocation !== nextLocation && !closeCardDetail\(\)/);
+  assert.match(navigate, /currentLocation !== nextLocation && !closeCardDetail\(\{ discardHistory: true \}\)/);
   assert.match(backHandler, /controlRoomDestination[\s\S]*navigateTaskBack\(destination\)/);
   assert.match(backHandler, /navigate\(destination\)/);
   assert.match(navigateTaskBack, /startViewTransition\(\(\) => \{ navigate\(destination\); \}\)/);
@@ -196,7 +196,7 @@ test('every card route exit closes through the shared navigation lifecycle', () 
   assert.match(applicationSource, /patch-card'[\s\S]*navigate\(controlRoomPath\(nextStatus === 'backlog'/);
   assert.match(applicationSource, /complete-master-task'[\s\S]*navigate\(completionReturnPath\(\), true\)/);
   assert.match(applicationSource, /delete-card'[\s\S]*navigate\(controlRoomPath\(state\.controlTab\), true\)/);
-  assert.match(applicationSource, /popstate'[\s\S]*closeCardDetail\(\)[\s\S]*loadRoute\(\)/);
+  assert.match(applicationSource, /popstate'[\s\S]*closeCardDetail\(\{ fromHistory: true \}\)[\s\S]*loadRoute/);
   assert.match(closeMobileThread, /if \(canvasState\.voice\.recording\) return false;/);
   assert.match(closeMobileThread, /canvasState\.threadPanelOpen = false;/);
   assert.match(closeMobileThread, /classList\.remove\('card-thread-open'\)/);
@@ -222,16 +222,28 @@ test('master-task Back uses a short accessible opacity-only handoff', () => {
   assert.match(applicationCss, /@media \(prefers-reduced-motion: reduce\)[\s\S]*data-task-back-handoff="true"\]::view-transition-old\(root\)[\s\S]*animation: none/);
 });
 
-test('every desktop card opens through one thread lifecycle while mobile cards stay closed', () => {
+test('card entry owns the desktop default once while same-card reconciliation preserves operator state', () => {
   const renderCard = applicationSource.match(/function renderCard\(card\) \{[\s\S]*?\n\}/)?.[0] ?? '';
   const openCardDetail = applicationSource.match(/function openCardDetail\(card\) \{[\s\S]*?\n\}/)?.[0] ?? '';
 
   assert.match(renderCard, /openCardDetail\(card\)/);
   assert.match(openCardDetail, /setView\('card-view'\)/);
-  assert.match(openCardDetail, /window\.matchMedia\?\.\('\(min-width: 761px\)'\)\.matches === true[\s\S]*openMobileThread\(card/);
-  assert.match(openCardDetail, /else \{[\s\S]*closeMobileThread\(\)/);
+  assert.match(openCardDetail, /if \(routeEntry\)[\s\S]*window\.matchMedia\?\.\('\(min-width: 761px\)'\)\.matches === true[\s\S]*openMobileThread\(card/);
+  assert.match(openCardDetail, /else closeMobileThread\(\{ fromHistory: true \}\)/);
+  assert.match(openCardDetail, /presentedCardIdentity = nextIdentity/);
   assert.doesNotMatch(openCardDetail, /parsedTask\.masterTask/);
   assert.doesNotMatch(applicationSource, /await navigate\(cardPath\(ledgerRef\.id, zone\.id, cardId\)\);\n  openMobileThread/);
+});
+
+test('mobile thread history and async refreshes are owned by the active presentation', () => {
+  const refresh = source.match(/async function refreshThreadLedger\(optimisticRunId = ''\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+  assert.match(source, /history\.pushState\(\{ \.\.\.history\.state, responsiveThreadLayer:/);
+  assert.match(source, /closeMobileThread\(\{ fromHistory = false, discardHistory = false \} = \{\}\)/);
+  assert.match(source, /if \(!fromHistory[\s\S]*history\.back\(\)/);
+  assert.match(refresh, /generation: \+\+threadRefreshGeneration/);
+  assert.match(refresh, /if \(!ownsRefresh\(\)\) return;/);
+  assert.match(source, /if \(!payload\.threadId[\s\S]*return;/);
+  assert.doesNotMatch(source, /eventSource\.addEventListener\('card-content-change', refresh\)/);
 });
 
 test('mobile Codex Log makes queued work read-only while preserving actions for other run states', () => {

@@ -36,7 +36,7 @@ test('exposes the settings screen from burger navigation', () => {
   const source = readFileSync(resolve(import.meta.dirname, '../src/app/responsive/application.js'), 'utf8');
   const html = readFileSync(resolve(import.meta.dirname, '../index.html'), 'utf8');
   assert.match(source, /destination\('Settings', '\/settings'/);
-  assert.match(source, /location\.pathname === '\/settings'/);
+  assert.match(source, /owner\.route\.pathname === '\/settings'/);
   assert.match(html, /id="settings-view"/);
   assert.match(html, /Maximum concurrent Codex processes/);
   assert.match(html, /Voice pipeline/);
