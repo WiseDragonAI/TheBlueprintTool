@@ -1430,6 +1430,9 @@ function renderCard(card) {
   setMobileThreadCard(card);
   setMobileCodexContext({ projectId: state.resourceProjectId, ledgerId: state.activeLedgerId, cardId: state.activeCardId });
   setView('card-view');
+  if (parsedTask.masterTask && window.matchMedia?.('(min-width: 761px)').matches === true) {
+    openMobileThread(card, state.activeZoneColor || 'var(--accent)');
+  }
   document.title = `${elements['card-title'].textContent} · ${state.projectName}`;
 }
 
