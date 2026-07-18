@@ -15055,7 +15055,7 @@
       "title": "Restore pipeline library card affordances",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "frontend",
         "bug",
@@ -15273,6 +15273,25 @@
       "h": 380,
       "comment": {
         "contentFile": ".decision-os/cards/specs/card-94735e60-269f-471e-8fc1-4da9c590c9c3.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-ac917c89-2671-4798-9d03-26a8f16d479d",
+      "title": "New task intake",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 141108,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-ac917c89-2671-4798-9d03-26a8f16d479d.md"
       },
       "facts": [],
       "fields": []
@@ -18686,6 +18705,16 @@
       "color": "#895cfa",
       "label": "Default Tasks ledger on project intake",
       "comments": []
+    },
+    {
+      "id": "zone-bc1e0be7-1704-4575-9dc7-07b8ee7d5ff6",
+      "x": -10462,
+      "y": 141048,
+      "width": 1200,
+      "height": 900,
+      "color": "#895cfa",
+      "label": "New task intake",
+      "comments": []
     }
   ],
   "notes": {},
@@ -18865,7 +18894,8 @@
     "thread-card-48756429-623a-46a1-921d-36418f10fa57": ".decision-os/threads/specs/thread-card-48756429-623a-46a1-921d-36418f10fa57.md",
     "thread-card-codex-skill-1784357650123-612dfaaf": ".decision-os/threads/specs/thread-card-codex-skill-1784357650123-612dfaaf.md",
     "thread-card-c6534091-d29a-49a4-936d-5fe57948b3ff": ".decision-os/threads/specs/thread-card-c6534091-d29a-49a4-936d-5fe57948b3ff.md",
-    "thread-card-codex-skill-1784358107101-fa9ea4aa": ".decision-os/threads/specs/thread-card-codex-skill-1784358107101-fa9ea4aa.md"
+    "thread-card-codex-skill-1784358107101-fa9ea4aa": ".decision-os/threads/specs/thread-card-codex-skill-1784358107101-fa9ea4aa.md",
+    "thread-card-ac917c89-2671-4798-9d03-26a8f16d479d": ".decision-os/threads/specs/thread-card-ac917c89-2671-4798-9d03-26a8f16d479d.md"
   },
   "deletedNoteIds": {
     "thread-card-7074d33a-39da-42a1-b470-673cbe221def": [
