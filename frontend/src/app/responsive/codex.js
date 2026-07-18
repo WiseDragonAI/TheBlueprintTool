@@ -379,7 +379,8 @@ function renderPipelineLibrary() {
   create.disabled = false;
   create.title = state.projectFilter === 'All' ? 'Create a server-wide pipeline.' : 'Create a pipeline for this project.';
   el('.pipeline-library').replaceChildren(...pipelines.map((pipeline) => {
-    const node = button('', 'codex-list-item', () => openEditor(pipeline)); const title = document.createElement('strong'); title.textContent = pipeline.name; const copy = document.createElement('span'); copy.textContent = pipeline.purpose || `${pipeline.stepIds.length} steps`; const metadata = document.createElement('small'); metadata.textContent = `${pipeline.projectName} · ${pipelineTags(pipeline).join(' · ')}`; node.style.borderInlineStartColor = pipeline.projectColor; node.append(title, copy, metadata); return node;
+    const card = document.createElement('article'); card.className = 'codex-list-card'; card.style.setProperty('--skill-category-color', pipeline.projectColor);
+    const node = button('', 'codex-list-item', () => openEditor(pipeline)); const title = document.createElement('strong'); title.textContent = pipeline.name; const copy = document.createElement('span'); copy.textContent = pipeline.purpose || `${pipeline.stepIds.length} steps`; const metadata = document.createElement('small'); metadata.textContent = `${pipeline.projectName} · ${pipelineTags(pipeline).join(' · ')}`; node.append(title, copy, metadata); card.append(node); return card;
   }));
   if (!pipelines.length) message('.pipelines-message', state.pipelines.length ? 'No matching pipelines.' : 'No saved pipelines.');
 }

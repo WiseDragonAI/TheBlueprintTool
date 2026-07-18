@@ -134,6 +134,14 @@ test('global pipeline editing creates server definitions at All projects and pre
   assert.match(script, /projects: state\.projects/);
 });
 
+test('pipeline library entries use the shared card surface with ownership color', () => {
+  const renderPipelineLibrary = script.match(/function renderPipelineLibrary\(\) \{[\s\S]*?\n\}/)?.[0] || '';
+  assert.match(renderPipelineLibrary, /document\.createElement\('article'\); card\.className = 'codex-list-card'/);
+  assert.match(renderPipelineLibrary, /card\.style\.setProperty\('--skill-category-color', pipeline\.projectColor\)/);
+  assert.match(renderPipelineLibrary, /card\.append\(node\); return card/);
+  assert.doesNotMatch(renderPipelineLibrary, /node\.style\.borderInlineStartColor/);
+});
+
 test('skill libraries share favorite ordering, colored categories, and scope-specific detail actions', () => {
   assert.match(script, /sortSkillsByFavorite\(filtered\)/);
   assert.match(script, /renderSkillLibraryItemContent\(record\)/);
