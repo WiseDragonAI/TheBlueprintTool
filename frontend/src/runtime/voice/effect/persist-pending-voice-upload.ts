@@ -11,6 +11,7 @@ const memoryStore = new Map<string, PendingVoiceUpload>();
 
 export type PendingVoiceUpload = {
   noteId: string;
+  projectId?: string;
   threadId: string;
   ledgerId: string;
   cardId: string;
@@ -79,11 +80,14 @@ export async function readPendingVoiceUpload(noteId: string): Promise<PendingVoi
   return result ? cloneEntry(result) : null;
 }
 
-export async function listPendingVoiceUploads(input: { ledgerId: string; threadId: string }): Promise<PendingVoiceUpload[]> {
+export async function listPendingVoiceUploads(input: { projectId?: string; ledgerId: string; threadId: string }): Promise<PendingVoiceUpload[]> {
   if (!indexedDbFactory()) {
-    return Array.from(memoryStore.values(), cloneEntry).filter((entry) => entry.ledgerId === input.ledgerId && entry.threadId === input.threadId);
+    return Array.from(memoryStore.values(), cloneEntry).filter((entry) => entry.ledgerId === input.ledgerId
+      && entry.threadId === input.threadId
+      && (!entry.projectId || entry.projectId === input.projectId));
   }
-  return runRequest<PendingVoiceUpload[]>('readonly', (store) => store.index(threadScopeIndex).getAll([input.ledgerId, input.threadId]));
+  const entries = await runRequest<PendingVoiceUpload[]>('readonly', (store) => store.index(threadScopeIndex).getAll([input.ledgerId, input.threadId]));
+  return entries.filter((entry) => !entry.projectId || entry.projectId === input.projectId);
 }
 
 export async function deletePendingVoiceUpload(noteId: string): Promise<void> {
