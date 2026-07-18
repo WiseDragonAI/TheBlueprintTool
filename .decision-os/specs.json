@@ -13549,7 +13549,7 @@
       "title": "Create projects from a selected local directory",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "master-task"
       ],
@@ -13954,9 +13954,6 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "executionStatus": "running",
-      "executionRunId": "codex-skill-1784354791376-155acbea",
-      "codexActiveRunId": "codex-skill-1784354791376-155acbea",
       "codexRunId": "codex-skill-1784354791376-155acbea",
       "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784354791376-155acbea.md",
       "codexPipelineRunId": "codex-skill-1784354791376-155acbea",
@@ -14842,9 +14839,6 @@
       },
       "facts": [],
       "fields": [],
-      "codexActiveRunId": "codex-skill-1784354791376-155acbea",
-      "executionStatus": "running",
-      "executionRunId": "codex-skill-1784354791376-155acbea",
       "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784354791376-155acbea.md",
       "codexPipelineRunId": "codex-skill-1784354791376-155acbea",
       "codexPipelineName": "retrospect-and-close-task run",
