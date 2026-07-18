@@ -33,7 +33,7 @@ export function createProjectSyncStore(input: { decisionOsRoot: string; now?: ()
     file,
     list(): ProjectSyncRun[] { return Object.values(document.runs).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)); },
     read(syncId: string): ProjectSyncRun | null { return document.runs[syncId] ?? null; },
-    attachTask(syncId: string, value: Pick<ProjectSyncRun, 'taskProjectId' | 'ledgerId' | 'masterCardId' | 'pipelineRunId'>): ProjectSyncRun {
+    attachTask(syncId: string, value: Pick<ProjectSyncRun, 'initiatorProjectId' | 'taskProjectId' | 'ledgerId' | 'masterCardId' | 'pipelineRunId'>): ProjectSyncRun {
       const run = document.runs[syncId];
       if (!run) throw new Error('Unknown project synchronization run.');
       Object.assign(run, value, { updatedAt: now().toISOString() });
