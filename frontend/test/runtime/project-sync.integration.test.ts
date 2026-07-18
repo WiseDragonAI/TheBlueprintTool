@@ -18,8 +18,9 @@ test('starts a node-agnostic project synchronization with an idempotency key', a
         duplicate: false,
       }), { status: 202, headers: { 'content-type': 'application/json' } });
     },
-    sourceProjectId: 'node-b:project-b',
-    idempotencyKey: 'project-b:fingerprint',
+    sourceProjectId: 'project-b',
+    sourceNodeId: 'node-b',
+    idempotencyKey: 'node-b:project-b:fingerprint',
   });
   assert.equal(admission.run.syncId, 'sync-1');
   assert.equal(admission.masterCardId, 'card-sync-1');
@@ -28,8 +29,8 @@ test('starts a node-agnostic project synchronization with an idempotency key', a
   assert.equal(admission.projectId, 'project-a');
   assert.equal(calls[0].url, '/api/project-sync');
   assert.equal(calls[0].options.method, 'POST');
-  assert.equal((calls[0].options.headers as Record<string, string>)['idempotency-key'], 'project-b:fingerprint');
-  assert.deepEqual(JSON.parse(String(calls[0].options.body)), { sourceProjectId: 'node-b:project-b', idempotencyKey: 'project-b:fingerprint' });
+  assert.equal((calls[0].options.headers as Record<string, string>)['idempotency-key'], 'node-b:project-b:fingerprint');
+  assert.deepEqual(JSON.parse(String(calls[0].options.body)), { sourceProjectId: 'project-b', sourceNodeId: 'node-b', idempotencyKey: 'node-b:project-b:fingerprint' });
 });
 
 test('routes successful admission to the canonical Control Room task and retains settings errors', () => {

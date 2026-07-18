@@ -19,8 +19,8 @@ function text(value: unknown): string {
 }
 
 function logicalProjectKey(project: AnyRecord): string {
-  const localProjectId = text(project.localProjectId).trim();
-  return localProjectId ? `project:${localProjectId}` : `node:${text(project.ownerNodeId)}`;
+  const projectId = text(project.id).trim();
+  return projectId ? `project:${projectId}` : `node:${text(project.ownerNodeId)}`;
 }
 
 function taskSemanticFingerprint(task: AnyRecord): string {
@@ -36,10 +36,7 @@ function taskSemanticFingerprint(task: AnyRecord): string {
 }
 
 function authorityMember(members: AnyRecord[]): AnyRecord {
-  return [...members].sort((left, right) => {
-    const locality = Number(left.remote === true) - Number(right.remote === true);
-    return locality || text(left.ownerNodeId).localeCompare(text(right.ownerNodeId));
-  })[0];
+  return [...members].sort((left, right) => text(left.ownerNodeId).localeCompare(text(right.ownerNodeId)))[0];
 }
 
 export function federatedControlRoomProjection(input: {
@@ -53,7 +50,7 @@ export function federatedControlRoomProjection(input: {
       const localProjectId = text(project.id);
       const qualified = {
         ...project,
-        id: owner.remote ? `${owner.nodeId}:${localProjectId}` : localProjectId,
+        id: localProjectId,
         localProjectId,
         ownerNodeId: owner.nodeId,
         ownerNodeLabel: owner.nodeLabel,
@@ -75,7 +72,7 @@ export function federatedControlRoomProjection(input: {
         status: task.status === 'task-active' ? 'task-execution' : task.status ?? fallbackStatus,
         executionSince: task.executionSince ?? task.activeSince,
         executionTime: task.executionTime ?? task.activeTime,
-        projectId: owner.remote ? `${owner.nodeId}:${localProjectId}` : localProjectId,
+        projectId: localProjectId,
         localProjectId,
         logicalProjectKey: project?.logicalProjectKey ?? `node:${owner.nodeId}:${localProjectId}`,
         ownerNodeId: owner.nodeId,
@@ -120,12 +117,12 @@ export function federatedControlRoomProjection(input: {
       ...authority,
       logicalProjectKey: key,
       replicaCount: members.length,
-      replicas: members.map((member) => ({
-        projectId: member.id,
-        ownerNodeId: member.ownerNodeId,
-        ownerNodeLabel: member.ownerNodeLabel,
+      replicas: [...members].sort((left, right) => text(left.ownerNodeId).localeCompare(text(right.ownerNodeId))).map((member) => ({
+        projectId: authority.id,
+        nodeId: member.ownerNodeId,
+        nodeLabel: member.ownerNodeLabel,
         online: member.online,
-        remote: member.remote,
+        local: member.remote !== true,
       })),
     };
   });
@@ -142,7 +139,7 @@ export function federatedControlRoomProjection(input: {
   });
   const taskGroups = new Map<string, AnyRecord[]>();
   for (const task of sourceTasks) {
-    const key = [task.logicalProjectKey, task.cardId].map(text).join('\0');
+    const key = [task.logicalProjectKey, task.ledgerId, task.cardId].map(text).join('\0');
     taskGroups.set(key, [...(taskGroups.get(key) ?? []), task]);
   }
 
@@ -152,15 +149,15 @@ export function federatedControlRoomProjection(input: {
     const projectAuthority = projectAuthorities.get(projectKey);
     const authority = members.find((member) => member.ownerNodeId === projectAuthority?.ownerNodeId) ?? authorityMember(members);
     const observationMembers = members.filter((member) => member.executionObservation && typeof member.executionObservation === 'object');
-    const executionMember = [...observationMembers].sort((left, right) => {
+    const orderedObservationMembers = [...observationMembers].sort((left, right) => {
       const priority = (member: AnyRecord): number => {
         const kind = text((member.executionObservation as AnyRecord | undefined)?.kind);
         return kind === 'codex-process' ? 0 : kind === 'voice-transcription' ? 1 : 2;
       };
       return priority(left) - priority(right)
-        || Number(left.remote === true) - Number(right.remote === true)
         || text(left.ownerNodeId).localeCompare(text(right.ownerNodeId));
-    })[0];
+    });
+    const executionMember = orderedObservationMembers[0];
     const observation = executionMember?.executionObservation as AnyRecord | undefined;
     const cardStatus = text(authority.cardStatus) || 'todo';
     const status = observation
@@ -171,8 +168,10 @@ export function federatedControlRoomProjection(input: {
           ? 'task-complete'
           : 'task-waiting';
     const fingerprints = new Set(members.map(taskSemanticFingerprint));
-    const conflict = fingerprints.size > 1;
-    if (conflict) {
+    const stateConflict = fingerprints.size > 1;
+    const executionConflict = orderedObservationMembers.length > 1;
+    const conflict = stateConflict || executionConflict;
+    if (stateConflict) {
       conflictDiagnostics.push({
         valid: false,
         type: 'federation_task_conflict',
@@ -183,10 +182,22 @@ export function federatedControlRoomProjection(input: {
         message: `Task replicas disagree; ${text(authority.ownerNodeLabel) || text(authority.ownerNodeId)} is displayed.`,
       });
     }
+    if (executionConflict) {
+      conflictDiagnostics.push({
+        valid: false,
+        type: 'federation_execution_conflict',
+        projectId: authority.projectId,
+        ledgerId: authority.ledgerId,
+        cardId: authority.cardId,
+        nodeIds: orderedObservationMembers.map((member) => text(member.ownerNodeId)),
+        message: 'Multiple replicas report verified execution for the same logical card.',
+      });
+    }
     return {
       ...authority,
       status,
       executionObservation: observation ?? null,
+      executionObservations: orderedObservationMembers.map((member) => member.executionObservation),
       executionStatus: observation?.kind === 'codex-process' ? 'running' : observation?.kind === 'codex-queue' ? 'pending' : observation?.kind === 'voice-transcription' ? 'transcribing-before-launch' : '',
       executionSince: observation?.kind === 'codex-process' ? text(executionMember.executionSince) : '',
       executionTime: observation?.kind === 'codex-process' ? Number(executionMember.executionTime) : Number.NaN,
@@ -201,11 +212,11 @@ export function federatedControlRoomProjection(input: {
       executionNodeLabel: observation ? text(observation.nodeLabel) : '',
       conflict,
       replicaCount: members.length,
-      replicas: members.map((member) => ({
-        projectId: member.projectId,
-        ownerNodeId: member.ownerNodeId,
-        ownerNodeLabel: member.ownerNodeLabel,
-        ownerOnline: member.ownerOnline,
+      replicas: [...members].sort((left, right) => text(left.ownerNodeId).localeCompare(text(right.ownerNodeId))).map((member) => ({
+        projectId: authority.projectId,
+        nodeId: member.ownerNodeId,
+        nodeLabel: member.ownerNodeLabel,
+        online: member.ownerOnline,
         status: member.status,
       })),
     };

@@ -412,8 +412,8 @@ test('requires an explicit project choice before creating a new task intake', ()
   assert.match(html, /class="new-task-project-modal"/);
   assert.match(html, /The task and its Codex run will use this project workspace\./);
   assert.match(mobile, /document\.querySelectorAll\('\.new-task-button'\)\.forEach\(\(button\) => button\.addEventListener\('click', openNewTaskProjectModal\)\)/);
-  assert.match(mobile, /await createTaskIntake\(project\.id\)/);
-  assert.match(mobile, /async function createTaskIntake\(projectId\) \{\s*setResourceProject\(projectId\)/);
+  assert.match(mobile, /await createTaskIntake\(project\.id, project\.selectedReplicaNodeId\)/);
+  assert.match(mobile, /async function createTaskIntake\(projectId, replicaNodeId\) \{\s*setResourceProject\(projectId\)/);
   const projectPicker = mobile.slice(mobile.indexOf('function openNewTaskProjectModal()'), mobile.indexOf('function cardOverlapArea'));
   assert.match(html, /class="new-task-node-tabs" role="tablist" aria-label="Choose a node"/);
   assert.match(html, /id="new-task-project-panel" class="new-task-project-list" role="tabpanel"/);

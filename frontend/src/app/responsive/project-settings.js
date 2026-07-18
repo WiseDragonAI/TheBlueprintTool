@@ -53,11 +53,11 @@ export async function saveProjectSettingsRequest({ fetchImpl, projects, projectI
   };
 }
 
-export async function startProjectSyncRequest({ fetchImpl, sourceProjectId, idempotencyKey }) {
+export async function startProjectSyncRequest({ fetchImpl, sourceProjectId, sourceNodeId, idempotencyKey }) {
   const response = await fetchImpl('/api/project-sync', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'idempotency-key': idempotencyKey },
-    body: JSON.stringify({ sourceProjectId, idempotencyKey }),
+    body: JSON.stringify({ sourceProjectId, sourceNodeId, idempotencyKey }),
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.run || !payload?.masterCardId || !payload?.ledgerId || !payload?.pipelineRunId || !payload?.projectId) {

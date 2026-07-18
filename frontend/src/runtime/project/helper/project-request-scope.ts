@@ -27,6 +27,11 @@ export function projectIdFromLocation(): string {
   try { return decodeURIComponent(match[1]).trim(); } catch { return ''; }
 }
 
+export function replicaNodeIdFromLocation(): string {
+  try { return new URLSearchParams(String(globalThis.location?.search ?? '')).get('replica')?.trim() ?? ''; }
+  catch { return ''; }
+}
+
 export function projectBasePath(value = projectIdFromLocation()): string {
   return value ? `/p/${encodeURIComponent(value)}` : '';
 }
@@ -51,9 +56,20 @@ export function installProjectRequestScope(): void {
   installed = true;
   const nativeFetch = globalThis.fetch.bind(globalThis);
   globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
-    if (typeof input === 'string' || input instanceof URL) return nativeFetch(projectScopedRequestPath(String(input)), init);
+    const replicaNodeId = replicaNodeIdFromLocation();
+    const withReplicaHeader = (requestInit: RequestInit | undefined, url: string, baseHeaders?: HeadersInit): RequestInit | undefined => {
+      if (!replicaNodeId || !pathnameOf(url).startsWith('/p/')) return requestInit;
+      const headers = new Headers(baseHeaders);
+      new Headers(requestInit?.headers).forEach((value, key) => headers.set(key, value));
+      headers.set('x-decision-os-replica-node', replicaNodeId);
+      return { ...requestInit, headers };
+    };
+    if (typeof input === 'string' || input instanceof URL) {
+      const scoped = projectScopedRequestPath(String(input));
+      return nativeFetch(scoped, withReplicaHeader(init, scoped));
+    }
     const scoped = projectScopedRequestPath(input.url);
-    if (scoped === input.url) return nativeFetch(input, init);
+    if (scoped === input.url && (!replicaNodeId || !pathnameOf(scoped).startsWith('/p/'))) return nativeFetch(input, init);
     const requestInit: RequestInit & { duplex?: 'half' } = {
       method: input.method,
       headers: input.headers,
@@ -69,6 +85,7 @@ export function installProjectRequestScope(): void {
       signal: input.signal,
     };
     if (input.body) requestInit.duplex = 'half';
-    return nativeFetch(new Request(scoped, requestInit), init);
+    const request = new Request(scoped, requestInit);
+    return nativeFetch(request, withReplicaHeader(init, scoped, input.headers));
   }) as typeof globalThis.fetch;
 }

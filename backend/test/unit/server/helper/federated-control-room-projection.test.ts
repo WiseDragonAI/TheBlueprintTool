@@ -21,7 +21,7 @@ test('merges Exec tasks and upgrades an older remote Active projection', () => {
   }) as Record<string, any>;
 
   assert.deepEqual(result.exec.map((task: Record<string, unknown>) => task.cardId), ['local', 'remote']);
-  assert.equal(result.exec[1].projectId, 'remote-node:b');
+  assert.equal(result.exec[1].projectId, 'b');
   assert.equal(result.exec[1].status, 'task-execution');
   assert.equal(result.exec[1].executionSince, '2026-07-17T05:00:00.000Z');
   assert.equal(result.active, undefined);
@@ -88,11 +88,11 @@ test('projects one authoritative task for replicas of the same logical project',
   assert.equal(result.projects.length, 1);
   assert.equal(result.projects[0].replicaCount, 2);
   assert.equal(result.allTasks.length, 1);
-  assert.equal(result.queue.length, 0);
-  assert.equal(result.backlog.length, 1);
-  assert.equal(result.backlog[0].ownerNodeId, 'workstation');
-  assert.equal(result.backlog[0].replicaCount, 2);
-  assert.equal(result.backlog[0].conflict, true);
+  assert.equal(result.queue.length, 1);
+  assert.equal(result.backlog.length, 0);
+  assert.equal(result.queue[0].ownerNodeId, 'mobile');
+  assert.equal(result.queue[0].replicaCount, 2);
+  assert.equal(result.queue[0].conflict, true);
   assert.equal(result.diagnostics.filter((entry: Record<string, unknown>) => entry.type === 'federation_task_conflict').length, 1);
 });
 
@@ -120,7 +120,7 @@ test('uses stable project identity across repository transport changes', () => {
   assert.equal(result.diagnostics.filter((entry: Record<string, unknown>) => entry.type === 'federation_task_conflict').length, 0);
 });
 
-test('merges execution observations onto one logical card despite divergent ledger placement', () => {
+test('keeps equal card ids separate when their ledger ids differ', () => {
   const localTask = { cardId: 'card-1', projectId: 'project-1', ledgerId: 'tasks', title: 'Task', cardStatus: 'todo', status: 'task-waiting' };
   const remoteTask = {
     ...localTask,
@@ -146,13 +146,40 @@ test('merges execution observations onto one logical card despite divergent ledg
     diagnostics: [],
   }) as Record<string, any>;
 
-  assert.equal(result.allTasks.length, 1);
+  assert.equal(result.allTasks.length, 2);
   assert.equal(result.exec.length, 1);
-  assert.equal(result.exec[0].ledgerId, 'tasks');
+  assert.equal(result.exec[0].ledgerId, 'specs');
   assert.equal(result.exec[0].executionNodeId, 'mobile');
   assert.equal(result.exec[0].codexRunId, 'run-mobile');
-  assert.equal(result.exec[0].replicaCount, 2);
+  assert.equal(result.exec[0].replicaCount, 1);
+  assert.equal(result.exec[0].conflict, false);
+});
+
+test('retains every verified execution observation as one execution conflict', () => {
+  const task = { cardId: 'card-1', projectId: 'project-1', ledgerId: 'tasks', title: 'Task', cardStatus: 'todo', status: 'task-execution' };
+  const result = federatedControlRoomProjection({
+    localProjection: {
+      fingerprint: 'local', projects: [{ id: 'project-1', name: 'Project' }], queue: [], backlog: [], done: [],
+      exec: [{ ...task, codexRunId: 'run-workstation', executionObservation: { kind: 'codex-process', runId: 'run-workstation' } }],
+      allTasks: [{ ...task, codexRunId: 'run-workstation', executionObservation: { kind: 'codex-process', runId: 'run-workstation' } }], diagnostics: [], ledgers: ['Tasks'],
+    },
+    localOwner: { nodeId: 'workstation', nodeLabel: 'Workstation', remote: false },
+    remoteProjections: [{
+      owner: { nodeId: 'mobile', nodeLabel: 'Mobile', remote: true },
+      projection: {
+        fingerprint: 'remote', projects: [{ id: 'project-1', name: 'Project' }], queue: [], backlog: [], done: [],
+        exec: [{ ...task, codexRunId: 'run-mobile', executionObservation: { kind: 'codex-process', runId: 'run-mobile' } }],
+        allTasks: [{ ...task, codexRunId: 'run-mobile', executionObservation: { kind: 'codex-process', runId: 'run-mobile' } }], diagnostics: [], ledgers: ['Tasks'],
+      },
+    }],
+    diagnostics: [],
+  }) as Record<string, any>;
+
+  assert.equal(result.exec.length, 1);
+  assert.equal(result.exec[0].projectId, 'project-1');
+  assert.deepEqual(result.exec[0].executionObservations.map((observation: Record<string, unknown>) => observation.nodeId), ['mobile', 'workstation']);
   assert.equal(result.exec[0].conflict, true);
+  assert.equal(result.diagnostics.filter((entry: Record<string, unknown>) => entry.type === 'federation_execution_conflict').length, 1);
 });
 
 test('keeps equal card ids separate when their stable project ids differ', () => {
@@ -176,4 +203,32 @@ test('keeps equal card ids separate when their stable project ids differ', () =>
 
   assert.equal(result.projects.length, 2);
   assert.equal(result.queue.length, 2);
+});
+
+test('produces symmetric placement from either node orientation', () => {
+  const project = { id: 'project-1', name: 'Project' };
+  const workstationTask = { cardId: 'card-1', projectId: 'project-1', ledgerId: 'tasks', title: 'Task', cardStatus: 'backlog', status: 'task-backlog' };
+  const mobileTask = { ...workstationTask, cardStatus: 'todo', status: 'task-waiting', executionObservation: { kind: 'codex-process', runId: 'run-mobile' } };
+  const projection = (task: Record<string, unknown>, fingerprint: string) => ({
+    fingerprint, projects: [project],
+    queue: task.status === 'task-waiting' ? [task] : [],
+    exec: task.status === 'task-execution' ? [task] : [],
+    backlog: task.status === 'task-backlog' ? [task] : [], done: [], allTasks: [task], diagnostics: [], ledgers: ['Tasks'],
+  });
+  const workstation = federatedControlRoomProjection({
+    localProjection: projection(workstationTask, 'workstation'),
+    localOwner: { nodeId: 'workstation', nodeLabel: 'Workstation', remote: false },
+    remoteProjections: [{ projection: projection(mobileTask, 'mobile'), owner: { nodeId: 'mobile', nodeLabel: 'Mobile', remote: true } }],
+    diagnostics: [],
+  }) as Record<string, any>;
+  const mobile = federatedControlRoomProjection({
+    localProjection: projection(mobileTask, 'mobile'),
+    localOwner: { nodeId: 'mobile', nodeLabel: 'Mobile', remote: false },
+    remoteProjections: [{ projection: projection(workstationTask, 'workstation'), owner: { nodeId: 'workstation', nodeLabel: 'Workstation', remote: true } }],
+    diagnostics: [],
+  }) as Record<string, any>;
+  const placement = (result: Record<string, any>) => Object.fromEntries(['queue', 'exec', 'backlog', 'done'].map((list) => [list, result[list].map((task: Record<string, unknown>) => [task.projectId, task.ledgerId, task.cardId])]));
+
+  assert.deepEqual(placement(workstation), placement(mobile));
+  assert.deepEqual(placement(workstation), { queue: [], exec: [['project-1', 'tasks', 'card-1']], backlog: [], done: [] });
 });

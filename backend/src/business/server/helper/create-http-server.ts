@@ -72,6 +72,7 @@ import {
   type FederatedSkillSnapshot,
 } from '../../federation/helper/federated-library-cache.js';
 import { federatedControlRoomProjection } from './federated-control-room-projection.js';
+import { federatedProjectCatalog } from './federated-project-catalog.js';
 import { ensureServerPipelines, migrateLegacyProjectPipelines } from '../../codex/helper/server-pipeline-catalog.js';
 import { applyCodexSkillMetadataOwner, migrateCodexSkillMetadataOwner } from '../../codex/helper/codex-skill-metadata-owner.js';
 import { readCodexPipelineStore } from '../../codex/helper/codex-pipeline-store.js';
@@ -583,14 +584,16 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.end(JSON.stringify({ ok: false, error: 'Malformed project URL.' }));
       return;
     }
-    if (projectScope && projectScope.projectId.includes(':')) {
-      const separator = projectScope.projectId.indexOf(':');
-      const ownerNodeId = projectScope.projectId.slice(0, separator);
-      const localProjectId = projectScope.projectId.slice(separator + 1);
-      if (!ownerNodeId || !localProjectId) {
+    const requestedReplicaNodeId = String(request.headers['x-decision-os-replica-node'] ?? '').trim();
+    const localNodeId = federation.localOwner().ownerNodeId;
+    if (projectScope && requestedReplicaNodeId && requestedReplicaNodeId !== localNodeId) {
+      const ownerNodeId = requestedReplicaNodeId;
+      const localProjectId = projectScope.projectId;
+      const remoteProject = federation.remoteProjects().find((project) => project.ownerNodeId === ownerNodeId && project.localProjectId === localProjectId);
+      if (!remoteProject) {
         response.statusCode = 404;
         response.setHeader('content-type', 'application/json');
-        response.end(JSON.stringify({ ok: false, error: 'owner_or_project_unknown' }));
+        response.end(JSON.stringify({ ok: false, error: 'replica_unknown', projectId: localProjectId, nodeId: ownerNodeId }));
         return;
       }
       const replica = federationReplicaStore.replica(ownerNodeId, localProjectId);
@@ -974,15 +977,18 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       try {
         const body = JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord;
         const sourceId = String(body.sourceProjectId ?? '');
+        const sourceNodeId = String(body.sourceNodeId ?? '');
+        const localOwner = federation.localOwner();
         const allProjects = [
           ...projects.map((project) => {
             let originFingerprint = '';
             try { originFingerprint = readRepositoryOriginIdentity(project.root).originFingerprint; } catch { /* surfaced by admission below */ }
-            return { ...project, ...federation.localOwner(), remote: false, localProjectId: project.id, originFingerprint };
+            return { ...project, ...localOwner, remote: false, localProjectId: project.id, originFingerprint };
           }),
           ...federation.remoteProjects(),
         ];
-        const source = allProjects.find((entry) => entry.id === sourceId);
+        const source = allProjects.find((entry) => String(entry.localProjectId ?? entry.id) === sourceId
+          && (!sourceNodeId || String(entry.ownerNodeId) === sourceNodeId));
         if (!source) throw new Error('Unknown source project.');
         const admitted = await projectSyncController.start(source, String(body.idempotencyKey ?? request.headers['idempotency-key'] ?? sourceId));
         response.statusCode = admitted.duplicate ? 200 : 202;
@@ -1044,18 +1050,21 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     }
     if (url === '/decision-os/projects' && request.method === 'GET') {
       const localOwner = federation.localOwner();
+      const localProjects = projects.map((project) => {
+        let originFingerprint = '';
+        try { originFingerprint = readRepositoryOriginIdentity(project.root).originFingerprint; } catch { /* Non-Git projects remain visible. */ }
+        return { ...project, originFingerprint };
+      });
+      const remoteProjects = federation.remoteProjects().map((project) => {
+        const replica = federationReplicaStore.status(project.ownerNodeId, project.localProjectId);
+        return { ...project, available: project.online || Boolean(federationReplicaStore.replica(project.ownerNodeId, project.localProjectId)), replica };
+      });
       response.setHeader('content-type', 'application/json');
-      response.end(JSON.stringify({ projects: [
-        ...projects.map((project) => {
-          let originFingerprint = '';
-          try { originFingerprint = readRepositoryOriginIdentity(project.root).originFingerprint; } catch { /* Non-Git projects remain visible. */ }
-          return { ...project, ...localOwner, remote: false, localProjectId: project.id, originFingerprint };
-        }),
-        ...federation.remoteProjects().map((project) => {
-          const replica = federationReplicaStore.status(project.ownerNodeId, project.localProjectId);
-          return { ...project, available: project.online || Boolean(federationReplicaStore.replica(project.ownerNodeId, project.localProjectId)), replica };
-        }),
-      ] }));
+      response.end(JSON.stringify({ projects: federatedProjectCatalog({
+        localProjects,
+        remoteProjects,
+        localNode: { nodeId: localOwner.ownerNodeId, nodeLabel: localOwner.ownerNodeLabel },
+      }) }));
       return;
     }
     if (url === '/decision-os/projects-canvas' && request.method === 'GET') {
