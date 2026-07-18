@@ -12942,7 +12942,7 @@
       "title": "Merge Control Room project filters by Git origin",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "implementation",
         "frontend",
@@ -14056,12 +14056,12 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784301285757-cb5a9f5f",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784301285757-cb5a9f5f.md",
-      "codexActiveRunId": "codex-skill-1784301285757-cb5a9f5f",
+      "codexThreadRunId": "codex-skill-1784305054299-75c52384",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784305054299-75c52384.md",
       "executionStatus": "running",
-      "executionRunId": "codex-skill-1784301285757-cb5a9f5f",
-      "codexActiveExecutionId": "codex-execution-1784301285768-778fff5f"
+      "codexActiveRunId": "codex-skill-1784305054299-75c52384",
+      "codexActiveExecutionId": "codex-execution-1784354095002-e9dc7bf0",
+      "executionRunId": "codex-skill-1784305054299-75c52384"
     },
     {
       "id": "card-codex-skill-1784292634000-81923844",
@@ -14230,15 +14230,23 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784293070526-5ea5e38a",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784293070526-5ea5e38a.md"
+      "executionStatus": "running",
+      "executionRunId": "codex-skill-1784354734438-c301a9ee",
+      "codexActiveRunId": "codex-skill-1784354734438-c301a9ee",
+      "codexRunId": "codex-skill-1784354734438-c301a9ee",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784354734438-c301a9ee.md",
+      "codexPipelineRunId": "codex-skill-1784354734438-c301a9ee",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexSkillName": "retrospect-and-close-task"
     },
     {
       "id": "card-9a7255f2-c390-4798-88cc-89e8579a9c7a",
       "title": "Define synchronization skills and the server pipeline",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "synchronization",
         "subtask"
@@ -14258,7 +14266,7 @@
       "title": "Admit synchronization as a labeled master task",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "synchronization",
         "subtask"
@@ -14278,7 +14286,7 @@
       "title": "Route every synchronization phase through pipeline execution",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "synchronization",
         "subtask"
@@ -14514,12 +14522,8 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784301173061-22050c9b",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784301173061-22050c9b.md",
-      "codexActiveRunId": "codex-skill-1784301173061-22050c9b",
-      "executionStatus": "running",
-      "executionRunId": "codex-skill-1784301173061-22050c9b",
-      "codexActiveExecutionId": "codex-execution-1784301173071-67eadfbd"
+      "codexThreadRunId": "codex-skill-1784305089935-a111be9e",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784305089935-a111be9e.md"
     },
     {
       "id": "card-5d13ddeb-dca7-4ded-8799-cd03ccca45c0",
@@ -14549,7 +14553,7 @@
       "title": "T02 — Separate card entry from data reconciliation",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "implementation",
         "frontend",
@@ -14572,7 +14576,7 @@
       "title": "T03 — Make route loads ownership-safe",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "implementation",
         "frontend",
@@ -14595,7 +14599,7 @@
       "title": "T04 — Scope background refreshes to owned resources",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "implementation",
         "frontend",
@@ -14618,7 +14622,7 @@
       "title": "T05 — Bind deferred navigation to the initiating action",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "implementation",
         "frontend",
@@ -14739,6 +14743,77 @@
       "fields": [],
       "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784301138950-27021ec1.md",
       "codexPipelineRunId": "codex-skill-1784301138950-27021ec1",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexSkillName": "retrospect-and-close-task"
+    },
+    {
+      "id": "card-47955f12-4ed3-41dd-aada-7cac51f3e899",
+      "title": "Explain MOH Codex diagnostic fragments",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "diagnostic-analysis",
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 134988,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-47955f12-4ed3-41dd-aada-7cac51f3e899.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784354465725-bf3ce0ec",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784354465725-bf3ce0ec.md"
+    },
+    {
+      "id": "card-b75d1db1-67c1-45f4-8e99-d110a4095702",
+      "title": "Trace and explain MOH diagnostic rendering",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "labels": [
+        "diagnostic-analysis",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 134988,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-b75d1db1-67c1-45f4-8e99-d110a4095702.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-codex-skill-1784354734438-c301a9ee",
+      "title": "retrospect-and-close-task result",
+      "cardType": "codex-skill-run",
+      "x": -9946,
+      "y": 129888,
+      "w": 700,
+      "h": 260,
+      "status": "todo",
+      "codexRunId": "codex-skill-1784354734438-c301a9ee",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-codex-skill-1784354734438-c301a9ee.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784354734438-c301a9ee",
+      "executionStatus": "running",
+      "executionRunId": "codex-skill-1784354734438-c301a9ee",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784354734438-c301a9ee.md",
+      "codexPipelineRunId": "codex-skill-1784354734438-c301a9ee",
       "codexPipelineName": "retrospect-and-close-task run",
       "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
       "codexPipelineStepName": "retrospect-and-close-task",
@@ -16503,6 +16578,18 @@
       "from": "card-50cbfca8-47c3-460e-acad-bd4bd3c7062c",
       "to": "card-codex-skill-1784301138950-27021ec1",
       "label": "retrospect-and-close-task"
+    },
+    {
+      "id": "rel-9868ab38-5a16-4839-9fe7-27ec11c22fc2",
+      "from": "card-47955f12-4ed3-41dd-aada-7cac51f3e899",
+      "to": "card-b75d1db1-67c1-45f4-8e99-d110a4095702",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-codex-skill-1784354734438-c301a9ee-1",
+      "from": "card-07132fde-ffd4-4db4-a2b7-97587637438f",
+      "to": "card-codex-skill-1784354734438-c301a9ee",
+      "label": "retrospect-and-close-task"
     }
   ],
   "annotations": [
@@ -17991,6 +18078,16 @@
       "color": "#895cfa",
       "label": "Project synchronization recovery",
       "comments": []
+    },
+    {
+      "id": "zone-8f7c551d-35df-47c4-a6bb-8f4b84d6e894",
+      "x": -10462,
+      "y": 134928,
+      "width": 1200,
+      "height": 900,
+      "color": "#895cfa",
+      "label": "MOH Codex diagnostic explanation",
+      "comments": []
     }
   ],
   "notes": {},
@@ -18159,7 +18256,9 @@
     "thread-card-1904363a-d446-4dfa-a638-e65a30cde12c": ".decision-os/threads/specs/thread-card-1904363a-d446-4dfa-a638-e65a30cde12c.md",
     "thread-card-e9169320-5637-41e6-8e3f-f01cdac68bb8": ".decision-os/threads/specs/thread-card-e9169320-5637-41e6-8e3f-f01cdac68bb8.md",
     "thread-card-3595f568-b6c1-4e1c-a2f5-27a1c36d0651": ".decision-os/threads/specs/thread-card-3595f568-b6c1-4e1c-a2f5-27a1c36d0651.md",
-    "thread-card-codex-skill-1784301138950-27021ec1": ".decision-os/threads/specs/thread-card-codex-skill-1784301138950-27021ec1.md"
+    "thread-card-codex-skill-1784301138950-27021ec1": ".decision-os/threads/specs/thread-card-codex-skill-1784301138950-27021ec1.md",
+    "thread-card-47955f12-4ed3-41dd-aada-7cac51f3e899": ".decision-os/threads/specs/thread-card-47955f12-4ed3-41dd-aada-7cac51f3e899.md",
+    "thread-card-codex-skill-1784354734438-c301a9ee": ".decision-os/threads/specs/thread-card-codex-skill-1784354734438-c301a9ee.md"
   },
   "deletedNoteIds": {
     "thread-card-7074d33a-39da-42a1-b470-673cbe221def": [
