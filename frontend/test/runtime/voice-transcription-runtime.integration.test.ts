@@ -234,7 +234,7 @@ test('upload-voice-audio reports accepted upload before transcription provider r
   }
 });
 
-test('request-transcription keeps preserved upload retryable when metadata commit fails', async () => {
+test('request-transcription signals durable persistence before delayed upload settlement and keeps failures retryable', async () => {
   const previousFetch = globalThis.fetch;
   const previousDocument = globalThis.document;
   const previousWindow = globalThis.window;
@@ -272,16 +272,16 @@ test('request-transcription keeps preserved upload retryable when metadata commi
   let uploadCount = 0;
   let persistedBeforeFetch = false;
   const lifecycle: string[] = [];
+  let settleFirstUpload: (response: unknown) => void = () => {};
+  const firstUpload = new Promise((resolve) => {
+    settleFirstUpload = resolve;
+  });
   (globalThis as unknown as { fetch: unknown }).fetch = async (_url: string, init?: RequestInit) => {
     uploadCount += 1;
     lifecycle.push('upload-started');
     const noteId = String((init?.body as FormData).get('noteId') ?? '');
     persistedBeforeFetch = Boolean(await readPendingVoiceUpload(noteId));
-    if (uploadCount === 1) return {
-      ok: false,
-      status: 500,
-      json: async () => ({ body: { ok: false, uploaded: true, configured: true, noteId, voiceFileRef: '/tmp/preserved.webm', error: 'Voice note commit failed.' } })
-    };
+    if (uploadCount === 1) return firstUpload;
     return {
       ok: true,
       status: 202,
@@ -293,13 +293,26 @@ test('request-transcription keeps preserved upload retryable when metadata commi
     state.threadId = 'thread-card-a';
     state.activeTab = 'specs';
     state.activeLedger = { notes: { 'thread-card-a': [] } };
-    await requestTranscription(new Blob(['abc'], { type: 'audio/webm' }), {
+    let submissionSettled = false;
+    const submission = requestTranscription(new Blob(['abc'], { type: 'audio/webm' }), {
       onPersisted: () => lifecycle.push('persisted')
     });
+    void submission.finally(() => {
+      submissionSettled = true;
+    });
+    await new Promise((resolve) => setImmediate(resolve));
     const note = state.activeLedger.notes['thread-card-a'][0];
     const noteId = String(note.id);
     assert.equal(persistedBeforeFetch, true);
     assert.deepEqual(lifecycle.slice(0, 2), ['persisted', 'upload-started']);
+    assert.equal(submissionSettled, false);
+    assert.ok(await readPendingVoiceUpload(noteId));
+    settleFirstUpload({
+      ok: false,
+      status: 500,
+      json: async () => ({ body: { ok: false, uploaded: true, configured: true, noteId, voiceFileRef: '/tmp/preserved.webm', error: 'Voice note commit failed.' } })
+    });
+    await submission;
     assert.equal(note.status, 'upload failed');
     assert.equal(note.voiceFileRef, '/tmp/preserved.webm');
     assert.equal(note.localVoiceUploadId, noteId);

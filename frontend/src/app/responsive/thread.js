@@ -181,8 +181,11 @@ export async function handleResponsiveThreadShortcut(event) {
     if (!canvasState.threadPanelOpen && currentCard) openMobileThread(currentCard, getComputedStyle(document.querySelector('#card-view')).getPropertyValue('--zone-color').trim());
     if (canvasState.voice.recording) {
       const launchMode = event.ctrlKey ? 'pipeline' : event.shiftKey ? 'run' : 'send';
-      const submitted = await stopVoiceRecording({ launchMode });
-      if (launchMode !== 'send') await finishQueuedVoiceSubmission(submitted);
+      if (launchMode === 'send') await stopVoiceRecording({ launchMode });
+      else void stopVoiceRecording({
+        launchMode,
+        onPersisted: () => void finishQueuedVoiceSubmission(true),
+      });
     }
     else void startVoiceRecording();
     return true;
