@@ -367,6 +367,28 @@ test('card skill run route infers status from the latest continued JSONL segment
     assert.deepEqual(failed.diagnostics.map((event) => event.kind), ['error']);
     assert.match(failed.diagnostics[0]?.text ?? '', /ENOENT/);
     assert.equal(existsSync(threadPath), false);
+
+    const multilineCommandRejection = [
+      '2026-07-18T05:48:47.327650Z ERROR codex_core::tools::router: error=exec_command failed for a multiline command:',
+      'trap \'rm -f "$plan_json"\' EXIT',
+      'jq -n \'{',
+      '  masterCardId: "card-sync",',
+      '  title: "Agent-authorized production database sync"',
+      '}\'',
+      'rejected: rm -f style commands are not permitted',
+    ].join('\n');
+    writeFileSync(logPath, `${multilineCommandRejection}\n`);
+    const multilineDiagnosticAt = new Date(Date.now() + 15);
+    utimesSync(logPath, multilineDiagnosticAt, multilineDiagnosticAt);
+    const multilineDiagnosticResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}`);
+    assert.equal(multilineDiagnosticResponse.status, 200);
+    const multilineDiagnostic = await multilineDiagnosticResponse.json() as { status: string; errorCount: number; diagnostics: Array<{ kind: string; title: string; text: string }> };
+    assert.equal(multilineDiagnostic.status, 'failed');
+    assert.equal(multilineDiagnostic.errorCount, 1);
+    assert.equal(multilineDiagnostic.diagnostics.length, 1);
+    assert.equal(multilineDiagnostic.diagnostics[0]?.kind, 'error');
+    assert.equal(multilineDiagnostic.diagnostics[0]?.title, 'Error');
+    assert.equal(multilineDiagnostic.diagnostics[0]?.text, multilineCommandRejection);
   } finally {
     server.close();
     process.chdir(originalCwd);
