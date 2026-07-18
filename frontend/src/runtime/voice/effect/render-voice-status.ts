@@ -8,6 +8,7 @@ import { interpolateVoiceLevel } from '../helper/interpolate-voice-level.js';
 import { formatVoiceDuration } from '../helper/format-voice-duration.js';
 import { normalizeVoiceLevels } from '../helper/normalize-voice-levels.js';
 import { paintVoiceWaveLevel } from './paint-voice-wave-level.js';
+import { updateDesktopVoiceActionPreview } from './update-desktop-voice-action-preview.js';
 
 export function renderVoiceStatus(): void {
   const status = document.querySelector('.voice-status') as HTMLElement | null;
@@ -48,6 +49,7 @@ export function renderVoiceStatus(): void {
       if (label) label.textContent = state.voice.recording ? 'SEND' : 'REC';
     });
   }
+  if (!state.voice.recording) updateDesktopVoiceActionPreview();
   const telemetryNow = Date.now();
   if (!state.voice.recording || telemetryNow - Number(state.voice.lastTelemetryAt ?? 0) > 500) {
     state.voice.lastTelemetryAt = telemetryNow;

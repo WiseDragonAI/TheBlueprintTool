@@ -29,6 +29,7 @@ import { routeScope } from '../../navigation/helper/route-scope.js';
 import { enterProjectsCanvasController } from '../../navigation/controller/enter-projects-canvas-controller.js';
 import { routeTab } from '../../navigation/helper/route-tab.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { bindDesktopVoiceActionPreview } from '../../voice/effect/update-desktop-voice-action-preview.js';
 
 export function bindInputs(): void {
   bindCanvasControlOverlayHover();
@@ -80,6 +81,7 @@ export function bindInputs(): void {
   canvas.addEventListener('pointercancel', finishPointer);
   canvas.addEventListener('dragstart', handleNativeDragStart);
   document.addEventListener('keydown', handleKeyboard);
+  bindDesktopVoiceActionPreview();
   document.addEventListener('paste', (event) => {
     void pasteThreadImageController(event);
   });
