@@ -92,6 +92,8 @@ let pendingControlRoomRefresh = false;
 let controlRoomEventSource = null;
 let controlRoomRefreshTimer = 0;
 let controlRoomEtag = '';
+let controlRoomHydrating = false;
+let controlRoomHydrationGeneration = 0;
 let cardSearchTimer = 0;
 let federationStatusRefreshTimer = 0;
 let federationStatusClockTimer = 0;
@@ -1460,13 +1462,20 @@ function renderControlRoom() {
     const empty = document.createElement('p');
     empty.className = 'control-column-empty';
     empty.hidden = tasks.length > 0;
-    empty.textContent = { queue: 'No waiting tasks', exec: 'No executing tasks', backlog: 'No backlog tasks' }[tab];
+    empty.textContent = controlRoomHydrating
+      ? 'Synchronizing tasks…'
+      : { queue: 'No waiting tasks', exec: 'No executing tasks', backlog: 'No backlog tasks' }[tab];
+    if (controlRoomHydrating) {
+      empty.setAttribute('role', 'status');
+      empty.setAttribute('aria-live', 'polite');
+    }
     list.append(empty);
     column.append(heading, list);
     return column;
   });
   elements['control-task-list'].replaceChildren(...columns);
   restoreControlRoomColumnScroll();
+  elements['control-room-view'].setAttribute('aria-busy', String(controlRoomHydrating));
   initializeQueueSortable();
   elements['control-empty'].hidden = true;
   setView('control-room-view');
@@ -2235,7 +2244,14 @@ async function loadRoute({ retainView = false } = {}) {
       state.controlTab = route.tab;
       const canonicalPath = controlRoomPath(route.tab, route.anchor);
       if (`${location.pathname}${location.search}${location.hash}` !== canonicalPath) history.replaceState({}, '', canonicalPath);
-      await loadControlRoom({ owner });
+      controlRoomHydrating = true;
+      controlRoomHydrationGeneration = owner.generation;
+      renderControlRoom();
+      try {
+        await loadControlRoom({ owner });
+      } finally {
+        if (controlRoomHydrationGeneration === owner.generation) controlRoomHydrating = false;
+      }
       requireRouteOwnership(owner);
       renderControlRoom();
       subscribeControlRoomEvents();

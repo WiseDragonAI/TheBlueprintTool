@@ -55,6 +55,7 @@ const chunkBytes = 64 * 1024;
 const creditWindowBytes = 1024 * 1024;
 const maximumBodyBytes = 25 * 1024 * 1024;
 const connectTimeoutMs = 10_000;
+const defaultInternalRequestTimeoutMs = 15_000;
 
 type FederationConnectionPhase = 'not_configured' | 'connecting' | 'retrying' | 'connected' | 'disconnected';
 
@@ -116,6 +117,7 @@ type RequesterStream = {
   chunks: Buffer[];
   bytes: number;
   resolve?: (response: InternalResponse) => void;
+  timeout?: NodeJS.Timeout;
 };
 type OwnerStream = {
   method: string;
@@ -134,7 +136,9 @@ export function createFederationNodeConnector(input: {
   onRemoteContentChange?: (nodeId: string) => void;
   onRemoteCatalogChange?: () => void;
   onReplicaPriority?: (input: { nodeId: string; projectId: string; resource: string }) => void;
+  internalRequestTimeoutMs?: number;
 }) {
+  const internalRequestTimeoutMs = input.internalRequestTimeoutMs ?? defaultInternalRequestTimeoutMs;
   let settings = configuredSettings(input.settings);
   const requesterStreams = new Map<string, RequesterStream>();
   const ownerStreams = new Map<string, OwnerStream>();
@@ -187,6 +191,7 @@ export function createFederationNodeConnector(input: {
     const stream = requesterStreams.get(requestId);
     if (!stream || stream.settled) return;
     stream.settled = true;
+    if (stream.timeout) clearTimeout(stream.timeout);
     const body = Buffer.from(JSON.stringify({ ok: false, error: code, message }));
     if (stream.response) {
       stream.response.statusCode = status;
@@ -328,6 +333,7 @@ export function createFederationNodeConnector(input: {
     }
     if (frame.type === 'response-end') {
       requester.settled = true;
+      if (requester.timeout) clearTimeout(requester.timeout);
       if (requester.response) requester.response.end();
       else settleInternal(requester, requester.status, requester.headers, Buffer.concat(requester.chunks));
       requesterStreams.delete(requestId);
@@ -344,15 +350,22 @@ export function createFederationNodeConnector(input: {
       return { requestId: '', response: Promise.resolve({ status: 503, headers: { 'content-type': 'application/json' }, body: Buffer.from('{"ok":false,"error":"owner_offline"}') }) };
     }
     const requestId = randomUUID();
-    let resolveResponse: (response: InternalResponse) => void = () => undefined;
-    const response = new Promise<InternalResponse>((resolve) => { resolveResponse = resolve; });
-    requesterStreams.set(requestId, {
-      requestCredit: new CreditGate(), settled: false, status: 502, headers: {}, chunks: [], bytes: 0,
-      resolve: resolveResponse,
-    });
     const method = String(options.method ?? 'GET').toUpperCase();
     const body = options.body ?? Buffer.alloc(0);
     if (body.byteLength > maximumBodyBytes) return { requestId: '', response: Promise.resolve({ status: 413, headers: { 'content-type': 'application/json' }, body: Buffer.from('{"ok":false,"error":"federation_body_limit"}') }) };
+    let resolveResponse: (response: InternalResponse) => void = () => undefined;
+    const response = new Promise<InternalResponse>((resolve) => { resolveResponse = resolve; });
+    const stream: RequesterStream = {
+      requestCredit: new CreditGate(), settled: false, status: 502, headers: {}, chunks: [], bytes: 0,
+      resolve: resolveResponse,
+    };
+    stream.timeout = setTimeout(() => {
+      if (!requesterStreams.has(requestId)) return;
+      try { send({ version: 1, type: 'cancel', requestId }); } catch { /* Connection settlement owns relay cleanup. */ }
+      failRequester(requestId, 504, 'federation_request_timeout', `Federation request exceeded ${internalRequestTimeoutMs}ms.`);
+    }, internalRequestTimeoutMs);
+    stream.timeout.unref?.();
+    requesterStreams.set(requestId, stream);
     send({
       version: 1,
       type: 'request-open',
@@ -479,6 +492,7 @@ export function createFederationNodeConnector(input: {
         reconnectAttempt,
         nextRetryAt,
         connectTimeoutMs,
+        internalRequestTimeoutMs,
         lastError,
         lastCloseCode,
         lastCloseReason,

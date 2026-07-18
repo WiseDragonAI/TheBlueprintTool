@@ -65,3 +65,56 @@ test('merges the federation Queue by rank and newest waiting time instead of own
     'local-node',
   ]);
 });
+
+test('projects one authoritative task for replicas of the same logical project', () => {
+  const localTask = { cardId: 'card-1', projectId: 'project-1', ledgerId: 'specs', title: 'Task', status: 'task-backlog' };
+  const remoteTask = { ...localTask, status: 'task-waiting' };
+  const result = federatedControlRoomProjection({
+    localProjection: {
+      fingerprint: 'local', projects: [{ id: 'project-1', name: 'Project', originFingerprint: 'origin-a' }],
+      queue: [], exec: [], backlog: [localTask], done: [], allTasks: [localTask], diagnostics: [], ledgers: ['Specs'],
+    },
+    localOwner: { nodeId: 'workstation', nodeLabel: 'Workstation', remote: false },
+    remoteProjections: [{
+      owner: { nodeId: 'mobile', nodeLabel: 'Mobile', remote: true },
+      projection: {
+        fingerprint: 'remote', projects: [{ id: 'project-1', name: 'Project', originFingerprint: 'origin-a' }],
+        queue: [remoteTask], exec: [], backlog: [], done: [], allTasks: [remoteTask], diagnostics: [], ledgers: ['Specs'],
+      },
+    }],
+    diagnostics: [],
+  }) as Record<string, any>;
+
+  assert.equal(result.projects.length, 1);
+  assert.equal(result.projects[0].replicaCount, 2);
+  assert.equal(result.allTasks.length, 1);
+  assert.equal(result.queue.length, 0);
+  assert.equal(result.backlog.length, 1);
+  assert.equal(result.backlog[0].ownerNodeId, 'workstation');
+  assert.equal(result.backlog[0].replicaCount, 2);
+  assert.equal(result.backlog[0].conflict, true);
+  assert.equal(result.diagnostics.filter((entry: Record<string, unknown>) => entry.type === 'federation_task_conflict').length, 1);
+});
+
+test('does not coalesce equal card ids from different repository origins', () => {
+  const task = { cardId: 'card-1', projectId: 'project-1', ledgerId: 'specs', title: 'Task', status: 'task-waiting' };
+  const result = federatedControlRoomProjection({
+    localProjection: {
+      fingerprint: 'local', projects: [{ id: 'project-1', name: 'Local', originFingerprint: 'origin-a' }],
+      queue: [task], exec: [], backlog: [], done: [], allTasks: [task], diagnostics: [], ledgers: [],
+    },
+    localOwner: { nodeId: 'workstation', nodeLabel: 'Workstation', remote: false },
+    remoteProjections: [{
+      owner: { nodeId: 'mobile', nodeLabel: 'Mobile', remote: true },
+      projection: {
+        fingerprint: 'remote', projects: [{ id: 'project-1', name: 'Remote', originFingerprint: 'origin-b' }],
+        queue: [task], exec: [], backlog: [], done: [], allTasks: [task], diagnostics: [], ledgers: [],
+      },
+    }],
+    diagnostics: [],
+  }) as Record<string, any>;
+
+  assert.equal(result.projects.length, 2);
+  assert.equal(result.queue.length, 2);
+  assert.equal(result.diagnostics.filter((entry: Record<string, unknown>) => entry.type === 'federation_task_conflict').length, 0);
+});
