@@ -340,11 +340,13 @@ test('The thread launcher exposes Codex model and effort controls.', async () =>
     assert.equal(await page.locator('[data-codex-run-history="next"]').isDisabled(), true);
     await page.locator('[data-codex-run-history="previous"]').click();
     assert.equal(await page.evaluate(({ threadId }) => window.__coreState.threadSelectedRunIdByThreadId[threadId], { threadId: seededLog.threadId }), 'codex-skill-8999-browser');
+    await page.waitForFunction(() => document.querySelector('.codex-log-run-position')?.textContent?.trim() === 'Run 1 of 2');
     assert.equal(await page.locator('.codex-log-run-position').innerText(), 'Run 1 of 2');
     assert.equal(await page.locator('[data-codex-run-history="previous"]').isDisabled(), true);
     assert.equal(await page.locator('[data-codex-run-history="next"]').isEnabled(), true);
     await page.locator('[data-codex-run-history="next"]').click();
     assert.equal(await page.evaluate(({ threadId }) => window.__coreState.threadSelectedRunIdByThreadId[threadId], { threadId: seededLog.threadId }), runHistory.currentRunId);
+    await page.waitForFunction(() => document.querySelector('.codex-log-run-position')?.textContent?.trim() === 'Run 2 of 2');
 
     for (const width of [1600, 1000, 760]) {
       await page.setViewportSize({ width, height: 700 });
