@@ -27,7 +27,7 @@ test('merges Exec tasks and upgrades an older remote Active projection', () => {
   assert.equal(result.active, undefined);
 });
 
-test('merges the federation Queue by rank and newest waiting time instead of owner node', () => {
+test('merges the federation Queue only by newest waiting time instead of owner node', () => {
   const result = federatedControlRoomProjection({
     localProjection: {
       fingerprint: 'local', projects: [],
@@ -53,15 +53,15 @@ test('merges the federation Queue by rank and newest waiting time instead of own
   }) as Record<string, any>;
 
   assert.deepEqual(result.queue.map((task: Record<string, unknown>) => task.cardId), [
-    'local-ranked',
     'remote-newest',
     'remote-middle',
     'local-oldest',
+    'local-ranked',
   ]);
   assert.deepEqual(result.queue.map((task: Record<string, unknown>) => task.ownerNodeId), [
+    'remote-node',
+    'remote-node',
     'local-node',
-    'remote-node',
-    'remote-node',
     'local-node',
   ]);
 });

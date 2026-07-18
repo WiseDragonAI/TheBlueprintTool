@@ -8,23 +8,11 @@ function text(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
-function rank(value: unknown): number | null {
-  return Number.isInteger(value) && Number(value) > 0 ? Number(value) : null;
-}
-
 function waitingTime(value: unknown): number | null {
   return Number.isFinite(value) ? Number(value) : null;
 }
 
 export function compareControlRoomQueueTasks(left: ControlRoomTask, right: ControlRoomTask): number {
-  const leftRank = rank(left.queueRank);
-  const rightRank = rank(right.queueRank);
-  if (leftRank !== null || rightRank !== null) {
-    if (leftRank === null) return 1;
-    if (rightRank === null) return -1;
-    if (leftRank !== rightRank) return leftRank - rightRank;
-  }
-
   const leftWaitingTime = waitingTime(left.waitingTime);
   const rightWaitingTime = waitingTime(right.waitingTime);
   if (leftWaitingTime !== null || rightWaitingTime !== null) {

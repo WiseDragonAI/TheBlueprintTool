@@ -25,7 +25,6 @@ export type ActiveLedgerMutation = {
     status?: 'todo' | 'backlog' | 'done';
     title?: string;
     description?: string;
-    queueRank?: number;
     imageSizes?: Record<string, { width?: number; height?: number }>;
     codexRunModel?: CodexModel;
     codexRunEffort?: CodexEffort;

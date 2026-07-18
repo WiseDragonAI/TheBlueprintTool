@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { executionStopwatch, cardCodexRunId, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withQueueRank } from '../src/app/responsive/control-room.js';
+import { executionStopwatch, cardCodexRunId, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge } from '../src/app/responsive/control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from '../src/app/responsive/control-room-route.js';
 
 const [mobile, html, styles, bootApplication, embla, panzoom, mediaRenderer] = await Promise.all([
@@ -84,16 +84,17 @@ test('ignores malformed thread timestamps and retains the card waiting timestamp
   assert.equal(parsed.waitingTime, Date.parse('2026-07-10T10:00:00.000Z'));
 });
 
-test('derives waiting, execution, and backlog tabs with FIFO and ranked priority', () => {
+test('derives the Queue only by newest waiting time and ignores legacy ranks', () => {
   const result = deriveControlRoom([
     task({ cardId: 'newer', markdown: task().markdown.replace('10T10', '11T10') }),
     task({ cardId: 'oldest' }),
-    task({ cardId: 'ranked', markdown: `${task().markdown.replace('10T10', '12T10')}\nQueue rank: 1` }),
+    task({ cardId: 'stale-ranked', markdown: `${task().markdown.replace('10T10', '09T10')}\nQueue rank: 1` }),
     task({ cardId: 'active', codexRunId: 'run-active', codexStatus: 'processing', markdown: task().markdown.replace('#task-waiting', '#task-execution').replace('Waiting since:', 'Active since: 2026-07-10T10:30:00.000Z\nWaiting since:') }),
     task({ cardId: 'backlog', cardStatus: 'backlog' }),
     task({ cardId: 'done', cardStatus: 'done', markdown: task().markdown.replace('#task-waiting', '#task-complete') })
   ]);
-  assert.deepEqual(result.queue.map((entry) => entry.cardId), ['ranked', 'oldest', 'newer']);
+  assert.deepEqual(result.queue.map((entry) => entry.cardId), ['newer', 'oldest', 'stale-ranked']);
+  assert.equal('queueRank' in result.queue[2], false);
   assert.deepEqual(result.exec.map((entry) => entry.cardId), ['active']);
   assert.deepEqual(result.backlog.map((entry) => entry.cardId), ['backlog']);
   assert.equal(result.queue.some((entry) => entry.cardId === 'done'), false);
@@ -220,13 +221,11 @@ test('ignores task tag examples in ordinary Markdown prose', () => {
   assert.equal(deriveControlRoom([{ ...task(), markdown: parsed.markdown }]).diagnostics.length, 0);
 });
 
-test('reports invalid canonical markdown and rewrites queue rank in place', () => {
+test('reports invalid canonical markdown and hides legacy queue ranks', () => {
   const invalid = parseMasterTaskMarkdown(task({ markdown: '#master-task #task-waiting\nLedger: Tasks' }));
   assert.equal(invalid.valid, false);
   assert.match(invalid.diagnostics.join(','), /Waiting since/);
-  const ranked = withQueueRank(task().markdown, 3);
-  assert.match(ranked, /Waiting since: .*\nQueue rank: 3/);
-  assert.equal(withQueueRank(ranked, 1).match(/Queue rank:/g).length, 1);
+  assert.doesNotMatch(visibleMasterTaskMarkdown(`Queue rank: 3\n\n${task().markdown}`), /Queue rank/);
 });
 
 test('keeps malformed master tasks visible in the control room with diagnostics', () => {
@@ -305,7 +304,8 @@ test('delegates touch sorting and animation to vendored SortableJS', () => {
   assert.match(mobile, /delayOnTouchOnly:\s*true/);
   assert.match(mobile, /touchStartThreshold:\s*8/);
   assert.match(mobile, /onStart\(event\)[\s\S]*queueDragActive = true/);
-  assert.match(mobile, /onEnd\(event\)[\s\S]*persistControlTaskPlacement[\s\S]*syncQueueFromDom\(\)[\s\S]*settleQueueDrag/);
+  assert.match(mobile, /onEnd\(event\)[\s\S]*persistControlTaskPlacement[\s\S]*settleQueueDrag/);
+  assert.doesNotMatch(mobile, /syncQueueFromDom|queueQueueOrderPersistence|persistQueueOrder/);
   assert.match(mobile, /pointercancel[\s\S]*interruptQueueDrag/);
   assert.match(mobile, /touchcancel[\s\S]*interruptQueueDrag/);
   assert.match(mobile, /removeQueueDragArtifacts/);
@@ -314,19 +314,8 @@ test('delegates touch sorting and animation to vendored SortableJS', () => {
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
 });
 
-test('persists optimistic ranks without a success reload and reconciles the latest failure', () => {
-  const persistence = mobile.slice(mobile.indexOf('function queueQueueOrderPersistence()'), mobile.indexOf('async function activateMasterTask'));
-  assert.doesNotMatch(persistence, /task\.markdown|withQueueRank/);
-  assert.match(persistence, /if \(task\.queueRank === queueRank\) return \[\]/);
-  assert.match(persistence, /task\.queueRank = queueRank/);
-  assert.match(persistence, /cardPatch: \{ id: task\.cardId, queueRank \}/);
-  assert.match(persistence, /queuePersistenceTail = queuePersistenceTail\.then/);
-  assert.match(persistence, /return persistQueueOrder\(mutations\)/);
-  assert.doesNotMatch(persistence.slice(0, persistence.indexOf('void queuePersistenceTail.then')), /renderControlRoom\(\)/);
-  assert.match(persistence, /for \(const \{ task, queueRank \} of mutations\)/);
-  assert.doesNotMatch(persistence, /Promise\.all/);
-  assert.match(persistence, /sequence !== queuePersistenceSequence/);
-  assert.match(persistence, /await loadControlRoom\(\{ force: true \}\);[\s\S]*setView\('error-view'\)/);
+test('has no Queue-rank parsing or persistence contract', () => {
+  assert.doesNotMatch(mobile, /queueRank|Queue rank|withQueueRank/);
 });
 
 test('persists optimistic Queue and Backlog placement and reconciles rejected changes', () => {
@@ -334,13 +323,13 @@ test('persists optimistic Queue and Backlog placement and reconciles rejected ch
   assert.match(persistence, /state\.controlRoom\[sourceTab\] = source\.filter/);
   assert.match(persistence, /target\.splice\(insertionIndex, 0, task\)/);
   assert.match(persistence, /cardPatch: \{ id: task\.cardId, status: targetTab === 'backlog' \? 'backlog' : 'todo' \}/);
-  assert.match(persistence, /if \(targetTab === 'queue'\) queueQueueOrderPersistence\(\)/);
+  assert.match(persistence, /if \(targetTab === 'queue'\) target\.sort\(compareControlRoomQueueTasks\)/);
   assert.match(persistence, /catch \(error\)[\s\S]*await loadControlRoom\(\{ force: true \}\)[\s\S]*renderControlRoom\(\)/);
   assert.match(mobile, /dataset\.controlColumnList !== 'exec'/);
 });
 
 test('defers authoritative Control Room refreshes until the queue gesture settles', () => {
-  assert.match(mobile, /queueRefreshBlocked\(\)[\s\S]*queueDragInProgress\(\) \|\| queuePersistenceActive/);
+  assert.match(mobile, /queueRefreshBlocked\(\)[\s\S]*return queueDragInProgress\(\)/);
   assert.match(mobile, /deferDuringQueueDrag && queueRefreshBlocked\(\)[\s\S]*pendingControlRoomRefresh = true/);
   assert.match(mobile, /refreshControlRoomFromEvent\(\)[\s\S]*queueRefreshBlocked\(\)[\s\S]*pendingControlRoomRefresh = true/);
   assert.match(mobile, /flushPendingControlRoomRefresh/);
