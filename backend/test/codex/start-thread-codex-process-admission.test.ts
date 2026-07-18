@@ -104,8 +104,8 @@ test('operator Run supersedes stale card ownership and a pending queue item', as
     const ledger = JSON.parse(readFileSync(context.ledgerPath, 'utf8')) as { cards: Array<Record<string, unknown>> };
     assert.equal(ledger.cards[0].codexActiveRunId, newRunId);
     assert.equal(ledger.cards[0].codexThreadRunId, newRunId);
-    assert.equal(ledger.cards[0].executionStatus, 'pending');
-    assert.equal(ledger.cards[0].executionRunId, newRunId);
+    assert.equal(ledger.cards[0].executionStatus, undefined);
+    assert.equal(ledger.cards[0].executionRunId, undefined);
   } finally {
     rmSync(context.workspace, { recursive: true, force: true });
   }

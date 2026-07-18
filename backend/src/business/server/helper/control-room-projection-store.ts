@@ -11,6 +11,7 @@ import { readCodexPipelineStore } from '../../codex/helper/codex-pipeline-store.
 import { readCodexProcessQueue } from '../../codex/helper/codex-process-queue.js';
 import { codexRunExecutions } from '../../codex/helper/codex-run-segment-marker.js';
 import { readCardSkillRunEventLines } from '../../codex/helper/read-card-skill-run-event-lines.js';
+import { runtimeCodexRunOwnsLiveProcess } from '../../codex/helper/runtime-codex-run-owns-live-process.js';
 import { readRepositoryOriginIdentity } from '../../project-sync/helper/repository-sync-status.js';
 import type { DecisionOsProject } from './project-catalog.js';
 import { compareControlRoomQueueTasks } from './control-room-queue-order.js';
@@ -20,8 +21,8 @@ type Dependency = { path: string; size: number; mtimeMs: number; sha256: string 
 type Projection = AnyRecord & { schemaVersion: number; projectorVersion: string; revision: number; generatedAt: string; fingerprint: string };
 type ProjectSlice = { projectId: string; project: AnyRecord; tasks: AnyRecord[]; dependencies: Dependency[]; fingerprint: string };
 
-const schemaVersion = 5;
-const projectorVersion = 'control-room-v9-logical-project-identity';
+const schemaVersion = 6;
+const projectorVersion = 'control-room-v10-derived-execution';
 
 function records(value: unknown): AnyRecord[] {
   return Array.isArray(value) ? value.filter((entry): entry is AnyRecord => Boolean(entry && typeof entry === 'object')) : [];
@@ -64,29 +65,49 @@ function zoneIdFor(card: AnyRecord, ledger: AnyRecord): string {
   return selected;
 }
 
-function runtimeStatus(input: { card: AnyRecord; runtime: AnyRecord; pipelineRuns: AnyRecord[]; queuedRuns: AnyRecord[] }): AnyRecord {
-  const persistedExecutionStatus = ['transcribing-before-launch', 'pending', 'running'].includes(text(input.card.executionStatus))
-    ? text(input.card.executionStatus)
-    : '';
+function runtimeStatus(input: {
+  card: AnyRecord;
+  runtime: AnyRecord;
+  decisionOsRoot: string;
+  ledgerId: string;
+  pipelineRuns: AnyRecord[];
+  queuedRuns: AnyRecord[];
+}): AnyRecord {
   const runId = text(input.card.codexActiveRunId) || text(input.card.codexThreadRunId) || text(input.card.codexRunId);
-  const pipelineRunId = text(input.card.codexQueuedPipelineRunId);
-  if (pipelineRunId) {
-    const run = input.pipelineRuns.find((entry) => text(entry.id) === pipelineRunId);
-    const steps = records(run?.steps);
-    const activeStep = steps.find((step) => ['pending', 'running'].includes(text(step.status)));
-    const activeSkill = records(activeStep?.skills).find((skill) => ['pending', 'running'].includes(text(skill.status)));
-    const status = persistedExecutionStatus || text(run?.status) || 'unknown';
-    const queueIndex = input.queuedRuns.findIndex((entry) => text(entry.id) === pipelineRunId || text((entry.payload as AnyRecord | undefined)?.runId) === pipelineRunId);
-    return { runId, pipelineRunId, status, startedAt: text(run?.resumedAt) || text(run?.createdAt) || text(run?.startedAt) || text(activeSkill?.startedAt) || text(activeStep?.startedAt), queuePosition: status === 'pending' && queueIndex >= 0 ? queueIndex + 1 : null };
-  }
+  const queuedPipelineRunId = text(input.card.codexQueuedPipelineRunId);
+  const pipelineRunId = text(input.card.codexPipelineRunId) || queuedPipelineRunId;
+  const voiceKey = `${input.ledgerId}\0${text(input.card.id)}`;
+  const voiceObservations = input.runtime.voiceCodexExecutionObservations && typeof input.runtime.voiceCodexExecutionObservations === 'object'
+    ? input.runtime.voiceCodexExecutionObservations as Record<string, AnyRecord>
+    : {};
+  const voiceObservation = voiceObservations[voiceKey];
+  const queueIndex = input.queuedRuns.findIndex((entry) => (
+    text(entry.id) === queuedPipelineRunId
+    || text(entry.id) === runId
+    || text((entry.payload as AnyRecord | undefined)?.runId) === runId
+  ));
+  const queued = queueIndex >= 0;
   const runtimeRuns = input.runtime.codexSkillRuns && typeof input.runtime.codexSkillRuns === 'object' ? input.runtime.codexSkillRuns as Record<string, AnyRecord> : {};
   const live = runtimeRuns[runId] ?? {};
-  const queueIndex = input.queuedRuns.findIndex((entry) => text(entry.id) === runId || text((entry.payload as AnyRecord | undefined)?.runId) === runId);
-  const status = persistedExecutionStatus || text(live.status) || (queueIndex >= 0 ? 'pending' : 'unknown');
+  const processAttached = Boolean(runId) && runtimeCodexRunOwnsLiveProcess(input.runtime, runId, input.decisionOsRoot);
+  const observation = voiceObservation
+    ? { kind: 'voice-transcription', startedAt: text(voiceObservation.startedAt) }
+    : queued
+      ? { kind: 'codex-queue', startedAt: text(input.queuedRuns[queueIndex]?.createdAt) }
+      : processAttached
+        ? { kind: 'codex-process', runId, executionId: text(live.executionId) }
+        : null;
+  const status = observation?.kind === 'voice-transcription'
+    ? 'transcribing-before-launch'
+    : observation?.kind === 'codex-queue'
+      ? 'pending'
+      : observation?.kind === 'codex-process'
+        ? 'running'
+        : text(live.status) || 'unknown';
   const stderrFile = text(live.stderrFile);
   const stdoutFile = text(live.stdoutFile);
   const log = stderrFile && existsSync(stderrFile) ? readFileSync(stderrFile, 'utf8') : '';
-  const activeExecutionId = text(input.card.codexActiveExecutionId);
+  const activeExecutionId = text(live.executionId);
   const latestExecution = log ? codexRunExecutions({ log, runId }).at(-1) : undefined;
   const executionMatchesCard = !activeExecutionId || latestExecution?.executionId === activeExecutionId;
   const runtimeMatchesCard = !activeExecutionId || text(live.executionId) === activeExecutionId;
@@ -97,9 +118,10 @@ function runtimeStatus(input: { card: AnyRecord; runtime: AnyRecord; pipelineRun
     ? readCardSkillRunEventLines(stdoutFile).some((entry) => entry.line > segmentStartLine && text(entry.event.type) === 'turn.started')
     : false;
   const turnStartedAtMs = observedTurnStartedAtMs || (legacyTurnStarted ? segmentStartedAtMs : 0);
-  const turnPending = status === 'running' && (activeExecutionId ? turnStartedAtMs === 0 : segmentStartedAtMs > 0 && turnStartedAtMs === 0);
-  const startedAt = turnStartedAtMs > 0 ? new Date(turnStartedAtMs).toISOString() : turnPending ? '' : runtimeMatchesCard ? text(live.startedAt) : '';
-  return { runId, pipelineRunId: '', status, startedAt, turnPending, queuePosition: status === 'pending' && queueIndex >= 0 ? queueIndex + 1 : null };
+  const turnPending = observation?.kind === 'codex-process' && turnStartedAtMs === 0;
+  const startedAtMs = turnStartedAtMs || segmentStartedAtMs;
+  const startedAt = startedAtMs > 0 ? new Date(startedAtMs).toISOString() : runtimeMatchesCard ? text(live.startedAt) : '';
+  return { runId, pipelineRunId, status, startedAt, turnPending, queuePosition: queued ? queueIndex + 1 : null, observation };
 }
 
 function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsProject['ledgers'][number]; ledger: AnyRecord; card: AnyRecord; runtime: AnyRecord; pipelineRuns: AnyRecord[]; queuedRuns: AnyRecord[] }): AnyRecord | null {
@@ -121,12 +143,13 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   const latestThreadTime = notes.reduce((latest, note) => Math.max(latest, Date.parse(text(note.timestamp)) || Number.NEGATIVE_INFINITY), Number.NEGATIVE_INFINITY);
   const waitingTime = Number.isFinite(latestThreadTime) ? latestThreadTime : Date.parse(waitingText);
   const rank = rankText ? Number(rankText) : null;
-  const run = runtimeStatus({ card: input.card, runtime: input.runtime, pipelineRuns: input.pipelineRuns, queuedRuns: input.queuedRuns });
-  const processing = run.status === 'running' || (!text(input.card.executionStatus) && ['processing', 'in_progress'].includes(text(run.status)));
-  const queued = run.status === 'pending';
-  const transcribingBeforeLaunch = run.status === 'transcribing-before-launch';
+  const run = runtimeStatus({ card: input.card, runtime: input.runtime, decisionOsRoot: input.project.decisionOsRoot, ledgerId: input.ledgerEntry.id, pipelineRuns: input.pipelineRuns, queuedRuns: input.queuedRuns });
+  const executionObservation = run.observation && typeof run.observation === 'object' ? run.observation as AnyRecord : null;
+  const processing = executionObservation?.kind === 'codex-process';
+  const queued = executionObservation?.kind === 'codex-queue';
+  const transcribingBeforeLaunch = executionObservation?.kind === 'voice-transcription';
   const cardStatus = text(input.card.status) || 'todo';
-  const status = cardStatus === 'backlog' ? 'task-backlog' : cardStatus === 'done' ? 'task-complete' : processing || queued || transcribingBeforeLaunch ? 'task-execution' : 'task-waiting';
+  const status = processing || queued || transcribingBeforeLaunch ? 'task-execution' : cardStatus === 'backlog' ? 'task-backlog' : cardStatus === 'done' ? 'task-complete' : 'task-waiting';
   const cards = records(input.ledger.cards);
   const subtasks: AnyRecord[] = [];
   const relationships = records(input.ledger.relationships).filter((relationship) => text(relationship.from) === text(input.card.id) && text(relationship.label) === 'subtask');
@@ -148,15 +171,17 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
     }
   }
   const complete = subtasks.filter((subtask) => subtask.status === 'complete').length;
-  const executionSince = processing ? (run.turnPending ? '' : text(run.startedAt) || executionText) : executionText;
+  const executionSince = processing ? text(run.startedAt) : '';
   return {
     valid: diagnostics.length === 0, masterTask: true, diagnostics,
     cardId: text(input.card.id), title: text(input.card.title) || `Card ${text(input.card.id)}`,
+    cardStatus,
     projectId: input.project.id, projectName: input.project.name, projectColor: input.project.color,
     ledgerId: input.ledgerEntry.id, ledgerTitle: input.ledgerEntry.title, ledger: ledgerName,
     zoneId: zoneIdFor(input.card, input.ledger), status,
     codexRunId: run.runId, codexPipelineRunId: run.pipelineRunId, codexStatus: run.status,
     executionStatus: processing ? 'running' : queued ? 'pending' : transcribingBeforeLaunch ? 'transcribing-before-launch' : '',
+    executionObservation,
     transcribingBeforeLaunch,
     codexProcessing: processing, codexQueued: queued, codexQueuePosition: queued ? run.queuePosition : null,
     waitingSince: Number.isFinite(latestThreadTime) ? new Date(latestThreadTime).toISOString() : waitingText,
@@ -186,8 +211,10 @@ function buildProjectSlice(input: { project: DecisionOsProject; runtime: AnyReco
     if (metadataDependency) dependencies.push(metadataDependency);
   }
   const pipelineRuns = readCodexPipelineStore({ decisionOsRoot: project.decisionOsRoot }).store.runs as unknown as AnyRecord[];
-  const queuedRuns = (readCodexProcessQueue(project.decisionOsRoot) as unknown as AnyRecord[])
-    .filter((run) => run.status === 'pending');
+  const queuedRuns = [
+    ...pipelineRuns.filter((run) => run.status === 'pending'),
+    ...(readCodexProcessQueue(project.decisionOsRoot) as unknown as AnyRecord[]).filter((run) => run.status === 'pending'),
+  ].sort((left, right) => text(left.createdAt).localeCompare(text(right.createdAt)));
   dependencies.push(watchedDependency(resolve(project.decisionOsRoot, 'codex-pipelines.json')));
   dependencies.push(watchedDependency(resolve(project.decisionOsRoot, 'codex-process-queue.json')));
   for (const ledgerEntry of project.ledgers) {

@@ -156,29 +156,22 @@ function persistLedger(context: PipelineLedgerContext): void {
 }
 
 function reconcilePipelineExecution(context: PipelineLedgerContext, run: CodexPipelineRun): void {
-  const executionStatus = run.status === 'pending' ? 'pending' : run.status === 'running' ? 'running' : '';
+  const terminal = !['pending', 'running'].includes(run.status);
   const skillRunIds = new Set(run.steps.flatMap((step) => step.skills.map((skill) => skill.runId)));
   let changed = false;
   for (const card of context.ledger.cards ?? []) {
     const ownsPipeline = String(card.codexQueuedPipelineRunId ?? '') === run.id
       || String(card.codexPipelineRunId ?? '') === run.id;
-    if (!ownsPipeline || String(card.executionRunId ?? '') !== run.id) continue;
-    if (executionStatus) {
-      if (card.executionStatus !== executionStatus) {
-        card.executionStatus = executionStatus;
-        changed = true;
-      }
-      continue;
-    }
-    if (card.executionStatus !== undefined) {
+    if (!ownsPipeline) continue;
+    if (String(card.executionRunId ?? '') === run.id && card.executionStatus !== undefined) {
       delete card.executionStatus;
       changed = true;
     }
-    if (card.executionRunId !== undefined) {
+    if (String(card.executionRunId ?? '') === run.id) {
       delete card.executionRunId;
       changed = true;
     }
-    if (skillRunIds.has(String(card.codexActiveRunId ?? ''))) {
+    if (terminal && skillRunIds.has(String(card.codexActiveRunId ?? ''))) {
       delete card.codexActiveRunId;
       delete card.codexActiveExecutionId;
       changed = true;

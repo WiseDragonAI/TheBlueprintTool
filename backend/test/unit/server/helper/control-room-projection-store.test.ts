@@ -25,7 +25,7 @@ test('direct executing master task uses the live run start for its stopwatch', (
   };
   const store = createControlRoomProjectionStore({
     cacheFile: join(decisionOsRoot, 'cache', 'control-room.json'),
-    runtimeForRoot: () => ({ codexSkillRuns: { 'run-a': { status: 'running', startedAt: '2026-07-14T10:02:00.000Z' } } }),
+    runtimeForRoot: () => ({ codexSkillRuns: { 'run-a': { status: 'running', startedAt: '2026-07-14T10:02:00.000Z', child: { pid: process.pid, exitCode: null, killed: false } } } }),
   });
 
   try {
@@ -67,7 +67,7 @@ test('direct executing master task uses the latest persisted Codex turn after se
   };
   const store = createControlRoomProjectionStore({
     cacheFile: join(decisionOsRoot, 'cache', 'control-room.json'),
-    runtimeForRoot: () => ({ codexSkillRuns: { 'run-a': { status: 'running', startedAt: '2026-07-14T10:12:00.000Z', stderrFile, stdoutFile } } }),
+    runtimeForRoot: () => ({ codexSkillRuns: { 'run-a': { status: 'running', startedAt: '2026-07-14T10:12:00.000Z', stderrFile, stdoutFile, child: { pid: process.pid, exitCode: null, killed: false } } } }),
   });
 
   try {
@@ -110,13 +110,13 @@ test('continuation stopwatch waits for its active execution and changes the proj
   };
   const store = createControlRoomProjectionStore({
     cacheFile: join(decisionOsRoot, 'cache', 'control-room.json'),
-    runtimeForRoot: () => ({ codexSkillRuns: { 'run-a': { status: 'running', executionId: 'execution-new', startedAt: '2026-07-14T10:12:00.000Z', stderrFile, stdoutFile } } }),
+    runtimeForRoot: () => ({ codexSkillRuns: { 'run-a': { status: 'running', executionId: 'execution-new', startedAt: '2026-07-14T10:12:00.000Z', stderrFile, stdoutFile, child: { pid: process.pid, exitCode: null, killed: false } } } }),
   });
 
   try {
     const before = store.get([project]) as Record<string, any>;
-    assert.equal(before.exec[0].executionSince, '');
-    assert.equal(Number.isNaN(before.exec[0].executionTime), true);
+    assert.equal(before.exec[0].executionSince, '2026-07-14T10:12:00.000Z');
+    assert.equal(before.exec[0].executionTime, Date.parse('2026-07-14T10:12:00.000Z'));
 
     appendFileSync(stderrFile, 'decision-os:codex-turn-start {"runId":"run-a","executionId":"execution-new","startedAt":"2026-07-14T10:12:03.000Z","line":2}\n');
     store.invalidate(project.id);
@@ -155,8 +155,8 @@ test('rebuilds a cached Exec projection when the process queue file appears', as
 
   try {
     const before = store.get([project]) as Record<string, any>;
-    assert.equal(before.exec[0].executionStatus, 'pending');
-    assert.equal(before.exec[0].codexQueuePosition, null);
+    assert.equal(before.exec.length, 0);
+    assert.equal(before.queue.length, 1);
 
     writeFileSync(join(decisionOsRoot, 'codex-process-queue.json'), JSON.stringify({
       version: 1,
@@ -259,7 +259,11 @@ test('projects voice transcription before launch as active without calling it Co
   };
   const store = createControlRoomProjectionStore({
     cacheFile: join(decisionOsRoot, 'cache', 'control-room.json'),
-    runtimeForRoot: () => ({}),
+    runtimeForRoot: () => ({
+      voiceCodexExecutionObservations: {
+        ['tasks\0master']: { kind: 'voice-transcription', startedAt: '2026-07-14T10:02:00.000Z' },
+      },
+    }),
   });
 
   try {

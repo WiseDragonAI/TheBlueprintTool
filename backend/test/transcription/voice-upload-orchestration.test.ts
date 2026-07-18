@@ -85,13 +85,18 @@ test('queued voice acceptance moves the card to transcribing-before-launch durin
     assert.equal(responseBody.body.queueCodex, true);
     await waitForText(join(workspace, '.decision-os', 'threads', 'specs', 'thread-card-a.md'), '"status":"transcribing"');
     let ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { cards: Array<{ executionStatus?: string; executionRunId?: string }> };
-    assert.equal(ledger.cards[0].executionStatus, 'transcribing-before-launch');
+    assert.equal(ledger.cards[0].executionStatus, undefined);
     assert.equal(ledger.cards[0].executionRunId, undefined);
+    assert.deepEqual((runtime.voiceCodexExecutionObservations as Record<string, unknown>)['specs\0card-a'], {
+      kind: 'voice-transcription',
+      startedAt: (runtime.voiceCodexExecutionObservations as Record<string, Record<string, unknown>>)['specs\0card-a'].startedAt,
+    });
 
     settleTranscription?.(new Response(JSON.stringify({ error: { message: 'provider unavailable' } }), { status: 503, headers: { 'content-type': 'application/json' } }));
     await waitForText(join(workspace, '.decision-os', 'threads', 'specs', 'thread-card-a.md'), '"status":"transcription failed"');
     ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { cards: Array<{ executionStatus?: string }> };
     assert.equal(ledger.cards[0].executionStatus, undefined);
+    assert.equal((runtime.voiceCodexExecutionObservations as Record<string, unknown>)['specs\0card-a'], undefined);
   } finally {
     settleTranscription?.(new Response(JSON.stringify({ error: { message: 'test cleanup' } }), { status: 503, headers: { 'content-type': 'application/json' } }));
     server.close();

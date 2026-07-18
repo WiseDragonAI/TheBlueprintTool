@@ -13,7 +13,8 @@ export function clearCardCodexExecution(input: { ledgerPath: string; cardId: str
     const ledger = JSON.parse(readFileSync(input.ledgerPath, 'utf8')) as AnyRecord & { cards?: AnyRecord[] };
     const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
     if (!card || String(card.codexActiveRunId ?? '') !== input.runId) return false;
-    if (input.executionId && String(card.codexActiveExecutionId ?? '') !== input.executionId) return false;
+    const persistedExecutionId = String(card.codexActiveExecutionId ?? '');
+    if (input.executionId && persistedExecutionId && persistedExecutionId !== input.executionId) return false;
     delete card.codexActiveRunId;
     delete card.codexActiveExecutionId;
     if (String(card.executionRunId ?? '') === input.runId) {

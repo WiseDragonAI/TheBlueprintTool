@@ -13,7 +13,7 @@ test('Control Room keeps transcribing-before-launch in Active with a distinct la
     ledgerTitle: 'Specs',
     markdown: '## A. Work\n\n1. Voice launch requested.\n',
     threadNotes: [{ timestamp: '2026-07-17T11:41:45.161Z' }],
-    executionStatus: 'transcribing-before-launch',
+    codexStatus: 'transcribing-before-launch',
   });
   assert.equal(task.status, 'task-execution');
   assert.equal(task.transcribingBeforeLaunch, true);

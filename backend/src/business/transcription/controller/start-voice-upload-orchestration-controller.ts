@@ -115,13 +115,17 @@ function setQueuedVoiceExecution(input: {
   if (!context.ok) return { ok: false, error: context.error };
   const card = (context.ledger.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
   if (!card) return { ok: false, error: 'Thread target card not found.' };
+  const observations = input.runtime.voiceCodexExecutionObservations && typeof input.runtime.voiceCodexExecutionObservations === 'object'
+    ? input.runtime.voiceCodexExecutionObservations as Record<string, AnyRecord>
+    : {};
+  input.runtime.voiceCodexExecutionObservations = observations;
+  const observationKey = `${input.ledgerId}\0${input.cardId}`;
   if (input.transcribingBeforeLaunch) {
-    if (String(card.executionStatus ?? '') !== 'running') card.executionStatus = 'transcribing-before-launch';
-  } else if (String(card.executionStatus ?? '') === 'transcribing-before-launch') {
-    delete card.executionStatus;
+    observations[observationKey] = { kind: 'voice-transcription', startedAt: new Date().toISOString() };
+  } else {
+    delete observations[observationKey];
   }
-  writeLedger(context);
-  telemetry('voice-codex-execution', { ledgerId: input.ledgerId, cardId: input.cardId, transcribingBeforeLaunch: input.transcribingBeforeLaunch, executionStatus: String(card.executionStatus ?? '') });
+  telemetry('voice-codex-execution', { ledgerId: input.ledgerId, cardId: input.cardId, transcribingBeforeLaunch: input.transcribingBeforeLaunch });
   notify(input.onLedgerChange, { reason: input.transcribingBeforeLaunch ? 'voice-codex-transcribing-before-launch' : 'voice-codex-transcribing-before-launch-cleared', ledgerId: input.ledgerId, cardId: input.cardId });
   return { ok: true };
 }
