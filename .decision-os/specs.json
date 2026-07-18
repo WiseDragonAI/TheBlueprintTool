@@ -14773,7 +14773,7 @@
       "title": "Explain MOH Codex diagnostic fragments",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "bugfix",
         "diagnostic-parsing",
