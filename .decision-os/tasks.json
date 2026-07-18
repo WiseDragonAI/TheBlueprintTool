@@ -2850,7 +2850,7 @@
       "title": "Voice note run and pipeline actions",
       "cardType": "note",
       "domainId": "tasks",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "master-task"
       ],
@@ -3018,7 +3018,7 @@
       "title": "Configure the voice pipeline in Settings",
       "cardType": "note",
       "domainId": "tasks",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "subtask"
       ],
@@ -3037,7 +3037,7 @@
       "title": "Add Run and Pipeline voice actions",
       "cardType": "note",
       "domainId": "tasks",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "subtask"
       ],
@@ -3056,7 +3056,7 @@
       "title": "Expose mobile Send, Run, and Pipeline controls",
       "cardType": "note",
       "domainId": "tasks",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "subtask"
       ],
