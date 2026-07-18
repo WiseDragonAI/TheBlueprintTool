@@ -96,7 +96,7 @@ test('projects one authoritative task for replicas of the same logical project',
   assert.equal(result.diagnostics.filter((entry: Record<string, unknown>) => entry.type === 'federation_task_conflict').length, 1);
 });
 
-test('does not coalesce equal card ids from different repository origins', () => {
+test('uses stable project identity across repository transport changes', () => {
   const task = { cardId: 'card-1', projectId: 'project-1', ledgerId: 'specs', title: 'Task', status: 'task-waiting' };
   const result = federatedControlRoomProjection({
     localProjection: {
@@ -114,7 +114,31 @@ test('does not coalesce equal card ids from different repository origins', () =>
     diagnostics: [],
   }) as Record<string, any>;
 
+  assert.equal(result.projects.length, 1);
+  assert.equal(result.queue.length, 1);
+  assert.equal(result.queue[0].replicaCount, 2);
+  assert.equal(result.diagnostics.filter((entry: Record<string, unknown>) => entry.type === 'federation_task_conflict').length, 0);
+});
+
+test('keeps equal card ids separate when their stable project ids differ', () => {
+  const localTask = { cardId: 'card-1', projectId: 'project-1', ledgerId: 'specs', title: 'Task', status: 'task-waiting' };
+  const remoteTask = { ...localTask, projectId: 'project-2' };
+  const result = federatedControlRoomProjection({
+    localProjection: {
+      fingerprint: 'local', projects: [{ id: 'project-1', name: 'Local', originFingerprint: 'origin-a' }],
+      queue: [localTask], exec: [], backlog: [], done: [], allTasks: [localTask], diagnostics: [], ledgers: [],
+    },
+    localOwner: { nodeId: 'workstation', nodeLabel: 'Workstation', remote: false },
+    remoteProjections: [{
+      owner: { nodeId: 'mobile', nodeLabel: 'Mobile', remote: true },
+      projection: {
+        fingerprint: 'remote', projects: [{ id: 'project-2', name: 'Remote', originFingerprint: 'origin-a' }],
+        queue: [remoteTask], exec: [], backlog: [], done: [], allTasks: [remoteTask], diagnostics: [], ledgers: [],
+      },
+    }],
+    diagnostics: [],
+  }) as Record<string, any>;
+
   assert.equal(result.projects.length, 2);
   assert.equal(result.queue.length, 2);
-  assert.equal(result.diagnostics.filter((entry: Record<string, unknown>) => entry.type === 'federation_task_conflict').length, 0);
 });
