@@ -764,7 +764,7 @@ test('modal sources retain loading, empty, read-only, and inherited-value states
   const process = source('frontend/src/runtime/codex/effect/render-card-process-modal.ts');
   const library = source('frontend/src/runtime/codex/effect/render-pipelines-modal.ts');
   const editor = source('frontend/src/runtime/codex/effect/render-pipeline-editor-modal.ts');
-  assert.match(process, /Loading \$\{processModalState\.mode\}/);
+  assert.match(process, /Loading pipelines…/);
   assert.match(process, /No saved pipelines yet\./);
   assert.match(process, /Source card content is unavailable/);
   assert.match(process, /skill\.readOnlyReason \|\| 'Read-only skill'/);
@@ -778,7 +778,8 @@ test('modal sources retain loading, empty, read-only, and inherited-value states
 test('desktop skill and pipeline modals expose manual federation synchronization states', () => {
   const process = source('frontend/src/runtime/codex/effect/render-card-process-modal.ts');
   const library = source('frontend/src/runtime/codex/effect/render-pipelines-modal.ts');
-  assert.match(process, /process-resynchronize/);
+  assert.match(process, /renderCodexLibrary/);
+  assert.match(process, /onSynchronize: synchronize/);
   assert.match(process, /requestFederatedLibrarySynchronization\(\)/);
   assert.match(process, /Synchronizing skills, then pipelines…/);
   assert.match(library, /pipeline-library-resynchronize/);
