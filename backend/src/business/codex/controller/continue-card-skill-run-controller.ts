@@ -68,7 +68,10 @@ function runtimeRunStatus(runtime: AnyRecord, runId: string): string {
 function updateRuntimeRun(runtime: AnyRecord, runId: string, patch: AnyRecord): void {
   const runs = runtimeRuns(runtime);
   const run = runs[runId];
-  if (run) Object.assign(run, patch);
+  const currentExecutionId = String(run?.executionId ?? '');
+  const nextExecutionId = String(patch.executionId ?? '');
+  if (run && nextExecutionId && currentExecutionId !== nextExecutionId) runs[runId] = { ...patch };
+  else if (run) Object.assign(run, patch);
   else runs[runId] = { ...patch };
 }
 

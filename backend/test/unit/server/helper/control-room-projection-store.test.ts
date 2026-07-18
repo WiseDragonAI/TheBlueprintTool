@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createControlRoomProjectionStore } from '@backend/business/server/helper/control-room-projection-store.js';
@@ -80,7 +80,7 @@ test('direct executing master task uses the latest persisted Codex turn after se
   }
 });
 
-test('direct executing master task waits for Codex turn.started before starting its stopwatch', () => {
+test('continuation stopwatch waits for its active execution and changes the projection fingerprint when the turn starts', async () => {
   const root = mkdtempSync(join(tmpdir(), 'decision-os-control-room-pending-turn-'));
   const decisionOsRoot = join(root, '.decision-os');
   const stderrFile = join(decisionOsRoot, 'runs', 'codex-skills', 'tasks', 'run-a.log');
@@ -88,10 +88,19 @@ test('direct executing master task waits for Codex turn.started before starting 
   mkdirSync(join(decisionOsRoot, 'cards', 'tasks'), { recursive: true });
   mkdirSync(join(decisionOsRoot, 'runs', 'codex-skills', 'tasks'), { recursive: true });
   writeFileSync(join(decisionOsRoot, 'cards', 'tasks', 'master.md'), 'Active since: 2026-07-14T10:02:00.000Z\n\n## A. Work\n\n1. Running.\n');
-  writeFileSync(stderrFile, 'decision-os:codex-run-segment {"runId":"run-a","startedAt":"2026-07-14T10:12:00.000Z","segment":"continue","startLine":1}\n');
+  writeFileSync(stderrFile, [
+    'decision-os:codex-run-segment {"runId":"run-a","executionId":"execution-old","startedAt":"2026-07-14T10:02:00.000Z","segment":"start","startLine":0}',
+    'decision-os:codex-turn-start {"runId":"run-a","executionId":"execution-old","startedAt":"2026-07-14T10:02:03.000Z","line":1}',
+    'decision-os:codex-run-segment {"runId":"run-a","executionId":"execution-new","startedAt":"2026-07-14T10:12:00.000Z","segment":"continue","startLine":1}',
+    '',
+  ].join('\n'));
   writeFileSync(stdoutFile, `${JSON.stringify({ type: 'turn.completed' })}\n`);
   writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
-    cards: [{ id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], codexActiveRunId: 'run-a', comment: { contentFile: '.decision-os/cards/tasks/master.md' } }],
+    cards: [{
+      id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], codexActiveRunId: 'run-a',
+      codexActiveExecutionId: 'execution-new', executionStatus: 'running',
+      comment: { contentFile: '.decision-os/cards/tasks/master.md' },
+    }],
     annotations: [], relationships: [], threadFiles: {},
   }));
   const project: DecisionOsProject = {
@@ -101,13 +110,21 @@ test('direct executing master task waits for Codex turn.started before starting 
   };
   const store = createControlRoomProjectionStore({
     cacheFile: join(decisionOsRoot, 'cache', 'control-room.json'),
-    runtimeForRoot: () => ({ codexSkillRuns: { 'run-a': { status: 'running', startedAt: '2026-07-14T10:12:00.000Z', stderrFile, stdoutFile } } }),
+    runtimeForRoot: () => ({ codexSkillRuns: { 'run-a': { status: 'running', executionId: 'execution-new', startedAt: '2026-07-14T10:12:00.000Z', stderrFile, stdoutFile } } }),
   });
 
   try {
-    const projection = store.get([project]) as Record<string, any>;
-    assert.equal(projection.exec[0].executionSince, '');
-    assert.equal(Number.isNaN(projection.exec[0].executionTime), true);
+    const before = store.get([project]) as Record<string, any>;
+    assert.equal(before.exec[0].executionSince, '');
+    assert.equal(Number.isNaN(before.exec[0].executionTime), true);
+
+    appendFileSync(stderrFile, 'decision-os:codex-turn-start {"runId":"run-a","executionId":"execution-new","startedAt":"2026-07-14T10:12:03.000Z","line":2}\n');
+    store.invalidate(project.id);
+    await new Promise((resolveWait) => setImmediate(resolveWait));
+    const after = store.get([project]) as Record<string, any>;
+    assert.equal(after.exec[0].executionSince, '2026-07-14T10:12:03.000Z');
+    assert.equal(after.exec[0].executionTime, Date.parse('2026-07-14T10:12:03.000Z'));
+    assert.notEqual(after.fingerprint, before.fingerprint);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

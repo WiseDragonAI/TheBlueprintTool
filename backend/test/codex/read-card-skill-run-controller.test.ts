@@ -529,7 +529,17 @@ test('card skill run route measures active resumed segment from the latest persi
   utimesSync(logPath, fresh, fresh);
 
   process.chdir(workspace);
-  const runtime: Record<string, unknown> = {};
+  const runtime: Record<string, unknown> = {
+    codexSkillRuns: {
+      [runId]: {
+        id: runId,
+        executionId: 'execution-b',
+        status: 'running',
+        startedAt: resumedAtIso,
+        finishedAt: new Date(resumedAt - 1000).toISOString(),
+      },
+    },
+  };
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');

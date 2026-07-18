@@ -9,7 +9,7 @@ import { readCardDescription } from '../../ledger/helper/card-content-file.js';
 import { parseThreadMarkdown, resolveThreadContentFile } from '../../ledger/helper/thread-content-file.js';
 import { readCodexPipelineStore } from '../../codex/helper/codex-pipeline-store.js';
 import { readCodexProcessQueue } from '../../codex/helper/codex-process-queue.js';
-import { latestCodexRunSegmentStartedAtMs, latestCodexRunSegmentStartLine, latestCodexRunTurnStartedAtMs } from '../../codex/helper/codex-run-segment-marker.js';
+import { codexRunExecutions } from '../../codex/helper/codex-run-segment-marker.js';
 import { readCardSkillRunEventLines } from '../../codex/helper/read-card-skill-run-event-lines.js';
 import type { DecisionOsProject } from './project-catalog.js';
 import { compareControlRoomQueueTasks } from './control-room-queue-order.js';
@@ -20,7 +20,7 @@ type Projection = AnyRecord & { schemaVersion: number; projectorVersion: string;
 type ProjectSlice = { projectId: string; project: AnyRecord; tasks: AnyRecord[]; dependencies: Dependency[]; fingerprint: string };
 
 const schemaVersion = 5;
-const projectorVersion = 'control-room-v7-transcribing-before-launch';
+const projectorVersion = 'control-room-v8-execution-fingerprint';
 
 function records(value: unknown): AnyRecord[] {
   return Array.isArray(value) ? value.filter((entry): entry is AnyRecord => Boolean(entry && typeof entry === 'object')) : [];
@@ -85,15 +85,19 @@ function runtimeStatus(input: { card: AnyRecord; runtime: AnyRecord; pipelineRun
   const stderrFile = text(live.stderrFile);
   const stdoutFile = text(live.stdoutFile);
   const log = stderrFile && existsSync(stderrFile) ? readFileSync(stderrFile, 'utf8') : '';
-  const segmentStartedAtMs = log ? latestCodexRunSegmentStartedAtMs({ log, runId }) : 0;
-  const observedTurnStartedAtMs = log ? latestCodexRunTurnStartedAtMs({ log, runId }) : 0;
-  const segmentStartLine = log ? latestCodexRunSegmentStartLine({ log, runId }) : 0;
-  const legacyTurnStarted = observedTurnStartedAtMs === 0 && stdoutFile && existsSync(stdoutFile)
+  const activeExecutionId = text(input.card.codexActiveExecutionId);
+  const latestExecution = log ? codexRunExecutions({ log, runId }).at(-1) : undefined;
+  const executionMatchesCard = !activeExecutionId || latestExecution?.executionId === activeExecutionId;
+  const runtimeMatchesCard = !activeExecutionId || text(live.executionId) === activeExecutionId;
+  const segmentStartedAtMs = executionMatchesCard ? Date.parse(latestExecution?.startedAt ?? '') || 0 : 0;
+  const observedTurnStartedAtMs = executionMatchesCard ? Date.parse(latestExecution?.turnStartedAt ?? '') || 0 : 0;
+  const segmentStartLine = executionMatchesCard ? latestExecution?.startLine ?? 0 : 0;
+  const legacyTurnStarted = !activeExecutionId && observedTurnStartedAtMs === 0 && stdoutFile && existsSync(stdoutFile)
     ? readCardSkillRunEventLines(stdoutFile).some((entry) => entry.line > segmentStartLine && text(entry.event.type) === 'turn.started')
     : false;
   const turnStartedAtMs = observedTurnStartedAtMs || (legacyTurnStarted ? segmentStartedAtMs : 0);
-  const turnPending = segmentStartedAtMs > 0 && turnStartedAtMs === 0;
-  const startedAt = turnStartedAtMs > 0 ? new Date(turnStartedAtMs).toISOString() : turnPending ? '' : text(live.startedAt);
+  const turnPending = status === 'running' && (activeExecutionId ? turnStartedAtMs === 0 : segmentStartedAtMs > 0 && turnStartedAtMs === 0);
+  const startedAt = turnStartedAtMs > 0 ? new Date(turnStartedAtMs).toISOString() : turnPending ? '' : runtimeMatchesCard ? text(live.startedAt) : '';
   return { runId, pipelineRunId: '', status, startedAt, turnPending, queuePosition: status === 'pending' && queueIndex >= 0 ? queueIndex + 1 : null };
 }
 
@@ -211,7 +215,13 @@ function buildProjectSlice(input: { project: DecisionOsProject; runtime: AnyReco
       }
   }
   dependencies.sort((left, right) => left.path.localeCompare(right.path));
-  const fingerprint = createHash('sha256').update(JSON.stringify({ projectId: project.id, schemaVersion, projectorVersion, dependencies: dependencies.map(({ path, sha256 }) => ({ path, sha256 })) })).digest('hex');
+  const fingerprint = createHash('sha256').update(JSON.stringify({
+    projectId: project.id,
+    schemaVersion,
+    projectorVersion,
+    dependencies: dependencies.map(({ path, sha256 }) => ({ path, sha256 })),
+    tasks,
+  })).digest('hex');
   return { projectId: project.id, project: { id: project.id, name: project.name, color: project.color }, tasks, dependencies, fingerprint };
 }
 
