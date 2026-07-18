@@ -36,9 +36,11 @@ test('reads the complete fixed Git snapshot without leaking worktree paths', () 
   }
 });
 
-test('canonical origin fingerprints ignore HTTPS credentials and .git suffixes', () => {
-  assert.equal(canonicalGitOrigin('https://user:secret@Example.com/team/repo.git'), 'https://example.com/team/repo');
+test('canonical origin fingerprints ignore credentials, transport, and .git suffixes', () => {
+  assert.equal(canonicalGitOrigin('https://user:secret@Example.com/team/repo.git'), 'example.com/team/repo');
   assert.equal(originFingerprint('https://user:secret@Example.com/team/repo.git'), originFingerprint('https://example.com/team/repo'));
+  assert.equal(originFingerprint('git@Example.com:team/repo.git'), originFingerprint('https://example.com/team/repo'));
+  assert.equal(originFingerprint('ssh://git@example.com/team/repo.git'), originFingerprint('https://example.com/team/repo'));
   assert.equal(isNetworkGitOrigin('git@example.com:team/repo.git'), true);
   assert.equal(isNetworkGitOrigin('/srv/private/repo.git'), false);
 });
