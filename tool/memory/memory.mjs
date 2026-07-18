@@ -13,17 +13,17 @@ if (!root) throw new Error('all commands require --root <server-launch-root>');
 
 let output;
 if (command === 'add') {
-  output = addMemory(root, {
+  output = await addMemory(root, {
     title: option('title'), body: option('body'), tag: option('tag'), subtag: option('subtag'),
     projectId: option('project'), type: option('type'), source: option('source'),
   });
 } else if (command === 'list' || command === 'search') {
-  output = readMemories(root, {
+  output = await readMemories(root, {
     projectId: option('project'), type: option('type'), tag: option('tag'), subtag: option('subtag'),
     query: command === 'search' ? option('query') : '', limit: option('limit'),
   });
 } else if (command === 'migrate') {
-  output = migrateMemories({
+  output = await migrateMemories({
     root, source: option('source'), projectId: option('project'), type: option('type'),
   });
 } else {

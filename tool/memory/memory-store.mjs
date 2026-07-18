@@ -1,23 +1,9 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const moduleDirectory = dirname(fileURLToPath(import.meta.url));
-const schemaSql = readFileSync(resolve(moduleDirectory, 'schema.sql'), 'utf8');
-const defaultMemoryLimit = 10;
-
-function text(value) {
-  return String(value ?? '').trim();
-}
-
-function slug(value, name) {
-  const normalized = text(value).toLowerCase();
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(normalized)) {
-    throw new Error(`${name} must be a lowercase slug`);
-  }
-  return normalized;
-}
+const text = (value) => String(value ?? '').trim();
 
 function required(value, name) {
   const normalized = text(value);
@@ -29,173 +15,91 @@ function positiveInteger(value, name, fallback) {
   if (value === undefined || value === null) return fallback;
   const normalized = text(value);
   if (!/^[1-9][0-9]*$/.test(normalized)) throw new Error(`${name} must be a positive integer`);
-  const parsed = Number(normalized);
-  if (!Number.isSafeInteger(parsed)) throw new Error(`${name} must be a positive integer`);
-  return parsed;
+  return Number(normalized);
 }
 
-function hasTable(database, table) {
-  return Boolean(database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table));
+function settings(root) {
+  const candidates = [
+    resolve(homedir(), '.decision-os', '.settings.json'),
+    resolve(required(root, 'root'), 'decision-os', '.decision-os', '.settings.json'),
+    resolve(required(root, 'root'), '.decision-os', '.settings.json'),
+  ];
+  return candidates.filter(existsSync).reduce(
+    (merged, path) => Object.assign(merged, JSON.parse(readFileSync(path, 'utf8'))),
+    {},
+  );
 }
 
-function tableColumns(database, table) {
-  return new Set(database.prepare(`PRAGMA table_info(${table})`).all().map((row) => String(row.name)));
+export function memoryServiceConfig(root) {
+  const configured = settings(root);
+  const url = text(process.env.DECISION_OS_MEMORY_URL ?? configured.memoryServiceUrl).replace(/\/$/, '');
+  const token = text(process.env.DECISION_OS_MEMORY_TOKEN ?? configured.memoryServiceToken);
+  if (!url) throw new Error('DECISION_OS_MEMORY_URL or memoryServiceUrl is required');
+  if (!token) throw new Error('DECISION_OS_MEMORY_TOKEN or memoryServiceToken is required');
+  return { url, token };
 }
 
-function migrateLegacyDestination(database) {
-  if (!hasTable(database, 'memories')) return;
-  const columns = tableColumns(database, 'memories');
-  if (columns.has('project_id') && columns.has('type')) return;
-  database.exec(`
-    BEGIN IMMEDIATE;
-    DROP INDEX IF EXISTS memories_tag_subtag_idx;
-    DROP INDEX IF EXISTS memories_updated_at_idx;
-    ALTER TABLE memories RENAME TO memories_legacy;
-    CREATE TABLE memories (
-      id INTEGER PRIMARY KEY,
-      title TEXT NOT NULL,
-      body TEXT NOT NULL,
-      tag TEXT NOT NULL,
-      subtag TEXT NOT NULL,
-      project_id TEXT NOT NULL,
-      type TEXT NOT NULL,
-      source TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      UNIQUE(title, tag, subtag, project_id, type)
-    );
-    INSERT INTO memories (id, title, body, tag, subtag, project_id, type, source, created_at, updated_at)
-    SELECT id, title, body, tag, subtag, 'global', 'code', source, created_at, updated_at
-    FROM memories_legacy;
-    DROP TABLE memories_legacy;
-    COMMIT;
-  `);
-}
-
-export function memoryDatabasePath(root) {
-  const requestedRoot = resolve(required(root, 'root'));
-  const nestedRepository = resolve(requestedRoot, 'decision-os');
-  const repositoryRoot = existsSync(resolve(nestedRepository, 'tool', 'memory', 'memory.mjs'))
-    ? nestedRepository
-    : requestedRoot;
-  return resolve(repositoryRoot, '.decision-os', 'memories.sqlite3');
-}
-
-export function ensureMemoryStore(root) {
-  const databasePath = memoryDatabasePath(root);
-  mkdirSync(dirname(databasePath), { recursive: true });
-  const database = new DatabaseSync(databasePath);
-  try {
-    migrateLegacyDestination(database);
-    database.exec(schemaSql);
-  } finally {
-    database.close();
-  }
-  return databasePath;
-}
-
-function openMemoryStore(root) {
-  const databasePath = ensureMemoryStore(root);
-  return new DatabaseSync(databasePath);
-}
-
-function memoryInput(input) {
-  return {
-    title: required(input.title, 'title'),
-    body: required(input.body, 'body'),
-    tag: slug(input.tag, 'tag'),
-    subtag: slug(input.subtag, 'subtag'),
-    projectId: required(input.projectId, 'project'),
-    type: slug(input.type, 'type'),
-    source: text(input.source),
-  };
-}
-
-function upsertMemory(database, input, timestamps = {}) {
-  const memory = memoryInput(input);
-  const now = new Date().toISOString();
-  const createdAt = text(timestamps.createdAt) || now;
-  const updatedAt = text(timestamps.updatedAt) || now;
-  database.prepare(`
-    INSERT INTO memories (title, body, tag, subtag, project_id, type, source, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(title, tag, subtag, project_id, type) DO UPDATE SET
-      body = excluded.body,
-      source = excluded.source,
-      updated_at = excluded.updated_at
-  `).run(memory.title, memory.body, memory.tag, memory.subtag, memory.projectId, memory.type, memory.source, createdAt, updatedAt);
-}
-
-export function addMemory(root, input) {
-  const database = openMemoryStore(root);
-  try {
-    upsertMemory(database, input);
-    return readMemories(root, { projectId: input.projectId, type: input.type, query: input.title });
-  } finally {
-    database.close();
-  }
-}
-
-export function readMemories(root, filters = {}) {
-  const database = openMemoryStore(root);
-  try {
-    const projectId = text(filters.projectId);
-    const type = text(filters.type).toLowerCase();
-    const tag = text(filters.tag).toLowerCase();
-    const subtag = text(filters.subtag).toLowerCase();
-    const query = text(filters.query);
-    const limit = positiveInteger(filters.limit, 'limit', defaultMemoryLimit);
-    return database.prepare(`
-      SELECT id, title, body, tag, subtag, project_id, type, source, created_at, updated_at
-      FROM memories
-      WHERE (? = '' OR project_id = ? OR project_id = 'global')
-        AND (? = '' OR type = ?)
-        AND (? = '' OR tag = ?)
-        AND (? = '' OR subtag = ?)
-        AND (? = '' OR title LIKE '%' || ? || '%' OR body LIKE '%' || ? || '%')
-      ORDER BY updated_at DESC, id DESC
-      LIMIT ?
-    `).all(projectId, projectId, type, type, tag, tag, subtag, subtag, query, query, query, limit);
-  } finally {
-    database.close();
-  }
-}
-
-export function migrateMemories(input) {
-  const sourcePath = resolve(required(input.source, 'source'));
-  const projectId = required(input.projectId, 'project');
-  const type = slug(input.type, 'type');
-  const destinationPath = ensureMemoryStore(input.root);
-  if (sourcePath === destinationPath) throw new Error('source must differ from the central memory database');
-  const source = new DatabaseSync(sourcePath, { readOnly: true });
-  const destination = new DatabaseSync(destinationPath);
-  try {
-    if (!hasTable(source, 'memories')) throw new Error('source has no memories table');
-    const columns = tableColumns(source, 'memories');
-    const rows = source.prepare('SELECT * FROM memories ORDER BY id').all();
-    destination.exec('BEGIN IMMEDIATE');
+async function request(root, path, init = {}) {
+  const config = memoryServiceConfig(root);
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
-      for (const row of rows) {
-        upsertMemory(destination, {
-          title: row.title,
-          body: row.body,
-          tag: row.tag,
-          subtag: row.subtag,
-          projectId: columns.has('project_id') ? row.project_id : projectId,
-          type: columns.has('type') ? row.type : type,
-          source: row.source,
-        }, { createdAt: row.created_at, updatedAt: row.updated_at });
+      const response = await fetch(`${config.url}${path}`, {
+        ...init,
+        headers: { authorization: `Bearer ${config.token}`, 'content-type': 'application/json', ...(init.headers ?? {}) },
+      });
+      const responseText = await response.text();
+      let payload;
+      try { payload = JSON.parse(responseText); } catch { payload = null; }
+      if (response.ok && payload !== null) return payload;
+      const message = payload?.error ?? `memory service returned HTTP ${response.status}`;
+      if (response.status < 500 && response.status !== 429) {
+        const error = new Error(message);
+        error.retryable = false;
+        throw error;
       }
-      destination.exec('COMMIT');
+      lastError = new Error(message);
     } catch (error) {
-      destination.exec('ROLLBACK');
-      throw error;
+      if (error?.retryable === false) throw error;
+      lastError = error;
     }
-    const quickCheck = String(destination.prepare('PRAGMA quick_check').get().quick_check);
-    const destinationRows = Number(destination.prepare('SELECT COUNT(*) AS count FROM memories').get().count);
-    return { source: sourcePath, destination: destinationPath, sourceRows: rows.length, destinationRows, migratedRows: rows.length, quickCheck };
+    if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 200));
+  }
+  throw lastError;
+}
+
+export async function addMemory(root, input) {
+  return request(root, '/memories', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export async function readMemories(root, filters = {}) {
+  const parameters = new URLSearchParams();
+  const values = {
+    project: text(filters.projectId), type: text(filters.type).toLowerCase(),
+    tag: text(filters.tag).toLowerCase(), subtag: text(filters.subtag).toLowerCase(),
+    query: text(filters.query), limit: String(positiveInteger(filters.limit, 'limit', 10)),
+  };
+  for (const [name, value] of Object.entries(values)) if (value) parameters.set(name, value);
+  return request(root, `/memories?${parameters}`);
+}
+
+export async function migrateMemories(input) {
+  const sourcePath = resolve(required(input.source, 'source'));
+  const source = new DatabaseSync(sourcePath, { readOnly: true });
+  try {
+    const columns = new Set(source.prepare('PRAGMA table_info(memories)').all().map((row) => String(row.name)));
+    const rows = source.prepare('SELECT * FROM memories ORDER BY id').all();
+    for (const row of rows) {
+      await addMemory(input.root, {
+        title: row.title, body: row.body, tag: row.tag, subtag: row.subtag,
+        projectId: columns.has('project_id') ? row.project_id : required(input.projectId, 'project'),
+        type: columns.has('type') ? row.type : required(input.type, 'type'), source: row.source,
+        createdAt: row.created_at, updatedAt: row.updated_at,
+      });
+    }
+    const health = await request(input.root, '/health');
+    return { source: sourcePath, sourceRows: rows.length, migratedRows: rows.length, destinationRows: health.rows };
   } finally {
-    destination.close();
     source.close();
   }
 }

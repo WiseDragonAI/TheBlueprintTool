@@ -1,0 +1,12 @@
+name = "decision-os-memory-service"
+account_id = "c99e5dd424bb8368244a4c9fcf5f6bae"
+main = "src/index.mjs"
+compatibility_date = "2026-07-18"
+
+[[d1_databases]]
+binding = "MEMORIES"
+database_name = "decision-os-memories"
+database_id = "6c7aa9a0-192d-455e-887e-cbf7f9e86980"
+
+[observability]
+enabled = true
