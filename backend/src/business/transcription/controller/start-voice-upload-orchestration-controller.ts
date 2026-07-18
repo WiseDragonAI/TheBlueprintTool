@@ -111,22 +111,24 @@ function setQueuedVoiceExecution(input: {
   transcribingBeforeLaunch: boolean;
   onLedgerChange?: unknown;
 }): { ok: boolean; error?: string } {
-  const context = resolveLedgerContext({ runtime: input.runtime, ledgerId: input.ledgerId });
-  if (!context.ok) return { ok: false, error: context.error };
-  const card = (context.ledger.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
-  if (!card) return { ok: false, error: 'Thread target card not found.' };
   const observations = input.runtime.voiceCodexExecutionObservations && typeof input.runtime.voiceCodexExecutionObservations === 'object'
     ? input.runtime.voiceCodexExecutionObservations as Record<string, AnyRecord>
     : {};
   input.runtime.voiceCodexExecutionObservations = observations;
   const observationKey = `${input.ledgerId}\0${input.cardId}`;
-  if (input.transcribingBeforeLaunch) {
-    observations[observationKey] = { kind: 'voice-transcription', startedAt: new Date().toISOString() };
-  } else {
+  if (!input.transcribingBeforeLaunch) {
     delete observations[observationKey];
+    telemetry('voice-codex-execution', { ledgerId: input.ledgerId, cardId: input.cardId, transcribingBeforeLaunch: false });
+    notify(input.onLedgerChange, { reason: 'voice-codex-transcribing-before-launch-cleared', ledgerId: input.ledgerId, cardId: input.cardId });
+    return { ok: true };
   }
-  telemetry('voice-codex-execution', { ledgerId: input.ledgerId, cardId: input.cardId, transcribingBeforeLaunch: input.transcribingBeforeLaunch });
-  notify(input.onLedgerChange, { reason: input.transcribingBeforeLaunch ? 'voice-codex-transcribing-before-launch' : 'voice-codex-transcribing-before-launch-cleared', ledgerId: input.ledgerId, cardId: input.cardId });
+  const context = resolveLedgerContext({ runtime: input.runtime, ledgerId: input.ledgerId });
+  if (!context.ok) return { ok: false, error: context.error };
+  const card = (context.ledger.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
+  if (!card) return { ok: false, error: 'Thread target card not found.' };
+  observations[observationKey] = { kind: 'voice-transcription', startedAt: new Date().toISOString() };
+  telemetry('voice-codex-execution', { ledgerId: input.ledgerId, cardId: input.cardId, transcribingBeforeLaunch: true });
+  notify(input.onLedgerChange, { reason: 'voice-codex-transcribing-before-launch', ledgerId: input.ledgerId, cardId: input.cardId });
   return { ok: true };
 }
 
@@ -471,9 +473,6 @@ async function finishVoiceUploadOrchestration(input: {
     reason: 'voice-transcription-failed'
   });
   lifecycleTelemetry({ noteId: input.noteId, phase: 'failed', at: completedAt, previousAt: providerSettledAt || input.acceptedAt });
-  if (input.launchMode !== 'send' && input.cardId) {
-    setQueuedVoiceExecution({ runtime: input.runtime, ledgerId: input.ledgerId, cardId: input.cardId, transcribingBeforeLaunch: false, onLedgerChange: input.onLedgerChange });
-  }
 }
 
 export async function startVoiceUploadOrchestrationController(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): Promise<AnyRecord> {
@@ -567,6 +566,7 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
       onCardContentChange: payload.onCardContentChange,
       reason: 'voice-orchestration-failed'
     });
+  }).finally(() => {
     if (queueCodex && cardId) {
       setQueuedVoiceExecution({ runtime, ledgerId, cardId, transcribingBeforeLaunch: false, onLedgerChange: payload.onLedgerChange });
     }
