@@ -507,6 +507,13 @@
   font-style: italic;
 }
 
+.thread-note-error {
+  color: #ff9a9a;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .thread-note.is-operator {
   align-self: flex-end;
   padding: 10px 12px 9px;

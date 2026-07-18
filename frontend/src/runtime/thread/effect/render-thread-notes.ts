@@ -42,6 +42,7 @@ function threadNotesSignature(threadId: string, notes: Array<Record<string, unkn
       String(note.id ?? ''),
       String(note.role ?? 'operator'),
       String(note.status ?? ''),
+      String(note.error ?? ''),
       String(note.voiceFileRef ?? ''),
       String(note.transcriptionStartedAt ?? ''),
       String(note.revision ?? ''),
@@ -127,6 +128,7 @@ export function renderThreadNotes(): void {
     const agentOwned = role === 'agent' || role === 'assistant';
     const noteId = String(note.id ?? '');
     const normalizedStatus = status.toLowerCase();
+    const error = String(note.error ?? '').trim();
     const busy = /committing|uploading|queued|transcribing|finalizing|retrying/.test(normalizedStatus);
     const localVoiceUploadId = String(note.localVoiceUploadId ?? '');
     const retryable = (Boolean(note.voiceFileRef) && normalizedStatus === 'transcription failed') || (Boolean(localVoiceUploadId) && normalizedStatus === 'upload failed');
@@ -162,6 +164,15 @@ export function renderThreadNotes(): void {
     deleteButton.textContent = 'X';
     item.append(body);
     if (status && !busy) item.append(meta);
+    // WHAT: Surface the server-owned terminal failure beside the generic lifecycle label.
+    // WHY: Persisted provider and configuration errors must remain actionable after reconciliation.
+    if (error && normalizedStatus.endsWith('failed')) {
+      const errorMessage = document.createElement('span');
+      errorMessage.className = 'thread-note-error';
+      errorMessage.setAttribute('role', 'alert');
+      errorMessage.textContent = error;
+      item.append(errorMessage);
+    }
     if (noteId) item.append(deleteButton);
     if (busy) {
       const spinner = document.createElement('span');

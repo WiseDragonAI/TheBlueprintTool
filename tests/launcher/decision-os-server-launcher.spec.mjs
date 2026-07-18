@@ -29,6 +29,7 @@ test('decision-os-server launcher resolves loader, server, frontend root, and ts
     assert.equal(command.cwd, workspace);
     assert.deepEqual(command.args, ['--import', resolve('backend/node_modules/tsx/dist/loader.mjs'), resolve('backend/src/server.ts')]);
     assert.equal(command.env.DECISION_OS_FRONTEND_ROOT, resolve('frontend'));
+    assert.equal(command.env.DECISION_OS_REPOSITORY_SETTINGS_FILE, resolve('.decision-os/.settings.json'));
     assert.equal(command.env.TSX_TSCONFIG_PATH, resolve('backend/tsconfig.json'));
     assert.deepEqual(command.scopedDecisionOsKeys, []);
   } finally {
