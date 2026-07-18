@@ -118,6 +118,40 @@ test('upload-voice-audio scopes the backend route to the canonical project URL',
   }
 });
 
+test('upload-voice-audio scopes Control Room card uploads from runtime project ownership', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousLocation = globalThis.location;
+  const previousWindow = globalThis.window;
+  const previousCustomEvent = globalThis.CustomEvent;
+  const previousProjectId = state.projectId;
+  let requestedUrl = '';
+  Object.defineProperty(globalThis, 'location', {
+    configurable: true,
+    value: new URL('http://decision-os.local/control-room/exec')
+  });
+  (globalThis as unknown as { window: unknown }).window = { location: globalThis.location, __coreTelemetry: [], dispatchEvent() {} };
+  (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
+    constructor(_name: string, public options: Record<string, unknown> = {}) {}
+  };
+  state.projectId = 'project-id';
+  globalThis.fetch = (async (url: string) => {
+    requestedUrl = url;
+    return { ok: true, status: 202, json: async () => ({ body: { ok: true, uploaded: true, configured: true, voiceFileRef: '/tmp/voice.webm', text: '' } }) } as Response;
+  }) as typeof fetch;
+
+  try {
+    await uploadVoiceAudio(new Blob(['abc'], { type: 'audio/webm' }), { ledgerId: 'specs', threadId: 'thread-card-a', cardId: 'card-a' });
+    assert.equal(requestedUrl, '/p/project-id/api/voice-upload');
+  } finally {
+    globalThis.fetch = previousFetch;
+    state.projectId = previousProjectId;
+    if (previousLocation === undefined) delete (globalThis as { location?: Location }).location;
+    else Object.defineProperty(globalThis, 'location', { configurable: true, value: previousLocation });
+    (globalThis as unknown as { window: unknown }).window = previousWindow;
+    (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
+  }
+});
+
 test('transcription retry scopes the backend route to the canonical project URL', async () => {
   const previousFetch = globalThis.fetch;
   const previousLocation = globalThis.location;
@@ -271,13 +305,15 @@ test('request-transcription signals durable persistence before delayed upload se
   };
   let uploadCount = 0;
   let persistedBeforeFetch = false;
+  const requestedUrls: string[] = [];
   const lifecycle: string[] = [];
   let settleFirstUpload: (response: unknown) => void = () => {};
   const firstUpload = new Promise((resolve) => {
     settleFirstUpload = resolve;
   });
-  (globalThis as unknown as { fetch: unknown }).fetch = async (_url: string, init?: RequestInit) => {
+  (globalThis as unknown as { fetch: unknown }).fetch = async (url: string, init?: RequestInit) => {
     uploadCount += 1;
+    requestedUrls.push(url);
     lifecycle.push('upload-started');
     const noteId = String((init?.body as FormData).get('noteId') ?? '');
     persistedBeforeFetch = Boolean(await readPendingVoiceUpload(noteId));
@@ -290,6 +326,7 @@ test('request-transcription signals durable persistence before delayed upload se
   };
 
   try {
+    state.projectId = 'project-id';
     state.threadId = 'thread-card-a';
     state.activeTab = 'specs';
     state.activeLedger = { notes: { 'thread-card-a': [] } };
@@ -304,6 +341,8 @@ test('request-transcription signals durable persistence before delayed upload se
     const note = state.activeLedger.notes['thread-card-a'][0];
     const noteId = String(note.id);
     assert.equal(persistedBeforeFetch, true);
+    assert.equal((await readPendingVoiceUpload(noteId))?.projectId, 'project-id');
+    assert.equal(requestedUrls[0], '/p/project-id/api/voice-upload');
     assert.deepEqual(lifecycle.slice(0, 2), ['persisted', 'upload-started']);
     assert.equal(submissionSettled, false);
     assert.ok(await readPendingVoiceUpload(noteId));
@@ -321,6 +360,7 @@ test('request-transcription signals durable persistence before delayed upload se
     assert.match(state.voice.transcriptionStatus, /^voice upload failed/);
     await retryVoiceTranscription({ threadId: 'thread-card-a', noteId, localVoiceUploadId: noteId });
     assert.equal(uploadCount, 2);
+    assert.equal(requestedUrls[1], '/p/project-id/api/voice-upload');
     assert.equal(note.voiceFileRef, '/tmp/retried.webm');
     assert.equal(note.status, 'queued');
     assert.equal(note.localVoiceUploadId, '');
@@ -331,6 +371,7 @@ test('request-transcription signals durable persistence before delayed upload se
     (globalThis as unknown as { window: unknown }).window = previousWindow;
     (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
     state.threadId = '';
+    state.projectId = '';
     state.activeLedger = null;
     state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
     clearPendingVoiceUploadMemoryForTest();

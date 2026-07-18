@@ -6,6 +6,7 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { state } from '../../state.js';
 import { routeTab } from '../../navigation/helper/route-tab.js';
 import { projectScopedRequestPath } from '../../project/helper/project-request-scope.js';
+import { voiceProjectId } from '../helper/voice-project-id.js';
 
 export type VoiceTranscriptionResult = {
   ok: boolean;
@@ -27,6 +28,7 @@ export type VoiceTranscriptionResult = {
 };
 
 export type VoiceUploadOptions = {
+  projectId?: string;
   ledgerId?: string;
   threadId?: string;
   cardId?: string;
@@ -61,6 +63,7 @@ function cardIdFromThread(threadId: string, fallback?: string): string {
 
 export async function uploadVoiceAudio(audio: Blob, input: VoiceUploadOptions | string = {}): Promise<VoiceTranscriptionResult> {
   const options = uploadOptions(input);
+  const projectId = voiceProjectId(options.projectId);
   const threadId = options.threadId || state.threadId || '';
   const form = new FormData();
   form.append('audio', audio, audio.type.includes('wav') ? 'voice.wav' : 'voice.webm');
@@ -72,7 +75,7 @@ export async function uploadVoiceAudio(audio: Blob, input: VoiceUploadOptions | 
   form.append('launchMode', launchMode);
   form.append('queueCodex', launchMode === 'run' ? 'true' : 'false');
   telemetry('upload-voice-audio', { optimistic: true, preserved: true, size: audio.size, type: audio.type, threadId, launchMode });
-  const response = await fetch(projectScopedRequestPath('/api/voice-upload'), {
+  const response = await fetch(projectScopedRequestPath('/api/voice-upload', projectId), {
     method: 'POST',
     body: form
   }).catch((error) => ({ ok: false, status: 0, json: async () => ({ body: { ok: false, error: error instanceof Error ? error.message : String(error) } }) }));

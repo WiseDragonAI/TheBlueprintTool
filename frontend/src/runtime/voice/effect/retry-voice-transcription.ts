@@ -10,6 +10,7 @@ import { currentLedgerStateId } from '../../ledger/helper/current-ledger-state-i
 import { applyVoiceServerNote, watchVoiceTranscription } from './reconcile-voice-transcription.js';
 import { patchOptimisticThreadNote } from '../../thread/effect/patch-optimistic-thread-note.js';
 import { submitPendingVoiceUpload } from './submit-pending-voice-upload.js';
+import { voiceProjectId } from '../helper/voice-project-id.js';
 
 export async function retryVoiceTranscription(input: { noteId: string; voiceFileRef?: string; localVoiceUploadId?: string; threadId?: string }): Promise<void> {
   if (!input.noteId) return;
@@ -25,7 +26,8 @@ export async function retryVoiceTranscription(input: { noteId: string; voiceFile
   patchOptimisticThreadNote({ threadId, noteId: input.noteId, voiceFileRef: input.voiceFileRef, status: 'queued', body: 'Voice uploaded.', error: '' });
   telemetry('retry-voice-transcription', { threadId, noteId: input.noteId });
   const ledgerId = currentLedgerStateId();
-  const result = await transcribeUploadedVoiceAudio(input.voiceFileRef, threadId, input.noteId, ledgerId);
+  const projectId = voiceProjectId();
+  const result = await transcribeUploadedVoiceAudio(input.voiceFileRef, threadId, input.noteId, ledgerId, projectId);
   const voiceFileRef = result.voiceFileRef || input.voiceFileRef;
   if (result.ok) applyVoiceServerNote({ ledgerId, threadId, noteId: input.noteId, note: {
     id: input.noteId,
@@ -40,6 +42,6 @@ export async function retryVoiceTranscription(input: { noteId: string; voiceFile
   } });
   state.voice.voiceFileRef = voiceFileRef;
   state.voice.transcriptionStatus = 'idle';
-  watchVoiceTranscription({ ledgerId, threadId, noteId: input.noteId });
+  watchVoiceTranscription({ projectId, ledgerId, threadId, noteId: input.noteId });
   renderVoiceStatus();
 }

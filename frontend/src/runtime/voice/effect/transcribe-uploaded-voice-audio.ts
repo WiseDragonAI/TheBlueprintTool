@@ -6,9 +6,10 @@ import { state } from '../../state.js';
 import type { VoiceTranscriptionResult } from './upload-voice-audio.js';
 import { currentLedgerStateId } from '../../ledger/helper/current-ledger-state-id.js';
 import { projectScopedRequestPath } from '../../project/helper/project-request-scope.js';
+import { voiceProjectId } from '../helper/voice-project-id.js';
 
-export async function transcribeUploadedVoiceAudio(voiceFileRef: string, threadId = state.threadId || '', noteId = '', ledgerId = currentLedgerStateId()): Promise<VoiceTranscriptionResult> {
-  const response = await fetch(projectScopedRequestPath('/api/transcribe/retry'), {
+export async function transcribeUploadedVoiceAudio(voiceFileRef: string, threadId = state.threadId || '', noteId = '', ledgerId = currentLedgerStateId(), projectId = voiceProjectId()): Promise<VoiceTranscriptionResult> {
+  const response = await fetch(projectScopedRequestPath('/api/transcribe/retry', voiceProjectId(projectId)), {
     method: 'POST',
     headers: {
       'content-type': 'application/json',

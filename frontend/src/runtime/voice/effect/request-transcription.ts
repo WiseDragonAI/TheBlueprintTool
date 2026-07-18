@@ -10,8 +10,10 @@ import { patchOptimisticThreadNote } from '../../thread/effect/patch-optimistic-
 import { currentLedgerStateId } from '../../ledger/helper/current-ledger-state-id.js';
 import { persistPendingVoiceUpload } from './persist-pending-voice-upload.js';
 import { submitPendingVoiceUpload } from './submit-pending-voice-upload.js';
+import { voiceProjectId } from '../helper/voice-project-id.js';
 
 export type VoiceTranscriptionRequest = {
+  projectId?: string;
   ledgerId?: string;
   threadId?: string;
   cardId?: string;
@@ -43,6 +45,7 @@ export async function requestTranscription(audio: Blob | null, input: VoiceTrans
   try {
     await persistPendingVoiceUpload({
       noteId,
+      projectId: voiceProjectId(options.projectId),
       threadId,
       ledgerId: options.ledgerId || currentLedgerStateId(),
       cardId: options.cardId ?? '',
