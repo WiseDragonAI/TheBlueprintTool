@@ -1530,6 +1530,7 @@ async function loadControlRoom({ force = false, deferDuringQueueDrag = false, ow
   if (response.status === 304 && state.controlRoom) return false;
   if (!response.ok) throw new Error(`Could not load the Control Room (${response.status}).`);
   const nextControlRoom = await response.json();
+  if (Array.isArray(nextControlRoom.queue)) nextControlRoom.queue.sort(compareControlRoomQueueTasks);
   if (owner) requireRouteOwnership(owner);
   const nextEtag = response.headers.get('etag') ?? '';
   if (deferDuringQueueDrag && queueRefreshBlocked()) {
