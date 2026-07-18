@@ -55,7 +55,6 @@ import { createProjectCatalogStore } from './project-catalog-store.js';
 import { listProjectDirectories } from './project-directory-browser.js';
 import { isGlobalProjectEndpoint, isProjectSensitiveEndpoint, parseProjectUrlScope } from './project-url-scope.js';
 import { ensureLedgerCliShim } from '../../codex/helper/decision-os-codex-runtime.js';
-import { ensureDecisionOsMemoryStore } from './ensure-decision-os-memory-store.js';
 import { createControlRoomProjectionStore } from './control-room-projection-store.js';
 import { ledgerCanvasProjection, ledgerCardProjection, ledgerNavigationProjection, ledgerSearchProjection, ledgerThreadProjection } from './ledger-read-models.js';
 import { ensureProjectsCanvasDocument } from './ensure-projects-canvas-document.js';
@@ -219,7 +218,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   if (payload.mode === 'dry-run') {
     return { ok: true, port, server: { listening: false, port } };
   }
-  runtime.memoryDatabasePath = ensureDecisionOsMemoryStore(masterDecisionOsRoot);
   const globalContentEventClients = new Set<ServerResponse>();
   type ProjectContext = {
     clients: Set<ServerResponse>;

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Retrospect and Close Task"
+  short_description: "Save lessons and atomically close task cards"
+  default_prompt: "Use $retrospect-and-close-task to save reusable lessons to memory and atomically complete the source master and canonical subtasks."

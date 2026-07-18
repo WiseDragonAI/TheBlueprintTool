@@ -1,0 +1,26 @@
+---
+name: retrospect-and-close-task
+description: Review a Decision OS task and its operator feedback, save durable lessons that prevent repeated mistakes, then atomically complete its master and canonical subtasks. Use when the operator asks to retrospect, learn from, finalize, archive, or close a Decision OS task or Codex session.
+---
+
+# Retrospect and Close Task
+
+## Workflow
+
+1. Use the source thread and task artifacts to compare the requested outcome with the delivered result. Identify the agent decisions that caused incorrect or incomplete work, the operator corrections that exposed them, and the engineering, writing, or process rules that would prevent recurrence. Keep only durable, actionable, evidence-backed lessons with clear future value; an empty selection is valid.
+
+2. Write each lesson as one reusable rule sentence followed by one concise evidence sentence, with at most `60` words in the body. Put stable commit and run IDs in `source`. Classify development lessons as `code`, instruction or writing lessons as `copywriting`, and game-development lessons as `game-dev`. Search before adding, add only lessons not already represented, then list the saved records. The CLI uses the authenticated Cloudflare memory service configured by `DECISION_OS_MEMORY_URL` plus `DECISION_OS_MEMORY_TOKEN`, or by `memoryServiceUrl` plus `memoryServiceToken` in the ignored `$HOME/.decision-os/.settings.json`.
+
+```sh
+MEMORY="${DECISION_OS_MEMORY_CLI:-${DECISION_OS_FRONTEND_ROOT%/frontend}/tool/memory/memory.mjs}"
+
+node "$MEMORY" search --root "$DECISION_OS_MASTER_ROOT" --project "$DECISION_OS_PROJECT_ID" --type <type> --query "<keywords>" --limit 10
+node "$MEMORY" add --root "$DECISION_OS_MASTER_ROOT" --project "$DECISION_OS_PROJECT_ID" --type <type> --title "<title>" --body "<rule sentence> <evidence sentence>" --tag <tag> --subtag <subtag> --source "<commit and run IDs>"
+node "$MEMORY" list --root "$DECISION_OS_MASTER_ROOT" --project "$DECISION_OS_PROJECT_ID" --type <type> --limit 10
+```
+
+3. Treat an intentional `$retrospect-and-close-task` invocation for a master card as completion authorization. After the memory work, call the canonical completion command exactly once.
+
+```sh
+ledger-cli master-task-complete --card-id <master-card-id>
+```

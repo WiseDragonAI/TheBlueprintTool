@@ -1,125 +1,89 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { once } from 'node:events';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import { DatabaseSync } from 'node:sqlite';
-import { addMemory, ensureMemoryStore, memoryDatabasePath, migrateMemories, readMemories } from './memory-store.mjs';
+import { addMemory, memoryServiceConfig, readMemories } from './memory-store.mjs';
 
-function root(name) {
-  return mkdtempSync(join(tmpdir(), `decision-os-memory-${name}-`));
+async function service(handler) {
+  const server = createServer(handler);
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  return { server, url: `http://127.0.0.1:${server.address().port}` };
 }
 
-const cliPath = fileURLToPath(new URL('./memory.mjs', import.meta.url));
-
-test('CLI adds, lists, and searches project memories', () => {
-  const workspace = root('cli');
-  const run = (...argumentsList) => spawnSync(process.execPath, [cliPath, ...argumentsList], { encoding: 'utf8' });
+test('environment configuration overrides shared Cloudflare settings', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-memory-config-'));
+  const beforeUrl = process.env.DECISION_OS_MEMORY_URL;
+  const beforeToken = process.env.DECISION_OS_MEMORY_TOKEN;
   try {
-    const add = run('add', '--root', workspace, '--project', 'project-a', '--type', 'code', '--title', 'CLI lesson', '--body', 'Searchable body', '--tag', 'engineering', '--subtag', 'rule');
-    assert.equal(add.status, 0, add.stderr);
-    const list = run('list', '--root', workspace, '--project', 'project-a', '--type', 'code');
-    assert.equal(list.status, 0, list.stderr);
-    assert.equal(JSON.parse(list.stdout)[0].title, 'CLI lesson');
-    const search = run('search', '--root', workspace, '--project', 'project-a', '--type', 'code', '--query', 'Searchable');
-    assert.equal(search.status, 0, search.stderr);
-    assert.equal(JSON.parse(search.stdout)[0].body, 'Searchable body');
-    const limited = run('list', '--root', workspace, '--project', 'project-a', '--limit', '1');
-    assert.equal(limited.status, 0, limited.stderr);
-    assert.equal(JSON.parse(limited.stdout).length, 1);
-    for (const invalid of ['', '0', '-1', '1.5', 'many']) {
-      const result = run('list', '--root', workspace, '--limit', invalid);
-      assert.notEqual(result.status, 0);
-      assert.match(result.stderr, /limit must be a positive integer/);
+    process.env.DECISION_OS_MEMORY_URL = 'https://memory.example/';
+    process.env.DECISION_OS_MEMORY_TOKEN = 'override';
+    assert.deepEqual(memoryServiceConfig(root), { url: 'https://memory.example', token: 'override' });
+  } finally {
+    if (beforeUrl === undefined) delete process.env.DECISION_OS_MEMORY_URL; else process.env.DECISION_OS_MEMORY_URL = beforeUrl;
+    if (beforeToken === undefined) delete process.env.DECISION_OS_MEMORY_TOKEN; else process.env.DECISION_OS_MEMORY_TOKEN = beforeToken;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('client authenticates reads and writes with Cloudflare', async () => {
+  const requests = [];
+  const { server, url } = await service((request, response) => {
+    let body = '';
+    request.on('data', (chunk) => { body += chunk; });
+    request.on('end', () => {
+      requests.push({ method: request.method, url: request.url, authorization: request.headers.authorization, body });
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify([{ id: 1, title: 'Rule' }]));
+    });
+  });
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-memory-client-'));
+  process.env.DECISION_OS_MEMORY_URL = url;
+  process.env.DECISION_OS_MEMORY_TOKEN = 'secret';
+  try {
+    await addMemory(root, { title: 'Rule', body: 'Evidence', tag: 'engineering', subtag: 'bug', projectId: 'p', type: 'code' });
+    await readMemories(root, { projectId: 'p', type: 'code', query: 'Rule', limit: 5 });
+    assert.deepEqual(requests.map((entry) => entry.method), ['POST', 'GET']);
+    assert.equal(requests[0].authorization, 'Bearer secret');
+    assert.match(requests[1].url, /project=p/);
+    assert.match(requests[1].url, /limit=5/);
+  } finally {
+    server.close();
+    await once(server, 'close');
+    rmSync(root, { recursive: true, force: true });
+    delete process.env.DECISION_OS_MEMORY_URL;
+    delete process.env.DECISION_OS_MEMORY_TOKEN;
+  }
+});
+
+test('client retries a transient non-JSON Cloudflare gateway response', async () => {
+  let attempts = 0;
+  const { server, url } = await service((request, response) => {
+    attempts += 1;
+    if (attempts === 1) {
+      response.statusCode = 502;
+      response.setHeader('content-type', 'text/html');
+      response.end('<!doctype html><title>gateway</title>');
+      return;
     }
-  } finally {
-    rmSync(workspace, { recursive: true, force: true });
-  }
-});
-
-test('memory reads default to the newest ten and apply explicit limits after filters', () => {
-  const workspace = root('limits');
+    response.setHeader('content-type', 'application/json');
+    response.end(JSON.stringify([{ id: 1, title: 'Recovered' }]));
+  });
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-memory-retry-'));
+  process.env.DECISION_OS_MEMORY_URL = url;
+  process.env.DECISION_OS_MEMORY_TOKEN = 'secret';
   try {
-    for (let index = 1; index <= 12; index += 1) {
-      addMemory(workspace, {
-        title: `Lesson ${index}`,
-        body: index % 2 === 0 ? 'Matching body' : 'Other body',
-        tag: 'engineering',
-        subtag: 'limit',
-        projectId: 'project-a',
-        type: 'code',
-      });
-    }
-    const newest = readMemories(workspace, { projectId: 'project-a', type: 'code' });
-    assert.equal(newest.length, 10);
-    assert.deepEqual(newest.slice(0, 3).map((row) => row.title), ['Lesson 12', 'Lesson 11', 'Lesson 10']);
-    const filtered = readMemories(workspace, { projectId: 'project-a', query: 'Matching', limit: 3 });
-    assert.deepEqual(filtered.map((row) => row.title), ['Lesson 12', 'Lesson 10', 'Lesson 8']);
-    assert.throws(() => readMemories(workspace, { limit: 0 }), /limit must be a positive integer/);
+    const rows = await readMemories(root, { projectId: 'p' });
+    assert.equal(rows[0].title, 'Recovered');
+    assert.equal(attempts, 2);
   } finally {
-    rmSync(workspace, { recursive: true, force: true });
-  }
-});
-
-test('memory store filters project and type while including global lessons', () => {
-  const workspace = root('filters');
-  try {
-    addMemory(workspace, { title: 'Code rule', body: 'Code body', tag: 'engineering', subtag: 'rule', projectId: 'project-a', type: 'code' });
-    addMemory(workspace, { title: 'Copy rule', body: 'Copy body', tag: 'writing', subtag: 'rule', projectId: 'project-b', type: 'copywriting' });
-    addMemory(workspace, { title: 'Global rule', body: 'Global body', tag: 'shared', subtag: 'rule', projectId: 'global', type: 'code' });
-    assert.deepEqual(readMemories(workspace, { projectId: 'project-a' }).map((row) => row.title).sort(), ['Code rule', 'Global rule']);
-    assert.deepEqual(readMemories(workspace, { projectId: 'project-b', type: 'copywriting' }).map((row) => row.title), ['Copy rule']);
-  } finally {
-    rmSync(workspace, { recursive: true, force: true });
-  }
-});
-
-test('memory store upserts on title, tag, subtag, project, and type', () => {
-  const workspace = root('upsert');
-  try {
-    const identity = { title: 'Stable title', tag: 'engineering', subtag: 'bug', projectId: 'project-a', type: 'code' };
-    addMemory(workspace, { ...identity, body: 'Before' });
-    addMemory(workspace, { ...identity, body: 'After' });
-    const rows = readMemories(workspace, { projectId: 'project-a', type: 'code' });
-    assert.equal(rows.length, 1);
-    assert.equal(rows[0].body, 'After');
-  } finally {
-    rmSync(workspace, { recursive: true, force: true });
-  }
-});
-
-test('legacy migration is idempotent and preserves content and timestamps', () => {
-  const workspace = root('migration');
-  const sourcePath = join(workspace, 'legacy.sqlite3');
-  const destinationRoot = join(workspace, 'catalog');
-  try {
-    const source = new DatabaseSync(sourcePath);
-    source.exec(`CREATE TABLE memories (id INTEGER PRIMARY KEY, title TEXT NOT NULL, body TEXT NOT NULL, tag TEXT NOT NULL, subtag TEXT NOT NULL, source TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(title, tag, subtag));`);
-    source.prepare('INSERT INTO memories VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(1, 'Legacy', 'Preserved', 'engineering', 'bug', 'commit abc', '2026-01-01T00:00:00.000Z', '2026-01-02T00:00:00.000Z');
-    source.close();
-    const first = migrateMemories({ root: destinationRoot, source: sourcePath, projectId: 'project-a', type: 'code' });
-    const second = migrateMemories({ root: destinationRoot, source: sourcePath, projectId: 'project-a', type: 'code' });
-    assert.equal(first.quickCheck, 'ok');
-    assert.equal(second.destinationRows, 1);
-    const [row] = readMemories(destinationRoot, { projectId: 'project-a', type: 'code' });
-    assert.equal(row.body, 'Preserved');
-    assert.equal(row.created_at, '2026-01-01T00:00:00.000Z');
-  } finally {
-    rmSync(workspace, { recursive: true, force: true });
-  }
-});
-
-test('ensureMemoryStore provisions the launch-root database once', () => {
-  const workspace = root('provision');
-  try {
-    assert.equal(ensureMemoryStore(workspace), memoryDatabasePath(workspace));
-    assert.equal(ensureMemoryStore(workspace), memoryDatabasePath(workspace));
-    const database = new DatabaseSync(memoryDatabasePath(workspace), { readOnly: true });
-    assert.equal(database.prepare('PRAGMA quick_check').get().quick_check, 'ok');
-    database.close();
-  } finally {
-    rmSync(workspace, { recursive: true, force: true });
+    server.close();
+    await once(server, 'close');
+    rmSync(root, { recursive: true, force: true });
+    delete process.env.DECISION_OS_MEMORY_URL;
+    delete process.env.DECISION_OS_MEMORY_TOKEN;
   }
 });
