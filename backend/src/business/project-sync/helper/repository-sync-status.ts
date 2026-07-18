@@ -45,7 +45,7 @@ export function canonicalGitOrigin(originInput: string): string {
   const origin = originInput.trim();
   if (!origin) throw new Error('Repository origin is required.');
   const scp = origin.match(/^([^@\s]+@)?([^:/\s]+):(.+)$/);
-  if (scp && !origin.includes('://')) return `ssh://${scp[2].toLowerCase()}/${scp[3].replace(/^\/+|\.git\/?$/g, '')}`;
+  if (scp && !origin.includes('://')) return `${scp[2].toLowerCase()}/${scp[3].replace(/^\/+|\.git\/?$/g, '')}`;
   try {
     const parsed = new URL(origin);
     parsed.username = '';
@@ -54,6 +54,7 @@ export function canonicalGitOrigin(originInput: string): string {
     parsed.search = '';
     parsed.hostname = parsed.hostname.toLowerCase();
     parsed.pathname = parsed.pathname.replace(/\.git\/?$/, '').replace(/\/$/, '');
+    if (['https:', 'http:', 'ssh:', 'git:'].includes(parsed.protocol)) return `${parsed.host}${parsed.pathname}`;
     return parsed.toString().replace(/\/$/, '');
   } catch {
     return origin.replace(/\.git\/?$/, '').replace(/\/$/, '');
