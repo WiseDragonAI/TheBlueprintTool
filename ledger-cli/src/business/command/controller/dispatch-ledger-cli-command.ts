@@ -15,6 +15,7 @@ import { auditCodexRuns } from '../../ledger/helper/audit-codex-runs.js';
 import { resolveCodexRunEvents } from '../../ledger/helper/resolve-codex-run-events.js';
 import { completeMasterTask } from '../../ledger/helper/complete-master-task.js';
 import { synchronizeServerSkillController } from '../../skills/controller/synchronize-server-skill.js';
+import { migrateMasterTasks } from '../../ledger/helper/migrate-master-tasks.js';
 
 export async function dispatchLedgerCliCommandController(
   argv: string[],
@@ -48,6 +49,30 @@ export async function dispatchLedgerCliCommandController(
         `Skipped binary files: ${result.value.skippedBinaryFiles.length}`,
         `Manual follow-up files: ${result.value.manualFollowUpFiles.length}`,
         ...result.value.manualFollowUpFiles.map((path) => `  ${path}`),
+      ].join('\n');
+      ports.emit ? ports.emit(output) : console.log(output);
+    }
+    return result;
+  }
+
+  if (command.mode === 'migrate-master-tasks') {
+    const operation = command.masterTaskMigrationOperation;
+    if (!operation?.sourceLedger || !operation.targetLedger) {
+      return { ok: false, error: 'migrate-master-tasks requires --source-ledger and --target-ledger.' };
+    }
+    const result = migrateMasterTasks({
+      sourceLedger: operation.sourceLedger,
+      targetLedger: operation.targetLedger,
+      write: operation.write,
+    });
+    if (result.ok) {
+      const output = operation.json ? JSON.stringify(result.value, null, 2) : [
+        `Master-task migration ${operation.write ? 'written' : 'dry run'}.`,
+        `Cards: ${result.value.cards}`,
+        `Zones: ${result.value.zones}`,
+        `Relationships: ${result.value.relationships}`,
+        `Card files: ${result.value.cardFiles}`,
+        `Thread files: ${result.value.threadFiles}`,
       ].join('\n');
       ports.emit ? ports.emit(output) : console.log(output);
     }
