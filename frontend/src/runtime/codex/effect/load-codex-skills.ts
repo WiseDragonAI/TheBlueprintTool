@@ -25,19 +25,21 @@ export type CodexSkillCatalogResult = {
   ok: boolean;
   statusCode: number;
   skills: CodexSkillSummary[];
+  availableTags: string[];
   error?: string;
 };
 
 export async function loadCodexSkillsResult(): Promise<CodexSkillCatalogResult> {
   const response = await fetch('/api/codex/skills').catch(() => undefined);
-  if (!response) return { ok: false, statusCode: 0, skills: [], error: 'Request failed.' };
-  const body = await response.json().catch(() => null) as { ok?: boolean; skills?: CodexSkillSummary[]; error?: string } | null;
-  if (!body) return { ok: false, statusCode: response.status, skills: [], error: 'Invalid response.' };
+  if (!response) return { ok: false, statusCode: 0, skills: [], availableTags: [], error: 'Request failed.' };
+  const body = await response.json().catch(() => null) as { ok?: boolean; skills?: CodexSkillSummary[]; availableTags?: string[]; error?: string } | null;
+  if (!body) return { ok: false, statusCode: response.status, skills: [], availableTags: [], error: 'Invalid response.' };
   const ok = response.ok && body.ok !== false;
   return {
     ok,
     statusCode: response.status,
     skills: Array.isArray(body.skills) ? body.skills : [],
+    availableTags: Array.isArray(body.availableTags) ? body.availableTags : [],
     error: ok ? undefined : String(body.error ?? `Request failed (${response.status}).`),
   };
 }

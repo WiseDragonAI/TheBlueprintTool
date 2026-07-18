@@ -468,8 +468,45 @@
 
 .pipeline-skill-picker-modal[open] {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 10px;
+}
+
+.codex-library-controls {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.codex-library-control-actions,
+.codex-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.codex-filter-row {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.codex-library-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.codex-library-search input {
+  width: 100%;
+}
+
+.pipeline-library-controls {
+  padding: 0 0 12px;
+}
+
+.pipeline-library-results {
+  display: grid;
+  gap: 8px;
 }
 
 .pipeline-skill-picker-modal .skill-search,

@@ -14,8 +14,9 @@ import { refreshRuntimeState } from '../../refresh/controller/refresh-runtime-st
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { processCardSkillController } from '../controller/process-card-skill-controller.js';
+import { visibleCodexLibraryRecords } from '../component/render-codex-library.js';
 import { renderSkillLibraryItemContent } from '../component/render-skill-library-item-content.js';
-import { colorForSkillTag, sortSkillsByFavorite, tagsForSkill } from '../helper/skill-library-presentation.js';
+import { colorForSkillTag, tagsForSkill } from '../helper/skill-library-presentation.js';
 import { codexEffortOptions, codexModelOptions } from '../helper/codex-run-options.js';
 import { loadCodexPipelines } from './load-codex-pipelines.js';
 import { loadCodexSkillsResult, type CodexSkillSummary } from './load-codex-skills.js';
@@ -160,22 +161,23 @@ function pipelineCanRun(pipeline: CodexPipeline): boolean {
 }
 
 function filteredPipelines(): CodexPipeline[] {
-  const query = processModalState.query.trim().toLowerCase();
-  return processModalState.pipelines.filter((pipeline) => {
-    const categories = pipelineCategories(pipeline);
-    if (processModalState.selectedCategory !== 'All' && !categories.includes(processModalState.selectedCategory)) return false;
-    const text = `${pipeline.name} ${pipeline.purpose} ${pipelineSkillNames(pipeline).join(' ')} ${categories.join(' ')}`.toLowerCase();
-    return !query || text.includes(query);
-  });
+  return visibleCodexLibraryRecords(
+    processModalState.pipelines.map((pipeline) => ({
+      ...pipeline,
+      description: pipeline.purpose,
+      tags: pipelineCategories(pipeline),
+      searchText: pipelineSkillNames(pipeline).join(' '),
+    })),
+    { query: processModalState.query, projectId: 'All', tag: processModalState.selectedCategory },
+  );
 }
 
 function filteredSkills(): CodexSkillSummary[] {
-  const query = processModalState.query.trim().toLowerCase();
-  return sortSkillsByFavorite(processModalState.skills.filter((skill) => {
-    const tags = tagsForSkill(skill);
-    if (processModalState.selectedCategory !== 'All' && !tags.includes(processModalState.selectedCategory)) return false;
-    return !query || `${skill.name} ${skill.description} ${tags.join(' ')}`.toLowerCase().includes(query);
-  }));
+  return visibleCodexLibraryRecords(
+    processModalState.skills.map((skill) => ({ ...skill, id: skill.name, tags: tagsForSkill(skill) })),
+    { query: processModalState.query, projectId: 'All', tag: processModalState.selectedCategory },
+    true,
+  );
 }
 
 function availableCategories(): string[] {

@@ -188,7 +188,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(dialogsCss, /\.skill-result\s*{[\s\S]*flex:\s*0 0 auto/);
   assert.match(dialogsCss, /\.process-skill-row\s*{[^}]*display:\s*grid;[^}]*flex:\s*0 0 auto;/s);
   assert.match(dialogsCss, /\.skill-modal\s*{[^}]*width:\s*min\(880px,[^}]*height:\s*80vh;/s);
-  assert.match(dialogsCss, /\.pipeline-skill-picker-modal\[open\]\s*{[^}]*grid-template-rows:\s*auto auto auto minmax\(0, 1fr\) auto;/s);
+  assert.match(dialogsCss, /\.pipeline-skill-picker-modal\[open\]\s*{[^}]*grid-template-rows:\s*auto auto minmax\(0, 1fr\) auto;/s);
 
   const stateSource = source('frontend/src/runtime/state.ts');
   const bootSurface = source('frontend/src/runtime/boot/controller/boot-surface.ts');
