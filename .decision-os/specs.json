@@ -14070,7 +14070,7 @@
       "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784305054299-75c52384.md",
       "executionStatus": "running",
       "codexActiveRunId": "codex-skill-1784305054299-75c52384",
-      "codexActiveExecutionId": "codex-execution-1784357547418-b4c72c7d",
+      "codexActiveExecutionId": "codex-execution-1784357862218-926a9f1e",
       "executionRunId": "codex-skill-1784305054299-75c52384"
     },
     {
@@ -14370,12 +14370,8 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexActiveRunId": "codex-skill-1784357486217-20cb20db",
-      "executionStatus": "running",
-      "executionRunId": "codex-skill-1784357486217-20cb20db",
       "codexThreadRunId": "codex-skill-1784357486217-20cb20db",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784357486217-20cb20db.md",
-      "codexActiveExecutionId": "codex-execution-1784357486228-af78f01b"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784357486217-20cb20db.md"
     },
     {
       "id": "card-c60f1900-bd54-43c1-afb4-193fc1ee2947",
@@ -14425,7 +14421,7 @@
       "title": "Restore immediate Shift+X exit after durable local persistence",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "implementation",
         "regression",
@@ -14446,7 +14442,7 @@
       "title": "Add temporal regression coverage for Shift+X voice handoff",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "test",
         "regression",
@@ -14533,9 +14529,6 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "executionStatus": "running",
-      "executionRunId": "codex-skill-1784357650123-612dfaaf",
-      "codexActiveRunId": "codex-skill-1784357650123-612dfaaf",
       "codexRunId": "codex-skill-1784357650123-612dfaaf",
       "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784357650123-612dfaaf.md",
       "codexPipelineRunId": "codex-skill-1784357650123-612dfaaf",
@@ -14774,7 +14767,8 @@
       "domainId": "specs",
       "status": "todo",
       "labels": [
-        "diagnostic-analysis",
+        "bugfix",
+        "diagnostic-parsing",
         "master-task"
       ],
       "x": -10402,
@@ -14789,11 +14783,7 @@
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
       "codexThreadRunId": "codex-skill-1784354465725-bf3ce0ec",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784354465725-bf3ce0ec.md",
-      "executionStatus": "running",
-      "codexActiveRunId": "codex-skill-1784354465725-bf3ce0ec",
-      "codexActiveExecutionId": "codex-execution-1784357583857-89a65bba",
-      "executionRunId": "codex-skill-1784354465725-bf3ce0ec"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784354465725-bf3ce0ec.md"
     },
     {
       "id": "card-b75d1db1-67c1-45f4-8e99-d110a4095702",
@@ -14802,7 +14792,8 @@
       "domainId": "specs",
       "status": "done",
       "labels": [
-        "diagnostic-analysis",
+        "bugfix",
+        "diagnostic-parsing",
         "subtask"
       ],
       "x": -10012,
@@ -14868,7 +14859,7 @@
       "title": "Split master-task completion into manual and pipeline actions",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "feature",
         "master-task"
@@ -15070,7 +15061,8 @@
         "bug",
         "pipeline",
         "ux",
-        "task-list",
+        "implemented",
+        "verified",
         "master-task"
       ],
       "x": -10402,
@@ -15084,20 +15076,30 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784357442246-d76c47e4",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784357442246-d76c47e4.md"
+      "executionStatus": "running",
+      "executionRunId": "codex-skill-1784358107101-fa9ea4aa",
+      "codexActiveRunId": "codex-skill-1784358107101-fa9ea4aa",
+      "codexRunId": "codex-skill-1784358107101-fa9ea4aa",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784358107101-fa9ea4aa.md",
+      "codexPipelineRunId": "codex-skill-1784358107101-fa9ea4aa",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexSkillName": "retrospect-and-close-task"
     },
     {
       "id": "card-64625af6-8535-4c03-891b-d2e0b1291cc1",
       "title": "Render pipeline entries inside the shared card surface",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "frontend",
         "code",
         "bug",
         "pipeline",
+        "implemented",
+        "verified",
         "subtask"
       ],
       "x": -10012,
@@ -15115,12 +15117,14 @@
       "title": "Lock the pipeline card structure in responsive regression coverage",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "frontend",
         "test",
         "regression",
         "pipeline",
+        "implemented",
+        "verified",
         "subtask"
       ],
       "x": -9632,
@@ -15138,12 +15142,13 @@
       "title": "Verify pipeline card interaction on the served surface",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "frontend",
         "scenario",
         "browser",
         "pipeline",
+        "verified",
         "subtask"
       ],
       "x": -10012,
@@ -15173,15 +15178,104 @@
       },
       "facts": [],
       "fields": [],
-      "codexActiveRunId": "codex-skill-1784357650123-612dfaaf",
-      "executionStatus": "running",
-      "executionRunId": "codex-skill-1784357650123-612dfaaf",
       "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784357650123-612dfaaf.md",
       "codexPipelineRunId": "codex-skill-1784357650123-612dfaaf",
       "codexPipelineName": "retrospect-and-close-task run",
       "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
       "codexPipelineStepName": "retrospect-and-close-task",
       "codexSkillName": "retrospect-and-close-task"
+    },
+    {
+      "id": "card-c6534091-d29a-49a4-936d-5fe57948b3ff",
+      "title": "Ensure new projects have a default Tasks ledger",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 140088,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-c6534091-d29a-49a4-936d-5fe57948b3ff.md"
+      },
+      "facts": [],
+      "fields": [],
+      "executionStatus": "running",
+      "codexActiveRunId": "codex-skill-1784358005151-98615753",
+      "executionRunId": "codex-skill-1784358005151-98615753",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunId": "codex-skill-1784358005151-98615753",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784358005151-98615753.md",
+      "codexActiveExecutionId": "codex-execution-1784358005161-0dd77efd"
+    },
+    {
+      "id": "card-codex-skill-1784358107101-fa9ea4aa",
+      "title": "retrospect-and-close-task result",
+      "cardType": "codex-skill-run",
+      "x": -9946,
+      "y": 139068,
+      "w": 700,
+      "h": 260,
+      "status": "todo",
+      "codexRunId": "codex-skill-1784358107101-fa9ea4aa",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-codex-skill-1784358107101-fa9ea4aa.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784358107101-fa9ea4aa",
+      "executionStatus": "running",
+      "executionRunId": "codex-skill-1784358107101-fa9ea4aa",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-skill-1784358107101-fa9ea4aa.md",
+      "codexPipelineRunId": "codex-skill-1784358107101-fa9ea4aa",
+      "codexPipelineName": "retrospect-and-close-task run",
+      "codexPipelineStepId": "temporary-step-retrospect-and-close-task",
+      "codexPipelineStepName": "retrospect-and-close-task",
+      "codexSkillName": "retrospect-and-close-task"
+    },
+    {
+      "id": "card-092d26be-9654-4bc0-8173-d79d34f3a3f0",
+      "title": "Enforce the default Tasks ledger invariant",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 140088,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-092d26be-9654-4bc0-8173-d79d34f3a3f0.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-94735e60-269f-471e-8fc1-4da9c590c9c3",
+      "title": "Verify selected-directory project intake",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 140088,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-94735e60-269f-471e-8fc1-4da9c590c9c3.md"
+      },
+      "facts": [],
+      "fields": []
     }
   ],
   "relationships": [
@@ -17026,6 +17120,24 @@
       "from": "card-3595f568-b6c1-4e1c-a2f5-27a1c36d0651",
       "to": "card-codex-skill-1784357650123-612dfaaf",
       "label": "retrospect-and-close-task"
+    },
+    {
+      "id": "rel-codex-skill-1784358107101-fa9ea4aa-1",
+      "from": "card-48756429-623a-46a1-921d-36418f10fa57",
+      "to": "card-codex-skill-1784358107101-fa9ea4aa",
+      "label": "retrospect-and-close-task"
+    },
+    {
+      "id": "rel-0ef87b65-76e1-44cf-b0b6-4722b0d83293",
+      "from": "card-c6534091-d29a-49a4-936d-5fe57948b3ff",
+      "to": "card-092d26be-9654-4bc0-8173-d79d34f3a3f0",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-203a3eae-51d5-496e-ab65-283e892af64a",
+      "from": "card-c6534091-d29a-49a4-936d-5fe57948b3ff",
+      "to": "card-94735e60-269f-471e-8fc1-4da9c590c9c3",
+      "label": "subtask"
     }
   ],
   "annotations": [
@@ -18564,6 +18676,16 @@
       "color": "#895cfa",
       "label": "Pipeline library card affordances",
       "comments": []
+    },
+    {
+      "id": "zone-a9c8de5d-4433-4782-aee3-dda482afb566",
+      "x": -10462,
+      "y": 140028,
+      "width": 1200,
+      "height": 900,
+      "color": "#895cfa",
+      "label": "Default Tasks ledger on project intake",
+      "comments": []
     }
   ],
   "notes": {},
@@ -18741,7 +18863,9 @@
     "thread-card-codex-skill-1784355765584-aa5dbc59": ".decision-os/threads/specs/thread-card-codex-skill-1784355765584-aa5dbc59.md",
     "thread-card-b66f13d3-e2d8-490b-ae8d-1da66a6c7d21": ".decision-os/threads/specs/thread-card-b66f13d3-e2d8-490b-ae8d-1da66a6c7d21.md",
     "thread-card-48756429-623a-46a1-921d-36418f10fa57": ".decision-os/threads/specs/thread-card-48756429-623a-46a1-921d-36418f10fa57.md",
-    "thread-card-codex-skill-1784357650123-612dfaaf": ".decision-os/threads/specs/thread-card-codex-skill-1784357650123-612dfaaf.md"
+    "thread-card-codex-skill-1784357650123-612dfaaf": ".decision-os/threads/specs/thread-card-codex-skill-1784357650123-612dfaaf.md",
+    "thread-card-c6534091-d29a-49a4-936d-5fe57948b3ff": ".decision-os/threads/specs/thread-card-c6534091-d29a-49a4-936d-5fe57948b3ff.md",
+    "thread-card-codex-skill-1784358107101-fa9ea4aa": ".decision-os/threads/specs/thread-card-codex-skill-1784358107101-fa9ea4aa.md"
   },
   "deletedNoteIds": {
     "thread-card-7074d33a-39da-42a1-b470-673cbe221def": [
