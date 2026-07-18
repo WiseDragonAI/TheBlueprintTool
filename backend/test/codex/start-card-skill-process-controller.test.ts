@@ -923,6 +923,18 @@ test('card skill run continue route resumes the captured session with post-end t
   const address = server.address() as AddressInfo;
 
   try {
+    runtime.codexSkillRuns = {
+      [runId]: {
+        id: runId,
+        executionId: 'execution-previous',
+        status: 'complete',
+        startedAt: '2026-07-07T17:00:00.000Z',
+        turnStartedAt: '2026-07-07T17:00:01.000Z',
+        finishedAt: '2026-07-07T17:01:00.000Z',
+        settledAt: '2026-07-07T17:01:00.001Z',
+        exitCode: 0,
+      },
+    };
     const threadBeforeResume = readFileSync(threadFile, 'utf8');
     const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}/continue`, {
       method: 'POST',
@@ -930,13 +942,18 @@ test('card skill run continue route resumes the captured session with post-end t
       body: JSON.stringify({ ledgerId: 'specs', cardId: outputCardId, codexModel: 'gpt-5.4', codexEffort: 'medium' })
     });
     assert.equal(response.status, 202);
-    const body = await response.json() as { ok: boolean; run: { id: string; continuedMessageCount: number; resumeSessionId: string; startedAt: string; continuedAt: string } };
+    const body = await response.json() as { ok: boolean; run: { id: string; executionId: string; continuedMessageCount: number; resumeSessionId: string; startedAt: string; continuedAt: string; turnStartedAt?: string; finishedAt?: string; settledAt?: string; exitCode?: number } };
     assert.equal(body.ok, true);
     assert.equal(body.run.id, runId);
     assert.equal(body.run.continuedMessageCount, 2);
     assert.equal(body.run.resumeSessionId, sessionId);
     assert.match(body.run.startedAt, /^\d{4}-\d{2}-\d{2}T/);
     assert.equal(body.run.startedAt, body.run.continuedAt);
+    assert.notEqual(body.run.executionId, 'execution-previous');
+    assert.equal(body.run.turnStartedAt, undefined);
+    assert.equal(body.run.finishedAt, undefined);
+    assert.equal(body.run.settledAt, undefined);
+    assert.equal(body.run.exitCode, undefined);
 
     await waitForText(inputFile, 'Continue the session with the additional information:');
     const input = readFileSync(inputFile, 'utf8');

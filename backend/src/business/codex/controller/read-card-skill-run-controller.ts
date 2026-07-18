@@ -152,7 +152,7 @@ function elapsedMs(input: { runtime: AnyRecord; runId: string; status: RunStatus
   const runs = input.runtime.codexSkillRuns && typeof input.runtime.codexSkillRuns === 'object' ? input.runtime.codexSkillRuns as Record<string, AnyRecord> : {};
   const run = runs[input.runId] ?? {};
   const started = runSegmentStartedAtMs({ runtime: input.runtime, runId: input.runId, stderrFile: input.stderrFile });
-  const finished = Date.parse(String(run.finishedAt ?? ''));
+  const finished = input.status === 'running' ? Number.NaN : Date.parse(String(run.finishedAt ?? ''));
   const terminalFileWrite = Math.max(fileMtimeMs(input.stdoutFile), fileMtimeMs(input.stderrFile));
   const end = finished || (input.status === 'running' ? Date.now() : terminalFileWrite || Date.now());
   return Math.max(0, end - started);
