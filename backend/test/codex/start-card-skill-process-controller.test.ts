@@ -446,12 +446,13 @@ test('thread codex process route anchors the run widget on the source card and s
     }, 'the initial thread run to settle');
 
     const ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as {
-      cards: Array<{ id: string; codexThreadRunId?: string; codexThreadRunOutputFile?: string; codexRunModel?: string; codexRunEffort?: string; comment?: { contentFile?: string } }>;
+      cards: Array<{ id: string; codexThreadRunId?: string; codexThreadRunIds?: string[]; codexThreadRunOutputFile?: string; codexRunModel?: string; codexRunEffort?: string; comment?: { contentFile?: string } }>;
       threadFiles: Record<string, string>;
     };
     const card = ledger.cards.find((entry) => entry.id === 'card-a');
     assert.equal(ledger.cards.length, 1);
     assert.equal(card?.codexThreadRunId, body.run.id);
+    assert.deepEqual(card?.codexThreadRunIds, [body.run.id]);
     assert.equal((card as Record<string, unknown>)?.codexActiveRunId, undefined);
     assert.equal(card?.codexThreadRunOutputFile?.includes(body.run.id), true);
     assert.equal(card?.codexRunModel, 'gpt-5.4');
@@ -575,6 +576,9 @@ test('thread codex process route anchors the run widget on the source card and s
     const settledCard = (JSON.parse(readFileSync(ledgerPath, 'utf8')) as { cards: Array<Record<string, unknown>> }).cards.find((entry) => entry.id === 'card-a');
     assert.equal(settledCard?.codexActiveRunId, undefined);
     assert.equal(settledCard?.codexThreadRunId, replacement.run.id);
+    assert.deepEqual(settledCard?.codexThreadRunIds, [body.run.id, replacement.run.id]);
+    const retainedStatus = await fetch(`${baseUrl}/api/codex/skills/runs/${body.run.id}?ledgerId=specs&cardId=card-a&since=0`);
+    assert.equal(retainedStatus.status, 200);
     await waitForCondition(
       () => eventCollector?.events.filter((event) => event.reason === 'codex-thread-settled' && event.runId === replacement.run.id && event.status === 'complete').length === 2,
       'one terminal ledger event per thread settlement',

@@ -3,7 +3,7 @@
  * WHY: Conversation controls, run diagnostics, focus, announcements, and scroll must keep separate ownership.
  */
 import { bindThreadCodexRunLog } from '../../codex/effect/bind-thread-codex-run-log.js';
-import { cardCodexRunId } from '../../codex/helper/card-codex-run-id.js';
+import { selectedCardCodexRunId } from '../../codex/helper/card-codex-run-id.js';
 import { codexEffortOptions, codexModelOptions } from '../../codex/helper/codex-run-options.js';
 import { cardCodexRunPreference, type CardCodexRunPreference } from '../../codex/helper/card-codex-run-preference.js';
 import { persistCardCodexRunPreference } from '../../codex/effect/persist-card-codex-run-preference.js';
@@ -226,7 +226,9 @@ function activeThreadCard(threadId: string): { cardId: string; card: Record<stri
 
 function bindActiveThreadRun(threadId: string): void {
   const { cardId, card } = activeThreadCard(threadId);
-  const runId = card ? cardCodexRunId(card) : '';
+  const selectedRunIds = state.threadSelectedRunIdByThreadId as Record<string, string>;
+  const runId = card ? selectedCardCodexRunId(card, selectedRunIds[threadId]) : '';
+  if (runId) selectedRunIds[threadId] = runId;
   const ledgerId = String(state.activeTab ?? '').trim();
   if (ledgerId && cardId && runId) bindThreadCodexRunLog({
     ledgerId,

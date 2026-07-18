@@ -324,6 +324,28 @@ test('The thread launcher exposes Codex model and effort controls.', async () =>
     }, { threadId: seededLog.threadId });
     assert.deepEqual(inactiveAnnouncement, { live: 'off', text: '', markdownAfter: seededLog.markdownBefore });
 
+    const runHistory = await page.evaluate(async ({ threadId }) => {
+      const state = window.__coreState;
+      const card = state.activeLedger.cards.find((candidate: { id: unknown }) => `thread-${String(candidate.id)}` === threadId);
+      const currentRunId = String(card.codexThreadRunId);
+      card.codexThreadRunIds = ['codex-skill-8999-browser', currentRunId];
+      state.threadSelectedRunIdByThreadId[threadId] = currentRunId;
+      state.threadActiveTabByThreadId[threadId] = 'codex-log';
+      const { renderThreadCodexLog } = await import('/src/runtime/thread/effect/render-thread-codex-log.js');
+      renderThreadCodexLog();
+      return { currentRunId };
+    }, { threadId: seededLog.threadId });
+    assert.equal(await page.locator('.codex-log-run-position').innerText(), 'Run 2 of 2');
+    assert.equal(await page.locator('[data-codex-run-history="previous"]').isEnabled(), true);
+    assert.equal(await page.locator('[data-codex-run-history="next"]').isDisabled(), true);
+    await page.locator('[data-codex-run-history="previous"]').click();
+    assert.equal(await page.evaluate(({ threadId }) => window.__coreState.threadSelectedRunIdByThreadId[threadId], { threadId: seededLog.threadId }), 'codex-skill-8999-browser');
+    assert.equal(await page.locator('.codex-log-run-position').innerText(), 'Run 1 of 2');
+    assert.equal(await page.locator('[data-codex-run-history="previous"]').isDisabled(), true);
+    assert.equal(await page.locator('[data-codex-run-history="next"]').isEnabled(), true);
+    await page.locator('[data-codex-run-history="next"]').click();
+    assert.equal(await page.evaluate(({ threadId }) => window.__coreState.threadSelectedRunIdByThreadId[threadId], { threadId: seededLog.threadId }), runHistory.currentRunId);
+
     for (const width of [1600, 1000, 760]) {
       await page.setViewportSize({ width, height: 700 });
       const metrics = await page.evaluate(() => {

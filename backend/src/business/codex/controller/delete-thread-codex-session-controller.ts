@@ -46,6 +46,14 @@ function restoreArtifacts(snapshots: ArtifactSnapshot[]): void {
   for (const snapshot of snapshots) writeFileSync(snapshot.file, snapshot.content);
 }
 
+function retainedThreadRunIds(card: AnyRecord): string[] {
+  const retained = Array.isArray(card.codexThreadRunIds)
+    ? card.codexThreadRunIds.map(String).map((runId) => runId.trim()).filter(Boolean)
+    : [];
+  const current = String(card.codexThreadRunId ?? '').trim();
+  return [...new Set([...retained, current].filter(Boolean))];
+}
+
 export async function deleteThreadCodexSessionController(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): Promise<AnyRecord> {
   const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord };
   const payload = (envelope.action_payload ?? input) as AnyRecord;
@@ -67,7 +75,8 @@ export async function deleteThreadCodexSessionController(input: { action_payload
   const ledger = JSON.parse(ledgerText) as AnyRecord & { cards?: AnyRecord[] };
   const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
   if (!card) return { ok: false, statusCode: 404, error: 'Card not found.', cardId };
-  if (String(card.codexThreadRunId ?? '').trim() !== runId) {
+  const ownedRunIds = retainedThreadRunIds(card);
+  if (!ownedRunIds.includes(runId)) {
     return { ok: false, statusCode: 404, error: 'Thread Codex session not found on card.', cardId, runId };
   }
 
@@ -102,8 +111,19 @@ export async function deleteThreadCodexSessionController(input: { action_payload
         delete card.executionStatus;
       }
     }
-    delete card.codexThreadRunId;
-    delete card.codexThreadRunOutputFile;
+    const remainingRunIds = ownedRunIds.filter((ownedRunId) => ownedRunId !== runId);
+    if (remainingRunIds.length > 0) card.codexThreadRunIds = remainingRunIds;
+    else delete card.codexThreadRunIds;
+    if (String(card.codexThreadRunId ?? '') === runId) {
+      const promotedRunId = remainingRunIds.at(-1) ?? '';
+      if (promotedRunId) {
+        card.codexThreadRunId = promotedRunId;
+        card.codexThreadRunOutputFile = `.decision-os/runs/codex-skills/${safeSegment(ledgerStem(ledgerPath))}/${safeSegment(promotedRunId)}.md`;
+      } else {
+        delete card.codexThreadRunId;
+        delete card.codexThreadRunOutputFile;
+      }
+    }
     stripHydratedThreadNotes(ledger);
     writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2), 'utf8');
   } catch (error) {

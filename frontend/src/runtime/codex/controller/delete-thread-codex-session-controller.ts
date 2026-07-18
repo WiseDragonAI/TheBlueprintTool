@@ -20,6 +20,7 @@ export function threadCodexSessionDeletionState(runId: string): DeletionState {
 function clearThreadRunCache(threadId: string): void {
   const keys = [
     'threadLogScrollTopByThreadId',
+    'threadSelectedRunIdByThreadId',
     'threadRunIdByThreadId',
     'threadRunSummaryByThreadId',
     'threadRunEventsByThreadId',
