@@ -20,6 +20,13 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
   createProject(home, 'admin', 'Admin Specs');
   createProject(home, 'dev/project-a', 'Project A Specs');
   createProject(home, 'dev/project-b', 'Project B Specs');
+  mkdirSync(join(home, '.decision-os'), { recursive: true });
+  writeFileSync(join(home, '.decision-os', 'codex-pipelines.json'), JSON.stringify({
+    version: 1,
+    pipelines: [{ id: 'pipeline-complete', name: 'Complete master task', purpose: '', stepIds: [] }],
+    steps: [],
+    runs: [],
+  }));
   mkdirSync(join(home, 'source-existing'));
   writeFileSync(join(home, 'source-existing', 'README.md'), '# Existing source\n');
   const runtime: Record<string, unknown> = {};
@@ -88,14 +95,41 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
     assert.equal(controlRoom.status, 200);
     assert.match(controlRoom.headers.get('content-type') ?? '', /text\/html/);
 
-    const initialCodexSettings = await fetch(`${baseUrl}/api/settings/codex-processes`).then((response) => response.json()) as { maxConcurrentCodexProcesses: number };
+    const initialCodexSettings = await fetch(`${baseUrl}/api/settings/codex-processes`).then((response) => response.json()) as {
+      maxConcurrentCodexProcesses: number;
+      masterTaskCompletionPipelineId: string;
+      pipelines: Array<{ id: string; name: string }>;
+    };
     assert.equal(initialCodexSettings.maxConcurrentCodexProcesses, 1);
+    assert.equal(initialCodexSettings.masterTaskCompletionPipelineId, '');
+    assert.deepEqual(
+      initialCodexSettings.pipelines.find((pipeline) => pipeline.id === 'pipeline-complete'),
+      { id: 'pipeline-complete', name: 'Complete master task' },
+    );
     const savedCodexSettings = await fetch(`${baseUrl}/api/settings/codex-processes`, {
-      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ maxConcurrentCodexProcesses: 3 })
+      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+        maxConcurrentCodexProcesses: 3,
+        masterTaskCompletionPipelineId: 'pipeline-complete',
+      })
     });
     assert.equal(savedCodexSettings.ok, true);
-    assert.equal((await savedCodexSettings.json() as { maxConcurrentCodexProcesses: number }).maxConcurrentCodexProcesses, 3);
+    const savedCodexSettingsPayload = await savedCodexSettings.json() as {
+      maxConcurrentCodexProcesses: number;
+      masterTaskCompletionPipelineId: string;
+    };
+    assert.equal(savedCodexSettingsPayload.maxConcurrentCodexProcesses, 3);
+    assert.equal(savedCodexSettingsPayload.masterTaskCompletionPipelineId, 'pipeline-complete');
     assert.equal(JSON.parse(readFileSync(join(home, '.decision-os', '.settings.json'), 'utf8')).maxConcurrentCodexProcesses, 3);
+    assert.equal(JSON.parse(readFileSync(join(home, '.decision-os', '.settings.json'), 'utf8')).masterTaskCompletionPipelineId, 'pipeline-complete');
+    const staleCompletionPipeline = await fetch(`${baseUrl}/api/settings/codex-processes`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+        maxConcurrentCodexProcesses: 3,
+        masterTaskCompletionPipelineId: 'missing-pipeline',
+      })
+    });
+    assert.equal(staleCompletionPipeline.status, 400);
+    assert.match(await staleCompletionPipeline.text(), /masterTaskCompletionPipelineId must identify an available pipeline/);
+    assert.equal(JSON.parse(readFileSync(join(home, '.decision-os', '.settings.json'), 'utf8')).masterTaskCompletionPipelineId, 'pipeline-complete');
 
     const legacyPage = await fetch(`${baseUrl}/p/${catalog.projects[0].id}/projects/${catalog.projects[0].id}`, { redirect: 'manual' });
     assert.equal(legacyPage.status, 302);

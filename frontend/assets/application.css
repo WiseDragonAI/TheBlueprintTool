@@ -307,10 +307,16 @@ h1 { margin: 0; font-size: clamp(28px, 8vw, 44px); line-height: 1.08; letter-spa
 .master-task-completion { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--line); }
 .delay-master-task-button { width: 100%; min-height: 52px; margin-bottom: 12px; border-color: color-mix(in srgb, var(--accent), transparent 30%); color: var(--accent); background: transparent; font-weight: 800; }
 .delay-master-task-button:disabled { color: var(--muted); border-color: var(--line); }
-.complete-master-task-button { width: 100%; min-height: 52px; border-color: var(--accent); color: #07100c; background: var(--accent); font-weight: 800; }
+.master-task-completion-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.complete-master-task-button { width: 100%; min-height: 52px; border-color: var(--accent); font-weight: 800; }
+.complete-master-task-manually-button { color: var(--accent); background: transparent; }
+.complete-master-task-pipeline-button { color: #07100c; background: var(--accent); }
 .complete-master-task-button:disabled { color: var(--muted); background: var(--panel); }
 .delete-master-task-button { width: 100%; min-height: 52px; margin-top: 12px; border-color: color-mix(in srgb, var(--danger), transparent 30%); color: var(--danger); background: transparent; font-weight: 800; }
 .confirm-delete-master-task-button { border-color: color-mix(in srgb, var(--danger), transparent 30%) !important; color: var(--danger) !important; }
+@media (max-width: 759px) {
+  .master-task-completion-actions { grid-template-columns: 1fr; }
+}
 .ledger-card-body { display: grid; gap: 14px; padding: 18px; border: 1px solid color-mix(in srgb, var(--zone-color), rgba(255,255,255,.18) 12%); border-radius: var(--radius); background: linear-gradient(180deg, rgb(16, 18, 23) 0%, rgb(9, 11, 15) 100%); box-shadow: 0 0 0 1px color-mix(in srgb, var(--zone-color), transparent 55%); line-height: 1.65; overflow-wrap: anywhere; }
 .ledger-card-body > * { margin: 0; }
 .ledger-card-body h1, .ledger-card-body h2, .ledger-card-body h3, .ledger-card-body h4, .ledger-card-body h5, .ledger-card-body h6 { color: color-mix(in srgb, var(--zone-color), white 52%); font-size: 1rem; letter-spacing: 0; }

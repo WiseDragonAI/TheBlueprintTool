@@ -23,11 +23,24 @@ test('saves the process limit while preserving unrelated project settings', () =
       runtime,
       maxConcurrentCodexProcesses: 4,
       voicePipelineId: 'pipeline-a',
-      availableVoicePipelineIds: ['pipeline-a']
+      masterTaskCompletionPipelineId: 'pipeline-complete',
+      availableVoicePipelineIds: ['pipeline-a'],
+      availableMasterTaskCompletionPipelineIds: ['pipeline-complete']
     });
     assert.equal(withPipeline.voicePipelineId, 'pipeline-a');
+    assert.equal(withPipeline.masterTaskCompletionPipelineId, 'pipeline-complete');
     assert.equal(JSON.parse(readFileSync(resolve(decisionOsRoot, '.settings.json'), 'utf8')).voicePipelineId, 'pipeline-a');
+    assert.equal(JSON.parse(readFileSync(resolve(decisionOsRoot, '.settings.json'), 'utf8')).masterTaskCompletionPipelineId, 'pipeline-complete');
     assert.equal(saveCodexProcessSettings({ decisionOsRoot, runtime, maxConcurrentCodexProcesses: 4, voicePipelineId: 'missing', availableVoicePipelineIds: ['pipeline-a'] }).statusCode, 400);
+    const rejectedCompletionPipeline = saveCodexProcessSettings({
+      decisionOsRoot,
+      runtime,
+      maxConcurrentCodexProcesses: 4,
+      masterTaskCompletionPipelineId: 'missing',
+      availableMasterTaskCompletionPipelineIds: ['pipeline-complete']
+    });
+    assert.equal(rejectedCompletionPipeline.statusCode, 400);
+    assert.equal(JSON.parse(readFileSync(resolve(decisionOsRoot, '.settings.json'), 'utf8')).masterTaskCompletionPipelineId, 'pipeline-complete');
   } finally {
     rmSync(decisionOsRoot, { recursive: true, force: true });
   }

@@ -24,7 +24,9 @@ export function saveCodexProcessSettings(input: {
   runtime: AnyRecord;
   maxConcurrentCodexProcesses: unknown;
   voicePipelineId?: unknown;
+  masterTaskCompletionPipelineId?: unknown;
   availableVoicePipelineIds?: readonly string[];
+  availableMasterTaskCompletionPipelineIds?: readonly string[];
 }): AnyRecord {
   const value = normalizedConcurrentCodexProcesses(input.maxConcurrentCodexProcesses);
   if (value === null) return {
@@ -42,14 +44,28 @@ export function saveCodexProcessSettings(input: {
   const temporaryFile = resolve(input.decisionOsRoot, `.settings-${process.pid}-${randomUUID()}.tmp`);
   const hasVoicePipelineId = typeof input.voicePipelineId === 'string';
   const voicePipelineId = hasVoicePipelineId ? String(input.voicePipelineId).trim() : String(settings.voicePipelineId ?? '');
+  const hasMasterTaskCompletionPipelineId = typeof input.masterTaskCompletionPipelineId === 'string';
+  const masterTaskCompletionPipelineId = hasMasterTaskCompletionPipelineId
+    ? String(input.masterTaskCompletionPipelineId).trim()
+    : String(settings.masterTaskCompletionPipelineId ?? '');
   if (input.availableVoicePipelineIds && voicePipelineId && !input.availableVoicePipelineIds.includes(voicePipelineId)) {
     return { ok: false, statusCode: 400, error: 'voicePipelineId must identify an available pipeline.' };
   }
+  if (input.availableMasterTaskCompletionPipelineIds
+    && masterTaskCompletionPipelineId
+    && !input.availableMasterTaskCompletionPipelineIds.includes(masterTaskCompletionPipelineId)) {
+    return { ok: false, statusCode: 400, error: 'masterTaskCompletionPipelineId must identify an available pipeline.' };
+  }
   try {
-    writeFileSync(temporaryFile, `${JSON.stringify({ ...settings, maxConcurrentCodexProcesses: value, ...(hasVoicePipelineId ? { voicePipelineId } : {}) }, null, 2)}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+    writeFileSync(temporaryFile, `${JSON.stringify({
+      ...settings,
+      maxConcurrentCodexProcesses: value,
+      ...(hasVoicePipelineId ? { voicePipelineId } : {}),
+      ...(hasMasterTaskCompletionPipelineId ? { masterTaskCompletionPipelineId } : {}),
+    }, null, 2)}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
     renameSync(temporaryFile, settingsFile);
     const refreshed = readDecisionOsSettings({ action_payload: { decisionOsRoot: input.decisionOsRoot }, runtime_state: input.runtime });
-    return { ok: true, statusCode: 200, maxConcurrentCodexProcesses: value, voicePipelineId, settings: refreshed.settings };
+    return { ok: true, statusCode: 200, maxConcurrentCodexProcesses: value, voicePipelineId, masterTaskCompletionPipelineId, settings: refreshed.settings };
   } catch (error) {
     return { ok: false, statusCode: 500, error: `Could not save project settings: ${error instanceof Error ? error.message : String(error)}.` };
   } finally {

@@ -5,6 +5,7 @@
 import { renderLedgerCardMarkdown } from '/src/runtime/ledger/component/render-ledger-card-markdown.js';
 import { ledgerCardBody } from '/src/runtime/ledger/helper/ledger-card-body.js';
 import { saveLedgerCardMediaCarouselSlide } from '/src/runtime/ledger/helper/persist-ledger-card-media-carousel.js';
+import { requestCodexPipelineRun } from '/src/runtime/codex/effect/request-codex-pipeline-run.js';
 import { closeMobileThread, handleResponsiveThreadShortcut, initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './thread.js';
 import { initializeMobileCodex, openMobileCodexLibrary, setMobileCodexContext } from './codex.js';
 import { executionAge, executionStopwatch, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge } from './control-room.js';
@@ -39,6 +40,8 @@ const state = {
   controlTab: 'queue',
   projectFilter: 'All',
   controlFilter: 'All',
+  masterTaskCompletionPipelineId: '',
+  codexSettingsLoaded: false,
 };
 
 const elements = Object.fromEntries([
@@ -48,7 +51,7 @@ const elements = Object.fromEntries([
   'overview-view', 'overview-summary', 'overview-ledgers', 'ledger-view', 'ledger-title', 'ledger-summary',
   'zone-list', 'zone-view', 'zone-title', 'zone-summary', 'card-search', 'card-list',
   'no-results', 'card-view', 'card-title', 'card-body', 'control-room-view', 'control-project-filters', 'control-filters',
-  'control-task-list', 'control-empty', 'codex-settings-limit', 'codex-settings-voice-pipeline', 'codex-settings-message',
+  'control-task-list', 'control-empty', 'codex-settings-limit', 'codex-settings-voice-pipeline', 'codex-settings-master-task-completion-pipeline', 'codex-settings-message',
   'federation-connection-status', 'federation-state-duration', 'federation-attempt-timeout', 'federation-last-connection',
   'federation-last-issue', 'federation-peer-list', 'federation-settings-message'
 ].map((id) => [id, document.getElementById(id)]));
@@ -106,6 +109,7 @@ let replicaRetryTimer = 0;
 let presentedCardIdentity = '';
 let routeLoadGeneration = 0;
 let routeLoadController = null;
+let codexSettingsRequest = null;
 
 function currentRouteSnapshot() {
   return captureRouteSnapshot(location, parseProjectScope);
@@ -769,17 +773,39 @@ function renderCodexProcessLimit(value) {
 async function loadCodexSettings() {
   elements['codex-settings-message'].textContent = 'Loading…';
   try {
-    const settings = await loadCodexProcessSettings(fetch);
+    const settings = await requestCodexSettings({ force: true });
     renderCodexProcessLimit(settings.maxConcurrentCodexProcesses);
-    const pipelineSelect = elements['codex-settings-voice-pipeline'];
-    pipelineSelect.replaceChildren(
-      Object.assign(document.createElement('option'), { value: '', textContent: 'Not configured' }),
-      ...(settings.pipelines || []).map((pipeline) => Object.assign(document.createElement('option'), { value: pipeline.id, textContent: pipeline.name }))
-    );
-    pipelineSelect.value = settings.voicePipelineId || '';
+    renderPipelineSetting(elements['codex-settings-voice-pipeline'], settings.pipelines, settings.voicePipelineId);
+    renderPipelineSetting(elements['codex-settings-master-task-completion-pipeline'], settings.pipelines, settings.masterTaskCompletionPipelineId);
     elements['codex-settings-message'].textContent = '';
   } catch (error) {
     elements['codex-settings-message'].textContent = error instanceof Error ? error.message : 'Could not load settings.';
+  }
+}
+
+function renderPipelineSetting(select, pipelines, selectedId) {
+  select.replaceChildren(
+    Object.assign(document.createElement('option'), { value: '', textContent: 'Not configured' }),
+    ...(pipelines || []).map((pipeline) => Object.assign(document.createElement('option'), { value: pipeline.id, textContent: pipeline.name }))
+  );
+  select.value = selectedId || '';
+}
+
+async function requestCodexSettings({ force = false } = {}) {
+  if (!force && state.codexSettingsLoaded) return {
+    masterTaskCompletionPipelineId: state.masterTaskCompletionPipelineId,
+  };
+  if (!force && codexSettingsRequest) return codexSettingsRequest;
+  const request = loadCodexProcessSettings(fetch).then((settings) => {
+    state.masterTaskCompletionPipelineId = settings.masterTaskCompletionPipelineId || '';
+    state.codexSettingsLoaded = true;
+    return settings;
+  });
+  codexSettingsRequest = request;
+  try {
+    return await request;
+  } finally {
+    if (codexSettingsRequest === request) codexSettingsRequest = null;
   }
 }
 
@@ -931,7 +957,14 @@ async function submitCodexProcessSettings() {
   save.disabled = true;
   elements['codex-settings-message'].textContent = '';
   try {
-    const result = await saveCodexProcessSettings(fetch, elements['codex-settings-limit'].value, elements['codex-settings-voice-pipeline'].value);
+    const result = await saveCodexProcessSettings(
+      fetch,
+      elements['codex-settings-limit'].value,
+      elements['codex-settings-voice-pipeline'].value,
+      elements['codex-settings-master-task-completion-pipeline'].value
+    );
+    state.masterTaskCompletionPipelineId = result.masterTaskCompletionPipelineId || '';
+    state.codexSettingsLoaded = true;
     renderCodexProcessLimit(result.maxConcurrentCodexProcesses);
     elements['codex-settings-message'].textContent = 'Settings saved.';
   } catch (error) {
@@ -2077,24 +2110,61 @@ function renderCard(card) {
         setView('error-view');
       }
     });
-    const completeButton = document.createElement('button');
-    completeButton.type = 'button';
-    completeButton.className = 'complete-master-task-button';
-    completeButton.textContent = card.status === 'done' ? 'Master task complete' : 'Complete master task';
-    completeButton.disabled = card.status === 'done';
-    completeButton.addEventListener('click', async () => {
-      completeButton.disabled = true;
-      completeButton.textContent = 'Completing task…';
+    const completionActions = document.createElement('div');
+    completionActions.className = 'master-task-completion-actions';
+    const manualCompleteButton = document.createElement('button');
+    manualCompleteButton.type = 'button';
+    manualCompleteButton.className = 'complete-master-task-button complete-master-task-manually-button';
+    manualCompleteButton.textContent = card.status === 'done' ? 'Master task complete' : 'Complete manually';
+    manualCompleteButton.disabled = card.status === 'done';
+    manualCompleteButton.addEventListener('click', async () => {
+      manualCompleteButton.disabled = true;
+      manualCompleteButton.textContent = 'Completing task…';
       try {
         state.ledger = await ledgerMutation(state.activeLedgerId, { action: 'complete-master-task', masterTaskId: card.id });
         navigate(completionReturnPath(), true);
       } catch (cause) {
-        completeButton.disabled = false;
-        completeButton.textContent = 'Complete master task';
+        manualCompleteButton.disabled = false;
+        manualCompleteButton.textContent = 'Complete manually';
         elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Master task completion failed.';
         setView('error-view');
       }
     });
+    const pipelineCompleteButton = document.createElement('button');
+    pipelineCompleteButton.type = 'button';
+    pipelineCompleteButton.className = 'complete-master-task-button complete-master-task-pipeline-button';
+    pipelineCompleteButton.textContent = 'Complete with pipeline';
+    const syncPipelineCompleteButton = () => {
+      const configured = Boolean(state.masterTaskCompletionPipelineId);
+      pipelineCompleteButton.disabled = card.status === 'done' || !configured;
+      pipelineCompleteButton.title = configured ? '' : 'Configure a master-task completion pipeline in Settings.';
+    };
+    syncPipelineCompleteButton();
+    pipelineCompleteButton.addEventListener('click', async () => {
+      const pipelineId = state.masterTaskCompletionPipelineId;
+      if (!pipelineId) return;
+      pipelineCompleteButton.disabled = true;
+      pipelineCompleteButton.textContent = 'Queueing pipeline…';
+      try {
+        const result = await requestCodexPipelineRun({ ledgerId: state.activeLedgerId, sourceCardId: String(card.id), pipelineId });
+        if (!result.ok) throw new Error(result.error || 'Master-task completion pipeline admission failed.');
+        pipelineCompleteButton.textContent = 'Pipeline queued';
+        navigate(controlRoomPath('exec'), true);
+      } catch (cause) {
+        pipelineCompleteButton.textContent = 'Complete with pipeline';
+        syncPipelineCompleteButton();
+        elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Master-task completion pipeline admission failed.';
+        setView('error-view');
+      }
+    });
+    completionActions.append(manualCompleteButton, pipelineCompleteButton);
+    if (!state.codexSettingsLoaded) {
+      void requestCodexSettings().then(() => {
+        if (state.activeCardId === String(card.id) && pipelineCompleteButton.isConnected) syncPipelineCompleteButton();
+      }).catch((cause) => {
+        pipelineCompleteButton.title = cause instanceof Error ? cause.message : 'Could not load the master-task completion pipeline setting.';
+      });
+    }
     const deleteButton = document.createElement('button');
     deleteButton.type = 'button';
     deleteButton.className = 'delete-master-task-button';
@@ -2103,7 +2173,7 @@ function renderCard(card) {
       deleteMasterTaskModal.dataset.cardId = String(card.id);
       deleteMasterTaskModal.showModal();
     });
-    completion.append(delayButton, completeButton, deleteButton);
+    completion.append(delayButton, completionActions, deleteButton);
     overview.append(status, heading, subtasks, completion);
     // The relationship-backed task summary is the navigation surface for a master task.
     // Keep it ahead of the narrative so linked cards remain visible on long mobile cards.

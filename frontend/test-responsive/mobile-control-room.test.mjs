@@ -553,19 +553,25 @@ test('renders and persists the shared carousel resize handle in a Control Room m
   assert.match(styles, /\.ledger-card-media-resize-handle::before\s*\{[^}]*width: 16px;[^}]*height: 16px;[^}]*content: "";/s);
 });
 
-test('completes all linked cards from the master-task detail', () => {
+test('offers manual and configured-pipeline completion from the master-task detail', () => {
   assert.match(mobile, /action: 'complete-master-task', masterTaskId: card\.id/);
   assert.match(mobile, /navigate\(completionReturnPath\(\), true\)/);
   assert.match(mobile, /return returnPath\.startsWith\('\/'\) \? returnPath : controlRoomPath\('queue'\)/);
-  assert.match(mobile, /completeButton\.textContent = card\.status === 'done' \? 'Master task complete' : 'Complete master task'/);
+  assert.match(mobile, /manualCompleteButton\.textContent = card\.status === 'done' \? 'Master task complete' : 'Complete manually'/);
+  assert.match(mobile, /pipelineCompleteButton\.textContent = 'Complete with pipeline'/);
+  assert.match(mobile, /requestCodexPipelineRun\(\{ ledgerId: state\.activeLedgerId, sourceCardId: String\(card\.id\), pipelineId \}\)/);
+  assert.match(mobile, /pipelineCompleteButton\.disabled = card\.status === 'done' \|\| !configured/);
+  assert.match(mobile, /navigate\(controlRoomPath\('exec'\), true\)/);
   assert.match(mobile, /overview\.append\(status, heading, subtasks, completion\)/);
   assert.match(mobile, /elements\['card-body'\]\.replaceChildren\(overview, content\)/);
   assert.doesNotMatch(mobile, /complete-master-subtask|masterTaskId=|Mark task as done/);
   assert.match(styles, /\.complete-master-task-button \{ width: 100%; min-height: 52px;/);
+  assert.match(styles, /\.master-task-completion-actions \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); gap: 12px;/);
+  assert.match(styles, /@media \(max-width: 759px\)[\s\S]*\.master-task-completion-actions \{ grid-template-columns: 1fr; \}/);
 });
 
 test('deletes a master task from its detail after explicit confirmation', () => {
-  assert.match(mobile, /completion\.append\(delayButton, completeButton, deleteButton\)/);
+  assert.match(mobile, /completion\.append\(delayButton, completionActions, deleteButton\)/);
   assert.match(mobile, /deleteMasterTaskModal\.showModal\(\)/);
   assert.match(mobile, /action: 'delete-card', cardId/);
   assert.match(mobile, /navigate\(controlRoomPath\(state\.controlTab\), true\)/);
