@@ -543,7 +543,7 @@ body:has(.project-color-picker-modal[open]) { overflow: hidden; }
  * A grid here can shrink every auto row when the catalog is taller than the modal,
  * collapsing rich skill cards into border lines instead of producing overflow.
  */
-.skill-picker-list { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow-y: auto; }
+.skill-picker-list.codex-list { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow-y: auto; }
 .skill-picker-list > .codex-list-card { flex: 0 0 auto; }
 .skill-picker-actions { border-top: 1px solid var(--line); padding-top: 10px; }
 .skill-picker-actions .codex-field { min-width: min(280px, 52%); }

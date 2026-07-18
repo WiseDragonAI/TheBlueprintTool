@@ -181,7 +181,7 @@ test('skill libraries share favorite ordering, colored categories, and scope-spe
   assert.match(styles, /\.skill-tag-choice\[aria-pressed="true"\]/);
   assert.match(styles, /\.codex-list-card \{[^}]*box-shadow/);
   assert.match(styles, /\.codex-list-item \{[^}]*background: transparent;[^}]*box-shadow: none/);
-  assert.match(styles, /\.skill-picker-list \{[^}]*display: flex;[^}]*flex-direction: column;[^}]*overflow-y: auto/);
+  assert.match(styles, /\.skill-picker-list\.codex-list \{[^}]*display: flex;[^}]*flex-direction: column;[^}]*overflow-y: auto/);
   assert.match(styles, /\.skill-picker-list > \.codex-list-card \{[^}]*flex: 0 0 auto/);
   assert.match(styles, /\.skill-reference-toggle \{[^}]*background: transparent;[^}]*box-shadow: none/);
   assert.match(styles, /\.process-modal \{ height: min\(80dvh, 860px\); \}/);
