@@ -148,6 +148,10 @@ test('responsive voice retry forwards the locally preserved upload identity', ()
   assert.match(source, /action === 'voice-retry'\) await retryVoiceTranscription\(voiceRetryInput\(button\)\)/);
 });
 
+test('responsive thread publishes the selected remote project to shared voice runtime state', () => {
+  assert.match(source, /canvasState\.projectId = currentProjectId/);
+});
+
 test('mobile thread routes jump-to-bottom into persistent bottom following', () => {
   assert.match(source, /import \{ pinThreadSurfaceToBottom \} from '\/src\/runtime\/thread\/effect\/pin-thread-feed-to-last-message\.js';/);
   assert.match(source, /action === 'jump-thread-bottom'[\s\S]*pinThreadSurfaceToBottom\(surface, \{ follow: true \}\)/);

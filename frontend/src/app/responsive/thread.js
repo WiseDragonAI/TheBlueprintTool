@@ -101,6 +101,7 @@ export function syncMobileThreadContext(input) {
   onCodexStarted = input.onCodexStarted ?? onCodexStarted;
   onQuickVoiceSubmitted = input.onQuickVoiceSubmitted ?? onQuickVoiceSubmitted;
   canvasState.canvasMode = 'ledger';
+  canvasState.projectId = currentProjectId;
   canvasState.activeTab = currentLedgerId;
   canvasState.activeLedgerId = currentLedgerId;
   canvasState.activeLedger = input.ledger;

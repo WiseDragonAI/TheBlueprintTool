@@ -332,6 +332,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const scopedEvent = hasCompleteScope ? event : resolvedEvent ? { ...event, ...resolvedEvent } : null;
       if (!scopedEvent) return;
       controlRoomProjectionStore?.invalidate(projectId);
+      federationTaskReplicaCache.invalidate(projectId);
       revisions.advance(String(scopedEvent.ledgerId));
       broadcast(`event: card-content-change\ndata: ${JSON.stringify({ ...scopedEvent, projectId })}\n\n`);
       federation?.publishContentChange();
@@ -339,6 +340,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const publishLedger = (event: AnyRecord): void => {
       if (event.kind === 'state') projectCatalogStore.refresh(projectId);
       controlRoomProjectionStore?.invalidate(projectId);
+      federationTaskReplicaCache.invalidate(projectId);
       watcher?.refreshOwnership();
       const ledgerId = String(event.ledgerId ?? '');
       if (ledgerId) revisions.advance(ledgerId);

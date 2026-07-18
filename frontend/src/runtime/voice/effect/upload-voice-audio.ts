@@ -27,6 +27,7 @@ export type VoiceTranscriptionResult = {
 };
 
 export type VoiceUploadOptions = {
+  projectId?: string;
   ledgerId?: string;
   threadId?: string;
   cardId?: string;
@@ -72,7 +73,7 @@ export async function uploadVoiceAudio(audio: Blob, input: VoiceUploadOptions | 
   form.append('launchMode', launchMode);
   form.append('queueCodex', launchMode === 'run' ? 'true' : 'false');
   telemetry('upload-voice-audio', { optimistic: true, preserved: true, size: audio.size, type: audio.type, threadId, launchMode });
-  const response = await fetch(projectScopedRequestPath('/api/voice-upload'), {
+  const response = await fetch(projectScopedRequestPath('/api/voice-upload', options.projectId || String(state.projectId ?? '') || undefined), {
     method: 'POST',
     body: form
   }).catch((error) => ({ ok: false, status: 0, json: async () => ({ body: { ok: false, error: error instanceof Error ? error.message : String(error) } }) }));

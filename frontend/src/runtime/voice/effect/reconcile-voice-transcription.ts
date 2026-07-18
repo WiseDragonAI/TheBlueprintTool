@@ -11,7 +11,7 @@ import {
   voiceTranscriptionDeadlineMs
 } from '../helper/voice-transcription-lifecycle.js';
 
-type VoiceIdentity = { ledgerId: string; threadId: string; noteId: string };
+type VoiceIdentity = { projectId?: string; ledgerId: string; threadId: string; noteId: string };
 type Watcher = VoiceIdentity & { timer: ReturnType<typeof setTimeout> | null; finalRead: boolean };
 
 const pollIntervalMs = 2_000;
@@ -19,7 +19,7 @@ const watchers = new Map<string, Watcher>();
 let recoveryListenersInstalled = false;
 
 function watcherKey(input: VoiceIdentity): string {
-  return `${input.ledgerId}:${input.threadId}:${input.noteId}`;
+  return `${input.projectId ?? ''}:${input.ledgerId}:${input.threadId}:${input.noteId}`;
 }
 
 function localNote(input: Pick<VoiceIdentity, 'threadId' | 'noteId'>): Record<string, any> | undefined {
@@ -75,7 +75,7 @@ export async function reconcileVoiceTranscription(input: VoiceIdentity): Promise
     return false;
   }
   const query = new URLSearchParams({ ledgerId: input.ledgerId, threadId: input.threadId, noteId: input.noteId });
-  const response = await fetch(projectScopedRequestPath(`/api/voice-transcription-status?${query.toString()}`), { cache: 'no-store' }).catch(() => undefined);
+  const response = await fetch(projectScopedRequestPath(`/api/voice-transcription-status?${query.toString()}`, input.projectId || String(state.projectId ?? '') || undefined), { cache: 'no-store' }).catch(() => undefined);
   const payload = response?.ok ? await response.json().catch(() => null) : null;
   const serverNote = payload && typeof payload.note === 'object' ? payload.note as Record<string, unknown> : null;
   const applied = serverNote ? applyVoiceServerNote({ ...input, note: serverNote }) : false;
@@ -112,7 +112,7 @@ export function syncVoiceTranscriptionWatchers(): void {
   const activeKeys = new Set<string>();
   for (const note of notes) {
     if (!isPendingVoiceNote(note)) continue;
-    const identity = { ledgerId, threadId, noteId: String(note.id ?? '') };
+    const identity = { projectId: String(state.projectId ?? ''), ledgerId, threadId, noteId: String(note.id ?? '') };
     if (!identity.ledgerId || !identity.noteId) continue;
     activeKeys.add(watcherKey(identity));
     watchVoiceTranscription(identity);

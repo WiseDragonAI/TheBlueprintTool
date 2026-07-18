@@ -43,6 +43,7 @@ export async function requestTranscription(audio: Blob | null, input: VoiceTrans
   try {
     await persistPendingVoiceUpload({
       noteId,
+      projectId: String(state.projectId ?? ''),
       threadId,
       ledgerId: options.ledgerId || currentLedgerStateId(),
       cardId: options.cardId ?? '',

@@ -99,3 +99,25 @@ test('reuses the immutable snapshot until the project-slice fingerprint changes'
   assert.notEqual(changed, first);
   assert.equal(builds, 2);
 });
+
+test('rebuilds an invalidated project snapshot when only task resources changed', () => {
+  let builds = 0;
+  const cache = createFederationTaskReplicaCache({
+    build: (input) => ({
+      version: 1,
+      revision: `revision-${++builds}`,
+      generatedAt: `2026-07-18T00:00:0${builds}.000Z`,
+      project: input.project,
+      controlRoom: { allTasks: [] },
+      state: {},
+      ledgers: {},
+    }),
+  });
+
+  const first = cache.get({ project, projection: projection('unchanged-task-metadata') });
+  cache.invalidate(project.id);
+  const refreshed = cache.get({ project, projection: projection('unchanged-task-metadata') });
+
+  assert.notEqual(refreshed, first);
+  assert.equal(builds, 2);
+});

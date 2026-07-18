@@ -13,11 +13,12 @@ const restoredScopes = new Set<string>();
 
 export async function restorePendingVoiceUploads(threadId: string): Promise<boolean> {
   const ledgerId = currentLedgerStateId();
-  const restoreKey = `${ledgerId}:${threadId}`;
+  const projectId = String(state.projectId ?? '');
+  const restoreKey = `${projectId}:${ledgerId}:${threadId}`;
   if (!ledgerId || !threadId || !state.activeLedger || activeRestores.has(restoreKey) || restoredScopes.has(restoreKey)) return false;
   activeRestores.add(restoreKey);
   try {
-    const entries = await listPendingVoiceUploads({ ledgerId, threadId });
+    const entries = await listPendingVoiceUploads({ projectId, ledgerId, threadId });
     restoredScopes.add(restoreKey);
     if (!entries.length || !state.activeLedger || state.threadId !== threadId || currentLedgerStateId() !== ledgerId) return false;
     const notesByThread = normalizeLedgerNotes(state.activeLedger);

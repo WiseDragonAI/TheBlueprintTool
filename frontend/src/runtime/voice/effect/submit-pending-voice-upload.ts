@@ -19,6 +19,7 @@ export async function submitPendingVoiceUpload(noteId: string): Promise<boolean>
   state.voice.transcriptionStatus = 'uploading voice';
   renderVoiceStatus();
   const upload = await uploadVoiceAudio(pending.audio, {
+    projectId: pending.projectId,
     ledgerId: pending.ledgerId,
     threadId: pending.threadId,
     cardId: pending.cardId,
@@ -69,7 +70,7 @@ export async function submitPendingVoiceUpload(noteId: string): Promise<boolean>
   state.voice.transcriptionStatus = 'idle';
   const scope = activeThreadContentScope();
   if (scope && scope.threadId === pending.threadId) await loadActiveThreadSlice(scope);
-  watchVoiceTranscription({ ledgerId: pending.ledgerId || currentLedgerStateId(), threadId: pending.threadId, noteId });
+  watchVoiceTranscription({ projectId: pending.projectId, ledgerId: pending.ledgerId || currentLedgerStateId(), threadId: pending.threadId, noteId });
   telemetry('voice-upload-accepted', { noteId, threadId: pending.threadId });
   renderVoiceStatus();
   return true;
