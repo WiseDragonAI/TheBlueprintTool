@@ -44,7 +44,7 @@ test('moves a complete master-task zone and preserves unrelated source content',
 
   const dryRun = migrateMasterTasks({ sourceLedger: join(root, 'specs.json'), targetLedger: join(root, 'tasks.json'), write: false });
   assert.deepEqual(dryRun, { ok: true, value: {
-    cards: 2, zones: 1, relationships: 1, cardFiles: 2, threadFiles: 1, queueItems: 1, pipelineRuns: 1,
+    cards: 2, zones: 1, relationships: 1, cardFiles: 2, threadFiles: 1, missingCardFiles: [], missingThreadFiles: [], queueItems: 1, pipelineRuns: 1,
     sourceLedger: join(root, 'specs.json'), targetLedger: join(root, 'tasks.json'), write: false,
   } });
   assert.equal(JSON.parse(readFileSync(join(root, 'specs.json'), 'utf8')).cards.length, 3);
@@ -63,6 +63,33 @@ test('moves a complete master-task zone and preserves unrelated source content',
   assert.equal(readFileSync(join(root, 'threads', 'tasks', 'thread-card-master.md'), 'utf8'), '# OPERATOR\n\nnote');
   assert.equal(JSON.parse(readFileSync(join(root, 'codex-process-queue.json'), 'utf8')).items[0].payload.ledgerId, 'tasks');
   assert.equal(JSON.parse(readFileSync(join(root, 'codex-pipelines.json'), 'utf8')).runs[0].ledgerId, 'tasks');
+});
+
+test('moves ledger records and reports source sidecars that were already missing', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-master-task-missing-sidecars-'));
+  const root = join(workspace, '.decision-os');
+  mkdirSync(root, { recursive: true });
+  const cardReference = '.decision-os/cards/specs/card-master.md';
+  const threadReference = '.decision-os/threads/specs/thread-card-master.md';
+  writeFileSync(join(root, 'specs.json'), JSON.stringify({
+    cards: [{
+      id: 'card-master', title: 'Master', labels: ['master-task'], domainId: 'specs', x: 10, y: 10, w: 100, h: 100,
+      comment: { contentFile: cardReference },
+    }],
+    annotations: [{ id: 'zone-task', x: 0, y: 0, width: 1000, height: 800 }],
+    relationships: [], notes: {}, deletedNoteIds: {},
+    threadFiles: { 'thread-card-master': threadReference },
+  }));
+  writeFileSync(join(root, 'tasks.json'), JSON.stringify({ cards: [], annotations: [], relationships: [], notes: {}, deletedNoteIds: {}, threadFiles: {} }));
+
+  const result = migrateMasterTasks({ sourceLedger: join(root, 'specs.json'), targetLedger: join(root, 'tasks.json'), write: true });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.value.missingCardFiles, [cardReference]);
+  assert.deepEqual(result.value.missingThreadFiles, [threadReference]);
+  const migratedTarget = JSON.parse(readFileSync(join(root, 'tasks.json'), 'utf8'));
+  assert.equal(migratedTarget.cards[0].comment.contentFile, '.decision-os/cards/tasks/card-master.md');
+  assert.equal(migratedTarget.threadFiles['thread-card-master'], '.decision-os/threads/tasks/thread-card-master.md');
 });
 
 test('rejects a relationship that would cross ledger boundaries', () => {
