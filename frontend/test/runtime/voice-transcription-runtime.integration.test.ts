@@ -66,9 +66,9 @@ test('upload-voice-audio posts captured audio to backend upload route', async ()
 
   try {
     state.activeTab = 'specs';
-    const result = await uploadVoiceAudio(new Blob(['abc'], { type: 'audio/webm' }), { ledgerId: 'specs', threadId: 'thread-card-a', cardId: 'card-a', noteId: 'note-voice-1', queueCodex: true });
+    const result = await uploadVoiceAudio(new Blob(['abc'], { type: 'audio/webm' }), { projectId: 'workstation:project-a', ledgerId: 'specs', threadId: 'thread-card-a', cardId: 'card-a', noteId: 'note-voice-1', queueCodex: true });
     assert.deepEqual(result, { ok: true, uploaded: true, configured: true, voiceFileRef: '/tmp/voice.webm', text: '', error: undefined, status: 202 });
-    assert.equal(requested.url, '/api/voice-upload');
+    assert.equal(requested.url, '/p/workstation%3Aproject-a/api/voice-upload');
     assert.equal(requested.init?.method, 'POST');
     assert.equal(requested.init?.headers, undefined);
     const body = requested.init?.body as FormData;
@@ -356,7 +356,9 @@ test('request-transcription signals durable persistence before delayed upload se
     assert.equal(note.voiceFileRef, '/tmp/preserved.webm');
     assert.equal(note.localVoiceUploadId, noteId);
     assert.equal(note.message, 'Voice uploaded; server acceptance failed. Audio is saved locally.');
-    assert.ok(await readPendingVoiceUpload(noteId));
+    const pending = await readPendingVoiceUpload(noteId);
+    assert.ok(pending);
+    assert.equal(pending.projectId, String(state.projectId ?? ''));
     assert.match(state.voice.transcriptionStatus, /^voice upload failed/);
     await retryVoiceTranscription({ threadId: 'thread-card-a', noteId, localVoiceUploadId: noteId });
     assert.equal(uploadCount, 2);
@@ -406,6 +408,32 @@ test('pending voice upload restores the same retryable note after local state is
     clearPendingVoiceUploadMemoryForTest();
     clearPendingVoiceUploadRestoreStateForTest();
     (globalThis as unknown as { document: unknown }).document = previousDocument;
+    state.threadId = '';
+    state.activeLedger = null;
+  }
+});
+
+test('pending voice restoration excludes the same thread identity from another project', async () => {
+  const previousDocument = globalThis.document;
+  try {
+    (globalThis as unknown as { document: unknown }).document = undefined;
+    clearPendingVoiceUploadMemoryForTest();
+    clearPendingVoiceUploadRestoreStateForTest();
+    state.projectId = 'workstation:project-a';
+    state.activeTab = 'specs';
+    state.threadId = 'thread-card-a';
+    state.activeLedger = { notes: { 'thread-card-a': [] } };
+    await persistPendingVoiceUpload({
+      noteId: 'note-other-project', projectId: 'phone:project-a', threadId: 'thread-card-a', ledgerId: 'specs', cardId: 'card-a',
+      audio: new Blob(['other audio'], { type: 'audio/webm' }), createdAt: '2026-07-13T15:49:00.000Z'
+    });
+    assert.equal(await restorePendingVoiceUploads('thread-card-a'), false);
+    assert.deepEqual(state.activeLedger.notes['thread-card-a'], []);
+  } finally {
+    clearPendingVoiceUploadMemoryForTest();
+    clearPendingVoiceUploadRestoreStateForTest();
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+    state.projectId = '';
     state.threadId = '';
     state.activeLedger = null;
   }
