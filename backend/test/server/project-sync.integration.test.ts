@@ -65,7 +65,7 @@ test('exposes origin identity and fixed repository status while protecting feder
     const admission = await admissionResponse.json() as Record<string, any>;
     assert.equal(admissionResponse.status, 202);
     assert.equal(admission.duplicate, false);
-    assert.equal(admission.ledgerId, 'specs');
+    assert.equal(admission.ledgerId, 'tasks');
     assert.match(admission.masterCardId, /^card-project-sync-/);
     assert.match(admission.pipelineRunId, /^codex-pipeline-/);
     const duplicate = await fetch(`${base}/api/project-sync`, {
@@ -76,7 +76,7 @@ test('exposes origin identity and fixed repository status while protecting feder
     assert.equal(duplicate.duplicate, true);
     assert.equal(duplicate.masterCardId, admission.masterCardId);
     assert.equal(duplicate.pipelineRunId, admission.pipelineRunId);
-    const ledger = JSON.parse(readFileSync(join(project, '.decision-os', 'specs.json'), 'utf8')) as Record<string, any>;
+    const ledger = JSON.parse(readFileSync(join(project, '.decision-os', 'tasks.json'), 'utf8')) as Record<string, any>;
     const master = ledger.cards.find((card: Record<string, unknown>) => card.id === admission.masterCardId);
     assert.deepEqual(master.labels, ['master-task', 'synchronization']);
     assert.equal(ledger.relationships.length, 3);

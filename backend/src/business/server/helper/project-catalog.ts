@@ -32,6 +32,7 @@ type ProjectSettings = {
 };
 const skippedDirectories = new Set(['.git', '.decision-os', '.worktrees', 'node_modules']);
 const defaultColors = ['#38d9e8', '#a78bfa', '#fb7185', '#fbbf24', '#34d399', '#60a5fa'];
+export const tasksLedgerId = 'tasks';
 
 function validateProjectCreationInput(nameInput: string, descriptionInput: string): { name: string; description: string } {
   const name = nameInput.trim();
@@ -124,7 +125,7 @@ export function projectFromRegisteredPath(input: { masterRoot: string; entry: Pr
     root,
     decisionOsRoot,
     color: validColor(input.entry.color) ? input.entry.color.toLowerCase() : defaultColors[0],
-    ledgers: ledgersFor(decisionOsRoot),
+    ledgers: ledgersWithTasks(decisionOsRoot),
     available: true,
     diagnostic: '',
   };
@@ -161,6 +162,26 @@ function ledgersFor(decisionOsRoot: string): DecisionOsProject['ledgers'] {
   } catch {
     return [];
   }
+}
+
+export function ensureTasksLedger(decisionOsRoot: string): DecisionOsProject['ledgers'][number] {
+  const existing = ledgersFor(decisionOsRoot).find((ledger) => ledger.id === tasksLedgerId);
+  if (existing) return existing;
+  const created = createLinkedLedger({ decisionOsRoot, title: 'Tasks' });
+  const ledger = ledgersFor(decisionOsRoot).find((entry) => entry.id === tasksLedgerId);
+  if (!ledger || String(created.tab.id ?? '') !== tasksLedgerId) {
+    throw new Error(`Could not create the canonical ${tasksLedgerId} ledger.`);
+  }
+  return ledger;
+}
+
+function ledgersWithTasks(decisionOsRoot: string): DecisionOsProject['ledgers'] {
+  ensureTasksLedger(decisionOsRoot);
+  return ledgersFor(decisionOsRoot);
+}
+
+export function tasksLedgerForProject(project: DecisionOsProject): DecisionOsProject['ledgers'][number] {
+  return project.ledgers.find((ledger) => ledger.id === tasksLedgerId) ?? ensureTasksLedger(project.decisionOsRoot);
 }
 
 export function discoverDecisionOsProjects(input: { masterRoot: string; masterDecisionOsRoot: string; persistIdentities?: boolean }): DecisionOsProject[] {
@@ -260,9 +281,7 @@ export function createDecisionOsProject(input: {
       writeFileSync(resolve(decisionOsRoot, 'state.json'), `${JSON.stringify({ ledgers: [] }, null, 2)}\n`);
       writeFileSync(resolve(decisionOsRoot, 'project.json'), `${JSON.stringify({ id: randomUUID() }, null, 2)}\n`);
     }
-    if (ledgersFor(decisionOsRoot).length === 0) {
-      createLinkedLedger({ decisionOsRoot, title: 'tasks' });
-    }
+    ensureTasksLedger(decisionOsRoot);
     const id = stableProjectId(decisionOsRoot, projectRelativePath);
     return {
       id,
