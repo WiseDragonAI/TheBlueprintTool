@@ -66,6 +66,28 @@ test('merges the federation Queue by rank and newest waiting time instead of own
   ]);
 });
 
+test('changes the projection fingerprint when retained remote replicas change presence', () => {
+  const project = { id: 'project-remote', name: 'Remote project' };
+  const task = { cardId: 'card-remote', projectId: project.id, ledgerId: 'specs', cardStatus: 'backlog', status: 'task-backlog' };
+  const projectPresence = (online: boolean) => federatedControlRoomProjection({
+    localProjection: { fingerprint: 'local', projects: [], queue: [], exec: [], backlog: [], done: [], allTasks: [], diagnostics: [], ledgers: [] },
+    localOwner: { nodeId: 'local-node', nodeLabel: 'Local', remote: false },
+    remoteProjections: [{
+      owner: { nodeId: 'remote-node', nodeLabel: 'Remote', remote: true, online },
+      projection: { fingerprint: 'unchanged-replica', projects: [project], queue: [], exec: [], backlog: [task], done: [], allTasks: [task], diagnostics: [], ledgers: ['Specs'] },
+    }],
+    diagnostics: [],
+  }) as Record<string, any>;
+
+  const offline = projectPresence(false);
+  const online = projectPresence(true);
+
+  assert.notEqual(online.fingerprint, offline.fingerprint);
+  assert.equal(offline.backlog[0].ownerOnline, false);
+  assert.equal(online.backlog[0].ownerOnline, true);
+  assert.equal(offline.backlog[0].status, 'task-backlog', 'retained offline tasks preserve their persisted workflow status');
+});
+
 test('projects one authoritative task for replicas of the same logical project', () => {
   const localTask = { cardId: 'card-1', projectId: 'project-1', ledgerId: 'specs', title: 'Task', cardStatus: 'backlog', status: 'task-backlog' };
   const remoteTask = { ...localTask, cardStatus: 'todo', status: 'task-waiting' };

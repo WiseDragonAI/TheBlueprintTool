@@ -477,10 +477,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     Object.defineProperty(runtime, 'federatedLibrarySyncPromise', { value: run, writable: true, configurable: true, enumerable: false });
     return run;
   };
-  const enqueuePeerProjects = (nodeId = '', priority: 'selected' | 'normal' = 'normal', resource = ''): void => {
+  const enqueuePeerProjects = (nodeId = '', priority: 'selected' | 'normal' = 'normal', resource = '', refreshCurrent = true): void => {
     for (const project of federation?.remoteProjects() ?? []) {
       if (nodeId && project.ownerNodeId !== nodeId) continue;
       federationReplicaStore.setPeer(project.ownerNodeId, project.ownerNodeLabel, project.online);
+      if (!refreshCurrent && federationReplicaStore.replica(project.ownerNodeId, project.localProjectId)) continue;
       federationReplicaStore.enqueue(project.ownerNodeId, project.localProjectId, priority, resource);
     }
   };
@@ -488,13 +489,21 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const nodes = federation?.nodes() ?? [];
     for (const node of nodes) {
       federationReplicaStore.setPeer(node.nodeId, node.nodeLabel, node.online);
-      if ((nodeId && node.nodeId !== nodeId) || !node.online || federationReplicaRuns.has(node.nodeId)) continue;
-      const run = (async () => {
-        for (;;) {
-          const pending = federationReplicaStore.next(node.nodeId);
-          if (!pending) break;
+      if ((nodeId && node.nodeId !== nodeId) || !node.online) continue;
+      for (const pending of federationReplicaStore.due(node.nodeId)) {
+        const runKey = `${node.nodeId}\0${pending.projectId}`;
+        if (federationReplicaRuns.has(runKey)) continue;
+        const run = (async () => {
           try {
-            const result = await federation!.request(node.nodeId, `/api/federation/task-replica?projectId=${encodeURIComponent(pending.projectId)}`);
+            const current = federationReplicaStore.replica(node.nodeId, pending.projectId);
+            const revision = current?.revision ? `&revision=${encodeURIComponent(current.revision)}` : '';
+            const result = await federation!.request(node.nodeId, `/api/federation/task-replica?projectId=${encodeURIComponent(pending.projectId)}${revision}`);
+            if (result.status === 304 && current) {
+              federationReplicaStore.complete(node.nodeId, pending.projectId, current);
+              federation!.publishReplicaAcknowledgement(node.nodeId, pending.projectId, current.revision);
+              for (const client of globalContentEventClients) client.write(`event: federation-replica-change\ndata: ${JSON.stringify({ nodeId: node.nodeId, projectId: pending.projectId, revision: current.revision })}\n\n`);
+              return;
+            }
             const snapshot = parseFederationResponse<FederationReplicaSnapshot>(result, `${node.nodeLabel} task replica`);
             if (snapshot.version !== 1 || !snapshot.revision) throw new Error(`${node.nodeLabel} returned an invalid task replica.`);
             federationReplicaStore.complete(node.nodeId, pending.projectId, snapshot);
@@ -502,14 +511,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             for (const client of globalContentEventClients) client.write(`event: federation-replica-change\ndata: ${JSON.stringify({ nodeId: node.nodeId, projectId: pending.projectId, revision: snapshot.revision })}\n\n`);
           } catch (error) {
             federationReplicaStore.fail(node.nodeId, pending.projectId, error instanceof Error ? error.message : 'Task replica synchronization failed.');
-            break;
           }
-        }
-      })().finally(() => {
-        federationReplicaRuns.delete(node.nodeId);
-        if (federationReplicaStore.next(node.nodeId)) scheduleFederatedTaskReplicas(node.nodeId);
-      });
-      federationReplicaRuns.set(node.nodeId, run);
+        })().finally(() => {
+          federationReplicaRuns.delete(runKey);
+          if (federationReplicaStore.next(node.nodeId)) scheduleFederatedTaskReplicas(node.nodeId);
+        });
+        federationReplicaRuns.set(runKey, run);
+      }
     }
   };
   federation = createFederationNodeConnector({
@@ -783,7 +791,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       return;
     }
     if (!projectScope && url === '/api/federation/task-replica' && request.method === 'GET') {
-      const projectId = new URL(request.url ?? '/', 'http://127.0.0.1').searchParams.get('projectId') ?? '';
+      const replicaUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
+      const projectId = replicaUrl.searchParams.get('projectId') ?? '';
       const project = projects.find((entry) => entry.id === projectId && entry.available);
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
@@ -793,7 +802,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         return;
       }
       const localProjection = controlRoomProjectionStore.get(projects.filter((entry) => entry.available));
-      response.end(JSON.stringify(federationTaskReplicaCache.get({ project, projection: localProjection as unknown as AnyRecord })));
+      const snapshot = federationTaskReplicaCache.get({ project, projection: localProjection as unknown as AnyRecord });
+      if (replicaUrl.searchParams.get('revision') === snapshot.revision) {
+        response.statusCode = 304;
+        response.end();
+        return;
+      }
+      response.end(JSON.stringify(snapshot));
       return;
     }
     if (!projectScope && url === '/api/federation/skills-manifest' && request.method === 'GET') {
@@ -1905,7 +1920,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   }, 1_000);
   codexQueueScanTimer.unref?.();
   const federationReplicaTimer = setInterval(() => {
-    enqueuePeerProjects();
+    // WHAT: Retry missing and failed replicas without invalidating every current hash-confirmed snapshot.
+    // WHY: Periodic unconditional enqueueing made healthy peers appear permanently synchronizing.
+    enqueuePeerProjects('', 'normal', '', false);
     scheduleFederatedTaskReplicas();
   }, 15_000);
   federationReplicaTimer.unref?.();
