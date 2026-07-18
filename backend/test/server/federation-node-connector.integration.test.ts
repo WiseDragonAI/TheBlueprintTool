@@ -124,6 +124,56 @@ test('stops retrying when the relay rejects node authentication', async () => {
   }
 });
 
+test('bounds internal federation requests and cancels a missing owner response', async () => {
+  const relayHttp = createServer();
+  const relay = new WebSocketServer({ noServer: true });
+  let cancelledRequestId = '';
+  relayHttp.on('upgrade', (request, socket, head) => relay.handleUpgrade(request, socket, head, (webSocket) => {
+    webSocket.on('message', (data) => {
+      const frame = JSON.parse(data.toString()) as Frame;
+      if (frame.type === 'manifest') {
+        webSocket.send(JSON.stringify({
+          version: 1,
+          type: 'catalog',
+          nodes: [
+            { nodeId: 'requester', online: true, projects: [] },
+            { nodeId: 'owner', online: true, projects: [] },
+          ],
+        }));
+      }
+      if (frame.type === 'cancel') cancelledRequestId = String(frame.requestId ?? '');
+    });
+  }));
+  relayHttp.listen(0, '127.0.0.1');
+  await once(relayHttp, 'listening');
+  const connector = createFederationNodeConnector({
+    settings: {
+      federationRelayUrl: `http://127.0.0.1:${(relayHttp.address() as AddressInfo).port}`,
+      federationId: 'proof',
+      federationNodeId: 'requester',
+      federationNodeCredential: 'credential',
+    },
+    localProjects: () => [],
+    localServerUrl: () => 'http://127.0.0.1:1',
+    internalRequestTimeoutMs: 25,
+  });
+  connector.start();
+  try {
+    await waitFor(async () => connector.status().peers.some((peer) => peer.nodeId === 'owner') ? true : null);
+    const response = await connector.request('owner', '/held');
+    assert.equal(response.status, 504);
+    assert.equal(JSON.parse(response.body.toString('utf8')).error, 'federation_request_timeout');
+    await waitFor(async () => cancelledRequestId ? true : null);
+    assert.ok(cancelledRequestId);
+    assert.equal(connector.status().internalRequestTimeoutMs, 25);
+  } finally {
+    connector.stop();
+    relay.close();
+    relayHttp.close();
+    await once(relayHttp, 'close');
+  }
+});
+
 test('two Decision OS nodes materialize complete libraries locally and retain them after an owner disconnects', async () => {
   const previousCodexHome = process.env.CODEX_HOME;
   const codexHome = mkdtempSync(join(tmpdir(), 'decision-os-federation-codex-home-'));

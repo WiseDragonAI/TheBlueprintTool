@@ -61,7 +61,7 @@ import { ledgerCanvasProjection, ledgerCardProjection, ledgerNavigationProjectio
 import { ensureProjectsCanvasDocument } from './ensure-projects-canvas-document.js';
 import { createFederationNodeConnector } from '../../federation/helper/federation-node-connector.js';
 import { createFederationReplicaStore, type FederationReplicaSnapshot } from '../../federation/helper/federation-replica-store.js';
-import { buildFederationTaskReplica } from '../../federation/helper/federation-task-replica.js';
+import { createFederationTaskReplicaCache } from '../../federation/helper/federation-task-replica.js';
 import {
   exportFederatedPipelineSnapshot,
   exportFederatedSkillManifest,
@@ -396,6 +396,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   });
   const projectCatalog = () => projectCatalogStore.projects();
   const federationReplicaStore = createFederationReplicaStore({ decisionOsRoot: masterDecisionOsRoot });
+  const federationTaskReplicaCache = createFederationTaskReplicaCache();
   const federationReplicaRuns = new Map<string, Promise<void>>();
   let federationServerPort = port;
   let federationSyncRequested = false;
@@ -650,8 +651,22 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const localOwner = federation.localOwner();
       const requestUrl = new URL(request.url ?? '/api/control-room', 'http://127.0.0.1');
       const remoteDiagnostics: AnyRecord[] = [];
+      const remoteProjectIdentity = new Map(federation.remoteProjects().map((project) => [
+        `${project.ownerNodeId}\0${project.localProjectId}`,
+        project.originFingerprint,
+      ]));
       const remoteProjections = requestUrl.searchParams.get('localOnly') === '1' ? [] : federationReplicaStore.peerProjections().map((entry) => ({
-        projection: entry.projection,
+        projection: {
+          ...entry.projection,
+          projects: (Array.isArray(entry.projection.projects) ? entry.projection.projects : []).map((project) => {
+            const record = project && typeof project === 'object' ? project as AnyRecord : {};
+            const projectId = String(record.id ?? '');
+            return {
+              ...record,
+              originFingerprint: remoteProjectIdentity.get(`${entry.nodeId}\0${projectId}`) ?? record.originFingerprint ?? '',
+            };
+          }),
+        },
         owner: { nodeId: entry.nodeId, nodeLabel: entry.nodeLabel, remote: true, online: federation.nodes().find((node) => node.nodeId === entry.nodeId)?.online !== false },
       }));
       const publicProjection = federatedControlRoomProjection({
@@ -769,7 +784,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         return;
       }
       const localProjection = controlRoomProjectionStore.get(projects.filter((entry) => entry.available));
-      response.end(JSON.stringify(buildFederationTaskReplica({ project, projection: localProjection as unknown as AnyRecord })));
+      response.end(JSON.stringify(federationTaskReplicaCache.get({ project, projection: localProjection as unknown as AnyRecord })));
       return;
     }
     if (!projectScope && url === '/api/federation/skills-manifest' && request.method === 'GET') {

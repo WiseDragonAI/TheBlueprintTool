@@ -11,6 +11,7 @@ import { readCodexPipelineStore } from '../../codex/helper/codex-pipeline-store.
 import { readCodexProcessQueue } from '../../codex/helper/codex-process-queue.js';
 import { codexRunExecutions } from '../../codex/helper/codex-run-segment-marker.js';
 import { readCardSkillRunEventLines } from '../../codex/helper/read-card-skill-run-event-lines.js';
+import { readRepositoryOriginIdentity } from '../../project-sync/helper/repository-sync-status.js';
 import type { DecisionOsProject } from './project-catalog.js';
 import { compareControlRoomQueueTasks } from './control-room-queue-order.js';
 
@@ -20,7 +21,7 @@ type Projection = AnyRecord & { schemaVersion: number; projectorVersion: string;
 type ProjectSlice = { projectId: string; project: AnyRecord; tasks: AnyRecord[]; dependencies: Dependency[]; fingerprint: string };
 
 const schemaVersion = 5;
-const projectorVersion = 'control-room-v8-execution-fingerprint';
+const projectorVersion = 'control-room-v9-logical-project-identity';
 
 function records(value: unknown): AnyRecord[] {
   return Array.isArray(value) ? value.filter((entry): entry is AnyRecord => Boolean(entry && typeof entry === 'object')) : [];
@@ -215,14 +216,23 @@ function buildProjectSlice(input: { project: DecisionOsProject; runtime: AnyReco
       }
   }
   dependencies.sort((left, right) => left.path.localeCompare(right.path));
+  let originFingerprint = '';
+  try { originFingerprint = readRepositoryOriginIdentity(project.root).originFingerprint; } catch { /* Non-Git projects retain node-local identity. */ }
   const fingerprint = createHash('sha256').update(JSON.stringify({
     projectId: project.id,
+    originFingerprint,
     schemaVersion,
     projectorVersion,
     dependencies: dependencies.map(({ path, sha256 }) => ({ path, sha256 })),
     tasks,
   })).digest('hex');
-  return { projectId: project.id, project: { id: project.id, name: project.name, color: project.color }, tasks, dependencies, fingerprint };
+  return {
+    projectId: project.id,
+    project: { id: project.id, name: project.name, color: project.color, ledgers: project.ledgers, originFingerprint },
+    tasks,
+    dependencies,
+    fingerprint,
+  };
 }
 
 function aggregateProjection(input: { slices: ProjectSlice[]; revision: number; stale?: boolean; error?: string }): Projection {
