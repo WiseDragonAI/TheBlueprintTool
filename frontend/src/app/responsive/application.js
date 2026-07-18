@@ -1358,7 +1358,9 @@ function taskRow(task, tab, index) {
         ? executionAge(task.executionSince)
         : waitingAge(task.waitingSince);
   const process = task.codexProcessing ? ` · Codex ${task.codexRunId}` : '';
-  const taskOwner = task.ownerNodeLabel || task.ownerNodeId || state.projects.find((project) => project.id === task.projectId)?.ownerNodeLabel || 'This server';
+  const taskOwner = executing
+    ? task.executionNodeLabel || task.executionNodeId || task.ownerNodeLabel || task.ownerNodeId || 'This server'
+    : task.ownerNodeLabel || task.ownerNodeId || state.projects.find((project) => project.id === task.projectId)?.ownerNodeLabel || 'This server';
   if (summary.querySelector('.task-meta')) {
     summary.querySelector('.task-meta').textContent = `${task.projectName} · ${taskOwner} · ${task.ledger} · ${age}${process}`;
   }
@@ -2017,7 +2019,6 @@ function renderCard(card) {
     ledgerTitle: state.ledgers.find((entry) => entry.id === state.activeLedgerId)?.title ?? state.activeLedgerId,
     markdown,
     cardStatus: card.status,
-    executionStatus: card.executionStatus,
     labels: card.labels ?? [],
     cards: state.ledger?.cards ?? [],
     relationships: state.ledger?.relationships ?? []

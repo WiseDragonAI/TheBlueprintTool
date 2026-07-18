@@ -79,8 +79,6 @@ export function createCodexPipelineStepCards(input: {
   const firstSkill = input.run.steps[0]?.skills[0];
   input.source.codexQueuedPipelineRunId = input.run.id;
   input.source.codexQueuedRunId = firstSkill?.runId ?? '';
-  input.source.executionStatus = 'pending';
-  input.source.executionRunId = input.run.id;
   stripHydratedThreadNotes(input.context.ledger);
   writeFileSync(input.context.ledgerPath, JSON.stringify(input.context.ledger, null, 2), 'utf8');
   return null;

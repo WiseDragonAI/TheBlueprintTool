@@ -73,8 +73,6 @@ export function buildFederationTaskReplica(input: { project: DecisionOsProject; 
         codexRunId: card.codexRunId ?? null,
         codexRunModel: card.codexRunModel ?? null,
         codexRunEffort: card.codexRunEffort ?? null,
-        executionStatus: card.executionStatus ?? null,
-        executionRunId: card.executionRunId ?? null,
       })),
     };
     const cards = Object.fromEntries([...cardIds].flatMap((cardId) => {

@@ -79,14 +79,6 @@ function updateRuntimeExecution(runtime: AnyRecord, runId: string, executionId: 
   return true;
 }
 
-function projectActiveExecution(ledgerPath: string, cardId: string, runId: string, executionId: string): void {
-  const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord & { cards?: AnyRecord[] };
-  const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
-  if (!card || String(card.codexActiveRunId ?? '') !== runId) return;
-  card.codexActiveExecutionId = executionId;
-  writeFileSync(ledgerPath, `${JSON.stringify(ledger, null, 2)}\n`, 'utf8');
-}
-
 function attachRuntimeRunChild(runtime: AnyRecord, runId: string, child: ChildProcess): void {
   const run = runtimeRuns(runtime)[runId];
   if (!run) return;
@@ -282,7 +274,6 @@ export async function startThreadCodexProcessController(input: { action_payload?
     codexModel: command.model,
     codexEffort: command.effort,
     ownership: 'thread',
-    executionStatus: queueDispatch ? 'running' : 'pending',
   });
   stripHydratedThreadNotes(ledger);
   writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2), 'utf8');
@@ -337,7 +328,6 @@ export async function startThreadCodexProcessController(input: { action_payload?
     const stdoutByteOffset = existsSync(stdoutFile) ? statSync(stdoutFile).size : 0;
     const stderrByteOffset = existsSync(stderrFile) ? statSync(stderrFile).size : 0;
     const attemptStartedAt = new Date().toISOString();
-    projectActiveExecution(ledgerPath, cardId, runId, executionId);
     const child = spawn(attemptCommand.command, attemptCommand.args, {
       cwd: workspaceRoot,
       env: decisionOsCodexEnvironment({ runtime, decisionOsRoot, ledgerFile: ledgerPath }),

@@ -130,8 +130,8 @@ test('saved pipeline creates all step cards and runs five isolated skills strict
     const queuedPipelineRunId = queuedBody.run.id as string;
     const pendingLedger = JSON.parse(readFileSync(join(decisionOsRoot, 'specs.json'), 'utf8')) as Record<string, any>;
     const pendingSourceCard = pendingLedger.cards.find((card: Record<string, any>) => card.id === 'source-card');
-    assert.equal(pendingSourceCard.executionStatus, 'pending');
-    assert.equal(pendingSourceCard.executionRunId, queuedPipelineRunId);
+    assert.equal(pendingSourceCard.executionStatus, undefined);
+    assert.equal(pendingSourceCard.executionRunId, undefined);
     assert.equal(pendingSourceCard.codexQueuedPipelineRunId, queuedPipelineRunId);
 
     const completed = await waitFor(() => {

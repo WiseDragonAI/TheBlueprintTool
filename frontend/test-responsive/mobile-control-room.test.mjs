@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { executionAge, executionStopwatch, cardCodexRunId, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withExecutionStatus, withQueueRank } from '../src/app/responsive/control-room.js';
+import { executionStopwatch, cardCodexRunId, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge, withQueueRank } from '../src/app/responsive/control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from '../src/app/responsive/control-room-route.js';
 
 const [mobile, html, styles, bootApplication, embla, panzoom, mediaRenderer] = await Promise.all([
@@ -160,7 +160,7 @@ test('anchors an executing pipeline task to its logical launch instead of a reco
   assert.doesNotMatch(mobile, /api\/codex\/skills\/runs\/\$\{encodeURIComponent\(runId\)\}/);
 });
 
-test('keeps a direct Codex task anchored to its persisted logical launch across process recovery', () => {
+test('does not use persisted task metadata as the Codex execution timer', () => {
   const logicalLaunch = '2026-07-10T10:30:00.000Z';
   const markdown = task().markdown.replace('#task-waiting', '#task-execution').replace('Waiting since:', `Active since: ${logicalLaunch}\nWaiting since:`);
   const parsed = parseMasterTaskMarkdown(task({
@@ -168,8 +168,8 @@ test('keeps a direct Codex task anchored to its persisted logical launch across 
     codexRunId: 'run-current',
     codexStatus: 'running'
   }));
-  assert.equal(parsed.executionSince, logicalLaunch);
-  assert.equal(executionStopwatch(parsed.executionSince, Date.parse('2026-07-10T10:37:12.000Z')), '07:12');
+  assert.equal(parsed.executionSince, '');
+  assert.equal(Number.isNaN(parsed.executionTime), true);
   assert.doesNotMatch(mobile, /codexStartedAt = String\(payload\.startedAt/);
 });
 
@@ -186,16 +186,14 @@ test('shows queued Codex pipelines in Exec with their one-based position', () =>
   assert.match(styles, /\.task-queue-position \{[^}]*white-space: nowrap/);
 });
 
-test('keeps persisted pending execution in Exec before queue position hydration', () => {
+test('ignores persisted pending execution without a queue observation', () => {
   const result = deriveControlRoom([task({
     executionStatus: 'pending',
     codexStatus: 'unknown',
     codexQueuePosition: null,
   })]);
-  assert.equal(result.queue.length, 0);
-  assert.equal(result.exec.length, 1);
-  assert.equal(result.exec[0].executionStatus, 'pending');
-  assert.equal(result.exec[0].codexQueuePosition, null);
+  assert.equal(result.queue.length, 1);
+  assert.equal(result.exec.length, 0);
 });
 
 test('Control Room resolves Process Card runs through the shared current-run pointer', () => {
@@ -220,17 +218,6 @@ test('ignores task tag examples in ordinary Markdown prose', () => {
   assert.equal(parsed.valid, false);
   assert.equal(parsed.diagnostics.includes('missing master-task label'), true);
   assert.equal(deriveControlRoom([{ ...task(), markdown: parsed.markdown }]).diagnostics.length, 0);
-});
-
-test('transitions a canonical master task to execution with its launch timestamp', () => {
-  const startedAt = '2026-07-12T06:35:14.888Z';
-  const markdown = withExecutionStatus(task().markdown, startedAt);
-  assert.match(markdown, /^#master-task #task-execution$/m);
-  assert.match(markdown, /^Active since: 2026-07-12T06:35:14.888Z$/m);
-  const parsed = parseMasterTaskMarkdown(task({ markdown }));
-  assert.equal(parsed.valid, true);
-  assert.equal(parsed.executionSince, startedAt);
-  assert.equal(executionAge(startedAt, Date.parse('2026-07-12T06:40:14.888Z')), '5m executing');
 });
 
 test('reports invalid canonical markdown and rewrites queue rank in place', () => {
