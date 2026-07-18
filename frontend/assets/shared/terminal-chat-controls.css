@@ -23,7 +23,7 @@
   }
   .agent-chat .voice-cancel-control { grid-column: 1; grid-row: 1; }
   .agent-chat .wave-panel { grid-column: 2 / 4; grid-row: 1; }
-  .agent-chat .meter-panel { grid-column: 4; grid-row: 1; }
+  .agent-chat .meter-panel { grid-column: 4; grid-row: 1 / 3; }
   .agent-chat .voice-action { display: inline-flex; grid-row: 2; width: 100%; }
   .agent-chat .voice-action--send { grid-column: 1; }
   .agent-chat .voice-action--run { grid-column: 2; }
