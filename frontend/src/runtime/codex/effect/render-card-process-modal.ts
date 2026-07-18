@@ -14,7 +14,7 @@ import { refreshRuntimeState } from '../../refresh/controller/refresh-runtime-st
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { processCardSkillController } from '../controller/process-card-skill-controller.js';
-import { visibleCodexLibraryRecords } from '../component/render-codex-library.js';
+import { renderCodexLibrary } from '../component/render-codex-library.js';
 import { renderSkillLibraryItemContent } from '../component/render-skill-library-item-content.js';
 import { colorForSkillTag, tagsForSkill } from '../helper/skill-library-presentation.js';
 import { codexEffortOptions, codexModelOptions } from '../helper/codex-run-options.js';
@@ -160,36 +160,6 @@ function pipelineCanRun(pipeline: CodexPipeline): boolean {
   });
 }
 
-function filteredPipelines(): CodexPipeline[] {
-  return visibleCodexLibraryRecords(
-    processModalState.pipelines.map((pipeline) => ({
-      ...pipeline,
-      description: pipeline.purpose,
-      tags: pipelineCategories(pipeline),
-      searchText: pipelineSkillNames(pipeline).join(' '),
-    })),
-    { query: processModalState.query, projectId: 'All', tag: processModalState.selectedCategory },
-  );
-}
-
-function filteredSkills(): CodexSkillSummary[] {
-  return visibleCodexLibraryRecords(
-    processModalState.skills.map((skill) => ({ ...skill, id: skill.name, tags: tagsForSkill(skill) })),
-    { query: processModalState.query, projectId: 'All', tag: processModalState.selectedCategory },
-    true,
-  );
-}
-
-function availableCategories(): string[] {
-  const categories = new Set<string>();
-  if (processModalState.mode === 'skills') {
-    processModalState.skills.forEach((skill) => tagsForSkill(skill).forEach((tag) => categories.add(tag)));
-  } else {
-    processModalState.pipelines.forEach((pipeline) => pipelineCategories(pipeline).forEach((category) => categories.add(category)));
-  }
-  return ['All', ...[...categories].sort((left, right) => left.localeCompare(right))];
-}
-
 function renderTabs(): HTMLElement {
   const tabs = document.createElement('nav');
   tabs.className = 'process-mode-tabs';
@@ -213,41 +183,6 @@ function renderTabs(): HTMLElement {
     tabs.append(tab);
   }
   return tabs;
-}
-
-function renderSearch(): HTMLInputElement {
-  const search = document.createElement('input');
-  search.className = 'skill-search process-search';
-  search.type = 'search';
-  search.placeholder = processModalState.mode === 'pipelines' ? 'Search pipelines' : 'Search skills';
-  search.setAttribute('aria-label', search.placeholder);
-  search.value = processModalState.query;
-  search.addEventListener('input', () => {
-    processModalState.query = search.value;
-    renderCardProcessModal();
-    processModal?.querySelector<HTMLInputElement>('.process-search')?.focus();
-  });
-  return search;
-}
-
-function renderCategoryFilters(): HTMLElement {
-  const filters = document.createElement('div');
-  filters.className = 'skill-category-filters process-category-filters';
-  filters.setAttribute('role', 'group');
-  filters.setAttribute('aria-label', `Filter ${processModalState.mode} by category`);
-  for (const category of availableCategories()) {
-    const selected = processModalState.selectedCategory === category;
-    const filter = button(category, () => {
-      processModalState.selectedCategory = category;
-      renderCardProcessModal();
-      processModal?.querySelector<HTMLButtonElement>(`.process-category-filters [data-process-category="${category}"]`)?.focus();
-    }, `skill-category-filter${selected ? ' is-selected' : ''}`);
-    filter.dataset.processCategory = category;
-    filter.style.setProperty('--skill-category-color', category === 'All' ? '#cbd5e1' : colorForSkillTag(category));
-    filter.setAttribute('aria-pressed', String(selected));
-    filters.append(filter);
-  }
-  return filters;
 }
 
 function renderPipelineResult(pipeline: CodexPipeline): HTMLButtonElement {
@@ -320,48 +255,71 @@ function renderSkillResult(skill: CodexSkillSummary): HTMLElement {
   return row;
 }
 
-function renderResults(): HTMLElement {
+function renderLibrarySurface(): { controls: HTMLElement; panels: HTMLElement[] } {
+  const controls = document.createElement('div');
+  controls.className = 'process-library-controls';
   const results = document.createElement('section');
   results.className = 'process-results';
   results.id = `process-panel-${processModalState.mode}`;
   results.setAttribute('role', 'tabpanel');
   results.setAttribute('aria-labelledby', `process-tab-${processModalState.mode}`);
-  results.setAttribute('aria-label', processModalState.mode === 'pipelines' ? 'Pipeline results' : 'Skill results');
+  const filters = { query: processModalState.query, projectId: 'All', tag: processModalState.selectedCategory };
+  const onFiltersChanged = (next: typeof filters): void => {
+    processModalState.query = next.query;
+    processModalState.selectedCategory = next.tag;
+    renderCardProcessModal();
+    processModal?.querySelector<HTMLInputElement>('.process-search')?.focus();
+  };
+  const synchronize = (): void => { void resynchronizeProcessLibraries(); };
   const loading = processModalState.mode === 'pipelines' ? processModalState.loadingPipelines : processModalState.loadingSkills;
-  if (loading) {
-    const message = document.createElement('p');
-    message.className = 'codex-empty-state';
-    message.textContent = `Loading ${processModalState.mode}…`;
-    results.append(message);
-    return results;
-  }
   if (processModalState.mode === 'pipelines') {
-    const pipelines = filteredPipelines();
-    if (pipelines.length > 0) results.replaceChildren(...pipelines.map(renderPipelineResult));
-    else {
-      const empty = document.createElement('div');
-      empty.className = 'codex-empty-state';
-      const message = document.createElement('p');
-      message.textContent = processModalState.pipelines.length === 0 ? 'No saved pipelines yet.' : 'No matching pipelines.';
-      empty.replaceChildren(message, button('Create pipeline', () => editProcessPipeline(), 'primary-action'));
-      results.append(empty);
+    const records = processModalState.pipelines.map((pipeline) => ({
+      ...pipeline,
+      description: pipeline.purpose,
+      tags: pipelineCategories(pipeline),
+      searchText: pipelineSkillNames(pipeline).join(' '),
+    }));
+    renderCodexLibrary<CodexPipeline & { description: string; tags: string[]; searchText: string }>({
+      records: loading ? [] : records,
+      projects: [],
+      filters,
+      controlsHost: controls,
+      resultsHost: results,
+      selectedId: processModalState.selectedPipelineId,
+      emptyMessage: loading ? 'Loading pipelines…' : records.length === 0 ? 'No saved pipelines yet.' : 'No matching pipelines.',
+      resultCountLabel: 'pipeline results',
+      synchronizing: processModalState.synchronizingLibraries,
+      onSynchronize: synchronize,
+      renderRecord: renderPipelineResult,
+      onFiltersChanged,
+    });
+    if (!loading && results.dataset.resultCount === '0' && records.length === 0) {
+      results.append(button('Create pipeline', () => editProcessPipeline(), 'primary-action'));
     }
   } else {
-    const skills = filteredSkills();
-    if (skills.length > 0) results.replaceChildren(...skills.map(renderSkillResult));
-    else {
-      const empty = document.createElement('p');
-      empty.className = 'codex-empty-state';
-      empty.textContent = processModalState.skills.length === 0 ? 'No skills are available.' : 'No matching skills.';
-      results.append(empty);
-    }
+    const records = processModalState.skills.map((skill) => ({ ...skill, id: skill.name, tags: tagsForSkill(skill) }));
+    renderCodexLibrary<CodexSkillSummary & { id: string; tags: string[] }>({
+      records: loading ? [] : records,
+      projects: [],
+      filters,
+      controlsHost: controls,
+      resultsHost: results,
+      selectedId: processModalState.selectedSkillName,
+      favoriteFirst: true,
+      emptyMessage: loading ? 'Loading skills…' : records.length === 0 ? 'No skills are available.' : 'No matching skills.',
+      resultCountLabel: 'skill results',
+      synchronizing: processModalState.synchronizingLibraries,
+      onSynchronize: synchronize,
+      renderRecord: renderSkillResult,
+      onFiltersChanged,
+    });
   }
-  return results;
-}
-
-function renderProcessPanels(): HTMLElement[] {
-  return (['pipelines', 'skills'] as const).map((mode) => {
-    if (mode === processModalState.mode) return renderResults();
+  const search = controls.querySelector<HTMLInputElement>('.codex-library-query');
+  if (search) search.className = `${search.className} process-search`;
+  const categoryFilters = controls.querySelector<HTMLElement>('.codex-library-tag-filters');
+  if (categoryFilters) categoryFilters.className = `${categoryFilters.className} process-category-filters`;
+  const panels = (['pipelines', 'skills'] as const).map((mode) => {
+    if (mode === processModalState.mode) return results;
     const panel = document.createElement('section');
     panel.className = 'process-results';
     panel.id = `process-panel-${mode}`;
@@ -370,6 +328,7 @@ function renderProcessPanels(): HTMLElement[] {
     panel.setAttribute('aria-labelledby', `process-tab-${mode}`);
     return panel;
   });
+  return { controls, panels };
 }
 
 function runSelect(input: {
@@ -512,28 +471,21 @@ export function renderCardProcessModal(): void {
   subtitle.className = 'codex-modal-subtitle';
   subtitle.textContent = 'Run a reusable step pipeline or process this card with one skill.';
   copy.replaceChildren(kicker, title, subtitle);
-  const synchronize = button(
-    processModalState.synchronizingLibraries ? 'Synchronizing…' : 'Resynchronize',
-    () => { void resynchronizeProcessLibraries(); },
-    'ghost-button',
-    'process-resynchronize',
-  );
-  synchronize.disabled = processModalState.synchronizingLibraries;
   const close = button('×', closeCardProcessModal, 'plain-close', 'process-head-close');
   close.setAttribute('aria-label', 'Close Process card');
   const headActions = document.createElement('div');
   headActions.className = 'codex-head-actions';
-  headActions.replaceChildren(synchronize, close);
+  headActions.replaceChildren(close);
   head.replaceChildren(copy, headActions);
-  const controls = renderDirectRunControls();
+  const library = renderLibrarySurface();
+  const runControls = renderDirectRunControls();
   processModal.replaceChildren(
     head,
     renderTabs(),
-    renderSearch(),
-    renderCategoryFilters(),
-    ...(controls ? [controls] : []),
+    library.controls,
+    ...(runControls ? [runControls] : []),
     renderFeedback(),
-    ...renderProcessPanels(),
+    ...library.panels,
     renderActions(),
   );
   if (focusKey) {
