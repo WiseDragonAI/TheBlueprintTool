@@ -19,11 +19,8 @@ function text(value: unknown): string {
 }
 
 function logicalProjectKey(project: AnyRecord): string {
-  const originFingerprint = text(project.originFingerprint).trim();
   const localProjectId = text(project.localProjectId).trim();
-  return originFingerprint && localProjectId
-    ? `repository:${originFingerprint}:${localProjectId}`
-    : `node:${text(project.ownerNodeId)}:${localProjectId}`;
+  return localProjectId ? `project:${localProjectId}` : `node:${text(project.ownerNodeId)}`;
 }
 
 function taskSemanticFingerprint(task: AnyRecord): string {
