@@ -12,6 +12,7 @@ export function admitProjectSyncMasterTask(input: {
   sourceProjectName: string;
   originFingerprint: string;
   syncId: string;
+  waitingSince: string;
 }): { ledgerId: string; masterCardId: string; zoneId: string } {
   const ledger = input.project.ledgers[0];
   if (!ledger) throw new Error('The initiating project has no ledger for the synchronization task.');
@@ -48,6 +49,8 @@ export function admitProjectSyncMasterTask(input: {
       h: 300,
       comment: {
         what: [
+          `Waiting since: ${input.waitingSince}`,
+          '',
           '## A. Synchronization',
           '',
           `1. **Sync ID:** \`${input.syncId}\`.`,
