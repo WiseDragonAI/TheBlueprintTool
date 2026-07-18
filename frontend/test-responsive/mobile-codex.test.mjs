@@ -5,12 +5,13 @@ import test from 'node:test';
 import { setMobileCodexView } from '../src/app/responsive/codex-view.js';
 
 const root = new URL('../', import.meta.url);
-const [html, script, styles, mobile, sharedRow] = await Promise.all([
+const [html, script, styles, mobile, sharedRow, sharedLibrary] = await Promise.all([
   readFile(new URL('index.html', root), 'utf8'),
   readFile(new URL('src/app/responsive/codex.js', root), 'utf8'),
   readFile(new URL('assets/application.css', root), 'utf8'),
   readFile(new URL('src/app/responsive/application.js', root), 'utf8'),
   readFile(new URL('../frontend/src/runtime/codex/component/render-skill-library-item-content.ts', root), 'utf8'),
+  readFile(new URL('../frontend/src/runtime/codex/component/render-codex-library.ts', root), 'utf8'),
 ]);
 
 test('mobile card detail exposes processing and both process libraries', () => {
@@ -117,9 +118,9 @@ test('library surfaces expose search, project filters, tag filters, and clearing
   assert.match(html, /class="pipelines-search"/);
   assert.match(html, /class="pipelines-project-filters codex-filter-row"/);
   assert.match(html, /class="pipelines-tag-filters codex-filter-row"/);
-  assert.match(script, /state\.projectFilter !== 'All'/);
-  assert.match(script, /state\.tagFilter !== 'All'/);
-  assert.match(script, /state\.query\.trim\(\)\.toLowerCase\(\)/);
+  assert.match(sharedLibrary, /filters\.projectId !== 'All'/);
+  assert.match(sharedLibrary, /filters\.tag !== 'All'/);
+  assert.match(sharedLibrary, /filters\.query\.trim\(\)\.toLowerCase\(\)/);
   assert.match(styles, /\.codex-filter-row \{[^}]*overflow-x: auto/);
 });
 
@@ -143,11 +144,11 @@ test('pipeline library entries use the shared card surface with ownership color'
 });
 
 test('skill libraries share favorite ordering, colored categories, and scope-specific detail actions', () => {
-  assert.match(script, /sortSkillsByFavorite\(filtered\)/);
+  assert.match(sharedLibrary, /favoriteOrder/);
   assert.match(script, /renderSkillLibraryItemContent\(record\)/);
   assert.match(script, /document\.createElement\('article'\); card\.className = 'codex-list-card'/);
   assert.match(script, /card\.append\(node\); return card/);
-  assert.match(script, /decorateSkillCategoryLabel\(chip, value\.category\)/);
+  assert.match(sharedLibrary, /decorateSkillCategoryLabel\(chip, tag\)/);
   assert.match(script, /state\.libraryScope === 'global'/);
   assert.match(script, /record\.favorite \? '★' : '☆'/);
   assert.match(script, /'Remove from favorites' : 'Add to favorites'/);
@@ -185,6 +186,19 @@ test('skill libraries share favorite ordering, colored categories, and scope-spe
   assert.match(styles, /\.skill-detail-scroll \{[^}]*overflow-y: auto/);
   assert.doesNotMatch(styles, /\.skill-markdown-section \.ledger-card-body[^}]*background:/);
   assert.match(styles, /\.codex-list-item \.project-record-label, \.codex-list-item \.skill-category-label[^}]*padding: 4px 7px/);
+});
+
+test('pipeline Add skill uses the shared rich catalog and explicit confirmation', () => {
+  assert.match(html, /class="skill-picker-controls codex-library-controls"/);
+  assert.match(html, /class="skill-picker-position"/);
+  assert.match(html, /class="skill-picker-confirm primary-button"[^>]*>Add skill/);
+  assert.match(script, /function renderSkillPicker\(\)/);
+  assert.match(script, /renderCodexLibrary\(\{/);
+  assert.match(script, /favoriteFirst: true/);
+  assert.match(script, /onSynchronize: \(\) => \{ void synchronizePickerLibraries\(\); \}/);
+  assert.match(script, /function confirmPicker\(\)/);
+  assert.match(script, /step\.skills\.splice\(state\.pickerInsertionIndex/);
+  assert.doesNotMatch(script, /skills\.map\(\(skill\) => button\(skill\.name/);
 });
 
 test('skill detail is an exclusive modal view and the single close control restores every library control', () => {

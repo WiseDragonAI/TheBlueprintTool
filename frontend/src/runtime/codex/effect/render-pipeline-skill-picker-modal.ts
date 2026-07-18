@@ -3,8 +3,9 @@
  * WHY: Step configuration must stay readable instead of embedding the complete skill library beside the skill sequence.
  */
 import { pipelineSkillPickerModal } from '../../dom.js';
+import { renderCodexLibrary } from '../component/render-codex-library.js';
 import { renderSkillLibraryItemContent } from '../component/render-skill-library-item-content.js';
-import { colorForSkillTag, sortSkillsByFavorite, tagsForSkill } from '../helper/skill-library-presentation.js';
+import { colorForSkillTag, tagsForSkill } from '../helper/skill-library-presentation.js';
 import type { CodexSkillSummary } from './load-codex-skills.js';
 import { openSkillLibraryEditor } from './render-skill-library-editor-modal.js';
 
@@ -49,57 +50,8 @@ function makeButton(label: string, onClick: () => void, className = 'ghost-butto
   return button;
 }
 
-function availableCategories(): string[] {
-  const available = new Set(pipelineSkillPickerState.skills.flatMap(tagsForSkill));
-  return ['All', ...[...available].sort((left, right) => left.localeCompare(right))];
-}
-
-function filteredSkills(): CodexSkillSummary[] {
-  const query = pipelineSkillPickerState.query.trim().toLowerCase();
-  return sortSkillsByFavorite(pipelineSkillPickerState.skills.filter((skill) => {
-    const tags = tagsForSkill(skill);
-    if (pipelineSkillPickerState.selectedCategory !== 'All' && !tags.includes(pipelineSkillPickerState.selectedCategory)) return false;
-    return !query || `${skill.name} ${skill.description} ${tags.join(' ')}`.toLowerCase().includes(query);
-  }));
-}
-
 function selectedSkill(): CodexSkillSummary | undefined {
   return pipelineSkillPickerState.skills.find((skill) => skill.name === pipelineSkillPickerState.selectedSkillName);
-}
-
-function renderSearch(): HTMLInputElement {
-  const search = document.createElement('input');
-  search.className = 'skill-search pipeline-skill-picker-search';
-  search.type = 'search';
-  search.placeholder = 'Search skills';
-  search.setAttribute('aria-label', 'Search skills');
-  search.value = pipelineSkillPickerState.query;
-  search.addEventListener('input', () => {
-    pipelineSkillPickerState.query = search.value;
-    renderPipelineSkillPickerModal();
-    pipelineSkillPickerModal?.querySelector<HTMLInputElement>('.pipeline-skill-picker-search')?.focus();
-  });
-  return search;
-}
-
-function renderCategoryFilters(): HTMLElement {
-  const filters = document.createElement('div');
-  filters.className = 'skill-category-filters pipeline-skill-picker-filters';
-  filters.setAttribute('role', 'group');
-  filters.setAttribute('aria-label', 'Filter skills by category');
-  for (const category of availableCategories()) {
-    const selected = category === pipelineSkillPickerState.selectedCategory;
-    const filter = makeButton(category, () => {
-      pipelineSkillPickerState.selectedCategory = category;
-      renderPipelineSkillPickerModal();
-      pipelineSkillPickerModal?.querySelector<HTMLButtonElement>(`[data-picker-category="${category}"]`)?.focus();
-    }, `skill-category-filter${selected ? ' is-selected' : ''}`, `picker-category:${category}`);
-    filter.dataset.pickerCategory = category;
-    filter.style.setProperty('--skill-category-color', category === 'All' ? '#cbd5e1' : colorForSkillTag(category));
-    filter.setAttribute('aria-pressed', String(selected));
-    filters.append(filter);
-  }
-  return filters;
 }
 
 function renderSkillResult(skill: CodexSkillSummary): HTMLButtonElement {
@@ -113,21 +65,6 @@ function renderSkillResult(skill: CodexSkillSummary): HTMLButtonElement {
   metadata.textContent = `${skill.effectiveCodexModel} · ${skill.effectiveCodexEffort}`;
   result.replaceChildren(...renderSkillLibraryItemContent(skill), metadata);
   return result;
-}
-
-function renderResults(): HTMLElement {
-  const results = document.createElement('section');
-  results.className = 'pipeline-picker-results pipeline-skill-picker-results';
-  results.setAttribute('aria-label', 'Available skills');
-  const matches = filteredSkills();
-  if (matches.length > 0) results.replaceChildren(...matches.map(renderSkillResult));
-  else {
-    const empty = document.createElement('p');
-    empty.className = 'codex-empty-state';
-    empty.textContent = 'No matching skills.';
-    results.append(empty);
-  }
-  return results;
 }
 
 function renderPositionField(): HTMLLabelElement {
@@ -207,7 +144,32 @@ export function renderPipelineSkillPickerModal(): void {
   const close = makeButton('×', closePipelineSkillPicker, 'plain-close', 'picker-head-close');
   close.setAttribute('aria-label', 'Close skill picker');
   head.replaceChildren(copy, close);
-  pipelineSkillPickerModal.replaceChildren(head, renderSearch(), renderCategoryFilters(), renderResults(), renderActions());
+  const controls = document.createElement('div');
+  controls.className = 'codex-library-controls pipeline-skill-picker-controls';
+  const results = document.createElement('section');
+  results.className = 'pipeline-picker-results pipeline-skill-picker-results';
+  renderCodexLibrary({
+    records: pipelineSkillPickerState.skills.map((skill) => ({ ...skill, id: skill.name, tags: tagsForSkill(skill) })),
+    projects: [],
+    filters: { query: pipelineSkillPickerState.query, projectId: 'All', tag: pipelineSkillPickerState.selectedCategory },
+    controlsHost: controls,
+    resultsHost: results,
+    selectedId: pipelineSkillPickerState.selectedSkillName,
+    favoriteFirst: true,
+    emptyMessage: 'No matching skills.',
+    resultCountLabel: 'available skills',
+    onFiltersChanged: (filters) => {
+      pipelineSkillPickerState.query = filters.query;
+      pipelineSkillPickerState.selectedCategory = filters.tag;
+      renderPipelineSkillPickerModal();
+    },
+    renderRecord: (skill) => renderSkillResult(skill),
+  });
+  const search = controls.querySelector<HTMLInputElement>('input');
+  if (search) search.className = `${search.className} skill-search pipeline-skill-picker-search`.trim();
+  const filters = controls.querySelector<HTMLElement>('.codex-library-tag-filters');
+  if (filters) filters.className = `${filters.className} skill-category-filters pipeline-skill-picker-filters`.trim();
+  pipelineSkillPickerModal.replaceChildren(head, controls, results, renderActions());
   if (focusKey) {
     const nextFocus = pipelineSkillPickerModal.querySelector<HTMLElement>(`[data-codex-focus-key="${focusKey}"]`);
     if (nextFocus) nextFocus.focus();

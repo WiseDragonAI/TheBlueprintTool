@@ -4,7 +4,7 @@
  */
 const modelOptions = ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4', 'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.2'];
 const effortOptions = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
-const state = { projectId: '', projects: [], ledgerId: '', cardId: '', skills: [], serverSkills: [], skillDetails: new Map(), selectedReference: '', availableTags: [], tagSaving: false, pipelines: [], steps: [], processTab: 'skills', libraryScope: 'project', query: '', projectFilter: 'All', tagFilter: 'All', selected: null, editor: null, pickerStepId: '' };
+const state = { projectId: '', projects: [], ledgerId: '', cardId: '', skills: [], serverSkills: [], skillDetails: new Map(), selectedReference: '', availableTags: [], tagSaving: false, pipelines: [], steps: [], processTab: 'skills', libraryScope: 'project', query: '', projectFilter: 'All', tagFilter: 'All', selected: null, editor: null, pickerStepId: '', pickerQuery: '', pickerProjectFilter: 'All', pickerTagFilter: 'All', pickerSelectedSkillName: '', pickerInsertionIndex: 0, pickerSynchronizing: false };
 let processDetailGeneration = 0;
 let processActionGeneration = 0;
 const el = (selector) => document.querySelector(selector);
@@ -36,17 +36,6 @@ function pipelineTags(pipeline) { return [...new Set(pipelineSteps(pipeline).fla
 function recordProjects(record) { return Array.isArray(record.projects) ? record.projects : state.projects.filter((project) => project.id === record.projectId); }
 function recordTags(record) { return state.processTab === 'skills' ? skillTags(record) : pipelineTags(record); }
 function serverSkillPath(skillName) { return `/api/codex/server-skills/${encodeURIComponent(skillName)}`; }
-function filteredRecords(records) {
-  const query = state.query.trim().toLowerCase();
-  const filtered = records.filter((record) => {
-    const projects = recordProjects(record);
-    const tags = recordTags(record);
-    if (state.projectFilter !== 'All' && !projects.some((project) => project.id === state.projectFilter)) return false;
-    if (state.tagFilter !== 'All' && !tags.includes(state.tagFilter)) return false;
-    return !query || [record.name, record.description, record.purpose, ...projects.map((project) => project.name), ...tags].join(' ').toLowerCase().includes(query);
-  });
-  return state.processTab === 'skills' ? sortSkillsByFavorite(filtered) : filtered;
-}
 async function loadGlobalLibraries() {
   // Federation materializes skills first and pipelines second into the server-owned local stores.
   // Library views must never fan out to remote projects during an operator interaction.
@@ -64,36 +53,35 @@ async function loadGlobalLibraries() {
 }
 function button(label, className, action) { const node = document.createElement('button'); node.type = 'button'; node.className = className; node.textContent = label; node.addEventListener('click', action); return node; }
 function pipelineSteps(pipeline) { return pipeline.stepIds.map((id) => state.steps.find((step) => step.id === id && step.scope === pipeline.scope && (pipeline.scope === 'server' || step.projectId === pipeline.projectId))).filter(Boolean); }
-function renderFilterChips(containerSelector, values, selected, className, onSelect) {
-  const container = el(containerSelector);
-  container.replaceChildren(...values.map((value) => {
-    const chip = button(value.label, className, () => onSelect(value.id));
-    chip.setAttribute('aria-pressed', String(value.id === selected));
-    if (value.color) chip.style.setProperty('--project-color', value.color);
-    if (value.category) decorateSkillCategoryLabel(chip, value.category);
-    return chip;
-  }));
-}
-function renderLibraryFilters(records, rerender, prefix = 'process') {
-  const projects = [{ id: 'All', label: 'All projects', color: '#20242b' }, ...state.projects.map((project) => ({ id: project.id, label: project.name, color: project.color }))]
-    .filter((project) => project.id === 'All' || records.some((record) => recordProjects(record).some((candidate) => candidate.id === project.id)));
-  const tags = ['All', ...new Set(records.flatMap(recordTags))].map((tag) => ({ id: tag, label: tag === 'All' ? 'All tags' : tag, category: tag }));
-  if (!projects.some((project) => project.id === state.projectFilter)) state.projectFilter = 'All';
-  if (!tags.some((tag) => tag.id === state.tagFilter)) state.tagFilter = 'All';
-  const projectSelector = `.${prefix}-project-filters`;
-  const tagSelector = `.${prefix}-tag-filters`;
-  const search = el(`.${prefix}-search`);
-  search.value = state.query;
-  renderFilterChips(projectSelector, projects, state.projectFilter, 'project-filter-chip', (id) => { state.projectFilter = id; rerender(); });
-  renderFilterChips(tagSelector, tags, state.tagFilter, 'skill-category-filter', (id) => { state.tagFilter = id; rerender(); });
-  el(projectSelector).hidden = state.libraryScope !== 'global';
+function catalogRecord(record, kind) {
+  return {
+    ...record,
+    id: kind === 'skills' ? record.name : record.id,
+    description: kind === 'skills' ? record.description : record.purpose,
+    projects: recordProjects(record),
+    tags: kind === 'skills' ? skillTags(record) : pipelineTags(record),
+    searchText: kind === 'skills' ? `${record.source || ''}` : pipelineSteps(record).flatMap((step) => step.skills.map((skill) => skill.skillName)).join(' '),
+  };
 }
 function renderProcessList() {
   const list = el('.process-library');
   const records = state.processTab === 'skills' ? state.skills : state.pipelines;
-  renderLibraryFilters(records, renderProcessList);
-  const visible = filteredRecords(records);
-  list.replaceChildren(...visible.map((record) => {
+  const catalogRecords = records.map((record) => catalogRecord(record, state.processTab));
+  const controls = document.querySelector('.process-modal .codex-library-controls');
+  const visible = renderCodexLibrary({
+    records: catalogRecords,
+    projects: state.projects,
+    filters: { query: state.query, projectId: state.projectFilter, tag: state.tagFilter },
+    controlsHost: controls,
+    resultsHost: list,
+    showProjects: state.libraryScope === 'global',
+    favoriteFirst: state.processTab === 'skills',
+    selectedId: state.selected?.id || state.selected?.name,
+    emptyMessage: `No matching ${state.processTab}.`,
+    resultCountLabel: state.processTab,
+    onSynchronize: state.libraryScope === 'global' ? () => { void resynchronizeGlobalLibraries(controls.querySelector('.codex-library-synchronize'), '.process-message', renderProcessList); } : undefined,
+    onFiltersChanged: (filters) => { state.query = filters.query; state.projectFilter = filters.projectId; state.tagFilter = filters.tag; renderProcessList(); },
+    renderRecord: (record) => {
     const card = document.createElement('article'); card.className = 'codex-list-card';
     card.style.setProperty('--skill-category-color', colorForSkillTag(recordTags(record)[0] || 'Uncategorized'));
     const node = button('', 'codex-list-item', () => { void renderProcessDetail(record); });
@@ -105,7 +93,8 @@ function renderProcessList() {
     for (const project of recordProjects(record)) { const label = document.createElement('small'); label.className = 'project-record-label'; label.textContent = project.name; label.style.setProperty('--project-color', project.color); labels.append(label); }
     for (const category of recordTags(record)) { const label = document.createElement('small'); label.textContent = category; decorateSkillCategoryLabel(label, category); labels.append(label); }
     node.append(title, detail, labels); card.append(node); return card;
-  }));
+    },
+  });
   message('.process-message', visible.length ? `${visible.length} ${state.processTab}` : records.length ? `No matching ${state.processTab}.` : `No ${state.processTab} are available.`);
 }
 function option(value, label = value) { const node = document.createElement('option'); node.value = value; node.textContent = label; return node; }
@@ -372,16 +361,29 @@ async function resynchronizeGlobalLibraries(button, messageSelector, render) {
 }
 function renderPipelineLibrary() {
   const priorTab = state.processTab; state.processTab = 'pipelines';
-  renderLibraryFilters(state.pipelines, renderPipelineLibrary, 'pipelines');
-  const pipelines = filteredRecords(state.pipelines);
+  const records = state.pipelines.map((pipeline) => catalogRecord(pipeline, 'pipelines'));
   state.processTab = priorTab;
   const create = el('.pipeline-new');
   create.disabled = false;
   create.title = state.projectFilter === 'All' ? 'Create a server-wide pipeline.' : 'Create a pipeline for this project.';
-  el('.pipeline-library').replaceChildren(...pipelines.map((pipeline) => {
+  const list = el('.pipeline-library');
+  const controls = document.querySelector('.pipelines-modal .codex-library-controls');
+  const pipelines = renderCodexLibrary({
+    records,
+    projects: state.projects,
+    filters: { query: state.query, projectId: state.projectFilter, tag: state.tagFilter },
+    controlsHost: controls,
+    resultsHost: list,
+    showProjects: true,
+    emptyMessage: 'No matching pipelines.',
+    resultCountLabel: 'pipelines',
+    onSynchronize: () => { void resynchronizeGlobalLibraries(controls.querySelector('.codex-library-synchronize'), '.pipelines-message', renderPipelineLibrary); },
+    onFiltersChanged: (filters) => { state.query = filters.query; state.projectFilter = filters.projectId; state.tagFilter = filters.tag; renderPipelineLibrary(); },
+    renderRecord: (pipeline) => {
     const card = document.createElement('article'); card.className = 'codex-list-card'; card.style.setProperty('--skill-category-color', pipeline.projectColor);
     const node = button('', 'codex-list-item', () => openEditor(pipeline)); const title = document.createElement('strong'); title.textContent = pipeline.name; const copy = document.createElement('span'); copy.textContent = pipeline.purpose || `${pipeline.stepIds.length} steps`; const metadata = document.createElement('small'); metadata.textContent = `${pipeline.projectName} · ${pipelineTags(pipeline).join(' · ')}`; node.append(title, copy, metadata); card.append(node); return card;
-  }));
+    },
+  });
   if (!pipelines.length) message('.pipelines-message', state.pipelines.length ? 'No matching pipelines.' : 'No saved pipelines.');
 }
 function clonePipeline(pipeline) {
@@ -409,7 +411,72 @@ function renderStepSkill(step, skill, index) {
   const effort = document.createElement('select'); effort.setAttribute('aria-label', `${skill.skillName} effort`); effort.append(option('', 'Inherit effort'), ...effortOptions.map((item) => option(item))); effort.value = skill.codexEffort || ''; effort.addEventListener('change', () => { skill.codexEffort = effort.value || null; });
   const controls = document.createElement('span'); const up = button('↑', 'codex-icon', () => { move(step.skills, index, -1); renderEditor(); }); up.disabled = index === 0; up.setAttribute('aria-label', 'Move skill earlier'); const down = button('↓', 'codex-icon', () => { move(step.skills, index, 1); renderEditor(); }); down.disabled = index === step.skills.length - 1; down.setAttribute('aria-label', 'Move skill later'); const remove = button('×', 'codex-icon', () => { step.skills.splice(index, 1); renderEditor(); }); remove.setAttribute('aria-label', 'Remove skill'); controls.append(up, down, remove); node.append(title, model, effort, controls); return node;
 }
-function openSkillPicker(stepId) { state.pickerStepId = stepId; el('.pipeline-editor-modal').close(); el('.skill-picker-modal').showModal(); const skills = state.editor.scope === 'server' ? state.serverSkills : state.skills.filter((skill) => !skill.projects?.length || skill.projects.some((project) => project.id === state.projectId)); message('.skill-picker-message', skills.length ? '' : 'No skills are available.'); el('.skill-picker-list').replaceChildren(...skills.map((skill) => button(skill.name, 'codex-list-item', () => { const step = state.editor.steps.find((item) => item.id === stepId); step.skills.push({ id: uid('codex-pipeline-skill'), skillName: skill.name, codexModel: null, codexEffort: null }); closePicker(); })) ); }
+function pickerSkills() {
+  const skills = state.editor.scope === 'server'
+    ? state.serverSkills.map((skill) => ({ ...skill, projects: state.projects }))
+    : state.skills.filter((skill) => !skill.projects?.length || skill.projects.some((project) => project.id === state.projectId));
+  return skills.map((skill) => catalogRecord(skill, 'skills'));
+}
+function renderSkillPicker() {
+  const step = state.editor.steps.find((item) => item.id === state.pickerStepId);
+  if (!step) return;
+  const skills = pickerSkills();
+  const controls = el('.skill-picker-controls');
+  const list = el('.skill-picker-list');
+  const visible = renderCodexLibrary({
+    records: skills,
+    projects: state.projects,
+    filters: { query: state.pickerQuery, projectId: state.pickerProjectFilter, tag: state.pickerTagFilter },
+    controlsHost: controls,
+    resultsHost: list,
+    selectedId: state.pickerSelectedSkillName,
+    showProjects: state.editor.scope === 'server',
+    favoriteFirst: true,
+    emptyMessage: 'No matching skills.',
+    resultCountLabel: 'skills',
+    synchronizing: state.pickerSynchronizing,
+    onSynchronize: () => { void synchronizePickerLibraries(); },
+    onFiltersChanged: (filters) => { state.pickerQuery = filters.query; state.pickerProjectFilter = filters.projectId; state.pickerTagFilter = filters.tag; renderSkillPicker(); },
+    renderRecord: (skill, selected) => {
+      const card = document.createElement('article'); card.className = `codex-list-card${selected ? ' is-selected' : ''}`; card.style.setProperty('--skill-category-color', colorForSkillTag(skillTags(skill)[0] || 'Uncategorized'));
+      const select = button('', 'codex-list-item', () => { state.pickerSelectedSkillName = skill.name; renderSkillPicker(); });
+      select.setAttribute('aria-pressed', String(selected));
+      select.replaceChildren(...renderSkillLibraryItemContent(skill));
+      card.append(select);
+      return card;
+    },
+  });
+  if (!skills.some((skill) => skill.name === state.pickerSelectedSkillName)) state.pickerSelectedSkillName = visible[0]?.name || '';
+  const position = el('.skill-picker-position');
+  position.replaceChildren(...Array.from({ length: step.skills.length + 1 }, (_value, index) => option(String(index), index === 0 ? 'At start' : `After ${step.skills[index - 1].skillName}`)));
+  state.pickerInsertionIndex = Math.min(state.pickerInsertionIndex, step.skills.length);
+  position.value = String(state.pickerInsertionIndex);
+  el('.skill-picker-confirm').disabled = !state.pickerSelectedSkillName;
+  message('.skill-picker-message', visible.length ? `${visible.length} skills` : skills.length ? 'No matching skills.' : 'No skills are available.');
+}
+async function synchronizePickerLibraries() {
+  if (state.pickerSynchronizing) return;
+  state.pickerSynchronizing = true; renderSkillPicker();
+  try {
+    await jsonRequest('/api/federation/libraries/synchronize', { method: 'POST' });
+    if (state.editor.scope === 'server') await loadGlobalLibraries();
+    else await loadLibraries(state.projectId);
+  }
+  catch (error) { message('.skill-picker-message', error.message, true); }
+  finally { state.pickerSynchronizing = false; renderSkillPicker(); }
+}
+function openSkillPicker(stepId) {
+  const step = state.editor.steps.find((item) => item.id === stepId);
+  state.pickerStepId = stepId; state.pickerQuery = ''; state.pickerProjectFilter = 'All'; state.pickerTagFilter = 'All'; state.pickerInsertionIndex = step?.skills.length || 0;
+  state.pickerSelectedSkillName = sortSkillsByFavorite(pickerSkills())[0]?.name || '';
+  el('.pipeline-editor-modal').close(); el('.skill-picker-modal').showModal(); renderSkillPicker();
+}
+function confirmPicker() {
+  const step = state.editor.steps.find((item) => item.id === state.pickerStepId);
+  if (!step || !state.pickerSelectedSkillName) return;
+  step.skills.splice(state.pickerInsertionIndex, 0, { id: uid('codex-pipeline-skill'), skillName: state.pickerSelectedSkillName, codexModel: null, codexEffort: null });
+  closePicker();
+}
 function closePicker() { el('.skill-picker-modal').close(); el('.pipeline-editor-modal').showModal(); renderEditor(); }
 async function saveEditor() {
   const editor = state.editor; const form = el('.pipeline-editor-form'); editor.name = form.elements['pipeline-name'].value.trim(); editor.purpose = form.elements['pipeline-purpose'].value.trim();
@@ -461,10 +528,14 @@ export function initializeMobileCodex() {
   el('.pipeline-new').addEventListener('click', () => { state.projectId = state.projectFilter === 'All' ? '' : state.projectFilter; openEditor(); }); el('.pipeline-editor-back').addEventListener('click', () => { el('.pipeline-editor-modal').close(); el('.pipelines-modal').showModal(); });
   el('.pipeline-add-step').addEventListener('click', () => { state.editor.steps.push({ id: uid('codex-step'), name: `Step ${state.editor.steps.length + 1}`, purpose: '', skills: [] }); renderEditor(); });
   el('.pipeline-editor-form').addEventListener('submit', (event) => { event.preventDefault(); void saveEditor(); }); el('.skill-picker-back').addEventListener('click', closePicker);
+  el('.skill-picker-cancel').addEventListener('click', closePicker);
+  el('.skill-picker-confirm').addEventListener('click', confirmPicker);
+  el('.skill-picker-position').addEventListener('change', (event) => { state.pickerInsertionIndex = Number(event.target.value); });
 }
 import { projectScopedRequestPath } from '/src/runtime/project/helper/project-request-scope.js';
 import { colorForSkillTag, decorateSkillCategoryLabel, skillInstructionMarkdown, sortSkillsByFavorite, tagsForSkill } from '/src/runtime/codex/helper/skill-library-presentation.js';
 import { skillCategories } from '/src/runtime/codex/helper/skill-category.js';
 import { renderSkillLibraryItemContent } from '/src/runtime/codex/component/render-skill-library-item-content.js';
+import { renderCodexLibrary } from '/src/runtime/codex/component/render-codex-library.js';
 import { renderLedgerCardMarkdown } from '/src/runtime/ledger/component/render-ledger-card-markdown.js';
 import { setMobileCodexView } from './codex-view.js';

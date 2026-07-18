@@ -659,8 +659,13 @@
         <dialog class="codex-modal skill-picker-modal" aria-labelledby="skill-picker-title">
           <section class="codex-sheet">
             <header><button class="codex-back skill-picker-back" type="button" aria-label="Back to pipeline editor">←</button><div><p class="eyebrow">Step skill</p><h2 id="skill-picker-title">Add skill</h2></div></header>
+            <div class="skill-picker-controls codex-library-controls"></div>
             <p class="codex-message skill-picker-message" role="alert"></p>
             <div class="skill-picker-list codex-list"></div>
+            <footer class="skill-picker-actions">
+              <label class="codex-field"><span>Insert position</span><select class="skill-picker-position" aria-label="Insert position"></select></label>
+              <div><button class="skill-picker-cancel codex-secondary" type="button">Cancel</button><button class="skill-picker-confirm primary-button" type="button">Add skill</button></div>
+            </footer>
           </section>
         </dialog>
       </div>
