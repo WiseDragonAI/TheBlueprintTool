@@ -17,14 +17,19 @@ function main() {
   const env = {
     ...serverEnvironment,
     DECISION_OS_FRONTEND_ROOT: process.env.DECISION_OS_FRONTEND_ROOT ?? resolve(repoRoot, 'frontend'),
+    DECISION_OS_REPOSITORY_SETTINGS_FILE: resolve(repoRoot, '.decision-os/.settings.json'),
     TSX_TSCONFIG_PATH: process.env.TSX_TSCONFIG_PATH ?? resolve(repoRoot, 'backend/tsconfig.json')
   };
   if (process.argv.includes('--print-command')) {
     console.log(JSON.stringify({
       node: process.execPath,
       args: ['--import', loader, server],
-      env: { DECISION_OS_FRONTEND_ROOT: env.DECISION_OS_FRONTEND_ROOT, TSX_TSCONFIG_PATH: env.TSX_TSCONFIG_PATH },
-      scopedDecisionOsKeys: Object.keys(env).filter((key) => key.startsWith('DECISION_OS_') && key !== 'DECISION_OS_FRONTEND_ROOT'),
+      env: {
+        DECISION_OS_FRONTEND_ROOT: env.DECISION_OS_FRONTEND_ROOT,
+        DECISION_OS_REPOSITORY_SETTINGS_FILE: env.DECISION_OS_REPOSITORY_SETTINGS_FILE,
+        TSX_TSCONFIG_PATH: env.TSX_TSCONFIG_PATH
+      },
+      scopedDecisionOsKeys: Object.keys(env).filter((key) => key.startsWith('DECISION_OS_') && !['DECISION_OS_FRONTEND_ROOT', 'DECISION_OS_REPOSITORY_SETTINGS_FILE'].includes(key)),
       cwd: process.cwd()
     }));
     return;
