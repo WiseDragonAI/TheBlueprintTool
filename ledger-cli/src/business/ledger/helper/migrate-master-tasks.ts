@@ -13,6 +13,8 @@ type MigrationReport = {
   relationships: number;
   cardFiles: number;
   threadFiles: number;
+  missingCardFiles: string[];
+  missingThreadFiles: string[];
   queueItems: number;
   pipelineRuns: number;
   sourceLedger: string;
@@ -140,6 +142,8 @@ export function migrateMasterTasks(input: { sourceLedger: string; targetLedger: 
 
   const cardCopies: Array<{ from: string; to: string; content: string }> = [];
   const threadCopies: Array<{ from: string; to: string; content: string }> = [];
+  const missingCardFiles: string[] = [];
+  const missingThreadFiles: string[] = [];
   for (const card of movedCards) {
     card.domainId = targetId;
     const reference = String(card.comment?.contentFile ?? '');
@@ -147,10 +151,10 @@ export function migrateMasterTasks(input: { sourceLedger: string; targetLedger: 
       const nextReference = replaceDomainReference(reference, sourceId, targetId, 'cards');
       const from = referencedFile(sourceRoot, reference);
       const to = referencedFile(sourceRoot, nextReference);
-      if (!existsSync(from)) return { ok: false, error: `Missing card content file: ${reference}` };
       if (existsSync(to)) return { ok: false, error: `Target card content already exists: ${nextReference}` };
       card.comment.contentFile = nextReference;
-      cardCopies.push({ from, to, content: readFileSync(from, 'utf8') });
+      if (existsSync(from)) cardCopies.push({ from, to, content: readFileSync(from, 'utf8') });
+      else missingCardFiles.push(reference);
     }
     if (typeof card.codexRunOutputFile === 'string') {
       card.codexRunOutputFile = replaceDomainReference(card.codexRunOutputFile, sourceId, targetId, 'cards');
@@ -166,12 +170,12 @@ export function migrateMasterTasks(input: { sourceLedger: string; targetLedger: 
     const nextReference = replaceDomainReference(reference, sourceId, targetId, 'threads');
     const from = referencedFile(sourceRoot, reference);
     const to = referencedFile(sourceRoot, nextReference);
-    if (!existsSync(from)) return { ok: false, error: `Missing thread file: ${reference}` };
     if (existsSync(to)) return { ok: false, error: `Target thread already exists: ${nextReference}` };
     if (targetThreadFiles[threadId]) return { ok: false, error: `Target thread id collision: ${threadId}` };
     targetThreadFiles[threadId] = nextReference;
     delete sourceThreadFiles[threadId];
-    threadCopies.push({ from, to, content: readFileSync(from, 'utf8') });
+    if (existsSync(from)) threadCopies.push({ from, to, content: readFileSync(from, 'utf8') });
+    else missingThreadFiles.push(reference);
   }
 
   source.cards = cards.filter((card) => !movedIds.has(String(card.id ?? '')));
@@ -225,6 +229,8 @@ export function migrateMasterTasks(input: { sourceLedger: string; targetLedger: 
     relationships: movedRelationships.length,
     cardFiles: cardCopies.length,
     threadFiles: threadCopies.length,
+    missingCardFiles,
+    missingThreadFiles,
     queueItems,
     pipelineRuns,
     sourceLedger: sourceFile,
