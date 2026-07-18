@@ -82,6 +82,7 @@ import { createProjectSyncController } from '../../project-sync/controller/start
 import { executeProjectSyncPipelineSkill } from '../../project-sync/controller/execute-project-sync-pipeline-skill.js';
 import { verifyProjectSyncPhase } from '../../project-sync/helper/verify-project-sync-phase.js';
 import type { ProjectSyncRole } from '../../project-sync/helper/project-sync-types.js';
+import { projectSyncGitSshCommand } from '../../project-sync/helper/project-sync-git-ssh-command.js';
 
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
@@ -538,6 +539,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     federation: federation!,
     store: projectSyncStore,
     runtimeForProject: (project) => projectContext(project.decisionOsRoot, project.id).runtime,
+    gitSshCommand: () => projectSyncGitSshCommand(
+      readDecisionOsSettings({ action_payload: { decisionOsRoot: masterDecisionOsRoot }, runtime_state: runtime }).settings,
+    ),
     onRunChange: () => undefined,
   });
   projectSyncController.resume();

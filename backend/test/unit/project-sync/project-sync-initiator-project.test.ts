@@ -29,8 +29,8 @@ function project(id: string, name: string, root: string): DecisionOsProject {
 
 test('materializes a remote source project before selecting its workstation task owner', () => {
   const home = mkdtempSync(join(tmpdir(), 'decision-os-project-sync-owner-'));
-  const origin = join(home, 'lis-origin.git');
-  const sourceRoot = join(home, 'source-node-lis');
+  const origin = join(home, 'lys-origin.git');
+  const sourceRoot = join(home, 'source-node-lys');
   const workstationRoot = join(home, 'workstation');
   const adminRoot = join(workstationRoot, 'admin');
   try {
@@ -44,7 +44,7 @@ test('materializes a remote source project before selecting its workstation task
     writeFileSync(join(sourceRoot, '.decision-os', 'state.json'), '{"ledgers":[{"id":"specs","title":"Specs","ledgerFile":".decision-os/specs.json"}]}\n');
     writeFileSync(join(sourceRoot, '.decision-os', 'specs.json'), '{"cards":[],"annotations":[],"relationships":[]}\n');
     git(sourceRoot, 'add', '.decision-os');
-    git(sourceRoot, 'commit', '-m', 'initialize LIS');
+    git(sourceRoot, 'commit', '-m', 'initialize lys');
     git(sourceRoot, 'push', '-u', 'origin', 'HEAD');
 
     const sourceSnapshot = readRepositorySyncStatus(sourceRoot);
@@ -56,16 +56,18 @@ test('materializes a remote source project before selecting its workstation task
       catalog: {
         register(path: string) {
           registeredPath = path;
-          return project('lis-project', 'LIS', join(workstationRoot, path));
+          return project('lys-project', 'lys', join(workstationRoot, path));
         },
       },
-      source: { ...project('node-b:lis-project', 'LIS', sourceRoot), ownerNodeId: 'node-b', localProjectId: 'lis-project', online: true },
+      source: { ...project('node-b:lys-project', 'lys', sourceRoot), ownerNodeId: 'node-b', localProjectId: 'lys-project', online: true },
       sourceSnapshot,
+      gitSshCommand: "ssh -i '/keys/wise' -o IdentitiesOnly=yes",
     });
 
-    assert.equal(registeredPath, 'LIS');
-    assert.equal(result.id, 'lis-project');
-    assert.equal(result.name, 'LIS');
+    assert.equal(registeredPath, 'lys');
+    assert.equal(result.id, 'lys-project');
+    assert.equal(result.name, 'lys');
+    assert.equal(execFileSync('git', ['-C', result.root, 'config', '--local', '--get', 'core.sshCommand'], { encoding: 'utf8' }).trim(), "ssh -i '/keys/wise' -o IdentitiesOnly=yes");
     assert.equal(readRepositorySyncStatus(result.root).originFingerprint, sourceSnapshot.originFingerprint);
     assert.notEqual(result.id, admin.id);
   } finally {

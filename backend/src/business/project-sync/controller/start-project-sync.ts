@@ -42,18 +42,27 @@ export function findOrMaterializeInitiatorProject(input: {
   catalog: Pick<ProjectCatalogStore, 'register'>;
   source: SyncSourceProject;
   sourceSnapshot: RepositorySyncStatus;
+  gitSshCommand?: string;
 }): DecisionOsProject {
   for (const project of input.projects().filter((entry) => entry.available)) {
     try {
-      if (readRepositorySyncStatus(project.root).originFingerprint === input.sourceSnapshot.originFingerprint) return project;
+      if (readRepositorySyncStatus(project.root).originFingerprint === input.sourceSnapshot.originFingerprint) {
+        if (input.gitSshCommand) execFileSync('git', ['-C', project.root, 'config', '--local', 'core.sshCommand', input.gitSshCommand], { stdio: 'pipe' });
+        return project;
+      }
     } catch { /* Non-Git projects are not synchronization matches. */ }
   }
   const destination = resolve(input.masterRoot, safeCloneName(input.source.name || basename(input.sourceSnapshot.originUrl)));
   if (dirname(destination) !== resolve(input.masterRoot)) throw new Error('Clone destination must be a direct child of the catalog root.');
   if (existsSync(destination)) throw new Error(`Clone destination is occupied: ${basename(destination)}.`);
   try {
-    execFileSync('git', ['clone', '--origin', 'origin', input.sourceSnapshot.originUrl, destination], { stdio: 'pipe', timeout: 10 * 60_000 });
+    const cloneArguments = [
+      ...(input.gitSshCommand ? ['-c', `core.sshCommand=${input.gitSshCommand}`] : []),
+      'clone', '--origin', 'origin', input.sourceSnapshot.originUrl, destination,
+    ];
+    execFileSync('git', cloneArguments, { stdio: 'pipe', timeout: 10 * 60_000 });
     if (!existsSync(resolve(destination, '.decision-os', 'state.json'))) throw new Error('Cloned repository does not contain .decision-os/state.json.');
+    if (input.gitSshCommand) execFileSync('git', ['-C', destination, 'config', '--local', 'core.sshCommand', input.gitSshCommand], { stdio: 'pipe' });
     return input.catalog.register(basename(destination));
   } catch (error) {
     // The destination was proven absent immediately before this run created it.
@@ -70,6 +79,7 @@ export function createProjectSyncController(input: {
   federation: FederationNodeConnector;
   store: ProjectSyncStore;
   runtimeForProject: (project: DecisionOsProject) => Record<string, unknown>;
+  gitSshCommand: () => string;
   onRunChange: (run: ProjectSyncRun) => void;
 }) {
   const running = new Set<string>();
@@ -198,6 +208,7 @@ export function createProjectSyncController(input: {
       const fingerprint = String(source.originFingerprint ?? '').trim();
       if (!fingerprint) throw new Error('Source project does not advertise a Git-origin fingerprint.');
       if (source.online === false) throw new Error('Source node is offline.');
+      const gitSshCommand = input.gitSshCommand();
       const admitted = input.store.admit({
         idempotencyKey,
         initiatorNodeId: input.localNodeId(),
@@ -208,48 +219,54 @@ export function createProjectSyncController(input: {
       });
       input.onRunChange(admitted.run);
       if (admitted.duplicate && admitted.run.masterCardId && admitted.run.pipelineRunId) return admitted;
-      const sourceSnapshot = await snapshot(sourceNodeId, String(source.localProjectId ?? source.id));
-      if (sourceSnapshot.originFingerprint !== fingerprint) throw new Error('Source origin fingerprint changed before task admission.');
-      if (sourceSnapshot.operationInProgress) throw new Error('Source repository has an active Git operation.');
-      const taskProject = findOrMaterializeInitiatorProject({
-        masterRoot: input.masterRoot,
-        projects: input.projects,
-        catalog: input.catalog,
-        source,
-        sourceSnapshot,
-      });
-      if (taskProject.ledgers.length === 0) throw new Error('The synchronized project has no ledger for its synchronization task.');
-      const task = admitProjectSyncMasterTask({
-        project: taskProject,
-        sourceProjectId: source.id,
-        sourceProjectName: source.name,
-        originFingerprint: fingerprint,
-        syncId: admitted.run.syncId,
-        waitingSince: admitted.run.createdAt,
-      });
-      const definition = projectSynchronizationPipelineDefinition();
-      const existingPipelineRun = readCodexPipelineStore({ decisionOsRoot: taskProject.decisionOsRoot }).store.runs.find((entry) =>
-        entry.pipelineId === definition.pipeline.id && entry.sourceCardId === task.masterCardId
-      );
-      const pipeline = existingPipelineRun ? { ok: true, run: existingPipelineRun } : await startFederatedPipelineRun({
-          decisionOsRoot: taskProject.decisionOsRoot,
-          runtime: input.runtimeForProject(taskProject),
-          ledgerId: task.ledgerId,
-          sourceCardId: task.masterCardId,
-          definition: { pipelineId: definition.pipeline.id, pipelineName: definition.pipeline.name, temporary: false, steps: definition.steps },
+      try {
+        const sourceSnapshot = await snapshot(sourceNodeId, String(source.localProjectId ?? source.id));
+        if (sourceSnapshot.originFingerprint !== fingerprint) throw new Error('Source origin fingerprint changed before task admission.');
+        if (sourceSnapshot.operationInProgress) throw new Error('Source repository has an active Git operation.');
+        const taskProject = findOrMaterializeInitiatorProject({
+          masterRoot: input.masterRoot,
+          projects: input.projects,
+          catalog: input.catalog,
+          source,
+          sourceSnapshot,
+          gitSshCommand,
         });
-      if (pipeline.ok !== true || !pipeline.run || typeof pipeline.run !== 'object') throw new Error(String(pipeline.error ?? 'Synchronization pipeline admission failed.'));
-      const pipelineRun = pipeline.run as { id?: unknown };
-      const run = input.store.attachTask(admitted.run.syncId, {
-        initiatorProjectId: taskProject.id,
-        taskProjectId: taskProject.id,
-        ledgerId: task.ledgerId,
-        masterCardId: task.masterCardId,
-        pipelineRunId: String(pipelineRun.id ?? ''),
-      });
-      input.onRunChange(run);
-      void advance(run, source);
-      return { run, duplicate: admitted.duplicate };
+        if (taskProject.ledgers.length === 0) throw new Error('The synchronized project has no ledger for its synchronization task.');
+        const task = admitProjectSyncMasterTask({
+          project: taskProject,
+          sourceProjectId: source.id,
+          sourceProjectName: source.name,
+          originFingerprint: fingerprint,
+          syncId: admitted.run.syncId,
+          waitingSince: admitted.run.createdAt,
+        });
+        const definition = projectSynchronizationPipelineDefinition();
+        const existingPipelineRun = readCodexPipelineStore({ decisionOsRoot: taskProject.decisionOsRoot }).store.runs.find((entry) =>
+          entry.pipelineId === definition.pipeline.id && entry.sourceCardId === task.masterCardId
+        );
+        const pipeline = existingPipelineRun ? { ok: true, run: existingPipelineRun } : await startFederatedPipelineRun({
+            decisionOsRoot: taskProject.decisionOsRoot,
+            runtime: input.runtimeForProject(taskProject),
+            ledgerId: task.ledgerId,
+            sourceCardId: task.masterCardId,
+            definition: { pipelineId: definition.pipeline.id, pipelineName: definition.pipeline.name, temporary: false, steps: definition.steps },
+          });
+        if (pipeline.ok !== true || !pipeline.run || typeof pipeline.run !== 'object') throw new Error(String(pipeline.error ?? 'Synchronization pipeline admission failed.'));
+        const pipelineRun = pipeline.run as { id?: unknown };
+        const run = input.store.attachTask(admitted.run.syncId, {
+          initiatorProjectId: taskProject.id,
+          taskProjectId: taskProject.id,
+          ledgerId: task.ledgerId,
+          masterCardId: task.masterCardId,
+          pipelineRunId: String(pipelineRun.id ?? ''),
+        });
+        input.onRunChange(run);
+        void advance(run, source);
+        return { run, duplicate: admitted.duplicate };
+      } catch (error) {
+        if (admitted.run.phase === 'requested') fail(admitted.run, error);
+        throw error;
+      }
     },
     retry(syncId: string): ProjectSyncRun {
       const run = input.store.read(syncId);
