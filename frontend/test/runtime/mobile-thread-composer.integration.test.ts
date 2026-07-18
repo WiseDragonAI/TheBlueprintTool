@@ -27,7 +27,7 @@ test('mobile thread composer defaults to a voice-first dock and expands text ent
   assert.match(responsiveThread, /if \(!wasQuickVoiceCapture && selectedLaunchMode === 'send'\) return;[\s\S]*await finishQueuedVoiceSubmission\(submitted\)/);
   assert.match(controlsCss, /@media \(max-width: 760px\)[\s\S]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\) 14px/);
   assert.match(controlsCss, /\.agent-chat \.wave-panel \{ grid-column: 2 \/ 4; grid-row: 1; \}/);
-  assert.match(controlsCss, /\.agent-chat \.meter-panel \{ grid-column: 4; grid-row: 1; \}/);
+  assert.match(controlsCss, /\.agent-chat \.meter-panel \{ grid-column: 4; grid-row: 1 \/ 3; \}/);
   assert.doesNotMatch(controlsCss, /\.agent-chat \.meter-panel \{ display: none; \}/);
   assert.match(buttonCss, /\.terminal-button__icon\s*\{[\s\S]*stroke:\s*currentColor/);
   assert.match(actionClick, /action === 'submit-thread-draft'/);
