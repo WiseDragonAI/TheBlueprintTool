@@ -58,8 +58,10 @@ const elements = Object.fromEntries([
 
 const asText = (value) => value == null ? '' : typeof value === 'string' ? value : JSON.stringify(value, null, 2);
 const defaultAccent = '#38d9e8';
-const projectOwnerLabel = (project) => project.ownerNodeLabel || project.ownerNodeId || 'This server';
-const projectPresenceLabel = (project) => `${projectOwnerLabel(project)} · ${project.online === false ? 'Offline' : 'Online'}`;
+const projectReplicas = (project) => Array.isArray(project?.replicas) ? project.replicas : [];
+const projectLocalReplica = (project) => projectReplicas(project).find((replica) => replica.local === true);
+const projectOwnerLabel = (project) => projectReplicas(project).map((replica) => replica.nodeLabel || replica.nodeId).join(', ') || 'No replicas';
+const projectPresenceLabel = (project) => `${projectReplicas(project).filter((replica) => replica.online !== false).length}/${projectReplicas(project).length} replicas online`;
 const routeParts = () => parseProjectScope(location.pathname)?.segments ?? [];
 const creationModal = document.querySelector('.creation-modal');
 const deleteMasterTaskModal = document.querySelector('.delete-master-task-modal');
@@ -196,8 +198,17 @@ Object.values(projectColorSliders).forEach((element) => {
 });
 renderProjectColorPicker();
 
-function projectFetch(url, options = {}, projectId = state.resourceProjectId) {
-  return fetch(projectScopedRequestPath(url, projectId), options);
+function projectFetch(url, options = {}, projectId = state.resourceProjectId, replicaNodeId = '') {
+  const headers = new Headers(options.headers);
+  if (replicaNodeId) headers.set('x-decision-os-replica-node', replicaNodeId);
+  return fetch(projectScopedRequestPath(url, projectId), { ...options, headers });
+}
+
+function replicaAddress(path, nodeId = new URLSearchParams(location.search).get('replica') || '') {
+  if (!nodeId) return path;
+  const url = new URL(path, location.origin);
+  url.searchParams.set('replica', nodeId);
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 function setResourceProject(projectId) {
@@ -240,15 +251,15 @@ function openMenu() {
 }
 
 function ledgerPath(ledgerId) {
-  return ledgerPathForProject(state.resourceProjectId, ledgerId);
+  return replicaAddress(ledgerPathForProject(state.resourceProjectId, ledgerId));
 }
 
 function zonePath(ledgerId, zoneId) {
-  return zonePathForProject(state.resourceProjectId, ledgerId, zoneId);
+  return replicaAddress(zonePathForProject(state.resourceProjectId, ledgerId, zoneId));
 }
 
 function cardPath(ledgerId, zoneId, cardId) {
-  return cardPathForProject(state.resourceProjectId, ledgerId, zoneId, cardId);
+  return replicaAddress(cardPathForProject(state.resourceProjectId, ledgerId, zoneId, cardId));
 }
 
 function closeCardDetail(options) {
@@ -271,7 +282,7 @@ function openCardDetail(card) {
 }
 
 function pathForTask(task) {
-  return cardPathForProject(task.projectId, task.ledgerId, task.zoneId || 'ungrouped', task.cardId);
+  return replicaAddress(cardPathForProject(task.projectId, task.ledgerId, task.zoneId || 'ungrouped', task.cardId), task.ownerNodeId);
 }
 
 function taskForCurrentRoute() {
@@ -560,12 +571,12 @@ async function loadProjectDirectory(path = '.') {
   }
 }
 
-async function ledgerMutation(ledgerId, mutation, projectId = state.resourceProjectId) {
+async function ledgerMutation(ledgerId, mutation, projectId = state.resourceProjectId, replicaNodeId = '') {
   const response = await projectFetch(`/decision-os/${encodeURIComponent(ledgerId)}`, {
     method: 'PATCH',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(mutation)
-  }, projectId);
+  }, projectId, replicaNodeId);
   const payload = await response.json().catch(() => null);
   if (!response.ok || payload?.ok === false) throw new Error(payload?.error || `Request failed with HTTP ${response.status}.`);
   if (!payload?.ok || projectId !== state.resourceProjectId || ledgerId !== state.activeLedgerId || !state.ledger) return payload;
@@ -995,7 +1006,7 @@ function renderProjects() {
     button.querySelector('.project-card-description').textContent = project.description || 'No description provided.';
     button.querySelector('code').textContent = `Owned by ${projectOwnerLabel(project)} · ${project.id}`;
     button.setAttribute('aria-label', `${project.name}, ${projectPresenceLabel(project)}`);
-    button.disabled = project.remote && !project.online;
+    button.disabled = !project.available;
     if (!button.disabled) button.addEventListener('click', () => {
       state.viewedProjectId = project.id;
       openProjectSettings();
@@ -1019,11 +1030,9 @@ function renderProjectDetail(project) {
   elements['project-detail-description'].textContent = project.description || 'No description provided.';
   elements['project-detail-color'].style.setProperty('--project-color', project.color);
   elements['project-detail-color'].style.backgroundColor = project.color;
-  elements['project-detail-status'].textContent = project.remote && !project.online
-    ? `${projectOwnerLabel(project)} · Offline`
-    : `${projectPresenceLabel(project)} · ${project.ledgers.length} ${project.ledgers.length === 1 ? 'ledger' : 'ledgers'}`;
-  elements['project-detail-path'].textContent = `Owned by ${projectOwnerLabel(project)} · ${project.id}`;
-  document.querySelector('.project-settings-button').hidden = Boolean(project.remote);
+  elements['project-detail-status'].textContent = `${projectPresenceLabel(project)} · ${project.ledgers.length} ${project.ledgers.length === 1 ? 'ledger' : 'ledgers'}`;
+  elements['project-detail-path'].textContent = `Replicas: ${projectOwnerLabel(project)} · ${project.id}`;
+  document.querySelector('.project-settings-button').hidden = !projectLocalReplica(project);
   setView('project-detail-view');
   document.title = `${project.name} · Projects`;
 }
@@ -1036,19 +1045,22 @@ function openProjectSettings() {
   const description = document.querySelector('#project-settings-description');
   name.value = values.name;
   description.value = values.description;
-  name.disabled = Boolean(project.remote);
-  description.disabled = Boolean(project.remote);
+  const localReplica = projectLocalReplica(project);
+  const syncReplica = projectReplicas(project).find((replica) => replica.local !== true && replica.online !== false);
+  name.disabled = !localReplica;
+  description.disabled = !localReplica;
   projectSettingsColorInput.value = values.color;
-  document.querySelector('.project-settings-color-trigger').disabled = Boolean(project.remote);
-  document.querySelector('.project-settings-save').hidden = Boolean(project.remote);
+  document.querySelector('.project-settings-color-trigger').disabled = !localReplica;
+  document.querySelector('.project-settings-save').hidden = !localReplica;
   document.querySelector('.project-settings-owner').textContent = `${projectPresenceLabel(project)} · ${project.id}`;
   const sync = document.querySelector('.project-settings-sync');
-  sync.disabled = !project.originFingerprint || project.online === false;
+  sync.disabled = !project.originFingerprint || !syncReplica;
   sync.dataset.projectId = project.id;
+  sync.dataset.replicaNodeId = syncReplica?.nodeId || '';
   renderProjectSettingsColorField(values.color);
   projectSettingsModal.querySelector('.project-settings-error').hidden = true;
   projectSettingsModal.showModal();
-  (project.remote ? sync : name).focus();
+  (localReplica ? name : sync).focus();
 }
 
 async function startSelectedProjectSync() {
@@ -1059,7 +1071,8 @@ async function startSelectedProjectSync() {
   button.disabled = true;
   error.hidden = true;
   try {
-    const admission = await startProjectSyncRequest({ fetchImpl: fetch, sourceProjectId: project.id, idempotencyKey: `${project.id}:${project.originFingerprint}` });
+    const sourceNodeId = button.dataset.replicaNodeId;
+    const admission = await startProjectSyncRequest({ fetchImpl: fetch, sourceProjectId: project.id, sourceNodeId, idempotencyKey: `${sourceNodeId}:${project.id}:${project.originFingerprint}` });
     projectSettingsModal.close();
     state.projectFilter = 'All';
     state.controlFilter = 'All';
@@ -1627,7 +1640,7 @@ async function persistQueueOrder(mutations) {
       await ledgerMutation(task.ledgerId, {
         action: 'patch-card',
         cardPatch: { id: task.cardId, queueRank }
-      }, task.projectId);
+      }, task.projectId, task.ownerNodeId);
     }
     return true;
   } catch (error) {
@@ -1661,7 +1674,7 @@ async function persistControlTaskPlacement({ taskId, sourceTab, targetTab, newIn
     await ledgerMutation(task.ledgerId, {
       action: 'patch-card',
       cardPatch: { id: task.cardId, status: targetTab === 'backlog' ? 'backlog' : 'todo' }
-    }, task.projectId);
+    }, task.projectId, task.ownerNodeId);
     if (targetTab === 'queue') queueQueueOrderPersistence();
   } catch (error) {
     await loadControlRoom({ force: true });
@@ -1684,23 +1697,23 @@ function parseMasterCandidate(card) {
   return labels.includes('master-task') || (!labels.some((label) => label === 'master-task' || label === 'subtask') && /^\s*(?:#[a-z][a-z0-9-]*\s*)*#master-task\b(?:\s*#[a-z][a-z0-9-]*)*\s*$/im.test(ledgerCardBody(card)));
 }
 
-async function createTaskIntake(projectId) {
+async function createTaskIntake(projectId, replicaNodeId) {
   setResourceProject(projectId);
   if (state.resourceProjectId !== projectId) throw new Error('The project is no longer available.');
   const ledgerRef = state.ledgers.find((entry) => entry.title === state.controlFilter || entry.id === state.controlFilter) ?? state.ledgers[0];
   if (!ledgerRef) throw new Error('Create a ledger before starting a task.');
-  const ledger = await projectFetch(`/api/ledgers/${encodeURIComponent(ledgerRef.id)}/canvas`, { cache: 'no-store' }).then((response) => response.json());
+  const ledger = await projectFetch(`/api/ledgers/${encodeURIComponent(ledgerRef.id)}/canvas`, { cache: 'no-store' }, projectId, replicaNodeId).then((response) => response.json());
   state.ledger = ledger;
   state.activeLedgerId = ledgerRef.id;
   const rect = nextZoneRect();
   const projectColor = state.projects.find((project) => project.id === projectId)?.color || defaultAccent;
   const zone = { id: objectId('zone'), ...rect, color: projectColor, label: 'New task intake', comments: [] };
-  await ledgerMutation(ledgerRef.id, { action: 'create-zone', annotation: zone });
+  await ledgerMutation(ledgerRef.id, { action: 'create-zone', annotation: zone }, projectId, replicaNodeId);
   const cardId = objectId('card');
   const timestamp = new Date().toISOString();
   const markdown = `Ledger: ${ledgerRef.title}\nWaiting since: ${timestamp}\n\n## Intake\n\nDescribe the task in this thread, attach the required files, then launch Codex. Categorize the task, keep this mandatory new zone, rename this master task and zone, create actionable subtask cards in this zone, and write canonical relationship-backed card links under \`## Subtasks\`.\n\n## Subtasks\n`;
   const card = { id: cardId, title: 'New task intake', cardType: 'note', domainId: ledgerRef.id, status: 'todo', labels: ['master-task'], x: rect.x + 60, y: rect.y + 60, w: 360, h: 240, comment: { what: markdown }, facts: [], fields: [] };
-  const updated = await ledgerMutation(ledgerRef.id, { action: 'create-card', card });
+  const updated = await ledgerMutation(ledgerRef.id, { action: 'create-card', card }, projectId, replicaNodeId);
   state.ledger = updated;
   state.activeZoneId = zone.id;
   state.activeZoneColor = zone.color;
@@ -1712,7 +1725,7 @@ async function createTaskIntake(projectId) {
     onCodexStarted: activateMasterTask,
     onQuickVoiceSubmitted: navigateVoiceSubmission
   });
-  await navigate(cardPath(ledgerRef.id, zone.id, cardId));
+  await navigate(replicaAddress(cardPathForProject(projectId, ledgerRef.id, zone.id, cardId), replicaNodeId));
 }
 
 function openNewTaskProjectModal() {
@@ -1721,16 +1734,19 @@ function openNewTaskProjectModal() {
   const error = document.querySelector('.new-task-project-error');
   const cancel = document.querySelector('.new-task-project-cancel');
   const nodes = [...state.projects.reduce((groups, project) => {
-    const nodeId = project.ownerNodeId || 'local';
-    const existing = groups.get(nodeId);
-    if (existing) existing.projects.push(project);
-    else groups.set(nodeId, {
-      nodeId,
-      label: projectOwnerLabel(project),
-      online: project.online !== false,
-      local: project.remote !== true,
-      projects: [project],
-    });
+    for (const replica of project.replicas ?? []) {
+      const nodeId = replica.nodeId;
+      const existing = groups.get(nodeId);
+      const routedProject = { ...project, selectedReplicaNodeId: nodeId };
+      if (existing) existing.projects.push(routedProject);
+      else groups.set(nodeId, {
+        nodeId,
+        label: replica.nodeLabel || nodeId,
+        online: replica.online !== false,
+        local: replica.local === true,
+        projects: [routedProject],
+      });
+    }
     return groups;
   }, new Map()).values()];
   const defaultNode = nodes.find((node) => node.local) ?? nodes[0];
@@ -1750,7 +1766,7 @@ function openNewTaskProjectModal() {
     button.setAttribute('aria-busy', 'true');
     error.hidden = true;
     try {
-      await createTaskIntake(project.id);
+      await createTaskIntake(project.id, project.selectedReplicaNodeId);
       delete newTaskProjectModal.dataset.busy;
       newTaskProjectModal.close();
     } catch (cause) {
