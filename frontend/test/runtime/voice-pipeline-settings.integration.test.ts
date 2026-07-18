@@ -10,18 +10,21 @@ test('voice pipeline settings load and save through the Codex settings contract'
       ok: true,
       maxConcurrentCodexProcesses: 3,
       voicePipelineId: 'pipeline-a',
+      masterTaskCompletionPipelineId: 'pipeline-complete',
       pipelines: [{ id: 'pipeline-a', name: 'Pipeline A' }]
     }), { status: 200, headers: { 'content-type': 'application/json' } });
   };
 
   const loaded = await loadCodexProcessSettings(fetchImpl);
   assert.equal(loaded.voicePipelineId, 'pipeline-a');
+  assert.equal(loaded.masterTaskCompletionPipelineId, 'pipeline-complete');
   assert.deepEqual(loaded.pipelines, [{ id: 'pipeline-a', name: 'Pipeline A' }]);
 
-  await saveCodexProcessSettings(fetchImpl, 3, 'pipeline-a');
+  await saveCodexProcessSettings(fetchImpl, 3, 'pipeline-a', 'pipeline-complete');
   assert.equal(requests[1].url, '/api/settings/codex-processes');
   assert.deepEqual(JSON.parse(String(requests[1].options?.body)), {
     maxConcurrentCodexProcesses: 3,
-    voicePipelineId: 'pipeline-a'
+    voicePipelineId: 'pipeline-a',
+    masterTaskCompletionPipelineId: 'pipeline-complete'
   });
 });

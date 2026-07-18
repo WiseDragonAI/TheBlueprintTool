@@ -835,6 +835,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         ok: true,
         maxConcurrentCodexProcesses: Number.isInteger(configured) ? configured : 1,
         voicePipelineId: String(settings.voicePipelineId ?? ''),
+        masterTaskCompletionPipelineId: String(settings.masterTaskCompletionPipelineId ?? ''),
         pipelines: pipelines.map((pipeline) => ({ id: String(pipeline.id ?? ''), name: String(pipeline.name ?? pipeline.id ?? '') })),
         minimum: 1,
         maximum: 32
@@ -856,7 +857,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         runtime,
         maxConcurrentCodexProcesses: body.maxConcurrentCodexProcesses,
         voicePipelineId: body.voicePipelineId,
-        availableVoicePipelineIds: pipelines.map((pipeline) => String(pipeline.id ?? '')).filter(Boolean)
+        masterTaskCompletionPipelineId: body.masterTaskCompletionPipelineId,
+        availableVoicePipelineIds: pipelines.map((pipeline) => String(pipeline.id ?? '')).filter(Boolean),
+        availableMasterTaskCompletionPipelineIds: pipelines.map((pipeline) => String(pipeline.id ?? '')).filter(Boolean)
       });
       if (result.ok === true) void scheduleGlobalCodexProcesses();
       response.setHeader('content-type', 'application/json');

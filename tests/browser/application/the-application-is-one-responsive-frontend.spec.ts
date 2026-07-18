@@ -232,6 +232,99 @@ test('The responsive application preserves the mobile Control Room and expands t
   }
 });
 
+test('Master-task completion exposes manual and configured pipeline actions at desktop and mobile widths.', { timeout: 60_000 }, async () => {
+  const server = await startDecisionOsServer();
+  let browser: Browser | undefined;
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      executablePath: existsSync(chromiumExecutablePath) ? chromiumExecutablePath : undefined,
+      args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    });
+    const route = await resolveMasterTaskRoute(server.url);
+    const settingsPayload = JSON.stringify({
+      ok: true,
+      maxConcurrentCodexProcesses: 1,
+      voicePipelineId: '',
+      masterTaskCompletionPipelineId: 'complete-master-task',
+      pipelines: [{ id: 'complete-master-task', name: 'Complete master task' }],
+    });
+
+    const desktop = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    let pipelineRequest: Record<string, unknown> | undefined;
+    await desktop.route('**/api/settings/codex-processes', (request) => request.fulfill({ status: 200, contentType: 'application/json', body: settingsPayload }));
+    await desktop.route('**/api/codex/pipelines/runs', async (request) => {
+      pipelineRequest = request.request().postDataJSON() as Record<string, unknown>;
+      await request.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ ok: true, run: { id: 'pipeline-run-browser' } }) });
+    });
+    await desktop.goto(`${server.url}${route}`, { waitUntil: 'domcontentloaded' });
+    const desktopManual = desktop.getByRole('button', { name: 'Complete manually' });
+    const desktopPipeline = desktop.getByRole('button', { name: 'Complete with pipeline' });
+    await desktopPipeline.waitFor({ state: 'visible' });
+    await desktop.waitForFunction(() => !(document.querySelector<HTMLButtonElement>('.complete-master-task-pipeline-button')?.disabled ?? true));
+    const desktopPositions = await Promise.all([desktopManual.boundingBox(), desktopPipeline.boundingBox()]);
+    assert.equal(desktopPositions[0]?.y, desktopPositions[1]?.y);
+    await desktopPipeline.click();
+    await desktop.waitForURL(`${server.url}/?tab=exec`);
+    assert.equal(pipelineRequest?.pipelineId, 'complete-master-task');
+    assert.equal(typeof pipelineRequest?.ledgerId, 'string');
+    assert.equal(typeof pipelineRequest?.sourceCardId, 'string');
+
+    const unconfigured = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    await unconfigured.route('**/api/settings/codex-processes', (request) => request.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ...JSON.parse(settingsPayload), masterTaskCompletionPipelineId: '' }),
+    }));
+    await unconfigured.goto(`${server.url}${route}`, { waitUntil: 'domcontentloaded' });
+    const unconfiguredPipeline = unconfigured.getByRole('button', { name: 'Complete with pipeline' });
+    await unconfiguredPipeline.waitFor({ state: 'visible' });
+    assert.equal(await unconfiguredPipeline.isDisabled(), true);
+    assert.equal(await unconfiguredPipeline.getAttribute('title'), 'Configure a master-task completion pipeline in Settings.');
+
+    const rejected = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    let rejectedLedgerMutation = false;
+    await rejected.route('**/api/settings/codex-processes', (request) => request.fulfill({ status: 200, contentType: 'application/json', body: settingsPayload }));
+    await rejected.route('**/api/codex/pipelines/runs', (request) => request.fulfill({
+      status: 400,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: false, error: 'Pipeline admission rejected.' }),
+    }));
+    await rejected.route('**/decision-os/*', async (request) => {
+      if (request.request().method() === 'PATCH') rejectedLedgerMutation = true;
+      await request.continue();
+    });
+    await rejected.goto(`${server.url}${route}`, { waitUntil: 'domcontentloaded' });
+    const rejectedPipeline = rejected.getByRole('button', { name: 'Complete with pipeline' });
+    await rejected.waitForFunction(() => !(document.querySelector<HTMLButtonElement>('.complete-master-task-pipeline-button')?.disabled ?? true));
+    await rejectedPipeline.click();
+    await rejected.locator('#error-view:not([hidden])').waitFor({ state: 'visible' });
+    assert.equal(await rejected.locator('#error-message').textContent(), 'Pipeline admission rejected.');
+    assert.equal(rejectedLedgerMutation, false);
+
+    const mobile = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    let manualRequest: Record<string, unknown> | undefined;
+    await mobile.route('**/api/settings/codex-processes', (request) => request.fulfill({ status: 200, contentType: 'application/json', body: settingsPayload }));
+    await mobile.route('**/decision-os/*', async (request) => {
+      if (request.request().method() !== 'PATCH') return request.continue();
+      manualRequest = request.request().postDataJSON() as Record<string, unknown>;
+      await request.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+    });
+    await mobile.goto(`${server.url}${route}`, { waitUntil: 'domcontentloaded' });
+    const mobileManual = mobile.getByRole('button', { name: 'Complete manually' });
+    const mobilePipeline = mobile.getByRole('button', { name: 'Complete with pipeline' });
+    await mobilePipeline.waitFor({ state: 'visible' });
+    const mobilePositions = await Promise.all([mobileManual.boundingBox(), mobilePipeline.boundingBox()]);
+    assert.ok(Number(mobilePositions[1]?.y) > Number(mobilePositions[0]?.y));
+    await mobileManual.click();
+    await mobile.waitForURL((url) => url.pathname === '/' && url.searchParams.get('tab') === 'queue');
+    assert.deepEqual(manualRequest, { action: 'complete-master-task', masterTaskId: pipelineRequest?.sourceCardId });
+  } finally {
+    await browser?.close();
+    await stopDecisionOsServer(server.process);
+  }
+});
+
 async function resolveResponsiveCardRoute(serverUrl: string): Promise<string> {
   const catalog = await fetch(`${serverUrl}/decision-os/projects`).then((response) => response.json()) as {
     projects?: Array<{ id: string; root: string; ledgers?: Array<{ id: string }> }>;
@@ -251,6 +344,24 @@ async function resolveResponsiveCardRoute(serverUrl: string): Promise<string> {
     }
   }
   assert.fail('The test workspace must expose one card and one zone for responsive card routing.');
+}
+
+async function resolveMasterTaskRoute(serverUrl: string): Promise<string> {
+  const catalog = await fetch(`${serverUrl}/decision-os/projects`).then((response) => response.json()) as {
+    projects?: Array<{ id: string; root: string; ledgers?: Array<{ id: string }> }>;
+  };
+  const project = catalog.projects?.find((candidate) => candidate.root === repoRoot);
+  assert.ok(project, 'The test workspace must be registered in its project catalog.');
+  for (const ledger of project.ledgers ?? []) {
+    const canvas = await fetch(`${serverUrl}/p/${encodeURIComponent(project.id)}/api/ledgers/${encodeURIComponent(ledger.id)}/canvas`).then((response) => response.json()) as {
+      annotations?: Array<{ id?: string; variant?: string; color?: string }>;
+      cards?: Array<{ id?: string; status?: string; labels?: string[] }>;
+    };
+    const zone = canvas.annotations?.find((candidate) => candidate.id && candidate.variant !== 'group' && typeof candidate.color === 'string');
+    const card = canvas.cards?.find((candidate) => candidate.id && candidate.status !== 'done' && candidate.labels?.includes('master-task'));
+    if (zone?.id && card?.id) return `/p/${encodeURIComponent(project.id)}/ledgers/${encodeURIComponent(ledger.id)}/zones/${encodeURIComponent(zone.id)}/cards/${encodeURIComponent(card.id)}`;
+  }
+  assert.fail('The test workspace must expose one open master task and one zone.');
 }
 
 function collectPageErrors(page: Page): string[] {
