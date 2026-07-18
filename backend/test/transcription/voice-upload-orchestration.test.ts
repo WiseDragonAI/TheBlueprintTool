@@ -92,10 +92,12 @@ test('queued voice acceptance moves the card to transcribing-before-launch durin
       startedAt: (runtime.voiceCodexExecutionObservations as Record<string, Record<string, unknown>>)['specs\0card-a'].startedAt,
     });
 
+    ledger.cards = [];
+    writeFileSync(join(workspace, '.decision-os', 'specs.json'), JSON.stringify(ledger, null, 2));
     settleTranscription?.(new Response(JSON.stringify({ error: { message: 'provider unavailable' } }), { status: 503, headers: { 'content-type': 'application/json' } }));
     await waitForText(join(workspace, '.decision-os', 'threads', 'specs', 'thread-card-a.md'), '"status":"transcription failed"');
     ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { cards: Array<{ executionStatus?: string }> };
-    assert.equal(ledger.cards[0].executionStatus, undefined);
+    assert.equal(ledger.cards.length, 0);
     assert.equal((runtime.voiceCodexExecutionObservations as Record<string, unknown>)['specs\0card-a'], undefined);
   } finally {
     settleTranscription?.(new Response(JSON.stringify({ error: { message: 'test cleanup' } }), { status: 503, headers: { 'content-type': 'application/json' } }));
@@ -283,6 +285,7 @@ test('voice upload transcribes on the backend and starts Codex when the card has
     await waitForText(inputFile, 'Backend-owned transcript.');
     const ledger = JSON.parse(readFileSync(join(workspace, '.decision-os', 'specs.json'), 'utf8')) as { cards: Array<{ id: string; codexThreadRunId?: string }> };
     assert.match(ledger.cards.find((card) => card.id === 'card-a')?.codexThreadRunId ?? '', /^codex-skill-/);
+    assert.equal((runtime.voiceCodexExecutionObservations as Record<string, unknown>)['specs\0card-a'], undefined);
   } finally {
     server.close();
     process.chdir(originalCwd);
@@ -346,6 +349,7 @@ test('voice Pipeline mode starts the pipeline configured in Settings', async () 
     assert.equal(body.body.launchMode, 'pipeline');
     assert.equal(readCodexPipelineStore({ decisionOsRoot }).store.runs.some((run) => run.pipelineId === 'voice-pipeline'), true);
     await waitForPipelineComplete(decisionOsRoot, 'voice-pipeline');
+    assert.equal((runtime.voiceCodexExecutionObservations as Record<string, unknown>)['specs\0card-a'], undefined);
   } finally {
     server.close();
     process.chdir(originalCwd);
@@ -433,6 +437,7 @@ test('voice upload continues the existing Codex session when the card has a run 
     assert.equal(ledger.cards.find((card) => card.id === 'card-a')?.codexThreadRunId, runId);
     assert.equal(ledger.cards.find((card) => card.id === 'card-a')?.codexRunModel, 'gpt-5.4');
     assert.equal(ledger.cards.find((card) => card.id === 'card-a')?.codexRunEffort, 'medium');
+    assert.equal((runtime.voiceCodexExecutionObservations as Record<string, unknown>)['specs\0card-a'], undefined);
   } finally {
     server.close();
     process.chdir(originalCwd);
