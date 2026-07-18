@@ -159,10 +159,31 @@ function elapsedMs(input: { runtime: AnyRecord; runId: string; status: RunStatus
 }
 
 function normalizedRunDiagnostics(log: string): NormalizedRunEvent[] {
-  return actionableCodexLog(log).split('\n').flatMap((text, index) => {
-    if (!text.trim()) return [];
-    return [normalizeCardSkillRunDiagnostic({ line: index + 1, text })];
-  });
+  const lines = actionableCodexLog(log).split('\n');
+  const diagnostics: NormalizedRunEvent[] = [];
+  const structuredRecordStart = /^\d{4}-\d{2}-\d{2}T\S+\s+(?:ERROR|WARN|WARNING|INFO)\b/;
+  for (let index = 0; index < lines.length;) {
+    const text = lines[index];
+    if (!text.trim()) {
+      index += 1;
+      continue;
+    }
+    const startLine = index + 1;
+    if (!structuredRecordStart.test(text)) {
+      diagnostics.push(normalizeCardSkillRunDiagnostic({ line: startLine, text }));
+      index += 1;
+      continue;
+    }
+    const record = [text];
+    index += 1;
+    while (index < lines.length && !structuredRecordStart.test(lines[index])) {
+      record.push(lines[index]);
+      index += 1;
+    }
+    while (record.at(-1)?.trim() === '') record.pop();
+    diagnostics.push(normalizeCardSkillRunDiagnostic({ line: startLine, text: record.join('\n') }));
+  }
+  return diagnostics;
 }
 
 function uniqueToolCallCount(runId: string, events: NormalizedRunEvent[]): number {
