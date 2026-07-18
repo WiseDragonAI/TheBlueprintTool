@@ -316,6 +316,7 @@ test('delegates touch sorting and animation to vendored SortableJS', () => {
 
 test('has no Queue-rank parsing or persistence contract', () => {
   assert.doesNotMatch(mobile, /queueRank|Queue rank|withQueueRank/);
+  assert.match(mobile, /nextControlRoom\.queue\.sort\(compareControlRoomQueueTasks\)/);
 });
 
 test('persists optimistic Queue and Backlog placement and reconciles rejected changes', () => {
