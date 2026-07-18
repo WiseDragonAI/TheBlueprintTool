@@ -138,6 +138,28 @@ test('initializes an existing source directory without replacing its files', () 
   assert.equal(readFileSync(join(selected, 'README.md'), 'utf8'), '# Existing source\n');
   assert.equal(existsSync(join(selected, '.git')), true);
   assert.equal(existsSync(join(selected, '.decision-os', 'state.json')), true);
+  assert.deepEqual(created.ledgers, [{ id: 'tasks', title: 'tasks', ledgerFile: '.decision-os/tasks.json' }]);
+  assert.equal(existsSync(join(selected, '.decision-os', 'tasks.json')), true);
+});
+
+test('adds a default tasks ledger when a selected directory has empty Decision OS state', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-empty-project-create-'));
+  const selected = join(root, 'empty-project');
+  mkdirSync(join(selected, '.decision-os'), { recursive: true });
+  writeFileSync(join(selected, '.decision-os', 'state.json'), `${JSON.stringify({ ledgers: [] }, null, 2)}\n`);
+
+  const created = createDecisionOsProject({
+    masterRoot: root,
+    masterDecisionOsRoot: join(root, '.decision-os'),
+    name: 'Empty Project',
+    description: '',
+    directory: 'empty-project',
+  });
+
+  assert.deepEqual(created.ledgers, [{ id: 'tasks', title: 'tasks', ledgerFile: '.decision-os/tasks.json' }]);
+  assert.equal(existsSync(join(selected, '.decision-os', 'tasks.json')), true);
+  const overview = JSON.parse(readFileSync(join(selected, '.decision-os', 'ledgers-canvas.json'), 'utf8')) as { cards: Array<Record<string, unknown>> };
+  assert.equal(overview.cards.some((card) => card.id === 'ledger-card:tasks' && card.targetLedgerId === 'tasks'), true);
 });
 
 test('initializes and identifies a project through a catalog symbolic link', () => {

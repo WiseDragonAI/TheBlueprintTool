@@ -259,6 +259,8 @@ export function createDecisionOsProject(input: {
       mkdirSync(decisionOsRoot, { recursive: true });
       writeFileSync(resolve(decisionOsRoot, 'state.json'), `${JSON.stringify({ ledgers: [] }, null, 2)}\n`);
       writeFileSync(resolve(decisionOsRoot, 'project.json'), `${JSON.stringify({ id: randomUUID() }, null, 2)}\n`);
+    }
+    if (ledgersFor(decisionOsRoot).length === 0) {
       createLinkedLedger({ decisionOsRoot, title: 'tasks' });
     }
     const id = stableProjectId(decisionOsRoot, projectRelativePath);
