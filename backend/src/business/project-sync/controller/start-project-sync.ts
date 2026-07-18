@@ -5,7 +5,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, rmSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
-import type { DecisionOsProject } from '../../server/helper/project-catalog.js';
+import { tasksLedgerForProject, type DecisionOsProject } from '../../server/helper/project-catalog.js';
 import type { ProjectCatalogStore } from '../../server/helper/project-catalog-store.js';
 import type { FederationNodeConnector } from '../../federation/helper/federation-node-connector.js';
 import { executeProjectSyncPipelineSkill } from './execute-project-sync-pipeline-skill.js';
@@ -124,7 +124,7 @@ export function createProjectSyncController(input: {
         const codex = await executeProjectSyncPipelineSkill({
           projectRoot: project.root,
           runtime: input.runtimeForProject(project),
-          ledgerFile: resolve(project.decisionOsRoot, String(project.ledgers[0]?.ledgerFile ?? '').replace(/^\.decision-os\//, '')),
+          ledgerFile: resolve(project.decisionOsRoot, tasksLedgerForProject(project).ledgerFile.replace(/^\.decision-os\//, '')),
           syncId: run.syncId,
           nodeId,
           initiatorNodeId: run.initiatorNodeId,
@@ -231,7 +231,6 @@ export function createProjectSyncController(input: {
           sourceSnapshot,
           gitSshCommand,
         });
-        if (taskProject.ledgers.length === 0) throw new Error('The synchronized project has no ledger for its synchronization task.');
         const task = admitProjectSyncMasterTask({
           project: taskProject,
           sourceProjectId: source.id,

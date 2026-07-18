@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { DecisionOsProject } from '../../server/helper/project-catalog.js';
+import { tasksLedgerForProject, type DecisionOsProject } from '../../server/helper/project-catalog.js';
 import { applyLedgerMutation } from '../../ledger/helper/apply-ledger-mutation.js';
 import { stripHydratedThreadNotes } from '../../ledger/helper/thread-content-file.js';
 
@@ -14,8 +14,7 @@ export function admitProjectSyncMasterTask(input: {
   syncId: string;
   waitingSince: string;
 }): { ledgerId: string; masterCardId: string; zoneId: string } {
-  const ledger = input.project.ledgers[0];
-  if (!ledger) throw new Error('The initiating project has no ledger for the synchronization task.');
+  const ledger = tasksLedgerForProject(input.project);
   const ledgerPath = resolve(input.project.decisionOsRoot, ledger.ledgerFile.replace(/^\.decision-os\//, ''));
   const document = JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord & {
     cards?: AnyRecord[];

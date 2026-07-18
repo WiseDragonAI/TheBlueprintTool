@@ -50,7 +50,7 @@ import { restartCodexPipelineRunController } from '../../codex/controller/restar
 import { resumeCodexPipelineRuns } from '../../codex/helper/resume-codex-pipeline-runs.js';
 import { recoverCodexProcessQueue } from '../../codex/helper/codex-process-queue.js';
 import { nextPendingCodexProcessCreatedAt, pendingCodexProcessEntries, runningCodexProcessCount, scheduleCodexProcesses } from '../../codex/helper/codex-process-scheduler.js';
-import { resolveCatalogProject } from './project-catalog.js';
+import { resolveCatalogProject, tasksLedgerForProject } from './project-catalog.js';
 import { createProjectCatalogStore } from './project-catalog-store.js';
 import { listProjectDirectories } from './project-directory-browser.js';
 import { isGlobalProjectEndpoint, isProjectSensitiveEndpoint, parseProjectUrlScope } from './project-url-scope.js';
@@ -929,7 +929,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         const codex = await executeProjectSyncPipelineSkill({
           projectRoot: project.root,
           runtime: projectContext(project.decisionOsRoot, project.id).runtime,
-          ledgerFile: resolve(project.decisionOsRoot, String(project.ledgers[0]?.ledgerFile ?? '').replace(/^\.decision-os\//, '')),
+          ledgerFile: resolve(project.decisionOsRoot, tasksLedgerForProject(project).ledgerFile.replace(/^\.decision-os\//, '')),
           syncId: String(body.syncId ?? ''),
           nodeId: federation.localOwner().ownerNodeId,
           initiatorNodeId: String(body.initiatorNodeId ?? ''),
