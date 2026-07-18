@@ -37,15 +37,7 @@ function threadCodexPreference(threadId: string): CardCodexRunPreference {
 }
 
 function threadCodexHydration(threadId: string): { status: string; active: boolean; queuePosition?: number | null } {
-  const { card } = activeThreadCard(threadId);
   const summary = state.threadRunSummaryByThreadId?.[threadId] as { ok?: boolean; active?: boolean; status?: string; executionId?: string; queuePosition?: number | null } | undefined;
-  const persistedStatus = String(card?.executionStatus ?? '');
-  const persistedExecutionId = String(card?.codexActiveExecutionId ?? '');
-  const summaryMatchesExecution = !persistedExecutionId || summary?.executionId === persistedExecutionId;
-  if ((persistedStatus === 'pending' || persistedStatus === 'running')
-    && (!summaryMatchesExecution || summary?.status !== persistedStatus)) {
-    return { status: persistedStatus, active: persistedStatus === 'running' };
-  }
   return {
     status: summary?.ok === true ? String(summary.status ?? '') : 'unknown',
     active: summary?.ok === true ? summary.active === true : false,
@@ -241,10 +233,6 @@ function bindActiveThreadRun(threadId: string): void {
     cardId,
     threadId,
     runId,
-    expectedExecutionId: String(card?.codexActiveExecutionId ?? ''),
-    expectedStatus: String(card?.executionStatus ?? '') === 'pending' ? 'pending'
-      : String(card?.executionStatus ?? '') === 'running' ? 'running'
-        : undefined,
   });
 }
 

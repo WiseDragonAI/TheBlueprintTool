@@ -3,7 +3,6 @@
  * WHY: Thread launches and Process Card pipelines must feed the same card-owned Codex Log contract.
  */
 type AnyRecord = Record<string, unknown>;
-export type CodexExecutionStatus = 'pending' | 'running';
 
 export function projectCardCodexRun(input: {
   ledger: AnyRecord & { cards?: AnyRecord[] };
@@ -13,7 +12,6 @@ export function projectCardCodexRun(input: {
   codexModel: string;
   codexEffort: string;
   ownership: 'thread' | 'card';
-  executionStatus?: CodexExecutionStatus;
   pipeline?: {
     runId: string;
     name: string;
@@ -25,8 +23,6 @@ export function projectCardCodexRun(input: {
   const card = (input.ledger.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
   if (!card) return null;
   card.codexActiveRunId = input.runId;
-  card.executionStatus = input.executionStatus ?? 'running';
-  card.executionRunId = input.pipeline?.runId ?? input.runId;
   card.codexRunModel = input.codexModel;
   card.codexRunEffort = input.codexEffort;
   delete card.codexQueuedPipelineRunId;

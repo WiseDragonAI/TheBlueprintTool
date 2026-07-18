@@ -11,7 +11,7 @@ import { encodeWavBlob } from '../helper/encode-wav-blob.js';
 import { flushPendingLedgerContentRefresh } from '../../refresh/effect/subscribe-ledger-content-events.js';
 import { threadCodexCardId } from '../../codex/helper/thread-codex-card-id.js';
 import { releaseVoiceRecordingWakeLock } from '../effect/hold-voice-recording-wake-lock.js';
-import { voiceProjectId } from '../helper/voice-project-id.js';
+import { voiceProjectId, voiceReplicaNodeId } from '../helper/voice-project-id.js';
 
 export async function stopVoiceRecording(input: { launchMode?: 'send' | 'run' | 'pipeline'; queueCodex?: boolean; onPersisted?: () => void } = {}): Promise<boolean> {
   if (state.voice.animationFrameId) cancelAnimationFrame(state.voice.animationFrameId);
@@ -48,6 +48,7 @@ export async function stopVoiceRecording(input: { launchMode?: 'send' | 'run' | 
   flushPendingLedgerContentRefresh();
   return requestTranscription(audio, {
     projectId: voiceProjectId(),
+    replicaNodeId: voiceReplicaNodeId(),
     threadId,
     cardId: threadCodexCardId(state.activeLedger, threadId),
     launchMode: input.launchMode ?? (input.queueCodex ? 'run' : 'send'),

@@ -70,9 +70,9 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
       { name: created.project.name, description: created.project.description, relativePath: created.project.relativePath },
       { name: 'Project Gamma', description: 'Created from the catalog', relativePath: 'Project Gamma' },
     );
-    assert.deepEqual(created.project.ledgers, [{ id: 'tasks', title: 'tasks', ledgerFile: '.decision-os/tasks.json' }]);
+    assert.deepEqual(created.project.ledgers, [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }]);
     assert.deepEqual(JSON.parse(readFileSync(join(home, 'Project Gamma', '.decision-os', 'state.json'), 'utf8')), {
-      ledgers: [{ id: 'tasks', title: 'tasks', ledgerFile: '.decision-os/tasks.json', cardId: 'ledger-card:tasks' }],
+      ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json', cardId: 'ledger-card:tasks' }],
     });
     const createdTasks = JSON.parse(readFileSync(join(home, 'Project Gamma', '.decision-os', 'tasks.json'), 'utf8')) as { modelName: string; cards: unknown[] };
     assert.equal(createdTasks.modelName, 'tasks');

@@ -547,7 +547,7 @@ test('queued thread runs become read-only and render their queue position withou
   }
 });
 
-test('a newer durable pending execution hides launch controls before its status request resolves', async () => {
+test('persisted card execution fields cannot override a terminal run summary', async () => {
   const previousFetch = globalThis.fetch;
   const { heading } = installDom();
   const { state } = await import('../../../../src/runtime/state.js');
@@ -616,9 +616,9 @@ test('a newer durable pending execution hides launch controls before its status 
 
     renderThreadPanel();
 
-    assert.equal(heading.querySelector('.thread-actions')?.hidden, true);
-    assert.equal(heading.dataset.codexStatus, 'pending');
-    assert.equal(heading.dataset.codexRunning, 'true');
+    assert.equal(heading.querySelector('.thread-actions')?.hidden, false);
+    assert.equal(heading.dataset.codexStatus, '');
+    assert.equal(heading.dataset.codexRunning, 'false');
   } finally {
     globalThis.fetch = previousFetch;
     state.threadId = '';

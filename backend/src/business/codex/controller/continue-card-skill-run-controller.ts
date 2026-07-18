@@ -231,9 +231,6 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     : resolveCodexResumeCommand({ workspaceRoot, runtime, sessionId, codexModel, codexEffort });
   if (card) {
     card.codexActiveRunId = runId;
-    card.codexActiveExecutionId = executionId;
-    card.executionStatus = queueDispatch ? 'running' : 'pending';
-    card.executionRunId = runId;
     card.codexRunModel = command.model;
     card.codexRunEffort = command.effort;
     stripHydratedThreadNotes(ledger);

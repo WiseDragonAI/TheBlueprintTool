@@ -11,7 +11,7 @@ import { deletePendingVoiceUpload, readPendingVoiceUpload } from './persist-pend
 import { applyVoiceServerNote, watchVoiceTranscription } from './reconcile-voice-transcription.js';
 import { renderVoiceStatus } from './render-voice-status.js';
 import { uploadVoiceAudio } from './upload-voice-audio.js';
-import { voiceProjectId } from '../helper/voice-project-id.js';
+import { voiceProjectId, voiceReplicaNodeId } from '../helper/voice-project-id.js';
 
 export async function submitPendingVoiceUpload(noteId: string): Promise<boolean> {
   const pending = await readPendingVoiceUpload(noteId);
@@ -21,6 +21,7 @@ export async function submitPendingVoiceUpload(noteId: string): Promise<boolean>
   renderVoiceStatus();
   const upload = await uploadVoiceAudio(pending.audio, {
     projectId: voiceProjectId(pending.projectId),
+    replicaNodeId: voiceReplicaNodeId(pending.replicaNodeId),
     ledgerId: pending.ledgerId,
     threadId: pending.threadId,
     cardId: pending.cardId,
@@ -71,7 +72,7 @@ export async function submitPendingVoiceUpload(noteId: string): Promise<boolean>
   state.voice.transcriptionStatus = 'idle';
   const scope = activeThreadContentScope();
   if (scope && scope.threadId === pending.threadId) await loadActiveThreadSlice(scope);
-  watchVoiceTranscription({ projectId: voiceProjectId(pending.projectId), ledgerId: pending.ledgerId || currentLedgerStateId(), threadId: pending.threadId, noteId });
+  watchVoiceTranscription({ projectId: voiceProjectId(pending.projectId), replicaNodeId: voiceReplicaNodeId(pending.replicaNodeId), ledgerId: pending.ledgerId || currentLedgerStateId(), threadId: pending.threadId, noteId });
   telemetry('voice-upload-accepted', { noteId, threadId: pending.threadId });
   renderVoiceStatus();
   return true;

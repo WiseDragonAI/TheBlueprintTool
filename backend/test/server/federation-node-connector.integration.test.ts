@@ -263,13 +263,13 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     assert.equal(sockets.size, 2, 'both Decision OS connectors reached the relay');
     assert.equal(manifests.size, 2, 'both Decision OS connectors published a manifest');
     const catalogA = await waitFor(async () => {
-      const body = await fetch(`${baseA}/decision-os/projects`).then((response) => response.json()) as { projects: Array<{ id: string; name: string; remote?: boolean }> };
-      return body.projects.some((project) => project.remote) ? body.projects : null;
+      const body = await fetch(`${baseA}/decision-os/projects`).then((response) => response.json()) as { projects: Array<{ id: string; name: string; replicas: Array<{ nodeId: string }> }> };
+      return body.projects.some((project) => project.replicas.some((replica) => replica.nodeId === 'node-b')) ? body.projects : null;
     });
-    const catalogB = await fetch(`${baseB}/decision-os/projects`).then((response) => response.json()) as { projects: Array<{ id: string; name: string; remote?: boolean }> };
-    const remoteBeta = catalogA.find((project) => project.remote && project.name === 'beta')!;
-    assert.ok(remoteBeta.id.startsWith('node-b:'));
-    assert.ok(catalogB.projects.some((project) => project.remote && project.name === 'alpha'));
+    const catalogB = await fetch(`${baseB}/decision-os/projects`).then((response) => response.json()) as { projects: Array<{ id: string; name: string; replicas: Array<{ nodeId: string }> }> };
+    const remoteBeta = catalogA.find((project) => project.name === 'beta')!;
+    assert.equal(remoteBeta.id.includes(':'), false);
+    assert.ok(catalogB.projects.some((project) => project.name === 'alpha' && project.replicas.some((replica) => replica.nodeId === 'node-a')));
     let lastControlRoomA: unknown = null;
     const controlRoomA = await waitFor(async () => {
       const body = await fetch(`${baseA}/api/control-room`).then((response) => response.json()) as {
@@ -283,8 +283,8 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
       throw new Error(`${error instanceof Error ? error.message : error}\nLast Control Room projection: ${JSON.stringify(lastControlRoomA)}`);
     });
     assert.deepEqual(controlRoomA.federation, { nodeCount: 2, remoteNodeCount: 1 });
-    assert.ok(controlRoomA.projects.some((project) => project.id.startsWith('node-b:') && project.ownerNodeId === 'node-b'));
-    assert.ok(controlRoomA.allTasks.some((task) => task.title === 'beta card' && task.projectId.startsWith('node-b:') && task.ownerNodeId === 'node-b'));
+    assert.ok(controlRoomA.projects.some((project) => project.id === remoteBeta.id && project.ownerNodeId === 'node-b'));
+    assert.ok(controlRoomA.allTasks.some((task) => task.title === 'beta card' && task.projectId === remoteBeta.id && task.ownerNodeId === 'node-b'));
     const settingsA = await fetch(`${baseA}/api/settings/federation`).then((response) => response.json()) as Record<string, unknown>;
     assert.equal(settingsA.connected, true);
     assert.equal(settingsA.credentialConfigured, true);
@@ -297,7 +297,7 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     const events = await fetch(`${baseA}/api/control-room-events`);
     const eventReader = events.body!.getReader();
     await eventReader.read();
-    const directMutation = await fetch(`${baseB}/p/${encodeURIComponent(catalogB.projects.find((project) => !project.remote)!.id)}/decision-os/specs`, {
+    const directMutation = await fetch(`${baseB}/p/${encodeURIComponent(catalogB.projects.find((project) => project.name === 'beta')!.id)}/decision-os/specs`, {
       method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'beta-card', title: 'changed on owner' } }),
     });
     assert.equal(directMutation.status, 200);
@@ -313,11 +313,14 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     const registryA = readFileSync(registryAPath, 'utf8');
     const registryB = readFileSync(registryBPath, 'utf8');
 
-    const remoteLedger = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/specs`).then((response) => response.json()) as { cards: Array<{ title: string }> };
+    const remoteHeaders = { 'x-decision-os-replica-node': 'node-b' };
+    const remoteLedger = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/specs`, { headers: remoteHeaders }).then((response) => response.json()) as { cards: Array<{ title: string }> };
     assert.equal(remoteLedger.cards[0].title, 'changed on owner');
+    const queryRoutedLedger = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/specs?replica=node-b`).then((response) => response.json()) as { cards: Array<{ title: string }> };
+    assert.equal(queryRoutedLedger.cards[0].title, 'changed on owner');
     const mutation = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/specs`, {
       method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...remoteHeaders },
       body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'beta-card', title: 'mutated by node-a' } }),
     });
     assert.equal(mutation.status, 200);
@@ -352,7 +355,7 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     assert.ok(manuallySynchronizedLibraries[1].pipelines.some((pipeline) => pipeline.id === 'manual-pipeline'));
 
     await waitFor(async () => {
-      const response = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/api/ledgers/specs/cards/beta-card`);
+      const response = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/api/ledgers/specs/cards/beta-card`, { headers: remoteHeaders });
       if (response.status !== 200) return null;
       const body = await response.json() as { title?: string };
       return body.title === 'mutated by node-a' ? body : null;
@@ -361,14 +364,14 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     serverB.close();
     await once(serverB, 'close');
     const offlineCard = await waitFor(async () => {
-      const response = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/api/ledgers/specs/cards/beta-card`);
+      const response = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/api/ledgers/specs/cards/beta-card`, { headers: remoteHeaders });
       if (response.status !== 200) return null;
       const body = await response.json() as { title?: string; replica?: { status?: string } };
       return body.title === 'mutated by node-a' && body.replica?.status === 'offline' ? body : null;
     });
     assert.equal(offlineCard.title, 'mutated by node-a', 'card detail remains readable from the local replica after owner disconnect');
-    const retainedSkills = await fetch(`${baseA}/p/${encodeURIComponent(catalogA.find((project) => !project.remote)!.id)}/api/codex/skills`).then((response) => response.json()) as { skills: Array<{ name: string }> };
-    const retainedPipelines = await fetch(`${baseA}/p/${encodeURIComponent(catalogA.find((project) => !project.remote)!.id)}/api/codex/pipelines`).then((response) => response.json()) as { pipelines: Array<{ id: string }> };
+    const retainedSkills = await fetch(`${baseA}/p/${encodeURIComponent(catalogA.find((project) => project.name === 'alpha')!.id)}/api/codex/skills`).then((response) => response.json()) as { skills: Array<{ name: string }> };
+    const retainedPipelines = await fetch(`${baseA}/p/${encodeURIComponent(catalogA.find((project) => project.name === 'alpha')!.id)}/api/codex/pipelines`).then((response) => response.json()) as { pipelines: Array<{ id: string }> };
     assert.ok(retainedSkills.skills.some((skill) => skill.name === 'beta-skill'), 'Process Card skill catalog remains local after beta disconnects');
     assert.ok(retainedPipelines.pipelines.some((pipeline) => pipeline.id === 'beta-pipeline'), 'Process Card pipeline catalog remains local after beta disconnects');
   } finally {

@@ -7,19 +7,20 @@ import { normalizeLedgerNotes } from '../../ledger/helper/normalize-ledger-notes
 import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { deletePendingVoiceUpload, listPendingVoiceUploads } from './persist-pending-voice-upload.js';
-import { voiceProjectId } from '../helper/voice-project-id.js';
+import { voiceProjectId, voiceReplicaNodeId } from '../helper/voice-project-id.js';
 
 const activeRestores = new Set<string>();
 const restoredScopes = new Set<string>();
 
 export async function restorePendingVoiceUploads(threadId: string): Promise<boolean> {
   const projectId = voiceProjectId();
+  const replicaNodeId = voiceReplicaNodeId();
   const ledgerId = currentLedgerStateId();
-  const restoreKey = `${projectId}:${ledgerId}:${threadId}`;
+  const restoreKey = `${projectId}:${replicaNodeId}:${ledgerId}:${threadId}`;
   if (!ledgerId || !threadId || !state.activeLedger || activeRestores.has(restoreKey) || restoredScopes.has(restoreKey)) return false;
   activeRestores.add(restoreKey);
   try {
-    const entries = await listPendingVoiceUploads({ projectId, ledgerId, threadId });
+    const entries = await listPendingVoiceUploads({ projectId, replicaNodeId, ledgerId, threadId });
     restoredScopes.add(restoreKey);
     if (!entries.length || !state.activeLedger || state.threadId !== threadId || currentLedgerStateId() !== ledgerId) return false;
     const notesByThread = normalizeLedgerNotes(state.activeLedger);

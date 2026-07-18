@@ -25,14 +25,16 @@ import { confirmThreadCodexSessionDeletionController } from '/src/runtime/codex/
 import { deleteThreadCodexSessionController } from '/src/runtime/codex/controller/delete-thread-codex-session-controller.js';
 import { collapseMobileThreadComposer, expandMobileThreadComposer } from './thread-composer.js';
 import { createMobileThreadSessionDeletionHandler, resetMobileThreadConfirmationModal } from './thread-session-deletion.js';
-import { projectScopedRequestPath } from '/src/runtime/project/helper/project-request-scope.js';
+import { projectReplicaRequestPath, projectScopedRequestPath, replicaRequestInit } from '/src/runtime/project/helper/project-request-scope.js';
 import { reconcileResponsiveThreadLedger } from './thread-ledger-reconciliation.js';
 import { voiceRetryInput } from './thread-voice-retry.js';
+import { bindDesktopVoiceActionPreview } from '/src/runtime/voice/effect/update-desktop-voice-action-preview.js';
 import { hydrateThreadViewportState, saveThreadPanelScrollPositions } from '/src/runtime/thread/effect/persist-thread-scroll.js';
 import { readPersistedState } from '/src/runtime/persistence/helper/read-persisted-state.js';
 
 let currentCard = null;
 let currentProjectId = '';
+let currentReplicaNodeId = '';
 let currentLedgerId = '';
 let onLedgerRefresh = async () => null;
 let onCodexStarted = async () => null;
@@ -93,15 +95,19 @@ function hydrateThreadRun(runId, startedAt, status, queuePosition) {
 }
 
 export function syncMobileThreadContext(input) {
-  const contextChanged = currentProjectId !== String(input.projectId ?? '') || currentLedgerId !== String(input.ledgerId ?? '');
+  const contextChanged = currentProjectId !== String(input.projectId ?? '')
+    || currentReplicaNodeId !== String(input.replicaNodeId ?? '')
+    || currentLedgerId !== String(input.ledgerId ?? '');
   if (contextChanged) unsubscribeEvents();
   currentProjectId = String(input.projectId ?? '');
+  currentReplicaNodeId = String(input.replicaNodeId ?? '');
   currentLedgerId = String(input.ledgerId ?? '');
   onLedgerRefresh = input.onLedgerRefresh ?? onLedgerRefresh;
   onCodexStarted = input.onCodexStarted ?? onCodexStarted;
   onQuickVoiceSubmitted = input.onQuickVoiceSubmitted ?? onQuickVoiceSubmitted;
   canvasState.canvasMode = 'ledger';
   canvasState.projectId = currentProjectId;
+  canvasState.replicaNodeId = currentReplicaNodeId;
   canvasState.activeTab = currentLedgerId;
   canvasState.activeLedgerId = currentLedgerId;
   canvasState.activeLedger = input.ledger;
@@ -128,7 +134,16 @@ export function openMobileThread(card, zoneColor) {
   document.body.classList.add('card-thread-open');
   bumpThreadPresentationGeneration();
   if (window.matchMedia?.('(max-width: 760px)').matches === true && history.state?.responsiveThreadLayer?.threadId !== threadId) {
-    history.pushState({ ...history.state, responsiveThreadLayer: { projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(card.id), threadId } }, '', location.href);
+    history.pushState({
+      ...history.state,
+      responsiveThreadLayer: {
+        projectId: currentProjectId,
+        replicaNodeId: currentReplicaNodeId,
+        ledgerId: currentLedgerId,
+        cardId: String(card.id),
+        threadId
+      }
+    }, '', location.href);
   }
   subscribeEvents();
   renderThreadPanel();
@@ -261,6 +276,7 @@ async function refreshThreadLedger(optimisticRunId = '') {
   const owner = Object.freeze({
     generation: ++threadRefreshGeneration,
     projectId: currentProjectId,
+    replicaNodeId: currentReplicaNodeId,
     ledgerId: currentLedgerId,
     cardId: String(currentCard?.id || ''),
     threadId: String(canvasState.threadId || ''),
@@ -268,17 +284,21 @@ async function refreshThreadLedger(optimisticRunId = '') {
   });
   const ownsRefresh = () => owner.generation === threadRefreshGeneration
     && owner.projectId === currentProjectId
+    && owner.replicaNodeId === currentReplicaNodeId
     && owner.ledgerId === currentLedgerId
     && owner.cardId === String(currentCard?.id || '')
     && owner.threadId === String(canvasState.threadId || '')
     && owner.panelOpen === canvasState.threadPanelOpen;
   if (!owner.ledgerId || !owner.threadId || !owner.panelOpen) return;
-  const response = await fetch(projectScopedRequestPath(`/api/ledgers/${encodeURIComponent(owner.ledgerId)}/threads/${encodeURIComponent(owner.threadId)}`, owner.projectId), { cache: 'no-store' });
+  const response = await fetch(
+    projectScopedRequestPath(`/api/ledgers/${encodeURIComponent(owner.ledgerId)}/threads/${encodeURIComponent(owner.threadId)}`, owner.projectId),
+    replicaRequestInit({ cache: 'no-store' }, owner.replicaNodeId)
+  );
   if (!ownsRefresh()) return;
   if (!response.ok) return;
   const slice = await response.json();
   if (!ownsRefresh()) return;
-  const refreshed = await onLedgerRefresh(owner.ledgerId);
+  const refreshed = await onLedgerRefresh(owner.ledgerId, owner.replicaNodeId);
   if (!ownsRefresh()) return;
   const reconciled = reconcileResponsiveThreadLedger({
     activeLedger: canvasState.activeLedger,
@@ -344,7 +364,7 @@ async function startCodex(button) {
 
 function subscribeEvents() {
   if (typeof EventSource === 'undefined') return;
-  const url = projectScopedRequestPath('/api/ledger-content-events', currentProjectId);
+  const url = projectReplicaRequestPath('/api/ledger-content-events', currentProjectId, currentReplicaNodeId);
   if (eventSource && eventSourceUrl === url) return;
   eventSource?.close();
   eventSourceUrl = url;
@@ -370,6 +390,7 @@ function unsubscribeEvents() {
 export function initializeMobileThread() {
   if (initialized) return;
   initialized = true;
+  bindDesktopVoiceActionPreview();
   hydrateThreadViewportState(readPersistedState());
   document.querySelector('.thread-open-button').addEventListener('click', () => {
     if (currentCard) openMobileThread(currentCard, getComputedStyle(document.querySelector('#card-view')).getPropertyValue('--zone-color').trim());

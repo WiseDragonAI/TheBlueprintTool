@@ -10,6 +10,8 @@ import type {
 } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import { pipelinesModal } from '../../dom.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
+import { renderCodexLibrary } from '../component/render-codex-library.js';
+import { tagsForSkill } from '../helper/skill-library-presentation.js';
 import { loadCodexPipelines } from './load-codex-pipelines.js';
 import { openPipelineEditor } from './render-pipeline-editor-modal.js';
 import { requestFederatedLibrarySynchronization } from './request-federated-library-synchronization.js';
@@ -25,6 +27,8 @@ export type PipelineLibraryState = {
   synchronizing: boolean;
   synchronizationMessage: string;
   error: string;
+  query: string;
+  selectedCategory: string;
   onLibraryChanged?: (result: CodexPipelineSaveResult) => void | Promise<void>;
 };
 
@@ -38,6 +42,8 @@ export const pipelineLibraryState: PipelineLibraryState = {
   synchronizing: false,
   synchronizationMessage: '',
   error: '',
+  query: '',
+  selectedCategory: 'All',
 };
 
 let libraryLoadGeneration = 0;
@@ -62,6 +68,13 @@ function referencesForPipeline(pipelineId: string): readonly CodexPipelineInvali
 
 function stepMap(): Map<string, CodexPipelineStep> {
   return new Map(pipelineLibraryState.steps.map((step) => [step.id, step]));
+}
+
+function tagsForPipeline(pipeline: CodexPipeline): string[] {
+  const stepsById = stepMap();
+  return [...new Set(pipeline.stepIds.flatMap((stepId) => (
+    stepsById.get(stepId)?.skills.flatMap((skill) => tagsForSkill({ name: skill.skillName })) ?? []
+  )))];
 }
 
 function openEditorForPipeline(pipeline?: CodexPipeline): void {
@@ -215,7 +228,33 @@ export function renderPipelinesModal(): void {
     empty.replaceChildren(message, description, button('Create pipeline', () => openEditorForPipeline(), 'primary-action', 'pipeline-library-create'));
     content.replaceChildren(empty);
   } else {
-    content.replaceChildren(...pipelineLibraryState.pipelines.map(renderPipelineRow));
+    const controls = document.createElement('div');
+    controls.className = 'codex-library-controls pipeline-library-controls';
+    const list = document.createElement('div');
+    list.className = 'pipeline-library-results';
+    renderCodexLibrary({
+      records: pipelineLibraryState.pipelines.map((pipeline) => ({
+        ...pipeline,
+        description: pipeline.purpose,
+        tags: tagsForPipeline(pipeline),
+        searchText: pipeline.stepIds.flatMap((stepId) => stepMap().get(stepId)?.skills.map((skill) => skill.skillName) ?? []).join(' '),
+      })),
+      projects: [],
+      filters: { query: pipelineLibraryState.query, projectId: 'All', tag: pipelineLibraryState.selectedCategory },
+      controlsHost: controls,
+      resultsHost: list,
+      emptyMessage: 'No matching pipelines.',
+      resultCountLabel: 'saved pipelines',
+      synchronizing: pipelineLibraryState.synchronizing,
+      onSynchronize: () => { void resynchronizePipelinesModalLibraries(); },
+      onFiltersChanged: (filters) => {
+        pipelineLibraryState.query = filters.query;
+        pipelineLibraryState.selectedCategory = filters.tag;
+        renderPipelinesModal();
+      },
+      renderRecord: (pipeline) => renderPipelineRow(pipeline),
+    });
+    content.replaceChildren(controls, list);
   }
 
   const footer = document.createElement('footer');
@@ -241,6 +280,8 @@ export async function openPipelinesModal(input: { onLibraryChanged?: PipelineLib
   pipelineLibraryState.synchronizing = false;
   pipelineLibraryState.error = '';
   pipelineLibraryState.synchronizationMessage = '';
+  pipelineLibraryState.query = '';
+  pipelineLibraryState.selectedCategory = 'All';
   renderPipelinesModal();
   showLibrary();
   telemetry('codex-pipelines-modal-open', {});

@@ -4,11 +4,13 @@ export function captureRouteSnapshot(locationLike, parseScope) {
   const pathname = String(locationLike.pathname || '/');
   const scope = parseScope(pathname);
   const [section = '', ledgerId = '', zoneMarker = '', zoneId = '', cardMarker = '', cardId = ''] = scope?.segments ?? [];
+  const search = String(locationLike.search || '');
   return Object.freeze({
     pathname,
-    search: String(locationLike.search || ''),
+    search,
     hash: String(locationLike.hash || ''),
     projectId: String(scope?.projectId || ''),
+    replicaNodeId: new URLSearchParams(search).get('replica')?.trim() || '',
     section,
     ledgerId,
     zoneId: zoneMarker === 'zones' ? zoneId : '',

@@ -19,23 +19,24 @@ function text(value: unknown): string {
 }
 
 function logicalProjectKey(project: AnyRecord): string {
-  const localProjectId = text(project.localProjectId).trim();
-  return localProjectId ? `project:${localProjectId}` : `node:${text(project.ownerNodeId)}`;
+  const projectId = text(project.id).trim();
+  return projectId ? `project:${projectId}` : `node:${text(project.ownerNodeId)}`;
 }
 
 function taskSemanticFingerprint(task: AnyRecord): string {
   const semantic = Object.fromEntries(Object.entries(task).filter(([key]) => ![
     'projectId', 'localProjectId', 'ownerNodeId', 'ownerNodeLabel', 'ownerOnline', 'remote',
     'logicalProjectKey', 'replica', 'replicas', 'replicaCount', 'conflict',
+    'status', 'executionStatus', 'executionObservation', 'executionSince', 'executionTime',
+    'codexStatus', 'codexProcessing', 'codexQueued', 'codexQueuePosition', 'transcribingBeforeLaunch',
+    'codexRunId', 'codexPipelineRunId', 'codexActiveRunId', 'codexActiveExecutionId',
+    'codexThreadRunId', 'codexRunModel', 'codexRunEffort',
   ].includes(key)));
   return createHash('sha256').update(JSON.stringify(semantic)).digest('hex');
 }
 
 function authorityMember(members: AnyRecord[]): AnyRecord {
-  return [...members].sort((left, right) => {
-    const locality = Number(left.remote === true) - Number(right.remote === true);
-    return locality || text(left.ownerNodeId).localeCompare(text(right.ownerNodeId));
-  })[0];
+  return [...members].sort((left, right) => text(left.ownerNodeId).localeCompare(text(right.ownerNodeId)))[0];
 }
 
 export function federatedControlRoomProjection(input: {
@@ -49,7 +50,7 @@ export function federatedControlRoomProjection(input: {
       const localProjectId = text(project.id);
       const qualified = {
         ...project,
-        id: owner.remote ? `${owner.nodeId}:${localProjectId}` : localProjectId,
+        id: localProjectId,
         localProjectId,
         ownerNodeId: owner.nodeId,
         ownerNodeLabel: owner.nodeLabel,
@@ -63,18 +64,22 @@ export function federatedControlRoomProjection(input: {
       const task = value && typeof value === 'object' ? value as AnyRecord : {};
       const localProjectId = text(task.projectId);
       const project = projectByLocalId.get(localProjectId);
+      const executionObservation = task.executionObservation && typeof task.executionObservation === 'object'
+        ? { ...task.executionObservation as AnyRecord, nodeId: owner.nodeId, nodeLabel: owner.nodeLabel }
+        : null;
       return {
         ...task,
         status: task.status === 'task-active' ? 'task-execution' : task.status ?? fallbackStatus,
         executionSince: task.executionSince ?? task.activeSince,
         executionTime: task.executionTime ?? task.activeTime,
-        projectId: owner.remote ? `${owner.nodeId}:${localProjectId}` : localProjectId,
+        projectId: localProjectId,
         localProjectId,
         logicalProjectKey: project?.logicalProjectKey ?? `node:${owner.nodeId}:${localProjectId}`,
         ownerNodeId: owner.nodeId,
         ownerNodeLabel: owner.nodeLabel,
         ownerOnline: owner.online !== false,
         remote: owner.remote,
+        executionObservation,
       };
     };
     const list = (key: string, legacyKey = ''): AnyRecord[] => {
@@ -112,12 +117,12 @@ export function federatedControlRoomProjection(input: {
       ...authority,
       logicalProjectKey: key,
       replicaCount: members.length,
-      replicas: members.map((member) => ({
-        projectId: member.id,
-        ownerNodeId: member.ownerNodeId,
-        ownerNodeLabel: member.ownerNodeLabel,
+      replicas: [...members].sort((left, right) => text(left.ownerNodeId).localeCompare(text(right.ownerNodeId))).map((member) => ({
+        projectId: authority.id,
+        nodeId: member.ownerNodeId,
+        nodeLabel: member.ownerNodeLabel,
         online: member.online,
-        remote: member.remote,
+        local: member.remote !== true,
       })),
     };
   });
@@ -143,9 +148,30 @@ export function federatedControlRoomProjection(input: {
     const projectKey = text(members[0]?.logicalProjectKey);
     const projectAuthority = projectAuthorities.get(projectKey);
     const authority = members.find((member) => member.ownerNodeId === projectAuthority?.ownerNodeId) ?? authorityMember(members);
+    const observationMembers = members.filter((member) => member.executionObservation && typeof member.executionObservation === 'object');
+    const orderedObservationMembers = [...observationMembers].sort((left, right) => {
+      const priority = (member: AnyRecord): number => {
+        const kind = text((member.executionObservation as AnyRecord | undefined)?.kind);
+        return kind === 'codex-process' ? 0 : kind === 'voice-transcription' ? 1 : 2;
+      };
+      return priority(left) - priority(right)
+        || text(left.ownerNodeId).localeCompare(text(right.ownerNodeId));
+    });
+    const executionMember = orderedObservationMembers[0];
+    const observation = executionMember?.executionObservation as AnyRecord | undefined;
+    const cardStatus = text(authority.cardStatus) || 'todo';
+    const status = observation
+      ? 'task-execution'
+      : cardStatus === 'backlog'
+        ? 'task-backlog'
+        : cardStatus === 'done'
+          ? 'task-complete'
+          : 'task-waiting';
     const fingerprints = new Set(members.map(taskSemanticFingerprint));
-    const conflict = fingerprints.size > 1;
-    if (conflict) {
+    const stateConflict = fingerprints.size > 1;
+    const executionConflict = orderedObservationMembers.length > 1;
+    const conflict = stateConflict || executionConflict;
+    if (stateConflict) {
       conflictDiagnostics.push({
         valid: false,
         type: 'federation_task_conflict',
@@ -156,15 +182,41 @@ export function federatedControlRoomProjection(input: {
         message: `Task replicas disagree; ${text(authority.ownerNodeLabel) || text(authority.ownerNodeId)} is displayed.`,
       });
     }
+    if (executionConflict) {
+      conflictDiagnostics.push({
+        valid: false,
+        type: 'federation_execution_conflict',
+        projectId: authority.projectId,
+        ledgerId: authority.ledgerId,
+        cardId: authority.cardId,
+        nodeIds: orderedObservationMembers.map((member) => text(member.ownerNodeId)),
+        message: 'Multiple replicas report verified execution for the same logical card.',
+      });
+    }
     return {
       ...authority,
+      status,
+      executionObservation: observation ?? null,
+      executionObservations: orderedObservationMembers.map((member) => member.executionObservation),
+      executionStatus: observation?.kind === 'codex-process' ? 'running' : observation?.kind === 'codex-queue' ? 'pending' : observation?.kind === 'voice-transcription' ? 'transcribing-before-launch' : '',
+      executionSince: observation?.kind === 'codex-process' ? text(executionMember.executionSince) : '',
+      executionTime: observation?.kind === 'codex-process' ? Number(executionMember.executionTime) : Number.NaN,
+      codexRunId: observation?.kind === 'codex-process' || observation?.kind === 'codex-queue' ? text(executionMember.codexRunId) : text(authority.codexRunId),
+      codexPipelineRunId: observation?.kind === 'codex-process' || observation?.kind === 'codex-queue' ? text(executionMember.codexPipelineRunId) : text(authority.codexPipelineRunId),
+      codexStatus: observation?.kind === 'codex-process' ? 'running' : observation?.kind === 'codex-queue' ? 'pending' : text(authority.codexStatus),
+      codexProcessing: observation?.kind === 'codex-process',
+      codexQueued: observation?.kind === 'codex-queue',
+      codexQueuePosition: observation?.kind === 'codex-queue' ? executionMember.codexQueuePosition ?? null : null,
+      transcribingBeforeLaunch: observation?.kind === 'voice-transcription',
+      executionNodeId: observation ? text(observation.nodeId) : '',
+      executionNodeLabel: observation ? text(observation.nodeLabel) : '',
       conflict,
       replicaCount: members.length,
-      replicas: members.map((member) => ({
-        projectId: member.projectId,
-        ownerNodeId: member.ownerNodeId,
-        ownerNodeLabel: member.ownerNodeLabel,
-        ownerOnline: member.ownerOnline,
+      replicas: [...members].sort((left, right) => text(left.ownerNodeId).localeCompare(text(right.ownerNodeId))).map((member) => ({
+        projectId: authority.projectId,
+        nodeId: member.ownerNodeId,
+        nodeLabel: member.ownerNodeLabel,
+        online: member.ownerOnline,
         status: member.status,
       })),
     };

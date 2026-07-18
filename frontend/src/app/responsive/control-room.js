@@ -8,7 +8,7 @@ export function cardCodexRunId(card) {
     || String(card?.codexRunId ?? '').trim();
 }
 
-export function parseMasterTaskMarkdown({ cardId, title, labels: cardLabels = [], relationships = [], projectId = '', projectName = '', projectColor = '', ledgerId, ledgerTitle, markdown, cardStatus = 'todo', cards = [], threadNotes = [], codexRunId = '', codexPipelineRunId = '', codexStatus = '', codexStartedAt = '', codexQueuePosition = null, executionStatus = '' }) {
+export function parseMasterTaskMarkdown({ cardId, title, labels: cardLabels = [], relationships = [], projectId = '', projectName = '', projectColor = '', ledgerId, ledgerTitle, markdown, cardStatus = 'todo', cards = [], threadNotes = [], codexRunId = '', codexPipelineRunId = '', codexStatus = '', codexStartedAt = '', codexQueuePosition = null }) {
   const source = String(markdown ?? '').replace(/\r\n?/g, '\n');
   const jsonLabels = Array.isArray(cardLabels) ? cardLabels.map(String) : [];
   const hasJsonTaskLabel = jsonLabels.some((label) => label === 'master-task' || label === 'subtask');
@@ -25,8 +25,6 @@ export function parseMasterTaskMarkdown({ cardId, title, labels: cardLabels = []
   // A waiting period restarts whenever either participant adds a thread message.
   // The card field remains the durable fallback for tasks without a timestamped thread.
   const waitingTime = Number.isFinite(latestThreadTime) ? latestThreadTime : Date.parse(waitingText);
-  const executionText = source.match(/^\s*(?:\*\*)?Active since(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
-  const executionTime = Date.parse(executionText);
   const rankText = source.match(/^\s*(?:\*\*)?Queue rank(?:\*\*)?\s*:\s*(\d+)\s*$/im)?.[1] ?? '';
   const queueRank = rankText ? Number(rankText) : null;
   const diagnostics = [];
@@ -58,16 +56,20 @@ export function parseMasterTaskMarkdown({ cardId, title, labels: cardLabels = []
   }
   const complete = subtasks.filter((task) => /^(?:complete|completed|done)$/i.test(task.status)).length;
   const normalizedCodexStatus = String(codexStatus).toLowerCase();
-  const normalizedExecutionStatus = ['transcribing-before-launch', 'pending', 'running'].includes(String(executionStatus))
-    ? String(executionStatus)
-    : normalizedCodexStatus === 'pending' ? 'pending' : ['processing', 'running', 'in_progress'].includes(normalizedCodexStatus) ? 'running' : '';
+  const normalizedExecutionStatus = normalizedCodexStatus === 'transcribing-before-launch'
+    ? 'transcribing-before-launch'
+    : normalizedCodexStatus === 'pending'
+      ? 'pending'
+      : ['processing', 'running', 'in_progress'].includes(normalizedCodexStatus)
+        ? 'running'
+        : '';
   const codexProcessing = normalizedExecutionStatus === 'running';
   const codexQueued = normalizedExecutionStatus === 'pending';
   const transcribingBeforeLaunch = normalizedExecutionStatus === 'transcribing-before-launch';
   const currentRunStartedAt = String(codexStartedAt || '').trim();
   const currentRunStartedTime = Date.parse(currentRunStartedAt);
-  const displayedExecutionSince = codexProcessing && Number.isFinite(currentRunStartedTime) ? currentRunStartedAt : executionText;
-  const displayedExecutionTime = codexProcessing && Number.isFinite(currentRunStartedTime) ? currentRunStartedTime : executionTime;
+  const displayedExecutionSince = codexProcessing && Number.isFinite(currentRunStartedTime) ? currentRunStartedAt : '';
+  const displayedExecutionTime = codexProcessing && Number.isFinite(currentRunStartedTime) ? currentRunStartedTime : Number.NaN;
   return {
     valid: diagnostics.length === 0,
     masterTask,
@@ -99,22 +101,6 @@ export function parseMasterTaskMarkdown({ cardId, title, labels: cardLabels = []
     nextSubtask: subtasks.find((task) => !/^(?:complete|completed|done)$/i.test(task.status)) ?? null,
     markdown: source
   };
-}
-
-export function withExecutionStatus(markdown, timestamp) {
-  const source = String(markdown ?? '').replace(/\r\n?/g, '\n');
-  const lines = source.split('\n');
-  const labelIndex = lines.findIndex((line) => /^\s*(?:#[a-z][a-z0-9-]*\s*)+$/i.test(line) && /#master-task\b/i.test(line));
-  if (labelIndex < 0) return source;
-  lines[labelIndex] = lines[labelIndex].replace(/#task-(?:waiting|active|execution|complete)\b/gi, '').replace(/\s+/g, ' ').trimEnd() + ' #task-execution';
-  const activeIndex = lines.findIndex((line) => /^\s*(?:\*\*)?Active since(?:\*\*)?\s*:/i.test(line));
-  const activeLine = `Active since: ${timestamp}`;
-  if (activeIndex >= 0) lines[activeIndex] = activeLine;
-  else {
-    const waitingIndex = lines.findIndex((line) => /^\s*(?:\*\*)?Waiting since(?:\*\*)?\s*:/i.test(line));
-    lines.splice(waitingIndex >= 0 ? waitingIndex + 1 : labelIndex + 1, 0, activeLine);
-  }
-  return lines.join('\n');
 }
 
 export function deriveControlRoom(cards) {

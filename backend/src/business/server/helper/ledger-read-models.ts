@@ -50,13 +50,10 @@ export function ledgerNavigationProjection(input: { decisionOsRoot: string; ledg
     w: card.w,
     h: card.h,
     codexActiveRunId: card.codexActiveRunId ?? null,
-    codexActiveExecutionId: card.codexActiveExecutionId ?? null,
     codexThreadRunId: card.codexThreadRunId ?? null,
     codexRunId: card.codexRunId ?? null,
     codexRunModel: card.codexRunModel ?? null,
     codexRunEffort: card.codexRunEffort ?? null,
-    executionStatus: card.executionStatus ?? null,
-    executionRunId: card.executionRunId ?? null,
   }));
   return { id: source.ledger.id ?? input.ledgerId, annotations: source.ledger.annotations ?? [], relationships: source.ledger.relationships ?? [], cards };
 }
