@@ -28,14 +28,14 @@ test('quick voice stop queues Codex and returns to the canonical Exec route afte
   assert.match(application, /onQuickVoiceSubmitted: navigateVoiceSubmission/);
 });
 
-test('desktop Shift+X awaits queued upload acceptance before navigating to Exec', () => {
+test('desktop Shift+X navigates to Exec after durable local persistence', () => {
   const thread = source('frontend/src/app/responsive/thread.js');
   const shortcut = thread.match(/export async function handleResponsiveThreadShortcut\(event\) \{[\s\S]*?\n\}/)?.[0] ?? '';
 
   assert.match(shortcut, /const launchMode = event\.ctrlKey \? 'pipeline' : event\.shiftKey \? 'run' : 'send';/);
-  assert.match(shortcut, /const submitted = await stopVoiceRecording\(\{ launchMode \}\);/);
-  assert.match(shortcut, /if \(launchMode !== 'send'\) await finishQueuedVoiceSubmission\(submitted\);/);
-  assert.doesNotMatch(shortcut, /onPersisted/);
+  assert.match(shortcut, /if \(launchMode === 'send'\) await stopVoiceRecording\(\{ launchMode \}\);/);
+  assert.match(shortcut, /else void stopVoiceRecording\(\{[\s\S]*launchMode,[\s\S]*onPersisted: \(\) => void finishQueuedVoiceSubmission\(true\)/);
+  assert.doesNotMatch(shortcut, /else await stopVoiceRecording|const submitted = await stopVoiceRecording/);
 });
 
 test('persisted voice navigation returns directly without an animated handoff', () => {
