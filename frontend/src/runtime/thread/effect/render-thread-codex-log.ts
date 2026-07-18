@@ -196,6 +196,7 @@ function renderRunNavigator(input: { card: Record<string, unknown>; runId: strin
   previous.textContent = '←';
   previous.title = 'Previous Codex run';
   previous.setAttribute('aria-label', previous.title);
+  previous.dataset.codexRunHistory = 'previous';
   previous.disabled = index === 0;
   previous.addEventListener('click', () => selectThreadCodexRun(input.threadId, runIds[index - 1]));
 
@@ -210,6 +211,7 @@ function renderRunNavigator(input: { card: Record<string, unknown>; runId: strin
   next.textContent = '→';
   next.title = 'Next Codex run';
   next.setAttribute('aria-label', next.title);
+  next.dataset.codexRunHistory = 'next';
   next.disabled = index === runIds.length - 1;
   next.addEventListener('click', () => selectThreadCodexRun(input.threadId, runIds[index + 1]));
 
