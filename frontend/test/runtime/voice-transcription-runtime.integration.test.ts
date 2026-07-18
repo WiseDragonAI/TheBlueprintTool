@@ -66,11 +66,11 @@ test('upload-voice-audio posts captured audio to backend upload route', async ()
 
   try {
     state.activeTab = 'specs';
-    const result = await uploadVoiceAudio(new Blob(['abc'], { type: 'audio/webm' }), { projectId: 'workstation:project-a', ledgerId: 'specs', threadId: 'thread-card-a', cardId: 'card-a', noteId: 'note-voice-1', queueCodex: true });
+    const result = await uploadVoiceAudio(new Blob(['abc'], { type: 'audio/webm' }), { projectId: 'project-a', replicaNodeId: 'workstation', ledgerId: 'specs', threadId: 'thread-card-a', cardId: 'card-a', noteId: 'note-voice-1', queueCodex: true });
     assert.deepEqual(result, { ok: true, uploaded: true, configured: true, voiceFileRef: '/tmp/voice.webm', text: '', error: undefined, status: 202 });
-    assert.equal(requested.url, '/p/workstation%3Aproject-a/api/voice-upload');
+    assert.equal(requested.url, '/p/project-a/api/voice-upload');
     assert.equal(requested.init?.method, 'POST');
-    assert.equal(requested.init?.headers, undefined);
+    assert.equal(new Headers(requested.init?.headers).get('x-decision-os-replica-node'), 'workstation');
     const body = requested.init?.body as FormData;
     assert.equal(body instanceof FormData, true);
     assert.equal(body.get('ledgerId'), 'specs');
@@ -124,7 +124,8 @@ test('upload-voice-audio scopes Control Room card uploads from runtime project o
   const previousWindow = globalThis.window;
   const previousCustomEvent = globalThis.CustomEvent;
   const previousProjectId = state.projectId;
-  let requestedUrl = '';
+  const previousReplicaNodeId = state.replicaNodeId;
+  let requested: { url: string; init?: RequestInit } = { url: '' };
   Object.defineProperty(globalThis, 'location', {
     configurable: true,
     value: new URL('http://decision-os.local/control-room/exec')
@@ -134,17 +135,20 @@ test('upload-voice-audio scopes Control Room card uploads from runtime project o
     constructor(_name: string, public options: Record<string, unknown> = {}) {}
   };
   state.projectId = 'project-id';
-  globalThis.fetch = (async (url: string) => {
-    requestedUrl = url;
+  state.replicaNodeId = 'mobile';
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    requested = { url, init };
     return { ok: true, status: 202, json: async () => ({ body: { ok: true, uploaded: true, configured: true, voiceFileRef: '/tmp/voice.webm', text: '' } }) } as Response;
   }) as typeof fetch;
 
   try {
     await uploadVoiceAudio(new Blob(['abc'], { type: 'audio/webm' }), { ledgerId: 'specs', threadId: 'thread-card-a', cardId: 'card-a' });
-    assert.equal(requestedUrl, '/p/project-id/api/voice-upload');
+    assert.equal(requested.url, '/p/project-id/api/voice-upload');
+    assert.equal(new Headers(requested.init?.headers).get('x-decision-os-replica-node'), 'mobile');
   } finally {
     globalThis.fetch = previousFetch;
     state.projectId = previousProjectId;
+    state.replicaNodeId = previousReplicaNodeId;
     if (previousLocation === undefined) delete (globalThis as { location?: Location }).location;
     else Object.defineProperty(globalThis, 'location', { configurable: true, value: previousLocation });
     (globalThis as unknown as { window: unknown }).window = previousWindow;
@@ -306,6 +310,7 @@ test('request-transcription signals durable persistence before delayed upload se
   let uploadCount = 0;
   let persistedBeforeFetch = false;
   const requestedUrls: string[] = [];
+  const requestedReplicaNodeIds: Array<string | null> = [];
   const lifecycle: string[] = [];
   let settleFirstUpload: (response: unknown) => void = () => {};
   const firstUpload = new Promise((resolve) => {
@@ -314,6 +319,7 @@ test('request-transcription signals durable persistence before delayed upload se
   (globalThis as unknown as { fetch: unknown }).fetch = async (url: string, init?: RequestInit) => {
     uploadCount += 1;
     requestedUrls.push(url);
+    requestedReplicaNodeIds.push(new Headers(init?.headers).get('x-decision-os-replica-node'));
     lifecycle.push('upload-started');
     const noteId = String((init?.body as FormData).get('noteId') ?? '');
     persistedBeforeFetch = Boolean(await readPendingVoiceUpload(noteId));
@@ -327,6 +333,7 @@ test('request-transcription signals durable persistence before delayed upload se
 
   try {
     state.projectId = 'project-id';
+    state.replicaNodeId = 'mobile';
     state.threadId = 'thread-card-a';
     state.activeTab = 'specs';
     state.activeLedger = { notes: { 'thread-card-a': [] } };
@@ -342,7 +349,9 @@ test('request-transcription signals durable persistence before delayed upload se
     const noteId = String(note.id);
     assert.equal(persistedBeforeFetch, true);
     assert.equal((await readPendingVoiceUpload(noteId))?.projectId, 'project-id');
+    assert.equal((await readPendingVoiceUpload(noteId))?.replicaNodeId, 'mobile');
     assert.equal(requestedUrls[0], '/p/project-id/api/voice-upload');
+    assert.equal(requestedReplicaNodeIds[0], 'mobile');
     assert.deepEqual(lifecycle.slice(0, 2), ['persisted', 'upload-started']);
     assert.equal(submissionSettled, false);
     assert.ok(await readPendingVoiceUpload(noteId));
@@ -360,9 +369,11 @@ test('request-transcription signals durable persistence before delayed upload se
     assert.ok(pending);
     assert.equal(pending.projectId, String(state.projectId ?? ''));
     assert.match(state.voice.transcriptionStatus, /^voice upload failed/);
+    state.replicaNodeId = '';
     await retryVoiceTranscription({ threadId: 'thread-card-a', noteId, localVoiceUploadId: noteId });
     assert.equal(uploadCount, 2);
     assert.equal(requestedUrls[1], '/p/project-id/api/voice-upload');
+    assert.equal(requestedReplicaNodeIds[1], 'mobile');
     assert.equal(note.voiceFileRef, '/tmp/retried.webm');
     assert.equal(note.status, 'queued');
     assert.equal(note.localVoiceUploadId, '');
@@ -374,6 +385,7 @@ test('request-transcription signals durable persistence before delayed upload se
     (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
     state.threadId = '';
     state.projectId = '';
+    state.replicaNodeId = '';
     state.activeLedger = null;
     state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
     clearPendingVoiceUploadMemoryForTest();
@@ -419,12 +431,13 @@ test('pending voice restoration excludes the same thread identity from another p
     (globalThis as unknown as { document: unknown }).document = undefined;
     clearPendingVoiceUploadMemoryForTest();
     clearPendingVoiceUploadRestoreStateForTest();
-    state.projectId = 'workstation:project-a';
+    state.projectId = 'project-a';
+    state.replicaNodeId = 'workstation';
     state.activeTab = 'specs';
     state.threadId = 'thread-card-a';
     state.activeLedger = { notes: { 'thread-card-a': [] } };
     await persistPendingVoiceUpload({
-      noteId: 'note-other-project', projectId: 'phone:project-a', threadId: 'thread-card-a', ledgerId: 'specs', cardId: 'card-a',
+      noteId: 'note-other-project', projectId: 'project-a', replicaNodeId: 'phone', threadId: 'thread-card-a', ledgerId: 'specs', cardId: 'card-a',
       audio: new Blob(['other audio'], { type: 'audio/webm' }), createdAt: '2026-07-13T15:49:00.000Z'
     });
     assert.equal(await restorePendingVoiceUploads('thread-card-a'), false);
@@ -434,6 +447,7 @@ test('pending voice restoration excludes the same thread identity from another p
     clearPendingVoiceUploadRestoreStateForTest();
     (globalThis as unknown as { document: unknown }).document = previousDocument;
     state.projectId = '';
+    state.replicaNodeId = '';
     state.threadId = '';
     state.activeLedger = null;
   }

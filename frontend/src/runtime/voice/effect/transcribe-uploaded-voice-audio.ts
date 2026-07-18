@@ -5,18 +5,18 @@
 import { state } from '../../state.js';
 import type { VoiceTranscriptionResult } from './upload-voice-audio.js';
 import { currentLedgerStateId } from '../../ledger/helper/current-ledger-state-id.js';
-import { projectScopedRequestPath } from '../../project/helper/project-request-scope.js';
-import { voiceProjectId } from '../helper/voice-project-id.js';
+import { projectScopedRequestPath, replicaRequestInit } from '../../project/helper/project-request-scope.js';
+import { voiceProjectId, voiceReplicaNodeId } from '../helper/voice-project-id.js';
 
-export async function transcribeUploadedVoiceAudio(voiceFileRef: string, threadId = state.threadId || '', noteId = '', ledgerId = currentLedgerStateId(), projectId = voiceProjectId()): Promise<VoiceTranscriptionResult> {
-  const response = await fetch(projectScopedRequestPath('/api/transcribe/retry', voiceProjectId(projectId)), {
+export async function transcribeUploadedVoiceAudio(voiceFileRef: string, threadId = state.threadId || '', noteId = '', ledgerId = currentLedgerStateId(), projectId = voiceProjectId(), replicaNodeId = voiceReplicaNodeId()): Promise<VoiceTranscriptionResult> {
+  const response = await fetch(projectScopedRequestPath('/api/transcribe/retry', voiceProjectId(projectId)), replicaRequestInit({
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       'x-thread-id': threadId
     },
     body: JSON.stringify({ voiceFileRef, threadId, noteId, ledgerId })
-  }).catch((error) => ({ ok: false, status: 0, json: async () => ({ body: { ok: false, uploaded: true, voiceFileRef, error: error instanceof Error ? error.message : String(error) } }) }));
+  }, voiceReplicaNodeId(replicaNodeId))).catch((error) => ({ ok: false, status: 0, json: async () => ({ body: { ok: false, uploaded: true, voiceFileRef, error: error instanceof Error ? error.message : String(error) } }) }));
   const payload = await response.json().catch(() => ({}));
   const body = payload.body && typeof payload.body === 'object' ? payload.body : payload;
   const result: VoiceTranscriptionResult = {

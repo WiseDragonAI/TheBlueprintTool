@@ -353,7 +353,7 @@ test('voice recording defers scoped thread and ledger refresh work in one queue'
     scheduleCanvasMediaOverlayRender: () => undefined
   });
   state.voice.recording = true;
-  const scope = { ledgerId: 'specs', threadId: 'thread-card-a', contentFile: '.decision-os/threads/specs/thread-card-a.md' };
+  const scope = { projectId: '', replicaNodeId: '', ledgerId: 'specs', threadId: 'thread-card-a', contentFile: '.decision-os/threads/specs/thread-card-a.md' };
 
   requestLedgerContentRefresh('card-content-change', { contentFile: '.decision-os/cards/specs/card-a.md' });
   requestThreadContentRefresh('thread-content-change', scope);
@@ -391,7 +391,7 @@ test('scoped thread refresh mutates only notes while preserving canvas, selectio
     }, 2);
   }) as typeof fetch;
   const { requestThreadContentRefresh } = await import('../../src/runtime/refresh/effect/subscribe-ledger-content-events.js');
-  requestThreadContentRefresh('thread-content-change', { ledgerId: 'specs', threadId: 'thread-card-a', contentFile: '.decision-os/threads/specs/thread-card-a.md' });
+  requestThreadContentRefresh('thread-content-change', { projectId: '', replicaNodeId: '', ledgerId: 'specs', threadId: 'thread-card-a', contentFile: '.decision-os/threads/specs/thread-card-a.md' });
   await waitFor(() => fetchCount === 1 && !state.ledgerContentRefresh.inFlight);
 
   assert.equal(state.activeLedger, ledgerIdentity);
@@ -497,10 +497,12 @@ test('events received during an in-flight ledger load drain the latest state and
   await firstGetStarted;
   requestLedgerContentRefresh('card-content-change-b', { contentFile: '/.decision-os/cards/specs/card-b.md' });
   requestLedgerContentRefresh('ledger-content-change');
-  requestThreadContentRefresh('thread-content-change', {
-    ledgerId: 'specs',
-    threadId: 'thread-card-a',
-    contentFile: '.decision-os/threads/specs/thread-card-a.md'
+	requestThreadContentRefresh('thread-content-change', {
+		projectId: '',
+		replicaNodeId: '',
+		ledgerId: 'specs',
+		threadId: 'thread-card-a',
+		contentFile: '.decision-os/threads/specs/thread-card-a.md'
   });
   assert.deepEqual(state.ledgerContentRefresh.changedContentFiles, ['.decision-os/cards/specs/card-b.md']);
   revision = 1;

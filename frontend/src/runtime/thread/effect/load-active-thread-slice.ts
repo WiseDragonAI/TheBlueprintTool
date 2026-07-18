@@ -11,6 +11,7 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { renderThreadNotes } from './render-thread-notes.js';
 import { isThreadFollowingBottom } from '../helper/thread-follow-bottom.js';
 import { pinThreadFeedToLastMessage } from './pin-thread-feed-to-last-message.js';
+import { projectScopedRequestPath, replicaRequestInit } from '../../project/helper/project-request-scope.js';
 
 type AnyRecord = Record<string, any>;
 
@@ -38,7 +39,7 @@ export function activeThreadContentScope(): ThreadContentRefreshScope | null {
   // WHAT: Construct a scope only from a complete active ledger, thread, and file identity.
   // WHY: Partial UI state cannot safely own a thread slice response.
   if (!isRecord(state.activeLedger) || !ledgerId || !threadId || !contentFile) return null;
-  return { ledgerId, threadId, contentFile };
+  return { projectId: String(state.projectId ?? ''), replicaNodeId: String(state.replicaNodeId ?? ''), ledgerId, threadId, contentFile };
 }
 
 export function isActiveThreadContentScope(scope: ThreadContentRefreshScope | null | undefined): boolean {
@@ -48,6 +49,8 @@ export function isActiveThreadContentScope(scope: ThreadContentRefreshScope | nu
   const activeScope = activeThreadContentScope();
   return Boolean(
     activeScope
+    && String(scope.projectId ?? '').trim() === activeScope.projectId
+    && String(scope.replicaNodeId ?? '').trim() === activeScope.replicaNodeId
     && String(scope.ledgerId ?? '').trim() === activeScope.ledgerId
     && String(scope.threadId ?? '').trim() === activeScope.threadId
     && normalizeContentFileReference(scope.contentFile) === activeScope.contentFile
@@ -66,8 +69,8 @@ export async function loadActiveThreadSlice(scope: ThreadContentRefreshScope): P
     return false;
   }
   const activeLedgerAtRequest = state.activeLedger as AnyRecord;
-  const endpoint = `/api/ledgers/${encodeURIComponent(scope.ledgerId)}/threads/${encodeURIComponent(scope.threadId)}`;
-  const response = await fetch(endpoint).catch(() => undefined);
+  const endpoint = projectScopedRequestPath(`/api/ledgers/${encodeURIComponent(scope.ledgerId)}/threads/${encodeURIComponent(scope.threadId)}`, scope.projectId);
+  const response = await fetch(endpoint, replicaRequestInit(undefined, scope.replicaNodeId)).catch(() => undefined);
   // WHAT: Preserve the current thread on network and non-success responses.
   // WHY: Failed refreshes must not clear visible notes.
   if (!response?.ok) {

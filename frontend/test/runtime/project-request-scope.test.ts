@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { projectScopedRequestPath, replicaNodeIdFromLocation } from '../../src/runtime/project/helper/project-request-scope.js';
+import { projectReplicaRequestPath, projectScopedRequestPath, replicaNodeIdFromLocation, replicaRequestInit } from '../../src/runtime/project/helper/project-request-scope.js';
 
 const projectId = 'project-id';
 
@@ -52,6 +52,8 @@ test('replicaNodeIdFromLocation reads routing independently from project identit
   try {
     assert.equal(replicaNodeIdFromLocation(), 'mobile');
     assert.equal(projectScopedRequestPath('/api/ledgers/specs/canvas', projectId), '/p/project-id/api/ledgers/specs/canvas');
+    assert.equal(projectReplicaRequestPath('/api/ledger-content-events', projectId, 'mobile'), '/p/project-id/api/ledger-content-events?replica=mobile');
+    assert.equal(new Headers(replicaRequestInit({ cache: 'no-store' }, 'mobile')?.headers).get('x-decision-os-replica-node'), 'mobile');
   } finally {
     if (originalLocation === undefined) delete (globalThis as { location?: Location }).location;
     else Object.defineProperty(globalThis, 'location', { configurable: true, value: originalLocation });
