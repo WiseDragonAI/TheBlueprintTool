@@ -1,10 +1,10 @@
 /**
- * WHAT: Exercises the complete Control Room queue drag lifecycle on the served root route.
- * WHY: Sortable fallback nodes and live refreshes must never leave duplicate or detached tasks.
+ * WHAT: Exercises the waiting-time-only Control Room queue on the served root route.
+ * WHY: Legacy ranks and Queue gestures must never override the canonical waiting-time order.
  */
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -17,7 +17,7 @@ const chromiumExecutablePath = '/snap/bin/chromium';
 const queueArtifactSelector = '.queue-task-fallback, .queue-task-ghost, .queue-task-chosen, .queue-task-dragging';
 const queueTaskSelector = '[data-control-column-list="queue"] > .control-task';
 
-test('queue reorder stays atomic across pointer, touch, refresh, cancellation, success, and rejection', { timeout: 60_000 }, async () => {
+test('queue stays newest-first across legacy ranks, pointer, touch, refresh, and cancellation', { timeout: 60_000 }, async () => {
   const workspace = createQueueWorkspace();
   const server = await startDecisionOsServer(workspace.root);
   let browser: Browser | undefined;
@@ -32,72 +32,16 @@ test('queue reorder stays atomic across pointer, touch, refresh, cancellation, s
     const patchRequests: string[] = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
     page.on('request', (request) => { if (request.method() === 'PATCH') patchRequests.push(request.url()); });
-    await openQueue(page, server.url);
-    const projectId = await page.locator(queueTaskSelector).first().evaluate((row) => decodeURIComponent(String((row as HTMLElement).dataset.taskId).split('--')[0]));
-
-    let persistenceHeld = true;
-    const heldRoutes: Array<{ continue(): Promise<void> }> = [];
-    const releasePersistence = async () => {
-      persistenceHeld = false;
-      await Promise.all(heldRoutes.splice(0).map((route) => route.continue()));
-    };
-    let heldMutations = 0;
-    await page.route('**/decision-os/tasks', async (route) => {
-      if (!isQueueRankMutation(route.request())) return route.continue();
-      heldMutations += 1;
-      if (persistenceHeld) {
-        heldRoutes.push(route);
-        return;
-      }
-      await route.continue();
-    });
+    await openQueue(page, server.url, pageErrors);
+    await waitForOrder(page, ['Gamma', 'Beta', 'Alpha']);
     await dragWithMouse(page, 0, 2);
-    await waitForOrder(page, ['Beta', 'Gamma', 'Alpha']);
-    await waitFor(async () => heldMutations === 1, 'Timed out waiting for the held queue-rank mutation.').catch(() => {
-      assert.fail(`Queue persistence did not start. PATCH requests: ${JSON.stringify(patchRequests)}. Page errors: ${JSON.stringify(pageErrors)}.`);
-    });
-    assert.equal(heldMutations, 1, 'optimistic order must render before the first sequential persistence request resolves');
+    await page.waitForTimeout(250);
+    await waitForOrder(page, ['Gamma', 'Beta', 'Alpha']);
+    assert.deepEqual(patchRequests, [], `in-Queue drag must not persist: ${JSON.stringify(pageErrors)}`);
     await assertCanonicalQueue(page, 3);
-
-    await page.waitForTimeout(220);
-    await page.mouse.move(1, 1);
-    await dragWithMouse(page, 2, 0);
-    await waitForOrder(page, ['Alpha', 'Beta', 'Gamma']);
-    assert.equal(heldMutations, 1, 'the second optimistic reorder must queue behind the active persistence batch');
-    await releasePersistence();
-    await waitForPersistedRanks(workspace.cardsRoot, { alpha: 1, beta: 2, gamma: 3 });
-    await assertCanonicalQueue(page, 3);
-    await page.unroute('**/decision-os/tasks');
 
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await waitForOrder(page, ['Alpha', 'Beta', 'Gamma']);
-    await assertCanonicalQueue(page, 3);
-
-    await page.route('**/decision-os/tasks', async (route) => {
-      if (!isQueueRankMutation(route.request())) return route.continue();
-      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'forced rejection' }) });
-    });
-    await dragWithMouse(page, 0, 2);
-    await page.locator('#error-view:not([hidden])').waitFor({ state: 'visible' });
-    await waitForOrder(page, ['Alpha', 'Beta', 'Gamma']);
-    await assertCanonicalQueue(page, 3);
-    await page.unroute('**/decision-os/tasks');
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await waitForOrder(page, ['Alpha', 'Beta', 'Gamma']);
-
-    await beginMouseDrag(page, 0, 1);
-    await page.waitForSelector('body > .queue-task-fallback');
-    const titleMutation = fetch(`${server.url}/p/${encodeURIComponent(projectId)}/decision-os/tasks`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'gamma', title: 'Gamma refreshed' } }),
-    });
-    assert.equal((await titleMutation).ok, true);
-    await page.waitForTimeout(180);
-    assert.equal(await page.locator(queueTaskSelector).count(), 3, 'live refresh must not remount the queue during a drag');
-    await page.mouse.up();
-    await page.getByText('Gamma refreshed', { exact: true }).waitFor();
-    await assertCanonicalQueue(page, 3);
+    await waitForOrder(page, ['Gamma', 'Beta', 'Alpha']);
 
     await beginMouseDrag(page, 0, 1);
     await page.waitForSelector('body > .queue-task-fallback');
@@ -109,7 +53,8 @@ test('queue reorder stays atomic across pointer, touch, refresh, cancellation, s
     await openQueue(touchPage, server.url);
     const beforeTouch = await queueOrder(touchPage);
     await dragWithTouch(touchPage, 0, 1);
-    await touchPage.waitForFunction(({ selector, before }) => JSON.stringify([...document.querySelectorAll(`${selector} strong`)].map((node) => node.textContent)) !== JSON.stringify(before), { selector: queueTaskSelector, before: beforeTouch });
+    await touchPage.waitForTimeout(250);
+    assert.deepEqual(await queueOrder(touchPage), beforeTouch);
     await assertCanonicalQueue(touchPage, 3);
     await touchContext.close();
   } finally {
@@ -119,10 +64,16 @@ test('queue reorder stays atomic across pointer, touch, refresh, cancellation, s
   }
 });
 
-async function openQueue(page: Page, url: string): Promise<void> {
-  await page.goto(url, { waitUntil: 'domcontentloaded' });
+async function openQueue(page: Page, url: string, pageErrors: string[] = []): Promise<void> {
+  await page.goto(`${url}/?tab=queue`, { waitUntil: 'domcontentloaded' });
   await page.locator('#control-room-view:not([hidden])').waitFor({ state: 'visible' });
-  await page.waitForFunction((selector) => document.querySelectorAll(selector).length === 3, queueTaskSelector);
+  await page.waitForFunction((selector) => document.querySelectorAll(selector).length === 3, queueTaskSelector, { timeout: 5_000 }).catch(async () => {
+    const projection = await page.evaluate(() => fetch('/api/control-room').then((response) => response.json()));
+    const errorText = await page.locator('#error-message').textContent().catch(() => '');
+    const columns = await page.locator('.control-task-column').allTextContents();
+    const filters = await page.locator('[aria-pressed="true"]').allTextContents();
+    assert.fail(`Expected three Queue tasks, received ${await page.locator(queueTaskSelector).count()}; errors=${JSON.stringify(pageErrors)}; errorView=${JSON.stringify(errorText)}; columns=${JSON.stringify(columns)}; filters=${JSON.stringify(filters)}; projection=${JSON.stringify(projection.queue)}`);
+  });
   await page.waitForFunction((selector) => {
     const list = document.querySelector(selector)?.parentElement;
     return Boolean(list && (globalThis as typeof globalThis & { Sortable?: { get(element: Element): unknown } }).Sortable?.get(list));
@@ -169,21 +120,6 @@ async function waitForOrder(page: Page, expected: string[]): Promise<void> {
 async function assertCanonicalQueue(page: Page, expectedRows: number): Promise<void> {
   await page.waitForFunction(({ artifactSelector, taskSelector, count }) => document.querySelectorAll(artifactSelector).length === 0 && document.querySelectorAll(taskSelector).length === count, { artifactSelector: queueArtifactSelector, taskSelector: queueTaskSelector, count: expectedRows });
   assert.equal(await page.locator('body > .control-task').count(), 0);
-}
-
-function isQueueRankMutation(request: { method(): string; postDataJSON(): unknown }): boolean {
-  if (request.method() !== 'PATCH') return false;
-  const body = request.postDataJSON() as { action?: string; cardPatch?: { queueRank?: number } };
-  return body.action === 'patch-card' && Number.isInteger(body.cardPatch?.queueRank);
-}
-
-async function waitForPersistedRanks(cardsRoot: string, expected: Record<string, number>): Promise<void> {
-  const deadline = Date.now() + 10_000;
-  while (Date.now() < deadline) {
-    if (Object.entries(expected).every(([id, rank]) => new RegExp(`^Queue rank: ${rank}$`, 'm').test(readFileSync(join(cardsRoot, `${id}.md`), 'utf8')))) return;
-    await delay(50);
-  }
-  assert.fail('Timed out waiting for persisted queue ranks.');
 }
 
 function createQueueWorkspace(): { root: string; cardsRoot: string } {
