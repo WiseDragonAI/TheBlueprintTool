@@ -133,10 +133,14 @@ export function buildFederationTaskReplica(input: { project: DecisionOsProject; 
 /** Reuses an unchanged project snapshot instead of rebuilding it on every federation heartbeat. */
 export function createFederationTaskReplicaCache(input: { build?: typeof buildFederationTaskReplica } = {}): {
   get(value: { project: DecisionOsProject; projection: AnyRecord }): FederationReplicaSnapshot;
+  invalidate(projectId: string): void;
 } {
   const build = input.build ?? buildFederationTaskReplica;
   const entries = new Map<string, { fingerprint: string; snapshot: FederationReplicaSnapshot }>();
   return {
+    invalidate(projectId) {
+      entries.delete(projectId);
+    },
     get(value) {
       const fingerprint = projectSliceFingerprint(value.projection, value.project.id);
       const current = entries.get(value.project.id);
