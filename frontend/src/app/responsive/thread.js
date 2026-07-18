@@ -28,6 +28,7 @@ import { createMobileThreadSessionDeletionHandler, resetMobileThreadConfirmation
 import { projectScopedRequestPath } from '/src/runtime/project/helper/project-request-scope.js';
 import { reconcileResponsiveThreadLedger } from './thread-ledger-reconciliation.js';
 import { voiceRetryInput } from './thread-voice-retry.js';
+import { bindDesktopVoiceActionPreview } from '/src/runtime/voice/effect/update-desktop-voice-action-preview.js';
 import { hydrateThreadViewportState, saveThreadPanelScrollPositions } from '/src/runtime/thread/effect/persist-thread-scroll.js';
 import { readPersistedState } from '/src/runtime/persistence/helper/read-persisted-state.js';
 
@@ -370,6 +371,7 @@ function unsubscribeEvents() {
 export function initializeMobileThread() {
   if (initialized) return;
   initialized = true;
+  bindDesktopVoiceActionPreview();
   hydrateThreadViewportState(readPersistedState());
   document.querySelector('.thread-open-button').addEventListener('click', () => {
     if (currentCard) openMobileThread(currentCard, getComputedStyle(document.querySelector('#card-view')).getPropertyValue('--zone-color').trim());
