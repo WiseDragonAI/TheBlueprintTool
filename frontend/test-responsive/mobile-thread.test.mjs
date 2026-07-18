@@ -241,7 +241,8 @@ test('card entry owns the desktop default once while same-card reconciliation pr
 
 test('mobile thread history and async refreshes are owned by the active presentation', () => {
   const refresh = source.match(/async function refreshThreadLedger\(optimisticRunId = ''\) \{[\s\S]*?\n\}/)?.[0] ?? '';
-  assert.match(source, /history\.pushState\(\{ \.\.\.history\.state, responsiveThreadLayer:/);
+  assert.match(source, /history\.pushState\(\{[\s\S]*responsiveThreadLayer: \{/);
+  assert.match(source, /responsiveThreadLayer: \{[\s\S]*projectId: currentProjectId,[\s\S]*replicaNodeId: currentReplicaNodeId,/);
   assert.match(source, /closeMobileThread\(\{ fromHistory = false, discardHistory = false \} = \{\}\)/);
   assert.match(source, /if \(!fromHistory[\s\S]*history\.back\(\)/);
   assert.match(refresh, /generation: \+\+threadRefreshGeneration/);

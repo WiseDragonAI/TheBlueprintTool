@@ -576,7 +576,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     controlRoomProjectionStore?.reconcile(registered);
   };
   const server = createServer(async (request, response) => {
-    const requestPath = (request.url ?? '/').split('?')[0];
+    const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
+    const requestPath = requestUrl.pathname;
     const projectScope = parseProjectUrlScope(requestPath);
     if (requestPath.startsWith('/p/') && !projectScope) {
       response.statusCode = 400;
@@ -584,7 +585,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.end(JSON.stringify({ ok: false, error: 'Malformed project URL.' }));
       return;
     }
-    const requestedReplicaNodeId = String(request.headers['x-decision-os-replica-node'] ?? '').trim();
+    const requestedReplicaNodeId = String(request.headers['x-decision-os-replica-node']
+      ?? (request.method === 'GET' ? requestUrl.searchParams.get('replica') : '')
+      ?? '').trim();
     const localNodeId = federation.localOwner().ownerNodeId;
     if (projectScope && requestedReplicaNodeId && requestedReplicaNodeId !== localNodeId) {
       const ownerNodeId = requestedReplicaNodeId;
@@ -656,7 +659,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       }
       const projection = controlRoomProjectionStore.get(projects.filter((project) => project.available));
       const localOwner = federation.localOwner();
-      const requestUrl = new URL(request.url ?? '/api/control-room', 'http://127.0.0.1');
       const remoteDiagnostics: AnyRecord[] = [];
       const remoteProjectIdentity = new Map(federation.remoteProjects().map((project) => [
         `${project.ownerNodeId}\0${project.localProjectId}`,

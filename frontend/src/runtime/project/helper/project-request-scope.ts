@@ -51,19 +51,35 @@ export function projectScopedRequestPath(input: string, value = projectIdFromLoc
   return `${projectBasePath(value)}${rootRelativePath}`;
 }
 
+export function projectReplicaRequestPath(input: string, projectId: string, replicaNodeId = ''): string {
+  const scoped = projectScopedRequestPath(input, projectId);
+  const replica = String(replicaNodeId).trim();
+  if (!replica) return scoped;
+  const hashIndex = scoped.indexOf('#');
+  const path = hashIndex >= 0 ? scoped.slice(0, hashIndex) : scoped;
+  const hash = hashIndex >= 0 ? scoped.slice(hashIndex) : '';
+  const separator = path.includes('?') ? '&' : '?';
+  return `${path}${separator}replica=${encodeURIComponent(replica)}${hash}`;
+}
+
+export function replicaRequestInit(init: RequestInit | undefined, replicaNodeId = '', baseHeaders?: HeadersInit): RequestInit | undefined {
+  const replica = String(replicaNodeId).trim();
+  if (!replica) return init;
+  const headers = new Headers(baseHeaders);
+  new Headers(init?.headers).forEach((value, key) => headers.set(key, value));
+  headers.set('x-decision-os-replica-node', replica);
+  return { ...init, headers };
+}
+
 export function installProjectRequestScope(): void {
   if (installed || typeof globalThis.fetch !== 'function') return;
   installed = true;
   const nativeFetch = globalThis.fetch.bind(globalThis);
   globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
     const replicaNodeId = replicaNodeIdFromLocation();
-    const withReplicaHeader = (requestInit: RequestInit | undefined, url: string, baseHeaders?: HeadersInit): RequestInit | undefined => {
-      if (!replicaNodeId || !pathnameOf(url).startsWith('/p/')) return requestInit;
-      const headers = new Headers(baseHeaders);
-      new Headers(requestInit?.headers).forEach((value, key) => headers.set(key, value));
-      headers.set('x-decision-os-replica-node', replicaNodeId);
-      return { ...requestInit, headers };
-    };
+    const withReplicaHeader = (requestInit: RequestInit | undefined, url: string, baseHeaders?: HeadersInit): RequestInit | undefined => pathnameOf(url).startsWith('/p/')
+      ? replicaRequestInit(requestInit, replicaNodeId, baseHeaders)
+      : requestInit;
     if (typeof input === 'string' || input instanceof URL) {
       const scoped = projectScopedRequestPath(String(input));
       return nativeFetch(scoped, withReplicaHeader(init, scoped));

@@ -24,7 +24,7 @@ import {
   type ContentChangeEvent
 } from '../helper/content-event-payload.js';
 import { installVoiceTranscriptionRecoveryListeners, reconcilePendingVoiceTranscriptions, reconcileVoiceTranscription } from '../../voice/effect/reconcile-voice-transcription.js';
-import { projectScopedRequestPath } from '../../project/helper/project-request-scope.js';
+import { projectReplicaRequestPath } from '../../project/helper/project-request-scope.js';
 
 export {
   flushPendingLedgerContentRefresh,
@@ -72,7 +72,7 @@ export function subscribeLedgerContentEvents(): void {
   if (subscribed || typeof EventSource === 'undefined') return;
   subscribed = true;
   installVoiceTranscriptionRecoveryListeners();
-  const events = new EventSource(projectScopedRequestPath('/api/ledger-content-events'));
+  const events = new EventSource(projectReplicaRequestPath('/api/ledger-content-events', String(state.projectId ?? ''), String(state.replicaNodeId ?? '')));
   events.addEventListener('open', () => reconcilePendingVoiceTranscriptions('event-source-open'));
   events.addEventListener('card-content-change', (event) => {
     const payload = contentEventPayload(event);
@@ -80,6 +80,8 @@ export function subscribeLedgerContentEvents(): void {
     // WHY: Thread writes must not replace or rerender the active canvas ledger.
     if (payload.kind === 'thread-content') {
       const scope: ThreadContentRefreshScope = {
+        projectId: String(state.projectId ?? ''),
+        replicaNodeId: String(state.replicaNodeId ?? ''),
         ledgerId: String(payload.ledgerId ?? '').trim(),
         threadId: String(payload.threadId ?? '').trim(),
         contentFile: normalizeContentFileReference(payload.contentFile)
@@ -91,7 +93,7 @@ export function subscribeLedgerContentEvents(): void {
         return;
       }
       if (payload.noteId && String(payload.reason ?? '').startsWith('voice-')) {
-        void reconcileVoiceTranscription({ ledgerId: scope.ledgerId, threadId: scope.threadId, noteId: payload.noteId });
+        void reconcileVoiceTranscription({ projectId: scope.projectId, replicaNodeId: scope.replicaNodeId, ledgerId: scope.ledgerId, threadId: scope.threadId, noteId: payload.noteId });
         return;
       }
       requestThreadContentRefresh('thread-content-change', scope);

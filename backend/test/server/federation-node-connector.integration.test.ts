@@ -316,6 +316,8 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     const remoteHeaders = { 'x-decision-os-replica-node': 'node-b' };
     const remoteLedger = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/specs`, { headers: remoteHeaders }).then((response) => response.json()) as { cards: Array<{ title: string }> };
     assert.equal(remoteLedger.cards[0].title, 'changed on owner');
+    const queryRoutedLedger = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/specs?replica=node-b`).then((response) => response.json()) as { cards: Array<{ title: string }> };
+    assert.equal(queryRoutedLedger.cards[0].title, 'changed on owner');
     const mutation = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/specs`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', ...remoteHeaders },

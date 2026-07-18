@@ -705,7 +705,7 @@ async function createCard(name, description) {
     fields: []
   };
   state.ledger = await ledgerMutation(state.activeLedgerId, { action: 'create-card', card });
-  syncMobileThreadContext({ projectId: state.resourceProjectId, ledgerId: state.activeLedgerId, ledger: state.ledger, ledgers: state.ledgers, onCodexStarted: activateMasterTask });
+  syncMobileThreadContext({ projectId: state.resourceProjectId, replicaNodeId: currentRouteSnapshot().replicaNodeId, ledgerId: state.activeLedgerId, ledger: state.ledger, ledgers: state.ledgers, onCodexStarted: activateMasterTask });
   navigate(cardPath(state.activeLedgerId, state.activeZoneId, card.id));
 }
 
@@ -1719,6 +1719,7 @@ async function createTaskIntake(projectId, replicaNodeId) {
   state.activeZoneColor = zone.color;
   syncMobileThreadContext({
     projectId,
+    replicaNodeId,
     ledgerId: ledgerRef.id,
     ledger: updated,
     ledgers: state.ledgers,
@@ -2276,14 +2277,15 @@ async function loadLedger(ledgerId, owner) {
   renderLedgerLinks();
   syncMobileThreadContext({
     projectId: state.resourceProjectId,
+    replicaNodeId: owner.route.replicaNodeId,
     ledgerId,
     ledger,
     ledgers: state.ledgers,
     onCodexStarted: activateMasterTask,
     onQuickVoiceSubmitted: navigateVoiceSubmission,
-    onLedgerRefresh: async (activeLedgerId) => {
+    onLedgerRefresh: async (activeLedgerId, replicaNodeId) => {
       const projectId = state.resourceProjectId;
-      const refreshed = await projectFetch(`/api/ledgers/${encodeURIComponent(activeLedgerId)}/navigation`, { cache: 'no-store' }, projectId).then((result) => result.ok ? result.json() : null);
+      const refreshed = await projectFetch(`/api/ledgers/${encodeURIComponent(activeLedgerId)}/navigation`, { cache: 'no-store' }, projectId, replicaNodeId).then((result) => result.ok ? result.json() : null);
       if (refreshed && projectId === state.resourceProjectId && activeLedgerId === state.activeLedgerId) state.ledger = refreshed;
       return refreshed;
     }
@@ -2422,6 +2424,7 @@ async function loadRoute({ retainView = false } = {}) {
         state.activeZoneColor = asText(zone.color);
         syncMobileThreadContext({
           projectId: state.resourceProjectId,
+          replicaNodeId: owner.route.replicaNodeId,
           ledgerId,
           ledger: state.ledger,
           ledgers: state.ledgers,

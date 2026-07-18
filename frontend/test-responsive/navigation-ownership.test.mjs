@@ -8,12 +8,13 @@ const parseScope = (pathname) => {
 };
 
 test('route ownership includes project, ledger, zone, card, and browser location', () => {
-  const first = captureRouteSnapshot({ pathname: '/p/project-a/ledgers/specs/zones/zone-a/cards/card-a', search: '?x=1', hash: '#note' }, parseScope);
-  const same = captureRouteSnapshot({ pathname: '/p/project-a/ledgers/specs/zones/zone-a/cards/card-a', search: '?x=1', hash: '#note' }, parseScope);
-  const newer = captureRouteSnapshot({ pathname: '/p/project-a/ledgers/specs/zones/zone-a/cards/card-b', search: '?x=1', hash: '#note' }, parseScope);
+  const first = captureRouteSnapshot({ pathname: '/p/project-a/ledgers/specs/zones/zone-a/cards/card-a', search: '?replica=mobile', hash: '#note' }, parseScope);
+  const same = captureRouteSnapshot({ pathname: '/p/project-a/ledgers/specs/zones/zone-a/cards/card-a', search: '?replica=mobile', hash: '#note' }, parseScope);
+  const newer = captureRouteSnapshot({ pathname: '/p/project-a/ledgers/specs/zones/zone-a/cards/card-b', search: '?replica=mobile', hash: '#note' }, parseScope);
   assert.equal(sameRouteSnapshot(first, same), true);
   assert.equal(sameRouteSnapshot(first, newer), false);
   assert.equal(cardPresentationIdentity(first), 'project-a:specs:zone-a:card-a');
+  assert.equal(first.replicaNodeId, 'mobile');
 });
 
 test('federation reconciliation is scoped to the active project and card route', () => {
