@@ -28,6 +28,7 @@ test('thread-launched run reads return chronological diagnostics without changin
   const startedAt = Date.now() - 600000;
   const completedAt = new Date(startedAt + 90000);
   const runId = `codex-skill-${startedAt}-feed1234`;
+  const latestRunId = `codex-skill-${startedAt + 120000}-latest12`;
   const cardId = 'card-thread-run';
   const threadId = `thread-${cardId}`;
   mkdirSync(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs'), { recursive: true });
@@ -40,7 +41,8 @@ test('thread-launched run reads return chronological diagnostics without changin
     cards: [{
       id: cardId,
       title: 'Thread target',
-      codexThreadRunId: runId,
+      codexThreadRunId: latestRunId,
+      codexThreadRunIds: [runId, latestRunId],
       comment: { what: 'Thread target body.' },
       facts: [],
       fields: []

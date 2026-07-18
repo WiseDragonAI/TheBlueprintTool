@@ -4,6 +4,14 @@
  */
 type AnyRecord = Record<string, unknown>;
 
+function threadRunIds(card: AnyRecord): string[] {
+  const retained = Array.isArray(card.codexThreadRunIds)
+    ? card.codexThreadRunIds.map(String).map((runId) => runId.trim()).filter(Boolean)
+    : [];
+  const current = String(card.codexThreadRunId ?? '').trim();
+  return [...new Set([...retained, current].filter(Boolean))];
+}
+
 export function projectCardCodexRun(input: {
   ledger: AnyRecord & { cards?: AnyRecord[] };
   cardId: string;
@@ -28,6 +36,7 @@ export function projectCardCodexRun(input: {
   delete card.codexQueuedPipelineRunId;
   delete card.codexQueuedRunId;
   if (input.ownership === 'thread') {
+    card.codexThreadRunIds = [...new Set([...threadRunIds(card), input.runId])];
     delete card.codexRunId;
     delete card.codexRunOutputFile;
     card.codexThreadRunId = input.runId;

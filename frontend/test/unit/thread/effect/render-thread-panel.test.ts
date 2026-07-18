@@ -481,6 +481,71 @@ test('generated skill-result threads bind and render their durable card run id',
   }
 });
 
+test('Codex Log run arrows default to the newest retained run and select the previous run', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousSetTimeout = globalThis.setTimeout;
+  const previousClearTimeout = globalThis.clearTimeout;
+  const { codexLog } = installDom();
+  const { state } = await import('../../../../src/runtime/state.js');
+  const { renderThreadPanel } = await import('../../../../src/runtime/thread/effect/render-thread-panel.js');
+  const oldRunId = 'codex-skill-1783681000000-oldrun';
+  const newRunId = 'codex-skill-1783682000000-newrun';
+  const threadId = 'thread-card-history';
+  try {
+    globalThis.setTimeout = (() => 1 as unknown as ReturnType<typeof setTimeout>) as unknown as typeof setTimeout;
+    globalThis.clearTimeout = (() => undefined) as typeof clearTimeout;
+    globalThis.fetch = (async () => new Response(JSON.stringify({ ok: false, error: 'not requested in this rendering assertion' }), { status: 404 })) as typeof fetch;
+    state.activeTab = 'specs';
+    state.activeLedger = {
+      cards: [{ id: 'card-history', title: 'Run history', codexThreadRunId: newRunId, codexThreadRunIds: [oldRunId, newRunId] }],
+      annotations: [], relationships: [], notes: { [threadId]: [] },
+    };
+    state.threadId = threadId;
+    state.renderedThreadId = '';
+    state.threadPanelOpen = true;
+    state.activeTool = 'select';
+    state.threadPinOnRender = false;
+    state.threadScrollTopByThreadId = {};
+    state.threadLogScrollTopByThreadId = {};
+    state.threadActiveTabByThreadId = { [threadId]: 'codex-log' };
+    state.threadSelectedRunIdByThreadId = {};
+    state.threadRunIdByThreadId = {};
+    state.threadRunSummaryByThreadId = {};
+    state.threadRunEventsByThreadId = {};
+    state.threadCoalescedToolsByThreadId = {};
+    state.telemetry = [];
+    state.voice = { recording: false, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
+
+    renderThreadPanel();
+
+    assert.equal(state.threadSelectedRunIdByThreadId[threadId], newRunId);
+    assert.equal(codexLog.querySelector('.codex-log-run-position')?.textContent, 'Run 2 of 2');
+    assert.equal(codexLog.querySelector('.codex-log-run-arrow--previous')?.disabled, false);
+    assert.equal(codexLog.querySelector('.codex-log-run-arrow--next')?.disabled, true);
+
+    codexLog.querySelector('.codex-log-run-arrow--previous')?.dispatchEvent(new Event('click'));
+    for (let index = 0; index < 12; index += 1) await Promise.resolve();
+    await new Promise<void>((resolve) => previousSetTimeout(resolve, 0));
+    assert.equal(state.threadSelectedRunIdByThreadId[threadId], oldRunId);
+    assert.equal(codexLog.querySelector('.codex-log-run-position')?.textContent, 'Run 1 of 2');
+    assert.equal(state.threadRunIdByThreadId[threadId], oldRunId);
+    assert.equal(codexLog.querySelector('.codex-log-run-arrow--previous')?.disabled, true);
+    assert.equal(codexLog.querySelector('.codex-log-run-arrow--next')?.disabled, false);
+  } finally {
+    globalThis.fetch = previousFetch;
+    globalThis.setTimeout = previousSetTimeout;
+    globalThis.clearTimeout = previousClearTimeout;
+    state.threadId = '';
+    state.activeLedger = null;
+    state.threadActiveTabByThreadId = {};
+    state.threadSelectedRunIdByThreadId = {};
+    state.threadRunIdByThreadId = {};
+    state.threadRunSummaryByThreadId = {};
+    state.threadRunEventsByThreadId = {};
+    state.threadCoalescedToolsByThreadId = {};
+  }
+});
+
 test('queued thread runs become read-only and render their queue position without elapsed time', async () => {
   const previousFetch = globalThis.fetch;
   const { heading, codexLog } = installDom();

@@ -90,11 +90,22 @@ type ThreadCodexRunLogIdentity = {
 
 export function bindThreadCodexRunLog(input: ThreadCodexRunLogIdentity): void {
   if (!input.ledgerId || !input.cardId || !input.threadId || !input.runId) return;
+  const projectId = input.projectId ?? projectIdFromLocation();
+  const previousRunId = String(recordState('threadRunIdByThreadId')[input.threadId] ?? '');
+  if (previousRunId && previousRunId !== input.runId) {
+    unbindCardSkillRunLogConsumer({
+      projectId,
+      ledgerId: input.ledgerId,
+      cardId: input.cardId,
+      runId: previousRunId,
+      consumerId: `thread-log:${input.threadId}`,
+    });
+  }
   prepareThreadRun(input.threadId, input.runId);
   const currentSummary = recordState('threadRunSummaryByThreadId')[input.threadId] as CardSkillRunSummary | undefined;
   if (currentSummary) syncThreadCodexRunClock({ threadId: input.threadId, runId: input.runId, summary: currentSummary });
   bindCardSkillRunLogConsumer({
-    projectId: input.projectId ?? projectIdFromLocation(),
+    projectId,
     ledgerId: input.ledgerId,
     cardId: input.cardId,
     runId: input.runId,

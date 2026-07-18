@@ -2,7 +2,7 @@
  * WHAT: Renders the selected thread's chronological Codex run log.
  * WHY: Run diagnostics belong in an inspectable, independently scrolling surface instead of conversation notes.
  */
-import { cardCodexRunId } from '../../codex/helper/card-codex-run-id.js';
+import { cardCodexRunIds, selectedCardCodexRunId } from '../../codex/helper/card-codex-run-id.js';
 import { groupSequentialToolCalls, type ThreadRunLogEvent, type ThreadRunToolGroup } from '../../codex/helper/thread-run-log.js';
 import { threadRunToolGroupSummary } from '../../codex/helper/thread-run-tool-group-summary.js';
 import { threadRunToolPresentation } from '../../codex/helper/thread-run-tool-presentation.js';
@@ -176,6 +176,47 @@ function renderQueuedWaiting(queuePosition: number | null | undefined): HTMLElem
   return waiting;
 }
 
+function selectThreadCodexRun(threadId: string, runId: string): void {
+  recordState('threadSelectedRunIdByThreadId')[threadId] = runId;
+  recordState('threadLogScrollTopByThreadId')[threadId] = 0;
+  void import('./render-thread-panel.js').then(({ renderThreadPanel }) => renderThreadPanel());
+}
+
+function renderRunNavigator(input: { card: Record<string, unknown>; runId: string; threadId: string }): HTMLElement | null {
+  const runIds = cardCodexRunIds(input.card);
+  if (runIds.length < 2) return null;
+  const index = Math.max(0, runIds.indexOf(input.runId));
+  const navigator = document.createElement('nav');
+  navigator.className = 'codex-log-run-navigator';
+  navigator.setAttribute('aria-label', 'Codex run history');
+
+  const previous = document.createElement('button');
+  previous.type = 'button';
+  previous.className = 'codex-log-run-arrow codex-log-run-arrow--previous';
+  previous.textContent = '←';
+  previous.title = 'Previous Codex run';
+  previous.setAttribute('aria-label', previous.title);
+  previous.disabled = index === 0;
+  previous.addEventListener('click', () => selectThreadCodexRun(input.threadId, runIds[index - 1]));
+
+  const position = document.createElement('span');
+  position.className = 'codex-log-run-position';
+  position.setAttribute('aria-live', 'polite');
+  position.textContent = `Run ${index + 1} of ${runIds.length}`;
+
+  const next = document.createElement('button');
+  next.type = 'button';
+  next.className = 'codex-log-run-arrow codex-log-run-arrow--next';
+  next.textContent = '→';
+  next.title = 'Next Codex run';
+  next.setAttribute('aria-label', next.title);
+  next.disabled = index === runIds.length - 1;
+  next.addEventListener('click', () => selectThreadCodexRun(input.threadId, runIds[index + 1]));
+
+  navigator.append(previous, position, next);
+  return navigator;
+}
+
 export function renderThreadCodexLog(): void {
   const root = document.querySelector('.thread-codex-log') as HTMLElement | null;
   // WHAT: Skip the final DOM effect when the thread log surface is not mounted.
@@ -186,7 +227,9 @@ export function renderThreadCodexLog(): void {
   const threadId = String(state.threadId ?? '');
   const following = isThreadFollowingBottom(threadId, 'codex-log');
   const card = selectedThreadCard(threadId);
-  const runId = card ? cardCodexRunId(card) : '';
+  const selectedRunIds = recordState('threadSelectedRunIdByThreadId');
+  const runId = card ? selectedCardCodexRunId(card, selectedRunIds[threadId]) : '';
+  if (runId) selectedRunIds[threadId] = runId;
   root.replaceChildren();
   // WHAT: Render the exact empty state when the selected thread owns no Codex run.
   // WHY: Missing ownership is distinct from an unavailable run response.
@@ -212,7 +255,8 @@ export function renderThreadCodexLog(): void {
     && Array.isArray(recordState('threadRunEventsByThreadId')[threadId])
     ? recordState('threadRunEventsByThreadId')[threadId] as ThreadRunLogEvent[]
     : [];
-  root.append(renderAnnouncement(threadId), renderThreadCodexLogStatus({ summary: summary ?? null, card, runId, threadId }));
+  const navigator = renderRunNavigator({ card, runId, threadId });
+  root.append(...[navigator, renderAnnouncement(threadId), renderThreadCodexLogStatus({ summary: summary ?? null, card, runId, threadId })].filter((element): element is HTMLElement => Boolean(element)));
   const stopError = threadCodexStopState(runId).error;
   if (stopError) {
     const error = document.createElement('p');
