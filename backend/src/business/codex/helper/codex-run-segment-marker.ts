@@ -2,9 +2,10 @@ export type CodexRunSegment = 'start' | 'continue' | 'restart';
 
 const markerPrefix = 'decision-os:codex-run-segment ';
 const turnMarkerPrefix = 'decision-os:codex-turn-start ';
+const finishedMarkerPrefix = 'decision-os:codex-execution-finished ';
 
 export function isCodexRunMarkerLine(line: string): boolean {
-  return line.startsWith(markerPrefix) || line.startsWith(turnMarkerPrefix);
+  return line.startsWith(markerPrefix) || line.startsWith(turnMarkerPrefix) || line.startsWith(finishedMarkerPrefix);
 }
 
 export type CodexRunSegmentMetadata = {
@@ -22,6 +23,8 @@ export type CodexRunExecution = {
   startLine: number;
   turnStartedAt: string;
   turnStartLine: number;
+  finishedAt: string;
+  status: string;
 };
 
 function cleanMetadata(input: CodexRunSegmentMetadata = {}): CodexRunSegmentMetadata {
@@ -43,6 +46,10 @@ export function codexRunTurnStartedMarker(input: { runId: string; executionId?: 
   return `${turnMarkerPrefix}${JSON.stringify({ runId: input.runId, executionId: String(input.executionId ?? '').trim(), startedAt: input.startedAt, line: Math.max(1, Math.floor(input.line)) })}\n`;
 }
 
+export function codexRunExecutionFinishedMarker(input: { runId: string; executionId: string; finishedAt: string; status: string }): string {
+  return `${finishedMarkerPrefix}${JSON.stringify({ runId: input.runId, executionId: input.executionId, finishedAt: input.finishedAt, status: input.status })}\n`;
+}
+
 export function codexRunExecutions(input: { log: string; runId: string }): CodexRunExecution[] {
   const executions: CodexRunExecution[] = [];
   for (const line of input.log.replace(/\r\n?/g, '\n').split('\n')) {
@@ -52,7 +59,23 @@ export function codexRunExecutions(input: { log: string; runId: string }): Codex
         if (String(parsed.runId ?? '') !== input.runId) continue;
         const startLine = Math.max(0, Math.floor(Number(parsed.startLine ?? 0) || 0));
         const segment = ['start', 'continue', 'restart'].includes(String(parsed.segment ?? '')) ? String(parsed.segment) as CodexRunSegment : 'continue';
-        executions.push({ executionId: String(parsed.executionId ?? '').trim() || `${input.runId}:execution:${startLine}`, runId: input.runId, segment, startedAt: String(parsed.startedAt ?? ''), startLine, turnStartedAt: '', turnStartLine: 0 });
+        const executionId = String(parsed.executionId ?? '').trim() || `${input.runId}:execution:${startLine}`;
+        // Automatic transport retries retain their execution id and remain one operator-visible run.
+        if (executions.some((execution) => execution.executionId === executionId)) continue;
+        executions.push({ executionId, runId: input.runId, segment, startedAt: String(parsed.startedAt ?? ''), startLine, turnStartedAt: '', turnStartLine: 0, finishedAt: '', status: '' });
+      } catch {
+        // Later valid markers remain authoritative.
+      }
+      continue;
+    }
+    if (line.startsWith(finishedMarkerPrefix)) {
+      try {
+        const parsed = JSON.parse(line.slice(finishedMarkerPrefix.length)) as Record<string, unknown>;
+        if (String(parsed.runId ?? '') !== input.runId) continue;
+        const execution = [...executions].reverse().find((entry) => entry.executionId === String(parsed.executionId ?? ''));
+        if (!execution) continue;
+        execution.finishedAt = String(parsed.finishedAt ?? '');
+        execution.status = String(parsed.status ?? '');
       } catch {
         // Later valid markers remain authoritative.
       }

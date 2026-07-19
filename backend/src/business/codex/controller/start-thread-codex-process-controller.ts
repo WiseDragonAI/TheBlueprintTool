@@ -15,7 +15,7 @@ import { createCardSkillRunEventIngestor } from '../effect/ingest-card-skill-run
 import { prepareCardSkillRunEventAppend } from '../effect/prepare-card-skill-run-event-append.js';
 import { buildThreadCodexPrompt } from '../helper/build-thread-codex-prompt.js';
 import { buildCardLaunchContext } from '../helper/build-card-launch-context.js';
-import { codexRunSegmentMarker, codexRunTurnStartedMarker } from '../helper/codex-run-segment-marker.js';
+import { codexRunExecutionFinishedMarker, codexRunSegmentMarker, codexRunTurnStartedMarker } from '../helper/codex-run-segment-marker.js';
 import { isCodexThreadArtifactNote } from '../helper/is-codex-thread-artifact-note.js';
 import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand, resolveCodexResumeCommand, type CodexCommand } from '../helper/resolve-codex-command.js';
 import { codexCapacityResumeDelayMs, isTransientCodexCapacityFailure, readCodexSessionId } from '../helper/transient-codex-capacity-failure.js';
@@ -383,6 +383,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
       finishRunStreams(stdout, stderr, () => {
         flushCardSkillRunEventIngestor(runEventIngestor, runId);
         if (!ownsExecution) return;
+        appendFileSync(stderrFile, codexRunExecutionFinishedMarker({ runId, executionId, finishedAt, status: 'failed' }), 'utf8');
         updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
         removeCodexProcessQueueItem(decisionOsRoot, runId);
         clearCardCodexExecution({ ledgerPath, cardId, runId, executionId });
@@ -426,6 +427,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
         const detail = status === 'cancelled' ? 'terminated by operator' : `exit code ${exitCode ?? 'unknown'}`;
         appendRunStatus(runSummaryFile, status, detail);
         if (!updateRuntimeExecution(runtime, runId, executionId, { status, exitCode, finishedAt, settledAt: new Date().toISOString() })) return;
+        appendFileSync(stderrFile, codexRunExecutionFinishedMarker({ runId, executionId, finishedAt, status }), 'utf8');
         removeCodexProcessQueueItem(decisionOsRoot, runId);
         clearCardCodexExecution({ ledgerPath, cardId, runId, executionId });
         const schedule = runtime.scheduleCodexProcesses;

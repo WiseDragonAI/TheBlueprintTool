@@ -8,7 +8,7 @@ import { saveLedgerCardMediaCarouselSlide } from '/src/runtime/ledger/helper/per
 import { requestCodexPipelineRun } from '/src/runtime/codex/effect/request-codex-pipeline-run.js';
 import { closeMobileThread, handleResponsiveThreadShortcut, initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './thread.js';
 import { initializeMobileCodex, openMobileCodexLibrary, setMobileCodexContext } from './codex.js';
-import { executionAge, executionStopwatch, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge } from './control-room.js';
+import { compareControlRoomQueueTasks, executionAge, executionStopwatch, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge } from './control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from './control-room-route.js';
 import { cardPathForProject, isProjectCardPath, ledgerPathForProject, parseProjectRoute, parseProjectScope, projectPath, zonePathForProject } from './project-route.js';
 import { projectSettingsValues, saveProjectSettingsRequest, startProjectSyncRequest } from './project-settings.js';
@@ -85,10 +85,7 @@ let controlRoomScrollFrame = 0;
 let controlRoomColumnScrollFrame = 0;
 const controlRoomColumnScrollTop = { queue: 0, exec: 0, backlog: 0 };
 const initializedControlRoomColumns = new Set();
-let queuePersistenceSequence = 0;
-let queuePersistenceActive = false;
 let queueSortables = [];
-let queuePersistenceTail = Promise.resolve(true);
 let queueDragActive = false;
 let queueDragSettling = false;
 let queueDragInterrupted = false;
@@ -1194,19 +1191,6 @@ function taskIdentity(task) {
   return [task.projectId, task.ledgerId, task.cardId].map((part) => encodeURIComponent(String(part))).join('--');
 }
 
-function syncQueueFromDom() {
-  const queueList = elements['control-task-list'].querySelector('[data-control-column-list="queue"]');
-  const rows = [...(queueList?.querySelectorAll('.control-task') ?? [])];
-  const orderedIds = rows.map((row) => row.dataset.taskId);
-  const visible = filteredControlTasks('queue');
-  const byId = new Map(visible.map((task) => [taskIdentity(task), task]));
-  const reordered = orderedIds.map((taskId) => byId.get(taskId)).filter(Boolean);
-  const visibleIds = new Set(visible.map(taskIdentity));
-  let replacementIndex = 0;
-  state.controlRoom.queue = state.controlRoom.queue.map((task) => visibleIds.has(taskIdentity(task)) ? reordered[replacementIndex++] : task);
-  rows.forEach((row, index) => row.classList.toggle('next-task', index === 0));
-}
-
 function destroyQueueSortables() {
   queueSortables.forEach((sortable) => sortable.destroy());
   queueSortables = [];
@@ -1217,7 +1201,7 @@ function queueDragInProgress() {
 }
 
 function queueRefreshBlocked() {
-  return queueDragInProgress() || queuePersistenceActive;
+  return queueDragInProgress();
 }
 
 function removeQueueDragArtifacts() {
@@ -1231,19 +1215,15 @@ function removeQueueDragArtifacts() {
   });
 }
 
-async function settleQueueDrag({ persist = false, rerender = false } = {}) {
+async function settleQueueDrag({ rerender = false } = {}) {
   removeQueueDragArtifacts();
   if (rerender) renderControlRoom();
-  try {
-    if (persist) queueQueueOrderPersistence();
-  } finally {
-    removeQueueDragArtifacts();
-    queueDragActive = false;
-    queueDragSettling = false;
-    queueDragInterrupted = false;
-    initializeQueueSortable();
-    await flushPendingControlRoomRefresh();
-  }
+  removeQueueDragArtifacts();
+  queueDragActive = false;
+  queueDragSettling = false;
+  queueDragInterrupted = false;
+  initializeQueueSortable();
+  await flushPendingControlRoomRefresh();
 }
 
 function interruptQueueDrag() {
@@ -1295,13 +1275,11 @@ function initializeQueueSortable() {
       const taskId = queueDragOrigin?.taskId;
       queueDragOrigin = null;
       const placementChanged = sourceTab && targetTab && sourceTab !== targetTab;
-      const orderChanged = targetTab === 'queue' && event.oldIndex !== event.newIndex;
       if (placementChanged) {
         queueMicrotask(() => void persistControlTaskPlacement({ taskId, sourceTab, targetTab, newIndex: event.newIndex }));
         return;
       }
-      if (orderChanged) syncQueueFromDom();
-      queueMicrotask(() => void settleQueueDrag({ persist: orderChanged }));
+      queueMicrotask(() => void settleQueueDrag({ rerender: true }));
     }
   }));
 }
@@ -1400,6 +1378,7 @@ function taskRow(task, tab, index) {
 }
 
 function rememberControlRoomColumnScroll(list) {
+  if (!elements['control-task-list'].contains(list)) return;
   const column = list?.dataset?.controlColumnList;
   if (!Object.hasOwn(controlRoomColumnScrollTop, column)) return;
   const scrollTop = Number(list.scrollTop);
@@ -1410,6 +1389,7 @@ function rememberControlRoomColumnScroll(list) {
 
 function captureControlRoomColumnScroll() {
   if (elements['control-room-view'].hidden) return;
+  if (controlRoomColumnScrollFrame) return;
   elements['control-task-list'].querySelectorAll('.control-task-column-list').forEach(rememberControlRoomColumnScroll);
 }
 
@@ -1422,6 +1402,7 @@ function restoreControlRoomColumnScroll() {
       const maximum = Math.max(0, Number(list.scrollHeight) - Number(list.clientHeight));
       list.scrollTop = Math.min(controlRoomColumnScrollTop[column], maximum);
     });
+    controlRoomColumnScrollFrame = 0;
   });
 }
 
@@ -1552,6 +1533,7 @@ async function loadControlRoom({ force = false, deferDuringQueueDrag = false, ow
   if (response.status === 304 && state.controlRoom) return false;
   if (!response.ok) throw new Error(`Could not load the Control Room (${response.status}).`);
   const nextControlRoom = await response.json();
+  if (Array.isArray(nextControlRoom.queue)) nextControlRoom.queue.sort(compareControlRoomQueueTasks);
   if (owner) requireRouteOwnership(owner);
   const nextEtag = response.headers.get('etag') ?? '';
   if (deferDuringQueueDrag && queueRefreshBlocked()) {
@@ -1601,54 +1583,6 @@ function subscribeControlRoomEvents() {
   });
 }
 
-function queueQueueOrderPersistence() {
-  const sequence = ++queuePersistenceSequence;
-  queuePersistenceActive = true;
-  const reordered = filteredControlTasks('queue');
-  const mutations = reordered.flatMap((task, index) => {
-    const queueRank = index + 1;
-    if (task.queueRank === queueRank) return [];
-    task.queueRank = queueRank;
-    const source = state.controlRoom.allTasks.find((candidate) => candidate.projectId === task.projectId && candidate.cardId === task.cardId && candidate.ledgerId === task.ledgerId);
-    if (source) source.queueRank = queueRank;
-    return [{ task, queueRank }];
-  });
-  queuePersistenceTail = queuePersistenceTail.then(async (previousSucceeded) => {
-    if (!previousSucceeded) return false;
-    return persistQueueOrder(mutations);
-  });
-  void queuePersistenceTail.then(async (persisted) => {
-    if (sequence !== queuePersistenceSequence) return;
-    try {
-      if (!persisted) {
-        pendingControlRoomRefresh = false;
-        await loadControlRoom({ force: true });
-        renderControlRoom();
-        setView('error-view');
-      }
-    } finally {
-      if (!persisted) queuePersistenceTail = Promise.resolve(true);
-      queuePersistenceActive = false;
-      await flushPendingControlRoomRefresh();
-    }
-  });
-}
-
-async function persistQueueOrder(mutations) {
-  try {
-    for (const { task, queueRank } of mutations) {
-      await ledgerMutation(task.ledgerId, {
-        action: 'patch-card',
-        cardPatch: { id: task.cardId, queueRank }
-      }, task.projectId, task.ownerNodeId);
-    }
-    return true;
-  } catch (error) {
-    elements['error-message'].textContent = error instanceof Error ? error.message : 'Queue order persistence failed.';
-    return false;
-  }
-}
-
 async function persistControlTaskPlacement({ taskId, sourceTab, targetTab, newIndex }) {
   const source = state.controlRoom?.[sourceTab] ?? [];
   const task = source.find((candidate) => taskIdentity(candidate) === taskId);
@@ -1667,6 +1601,7 @@ async function persistControlTaskPlacement({ taskId, sourceTab, targetTab, newIn
     : after ? target.indexOf(after) + 1 : target.length;
   target.splice(insertionIndex, 0, task);
   task.status = targetTab === 'backlog' ? 'task-backlog' : 'task-waiting';
+  if (targetTab === 'queue') target.sort(compareControlRoomQueueTasks);
   const canonical = state.controlRoom.allTasks.find((candidate) => taskIdentity(candidate) === taskId);
   if (canonical) canonical.status = task.status;
   renderControlRoom();
@@ -1675,7 +1610,6 @@ async function persistControlTaskPlacement({ taskId, sourceTab, targetTab, newIn
       action: 'patch-card',
       cardPatch: { id: task.cardId, status: targetTab === 'backlog' ? 'backlog' : 'todo' }
     }, task.projectId, task.ownerNodeId);
-    if (targetTab === 'queue') queueQueueOrderPersistence();
   } catch (error) {
     await loadControlRoom({ force: true });
     renderControlRoom();

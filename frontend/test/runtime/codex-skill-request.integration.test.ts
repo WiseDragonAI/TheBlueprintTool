@@ -908,7 +908,7 @@ test('externally started Codex runs clear terminal widget cache and restart poll
     assert.equal(firstWidget.nodes['[data-codex-run-effort]'].value, 'xhigh');
     assert.equal(firstWidget.nodes['[data-codex-run-model]'].disabled, false);
     assert.equal(firstWidget.nodes['[data-codex-run-effort]'].disabled, false);
-    assert.equal(firstWidget.nodes['[data-codex-run-new-session]'].hidden, false);
+    assert.equal(firstWidget.nodes['[data-codex-run-continue]'].hidden, false);
 
     const cachedWidget = fakeCodexRunWidget();
     bindCardSkillRunWidget({ ledgerId: 'specs', cardId: 'card-a', runId: 'codex-skill-3000-cache', element: cachedWidget });
@@ -920,7 +920,6 @@ test('externally started Codex runs clear terminal widget cache and restart poll
     assert.equal(cachedWidget.nodes['[data-codex-run-latest]'].textContent, 'Continuing session');
     assert.equal(cachedWidget.nodes['[data-codex-run-cancel]'].hidden, false);
     assert.equal(cachedWidget.nodes['[data-codex-run-continue]'].hidden, true);
-    assert.equal(cachedWidget.nodes['[data-codex-run-new-session]'].hidden, true);
     assert.equal(cachedWidget.nodes['[data-codex-run-model]'].disabled, true);
     assert.equal(cachedWidget.nodes['[data-codex-run-effort]'].disabled, true);
     await waitFor(() => requests.length === 2);
@@ -929,14 +928,14 @@ test('externally started Codex runs clear terminal widget cache and restart poll
     cachedWidget.nodes['[data-codex-run-tools]'].textContent = '7';
     cachedWidget.nodes['[data-codex-run-messages]'].textContent = '2';
     cachedWidget.nodes['[data-codex-run-files]'].textContent = '1';
-    cachedWidget.nodes['[data-codex-run-new-session]'].onclick?.(new Event('click'));
+    cachedWidget.nodes['[data-codex-run-continue]'].onclick?.(new Event('click'));
     assert.equal(cachedWidget.nodes['[data-codex-run-status]'].textContent, 'RUNNING');
-    assert.equal(cachedWidget.nodes['[data-codex-run-latest]'].textContent, 'Starting new session');
+    assert.equal(cachedWidget.nodes['[data-codex-run-latest]'].textContent, 'Continuing session');
     assert.equal(cachedWidget.nodes['[data-codex-run-tools]'].textContent, '0');
     assert.equal(cachedWidget.nodes['[data-codex-run-messages]'].textContent, '0');
     assert.equal(cachedWidget.nodes['[data-codex-run-files]'].textContent, '0');
     await waitFor(() => continuationBodies.length === 1);
-    assert.equal(continuationBodies[0].newSession, true);
+    assert.equal('newSession' in continuationBodies[0], false);
     assert.equal(continuationBodies[0].codexModel, 'gpt-5.6-sol');
     assert.equal(continuationBodies[0].codexEffort, 'medium');
   } finally {
@@ -988,7 +987,7 @@ test('requestThreadCodexSessionDelete sends exact run ownership with DELETE', as
   }
 });
 
-test('requestCardSkillRunContinue can start a new session with the selected model and effort', async () => {
+test('requestCardSkillRunContinue resumes the run with the selected model and effort', async () => {
   const previousFetch = globalThis.fetch;
   try {
     globalThis.fetch = (async (url: string, init?: RequestInit) => {
@@ -1000,8 +999,7 @@ test('requestCardSkillRunContinue can start a new session with the selected mode
         ledgerId: 'specs',
         cardId: 'card-a',
         codexModel: 'gpt-5.4',
-        codexEffort: 'high',
-        newSession: true
+        codexEffort: 'high'
       });
       return new Response(JSON.stringify({ ok: true, run: { id: 'codex-skill-1000-abcd', status: 'running' } }), {
         status: 202,
@@ -1014,8 +1012,7 @@ test('requestCardSkillRunContinue can start a new session with the selected mode
       cardId: 'card-a',
       runId: 'codex-skill-1000-abcd',
       codexModel: 'gpt-5.4',
-      codexEffort: 'high',
-      newSession: true
+      codexEffort: 'high'
     });
     assert.equal(result.ok, true);
     assert.equal(result.status, 'running');

@@ -27,6 +27,9 @@ test('quick voice stop queues Codex and returns to the canonical Exec route afte
   assert.doesNotMatch(thread.match(/async function finishQueuedVoiceSubmission\(submitted\) \{[\s\S]*?\n\}/)?.[0] ?? '', /closeMobileThread\(\)/);
   assert.match(application, /onQuickVoiceSubmitted: navigateVoiceSubmission/);
   assert.match(thread, /canvasState\.projectId = currentProjectId;/);
+  assert.match(thread, /existingRunId = String\(button\.dataset\.codexRunId \|\| cardCodexThreadRunId\(currentCard\)\)/);
+  assert.match(thread, /existingRunId[\s\S]*requestCardSkillRunContinue\(\{/);
+  assert.match(thread, /threadSelectedRunIdByThreadId\[canvasState\.threadId\] = runId/);
 });
 
 test('desktop Shift+X navigates to Exec after durable local persistence', () => {

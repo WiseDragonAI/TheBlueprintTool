@@ -538,7 +538,13 @@ body:has(.project-color-picker-modal[open]) { overflow: hidden; }
 .codex-library-controls { display: grid; gap: 8px; }
 .codex-library-control-actions, .skill-picker-actions, .skill-picker-actions > div { display: flex; align-items: end; justify-content: space-between; gap: 8px; }
 .skill-picker-modal .codex-sheet { overflow: hidden; }
-.skill-picker-list { min-height: 0; overflow-y: auto; }
+/*
+ * Keep the bounded picker as the scroll owner and its cards at intrinsic height.
+ * A grid here can shrink every auto row when the catalog is taller than the modal,
+ * collapsing rich skill cards into border lines instead of producing overflow.
+ */
+.skill-picker-list.codex-list { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow-y: auto; }
+.skill-picker-list > .codex-list-card { flex: 0 0 auto; }
 .skill-picker-actions { border-top: 1px solid var(--line); padding-top: 10px; }
 .skill-picker-actions .codex-field { min-width: min(280px, 52%); }
 .codex-list-card.is-selected { border-color: var(--skill-category-color); background: color-mix(in srgb, var(--skill-category-color), transparent 92%); }

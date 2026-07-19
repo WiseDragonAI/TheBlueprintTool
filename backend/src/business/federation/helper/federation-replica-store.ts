@@ -75,6 +75,12 @@ export function createFederationReplicaStore(input: { decisionOsRoot: string; no
   });
   const pendingFor = (nodeId: string, projectId: string): PendingReplica | undefined => document.pending
     .find((entry) => entry.nodeId === nodeId && entry.projectId === projectId);
+  const dueFor = (nodeId: string): PendingReplica[] => {
+    const timestamp = now().getTime();
+    return document.pending
+      .filter((entry) => entry.nodeId === nodeId && Date.parse(entry.nextAttemptAt) <= timestamp)
+      .sort((left, right) => (left.priority === right.priority ? left.queuedAt.localeCompare(right.queuedAt) : left.priority === 'selected' ? -1 : 1));
+  };
   const readStatus = (nodeId: string, projectId: string): { status: FederationReplicaStatus; updatedAt: string; message: string; resource: string } => {
     const state = document.peers[nodeId];
     const snapshot = state?.projects[projectId];
@@ -118,10 +124,10 @@ export function createFederationReplicaStore(input: { decisionOsRoot: string; no
       persist();
     },
     next(nodeId: string): PendingReplica | null {
-      const timestamp = now().getTime();
-      return document.pending
-        .filter((entry) => entry.nodeId === nodeId && Date.parse(entry.nextAttemptAt) <= timestamp)
-        .sort((left, right) => (left.priority === right.priority ? left.queuedAt.localeCompare(right.queuedAt) : left.priority === 'selected' ? -1 : 1))[0] ?? null;
+      return dueFor(nodeId)[0] ?? null;
+    },
+    due(nodeId: string): PendingReplica[] {
+      return dueFor(nodeId);
     },
     complete(nodeId: string, projectId: string, snapshot: FederationReplicaSnapshot): void {
       const state = peer(nodeId);

@@ -121,6 +121,32 @@ test('active session deletion waits for settlement before removing owned artifac
   }
 });
 
+test('deleting the newest retained session promotes the previous run without deleting its artifacts', async () => {
+  const context = fixture();
+  const previousRunId = `codex-skill-${Date.now() - 2000}-previous`;
+  const previousArtifacts = context.artifacts.map((artifact) => artifact.replace(context.runId, previousRunId));
+  for (const artifact of previousArtifacts) writeFileSync(artifact, `owned by ${previousRunId}`);
+  const ledger = JSON.parse(readFileSync(context.ledgerPath, 'utf8')) as { cards: Array<Record<string, unknown>> };
+  ledger.cards[0].codexThreadRunIds = [previousRunId, context.runId];
+  writeFileSync(context.ledgerPath, JSON.stringify(ledger, null, 2));
+  const runtime: Record<string, any> = {
+    decisionOsRoot: context.decisionOsRoot,
+    codexSkillRuns: { [context.runId]: { id: context.runId, status: 'complete', settledAt: new Date().toISOString() } },
+  };
+  try {
+    const result = await deleteThreadCodexSessionController({ action_payload: { ledgerId: 'specs', cardId: context.cardId, runId: context.runId }, runtime_state: runtime });
+    assert.equal(result.ok, true);
+    const persisted = JSON.parse(readFileSync(context.ledgerPath, 'utf8')) as { cards: Array<Record<string, unknown>> };
+    assert.deepEqual(persisted.cards[0].codexThreadRunIds, [previousRunId]);
+    assert.equal(persisted.cards[0].codexThreadRunId, previousRunId);
+    assert.equal(persisted.cards[0].codexThreadRunOutputFile, `.decision-os/runs/codex-skills/specs/${previousRunId}.md`);
+    assert.equal(context.artifacts.some(existsSync), false);
+    assert.equal(previousArtifacts.every(existsSync), true);
+  } finally {
+    rmSync(context.workspace, { recursive: true, force: true });
+  }
+});
+
 test('artifact read failure preserves session ownership and the ledger projection', async () => {
   const context = fixture();
   rmSync(context.artifacts[0]);

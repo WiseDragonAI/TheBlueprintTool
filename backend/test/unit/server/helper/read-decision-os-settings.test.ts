@@ -33,3 +33,30 @@ test('read-decision-os-settings reads workspace settings and normalizes aliases'
     rmSync(workspace, { recursive: true, force: true });
   }
 });
+
+test('read-decision-os-settings inherits repository defaults and preserves workspace overrides', () => {
+  const repository = mkdtempSync(join(tmpdir(), 'decision-os-repository-settings-'));
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-workspace-settings-'));
+  const runtime_state: Record<string, unknown> = {};
+  try {
+    mkdirSync(join(repository, '.decision-os'), { recursive: true });
+    mkdirSync(join(workspace, '.decision-os'), { recursive: true });
+    writeFileSync(join(repository, '.decision-os', '.settings.json'), JSON.stringify({
+      openaiApiKey: 'repository-key',
+      transcriptionModel: 'repository-model'
+    }));
+    writeFileSync(join(workspace, '.decision-os', '.settings.json'), JSON.stringify({
+      transcriptionModel: 'workspace-model'
+    }));
+    const result = readDecisionOsSettings({
+      action_payload: { cwd: workspace, repositorySettingsFile: join(repository, '.decision-os', '.settings.json') },
+      runtime_state
+    });
+    assert.equal(result.repositorySettingsFile, join(repository, '.decision-os', '.settings.json'));
+    assert.equal(runtime_state.openaiApiKey, 'repository-key');
+    assert.equal(runtime_state.transcriptionModel, 'workspace-model');
+  } finally {
+    rmSync(repository, { recursive: true, force: true });
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});

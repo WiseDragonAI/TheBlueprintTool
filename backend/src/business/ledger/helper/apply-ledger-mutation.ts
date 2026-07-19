@@ -14,7 +14,7 @@ export type LedgerMutation = {
   cardId?: string;
   masterTaskId?: string;
   imageSrc?: string;
-  cardPatch?: { id?: string; status?: string; title?: string; description?: string; queueRank?: number; imageSizes?: Record<string, { width?: number; height?: number }>; codexRunModel?: CodexModel; codexRunEffort?: CodexEffort };
+  cardPatch?: { id?: string; status?: string; title?: string; description?: string; imageSizes?: Record<string, { width?: number; height?: number }>; codexRunModel?: CodexModel; codexRunEffort?: CodexEffort };
   annotation?: Record<string, unknown>;
   relationship?: Record<string, unknown>;
   zoneIds?: string[];
@@ -119,14 +119,6 @@ export function applyLedgerMutation(input: {
       if (card && typeof mutation.cardPatch.title === 'string') card.title = mutation.cardPatch.title;
       if (card && typeof mutation.cardPatch.description === 'string') {
         writeCardDescriptionFile({ decisionOsRoot, card, description: mutation.cardPatch.description, ledgerPath });
-      }
-      if (card && Number.isInteger(mutation.cardPatch.queueRank) && Number(mutation.cardPatch.queueRank) > 0) {
-        const rank = Number(mutation.cardPatch.queueRank);
-        const markdown = readCardDescription({ decisionOsRoot, card });
-        const nextMarkdown = /^\s*(?:\*\*)?Queue rank(?:\*\*)?\s*:/im.test(markdown)
-          ? markdown.replace(/^\s*(?:\*\*)?Queue rank(?:\*\*)?\s*:.*$/im, `Queue rank: ${rank}`)
-          : markdown.replace(/^(\s*(?:\*\*)?Waiting since(?:\*\*)?\s*:.*)$/im, `$1\nQueue rank: ${rank}`);
-        writeCardDescriptionFile({ decisionOsRoot, card, description: nextMarkdown, ledgerPath });
       }
       if (card && mutation.cardPatch.imageSizes && typeof mutation.cardPatch.imageSizes === 'object') card.imageSizes = mutation.cardPatch.imageSizes;
       if (card && validCodexPreference) {

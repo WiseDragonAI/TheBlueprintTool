@@ -298,7 +298,7 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     const eventReader = events.body!.getReader();
     await eventReader.read();
     const directMutation = await fetch(`${baseB}/p/${encodeURIComponent(catalogB.projects.find((project) => project.name === 'beta')!.id)}/decision-os/specs`, {
-      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'beta-card', title: 'changed on owner' } }),
+      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'beta-card', title: 'changed on owner', status: 'backlog' } }),
     });
     assert.equal(directMutation.status, 200);
     const remoteEvent = await Promise.race([
@@ -307,6 +307,17 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     ]);
     assert.match(new TextDecoder().decode(remoteEvent.value), /ledger-content-change/);
     await eventReader.cancel();
+    const synchronizedBacklog = await waitFor(async () => {
+      const body = await fetch(`${baseA}/api/control-room`).then((response) => response.json()) as {
+        backlog: Array<{ cardId: string; cardStatus: string; replica?: { status: string } }>;
+      };
+      return body.backlog.find((task) => task.cardId === 'beta-card' && task.cardStatus === 'backlog' && task.replica?.status === 'replicated') ?? null;
+    });
+    assert.equal(synchronizedBacklog.cardId, 'beta-card');
+
+    const replicaSnapshot = await fetch(`${baseB}/api/federation/task-replica?projectId=${encodeURIComponent(catalogB.projects.find((project) => project.name === 'beta')!.id)}`).then((response) => response.json()) as { revision: string };
+    const unchangedReplica = await fetch(`${baseB}/api/federation/task-replica?projectId=${encodeURIComponent(catalogB.projects.find((project) => project.name === 'beta')!.id)}&revision=${encodeURIComponent(replicaSnapshot.revision)}`);
+    assert.equal(unchangedReplica.status, 304, 'an unchanged task replica is confirmed by hash without retransmitting its payload');
 
     const registryAPath = join(homeA, '.decision-os', 'projects.json');
     const registryBPath = join(homeB, '.decision-os', 'projects.json');

@@ -28,6 +28,9 @@ export function resolveCardSkillRunOwnership(input: {
   if (!storedCard) return { found: false, threadLaunched: false };
   const hydrated = hydrateLedgerCardContent({ cards: [JSON.parse(JSON.stringify(storedCard)) as AnyRecord] }, input.decisionOsRoot) as { cards?: AnyRecord[] };
   const card = hydrated.cards?.[0] ?? storedCard;
+  const retainedThreadRunIds = Array.isArray(card.codexThreadRunIds)
+    ? card.codexThreadRunIds.map(String).map((runId) => runId.trim()).filter(Boolean)
+    : [];
   // WHAT: Accept the shared current-run pointer before legacy ownership fields.
   // WHY: Process Card skills must be readable from the source card's existing Codex Log.
   if (String(card.codexActiveRunId ?? '') === input.runId) {
@@ -36,6 +39,9 @@ export function resolveCardSkillRunOwnership(input: {
   // WHAT: Classify an explicit thread-run field as thread-launched ownership.
   // WHY: Consumers use this classification to keep lifecycle artifacts out of conversation notes.
   if (String(card.codexThreadRunId ?? '') === input.runId) return { found: true, threadLaunched: true };
+  // WHAT: Retain ownership for every historical run projected by the source thread.
+  // WHY: Starting a newer run must not make an older on-disk log unreadable.
+  if (retainedThreadRunIds.includes(input.runId)) return { found: true, threadLaunched: true };
   // WHAT: Accept the ordinary card-run field without the thread-launched classification.
   // WHY: Generated skill cards share run artifacts but retain card-owned presentation.
   if (String(card.codexRunId ?? '') === input.runId) return { found: true, threadLaunched: false };

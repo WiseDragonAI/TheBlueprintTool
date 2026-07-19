@@ -44,7 +44,8 @@ function paintThreadCodexRunClock(clock: ThreadRunClock): void {
     const panel = document.querySelector<HTMLElement>('.thread-panel');
     const status = document.querySelector<HTMLElement>('.thread-codex-log .codex-log-status');
     const elapsed = status?.querySelector<HTMLElement>('[data-codex-log-elapsed]');
-    if (panel && !panel.hidden && status?.dataset.runId === clock.runId && elapsed) {
+    const selectedExecutionId = String(recordState('threadSelectedExecutionIdByThreadId')[clock.threadId] ?? '');
+    if (panel && !panel.hidden && status?.dataset.runId === clock.runId && (!selectedExecutionId || selectedExecutionId === summary.executionId) && elapsed) {
       const label = codexRunDurationLabel(elapsedMs);
       if (elapsed.textContent !== label) elapsed.textContent = label;
     }

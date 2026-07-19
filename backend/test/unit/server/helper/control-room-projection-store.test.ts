@@ -176,7 +176,7 @@ test('rebuilds a cached Exec projection when the process queue file appears', as
   }
 });
 
-test('orders one multi-project Queue by explicit rank and newest waiting time', () => {
+test('orders one multi-project Queue only by newest waiting time', () => {
   const root = mkdtempSync(join(tmpdir(), 'decision-os-control-room-queue-order-'));
   const createProject = (id: string, cards: Array<{ id: string; waitingSince: string; queueRank?: number }>): DecisionOsProject => {
     const projectRoot = join(root, id);
@@ -224,16 +224,18 @@ test('orders one multi-project Queue by explicit rank and newest waiting time', 
   try {
     const projection = store.get(projects) as Record<string, any>;
     assert.deepEqual(projection.queue.map((task: Record<string, unknown>) => task.cardId), [
-      'ranked-oldest',
       'newest',
       'middle',
       'oldest',
+      'ranked-oldest',
     ]);
-    assert.deepEqual(projection.queue.slice(1).map((task: Record<string, unknown>) => task.projectId), [
+    assert.deepEqual(projection.queue.map((task: Record<string, unknown>) => task.projectId), [
       'project-b',
       'project-a',
       'project-b',
+      'project-a',
     ]);
+    assert.equal('queueRank' in projection.queue[3], false);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

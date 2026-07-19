@@ -229,7 +229,16 @@ export function federatedControlRoomProjection(input: {
     allTasks,
   };
   mergedLists.queue.sort(compareControlRoomQueueTasks);
-  const fingerprints = projections.map((projection) => text(projection.fingerprint));
+  // WHAT: Bind the public projection revision to both replica content and owner presence.
+  // WHY: Presence changes alter task/project output even when every retained replica revision is unchanged.
+  const fingerprints = projections.map((projection) => ({
+    fingerprint: text(projection.fingerprint),
+    projects: records(projection.projects).map((project) => ({
+      id: text(project.id),
+      ownerNodeId: text(project.ownerNodeId),
+      online: project.online !== false,
+    })),
+  }));
   return {
     ...projections[0],
     ...mergedLists,

@@ -20,6 +20,8 @@ export function threadCodexSessionDeletionState(runId: string): DeletionState {
 function clearThreadRunCache(threadId: string): void {
   const keys = [
     'threadLogScrollTopByThreadId',
+    'threadSelectedRunIdByThreadId',
+    'threadSelectedExecutionIdByThreadId',
     'threadRunIdByThreadId',
     'threadRunSummaryByThreadId',
     'threadRunEventsByThreadId',
@@ -61,6 +63,7 @@ export async function deleteThreadCodexSessionController(
   }
 
   deletionStateByRunId.delete(input.runId);
+  if (state.threadRunExecutionsByRunId && typeof state.threadRunExecutionsByRunId === 'object') delete state.threadRunExecutionsByRunId[input.runId];
   clearThreadCodexStopState(input.runId);
   clearThreadRunCache(input.threadId);
   modal.close?.();

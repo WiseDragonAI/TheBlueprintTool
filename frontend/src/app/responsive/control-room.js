@@ -25,14 +25,11 @@ export function parseMasterTaskMarkdown({ cardId, title, labels: cardLabels = []
   // A waiting period restarts whenever either participant adds a thread message.
   // The card field remains the durable fallback for tasks without a timestamped thread.
   const waitingTime = Number.isFinite(latestThreadTime) ? latestThreadTime : Date.parse(waitingText);
-  const rankText = source.match(/^\s*(?:\*\*)?Queue rank(?:\*\*)?\s*:\s*(\d+)\s*$/im)?.[1] ?? '';
-  const queueRank = rankText ? Number(rankText) : null;
   const diagnostics = [];
   if (!masterTask) diagnostics.push('missing master-task label');
   if (jsonLabels.includes('master-task') && jsonLabels.includes('subtask')) diagnostics.push('invalid_master_label');
   if (!ledger) diagnostics.push('missing Ledger');
   if (!Number.isFinite(waitingTime)) diagnostics.push('invalid Waiting since');
-  if (queueRank !== null && (!Number.isInteger(queueRank) || queueRank < 1)) diagnostics.push('invalid Queue rank');
 
   const subtasks = [];
   if (jsonLabels.includes('master-task')) {
@@ -95,7 +92,6 @@ export function parseMasterTaskMarkdown({ cardId, title, labels: cardLabels = []
     waitingTime,
     executionSince: displayedExecutionSince,
     executionTime: displayedExecutionTime,
-    queueRank,
     subtasks,
     complete,
     nextSubtask: subtasks.find((task) => !/^(?:complete|completed|done)$/i.test(task.status)) ?? null,
@@ -108,22 +104,26 @@ export function deriveControlRoom(cards) {
   // Keep every master task visible, including completed and malformed cards.
   const eligible = parsed.filter((task) => task.masterTask);
   const compare = (left, right) => {
-    if (left.queueRank !== null || right.queueRank !== null) {
-      if (left.queueRank === null) return 1;
-      if (right.queueRank === null) return -1;
-      if (left.queueRank !== right.queueRank) return left.queueRank - right.queueRank;
-    }
     const leftTime = Number.isFinite(left.waitingTime) ? left.waitingTime : Number.POSITIVE_INFINITY;
     const rightTime = Number.isFinite(right.waitingTime) ? right.waitingTime : Number.POSITIVE_INFINITY;
     return leftTime - rightTime || left.cardId.localeCompare(right.cardId);
   };
   return {
-    queue: eligible.filter((task) => task.status === 'task-waiting').sort(compare),
+    queue: eligible.filter((task) => task.status === 'task-waiting').sort(compareControlRoomQueueTasks),
     exec: eligible.filter((task) => task.status === 'task-execution').sort(compare),
     backlog: eligible.filter((task) => task.status === 'task-backlog').sort(compare),
     ledgers: Array.from(new Set(eligible.map((task) => task.ledger))).sort((a, b) => a.localeCompare(b)),
     diagnostics: parsed.filter((task) => !task.valid && task.masterTask)
   };
+}
+
+export function compareControlRoomQueueTasks(left, right) {
+  const leftTime = Number.isFinite(left.waitingTime) ? left.waitingTime : Number.NEGATIVE_INFINITY;
+  const rightTime = Number.isFinite(right.waitingTime) ? right.waitingTime : Number.NEGATIVE_INFINITY;
+  return rightTime - leftTime
+    || String(left.projectId ?? '').localeCompare(String(right.projectId ?? ''))
+    || String(left.ledgerId ?? '').localeCompare(String(right.ledgerId ?? ''))
+    || String(left.cardId ?? '').localeCompare(String(right.cardId ?? ''));
 }
 
 export function visibleMasterTaskMarkdown(markdown) {
@@ -143,15 +143,6 @@ export function visibleMasterTaskMarkdown(markdown) {
     lines.splice(start, end - start);
   }
   return lines.join('\n').trim();
-}
-
-export function withQueueRank(markdown, rank) {
-  const line = `Queue rank: ${rank}`;
-  if (/^\s*(?:\*\*)?Queue rank(?:\*\*)?\s*:/im.test(markdown)) {
-    return markdown.replace(/^\s*(?:\*\*)?Queue rank(?:\*\*)?\s*:.*$/im, line);
-  }
-  const waiting = /^\s*(?:\*\*)?Waiting since(?:\*\*)?\s*:.*$/im;
-  return waiting.test(markdown) ? markdown.replace(waiting, (value) => `${value}\n${line}`) : `${markdown.trimEnd()}\n\n${line}\n`;
 }
 
 export function waitingAge(timestamp, now = Date.now()) {

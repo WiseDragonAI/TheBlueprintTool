@@ -53,6 +53,7 @@ function consumeThreadRunSummary(input: { threadId: string; runId: string; summa
   const previousSummary = summaries[input.threadId] as CardSkillRunSummary | undefined;
   runIds[input.threadId] = input.runId;
   summaries[input.threadId] = input.summary;
+  recordState('threadRunExecutionsByRunId')[input.runId] = input.summary.executions;
   syncThreadCodexRunClock(input);
 
   const previousEvents = Array.isArray(eventsByThread[input.threadId]) ? eventsByThread[input.threadId] as ThreadRunLogEvent[] : [];
@@ -90,11 +91,22 @@ type ThreadCodexRunLogIdentity = {
 
 export function bindThreadCodexRunLog(input: ThreadCodexRunLogIdentity): void {
   if (!input.ledgerId || !input.cardId || !input.threadId || !input.runId) return;
+  const projectId = input.projectId ?? projectIdFromLocation();
+  const previousRunId = String(recordState('threadRunIdByThreadId')[input.threadId] ?? '');
+  if (previousRunId && previousRunId !== input.runId) {
+    unbindCardSkillRunLogConsumer({
+      projectId,
+      ledgerId: input.ledgerId,
+      cardId: input.cardId,
+      runId: previousRunId,
+      consumerId: `thread-log:${input.threadId}`,
+    });
+  }
   prepareThreadRun(input.threadId, input.runId);
   const currentSummary = recordState('threadRunSummaryByThreadId')[input.threadId] as CardSkillRunSummary | undefined;
   if (currentSummary) syncThreadCodexRunClock({ threadId: input.threadId, runId: input.runId, summary: currentSummary });
   bindCardSkillRunLogConsumer({
-    projectId: input.projectId ?? projectIdFromLocation(),
+    projectId,
     ledgerId: input.ledgerId,
     cardId: input.cardId,
     runId: input.runId,

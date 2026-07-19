@@ -135,14 +135,12 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   const ledgerName = jsonLabels.includes('master-task') ? input.ledgerEntry.title : legacyLedgerName;
   const waitingText = markdown.match(/^\s*(?:\*\*)?Waiting since(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
   const executionText = markdown.match(/^\s*(?:\*\*)?Active since(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
-  const rankText = markdown.match(/^\s*(?:\*\*)?Queue rank(?:\*\*)?\s*:\s*(\d+)\s*$/im)?.[1] ?? '';
   const threadId = `thread-${text(input.card.id)}`;
   const threadRef = input.ledger.threadFiles && typeof input.ledger.threadFiles === 'object' ? (input.ledger.threadFiles as AnyRecord)[threadId] : '';
   const threadFile = resolveThreadContentFile(input.project.decisionOsRoot, threadRef);
   const notes = threadFile && existsSync(threadFile) ? parseThreadMarkdown(readFileSync(threadFile, 'utf8')) : [];
   const latestThreadTime = notes.reduce((latest, note) => Math.max(latest, Date.parse(text(note.timestamp)) || Number.NEGATIVE_INFINITY), Number.NEGATIVE_INFINITY);
   const waitingTime = Number.isFinite(latestThreadTime) ? latestThreadTime : Date.parse(waitingText);
-  const rank = rankText ? Number(rankText) : null;
   const run = runtimeStatus({ card: input.card, runtime: input.runtime, decisionOsRoot: input.project.decisionOsRoot, ledgerId: input.ledgerEntry.id, pipelineRuns: input.pipelineRuns, queuedRuns: input.queuedRuns });
   const executionObservation = run.observation && typeof run.observation === 'object' ? run.observation as AnyRecord : null;
   const processing = executionObservation?.kind === 'codex-process';
@@ -162,7 +160,6 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   if (jsonLabels.includes('master-task') && jsonLabels.includes('subtask')) diagnostics.push('invalid_master_label');
   if (!ledgerName) diagnostics.push('missing Ledger');
   if (!Number.isFinite(waitingTime)) diagnostics.push('invalid Waiting since');
-  if (rank !== null && (!Number.isInteger(rank) || rank < 1)) diagnostics.push('invalid Queue rank');
   if (jsonLabels.includes('master-task')) {
     for (const relationship of relationships) {
       const child = cards.find((card) => text(card.id) === text(relationship.to));
@@ -186,17 +183,12 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
     codexProcessing: processing, codexQueued: queued, codexQueuePosition: queued ? run.queuePosition : null,
     waitingSince: Number.isFinite(latestThreadTime) ? new Date(latestThreadTime).toISOString() : waitingText,
     waitingTime, executionSince,
-    executionTime: Date.parse(executionSince), queueRank: rank,
+    executionTime: Date.parse(executionSince),
     subtasks, complete, nextSubtask: subtasks.find((subtask) => subtask.status !== 'complete') ?? null,
   };
 }
 
 function compareTasks(left: AnyRecord, right: AnyRecord): number {
-  if (left.queueRank !== null || right.queueRank !== null) {
-    if (left.queueRank === null) return 1;
-    if (right.queueRank === null) return -1;
-    if (left.queueRank !== right.queueRank) return Number(left.queueRank) - Number(right.queueRank);
-  }
   return (Number.isFinite(left.waitingTime) ? Number(left.waitingTime) : Number.POSITIVE_INFINITY)
     - (Number.isFinite(right.waitingTime) ? Number(right.waitingTime) : Number.POSITIVE_INFINITY)
     || text(left.cardId).localeCompare(text(right.cardId));

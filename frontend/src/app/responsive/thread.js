@@ -17,6 +17,7 @@ import { retryVoiceTranscription } from '/src/runtime/voice/effect/retry-voice-t
 import { uploadThreadFileController } from '/src/runtime/thread/controller/upload-thread-file-controller.js';
 import { pasteThreadImageController } from '/src/runtime/thread/controller/paste-thread-image-controller.js';
 import { requestThreadCodexProcess } from '/src/runtime/codex/effect/request-thread-codex-process.js';
+import { requestCardSkillRunContinue } from '/src/runtime/codex/effect/request-card-skill-run-continue.js';
 import { bindThreadCodexRunLog, unbindThreadCodexRunLog } from '/src/runtime/codex/effect/bind-thread-codex-run-log.js';
 import { cardCodexThreadRunId } from '/src/runtime/codex/helper/card-codex-thread-run-id.js';
 import { syncThreadCodexRunControls } from '/src/runtime/thread/effect/sync-thread-codex-run-controls.js';
@@ -337,19 +338,32 @@ async function startCodex(button) {
   updateLaunchReadiness();
   if (button.disabled) return;
   button.disabled = true;
-  const result = await requestThreadCodexProcess({
-    ledgerId: currentLedgerId,
-    threadId: canvasState.threadId,
-    cardId: String(currentCard.id),
-    codexModel: button.dataset.codexModel,
-    codexEffort: button.dataset.codexEffort
-  });
+  const existingRunId = String(button.dataset.codexRunId || cardCodexThreadRunId(currentCard)).trim();
+  const result = existingRunId
+    ? await requestCardSkillRunContinue({
+      ledgerId: currentLedgerId,
+      cardId: String(currentCard.id),
+      runId: existingRunId,
+      codexModel: button.dataset.codexModel,
+      codexEffort: button.dataset.codexEffort
+    })
+    : await requestThreadCodexProcess({
+      ledgerId: currentLedgerId,
+      threadId: canvasState.threadId,
+      cardId: String(currentCard.id),
+      codexModel: button.dataset.codexModel,
+      codexEffort: button.dataset.codexEffort
+    });
   if (!result.ok) {
     button.disabled = false;
     return;
   }
-  const runId = String(result.run?.id ?? '');
+  const runId = String(result.run?.id ?? existingRunId);
   const startedAt = String(result.run?.startedAt || new Date().toISOString());
+  if (runId) {
+    canvasState.threadSelectedRunIdByThreadId ||= {};
+    canvasState.threadSelectedRunIdByThreadId[canvasState.threadId] = runId;
+  }
   if (runId) bindThreadCodexRunLog({ projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId });
   const status = String(result.run?.status || 'running');
   hydrateThreadRun(runId, startedAt, status, result.queuePosition);

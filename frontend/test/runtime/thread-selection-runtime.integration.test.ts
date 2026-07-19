@@ -250,6 +250,7 @@ test('thread viewport state hydrates validated independent follow and offset rec
   assert.equal(isThreadFollowingBottom('thread-a', 'thread'), false);
   assert.equal(isThreadFollowingBottom('thread-a', 'codex-log'), true);
   assert.equal(isThreadFollowingBottom('unseen-thread', 'thread'), true);
+  assert.equal(isThreadFollowingBottom('unseen-thread', 'codex-log'), true);
 });
 
 test('conversation and Codex Log follow changes persist independently', () => {
@@ -616,7 +617,7 @@ test('render-thread-notes keeps failed voice audio retryable', () => {
     state.threadId = 'thread-card-a';
     state.activeLedger = {
       notes: {
-        'thread-card-a': [{ id: 'note-1', role: 'operator', message: 'Voice uploaded; transcription failed.', voiceFileRef: '/tmp/voice.webm', status: 'transcription failed' }]
+        'thread-card-a': [{ id: 'note-1', role: 'operator', message: 'Voice uploaded; transcription failed.', voiceFileRef: '/tmp/voice.webm', status: 'transcription failed', error: 'transcription not configured' }]
       }
     };
     renderThreadNotes();
@@ -625,6 +626,9 @@ test('render-thread-notes keeps failed voice audio retryable', () => {
     assert.equal(retry?.dataset?.action, 'voice-retry');
     assert.equal(retry?.dataset?.noteId, 'note-1');
     assert.equal(retry?.dataset?.voiceFileRef, '/tmp/voice.webm');
+    const errorMessage = rendered[0].children.find((child) => child.className === 'thread-note-error');
+    assert.equal(errorMessage?.textContent, 'transcription not configured');
+    assert.equal(errorMessage?.attributes?.role, 'alert');
     const deleteButton = rendered[0].children.find((child) => child.className?.includes('thread-note-delete'));
     assert.equal(deleteButton?.dataset?.action, 'confirm-delete-note');
     assert.equal(deleteButton?.dataset?.noteId, 'note-1');
