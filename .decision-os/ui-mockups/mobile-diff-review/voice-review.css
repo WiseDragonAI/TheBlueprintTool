@@ -1,0 +1,17 @@
+@import url('./review-shell.css');
+.content { padding-top: 10px; }
+.diff { height: 330px; }
+.voice-sheet { position: absolute; inset: auto 0 0; z-index: 8; min-height: 390px; padding: 16px 14px 24px; border-top: 1px solid #ff766866; background: linear-gradient(180deg,#1b171a 0%,#0c0e11 55%); box-shadow: 0 -24px 55px #000c; }
+.sheet-handle { width: 42px; height: 4px; margin: 0 auto 14px; border-radius: 9px; background: #4d5158; }
+.context { padding: 10px; border-left: 3px solid var(--accent); background: #111820; }
+.context small { display: block; color: var(--accent); font-size: 10px; font-weight: 800; text-transform: uppercase; }
+.context code { display: block; overflow: hidden; margin-top: 6px; color: #d5dde6; font: 11px "Ubuntu Mono",monospace; text-overflow: ellipsis; white-space: nowrap; }
+.recording { text-align: center; }
+.recording strong { display: block; margin-top: 18px; color: var(--red); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
+.time { margin-top: 6px; font: 800 28px "Ubuntu Mono",monospace; }
+.wave { display: flex; height: 52px; align-items: center; justify-content: center; gap: 3px; margin: 4px 0 14px; }
+.wave i { width: 3px; border-radius: 2px; background: var(--red); box-shadow: 0 0 8px #ff766866; }
+.wave i:nth-child(3n) { height: 34px; }.wave i:nth-child(3n+1) { height: 18px; }.wave i:nth-child(3n+2) { height: 44px; }
+.record-actions { display: grid; grid-template-columns: 1fr 1.3fr; gap: 8px; }
+.cancel { color: var(--muted); }.send { color: var(--text); background: linear-gradient(165deg,#452529,#28171a); box-shadow: inset 0 0 0 1px #ff766870, inset 0 0 14px #ff766824, 0 7px 18px #0008; }
+.sheet-note { margin: 12px 0 0; color: var(--muted); font-size: 10px; line-height: 1.4; text-align: center; }
