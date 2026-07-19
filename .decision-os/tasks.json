@@ -6121,6 +6121,190 @@
       "codexPipelineStepId": "codex-step-76620a22-6ca8-4afd-8fe0-fee74d9b40b0",
       "codexPipelineStepName": "Recap",
       "codexSkillName": "retrospect-and-close-task"
+    },
+    {
+      "id": "card-3f99b18f-b96e-4af2-b3c9-9b891e0f2b5f",
+      "title": "Restore mobile voice submission controls",
+      "cardType": "note",
+      "domainId": "tasks",
+      "status": "done",
+      "labels": [
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 131928,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/tasks/card-3f99b18f-b96e-4af2-b3c9-9b891e0f2b5f.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexActiveRunId": "codex-skill-1784445242759-414dfd66",
+      "codexRunId": "codex-skill-1784445242759-414dfd66",
+      "codexRunOutputFile": ".decision-os/cards/tasks/card-codex-pipeline-1784445242759-514ae9fa-step-1.md",
+      "codexPipelineRunId": "codex-pipeline-1784445242759-514ae9fa",
+      "codexPipelineName": "PostMortem",
+      "codexPipelineStepId": "codex-step-76620a22-6ca8-4afd-8fe0-fee74d9b40b0",
+      "codexPipelineStepName": "Recap",
+      "codexSkillName": "retrospect-and-close-task"
+    },
+    {
+      "id": "card-4b151f18-7e22-4c4d-8b30-0109437bf7ae",
+      "title": "Route mobile voice action buttons",
+      "cardType": "note",
+      "domainId": "tasks",
+      "status": "done",
+      "labels": [
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 131928,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/tasks/card-4b151f18-7e22-4c4d-8b30-0109437bf7ae.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-112e238f-2b5f-4a6a-bf7f-4c0e510c0dbc",
+      "title": "Replicate mobile voice-note threads to the hosting federation node",
+      "cardType": "note",
+      "domainId": "tasks",
+      "status": "todo",
+      "labels": [
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 137028,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/tasks/card-112e238f-2b5f-4a6a-bf7f-4c0e510c0dbc.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexActiveRunId": "codex-skill-1784445257596-fa1d3b42",
+      "codexRunId": "codex-skill-1784445257596-fa1d3b42",
+      "codexRunOutputFile": ".decision-os/cards/tasks/card-codex-pipeline-1784445257596-7ba11b11-step-1.md",
+      "codexPipelineRunId": "codex-pipeline-1784445257596-7ba11b11",
+      "codexPipelineName": "PostMortem",
+      "codexPipelineStepId": "codex-step-76620a22-6ca8-4afd-8fe0-fee74d9b40b0",
+      "codexPipelineStepName": "Recap",
+      "codexSkillName": "retrospect-and-close-task"
+    },
+    {
+      "id": "card-71cf2fc2-b189-4a91-9d31-d7e747e1094d",
+      "title": "Identify the first broken federation transition",
+      "cardType": "note",
+      "domainId": "tasks",
+      "status": "done",
+      "labels": [
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 137028,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/tasks/card-71cf2fc2-b189-4a91-9d31-d7e747e1094d.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-93d1c5d0-a995-4961-81e7-73ebcb4cc2a0",
+      "title": "Implement authoritative remote thread persistence",
+      "cardType": "note",
+      "domainId": "tasks",
+      "status": "done",
+      "labels": [
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 137028,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/tasks/card-93d1c5d0-a995-4961-81e7-73ebcb4cc2a0.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-e29306ff-9114-4e0c-b665-8a45a1d14acc",
+      "title": "Verify remote voice-note replication and Codex visibility",
+      "cardType": "note",
+      "domainId": "tasks",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 137438,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/tasks/card-e29306ff-9114-4e0c-b665-8a45a1d14acc.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-codex-pipeline-1784445242759-514ae9fa-step-1",
+      "title": "PostMortem · Recap",
+      "cardType": "codex-skill-run",
+      "x": -9946,
+      "y": 131928,
+      "w": 700,
+      "h": 260,
+      "status": "todo",
+      "codexRunId": "codex-skill-1784445242759-414dfd66",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "comment": {
+        "contentFile": ".decision-os/cards/tasks/card-codex-pipeline-1784445242759-514ae9fa-step-1.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784445242759-414dfd66",
+      "codexRunOutputFile": ".decision-os/cards/tasks/card-codex-pipeline-1784445242759-514ae9fa-step-1.md",
+      "codexPipelineRunId": "codex-pipeline-1784445242759-514ae9fa",
+      "codexPipelineName": "PostMortem",
+      "codexPipelineStepId": "codex-step-76620a22-6ca8-4afd-8fe0-fee74d9b40b0",
+      "codexPipelineStepName": "Recap",
+      "codexSkillName": "retrospect-and-close-task"
+    },
+    {
+      "id": "card-codex-pipeline-1784445257596-7ba11b11-step-1",
+      "title": "PostMortem · Recap",
+      "cardType": "codex-skill-run",
+      "x": -9946,
+      "y": 137028,
+      "w": 700,
+      "h": 260,
+      "status": "todo",
+      "codexRunId": "codex-skill-1784445257596-fa1d3b42",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "comment": {
+        "contentFile": ".decision-os/cards/tasks/card-codex-pipeline-1784445257596-7ba11b11-step-1.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784445257596-fa1d3b42",
+      "codexRunOutputFile": ".decision-os/cards/tasks/card-codex-pipeline-1784445257596-7ba11b11-step-1.md",
+      "codexPipelineRunId": "codex-pipeline-1784445257596-7ba11b11",
+      "codexPipelineName": "PostMortem",
+      "codexPipelineStepId": "codex-step-76620a22-6ca8-4afd-8fe0-fee74d9b40b0",
+      "codexPipelineStepName": "Recap",
+      "codexSkillName": "retrospect-and-close-task"
     }
   ],
   "annotations": [
@@ -6663,6 +6847,26 @@
       "height": 1400,
       "color": "#895cfa",
       "label": "Distributed project identity",
+      "comments": []
+    },
+    {
+      "id": "zone-deb9af36-8866-4774-a6d9-9cdfb28ae813",
+      "x": -10462,
+      "y": 131868,
+      "width": 1200,
+      "height": 900,
+      "color": "#a78bfa",
+      "label": "Mobile voice submission",
+      "comments": []
+    },
+    {
+      "id": "zone-5daa5126-9123-4b10-b0fb-7f9c2ea72083",
+      "x": -10462,
+      "y": 136968,
+      "width": 1200,
+      "height": 900,
+      "color": "#a78bfa",
+      "label": "Federated voice-note replication",
       "comments": []
     }
   ],
@@ -7914,6 +8118,42 @@
       "from": "card-924e2263-f833-41e2-895a-86b91ebbd47d",
       "to": "card-codex-pipeline-1784441270126-f9ccf4eb-step-1",
       "label": "Recap"
+    },
+    {
+      "id": "rel-3c3a7ac6-e864-4a02-8895-a4def6b63645",
+      "from": "card-3f99b18f-b96e-4af2-b3c9-9b891e0f2b5f",
+      "to": "card-4b151f18-7e22-4c4d-8b30-0109437bf7ae",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-22155769-7a50-47b3-adda-6c7cdcaf1347",
+      "from": "card-112e238f-2b5f-4a6a-bf7f-4c0e510c0dbc",
+      "to": "card-71cf2fc2-b189-4a91-9d31-d7e747e1094d",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-c2353725-19a4-495e-99b1-72e0a4f9646e",
+      "from": "card-112e238f-2b5f-4a6a-bf7f-4c0e510c0dbc",
+      "to": "card-93d1c5d0-a995-4961-81e7-73ebcb4cc2a0",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-39cb554a-3b3e-4107-99d6-22c0552cac38",
+      "from": "card-112e238f-2b5f-4a6a-bf7f-4c0e510c0dbc",
+      "to": "card-e29306ff-9114-4e0c-b665-8a45a1d14acc",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-codex-pipeline-1784445242759-514ae9fa-1",
+      "from": "card-3f99b18f-b96e-4af2-b3c9-9b891e0f2b5f",
+      "to": "card-codex-pipeline-1784445242759-514ae9fa-step-1",
+      "label": "Recap"
+    },
+    {
+      "id": "rel-codex-pipeline-1784445257596-7ba11b11-1",
+      "from": "card-112e238f-2b5f-4a6a-bf7f-4c0e510c0dbc",
+      "to": "card-codex-pipeline-1784445257596-7ba11b11-step-1",
+      "label": "Recap"
     }
   ],
   "notes": {},
@@ -7999,7 +8239,11 @@
     "thread-card-codex-pipeline-1784394619194-f274a565-step-1": ".decision-os/threads/tasks/thread-card-codex-pipeline-1784394619194-f274a565-step-1.md",
     "thread-card-codex-pipeline-1784439300006-4a288471-step-1": ".decision-os/threads/tasks/thread-card-codex-pipeline-1784439300006-4a288471-step-1.md",
     "thread-card-codex-pipeline-1784439334563-e18d7a5a-step-1": ".decision-os/threads/tasks/thread-card-codex-pipeline-1784439334563-e18d7a5a-step-1.md",
-    "thread-card-codex-pipeline-1784441270126-f9ccf4eb-step-1": ".decision-os/threads/tasks/thread-card-codex-pipeline-1784441270126-f9ccf4eb-step-1.md"
+    "thread-card-codex-pipeline-1784441270126-f9ccf4eb-step-1": ".decision-os/threads/tasks/thread-card-codex-pipeline-1784441270126-f9ccf4eb-step-1.md",
+    "thread-card-3f99b18f-b96e-4af2-b3c9-9b891e0f2b5f": ".decision-os/threads/tasks/thread-card-3f99b18f-b96e-4af2-b3c9-9b891e0f2b5f.md",
+    "thread-card-112e238f-2b5f-4a6a-bf7f-4c0e510c0dbc": ".decision-os/threads/tasks/thread-card-112e238f-2b5f-4a6a-bf7f-4c0e510c0dbc.md",
+    "thread-card-codex-pipeline-1784445242759-514ae9fa-step-1": ".decision-os/threads/tasks/thread-card-codex-pipeline-1784445242759-514ae9fa-step-1.md",
+    "thread-card-codex-pipeline-1784445257596-7ba11b11-step-1": ".decision-os/threads/tasks/thread-card-codex-pipeline-1784445257596-7ba11b11-step-1.md"
   },
   "deletedNoteIds": {
     "thread-card-d4df7793-0cb8-4a6f-aee6-4a6c7366200c": [
@@ -8023,5 +8267,5 @@
       "note-1784279137406-1c0937fb11842"
     ]
   },
-  "updatedAt": "2026-07-18T08:51:10.431Z"
+  "updatedAt": "2026-07-19T06:23:38.374Z"
 }
