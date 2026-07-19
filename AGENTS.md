@@ -74,15 +74,21 @@
 4. **Lists:** use numbered list items.
 5. **Emphasis:** use **bold** for key points and `backticks` for exact literals.
 
-## Mobile Chromium Procedure
+## Platform-Aware Chromium Procedure
 
-- **Mandatory runbook:** Before installing, running, debugging, or modifying
-  browser automation on the phone, and before using Chromium for a mobile test
-  or screenshot, read and follow [`BROWSER_RUNBOOK.md`](BROWSER_RUNBOOK.md).
-- **Verified helper:** Use `../tool/browser/browse.js` with the Termux Chromium
-  executable at `/data/data/com.termux/files/usr/bin/chromium-browser`.
-- **Required flags:** Preserve `--no-sandbox`, `--no-zygote`,
-  `--single-process`, `--disable-dev-shm-usage`, and `--disable-gpu`.
+- **Mandatory platform gate:** Before installing, running, debugging, or
+  modifying browser automation, and before using Chromium for a browser test or
+  screenshot, read the injected `platform` instruction and follow only the
+  matching section in [`BROWSER_RUNBOOK.md`](BROWSER_RUNBOOK.md).
+- **Linux workflow:** For `platform: linux`, use root `@playwright/test` with
+  `/snap/bin/chromium` and the Linux launch flags documented in the runbook.
+- **Termux workflow:** For `platform: termux`, use
+  `../tool/browser/browse.js` with
+  `/data/data/com.termux/files/usr/bin/chromium-browser` and preserve the
+  Android-only `--no-zygote` and `--single-process` flags.
+- **No inference:** The injected platform value is authoritative. Do not infer
+  the workflow from filesystem paths and do not run commands from the other
+  platform's section.
 - **Server boundary:** Chromium is a separate client process. Do not restart,
   stop, replace, or launch the Decision OS server while preparing a browser test
   unless the operator explicitly requests a server restart.
