@@ -10405,7 +10405,6 @@
       "codexThreadRunIds": [
         "codex-skill-1784439508139-45a0918e"
       ],
-      "codexActiveRunId": "codex-skill-1784441306682-98bd2152",
       "codexRunId": "codex-skill-1784441306682-98bd2152",
       "codexRunOutputFile": ".decision-os/cards/specs/card-codex-pipeline-1784441306682-a4fc2621-step-1.md",
       "codexPipelineRunId": "codex-pipeline-1784441306682-a4fc2621",
@@ -10454,11 +10453,15 @@
     },
     {
       "id": "card-77edea64-f747-430a-983c-50f32c84d6ca",
-      "title": "New task intake",
+      "title": "Make project synchronization immediate and lifecycle-safe",
       "cardType": "note",
       "domainId": "specs",
       "status": "todo",
       "labels": [
+        "analysis",
+        "project-sync",
+        "frontend",
+        "backend",
         "master-task"
       ],
       "x": -10402,
@@ -10470,7 +10473,6 @@
       },
       "facts": [],
       "fields": [],
-      "codexActiveRunId": "codex-skill-1784441165275-c7d81284",
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
       "codexThreadRunIds": [
@@ -10520,7 +10522,6 @@
       },
       "facts": [],
       "fields": [],
-      "codexActiveRunId": "codex-skill-1784441306682-98bd2152",
       "codexRunOutputFile": ".decision-os/cards/specs/card-codex-pipeline-1784441306682-a4fc2621-step-1.md",
       "codexPipelineRunId": "codex-pipeline-1784441306682-a4fc2621",
       "codexPipelineName": "PostMortem",
@@ -10530,7 +10531,7 @@
     },
     {
       "id": "card-92702a8b-fd8a-4c2b-af5c-8226e65c7524",
-      "title": "New task intake",
+      "title": "Unify Codex session and execution ownership",
       "cardType": "note",
       "domainId": "specs",
       "status": "todo",
@@ -10545,7 +10546,648 @@
         "contentFile": ".decision-os/cards/specs/card-92702a8b-fd8a-4c2b-af5c-8226e65c7524.md"
       },
       "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "xhigh",
+      "codexThreadRunIds": [
+        "codex-skill-1784441468966-e407e430"
+      ],
+      "codexThreadRunId": "codex-skill-1784441468966-e407e430",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784441468966-e407e430.md"
+    },
+    {
+      "id": "card-64e412a0-ebb8-45fd-977b-417317d4afcd",
+      "title": "Split durable admission from background provisioning",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "code",
+        "backend",
+        "project-sync",
+        "async-provisioning",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 147228,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-64e412a0-ebb8-45fd-977b-417317d4afcd.md"
+      },
+      "facts": [],
       "fields": []
+    },
+    {
+      "id": "card-947a3cd5-b8c4-4266-818a-eb24d0f8707b",
+      "title": "Project provisional synchronization runs into Control Room",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "code",
+        "frontend",
+        "backend",
+        "project-sync",
+        "control-room",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 147228,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-947a3cd5-b8c4-4266-818a-eb24d0f8707b.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-a07e18a7-5d39-4dc0-8434-605d1ee4731f",
+      "title": "Correct synchronization deduplication and retry lifecycle",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "code",
+        "backend",
+        "project-sync",
+        "lifecycle",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 147638,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-a07e18a7-5d39-4dc0-8434-605d1ee4731f.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-d1b287de-c324-4551-bd26-eb73735d5ad5",
+      "title": "Propagate source project color through synchronization",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "code",
+        "backend",
+        "frontend",
+        "project-sync",
+        "color",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 147638,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-d1b287de-c324-4551-bd26-eb73735d5ad5.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-2305d65b-f536-449c-b536-6d34e922479f",
+      "title": "Add synchronization lifecycle and interaction regressions",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "test",
+        "frontend",
+        "backend",
+        "project-sync",
+        "browser",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 148048,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-2305d65b-f536-449c-b536-6d34e922479f.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-7e6e0630-d3c2-4d78-b70f-a58c247d5a43",
+      "title": "Define and migrate the canonical Codex ownership schema",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 148248,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-7e6e0630-d3c2-4d78-b70f-a58c247d5a43.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-7017298f-34df-4c85-a516-1d83bad98fd2",
+      "title": "Make card-level Codex admission atomic and idempotent",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 148248,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-7017298f-34df-4c85-a516-1d83bad98fd2.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-7d72a88e-8a01-47a7-bdb2-95c5a7dae6a8",
+      "title": "Unify thread, continuation, and pipeline execution lifecycle",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 148658,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-7d72a88e-8a01-47a7-bdb2-95c5a7dae6a8.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-3b88d83a-f848-4b9a-867b-2c8cada2a8f8",
+      "title": "Fence queue recovery and process settlement by execution",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 148658,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-3b88d83a-f848-4b9a-867b-2c8cada2a8f8.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-a3db13c6-4429-43fe-8346-20768f1d9c53",
+      "title": "Make Codex actions use typed execution ownership",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 149068,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-a3db13c6-4429-43fe-8346-20768f1d9c53.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-3a584ed3-2795-469a-ace4-ca9f6c67dc5b",
+      "title": "Separate active execution controls from Codex Log history",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 149068,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-3a584ed3-2795-469a-ace4-ca9f6c67dc5b.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-05ff44af-b72b-461f-8d32-ec46affba0c7",
+      "title": "Unify responsive and desktop lifecycle consumers",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 149478,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-05ff44af-b72b-461f-8d32-ec46affba0c7.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-c49f2564-7fc4-4a17-b90c-fee24460b210",
+      "title": "Centralize artifact and projection resolution",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 149478,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-c49f2564-7fc4-4a17-b90c-fee24460b210.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-1d37d63b-b56d-420e-8aed-971bb0a8c161",
+      "title": "Prove Codex lifecycle invariants end to end",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 149888,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-1d37d63b-b56d-420e-8aed-971bb0a8c161.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-b6acc68a-f6c7-4fc6-a08f-53dc11bdc16a",
+      "title": "Replicate the fixed tasks ledger",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "architecture",
+        "synchronization",
+        "replication",
+        "tasks-ledger",
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 150448,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-b6acc68a-f6c7-4fc6-a08f-53dc11bdc16a.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunIds": [
+        "codex-skill-1784448364821-d313924a"
+      ],
+      "codexThreadRunId": "codex-skill-1784448364821-d313924a",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784448364821-d313924a.md",
+      "codexActiveRunId": "codex-skill-1784448364821-d313924a"
+    },
+    {
+      "id": "card-5ceeedcd-3f65-482e-8901-31ce664a7d9d",
+      "title": "Specify fixed-ledger timestamped task events",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "architecture",
+        "event-model",
+        "replication",
+        "tasks-ledger",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 150448,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-5ceeedcd-3f65-482e-8901-31ce664a7d9d.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-d0edb909-0b5a-4327-b9d0-fd68e3e04d90",
+      "title": "Build durable tasks-ledger event authority",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "backend",
+        "event-store",
+        "persistence",
+        "tasks-ledger",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 150448,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-d0edb909-0b5a-4327-b9d0-fd68e3e04d90.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-9c74f4da-db2a-4988-adc8-bc3166b0b0d1",
+      "title": "Route every task mutation to the fixed tasks ledger",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "backend",
+        "ledger-cli",
+        "migration",
+        "tasks-ledger",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 150858,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-9c74f4da-db2a-4988-adc8-bc3166b0b0d1.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-33342b59-aa84-4a59-a7f1-af439ac994a1",
+      "title": "Replicate only fixed tasks-ledger events",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "backend",
+        "federation",
+        "websocket",
+        "tasks-ledger",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 150858,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-33342b59-aa84-4a59-a7f1-af439ac994a1.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-d387d03e-f829-445c-b144-abb7659bcd6e",
+      "title": "Enforce tasks-ledger and content boundaries",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "backend",
+        "content-boundary",
+        "replication",
+        "tasks-ledger",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 151268,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-d387d03e-f829-445c-b144-abb7659bcd6e.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-6efae974-597c-4deb-a97b-89017f85df80",
+      "title": "Separate tasks-event durability from Git code sync",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "git",
+        "durability",
+        "replication",
+        "tasks-ledger",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 151268,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-6efae974-597c-4deb-a97b-89017f85df80.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-3ce4451c-256e-4380-8d61-aab4d4294e74",
+      "title": "Migrate specs into the fixed tasks ledger",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "migration",
+        "ledger",
+        "replication",
+        "tasks-ledger",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 151678,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-3ce4451c-256e-4380-8d61-aab4d4294e74.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-d9b41fe5-6d3f-446e-a482-5881f1d480f5",
+      "title": "Verify fixed tasks-ledger replication",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "tests",
+        "diagnostics",
+        "replication",
+        "tasks-ledger",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 151678,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-d9b41fe5-6d3f-446e-a482-5881f1d480f5.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-e5546e18-afd2-4ce0-b8ba-8098b437ee50",
+      "title": "Voice SEND incorrectly launches Codex",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "labels": [
+        "bug",
+        "frontend",
+        "voice",
+        "codex",
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 152368,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-e5546e18-afd2-4ce0-b8ba-8098b437ee50.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunIds": [
+        "codex-skill-1784458051582-74a18540"
+      ],
+      "codexActiveRunId": "codex-skill-1784471860336-94b3d91c",
+      "codexRunId": "codex-skill-1784471860336-94b3d91c",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-pipeline-1784471860336-10eea594-step-1.md",
+      "codexPipelineRunId": "codex-pipeline-1784471860336-10eea594",
+      "codexPipelineName": "PostMortem",
+      "codexPipelineStepId": "codex-step-76620a22-6ca8-4afd-8fe0-fee74d9b40b0",
+      "codexPipelineStepName": "Recap",
+      "codexSkillName": "retrospect-and-close-task"
+    },
+    {
+      "id": "card-96eb779a-4139-40ec-988f-7dddddf2de0a",
+      "title": "Remove the quick-capture SEND override",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "labels": [
+        "bug",
+        "frontend",
+        "voice",
+        "codex",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 152368,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-96eb779a-4139-40ec-988f-7dddddf2de0a.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-ab4631a3-1274-4507-ae4d-fc8772e2322e",
+      "title": "Add action-boundary regression coverage",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "labels": [
+        "test",
+        "frontend",
+        "voice",
+        "codex",
+        "subtask"
+      ],
+      "x": -9632,
+      "y": 152368,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-ab4631a3-1274-4507-ae4d-fc8772e2322e.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-a66f17b1-3cb2-468a-8f15-88a1bc7e0f2d",
+      "title": "Complete report: fixed tasks-ledger event replication",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "done",
+      "labels": [
+        "report",
+        "architecture",
+        "replication",
+        "tasks-ledger",
+        "subtask"
+      ],
+      "x": -10402,
+      "y": 150718,
+      "w": 360,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-a66f17b1-3cb2-468a-8f15-88a1bc7e0f2d.md"
+      },
+      "facts": [],
+      "fields": []
+    },
+    {
+      "id": "card-codex-pipeline-1784471860336-10eea594-step-1",
+      "title": "PostMortem · Recap",
+      "cardType": "codex-skill-run",
+      "x": -9946,
+      "y": 152368,
+      "w": 700,
+      "h": 260,
+      "status": "todo",
+      "codexRunId": "codex-skill-1784471860336-94b3d91c",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-codex-pipeline-1784471860336-10eea594-step-1.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784471860336-94b3d91c",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-pipeline-1784471860336-10eea594-step-1.md",
+      "codexPipelineRunId": "codex-pipeline-1784471860336-10eea594",
+      "codexPipelineName": "PostMortem",
+      "codexPipelineStepId": "codex-step-76620a22-6ca8-4afd-8fe0-fee74d9b40b0",
+      "codexPipelineStepName": "Recap",
+      "codexSkillName": "retrospect-and-close-task"
     }
   ],
   "relationships": [
@@ -11423,6 +12065,162 @@
       "id": "rel-codex-pipeline-1784441306682-a4fc2621-1",
       "from": "card-3add8dea-07f1-4882-84e0-5c45b7967583",
       "to": "card-codex-pipeline-1784441306682-a4fc2621-step-1",
+      "label": "Recap"
+    },
+    {
+      "id": "rel-17bc258e-8d40-4540-8a94-31899d956d6c",
+      "from": "card-77edea64-f747-430a-983c-50f32c84d6ca",
+      "to": "card-64e412a0-ebb8-45fd-977b-417317d4afcd",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-4422712c-94ae-49a6-88f4-470ccca0d29a",
+      "from": "card-77edea64-f747-430a-983c-50f32c84d6ca",
+      "to": "card-947a3cd5-b8c4-4266-818a-eb24d0f8707b",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-332e825b-06a1-40f4-856b-5c079c304a6f",
+      "from": "card-77edea64-f747-430a-983c-50f32c84d6ca",
+      "to": "card-a07e18a7-5d39-4dc0-8434-605d1ee4731f",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-00a9b579-4deb-4868-945f-306082af1a67",
+      "from": "card-77edea64-f747-430a-983c-50f32c84d6ca",
+      "to": "card-d1b287de-c324-4551-bd26-eb73735d5ad5",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-9ce2cb58-2d7a-4aad-b3f8-041c164b3764",
+      "from": "card-77edea64-f747-430a-983c-50f32c84d6ca",
+      "to": "card-2305d65b-f536-449c-b536-6d34e922479f",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-b06904fe-1591-4e30-9cca-0ec175f8dee5",
+      "from": "card-92702a8b-fd8a-4c2b-af5c-8226e65c7524",
+      "to": "card-7e6e0630-d3c2-4d78-b70f-a58c247d5a43",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-240395fc-4afe-4a51-8ff8-bd4ad7681148",
+      "from": "card-92702a8b-fd8a-4c2b-af5c-8226e65c7524",
+      "to": "card-7017298f-34df-4c85-a516-1d83bad98fd2",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-f0bdb8b8-c654-4d76-8a9a-8f9133ca2d35",
+      "from": "card-92702a8b-fd8a-4c2b-af5c-8226e65c7524",
+      "to": "card-7d72a88e-8a01-47a7-bdb2-95c5a7dae6a8",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-48f031d0-7f81-46cd-aaae-bf3f896c1ff5",
+      "from": "card-92702a8b-fd8a-4c2b-af5c-8226e65c7524",
+      "to": "card-3b88d83a-f848-4b9a-867b-2c8cada2a8f8",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-6db8400c-1172-4ceb-8f9f-3cdc08b1d64b",
+      "from": "card-92702a8b-fd8a-4c2b-af5c-8226e65c7524",
+      "to": "card-a3db13c6-4429-43fe-8346-20768f1d9c53",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-a49d48c6-dd9c-4c0e-8d68-9d78b28b7693",
+      "from": "card-92702a8b-fd8a-4c2b-af5c-8226e65c7524",
+      "to": "card-3a584ed3-2795-469a-ace4-ca9f6c67dc5b",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-07a70685-fb30-469e-b625-9fad7a9230fd",
+      "from": "card-92702a8b-fd8a-4c2b-af5c-8226e65c7524",
+      "to": "card-05ff44af-b72b-461f-8d32-ec46affba0c7",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-599d1c61-be53-4c69-98c1-99a720c82327",
+      "from": "card-92702a8b-fd8a-4c2b-af5c-8226e65c7524",
+      "to": "card-c49f2564-7fc4-4a17-b90c-fee24460b210",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-e4e84004-296e-4c8c-97e9-b29993e11245",
+      "from": "card-92702a8b-fd8a-4c2b-af5c-8226e65c7524",
+      "to": "card-1d37d63b-b56d-420e-8aed-971bb0a8c161",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-9eeebaac-4819-47d0-9e04-8a20e7cfc5ce",
+      "from": "card-b6acc68a-f6c7-4fc6-a08f-53dc11bdc16a",
+      "to": "card-5ceeedcd-3f65-482e-8901-31ce664a7d9d",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-7a84d50d-3de4-4226-ac70-1a39f7dc7923",
+      "from": "card-b6acc68a-f6c7-4fc6-a08f-53dc11bdc16a",
+      "to": "card-d0edb909-0b5a-4327-b9d0-fd68e3e04d90",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-b06934e8-42fb-46fe-ac7f-48c3f46acf1e",
+      "from": "card-b6acc68a-f6c7-4fc6-a08f-53dc11bdc16a",
+      "to": "card-9c74f4da-db2a-4988-adc8-bc3166b0b0d1",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-0d5cc9c8-01be-407c-ac19-d0be87b758b9",
+      "from": "card-b6acc68a-f6c7-4fc6-a08f-53dc11bdc16a",
+      "to": "card-33342b59-aa84-4a59-a7f1-af439ac994a1",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-337f7bd4-b0eb-469d-a4a5-19641b3e406a",
+      "from": "card-b6acc68a-f6c7-4fc6-a08f-53dc11bdc16a",
+      "to": "card-d387d03e-f829-445c-b144-abb7659bcd6e",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-5d137985-075d-441d-8d53-d78c7dd17f1b",
+      "from": "card-b6acc68a-f6c7-4fc6-a08f-53dc11bdc16a",
+      "to": "card-6efae974-597c-4deb-a97b-89017f85df80",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-ae517be3-30a4-4bb3-a70a-c52c7ae76702",
+      "from": "card-b6acc68a-f6c7-4fc6-a08f-53dc11bdc16a",
+      "to": "card-3ce4451c-256e-4380-8d61-aab4d4294e74",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-2f9aec3d-4087-4ec5-907a-adabe5a5ae31",
+      "from": "card-b6acc68a-f6c7-4fc6-a08f-53dc11bdc16a",
+      "to": "card-d9b41fe5-6d3f-446e-a482-5881f1d480f5",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-89311a91-e0fc-4802-9b19-458e2c27a8e6",
+      "from": "card-e5546e18-afd2-4ce0-b8ba-8098b437ee50",
+      "to": "card-96eb779a-4139-40ec-988f-7dddddf2de0a",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-48b83ac0-e789-45c3-b6ab-bd2e3fa25a75",
+      "from": "card-e5546e18-afd2-4ce0-b8ba-8098b437ee50",
+      "to": "card-ab4631a3-1274-4507-ae4d-fc8772e2322e",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-e2b6cfaf-6879-456b-afd1-e086d64d4eb9",
+      "from": "card-b6acc68a-f6c7-4fc6-a08f-53dc11bdc16a",
+      "to": "card-a66f17b1-3cb2-468a-8f15-88a1bc7e0f2d",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-codex-pipeline-1784471860336-10eea594-1",
+      "from": "card-e5546e18-afd2-4ce0-b8ba-8098b437ee50",
+      "to": "card-codex-pipeline-1784471860336-10eea594-step-1",
       "label": "Recap"
     }
   ],
@@ -12580,7 +13378,7 @@
       "width": 1200,
       "height": 900,
       "color": "#a78bfa",
-      "label": "New task intake",
+      "label": "Immediate project synchronization lifecycle",
       "comments": []
     },
     {
@@ -12590,7 +13388,27 @@
       "width": 1200,
       "height": 900,
       "color": "#a78bfa",
-      "label": "New task intake",
+      "label": "Unify Codex session and execution ownership",
+      "comments": []
+    },
+    {
+      "id": "zone-f40cc6bb-e374-4a0e-8873-df9e618ef4d1",
+      "x": -10462,
+      "y": 150388,
+      "width": 1200,
+      "height": 1800,
+      "color": "#a78bfa",
+      "label": "Fixed tasks-ledger replication",
+      "comments": []
+    },
+    {
+      "id": "zone-13466278-88c6-4829-a2fa-a9092b24e697",
+      "x": -10462,
+      "y": 152308,
+      "width": 1200,
+      "height": 900,
+      "color": "#a78bfa",
+      "label": "Voice SEND incorrectly launches Codex",
       "comments": []
     }
   ],
@@ -12718,7 +13536,10 @@
     "thread-card-77edea64-f747-430a-983c-50f32c84d6ca": ".decision-os/threads/specs/thread-card-77edea64-f747-430a-983c-50f32c84d6ca.md",
     "thread-card-codex-pipeline-1784441234171-b2755d12-step-1": ".decision-os/threads/specs/thread-card-codex-pipeline-1784441234171-b2755d12-step-1.md",
     "thread-card-codex-pipeline-1784441306682-a4fc2621-step-1": ".decision-os/threads/specs/thread-card-codex-pipeline-1784441306682-a4fc2621-step-1.md",
-    "thread-card-92702a8b-fd8a-4c2b-af5c-8226e65c7524": ".decision-os/threads/specs/thread-card-92702a8b-fd8a-4c2b-af5c-8226e65c7524.md"
+    "thread-card-92702a8b-fd8a-4c2b-af5c-8226e65c7524": ".decision-os/threads/specs/thread-card-92702a8b-fd8a-4c2b-af5c-8226e65c7524.md",
+    "thread-card-b6acc68a-f6c7-4fc6-a08f-53dc11bdc16a": ".decision-os/threads/specs/thread-card-b6acc68a-f6c7-4fc6-a08f-53dc11bdc16a.md",
+    "thread-card-e5546e18-afd2-4ce0-b8ba-8098b437ee50": ".decision-os/threads/specs/thread-card-e5546e18-afd2-4ce0-b8ba-8098b437ee50.md",
+    "thread-card-codex-pipeline-1784471860336-10eea594-step-1": ".decision-os/threads/specs/thread-card-codex-pipeline-1784471860336-10eea594-step-1.md"
   },
   "deletedNoteIds": {
     "thread-card-7074d33a-39da-42a1-b470-673cbe221def": [
