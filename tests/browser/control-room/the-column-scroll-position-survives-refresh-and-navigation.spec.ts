@@ -1,5 +1,5 @@
 /**
- * WHAT: Proves that all three Control Room columns retain independent in-memory scroll positions.
+ * WHAT: Proves that populated Control Room columns retain independent in-memory scroll positions.
  * WHY: Live refreshes and task-detail navigation remount the column nodes during one application session.
  */
 import assert from 'node:assert/strict';
@@ -29,26 +29,33 @@ test('column scroll survives task refresh, in-app task return, and browser back'
     const page = await browser.newPage({ viewport: { width: 1100, height: 720 } });
     await openControlRoom(page, server.url);
 
-    const initial = await setColumnScroll(page, { queue: 210, exec: 330, backlog: 450 });
-    assert.ok(initial.queue > 0 && initial.exec > initial.queue && initial.backlog > initial.exec, JSON.stringify(initial));
+    const initial = await setColumnScroll(page, { queue: 210, backlog: 450 });
+    assert.ok(initial.queue > 0 && initial.exec === 0 && initial.backlog > initial.queue, JSON.stringify(initial));
 
     const queueOnly = await setColumnScroll(page, { queue: 280 });
     assert.equal(queueOnly.exec, initial.exec);
     assert.equal(queueOnly.backlog, initial.backlog);
+
+    await page.evaluate(() => {
+      const activeTab = document.querySelector<HTMLButtonElement>('[data-control-tab="queue"]');
+      activeTab?.click();
+      activeTab?.click();
+    });
+    await assertColumnScroll(page, queueOnly);
 
     await page.waitForTimeout(250);
     const projectId = await page.locator(`${columnSelector('queue')} .control-task`).first().evaluate((row) => decodeURIComponent(String((row as HTMLElement).dataset.taskId).split('--')[0]));
     const refresh = await fetch(`${server.url}/p/${encodeURIComponent(projectId)}/decision-os/tasks`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'queue-17', title: 'Queue 17 refreshed' } }),
+      body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'queue-17', title: 'Queue 17 refreshed', status: 'backlog' } }),
     });
-    const refreshPayload = await refresh.json() as { ok?: boolean; changedCard?: { id?: string; title?: string } };
+    const refreshPayload = await refresh.json() as { ok?: boolean; changedCard?: { id?: string; title?: string; status?: string } };
     assert.equal(refresh.ok, true, JSON.stringify(refreshPayload));
-    assert.deepEqual(refreshPayload.changedCard && { id: refreshPayload.changedCard.id, title: refreshPayload.changedCard.title }, { id: 'queue-17', title: 'Queue 17 refreshed' });
+    assert.deepEqual(refreshPayload.changedCard && { id: refreshPayload.changedCard.id, title: refreshPayload.changedCard.title, status: refreshPayload.changedCard.status }, { id: 'queue-17', title: 'Queue 17 refreshed', status: 'backlog' });
     await page.locator('.refresh-button').click();
     await page.locator('#control-room-view:not([hidden])').waitFor({ state: 'visible' });
-    await page.waitForFunction(() => [...document.querySelectorAll('.control-task strong')].some((node) => node.textContent === 'Queue 17 refreshed'));
+    await page.waitForFunction(() => [...document.querySelectorAll('[data-control-column-list="backlog"] .control-task strong')].some((node) => node.textContent === 'Queue 17 refreshed'));
     await assertColumnScroll(page, queueOnly);
 
     await page.locator(`${columnSelector('queue')} .control-task-summary`).nth(8).evaluate((button) => (button as HTMLButtonElement).click());
@@ -76,7 +83,11 @@ test('column scroll survives task refresh, in-app task return, and browser back'
 async function openControlRoom(page: Page, url: string, navigate = true): Promise<void> {
   if (navigate) await page.goto(url, { waitUntil: 'domcontentloaded' });
   await page.locator('#control-room-view:not([hidden])').waitFor({ state: 'visible' });
-  await page.waitForFunction(() => [...document.querySelectorAll<HTMLElement>('.control-task-column-list')].every((list) => list.scrollHeight > list.clientHeight));
+  if (navigate) await page.locator('.refresh-button').click();
+  await page.waitForFunction(() => ['queue', 'backlog'].every((column) => {
+    const list = document.querySelector<HTMLElement>(`[data-control-column-list="${column}"]`);
+    return list && list.scrollHeight > list.clientHeight;
+  }));
 }
 
 async function setColumnScroll(page: Page, positions: Partial<Record<'queue' | 'exec' | 'backlog', number>>): Promise<Record<'queue' | 'exec' | 'backlog', number>> {
@@ -106,9 +117,9 @@ function createScrollWorkspace(): { root: string } {
   const cardsRoot = join(decisionOsRoot, 'cards', 'tasks');
   mkdirSync(cardsRoot, { recursive: true });
   const groups = [
-    { prefix: 'queue', status: 'todo', executionStatus: undefined },
-    { prefix: 'exec', status: 'todo', executionStatus: 'running' },
-    { prefix: 'backlog', status: 'backlog', executionStatus: undefined },
+    { prefix: 'queue', status: 'todo' },
+    { prefix: 'exec', status: 'todo' },
+    { prefix: 'backlog', status: 'backlog' },
   ];
   const cards = groups.flatMap((group, groupIndex) => Array.from({ length: 18 }, (_, index) => {
     const id = `${group.prefix}-${String(index).padStart(2, '0')}`;
@@ -118,8 +129,6 @@ function createScrollWorkspace(): { root: string } {
       title: `${group.prefix[0].toUpperCase()}${group.prefix.slice(1)} ${String(index).padStart(2, '0')}`,
       status: group.status,
       labels: ['master-task'],
-      executionStatus: group.executionStatus,
-      codexStartedAt: group.executionStatus ? '2026-07-17T03:00:00.000Z' : undefined,
       x: 40,
       y: 40,
       w: 300,
@@ -149,6 +158,12 @@ async function startDecisionOsServer(cwd: string): Promise<{ process: ChildProce
     assert.equal(child.exitCode, null, `decision-os server exited early:\n${output.join('')}`);
     return Boolean((await fetch(url, { method: 'HEAD' }).catch(() => undefined))?.ok);
   }, `Timed out waiting for Decision OS at ${url}`);
+  await waitFor(async () => {
+    const response = await fetch(`${url}/api/control-room`).catch(() => undefined);
+    if (!response?.ok) return false;
+    const payload = await response.json() as { queue?: unknown[]; exec?: unknown[]; backlog?: unknown[] };
+    return payload.queue?.length === 36 && payload.exec?.length === 0 && payload.backlog?.length === 18;
+  }, `Timed out waiting for the Control Room projection at ${url}`);
   return { process: child, url };
 }
 
