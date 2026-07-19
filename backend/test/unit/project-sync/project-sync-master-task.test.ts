@@ -27,7 +27,7 @@ test('admits one deterministic synchronization-labeled master task', () => {
         { id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' },
       ],
     };
-    const input = { project, sourceProjectId: 'source-b', sourceProjectName: 'Source B', originFingerprint: 'f'.repeat(64), syncId: 'sync-1', waitingSince: '2026-07-18T06:00:00.000Z' };
+    const input = { project, sourceProjectId: 'source-b', sourceProjectName: 'Source B', sourceProjectColor: '#d94f70', originFingerprint: 'f'.repeat(64), syncId: 'sync-1', waitingSince: '2026-07-18T06:00:00.000Z' };
     const first = admitProjectSyncMasterTask(input);
     const duplicate = admitProjectSyncMasterTask(input);
     assert.deepEqual(duplicate, first);
@@ -37,6 +37,7 @@ test('admits one deterministic synchronization-labeled master task', () => {
     assert.equal(ledger.cards[0].status, 'todo');
     assert.match(readFileSync(join(decisionOsRoot, 'cards', 'tasks', `${first.masterCardId}.md`), 'utf8'), /Waiting since: 2026-07-18T06:00:00.000Z/);
     assert.equal(ledger.annotations.length, 1);
+    assert.equal(ledger.annotations[0].color, '#d94f70');
     assert.equal(first.ledgerId, 'tasks');
     assert.equal(existsSync(join(decisionOsRoot, 'cards', 'tasks', `${first.masterCardId}.md`)), true);
     assert.deepEqual(JSON.parse(readFileSync(specsLedgerPath, 'utf8')).cards, []);

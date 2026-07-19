@@ -224,6 +224,7 @@ body.menu-open .nav-scrim { opacity: 1; pointer-events: auto; }
 .task-runtime-status { align-self: center; }
 .task-queue-position { align-self: center; color: var(--accent); font-weight: 800; white-space: nowrap; }
 .task-diagnostic { display: block; margin-top: 10px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--danger), transparent 50%); border-radius: 8px; color: var(--danger); background: color-mix(in srgb, var(--danger), transparent 91%); font-size: 12px; line-height: 1.35; }
+.project-sync-retry { width: calc(100% - 32px); min-height: 42px; margin: 0 16px 16px; border-color: var(--danger); color: var(--danger); background: color-mix(in srgb, var(--danger), transparent 92%); }
 .subtask-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 48px; margin-bottom: 6px; padding: 8px 12px; text-align: left; }
 .subtask-row small { flex: 0 0 auto; color: var(--accent); text-transform: capitalize; }
 .task-actions { display: flex; gap: 8px; padding-top: 12px; overflow-x: auto; }

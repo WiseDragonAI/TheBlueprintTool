@@ -15,6 +15,7 @@ import { runtimeCodexRunOwnsLiveProcess } from '../../codex/helper/runtime-codex
 import { readRepositoryOriginIdentity } from '../../project-sync/helper/repository-sync-status.js';
 import type { DecisionOsProject } from './project-catalog.js';
 import { compareControlRoomQueueTasks } from './control-room-queue-order.js';
+import type { ProjectSyncRun } from '../../project-sync/helper/project-sync-types.js';
 
 type AnyRecord = Record<string, unknown>;
 type Dependency = { path: string; size: number; mtimeMs: number; sha256: string };
@@ -192,6 +193,75 @@ function compareTasks(left: AnyRecord, right: AnyRecord): number {
   return (Number.isFinite(left.waitingTime) ? Number(left.waitingTime) : Number.POSITIVE_INFINITY)
     - (Number.isFinite(right.waitingTime) ? Number(right.waitingTime) : Number.POSITIVE_INFINITY)
     || text(left.cardId).localeCompare(text(right.cardId));
+}
+
+function projectSyncTask(run: ProjectSyncRun, canonical?: AnyRecord): AnyRecord {
+  const failed = run.phase === 'failed';
+  const attached = Boolean(canonical);
+  const diagnostics = [
+    ...(Array.isArray(canonical?.diagnostics) ? canonical.diagnostics.map(String).filter(Boolean) : []),
+    ...(run.error?.message ? [run.error.message] : []),
+  ];
+  return {
+    ...(canonical ?? {}),
+    valid: !failed,
+    masterTask: true,
+    diagnostics,
+    cardId: attached ? text(canonical?.cardId) : `project-sync-${run.syncId}`,
+    title: attached ? text(canonical?.title) : `Synchronize ${run.sourceProjectName}`,
+    cardStatus: attached ? text(canonical?.cardStatus) || 'todo' : 'todo',
+    projectId: attached ? text(canonical?.projectId) : run.sourceProjectId,
+    projectName: attached ? text(canonical?.projectName) || run.sourceProjectName : run.sourceProjectName,
+    projectColor: run.sourceProjectColor,
+    ledgerId: attached ? text(canonical?.ledgerId) : 'project-sync',
+    ledgerTitle: attached ? text(canonical?.ledgerTitle) : 'Synchronization',
+    ledger: attached ? text(canonical?.ledger) : 'Synchronization',
+    zoneId: attached ? text(canonical?.zoneId) : 'project-sync',
+    status: run.phase === 'complete' ? (attached ? canonical?.status ?? 'task-waiting' : 'task-waiting') : 'task-execution',
+    executionStatus: failed ? 'failed' : run.phase === 'complete' ? '' : 'running',
+    executionSince: run.createdAt,
+    executionTime: Date.parse(run.createdAt),
+    waitingSince: run.createdAt,
+    waitingTime: Date.parse(run.createdAt),
+    subtasks: attached ? canonical?.subtasks ?? [] : [],
+    complete: attached ? canonical?.complete ?? 0 : 0,
+    nextSubtask: attached ? canonical?.nextSubtask ?? null : null,
+    projectSync: true,
+    projectSyncCanonical: attached,
+    projectSyncId: run.syncId,
+    projectSyncPhase: run.phase,
+    projectSyncPreparationPhase: run.preparationPhase,
+    projectSyncFailed: failed,
+    ownerNodeId: run.initiatorNodeId,
+  };
+}
+
+export function withProjectSyncRuns(projection: AnyRecord, runs: ProjectSyncRun[]): AnyRecord {
+  const tasks = records(projection.allTasks).map((task) => ({ ...task }));
+  for (const run of runs) {
+    const canonicalIndex = run.masterCardId
+      ? tasks.findIndex((task) => text(task.cardId) === run.masterCardId && text(task.ledgerId) === run.ledgerId)
+      : -1;
+    const canonical = canonicalIndex >= 0 ? tasks[canonicalIndex] : undefined;
+    const synchronized = projectSyncTask(run, canonical);
+    if (canonicalIndex >= 0) tasks[canonicalIndex] = synchronized;
+    else tasks.push(synchronized);
+  }
+  const queue = tasks.filter((task) => task.status === 'task-waiting').sort(compareControlRoomQueueTasks);
+  const exec = tasks.filter((task) => task.status === 'task-execution').sort(compareTasks);
+  const backlog = tasks.filter((task) => task.status === 'task-backlog').sort(compareTasks);
+  const done = tasks.filter((task) => task.status === 'task-complete').sort(compareTasks);
+  const runFingerprint = runs.map((run) => [run.syncId, run.updatedAt, run.phase, run.preparationPhase, run.masterCardId]);
+  return {
+    ...projection,
+    fingerprint: createHash('sha256').update(JSON.stringify([projection.fingerprint, runFingerprint])).digest('hex'),
+    queue,
+    exec,
+    backlog,
+    done,
+    allTasks: tasks,
+    ledgers: Array.from(new Set([...(Array.isArray(projection.ledgers) ? projection.ledgers.map(String) : []), ...tasks.map((task) => text(task.ledger))].filter(Boolean))).sort(),
+  };
 }
 
 function buildProjectSlice(input: { project: DecisionOsProject; runtime: AnyRecord }): ProjectSlice {
