@@ -18,7 +18,7 @@ import { uploadThreadFileController } from '/src/runtime/thread/controller/uploa
 import { pasteThreadImageController } from '/src/runtime/thread/controller/paste-thread-image-controller.js';
 import { requestThreadCodexProcess } from '/src/runtime/codex/effect/request-thread-codex-process.js';
 import { requestCardSkillRunContinue } from '/src/runtime/codex/effect/request-card-skill-run-continue.js';
-import { bindThreadCodexRunLog, unbindThreadCodexRunLog } from '/src/runtime/codex/effect/bind-thread-codex-run-log.js';
+import { bindThreadCodexActiveRunLog, bindThreadCodexRunLog, unbindThreadCodexActiveRunLog, unbindThreadCodexRunLog } from '/src/runtime/codex/effect/bind-thread-codex-run-log.js';
 import { cardCodexThreadRunId } from '/src/runtime/codex/helper/card-codex-thread-run-id.js';
 import { syncThreadCodexRunControls } from '/src/runtime/thread/effect/sync-thread-codex-run-controls.js';
 import { stopThreadCodexRunController } from '/src/runtime/codex/controller/stop-thread-codex-run-controller.js';
@@ -156,7 +156,8 @@ export function closeMobileThread({ fromHistory = false, discardHistory = false 
   if (canvasState.voice.recording) return false;
   saveThreadDraft();
   saveThreadPanelScrollPositions();
-  const runId = currentCard ? cardCodexThreadRunId(currentCard) : '';
+  const runId = String(canvasState.threadRunIdByThreadId?.[canvasState.threadId] || (currentCard ? cardCodexThreadRunId(currentCard) : ''));
+  const activeRunId = String(canvasState.threadActiveRunIdByThreadId?.[canvasState.threadId] || currentCard?.codexActiveRunId || '');
   if (currentLedgerId && currentCard && canvasState.threadId && runId) {
     unbindThreadCodexRunLog({
       projectId: currentProjectId,
@@ -164,6 +165,15 @@ export function closeMobileThread({ fromHistory = false, discardHistory = false 
       cardId: String(currentCard.id),
       threadId: canvasState.threadId,
       runId,
+    });
+  }
+  if (currentLedgerId && currentCard && canvasState.threadId && activeRunId) {
+    unbindThreadCodexActiveRunLog({
+      projectId: currentProjectId,
+      ledgerId: currentLedgerId,
+      cardId: String(currentCard.id),
+      threadId: canvasState.threadId,
+      runId: activeRunId,
     });
   }
   canvasState.threadPanelOpen = false;
@@ -357,13 +367,18 @@ async function startCodex(button) {
     return;
   }
   const runId = String(result.run?.id ?? existingRunId);
+  const executionId = String(result.run?.executionId ?? '');
   const startedAt = String(result.run?.startedAt || new Date().toISOString());
   if (runId) {
     canvasState.threadSelectedRunIdByThreadId ||= {};
     canvasState.threadSelectedRunIdByThreadId[canvasState.threadId] = runId;
   }
-  if (runId) bindThreadCodexRunLog({ projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId });
   const status = String(result.run?.status || 'running');
+  if (runId) {
+    const identity = { projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId, expectedExecutionId: executionId || undefined, expectedStatus: status, forceRevalidate: true };
+    bindThreadCodexRunLog(identity);
+    bindThreadCodexActiveRunLog(identity);
+  }
   hydrateThreadRun(runId, startedAt, status, result.queuePosition);
   await onCodexStarted({
     ledgerId: currentLedgerId,
@@ -371,7 +386,7 @@ async function startCodex(button) {
     startedAt
   });
   await refreshThreadLedger(runId);
-  if (runId) bindThreadCodexRunLog({ projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId });
+  if (runId) bindThreadCodexRunLog({ projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId, expectedExecutionId: executionId || undefined, expectedStatus: status });
 }
 
 function subscribeEvents() {

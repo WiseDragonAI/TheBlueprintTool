@@ -2,6 +2,7 @@
  * WHAT: Resolves one card-owned Codex run's durable summary, JSONL, and stderr files.
  * WHY: Cards can move between ledgers while their original run directory remains unchanged.
  */
+import { existsSync, readdirSync } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, relative, resolve } from 'node:path';
 
 type AnyRecord = Record<string, unknown>;
@@ -17,6 +18,20 @@ function isInside(parent: string, child: string): boolean {
 
 function ledgerStem(ledgerPath: string): string {
   return basename(ledgerPath, extname(ledgerPath));
+}
+
+function discoverLegacyRunDirectory(runRoot: string, runId: string): string {
+  if (!existsSync(runRoot)) return '';
+  const stem = safeSegment(runId);
+  try {
+    return readdirSync(runRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => resolve(runRoot, entry.name))
+      .filter((directory) => existsSync(resolve(directory, `${stem}.md`)) || existsSync(resolve(directory, `${stem}.jsonl`)) || existsSync(resolve(directory, `${stem}.log`)))
+      .sort()[0] ?? '';
+  } catch {
+    return '';
+  }
 }
 
 export type CardSkillRunFiles = {
@@ -36,14 +51,22 @@ export function resolveCardSkillRunFiles(input: {
   const runRoot = resolve(input.decisionOsRoot, 'runs', 'codex-skills');
   const cards = Array.isArray(input.ledger.cards) ? input.ledger.cards as AnyRecord[] : [];
   const card = cards.find((entry) => String(entry.id ?? '') === input.cardId);
-  const persistedOutputReference = String(card?.codexThreadRunOutputFile ?? card?.codexRunOutputFile ?? '').trim();
+  const persistedOutputFiles = card?.codexThreadRunOutputFiles && typeof card.codexThreadRunOutputFiles === 'object' && !Array.isArray(card.codexThreadRunOutputFiles)
+    ? card.codexThreadRunOutputFiles as Record<string, unknown>
+    : {};
+  const persistedOutputReference = String(
+    persistedOutputFiles[input.runId]
+      ?? (String(card?.codexThreadRunId ?? '') === input.runId ? card?.codexThreadRunOutputFile : '')
+      ?? card?.codexRunOutputFile
+      ?? '',
+  ).trim();
   const persistedOutputFile = persistedOutputReference
     ? resolve(input.decisionOsRoot, persistedOutputReference.replace(/^\.decision-os\//, ''))
     : '';
   const persistedRunDirectory = persistedOutputFile && isInside(runRoot, persistedOutputFile)
     ? dirname(persistedOutputFile)
     : '';
-  const runDirectory = persistedRunDirectory || resolve(runRoot, safeSegment(ledgerStem(input.ledgerPath)));
+  const runDirectory = persistedRunDirectory || discoverLegacyRunDirectory(runRoot, input.runId) || resolve(runRoot, safeSegment(ledgerStem(input.ledgerPath)));
   const runFileStem = safeSegment(input.runId);
   return {
     runDirectory,

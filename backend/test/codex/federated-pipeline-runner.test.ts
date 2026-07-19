@@ -36,7 +36,7 @@ test('dispatches ordered federated skills through durable per-step executors', a
         outputCardId: outputCards[index], status: 'pending', startedAt: null, finishedAt: null, error: '',
         skills: [{
           id: `skill-${index + 1}`, pipelineSkillId: `pipeline-skill-${index + 1}`, skillName: `project-sync-${role}`,
-          runId: `skill-run-${index + 1}`, status: 'pending', codexModel: 'gpt-5.6-sol', codexEffort: 'medium',
+          runId: `skill-run-${index + 1}`, executionId: `execution-${index + 1}`, status: 'pending', codexModel: 'gpt-5.6-sol', codexEffort: 'medium',
           stdoutFile: join(logsRoot, `skill-${index + 1}.jsonl`), stderrFile: join(logsRoot, `skill-${index + 1}.log`),
           startedAt: null, finishedAt: null, error: '',
         }],

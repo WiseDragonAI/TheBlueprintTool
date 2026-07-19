@@ -16,7 +16,7 @@ import { hydrateLedgerCardContent, resolveCardContentFile } from '@backend/busin
 import { stripHydratedThreadNotes } from '@backend/business/ledger/helper/thread-content-file.js';
 import { createCardSkillRunEventIngestor } from '../effect/ingest-card-skill-run-events.js';
 import { flushCardSkillRunEventIngestor } from '../effect/flush-card-skill-run-event-ingestor.js';
-import { codexRunSegmentMarker, codexRunTurnStartedMarker } from './codex-run-segment-marker.js';
+import { codexRunExecutionFinishedMarker, codexRunSegmentMarker, codexRunTurnStartedMarker } from './codex-run-segment-marker.js';
 import { readCodexPipelineStore, writeCodexPipelineStore } from './codex-pipeline-store.js';
 import { buildPipelineSkillPrompt } from './build-pipeline-skill-prompt.js';
 import { resolveCodexCommand } from './resolve-codex-command.js';
@@ -156,8 +156,7 @@ function persistLedger(context: PipelineLedgerContext): void {
 }
 
 function reconcilePipelineExecution(context: PipelineLedgerContext, run: CodexPipelineRun): void {
-  const terminal = !['pending', 'running'].includes(run.status);
-  const skillRunIds = new Set(run.steps.flatMap((step) => step.skills.map((skill) => skill.runId)));
+  const skillExecutions = new Map(run.steps.flatMap((step) => step.skills.map((skill) => [skill.runId, skill] as const)));
   let changed = false;
   for (const card of context.ledger.cards ?? []) {
     const ownsPipeline = String(card.codexQueuedPipelineRunId ?? '') === run.id
@@ -171,7 +170,9 @@ function reconcilePipelineExecution(context: PipelineLedgerContext, run: CodexPi
       delete card.executionRunId;
       changed = true;
     }
-    if (terminal && skillRunIds.has(String(card.codexActiveRunId ?? ''))) {
+    const activeSkill = skillExecutions.get(String(card.codexActiveRunId ?? ''));
+    if (activeSkill && activeSkill.status !== 'pending' && activeSkill.status !== 'running'
+      && String(card.codexActiveExecutionId ?? '') === activeSkill.executionId) {
       delete card.codexActiveRunId;
       delete card.codexActiveExecutionId;
       changed = true;
@@ -208,6 +209,7 @@ function projectPipelineSkillRun(input: {
   const projection = {
     ledger: input.context.ledger,
     runId: input.skill.runId,
+    executionId: input.skill.executionId,
     outputFileRef,
     codexModel: input.skill.codexModel,
     codexEffort: input.skill.codexEffort,
@@ -469,11 +471,15 @@ export function spawnPipelineSkillProcess(input: {
     runId: input.skill.runId,
     telemetryFile: `${input.skill.stdoutFile}.telemetry.jsonl`,
     projectId: String(input.runtime.projectId ?? ''),
-    onTurnStarted: (event, observedAt) => appendFileSync(input.skill.stderrFile, codexRunTurnStartedMarker({ runId: input.skill.runId, startedAt: observedAt, line: event.line }), 'utf8'),
+    onTurnStarted: (event, observedAt) => {
+      appendFileSync(input.skill.stderrFile, codexRunTurnStartedMarker({ runId: input.skill.runId, executionId: input.skill.executionId, startedAt: observedAt, line: event.line }), 'utf8');
+      notify(input.runtime.onCodexTurnStarted, { ledgerId: input.pipelineRun.ledgerId, cardId: input.pipelineRun.sourceCardId, outputCardId: input.step.outputCardId, threadId: `thread-${input.pipelineRun.sourceCardId}`, runId: input.skill.runId, executionId: input.skill.executionId, status: 'running', startedAt: observedAt });
+    },
   });
   const startedAt = input.skill.startedAt ?? new Date().toISOString();
   appendFileSync(input.skill.stderrFile, codexRunSegmentMarker({
     runId: input.skill.runId,
+    executionId: input.skill.executionId,
     startedAt,
     segment: 'start',
     startLine: 0,
@@ -491,6 +497,7 @@ export function spawnPipelineSkillProcess(input: {
 
   const runtimeRun = updateRuntimeRun(input.runtime, input.skill.runId, {
     id: input.skill.runId,
+    executionId: input.skill.executionId,
     pipelineRunId: input.pipelineRun.id,
     pipelineId: input.pipelineRun.pipelineId,
     pipelineName: input.pipelineRun.pipelineName,
@@ -516,6 +523,7 @@ export function spawnPipelineSkillProcess(input: {
     ledgerId: input.pipelineRun.ledgerId,
     pipelineRunId: input.pipelineRun.id,
     runId: input.skill.runId,
+    executionId: input.skill.executionId,
     cardId: input.step.outputCardId,
   });
 
@@ -530,6 +538,7 @@ export function spawnPipelineSkillProcess(input: {
       if (status === 'cancelled') appendFileSync(input.skill.stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
       if (status === 'failed') appendFileSync(input.skill.stderrFile, `Codex run failed: ${detail}\n`, 'utf8');
       flushCardSkillRunEventIngestor(runEventIngestor, input.skill.runId);
+      appendFileSync(input.skill.stderrFile, codexRunExecutionFinishedMarker({ runId: input.skill.runId, executionId: input.skill.executionId, finishedAt, status }), 'utf8');
       const reassessed = reassessPipelineAfterSkill({
         decisionOsRoot: input.decisionOsRoot,
         runtime: input.runtime,
@@ -546,6 +555,7 @@ export function spawnPipelineSkillProcess(input: {
         ledgerId: input.pipelineRun.ledgerId,
         pipelineRunId: input.pipelineRun.id,
         runId: input.skill.runId,
+        executionId: input.skill.executionId,
         cardId: input.step.outputCardId,
         status,
         pipelineStatus: reassessed?.status ?? status,
@@ -563,6 +573,7 @@ export function spawnPipelineSkillProcess(input: {
         outputCardId: input.step.outputCardId,
         threadId: `thread-${input.step.outputCardId}`,
         runId: input.skill.runId,
+        executionId: input.skill.executionId,
         pipelineRunId: input.pipelineRun.id,
         status,
         pipelineStatus: reassessed?.status ?? status,
@@ -573,7 +584,7 @@ export function spawnPipelineSkillProcess(input: {
   };
   child.on('error', (error) => settle('failed', error.message, null, error.message));
   child.on('close', (exitCode) => {
-    const status = runtimeStatus(input.runtime, input.skill.runId) === 'cancelled'
+    const status = pipelineRuntimeRun(input.runtime, input.skill.runId)?.cancelRequestedAt || runtimeStatus(input.runtime, input.skill.runId) === 'cancelled'
       ? 'cancelled'
       : exitCode === 0 ? 'complete' : 'failed';
     const detail = status === 'cancelled' ? 'terminated by operator' : `exit code ${exitCode ?? 'unknown'}`;

@@ -11,6 +11,8 @@ import { traces } from '@backend/telemetry/harness.js';
 import { readDecisionOsSettings } from '@backend/business/server/helper/read-decision-os-settings.js';
 
 test('read-decision-os-settings reads workspace settings and normalizes aliases', () => {
+  const previousRepositorySettingsFile = process.env.DECISION_OS_REPOSITORY_SETTINGS_FILE;
+  delete process.env.DECISION_OS_REPOSITORY_SETTINGS_FILE;
   traces.length = 0;
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-settings-'));
   const runtime_state: Record<string, unknown> = {};
@@ -30,6 +32,8 @@ test('read-decision-os-settings reads workspace settings and normalizes aliases'
     assert.equal(runtime_state.transcriptionModel, 'gpt-4o-mini-transcribe');
     assert.ok(traces.some((trace) => trace.name === 'read-decision-os-settings'));
   } finally {
+    if (previousRepositorySettingsFile === undefined) delete process.env.DECISION_OS_REPOSITORY_SETTINGS_FILE;
+    else process.env.DECISION_OS_REPOSITORY_SETTINGS_FILE = previousRepositorySettingsFile;
     rmSync(workspace, { recursive: true, force: true });
   }
 });

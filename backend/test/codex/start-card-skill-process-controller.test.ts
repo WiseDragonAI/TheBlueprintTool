@@ -527,19 +527,25 @@ test('thread codex process route anchors the run widget on the source card and s
     assert.equal(eventCollector.events.length, eventCountBeforePolling);
 
     appendFileSync(threadPath, '\n# OPERATOR\n<!-- decision-os:note {"id":"note-operator-missing-timestamp"} -->\n\nThis request has no timestamp.\n', 'utf8');
-    const launchCountBeforeRejection = readFileSync(launchesFile, 'utf8').trim().split('\n').length;
-    const runCountBeforeRejection = Object.keys(runtime.codexSkillRuns as Record<string, unknown>).length;
-    const rejectedResponse = await fetch(`${baseUrl}/api/codex/threads/process`, {
+    const launchCountBeforeContinuation = readFileSync(launchesFile, 'utf8').trim().split('\n').length;
+    const runCountBeforeContinuation = Object.keys(runtime.codexSkillRuns as Record<string, unknown>).length;
+    const continuationResponse = await fetch(`${baseUrl}/api/codex/threads/process`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ ledgerId: 'specs', threadId: 'thread-card-a', cardId: 'card-a' })
     });
-    assert.equal(rejectedResponse.status, 400);
-    const rejected = await rejectedResponse.json() as { ok: boolean; error: string };
-    assert.equal(rejected.ok, false);
-    assert.match(rejected.error, /latest operator note must have an exact ISO timestamp/i);
-    assert.equal(readFileSync(launchesFile, 'utf8').trim().split('\n').length, launchCountBeforeRejection);
-    assert.equal(Object.keys(runtime.codexSkillRuns as Record<string, unknown>).length, runCountBeforeRejection);
+    assert.equal(continuationResponse.status, 202);
+    const continuation = await continuationResponse.json() as { ok: boolean; run: { id: string; executionId: string } };
+    assert.equal(continuation.ok, true);
+    assert.equal(continuation.run.id, body.run.id);
+    await waitForCondition(() => {
+      const runs = runtime.codexSkillRuns as Record<string, { status?: string; executionId?: string; settledAt?: string }> | undefined;
+      return runs?.[body.run.id]?.executionId === continuation.run.executionId
+        && runs[body.run.id]?.status === 'complete'
+        && Boolean(runs[body.run.id]?.settledAt);
+    }, 'the first continuation on the retained thread run to settle');
+    assert.equal(readFileSync(launchesFile, 'utf8').trim().split('\n').length, launchCountBeforeContinuation + 1);
+    assert.equal(Object.keys(runtime.codexSkillRuns as Record<string, unknown>).length, runCountBeforeContinuation);
 
     appendFileSync(threadPath, '\n# OPERATOR\n<!-- decision-os:note {"id":"note-operator-duplicate","timestamp":"2026-07-08T01:05:00.000Z"} -->\n\nContinue the existing session.\n', 'utf8');
     const replacementResponse = await fetch(`${baseUrl}/api/codex/threads/process`, {
@@ -548,14 +554,23 @@ test('thread codex process route anchors the run widget on the source card and s
       body: JSON.stringify({ ledgerId: 'specs', threadId: 'thread-card-a', cardId: 'card-a' })
     });
     assert.equal(replacementResponse.status, 202);
-    const replacement = await replacementResponse.json() as { ok: boolean; run: { id: string } };
+    const replacement = await replacementResponse.json() as { ok: boolean; run: { id: string; executionId: string } };
     assert.equal(replacement.ok, true);
-    assert.notEqual(replacement.run.id, body.run.id);
+    assert.equal(replacement.run.id, body.run.id);
     await waitForCondition(() => {
-      const runs = runtime.codexSkillRuns as Record<string, { status?: string; settledAt?: string }> | undefined;
-      return runs?.[replacement.run.id]?.status === 'complete' && Boolean(runs[replacement.run.id]?.settledAt);
-    }, 'the authoritative replacement thread run to settle');
-    assert.equal(readFileSync(launchesFile, 'utf8').trim().split('\n').length, launchCountBeforeRejection + 1);
+      const runs = runtime.codexSkillRuns as Record<string, { status?: string; executionId?: string; settledAt?: string }> | undefined;
+      return runs?.[replacement.run.id]?.executionId === replacement.run.executionId
+        && runs[replacement.run.id]?.status === 'complete'
+        && Boolean(runs[replacement.run.id]?.settledAt);
+    }, 'the second continuation on the retained thread run to settle');
+    assert.equal(readFileSync(launchesFile, 'utf8').trim().split('\n').length, launchCountBeforeContinuation + 2);
+    await waitForCondition(
+      () => eventCollector?.events.filter((event) => event.reason === 'codex-thread-settled' && event.runId === body.run.id && event.status === 'complete').length === 3,
+      'one terminal ledger event for each retained-run execution',
+    );
+    const settlementCountBeforeDirectContinuation = eventCollector.events.filter(
+      (event) => event.reason === 'codex-thread-settled' && event.runId === body.run.id && event.status === 'complete',
+    ).length;
 
     appendFileSync(threadPath, '\n# OPERATOR\n<!-- decision-os:note {"id":"note-operator-hung-wrapper","timestamp":"2026-07-08T01:06:00.000Z"} -->\n\nHang after terminal.\n', 'utf8');
     const continuedResponse = await fetch(`${baseUrl}/api/codex/skills/runs/${replacement.run.id}/continue`, {
@@ -576,11 +591,11 @@ test('thread codex process route anchors the run widget on the source card and s
     const settledCard = (JSON.parse(readFileSync(ledgerPath, 'utf8')) as { cards: Array<Record<string, unknown>> }).cards.find((entry) => entry.id === 'card-a');
     assert.equal(settledCard?.codexActiveRunId, undefined);
     assert.equal(settledCard?.codexThreadRunId, replacement.run.id);
-    assert.deepEqual(settledCard?.codexThreadRunIds, [body.run.id, replacement.run.id]);
+    assert.deepEqual(settledCard?.codexThreadRunIds, [body.run.id]);
     const retainedStatus = await fetch(`${baseUrl}/api/codex/skills/runs/${body.run.id}?ledgerId=specs&cardId=card-a&since=0`);
     assert.equal(retainedStatus.status, 200);
     await waitForCondition(
-      () => eventCollector?.events.filter((event) => event.reason === 'codex-thread-settled' && event.runId === replacement.run.id && event.status === 'complete').length === 2,
+      () => eventCollector?.events.filter((event) => event.reason === 'codex-thread-settled' && event.runId === replacement.run.id && event.status === 'complete').length === settlementCountBeforeDirectContinuation + 1,
       'one terminal ledger event per thread settlement',
     );
   } finally {
@@ -810,19 +825,20 @@ test('card skill run cancel route terminates the active codex process', async ()
       body: JSON.stringify({ ledgerId: 'specs', cardId: 'source-card', skillName: 'slow-skill' })
     });
     assert.equal(startResponse.status, 202);
-    const started = await startResponse.json() as { ok: boolean; run: { id: string; outputCardId: string; outputFile: string } };
+    const started = await startResponse.json() as { ok: boolean; run: { id: string; executionId: string; outputCardId: string; outputFile: string } };
     assert.equal(started.ok, true);
     await waitForText(started.run.outputFile, 'started');
 
     const cancelResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${started.run.id}/cancel`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ledgerId: 'specs', cardId: started.run.outputCardId })
+      body: JSON.stringify({ ledgerId: 'specs', cardId: started.run.outputCardId, executionId: started.run.executionId })
     });
     assert.equal(cancelResponse.status, 202);
-    const cancelled = await cancelResponse.json() as { ok: boolean; status: string };
+    const cancelled = await cancelResponse.json() as { ok: boolean; status: string; cancellationRequested: boolean };
     assert.equal(cancelled.ok, true);
-    assert.equal(cancelled.status, 'cancelled');
+    assert.equal(cancelled.status, 'running');
+    assert.equal(cancelled.cancellationRequested, true);
 
     await waitForText(started.run.outputFile, 'Codex run cancelled: terminated by operator');
     const statusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${started.run.id}?ledgerId=specs&cardId=${started.run.outputCardId}&since=0`);

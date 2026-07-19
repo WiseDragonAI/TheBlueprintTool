@@ -34,8 +34,8 @@ test('Codex Log STOP sends one request while the first stop is pending', async (
       return await new Promise<Response>((resolve) => { settle = resolve; });
     }) as typeof fetch;
     const control = fakeButton();
-    const first = stopThreadCodexRunController({ button: control.button, ledgerId: 'specs', cardId: 'card-a', runId: 'run-a' });
-    const second = await stopThreadCodexRunController({ button: control.button, ledgerId: 'specs', cardId: 'card-a', runId: 'run-a' });
+    const first = stopThreadCodexRunController({ button: control.button, ledgerId: 'specs', cardId: 'card-a', runId: 'run-a', executionId: 'execution-a' });
+    const second = await stopThreadCodexRunController({ button: control.button, ledgerId: 'specs', cardId: 'card-a', runId: 'run-a', executionId: 'execution-a' });
     assert.equal(requests, 1);
     assert.equal(second, false);
     assert.equal(control.button.disabled, true);
@@ -57,7 +57,7 @@ test('Codex Log STOP restores the control and exposes a rejected-request error',
       headers: { 'content-type': 'application/json' },
     })) as typeof fetch;
     const control = fakeButton();
-    const stopped = await stopThreadCodexRunController({ button: control.button, ledgerId: 'specs', cardId: 'card-a', runId: 'run-a' });
+    const stopped = await stopThreadCodexRunController({ button: control.button, ledgerId: 'specs', cardId: 'card-a', runId: 'run-a', executionId: 'execution-a' });
     assert.equal(stopped, false);
     assert.equal(control.button.disabled, false);
     assert.equal(control.label.textContent, 'STOP');
@@ -81,7 +81,7 @@ test('queued cancellation restores the CANCEL label after rejection', async () =
     control.button.dataset.stopPendingLabel = 'CANCELLING';
     control.button.dataset.stopReadyTitle = 'Cancel queued Codex run';
     control.button.dataset.stopPendingTitle = 'Cancelling queued Codex run';
-    const stopped = await stopThreadCodexRunController({ button: control.button, ledgerId: 'specs', cardId: 'card-a', runId: 'run-queued' });
+    const stopped = await stopThreadCodexRunController({ button: control.button, ledgerId: 'specs', cardId: 'card-a', runId: 'run-queued', executionId: 'execution-queued' });
     assert.equal(stopped, false);
     assert.equal(control.label.textContent, 'CANCEL');
     assert.equal(control.button.title, 'Cancel queued Codex run');

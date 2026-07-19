@@ -133,14 +133,17 @@ export function saveCodexPipelineController(
       availableSkillNames,
       store: { ...before.store, pipelines, steps: Array.from(stepsById.values()) },
     });
+    // WHAT: Scope save validation to the pipeline represented by this response.
+    // WHY: Invalid references in an independent server pipeline must not make a successful project-pipeline save appear invalid.
+    const invalidReferences = normalized.invalidReferences.filter((reference) => reference.pipelineId === id);
     return {
       ok: true,
       statusCode: existing ? 200 : 201,
       pipeline: { ...normalized.store.pipelines.find((entry) => entry.id === id), scope: text(payload.scope) === 'server' ? 'server' : 'project' },
       pipelines: normalized.store.pipelines.map((entry) => ({ ...entry, scope: text(payload.scope) === 'server' ? 'server' : 'project' })),
       steps: normalized.store.steps.map((entry) => ({ ...entry, scope: text(payload.scope) === 'server' ? 'server' : 'project' })),
-      hasInvalidReferences: normalized.invalidReferences.length > 0,
-      invalidReferences: normalized.invalidReferences,
+      hasInvalidReferences: invalidReferences.length > 0,
+      invalidReferences,
       issues: normalized.issues,
     };
   } catch (error) {

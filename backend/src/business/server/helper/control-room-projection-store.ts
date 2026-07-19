@@ -10,7 +10,6 @@ import { parseThreadMarkdown, resolveThreadContentFile } from '../../ledger/help
 import { readCodexPipelineStore } from '../../codex/helper/codex-pipeline-store.js';
 import { readCodexProcessQueue } from '../../codex/helper/codex-process-queue.js';
 import { codexRunExecutions } from '../../codex/helper/codex-run-segment-marker.js';
-import { readCardSkillRunEventLines } from '../../codex/helper/read-card-skill-run-event-lines.js';
 import { runtimeCodexRunOwnsLiveProcess } from '../../codex/helper/runtime-codex-run-owns-live-process.js';
 import { readRepositoryOriginIdentity } from '../../project-sync/helper/repository-sync-status.js';
 import type { DecisionOsProject } from './project-catalog.js';
@@ -21,8 +20,8 @@ type Dependency = { path: string; size: number; mtimeMs: number; sha256: string 
 type Projection = AnyRecord & { schemaVersion: number; projectorVersion: string; revision: number; generatedAt: string; fingerprint: string };
 type ProjectSlice = { projectId: string; project: AnyRecord; tasks: AnyRecord[]; dependencies: Dependency[]; fingerprint: string };
 
-const schemaVersion = 6;
-const projectorVersion = 'control-room-v10-derived-execution';
+const schemaVersion = 7;
+const projectorVersion = 'control-room-v11-exact-execution-lease';
 
 function records(value: unknown): AnyRecord[] {
   return Array.isArray(value) ? value.filter((entry): entry is AnyRecord => Boolean(entry && typeof entry === 'object')) : [];
@@ -73,7 +72,8 @@ function runtimeStatus(input: {
   pipelineRuns: AnyRecord[];
   queuedRuns: AnyRecord[];
 }): AnyRecord {
-  const runId = text(input.card.codexActiveRunId) || text(input.card.codexThreadRunId) || text(input.card.codexRunId);
+  const runId = text(input.card.codexActiveRunId);
+  const activeExecutionId = text(input.card.codexActiveExecutionId);
   const queuedPipelineRunId = text(input.card.codexQueuedPipelineRunId);
   const pipelineRunId = text(input.card.codexPipelineRunId) || queuedPipelineRunId;
   const voiceKey = `${input.ledgerId}\0${text(input.card.id)}`;
@@ -81,15 +81,21 @@ function runtimeStatus(input: {
     ? input.runtime.voiceCodexExecutionObservations as Record<string, AnyRecord>
     : {};
   const voiceObservation = voiceObservations[voiceKey];
-  const queueIndex = input.queuedRuns.findIndex((entry) => (
-    text(entry.id) === queuedPipelineRunId
-    || text(entry.id) === runId
-    || text((entry.payload as AnyRecord | undefined)?.runId) === runId
-  ));
+  const queueIndex = input.queuedRuns.findIndex((entry) => {
+    const payload = entry.payload && typeof entry.payload === 'object' ? entry.payload as AnyRecord : {};
+    const pipelineOwnsExecution = text(entry.id) === queuedPipelineRunId
+      && records(entry.steps).some((step) => records(step.skills).some((skill) => text(skill.runId) === runId && text(skill.executionId) === activeExecutionId));
+    const queueOwnsExecution = text(payload.ledgerId) === input.ledgerId
+      && text(payload.cardId) === text(input.card.id)
+      && text(payload.runId || entry.id) === runId
+      && text(payload.executionId) === activeExecutionId;
+    return Boolean(runId && activeExecutionId && (pipelineOwnsExecution || queueOwnsExecution));
+  });
   const queued = queueIndex >= 0;
   const runtimeRuns = input.runtime.codexSkillRuns && typeof input.runtime.codexSkillRuns === 'object' ? input.runtime.codexSkillRuns as Record<string, AnyRecord> : {};
   const live = runtimeRuns[runId] ?? {};
-  const processAttached = Boolean(runId) && runtimeCodexRunOwnsLiveProcess(input.runtime, runId, input.decisionOsRoot);
+  const runtimeMatchesCard = Boolean(runId && activeExecutionId && text(live.executionId) === activeExecutionId);
+  const processAttached = runtimeMatchesCard && runtimeCodexRunOwnsLiveProcess(input.runtime, runId, input.decisionOsRoot);
   const observation = voiceObservation
     ? { kind: 'voice-transcription', startedAt: text(voiceObservation.startedAt) }
     : queued
@@ -103,20 +109,16 @@ function runtimeStatus(input: {
       ? 'pending'
       : observation?.kind === 'codex-process'
         ? 'running'
-        : text(live.status) || 'unknown';
+        : 'unknown';
   const stderrFile = text(live.stderrFile);
   const stdoutFile = text(live.stdoutFile);
   const log = stderrFile && existsSync(stderrFile) ? readFileSync(stderrFile, 'utf8') : '';
-  const activeExecutionId = text(live.executionId);
   const latestExecution = log ? codexRunExecutions({ log, runId }).at(-1) : undefined;
-  const executionMatchesCard = !activeExecutionId || latestExecution?.executionId === activeExecutionId;
-  const runtimeMatchesCard = !activeExecutionId || text(live.executionId) === activeExecutionId;
+  const executionMatchesCard = Boolean(activeExecutionId && latestExecution?.executionId === activeExecutionId);
   const segmentStartedAtMs = executionMatchesCard ? Date.parse(latestExecution?.startedAt ?? '') || 0 : 0;
   const observedTurnStartedAtMs = executionMatchesCard ? Date.parse(latestExecution?.turnStartedAt ?? '') || 0 : 0;
   const segmentStartLine = executionMatchesCard ? latestExecution?.startLine ?? 0 : 0;
-  const legacyTurnStarted = !activeExecutionId && observedTurnStartedAtMs === 0 && stdoutFile && existsSync(stdoutFile)
-    ? readCardSkillRunEventLines(stdoutFile).some((entry) => entry.line > segmentStartLine && text(entry.event.type) === 'turn.started')
-    : false;
+  const legacyTurnStarted = false;
   const turnStartedAtMs = observedTurnStartedAtMs || (legacyTurnStarted ? segmentStartedAtMs : 0);
   const turnPending = observation?.kind === 'codex-process' && turnStartedAtMs === 0;
   const startedAtMs = turnStartedAtMs || segmentStartedAtMs;

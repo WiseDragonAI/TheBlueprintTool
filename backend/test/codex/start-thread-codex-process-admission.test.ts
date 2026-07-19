@@ -183,12 +183,12 @@ test('turn lifecycle updates preserve the live child handle for cancellation', a
 
     assert.equal(runtimeCodexRunOwnsLiveProcess(runtime, context.staleRunId), true);
     const cancellation = await cancelCardSkillRunController({
-      action_payload: { ledgerId: 'specs', cardId: context.cardId, runId: context.staleRunId },
+      action_payload: { ledgerId: 'specs', cardId: context.cardId, runId: context.staleRunId, executionId: String((result.run as Record<string, unknown>).executionId ?? '') },
       runtime_state: runtime,
     });
     assert.equal(cancellation.ok, true);
     assert.equal(cancellation.statusCode, 202);
-    assert.equal(cancellation.status, 'cancelled');
+    assert.equal(cancellation.cancellationRequested, true);
     await waitForCondition(
       () => Boolean((runtime.codexSkillRuns as Record<string, { settledAt?: string }>)[context.staleRunId]?.settledAt),
       'the cancelled child to settle',

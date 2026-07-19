@@ -70,12 +70,12 @@ function consumeThreadRunSummary(input: { threadId: string; runId: string; summa
   }
 
   if (String(state.threadId ?? '') !== input.threadId || typeof document === 'undefined') return;
-  syncThreadCodexRunControls({
-    threadId: input.threadId,
-    status: input.summary.ok ? input.summary.status : 'unknown',
-    active: input.summary.ok ? input.summary.active : false,
-    queuePosition: input.summary.queuePosition,
-  });
+  if (!String(recordState('threadActiveRunIdByThreadId')[input.threadId] ?? '')) syncThreadCodexRunControls({
+      threadId: input.threadId,
+      status: input.summary.ok ? input.summary.status : 'unknown',
+      active: input.summary.ok ? input.summary.active : false,
+      queuePosition: input.summary.queuePosition,
+    });
   void import('../../thread/effect/render-thread-codex-log.js').then(({ renderThreadCodexLog }) => renderThreadCodexLog());
 }
 
@@ -87,6 +87,7 @@ type ThreadCodexRunLogIdentity = {
   runId: string;
   expectedExecutionId?: string;
   expectedStatus?: CardSkillRunSummary['status'];
+  forceRevalidate?: boolean;
 };
 
 export function bindThreadCodexRunLog(input: ThreadCodexRunLogIdentity): void {
@@ -112,9 +113,64 @@ export function bindThreadCodexRunLog(input: ThreadCodexRunLogIdentity): void {
     runId: input.runId,
     expectedExecutionId: input.expectedExecutionId,
     expectedStatus: input.expectedStatus,
+    forceRevalidate: input.forceRevalidate,
     consumerId: `thread-log:${input.threadId}`,
     onSummary: (summary) => consumeThreadRunSummary({ threadId: input.threadId, runId: input.runId, summary }),
   });
+}
+
+function consumeActiveRunSummary(input: { threadId: string; runId: string; summary: CardSkillRunSummary }): void {
+  if (String(recordState('threadActiveRunIdByThreadId')[input.threadId] ?? '') !== input.runId) return;
+  recordState('threadActiveRunSummaryByThreadId')[input.threadId] = input.summary;
+  if (String(state.threadId ?? '') !== input.threadId || typeof document === 'undefined') return;
+  syncThreadCodexRunControls({
+    threadId: input.threadId,
+    status: input.summary.ok ? input.summary.status : 'unknown',
+    active: input.summary.ok ? input.summary.active : false,
+    queuePosition: input.summary.queuePosition,
+  });
+  void import('../../thread/effect/render-thread-codex-log.js').then(({ renderThreadCodexLog }) => renderThreadCodexLog());
+}
+
+export function bindThreadCodexActiveRunLog(input: ThreadCodexRunLogIdentity): void {
+  if (!input.ledgerId || !input.cardId || !input.threadId || !input.runId) return;
+  const projectId = input.projectId ?? projectIdFromLocation();
+  const activeRunIds = recordState('threadActiveRunIdByThreadId');
+  const previousRunId = String(activeRunIds[input.threadId] ?? '');
+  if (previousRunId && previousRunId !== input.runId) unbindCardSkillRunLogConsumer({
+    projectId,
+    ledgerId: input.ledgerId,
+    cardId: input.cardId,
+    runId: previousRunId,
+    consumerId: `thread-active:${input.threadId}`,
+  });
+  activeRunIds[input.threadId] = input.runId;
+  bindCardSkillRunLogConsumer({
+    projectId,
+    ledgerId: input.ledgerId,
+    cardId: input.cardId,
+    runId: input.runId,
+    expectedExecutionId: input.expectedExecutionId,
+    expectedStatus: input.expectedStatus,
+    forceRevalidate: input.forceRevalidate,
+    consumerId: `thread-active:${input.threadId}`,
+    onSummary: (summary) => consumeActiveRunSummary({ threadId: input.threadId, runId: input.runId, summary }),
+  });
+}
+
+export function unbindThreadCodexActiveRunLog(input: ThreadCodexRunLogIdentity): void {
+  if (!input.ledgerId || !input.cardId || !input.threadId || !input.runId) return;
+  unbindCardSkillRunLogConsumer({
+    projectId: input.projectId ?? projectIdFromLocation(),
+    ledgerId: input.ledgerId,
+    cardId: input.cardId,
+    runId: input.runId,
+    consumerId: `thread-active:${input.threadId}`,
+  });
+  if (String(recordState('threadActiveRunIdByThreadId')[input.threadId] ?? '') === input.runId) {
+    delete recordState('threadActiveRunIdByThreadId')[input.threadId];
+    delete recordState('threadActiveRunSummaryByThreadId')[input.threadId];
+  }
 }
 
 export function unbindThreadCodexRunLog(input: ThreadCodexRunLogIdentity): void {

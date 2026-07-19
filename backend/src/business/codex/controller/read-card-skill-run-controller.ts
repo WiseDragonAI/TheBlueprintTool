@@ -257,6 +257,8 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
   const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord & { cards?: AnyRecord[] };
   const runReference = resolveCardSkillRunOwnership({ ledger, decisionOsRoot, cardId, runId });
   if (!runReference.found) return { ok: false, statusCode: 404, error: 'Run not found on card.', cardId, runId };
+  const card = ledger.cards?.find((entry) => String(entry.id ?? '') === cardId) ?? {};
+  const cardExecutionId = String(card.codexActiveRunId ?? '') === runId ? String(card.codexActiveExecutionId ?? '') : '';
 
   const persistedPipelineRun = readCodexPipelineStore({ decisionOsRoot }).store.runs
     .find((entry) => entry.steps.some((step) => step.skills.some((skill) => skill.runId === runId)));
@@ -269,7 +271,20 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
   const parsedLines = readCardSkillRunEventLines(stdoutFile);
   const events = parsedLines.map(normalizeCardSkillRunEvent);
   const executions = codexRunExecutions({ log: stderrLog, runId });
-  const runtimeRun = runtime.codexSkillRuns && typeof runtime.codexSkillRuns === 'object' ? (runtime.codexSkillRuns as Record<string, AnyRecord>)[runId] ?? {} : {};
+  const candidateRuntimeRuns = runtime.codexSkillRuns && typeof runtime.codexSkillRuns === 'object'
+    ? runtime.codexSkillRuns as Record<string, AnyRecord>
+    : {};
+  const candidateRuntimeRun = candidateRuntimeRuns[runId] ?? {};
+  // WHAT: Ignore a stale runtime entry when the card's durable lease names a newer execution.
+  // WHY: A reused session run id cannot make an older process authoritative for status or STOP.
+  const runtimeOwnsExecution = !cardExecutionId || String(candidateRuntimeRun.executionId ?? '') === cardExecutionId;
+  const runtimeRun = runtimeOwnsExecution ? candidateRuntimeRun : {};
+  const fencedRuntime = runtimeOwnsExecution
+    ? runtime
+    : {
+        ...runtime,
+        codexSkillRuns: Object.fromEntries(Object.entries(candidateRuntimeRuns).filter(([candidateRunId]) => candidateRunId !== runId)),
+      };
   const runtimeExecutionId = String(runtimeRun.executionId ?? '');
   if (runtimeExecutionId && executions.at(-1)?.executionId !== runtimeExecutionId) {
     executions.push({
@@ -288,22 +303,29 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
   const segmentEvents = events.filter((event) => event.line > segmentStartLine);
   const segmentLog = latestCodexRunSegmentLog({ log: stderrLog, runId });
   const diagnostics = normalizedRunDiagnostics(segmentLog);
-  const inferred = inferredStatus({ runtime, runId, events: segmentEvents, stdoutFile, stderrFile, stderrLog: segmentLog });
-  const inMemoryStatus = runtimeRunStatus(runtime, runId);
-  const queuedProcess = readCodexProcessQueue(decisionOsRoot).find((item) => item.id === runId || String(item.payload.runId ?? '') === runId);
+  const inferred = inferredStatus({ runtime: fencedRuntime, runId, events: segmentEvents, stdoutFile, stderrFile, stderrLog: segmentLog });
+  const inMemoryStatus = runtimeRunStatus(fencedRuntime, runId);
+  // WHAT: Fence queue hydration with the same execution lease used by recovery and cancellation.
+  // WHY: A stale interrupted continuation can share the durable session run id with its replacement.
+  const queuedProcess = readCodexProcessQueue(decisionOsRoot).find((item) => (
+    (item.id === runId || String(item.payload.runId ?? '') === runId)
+    && (!cardExecutionId || String(item.payload.executionId ?? '') === cardExecutionId)
+  ));
   const interruptedProcess = queuedProcess?.status === 'interrupted' ? queuedProcess : null;
   const inferredTerminal = inferred === 'complete' || inferred === 'failed' || inferred === 'cancelled' ? inferred : null;
+  const persistedSkillOwnsExecution = !cardExecutionId || persistedSkill?.executionId === cardExecutionId;
   const status = inMemoryStatus
-    ?? (persistedSkill && (persistedSkill.status === 'complete' || persistedSkill.status === 'failed' || persistedSkill.status === 'cancelled')
-      ? persistedSkill.status
-      : inferredTerminal ?? (interruptedProcess ? 'failed' : inferred));
+    ?? (queuedProcess?.status === 'pending' ? 'pending' : null)
+    ?? (persistedSkillOwnsExecution ? persistedSkill?.status : null)
+    ?? inferredTerminal
+    ?? (interruptedProcess ? 'failed' : inferred);
   // Retain the response field for clients while making explicit that status reads persist nothing.
   const persistedEventCount = 0;
   // Session history is append-only. Segment filtering is reserved for current-execution
   // status and counters; the global line cursor always addresses the complete log.
   const returnedEvents = events.filter((event) => event.line > since);
   const metadata = {
-    ...runtimeRunMetadata(runtime, runId),
+    ...runtimeRunMetadata(fencedRuntime, runId),
     ...codexRunSegmentMetadata({ log: stderrLog, runId }),
     ...(persistedSkill ? { codexModel: persistedSkill.codexModel, codexEffort: persistedSkill.codexEffort } : {}),
   };
@@ -327,8 +349,8 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     stdoutFile,
     stderrFile,
   });
-  const active = runtimeCodexRunOwnsLiveProcess(runtime, runId, decisionOsRoot);
-  const currentElapsedMs = elapsedMs({ runtime, runId, status, stdoutFile, stderrFile });
+  const active = runtimeOwnsExecution && runtimeCodexRunOwnsLiveProcess(fencedRuntime, runId, decisionOsRoot);
+  const currentElapsedMs = elapsedMs({ runtime: fencedRuntime, runId, status, stdoutFile, stderrFile });
   const projectedExecutions = executionHistory({
     executions,
     events,
@@ -355,12 +377,18 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     pipelineStatus: persistedPipelineRun?.status ?? null,
     status,
     active,
-    executionId: String(currentExecution?.executionId ?? ''),
+    executionId: cardExecutionId || runtimeExecutionId || persistedSkill?.executionId || String(currentExecution?.executionId ?? ''),
     currentExecution,
     executions: projectedExecutions,
     interruptedAt: interruptedProcess?.interruptedAt ?? null,
-    queuePosition: status === 'pending' && queuedProcess ? unifiedCodexQueuePosition({ decisionOsRoot, id: queuedProcess.id, createdAt: queuedProcess.createdAt, runtime }) : null,
-    startedAt: new Date(runSegmentStartedAtMs({ runtime, runId, stderrFile })).toISOString(),
+    queuePosition: status === 'pending'
+      ? queuedProcess
+        ? unifiedCodexQueuePosition({ decisionOsRoot, id: queuedProcess.id, createdAt: queuedProcess.createdAt, runtime })
+        : persistedPipelineRun
+          ? unifiedCodexQueuePosition({ decisionOsRoot, id: persistedPipelineRun.id, createdAt: persistedPipelineRun.createdAt, runtime })
+          : null
+      : null,
+    startedAt: new Date(runSegmentStartedAtMs({ runtime: fencedRuntime, runId, stderrFile })).toISOString(),
     elapsedMs: currentElapsedMs,
     lineCount: parsedLines.at(-1)?.line ?? 0,
     nextSince: parsedLines.at(-1)?.line ?? 0,

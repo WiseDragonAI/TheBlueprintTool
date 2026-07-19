@@ -319,7 +319,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(cardDetailSkillRunPoller, /requestCardSkillRunContinue\(\{ ledgerId: poller\.ledgerId, cardId: poller\.cardId, runId: poller\.runId, traceId, codexModel, codexEffort \}\)/);
   assert.doesNotMatch(cardDetailSkillRunPoller, /bindNewSessionButton|codexRunNewSession/);
   assert.match(cardDetailSkillRunPoller, /function bindCancelButton\(poller: Poller\): void \{[\s\S]*void cancelRun\(poller\);[\s\S]*\}/);
-  assert.match(cardDetailSkillRunPoller, /requestCardSkillRunCancel\(\{ ledgerId: poller\.ledgerId, cardId: poller\.cardId, runId: poller\.runId \}\)/);
+  assert.match(cardDetailSkillRunPoller, /requestCardSkillRunCancel\(\{ ledgerId: poller\.ledgerId, cardId: poller\.cardId, runId: poller\.runId, executionId \}\)/);
   assert.match(cardDetailSkillRunPoller, /setCancelButtonVisible\(element: HTMLElement, visible: boolean\)/);
   assert.match(cardDetailSkillRunPoller, /requestAnimationFrame/);
   assert.match(cardDetailSkillRunPoller, /now - poller\.lastClockPaintMs >= 33/);
@@ -338,8 +338,8 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(cardDetailSkillRunPoller, /async function continueRun\(poller: Poller\): Promise<void> \{[\s\S]*paintExternallyStartedRun\(poller\);[\s\S]*requestCardSkillRunContinue/);
   assert.match(cardDetailSkillRunPoller, /function paintExternallyStartedRun\(poller: Poller, latestLabel = 'Continuing session'\): void \{[\s\S]*poller\.startedAtMs = Date\.now\(\);[\s\S]*poller\.element\.dataset\.runStatus = 'running';/);
   assert.match(ledgerContentEvents, /resumeExternallyStartedCardSkillRun/);
-  assert.match(ledgerContentEvents, /reason\.startsWith\('codex-'\)/);
-  assert.match(ledgerContentEvents, /reason\.endsWith\('-started'\)/);
+  assert.match(ledgerContentEvents, /reason !== 'codex-run-accepted' && reason !== 'codex-turn-started'/);
+  assert.match(ledgerContentEvents, /executionId: String\(payload\.executionId \?\? ''\), status: payload\.status/);
   assert.match(threadNotes, /!isCodexThreadArtifactNote\(note\)/);
   assert.doesNotMatch(threadNotes, /codexNoteClass\(note\)|is-codex-run-event/);
   assert.match(threadCodexLog, /groupSequentialToolCalls\(input\.events\)/);

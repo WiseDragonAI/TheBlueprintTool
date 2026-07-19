@@ -49,6 +49,7 @@ import { cancelCodexPipelineRunController } from '../../codex/controller/cancel-
 import { restartCodexPipelineRunController } from '../../codex/controller/restart-codex-pipeline-run-controller.js';
 import { resumeCodexPipelineRuns } from '../../codex/helper/resume-codex-pipeline-runs.js';
 import { recoverCodexProcessQueue } from '../../codex/helper/codex-process-queue.js';
+import { reconcileCodexExecutionOwnership } from '../../codex/helper/reconcile-codex-execution-ownership.js';
 import { nextPendingCodexProcessCreatedAt, pendingCodexProcessEntries, runningCodexProcessCount, scheduleCodexProcesses } from '../../codex/helper/codex-process-scheduler.js';
 import { resolveCatalogProject, tasksLedgerForProject } from './project-catalog.js';
 import { createProjectCatalogStore } from './project-catalog-store.js';
@@ -349,17 +350,27 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     };
     projectRuntime.onPipelineLedgerChange = publishLedger;
     projectRuntime.scheduleCodexProcesses = scheduleGlobalCodexProcesses;
+    projectRuntime.onCodexRunAccepted = (event: AnyRecord): void => {
+      publishLedger({
+        reason: 'codex-run-accepted', ledgerId: String(event.ledgerId ?? ''), runId: String(event.runId ?? ''),
+        executionId: String(event.executionId ?? ''), status: String(event.status ?? 'pending'),
+        cardId: String(event.cardId ?? ''), outputCardId: String(event.outputCardId ?? event.cardId ?? ''),
+        threadId: String(event.threadId ?? '')
+      });
+    };
     projectRuntime.onCodexTurnStarted = (event: AnyRecord): void => {
       publishLedger({
         reason: 'codex-turn-started', ledgerId: String(event.ledgerId ?? ''), runId: String(event.runId ?? ''),
-        cardId: String(event.cardId ?? ''), threadId: String(event.threadId ?? ''), startedAt: String(event.startedAt ?? '')
+        executionId: String(event.executionId ?? ''), status: String(event.status ?? 'running'),
+        cardId: String(event.cardId ?? ''), outputCardId: String(event.outputCardId ?? event.cardId ?? ''),
+        threadId: String(event.threadId ?? ''), startedAt: String(event.startedAt ?? '')
       });
     };
     projectRuntime.onCodexRunSettled = (event: AnyRecord): void => {
       if (!event.pipelineRunId) {
         publishLedger({
           reason: 'codex-thread-settled', ledgerId: String(event.ledgerId ?? ''), status: String(event.status ?? ''),
-          runId: String(event.runId ?? ''), cardId: String(event.cardId ?? event.outputCardId ?? ''),
+          runId: String(event.runId ?? ''), executionId: String(event.executionId ?? ''), cardId: String(event.cardId ?? event.outputCardId ?? ''),
           outputCardId: String(event.outputCardId ?? event.cardId ?? ''), threadId: String(event.threadId ?? '')
         });
       }
@@ -369,6 +380,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           reason: pipelineStatus === 'complete' ? 'pipeline-completed' : pipelineStatus === 'cancelled' ? 'pipeline-cancelled' : 'pipeline-failed',
           ledgerId: String(event.ledgerId ?? ''), pipelineRunId: String(event.pipelineRunId), pipelineStatus,
           status: String(event.status ?? pipelineStatus), runId: String(event.runId ?? ''),
+          executionId: String(event.executionId ?? ''),
           cardId: String(event.cardId ?? event.outputCardId ?? ''), outputCardId: String(event.outputCardId ?? event.cardId ?? ''),
           threadId: String(event.threadId ?? '')
         });
@@ -387,6 +399,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const context: ProjectContext = { clients, revisions, runtime: projectRuntime, publishCard, publishLedger, watcher };
     projectContexts.set(activeDecisionOsRoot, context);
     recoverCodexProcessQueue(activeDecisionOsRoot, projectRuntime);
+    const ownershipReconciliation = reconcileCodexExecutionOwnership({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime });
+    if (ownershipReconciliation.ledgersChanged > 0) console.log(JSON.stringify({ codexOwnershipReconciliation: ownershipReconciliation, projectId }));
     void resumeCodexPipelineRuns({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime }).catch(() => undefined);
     return context;
   };

@@ -48,8 +48,9 @@ test('server startup drains pending Codex work discovered after an empty project
   const masterDecisionOsRoot = createProject(home, null);
   createProject(join(home, 'a-empty'), null);
   const queuedProject = join(home, 'b-queued');
+  const executionId = 'execution-queued';
   const queuedDecisionOsRoot = createProject(queuedProject, {
-    cards: [{ id: 'card-queued', title: 'Queued card', codexThreadRunId: 'run-queued', comment: { what: 'Queued card body.' }, facts: [], fields: [] }],
+    cards: [{ id: 'card-queued', title: 'Queued card', codexThreadRunId: 'run-queued', codexActiveRunId: 'run-queued', codexActiveExecutionId: executionId, comment: { what: 'Queued card body.' }, facts: [], fields: [] }],
     annotations: [],
     relationships: [],
     notes: {},
@@ -73,7 +74,7 @@ test('server startup drains pending Codex work discovered after an empty project
       startedAt: null,
       interruptedAt: null,
       interruptionReason: '',
-      payload: { ledgerId: 'specs', threadId: 'thread-card-queued', cardId: 'card-queued' },
+      payload: { ledgerId: 'specs', threadId: 'thread-card-queued', cardId: 'card-queued', runId: 'run-queued', executionId },
     }],
   }, null, 2));
   const invocationFile = join(queuedProject, 'invoked.txt');

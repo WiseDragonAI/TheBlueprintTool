@@ -72,15 +72,30 @@ export function writeCodexProcessQueue(decisionOsRoot: string, items: readonly C
 }
 
 export function enqueueCodexThreadProcess(input: { decisionOsRoot: string; id: string; createdAt: string; payload: AnyRecord }): CodexProcessQueueItem {
+  const existing = findActiveLogicalQueueItem(input.decisionOsRoot, input.payload);
+  if (existing) return existing;
   const item: CodexProcessQueueItem = { id: input.id, kind: 'thread', status: 'pending', createdAt: input.createdAt, startedAt: null, interruptedAt: null, interruptionReason: '', processId: 0, processStartTime: '', stdoutFile: '', stderrFile: '', payload: input.payload };
   writeCodexProcessQueue(input.decisionOsRoot, [...readCodexProcessQueue(input.decisionOsRoot), item]);
   return item;
 }
 
 export function enqueueCodexContinuation(input: { decisionOsRoot: string; id: string; createdAt: string; payload: AnyRecord }): CodexProcessQueueItem {
+  const existing = findActiveLogicalQueueItem(input.decisionOsRoot, input.payload);
+  if (existing) return existing;
   const item: CodexProcessQueueItem = { id: input.id, kind: 'continuation', status: 'pending', createdAt: input.createdAt, startedAt: null, interruptedAt: null, interruptionReason: '', processId: 0, processStartTime: '', stdoutFile: '', stderrFile: '', payload: input.payload };
   writeCodexProcessQueue(input.decisionOsRoot, [...readCodexProcessQueue(input.decisionOsRoot), item]);
   return item;
+}
+
+function sameLogicalExecution(item: CodexProcessQueueItem, payload: AnyRecord): boolean {
+  return String(item.payload.ledgerId ?? '') === String(payload.ledgerId ?? '')
+    && String(item.payload.cardId ?? '') === String(payload.cardId ?? '')
+    && logicalRunId(item) === String(payload.runId ?? '')
+    && (item.status === 'pending' || item.status === 'running' || item.status === 'interrupted');
+}
+
+export function findActiveLogicalQueueItem(decisionOsRoot: string, payload: AnyRecord): CodexProcessQueueItem | null {
+  return readCodexProcessQueue(decisionOsRoot).find((item) => sameLogicalExecution(item, payload)) ?? null;
 }
 
 export function markCodexProcessQueueItemRunning(decisionOsRoot: string, id: string): CodexProcessQueueItem | null {
@@ -207,6 +222,7 @@ function recoveredContinuation(item: CodexProcessQueueItem): CodexProcessQueueIt
       codexModel: item.payload.codexModel,
       codexEffort: item.payload.codexEffort,
       traceId: item.payload.traceId,
+      executionId: item.payload.executionId,
       restartRecovery: true,
     },
   };
@@ -231,7 +247,10 @@ function interruptedItemStillOwned(decisionOsRoot: string, item: CodexProcessQue
     const card = cards.find((entry) => String(entry.id ?? '') === cardId);
     if (!card) return false;
     const runId = logicalRunId(item);
-    return [card.codexActiveRunId, card.codexThreadRunId, card.codexRunId].some((value) => String(value ?? '') === runId);
+    const executionId = String(item.payload.executionId ?? '');
+    if (!executionId) return false;
+    return String(card.codexActiveRunId ?? '') === runId
+      && String(card.codexActiveExecutionId ?? '') === executionId;
   } catch {
     return false;
   }
@@ -240,13 +259,14 @@ function interruptedItemStillOwned(decisionOsRoot: string, item: CodexProcessQue
 function deduplicateLogicalRuns(items: CodexProcessQueueItem[]): CodexProcessQueueItem[] {
   const selected = new Map<string, CodexProcessQueueItem>();
   for (const item of items) {
-    const runId = logicalRunId(item);
-    const existing = selected.get(runId);
+    const key = [item.payload.ledgerId, item.payload.cardId, logicalRunId(item)].join(':');
+    const existing = selected.get(key);
     if (!existing) {
-      selected.set(runId, item);
+      selected.set(key, item);
       continue;
     }
-    if (existing.status !== 'running' && item.status === 'running') selected.set(runId, item);
+    if (existing.status !== 'running' && item.status === 'running') selected.set(key, item);
+    else if (existing.status === item.status && item.createdAt > existing.createdAt) selected.set(key, item);
   }
   return [...selected.values()];
 }
@@ -281,11 +301,12 @@ function monitorAdoptedProcess(decisionOsRoot: string, runtime: AnyRecord, item:
       stopAdoptedMonitor(runtime, item.id);
       return;
     }
-    const settled = terminalStatus(current.stdoutFile);
     const runs = runtime.codexSkillRuns && typeof runtime.codexSkillRuns === 'object'
       ? runtime.codexSkillRuns as Record<string, AnyRecord>
       : {};
     runtime.codexSkillRuns = runs;
+    if (isSameCodexProcess(current.processId, current.processStartTime)) return;
+    const settled = terminalStatus(current.stdoutFile);
     if (settled) {
       runs[runId] = { ...(runs[runId] ?? {}), status: settled, adopted: false, finishedAt: new Date().toISOString() };
       clearCardCodexExecutionForLedger({
@@ -293,6 +314,7 @@ function monitorAdoptedProcess(decisionOsRoot: string, runtime: AnyRecord, item:
         ledgerId: String(current.payload.ledgerId ?? ''),
         cardId: String(current.payload.cardId ?? ''),
         runId,
+        executionId: String(current.payload.executionId ?? ''),
         runtime,
       });
       removeCodexProcessQueueItem(decisionOsRoot, current.id);
@@ -303,13 +325,14 @@ function monitorAdoptedProcess(decisionOsRoot: string, runtime: AnyRecord, item:
         outputCardId: current.payload.cardId,
         threadId: `thread-${String(current.payload.cardId ?? '')}`,
         runId,
+        executionId: current.payload.executionId,
         status: settled,
       });
       scheduleAfterAdoptedSettlement(runtime);
       return;
     }
-    if (isSameCodexProcess(current.processId, current.processStartTime)) return;
-    writeCodexProcessQueue(decisionOsRoot, readCodexProcessQueue(decisionOsRoot).map((entry) => entry.id === current.id ? recoveredContinuation(entry) : entry));
+    const next = interruptedItemStillOwned(decisionOsRoot, current) ? recoveredContinuation(current) : null;
+    writeCodexProcessQueue(decisionOsRoot, readCodexProcessQueue(decisionOsRoot).flatMap((entry) => entry.id !== current.id ? [entry] : next ? [next] : []));
     delete runs[runId];
     stopAdoptedMonitor(runtime, current.id);
     scheduleAfterAdoptedSettlement(runtime);
@@ -320,27 +343,27 @@ function monitorAdoptedProcess(decisionOsRoot: string, runtime: AnyRecord, item:
 
 export function recoverCodexProcessQueue(decisionOsRoot: string, runtime?: AnyRecord): void {
   const items = readCodexProcessQueue(decisionOsRoot);
-  if (!items.some((item) => item.status === 'running' || item.status === 'interrupted')) return;
+  if (items.length === 0) return;
   const runs = runtime && runtime.codexSkillRuns && typeof runtime.codexSkillRuns === 'object'
     ? runtime.codexSkillRuns as Record<string, AnyRecord>
     : {};
   if (runtime) runtime.codexSkillRuns = runs;
   const recovered = items.flatMap((item): CodexProcessQueueItem[] => {
-    if (item.status === 'pending') return [item];
     const runId = logicalRunId(item);
-    const files = runFiles(decisionOsRoot, item);
-    const settled = terminalStatus(files.stdoutFile);
-    if (settled) {
-      runs[runId] = { ...(runs[runId] ?? {}), id: runId, status: settled, pid: item.processId, adopted: false, finishedAt: new Date().toISOString() };
-      clearCardCodexExecutionForLedger({
-        decisionOsRoot,
-        ledgerId: String(item.payload.ledgerId ?? ''),
-        cardId: String(item.payload.cardId ?? ''),
-        runId,
-        runtime,
-      });
-      return [];
+    if (item.status === 'pending') {
+      if (runtime && interruptedItemStillOwned(decisionOsRoot, item)) runs[runId] = {
+        ...(runs[runId] ?? {}),
+        id: runId,
+        executionId: item.payload.executionId,
+        ledgerId: item.payload.ledgerId,
+        outputCardId: item.payload.cardId,
+        status: 'pending',
+        queueItemId: item.id,
+        createdAt: item.createdAt,
+      };
+      return interruptedItemStillOwned(decisionOsRoot, item) ? [item] : [];
     }
+    const files = runFiles(decisionOsRoot, item);
     if (item.status === 'interrupted') {
       return interruptedItemStillOwned(decisionOsRoot, item) ? [recoveredContinuation(item)] : [];
     }
@@ -348,6 +371,7 @@ export function recoverCodexProcessQueue(decisionOsRoot: string, runtime?: AnyRe
       runs[runId] = {
         ...(runs[runId] ?? {}),
         id: runId,
+        executionId: item.payload.executionId,
         ledgerId: item.payload.ledgerId,
         outputCardId: item.payload.cardId,
         stdoutFile: files.stdoutFile,
@@ -361,7 +385,20 @@ export function recoverCodexProcessQueue(decisionOsRoot: string, runtime?: AnyRe
       if (runtime) monitorAdoptedProcess(decisionOsRoot, runtime, item);
       return [item];
     }
-    return [recoveredContinuation(item)];
+    const settled = terminalStatus(files.stdoutFile);
+    if (settled) {
+      runs[runId] = { ...(runs[runId] ?? {}), id: runId, executionId: item.payload.executionId, status: settled, pid: item.processId, adopted: false, finishedAt: new Date().toISOString() };
+      clearCardCodexExecutionForLedger({
+        decisionOsRoot,
+        ledgerId: String(item.payload.ledgerId ?? ''),
+        cardId: String(item.payload.cardId ?? ''),
+        runId,
+        executionId: String(item.payload.executionId ?? ''),
+        runtime,
+      });
+      return [];
+    }
+    return interruptedItemStillOwned(decisionOsRoot, item) ? [recoveredContinuation(item)] : [];
   });
   writeCodexProcessQueue(decisionOsRoot, deduplicateLogicalRuns(recovered));
 }
