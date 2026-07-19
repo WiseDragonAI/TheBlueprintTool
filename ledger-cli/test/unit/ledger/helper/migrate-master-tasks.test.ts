@@ -142,3 +142,31 @@ test('rejects a relationship that would cross ledger boundaries', () => {
     ok: false, error: 'Migration would break 1 cross-ledger relationships.',
   });
 });
+
+test('returns a zero-change result after all master tasks have already moved', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-master-task-idempotent-'));
+  const root = join(workspace, '.decision-os');
+  mkdirSync(root, { recursive: true });
+  const sourceLedger = join(root, 'specs.json');
+  const targetLedger = join(root, 'tasks.json');
+  writeFileSync(sourceLedger, JSON.stringify({ cards: [], annotations: [], relationships: [] }));
+  writeFileSync(targetLedger, JSON.stringify({ cards: [{ id: 'existing-task' }], annotations: [], relationships: [] }));
+
+  const result = migrateMasterTasks({ sourceLedger, targetLedger, write: true });
+
+  assert.deepEqual(result, { ok: true, value: {
+    cards: 0,
+    zones: 0,
+    relationships: 0,
+    cardFiles: 0,
+    threadFiles: 0,
+    missingCardFiles: [],
+    missingThreadFiles: [],
+    queueItems: 0,
+    pipelineRuns: 0,
+    sourceLedger,
+    targetLedger,
+    write: true,
+  } });
+  assert.deepEqual(JSON.parse(readFileSync(targetLedger, 'utf8')).cards, [{ id: 'existing-task' }]);
+});

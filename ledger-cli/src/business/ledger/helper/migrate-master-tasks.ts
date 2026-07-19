@@ -101,7 +101,20 @@ export function migrateMasterTasks(input: { sourceLedger: string; targetLedger: 
   const zones = records(source.annotations).filter((entry) => String(entry.variant ?? 'zone') === 'zone');
   const movedIds = new Set(cards.filter((card) => Array.isArray(card.labels) && card.labels.includes('master-task'))
     .map((card) => String(card.id ?? '')));
-  if (movedIds.size === 0) return { ok: false, error: `No master-task cards found in ${sourceId}.` };
+  if (movedIds.size === 0) return { ok: true, value: {
+    cards: 0,
+    zones: 0,
+    relationships: 0,
+    cardFiles: 0,
+    threadFiles: 0,
+    missingCardFiles: [],
+    missingThreadFiles: [],
+    queueItems: 0,
+    pipelineRuns: 0,
+    sourceLedger: sourceFile,
+    targetLedger: targetFile,
+    write: input.write,
+  } };
 
   let changed = true;
   while (changed) {
