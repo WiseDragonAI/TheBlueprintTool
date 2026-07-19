@@ -1,16 +1,18 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=390,initial-scale=1"><link rel="stylesheet" href="review-overview.css"><title>Review overview</title></head><body><main class="phone">
-  <header class="topbar"><button class="icon-button" aria-label="Back">‹</button><div class="topbar-copy"><span class="eyebrow">Code review</span><strong>mobile-diff-review-ux</strong></div><button class="icon-button" aria-label="Review options">⋯</button></header>
-  <section class="content"><div class="review-meta"><span class="pill accent">● 4 files changed</span><span class="pill">main ↔ working tree</span></div>
-    <div class="section-title"><h1>Review changes</h1><small>6 of 11 hunks</small></div>
-    <section class="panel summary"><div class="summary-head"><strong>Review progress</strong><b>55%</b></div><div class="progress"><span style="width:55%"></span></div>
-      <div class="files">
-        <div class="file done"><span class="file-icon">TS</span><div class="file-copy"><div class="file-path">backend/src/git/diff.ts</div><small>3 hunks · +42 −8</small></div><span class="file-state">✓</span></div>
-        <div class="file active"><span class="file-icon">TS</span><div class="file-copy"><div class="file-path">frontend/src/review/diff-view.ts</div><small>5 hunks · 2 reviewed · +86 −21</small></div><span class="file-state">›</span></div>
-        <div class="file"><span class="file-icon">CSS</span><div class="file-copy"><div class="file-path">frontend/assets/review.css</div><small>2 hunks · +64 −0</small></div><span class="file-state">○</span></div>
-        <div class="file"><span class="file-icon">MD</span><div class="file-copy"><div class="file-path">AGENTS.md</div><small>1 hunk · +6 −0</small></div><span class="file-state">○</span></div>
-      </div>
-      <div class="legend"><div><b style="color:var(--green)">2</b><small>staged</small></div><div><b style="color:var(--accent)">4</b><small>reviewed</small></div><div><b>5</b><small>remaining</small></div></div>
-    </section>
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=390,initial-scale=1"><link rel="stylesheet" href="review-overview.css"><title>Review overview</title></head>
+<body><main class="phone">
+  <header class="app-topbar"><button class="control icon-control" aria-label="Open navigation">☰</button><div class="brand"><span class="brand-mark">D</span><span class="brand-copy"><strong>decision-os</strong><small>Specs · card review</small></span></div><button class="control icon-control" aria-label="Refresh">↻</button></header>
+  <section class="screen"><header class="card-header"><div class="card-actions"><button class="control back">← Back</button><button class="control primary">Open file</button><button class="control">Thread</button></div><div><p class="eyebrow">Git review</p><h1>Review changes</h1></div></header>
+    <div class="review-body"><div class="compare"><span class="pill accent">4 files changed</span><span class="pill">main ↔ working tree</span></div>
+      <section class="surface summary"><div class="surface-heading"><strong>mobile-diff-review-ux</strong><small>6 of 11 hunks reviewed</small></div><div class="progress"><span style="width:55%"></span></div>
+        <div class="files">
+          <button class="file complete"><span class="file-icon">TS</span><span class="file-copy"><span class="file-path">backend/src/git/diff.ts</span><small>3 hunks · +42 −8</small></span><span class="file-state">✓</span></button>
+          <button class="file active"><span class="file-icon">TS</span><span class="file-copy"><span class="file-path">frontend/src/review/diff-view.ts</span><small>5 hunks · 2 reviewed · +86 −21</small></span><span class="file-state">›</span></button>
+          <button class="file"><span class="file-icon">CSS</span><span class="file-copy"><span class="file-path">frontend/assets/review.css</span><small>2 hunks · +64 −0</small></span><span class="file-state">○</span></button>
+          <button class="file"><span class="file-icon">MD</span><span class="file-copy"><span class="file-path">AGENTS.md</span><small>1 hunk · +6 −0</small></span><span class="file-state">○</span></button>
+        </div>
+        <div class="status-row"><div><b style="color:var(--green)">2</b><small>staged</small></div><div><b style="color:var(--accent)">4</b><small>reviewed</small></div><div><b>5</b><small>remaining</small></div></div>
+      </section>
+    </div>
   </section>
-  <nav class="bottom-nav"><button class="nav-item"><span>▦</span>Queue</button><button class="nav-item active"><span>◫</span>Review</button><button class="nav-item"><span>◉</span>Thread</button><button class="nav-item"><span>⌘</span>Files</button></nav>
 </main></body></html>

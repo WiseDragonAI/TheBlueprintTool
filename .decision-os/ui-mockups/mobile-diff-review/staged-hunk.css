@@ -1,14 +1,13 @@
 @import url('./review-shell.css');
-.content { padding-top: 10px; }
-.locked { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 10px; border: 1px solid #53e08a70; background: #53e08a12; }
-.lock-icon { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border-radius: 50%; color: #07130c; background: var(--green); font-size: 17px; }
-.locked strong { display: block; color: var(--green); font-size: 12px; }
-.locked small { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
-.diff { height: 374px; border-color: #53e08a55; }
-.diff .line.add { background: #163526aa; }
-.stage-meta { display: grid; grid-template-columns: repeat(2,1fr); gap: 1px; margin-top: 10px; overflow: hidden; border: 1px solid var(--line); background: var(--line); }
-.stage-meta div { padding: 10px; background: var(--panel-deep); }
-.stage-meta small { display: block; color: var(--muted); font-size: 9px; text-transform: uppercase; }
-.stage-meta strong { display: block; margin-top: 4px; font-size: 11px; }
-.actions { display: grid; grid-template-columns: .8fr 1.2fr; gap: 8px; margin-top: 10px; }
-.unstage { color: var(--amber); }.next { color: var(--accent); }
+.staged-screen { padding-top: 12px; }
+.review-toolbar { display: grid; grid-template-columns: 44px minmax(0,1fr) 44px; gap: 10px; align-items: center; padding-bottom: 11px; border-bottom: 1px solid var(--line); }
+.review-toolbar .eyebrow { margin-bottom: 3px; }
+.accepted { display: grid; grid-template-columns: 36px minmax(0,1fr); gap: 10px; align-items: center; margin: 12px 0 10px; padding: 10px; border-color: rgba(83,224,138,.45); box-shadow: 0 0 0 1px rgba(83,224,138,.12); }
+.accepted-icon { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 3px; color: #07130c; background: var(--green); font-weight: 900; }
+.accepted strong, .accepted small { display: block; }.accepted strong { color: var(--green); font-size: 12px; }.accepted small { margin-top: 3px; color: var(--muted); font-size: 9px; }
+.staged-diff { height: 350px; border-color: rgba(83,224,138,.34); }
+.staged-diff .line.add { background: rgba(22,53,38,.75); }
+.stage-meta { margin-top: 10px; border: 1px solid var(--line); }
+.stage-meta b { margin-top: 3px; font-size: 10px; }
+.stage-actions { display: grid; grid-template-columns: .8fr 1.2fr; gap: 8px; margin-top: 10px; }
+.unstage { color: var(--amber); }
