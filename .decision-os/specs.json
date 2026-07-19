@@ -9949,7 +9949,6 @@
         "codex-skill-1784369782912-572dd9bc",
         "codex-skill-1784437148980-697d2c2e"
       ],
-      "codexActiveRunId": "codex-skill-1784441234172-c1e3b042",
       "codexRunId": "codex-skill-1784441234172-c1e3b042",
       "codexRunOutputFile": ".decision-os/cards/specs/card-codex-pipeline-1784441234171-b2755d12-step-1.md",
       "codexPipelineRunId": "codex-pipeline-1784441234171-b2755d12",
@@ -10388,7 +10387,7 @@
       "title": "Preserve Control Room column scroll across task status refreshes",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "master-task"
       ],
@@ -10497,7 +10496,6 @@
       },
       "facts": [],
       "fields": [],
-      "codexActiveRunId": "codex-skill-1784441234172-c1e3b042",
       "codexRunOutputFile": ".decision-os/cards/specs/card-codex-pipeline-1784441234171-b2755d12-step-1.md",
       "codexPipelineRunId": "codex-pipeline-1784441234171-b2755d12",
       "codexPipelineName": "PostMortem",
