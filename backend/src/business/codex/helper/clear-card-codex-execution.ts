@@ -2,9 +2,10 @@
  * WHAT: Clears terminal execution ownership while preserving the resumable run identity.
  * WHY: A settled run must leave Exec, and an older callback must never clear a newer execution.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
+import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -21,7 +22,7 @@ export function clearCardCodexExecution(input: { ledgerPath: string; cardId: str
       delete card.executionStatus;
       delete card.executionRunId;
     }
-    writeFileSync(input.ledgerPath, `${JSON.stringify(ledger, null, 2)}\n`, 'utf8');
+    persistLedgerProjection({ ledgerPath: input.ledgerPath, ledger });
     return true;
   } catch {
     // The run is still settled in memory when its project was removed during shutdown.

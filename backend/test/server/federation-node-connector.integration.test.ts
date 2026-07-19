@@ -17,8 +17,8 @@ function projectHome(name: string): string {
   const home = mkdtempSync(join(tmpdir(), `decision-os-federation-${name}-`));
   const decisionOsRoot = join(home, name, '.decision-os');
   mkdirSync(decisionOsRoot, { recursive: true });
-  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'specs', title: `${name} Specs`, ledgerFile: '.decision-os/specs.json' }] }));
-  writeFileSync(join(decisionOsRoot, 'specs.json'), JSON.stringify({ cards: [{ id: `${name}-card`, title: `${name} card`, labels: ['master-task'], status: 'todo' }], annotations: [], relationships: [] }));
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'tasks', title: `${name} Tasks`, ledgerFile: '.decision-os/tasks.json' }] }));
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({ cards: [{ id: `${name}-card`, title: `${name} card`, labels: ['master-task'], status: 'todo' }], annotations: [], relationships: [] }));
   return home;
 }
 
@@ -199,6 +199,10 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
         for (const [targetId, target] of sockets) if (targetId !== nodeId) target.send(JSON.stringify({ version: 1, type: 'content-change' }));
         return;
       }
+      if (frame.type.startsWith('state-') && frame.to) {
+        sockets.get(frame.to)?.send(JSON.stringify({ ...frame, from: nodeId }));
+        return;
+      }
       if (frame.type === 'request-open' && frame.requestId && frame.to) {
         streams.set(frame.requestId, { requester: nodeId, owner: frame.to });
         sockets.get(frame.to)?.send(JSON.stringify({ ...frame, to: undefined }));
@@ -274,11 +278,11 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     const controlRoomA = await waitFor(async () => {
       const body = await fetch(`${baseA}/api/control-room`).then((response) => response.json()) as {
       projects: Array<{ id: string; ownerNodeId: string }>;
-      allTasks: Array<{ projectId: string; ownerNodeId: string; title: string; replica?: { status: string } }>;
+      allTasks: Array<{ projectId: string; ownerNodeId: string; title: string; ownerOnline: boolean }>;
       federation: { nodeCount: number; remoteNodeCount: number };
       };
       lastControlRoomA = body;
-      return body.allTasks.some((task) => task.title === 'beta card' && task.replica?.status === 'replicated') ? body : null;
+      return body.allTasks.some((task) => task.title === 'beta card' && task.ownerOnline) ? body : null;
     }).catch((error) => {
       throw new Error(`${error instanceof Error ? error.message : error}\nLast Control Room projection: ${JSON.stringify(lastControlRoomA)}`);
     });
@@ -297,7 +301,7 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     const events = await fetch(`${baseA}/api/control-room-events`);
     const eventReader = events.body!.getReader();
     await eventReader.read();
-    const directMutation = await fetch(`${baseB}/p/${encodeURIComponent(catalogB.projects.find((project) => project.name === 'beta')!.id)}/decision-os/specs`, {
+    const directMutation = await fetch(`${baseB}/p/${encodeURIComponent(catalogB.projects.find((project) => project.name === 'beta')!.id)}/decision-os/tasks`, {
       method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'beta-card', title: 'changed on owner', status: 'backlog' } }),
     });
     assert.equal(directMutation.status, 200);
@@ -307,17 +311,24 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     ]);
     assert.match(new TextDecoder().decode(remoteEvent.value), /ledger-content-change/);
     await eventReader.cancel();
-    const synchronizedBacklog = await waitFor(async () => {
-      const body = await fetch(`${baseA}/api/control-room`).then((response) => response.json()) as {
-        backlog: Array<{ cardId: string; cardStatus: string; replica?: { status: string } }>;
-      };
-      return body.backlog.find((task) => task.cardId === 'beta-card' && task.cardStatus === 'backlog' && task.replica?.status === 'replicated') ?? null;
+    const synchronizedState = await waitFor(async () => {
+      const body = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/tasks`, { headers: { 'x-decision-os-replica-node': 'node-b' } }).then((response) => response.json()) as { cards?: Array<{ id: string; status: string }> };
+      return body.cards?.find((card) => card.id === 'beta-card' && card.status === 'backlog') ?? null;
     });
-    assert.equal(synchronizedBacklog.cardId, 'beta-card');
+    assert.equal(synchronizedState.id, 'beta-card');
 
-    const replicaSnapshot = await fetch(`${baseB}/api/federation/task-replica?projectId=${encodeURIComponent(catalogB.projects.find((project) => project.name === 'beta')!.id)}`).then((response) => response.json()) as { revision: string };
-    const unchangedReplica = await fetch(`${baseB}/api/federation/task-replica?projectId=${encodeURIComponent(catalogB.projects.find((project) => project.name === 'beta')!.id)}&revision=${encodeURIComponent(replicaSnapshot.revision)}`);
-    assert.equal(unchangedReplica.status, 304, 'an unchanged task replica is confirmed by hash without retransmitting its payload');
+    const contentManifest = await fetch(`${baseB}/api/federation/content-manifest?projectId=${encodeURIComponent(catalogB.projects.find((project) => project.name === 'beta')!.id)}`);
+    assert.equal(contentManifest.status, 200, 'content discovery remains available on its independent asynchronous lane');
+    const retiredReplica = await fetch(`${baseB}/api/federation/task-replica?projectId=${encodeURIComponent(catalogB.projects.find((project) => project.name === 'beta')!.id)}`);
+    const retiredReplicaBody = await retiredReplica.text();
+    assert.equal(retiredReplica.status, 404, `the hydrated task replica endpoint is retired: ${retiredReplicaBody.slice(0, 200)}`);
+    const replicationStatus = await fetch(`${baseA}/api/federation/replication-status`).then((response) => response.json()) as {
+      stateLane: { projects: Array<{ projectId: string; eventCount: number; snapshotCount: number }> };
+      contentLane: { queueDepth: number; running: boolean };
+    };
+    assert.ok(replicationStatus.stateLane.projects.some((project) => project.projectId === remoteBeta.id && project.eventCount + project.snapshotCount > 0));
+    assert.equal(typeof replicationStatus.contentLane.queueDepth, 'number');
+    assert.equal(typeof replicationStatus.contentLane.running, 'boolean');
 
     const registryAPath = join(homeA, '.decision-os', 'projects.json');
     const registryBPath = join(homeB, '.decision-os', 'projects.json');
@@ -325,18 +336,18 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     const registryB = readFileSync(registryBPath, 'utf8');
 
     const remoteHeaders = { 'x-decision-os-replica-node': 'node-b' };
-    const remoteLedger = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/specs`, { headers: remoteHeaders }).then((response) => response.json()) as { cards: Array<{ title: string }> };
+    const remoteLedger = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/tasks`, { headers: remoteHeaders }).then((response) => response.json()) as { cards: Array<{ title: string }> };
     assert.equal(remoteLedger.cards[0].title, 'changed on owner');
-    const queryRoutedLedger = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/specs?replica=node-b`).then((response) => response.json()) as { cards: Array<{ title: string }> };
+    const queryRoutedLedger = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/tasks?replica=node-b`).then((response) => response.json()) as { cards: Array<{ title: string }> };
     assert.equal(queryRoutedLedger.cards[0].title, 'changed on owner');
-    const mutation = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/specs`, {
+    const mutation = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/decision-os/tasks`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', ...remoteHeaders },
       body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'beta-card', title: 'mutated by node-a' } }),
     });
     assert.equal(mutation.status, 200);
-    assert.match(readFileSync(join(homeB, 'beta', '.decision-os', 'specs.json'), 'utf8'), /mutated by node-a/);
-    assert.doesNotMatch(readFileSync(join(homeA, 'alpha', '.decision-os', 'specs.json'), 'utf8'), /mutated by node-a/);
+    assert.match(readFileSync(join(homeB, 'beta', '.decision-os', 'tasks.json'), 'utf8'), /mutated by node-a/);
+    assert.doesNotMatch(readFileSync(join(homeA, 'alpha', '.decision-os', 'tasks.json'), 'utf8'), /mutated by node-a/);
     assert.equal(readFileSync(registryAPath, 'utf8'), registryA);
     assert.equal(readFileSync(registryBPath, 'utf8'), registryB);
 
@@ -366,7 +377,7 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     assert.ok(manuallySynchronizedLibraries[1].pipelines.some((pipeline) => pipeline.id === 'manual-pipeline'));
 
     await waitFor(async () => {
-      const response = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/api/ledgers/specs/cards/beta-card`, { headers: remoteHeaders });
+      const response = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/api/ledgers/tasks/cards/beta-card`, { headers: remoteHeaders });
       if (response.status !== 200) return null;
       const body = await response.json() as { title?: string };
       return body.title === 'mutated by node-a' ? body : null;
@@ -375,10 +386,10 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     serverB.close();
     await once(serverB, 'close');
     const offlineCard = await waitFor(async () => {
-      const response = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/api/ledgers/specs/cards/beta-card`, { headers: remoteHeaders });
+      const response = await fetch(`${baseA}/p/${encodeURIComponent(remoteBeta.id)}/api/ledgers/tasks/cards/beta-card`, { headers: remoteHeaders });
       if (response.status !== 200) return null;
-      const body = await response.json() as { title?: string; replica?: { status?: string } };
-      return body.title === 'mutated by node-a' && body.replica?.status === 'offline' ? body : null;
+      const body = await response.json() as { title?: string; state?: { status?: string } };
+      return body.title === 'mutated by node-a' && body.state?.status === 'offline' ? body : null;
     });
     assert.equal(offlineCard.title, 'mutated by node-a', 'card detail remains readable from the local replica after owner disconnect');
     const retainedSkills = await fetch(`${baseA}/p/${encodeURIComponent(catalogA.find((project) => project.name === 'alpha')!.id)}/api/codex/skills`).then((response) => response.json()) as { skills: Array<{ name: string }> };

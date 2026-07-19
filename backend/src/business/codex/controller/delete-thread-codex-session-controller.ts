@@ -7,6 +7,7 @@ import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
 import { stripHydratedThreadNotes } from '@backend/business/ledger/helper/thread-content-file.js';
 import { cancelCardSkillRunController } from './cancel-card-skill-run-controller.js';
+import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
 import { resolveCardSkillRunFiles } from '../helper/resolve-card-skill-run-files.js';
 
 type AnyRecord = Record<string, unknown>;
@@ -132,10 +133,10 @@ export async function deleteThreadCodexSessionController(input: { action_payload
       }
     }
     stripHydratedThreadNotes(ledger);
-    writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2), 'utf8');
+    persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime });
   } catch (error) {
     try {
-      writeFileSync(ledgerPath, ledgerText, 'utf8');
+      persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger: JSON.parse(ledgerText) as AnyRecord, runtime });
       restoreArtifacts(snapshots);
     } catch {
       return { ok: false, statusCode: 500, error: 'Codex session deletion failed and rollback could not restore every artifact.', runId };

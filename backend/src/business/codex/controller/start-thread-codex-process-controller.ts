@@ -28,6 +28,7 @@ import { clearCardCodexExecution } from '../helper/clear-card-codex-execution.js
 import { runtimeCodexRunOwnsLiveProcess } from '../helper/runtime-codex-run-owns-live-process.js';
 import { readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import { cancelCodexPipelineRunController } from './cancel-codex-pipeline-run-controller.js';
+import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
 
 type AnyRecord = Record<string, unknown>;
 type ProcessStatus = 'running' | 'complete' | 'failed' | 'cancelled';
@@ -335,7 +336,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
         payload: { ledgerId, threadId, cardId, runId, executionId, codexModel: command.model, codexEffort: command.effort },
       });
       stripHydratedThreadNotes(ledger);
-      writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2), 'utf8');
+      persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime });
     } catch (error) {
       removeCodexProcessQueueItem(decisionOsRoot, runId);
       delete runtimeRuns(runtime)[runId];
@@ -358,7 +359,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
   }
 
   stripHydratedThreadNotes(ledger);
-  writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2), 'utf8');
+  persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime });
   notifyRuntimeCallback(runtime.onCodexRunAccepted, { ledgerId, cardId, threadId, runId, executionId, status: 'running' });
 
   const launch = (attemptCommand: CodexCommand, taskInput: string, segment: 'start' | 'continue'): void => {

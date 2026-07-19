@@ -2,13 +2,14 @@
  * WHAT: Migrates durable Codex ownership to exact execution leases and per-run artifact references.
  * WHY: Legacy active pointers and collapsed output paths must not survive startup as false runtime authority.
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
 import { readCanonicalDecisionOsState } from '../../ledger/helper/read-canonical-decision-os-state.js';
 import { stripHydratedThreadNotes } from '../../ledger/helper/thread-content-file.js';
 import { readCodexPipelineStore } from './codex-pipeline-store.js';
 import { readCodexProcessQueue } from './codex-process-queue.js';
 import { resolveCardSkillRunFiles } from './resolve-card-skill-run-files.js';
+import { persistLedgerProjection } from '../../task-state/helper/persist-ledger-projection.js';
 
 type AnyRecord = Record<string, unknown>;
 export type CodexOwnershipReconciliation = { ledgersChanged: number; leasesCleared: number; artifactMappingsAdded: number };
@@ -86,7 +87,7 @@ export function reconcileCodexExecutionOwnership(input: { decisionOsRoot: string
     }
     if (!changed) continue;
     stripHydratedThreadNotes(ledger);
-    writeFileSync(ledgerPath, `${JSON.stringify(ledger, null, 2)}\n`, 'utf8');
+    persistLedgerProjection({ decisionOsRoot: input.decisionOsRoot, ledgerId: entry.id, ledgerPath, ledger, runtime: input.runtime ?? {} });
     result.ledgersChanged += 1;
   }
   return result;

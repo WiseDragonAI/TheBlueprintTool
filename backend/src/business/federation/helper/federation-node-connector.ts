@@ -28,10 +28,16 @@ type RelayFrame = {
   nodes?: Array<{ nodeId: string; nodeLabel?: string; online: boolean; projects: ProjectManifest[] }>;
   code?: string;
   message?: string;
-  replicaVersion?: 1;
   projectId?: string;
-  resource?: string;
-  revision?: string;
+  stateVersion?: 1;
+  payload?: unknown;
+};
+
+export type FederationStateFrame = {
+  type: 'state-event-batch' | 'state-ack' | 'state-bucket-summary' | 'state-missing-request' | 'state-snapshot-manifest' | 'state-snapshot-request' | 'state-snapshot-chunk' | 'state-snapshot-end' | 'state-converged';
+  from: string;
+  projectId: string;
+  payload: unknown;
 };
 
 export type FederationSettings = {
@@ -135,7 +141,7 @@ export function createFederationNodeConnector(input: {
   localServerUrl: () => string;
   onRemoteContentChange?: (nodeId: string) => void;
   onRemoteCatalogChange?: () => void;
-  onReplicaPriority?: (input: { nodeId: string; projectId: string; resource: string }) => void;
+  onStateFrame?: (frame: FederationStateFrame) => void | Promise<void>;
   internalRequestTimeoutMs?: number;
 }) {
   const internalRequestTimeoutMs = input.internalRequestTimeoutMs ?? defaultInternalRequestTimeoutMs;
@@ -261,8 +267,13 @@ export function createFederationNodeConnector(input: {
       input.onRemoteContentChange?.(String(frame.from ?? ''));
       return;
     }
-    if (frame.type === 'replica-priority') {
-      input.onReplicaPriority?.({ nodeId: String(frame.from ?? ''), projectId: String(frame.projectId ?? ''), resource: String(frame.resource ?? '') });
+    if (frame.type.startsWith('state-')) {
+      await input.onStateFrame?.({
+        type: frame.type as FederationStateFrame['type'],
+        from: String(frame.from ?? ''),
+        projectId: String(frame.projectId ?? ''),
+        payload: frame.payload,
+      });
       return;
     }
     const requestId = String(frame.requestId ?? '');
@@ -534,11 +545,10 @@ export function createFederationNodeConnector(input: {
     publishContentChange(): void {
       if (socket?.readyState === WebSocket.OPEN) send({ version: 1, type: 'content-change' });
     },
-    publishReplicaPriority(ownerNodeId: string, projectId: string, resource: string): void {
-      if (socket?.readyState === WebSocket.OPEN) send({ version: 1, type: 'replica-priority', replicaVersion: 1, to: ownerNodeId, projectId, resource });
-    },
-    publishReplicaAcknowledgement(ownerNodeId: string, projectId: string, revision: string): void {
-      if (socket?.readyState === WebSocket.OPEN) send({ version: 1, type: 'replica-ack', replicaVersion: 1, to: ownerNodeId, projectId, revision });
+    publishStateFrame(ownerNodeId: string, frame: Omit<FederationStateFrame, 'from'>): boolean {
+      if (socket?.readyState !== WebSocket.OPEN) return false;
+      send({ version: 1, type: frame.type, stateVersion: 1, to: ownerNodeId, projectId: frame.projectId, payload: frame.payload });
+      return true;
     },
     localOwner(): { ownerNodeId: string; ownerNodeLabel: string; online: true } {
       return { ownerNodeId: settings?.nodeId || 'local', ownerNodeLabel: settings?.nodeLabel || 'This server', online: true };

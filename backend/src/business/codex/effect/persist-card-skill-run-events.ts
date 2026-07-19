@@ -2,11 +2,12 @@
  * WHAT: Persists normalized Codex run events as ordered, deduplicated notes in the owning card thread.
  * WHY: Durable lifecycle ingestion must update only the thread file and its ownership metadata.
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { hydrateLedgerThreadNotesFor, stripHydratedThreadNotes, writeThreadNotesFile } from '@backend/business/ledger/helper/thread-content-file.js';
 import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-ledger-notes.js';
 import { type NormalizedRunEvent } from '../helper/card-skill-run-event-types.js';
 import { resolveCardSkillRunOwnership } from '../helper/resolve-card-skill-run-ownership.js';
+import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -93,7 +94,7 @@ export function persistCardSkillRunEvents(input: {
   // WHY: Existing ownership leaves status ingestion scoped to the thread file alone.
   if (String(currentThreadFiles[threadId] ?? '') !== previousThreadFile) {
     stripHydratedThreadNotes(ledger);
-    writeFileSync(input.ledgerPath, JSON.stringify(ledger, null, 2), 'utf8');
+    persistLedgerProjection({ decisionOsRoot: input.decisionOsRoot, ledgerPath: input.ledgerPath, ledger });
   }
   return changed;
 }

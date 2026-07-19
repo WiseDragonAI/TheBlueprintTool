@@ -4,6 +4,18 @@ export const creditWindowBytes = 1024 * 1024;
 export const maximumBodyBytes = 25 * 1024 * 1024;
 export const maximumStreamsPerNode = 32;
 
+export const priorityStateFrameTypes = new Set([
+  'state-event-batch',
+  'state-ack',
+  'state-bucket-summary',
+  'state-missing-request',
+  'state-snapshot-manifest',
+  'state-snapshot-request',
+  'state-snapshot-chunk',
+  'state-snapshot-end',
+  'state-converged',
+]);
+
 export type ProjectManifest = {
   id: string;
   name: string;
@@ -30,10 +42,9 @@ export type RelayFrame = {
   nodes?: Array<{ nodeId: string; nodeLabel: string; online: boolean; projects: ProjectManifest[] }>;
   code?: string;
   message?: string;
-  replicaVersion?: 1;
   projectId?: string;
-  resource?: string;
-  revision?: string;
+  stateVersion?: 1;
+  payload?: unknown;
 };
 
 export function parseFrame(value: string): RelayFrame {

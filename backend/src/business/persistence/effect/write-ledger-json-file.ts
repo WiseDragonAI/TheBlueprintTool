@@ -5,6 +5,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { telemetry } from '@backend/telemetry/harness.js';
+import { persistLedgerProjection } from '../../task-state/helper/persist-ledger-projection.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -18,7 +19,8 @@ export function writeLedgerJsonFile(input: { action_payload?: AnyRecord; runtime
   if (payload.mode !== 'dry-run' && payload.ledgerFile) {
     const file = resolve(String(payload.ledgerFile));
     mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, JSON.stringify(document, null, 2));
+    if (file.endsWith('/tasks.json') && document && typeof document === 'object' && !Array.isArray(document)) {
+      persistLedgerProjection({ decisionOsRoot: dirname(file), ledgerId: 'tasks', ledgerPath: file, ledger: document as AnyRecord, runtime });
+    } else writeFileSync(file, JSON.stringify(document, null, 2));
   }
 }
-

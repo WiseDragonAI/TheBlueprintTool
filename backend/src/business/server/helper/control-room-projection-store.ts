@@ -197,6 +197,26 @@ function compareTasks(left: AnyRecord, right: AnyRecord): number {
     || text(left.cardId).localeCompare(text(right.cardId));
 }
 
+/** Builds the Control Room slice directly from a worker-owned task projection. */
+export function controlRoomProjectionFromTaskLedger(input: { project: DecisionOsProject; ledger: AnyRecord; runtime?: AnyRecord }): AnyRecord {
+  const ledgerEntry = input.project.ledgers.find((entry) => entry.id === 'tasks') ?? { id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' };
+  const tasks = records(input.ledger.cards).flatMap((card) => {
+    const task = taskFrom({ project: input.project, ledgerEntry, ledger: input.ledger, card, runtime: input.runtime ?? {}, pipelineRuns: [], queuedRuns: [] });
+    return task ? [task] : [];
+  });
+  return {
+    queue: tasks.filter((task) => task.status === 'task-waiting'),
+    exec: tasks.filter((task) => task.status === 'task-execution'),
+    backlog: tasks.filter((task) => task.status === 'task-backlog'),
+    done: tasks.filter((task) => task.status === 'task-complete'),
+    allTasks: tasks,
+    projects: [{ id: input.project.id, name: input.project.name, color: input.project.color, ledgers: input.project.ledgers, originFingerprint: input.project.originFingerprint }],
+    ledgers: ['Tasks'],
+    diagnostics: tasks.filter((task) => task.valid === false),
+    fingerprint: createHash('sha256').update(JSON.stringify({ projectId: input.project.id, ledger: input.ledger })).digest('hex'),
+  };
+}
+
 function projectSyncTask(run: ProjectSyncRun, canonical?: AnyRecord): AnyRecord {
   const failed = run.phase === 'failed';
   const attached = Boolean(canonical);
@@ -266,7 +286,7 @@ export function withProjectSyncRuns(projection: AnyRecord, runs: ProjectSyncRun[
   };
 }
 
-function buildProjectSlice(input: { project: DecisionOsProject; runtime: AnyRecord }): ProjectSlice {
+function buildProjectSlice(input: { project: DecisionOsProject; runtime: AnyRecord; taskProjection?: AnyRecord | null }): ProjectSlice {
   const tasks: AnyRecord[] = [];
   const dependencies: Dependency[] = [];
   const project = input.project;
@@ -285,8 +305,10 @@ function buildProjectSlice(input: { project: DecisionOsProject; runtime: AnyReco
       const ledgerPath = resolve(project.decisionOsRoot, ledgerEntry.ledgerFile.replace(/^\.decision-os\//, ''));
       const ledgerDependency = dependency(ledgerPath);
       if (ledgerDependency) dependencies.push(ledgerDependency);
-      if (!existsSync(ledgerPath)) continue;
-      const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord;
+      if (!existsSync(ledgerPath) && !(ledgerEntry.id === 'tasks' && input.taskProjection)) continue;
+      const ledger = ledgerEntry.id === 'tasks' && input.taskProjection
+        ? structuredClone(input.taskProjection)
+        : JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord;
       for (const card of records(ledger.cards)) {
         const task = taskFrom({ project, ledgerEntry, ledger, card, runtime: input.runtime, pipelineRuns, queuedRuns });
         if (task) tasks.push(task);
@@ -345,7 +367,7 @@ function aggregateProjection(input: { slices: ProjectSlice[]; revision: number; 
   };
 }
 
-export function createControlRoomProjectionStore(input: { cacheFile: string; runtimeForRoot: (root: string) => AnyRecord }): {
+export function createControlRoomProjectionStore(input: { cacheFile: string; runtimeForRoot: (root: string) => AnyRecord; taskProjectionForProject?: (project: DecisionOsProject) => AnyRecord | null }): {
   get(projects: DecisionOsProject[]): Projection;
   invalidate(projectId?: string): void;
   reconcile(projects: DecisionOsProject[]): boolean;
@@ -386,7 +408,7 @@ export function createControlRoomProjectionStore(input: { cacheFile: string; run
     for (const projectId of slices.keys()) if (!projectIds.has(projectId)) slices.delete(projectId);
     for (const project of projects) {
       if (!dirtyAll && !dirtyProjects.has(project.id) && slices.has(project.id)) continue;
-      slices.set(project.id, buildProjectSlice({ project, runtime: input.runtimeForRoot(project.decisionOsRoot) }));
+      slices.set(project.id, buildProjectSlice({ project, runtime: input.runtimeForRoot(project.decisionOsRoot), taskProjection: input.taskProjectionForProject?.(project) }));
     }
     const orderedSlices = projects.map((project) => slices.get(project.id)).filter((slice): slice is ProjectSlice => Boolean(slice));
     const next = aggregateProjection({ slices: orderedSlices, revision: revision + 1 });
