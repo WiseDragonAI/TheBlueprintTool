@@ -217,6 +217,8 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(renderThreadPanel, /button\.dataset\.codexModel = threadCodexModel/);
   assert.match(renderThreadPanel, /button\.dataset\.codexEffort = threadCodexEffort/);
   assert.match(processThreadCodex, /existingRunId[\s\S]*requestCardSkillRunContinue\(\{ ledgerId, cardId, runId: existingRunId/);
+  assert.match(processThreadCodex, /cardCodexThreadRunId\(card\)/);
+  assert.match(processThreadCodex, /threadSelectedRunIdByThreadId\[threadId\] = runId/);
   assert.match(processThreadCodex, /requestThreadCodexProcess\(\{ ledgerId, threadId, cardId, codexModel: input\.codexModel, codexEffort: input\.codexEffort \}\)/);
   assert.match(threadCss, /\.thread-codex-select\s*{[^}]*height:\s*28px;[^}]*font-family:\s*var\(--mono\);/s);
 
@@ -300,8 +302,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(cardDetailSkillRunWidget, /stopIcon\.textContent = '■'/);
   assert.match(cardDetailSkillRunWidget, /stopLabel\.textContent = 'STOP'/);
   assert.match(cardDetailSkillRunWidget, /cancel\.title = 'Stop Codex run'/);
-  assert.match(cardDetailSkillRunWidget, /newSession\.dataset\.codexRunNewSession = ''/);
-  assert.match(cardDetailSkillRunWidget, /newSession\.textContent = 'New session'/);
+  assert.doesNotMatch(cardDetailSkillRunWidget, /codexRunNewSession|New session/);
   assert.match(cardDetailSkillRunWidget, /const preference = cardCodexRunPreference\(card\)/);
   assert.match(cardDetailSkillRunWidget, /selectionMetric\('Model', 'codexRunModel', codexModelOptions, preference\.model\)/);
   assert.match(cardDetailSkillRunWidget, /selectionMetric\('Effort', 'codexRunEffort', codexEffortOptions, preference\.effort\)/);
@@ -313,8 +314,8 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(cardDetailSkillRunPoller, /label\.textContent = stopping \? 'STOPPING' : 'STOP'/);
   assert.match(cardDetailSkillRunPoller, /'Stopping run'/);
   assert.match(cardDetailSkillRunPoller, /result\.error \|\| 'Stop failed'/);
-  assert.match(cardDetailSkillRunPoller, /requestCardSkillRunContinue\(\{ ledgerId: poller\.ledgerId, cardId: poller\.cardId, runId: poller\.runId, traceId, codexModel, codexEffort, newSession \}\)/);
-  assert.match(cardDetailSkillRunPoller, /function bindNewSessionButton\(poller: Poller\): void \{[\s\S]*void continueRun\(poller, true\);[\s\S]*\}/);
+  assert.match(cardDetailSkillRunPoller, /requestCardSkillRunContinue\(\{ ledgerId: poller\.ledgerId, cardId: poller\.cardId, runId: poller\.runId, traceId, codexModel, codexEffort \}\)/);
+  assert.doesNotMatch(cardDetailSkillRunPoller, /bindNewSessionButton|codexRunNewSession/);
   assert.match(cardDetailSkillRunPoller, /function bindCancelButton\(poller: Poller\): void \{[\s\S]*void cancelRun\(poller\);[\s\S]*\}/);
   assert.match(cardDetailSkillRunPoller, /requestCardSkillRunCancel\(\{ ledgerId: poller\.ledgerId, cardId: poller\.cardId, runId: poller\.runId \}\)/);
   assert.match(cardDetailSkillRunPoller, /setCancelButtonVisible\(element: HTMLElement, visible: boolean\)/);
@@ -332,7 +333,7 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.doesNotMatch(cardDetailSkillRunPoller, /setInterval/);
   assert.match(cardDetailSkillRunPoller, /schedulePoll\(poller, 0\)/);
   assert.match(cardDetailSkillRunPoller, /summary\.status === 'running'/);
-  assert.match(cardDetailSkillRunPoller, /async function continueRun\(poller: Poller, newSession: boolean\): Promise<void> \{[\s\S]*paintExternallyStartedRun\(poller,[\s\S]*requestCardSkillRunContinue/);
+  assert.match(cardDetailSkillRunPoller, /async function continueRun\(poller: Poller\): Promise<void> \{[\s\S]*paintExternallyStartedRun\(poller\);[\s\S]*requestCardSkillRunContinue/);
   assert.match(cardDetailSkillRunPoller, /function paintExternallyStartedRun\(poller: Poller, latestLabel = 'Continuing session'\): void \{[\s\S]*poller\.startedAtMs = Date\.now\(\);[\s\S]*poller\.element\.dataset\.runStatus = 'running';/);
   assert.match(ledgerContentEvents, /resumeExternallyStartedCardSkillRun/);
   assert.match(ledgerContentEvents, /reason\.startsWith\('codex-'\)/);

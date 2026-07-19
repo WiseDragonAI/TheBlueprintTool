@@ -104,14 +104,6 @@ export function renderCardSkillRunWidget(card: Record<string, unknown>): HTMLEle
   resume.title = 'Continue Codex session';
   resume.setAttribute('aria-label', resume.title);
   resume.textContent = 'Continue';
-  const newSession = document.createElement('button');
-  newSession.type = 'button';
-  newSession.className = 'codex-run-new-session terminal-button terminal-button--compact';
-  newSession.dataset.codexRunNewSession = '';
-  newSession.hidden = true;
-  newSession.title = 'Start a new Codex session';
-  newSession.setAttribute('aria-label', newSession.title);
-  newSession.textContent = 'New session';
   const restart = document.createElement('button');
   restart.type = 'button';
   restart.className = 'codex-run-restart terminal-button terminal-button--compact';
@@ -130,7 +122,7 @@ export function renderCardSkillRunWidget(card: Record<string, unknown>): HTMLEle
   retry.textContent = 'Retry status';
   const actions = document.createElement('div');
   actions.className = 'codex-run-actions';
-  actions.replaceChildren(cancel, resume, newSession, restart, retry);
+  actions.replaceChildren(cancel, resume, restart, retry);
   header.replaceChildren(status, context, actions);
 
   const timer = document.createElement('time');
