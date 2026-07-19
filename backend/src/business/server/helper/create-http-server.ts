@@ -49,13 +49,14 @@ import { cancelCodexPipelineRunController } from '../../codex/controller/cancel-
 import { restartCodexPipelineRunController } from '../../codex/controller/restart-codex-pipeline-run-controller.js';
 import { resumeCodexPipelineRuns } from '../../codex/helper/resume-codex-pipeline-runs.js';
 import { recoverCodexProcessQueue } from '../../codex/helper/codex-process-queue.js';
+import { reconcileCodexExecutionOwnership } from '../../codex/helper/reconcile-codex-execution-ownership.js';
 import { nextPendingCodexProcessCreatedAt, pendingCodexProcessEntries, runningCodexProcessCount, scheduleCodexProcesses } from '../../codex/helper/codex-process-scheduler.js';
 import { resolveCatalogProject, tasksLedgerForProject, type DecisionOsProject } from './project-catalog.js';
 import { createProjectCatalogStore } from './project-catalog-store.js';
 import { listProjectDirectories } from './project-directory-browser.js';
 import { isGlobalProjectEndpoint, isProjectSensitiveEndpoint, parseProjectUrlScope } from './project-url-scope.js';
 import { ensureLedgerCliShim } from '../../codex/helper/decision-os-codex-runtime.js';
-import { controlRoomProjectionFromTaskLedger, createControlRoomProjectionStore } from './control-room-projection-store.js';
+import { controlRoomProjectionFromTaskLedger, createControlRoomProjectionStore, withProjectSyncRuns } from './control-room-projection-store.js';
 import { ledgerCanvasProjection, ledgerCardProjection, ledgerNavigationProjection, ledgerSearchProjection, ledgerThreadProjection } from './ledger-read-models.js';
 import { ensureProjectsCanvasDocument } from './ensure-projects-canvas-document.js';
 import { createFederationNodeConnector } from '../../federation/helper/federation-node-connector.js';
@@ -87,6 +88,7 @@ import { executeProjectSyncPipelineSkill } from '../../project-sync/controller/e
 import { verifyProjectSyncPhase } from '../../project-sync/helper/verify-project-sync-phase.js';
 import type { ProjectSyncRole } from '../../project-sync/helper/project-sync-types.js';
 import { projectSyncGitSshCommand } from '../../project-sync/helper/project-sync-git-ssh-command.js';
+import { applyGitReviewPatch, readGitReview } from '../../git-review/helper/git-review-patch.js';
 
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
@@ -400,17 +402,27 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     };
     projectRuntime.onPipelineLedgerChange = publishLedger;
     projectRuntime.scheduleCodexProcesses = scheduleGlobalCodexProcesses;
+    projectRuntime.onCodexRunAccepted = (event: AnyRecord): void => {
+      publishLedger({
+        reason: 'codex-run-accepted', ledgerId: String(event.ledgerId ?? ''), runId: String(event.runId ?? ''),
+        executionId: String(event.executionId ?? ''), status: String(event.status ?? 'pending'),
+        cardId: String(event.cardId ?? ''), outputCardId: String(event.outputCardId ?? event.cardId ?? ''),
+        threadId: String(event.threadId ?? '')
+      });
+    };
     projectRuntime.onCodexTurnStarted = (event: AnyRecord): void => {
       publishLedger({
         reason: 'codex-turn-started', ledgerId: String(event.ledgerId ?? ''), runId: String(event.runId ?? ''),
-        cardId: String(event.cardId ?? ''), threadId: String(event.threadId ?? ''), startedAt: String(event.startedAt ?? '')
+        executionId: String(event.executionId ?? ''), status: String(event.status ?? 'running'),
+        cardId: String(event.cardId ?? ''), outputCardId: String(event.outputCardId ?? event.cardId ?? ''),
+        threadId: String(event.threadId ?? ''), startedAt: String(event.startedAt ?? '')
       });
     };
     projectRuntime.onCodexRunSettled = (event: AnyRecord): void => {
       if (!event.pipelineRunId) {
         publishLedger({
           reason: 'codex-thread-settled', ledgerId: String(event.ledgerId ?? ''), status: String(event.status ?? ''),
-          runId: String(event.runId ?? ''), cardId: String(event.cardId ?? event.outputCardId ?? ''),
+          runId: String(event.runId ?? ''), executionId: String(event.executionId ?? ''), cardId: String(event.cardId ?? event.outputCardId ?? ''),
           outputCardId: String(event.outputCardId ?? event.cardId ?? ''), threadId: String(event.threadId ?? '')
         });
       }
@@ -420,6 +432,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           reason: pipelineStatus === 'complete' ? 'pipeline-completed' : pipelineStatus === 'cancelled' ? 'pipeline-cancelled' : 'pipeline-failed',
           ledgerId: String(event.ledgerId ?? ''), pipelineRunId: String(event.pipelineRunId), pipelineStatus,
           status: String(event.status ?? pipelineStatus), runId: String(event.runId ?? ''),
+          executionId: String(event.executionId ?? ''),
           cardId: String(event.cardId ?? event.outputCardId ?? ''), outputCardId: String(event.outputCardId ?? event.cardId ?? ''),
           threadId: String(event.threadId ?? '')
         });
@@ -438,6 +451,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const context: ProjectContext = { clients, revisions, runtime: projectRuntime, publishCard, publishLedger, watcher };
     projectContexts.set(activeDecisionOsRoot, context);
     recoverCodexProcessQueue(activeDecisionOsRoot, projectRuntime);
+    const ownershipReconciliation = reconcileCodexExecutionOwnership({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime });
+    if (ownershipReconciliation.ledgersChanged > 0) console.log(JSON.stringify({ codexOwnershipReconciliation: ownershipReconciliation, projectId }));
     void resumeCodexPipelineRuns({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime }).catch(() => undefined);
     return context;
   };
@@ -586,7 +601,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     gitSshCommand: () => projectSyncGitSshCommand(
       readDecisionOsSettings({ action_payload: { decisionOsRoot: masterDecisionOsRoot }, runtime_state: runtime }).settings,
     ),
-    onRunChange: () => undefined,
+    onRunChange: (run) => {
+      controlRoomProjectionStore?.invalidate();
+      for (const client of globalContentEventClients) client.write(`event: project-sync-change\ndata: ${JSON.stringify({ syncId: run.syncId, phase: run.phase, preparationPhase: run.preparationPhase })}\n\n`);
+    },
   });
   projectSyncController.resume();
   Object.defineProperty(runtime, 'federationNodeConnector', { value: federation, configurable: true, enumerable: false });
@@ -721,6 +739,44 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.end(JSON.stringify({ ok: false, error: activeProject.diagnostic, projectId: activeProject.id }));
       return;
     }
+    if (url === '/api/git-review' && request.method === 'GET' && activeProject) {
+      try {
+        const result = readGitReview({
+          workspaceRoot: dirname(activeProject.decisionOsRoot),
+          repository: requestUrl.searchParams.get('repo') ?? '.',
+          target: requestUrl.searchParams.get('path') ?? '.',
+        });
+        response.setHeader('cache-control', 'no-store');
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ ok: true, ...result }));
+      } catch (error) {
+        response.statusCode = 400;
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+      }
+      return;
+    }
+    if (url === '/api/git-review/stage' && request.method === 'POST' && activeProject) {
+      try {
+        const payload = JSON.parse((await readRequestBuffer(request)).toString('utf8')) as AnyRecord;
+        const result = applyGitReviewPatch({
+          workspaceRoot: dirname(activeProject.decisionOsRoot),
+          repository: String(payload.repository ?? '.'),
+          target: String(payload.target ?? '.'),
+          expectedPatchHash: String(payload.expectedPatchHash ?? ''),
+          patch: String(payload.patch ?? ''),
+          operation: payload.operation === 'unstage' ? 'unstage' : 'stage',
+        });
+        response.setHeader('cache-control', 'no-store');
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ ok: true, ...result }));
+      } catch (error) {
+        response.statusCode = 409;
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+      }
+      return;
+    }
     if (!projectScope && url === '/api/control-room' && request.method === 'GET') {
       for (const project of projects) {
         // WHAT: Hydrate only available project contexts before projection reads.
@@ -745,12 +801,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           owner: { nodeId: project.ownerNodeId, nodeLabel: project.ownerNodeLabel, remote: true, online: project.online },
         }];
       });
-      const publicProjection = federatedControlRoomProjection({
+      const publicProjection = withProjectSyncRuns(federatedControlRoomProjection({
         localProjection: projection,
         localOwner: { nodeId: localOwner.ownerNodeId, nodeLabel: localOwner.ownerNodeLabel, remote: false },
         remoteProjections,
         diagnostics: remoteDiagnostics,
-      });
+      }), projectSyncStore.list());
       const etag = `"${String(publicProjection.fingerprint)}"`;
       if (request.headers['if-none-match'] === etag) {
         response.statusCode = 304;
@@ -1129,7 +1185,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         const source = allProjects.find((entry) => String(entry.localProjectId ?? entry.id) === sourceId
           && (!sourceNodeId || String(entry.ownerNodeId) === sourceNodeId));
         if (!source) throw new Error('Unknown source project.');
-        const admitted = await projectSyncController.start(source, String(body.idempotencyKey ?? request.headers['idempotency-key'] ?? sourceId));
+        const admitted = projectSyncController.start(source, String(body.idempotencyKey ?? request.headers['idempotency-key'] ?? sourceId));
         response.statusCode = admitted.duplicate ? 200 : 202;
         response.end(JSON.stringify({
           ok: true,
@@ -1137,7 +1193,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           masterCardId: admitted.run.masterCardId,
           ledgerId: admitted.run.ledgerId,
           pipelineRunId: admitted.run.pipelineRunId,
-          projectId: admitted.run.taskProjectId,
+          projectId: admitted.run.taskProjectId || admitted.run.sourceProjectId,
           run: admitted.run,
         }));
       } catch (error) {

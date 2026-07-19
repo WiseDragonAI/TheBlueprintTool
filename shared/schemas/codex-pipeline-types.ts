@@ -53,6 +53,7 @@ export type CodexPipelineRunSkill = {
   readonly pipelineSkillId: string;
   readonly skillName: string;
   readonly runId: string;
+  readonly executionId: string;
   readonly status: CodexPipelineStatus;
   readonly codexModel: CodexModel | string;
   readonly codexEffort: CodexEffort | string;

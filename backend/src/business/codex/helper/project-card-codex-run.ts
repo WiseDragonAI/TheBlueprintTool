@@ -16,6 +16,7 @@ export function projectCardCodexRun(input: {
   ledger: AnyRecord & { cards?: AnyRecord[] };
   cardId: string;
   runId: string;
+  executionId: string;
   outputFileRef: string;
   codexModel: string;
   codexEffort: string;
@@ -31,6 +32,7 @@ export function projectCardCodexRun(input: {
   const card = (input.ledger.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
   if (!card) return null;
   card.codexActiveRunId = input.runId;
+  card.codexActiveExecutionId = input.executionId;
   card.codexRunModel = input.codexModel;
   card.codexRunEffort = input.codexEffort;
   delete card.codexQueuedPipelineRunId;
@@ -41,6 +43,10 @@ export function projectCardCodexRun(input: {
     delete card.codexRunOutputFile;
     card.codexThreadRunId = input.runId;
     card.codexThreadRunOutputFile = input.outputFileRef;
+    const outputFiles = card.codexThreadRunOutputFiles && typeof card.codexThreadRunOutputFiles === 'object' && !Array.isArray(card.codexThreadRunOutputFiles)
+      ? card.codexThreadRunOutputFiles as Record<string, unknown>
+      : {};
+    card.codexThreadRunOutputFiles = { ...outputFiles, [input.runId]: input.outputFileRef };
   } else {
     delete card.codexThreadRunId;
     delete card.codexThreadRunOutputFile;

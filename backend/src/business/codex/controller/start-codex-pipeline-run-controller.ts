@@ -2,7 +2,8 @@
  * WHAT: Orchestrates validation, durable setup, event publication, and first-skill launch for one Codex pipeline.
  * WHY: The full pending pipeline must be visible and durable before asynchronous execution begins.
  */
-import { dirname, resolve } from 'node:path';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import type {
   CodexEffort,
   CodexModel,
@@ -37,6 +38,18 @@ function safeSegment(value: unknown): string {
 
 function sourceCard(context: PipelineLedgerContext, sourceCardId: string): AnyRecord | null {
   return (context.ledger.cards ?? []).find((entry) => String(entry.id ?? '') === sourceCardId) ?? null;
+}
+
+function rollbackPipelineCards(input: { decisionOsRoot: string; context: PipelineLedgerContext; ledgerBefore: string; outputCardIds: string[] }): void {
+  for (const cardId of input.outputCardIds) {
+    const card = (input.context.ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
+    const comment = card?.comment && typeof card.comment === 'object' ? card.comment as AnyRecord : {};
+    const contentRef = text(comment.contentFile).replace(/^\.decision-os\//, '');
+    const contentFile = resolve(input.decisionOsRoot, contentRef);
+    const inner = relative(input.decisionOsRoot, contentFile);
+    if (contentRef && inner && !inner.startsWith('..') && !isAbsolute(inner) && existsSync(contentFile)) rmSync(contentFile, { force: true });
+  }
+  writeFileSync(input.context.ledgerPath, input.ledgerBefore, 'utf8');
 }
 
 export async function startPipelineRun(input: {
@@ -75,6 +88,23 @@ export async function startPipelineRun(input: {
   if (!context) return { ok: false, statusCode: 404, error: 'Ledger not found.', ledgerId: input.ledgerId };
   const source = sourceCard(context, input.sourceCardId);
   if (!source) return { ok: false, statusCode: 404, error: 'Source card not found.', cardId: input.sourceCardId };
+  const activeRunId = text(source.codexActiveRunId);
+  const activeExecutionId = text(source.codexActiveExecutionId);
+  if (activeRunId || activeExecutionId) {
+    const existing = normalized.store.runs.find((candidate) => candidate.ledgerId === input.ledgerId
+      && candidate.sourceCardId === input.sourceCardId
+      && (candidate.status === 'pending' || candidate.status === 'running')
+      && candidate.steps.some((step) => step.skills.some((skill) => skill.runId === activeRunId && skill.executionId === activeExecutionId)));
+    if (existing) return {
+      ok: true,
+      statusCode: 202,
+      run: existing,
+      skillRun: null,
+      queuePosition: existing.status === 'pending' ? unifiedCodexQueuePosition({ decisionOsRoot: input.decisionOsRoot, id: existing.id, createdAt: existing.createdAt, runtime: input.runtime }) : null,
+      maxConcurrentCodexProcesses: 0,
+    };
+    return { ok: false, statusCode: 409, error: 'Source card already owns an active Codex execution.', runId: activeRunId, executionId: activeExecutionId };
+  }
   // WHAT: Reject empty pipeline shapes at the runtime boundary.
   // WHY: A run with no executable stage cannot make progress or settle correctly.
   if (input.definition.steps.length === 0) return { ok: false, statusCode: 400, error: 'A pipeline run requires at least one step.' };
@@ -102,10 +132,14 @@ export async function startPipelineRun(input: {
     // WHY: Invalid model and effort inputs are operator-correctable, not server faults.
     return { ok: false, statusCode: 400, error: error instanceof Error ? error.message : String(error) };
   }
+  const ledgerBefore = readFileSync(context.ledgerPath, 'utf8');
   const cardError = createCodexPipelineStepCards({ decisionOsRoot: input.decisionOsRoot, context, source, run });
   // WHAT: Stop when the ledger rejects a generated card or relationship.
   // WHY: The manifest must not start unless its complete visual chain exists.
-  if (cardError) return { ok: false, statusCode: 400, error: String(cardError.error ?? 'Could not create pipeline step cards.') };
+  if (cardError) {
+    rollbackPipelineCards({ decisionOsRoot: input.decisionOsRoot, context, ledgerBefore, outputCardIds: run.steps.map((step) => step.outputCardId) });
+    return { ok: false, statusCode: 400, error: String(cardError.error ?? 'Could not create pipeline step cards.') };
+  }
   try {
     writeCodexPipelineStore({
       decisionOsRoot: input.decisionOsRoot,
@@ -113,6 +147,7 @@ export async function startPipelineRun(input: {
       store: { ...normalized.store, runs: [...normalized.store.runs, run] },
     });
   } catch {
+    rollbackPipelineCards({ decisionOsRoot: input.decisionOsRoot, context, ledgerBefore, outputCardIds: run.steps.map((step) => step.outputCardId) });
     // WHAT: Report manifest persistence failure before launching Codex.
     // WHY: An untracked child process could not be resumed or cancelled safely.
     return { ok: false, statusCode: 500, error: 'Could not persist the pipeline run manifest.' };
@@ -121,10 +156,15 @@ export async function startPipelineRun(input: {
   // WHY: Pipeline runner transitions must publish through the same server event boundary as startup.
   if (typeof input.onLedgerChange === 'function') input.runtime.onPipelineLedgerChange = input.onLedgerChange;
   if (typeof input.onLedgerChange === 'function') {
+    const firstSkill = run.steps[0]?.skills[0];
     (input.onLedgerChange as (event: AnyRecord) => void)({
       reason: 'pipeline-enqueued',
       ledgerId: input.ledgerId,
       pipelineRunId: run.id,
+      runId: firstSkill?.runId ?? '',
+      executionId: firstSkill?.executionId ?? '',
+      status: 'pending',
+      cardId: input.sourceCardId,
       cardIds: run.steps.map((step) => step.outputCardId),
     });
   }

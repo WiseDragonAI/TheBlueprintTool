@@ -32,6 +32,10 @@
 
 - Unless explicitly instructed by the operator or the active skill, agents must not close master tasks or mark master-task cards `done`.
 
+### Staged Code Protection
+
+- Git-index hunks are operator-approved and protected. Agents must not modify, overwrite, or unstage staged lines. If required work conflicts with a staged hunk, stop and request operator direction.
+
 ### Reference Component Fidelity
 
 - **Trigger.** When the operator names an existing widget or component as the visual reference, inspect that component's rendered structure and every CSS rule controlling its surface, icon, label, casing, spacing, and states before implementation.

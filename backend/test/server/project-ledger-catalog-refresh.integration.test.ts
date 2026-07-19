@@ -36,7 +36,7 @@ test('refreshes catalog ledgers after a registered project state change', async 
     const creation = await fetch(`${baseUrl}/p/${projectId}/decision-os/ledgers`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title: 'Specs' }),
+      body: JSON.stringify({ title: 'Roadmap' }),
     });
     assert.equal(creation.status, 201);
 
@@ -53,7 +53,7 @@ test('refreshes catalog ledgers after a registered project state change', async 
       return [];
     })();
 
-    assert.deepEqual(refreshedLedgers.map((ledger) => ledger.id), ['tasks', 'specs']);
+    assert.deepEqual(refreshedLedgers.map((ledger) => ledger.id), ['tasks', 'roadmap']);
   } finally {
     server.close();
     await once(server, 'close');

@@ -16,6 +16,10 @@ function createProject(root: string, path: string, title: string): void {
 }
 
 test('home-scoped server catalogs nested projects and isolates project ledger requests', async () => {
+  const previousMaxConcurrentProcesses = process.env.CODEX_MAX_CONCURRENT_PROCESSES;
+  const previousRepositorySettingsFile = process.env.DECISION_OS_REPOSITORY_SETTINGS_FILE;
+  delete process.env.CODEX_MAX_CONCURRENT_PROCESSES;
+  delete process.env.DECISION_OS_REPOSITORY_SETTINGS_FILE;
   const home = mkdtempSync(join(tmpdir(), 'decision-os-master-home-'));
   createProject(home, 'admin', 'Admin Specs');
   createProject(home, 'dev/project-a', 'Project A Specs');
@@ -201,6 +205,10 @@ test('home-scoped server catalogs nested projects and isolates project ledger re
   } finally {
     server.close();
     await once(server, 'close');
+    if (previousMaxConcurrentProcesses === undefined) delete process.env.CODEX_MAX_CONCURRENT_PROCESSES;
+    else process.env.CODEX_MAX_CONCURRENT_PROCESSES = previousMaxConcurrentProcesses;
+    if (previousRepositorySettingsFile === undefined) delete process.env.DECISION_OS_REPOSITORY_SETTINGS_FILE;
+    else process.env.DECISION_OS_REPOSITORY_SETTINGS_FILE = previousRepositorySettingsFile;
     rmSync(home, { recursive: true, force: true });
   }
 });

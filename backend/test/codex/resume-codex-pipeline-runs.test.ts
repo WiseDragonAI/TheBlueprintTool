@@ -105,7 +105,13 @@ test('cancellation stops downstream work and restart clears generated card and t
 
     const cancelResponse = await fetch(`${baseUrl}/api/codex/pipelines/runs/${runId}/cancel`, { method: 'POST' });
     assert.equal(cancelResponse.status, 202);
-    const cancelled = readCodexPipelineStore({ decisionOsRoot }).store.runs.find((run) => run.id === runId);
+    const cancelRequested = await cancelResponse.json() as { status: string; cancellationRequested: boolean };
+    assert.equal(cancelRequested.status, 'running');
+    assert.equal(cancelRequested.cancellationRequested, true);
+    const cancelled = await waitFor(
+      () => readCodexPipelineStore({ decisionOsRoot }).store.runs.find((run) => run.id === runId && run.status === 'cancelled') ?? null,
+      'pipeline cancellation settlement',
+    );
     assert.equal(cancelled?.status, 'cancelled');
     assert.equal(cancelled?.steps[0].skills[1].status, 'pending');
     assert.equal(readCodexPipelineStore({ decisionOsRoot }).store.activeWorkspaceRun, null);

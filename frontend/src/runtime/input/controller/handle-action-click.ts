@@ -191,6 +191,7 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
       ledgerId: String(state.activeTab ?? ''),
       cardId: actionTarget.dataset.codexCardId ?? '',
       runId: actionTarget.dataset.codexRunId ?? '',
+      executionId: actionTarget.dataset.codexExecutionId ?? '',
     });
     return;
   }

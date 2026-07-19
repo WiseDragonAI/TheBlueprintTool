@@ -7,6 +7,7 @@ import { markCodexProcessQueueItemRunning, readCodexProcessQueue, removeCodexPro
 import { maxConcurrentCodexProcesses, runNextPipelineSkill } from './codex-pipeline-runner.js';
 import { startThreadCodexProcessController } from '../controller/start-thread-codex-process-controller.js';
 import { continueCardSkillRunController } from '../controller/continue-card-skill-run-controller.js';
+import { clearCardCodexExecutionForLedger } from './clear-card-codex-execution.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -58,8 +59,34 @@ async function runCodexProcessSchedule(input: { decisionOsRoot: string; runtime:
         ? await continueCardSkillRunController({ action_payload: { ...claimed.payload, queueItemId: claimed.id, queueDispatch: true }, runtime_state: input.runtime })
         : await startThreadCodexProcessController({ action_payload: { ...claimed.payload, reservedRunId: claimed.id, queueDispatch: true }, runtime_state: input.runtime });
       launched.push(result);
-      if (result.ok === false) removeCodexProcessQueueItem(input.decisionOsRoot, thread.id);
-      if (result.ok === false) break;
+      if (result.ok === false) {
+        removeCodexProcessQueueItem(input.decisionOsRoot, thread.id);
+        const runId = String(claimed.payload.runId ?? claimed.id);
+        const executionId = String(claimed.payload.executionId ?? '');
+        const runs = input.runtime.codexSkillRuns && typeof input.runtime.codexSkillRuns === 'object'
+          ? input.runtime.codexSkillRuns as Record<string, AnyRecord>
+          : {};
+        input.runtime.codexSkillRuns = runs;
+        runs[runId] = { ...(runs[runId] ?? {}), id: runId, executionId, status: 'failed', error: String(result.error ?? 'Dispatch failed.'), finishedAt: new Date().toISOString() };
+        clearCardCodexExecutionForLedger({
+          decisionOsRoot: input.decisionOsRoot,
+          ledgerId: String(claimed.payload.ledgerId ?? ''),
+          cardId: String(claimed.payload.cardId ?? ''),
+          runId,
+          executionId,
+          runtime: input.runtime,
+        });
+        if (typeof input.runtime.onCodexRunSettled === 'function') input.runtime.onCodexRunSettled({
+          ledgerId: claimed.payload.ledgerId,
+          cardId: claimed.payload.cardId,
+          outputCardId: claimed.payload.cardId,
+          threadId: `thread-${String(claimed.payload.cardId ?? '')}`,
+          runId,
+          executionId,
+          status: 'failed',
+        });
+        continue;
+      }
       continue;
     }
     if (pipeline) {

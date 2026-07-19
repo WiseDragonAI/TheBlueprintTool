@@ -54,13 +54,14 @@ export async function stopThreadCodexRunController(input: {
   ledgerId: string;
   cardId: string;
   runId: string;
+  executionId: string;
 }): Promise<boolean> {
   const current = threadCodexStopState(input.runId);
-  if (!input.ledgerId || !input.cardId || !input.runId || current.pending) return false;
+  if (!input.ledgerId || !input.cardId || !input.runId || !input.executionId || current.pending) return false;
   stopStateByRunId.set(input.runId, { pending: true, error: '' });
   clearStopError(input.button);
   setStopState(input.button, 'stopping');
-  const result = await requestCardSkillRunCancel({ ledgerId: input.ledgerId, cardId: input.cardId, runId: input.runId });
+  const result = await requestCardSkillRunCancel({ ledgerId: input.ledgerId, cardId: input.cardId, runId: input.runId, executionId: input.executionId });
   if (result.ok) return true;
   const error = result.error || 'Stop failed.';
   stopStateByRunId.set(input.runId, { pending: false, error });

@@ -500,6 +500,12 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
   const launchMode = voiceLaunchMode(payload);
   const queueCodex = launchMode !== 'send';
   const acceptedAt = new Date().toISOString();
+  const reviewContext = (() => {
+    try {
+      const parsed = JSON.parse(String(payload.reviewContext ?? ''));
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, string> : undefined;
+    } catch { return undefined; }
+  })();
   const patch = applyNotePatch({
     runtime,
     ledgerId,
@@ -508,6 +514,7 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
       id,
       body: 'Voice uploaded.',
       voiceFileRef,
+      reviewContext,
       status: 'queued',
       uploadReceivedAt,
       audioPersistedAt,

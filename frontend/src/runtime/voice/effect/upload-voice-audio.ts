@@ -19,6 +19,7 @@ export type VoiceTranscriptionResult = {
   status?: number;
   queueCodex?: boolean;
   launchMode?: 'send' | 'run' | 'pipeline';
+  reviewContext?: Record<string, string>;
   revision?: number;
   lifecycleStatus?: string;
   uploadReceivedAt?: string;
@@ -36,6 +37,7 @@ export type VoiceUploadOptions = {
   noteId?: string;
   queueCodex?: boolean;
   launchMode?: 'send' | 'run' | 'pipeline';
+  reviewContext?: Record<string, string>;
 };
 
 function uploadOptions(input: VoiceUploadOptions | string | undefined): VoiceUploadOptions {
@@ -76,6 +78,7 @@ export async function uploadVoiceAudio(audio: Blob, input: VoiceUploadOptions | 
   const launchMode = options.launchMode ?? (options.queueCodex ? 'run' : 'send');
   form.append('launchMode', launchMode);
   form.append('queueCodex', launchMode === 'run' ? 'true' : 'false');
+  if (options.reviewContext) form.append('reviewContext', JSON.stringify(options.reviewContext));
   telemetry('upload-voice-audio', { optimistic: true, preserved: true, size: audio.size, type: audio.type, threadId, launchMode });
   const response = await fetch(projectScopedRequestPath('/api/voice-upload', projectId), replicaRequestInit({
     method: 'POST',

@@ -27,6 +27,7 @@ export type LedgerMarkdownBlock =
   | { kind: 'paragraph'; children: LedgerMarkdownInline[] }
   | { kind: 'images'; images: Extract<LedgerMarkdownInline, { kind: 'image' }>[] }
   | { kind: 'htmlEmbeds'; embeds: { title: string; src: string }[] }
+  | { kind: 'gitDiff'; title: string; repository: string; target: string }
   | { kind: 'list'; ordered: boolean; start: number; items: LedgerMarkdownInline[][] }
   | { kind: 'table'; headers: LedgerMarkdownInline[][]; rows: LedgerMarkdownInline[][][] }
   | { kind: 'hr' }
@@ -54,6 +55,18 @@ function standaloneHtmlEmbedFromLine(line: string): { title: string; src: string
     title: (match[1] || destination.title).trim(),
     src: destination.url
   };
+}
+
+function standaloneGitDiffFromLine(line: string): Extract<LedgerMarkdownBlock, { kind: 'gitDiff' }> | null {
+  const match = line.match(/^::git-diff\[([^\]\n]*)\]\(([^)\n]+)\)$/);
+  if (!match) return null;
+  const destination = parseDestination(match[2] ?? '');
+  if (!destination || !destination.url.startsWith('git-diff:?')) return null;
+  const query = new URLSearchParams(destination.url.slice('git-diff:?'.length));
+  const repository = String(query.get('repo') ?? '').trim();
+  const target = String(query.get('path') ?? '').trim();
+  if (!repository || !target) return null;
+  return { kind: 'gitDiff', title: (match[1] || destination.title || 'Git review').trim(), repository, target };
 }
 
 export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[] {
@@ -145,6 +158,14 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
         blocks.push(htmlEmbeds);
       }
       htmlEmbeds.embeds.push(htmlEmbed);
+      continue;
+    }
+    const gitDiff = standaloneGitDiffFromLine(line);
+    if (gitDiff) {
+      list = null;
+      images = null;
+      htmlEmbeds = null;
+      blocks.push(gitDiff);
       continue;
     }
     const unorderedItem = line.match(/^[-*]\s+(.*)$/);

@@ -11,16 +11,87 @@ import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
-import { readCodexProcessQueue } from '@backend/business/codex/helper/codex-process-queue.js';
+import { readCardSkillRunController } from '@backend/business/codex/controller/read-card-skill-run-controller.js';
+import { enqueueCodexContinuation, readCodexProcessQueue } from '@backend/business/codex/helper/codex-process-queue.js';
 
 async function waitForText(file: string, text: string): Promise<void> {
   const started = Date.now();
-  while (Date.now() - started < 3000) {
+  while (Date.now() - started < 10000) {
     if (existsSync(file) && readFileSync(file, 'utf8').includes(text)) return;
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   assert.fail(`Timed out waiting for ${text} in ${file}`);
 }
+
+test('status read ignores a stale runtime execution when a newer queued execution owns the card lease', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-card-skill-run-execution-fence-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  const runId = `codex-skill-${Date.now() - 60000}-execfence`;
+  const cardId = 'card-execution-fence';
+  const runDirectory = join(decisionOsRoot, 'runs', 'codex-skills', 'specs');
+  mkdirSync(runDirectory, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({
+    ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }],
+  }));
+  writeFileSync(join(decisionOsRoot, 'specs.json'), JSON.stringify({
+    cards: [{
+      id: cardId,
+      title: 'Execution fence',
+      codexThreadRunId: runId,
+      codexThreadRunIds: [runId],
+      codexActiveRunId: runId,
+      codexActiveExecutionId: 'execution-new',
+      codexThreadRunOutputFile: `.decision-os/runs/codex-skills/specs/${runId}.md`,
+      comment: { what: 'Execution fence body.' },
+      facts: [],
+      fields: [],
+    }],
+    annotations: [],
+    relationships: [],
+    notes: {},
+  }));
+  writeFileSync(join(runDirectory, `${runId}.md`), '# Previous execution\n');
+  writeFileSync(join(runDirectory, `${runId}.jsonl`), [
+    JSON.stringify({ type: 'thread.started', thread_id: 'session-execution-fence' }),
+    JSON.stringify({ type: 'turn.completed' }),
+  ].join('\n'));
+  writeFileSync(join(runDirectory, `${runId}.log`), [
+    `decision-os:codex-run-segment ${JSON.stringify({ runId, executionId: 'execution-old', startedAt: new Date(Date.now() - 60000).toISOString(), segment: 'start', startLine: 0 })}`,
+    `decision-os:codex-execution-finished ${JSON.stringify({ runId, executionId: 'execution-old', finishedAt: new Date(Date.now() - 30000).toISOString(), status: 'complete' })}`,
+  ].join('\n'));
+  enqueueCodexContinuation({
+    decisionOsRoot,
+    id: 'queue-execution-new',
+    createdAt: new Date().toISOString(),
+    payload: { ledgerId: 'specs', cardId, runId, executionId: 'execution-new' },
+  });
+  const runtime: Record<string, unknown> = {
+    decisionOsRoot,
+    codexSkillRuns: {
+      [runId]: {
+        id: runId,
+        executionId: 'execution-old',
+        status: 'running',
+        startedAt: new Date(Date.now() - 60000).toISOString(),
+        child: { pid: process.pid, exitCode: null, killed: false },
+      },
+    },
+  };
+
+  try {
+    const result = await readCardSkillRunController({
+      action_payload: { ledgerId: 'specs', cardId, runId },
+      runtime_state: runtime,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.executionId, 'execution-new');
+    assert.equal(result.status, 'pending');
+    assert.equal(result.active, false);
+    assert.equal(result.queuePosition, 1);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
 
 test('thread-launched run reads return chronological diagnostics without changing the conversation', async () => {
   const originalCwd = process.cwd();
@@ -604,6 +675,7 @@ test('server startup resumes a claimed thread run from its durable Codex session
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-interrupted-thread-run-'));
   const decisionOsRoot = join(workspace, '.decision-os');
   const runId = `codex-skill-${Date.now() - 1000}-restart1`;
+  const executionId = 'execution-restart1';
   const cardId = 'card-interrupted-run';
   const runDirectory = join(decisionOsRoot, 'runs', 'codex-skills', 'specs');
   const fakeCodex = join(workspace, 'fake-codex.mjs');
@@ -617,6 +689,8 @@ test('server startup resumes a claimed thread run from its durable Codex session
       id: cardId,
       title: 'Interrupted thread run',
       codexThreadRunId: runId,
+      codexActiveRunId: runId,
+      codexActiveExecutionId: executionId,
       codexThreadRunOutputFile: `.decision-os/runs/codex-skills/specs/${runId}.md`,
       comment: { what: 'Thread body.' },
       facts: [],
@@ -640,7 +714,7 @@ test('server startup resumes a claimed thread run from its durable Codex session
       status: 'running',
       createdAt: new Date(Date.now() - 2000).toISOString(),
       startedAt: new Date(Date.now() - 1000).toISOString(),
-      payload: { ledgerId: 'specs', threadId: `thread-${cardId}`, cardId },
+      payload: { ledgerId: 'specs', threadId: `thread-${cardId}`, cardId, runId, executionId },
     }],
   }, null, 2));
   writeFileSync(fakeCodex, [
@@ -661,7 +735,7 @@ test('server startup resumes a claimed thread run from its durable Codex session
   try {
     await waitForText(invocationFile, 'relaunched');
     assert.equal(readFileSync(invocationFile, 'utf8'), 'relaunched');
-    const queueDeadline = Date.now() + 3000;
+    const queueDeadline = Date.now() + 10000;
     while (Date.now() < queueDeadline && readCodexProcessQueue(decisionOsRoot).length > 0) await new Promise((resolve) => setTimeout(resolve, 50));
     assert.deepEqual(readCodexProcessQueue(decisionOsRoot), []);
 

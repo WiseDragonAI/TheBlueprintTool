@@ -63,6 +63,7 @@ function metadataFor(note: AnyRecord): AnyRecord {
   }
   if (Number.isFinite(Number(note.revision)) && Number(note.revision) > 0) metadata.revision = Number(note.revision);
   if (isRecord(note.imageSizes) && Object.keys(note.imageSizes).length > 0) metadata.imageSizes = note.imageSizes;
+  if (isRecord(note.reviewContext) && Object.keys(note.reviewContext).length > 0) metadata.reviewContext = note.reviewContext;
   return metadata;
 }
 

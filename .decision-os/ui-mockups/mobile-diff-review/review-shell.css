@@ -49,6 +49,9 @@ button { color: inherit; font: inherit; }
 .muted { color: var(--muted); }
 
 .review-body { display: grid; gap: 12px; padding-top: 16px; }
+.markdown-card { padding: 10px; border: 1px solid color-mix(in srgb, var(--zone), rgba(255,255,255,.18) 12%); border-radius: 3px; background: linear-gradient(180deg, #101217 0%, #090b0f 100%); box-shadow: 0 0 0 1px color-mix(in srgb, var(--zone), transparent 55%); }
+.markdown-widget-label { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 8px; color: var(--muted); font: 9px "Ubuntu Mono", ui-monospace, monospace; }
+.markdown-widget-label b { color: var(--accent); }
 .surface { border: 1px solid color-mix(in srgb, var(--zone), rgba(255,255,255,.18) 12%); border-radius: 3px; background: linear-gradient(180deg, #101217 0%, #090b0f 100%); box-shadow: 0 0 0 1px color-mix(in srgb, var(--zone), transparent 55%); }
 .surface-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border-bottom: 1px solid var(--line); }
 .surface-heading strong { font-size: 13px; }

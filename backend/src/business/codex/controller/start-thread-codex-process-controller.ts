@@ -3,7 +3,7 @@
  * WHY: The thread panel needs a direct Codex action that continues against the same thread messages.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
-import { appendFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync, type WriteStream } from 'node:fs';
+import { appendFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync, type WriteStream } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, relative, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
@@ -21,7 +21,7 @@ import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand, resolve
 import { codexCapacityResumeDelayMs, isTransientCodexCapacityFailure, readCodexSessionId } from '../helper/transient-codex-capacity-failure.js';
 import { decisionOsCodexEnvironment } from '../helper/decision-os-codex-runtime.js';
 import { projectCardCodexRun } from '../helper/project-card-codex-run.js';
-import { enqueueCodexThreadProcess, recordCodexProcessQueueItemProcess, removeCodexProcessQueueItem } from '../helper/codex-process-queue.js';
+import { enqueueCodexThreadProcess, readCodexProcessQueue, recordCodexProcessQueueItemProcess, removeCodexProcessQueueItem } from '../helper/codex-process-queue.js';
 import { scheduleCodexProcesses, unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
 import { createTerminalCodexProcessReconciler, type TerminalCodexStatus } from '../helper/reconcile-terminal-codex-process.js';
 import { clearCardCodexExecution } from '../helper/clear-card-codex-execution.js';
@@ -186,6 +186,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
   const requestedCodexModel = optionalText(payload.codexModel);
   const requestedCodexEffort = optionalText(payload.codexEffort);
   const reservedRunId = optionalText(payload.reservedRunId);
+  const reservedExecutionId = optionalText(payload.executionId);
   const queueDispatch = payload.queueDispatch === true;
   if (requestedCodexModel && !isAllowedCodexModel(requestedCodexModel)) return { ok: false, statusCode: 400, error: 'Unsupported Codex model.', codexModel: requestedCodexModel };
   if (requestedCodexEffort && !isAllowedCodexEffort(requestedCodexEffort)) return { ok: false, statusCode: 400, error: 'Unsupported Codex effort.', codexEffort: requestedCodexEffort };
@@ -201,6 +202,30 @@ export async function startThreadCodexProcessController(input: { action_payload?
   const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord & { cards?: AnyRecord[] };
   const source = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
   if (!source) return { ok: false, statusCode: 404, error: 'Thread target card not found.', cardId, threadId };
+  const activeRunId = String(source.codexActiveRunId ?? '').trim();
+  const activeExecutionId = String(source.codexActiveExecutionId ?? '').trim();
+  if (!queueDispatch && activeRunId && activeExecutionId) {
+    const queued = readCodexProcessQueue(decisionOsRoot).find((item) => String(item.payload.runId ?? item.id) === activeRunId && String(item.payload.executionId ?? '') === activeExecutionId);
+    const live = runtimeRuns(runtime)[activeRunId];
+    if (queued || live && (live.status === 'pending' || live.status === 'running')) {
+      const run = live ?? { id: activeRunId, executionId: activeExecutionId, ledgerId, outputCardId: cardId, status: queued?.status === 'running' ? 'running' : 'pending', createdAt: queued?.createdAt ?? '' };
+      return {
+        ok: true,
+        statusCode: 202,
+        run: publicRun(run),
+        queued: String(run.status ?? '') === 'pending',
+        queuePosition: queued?.status === 'pending' ? unifiedCodexQueuePosition({ decisionOsRoot, id: queued.id, createdAt: queued.createdAt, runtime }) : null,
+      };
+    }
+  }
+  const retainedThreadRunId = String(source.codexThreadRunId ?? '').trim();
+  if (!queueDispatch && !activeRunId && retainedThreadRunId) {
+    const { continueCardSkillRunController } = await import('./continue-card-skill-run-controller.js');
+    return continueCardSkillRunController({
+      action_payload: { ...payload, ledgerId, cardId, runId: retainedThreadRunId },
+      runtime_state: runtime,
+    });
+  }
   const sourceCardFile = cardContentFile({ decisionOsRoot, card: source, ledgerPath });
   const sourceThreadFile = threadContentFile({ decisionOsRoot, ledger, ledgerPath, threadId });
   if (!sourceCardFile || !sourceThreadFile) return { ok: false, statusCode: 500, error: 'Could not resolve card or thread markdown file.', cardId, threadId };
@@ -212,7 +237,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
     cardId,
     threadId,
   };
-  const existingRunId = String(source.codexActiveRunId ?? source.codexThreadRunId ?? source.codexRunId ?? '').trim();
+  const existingRunId = activeRunId;
   if (existingRunId && existingRunId !== reservedRunId) {
     if (queueDispatch || runtimeCodexRunOwnsLiveProcess(runtime, existingRunId, decisionOsRoot)) return {
       ok: false,
@@ -226,6 +251,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
   }
 
   const runId = reservedRunId || `codex-skill-${Date.now()}-${randomUUID().slice(0, 8)}`;
+  const executionId = reservedExecutionId || `codex-execution-${Date.now()}-${randomUUID().slice(0, 8)}`;
   const runDirectoryRef = `.decision-os/runs/codex-skills/${safeSegment(ledgerStem(ledgerPath))}`;
   const runDirectory = resolve(decisionOsRoot, runDirectoryRef.replace(/^\.decision-os\//, ''));
   mkdirSync(runDirectory, { recursive: true });
@@ -271,18 +297,17 @@ export async function startThreadCodexProcessController(input: { action_payload?
     ledger,
     cardId,
     runId,
+    executionId,
     outputFileRef: runSummaryRef,
     codexModel: command.model,
     codexEffort: command.effort,
     ownership: 'thread',
   });
-  stripHydratedThreadNotes(ledger);
-  persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime });
-
   const createdAt = new Date().toISOString();
   const startedAt = queueDispatch ? createdAt : null;
   const run = {
     id: runId,
+    executionId,
     skillName: 'decision-os-thread',
     kind: 'thread',
     ledgerId,
@@ -303,12 +328,22 @@ export async function startThreadCodexProcessController(input: { action_payload?
   updateRuntimeRun(runtime, runId, run);
 
   if (!queueDispatch) {
-    enqueueCodexThreadProcess({
-      decisionOsRoot,
-      id: runId,
-      createdAt,
-      payload: { ledgerId, threadId, cardId, codexModel: command.model, codexEffort: command.effort },
-    });
+    try {
+      enqueueCodexThreadProcess({
+        decisionOsRoot,
+        id: runId,
+        createdAt,
+        payload: { ledgerId, threadId, cardId, runId, executionId, codexModel: command.model, codexEffort: command.effort },
+      });
+      stripHydratedThreadNotes(ledger);
+      persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime });
+    } catch (error) {
+      removeCodexProcessQueueItem(decisionOsRoot, runId);
+      delete runtimeRuns(runtime)[runId];
+      rmSync(runSummaryFile, { force: true });
+      return { ok: false, statusCode: 500, error: error instanceof Error ? error.message : 'Codex admission failed.', runId };
+    }
+    notifyRuntimeCallback(runtime.onCodexRunAccepted, { ledgerId, cardId, threadId, runId, executionId, status: 'pending' });
     const schedule = runtime.scheduleCodexProcesses;
     if (typeof schedule === 'function') await schedule();
     else await scheduleCodexProcesses({ decisionOsRoot, runtime });
@@ -323,8 +358,11 @@ export async function startThreadCodexProcessController(input: { action_payload?
     };
   }
 
+  stripHydratedThreadNotes(ledger);
+  persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime });
+  notifyRuntimeCallback(runtime.onCodexRunAccepted, { ledgerId, cardId, threadId, runId, executionId, status: 'running' });
+
   const launch = (attemptCommand: CodexCommand, taskInput: string, segment: 'start' | 'continue'): void => {
-    const executionId = `codex-execution-${Date.now()}-${randomUUID().slice(0, 8)}`;
     const eventStartLine = segment === 'start' ? 0 : prepareCardSkillRunEventAppend(stdoutFile);
     const stdoutByteOffset = existsSync(stdoutFile) ? statSync(stdoutFile).size : 0;
     const stderrByteOffset = existsSync(stderrFile) ? statSync(stderrFile).size : 0;
@@ -399,7 +437,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
       finishRunStreams(stdout, stderr, () => {
         flushCardSkillRunEventIngestor(runEventIngestor, runId);
         if (String(runtimeRuns(runtime)[runId]?.executionId ?? '') !== executionId) return;
-        const cancelled = runtimeRunStatus(runtime, runId) === 'cancelled';
+        const cancelled = Boolean(runtimeRuns(runtime)[runId]?.cancelRequestedAt) || runtimeRunStatus(runtime, runId) === 'cancelled';
         const sessionId = exitCode === 0 || cancelled ? '' : readCodexSessionId(stdoutFile);
         if (!cancelled && exitCode !== 0 && sessionId && isTransientCodexCapacityFailure({
           stdoutFile,

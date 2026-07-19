@@ -52,13 +52,13 @@ function maybeResumeCodexRunWidget(payload: ContentChangeEvent): void {
   }
   // WHAT: Resume widgets only for explicit Codex start lifecycle events.
   // WHY: Ordinary ledger writes must not create polling loops.
-  if (!reason.startsWith('codex-') || !reason.endsWith('-started')) return;
+  if (reason !== 'codex-run-accepted' && reason !== 'codex-turn-started') return;
   const cardId = String(payload.outputCardId || payload.cardId || '').trim();
   const runId = String(payload.runId ?? '').trim();
   // WHAT: Require the complete run identity before starting polling.
   // WHY: Partial SSE payloads cannot safely target a widget.
   if (!ledgerId || !cardId || !runId) return;
-  resumeExternallyStartedCardSkillRun({ ledgerId, cardId, runId });
+  resumeExternallyStartedCardSkillRun({ ledgerId, cardId, runId, executionId: String(payload.executionId ?? ''), status: payload.status as 'pending' | 'running' });
 }
 
 function eventBelongsToActiveLedger(payload: ContentChangeEvent): boolean {

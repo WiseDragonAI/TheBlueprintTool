@@ -168,7 +168,10 @@ test('mobile thread launch resumes the card session whenever it owns a run id', 
   assert.match(source, /canvasState\.threadRunSummaryByThreadId\[threadId\] = \{/);
   assert.match(source, /active: status === 'running'/);
   assert.match(source, /queuePosition: Number\.isInteger\(queuePosition\) \? queuePosition : null/);
-  assert.match(source, /bindThreadCodexRunLog\([^;]+runId \}\);\n  const status = String\(result\.run\?\.status \|\| 'running'\);\n  hydrateThreadRun\(runId, startedAt, status, result\.queuePosition\);[\s\S]*await refreshThreadLedger\(runId\)/);
+  assert.match(source, /const executionId = String\(result\.run\?\.executionId \?\? ''\)/);
+  assert.match(source, /expectedExecutionId: executionId \|\| undefined, expectedStatus: status, forceRevalidate: true/);
+  assert.match(source, /bindThreadCodexActiveRunLog\(identity\)/);
+  assert.match(source, /hydrateThreadRun\(runId, startedAt, status, result\.queuePosition\);[\s\S]*await refreshThreadLedger\(runId\)/);
 });
 
 test('mobile thread reconciles the refreshed ledger before rerendering an accepted run', () => {
@@ -179,7 +182,7 @@ test('mobile thread reconciles the refreshed ledger before rerendering an accept
 
 test('closing a mobile thread unregisters its project-scoped Codex run consumer', () => {
   const closeMobileThread = source.match(/export function closeMobileThread\([^\n]*\) \{[\s\S]*?\n\}/)?.[0] ?? '';
-  assert.match(source, /import \{ bindThreadCodexRunLog, unbindThreadCodexRunLog \}/);
+  assert.match(source, /unbindThreadCodexActiveRunLog, unbindThreadCodexRunLog/);
   assert.match(closeMobileThread, /cardCodexThreadRunId\(currentCard\)/);
   assert.match(closeMobileThread, /unbindThreadCodexRunLog\(\{[\s\S]*projectId: currentProjectId/);
   assert.match(source, /bindThreadCodexRunLog\(\{ projectId: currentProjectId/);
@@ -253,15 +256,16 @@ test('mobile thread history and async refreshes are owned by the active presenta
   assert.doesNotMatch(source, /eventSource\.addEventListener\('card-content-change', refresh\)/);
 });
 
-test('mobile Codex Log makes queued work read-only while preserving actions for other run states', () => {
-  assert.match(sharedCodexStatus, /if \(!queued\) strip\.append\(renderRunAction\(/);
+test('mobile Codex Log exposes execution-fenced cancel and stop actions', () => {
+  assert.match(sharedCodexStatus, /if \(running \|\| queued\) strip\.append\(renderRunAction\(/);
   assert.match(sharedCodexStatus, /sessionSummary\?\.ok === true && sessionSummary\.active === true && sessionSummary\.status === 'running'/);
   assert.match(sharedCodexStatus, /threadCodexStopState\(input\.runId\)\.pending/);
-  assert.match(sharedCodexLog, /const stopError = threadCodexStopState\(runId\)\.error/);
+  assert.match(sharedCodexLog, /const stopError = threadCodexStopState\(actionRunId\)\.error/);
   assert.doesNotMatch(sharedCodexStatus, /\['Status', status\]/);
-  assert.match(sharedCodexStatus, /input\.running \? 'STOP' : input\.runId \? 'RESUME' : 'START'/);
+  assert.match(sharedCodexStatus, /action: running \? 'STOP' : 'CANCEL'/);
+  assert.match(sharedCodexStatus, /button\.dataset\.codexExecutionId = input\.executionId \?\? ''/);
   assert.match(sharedCodexStatus, /button\.dataset\.action = occupied \? 'stop-thread-codex' : 'process-thread-codex'/);
-  assert.match(sharedCodexStatus, /icon\.textContent = occupied \? '■' : input\.runId \? '↻' : '▶'/);
+  assert.match(sharedCodexStatus, /input\.action === 'CANCEL' \? '×'/);
   assert.match(sharedCodexStatus, /`Queued · position \$\{summary\.queuePosition\}`/);
   assert.match(sharedCodexLog, /Waiting for Codex capacity/);
   assert.match(sharedCodexStatus, /terminal-button--stop' : 'terminal-button--send'/);

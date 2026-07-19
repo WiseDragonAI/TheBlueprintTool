@@ -43,6 +43,8 @@ export function createCodexPipelineStepCards(input: {
       codexPipelineStepName: step.name,
       codexPipelineName: input.run.pipelineName,
       codexRunId: firstSkill?.runId ?? '',
+      codexActiveRunId: firstSkill?.runId ?? '',
+      codexActiveExecutionId: firstSkill?.executionId ?? '',
       codexSkillName: firstSkill?.skillName ?? '',
       codexRunModel: firstSkill?.codexModel ?? '',
       codexRunEffort: firstSkill?.codexEffort ?? '',
@@ -79,6 +81,8 @@ export function createCodexPipelineStepCards(input: {
   const firstSkill = input.run.steps[0]?.skills[0];
   input.source.codexQueuedPipelineRunId = input.run.id;
   input.source.codexQueuedRunId = firstSkill?.runId ?? '';
+  input.source.codexActiveRunId = firstSkill?.runId ?? '';
+  input.source.codexActiveExecutionId = firstSkill?.executionId ?? '';
   stripHydratedThreadNotes(input.context.ledger);
   persistLedgerProjection({ decisionOsRoot: input.decisionOsRoot, ledgerId: input.context.ledgerId, ledgerPath: input.context.ledgerPath, ledger: input.context.ledger, runtime: input.context.runtime });
   return null;

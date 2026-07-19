@@ -49,7 +49,7 @@ function createWorkspace(prefix: string): { workspace: string; decisionOsRoot: s
   return { workspace, decisionOsRoot };
 }
 
-test('saved pipeline creates all step cards and runs five isolated skills strictly in order', async () => {
+test('saved pipeline is idempotent while active and runs five isolated skills strictly in order', async () => {
   const previousCodexBin = process.env.CODEX_BIN;
   const { workspace, decisionOsRoot } = createWorkspace('decision-os-pipeline-run-');
   const fakeCodex = join(workspace, 'fake-codex.mjs');
@@ -125,24 +125,22 @@ test('saved pipeline creates all step cards and runs five isolated skills strict
     });
     assert.equal(queuedResponse.status, 202);
     const queuedBody = await queuedResponse.json() as Record<string, any>;
-    assert.equal(queuedBody.run.status, 'pending');
-    assert.equal(queuedBody.queuePosition, 1);
-    const queuedPipelineRunId = queuedBody.run.id as string;
+    assert.equal(queuedBody.run.id, pipelineRunId);
+    assert.equal(queuedBody.run.status, 'running');
+    assert.equal(queuedBody.queuePosition, null);
+    assert.equal(readCodexPipelineStore({ decisionOsRoot }).store.runs.length, 1);
     const pendingLedger = JSON.parse(readFileSync(join(decisionOsRoot, 'specs.json'), 'utf8')) as Record<string, any>;
     const pendingSourceCard = pendingLedger.cards.find((card: Record<string, any>) => card.id === 'source-card');
     assert.equal(pendingSourceCard.executionStatus, undefined);
     assert.equal(pendingSourceCard.executionRunId, undefined);
-    assert.equal(pendingSourceCard.codexQueuedPipelineRunId, queuedPipelineRunId);
+    assert.equal(pendingSourceCard.codexActiveRunId, started.run.steps[0].skills[0].runId);
+    assert.equal(pendingSourceCard.codexActiveExecutionId, started.run.steps[0].skills[0].executionId);
 
     const completed = await waitFor(() => {
       const run = readCodexPipelineStore({ decisionOsRoot }).store.runs.find((entry) => entry.id === pipelineRunId);
       return run?.status === 'complete' ? run : null;
     }, 'pipeline completion');
     assert.equal(completed.steps.every((step) => step.status === 'complete'), true);
-    await waitFor(() => {
-      const run = readCodexPipelineStore({ decisionOsRoot }).store.runs.find((entry) => entry.id === queuedPipelineRunId);
-      return run?.status === 'complete' ? run : null;
-    }, 'queued pipeline completion');
     assert.equal(readCodexPipelineStore({ decisionOsRoot }).store.activeWorkspaceRun, null);
     const allSkills = completed.steps.flatMap((step) => step.skills);
     assert.equal(new Set(allSkills.map((skill) => skill.runId)).size, 5);
@@ -156,7 +154,7 @@ test('saved pipeline creates all step cards and runs five isolated skills strict
     assert.match(readFileSync(betaInput, 'utf8'), /produced-by=alpha/);
     assert.match(readFileSync(gammaInput, 'utf8'), /produced-by=beta/);
     const ledger = JSON.parse(readFileSync(join(decisionOsRoot, 'specs.json'), 'utf8')) as Record<string, any>;
-    const generated = ledger.cards.filter((card: Record<string, any>) => card.codexPipelineRunId === completed.id);
+    const generated = ledger.cards.filter((card: Record<string, any>) => card.cardType === 'codex-skill-run' && card.codexPipelineRunId === completed.id);
     assert.equal(generated.length, 3);
     const sourceCard = ledger.cards.find((card: Record<string, any>) => card.id === 'source-card');
     assert.equal(sourceCard.executionStatus, undefined);
@@ -253,6 +251,13 @@ test('workspace capacity runs two pipelines concurrently and promotes the FIFO q
   const fakeCodex = join(workspace, 'fake-codex.mjs');
   const lifecycleFile = join(workspace, 'lifecycle.txt');
   createSkill(workspace, 'alpha');
+  const ledgerPath = join(decisionOsRoot, 'specs.json');
+  const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as Record<string, any>;
+  ledger.cards.push(
+    { ...ledger.cards[0], id: 'source-card-2', title: 'Source Card 2' },
+    { ...ledger.cards[0], id: 'source-card-3', title: 'Source Card 3' },
+  );
+  writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
   writeFileSync(fakeCodex, [
     '#!/usr/bin/env node',
     'import { appendFileSync, writeFileSync } from "node:fs";',
@@ -283,7 +288,7 @@ test('workspace capacity runs two pipelines concurrently and promotes the FIFO q
     for (let index = 0; index < 3; index += 1) {
       const response = await fetch(`${baseUrl}/api/codex/skills/process`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ledgerId: 'specs', cardId: 'source-card', skillName: 'alpha' }),
+        body: JSON.stringify({ ledgerId: 'specs', cardId: `source-card${index === 0 ? '' : `-${index + 1}`}`, skillName: 'alpha' }),
       });
       assert.equal(response.status, 202);
       starts.push(await response.json() as Record<string, any>);
@@ -366,7 +371,10 @@ test('one catalog-level server skill executes directly and in saved pipelines fr
       const library = await libraryResponse.json() as Record<string, any>;
       assert.equal(library.skills.some((skill: Record<string, unknown>) => skill.name === 'shared-catalog-skill'), true);
       const pipelineLibrary = await fetch(`${scoped}/api/codex/pipelines`).then((response) => response.json()) as Record<string, any>;
-      assert.deepEqual(pipelineLibrary.pipelines.map((pipeline: Record<string, unknown>) => [pipeline.id, pipeline.scope]), [['shared-pipeline', 'server']]);
+      assert.deepEqual(
+        pipelineLibrary.pipelines.filter((pipeline: Record<string, unknown>) => pipeline.id === 'shared-pipeline').map((pipeline: Record<string, unknown>) => [pipeline.id, pipeline.scope]),
+        [['shared-pipeline', 'server']],
+      );
       const directResponse = await fetch(`${scoped}/api/codex/skills/process`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ ledgerId: 'specs', cardId: 'source-card', skillName: 'shared-catalog-skill' }),
