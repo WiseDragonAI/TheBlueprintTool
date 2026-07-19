@@ -205,8 +205,6 @@ export function resolveCodexResumeCommand(input: { workspaceRoot: string; runtim
       '--json',
       '-c',
       `model_reasoning_effort="${selection.effort}"`,
-      '-c',
-      `developer_instructions=${JSON.stringify(codexDeveloperInstructions())}`,
       '--model',
       selection.model,
       input.sessionId,

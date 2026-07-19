@@ -139,6 +139,7 @@ test('resolveCodexResumeCommand builds an exec resume invocation with stdin prom
     assert.equal(command.args.at(-1), '-');
     assert.equal(command.args.includes('gpt-5.4'), true);
     assert.equal(command.args.includes('model_reasoning_effort="medium"'), true);
+    assert.equal(command.args.some((argument) => argument.startsWith('developer_instructions=')), false);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }
