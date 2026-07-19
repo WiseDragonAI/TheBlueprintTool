@@ -659,6 +659,8 @@ test('thread codex process resumes a capacity-interrupted session after five sec
     assert.ok(launches[1].at - launches[0].at >= 4_900);
     assert.deepEqual(launches[1].args.slice(0, 4), ['exec', 'resume', '--dangerously-bypass-approvals-and-sandbox', '--json']);
     assert.equal(launches[1].args.includes('session-capacity'), true);
+    assert.equal(launches[1].args.some((argument) => argument.startsWith('developer_instructions=')), false);
+    assert.equal(launches[0].args.some((argument) => argument.startsWith('developer_instructions=')), true);
     for (const launch of launches) {
       assert.equal(launch.args[launch.args.indexOf('--model') + 1], 'gpt-5.4');
       assert.equal(launch.args.includes('model_reasoning_effort="high"'), true);
