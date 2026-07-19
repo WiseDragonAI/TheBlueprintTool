@@ -41,6 +41,12 @@ export type Card = {
   readonly labels: readonly string[];
   readonly threadId: string;
   readonly tabs: readonly string[];
+  readonly codexThreadRunId?: string;
+  readonly codexThreadRunIds?: readonly string[];
+  readonly codexThreadRunOutputFiles?: Readonly<Record<string, string>>;
+  readonly codexActiveRunId?: string;
+  readonly codexActiveExecutionId?: string;
+  readonly codexRunId?: string;
 };
 
 export type Zone = {

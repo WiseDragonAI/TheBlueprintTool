@@ -8,13 +8,13 @@ import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/re
 
 type AnyRecord = Record<string, unknown>;
 
-export function clearCardCodexExecution(input: { ledgerPath: string; cardId: string; runId: string; executionId?: string }): boolean {
+export function clearCardCodexExecution(input: { ledgerPath: string; cardId: string; runId: string; executionId: string }): boolean {
   try {
     const ledger = JSON.parse(readFileSync(input.ledgerPath, 'utf8')) as AnyRecord & { cards?: AnyRecord[] };
     const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
     if (!card || String(card.codexActiveRunId ?? '') !== input.runId) return false;
     const persistedExecutionId = String(card.codexActiveExecutionId ?? '');
-    if (input.executionId && persistedExecutionId && persistedExecutionId !== input.executionId) return false;
+    if (!persistedExecutionId || persistedExecutionId !== input.executionId) return false;
     delete card.codexActiveRunId;
     delete card.codexActiveExecutionId;
     if (String(card.executionRunId ?? '') === input.runId) {
@@ -34,6 +34,7 @@ export function clearCardCodexExecutionForLedger(input: {
   ledgerId: string;
   cardId: string;
   runId: string;
+  executionId: string;
   runtime?: AnyRecord;
 }): boolean {
   const state = readCanonicalDecisionOsState({
@@ -44,5 +45,5 @@ export function clearCardCodexExecutionForLedger(input: {
   const ledgerPath = resolve(input.decisionOsRoot, ledgerFile);
   const inner = relative(input.decisionOsRoot, ledgerPath);
   if (!ledgerFile || !inner || inner.startsWith('..') || isAbsolute(inner)) return false;
-  return clearCardCodexExecution({ ledgerPath, cardId: input.cardId, runId: input.runId });
+  return clearCardCodexExecution({ ledgerPath, cardId: input.cardId, runId: input.runId, executionId: input.executionId });
 }

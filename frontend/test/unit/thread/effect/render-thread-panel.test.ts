@@ -524,8 +524,9 @@ test('Codex Log run arrows default to the newest retained run and select the pre
     assert.equal(codexLog.querySelector('.codex-log-run-arrow--next')?.disabled, true);
 
     codexLog.querySelector('.codex-log-run-arrow--previous')?.dispatchEvent(new Event('click'));
-    for (let index = 0; index < 12; index += 1) await Promise.resolve();
-    await new Promise<void>((resolve) => previousSetTimeout(resolve, 0));
+    for (let index = 0; index < 20 && state.threadRunIdByThreadId[threadId] !== oldRunId; index += 1) {
+      await new Promise<void>((resolve) => previousSetTimeout(resolve, 5));
+    }
     assert.equal(state.threadSelectedRunIdByThreadId[threadId], oldRunId);
     assert.equal(codexLog.querySelector('.codex-log-run-position')?.textContent, 'Run 1 of 2');
     assert.equal(state.threadRunIdByThreadId[threadId], oldRunId);
@@ -620,7 +621,7 @@ test('Codex Log counts continuations as separate runs with execution-scoped metr
   }
 });
 
-test('queued thread runs become read-only and render their queue position without elapsed time', async () => {
+test('queued thread runs expose exact cancellation and render their queue position without elapsed time', async () => {
   const previousFetch = globalThis.fetch;
   const { heading, codexLog } = installDom();
   const { state } = await import('../../../../src/runtime/state.js');
@@ -630,7 +631,7 @@ test('queued thread runs become read-only and render their queue position withou
   const threadId = 'thread-card-a';
   const summary = {
     ok: true, active: false, runId, runKind: 'thread', pipelineRunId: '', pipelineName: '', pipelineStepName: '', skillName: '', pipelineStatus: '',
-    status: 'pending', queuePosition: 3, startedAt: '', elapsedMs: 0, lineCount: 0, nextSince: 0, toolCallCount: 0, agentMessageCount: 0,
+    status: 'pending', executionId: 'execution-queued', currentExecution: null, executions: [], queuePosition: 3, startedAt: '', elapsedMs: 0, lineCount: 0, nextSince: 0, toolCallCount: 0, agentMessageCount: 0,
     fileChangeCount: 0, thinkingCount: 0, warningCount: 0, errorCount: 0, transportStatus: 'ok', persistedEventCount: 0,
     metadata: { sourceCardTitle: '', sourceThreadId: threadId, codexModel: 'gpt-5.6-sol', codexEffort: 'medium' },
     latestEvent: null, events: [], diagnostics: [], error: '',
@@ -638,7 +639,7 @@ test('queued thread runs become read-only and render their queue position withou
   try {
     globalThis.fetch = (async () => new Response(JSON.stringify(summary), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch;
     state.activeTab = 'specs';
-    state.activeLedger = { cards: [{ id: 'card-a', title: 'Card A', codexThreadRunId: runId }], annotations: [], relationships: [], notes: { [threadId]: [] } };
+    state.activeLedger = { cards: [{ id: 'card-a', title: 'Card A', codexThreadRunId: runId, codexActiveRunId: runId, codexActiveExecutionId: 'execution-queued' }], annotations: [], relationships: [], notes: { [threadId]: [] } };
     state.threadId = threadId;
     state.renderedThreadId = '';
     state.threadPanelOpen = true;
@@ -659,7 +660,8 @@ test('queued thread runs become read-only and render their queue position withou
     assert.equal(heading.querySelector('.thread-actions')?.hidden, true);
     assert.equal(heading.dataset.codexRunning, 'true');
     assert.equal(heading.dataset.codexStatus, 'pending');
-    assert.equal(codexLog.querySelector('.terminal-button__label'), null);
+    assert.equal(codexLog.querySelector('.terminal-button__label')?.textContent, 'CANCEL');
+    assert.equal(codexLog.querySelector('.codex-log-action-button')?.dataset.codexExecutionId, 'execution-queued');
     assert.equal(codexLog.querySelector('.codex-log-session-footer'), null);
     assert.ok(codexLog.querySelectorAll('dd').map((element) => element.textContent).includes('Queued · position 3'));
     assert.equal(codexLog.querySelector('[data-codex-log-elapsed]'), null);
@@ -674,6 +676,13 @@ test('queued thread runs become read-only and render their queue position withou
     syncThreadCodexRunControls({ threadId, status: 'running', active: true });
     assert.equal(heading.querySelector('.thread-actions')?.hidden, true);
     assert.equal(heading.dataset.codexRunning, 'true');
+
+    delete state.activeLedger.cards[0].codexActiveRunId;
+    delete state.activeLedger.cards[0].codexActiveExecutionId;
+    state.threadActiveRunSummaryByThreadId = { [threadId]: summary };
+    renderThreadPanel();
+    assert.equal(state.threadActiveRunIdByThreadId[threadId], undefined);
+    assert.equal(state.threadActiveRunSummaryByThreadId[threadId], undefined);
   } finally {
     globalThis.fetch = previousFetch;
     state.threadId = '';
@@ -683,6 +692,8 @@ test('queued thread runs become read-only and render their queue position withou
     state.threadRunSummaryByThreadId = {};
     state.threadRunEventsByThreadId = {};
     state.threadCoalescedToolsByThreadId = {};
+    state.threadActiveRunIdByThreadId = {};
+    state.threadActiveRunSummaryByThreadId = {};
   }
 });
 

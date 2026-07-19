@@ -20,13 +20,13 @@ test('serves one compact multi-project Control Room projection and refreshes one
     cards: [
       { id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], x: 10, y: 10, w: 300, h: 200, comment: { contentFile: '.decision-os/cards/tasks/master.md' } },
       { id: 'child', title: 'Child', status: 'done', labels: ['subtask'], x: 350, y: 10, w: 300, h: 200 },
-      { id: 'worker', title: 'Worker', status: 'todo', codexActiveRunId: 'codex-skill-test', codexRunId: 'codex-skill-test' },
+      { id: 'worker', title: 'Worker', status: 'todo', codexActiveRunId: 'codex-skill-test', codexActiveExecutionId: 'execution-test', codexRunId: 'codex-skill-test' },
     ],
     annotations: [{ id: 'zone-a', x: 0, y: 0, width: 800, height: 600, color: '#123456' }],
     relationships: [{ id: 'rel-a', from: 'master', to: 'child', label: 'subtask' }], notes: {}, threadFiles: { 'thread-master': '.decision-os/threads/tasks/thread-master.md' },
   }));
   const repositoryRoot = basename(process.cwd()) === 'backend' ? join(process.cwd(), '..') : process.cwd();
-  const runtime: Record<string, unknown> = { codexSkillRuns: { 'codex-skill-test': { status: 'running', startedAt: '2026-07-14T10:02:00.000Z' } } };
+  const runtime: Record<string, unknown> = { codexSkillRuns: { 'codex-skill-test': { status: 'running', executionId: 'execution-test', startedAt: '2026-07-14T10:02:00.000Z', child: { pid: process.pid, exitCode: null, killed: false } } } };
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: home, decisionOsFrontendRoot: join(repositoryRoot, 'frontend') }, runtime_state: runtime });
   const server = runtime.server as Server;
   await once(server, 'listening');
@@ -36,7 +36,7 @@ test('serves one compact multi-project Control Room projection and refreshes one
     const firstText = await firstResponse.text();
     const first = JSON.parse(firstText) as Record<string, any>;
     assert.equal(firstResponse.ok, true, firstText);
-    assert.equal(first.projectorVersion, 'control-room-v10-derived-execution');
+    assert.equal(first.projectorVersion, 'control-room-v11-exact-execution-lease');
     assert.ok(Buffer.byteLength(firstText) < 250_000);
     assert.equal(first.queue.length, 1);
     assert.equal(first.queue[0].zoneId, 'zone-a');

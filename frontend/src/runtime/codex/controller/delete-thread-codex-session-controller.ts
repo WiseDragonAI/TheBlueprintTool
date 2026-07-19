@@ -8,6 +8,8 @@ import { refreshRuntimeState } from '../../refresh/controller/refresh-runtime-st
 import { renderThreadPanel } from '../../thread/effect/render-thread-panel.js';
 import { clearThreadCodexStopState } from './stop-thread-codex-run-controller.js';
 import { requestThreadCodexSessionDelete } from '../effect/request-thread-codex-session-delete.js';
+import { unbindThreadCodexActiveRunLog, unbindThreadCodexRunLog } from '../effect/bind-thread-codex-run-log.js';
+import { purgeCardSkillRunLog } from '../effect/poll-card-skill-run.js';
 
 type DeletionState = { pending: boolean; error: string };
 type DeletionEffects = { refresh?: () => Promise<unknown>; render?: () => void };
@@ -30,6 +32,10 @@ function clearThreadRunCache(threadId: string): void {
     'threadToolRowDisclosureByThreadId',
     'threadRunAnnouncementByThreadId',
     'threadRunAnnouncedSequenceByThreadId',
+    'threadActiveRunIdByThreadId',
+    'threadActiveRunSummaryByThreadId',
+    'threadActiveLeaseKeyByThreadId',
+    'threadLastAdmittedRunIdByThreadId',
   ];
   for (const key of keys) {
     const map = state[key] as Record<string, unknown> | undefined;
@@ -63,6 +69,10 @@ export async function deleteThreadCodexSessionController(
   }
 
   deletionStateByRunId.delete(input.runId);
+  const identity = { ledgerId: input.ledgerId, cardId: input.cardId, threadId: input.threadId, runId: input.runId };
+  unbindThreadCodexRunLog(identity);
+  if (String(state.threadActiveRunIdByThreadId?.[input.threadId] ?? '') === input.runId) unbindThreadCodexActiveRunLog(identity);
+  purgeCardSkillRunLog(identity);
   if (state.threadRunExecutionsByRunId && typeof state.threadRunExecutionsByRunId === 'object') delete state.threadRunExecutionsByRunId[input.runId];
   clearThreadCodexStopState(input.runId);
   clearThreadRunCache(input.threadId);

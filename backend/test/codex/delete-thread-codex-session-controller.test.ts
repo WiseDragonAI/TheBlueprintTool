@@ -93,8 +93,13 @@ test('DELETE session route removes a terminal owned run and rejects stale owners
 
 test('active session deletion waits for settlement before removing owned artifacts', async () => {
   const context = fixture();
+  const executionId = 'execution-delete-active';
+  const ledger = JSON.parse(readFileSync(context.ledgerPath, 'utf8')) as { cards: Array<Record<string, unknown>> };
+  ledger.cards[0].codexActiveRunId = context.runId;
+  ledger.cards[0].codexActiveExecutionId = executionId;
+  writeFileSync(context.ledgerPath, JSON.stringify(ledger, null, 2));
   let settledBeforeReturn = false;
-  const run: Record<string, any> = { id: context.runId, ledgerId: 'specs', outputCardId: context.cardId, status: 'running' };
+  const run: Record<string, any> = { id: context.runId, executionId, ledgerId: 'specs', outputCardId: context.cardId, status: 'running' };
   Object.defineProperty(run, 'child', {
     enumerable: false,
     value: {

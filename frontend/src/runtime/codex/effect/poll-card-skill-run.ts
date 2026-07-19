@@ -37,6 +37,8 @@ type Poller = {
   continueTraceId: string;
   detachedChecks: number;
   terminal: boolean;
+  generation: number;
+  expectedExecutionId: string;
 };
 
 type ClockHandle =
@@ -379,7 +381,8 @@ async function cancelRun(poller: Poller): Promise<void> {
   poller.cancelInFlight = true;
   setCancelButtonState(button, 'stopping');
   setText(poller.element, '[data-codex-run-latest]', 'Stopping run');
-  const result = await requestCardSkillRunCancel({ ledgerId: poller.ledgerId, cardId: poller.cardId, runId: poller.runId });
+  const executionId = poller.lastSummary?.executionId || poller.expectedExecutionId;
+  const result = await requestCardSkillRunCancel({ ledgerId: poller.ledgerId, cardId: poller.cardId, runId: poller.runId, executionId });
   poller.cancelInFlight = false;
   if (!result.ok) {
     setCancelButtonState(button, 'ready');
@@ -471,6 +474,7 @@ async function poll(poller: Poller): Promise<void> {
     return;
   }
   poller.inFlight = true;
+  const requestGeneration = poller.generation;
   debugContinue(poller.continueTraceId, 'poll-request', pollerDebugState(poller));
   const summary = await requestCardSkillRunStatus({
     projectId: poller.projectId,
@@ -480,8 +484,17 @@ async function poll(poller: Poller): Promise<void> {
     since: poller.since,
     traceId: poller.continueTraceId
   });
+  if (pollers.get(key) !== poller || poller.generation !== requestGeneration) {
+    poller.inFlight = false;
+    schedulePoll(poller, 0);
+    return;
+  }
   poller.inFlight = false;
   debugContinue(poller.continueTraceId, 'poll-response', { ...pollerDebugState(poller), ok: summary.ok, status: summary.status, lineCount: summary.lineCount, nextSince: summary.nextSince, persistedEventCount: summary.persistedEventCount, latestEventType: summary.latestEvent?.type ?? '', latestEventLine: summary.latestEvent?.line ?? 0, error: summary.error ?? '' });
+  if (summary.ok && poller.expectedExecutionId && summary.executionId !== poller.expectedExecutionId) {
+    schedulePoll(poller, 250);
+    return;
+  }
   if (!summary.ok) {
     if (poller.element) {
       poller.element.dataset.runStatus = 'unknown';
@@ -520,15 +533,21 @@ async function poll(poller: Poller): Promise<void> {
   }
 }
 
-export function resumeExternallyStartedCardSkillRun(input: PollerIdentity): boolean {
+export function resumeExternallyStartedCardSkillRun(input: PollerIdentity & { executionId?: string; status?: CardSkillRunStatus }): boolean {
   const identity = normalizedPollerIdentity(input);
   const key = pollerKey(identity);
   terminalSummaries.delete(key);
-  const poller = pollers.get(key);
-  if (!poller) return false;
+  let poller = pollers.get(key);
+  if (!poller) {
+    const consumers = runConsumers.get(key);
+    if (!consumers?.size) return false;
+    poller = createConsumerPoller(identity, consumers, String(input.executionId ?? ''));
+  }
+  poller.generation += 1;
+  poller.expectedExecutionId = String(input.executionId ?? poller.expectedExecutionId);
   poller.continueInFlight = false;
   poller.since = Math.max(poller.since, poller.lastSummary?.lineCount ?? 0);
-  paintExternallyStartedRun(poller);
+  poller.terminal = false;
   pollers.set(key, poller);
   schedulePoll(poller, 0);
   return true;
@@ -541,6 +560,7 @@ export function bindCardSkillRunLogConsumer(input: {
   runId: string;
   expectedExecutionId?: string;
   expectedStatus?: CardSkillRunStatus;
+  forceRevalidate?: boolean;
   consumerId: string;
   onSummary: (summary: CardSkillRunSummary) => void;
 }): void {
@@ -552,7 +572,7 @@ export function bindCardSkillRunLogConsumer(input: {
   const expectedExecutionId = String(input.expectedExecutionId ?? '');
   const expectsLiveExecution = input.expectedStatus === 'pending' || input.expectedStatus === 'running';
   const terminalSummaryIsStale = Boolean(cachedTerminalSummary)
-    && ((expectedExecutionId && cachedTerminalSummary?.executionId !== expectedExecutionId) || expectsLiveExecution);
+    && (input.forceRevalidate === true || (expectedExecutionId && cachedTerminalSummary?.executionId !== expectedExecutionId) || expectsLiveExecution);
   if (terminalSummaryIsStale) terminalSummaries.delete(key);
   const terminalSummary = terminalSummaryIsStale ? undefined : cachedTerminalSummary;
   if (terminalSummary) {
@@ -562,21 +582,31 @@ export function bindCardSkillRunLogConsumer(input: {
   const existing = pollers.get(key);
   if (existing) {
     existing.consumers = consumers;
-    if (existing.lastSummary) input.onSummary(existing.lastSummary);
+    if (input.forceRevalidate || (expectedExecutionId && existing.expectedExecutionId !== expectedExecutionId)) {
+      existing.generation += 1;
+      existing.expectedExecutionId = expectedExecutionId;
+      existing.terminal = false;
+    } else if (existing.lastSummary) input.onSummary(existing.lastSummary);
     if (!existing.timer && !existing.inFlight) schedulePoll(existing, 0);
     return;
   }
-  const poller: Poller = {
+  const poller = createConsumerPoller(identity, consumers, expectedExecutionId);
+  pollers.set(key, poller);
+  schedulePoll(poller, 0);
+}
+
+function createConsumerPoller(identity: Required<PollerIdentity>, consumers: Map<string, (summary: CardSkillRunSummary) => void>, expectedExecutionId = ''): Poller {
+  return {
     projectId: identity.projectId,
-    ledgerId: input.ledgerId,
-    cardId: input.cardId,
-    runId: input.runId,
+    ledgerId: identity.ledgerId,
+    cardId: identity.cardId,
+    runId: identity.runId,
     element: null,
     consumers,
     historyEvents: [],
     lastSummary: null,
     since: 0,
-    startedAtMs: runStartedAt(input.runId),
+    startedAtMs: runStartedAt(identity.runId),
     timer: null,
     clock: null,
     lastClockPaintMs: 0,
@@ -586,9 +616,9 @@ export function bindCardSkillRunLogConsumer(input: {
     continueTraceId: '',
     detachedChecks: 0,
     terminal: false,
+    generation: 0,
+    expectedExecutionId,
   };
-  pollers.set(key, poller);
-  schedulePoll(poller, 0);
 }
 
 export function unbindCardSkillRunLogConsumer(input: PollerIdentity & { consumerId: string }): void {
@@ -602,13 +632,20 @@ export function unbindCardSkillRunLogConsumer(input: PollerIdentity & { consumer
   if (poller && !poller.element) stopPoller(key);
 }
 
+export function purgeCardSkillRunLog(input: PollerIdentity): void {
+  const key = pollerKey(normalizedPollerIdentity(input));
+  stopPoller(key);
+  terminalSummaries.delete(key);
+  runConsumers.delete(key);
+}
+
 export function bindCardSkillRunWidget(input: PollerIdentity & { element: HTMLElement }): void {
   const identity = normalizedPollerIdentity(input);
   const scopedInput = { ...input, projectId: identity.projectId };
   const key = pollerKey(identity);
   const terminalSummary = terminalSummaries.get(key);
   if (terminalSummary) {
-    const poller: Poller = { ...scopedInput, consumers: consumersFor(key), historyEvents: [...terminalSummary.events], lastSummary: terminalSummary, since: terminalSummary.lineCount, startedAtMs: runStartedAt(input.runId), timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, continueTraceId: '', detachedChecks: 0, terminal: true };
+    const poller: Poller = { ...scopedInput, consumers: consumersFor(key), historyEvents: [...terminalSummary.events], lastSummary: terminalSummary, since: terminalSummary.lineCount, startedAtMs: runStartedAt(input.runId), timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, continueTraceId: '', detachedChecks: 0, terminal: true, generation: 0, expectedExecutionId: '' };
     pollers.set(key, poller);
     paintWidget(input.element, terminalSummary);
     bindCancelButton(poller);
@@ -628,7 +665,7 @@ export function bindCardSkillRunWidget(input: PollerIdentity & { element: HTMLEl
     if (!existing.timer && !existing.inFlight) schedulePoll(existing, 0);
     return;
   }
-  const poller: Poller = { ...scopedInput, consumers: consumersFor(key), historyEvents: [], lastSummary: null, since: 0, startedAtMs: runStartedAt(input.runId), timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, continueTraceId: '', detachedChecks: 0, terminal: false };
+  const poller: Poller = { ...scopedInput, consumers: consumersFor(key), historyEvents: [], lastSummary: null, since: 0, startedAtMs: runStartedAt(input.runId), timer: null, clock: null, lastClockPaintMs: 0, inFlight: false, cancelInFlight: false, continueInFlight: false, continueTraceId: '', detachedChecks: 0, terminal: false, generation: 0, expectedExecutionId: '' };
   pollers.set(key, poller);
   bindCancelButton(poller);
   bindContinueButton(poller);
@@ -870,7 +907,12 @@ async function cancelPipelineStepRun(poller: PipelineStepPoller): Promise<void> 
   if (stop) setCancelButtonState(stop, 'stopping');
   setText(poller.element, '[data-codex-run-latest]', poller.continuationMode ? 'Stopping continuation' : 'Stopping pipeline');
   const result = poller.continuationMode
-    ? await requestCardSkillRunCancel({ ledgerId: poller.ledgerId, cardId: poller.cardId, runId: poller.activeSkillRunId || poller.runId })
+    ? await requestCardSkillRunCancel({
+        ledgerId: poller.ledgerId,
+        cardId: poller.cardId,
+        runId: poller.activeSkillRunId || poller.runId,
+        executionId: poller.lastStatus?.activeSkill?.executionId ?? '',
+      })
     : await requestCodexPipelineRunCancel({ runId: poller.pipelineRunId });
   poller.cancelInFlight = false;
   if (!result.ok) {

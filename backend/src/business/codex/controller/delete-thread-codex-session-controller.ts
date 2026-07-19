@@ -3,25 +3,18 @@
  * WHY: Clearing the run association must make the next thread launch a genuinely fresh session.
  */
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { basename, extname, isAbsolute, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
 import { stripHydratedThreadNotes } from '@backend/business/ledger/helper/thread-content-file.js';
 import { cancelCardSkillRunController } from './cancel-card-skill-run-controller.js';
+import { resolveCardSkillRunFiles } from '../helper/resolve-card-skill-run-files.js';
 
 type AnyRecord = Record<string, unknown>;
 type ArtifactSnapshot = { file: string; content: Buffer };
 
-function safeSegment(value: unknown): string {
-  return String(value || 'untitled').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled';
-}
-
 function isInside(parent: string, child: string): boolean {
   const inner = relative(parent, child);
   return Boolean(inner) && !inner.startsWith('..') && !isAbsolute(inner);
-}
-
-function ledgerStem(ledgerPath: string): string {
-  return basename(ledgerPath, extname(ledgerPath));
 }
 
 function runtimeRuns(runtime: AnyRecord): Record<string, AnyRecord> {
@@ -82,17 +75,20 @@ export async function deleteThreadCodexSessionController(input: { action_payload
 
   const run = runtimeRuns(runtime)[runId];
   if (run && String(run.status ?? '') === 'running') {
-    const cancelled = await cancelCardSkillRunController({ action_payload: { ledgerId, cardId, runId }, runtime_state: runtime });
+    const cancelled = await cancelCardSkillRunController({ action_payload: { ledgerId, cardId, runId, executionId: String(run.executionId ?? card.codexActiveExecutionId ?? '') }, runtime_state: runtime });
     if (cancelled.ok === false) return cancelled;
   }
   if (run && !String(run.settledAt ?? '').trim() && !await waitForSettlement(runtime, runId)) {
     return { ok: false, statusCode: 504, error: 'Codex run did not settle before session deletion.', runId };
   }
 
-  const runDirectory = resolve(decisionOsRoot, 'runs', 'codex-skills', safeSegment(ledgerStem(ledgerPath)));
+  const outputFiles = card.codexThreadRunOutputFiles && typeof card.codexThreadRunOutputFiles === 'object' && !Array.isArray(card.codexThreadRunOutputFiles)
+    ? card.codexThreadRunOutputFiles as Record<string, unknown>
+    : {};
+  const runFiles = resolveCardSkillRunFiles({ ledger, decisionOsRoot, ledgerPath, cardId, runId });
+  const runDirectory = runFiles.runDirectory;
   if (!isInside(decisionOsRoot, runDirectory)) return { ok: false, statusCode: 400, error: 'Codex run directory is outside the workspace.', runId };
-  const runBase = resolve(runDirectory, safeSegment(runId));
-  const artifactFiles = [`${runBase}.jsonl`, `${runBase}.log`, `${runBase}.md`, `${runBase}.jsonl.telemetry.jsonl`];
+  const artifactFiles = [runFiles.stdoutFile, runFiles.stderrFile, runFiles.outputFile, `${runFiles.stdoutFile}.telemetry.jsonl`];
   if (artifactFiles.some((file) => !isInside(runDirectory, file))) return { ok: false, statusCode: 400, error: 'Codex run artifact is outside its run directory.', runId };
   let snapshots: ArtifactSnapshot[];
   try {
@@ -112,13 +108,24 @@ export async function deleteThreadCodexSessionController(input: { action_payload
       }
     }
     const remainingRunIds = ownedRunIds.filter((ownedRunId) => ownedRunId !== runId);
+    const remainingOutputFiles = Object.fromEntries(Object.entries(outputFiles).filter(([ownedRunId]) => ownedRunId !== runId));
+    if (Object.keys(remainingOutputFiles).length > 0) card.codexThreadRunOutputFiles = remainingOutputFiles;
+    else delete card.codexThreadRunOutputFiles;
     if (remainingRunIds.length > 0) card.codexThreadRunIds = remainingRunIds;
     else delete card.codexThreadRunIds;
     if (String(card.codexThreadRunId ?? '') === runId) {
       const promotedRunId = remainingRunIds.at(-1) ?? '';
       if (promotedRunId) {
         card.codexThreadRunId = promotedRunId;
-        card.codexThreadRunOutputFile = `.decision-os/runs/codex-skills/${safeSegment(ledgerStem(ledgerPath))}/${safeSegment(promotedRunId)}.md`;
+        const discoveredOutputFile = resolveCardSkillRunFiles({ ledger, decisionOsRoot, ledgerPath, cardId, runId: promotedRunId }).outputFile;
+        const promotedOutputFile = String(remainingOutputFiles[promotedRunId] ?? '').trim()
+          || (existsSync(discoveredOutputFile) ? relative(dirname(decisionOsRoot), discoveredOutputFile) : '');
+        // WHAT: Persist legacy artifact discovery when promoting a retained session.
+        // WHY: A moved card must keep the promoted run's real artifact directory instead of deriving it from its current ledger.
+        if (promotedOutputFile) remainingOutputFiles[promotedRunId] = promotedOutputFile;
+        if (Object.keys(remainingOutputFiles).length > 0) card.codexThreadRunOutputFiles = remainingOutputFiles;
+        if (promotedOutputFile) card.codexThreadRunOutputFile = promotedOutputFile;
+        else delete card.codexThreadRunOutputFile;
       } else {
         delete card.codexThreadRunId;
         delete card.codexThreadRunOutputFile;

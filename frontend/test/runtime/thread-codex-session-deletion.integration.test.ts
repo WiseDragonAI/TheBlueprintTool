@@ -9,12 +9,12 @@ import { readFileSync } from 'node:fs';
 const root = new URL('../../../', import.meta.url);
 const source = (path: string): string => readFileSync(new URL(path, root), 'utf8');
 
-test('Codex Log renders the owned-session footer after the event stream only outside the queue', () => {
+test('Codex Log renders the owned thread-session footer only after terminal settlement', () => {
   const renderer = source('frontend/src/runtime/thread/effect/render-thread-codex-log.ts');
   assert.match(renderer, /function renderDeleteSession/);
   assert.match(renderer, /button\.dataset\.action = 'confirm-delete-thread-codex-session'/);
   assert.match(renderer, /root\.append\(stream\);/);
-  assert.match(renderer, /if \(summary\?\.status !== 'pending'\) root\.append\(renderDeleteSession/);
+  assert.match(renderer, /if \(selectedSummary\?\.runKind === 'thread' && selectedSummary\.status !== 'pending' && selectedSummary\.status !== 'running'\)/);
   assert.match(renderer, /if \(!runId\)[\s\S]*return;/);
   assert.doesNotMatch(renderer, /renderDeleteSession[\s\S]{0,500}button\.disabled/);
   const css = source('frontend/assets/shared/thread.css');

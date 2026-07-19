@@ -70,6 +70,8 @@ export function buildFederationTaskReplica(input: { project: DecisionOsProject; 
         codexActiveRunId: card.codexActiveRunId ?? null,
         codexActiveExecutionId: card.codexActiveExecutionId ?? null,
         codexThreadRunId: card.codexThreadRunId ?? null,
+        codexThreadRunIds: card.codexThreadRunIds ?? null,
+        codexThreadRunOutputFiles: card.codexThreadRunOutputFiles ?? null,
         codexRunId: card.codexRunId ?? null,
         codexRunModel: card.codexRunModel ?? null,
         codexRunEffort: card.codexRunEffort ?? null,

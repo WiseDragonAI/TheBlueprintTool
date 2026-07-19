@@ -13,6 +13,7 @@ export type ContentChangeEvent = {
   pipelineStatus?: string;
   reason?: string;
   runId?: string;
+  executionId?: string;
   status?: string;
   threadId?: string;
   noteId?: string;
@@ -34,6 +35,7 @@ export function contentEventPayload(event: Event): ContentChangeEvent {
       pipelineStatus: typeof parsed.pipelineStatus === 'string' ? parsed.pipelineStatus : '',
       reason: typeof parsed.reason === 'string' ? parsed.reason : '',
       runId: typeof parsed.runId === 'string' ? parsed.runId : '',
+      executionId: typeof parsed.executionId === 'string' ? parsed.executionId : '',
       status: typeof parsed.status === 'string' ? parsed.status : '',
       threadId: typeof parsed.threadId === 'string' ? parsed.threadId : '',
       noteId: typeof parsed.noteId === 'string' ? parsed.noteId : '',

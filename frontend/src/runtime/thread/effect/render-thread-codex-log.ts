@@ -184,6 +184,9 @@ function selectThreadCodexRun(threadId: string, entry: ThreadRunHistoryEntry): v
   recordState('threadSelectedRunIdByThreadId')[threadId] = entry.runId;
   recordState('threadSelectedExecutionIdByThreadId')[threadId] = entry.executionId;
   recordState('threadLogScrollTopByThreadId')[threadId] = 0;
+  // WHAT: Repaint the selected execution before the asynchronous panel bind completes.
+  // WHY: History navigation is local UI state and must respond in the same interaction turn.
+  renderThreadCodexLog();
   void import('./render-thread-panel.js').then(({ renderThreadPanel }) => renderThreadPanel());
 }
 
@@ -332,9 +335,11 @@ export function renderThreadCodexLog(): void {
   const selectedEntry = selectedHistoryEntry({ entries: historyEntries, runId, threadId });
   const selectedEvents = executionEvents({ events, summary, executionId: selectedEntry.executionId });
   const selectedSummary = executionSummary(summary, selectedEntry.executionId, selectedEvents);
+  const activeSummary = recordState('threadActiveRunSummaryByThreadId')[threadId] as CardSkillRunSummary | undefined;
   const navigator = renderRunNavigator({ entries: historyEntries, selected: selectedEntry, threadId });
-  root.append(...[navigator, renderAnnouncement(threadId), renderThreadCodexLogStatus({ summary: selectedSummary ?? null, sessionSummary: summary ?? null, card, runId, threadId })].filter((element): element is HTMLElement => Boolean(element)));
-  const stopError = threadCodexStopState(runId).error;
+  root.append(...[navigator, renderAnnouncement(threadId), renderThreadCodexLogStatus({ summary: selectedSummary ?? null, sessionSummary: activeSummary ?? summary ?? null, card, runId, threadId })].filter((element): element is HTMLElement => Boolean(element)));
+  const actionRunId = activeSummary?.status === 'pending' || activeSummary?.status === 'running' ? activeSummary.runId : runId;
+  const stopError = threadCodexStopState(actionRunId).error;
   if (stopError) {
     const error = document.createElement('p');
     error.className = 'codex-log-stop-error';
@@ -374,7 +379,9 @@ export function renderThreadCodexLog(): void {
     stream.append(waiting);
   }
   root.append(stream);
-  if (summary?.status !== 'pending') root.append(renderDeleteSession({ cardId: String(card.id ?? ''), runId, threadId }));
+  if (selectedSummary?.runKind === 'thread' && selectedSummary.status !== 'pending' && selectedSummary.status !== 'running') {
+    root.append(renderDeleteSession({ cardId: String(card.id ?? ''), runId, threadId }));
+  }
 
   const restore = () => {
     // WHAT: Skip scroll restoration when the independent log viewport is absent.

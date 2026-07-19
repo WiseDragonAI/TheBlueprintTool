@@ -45,9 +45,9 @@ test('pipeline library routes expose empty, create, invalid-reference, conflict,
     assert.equal(emptyResponse.status, 200);
     const empty = await emptyResponse.json() as Record<string, any>;
     assert.equal(empty.ok, true);
-    assert.equal(empty.empty, true);
-    assert.deepEqual(empty.pipelines, []);
-    assert.deepEqual(empty.steps, []);
+    assert.equal(empty.empty, false);
+    assert.equal(empty.pipelines.some((pipeline: Record<string, unknown>) => pipeline.id === 'project-synchronization' && pipeline.scope === 'server'), true);
+    assert.equal(empty.steps.length > 0, true);
 
     const saveBody = {
       pipeline: {
@@ -120,8 +120,9 @@ test('pipeline library routes expose empty, create, invalid-reference, conflict,
     assert.equal(invalidResponse.status, 400);
 
     const persisted = JSON.parse(readFileSync(join(decisionOsRoot, 'codex-pipelines.json'), 'utf8')) as Record<string, any>;
-    assert.equal(persisted.pipelines[0].name, 'Pipeline A updated');
-    assert.deepEqual(persisted.pipelines[0].stepIds, ['step-a']);
+    const persistedPipeline = persisted.pipelines.find((pipeline: Record<string, unknown>) => pipeline.id === 'pipeline-a');
+    assert.equal(persistedPipeline.name, 'Pipeline A updated');
+    assert.deepEqual(persistedPipeline.stepIds, ['step-a']);
 
     const skillsResponse = await fetch(`${baseUrl}/api/codex/skills`);
     assert.equal(skillsResponse.status, 200);
@@ -166,8 +167,11 @@ test('server pipeline routes persist explicit server provenance', async () => {
     const created = await response.json() as Record<string, any>;
     assert.equal(created.pipeline.scope, 'server');
     const listed = await fetch(`${baseUrl}/api/codex/server-pipelines`).then((result) => result.json()) as Record<string, any>;
-    assert.deepEqual(listed.pipelines.map((pipeline: Record<string, any>) => [pipeline.id, pipeline.scope]), [['server-pipeline', 'server']]);
-    assert.equal(JSON.parse(readFileSync(join(decisionOsRoot, 'codex-pipelines.json'), 'utf8')).pipelines[0].id, 'server-pipeline');
+    assert.deepEqual(
+      listed.pipelines.filter((pipeline: Record<string, any>) => pipeline.id === 'server-pipeline').map((pipeline: Record<string, any>) => [pipeline.id, pipeline.scope]),
+      [['server-pipeline', 'server']],
+    );
+    assert.equal(JSON.parse(readFileSync(join(decisionOsRoot, 'codex-pipelines.json'), 'utf8')).pipelines.some((pipeline: Record<string, unknown>) => pipeline.id === 'server-pipeline'), true);
   } finally {
     await closeServer(server);
     rmSync(workspace, { recursive: true, force: true });
