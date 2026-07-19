@@ -250,6 +250,7 @@ test('thread viewport state hydrates validated independent follow and offset rec
   assert.equal(isThreadFollowingBottom('thread-a', 'thread'), false);
   assert.equal(isThreadFollowingBottom('thread-a', 'codex-log'), true);
   assert.equal(isThreadFollowingBottom('unseen-thread', 'thread'), true);
+  assert.equal(isThreadFollowingBottom('unseen-thread', 'codex-log'), true);
 });
 
 test('conversation and Codex Log follow changes persist independently', () => {
