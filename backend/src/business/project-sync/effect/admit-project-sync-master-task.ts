@@ -10,6 +10,7 @@ export function admitProjectSyncMasterTask(input: {
   project: DecisionOsProject;
   sourceProjectId: string;
   sourceProjectName: string;
+  sourceProjectColor: string;
   originFingerprint: string;
   syncId: string;
   waitingSince: string;
@@ -33,7 +34,7 @@ export function admitProjectSyncMasterTask(input: {
     const result = applyLedgerMutation({ decisionOsRoot: input.project.decisionOsRoot, ledgerPath, ledger: document, mutation });
     if (!result.ok) throw new Error(String(result.error?.body.error ?? 'Could not persist synchronization task.'));
   };
-  mutate({ action: 'create-zone', annotation: { id: zoneId, variant: 'zone', label: `Synchronization · ${input.sourceProjectName}`, color: '#895cfa', x, y: 80, width: 1120, height: 720 } });
+  mutate({ action: 'create-zone', annotation: { id: zoneId, variant: 'zone', label: `Synchronization · ${input.sourceProjectName}`, color: input.sourceProjectColor, x, y: 80, width: 1120, height: 720 } });
   mutate({
     action: 'create-card',
     card: {

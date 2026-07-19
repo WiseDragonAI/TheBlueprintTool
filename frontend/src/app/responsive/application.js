@@ -1074,8 +1074,10 @@ async function startSelectedProjectSync() {
     state.projectFilter = 'All';
     state.controlFilter = 'All';
     state.controlTab = 'exec';
-    await loadControlRoom({ force: true });
-    const anchor = `task-${taskIdentity({ projectId: admission.projectId, ledgerId: admission.ledgerId, cardId: admission.masterCardId })}`;
+    const navigationTask = admission.masterCardId
+      ? { projectId: admission.projectId, ledgerId: admission.ledgerId, cardId: admission.masterCardId }
+      : { projectId: admission.run.sourceProjectId, ledgerId: 'project-sync', cardId: `project-sync-${admission.run.syncId}` };
+    const anchor = `task-${taskIdentity(navigationTask)}`;
     navigate(controlRoomPath('exec', anchor), true);
   } catch (cause) {
     error.textContent = cause instanceof Error ? cause.message : 'Synchronization could not start.';
@@ -1326,7 +1328,15 @@ function taskRow(task, tab, index) {
   summary.querySelector('strong').textContent = task.title;
   if (executing) {
     const runtimeStatus = summary.querySelector('.task-next');
-    if (task.transcribingBeforeLaunch) {
+    if (task.projectSyncFailed) {
+      runtimeStatus.textContent = 'Failed';
+    } else if (task.projectSync) {
+      runtimeStatus.textContent = task.projectSyncPreparationPhase === 'materializing'
+        ? 'Preparing repository'
+        : task.projectSyncPhase === 'requested'
+          ? 'Starting'
+          : task.projectSyncPhase.replaceAll('_', ' ');
+    } else if (task.transcribingBeforeLaunch) {
       runtimeStatus.textContent = 'Transcribing before launch';
     } else if (task.codexQueued) {
       runtimeStatus.className = 'task-queue-position';
@@ -1372,8 +1382,32 @@ function taskRow(task, tab, index) {
     diagnostic.textContent = task.diagnostics.join(' · ');
     summary.querySelector('.task-copy').append(diagnostic);
   }
-  summary.addEventListener('click', () => navigate(pathForTask(task)));
+  if (task.projectSyncCanonical !== false) summary.addEventListener('click', () => navigate(pathForTask(task)));
+  else {
+    summary.setAttribute('aria-disabled', 'true');
+    summary.style.cursor = 'default';
+  }
   article.append(summary);
+  if (task.projectSyncFailed) {
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'project-sync-retry';
+    retry.textContent = 'Retry synchronization';
+    retry.addEventListener('click', async () => {
+      retry.disabled = true;
+      try {
+        const response = await fetch(`/api/project-sync/${encodeURIComponent(task.projectSyncId)}/retry`, { method: 'POST' });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload?.run) throw new Error(payload?.error || `Retry failed (${response.status}).`);
+        await loadControlRoom({ force: true });
+        renderControlRoom();
+      } catch (cause) {
+        retry.disabled = false;
+        console.error('Project synchronization retry failed.', cause);
+      }
+    });
+    article.append(retry);
+  }
   return article;
 }
 
@@ -1575,6 +1609,7 @@ function subscribeControlRoomEvents() {
   };
   controlRoomEventSource.addEventListener('ledger-content-change', refresh);
   controlRoomEventSource.addEventListener('card-content-change', refresh);
+  controlRoomEventSource.addEventListener('project-sync-change', refresh);
   controlRoomEventSource.addEventListener('federation-replica-change', (event) => {
     refresh();
     let payload = {};

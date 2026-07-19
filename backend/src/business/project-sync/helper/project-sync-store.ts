@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { projectSyncPhases, type ProjectSyncEvidence, type ProjectSyncPhase, type ProjectSyncRun } from './project-sync-types.js';
+import { projectSyncPhases, type ProjectSyncEvidence, type ProjectSyncPhase, type ProjectSyncPreparationPhase, type ProjectSyncRun } from './project-sync-types.js';
 
 type StoreDocument = { version: 1; runs: Record<string, ProjectSyncRun>; locks: Record<string, string> };
 const terminal = new Set<ProjectSyncPhase>(['complete', 'failed']);
@@ -13,7 +13,7 @@ const transitions: Record<ProjectSyncPhase, ProjectSyncPhase[]> = {
   initiator_reconcile: ['source_finalize', 'failed'],
   source_finalize: ['complete', 'failed'],
   complete: [],
-  failed: ['preflight'],
+  failed: ['requested', 'preflight'],
 };
 
 export function createProjectSyncStore(input: { decisionOsRoot: string; now?: () => Date }) {
@@ -23,6 +23,11 @@ export function createProjectSyncStore(input: { decisionOsRoot: string; now?: ()
   try { document = JSON.parse(readFileSync(file, 'utf8')) as StoreDocument; }
   catch { document = { version: 1, runs: {}, locks: {} }; }
   document.locks ??= {};
+  for (const run of Object.values(document.runs ?? {})) {
+    run.sourceProjectName ||= run.sourceProjectId;
+    run.sourceProjectColor ||= '#38d9e8';
+    run.preparationPhase ||= run.taskProjectId && run.masterCardId && run.pipelineRunId ? 'attached' : 'pending';
+  }
   const persist = (): void => {
     mkdirSync(dirname(file), { recursive: true });
     const temporary = `${file}.tmp-${process.pid}-${Date.now()}`;
@@ -36,12 +41,20 @@ export function createProjectSyncStore(input: { decisionOsRoot: string; now?: ()
     attachTask(syncId: string, value: Pick<ProjectSyncRun, 'initiatorProjectId' | 'taskProjectId' | 'ledgerId' | 'masterCardId' | 'pipelineRunId'>): ProjectSyncRun {
       const run = document.runs[syncId];
       if (!run) throw new Error('Unknown project synchronization run.');
-      Object.assign(run, value, { updatedAt: now().toISOString() });
+      Object.assign(run, value, { preparationPhase: 'attached', updatedAt: now().toISOString() });
       persist();
       return run;
     },
-    admit(value: Omit<ProjectSyncRun, 'syncId' | 'phase' | 'createdAt' | 'updatedAt' | 'evidence' | 'error' | 'taskProjectId' | 'ledgerId' | 'masterCardId' | 'pipelineRunId'>): { run: ProjectSyncRun; duplicate: boolean } {
-      const duplicate = Object.values(document.runs).find((run) => run.idempotencyKey === value.idempotencyKey)
+    setPreparationPhase(syncId: string, preparationPhase: ProjectSyncPreparationPhase): ProjectSyncRun {
+      const run = document.runs[syncId];
+      if (!run) throw new Error('Unknown project synchronization run.');
+      run.preparationPhase = preparationPhase;
+      run.updatedAt = now().toISOString();
+      persist();
+      return run;
+    },
+    admit(value: Omit<ProjectSyncRun, 'syncId' | 'phase' | 'createdAt' | 'updatedAt' | 'evidence' | 'error' | 'taskProjectId' | 'ledgerId' | 'masterCardId' | 'pipelineRunId' | 'preparationPhase'>): { run: ProjectSyncRun; duplicate: boolean } {
+      const duplicate = Object.values(document.runs).find((run) => run.phase !== 'complete' && run.idempotencyKey === value.idempotencyKey)
         ?? Object.values(document.runs).find((run) => !terminal.has(run.phase) && run.originFingerprint === value.originFingerprint);
       if (duplicate) return { run: duplicate, duplicate: true };
       if (document.locks[value.originFingerprint]) throw new Error('Repository origin already has an active synchronization run.');
@@ -53,6 +66,7 @@ export function createProjectSyncStore(input: { decisionOsRoot: string; now?: ()
         ledgerId: '',
         masterCardId: '',
         pipelineRunId: '',
+        preparationPhase: 'pending',
         phase: 'requested',
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -63,6 +77,20 @@ export function createProjectSyncStore(input: { decisionOsRoot: string; now?: ()
       document.locks[run.originFingerprint] = run.syncId;
       persist();
       return { run, duplicate: false };
+    },
+    restart(syncId: string): ProjectSyncRun {
+      const run = document.runs[syncId];
+      if (!run || run.phase !== 'failed') throw new Error('Only a failed project synchronization can be retried.');
+      const attached = Boolean(run.taskProjectId && run.masterCardId && run.pipelineRunId);
+      const owner = document.locks[run.originFingerprint];
+      if (owner && owner !== syncId) throw new Error('Repository origin already has an active synchronization run.');
+      document.locks[run.originFingerprint] = syncId;
+      run.phase = attached ? 'preflight' : 'requested';
+      if (!attached) run.preparationPhase = 'pending';
+      run.updatedAt = now().toISOString();
+      run.error = null;
+      persist();
+      return run;
     },
     transition(syncId: string, phase: ProjectSyncPhase, evidence?: ProjectSyncEvidence, error?: ProjectSyncRun['error']): ProjectSyncRun {
       const run = document.runs[syncId];

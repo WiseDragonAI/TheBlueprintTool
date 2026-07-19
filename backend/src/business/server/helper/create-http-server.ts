@@ -55,7 +55,7 @@ import { createProjectCatalogStore } from './project-catalog-store.js';
 import { listProjectDirectories } from './project-directory-browser.js';
 import { isGlobalProjectEndpoint, isProjectSensitiveEndpoint, parseProjectUrlScope } from './project-url-scope.js';
 import { ensureLedgerCliShim } from '../../codex/helper/decision-os-codex-runtime.js';
-import { createControlRoomProjectionStore } from './control-room-projection-store.js';
+import { createControlRoomProjectionStore, withProjectSyncRuns } from './control-room-projection-store.js';
 import { ledgerCanvasProjection, ledgerCardProjection, ledgerNavigationProjection, ledgerSearchProjection, ledgerThreadProjection } from './ledger-read-models.js';
 import { ensureProjectsCanvasDocument } from './ensure-projects-canvas-document.js';
 import { createFederationNodeConnector } from '../../federation/helper/federation-node-connector.js';
@@ -551,7 +551,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     gitSshCommand: () => projectSyncGitSshCommand(
       readDecisionOsSettings({ action_payload: { decisionOsRoot: masterDecisionOsRoot }, runtime_state: runtime }).settings,
     ),
-    onRunChange: () => undefined,
+    onRunChange: (run) => {
+      controlRoomProjectionStore?.invalidate();
+      for (const client of globalContentEventClients) client.write(`event: project-sync-change\ndata: ${JSON.stringify({ syncId: run.syncId, phase: run.phase, preparationPhase: run.preparationPhase })}\n\n`);
+    },
   });
   projectSyncController.resume();
   Object.defineProperty(runtime, 'federationNodeConnector', { value: federation, configurable: true, enumerable: false });
@@ -686,12 +689,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         },
         owner: { nodeId: entry.nodeId, nodeLabel: entry.nodeLabel, remote: true, online: federation.nodes().find((node) => node.nodeId === entry.nodeId)?.online !== false },
       }));
-      const publicProjection = federatedControlRoomProjection({
+      const publicProjection = withProjectSyncRuns(federatedControlRoomProjection({
         localProjection: projection,
         localOwner: { nodeId: localOwner.ownerNodeId, nodeLabel: localOwner.ownerNodeLabel, remote: false },
         remoteProjections,
         diagnostics: remoteDiagnostics,
-      });
+      }), projectSyncStore.list());
       const etag = `"${String(publicProjection.fingerprint)}"`;
       if (request.headers['if-none-match'] === etag) {
         response.statusCode = 304;
@@ -1007,7 +1010,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         const source = allProjects.find((entry) => String(entry.localProjectId ?? entry.id) === sourceId
           && (!sourceNodeId || String(entry.ownerNodeId) === sourceNodeId));
         if (!source) throw new Error('Unknown source project.');
-        const admitted = await projectSyncController.start(source, String(body.idempotencyKey ?? request.headers['idempotency-key'] ?? sourceId));
+        const admitted = projectSyncController.start(source, String(body.idempotencyKey ?? request.headers['idempotency-key'] ?? sourceId));
         response.statusCode = admitted.duplicate ? 200 : 202;
         response.end(JSON.stringify({
           ok: true,
@@ -1015,7 +1018,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           masterCardId: admitted.run.masterCardId,
           ledgerId: admitted.run.ledgerId,
           pipelineRunId: admitted.run.pipelineRunId,
-          projectId: admitted.run.taskProjectId,
+          projectId: admitted.run.taskProjectId || admitted.run.sourceProjectId,
           run: admitted.run,
         }));
       } catch (error) {
