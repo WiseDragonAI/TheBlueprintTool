@@ -1378,6 +1378,7 @@ function taskRow(task, tab, index) {
 }
 
 function rememberControlRoomColumnScroll(list) {
+  if (!elements['control-task-list'].contains(list)) return;
   const column = list?.dataset?.controlColumnList;
   if (!Object.hasOwn(controlRoomColumnScrollTop, column)) return;
   const scrollTop = Number(list.scrollTop);
@@ -1388,6 +1389,7 @@ function rememberControlRoomColumnScroll(list) {
 
 function captureControlRoomColumnScroll() {
   if (elements['control-room-view'].hidden) return;
+  if (controlRoomColumnScrollFrame) return;
   elements['control-task-list'].querySelectorAll('.control-task-column-list').forEach(rememberControlRoomColumnScroll);
 }
 
@@ -1400,6 +1402,7 @@ function restoreControlRoomColumnScroll() {
       const maximum = Math.max(0, Number(list.scrollHeight) - Number(list.clientHeight));
       list.scrollTop = Math.min(controlRoomColumnScrollTop[column], maximum);
     });
+    controlRoomColumnScrollFrame = 0;
   });
 }
 

@@ -283,11 +283,11 @@ test('uses the full desktop pane and gives every Kanban column its own vertical 
 
 test('remembers and restores every Control Room column scroll position in runtime memory', () => {
   assert.match(mobile, /const controlRoomColumnScrollTop = \{ queue: 0, exec: 0, backlog: 0 \}/);
-  assert.match(mobile, /function rememberControlRoomColumnScroll\(list\)[\s\S]*controlRoomColumnScrollTop\[column\] = Math\.max\(0, scrollTop\)[\s\S]*initializedControlRoomColumns\.add\(column\)/);
-  assert.match(mobile, /function captureControlRoomColumnScroll\(\) \{\s*if \(elements\['control-room-view'\]\.hidden\) return;/);
+  assert.match(mobile, /function rememberControlRoomColumnScroll\(list\) \{\s*if \(!elements\['control-task-list'\]\.contains\(list\)\) return;[\s\S]*controlRoomColumnScrollTop\[column\] = Math\.max\(0, scrollTop\)[\s\S]*initializedControlRoomColumns\.add\(column\)/);
+  assert.match(mobile, /function captureControlRoomColumnScroll\(\) \{\s*if \(elements\['control-room-view'\]\.hidden\) return;\s*if \(controlRoomColumnScrollFrame\) return;/);
   assert.match(mobile, /function renderControlRoom\(\) \{\s*captureControlRoomColumnScroll\(\);[\s\S]*replaceChildren\(\.\.\.columns\);\s*restoreControlRoomColumnScroll\(\);/);
   assert.match(mobile, /list\.addEventListener\('scroll', \(\) => rememberControlRoomColumnScroll\(list\), \{ passive: true \}\)/);
-  assert.match(mobile, /list\.scrollTop = Math\.min\(controlRoomColumnScrollTop\[column\], maximum\)/);
+  assert.match(mobile, /list\.scrollTop = Math\.min\(controlRoomColumnScrollTop\[column\], maximum\);[\s\S]*controlRoomColumnScrollFrame = 0;/);
   assert.doesNotMatch(mobile, /(?:localStorage|sessionStorage).*controlRoomColumnScrollTop/);
 });
 
