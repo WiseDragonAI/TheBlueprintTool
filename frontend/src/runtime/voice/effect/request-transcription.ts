@@ -20,6 +20,7 @@ export type VoiceTranscriptionRequest = {
   cardId?: string;
   launchMode?: 'send' | 'run' | 'pipeline';
   queueCodex?: boolean;
+  reviewContext?: Record<string, string>;
   onPersisted?: () => void;
 };
 
@@ -52,6 +53,7 @@ export async function requestTranscription(audio: Blob | null, input: VoiceTrans
       ledgerId: options.ledgerId || currentLedgerStateId(),
       cardId: options.cardId ?? '',
       launchMode,
+      reviewContext: options.reviewContext,
       audio,
       createdAt: new Date().toISOString()
     });

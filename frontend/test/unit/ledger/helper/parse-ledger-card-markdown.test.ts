@@ -130,3 +130,13 @@ test('parse-ledger-card-markdown ignores html directives inside code fences', ()
     }
   ]);
 });
+
+test('parse-ledger-card-markdown parses a configurable repository and repository-relative target', () => {
+  assert.deepEqual(parseLedgerCardMarkdown('::git-diff[Review frontend](git-diff:?repo=packages%2Ffrontend&path=src%2Freview.ts)'), [
+    { kind: 'gitDiff', title: 'Review frontend', repository: 'packages/frontend', target: 'src/review.ts' }
+  ]);
+});
+
+test('parse-ledger-card-markdown leaves incomplete git diff directives inert', () => {
+  assert.equal(parseLedgerCardMarkdown('::git-diff[Unsafe](git-diff:?repo=.&missing=path)')[0]?.kind, 'paragraph');
+});

@@ -52,6 +52,7 @@ export async function stopVoiceRecording(input: { launchMode?: 'send' | 'run' | 
     threadId,
     cardId: threadCodexCardId(state.activeLedger, threadId),
     launchMode: input.launchMode ?? (input.queueCodex ? 'run' : 'send'),
+    reviewContext: state.voice.reviewContext,
     onPersisted: input.onPersisted
   });
 }
