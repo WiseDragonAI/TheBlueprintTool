@@ -1,17 +1,12 @@
 @import url('./review-shell.css');
-.summary { padding: 14px; }
-.summary-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.summary-head strong { font-size: 13px; }
-.summary-head b { color: var(--accent); font-size: 12px; }
-.files { display: grid; gap: 8px; margin-top: 12px; }
-.file { display: grid; grid-template-columns: 34px minmax(0,1fr) auto; gap: 10px; align-items: center; min-height: 64px; padding: 10px; border: 1px solid var(--line); border-radius: 3px; background: #111419; }
-.file-icon { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 3px; color: var(--accent); background: #38d9e817; font-weight: 900; }
+.compare { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.summary { overflow: hidden; }
+.files { display: grid; gap: 7px; padding: 10px; }
+.file { display: grid; grid-template-columns: 34px minmax(0,1fr) auto; gap: 10px; align-items: center; width: 100%; min-height: 60px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 3px; color: var(--text); background: #111419; box-shadow: none; text-align: left; }
+.file-icon { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 3px; color: var(--accent); background: rgba(56,217,232,.09); font-size: 11px; font-weight: 900; }
+.file-copy { min-width: 0; }
 .file-copy small { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; }
 .file-state { color: var(--muted); font-size: 17px; }
-.file.done .file-icon, .file.done .file-state { color: var(--green); }
-.file.active { border-color: #38d9e870; box-shadow: inset 0 0 0 1px #38d9e826; }
+.file.complete .file-icon, .file.complete .file-state { color: var(--green); }
+.file.active { border-color: rgba(56,217,232,.44); box-shadow: inset 3px 0 var(--accent); }
 .file.active .file-state { color: var(--accent); }
-.legend { display: grid; grid-template-columns: repeat(3,1fr); gap: 1px; margin-top: 12px; overflow: hidden; border: 1px solid var(--line); background: var(--line); }
-.legend div { padding: 9px; background: var(--panel-deep); text-align: center; }
-.legend b { display: block; font-size: 15px; }
-.legend small { color: var(--muted); font-size: 9px; text-transform: uppercase; }
