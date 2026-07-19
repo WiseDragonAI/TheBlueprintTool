@@ -3218,7 +3218,7 @@
       "title": "Restore Thread and Codex Log Follow-Bottom",
       "cardType": "note",
       "domainId": "tasks",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "implementation",
         "master-task"
