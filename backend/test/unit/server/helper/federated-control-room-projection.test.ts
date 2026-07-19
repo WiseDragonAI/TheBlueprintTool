@@ -88,7 +88,7 @@ test('changes the projection fingerprint when retained remote replicas change pr
   assert.equal(offline.backlog[0].status, 'task-backlog', 'retained offline tasks preserve their persisted workflow status');
 });
 
-test('projects one authoritative task for replicas of the same logical project', () => {
+test('keeps the local workstation task authoritative when a mobile replica disagrees', () => {
   const localTask = { cardId: 'card-1', projectId: 'project-1', ledgerId: 'specs', title: 'Task', cardStatus: 'backlog', status: 'task-backlog' };
   const remoteTask = { ...localTask, cardStatus: 'todo', status: 'task-waiting' };
   const result = federatedControlRoomProjection({
@@ -110,11 +110,11 @@ test('projects one authoritative task for replicas of the same logical project',
   assert.equal(result.projects.length, 1);
   assert.equal(result.projects[0].replicaCount, 2);
   assert.equal(result.allTasks.length, 1);
-  assert.equal(result.queue.length, 1);
-  assert.equal(result.backlog.length, 0);
-  assert.equal(result.queue[0].ownerNodeId, 'mobile');
-  assert.equal(result.queue[0].replicaCount, 2);
-  assert.equal(result.queue[0].conflict, true);
+  assert.equal(result.queue.length, 0);
+  assert.equal(result.backlog.length, 1);
+  assert.equal(result.backlog[0].ownerNodeId, 'workstation');
+  assert.equal(result.backlog[0].replicaCount, 2);
+  assert.equal(result.backlog[0].conflict, true);
   assert.equal(result.diagnostics.filter((entry: Record<string, unknown>) => entry.type === 'federation_task_conflict').length, 1);
 });
 
