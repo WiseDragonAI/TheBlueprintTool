@@ -25,6 +25,7 @@ import { scheduleCodexProcesses, unifiedCodexQueuePosition } from '../helper/cod
 import { createTerminalCodexProcessReconciler, type TerminalCodexStatus } from '../helper/reconcile-terminal-codex-process.js';
 import { clearCardCodexExecution } from '../helper/clear-card-codex-execution.js';
 import { resolveCardSkillRunFiles } from '../helper/resolve-card-skill-run-files.js';
+import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
 
 type AnyRecord = Record<string, unknown>;
 type ProcessStatus = 'running' | 'complete' | 'failed' | 'cancelled';
@@ -225,7 +226,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     card.codexRunModel = command.model;
     card.codexRunEffort = command.effort;
     stripHydratedThreadNotes(ledger);
-    writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2), 'utf8');
+    persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime });
   }
   const prompt = buildCardSkillContinuePrompt({
     messages,

@@ -23,6 +23,7 @@ import { resolveCodexCommand } from './resolve-codex-command.js';
 import { decisionOsCodexEnvironment } from './decision-os-codex-runtime.js';
 import { resolveServerSkillContext } from './server-skill-context.js';
 import { projectCardCodexRun } from './project-card-codex-run.js';
+import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
 
 type AnyRecord = Record<string, unknown>;
 type TerminalStatus = 'complete' | 'failed' | 'cancelled';
@@ -58,6 +59,7 @@ export type PipelineLedgerContext = {
   ledgerId: string;
   ledgerPath: string;
   ledger: AnyRecord & { cards?: AnyRecord[]; relationships?: AnyRecord[] };
+  runtime?: AnyRecord;
 };
 
 function isInside(parent: string, child: string): boolean {
@@ -147,12 +149,12 @@ export function resolvePipelineLedgerContext(input: {
     ledgerId: input.ledgerId,
     ledgerPath,
     ledger: JSON.parse(readFileSync(ledgerPath, 'utf8')) as PipelineLedgerContext['ledger'],
+    runtime: input.runtime,
   };
 }
 
 function persistLedger(context: PipelineLedgerContext): void {
-  stripHydratedThreadNotes(context.ledger);
-  writeFileSync(context.ledgerPath, JSON.stringify(context.ledger, null, 2), 'utf8');
+  persistLedgerProjection({ ledgerId: context.ledgerId, ledgerPath: context.ledgerPath, ledger: context.ledger, runtime: context.runtime });
 }
 
 function reconcilePipelineExecution(context: PipelineLedgerContext, run: CodexPipelineRun): void {

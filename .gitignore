@@ -3,6 +3,8 @@ tmp/
 .decision-os/runs/
 .decision-os/voice-uploads/
 .decision-os/cache/
+**/.decision-os/cache/
+**/.decision-os/task-state/
 .decision-os/memories.sqlite3
 .decision-os/.settings.json
 .decision-os/runtime/

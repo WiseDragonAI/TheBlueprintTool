@@ -4,7 +4,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import { applyLedgerMutation, type LedgerMutation } from './apply-ledger-mutation.js';
 import { stripHydratedThreadNotes } from './thread-content-file.js';
 
@@ -49,6 +49,7 @@ export function commitMasterTaskCompletion(input: {
   ledgerPath: string;
   ledger: Ledger;
   mutation: LedgerMutation;
+  persistProjection?: (ledger: Ledger) => void;
 }): { ok: true; ledger: Ledger; commitSha: string } | { ok: false; error: MutationError } {
   const masterTaskId = String(input.mutation.masterTaskId ?? '');
   const masterTask = (input.ledger.cards ?? []).find((card) => String(card.id ?? '') === masterTaskId);
@@ -72,7 +73,8 @@ export function commitMasterTaskCompletion(input: {
   let indexTouched = false;
 
   const restore = (): string => {
-    writeFileSync(input.ledgerPath, ledgerText, 'utf8');
+    if (input.persistProjection) input.persistProjection(JSON.parse(ledgerText) as Ledger);
+    else writeFileSync(input.ledgerPath, ledgerText, 'utf8');
     if (masterText === null) rmSync(masterPath, { force: true });
     else writeFileSync(masterPath, masterText, 'utf8');
     replaceLedger(input.ledger, ledgerSnapshot);
@@ -93,14 +95,15 @@ export function commitMasterTaskCompletion(input: {
       return { ok: false, error: mutationResult.error };
     }
     stripHydratedThreadNotes(input.ledger);
-    writeFileSync(input.ledgerPath, JSON.stringify(input.ledger, null, 2), 'utf8');
+    if (input.persistProjection) input.persistProjection(input.ledger);
+    else writeFileSync(input.ledgerPath, JSON.stringify(input.ledger, null, 2), 'utf8');
 
     repositoryRoot = git(dirname(input.decisionOsRoot), ['rev-parse', '--show-toplevel']);
     const threadId = `thread-${masterTaskId}`;
     const threadRef = String(input.ledger.threadFiles?.[threadId] ?? '').trim();
     if (!threadRef) throw new Error(`Master task ${masterTaskId} has no canonical thread file.`);
     const files = [
-      input.ledgerPath,
+      ...(basename(input.ledgerPath) === 'tasks.json' ? [] : [input.ledgerPath]),
       ...cards.map((card) => cardContentPath(input.decisionOsRoot, card!)),
       resolve(dirname(input.decisionOsRoot), threadRef),
     ];

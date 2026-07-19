@@ -317,12 +317,12 @@ function renderTaskReplicaShell(task, replica = task?.replica) {
   backButton.replaceChildren(backIcon, backLabel);
   backButton.dataset.destination = 'control-room';
   const shell = document.createElement('section');
-  shell.className = 'task-replica-skeleton';
+  shell.className = 'task-state-skeleton';
   shell.dataset.replicaStatus = status;
   shell.setAttribute('role', 'status');
   shell.setAttribute('aria-live', 'polite');
-  shell.innerHTML = '<p class="task-replica-message"></p><div></div><div></div><div></div>';
-  shell.querySelector('.task-replica-message').textContent = replica?.message || label;
+  shell.innerHTML = '<p class="task-state-message"></p><div></div><div></div><div></div>';
+  shell.querySelector('.task-state-message').textContent = replica?.message || label;
   elements['card-body'].replaceChildren(shell);
   elements['card-view'].style.setProperty('--zone-color', state.activeZoneColor || 'var(--accent)');
   elements['card-view'].style.setProperty('--accent', state.activeZoneColor || defaultAccent);
@@ -1357,10 +1357,11 @@ function taskRow(task, tab, index) {
   }
   if (task.remote || task.replica) {
     const replica = document.createElement('span');
-    replica.className = `task-replica-status is-${task.replica?.status || (task.ownerOnline === false ? 'offline' : 'synchronizing')}`;
-    replica.textContent = task.replica?.status || (task.ownerOnline === false ? 'offline' : 'synchronizing');
-    replica.title = task.replica?.message || '';
-    if (task.replica?.status === 'synchronizing') replica.setAttribute('aria-live', 'polite');
+    const taskState = task.state?.status || (task.ownerOnline === false ? 'offline' : 'synchronized');
+    replica.className = `task-state-status is-${taskState}`;
+    replica.textContent = taskState;
+    replica.title = task.state?.message || '';
+    if (taskState === 'synchronizing') replica.setAttribute('aria-live', 'polite');
     summary.querySelector('.task-copy').append(replica);
   }
   const nextSubtask = !executing ? summary.querySelector('.task-next') : null;

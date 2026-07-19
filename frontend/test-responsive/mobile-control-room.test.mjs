@@ -510,11 +510,11 @@ test('commits retained Control Room and task-shell views before background route
   assert.match(mobile, /response\.status === 202[\s\S]*renderTaskReplicaShell[\s\S]*loadRoute\(\{ retainView: true \}\)/);
 });
 
-test('renders accessible replica states and task-detail skeletons', () => {
-  assert.match(mobile, /task-replica-status is-\$\{task\.replica/);
+test('renders accessible task states and task-detail skeletons', () => {
+  assert.match(mobile, /task-state-status is-\$\{taskState/);
   assert.match(mobile, /shell\.setAttribute\('role', 'status'\)/);
   assert.match(mobile, /shell\.setAttribute\('aria-live', 'polite'\)/);
-  assert.match(styles, /\.task-replica-skeleton/);
+  assert.match(styles, /\.task-state-skeleton/);
   assert.match(styles, /@keyframes replica-skeleton/);
 });
 

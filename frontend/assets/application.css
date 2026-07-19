@@ -287,16 +287,16 @@ h1 { margin: 0; font-size: clamp(28px, 8vw, 44px); line-height: 1.08; letter-spa
 .card-detail-actions button { min-width: 0; padding-inline: 8px; }
 .process-card-button { min-height: 44px; padding: 0 14px; color: var(--accent); background: var(--control-bg-primary); }
 .card-body { display: grid; gap: 20px; padding: 22px 0; color: var(--text); }
-.task-replica-status { width: max-content; padding: 2px 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; }
-.task-replica-status.is-replicated { color: var(--accent); }
-.task-replica-status.is-synchronizing { color: var(--accent); }
-.task-replica-status.is-stale, .task-replica-status.is-blocked { color: var(--secondary); }
-.task-replica-status.is-offline { color: var(--muted); }
-.task-replica-skeleton { display: grid; gap: 16px; padding: 20px; border: 1px solid color-mix(in srgb, var(--zone-color), transparent 45%); border-radius: var(--radius); background: #0b0d11; }
-.task-replica-message { margin: 0; color: var(--muted); }
-.task-replica-skeleton > div { height: 14px; border-radius: 999px; background: linear-gradient(90deg, #171a21 25%, #242936 50%, #171a21 75%); background-size: 200% 100%; animation: replica-skeleton 1.2s ease-in-out infinite; }
-.task-replica-skeleton > div:nth-of-type(2) { width: 78%; }
-.task-replica-skeleton > div:nth-of-type(3) { width: 56%; }
+.task-state-status { width: max-content; padding: 2px 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; }
+.task-state-status.is-replicated { color: var(--accent); }
+.task-state-status.is-synchronizing { color: var(--accent); }
+.task-state-status.is-stale, .task-state-status.is-blocked { color: var(--secondary); }
+.task-state-status.is-offline { color: var(--muted); }
+.task-state-skeleton { display: grid; gap: 16px; padding: 20px; border: 1px solid color-mix(in srgb, var(--zone-color), transparent 45%); border-radius: var(--radius); background: #0b0d11; }
+.task-state-message { margin: 0; color: var(--muted); }
+.task-state-skeleton > div { height: 14px; border-radius: 999px; background: linear-gradient(90deg, #171a21 25%, #242936 50%, #171a21 75%); background-size: 200% 100%; animation: replica-skeleton 1.2s ease-in-out infinite; }
+.task-state-skeleton > div:nth-of-type(2) { width: 78%; }
+.task-state-skeleton > div:nth-of-type(3) { width: 56%; }
 @keyframes replica-skeleton { to { background-position: -200% 0; } }
 .task-overview { margin-top: 20px; }
 .task-status-line { display: flex; align-items: center; gap: 10px; margin: 0 0 18px; color: var(--muted); font-size: 13px; }
