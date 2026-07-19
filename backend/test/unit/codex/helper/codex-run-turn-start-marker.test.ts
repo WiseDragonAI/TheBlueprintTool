@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { codexRunExecutions, codexRunSegmentMarker, codexRunTurnStartedMarker, isCodexRunMarkerLine, latestCodexRunTurnStartedAtMs } from '@backend/business/codex/helper/codex-run-segment-marker.js';
+import { codexRunExecutionFinishedMarker, codexRunExecutions, codexRunSegmentMarker, codexRunTurnStartedMarker, isCodexRunMarkerLine, latestCodexRunTurnStartedAtMs } from '@backend/business/codex/helper/codex-run-segment-marker.js';
 
 test('Codex turn markers persist the latest observed turn start', () => {
   const log = codexRunTurnStartedMarker({ runId: 'run-a', startedAt: '2026-07-14T10:02:04.000Z', line: 2 })
@@ -13,6 +13,7 @@ test('projects immutable execution identities across one append-only session', (
   const runId = 'run-a';
   const log = codexRunSegmentMarker({ runId, executionId: 'execution-a', startedAt: '2026-07-14T10:00:00.000Z', segment: 'start', startLine: 0 })
     + codexRunTurnStartedMarker({ runId, executionId: 'execution-a', startedAt: '2026-07-14T10:00:02.000Z', line: 2 })
+    + codexRunExecutionFinishedMarker({ runId, executionId: 'execution-a', finishedAt: '2026-07-14T10:03:00.000Z', status: 'complete' })
     + codexRunSegmentMarker({ runId, executionId: 'execution-b', startedAt: '2026-07-14T11:00:00.000Z', segment: 'continue', startLine: 8 })
     + codexRunTurnStartedMarker({ runId, executionId: 'execution-b', startedAt: '2026-07-14T11:00:03.000Z', line: 10 });
 
@@ -21,8 +22,10 @@ test('projects immutable execution identities across one append-only session', (
     segment: execution.segment,
     startLine: execution.startLine,
     turnStartLine: execution.turnStartLine,
+    finishedAt: execution.finishedAt,
+    status: execution.status,
   })), [
-    { executionId: 'execution-a', segment: 'start', startLine: 0, turnStartLine: 2 },
-    { executionId: 'execution-b', segment: 'continue', startLine: 8, turnStartLine: 10 },
+    { executionId: 'execution-a', segment: 'start', startLine: 0, turnStartLine: 2, finishedAt: '2026-07-14T10:03:00.000Z', status: 'complete' },
+    { executionId: 'execution-b', segment: 'continue', startLine: 8, turnStartLine: 10, finishedAt: '', status: '' },
   ]);
 });

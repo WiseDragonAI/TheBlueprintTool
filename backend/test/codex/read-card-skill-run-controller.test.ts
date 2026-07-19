@@ -545,6 +545,7 @@ test('card skill run route measures active resumed segment from the latest persi
   ].join('\n'));
   writeFileSync(logPath, [
     `decision-os:codex-run-segment ${JSON.stringify({ runId, executionId: 'execution-a', startedAt: new Date(firstStartedAt).toISOString(), segment: 'start', startLine: 0 })}`,
+    `decision-os:codex-execution-finished ${JSON.stringify({ runId, executionId: 'execution-a', finishedAt: new Date(firstStartedAt + 45000).toISOString(), status: 'complete' })}`,
     'error: stale failure from the previous session',
     `decision-os:codex-run-segment ${JSON.stringify({ runId, executionId: 'execution-b', startedAt: resumedAtIso, segment: 'restart', startLine: 3 })}`,
   ].join('\n'));
@@ -572,7 +573,7 @@ test('card skill run route measures active resumed segment from the latest persi
   try {
     const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}`);
     assert.equal(response.status, 200);
-    const body = await response.json() as { ok: boolean; status: string; executionId: string; startedAt: string; elapsedMs: number; toolCallCount: number; agentMessageCount: number; fileChangeCount: number; latestEvent: unknown; events: Array<{ line: number }>; executions: Array<{ executionId: string; startLine: number; status: string }> };
+    const body = await response.json() as { ok: boolean; status: string; executionId: string; startedAt: string; elapsedMs: number; toolCallCount: number; agentMessageCount: number; fileChangeCount: number; latestEvent: unknown; events: Array<{ line: number }>; executions: Array<{ executionId: string; startLine: number; status: string; elapsedMs: number; toolCallCount: number }> };
     assert.equal(body.ok, true);
     assert.equal(body.status, 'running');
     assert.equal(body.executionId, 'execution-b');
@@ -587,6 +588,9 @@ test('card skill run route measures active resumed segment from the latest persi
       ['execution-a', 0, 'complete'],
       ['execution-b', 3, 'running'],
     ]);
+    assert.deepEqual(body.executions.map((execution) => execution.toolCallCount), [1, 0]);
+    assert.equal(body.executions[0].elapsedMs, 45000);
+    assert.ok(body.executions[1].elapsedMs >= 29000 && body.executions[1].elapsedMs < 45000);
   } finally {
     server.close();
     process.chdir(originalCwd);

@@ -53,6 +53,7 @@ function consumeThreadRunSummary(input: { threadId: string; runId: string; summa
   const previousSummary = summaries[input.threadId] as CardSkillRunSummary | undefined;
   runIds[input.threadId] = input.runId;
   summaries[input.threadId] = input.summary;
+  recordState('threadRunExecutionsByRunId')[input.runId] = input.summary.executions;
   syncThreadCodexRunClock(input);
 
   const previousEvents = Array.isArray(eventsByThread[input.threadId]) ? eventsByThread[input.threadId] as ThreadRunLogEvent[] : [];

@@ -546,6 +546,80 @@ test('Codex Log run arrows default to the newest retained run and select the pre
   }
 });
 
+test('Codex Log counts continuations as separate runs with execution-scoped metrics and events', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousSetTimeout = globalThis.setTimeout;
+  const previousClearTimeout = globalThis.clearTimeout;
+  const { codexLog } = installDom();
+  const { state } = await import('../../../../src/runtime/state.js');
+  const { renderThreadCodexLog } = await import('../../../../src/runtime/thread/effect/render-thread-codex-log.js');
+  const runId = 'codex-skill-1784439000000-continuations';
+  const threadId = 'thread-card-continuations';
+  const execution = (executionId: string, startLine: number, endLine: number | null, elapsedMs: number, toolCallCount: number, active = false) => ({
+    executionId, runId, segment: startLine === 0 ? 'start' as const : 'continue' as const,
+    startedAt: `2026-07-19T05:0${startLine}:00.000Z`, turnStartedAt: '', startLine, turnStartLine: startLine + 1, endLine,
+    status: active ? 'running' as const : 'complete' as const, active, finishedAt: active ? '' : `2026-07-19T05:0${startLine}:30.000Z`,
+    elapsedMs, toolCallCount, agentMessageCount: 0, fileChangeCount: 0, thinkingCount: 0, warningCount: 0, errorCount: 0, transportStatus: 'ok' as const,
+  });
+  const summary = {
+    ok: true, active: true, runId, runKind: 'thread' as const, pipelineRunId: '', pipelineName: '', pipelineStepName: '', skillName: '', pipelineStatus: '' as const,
+    status: 'running' as const, executionId: 'execution-c', queuePosition: null,
+    executions: [execution('execution-a', 0, 2, 12000, 1), execution('execution-b', 2, 4, 24000, 2), execution('execution-c', 4, null, 36000, 3, true)],
+    currentExecution: null, startedAt: '2026-07-19T05:04:00.000Z', elapsedMs: 36000, lineCount: 6, nextSince: 6,
+    toolCallCount: 3, agentMessageCount: 0, fileChangeCount: 0, thinkingCount: 0, warningCount: 0, errorCount: 0, transportStatus: 'ok' as const,
+    persistedEventCount: 0, metadata: { sourceCardTitle: '', sourceThreadId: threadId, codexModel: 'gpt-5.6-sol', codexEffort: 'medium' },
+    latestEvent: null, events: [], diagnostics: [], error: '',
+  };
+  try {
+    globalThis.fetch = (() => new Promise<Response>(() => undefined)) as typeof fetch;
+    globalThis.setTimeout = (() => 1 as unknown as ReturnType<typeof setTimeout>) as unknown as typeof setTimeout;
+    globalThis.clearTimeout = (() => undefined) as typeof clearTimeout;
+    state.activeTab = 'specs';
+    state.activeLedger = { cards: [{ id: 'card-continuations', title: 'Continuations', codexThreadRunId: runId, codexThreadRunIds: [runId] }], annotations: [], relationships: [], notes: { [threadId]: [] } };
+    state.threadId = threadId;
+    state.threadPanelOpen = true;
+    state.threadActiveTabByThreadId = { [threadId]: 'codex-log' };
+    state.threadSelectedRunIdByThreadId = { [threadId]: runId };
+    state.threadSelectedExecutionIdByThreadId = {};
+    state.threadRunIdByThreadId = { [threadId]: runId };
+    state.threadRunExecutionsByRunId = {};
+    state.threadRunSummaryByThreadId = { [threadId]: summary };
+    state.threadRunEventsByThreadId = { [threadId]: [
+      { runId, line: 2, source: 'jsonl', sourceLine: 2, type: 'item.completed', kind: 'tool_call', title: 'first', text: '', status: 'completed', itemId: 'a', tool: 'first', output: '', exitCode: '0', severity: 'info', persist: false, eventKey: 'a', toolKey: 'a' },
+      { runId, line: 4, source: 'jsonl', sourceLine: 4, type: 'item.completed', kind: 'tool_call', title: 'second', text: '', status: 'completed', itemId: 'b', tool: 'second', output: '', exitCode: '0', severity: 'info', persist: false, eventKey: 'b', toolKey: 'b' },
+      { runId, line: 6, source: 'jsonl', sourceLine: 6, type: 'item.completed', kind: 'tool_call', title: 'third', text: '', status: 'completed', itemId: 'c', tool: 'third', output: '', exitCode: '0', severity: 'info', persist: false, eventKey: 'c', toolKey: 'c' },
+    ] };
+    state.threadCoalescedToolsByThreadId = { [threadId]: {} };
+
+    renderThreadCodexLog();
+
+    assert.equal(codexLog.querySelector('.codex-log-run-position')?.textContent, 'Run 3 of 3');
+    assert.equal(codexLog.querySelector('.codex-tool-call-command')?.textContent, 'third');
+    assert.ok(codexLog.querySelectorAll('dd').map((element) => element.textContent).includes('3'));
+
+    codexLog.querySelector('.codex-log-run-arrow--previous')?.dispatchEvent(new Event('click'));
+    for (let index = 0; index < 12; index += 1) await Promise.resolve();
+    await new Promise<void>((resolve) => previousSetTimeout(resolve, 0));
+    assert.equal(state.threadSelectedExecutionIdByThreadId[threadId], 'execution-b');
+    assert.equal(codexLog.querySelector('.codex-log-run-position')?.textContent, 'Run 2 of 3');
+    assert.equal(codexLog.querySelector('.codex-tool-call-command')?.textContent, 'second');
+    assert.ok(codexLog.querySelectorAll('dd').map((element) => element.textContent).includes('2'));
+  } finally {
+    globalThis.fetch = previousFetch;
+    globalThis.setTimeout = previousSetTimeout;
+    globalThis.clearTimeout = previousClearTimeout;
+    state.threadId = '';
+    state.activeLedger = null;
+    state.threadSelectedRunIdByThreadId = {};
+    state.threadSelectedExecutionIdByThreadId = {};
+    state.threadRunIdByThreadId = {};
+    state.threadRunExecutionsByRunId = {};
+    state.threadRunSummaryByThreadId = {};
+    state.threadRunEventsByThreadId = {};
+    state.threadCoalescedToolsByThreadId = {};
+  }
+});
+
 test('queued thread runs become read-only and render their queue position without elapsed time', async () => {
   const previousFetch = globalThis.fetch;
   const { heading, codexLog } = installDom();

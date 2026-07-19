@@ -13,7 +13,7 @@ import { createCardSkillRunEventIngestor } from '../effect/ingest-card-skill-run
 import { prepareCardSkillRunEventAppend } from '../effect/prepare-card-skill-run-event-append.js';
 import { buildCardSkillContinuePrompt } from '../helper/build-card-skill-continue-prompt.js';
 import { buildCardLaunchContext } from '../helper/build-card-launch-context.js';
-import { codexRunSegmentMarker, codexRunTurnStartedMarker } from '../helper/codex-run-segment-marker.js';
+import { codexRunExecutionFinishedMarker, codexRunSegmentMarker, codexRunTurnStartedMarker } from '../helper/codex-run-segment-marker.js';
 import { resolveCardSkillRunOwnership } from '../helper/resolve-card-skill-run-ownership.js';
 import { isAllowedCodexEffort, isAllowedCodexModel, resolveCodexCommand, resolveCodexResumeCommand } from '../helper/resolve-codex-command.js';
 import { threadMessagesAfterLastCodexEvent } from '../helper/thread-messages-after-last-codex-event.js';
@@ -357,6 +357,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     finishRunStreams(stdout, stderr, () => {
       flushCardSkillRunEventIngestor(runEventIngestor, runId);
       if (!ownsExecution) return;
+      appendFileSync(stderrFile, codexRunExecutionFinishedMarker({ runId, executionId, finishedAt, status: 'failed' }), 'utf8');
       updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
       if (queueItemId) removeCodexProcessQueueItem(decisionOsRoot, queueItemId);
       clearCardCodexExecution({ ledgerPath, cardId, runId, executionId });
@@ -378,6 +379,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
       flushCardSkillRunEventIngestor(runEventIngestor, runId);
       if (!ownsExecution) return;
+      appendFileSync(stderrFile, codexRunExecutionFinishedMarker({ runId, executionId, finishedAt, status }), 'utf8');
       updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
       if (queueItemId) removeCodexProcessQueueItem(decisionOsRoot, queueItemId);
       clearCardCodexExecution({ ledgerPath, cardId, runId, executionId });

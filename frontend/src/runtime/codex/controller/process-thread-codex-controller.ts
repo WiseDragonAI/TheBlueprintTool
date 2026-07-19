@@ -34,6 +34,9 @@ export async function processThreadCodexController(input: { threadId?: string; c
   if (runId) {
     state.threadSelectedRunIdByThreadId ||= {};
     state.threadSelectedRunIdByThreadId[threadId] = runId;
+    state.threadSelectedExecutionIdByThreadId ||= {};
+    if (expectedExecutionId) state.threadSelectedExecutionIdByThreadId[threadId] = expectedExecutionId;
+    else delete state.threadSelectedExecutionIdByThreadId[threadId];
     // The accepted continuation supersedes any cached terminal summary for this run.
     // Bind before refresh so the live poller owns the transition while the panel rerenders.
     bindThreadCodexRunLog({ ledgerId, threadId, cardId, runId, expectedExecutionId, expectedStatus });

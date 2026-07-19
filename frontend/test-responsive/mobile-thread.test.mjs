@@ -255,7 +255,7 @@ test('mobile thread history and async refreshes are owned by the active presenta
 
 test('mobile Codex Log makes queued work read-only while preserving actions for other run states', () => {
   assert.match(sharedCodexStatus, /if \(!queued\) strip\.append\(renderRunAction\(/);
-  assert.match(sharedCodexStatus, /summary\?\.ok === true && summary\.active === true && status === 'running'/);
+  assert.match(sharedCodexStatus, /sessionSummary\?\.ok === true && sessionSummary\.active === true && sessionSummary\.status === 'running'/);
   assert.match(sharedCodexStatus, /threadCodexStopState\(input\.runId\)\.pending/);
   assert.match(sharedCodexLog, /const stopError = threadCodexStopState\(runId\)\.error/);
   assert.doesNotMatch(sharedCodexStatus, /\['Status', status\]/);
