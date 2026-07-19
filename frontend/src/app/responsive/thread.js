@@ -262,14 +262,12 @@ function voiceLaunchMode(event) {
 }
 
 async function stopQuickVoiceComment(launchMode = 'send') {
-  const wasQuickVoiceCapture = quickVoiceCapture;
-  const selectedLaunchMode = wasQuickVoiceCapture ? 'run' : launchMode;
-  const submitted = await stopVoiceRecording({ launchMode: selectedLaunchMode });
-  if (!wasQuickVoiceCapture && selectedLaunchMode === 'send') return;
+  const submitted = await stopVoiceRecording({ launchMode });
   quickVoiceCapture = false;
   const button = document.querySelector('.quick-voice-comment-button');
   button.disabled = false;
   button.removeAttribute('aria-busy');
+  if (launchMode === 'send') return;
   await finishQueuedVoiceSubmission(submitted);
 }
 
