@@ -6175,7 +6175,7 @@
       "title": "Replicate mobile voice-note threads to the hosting federation node",
       "cardType": "note",
       "domainId": "tasks",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "master-task"
       ],
@@ -6242,7 +6242,7 @@
       "title": "Verify remote voice-note replication and Codex visibility",
       "cardType": "note",
       "domainId": "tasks",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "subtask"
       ],
