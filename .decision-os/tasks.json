@@ -2866,8 +2866,6 @@
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
       "executionStatus": "running",
-      "codexActiveRunId": "codex-skill-1784394619194-79589aec",
-      "codexActiveExecutionId": "codex-execution-1784363763154-61c1cde8",
       "executionRunId": "codex-skill-1784286699883-9da72cbf",
       "codexRunId": "codex-skill-1784394619194-79589aec",
       "codexRunOutputFile": ".decision-os/cards/tasks/card-codex-pipeline-1784394619194-f274a565-step-1.md",
@@ -3236,8 +3234,14 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784287092481-f45a7753",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784287092481-f45a7753.md"
+      "codexActiveRunId": "codex-skill-1784439300006-1917fed4",
+      "codexRunId": "codex-skill-1784439300006-1917fed4",
+      "codexRunOutputFile": ".decision-os/cards/tasks/card-codex-pipeline-1784439300006-4a288471-step-1.md",
+      "codexPipelineRunId": "codex-pipeline-1784439300006-4a288471",
+      "codexPipelineName": "PostMortem",
+      "codexPipelineStepId": "codex-step-76620a22-6ca8-4afd-8fe0-fee74d9b40b0",
+      "codexPipelineStepName": "Recap",
+      "codexSkillName": "retrospect-and-close-task"
     },
     {
       "id": "card-c4da3f2c-68bd-4c5b-b964-6e424be02962",
@@ -5392,8 +5396,6 @@
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
       "executionStatus": "running",
-      "codexActiveRunId": "codex-skill-1784394601014-584dbdb6",
-      "codexActiveExecutionId": "codex-execution-1784364350774-46a5e451",
       "executionRunId": "codex-skill-1784359717190-8f8e4f9d",
       "codexRunId": "codex-skill-1784394601014-584dbdb6",
       "codexRunOutputFile": ".decision-os/cards/tasks/card-codex-pipeline-1784394601014-c23f81ac-step-1.md",
@@ -5586,7 +5588,7 @@
       "title": "Unify Skill and Pipeline Library Modals",
       "cardType": "note",
       "domainId": "tasks",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "analysis",
         "implementation",
@@ -5603,12 +5605,17 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784394540590-57850296",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/tasks/codex-skill-1784394540590-57850296.md",
       "executionStatus": "running",
-      "codexActiveRunId": "codex-skill-1784394540590-57850296",
+      "codexActiveRunId": "codex-skill-1784439334563-9fbd06c8",
       "codexActiveExecutionId": "codex-execution-1784364373367-55df9426",
-      "executionRunId": "codex-skill-1784363365369-490850f3"
+      "executionRunId": "codex-skill-1784363365369-490850f3",
+      "codexRunId": "codex-skill-1784439334563-9fbd06c8",
+      "codexRunOutputFile": ".decision-os/cards/tasks/card-codex-pipeline-1784439334563-e18d7a5a-step-1.md",
+      "codexPipelineRunId": "codex-pipeline-1784439334563-e18d7a5a",
+      "codexPipelineName": "PostMortem",
+      "codexPipelineStepId": "codex-step-76620a22-6ca8-4afd-8fe0-fee74d9b40b0",
+      "codexPipelineStepName": "Recap",
+      "codexSkillName": "retrospect-and-close-task"
     },
     {
       "id": "card-codex-pipeline-1784363771290-a0ed834f-step-1",
@@ -5770,7 +5777,7 @@
       "title": "Verify the unified served catalog workflow",
       "cardType": "note",
       "domainId": "tasks",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "implementation",
         "scenario",
@@ -6007,7 +6014,6 @@
       },
       "facts": [],
       "fields": [],
-      "codexActiveRunId": "codex-skill-1784394601014-584dbdb6",
       "codexRunOutputFile": ".decision-os/cards/tasks/card-codex-pipeline-1784394601014-c23f81ac-step-1.md",
       "codexPipelineRunId": "codex-pipeline-1784394601014-c23f81ac",
       "codexPipelineName": "PostMortem",
@@ -6032,9 +6038,58 @@
       },
       "facts": [],
       "fields": [],
-      "codexActiveRunId": "codex-skill-1784394619194-79589aec",
       "codexRunOutputFile": ".decision-os/cards/tasks/card-codex-pipeline-1784394619194-f274a565-step-1.md",
       "codexPipelineRunId": "codex-pipeline-1784394619194-f274a565",
+      "codexPipelineName": "PostMortem",
+      "codexPipelineStepId": "codex-step-76620a22-6ca8-4afd-8fe0-fee74d9b40b0",
+      "codexPipelineStepName": "Recap",
+      "codexSkillName": "retrospect-and-close-task"
+    },
+    {
+      "id": "card-codex-pipeline-1784439300006-4a288471-step-1",
+      "title": "PostMortem · Recap",
+      "cardType": "codex-skill-run",
+      "x": -9946,
+      "y": 120708,
+      "w": 700,
+      "h": 260,
+      "status": "todo",
+      "codexRunId": "codex-skill-1784439300006-1917fed4",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "comment": {
+        "contentFile": ".decision-os/cards/tasks/card-codex-pipeline-1784439300006-4a288471-step-1.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784439300006-1917fed4",
+      "codexRunOutputFile": ".decision-os/cards/tasks/card-codex-pipeline-1784439300006-4a288471-step-1.md",
+      "codexPipelineRunId": "codex-pipeline-1784439300006-4a288471",
+      "codexPipelineName": "PostMortem",
+      "codexPipelineStepId": "codex-step-76620a22-6ca8-4afd-8fe0-fee74d9b40b0",
+      "codexPipelineStepName": "Recap",
+      "codexSkillName": "retrospect-and-close-task"
+    },
+    {
+      "id": "card-codex-pipeline-1784439334563-e18d7a5a-step-1",
+      "title": "PostMortem · Recap",
+      "cardType": "codex-skill-run",
+      "x": -9946,
+      "y": 142128,
+      "w": 700,
+      "h": 260,
+      "status": "todo",
+      "codexRunId": "codex-skill-1784439334563-9fbd06c8",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "comment": {
+        "contentFile": ".decision-os/cards/tasks/card-codex-pipeline-1784439334563-e18d7a5a-step-1.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784439334563-9fbd06c8",
+      "codexRunOutputFile": ".decision-os/cards/tasks/card-codex-pipeline-1784439334563-e18d7a5a-step-1.md",
+      "codexPipelineRunId": "codex-pipeline-1784439334563-e18d7a5a",
       "codexPipelineName": "PostMortem",
       "codexPipelineStepId": "codex-step-76620a22-6ca8-4afd-8fe0-fee74d9b40b0",
       "codexPipelineStepName": "Recap",
@@ -7814,6 +7869,18 @@
       "from": "card-216524c4-cf41-4b50-a8aa-a696b71dc0f6",
       "to": "card-codex-pipeline-1784394619194-f274a565-step-1",
       "label": "Recap"
+    },
+    {
+      "id": "rel-codex-pipeline-1784439300006-4a288471-1",
+      "from": "card-603acaa4-34c6-4a59-aaba-1a681c650311",
+      "to": "card-codex-pipeline-1784439300006-4a288471-step-1",
+      "label": "Recap"
+    },
+    {
+      "id": "rel-codex-pipeline-1784439334563-e18d7a5a-1",
+      "from": "card-3d56069c-2645-4b50-ba72-ef596d321ab6",
+      "to": "card-codex-pipeline-1784439334563-e18d7a5a-step-1",
+      "label": "Recap"
     }
   ],
   "notes": {},
@@ -7896,7 +7963,9 @@
     "thread-card-codex-pipeline-1784363802862-7a8e2625-step-1": ".decision-os/threads/tasks/thread-card-codex-pipeline-1784363802862-7a8e2625-step-1.md",
     "thread-card-953d29e7-9528-4c66-accd-61fb6c881fea": ".decision-os/threads/tasks/thread-card-953d29e7-9528-4c66-accd-61fb6c881fea.md",
     "thread-card-codex-pipeline-1784394601014-c23f81ac-step-1": ".decision-os/threads/tasks/thread-card-codex-pipeline-1784394601014-c23f81ac-step-1.md",
-    "thread-card-codex-pipeline-1784394619194-f274a565-step-1": ".decision-os/threads/tasks/thread-card-codex-pipeline-1784394619194-f274a565-step-1.md"
+    "thread-card-codex-pipeline-1784394619194-f274a565-step-1": ".decision-os/threads/tasks/thread-card-codex-pipeline-1784394619194-f274a565-step-1.md",
+    "thread-card-codex-pipeline-1784439300006-4a288471-step-1": ".decision-os/threads/tasks/thread-card-codex-pipeline-1784439300006-4a288471-step-1.md",
+    "thread-card-codex-pipeline-1784439334563-e18d7a5a-step-1": ".decision-os/threads/tasks/thread-card-codex-pipeline-1784439334563-e18d7a5a-step-1.md"
   },
   "deletedNoteIds": {
     "thread-card-d4df7793-0cb8-4a6f-aee6-4a6c7366200c": [
