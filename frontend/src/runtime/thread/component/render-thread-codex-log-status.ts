@@ -57,15 +57,17 @@ function renderRunAction(input: { card: Record<string, unknown>; runId: string; 
   return item;
 }
 
-export function renderThreadCodexLogStatus(input: { summary: CardSkillRunSummary | null; card: Record<string, unknown>; runId: string; threadId: string }): HTMLElement {
+export function renderThreadCodexLogStatus(input: { summary: CardSkillRunSummary | null; sessionSummary?: CardSkillRunSummary | null; card: Record<string, unknown>; runId: string; threadId: string }): HTMLElement {
   const summary = input.summary;
+  const sessionSummary = input.sessionSummary ?? summary;
   const status = !input.runId ? 'idle' : summary?.ok === false ? 'unavailable' : summary?.status ?? 'running';
   const strip = document.createElement('dl');
   strip.className = 'codex-log-status';
   strip.dataset.runStatus = status;
   strip.dataset.runId = input.runId;
-  const running = summary?.ok === true && summary.active === true && status === 'running';
-  const queued = summary?.ok === true && status === 'pending';
+  strip.dataset.executionId = summary?.executionId ?? '';
+  const running = sessionSummary?.ok === true && sessionSummary.active === true && sessionSummary.status === 'running';
+  const queued = sessionSummary?.ok === true && sessionSummary.status === 'pending';
   if (!running) clearThreadCodexStopState(input.runId);
   // Queued work is scheduler-owned. Keep the status surface read-only until it
   // starts so an operator cannot accidentally create, cancel, or delete work.

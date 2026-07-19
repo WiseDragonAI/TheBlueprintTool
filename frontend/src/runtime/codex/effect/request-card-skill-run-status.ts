@@ -44,6 +44,15 @@ export type CardSkillRunExecution = {
   endLine: number | null;
   status: CardSkillRunStatus;
   active: boolean;
+  finishedAt: string;
+  elapsedMs: number;
+  toolCallCount: number;
+  agentMessageCount: number;
+  fileChangeCount: number;
+  thinkingCount: number;
+  warningCount: number;
+  errorCount: number;
+  transportStatus: 'ok' | 'degraded' | 'unknown';
 };
 
 export type CardSkillRunSummary = {
@@ -134,6 +143,15 @@ function normalizedExecution(value: unknown, runId: string): CardSkillRunExecuti
     endLine: execution.endLine === null ? null : Math.max(0, Number(execution.endLine ?? 0) || 0),
     status,
     active: execution.active === true,
+    finishedAt: String(execution.finishedAt ?? ''),
+    elapsedMs: Math.max(0, Number(execution.elapsedMs ?? 0) || 0),
+    toolCallCount: Math.max(0, Number(execution.toolCallCount ?? 0) || 0),
+    agentMessageCount: Math.max(0, Number(execution.agentMessageCount ?? 0) || 0),
+    fileChangeCount: Math.max(0, Number(execution.fileChangeCount ?? 0) || 0),
+    thinkingCount: Math.max(0, Number(execution.thinkingCount ?? 0) || 0),
+    warningCount: Math.max(0, Number(execution.warningCount ?? 0) || 0),
+    errorCount: Math.max(0, Number(execution.errorCount ?? 0) || 0),
+    transportStatus: execution.transportStatus === 'degraded' ? 'degraded' : execution.transportStatus === 'ok' ? 'ok' : 'unknown',
   };
 }
 

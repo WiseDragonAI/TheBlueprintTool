@@ -31,6 +31,10 @@ export async function processThreadCodexController(input: { threadId?: string; c
   if (runId) {
     state.threadSelectedRunIdByThreadId ||= {};
     state.threadSelectedRunIdByThreadId[threadId] = runId;
+    state.threadSelectedExecutionIdByThreadId ||= {};
+    const executionId = String(result.run?.executionId ?? '').trim();
+    if (executionId) state.threadSelectedExecutionIdByThreadId[threadId] = executionId;
+    else delete state.threadSelectedExecutionIdByThreadId[threadId];
   }
   await refreshRuntimeState();
   if (existingRunId) resumeExternallyStartedCardSkillRun({ ledgerId, cardId, runId });

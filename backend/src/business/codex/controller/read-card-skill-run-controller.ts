@@ -125,18 +125,63 @@ function runSegmentStartedAtMs(input: { runtime: AnyRecord; runId: string; stder
   return latestCodexRunSegmentStartedAtMs({ log, runId: input.runId }) || runtimeStarted || runTimestamp(input.runId);
 }
 
-function executionHistory(input: { executions: CodexRunExecution[]; events: NormalizedRunEvent[]; currentStatus: RunStatus; active: boolean }): AnyRecord[] {
+function executionTelemetryFinishedAtByStartLine(file: string): Map<number, number> {
+  const finishedAtByStartLine = new Map<number, number>();
+  if (!existsSync(file)) return finishedAtByStartLine;
+  for (const line of readFileSync(file, 'utf8').replace(/\r\n?/g, '\n').split('\n')) {
+    try {
+      const record = JSON.parse(line) as AnyRecord;
+      const turnMatch = String(record.turnId ?? '').match(/:turn-(\d+)-/);
+      const startLine = Math.max(0, Number(turnMatch?.[1] ?? 1) - 1);
+      const finishedAt = Date.parse(String(record.completedAt ?? ''));
+      if (turnMatch && Number.isFinite(finishedAt)) finishedAtByStartLine.set(startLine, Math.max(finishedAtByStartLine.get(startLine) ?? 0, finishedAt));
+    } catch {
+      // Malformed telemetry records cannot invalidate durable execution markers.
+    }
+  }
+  return finishedAtByStartLine;
+}
+
+function executionHistory(input: {
+  executions: CodexRunExecution[];
+  events: NormalizedRunEvent[];
+  currentStatus: RunStatus;
+  active: boolean;
+  currentElapsedMs: number;
+  terminalFileWriteMs: number;
+  telemetryFinishedAtByStartLine: Map<number, number>;
+}): AnyRecord[] {
   return input.executions.map((execution, index) => {
     const endLine = input.executions[index + 1]?.startLine ?? (input.events.at(-1)?.line ?? execution.startLine);
     const executionEvents = input.events.filter((event) => event.line > execution.startLine && event.line <= endLine);
     const terminal = latestRunEventStatus(executionEvents);
     const current = index === input.executions.length - 1;
-    const status = current ? input.currentStatus : terminal ?? 'unknown';
+    const markerStatus = ['complete', 'failed', 'cancelled'].includes(execution.status) ? execution.status as RunStatus : null;
+    const status = current ? input.currentStatus : markerStatus ?? terminal ?? 'unknown';
+    const startedAtMs = Date.parse(execution.startedAt) || 0;
+    const telemetryFinishedAtMs = input.telemetryFinishedAtByStartLine.get(execution.startLine) ?? 0;
+    const nextStartedAtMs = Date.parse(input.executions[index + 1]?.startedAt ?? '') || 0;
+    const durableFinishedAtMs = Date.parse(execution.finishedAt) || 0;
+    const finishedAtMs = current
+      ? (input.active ? 0 : input.terminalFileWriteMs)
+      : durableFinishedAtMs || telemetryFinishedAtMs || nextStartedAtMs;
+    const elapsedMs = current
+      ? input.currentElapsedMs
+      : Math.max(0, finishedAtMs - startedAtMs);
     return {
       ...execution,
       endLine: current && input.active ? null : endLine,
       status,
       active: current && input.active,
+      finishedAt: finishedAtMs > 0 ? new Date(finishedAtMs).toISOString() : '',
+      elapsedMs,
+      toolCallCount: uniqueToolCallCount(execution.runId, executionEvents),
+      agentMessageCount: executionEvents.filter((event) => event.kind === 'agent_message').length,
+      fileChangeCount: executionEvents.filter((event) => event.title === 'File changes').length,
+      thinkingCount: executionEvents.filter((event) => event.kind === 'thinking').length,
+      warningCount: executionEvents.filter((event) => event.kind === 'warning').length,
+      errorCount: executionEvents.filter((event) => event.kind === 'error').length,
+      transportStatus: executionEvents.some((event) => event.kind === 'transport') ? 'degraded' : 'ok',
     };
   });
 }
@@ -235,6 +280,8 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
       startLine: parsedLines.at(-1)?.line ?? 0,
       turnStartedAt: String(runtimeRun.turnStartedAt ?? ''),
       turnStartLine: 0,
+      finishedAt: String(runtimeRun.finishedAt ?? ''),
+      status: String(runtimeRun.status ?? ''),
     });
   }
   const segmentStartLine = latestCodexRunSegmentStartLine({ log: stderrLog, runId });
@@ -282,7 +329,15 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
   });
   const active = runtimeCodexRunOwnsLiveProcess(runtime, runId, decisionOsRoot);
   const currentElapsedMs = elapsedMs({ runtime, runId, status, stdoutFile, stderrFile });
-  const projectedExecutions = executionHistory({ executions, events, currentStatus: status, active });
+  const projectedExecutions = executionHistory({
+    executions,
+    events,
+    currentStatus: status,
+    active,
+    currentElapsedMs,
+    terminalFileWriteMs: Math.max(fileMtimeMs(stdoutFile), fileMtimeMs(stderrFile)),
+    telemetryFinishedAtByStartLine: executionTelemetryFinishedAtByStartLine(`${stdoutFile}.telemetry.jsonl`),
+  });
   const currentExecution = projectedExecutions.at(-1) ?? null;
   return {
     ok: true,
