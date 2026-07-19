@@ -36,7 +36,10 @@ function taskSemanticFingerprint(task: AnyRecord): string {
 }
 
 function authorityMember(members: AnyRecord[]): AnyRecord {
-  return [...members].sort((left, right) => text(left.ownerNodeId).localeCompare(text(right.ownerNodeId)))[0];
+  return [...members].sort((left, right) => {
+    const locality = Number(left.remote === true) - Number(right.remote === true);
+    return locality || text(left.ownerNodeId).localeCompare(text(right.ownerNodeId));
+  })[0];
 }
 
 export function federatedControlRoomProjection(input: {
