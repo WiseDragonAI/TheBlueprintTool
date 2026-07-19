@@ -157,9 +157,11 @@ test('mobile thread routes jump-to-bottom into persistent bottom following', () 
   assert.match(source, /action === 'jump-thread-bottom'[\s\S]*pinThreadSurfaceToBottom\(surface, \{ follow: true \}\)/);
 });
 
-test('mobile thread launch always dispatches an authoritative fresh run', () => {
-  assert.doesNotMatch(source, /requestCardSkillRunStatus|requestCardSkillRunContinue|resumeExternallyStartedCardSkillRun/);
-  assert.match(source, /const result = await requestThreadCodexProcess\(\{/);
+test('mobile thread launch resumes the card session whenever it owns a run id', () => {
+  assert.match(source, /requestCardSkillRunContinue/);
+  assert.match(source, /existingRunId = String\(button\.dataset\.codexRunId \|\| cardCodexThreadRunId\(currentCard\)\)/);
+  assert.match(source, /existingRunId[\s\S]*requestCardSkillRunContinue\(\{[\s\S]*runId: existingRunId/);
+  assert.match(source, /:\s*await requestThreadCodexProcess\(\{/);
   assert.match(source, /threadId: canvasState\.threadId/);
   assert.match(source, /cardId: String\(currentCard\.id\)/);
   assert.match(source, /function hydrateThreadRun\(runId, startedAt, status, queuePosition\)/);

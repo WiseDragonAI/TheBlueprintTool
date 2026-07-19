@@ -3,7 +3,7 @@
  * WHY: The output card and run id are enough to hydrate live progress without a persisted run manifest.
  */
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { basename, extname, isAbsolute, relative, resolve } from 'node:path';
+import { isAbsolute, relative, resolve } from 'node:path';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
 import { type NormalizedRunEvent } from '../helper/card-skill-run-event-types.js';
 import { normalizeCardSkillRunDiagnostic, normalizeCardSkillRunEvent } from '../helper/normalize-card-skill-run-event.js';
@@ -14,6 +14,7 @@ import { readCodexProcessQueue } from '../helper/codex-process-queue.js';
 import { unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
 import { resolveCardSkillRunOwnership } from '../helper/resolve-card-skill-run-ownership.js';
 import { runtimeCodexRunOwnsLiveProcess } from '../helper/runtime-codex-run-owns-live-process.js';
+import { resolveCardSkillRunFiles } from '../helper/resolve-card-skill-run-files.js';
 
 type AnyRecord = Record<string, unknown>;
 type RunStatus = 'pending' | 'running' | 'complete' | 'failed' | 'cancelled' | 'unknown';
@@ -48,17 +49,9 @@ function logCodexContinueDebug(phase: string, detail: AnyRecord): void {
   console.log(JSON.stringify({ codexContinueDebug: true, source: 'backend', phase, at: new Date().toISOString(), ...detail }));
 }
 
-function safeSegment(value: unknown): string {
-  return String(value || 'untitled').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled';
-}
-
 function isInside(parent: string, child: string): boolean {
   const inner = relative(parent, child);
   return Boolean(inner) && !inner.startsWith('..') && !isAbsolute(inner);
-}
-
-function ledgerStem(ledgerPath: string): string {
-  return basename(ledgerPath, extname(ledgerPath));
 }
 
 function runTimestamp(runId: string): number {
@@ -224,9 +217,9 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
     .find((entry) => entry.steps.some((step) => step.skills.some((skill) => skill.runId === runId)));
   const persistedStep = persistedPipelineRun?.steps.find((step) => step.skills.some((skill) => skill.runId === runId));
   const persistedSkill = persistedStep?.skills.find((skill) => skill.runId === runId);
-  const runDirectory = resolve(decisionOsRoot, 'runs', 'codex-skills', safeSegment(ledgerStem(ledgerPath)));
-  const stdoutFile = persistedSkill?.stdoutFile || resolve(runDirectory, `${safeSegment(runId)}.jsonl`);
-  const stderrFile = persistedSkill?.stderrFile || resolve(runDirectory, `${safeSegment(runId)}.log`);
+  const runFiles = resolveCardSkillRunFiles({ ledger, decisionOsRoot, ledgerPath, cardId, runId });
+  const stdoutFile = persistedSkill?.stdoutFile || runFiles.stdoutFile;
+  const stderrFile = persistedSkill?.stderrFile || runFiles.stderrFile;
   const stderrLog = existsSync(stderrFile) ? readFileSync(stderrFile, 'utf8') : '';
   const parsedLines = readCardSkillRunEventLines(stdoutFile);
   const events = parsedLines.map(normalizeCardSkillRunEvent);

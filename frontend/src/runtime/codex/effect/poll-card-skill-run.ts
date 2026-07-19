@@ -214,10 +214,6 @@ function continueButton(element: HTMLElement): HTMLButtonElement | null {
   return element.querySelector<HTMLButtonElement>('[data-codex-run-continue]');
 }
 
-function newSessionButton(element: HTMLElement): HTMLButtonElement | null {
-  return element.querySelector<HTMLButtonElement>('[data-codex-run-new-session]');
-}
-
 function setCancelButtonVisible(element: HTMLElement, visible: boolean): void {
   const button = cancelButton(element);
   if (button) button.hidden = !visible;
@@ -225,11 +221,6 @@ function setCancelButtonVisible(element: HTMLElement, visible: boolean): void {
 
 function setContinueButtonVisible(element: HTMLElement, visible: boolean): void {
   const button = continueButton(element);
-  if (button) button.hidden = !visible;
-}
-
-function setNewSessionButtonVisible(element: HTMLElement, visible: boolean): void {
-  const button = newSessionButton(element);
   if (button) button.hidden = !visible;
 }
 
@@ -249,13 +240,11 @@ function paintWidget(element: HTMLElement, summary: CardSkillRunSummary): void {
     showTimer(element);
     setCancelButtonVisible(element, true);
     setContinueButtonVisible(element, false);
-    setNewSessionButtonVisible(element, false);
     setSelectionEnabled(element, false);
   } else {
     removeTimer(element);
     setCancelButtonVisible(element, false);
     setContinueButtonVisible(element, summary.status !== 'unknown');
-    setNewSessionButtonVisible(element, summary.status !== 'unknown');
     setSelectionEnabled(element, summary.status !== 'unknown');
   }
   setText(element, '[data-codex-run-tools]', String(summary.toolCallCount));
@@ -339,11 +328,6 @@ function setContinueButtonState(button: HTMLButtonElement, state: 'ready' | 'sta
   button.textContent = state === 'starting' ? 'Continuing' : 'Continue';
 }
 
-function setNewSessionButtonState(button: HTMLButtonElement, state: 'ready' | 'starting'): void {
-  button.disabled = state === 'starting';
-  button.textContent = state === 'starting' ? 'Starting' : 'New session';
-}
-
 function paintExternallyStartedRun(poller: Poller, latestLabel = 'Continuing session'): void {
   if (!poller.element) return;
   poller.terminal = false;
@@ -357,7 +341,6 @@ function paintExternallyStartedRun(poller: Poller, latestLabel = 'Continuing ses
   setText(poller.element, '[data-codex-run-files]', '0');
   setCancelButtonVisible(poller.element, true);
   setContinueButtonVisible(poller.element, false);
-  setNewSessionButtonVisible(poller.element, false);
   setSelectionEnabled(poller.element, false);
   const cancel = cancelButton(poller.element);
   if (cancel) setCancelButtonState(cancel, 'ready');
@@ -384,21 +367,9 @@ function bindContinueButton(poller: Poller): void {
   button.onclick = (event): void => {
     event.preventDefault();
     event.stopPropagation();
-    void continueRun(poller, false);
+    void continueRun(poller);
   };
   setContinueButtonState(button, poller.continueInFlight ? 'starting' : 'ready');
-}
-
-function bindNewSessionButton(poller: Poller): void {
-  if (!poller.element) return;
-  const button = newSessionButton(poller.element);
-  if (!button) return;
-  button.onclick = (event): void => {
-    event.preventDefault();
-    event.stopPropagation();
-    void continueRun(poller, true);
-  };
-  setNewSessionButtonState(button, poller.continueInFlight ? 'starting' : 'ready');
 }
 
 async function cancelRun(poller: Poller): Promise<void> {
@@ -419,9 +390,9 @@ async function cancelRun(poller: Poller): Promise<void> {
   schedulePoll(poller, 0);
 }
 
-async function continueRun(poller: Poller, newSession: boolean): Promise<void> {
+async function continueRun(poller: Poller): Promise<void> {
   if (!poller.element || poller.continueInFlight || poller.inFlight) return;
-  const button = newSession ? newSessionButton(poller.element) : continueButton(poller.element);
+  const button = continueButton(poller.element);
   if (!button) return;
   const key = pollerKey(poller);
   const previousSummary = terminalSummaries.get(key);
@@ -430,7 +401,7 @@ async function continueRun(poller: Poller, newSession: boolean): Promise<void> {
   const codexEffort = preference.effort;
   const traceId = continueTraceId(poller.runId);
   poller.continueTraceId = traceId;
-  debugContinue(traceId, 'click', { ...pollerDebugState(poller), newSession, previousSummaryStatus: previousSummary?.status ?? '', previousSummaryLineCount: previousSummary?.lineCount ?? 0 });
+  debugContinue(traceId, 'click', { ...pollerDebugState(poller), previousSummaryStatus: previousSummary?.status ?? '', previousSummaryLineCount: previousSummary?.lineCount ?? 0 });
   poller.continueInFlight = true;
   poller.terminal = false;
   // A continuation is a new execution inside the same append-only session.
@@ -441,11 +412,10 @@ async function continueRun(poller: Poller, newSession: boolean): Promise<void> {
   poller.startedAtMs = Date.now();
   terminalSummaries.delete(key);
   pollers.set(key, poller);
-  if (newSession) setNewSessionButtonState(button, 'starting');
-  else setContinueButtonState(button, 'starting');
-  paintExternallyStartedRun(poller, newSession ? 'Starting new session' : 'Continuing session');
+  setContinueButtonState(button, 'starting');
+  paintExternallyStartedRun(poller);
   debugContinue(traceId, 'optimistic-running-painted', pollerDebugState(poller));
-  const result = await requestCardSkillRunContinue({ ledgerId: poller.ledgerId, cardId: poller.cardId, runId: poller.runId, traceId, codexModel, codexEffort, newSession });
+  const result = await requestCardSkillRunContinue({ ledgerId: poller.ledgerId, cardId: poller.cardId, runId: poller.runId, traceId, codexModel, codexEffort });
   poller.continueInFlight = false;
   debugContinue(traceId, 'continue-response', { ...pollerDebugState(poller), ok: result.ok, status: result.status, error: result.error ?? '', pid: result.run?.pid ?? 0, continuedMessageCount: result.run?.continuedMessageCount ?? 0 });
   if (!result.ok) {
@@ -461,23 +431,19 @@ async function continueRun(poller: Poller, newSession: boolean): Promise<void> {
       removeTimer(poller.element);
       setCancelButtonVisible(poller.element, false);
       setContinueButtonVisible(poller.element, true);
-      setNewSessionButtonVisible(poller.element, true);
       setSelectionEnabled(poller.element, true);
       setText(poller.element, '[data-codex-run-status]', 'UNKNOWN');
     }
     const restoredButton = continueButton(poller.element);
     if (restoredButton) setContinueButtonState(restoredButton, 'ready');
-    const restoredNewSessionButton = newSessionButton(poller.element);
-    if (restoredNewSessionButton) setNewSessionButtonState(restoredNewSessionButton, 'ready');
-    setText(poller.element, '[data-codex-run-latest]', result.error || (newSession ? 'New session failed' : 'Continue failed'));
+    setText(poller.element, '[data-codex-run-latest]', result.error || 'Continue failed');
     debugContinue(traceId, 'continue-response-restored-terminal', pollerDebugState(poller));
     return;
   }
   const startedAt = timestampMs(result.run?.startedAt) || timestampMs(result.run?.continuedAt);
   if (startedAt) poller.startedAtMs = startedAt;
   pollers.set(key, poller);
-  if (newSession) setNewSessionButtonState(button, 'ready');
-  else setContinueButtonState(button, 'ready');
+  setContinueButtonState(button, 'ready');
   startFrontendClock(poller);
   debugContinue(traceId, 'continue-response-schedule-poll', pollerDebugState(poller));
   schedulePoll(poller, 0);
@@ -522,7 +488,6 @@ async function poll(poller: Poller): Promise<void> {
       removeTimer(poller.element);
       setCancelButtonVisible(poller.element, false);
       setContinueButtonVisible(poller.element, false);
-      setNewSessionButtonVisible(poller.element, false);
       setText(poller.element, '[data-codex-run-status]', 'UNKNOWN');
       setText(poller.element, '[data-codex-run-latest]', summary.error || 'Run unavailable');
     }
@@ -548,8 +513,6 @@ async function poll(poller: Poller): Promise<void> {
     if (poller.element) {
       const button = continueButton(poller.element);
       if (button) setContinueButtonState(button, 'ready');
-      const freshButton = newSessionButton(poller.element);
-      if (freshButton) setNewSessionButtonState(freshButton, 'ready');
     }
     terminalSummaries.set(key, { ...summary, events: [...poller.historyEvents] });
     debugContinue(poller.continueTraceId, 'poll-terminal-stopping', { ...pollerDebugState(poller), status: summary.status, lineCount: summary.lineCount, latestEventType: summary.latestEvent?.type ?? '', latestEventLine: summary.latestEvent?.line ?? 0 });
@@ -650,7 +613,6 @@ export function bindCardSkillRunWidget(input: PollerIdentity & { element: HTMLEl
     paintWidget(input.element, terminalSummary);
     bindCancelButton(poller);
     bindContinueButton(poller);
-    bindNewSessionButton(poller);
     return;
   }
   const existing = pollers.get(key);
@@ -662,7 +624,6 @@ export function bindCardSkillRunWidget(input: PollerIdentity & { element: HTMLEl
     existing.terminal = false;
     bindCancelButton(existing);
     bindContinueButton(existing);
-    bindNewSessionButton(existing);
     startFrontendClock(existing);
     if (!existing.timer && !existing.inFlight) schedulePoll(existing, 0);
     return;
@@ -671,7 +632,6 @@ export function bindCardSkillRunWidget(input: PollerIdentity & { element: HTMLEl
   pollers.set(key, poller);
   bindCancelButton(poller);
   bindContinueButton(poller);
-  bindNewSessionButton(poller);
   startFrontendClock(poller);
   schedulePoll(poller, 0);
 }
@@ -771,7 +731,6 @@ function setPipelineControls(
   const pipelineTerminal = result.run?.status === 'complete' || result.run?.status === 'failed' || result.run?.status === 'cancelled';
   setCancelButtonVisible(poller.element, (running || queued) && Boolean(result.canCancel));
   setContinueButtonVisible(poller.element, pipelineTerminal && Boolean(result.canContinue) && Boolean(skill?.runId));
-  setNewSessionButtonVisible(poller.element, false);
   setRestartButtonVisible(poller.element, pipelineTerminal && Boolean(result.canRestart));
   setRetryButtonVisible(poller.element, false);
   setSelectionEnabled(poller.element, pipelineTerminal);
@@ -811,7 +770,6 @@ function paintPipelineError(poller: PipelineStepPoller, message: string, options
   removeTimer(poller.element);
   setCancelButtonVisible(poller.element, Boolean(options.keepCancel));
   setContinueButtonVisible(poller.element, false);
-  setNewSessionButtonVisible(poller.element, false);
   setRestartButtonVisible(poller.element, false);
   setRetryButtonVisible(poller.element, true);
   setSelectionEnabled(poller.element, false);
@@ -964,7 +922,6 @@ async function continuePipelineStepRun(poller: PipelineStepPoller): Promise<void
     runId: skillRunId,
     codexModel: preference.model,
     codexEffort: preference.effort,
-    newSession: false,
   });
   poller.continueInFlight = false;
   if (!result.ok) {

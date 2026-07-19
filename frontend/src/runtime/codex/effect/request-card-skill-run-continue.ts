@@ -1,8 +1,8 @@
 /**
  * WHAT: Requests a follow-up turn for one terminal card-scoped Codex skill run.
- * WHY: The widget should resume the current session or start a fresh session with newer thread notes.
+ * WHY: The widget should continue the run without exposing a destructive session-reset choice.
  */
-export async function requestCardSkillRunContinue(input: { ledgerId: string; cardId: string; runId: string; traceId?: string; codexModel?: string; codexEffort?: string; newSession?: boolean }): Promise<{ ok: boolean; status: string; run?: Record<string, unknown>; queuePosition?: number | null; error?: string }> {
+export async function requestCardSkillRunContinue(input: { ledgerId: string; cardId: string; runId: string; traceId?: string; codexModel?: string; codexEffort?: string }): Promise<{ ok: boolean; status: string; run?: Record<string, unknown>; queuePosition?: number | null; error?: string }> {
   const response = await fetch(`/api/codex/skills/runs/${encodeURIComponent(input.runId)}/continue`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -12,7 +12,6 @@ export async function requestCardSkillRunContinue(input: { ledgerId: string; car
       traceId: input.traceId,
       codexModel: input.codexModel,
       codexEffort: input.codexEffort,
-      newSession: input.newSession,
     }),
   }).catch(() => undefined);
   if (!response) return { ok: false, status: 'unknown', error: 'Request failed.' };

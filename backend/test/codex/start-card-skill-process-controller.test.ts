@@ -839,7 +839,7 @@ test('card skill run cancel route terminates the active codex process', async ()
   }
 });
 
-test('card skill run continue route resumes the captured session with post-end thread messages', async () => {
+test('card skill run continue route resumes the captured session after its card moves ledgers', async () => {
   const originalCwd = process.cwd();
   const previousCodexBin = process.env.CODEX_BIN;
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-card-skill-continue-'));
@@ -851,33 +851,36 @@ test('card skill run continue route resumes the captured session with post-end t
   const freshSessionId = '019f3c6d-38a5-7e23-a238-904176322f0d';
   const outputCardId = `card-${runId}`;
   const threadId = `thread-${outputCardId}`;
-  const threadFile = join(workspace, '.decision-os', 'threads', 'specs', `${threadId}.md`);
+  const threadFile = join(workspace, '.decision-os', 'threads', 'tasks', `${threadId}.md`);
   const jsonlFile = join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.jsonl`);
   mkdirSync(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs'), { recursive: true });
-  mkdirSync(join(workspace, '.decision-os', 'cards', 'specs'), { recursive: true });
-  mkdirSync(join(workspace, '.decision-os', 'threads', 'specs'), { recursive: true });
+  mkdirSync(join(workspace, '.decision-os', 'cards', 'tasks'), { recursive: true });
+  mkdirSync(join(workspace, '.decision-os', 'threads', 'tasks'), { recursive: true });
   writeFileSync(join(workspace, '.decision-os', 'state.json'), JSON.stringify({
-    ledgers: [{ id: 'specs', title: 'Specs', ledgerFile: '.decision-os/specs.json' }]
+    ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }]
   }, null, 2));
-  writeFileSync(join(workspace, '.decision-os', 'specs.json'), JSON.stringify({
+  writeFileSync(join(workspace, '.decision-os', 'tasks.json'), JSON.stringify({
     cards: [{
       id: outputCardId,
       title: 'Skill Result',
       cardType: 'codex-skill-run',
-      comment: { contentFile: `.decision-os/cards/specs/${outputCardId}.md` },
+      codexThreadRunId: runId,
+      codexThreadRunOutputFile: `.decision-os/runs/codex-skills/specs/${runId}.md`,
+      comment: { contentFile: `.decision-os/cards/tasks/${outputCardId}.md` },
       facts: [],
       fields: []
     }],
     annotations: [],
     relationships: [],
     notes: {},
-    threadFiles: { [threadId]: `.decision-os/threads/specs/${threadId}.md` }
+    threadFiles: { [threadId]: `.decision-os/threads/tasks/${threadId}.md` }
   }, null, 2));
-  writeFileSync(join(workspace, '.decision-os', 'cards', 'specs', `${outputCardId}.md`), [
+  writeFileSync(join(workspace, '.decision-os', 'cards', 'tasks', `${outputCardId}.md`), [
     '# Finished Skill Result',
     '',
     `Codex run: ${runId}`,
   ].join('\n'));
+  writeFileSync(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.md`), '# Finished Skill Result\n');
   writeFileSync(threadFile, [
     '# AGENT',
     `<!-- decision-os:note {"id":"codex-${runId}-line-2","timestamp":"2026-07-07T17:13:35.518Z","status":"complete","codexRunId":"${runId}","codexLine":"2","codexKind":"run_status","codexEventType":"turn.completed"} -->`,
@@ -943,7 +946,7 @@ test('card skill run continue route resumes the captured session with post-end t
     const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}/continue`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ledgerId: 'specs', cardId: outputCardId, codexModel: 'gpt-5.4', codexEffort: 'medium' })
+      body: JSON.stringify({ ledgerId: 'tasks', cardId: outputCardId, codexModel: 'gpt-5.4', codexEffort: 'medium' })
     });
     assert.equal(response.status, 202);
     const body = await response.json() as { ok: boolean; run: { id: string; executionId: string; continuedMessageCount: number; resumeSessionId: string; startedAt: string; continuedAt: string; turnStartedAt?: string; finishedAt?: string; settledAt?: string; exitCode?: number } };
@@ -972,87 +975,73 @@ test('card skill run continue route resumes the captured session with post-end t
       const runs = runtime.codexSkillRuns as Record<string, { status?: string }> | undefined;
       return runs?.[runId]?.status === 'complete';
     }, 'the resumed card-skill run to complete');
-    const resumedStatusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}&since=0`);
+    const resumedStatusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=tasks&cardId=${outputCardId}&since=0`);
     assert.equal(resumedStatusResponse.status, 200);
     const resumedStatus = await resumedStatusResponse.json() as { persistedEventCount: number; events: Array<{ type: string }> };
     assert.equal(resumedStatus.persistedEventCount, 0);
     assert.deepEqual(resumedStatus.events.map((event) => event.type), ['thread.started', 'turn.completed', 'turn.started', 'item.completed', 'turn.completed']);
     assert.equal(readFileSync(threadFile, 'utf8'), threadBeforeResume);
 
-    const threadBeforeFresh = `${threadBeforeResume.trimEnd()}\n\n# OPERATOR\n<!-- decision-os:note {"id":"note-fresh","timestamp":"2026-07-07T17:16:00.000Z"} -->\n\nStart without the previous session context.\n`;
-    writeFileSync(threadFile, threadBeforeFresh);
-    const freshResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}/continue`, {
+    const threadBeforeOverride = `${threadBeforeResume.trimEnd()}\n\n# OPERATOR\n<!-- decision-os:note {"id":"note-resume","timestamp":"2026-07-07T17:16:00.000Z"} -->\n\nResume the previous session context.\n`;
+    writeFileSync(threadFile, threadBeforeOverride);
+    const overrideResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}/continue`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ledgerId: 'specs', cardId: outputCardId, codexModel: 'gpt-5.5', codexEffort: 'high', newSession: true })
+      body: JSON.stringify({ ledgerId: 'tasks', cardId: outputCardId, codexModel: 'gpt-5.5', codexEffort: 'high', newSession: true })
     });
-    assert.equal(freshResponse.status, 202);
-    const freshBody = await freshResponse.json() as { ok: boolean; run: { newSession: boolean; resumeSessionId: string } };
-    assert.equal(freshBody.ok, true);
-    assert.equal(freshBody.run.newSession, true);
-    assert.equal(freshBody.run.resumeSessionId, '');
-    await waitForText(inputFile, 'Start a new Codex session for an existing decision-os run.');
-    const freshInput = readFileSync(inputFile, 'utf8');
-    assert.match(freshInput, /The previous Codex session is unavailable/);
-    assert.match(freshInput, /Decision OS context:/);
-    assert.doesNotMatch(freshInput, /session-context|locate the CLI/i);
-    assert.match(freshInput, /Start without the previous session context\./);
-    assert.match(freshInput, /# Finished Skill Result/);
-    const freshArgs = JSON.parse(readFileSync(argvFile, 'utf8')) as string[];
-    assert.deepEqual(freshArgs.slice(0, 4), ['exec', '--dangerously-bypass-approvals-and-sandbox', '--json', '-C']);
-    assert.equal(freshArgs.includes('resume'), false);
-    assert.equal(freshArgs.includes(sessionId), false);
+    assert.equal(overrideResponse.status, 202);
+    const overrideBody = await overrideResponse.json() as { ok: boolean; run: { newSession: boolean; resumeSessionId: string } };
+    assert.equal(overrideBody.ok, true);
+    assert.equal(overrideBody.run.newSession, false);
+    assert.equal(overrideBody.run.resumeSessionId, sessionId);
+    await waitForText(inputFile, 'Resume the previous session context.');
+    const overrideArgs = JSON.parse(readFileSync(argvFile, 'utf8')) as string[];
+    assert.deepEqual(overrideArgs.slice(0, 4), ['exec', 'resume', '--dangerously-bypass-approvals-and-sandbox', '--json']);
+    assert.equal(overrideArgs.includes(sessionId), true);
+    await waitForText(jsonlFile, 'resumed response');
+    await waitForCondition(() => {
+      const runs = runtime.codexSkillRuns as Record<string, { status?: string }> | undefined;
+      return runs?.[runId]?.status === 'complete';
+    }, 'the forced resume request to complete');
+    assert.equal(readFileSync(threadFile, 'utf8'), threadBeforeOverride);
 
+    const threadBeforeFallback = `${threadBeforeOverride.trimEnd()}\n\n# OPERATOR\n<!-- decision-os:note {"id":"note-missing-session","timestamp":"2026-07-07T17:17:00.000Z"} -->\n\nRecover despite the missing session id.\n`;
+    writeFileSync(threadFile, threadBeforeFallback);
+    writeFileSync(jsonlFile, `${JSON.stringify({ type: 'turn.completed' })}\n`, 'utf8');
+    const fallbackResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}/continue`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ledgerId: 'tasks', cardId: outputCardId, codexModel: 'gpt-5.5', codexEffort: 'high' })
+    });
+    assert.equal(fallbackResponse.status, 202);
+    const fallbackBody = await fallbackResponse.json() as { ok: boolean; run: { newSession: boolean; resumeSessionId: string } };
+    assert.equal(fallbackBody.ok, true);
+    assert.equal(fallbackBody.run.newSession, true);
+    assert.equal(fallbackBody.run.resumeSessionId, '');
+    await waitForText(inputFile, 'Start a new Codex session for an existing decision-os run.');
+    const fallbackArgs = JSON.parse(readFileSync(argvFile, 'utf8')) as string[];
+    assert.deepEqual(fallbackArgs.slice(0, 4), ['exec', '--dangerously-bypass-approvals-and-sandbox', '--json', '-C']);
+    assert.equal(fallbackArgs.includes('resume'), false);
     await waitForText(jsonlFile, 'fresh response');
     await waitForCondition(() => {
       const runs = runtime.codexSkillRuns as Record<string, { status?: string }> | undefined;
       return runs?.[runId]?.status === 'complete';
-    }, 'the fresh card-skill session to complete');
-    const freshStatusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}&since=0`);
-    assert.equal(freshStatusResponse.status, 200);
-    const freshStatus = await freshStatusResponse.json() as { persistedEventCount: number; events: Array<{ type: string }> };
-    assert.equal(freshStatus.persistedEventCount, 0);
-    assert.deepEqual(freshStatus.events.map((event) => event.type), ['thread.started', 'turn.completed', 'turn.started', 'item.completed', 'turn.completed', 'thread.started', 'turn.started', 'item.completed', 'turn.completed']);
-    assert.equal(readFileSync(threadFile, 'utf8'), threadBeforeFresh);
+    }, 'the missing-session fallback to complete');
 
-    const threadBeforeLatestResume = `${threadBeforeFresh.trimEnd()}\n\n# OPERATOR\n<!-- decision-os:note {"id":"note-after-fresh","timestamp":"2026-07-07T17:17:00.000Z"} -->\n\nContinue the fresh session.\n`;
-    writeFileSync(threadFile, threadBeforeLatestResume);
-    const resumedFreshResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}/continue`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ledgerId: 'specs', cardId: outputCardId, codexModel: 'gpt-5.5', codexEffort: 'high' })
-    });
-    assert.equal(resumedFreshResponse.status, 202);
-    await waitForText(inputFile, 'Continue the fresh session.');
-    const resumedFreshArgs = JSON.parse(readFileSync(argvFile, 'utf8')) as string[];
-    assert.deepEqual(resumedFreshArgs.slice(0, 4), ['exec', 'resume', '--dangerously-bypass-approvals-and-sandbox', '--json']);
-    assert.equal(resumedFreshArgs.includes(freshSessionId), true);
-    await waitForText(jsonlFile, 'latest session response');
-    await waitForCondition(() => {
-      const runs = runtime.codexSkillRuns as Record<string, { status?: string }> | undefined;
-      return runs?.[runId]?.status === 'complete';
-    }, 'the latest resumed card-skill session to complete');
-    const latestStatusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}&since=0`);
-    assert.equal(latestStatusResponse.status, 200);
-    const latestStatus = await latestStatusResponse.json() as { persistedEventCount: number; events: Array<{ type: string }> };
-    assert.equal(latestStatus.persistedEventCount, 0);
-    assert.deepEqual(latestStatus.events.map((event) => event.type), ['thread.started', 'turn.completed', 'turn.started', 'item.completed', 'turn.completed', 'thread.started', 'turn.started', 'item.completed', 'turn.completed', 'turn.started', 'item.completed', 'turn.completed']);
-    assert.equal(readFileSync(threadFile, 'utf8'), threadBeforeLatestResume);
-
-    const interruptedThread = `${threadBeforeLatestResume.trimEnd()}\n\n# AGENT\n<!-- decision-os:note {"id":"codex-${runId}-line-13","timestamp":"2026-07-07T17:18:00.000Z","status":"running","codexRunId":"${runId}","codexLine":"13","codexKind":"run_status","codexEventType":"turn.started"} -->\n\nCodex turn started.\n`;
+    const interruptedThread = `${threadBeforeFallback.trimEnd()}\n\n# AGENT\n<!-- decision-os:note {"id":"codex-${runId}-line-13","timestamp":"2026-07-07T17:18:00.000Z","status":"running","codexRunId":"${runId}","codexLine":"13","codexKind":"run_status","codexEventType":"turn.started"} -->\n\nCodex turn started.\n`;
     writeFileSync(threadFile, interruptedThread);
     appendFileSync(jsonlFile, `${JSON.stringify({ type: 'turn.started' })}\n`);
     appendFileSync(join(workspace, '.decision-os', 'runs', 'codex-skills', 'specs', `${runId}.log`), `decision-os:codex-run-segment ${JSON.stringify({ runId, startedAt: new Date().toISOString(), segment: 'continue', startLine: 12 })}\n`);
     delete (runtime.codexSkillRuns as Record<string, unknown>)[runId];
 
-    const orphanedStatusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=specs&cardId=${outputCardId}&since=0`);
+    const orphanedStatusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=tasks&cardId=${outputCardId}&since=0`);
     const orphanedStatus = await orphanedStatusResponse.json() as { status: string; active: boolean };
     assert.equal(orphanedStatus.status, 'running');
     assert.equal(orphanedStatus.active, false);
     const interruptedResumeResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}/continue`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ledgerId: 'specs', cardId: outputCardId, codexModel: 'gpt-5.5', codexEffort: 'high' })
+      body: JSON.stringify({ ledgerId: 'tasks', cardId: outputCardId, codexModel: 'gpt-5.5', codexEffort: 'high' })
     });
     assert.equal(interruptedResumeResponse.status, 202);
     await waitForText(inputFile, 'Continue the interrupted task from the durable session context.');
