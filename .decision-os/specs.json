@@ -9945,18 +9945,24 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784369782912-572dd9bc",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784369782912-572dd9bc.md",
-      "codexActiveRunId": "codex-skill-1784369782912-572dd9bc"
+      "codexThreadRunId": "codex-skill-1784437148980-697d2c2e",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784437148980-697d2c2e.md",
+      "codexThreadRunIds": [
+        "codex-skill-1784369782912-572dd9bc",
+        "codex-skill-1784437148980-697d2c2e"
+      ],
+      "codexActiveRunId": "codex-skill-1784437148980-697d2c2e"
     },
     {
       "id": "card-2e7ef059-8902-4234-9e1b-03080fad351b",
       "title": "Persist ordered Codex thread-run history",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "code",
+        "implemented",
+        "verified",
         "subtask"
       ],
       "x": -10012,
@@ -9977,6 +9983,9 @@
       "status": "todo",
       "labels": [
         "code",
+        "implemented",
+        "contradicted-success",
+        "target-verification-pending",
         "subtask"
       ],
       "x": -9632,
@@ -9994,9 +10003,12 @@
       "title": "Add run-history regression coverage",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "test",
+        "implemented",
+        "verified",
+        "regression",
         "subtask"
       ],
       "x": -10012,
@@ -10189,7 +10201,6 @@
       "fields": [],
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexActiveRunId": "codex-skill-1784394516973-f8f69dbd",
       "codexRunId": "codex-skill-1784394516973-f8f69dbd",
       "codexRunOutputFile": ".decision-os/cards/specs/card-codex-pipeline-1784394516973-6845bc44-step-1.md",
       "codexPipelineRunId": "codex-pipeline-1784394516973-6845bc44",
@@ -10260,7 +10271,7 @@
       "title": "Fix voice transcription configuration and error visibility",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "master-task"
       ],
@@ -10273,11 +10284,16 @@
       },
       "facts": [],
       "fields": [],
-      "codexActiveRunId": "codex-skill-1784394275972-8db335cb",
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
-      "codexThreadRunId": "codex-skill-1784394275972-8db335cb",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784394275972-8db335cb.md"
+      "codexActiveRunId": "codex-skill-1784439413294-1a3c2be0",
+      "codexRunId": "codex-skill-1784439413294-1a3c2be0",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-pipeline-1784439413294-56258c03-step-1.md",
+      "codexPipelineRunId": "codex-pipeline-1784439413294-56258c03",
+      "codexPipelineName": "PostMortem",
+      "codexPipelineStepId": "codex-step-76620a22-6ca8-4afd-8fe0-fee74d9b40b0",
+      "codexPipelineStepName": "Recap",
+      "codexSkillName": "retrospect-and-close-task"
     },
     {
       "id": "card-codex-pipeline-1784394516973-6845bc44-step-1",
@@ -10296,7 +10312,6 @@
       },
       "facts": [],
       "fields": [],
-      "codexActiveRunId": "codex-skill-1784394516973-f8f69dbd",
       "codexRunOutputFile": ".decision-os/cards/specs/card-codex-pipeline-1784394516973-6845bc44-step-1.md",
       "codexPipelineRunId": "codex-pipeline-1784394516973-6845bc44",
       "codexPipelineName": "PostMortem",
@@ -10309,7 +10324,7 @@
       "title": "Inherit repository transcription settings",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "subtask"
       ],
@@ -10328,7 +10343,7 @@
       "title": "Expose persisted voice transcription errors",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "subtask"
       ],
@@ -10341,6 +10356,58 @@
       },
       "facts": [],
       "fields": []
+    },
+    {
+      "id": "card-codex-pipeline-1784439413294-56258c03-step-1",
+      "title": "PostMortem · Recap",
+      "cardType": "codex-skill-run",
+      "x": -9946,
+      "y": 145188,
+      "w": 700,
+      "h": 260,
+      "status": "todo",
+      "codexRunId": "codex-skill-1784439413294-1a3c2be0",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-codex-pipeline-1784439413294-56258c03-step-1.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784439413294-1a3c2be0",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-pipeline-1784439413294-56258c03-step-1.md",
+      "codexPipelineRunId": "codex-pipeline-1784439413294-56258c03",
+      "codexPipelineName": "PostMortem",
+      "codexPipelineStepId": "codex-step-76620a22-6ca8-4afd-8fe0-fee74d9b40b0",
+      "codexPipelineStepName": "Recap",
+      "codexSkillName": "retrospect-and-close-task"
+    },
+    {
+      "id": "card-3add8dea-07f1-4882-84e0-5c45b7967583",
+      "title": "New task intake",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "master-task"
+      ],
+      "x": -10402,
+      "y": 146208,
+      "w": 360,
+      "h": 240,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-3add8dea-07f1-4882-84e0-5c45b7967583.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexActiveRunId": "codex-skill-1784439508139-45a0918e",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "codexThreadRunIds": [
+        "codex-skill-1784439508139-45a0918e"
+      ],
+      "codexThreadRunId": "codex-skill-1784439508139-45a0918e",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784439508139-45a0918e.md"
     }
   ],
   "relationships": [
@@ -11189,6 +11256,12 @@
       "from": "card-45a573c9-275b-4062-a63c-4febdc90d286",
       "to": "card-547199d5-ab2f-4786-af0c-2e1b2f2d689c",
       "label": "subtask"
+    },
+    {
+      "id": "rel-codex-pipeline-1784439413294-56258c03-1",
+      "from": "card-45a573c9-275b-4062-a63c-4febdc90d286",
+      "to": "card-codex-pipeline-1784439413294-56258c03-step-1",
+      "label": "Recap"
     }
   ],
   "annotations": [
@@ -12327,6 +12400,16 @@
       "color": "#a78bfa",
       "label": "Voice transcription configuration and error visibility",
       "comments": []
+    },
+    {
+      "id": "zone-adcdda29-7aec-4b11-9f12-e8b5baecc5a7",
+      "x": -10462,
+      "y": 146148,
+      "width": 1200,
+      "height": 900,
+      "color": "#a78bfa",
+      "label": "New task intake",
+      "comments": []
     }
   ],
   "notes": {},
@@ -12447,7 +12530,9 @@
     "thread-card-dd250386-4557-4b33-b58a-8b6d837b45b5": ".decision-os/threads/specs/thread-card-dd250386-4557-4b33-b58a-8b6d837b45b5.md",
     "thread-card-3aba2818-6b47-438d-9785-97793893d573": ".decision-os/threads/specs/thread-card-3aba2818-6b47-438d-9785-97793893d573.md",
     "thread-card-45a573c9-275b-4062-a63c-4febdc90d286": ".decision-os/threads/specs/thread-card-45a573c9-275b-4062-a63c-4febdc90d286.md",
-    "thread-card-codex-pipeline-1784394516973-6845bc44-step-1": ".decision-os/threads/specs/thread-card-codex-pipeline-1784394516973-6845bc44-step-1.md"
+    "thread-card-codex-pipeline-1784394516973-6845bc44-step-1": ".decision-os/threads/specs/thread-card-codex-pipeline-1784394516973-6845bc44-step-1.md",
+    "thread-card-codex-pipeline-1784439413294-56258c03-step-1": ".decision-os/threads/specs/thread-card-codex-pipeline-1784439413294-56258c03-step-1.md",
+    "thread-card-3add8dea-07f1-4882-84e0-5c45b7967583": ".decision-os/threads/specs/thread-card-3add8dea-07f1-4882-84e0-5c45b7967583.md"
   },
   "deletedNoteIds": {
     "thread-card-7074d33a-39da-42a1-b470-673cbe221def": [
