@@ -26,6 +26,7 @@ export async function submitPendingVoiceUpload(noteId: string): Promise<boolean>
     threadId: pending.threadId,
     cardId: pending.cardId,
     noteId,
+    reviewContext: pending.reviewContext,
     launchMode: pending.launchMode ?? (pending.queueCodex ? 'run' : 'send')
   });
   if (!upload.ok || !upload.voiceFileRef) {

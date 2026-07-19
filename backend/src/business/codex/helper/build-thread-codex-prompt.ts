@@ -2,6 +2,7 @@
  * WHAT: Builds a compact runtime contract and the current thread payload for Codex.
  * WHY: Repository AGENTS.md owns general policy; launch instructions contain only Decision OS mechanics.
  */
+import { readProtectedGitPatch } from '../../git-review/helper/git-review-patch.js';
 export function buildThreadCodexPrompt(input: {
   workspaceRoot: string;
   projectId: string;
@@ -18,6 +19,7 @@ export function buildThreadCodexPrompt(input: {
   context: Record<string, unknown>;
   disallowSkills?: boolean;
 }): { developerInstructions: string; taskContext: string } {
+  const protectedPatch = readProtectedGitPatch(input.workspaceRoot);
   const developerInstructions = [
     'Decision OS card run:',
     `- Project: \`${input.projectId}\`.`,
@@ -28,6 +30,12 @@ export function buildThreadCodexPrompt(input: {
     `- Gate: \`ledger-cli master-task-gate --ledger "$DECISION_OS_LEDGER_FILE" --card-id ${input.cardId} --json\`.`,
     `- Reply: \`ledger-cli answer --ledger "$DECISION_OS_LEDGER_FILE" --thread-id ${input.threadId} --message-stdin\`.`,
     '- Follow the workspace `AGENTS.md` Markdown contract.',
+    ...(protectedPatch ? [
+      '- Git-index protection: the staged patch below is operator-approved. Do not modify, unstage, or overwrite these lines.',
+      '```diff',
+      protectedPatch,
+      '```',
+    ] : []),
   ].join('\n');
 
   const taskContext = [

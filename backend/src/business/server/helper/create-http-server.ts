@@ -83,6 +83,7 @@ import { executeProjectSyncPipelineSkill } from '../../project-sync/controller/e
 import { verifyProjectSyncPhase } from '../../project-sync/helper/verify-project-sync-phase.js';
 import type { ProjectSyncRole } from '../../project-sync/helper/project-sync-types.js';
 import { projectSyncGitSshCommand } from '../../project-sync/helper/project-sync-git-ssh-command.js';
+import { applyGitReviewPatch, readGitReview } from '../../git-review/helper/git-review-patch.js';
 
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
@@ -660,6 +661,44 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.statusCode = 503;
       response.setHeader('content-type', 'application/json');
       response.end(JSON.stringify({ ok: false, error: activeProject.diagnostic, projectId: activeProject.id }));
+      return;
+    }
+    if (url === '/api/git-review' && request.method === 'GET' && activeProject) {
+      try {
+        const result = readGitReview({
+          workspaceRoot: dirname(activeProject.decisionOsRoot),
+          repository: requestUrl.searchParams.get('repo') ?? '.',
+          target: requestUrl.searchParams.get('path') ?? '.',
+        });
+        response.setHeader('cache-control', 'no-store');
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ ok: true, ...result }));
+      } catch (error) {
+        response.statusCode = 400;
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+      }
+      return;
+    }
+    if (url === '/api/git-review/stage' && request.method === 'POST' && activeProject) {
+      try {
+        const payload = JSON.parse((await readRequestBuffer(request)).toString('utf8')) as AnyRecord;
+        const result = applyGitReviewPatch({
+          workspaceRoot: dirname(activeProject.decisionOsRoot),
+          repository: String(payload.repository ?? '.'),
+          target: String(payload.target ?? '.'),
+          expectedPatchHash: String(payload.expectedPatchHash ?? ''),
+          patch: String(payload.patch ?? ''),
+          operation: payload.operation === 'unstage' ? 'unstage' : 'stage',
+        });
+        response.setHeader('cache-control', 'no-store');
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ ok: true, ...result }));
+      } catch (error) {
+        response.statusCode = 409;
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+      }
       return;
     }
     if (!projectScope && url === '/api/control-room' && request.method === 'GET') {

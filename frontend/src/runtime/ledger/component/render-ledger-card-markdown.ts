@@ -8,6 +8,7 @@ import { renderLedgerCardCodeBlock } from './render-ledger-card-code-block.js';
 import { renderLedgerCardHtmlEmbeds } from './render-ledger-card-html-embeds.js';
 import { renderLedgerCardMedia, type LedgerCardImageSizes } from './render-ledger-card-media.js';
 import { renderLedgerCardTable } from './render-ledger-card-table.js';
+import { renderLedgerCardGitDiff } from './render-ledger-card-git-diff.js';
 
 type LedgerCardMarkdownOptions = {
   cardId?: string;
@@ -50,6 +51,10 @@ export function renderLedgerCardMarkdown(markdown: string, options: LedgerCardMa
     }
     if (block.kind === 'htmlEmbeds') {
       body.appendChild(renderLedgerCardHtmlEmbeds(block, options));
+      continue;
+    }
+    if (block.kind === 'gitDiff') {
+      body.appendChild(renderLedgerCardGitDiff(block, options));
       continue;
     }
     if (block.kind === 'code') {
