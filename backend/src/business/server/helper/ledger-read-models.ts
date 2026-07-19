@@ -51,6 +51,7 @@ export function ledgerNavigationProjection(input: { decisionOsRoot: string; ledg
     h: card.h,
     codexActiveRunId: card.codexActiveRunId ?? null,
     codexThreadRunId: card.codexThreadRunId ?? null,
+    codexThreadRunIds: card.codexThreadRunIds ?? null,
     codexRunId: card.codexRunId ?? null,
     codexRunModel: card.codexRunModel ?? null,
     codexRunEffort: card.codexRunEffort ?? null,
