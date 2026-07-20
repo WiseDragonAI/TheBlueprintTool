@@ -12,6 +12,7 @@ import { saveThreadDraft } from '/src/runtime/thread/effect/persist-thread-draft
 import { focusThreadDraft } from '/src/runtime/thread/effect/focus-thread-draft.js';
 import { startVoiceRecording } from '/src/runtime/voice/controller/start-voice-recording.js';
 import { stopVoiceRecording } from '/src/runtime/voice/controller/stop-voice-recording.js';
+import { submitVoiceRecording } from '/src/runtime/voice/controller/submit-voice-recording.js';
 import { cancelVoiceRecording } from '/src/runtime/voice/controller/cancel-voice-recording.js';
 import { retryVoiceTranscription } from '/src/runtime/voice/effect/retry-voice-transcription.js';
 import { uploadThreadFileController } from '/src/runtime/thread/controller/upload-thread-file-controller.js';
@@ -272,13 +273,22 @@ function voiceLaunchMode(event) {
 }
 
 async function stopQuickVoiceComment(launchMode = 'send') {
-  const submitted = await stopVoiceRecording({ launchMode });
-  quickVoiceCapture = false;
-  const button = document.querySelector('.quick-voice-comment-button');
-  button.disabled = false;
-  button.removeAttribute('aria-busy');
-  if (launchMode === 'send') return;
-  await finishQueuedVoiceSubmission(submitted);
+  const resetCapture = () => {
+    quickVoiceCapture = false;
+    const button = document.querySelector('.quick-voice-comment-button');
+    button.disabled = false;
+    button.removeAttribute('aria-busy');
+  };
+  await submitVoiceRecording({
+    launchMode,
+    stop: stopVoiceRecording,
+    onDurableHandoff: () => {
+      resetCapture();
+      void finishQueuedVoiceSubmission(true);
+    },
+    onRejected: resetCapture,
+  });
+  if (launchMode === 'send') resetCapture();
 }
 
 async function refreshThreadLedger(optimisticRunId = '') {
