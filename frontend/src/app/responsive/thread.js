@@ -12,6 +12,7 @@ import { submitThreadDraft } from '/src/runtime/thread/effect/submit-thread-draf
 import { saveThreadDraft } from '/src/runtime/thread/effect/persist-thread-draft.js';
 import { focusThreadDraft } from '/src/runtime/thread/effect/focus-thread-draft.js';
 import { startVoiceRecording } from '/src/runtime/voice/controller/start-voice-recording.js';
+import { currentVoiceCaptureOwner } from '/src/runtime/voice/helper/voice-capture-ownership.js';
 import { executeVoiceAction } from '/src/runtime/voice/controller/execute-voice-action.js';
 import { cancelVoiceRecording } from '/src/runtime/voice/controller/cancel-voice-recording.js';
 import { parseVoiceLaunchMode, voiceLaunchModeForModifiers } from '/src/runtime/voice/helper/voice-launch-mode.js';
@@ -206,6 +207,7 @@ export async function handleResponsiveThreadShortcut(event) {
   }
   if (key === 'x') {
     event.preventDefault();
+    if (currentVoiceCaptureOwner()?.startsWith('git-review:')) return true;
     if (!canvasState.threadPanelOpen && currentCard) openMobileThread(currentCard, getComputedStyle(document.querySelector('#card-view')).getPropertyValue('--zone-color').trim());
     if (canvasState.voice.recording) {
       const launchMode = voiceLaunchModeForModifiers(event);

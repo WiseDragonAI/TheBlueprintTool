@@ -13,6 +13,7 @@ import { threadCodexCardId } from '../../codex/helper/thread-codex-card-id.js';
 import { releaseVoiceRecordingWakeLock } from '../effect/hold-voice-recording-wake-lock.js';
 import { voiceProjectId, voiceReplicaNodeId } from '../helper/voice-project-id.js';
 import type { VoiceLaunchMode } from '../helper/voice-launch-mode.js';
+import { releaseVoiceCaptureOwnership } from '../helper/voice-capture-ownership.js';
 
 export async function stopVoiceRecording(input: { launchMode?: VoiceLaunchMode; onPersisted?: () => void; onCaptured?: (audio: Blob | null) => Promise<boolean> } = {}): Promise<boolean> {
   if (state.voice.animationFrameId) cancelAnimationFrame(state.voice.animationFrameId);
@@ -41,6 +42,7 @@ export async function stopVoiceRecording(input: { launchMode?: VoiceLaunchMode; 
   void audioContext?.close();
   state.voice.recording = false;
   releaseVoiceRecordingWakeLock();
+  releaseVoiceCaptureOwnership('thread');
   state.voice.durationMs = state.voice.startedAt ? Date.now() - state.voice.startedAt : state.voice.durationMs;
   state.voice.level = 0;
   state.voice.transcriptionStatus = 'uploading voice';
