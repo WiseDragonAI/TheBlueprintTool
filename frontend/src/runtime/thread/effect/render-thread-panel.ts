@@ -225,6 +225,7 @@ function bindActiveThreadRun(threadId: string): void {
   const { cardId, card } = activeThreadCard(threadId);
   const selectedRunIds = recordState('threadSelectedRunIdByThreadId') as Record<string, string>;
   const ledgerId = String(state.activeTab ?? '').trim();
+  const requestScope = { projectId: String(state.projectId ?? ''), replicaNodeId: String(state.replicaNodeId ?? '') };
   const activeRunId = String(card?.codexActiveRunId ?? '');
   const activeExecutionId = String(card?.codexActiveExecutionId ?? '');
   const admittedRunIds = recordState('threadLastAdmittedRunIdByThreadId') as Record<string, string>;
@@ -248,6 +249,7 @@ function bindActiveThreadRun(threadId: string): void {
   const runId = card ? selectedCardCodexRunId(card, selectedRunIds[threadId]) : '';
   if (runId) selectedRunIds[threadId] = runId;
   if (ledgerId && cardId && runId) bindThreadCodexRunLog({
+    ...requestScope,
     ledgerId,
     cardId,
     threadId,
@@ -259,6 +261,7 @@ function bindActiveThreadRun(threadId: string): void {
     const forceRevalidate = leaseKeys[threadId] !== leaseKey;
     leaseKeys[threadId] = leaseKey;
     bindThreadCodexActiveRunLog({
+      ...requestScope,
       ledgerId,
       cardId,
       threadId,
@@ -272,11 +275,12 @@ function bindActiveThreadRun(threadId: string): void {
 function unbindActiveThreadRuns(threadId: string): void {
   const { cardId } = activeThreadCard(threadId);
   const ledgerId = String(state.activeTab ?? '').trim();
+  const requestScope = { projectId: String(state.projectId ?? ''), replicaNodeId: String(state.replicaNodeId ?? '') };
   if (!ledgerId || !cardId || !threadId) return;
   const selectedRunId = String(recordState('threadRunIdByThreadId')[threadId] ?? '');
   const activeRunId = String(recordState('threadActiveRunIdByThreadId')[threadId] ?? '');
-  if (selectedRunId) unbindThreadCodexRunLog({ ledgerId, cardId, threadId, runId: selectedRunId });
-  if (activeRunId) unbindThreadCodexActiveRunLog({ ledgerId, cardId, threadId, runId: activeRunId });
+  if (selectedRunId) unbindThreadCodexRunLog({ ...requestScope, ledgerId, cardId, threadId, runId: selectedRunId });
+  if (activeRunId) unbindThreadCodexActiveRunLog({ ...requestScope, ledgerId, cardId, threadId, runId: activeRunId });
 }
 
 export function renderThreadPanel(): void {

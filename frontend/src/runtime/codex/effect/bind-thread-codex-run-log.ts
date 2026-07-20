@@ -5,7 +5,7 @@
 import { state } from '../../state.js';
 import { mergeThreadRunEvents, type ThreadRunLogEvent } from '../helper/thread-run-log.js';
 import { bindCardSkillRunLogConsumer, unbindCardSkillRunLogConsumer } from './poll-card-skill-run.js';
-import { projectIdFromLocation } from '../../project/helper/project-request-scope.js';
+import { projectIdFromLocation, replicaNodeIdFromLocation } from '../../project/helper/project-request-scope.js';
 import type { CardSkillRunSummary } from './request-card-skill-run-status.js';
 import { syncThreadCodexRunControls } from '../../thread/effect/sync-thread-codex-run-controls.js';
 import { stopThreadCodexRunClock, syncThreadCodexRunClock } from './sync-thread-codex-run-clock.js';
@@ -81,6 +81,7 @@ function consumeThreadRunSummary(input: { threadId: string; runId: string; summa
 
 type ThreadCodexRunLogIdentity = {
   projectId?: string;
+  replicaNodeId?: string;
   ledgerId: string;
   cardId: string;
   threadId: string;
@@ -93,10 +94,12 @@ type ThreadCodexRunLogIdentity = {
 export function bindThreadCodexRunLog(input: ThreadCodexRunLogIdentity): void {
   if (!input.ledgerId || !input.cardId || !input.threadId || !input.runId) return;
   const projectId = input.projectId ?? projectIdFromLocation();
+  const replicaNodeId = input.replicaNodeId ?? replicaNodeIdFromLocation();
   const previousRunId = String(recordState('threadRunIdByThreadId')[input.threadId] ?? '');
   if (previousRunId && previousRunId !== input.runId) {
     unbindCardSkillRunLogConsumer({
       projectId,
+      replicaNodeId,
       ledgerId: input.ledgerId,
       cardId: input.cardId,
       runId: previousRunId,
@@ -108,6 +111,7 @@ export function bindThreadCodexRunLog(input: ThreadCodexRunLogIdentity): void {
   if (currentSummary) syncThreadCodexRunClock({ threadId: input.threadId, runId: input.runId, summary: currentSummary });
   bindCardSkillRunLogConsumer({
     projectId,
+    replicaNodeId,
     ledgerId: input.ledgerId,
     cardId: input.cardId,
     runId: input.runId,
@@ -135,10 +139,12 @@ function consumeActiveRunSummary(input: { threadId: string; runId: string; summa
 export function bindThreadCodexActiveRunLog(input: ThreadCodexRunLogIdentity): void {
   if (!input.ledgerId || !input.cardId || !input.threadId || !input.runId) return;
   const projectId = input.projectId ?? projectIdFromLocation();
+  const replicaNodeId = input.replicaNodeId ?? replicaNodeIdFromLocation();
   const activeRunIds = recordState('threadActiveRunIdByThreadId');
   const previousRunId = String(activeRunIds[input.threadId] ?? '');
   if (previousRunId && previousRunId !== input.runId) unbindCardSkillRunLogConsumer({
     projectId,
+    replicaNodeId,
     ledgerId: input.ledgerId,
     cardId: input.cardId,
     runId: previousRunId,
@@ -147,6 +153,7 @@ export function bindThreadCodexActiveRunLog(input: ThreadCodexRunLogIdentity): v
   activeRunIds[input.threadId] = input.runId;
   bindCardSkillRunLogConsumer({
     projectId,
+    replicaNodeId,
     ledgerId: input.ledgerId,
     cardId: input.cardId,
     runId: input.runId,
@@ -162,6 +169,7 @@ export function unbindThreadCodexActiveRunLog(input: ThreadCodexRunLogIdentity):
   if (!input.ledgerId || !input.cardId || !input.threadId || !input.runId) return;
   unbindCardSkillRunLogConsumer({
     projectId: input.projectId ?? projectIdFromLocation(),
+    replicaNodeId: input.replicaNodeId ?? replicaNodeIdFromLocation(),
     ledgerId: input.ledgerId,
     cardId: input.cardId,
     runId: input.runId,
@@ -178,6 +186,7 @@ export function unbindThreadCodexRunLog(input: ThreadCodexRunLogIdentity): void 
   stopThreadCodexRunClock(input.threadId);
   unbindCardSkillRunLogConsumer({
     projectId: input.projectId ?? projectIdFromLocation(),
+    replicaNodeId: input.replicaNodeId ?? replicaNodeIdFromLocation(),
     ledgerId: input.ledgerId,
     cardId: input.cardId,
     runId: input.runId,

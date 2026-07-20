@@ -353,6 +353,8 @@ async function startCodex(button) {
   const existingRunId = String(button.dataset.codexRunId || cardCodexThreadRunId(currentCard)).trim();
   const result = existingRunId
     ? await requestCardSkillRunContinue({
+      projectId: currentProjectId,
+      replicaNodeId: currentReplicaNodeId,
       ledgerId: currentLedgerId,
       cardId: String(currentCard.id),
       runId: existingRunId,
@@ -379,7 +381,7 @@ async function startCodex(button) {
   }
   const status = String(result.run?.status || 'running');
   if (runId) {
-    const identity = { projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId, expectedExecutionId: executionId || undefined, expectedStatus: status, forceRevalidate: true };
+    const identity = { projectId: currentProjectId, replicaNodeId: currentReplicaNodeId, ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId, expectedExecutionId: executionId || undefined, expectedStatus: status, forceRevalidate: true };
     bindThreadCodexRunLog(identity);
     bindThreadCodexActiveRunLog(identity);
   }
@@ -390,7 +392,7 @@ async function startCodex(button) {
     startedAt
   });
   await refreshThreadLedger(runId);
-  if (runId) bindThreadCodexRunLog({ projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId, expectedExecutionId: executionId || undefined, expectedStatus: status });
+  if (runId) bindThreadCodexRunLog({ projectId: currentProjectId, replicaNodeId: currentReplicaNodeId, ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId, expectedExecutionId: executionId || undefined, expectedStatus: status });
 }
 
 function subscribeEvents() {

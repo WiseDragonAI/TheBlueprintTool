@@ -582,6 +582,7 @@ export function bindCardSkillRunLogConsumer(input: {
   const identity = normalizedPollerIdentity(input);
   const key = pollerKey(identity);
   const consumers = consumersFor(key);
+  const alreadyBound = consumers.has(input.consumerId);
   consumers.set(input.consumerId, input.onSummary);
   const cachedTerminalSummary = terminalSummaries.get(key);
   const expectedExecutionId = String(input.expectedExecutionId ?? '');
@@ -591,7 +592,7 @@ export function bindCardSkillRunLogConsumer(input: {
   if (terminalSummaryIsStale) terminalSummaries.delete(key);
   const terminalSummary = terminalSummaryIsStale ? undefined : cachedTerminalSummary;
   if (terminalSummary) {
-    input.onSummary(terminalSummary);
+    if (!alreadyBound) input.onSummary(terminalSummary);
     return;
   }
   const existing = pollers.get(key);
@@ -601,7 +602,7 @@ export function bindCardSkillRunLogConsumer(input: {
       existing.generation += 1;
       existing.expectedExecutionId = expectedExecutionId;
       existing.terminal = false;
-    } else if (existing.lastSummary) input.onSummary(existing.lastSummary);
+    } else if (existing.lastSummary && !alreadyBound) input.onSummary(existing.lastSummary);
     if (!existing.timer && !existing.inFlight) schedulePoll(existing, 0);
     return;
   }

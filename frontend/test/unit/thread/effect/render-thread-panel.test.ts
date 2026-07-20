@@ -840,7 +840,14 @@ test('an active card lease makes the production panel revalidate a cached termin
   const { bindCardSkillRunLogConsumer, unbindCardSkillRunLogConsumer, purgeCardSkillRunLog } = await import('../../../../src/runtime/codex/effect/poll-card-skill-run.js');
   const runId = 'codex-skill-terminal-cache-revalidation';
   const threadId = 'thread-card-cache-revalidation';
-  const identity = { ledgerId: 'specs', cardId: 'card-cache-revalidation', runId, consumerId: 'seed-terminal-cache' };
+  const identity = {
+    projectId: 'project-cache-revalidation',
+    replicaNodeId: 'replica-cache-revalidation',
+    ledgerId: 'specs',
+    cardId: 'card-cache-revalidation',
+    runId,
+    consumerId: 'seed-terminal-cache',
+  };
   let requestCount = 0;
   let resolveActiveStatus!: (response: Response) => void;
   const summary = (status: 'complete' | 'pending', executionId: string) => ({
@@ -858,6 +865,8 @@ test('an active card lease makes the production panel revalidate a cached termin
     await waitFor(() => seeded);
     unbindCardSkillRunLogConsumer(identity);
 
+    state.projectId = identity.projectId;
+    state.replicaNodeId = identity.replicaNodeId;
     state.activeTab = 'specs';
     state.activeLedger = {
       cards: [{ id: identity.cardId, title: 'Cached run', codexThreadRunId: runId, codexActiveRunId: runId, codexActiveExecutionId: 'execution-new' }],
