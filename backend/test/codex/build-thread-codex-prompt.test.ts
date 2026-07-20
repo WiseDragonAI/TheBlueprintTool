@@ -36,6 +36,8 @@ test('thread Codex prompt uses a direct scoped contract without triggering open-
   assert.match(prompt.developerInstructions, /thread reply is a separate CTO-facing iteration record/);
   assert.match(prompt.developerInstructions, /very short numbered bullets with no heading or section/);
   assert.match(prompt.developerInstructions, /material outcomes from this iteration/);
+  assert.match(prompt.developerInstructions, /Never include raw UUIDs or other opaque internal identifiers/);
+  assert.match(prompt.developerInstructions, /name the human-readable subject and outcome instead/);
   assert.match(prompt.developerInstructions, /Do not include analysis, rationale, process narration, implementation inventory, the full-task summary, or implicit workflow actions/);
   assert.match(prompt.developerInstructions, /Put all reasoning and complete task state in the master-task body/);
   assert.doesNotMatch(prompt.developerInstructions, /master-task-complete/);
