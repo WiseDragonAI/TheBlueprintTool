@@ -36,7 +36,7 @@ export function hydrateThreadCodexRunHistory(input: {
       if (!summary.ok || summary.executions.length === 0) return;
       cache[runId] = summary.executions;
       if (String(state.threadId ?? '') !== input.threadId) return;
-      void import('../../thread/effect/render-thread-codex-log.js').then(({ renderThreadCodexLog }) => renderThreadCodexLog());
+      void import('../../thread/effect/render-thread-panel.js').then(({ renderThreadPanel }) => renderThreadPanel());
     }).finally(() => pendingRunIds.delete(runId));
   }
 }

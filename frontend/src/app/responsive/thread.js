@@ -3,8 +3,9 @@
  * WHY: Notes, voice, uploads, Codex logs, and session controls must work at every width.
  */
 import { state as canvasState } from '/src/runtime/state.js';
-import { selectThread } from '/src/runtime/thread/effect/select-thread.js';
 import { renderThreadPanel } from '/src/runtime/thread/effect/render-thread-panel.js';
+import { openThreadPanelController } from '/src/runtime/thread/controller/open-thread-panel-controller.js';
+import { disconnectThreadFollowBottomObserver } from '/src/runtime/thread/effect/sync-thread-follow-bottom-observer.js';
 import { pinThreadSurfaceToBottom } from '/src/runtime/thread/effect/pin-thread-feed-to-last-message.js';
 import { syncThreadJumpButtonVisibility } from '/src/runtime/thread/effect/render-thread-jump-button.js';
 import { submitThreadDraft } from '/src/runtime/thread/effect/submit-thread-draft.js';
@@ -131,8 +132,6 @@ export function openMobileThread(card, zoneColor) {
   cardView.dataset.threadId = threadId;
   cardView.dataset.cardId = String(card.id);
   cardView.style.setProperty('--card-zone-color', zoneColor || 'var(--accent)');
-  selectThread(threadId);
-  canvasState.threadPanelOpen = true;
   document.body.classList.add('card-thread-open');
   bumpThreadPresentationGeneration();
   if (window.matchMedia?.('(max-width: 760px)').matches === true && history.state?.responsiveThreadLayer?.threadId !== threadId) {
@@ -148,7 +147,7 @@ export function openMobileThread(card, zoneColor) {
     }, '', location.href);
   }
   subscribeEvents();
-  renderThreadPanel();
+  openThreadPanelController(threadId);
   updateLaunchReadiness();
   void refreshThreadLedger();
 }
@@ -178,6 +177,7 @@ export function closeMobileThread({ fromHistory = false, discardHistory = false 
     });
   }
   canvasState.threadPanelOpen = false;
+  disconnectThreadFollowBottomObserver();
   threadRefreshGeneration += 1;
   unsubscribeEvents();
   document.body.classList.remove('card-thread-open');

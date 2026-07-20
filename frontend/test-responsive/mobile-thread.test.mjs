@@ -87,7 +87,8 @@ test('mobile Text action replaces jump with close, then collapses without cleari
 test('opening a mobile thread does not focus the draft and raise the software keyboard', () => {
   const openMobileThread = source.match(/export function openMobileThread\([\s\S]*?\n\}/)?.[0] ?? '';
 
-  assert.match(openMobileThread, /renderThreadPanel\(\);/);
+  assert.match(openMobileThread, /openThreadPanelController\(threadId\);/);
+  assert.doesNotMatch(openMobileThread, /selectThread\(/);
   assert.doesNotMatch(openMobileThread, /\.focus\(\)/);
 });
 

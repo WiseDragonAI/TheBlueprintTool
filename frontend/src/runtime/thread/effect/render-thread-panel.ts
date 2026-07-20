@@ -14,9 +14,14 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { renderVoiceDock } from '../../voice/effect/render-voice-dock.js';
 import { renderVoiceStatus } from '../../voice/effect/render-voice-status.js';
 import { resolveThreadTargetTitle } from '../helper/resolve-thread-target-title.js';
+import { activeThreadPanelTab } from '../helper/active-thread-panel-tab.js';
+import { threadPanelTabState } from '../helper/thread-panel-tab-state.js';
 import { applyThreadAccent } from './apply-thread-accent.js';
 import { pinThreadSurfaceToBottom } from './pin-thread-feed-to-last-message.js';
 import { isThreadFollowingBottom } from '../helper/thread-follow-bottom.js';
+import { requestThreadViewportEntry } from './request-thread-viewport-entry.js';
+import { consumeThreadViewportEntry } from './consume-thread-viewport-entry.js';
+import { syncThreadFollowBottomObserver } from './sync-thread-follow-bottom-observer.js';
 import { restoreThreadDraft } from './persist-thread-draft.js';
 import { restoreThreadScrollPosition, saveThreadScrollPosition } from './persist-thread-scroll.js';
 import { renderThreadCodexLog } from './render-thread-codex-log.js';
@@ -48,20 +53,6 @@ function threadCodexHydration(threadId: string): { status: string; active: boole
     active: summary?.ok === true ? summary.active === true : false,
     queuePosition: summary?.queuePosition,
   };
-}
-
-function activeTabState(): Record<string, ThreadPanelTab> {
-  if (!state.threadActiveTabByThreadId || typeof state.threadActiveTabByThreadId !== 'object' || Array.isArray(state.threadActiveTabByThreadId)) {
-    state.threadActiveTabByThreadId = {};
-  }
-  return state.threadActiveTabByThreadId as Record<string, ThreadPanelTab>;
-}
-
-export function activeThreadPanelTab(threadId = String(state.threadId ?? '')): ThreadPanelTab {
-  const tabs = activeTabState();
-  if (!threadId) return 'thread';
-  if (tabs[threadId] !== 'codex-log') tabs[threadId] = 'thread';
-  return tabs[threadId];
 }
 
 function renderThreadCodexSelect(input: { preference: 'model' | 'effort'; label: string; value: string; options: readonly string[]; onChange: (value: string) => void }): HTMLLabelElement {
@@ -216,7 +207,8 @@ export function setThreadPanelTab(tab: ThreadPanelTab, options: { focus?: boolea
   if (!threadId || !threadTabOrder.includes(tab)) return;
   const previous = activeThreadPanelTab(threadId);
   saveThreadScrollPosition(threadId, previous);
-  activeTabState()[threadId] = tab;
+  threadPanelTabState()[threadId] = tab;
+  requestThreadViewportEntry(threadId, tab, 'tab-activation');
   renderThreadPanel();
   if (options.focus) tabButton(tab)?.focus();
 }
@@ -285,7 +277,8 @@ export function renderThreadPanel(): void {
   const shouldOpenThread = Boolean(state.threadPanelOpen || state.activeTool === 'thread');
   const activeThreadId = String(state.threadId ?? '');
   const activeTab = activeThreadPanelTab(activeThreadId);
-  const shouldPinThread = Boolean(shouldOpenThread && state.threadPinOnRender);
+  const viewportEntry = shouldOpenThread ? consumeThreadViewportEntry(activeThreadId, activeTab) : null;
+  const shouldPinThread = Boolean(viewportEntry);
   const shouldFollowBottom = Boolean(shouldOpenThread && isThreadFollowingBottom(activeThreadId, activeTab));
 
   inspector.hidden = !shouldOpenThread;
@@ -323,10 +316,10 @@ export function renderThreadPanel(): void {
   renderTelemetry();
 
   if (shouldPinThread || shouldFollowBottom) {
-    state.threadPinOnRender = false;
     pinThreadSurfaceToBottom(activeTab);
   } else if (shouldOpenThread) {
     restoreThreadScrollPosition(activeThreadId, activeTab);
   }
+  syncThreadFollowBottomObserver({ active: shouldOpenThread, threadId: activeThreadId, surface: activeTab });
   syncThreadJumpButtonVisibility();
 }

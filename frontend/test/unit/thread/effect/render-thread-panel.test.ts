@@ -238,7 +238,6 @@ test('thread selection persists the complete default pair and synchronizes a mou
     failedLoadCount: 0,
     lastFailedLoad: null
   };
-  state.threadPinOnRender = false;
   state.threadScrollTopByThreadId = {};
   state.telemetry = [];
   state.voice = { recording: false, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
@@ -354,7 +353,6 @@ test('rejected Codex preference mutation restores both surfaces to the durable p
   state.renderedThreadId = '';
   state.threadPanelOpen = true;
   state.activeTool = 'select';
-  state.threadPinOnRender = false;
   state.threadScrollTopByThreadId = {};
   state.telemetry = [];
   state.voice = { recording: false, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
@@ -441,7 +439,6 @@ test('generated skill-result threads bind and render their durable card run id',
     state.renderedThreadId = '';
     state.threadPanelOpen = true;
     state.activeTool = 'select';
-    state.threadPinOnRender = false;
     state.threadScrollTopByThreadId = {};
     state.threadLogScrollTopByThreadId = {};
     state.threadActiveTabByThreadId = { [threadId]: 'codex-log' };
@@ -504,7 +501,6 @@ test('Codex Log run arrows default to the newest retained run and select the pre
     state.renderedThreadId = '';
     state.threadPanelOpen = true;
     state.activeTool = 'select';
-    state.threadPinOnRender = false;
     state.threadScrollTopByThreadId = {};
     state.threadLogScrollTopByThreadId = {};
     state.threadActiveTabByThreadId = { [threadId]: 'codex-log' };
@@ -644,7 +640,6 @@ test('queued thread runs expose exact cancellation and render their queue positi
     state.renderedThreadId = '';
     state.threadPanelOpen = true;
     state.activeTool = 'select';
-    state.threadPinOnRender = false;
     state.threadScrollTopByThreadId = {};
     state.threadLogScrollTopByThreadId = {};
     state.threadActiveTabByThreadId = { [threadId]: 'codex-log' };
@@ -722,7 +717,6 @@ test('persisted card execution fields cannot override a terminal run summary', a
     state.renderedThreadId = '';
     state.threadPanelOpen = true;
     state.activeTool = 'select';
-    state.threadPinOnRender = false;
     state.threadScrollTopByThreadId = {};
     state.threadLogScrollTopByThreadId = {};
     state.threadActiveTabByThreadId = { [threadId]: 'thread' };

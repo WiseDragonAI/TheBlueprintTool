@@ -11,6 +11,8 @@ import { restoreThreadDraft, saveThreadDraft } from '../../src/runtime/thread/ef
 import { hydrateThreadViewportState, restoreThreadScrollPosition, saveThreadScrollPosition } from '../../src/runtime/thread/effect/persist-thread-scroll.js';
 import { pinThreadFeedToLastMessage, pinThreadSurfaceToBottom } from '../../src/runtime/thread/effect/pin-thread-feed-to-last-message.js';
 import { isThreadFollowingBottom, setThreadFollowBottom } from '../../src/runtime/thread/helper/thread-follow-bottom.js';
+import { consumeThreadViewportEntry } from '../../src/runtime/thread/effect/consume-thread-viewport-entry.js';
+import { requestThreadViewportEntry } from '../../src/runtime/thread/effect/request-thread-viewport-entry.js';
 import { renderThreadJumpButton, suppressThreadScrollTrackingThroughNextFrame, syncThreadJumpButtonVisibility } from '../../src/runtime/thread/effect/render-thread-jump-button.js';
 import { renderThreadNotes } from '../../src/runtime/thread/effect/render-thread-notes.js';
 import { state } from '../../src/runtime/state.js';
@@ -83,19 +85,25 @@ test('select-thread clears stale idle voice status when card context changes', (
     state.voice = { recording: false, startedAt: 0, durationMs: 12, level: 0, transcriptionStatus: 'voice uploaded; transcription not configured', voiceFileRef: '/tmp/voice.webm' };
     selectThread('thread-card-b');
     assert.equal(state.threadId, 'thread-card-b');
-    assert.equal(state.threadPinOnRender, true);
+    assert.deepEqual(state.threadViewportPinRequest, {
+      threadId: 'thread-card-b',
+      surface: 'thread',
+      openGeneration: state.threadViewportOpenGeneration,
+      reason: 'thread-switch',
+    });
     assert.equal(state.voice.transcriptionStatus, 'idle');
     assert.equal(state.voice.voiceFileRef, undefined);
   } finally {
     (globalThis as unknown as { window: unknown }).window = previousWindow;
     (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
     state.threadId = '';
-    delete state.threadPinOnRender;
+    state.threadViewportOpenGeneration = 0;
+    state.threadViewportPinRequest = null;
     state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
   }
 });
 
-test('select-thread restores saved thread scroll instead of pinning when returning to a thread', () => {
+test('select-thread entry overrides a persisted pause and requests the activated surface bottom', () => {
   const previousWindow = globalThis.window;
   const previousCustomEvent = globalThis.CustomEvent;
   const previousDocument = globalThis.document;
@@ -118,7 +126,9 @@ test('select-thread restores saved thread scroll instead of pinning when returni
     selectThread('thread-card-b');
     assert.equal(state.threadScrollTopByThreadId['thread-card-a'], 184);
     assert.equal(state.threadId, 'thread-card-b');
-    assert.equal(state.threadPinOnRender, false);
+    assert.equal(isThreadFollowingBottom('thread-card-b'), true);
+    assert.equal(consumeThreadViewportEntry('thread-card-b', 'thread')?.reason, 'thread-switch');
+    assert.equal(state.threadViewportPinRequest, null);
   } finally {
     (globalThis as unknown as { window: unknown }).window = previousWindow;
     (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
@@ -126,7 +136,8 @@ test('select-thread restores saved thread scroll instead of pinning when returni
     state.threadId = '';
     state.threadScrollTopByThreadId = {};
     state.threadFollowBottomByThreadId = {};
-    delete state.threadPinOnRender;
+    state.threadViewportOpenGeneration = 0;
+    state.threadViewportPinRequest = null;
     state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
   }
 });
@@ -251,6 +262,30 @@ test('thread viewport state hydrates validated independent follow and offset rec
   assert.equal(isThreadFollowingBottom('thread-a', 'codex-log'), true);
   assert.equal(isThreadFollowingBottom('unseen-thread', 'thread'), true);
   assert.equal(isThreadFollowingBottom('unseen-thread', 'codex-log'), true);
+});
+
+test('thread viewport entry is scoped to one thread, surface, and generation', () => {
+  state.threadViewportOpenGeneration = 0;
+  state.threadViewportPinRequest = null;
+  state.threadFollowBottomByThreadId = { 'thread-a': false };
+  try {
+    const first = requestThreadViewportEntry('thread-a', 'thread', 'panel-open');
+    assert.equal(first?.openGeneration, 1);
+    assert.equal(isThreadFollowingBottom('thread-a'), true);
+    assert.equal(consumeThreadViewportEntry('thread-a', 'codex-log'), null);
+    assert.equal(consumeThreadViewportEntry('thread-b', 'thread'), null);
+    assert.deepEqual(consumeThreadViewportEntry('thread-a', 'thread'), first);
+    assert.equal(consumeThreadViewportEntry('thread-a', 'thread'), null);
+
+    requestThreadViewportEntry('thread-a', 'thread', 'panel-open');
+    const current = requestThreadViewportEntry('thread-a', 'thread', 'tab-activation');
+    assert.equal(current?.openGeneration, 3);
+    assert.equal(consumeThreadViewportEntry('thread-a', 'thread')?.reason, 'tab-activation');
+  } finally {
+    state.threadViewportOpenGeneration = 0;
+    state.threadViewportPinRequest = null;
+    state.threadFollowBottomByThreadId = {};
+  }
 });
 
 test('conversation and Codex Log follow changes persist independently', () => {
