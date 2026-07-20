@@ -26,6 +26,7 @@ function logicalProjectKey(project: AnyRecord): string {
 function taskSemanticFingerprint(task: AnyRecord): string {
   const semantic = Object.fromEntries(Object.entries(task).filter(([key]) => ![
     'projectId', 'localProjectId', 'ownerNodeId', 'ownerNodeLabel', 'ownerOnline', 'remote',
+    'projectName', 'projectColor', 'ledger', 'ledgerTitle',
     'logicalProjectKey', 'replica', 'replicas', 'replicaCount', 'conflict',
     'status', 'executionStatus', 'executionObservation', 'executionSince', 'executionTime',
     'executionOwnerCardId', 'executionOwnerKind',

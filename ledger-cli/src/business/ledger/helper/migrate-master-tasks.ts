@@ -74,6 +74,18 @@ function referencedFile(root: string, reference: string): string {
   return resolve(root, relative);
 }
 
+function isMasterTaskCard(root: string, card: JsonRecord): boolean {
+  const labels = Array.isArray(card.labels) ? card.labels.map(String) : [];
+  if (labels.includes('master-task')) return true;
+  if (labels.includes('subtask')) return false;
+  const reference = String(card.comment?.contentFile ?? '');
+  const file = reference ? referencedFile(root, reference) : '';
+  const markdown = file && existsSync(file) ? readFileSync(file, 'utf8') : String(card.comment?.what ?? '');
+  const labelLines = markdown.split('\n').filter((line) => /^\s*(?:#[a-z][a-z0-9-]*\s*)+$/i.test(line));
+  const legacyLabels = new Set(Array.from(labelLines.join('\n').matchAll(/#([a-z][a-z0-9-]*)\b/gi), (match) => match[1].toLowerCase()));
+  return legacyLabels.has('master-task');
+}
+
 function replaceDomainReference(reference: string, fromId: string, toId: string, kind: 'cards' | 'threads'): string {
   return reference.replace(`.decision-os/${kind}/${fromId}/`, `.decision-os/${kind}/${toId}/`);
 }
@@ -99,7 +111,7 @@ export function migrateMasterTasks(input: { sourceLedger: string; targetLedger: 
   const cards = records(source.cards);
   const relationships = records(source.relationships);
   const zones = records(source.annotations).filter((entry) => String(entry.variant ?? 'zone') === 'zone');
-  const movedIds = new Set(cards.filter((card) => Array.isArray(card.labels) && card.labels.includes('master-task'))
+  const movedIds = new Set(cards.filter((card) => isMasterTaskCard(sourceRoot, card))
     .map((card) => String(card.id ?? '')));
   if (movedIds.size === 0) return { ok: true, value: {
     cards: 0,
