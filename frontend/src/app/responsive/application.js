@@ -2059,15 +2059,32 @@ function renderCard(card) {
       return false;
     }
   };
+  const persistGitReviewNotes = async (gitReviewNotes) => {
+    const previousGitReviewNotes = card.gitReviewNotes;
+    card.gitReviewNotes = gitReviewNotes;
+    try {
+      state.ledger = await ledgerMutation(state.activeLedgerId, {
+        action: 'patch-card',
+        cardPatch: { id: card.id, gitReviewNotes }
+      });
+      return true;
+    } catch (cause) {
+      card.gitReviewNotes = previousGitReviewNotes;
+      elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Git review note update failed.';
+      return false;
+    }
+  };
   const content = renderLedgerCardMarkdown(parsedTask.masterTask ? visibleMasterTaskMarkdown(markdown) : markdown, {
     cardId: parsedTask.masterTask ? String(card.id) : undefined,
     questionnaireCardId: String(card.id),
     imageSizes,
     questionnaires: card.questionnaires,
+    gitReviewNotes: card.gitReviewNotes,
     mediaSurface: parsedTask.masterTask ? 'detail' : 'thread',
     carouselDriver: 'external',
     onImageResize: parsedTask.masterTask ? persistCardImageResize : undefined,
-    onQuestionnairesChange: persistCardQuestionnaires
+    onQuestionnairesChange: persistCardQuestionnaires,
+    onGitReviewNotesChange: persistGitReviewNotes
   });
   if (parsedTask.masterTask) {
     const overview = document.createElement('section');

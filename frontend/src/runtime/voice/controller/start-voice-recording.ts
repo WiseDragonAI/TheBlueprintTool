@@ -9,16 +9,10 @@ import { updateVoiceRecordingFrame } from '../effect/update-voice-recording-fram
 import { calculateVoiceLevel } from '../helper/calculate-voice-level.js';
 import { holdVoiceRecordingWakeLock, releaseVoiceRecordingWakeLock } from '../effect/hold-voice-recording-wake-lock.js';
 
-export type VoiceRecordingContext = {
-  threadId?: string;
-  reviewContext?: Record<string, string>;
-  surfaceRoot?: HTMLElement;
-};
-
-export async function startVoiceRecording(input: VoiceRecordingContext = {}): Promise<void> {
+export async function startVoiceRecording(): Promise<void> {
   if (state.voice.recording) return;
   try {
-    const threadId = input.threadId || state.threadId || 'conversation-ledger';
+    const threadId = state.threadId || 'conversation-ledger';
     if (!state.threadId) state.threadId = threadId;
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -54,14 +48,14 @@ export async function startVoiceRecording(input: VoiceRecordingContext = {}): Pr
       if (event.data?.size) chunks.push(event.data);
     });
     recorder.start();
-    state.voice = { recording: true, startedAt: Date.now(), durationMs: 0, level: 0, pendingVoicePeak: 0, waveSamples: [], transcriptionStatus: 'recording', threadId, reviewContext: input.reviewContext, surfaceRoot: input.surfaceRoot, stream, audioContext, analyser, recorder, chunks, mimeType: 'audio/wav', recorderMimeType: recorder.mimeType || 'audio/webm', pcmChunks, sampleRate: audioContext.sampleRate, processor, silentGain, error: '' };
+    state.voice = { recording: true, startedAt: Date.now(), durationMs: 0, level: 0, pendingVoicePeak: 0, waveSamples: [], transcriptionStatus: 'recording', threadId, stream, audioContext, analyser, recorder, chunks, mimeType: 'audio/wav', recorderMimeType: recorder.mimeType || 'audio/webm', pcmChunks, sampleRate: audioContext.sampleRate, processor, silentGain, error: '' };
     await holdVoiceRecordingWakeLock();
     telemetry('resolve-voice-session', { threadId });
     telemetry('capture-voice-audio', { status: 'recording', source: 'microphone' });
     updateVoiceRecordingFrame();
   } catch (error) {
     releaseVoiceRecordingWakeLock();
-    state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'permission denied', threadId: input.threadId, reviewContext: input.reviewContext, surfaceRoot: input.surfaceRoot, error: error instanceof Error ? error.message : String(error) };
+    state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'permission denied', error: error instanceof Error ? error.message : String(error) };
     telemetry('voice-recording-failed', { error: state.voice.error });
     renderVoiceStatus();
   }

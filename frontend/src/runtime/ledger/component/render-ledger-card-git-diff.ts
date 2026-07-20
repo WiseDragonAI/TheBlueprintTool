@@ -4,17 +4,26 @@
  */
 import { state } from '../../state.js';
 import { projectScopedRequestPath } from '../../project/helper/project-request-scope.js';
-import { cancelVoiceRecording } from '../../voice/controller/cancel-voice-recording.js';
-import { startVoiceRecording } from '../../voice/controller/start-voice-recording.js';
-import { stopVoiceRecording } from '../../voice/controller/stop-voice-recording.js';
-import { controlDock } from '../../voice/component/control-dock.js';
+import { voiceActionIcon } from '../../voice/component/control-dock.js';
+import { waveSvg } from '../../voice/component/wave-svg.js';
+import { commitActiveLedgerMutation } from '../effect/commit-active-ledger-mutation.js';
+import { startGitReviewVoiceCapture, type GitReviewVoiceCapture } from '../helper/git-review-voice-capture.js';
 import type { LedgerMarkdownBlock } from '../helper/parse-ledger-card-markdown.js';
+import { normalizeGitReviewNotes, type GitReviewNote } from '../../../../../shared/schemas/git-review-types.js';
 
 type ReviewHunk = { id: string; header: string; patch: string };
 type ReviewFile = { path: string; patch: string; hunks: ReviewHunk[] };
 type ReviewResponse = { ok: boolean; error?: string; repository: string; target: string; patchHash: string; files: ReviewFile[]; stagedFiles: ReviewFile[] };
 type PierreModule = typeof import('@pierre/diffs');
 type ReviewSelection = { start: number; end?: number; side?: string; endSide?: string };
+export type GitReviewNotesChangeHandler = (notes: GitReviewNote[]) => Promise<boolean>;
+
+type GitDiffRendererOptions = {
+  cardId?: string;
+  mediaSurface?: 'card' | 'detail' | 'thread';
+  gitReviewNotes?: unknown;
+  onGitReviewNotesChange?: GitReviewNotesChangeHandler;
+};
 
 let pierreModule: Promise<PierreModule> | null = null;
 function loadPierre(): Promise<PierreModule> {
@@ -51,7 +60,30 @@ function selectionLabel(selection: ReviewSelection | null): string {
   return end === selection.start ? `Line ${selection.start} selected` : `Lines ${selection.start}–${end} selected`;
 }
 
-export function renderLedgerCardGitDiff(block: Extract<LedgerMarkdownBlock, { kind: 'gitDiff' }>, options: { cardId?: string; mediaSurface?: 'card' | 'detail' | 'thread' } = {}): HTMLElement {
+function reviewVoiceDock(): string {
+  return `<div class="control-dock">
+    <button class="terminal-button terminal-button--stop terminal-button--stack git-review-voice-cancel" type="button" data-git-review-voice="cancel"><span class="terminal-button__key">Esc</span><svg class="terminal-button__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg><span class="terminal-button__label">CANCEL</span></button>
+    <section class="wave-panel"><div class="wave-timer">00:00</div>${waveSvg()}</section>
+    <aside class="meter-panel"><div class="meter-track"><div class="meter-fill"></div></div></aside>
+    <button class="terminal-button terminal-button--send terminal-button--stack git-review-voice-send" type="button" data-git-review-voice="send"><span class="terminal-button__key">X</span>${voiceActionIcon('send')}<span class="terminal-button__label">SEND</span></button>
+  </div>`;
+}
+
+function formatRecordingDuration(durationMs: number): string {
+  const totalSeconds = Math.floor(Math.max(0, durationMs) / 1000);
+  return `${String(Math.floor(totalSeconds / 60)).padStart(2, '0')}:${String(totalSeconds % 60).padStart(2, '0')}`;
+}
+
+async function defaultPersistNotes(cardId: string, notes: GitReviewNote[]): Promise<boolean> {
+  const card = state.activeLedger?.cards?.find((entry: Record<string, unknown>) => String(entry.id ?? '') === cardId) as Record<string, unknown> | undefined;
+  const previous = card?.gitReviewNotes;
+  if (card) card.gitReviewNotes = notes;
+  const committed = await commitActiveLedgerMutation({ action: 'patch-card', cardPatch: { id: cardId, gitReviewNotes: notes } });
+  if (!committed && card) card.gitReviewNotes = previous;
+  return committed;
+}
+
+export function renderLedgerCardGitDiff(block: Extract<LedgerMarkdownBlock, { kind: 'gitDiff' }>, options: GitDiffRendererOptions = {}): HTMLElement {
   const root = document.createElement('section');
   root.className = 'ledger-card-git-diff';
   root.dataset.repository = block.repository;
@@ -88,6 +120,8 @@ export function renderLedgerCardGitDiff(block: Extract<LedgerMarkdownBlock, { ki
   let hunkIndex = 0;
   let selection: ReviewSelection | null = null;
   let renderer: { cleanUp(): void } | null = null;
+  let notes = normalizeGitReviewNotes(options.gitReviewNotes);
+  let voiceCapture: GitReviewVoiceCapture | null = null;
 
   const endpoint = () => {
     const query = new URLSearchParams({ repo: block.repository, path: block.target });
@@ -174,40 +208,130 @@ export function renderLedgerCardGitDiff(block: Extract<LedgerMarkdownBlock, { ki
     actions.append(stageButton, record);
     content.append(actions);
 
+    const noteList = document.createElement('section');
+    noteList.className = 'git-diff-review-notes';
+    const renderNotes = () => {
+      const matching = notes.filter((note) => note.repository === block.repository && note.target === block.target && note.file === file.path && note.hunk === hunk.header);
+      noteList.replaceChildren();
+      if (!matching.length) return;
+      const heading = document.createElement('strong');
+      heading.textContent = `${matching.length} VOICE ${matching.length === 1 ? 'REVIEW' : 'REVIEWS'}`;
+      noteList.append(heading);
+      for (const note of matching) {
+        const article = document.createElement('article');
+        const transcript = document.createElement('p');
+        transcript.textContent = note.body;
+        const context = document.createElement('small');
+        context.textContent = `${note.selection ? `${note.selection} · ` : ''}${note.status}`;
+        article.append(transcript, context);
+        noteList.append(article);
+      }
+    };
+    renderNotes();
+    content.append(noteList);
+
     const voice = document.createElement('section');
     voice.className = 'git-diff-voice agent-chat';
     voice.hidden = true;
-    voice.innerHTML = `<div class="voice-panel"><span class="voice-status" aria-live="polite"></span>${controlDock()}</div>`;
-    voice.querySelector('.voice-action--run')?.remove();
-    voice.querySelector('.voice-action--pipeline')?.remove();
+    voice.innerHTML = `<div class="git-diff-voice-panel"><span class="git-diff-voice-status" aria-live="polite"></span>${reviewVoiceDock()}</div>`;
     content.append(voice);
 
-    record.onclick = async () => {
-      const threadId = options.cardId ? `thread-${options.cardId}` : String(state.threadId || 'conversation-ledger');
-      state.threadId = threadId;
-      voice.hidden = false;
-      await startVoiceRecording({
-        threadId,
-        surfaceRoot: voice,
-        reviewContext: {
-          repository: block.repository,
-          target: block.target,
-          file: file.path,
-          hunk: hunk.header,
-          patchHash: response!.patchHash,
-          ...(selection ? { selection: JSON.stringify(selection) } : {}),
-        },
-      });
+    const voiceStatus = voice.querySelector('.git-diff-voice-status') as HTMLElement;
+    const voiceTimer = voice.querySelector('.wave-timer') as HTMLElement;
+    const voiceMeter = voice.querySelector('.meter-fill') as HTMLElement;
+    const cancelButton = voice.querySelector('[data-git-review-voice="cancel"]') as HTMLButtonElement;
+    const sendButton = voice.querySelector('[data-git-review-voice="send"]') as HTMLButtonElement;
+    const setReviewControlsDisabled = (disabled: boolean) => {
+      previous.disabled = disabled || (fileIndex === 0 && hunkIndex === 0);
+      next.disabled = disabled || (fileIndex === response!.files.length - 1 && hunkIndex === hunks.length - 1);
+      refresh.disabled = disabled;
+      stageButton.disabled = disabled || staged;
+      record.disabled = disabled;
     };
-    voice.querySelector('[data-action="voice-cancel"]')?.addEventListener('click', (event) => {
-      event.stopPropagation();
-      cancelVoiceRecording();
+    const resetVoice = () => {
+      voiceCapture = null;
       voice.hidden = true;
+      voiceStatus.textContent = '';
+      voiceTimer.textContent = '00:00';
+      voiceMeter.style.height = '18%';
+      setReviewControlsDisabled(false);
+    };
+
+    record.onclick = async () => {
+      if (voiceCapture) return;
+      voice.hidden = false;
+      voiceStatus.textContent = 'Recording this Git review only';
+      setReviewControlsDisabled(true);
+      try {
+        voiceCapture = await startGitReviewVoiceCapture(({ durationMs, level }) => {
+          voiceTimer.textContent = formatRecordingDuration(durationMs);
+          voiceMeter.style.height = `${Math.round(18 + level * 74)}%`;
+        });
+      } catch (error) {
+        voiceStatus.textContent = error instanceof Error ? error.message : String(error);
+        setReviewControlsDisabled(false);
+      }
+    };
+
+    cancelButton.addEventListener('click', () => {
+      voiceCapture?.cancel();
+      resetVoice();
     });
-    voice.querySelector('[data-action="voice-stop"]')?.addEventListener('click', (event) => {
-      event.stopPropagation();
-      void stopVoiceRecording({ launchMode: 'send', onPersisted: () => { voice.hidden = true; } });
+
+    sendButton.addEventListener('click', async () => {
+      if (!voiceCapture || !options.cardId) return;
+      sendButton.disabled = true;
+      cancelButton.disabled = true;
+      voiceStatus.textContent = 'Transcribing Git review…';
+      const capture = voiceCapture;
+      voiceCapture = null;
+      const audio = await capture.stop();
+      const form = new FormData();
+      form.append('audio', audio, audio.type.includes('wav') ? 'git-review.wav' : 'git-review.webm');
+      form.append('repository', block.repository);
+      form.append('target', block.target);
+      form.append('file', file.path);
+      form.append('hunk', hunk.header);
+      form.append('patchHash', response!.patchHash);
+      if (selection) form.append('selection', JSON.stringify(selection));
+      const request = await fetch(projectScopedRequestPath('/api/git-review/voice', String(state.projectId ?? '')), { method: 'POST', body: form }).catch(() => undefined);
+      const payload = await request?.json().catch(() => null) as { ok?: boolean; error?: string; note?: GitReviewNote } | null;
+      if (!request?.ok || !payload?.ok || !payload.note) {
+        voiceStatus.textContent = payload?.error || 'Git review transcription failed.';
+        sendButton.disabled = false;
+        cancelButton.disabled = false;
+        setReviewControlsDisabled(false);
+        return;
+      }
+      const nextNotes = notes.concat(payload.note);
+      const committed = await (options.onGitReviewNotesChange
+        ? options.onGitReviewNotesChange(nextNotes)
+        : defaultPersistNotes(options.cardId, nextNotes)).catch(() => false);
+      if (!committed) {
+        voiceStatus.textContent = 'Git review note could not be saved to this card.';
+        sendButton.disabled = false;
+        cancelButton.disabled = false;
+        setReviewControlsDisabled(false);
+        return;
+      }
+      notes = nextNotes;
+      renderNotes();
+      resetVoice();
     });
+    root.onkeydown = (event) => {
+      const key = event.key.toLowerCase();
+      if (key === 'x') {
+        event.preventDefault();
+        event.stopPropagation();
+        if (voiceCapture) sendButton.click();
+        else record.click();
+      }
+      if (key === 'escape' && voiceCapture) {
+        event.preventDefault();
+        event.stopPropagation();
+        cancelButton.click();
+      }
+    };
   }
 
   async function load(): Promise<void> {
