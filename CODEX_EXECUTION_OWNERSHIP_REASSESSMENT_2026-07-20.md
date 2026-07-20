@@ -70,10 +70,10 @@
 
 ## G. Verification Evidence
 
-1. **Focused frontend lifecycle:** `43/43` passed, including terminal-cache revalidation, stale-response fencing, responsive stop routing, closed-panel cleanup, SSE scope replacement, and generated pipeline-card pending cancellation.
-2. **Focused backend lifecycle:** `19/19` passed, including idempotent admission, exact stale cancellation, pending deletion, contradictory leases, pipeline PID adoption, process-tree termination, and spawn-persistence failure cleanup.
+1. **Focused frontend lifecycle:** `44/44` passed, including terminal-cache revalidation, stale-response fencing, responsive stop routing, closed-panel cleanup, SSE scope replacement, scoped consumer idempotency, and generated pipeline-card pending cancellation.
+2. **Focused backend lifecycle:** `21/21` passed, including idempotent admission, exact stale cancellation, pending deletion, contradictory leases, pipeline PID adoption, process-tree termination, and spawn-persistence failure cleanup.
 3. **Type safety:** frontend and backend TypeScript checks passed through `bin/decision-os-verify.mjs`.
-4. **Complete frontend suite:** all `488` tests passed through the repository verification lease.
-5. **Complete backend suite:** the complete suite passed serially through the repository verification lease. Its only default-parallel failure was the unrelated voice-orchestration file timing out under aggregate load; that file passed `7/7` in isolation before the serial full-suite pass.
+4. **Complete frontend suite:** the complete suite passed through the repository verification lease after its continuation test was corrected to observe both the optimistic accepted state and the later runtime status response.
+5. **Complete backend suite:** every Codex lifecycle test passed, but the repository-wide serial run retains one federation materialization failure. The same isolated test fails on untouched `main` at `02b25a7e`; this branch does not modify federation code. The failure is therefore a verified pre-existing repository blocker, not a lifecycle regression.
 6. **Static hygiene:** `git diff --check` passed.
 7. **Interaction claim:** **implemented; automated checks pass; target-browser interaction not yet verified** because the mandatory platform value for Chromium was not injected. The master task must remain active until that operator-facing route is exercised.

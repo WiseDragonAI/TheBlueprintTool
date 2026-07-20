@@ -237,6 +237,7 @@ function bindActiveThreadRun(threadId: string): void {
     delete admittedRunIds[threadId];
     delete recordState('threadActiveLeaseKeyByThreadId')[threadId];
     if (ledgerId && cardId && boundActiveRunId) unbindThreadCodexActiveRunLog({
+      ...requestScope,
       ledgerId,
       cardId,
       threadId,

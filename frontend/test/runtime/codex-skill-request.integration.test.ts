@@ -1056,6 +1056,7 @@ test('externally started Codex runs clear terminal widget cache and restart poll
     assert.equal(cachedWidget.nodes['[data-codex-run-files]'].textContent, '0');
     await waitFor(() => continuationBodies.length === 1);
     await waitFor(() => cachedWidget.nodes['[data-codex-run-status]'].textContent === 'RUNNING');
+    await waitFor(() => cachedWidget.nodes['[data-codex-run-latest]'].textContent === 'Turn started');
     assert.equal(cachedWidget.nodes['[data-codex-run-latest]'].textContent, 'Turn started');
     assert.equal('newSession' in continuationBodies[0], false);
     assert.equal(continuationBodies[0].codexModel, 'gpt-5.6-sol');
