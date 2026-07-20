@@ -26,6 +26,36 @@ function isRecord(value: unknown): value is JsonObject {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+function validQuestionnaires(value: unknown): value is Record<string, { contextRevision: string; responses: Record<string, { status: string }> }> {
+  if (!isRecord(value)) return false;
+  for (const [questionnaireId, questionnaireValue] of Object.entries(value)) {
+    if (!/^[A-Za-z0-9._-]+$/.test(questionnaireId) || !isRecord(questionnaireValue) || questionnaireValue.version !== 1 || typeof questionnaireValue.contextRevision !== 'string' || !questionnaireValue.contextRevision.trim() || !Array.isArray(questionnaireValue.questions) || !isRecord(questionnaireValue.responses)) return false;
+    const questionIds = new Set<string>();
+    for (const questionValue of questionnaireValue.questions) {
+      if (!isRecord(questionValue) || typeof questionValue.id !== 'string' || !questionValue.id.trim() || questionIds.has(questionValue.id) || typeof questionValue.question !== 'string' || typeof questionValue.placeholder !== 'string' || !Array.isArray(questionValue.choices) || questionValue.choices.length !== 4) return false;
+      questionIds.add(questionValue.id);
+      if (questionValue.choices.some((choice) => !isRecord(choice) || typeof choice.emoji !== 'string' || typeof choice.text !== 'string' || !choice.text.trim())) return false;
+    }
+    if (questionnaireValue.currentQuestionId !== undefined && (typeof questionnaireValue.currentQuestionId !== 'string' || !questionIds.has(questionnaireValue.currentQuestionId))) return false;
+    for (const [questionId, response] of Object.entries(questionnaireValue.responses)) {
+      if (!questionIds.has(questionId) || !isRecord(response) || !['answered', 'rejected', 'skipped', 'pending'].includes(String(response.status)) || typeof response.updatedAt !== 'string') return false;
+      if (response.choiceIndex !== undefined && (!Number.isInteger(Number(response.choiceIndex)) || Number(response.choiceIndex) < 0 || Number(response.choiceIndex) > 3)) return false;
+      if (response.customAnswer !== undefined && typeof response.customAnswer !== 'string') return false;
+    }
+  }
+  return true;
+}
+
+function revisedQuestionnairesCarryAnswers(previous: unknown, next: Record<string, { contextRevision: string; responses: Record<string, { status: string }> }>): boolean {
+  if (!isRecord(previous)) return false;
+  for (const [questionnaireId, questionnaire] of Object.entries(next)) {
+    const prior = previous[questionnaireId];
+    if (!isRecord(prior) || String(prior.contextRevision ?? '') === questionnaire.contextRevision) continue;
+    if (Object.values(questionnaire.responses).some((response) => response.status !== 'pending')) return true;
+  }
+  return false;
+}
+
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
@@ -49,6 +79,7 @@ async function applyLedgerMutationOperation(
     }>;
     cardComment?: string;
     cardCommentFile?: string;
+    cardQuestionnairesFile?: string;
     cardH?: number;
     cardId?: string;
     cardLabels?: string[];
@@ -64,7 +95,7 @@ async function applyLedgerMutationOperation(
 ): Promise<Result<unknown>> {
   const hasCardLabels = (operation?.cardLabels ?? []).length > 0;
   const hasCardLayout = operation?.cardX !== undefined || operation?.cardY !== undefined || operation?.cardW !== undefined || operation?.cardH !== undefined;
-  if (!operation || (!operation.addCardFile && operation.cardComment === undefined && !operation.cardCommentFile && !operation.cardId && !operation.cardTitle && !hasCardLabels && !hasCardLayout && (operation.removeCardIds ?? []).length === 0 && (operation.removeRelationshipIds ?? []).length === 0 && (operation.addRelationships ?? []).length === 0)) {
+  if (!operation || (!operation.addCardFile && operation.cardComment === undefined && !operation.cardCommentFile && !operation.cardQuestionnairesFile && !operation.cardId && !operation.cardTitle && !hasCardLabels && !hasCardLayout && (operation.removeCardIds ?? []).length === 0 && (operation.removeRelationshipIds ?? []).length === 0 && (operation.addRelationships ?? []).length === 0)) {
     return { ok: true, value: ledger };
   }
 
@@ -108,7 +139,7 @@ async function applyLedgerMutationOperation(
     });
   }
 
-  if (operation.cardComment !== undefined || operation.cardCommentFile || operation.cardTitle || hasCardLabels || hasCardLayout || operation.cardId) {
+  if (operation.cardComment !== undefined || operation.cardCommentFile || operation.cardQuestionnairesFile || operation.cardTitle || hasCardLabels || hasCardLayout || operation.cardId) {
     if (!operation.cardId) {
       return { ok: false, error: 'Card mutation requires --card-id.' };
     }
@@ -137,6 +168,19 @@ async function applyLedgerMutationOperation(
     if (operation.cardComment !== undefined || operation.cardCommentFile) {
       const commentText = operation.cardComment ?? await (fs ? fs.readFile(operation.cardCommentFile ?? '') : readFileWithNode(operation.cardCommentFile ?? ''));
       await writeCardCommentContent({ card, content: commentText, fs, ledgerJsonFile });
+    }
+
+    if (operation.cardQuestionnairesFile) {
+      const questionnaireText = await (fs ? fs.readFile(operation.cardQuestionnairesFile) : readFileWithNode(operation.cardQuestionnairesFile));
+      let questionnaires: unknown;
+      try {
+        questionnaires = JSON.parse(questionnaireText);
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : 'Invalid questionnaire JSON.' };
+      }
+      if (!validQuestionnaires(questionnaires)) return { ok: false, error: 'Card questionnaires must use the supported versioned question and response contract.' };
+      if (revisedQuestionnairesCarryAnswers(card.questionnaires, questionnaires)) return { ok: false, error: 'Changing a questionnaire context revision requires clearing its prior answers.' };
+      card.questionnaires = questionnaires;
     }
   }
 
@@ -210,6 +254,7 @@ export async function manageLedgerJsonController(
       cardH?: number;
       cardComment?: string;
       cardCommentFile?: string;
+      cardQuestionnairesFile?: string;
       cardId?: string;
       cardLabels?: string[];
       cardTitle?: string;

@@ -3,8 +3,10 @@
  * WHY: A pre-acceptance network failure must not discard the only copy of a completed recording.
  */
 
+import type { VoiceLaunchMode } from '../helper/voice-launch-mode.js';
+
 const databaseName = 'decision-os-voice';
-const databaseVersion = 1;
+const databaseVersion = 2;
 const storeName = 'pending-uploads';
 const threadScopeIndex = 'ledger-thread';
 const memoryStore = new Map<string, PendingVoiceUpload>();
@@ -16,11 +18,15 @@ export type PendingVoiceUpload = {
   threadId: string;
   ledgerId: string;
   cardId: string;
-  launchMode?: 'send' | 'run' | 'pipeline';
-  queueCodex?: boolean;
+  launchMode: VoiceLaunchMode;
   reviewContext?: Record<string, string>;
   audio: Blob;
   createdAt: string;
+};
+
+type LegacyPendingVoiceUpload = Omit<PendingVoiceUpload, 'launchMode'> & {
+  launchMode?: VoiceLaunchMode;
+  queueCodex?: boolean;
 };
 
 function cloneEntry(entry: PendingVoiceUpload): PendingVoiceUpload {
@@ -34,11 +40,25 @@ function indexedDbFactory(): IDBFactory | null {
 function openDatabase(factory: IDBFactory): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = factory.open(databaseName, databaseVersion);
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       const store = request.result.objectStoreNames.contains(storeName)
         ? request.transaction!.objectStore(storeName)
         : request.result.createObjectStore(storeName, { keyPath: 'noteId' });
       if (!store.indexNames.contains(threadScopeIndex)) store.createIndex(threadScopeIndex, ['ledgerId', 'threadId']);
+      if (event.oldVersion < 2) {
+        const cursorRequest = store.openCursor();
+        cursorRequest.onsuccess = () => {
+          const cursor = cursorRequest.result;
+          if (!cursor) return;
+          const entry = cursor.value as LegacyPendingVoiceUpload;
+          if (!entry.launchMode) {
+            entry.launchMode = entry.queueCodex ? 'run' : 'send';
+            delete entry.queueCodex;
+            cursor.update(entry);
+          }
+          cursor.continue();
+        };
+      }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error ?? new Error('Unable to open the voice upload store.'));

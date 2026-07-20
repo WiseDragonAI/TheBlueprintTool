@@ -21,6 +21,7 @@ export type LedgerMutationOperation = {
   cardLabels?: string[];
   cardComment?: string;
   cardCommentFile?: string;
+  cardQuestionnairesFile?: string;
   cardH?: number;
   cardId?: string;
   cardTitle?: string;

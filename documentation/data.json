@@ -850,7 +850,7 @@
       "y": 3083,
       "w": 320,
       "comment": {
-        "what": "Current right-panel thread target and visibility state."
+        "what": "Current right-panel thread identity, visibility, active surface, and one-shot entry viewport request. Persisted follow state owns continuation only."
       },
       "facts": [],
       "fields": [
@@ -869,6 +869,18 @@
         {
           "name": "targetKind",
           "type": "string"
+        },
+        {
+          "name": "activeSurface",
+          "type": "thread|codex-log"
+        },
+        {
+          "name": "openGeneration",
+          "type": "integer"
+        },
+        {
+          "name": "pinRequest",
+          "type": "ThreadViewportPinRequest|null"
         }
       ]
     },

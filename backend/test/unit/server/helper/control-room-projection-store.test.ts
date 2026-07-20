@@ -38,6 +38,157 @@ test('direct executing master task uses the live run start for its stopwatch', (
   }
 });
 
+test('projects a linked subtask live execution onto its master task', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-control-room-subtask-runtime-'));
+  const decisionOsRoot = join(root, '.decision-os');
+  mkdirSync(join(decisionOsRoot, 'cards', 'tasks'), { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'cards', 'tasks', 'master.md'), 'Waiting since: 2026-07-14T10:00:00.000Z\n\n## A. Work\n\n1. Running child.\n');
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
+    cards: [
+      { id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], comment: { contentFile: '.decision-os/cards/tasks/master.md' } },
+      { id: 'child', title: 'Child', status: 'todo', labels: ['subtask'], codexActiveRunId: 'run-child', codexActiveExecutionId: 'execution-child' },
+    ],
+    annotations: [], relationships: [{ id: 'rel-child', from: 'master', to: 'child', label: 'subtask' }], threadFiles: {},
+  }));
+  const project: DecisionOsProject = {
+    id: 'project-a', name: 'Project A', relativePath: '.', root, decisionOsRoot,
+    description: '', color: '#123456', available: true, diagnostic: '',
+    ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+  };
+  const store = createControlRoomProjectionStore({
+    cacheFile: join(decisionOsRoot, 'cache', 'control-room.json'),
+    runtimeForRoot: () => ({ codexSkillRuns: { 'run-child': { status: 'running', executionId: 'execution-child', startedAt: '2026-07-14T10:02:00.000Z', child: { pid: process.pid, exitCode: null, killed: false } } } }),
+  });
+
+  try {
+    const projection = store.get([project]) as Record<string, any>;
+    assert.equal(projection.queue.length, 0);
+    assert.equal(projection.exec.length, 1);
+    assert.equal(projection.exec[0].cardId, 'master');
+    assert.equal(projection.exec[0].codexRunId, 'run-child');
+    assert.equal(projection.exec[0].executionOwnerCardId, 'child');
+    assert.equal(projection.exec[0].executionOwnerKind, 'subtask');
+    assert.deepEqual(projection.exec[0].executionObservation, {
+      kind: 'codex-process', runId: 'run-child', executionId: 'execution-child', cardId: 'child', ownerKind: 'subtask',
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('projects a linked subtask queued execution onto its master task', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-control-room-subtask-queue-'));
+  const decisionOsRoot = join(root, '.decision-os');
+  mkdirSync(join(decisionOsRoot, 'cards', 'tasks'), { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'cards', 'tasks', 'master.md'), 'Waiting since: 2026-07-14T10:00:00.000Z\n\n## A. Work\n\n1. Queued child.\n');
+  writeFileSync(join(decisionOsRoot, 'codex-process-queue.json'), JSON.stringify({ version: 1, items: [{
+    id: 'run-child', kind: 'thread', status: 'pending', createdAt: '2026-07-14T10:01:00.000Z', startedAt: null,
+    payload: { ledgerId: 'tasks', cardId: 'child', runId: 'run-child', executionId: 'execution-child' },
+  }] }));
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
+    cards: [
+      { id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], comment: { contentFile: '.decision-os/cards/tasks/master.md' } },
+      { id: 'child', title: 'Child', status: 'todo', labels: ['subtask'], codexActiveRunId: 'run-child', codexActiveExecutionId: 'execution-child' },
+    ],
+    annotations: [], relationships: [{ id: 'rel-child', from: 'master', to: 'child', label: 'subtask' }], threadFiles: {},
+  }));
+  const project: DecisionOsProject = {
+    id: 'project-a', name: 'Project A', relativePath: '.', root, decisionOsRoot,
+    description: '', color: '#123456', available: true, diagnostic: '',
+    ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+  };
+  const store = createControlRoomProjectionStore({
+    cacheFile: join(decisionOsRoot, 'cache', 'control-room.json'), runtimeForRoot: () => ({}),
+  });
+
+  try {
+    const projection = store.get([project]) as Record<string, any>;
+    assert.equal(projection.queue.length, 0);
+    assert.equal(projection.exec.length, 1);
+    assert.equal(projection.exec[0].executionStatus, 'pending');
+    assert.equal(projection.exec[0].executionOwnerCardId, 'child');
+    assert.equal(projection.exec[0].codexQueued, true);
+    assert.equal(projection.exec[0].codexQueuePosition, 1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('prefers a linked subtask live process over another linked subtask queue observation', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-control-room-subtask-priority-'));
+  const decisionOsRoot = join(root, '.decision-os');
+  mkdirSync(join(decisionOsRoot, 'cards', 'tasks'), { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'cards', 'tasks', 'master.md'), 'Waiting since: 2026-07-14T10:00:00.000Z\n\n## A. Work\n\n1. Multiple children.\n');
+  writeFileSync(join(decisionOsRoot, 'codex-process-queue.json'), JSON.stringify({ version: 1, items: [{
+    id: 'run-queued', kind: 'thread', status: 'pending', createdAt: '2026-07-14T10:01:00.000Z', startedAt: null,
+    payload: { ledgerId: 'tasks', cardId: 'child-queued', runId: 'run-queued', executionId: 'execution-queued' },
+  }] }));
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
+    cards: [
+      { id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], comment: { contentFile: '.decision-os/cards/tasks/master.md' } },
+      { id: 'child-queued', title: 'Queued child', status: 'todo', labels: ['subtask'], codexActiveRunId: 'run-queued', codexActiveExecutionId: 'execution-queued' },
+      { id: 'child-running', title: 'Running child', status: 'todo', labels: ['subtask'], codexActiveRunId: 'run-running', codexActiveExecutionId: 'execution-running' },
+    ],
+    annotations: [], relationships: [
+      { id: 'rel-queued', from: 'master', to: 'child-queued', label: 'subtask' },
+      { id: 'rel-running', from: 'master', to: 'child-running', label: 'subtask' },
+    ], threadFiles: {},
+  }));
+  const project: DecisionOsProject = {
+    id: 'project-a', name: 'Project A', relativePath: '.', root, decisionOsRoot,
+    description: '', color: '#123456', available: true, diagnostic: '',
+    ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+  };
+  const store = createControlRoomProjectionStore({
+    cacheFile: join(decisionOsRoot, 'cache', 'control-room.json'),
+    runtimeForRoot: () => ({ codexSkillRuns: { 'run-running': { status: 'running', executionId: 'execution-running', startedAt: '2026-07-14T10:02:00.000Z', child: { pid: process.pid, exitCode: null, killed: false } } } }),
+  });
+
+  try {
+    const projection = store.get([project]) as Record<string, any>;
+    assert.equal(projection.exec[0].executionStatus, 'running');
+    assert.equal(projection.exec[0].executionOwnerCardId, 'child-running');
+    assert.equal(projection.exec[0].codexRunId, 'run-running');
+    assert.equal(projection.exec[0].codexQueued, false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('does not project stale terminal subtask execution metadata onto its master task', () => {
+  const root = mkdtempSync(join(tmpdir(), 'decision-os-control-room-terminal-subtask-'));
+  const decisionOsRoot = join(root, '.decision-os');
+  mkdirSync(join(decisionOsRoot, 'cards', 'tasks'), { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'cards', 'tasks', 'master.md'), 'Waiting since: 2026-07-14T10:00:00.000Z\n\n## A. Work\n\n1. Child finished.\n');
+  writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
+    cards: [
+      { id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], comment: { contentFile: '.decision-os/cards/tasks/master.md' } },
+      { id: 'child', title: 'Child', status: 'todo', labels: ['subtask'], codexActiveRunId: 'run-terminal', codexActiveExecutionId: 'execution-terminal' },
+    ],
+    annotations: [], relationships: [{ id: 'rel-child', from: 'master', to: 'child', label: 'subtask' }], threadFiles: {},
+  }));
+  const project: DecisionOsProject = {
+    id: 'project-a', name: 'Project A', relativePath: '.', root, decisionOsRoot,
+    description: '', color: '#123456', available: true, diagnostic: '',
+    ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }],
+  };
+  const store = createControlRoomProjectionStore({
+    cacheFile: join(decisionOsRoot, 'cache', 'control-room.json'),
+    runtimeForRoot: () => ({ codexSkillRuns: { 'run-terminal': { status: 'complete', executionId: 'execution-terminal', startedAt: '2026-07-14T10:02:00.000Z', child: { pid: process.pid, exitCode: 0, killed: false } } } }),
+  });
+
+  try {
+    const projection = store.get([project]) as Record<string, any>;
+    assert.equal(projection.exec.length, 0);
+    assert.equal(projection.queue.length, 1);
+    assert.equal(projection.queue[0].executionObservation, null);
+    assert.equal(projection.queue[0].executionOwnerCardId, '');
+    assert.equal(projection.queue[0].executionOwnerKind, '');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('direct executing master task uses the latest persisted Codex turn after server continuation', () => {
   const root = mkdtempSync(join(tmpdir(), 'decision-os-control-room-session-stopwatch-'));
   const decisionOsRoot = join(root, '.decision-os');

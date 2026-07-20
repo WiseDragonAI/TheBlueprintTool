@@ -13,8 +13,6 @@ import { renderThreadCodexLogEvent } from '../component/render-thread-codex-log-
 import { renderThreadCodexLogStatus } from '../component/render-thread-codex-log-status.js';
 import { threadCodexStopState } from '../../codex/controller/stop-thread-codex-run-controller.js';
 import { threadCodexSessionDeletionState } from '../../codex/controller/delete-thread-codex-session-controller.js';
-import { isThreadFollowingBottom } from '../helper/thread-follow-bottom.js';
-import { persistThreadViewportState } from './persist-thread-scroll.js';
 import { hydrateThreadCodexRunHistory } from '../../codex/effect/hydrate-thread-codex-run-history.js';
 
 type DisclosureByThread = Record<string, Record<string, boolean>>;
@@ -290,10 +288,7 @@ export function renderThreadCodexLog(): void {
   // WHAT: Skip the final DOM effect when the thread log surface is not mounted.
   // WHY: Headless and partially rendered callers may invoke the shared thread renderer.
   if (!root) return;
-  const viewport = document.querySelector('.thread-log-scroll') as HTMLElement | null;
-  const previousTop = Number(viewport?.scrollTop ?? 0);
   const threadId = String(state.threadId ?? '');
-  const following = isThreadFollowingBottom(threadId, 'codex-log');
   const card = selectedThreadCard(threadId);
   const selectedRunIds = recordState('threadSelectedRunIdByThreadId');
   const runId = card ? selectedCardCodexRunId(card, selectedRunIds[threadId]) : '';
@@ -383,14 +378,4 @@ export function renderThreadCodexLog(): void {
     root.append(renderDeleteSession({ cardId: String(card.id ?? ''), runId, threadId }));
   }
 
-  const restore = () => {
-    // WHAT: Skip scroll restoration when the independent log viewport is absent.
-    // WHY: The log content can render in isolated test and partial-DOM surfaces.
-    if (!viewport) return;
-    viewport.scrollTop = following ? Number(viewport.scrollHeight ?? 0) : previousTop;
-    recordState('threadLogScrollTopByThreadId')[threadId] = Math.max(0, Number(viewport.scrollTop ?? 0));
-    persistThreadViewportState();
-  };
-  restore();
-  globalThis.requestAnimationFrame?.(() => restore());
 }

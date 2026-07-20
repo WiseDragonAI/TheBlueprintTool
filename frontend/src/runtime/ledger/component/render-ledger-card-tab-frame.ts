@@ -14,7 +14,7 @@ export function renderLedgerCardTabFrame(card: Record<string, unknown>, fields: 
   frame.dataset.spec = 'd0b7e3a9 e4c1b8f5 c6e3b7d1';
   frame.dataset.wheelCapture = 'true';
 
-  const description = renderLedgerCardMarkdown(ledgerCardBody(card), { cardId, imageSizes });
+  const description = renderLedgerCardMarkdown(ledgerCardBody(card), { cardId, imageSizes, questionnaires: card.questionnaires, gitReviewNotes: card.gitReviewNotes });
   description.classList.add('ledger-card-panel', 'ledger-card-description-panel');
   description.classList.toggle('is-active', activeTab === 'description');
   description.dataset.cardPanel = 'description';

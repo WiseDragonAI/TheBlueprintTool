@@ -87,7 +87,8 @@ test('mobile Text action replaces jump with close, then collapses without cleari
 test('opening a mobile thread does not focus the draft and raise the software keyboard', () => {
   const openMobileThread = source.match(/export function openMobileThread\([\s\S]*?\n\}/)?.[0] ?? '';
 
-  assert.match(openMobileThread, /renderThreadPanel\(\);/);
+  assert.match(openMobileThread, /openThreadPanelController\(threadId\);/);
+  assert.doesNotMatch(openMobileThread, /selectThread\(/);
   assert.doesNotMatch(openMobileThread, /\.focus\(\)/);
 });
 
@@ -115,10 +116,9 @@ test('responsive card threads own desktop split geometry and documented entry sh
 test('desktop Shift+X returns to Control Room execution after durable local persistence', () => {
   const shortcut = source.match(/export async function handleResponsiveThreadShortcut\(event\) \{[\s\S]*?\n\}/)?.[0] ?? '';
 
-  assert.match(shortcut, /const launchMode = event\.ctrlKey \? 'pipeline' : event\.shiftKey \? 'run' : 'send';/);
-  assert.match(shortcut, /if \(launchMode === 'send'\) await stopVoiceRecording\(\{ launchMode \}\);/);
-  assert.match(shortcut, /else void stopVoiceRecording\(\{[\s\S]*launchMode,[\s\S]*onPersisted: \(\) => void finishQueuedVoiceSubmission\(true\)/);
-  assert.doesNotMatch(shortcut, /else await stopVoiceRecording|const submitted = await stopVoiceRecording/);
+  assert.match(shortcut, /const launchMode = voiceLaunchModeForModifiers\(event\);/);
+  assert.match(shortcut, /await executeVoiceAction\(\{[\s\S]*launchMode,[\s\S]*onDurableHandoff: \(\) => void finishQueuedVoiceSubmission\(true\)/);
+  assert.doesNotMatch(shortcut, /stopVoiceRecording/);
   assert.match(applicationSource, /async function navigateAcceptedProcess\(detail\)[\s\S]*acceptedRunOwnsRoute\(detail, snapshot, threadGeneration\)[\s\S]*navigate\(controlRoomPath\('exec'\), true\)/);
 });
 

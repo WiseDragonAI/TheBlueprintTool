@@ -76,7 +76,7 @@ function consumeThreadRunSummary(input: { threadId: string; runId: string; summa
       active: input.summary.ok ? input.summary.active : false,
       queuePosition: input.summary.queuePosition,
     });
-  void import('../../thread/effect/render-thread-codex-log.js').then(({ renderThreadCodexLog }) => renderThreadCodexLog());
+  void import('../../thread/effect/render-thread-codex-log-update.js').then(({ renderThreadCodexLogUpdate }) => renderThreadCodexLogUpdate());
 }
 
 type ThreadCodexRunLogIdentity = {
@@ -129,7 +129,7 @@ function consumeActiveRunSummary(input: { threadId: string; runId: string; summa
     active: input.summary.ok ? input.summary.active : false,
     queuePosition: input.summary.queuePosition,
   });
-  void import('../../thread/effect/render-thread-codex-log.js').then(({ renderThreadCodexLog }) => renderThreadCodexLog());
+  void import('../../thread/effect/render-thread-codex-log-update.js').then(({ renderThreadCodexLogUpdate }) => renderThreadCodexLogUpdate());
 }
 
 export function bindThreadCodexActiveRunLog(input: ThreadCodexRunLogIdentity): void {
