@@ -34,6 +34,7 @@ test('removes status and ownership when the settling run still owns execution', 
       cards: [{
         id: 'master', codexActiveRunId: 'direct-run', codexActiveExecutionId: 'direct-execution',
         executionStatus: 'running', executionRunId: 'direct-run',
+        executionIntent: { id: 'voice-note', state: 'running' },
       }],
     }));
 
@@ -42,6 +43,7 @@ test('removes status and ownership when the settling run still owns execution', 
     assert.equal(card.codexActiveRunId, undefined);
     assert.equal(card.executionStatus, undefined);
     assert.equal(card.executionRunId, undefined);
+    assert.equal((card.executionIntent as Record<string, unknown>).state, 'terminal');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

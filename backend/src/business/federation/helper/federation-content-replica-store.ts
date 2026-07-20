@@ -5,7 +5,7 @@ import type { FederationContentManifest, FederationContentManifestEntry } from '
 
 export type FederationContentState = 'missing' | 'synchronizing' | 'available' | 'stale';
 type ResourceState = FederationContentManifestEntry & { ownerNodeId: string; projectId: string; state: FederationContentState; verifiedHash: string; lastVerifiedAt: string; error: string };
-type QueueEntry = { ownerNodeId: string; projectId: string; key: string; hash: string; attempts: number; nextAttemptAt: string };
+type QueueEntry = { ownerNodeId: string; projectId: string; key: string; hash: string; attempts: number; nextAttemptAt: string; priority?: number };
 type ContentDocument = { version: 1; resources: Record<string, ResourceState>; queue: QueueEntry[] };
 
 function atomicWrite(file: string, bytes: string | Buffer): void {
@@ -46,20 +46,40 @@ export function createFederationContentReplicaStore(input: { decisionOsRoot: str
         const current = document.resources[id];
         const available = existsSync(objectFile(entry.hash));
         document.resources[id] = { ...entry, ownerNodeId, projectId: manifest.projectId, state: available ? 'available' : current?.verifiedHash ? 'stale' : 'missing', verifiedHash: available ? entry.hash : current?.verifiedHash ?? '', lastVerifiedAt: available ? now().toISOString() : current?.lastVerifiedAt ?? '', error: '' };
+        document.queue = document.queue.filter((queued) => queued.ownerNodeId !== ownerNodeId
+          || queued.projectId !== manifest.projectId
+          || queued.key !== entry.key
+          || queued.hash === entry.hash);
         if (!available && !document.queue.some((queued) => queued.ownerNodeId === ownerNodeId && queued.projectId === manifest.projectId && queued.key === entry.key && queued.hash === entry.hash)) {
           document.queue.push({ ownerNodeId, projectId: manifest.projectId, key: entry.key, hash: entry.hash, attempts: 0, nextAttemptAt: now().toISOString() });
           document.resources[id].state = 'synchronizing';
         }
       }
-      for (const id of Object.keys(document.resources)) {
-        const resource = document.resources[id];
-        if (resource.ownerNodeId === ownerNodeId && resource.projectId === manifest.projectId && !manifestKeys.has(id)) delete document.resources[id];
+      if (manifest.complete !== false) {
+        for (const id of Object.keys(document.resources)) {
+          const resource = document.resources[id];
+          if (resource.ownerNodeId === ownerNodeId && resource.projectId === manifest.projectId && !manifestKeys.has(id)) delete document.resources[id];
+        }
+        document.queue = document.queue.filter((entry) => entry.ownerNodeId !== ownerNodeId
+          || entry.projectId !== manifest.projectId
+          || manifestKeys.has(resourceId(entry.ownerNodeId, entry.projectId, entry.key)));
       }
       persist();
     },
     due(limit = 2): QueueEntry[] {
       const timestamp = now().getTime();
-      return document.queue.filter((entry) => Date.parse(entry.nextAttemptAt) <= timestamp).slice(0, limit);
+      return document.queue
+        .filter((entry) => Date.parse(entry.nextAttemptAt) <= timestamp)
+        .sort((left, right) => Number(right.priority ?? 0) - Number(left.priority ?? 0) || left.nextAttemptAt.localeCompare(right.nextAttemptAt))
+        .slice(0, limit);
+    },
+    prioritize(ownerNodeId: string, projectId: string, key: string): boolean {
+      const entry = document.queue.find((candidate) => candidate.ownerNodeId === ownerNodeId && candidate.projectId === projectId && candidate.key === key);
+      if (!entry) return false;
+      entry.priority = 1;
+      entry.nextAttemptAt = now().toISOString();
+      persist();
+      return true;
     },
     install(entry: QueueEntry, bytes: Buffer): void {
       if (createHash('sha256').update(bytes).digest('hex') !== entry.hash) throw new Error('invalid_federation_content_hash');

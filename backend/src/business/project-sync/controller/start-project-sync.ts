@@ -198,6 +198,7 @@ export function createProjectSyncController(input: {
     });
     const task = admitProjectSyncMasterTask({
       project: taskProject,
+      runtime: input.runtimeForProject(taskProject),
       sourceProjectId: run.sourceProjectId,
       sourceProjectName: run.sourceProjectName,
       sourceProjectColor: run.sourceProjectColor,

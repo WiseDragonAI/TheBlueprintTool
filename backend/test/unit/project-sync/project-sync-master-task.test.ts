@@ -27,7 +27,8 @@ test('admits one deterministic synchronization-labeled master task', () => {
         { id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' },
       ],
     };
-    const input = { project, sourceProjectId: 'source-b', sourceProjectName: 'Source B', sourceProjectColor: '#d94f70', originFingerprint: 'f'.repeat(64), syncId: 'sync-1', waitingSince: '2026-07-18T06:00:00.000Z' };
+    const runtime: Record<string, unknown> = {};
+    const input = { project, runtime, sourceProjectId: 'source-b', sourceProjectName: 'Source B', sourceProjectColor: '#d94f70', originFingerprint: 'f'.repeat(64), syncId: 'sync-1', waitingSince: '2026-07-18T06:00:00.000Z' };
     const first = admitProjectSyncMasterTask(input);
     const duplicate = admitProjectSyncMasterTask(input);
     assert.deepEqual(duplicate, first);

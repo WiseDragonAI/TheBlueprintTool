@@ -9,6 +9,7 @@ type AnyRecord = Record<string, unknown>;
 
 export function admitProjectSyncMasterTask(input: {
   project: DecisionOsProject;
+  runtime: AnyRecord;
   sourceProjectId: string;
   sourceProjectName: string;
   sourceProjectColor: string;
@@ -69,6 +70,13 @@ export function admitProjectSyncMasterTask(input: {
     },
   });
   stripHydratedThreadNotes(document);
-  persistLedgerProjection({ decisionOsRoot: input.project.decisionOsRoot, ledgerId: ledger.id, ledgerPath, ledger: document });
+  persistLedgerProjection({
+    decisionOsRoot: input.project.decisionOsRoot,
+    ledgerId: ledger.id,
+    ledgerPath,
+    ledger: document,
+    runtime: input.runtime,
+    command: { kind: 'admit-project-sync-task', cardIds: [masterCardId], annotationIds: [zoneId] },
+  });
   return { ledgerId: ledger.id, masterCardId, zoneId };
 }

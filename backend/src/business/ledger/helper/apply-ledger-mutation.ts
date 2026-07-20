@@ -28,6 +28,7 @@ export type LedgerMutation = {
   note?: { id?: string; threadId?: string; body?: string; voiceFileRef?: string; reviewContext?: Record<string, string>; status?: string; transcriptionStartedAt?: string; uploadReceivedAt?: string; audioPersistedAt?: string; acceptedAt?: string; providerStartedAt?: string; providerSettledAt?: string; completedAt?: string; revision?: number; source?: string; error?: string; codexQueueStatus?: string; codexQueueRequestedAt?: string; codexQueueRunId?: string; codexQueueError?: string; imageSizes?: Record<string, { width?: number; height?: number }> };
   selection?: { cardIds?: string[]; zoneIds?: string[]; groupIds?: string[] };
   pasteSuffix?: string;
+  executionIntent?: { id?: string; state?: 'waiting' | 'queued' | 'running' | 'terminal' | 'failed'; launchMode?: 'run' | 'pipeline'; error?: string; updatedAt?: string };
 };
 
 type MutationError = { statusCode: number; body: Record<string, unknown> };
@@ -128,11 +129,11 @@ export function applyLedgerMutation(input: {
     if (Number.isFinite(Number(note?.revision)) && (options.overwrite || !target.revision)) target.revision = Number(note?.revision);
   };
 
-  if ((mutation.action === 'create-zone' || mutation.action === 'create-group') && mutation.annotation?.id) {
+  if ((mutation.action === 'create-zone' || mutation.action === 'create-group' || mutation.action === 'create-task-intake') && mutation.annotation?.id) {
     const id = String(mutation.annotation.id);
     ledger.annotations = (ledger.annotations ?? []).filter((entry) => String(entry.id ?? '') !== id).concat(mutation.annotation);
   }
-  if (mutation.action === 'create-card' && mutation.card?.id) {
+  if ((mutation.action === 'create-card' || mutation.action === 'create-task-intake') && mutation.card?.id) {
     const id = String(mutation.card.id);
     externalizeCardContent({ decisionOsRoot, card: mutation.card, ledgerPath });
     writeThreadNotesFile({ decisionOsRoot, ledger, ledgerPath, threadId: `thread-${id}`, notes: [] });
@@ -321,6 +322,20 @@ export function applyLedgerMutation(input: {
     const annotation = (ledger.annotations ?? []).find((entry) => String(entry.id ?? '') === mutation.region?.id);
     if (annotation && typeof mutation.region.label === 'string') annotation.label = mutation.region.label;
     if (annotation && mutation.region.kind === 'zone' && typeof mutation.region.color === 'string') annotation.color = mutation.region.color;
+  }
+  if (mutation.action === 'create-execution-intent' && mutation.cardId && mutation.executionIntent?.id) {
+    const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === String(mutation.cardId));
+    const current = card?.executionIntent && typeof card.executionIntent === 'object' ? card.executionIntent as Record<string, unknown> : null;
+    const active = current && ['waiting', 'queued', 'running'].includes(String(current.state ?? ''));
+    if (!card) mutationError = { statusCode: 404, body: { ok: false, error: 'Execution target card not found.' } };
+    else if (active && String(current.id ?? '') !== String(mutation.executionIntent.id)) mutationError = { statusCode: 409, body: { ok: false, error: 'An execution intent is already active.' } };
+    else card.executionIntent = {
+      id: String(mutation.executionIntent.id),
+      state: 'waiting',
+      launchMode: mutation.executionIntent.launchMode === 'pipeline' ? 'pipeline' : 'run',
+      error: '',
+      updatedAt: new Date().toISOString(),
+    };
   }
   if (mutation.action === 'append-note' && mutation.note?.threadId) {
     const notesByThread = normalizeLedgerNotes(ledger);

@@ -105,7 +105,7 @@ test('projects a linked subtask queued execution onto its master task', () => {
     const projection = store.get([project]) as Record<string, any>;
     assert.equal(projection.queue.length, 0);
     assert.equal(projection.exec.length, 1);
-    assert.equal(projection.exec[0].executionStatus, 'pending');
+    assert.equal(projection.exec[0].executionStatus, 'queued');
     assert.equal(projection.exec[0].executionOwnerCardId, 'child');
     assert.equal(projection.exec[0].codexQueued, true);
     assert.equal(projection.exec[0].codexQueuePosition, 1);

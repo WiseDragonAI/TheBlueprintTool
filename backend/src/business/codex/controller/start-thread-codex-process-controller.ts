@@ -301,7 +301,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
         payload: { ledgerId, threadId, cardId, runId, executionId, codexModel: command.model, codexEffort: command.effort },
       });
       stripHydratedThreadNotes(ledger);
-      persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime });
+      persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime, command: { kind: 'queue-codex-execution', cardIds: [cardId] } });
     } catch (error) {
       removeCodexProcessQueueItem(decisionOsRoot, runId);
       delete runtimeRuns(runtime)[runId];
@@ -324,7 +324,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
   }
 
   stripHydratedThreadNotes(ledger);
-  persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime });
+  persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime, command: { kind: 'start-codex-execution', cardIds: [cardId] } });
   notifyRuntimeCallback(runtime.onCodexRunAccepted, { ledgerId, cardId, threadId, runId, executionId, status: 'running' });
 
   const launch = (attemptCommand: CodexCommand, taskInput: string, segment: 'start' | 'continue'): void => {
@@ -371,7 +371,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
           appendFileSync(stderrFile, codexRunExecutionFinishedMarker({ runId, executionId, finishedAt: settlement.finishedAt, status: 'failed' }), 'utf8');
           updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
           removeCodexProcessQueueItem(decisionOsRoot, runId);
-          clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime });
+          clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime, terminalState: 'failed' });
           const schedule = runtime.scheduleCodexProcesses;
           if (typeof schedule === 'function') void schedule();
           notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, executionId, status: 'failed' });
@@ -397,7 +397,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
         if (!updateRuntimeExecution(runtime, runId, executionId, { status, exitCode: settlement.exitCode, finishedAt: settlement.finishedAt, settledAt: new Date().toISOString() })) return;
         appendFileSync(stderrFile, codexRunExecutionFinishedMarker({ runId, executionId, finishedAt: settlement.finishedAt, status }), 'utf8');
         removeCodexProcessQueueItem(decisionOsRoot, runId);
-        clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime });
+        clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime, terminalState: status === 'failed' ? 'failed' : 'terminal' });
         const schedule = runtime.scheduleCodexProcesses;
         if (typeof schedule === 'function') void schedule();
         if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');

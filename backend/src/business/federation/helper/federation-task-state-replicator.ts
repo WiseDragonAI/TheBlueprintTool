@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FederationStateFrame } from './federation-node-connector.js';
 import { assertTaskFieldEvent, sha256 } from '../../task-state/helper/task-event-codec.js';
 import type { TaskEventStore } from '../../task-state/helper/task-event-store.js';
-import type { TaskBucketManifestEntry, TaskFieldEvent, TaskStateSnapshot } from '../../task-state/helper/task-event-types.js';
+import { taskEventReducerVersion, type TaskBucketManifestEntry, type TaskFieldEvent, type TaskStateSnapshot } from '../../task-state/helper/task-event-types.js';
 
 type Publisher = (nodeId: string, frame: Omit<FederationStateFrame, 'from'>) => boolean;
 type SnapshotTransfer = { projectId: string; from: string; checksum: string; chunks: string[]; total: number };
@@ -51,10 +51,10 @@ export function createFederationTaskStateReplicator(input: {
   const publishEvent = (event: TaskFieldEvent): void => {
     const store = input.stores().get(event.projectId);
     if (!store) return;
-    store.markPending('relay', event.eventId);
+    const onlinePeers = input.peers().filter((entry) => entry.online);
+    store.markPendingForPeers(['relay', ...onlinePeers.map((peer) => peer.nodeId)], [event.eventId]);
     publishBatch('relay', event.projectId, [event]);
-    for (const peer of input.peers().filter((entry) => entry.online)) {
-      store.markPending(peer.nodeId, event.eventId);
+    for (const peer of onlinePeers) {
       publishBatch(peer.nodeId, event.projectId, [event]);
     }
   };
@@ -78,6 +78,14 @@ export function createFederationTaskStateReplicator(input: {
       if (pending.length > 0) publishBatch(peerId, projectId, pending);
       advertise(peerId, projectId, store);
     }
+  };
+
+  const reconcileProject = (peerId: string, projectId: string): void => {
+    const store = input.stores().get(projectId);
+    if (!store) return;
+    const pending = store.pendingFor(peerId);
+    if (pending.length > 0) publishBatch(peerId, projectId, pending);
+    advertise(peerId, projectId, store);
   };
 
   const sendSnapshot = (peerId: string, projectId: string, snapshot: TaskStateSnapshot): void => {
@@ -150,7 +158,7 @@ export function createFederationTaskStateReplicator(input: {
     }
     if (frame.type === 'state-snapshot-manifest') {
       const manifests = Array.isArray(payload.manifests) ? payload.manifests as Array<Record<string, unknown>> : [];
-      const selected = manifests.filter((manifest) => Number(manifest.reducerVersion) === 1).sort((left, right) => String(left.createdAt).localeCompare(String(right.createdAt))).at(-1);
+      const selected = manifests.filter((manifest) => Number(manifest.reducerVersion) === taskEventReducerVersion).sort((left, right) => String(left.createdAt).localeCompare(String(right.createdAt))).at(-1);
       const local = store.snapshots().at(-1)?.manifest;
       if (selected && (String(selected.snapshotId ?? '') !== local?.snapshotId || String(selected.projectionChecksum ?? '') !== local?.projectionChecksum)) {
         awaitingSnapshots.add(`${frame.from}\u0000${frame.projectId}`);
@@ -197,9 +205,11 @@ export function createFederationTaskStateReplicator(input: {
       if (frame.from === 'relay') {
         const bucketSignature = JSON.stringify(store.bucketManifest());
         if (publishedRelaySnapshotForBuckets.get(frame.projectId) !== bucketSignature) {
-          const snapshot = store.createSnapshot();
           publishedRelaySnapshotForBuckets.set(frame.projectId, bucketSignature);
-          sendSnapshot('relay', frame.projectId, snapshot);
+          queueMicrotask(() => {
+            const snapshot = store.createSnapshot();
+            sendSnapshot('relay', frame.projectId, snapshot);
+          });
         }
       }
     }
@@ -209,6 +219,7 @@ export function createFederationTaskStateReplicator(input: {
     publishEvent,
     reconcileRelay,
     reconcilePeer,
+    reconcileProject,
     handleFrame,
     diagnostics: () => ({
       pendingAcknowledgements: [...input.stores()].flatMap(([projectId, store]) => [

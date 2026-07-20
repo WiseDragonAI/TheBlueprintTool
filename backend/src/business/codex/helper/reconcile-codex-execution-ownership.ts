@@ -51,10 +51,12 @@ export function reconcileCodexExecutionOwnership(input: { decisionOsRoot: string
     if (!ledgerRef || !existsSync(ledgerPath)) continue;
     const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord & { cards?: AnyRecord[] };
     let changed = false;
+    const changedCardIds = new Set<string>();
     for (const card of ledger.cards ?? []) {
-      if (card.executionStatus !== undefined) { delete card.executionStatus; changed = true; }
-      if (card.executionRunId !== undefined) { delete card.executionRunId; changed = true; }
       const cardId = text(card.id);
+      let cardChanged = false;
+      if (card.executionStatus !== undefined) { delete card.executionStatus; changed = true; cardChanged = true; }
+      if (card.executionRunId !== undefined) { delete card.executionRunId; changed = true; cardChanged = true; }
       const activeRunId = text(card.codexActiveRunId);
       const activeExecutionId = text(card.codexActiveExecutionId);
       if (activeRunId || activeExecutionId) {
@@ -68,6 +70,7 @@ export function reconcileCodexExecutionOwnership(input: { decisionOsRoot: string
           delete card.codexActiveExecutionId;
           result.leasesCleared += 1;
           changed = true;
+          cardChanged = true;
         }
       }
 
@@ -83,12 +86,21 @@ export function reconcileCodexExecutionOwnership(input: { decisionOsRoot: string
         outputFiles[runId] = relative(dirname(input.decisionOsRoot), files.outputFile);
         result.artifactMappingsAdded += 1;
         changed = true;
+        cardChanged = true;
       }
       if (Object.keys(outputFiles).length > 0) card.codexThreadRunOutputFiles = outputFiles;
+      if (cardChanged && cardId) changedCardIds.add(cardId);
     }
     if (!changed) continue;
     stripHydratedThreadNotes(ledger);
-    persistLedgerProjection({ decisionOsRoot: input.decisionOsRoot, ledgerId: entry.id, ledgerPath, ledger, runtime: input.runtime ?? {} });
+    persistLedgerProjection({
+      decisionOsRoot: input.decisionOsRoot,
+      ledgerId: entry.id,
+      ledgerPath,
+      ledger,
+      runtime: input.runtime ?? {},
+      command: { kind: 'reconcile-codex-ownership', cardIds: [...changedCardIds] },
+    });
     result.ledgersChanged += 1;
   }
   return result;

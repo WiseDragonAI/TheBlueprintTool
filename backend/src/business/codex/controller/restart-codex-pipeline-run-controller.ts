@@ -90,7 +90,14 @@ export async function restartCodexPipelineRunController(
     }
   }
   stripHydratedThreadNotes(context.ledger);
-  persistLedgerProjection({ decisionOsRoot, ledgerId: context.ledgerId, ledgerPath: context.ledgerPath, ledger: context.ledger, runtime });
+  persistLedgerProjection({
+    decisionOsRoot,
+    ledgerId: context.ledgerId,
+    ledgerPath: context.ledgerPath,
+    ledger: context.ledger,
+    runtime,
+    command: { kind: 'restart-codex-pipeline', cardIds: [run.sourceCardId, ...run.steps.map((step) => step.outputCardId)] },
+  });
   const restarted = resetRun(run, new Date().toISOString());
   writeCodexPipelineStore({
     decisionOsRoot,

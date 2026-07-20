@@ -1,5 +1,5 @@
 import { canonicalJson } from './task-event-codec.js';
-import type { TaskFieldChange, TaskFieldEvent, TaskProjection, TaskProjectionConflict } from './task-event-types.js';
+import { taskEventReducerVersion, type TaskFieldChange, type TaskFieldEvent, type TaskProjection, type TaskProjectionConflict } from './task-event-types.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -76,18 +76,32 @@ export function emptyTaskProjection(projectId: string, ledger: AnyRecord = {}): 
   materialized.cards = records(materialized.cards);
   materialized.annotations = records(materialized.annotations);
   materialized.relationships = records(materialized.relationships);
-  return { version: 1, projectId, ledger: materialized, conflicts: [], appliedEventIds: [] };
+  return { version: 1, reducerVersion: taskEventReducerVersion, projectId, ledger: materialized, conflicts: [], appliedEventIds: [], lastRevision: 0, fieldRevisions: {} };
 }
 
-/** Reduces chronological date positions. Events inside one date position are intentionally unordered. */
+function eventPosition(event: TaskFieldEvent, legacyPositions: Map<string, number>): number {
+  if (event.revision !== undefined) return event.revision;
+  return legacyPositions.get(event.emittedAt) ?? 0;
+}
+
+/** Reduces causal positions. `emittedAt` is used only to import legacy events that predate revisions. */
 export function reduceTaskEvents(input: { projectId: string; events: TaskFieldEvent[]; base?: TaskProjection }): TaskProjection {
   const projection = input.base ? clone(input.base) : emptyTaskProjection(input.projectId);
+  projection.reducerVersion = taskEventReducerVersion;
+  projection.lastRevision ??= 0;
+  projection.fieldRevisions ??= {};
   const seen = new Set(projection.appliedEventIds);
   const events = input.events.filter((event) => event.projectId === input.projectId && !seen.has(event.eventId));
-  const positions = new Map<string, TaskFieldEvent[]>();
-  for (const event of events) (positions.get(event.emittedAt) ?? (positions.set(event.emittedAt, []), positions.get(event.emittedAt)!)).push(event);
-  for (const emittedAt of [...positions.keys()].sort()) {
-    const positionEvents = positions.get(emittedAt)!;
+  const legacyDates = [...new Set(events.filter((event) => event.revision === undefined).map((event) => event.emittedAt))].sort();
+  const legacyBase = projection.lastRevision;
+  const legacyPositions = new Map(legacyDates.map((date, index) => [date, legacyBase + index + 1]));
+  const positions = new Map<number, TaskFieldEvent[]>();
+  for (const event of events) {
+    const position = eventPosition(event, legacyPositions);
+    (positions.get(position) ?? (positions.set(position, []), positions.get(position)!)).push(event);
+  }
+  for (const position of [...positions.keys()].sort((left, right) => left - right)) {
+    const positionEvents = positions.get(position)!;
     const fields = new Map<string, Array<{ event: TaskFieldEvent; change: TaskFieldChange }>>();
     for (const event of positionEvents) {
       for (const change of event.changes) {
@@ -95,7 +109,8 @@ export function reduceTaskEvents(input: { projectId: string; events: TaskFieldEv
         (fields.get(key) ?? (fields.set(key, []), fields.get(key)!)).push({ event, change });
       }
     }
-    for (const changes of fields.values()) {
+    for (const [fieldKey, changes] of fields) {
+      if ((projection.fieldRevisions[fieldKey] ?? 0) > position) continue;
       const uniqueEffects = new Map<string, { event: TaskFieldEvent; change: TaskFieldChange }>();
       for (const entry of changes) uniqueEffects.set(effectKey(entry.change), entry);
       const first = changes[0];
@@ -105,7 +120,7 @@ export function reduceTaskEvents(input: { projectId: string; events: TaskFieldEv
         else applyChange(entityFor(projection, first.event), first.change);
       } else {
         const conflict: TaskProjectionConflict = {
-          emittedAt,
+          emittedAt: first.event.emittedAt,
           entityType: first.event.entityType,
           entityId: first.event.entityId,
           path: first.change.path,
@@ -113,13 +128,15 @@ export function reduceTaskEvents(input: { projectId: string; events: TaskFieldEv
         };
         projection.conflicts.push(conflict);
       }
+      projection.fieldRevisions[fieldKey] = position;
     }
     for (const event of positionEvents) seen.add(event.eventId);
+    projection.lastRevision = Math.max(projection.lastRevision, position);
   }
   projection.appliedEventIds = [...seen];
   projection.ledger.cards = records(projection.ledger.cards);
   projection.ledger.annotations = records(projection.ledger.annotations);
   projection.ledger.relationships = records(projection.ledger.relationships);
-  projection.conflicts.sort((left, right) => `${left.emittedAt}\u0000${left.entityType}\u0000${left.entityId}\u0000${left.path}`.localeCompare(`${right.emittedAt}\u0000${right.entityType}\u0000${right.entityId}\u0000${right.path}`));
+  projection.conflicts.sort((left, right) => `${left.entityType}\u0000${left.entityId}\u0000${left.path}`.localeCompare(`${right.entityType}\u0000${right.entityId}\u0000${right.path}`));
   return projection;
 }

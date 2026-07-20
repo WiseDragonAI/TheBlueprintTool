@@ -305,6 +305,12 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
       method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'beta-card', title: 'changed on owner', status: 'backlog' } }),
     });
     assert.equal(directMutation.status, 200);
+    const localBetaId = catalogB.projects.find((project) => project.name === 'beta')!.id;
+    const locallyAuthoritative = await fetch(`${baseB}/p/${encodeURIComponent(localBetaId)}/decision-os/state?replica=node-a`, {
+      headers: { 'x-decision-os-replica-node': 'node-a' },
+    });
+    assert.equal(locallyAuthoritative.status, 200, 'a foreign selector cannot mask a project hosted by this node');
+    assert.equal(((await locallyAuthoritative.json()) as { projectName: string }).projectName, 'beta');
     const remoteEvent = await Promise.race([
       eventReader.read(),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timed out waiting for federated Control Room event.')), 2_000)),

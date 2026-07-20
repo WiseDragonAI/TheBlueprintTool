@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import test from 'node:test';
@@ -23,6 +23,8 @@ test('store durably appends before exporting the generated projection', (context
   value.store.append(event('a', '2026-07-20T01:00:00.000Z', 'todo'));
   assert.equal(value.store.events().length, 1);
   assert.equal((JSON.parse(readFileSync(value.compatibilityLedgerFile, 'utf8')).cards as Array<Record<string, unknown>>)[0].status, 'todo');
+  assert.equal(value.store.snapshots().length, 0, 'request-path writes do not create snapshots');
+  value.store.maintain();
   assert.equal(value.store.snapshots().length, 1);
 });
 
@@ -55,7 +57,7 @@ test('verified snapshot bootstraps a blank store and rejects corruption', (conte
   const target = fixture();
   context.after(() => { rmSync(source.root, { recursive: true, force: true }); rmSync(target.root, { recursive: true, force: true }); });
   source.store.append(event('a', '2026-07-20T01:00:00.000Z', 'todo'));
-  const snapshot = source.store.snapshots().at(-1)!;
+  const snapshot = source.store.createSnapshot();
   target.store.installSnapshot(snapshot);
   assert.equal((target.store.projection().ledger.cards as Array<Record<string, unknown>>)[0].status, 'todo');
   const corrupt = structuredClone(snapshot);
@@ -81,4 +83,32 @@ test('large histories restore from a snapshot and apply only the uncovered tail'
   target.store.append(event('tail', '2026-07-20T04:00:00.000Z', 'done'));
   assert.equal(target.store.events().length, 1);
   assert.equal((target.store.projection().ledger.cards as Array<Record<string, unknown>>)[0].status, 'done');
+});
+
+test('restart restores causal projection and bounded maintenance retains two checkpoints', (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-task-restart-'));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  let clock = Date.parse('2026-07-20T00:00:00.000Z');
+  const options = {
+    decisionOsRoot: root, projectId: 'project-a', snapshotTailMaximum: 1, snapshotRetainMaximum: 2,
+    now: () => new Date(clock += 1_000),
+  };
+  const first = createTaskEventStore(options);
+  for (let index = 1; index <= 3; index += 1) {
+    first.append(createTaskFieldEvent({
+      eventId: `causal-${index}`, projectId: 'project-a', writerId: 'node-a', emittedAt: new Date(clock).toISOString(), revision: index,
+      entityType: 'card', entityId: 'card-a', changes: [{ path: 'status', operation: 'set', value: `state-${index}` }],
+    }));
+    first.maintain();
+  }
+  assert.equal(first.snapshots().length, 2);
+  writeFileSync(first.projectionFile, JSON.stringify({
+    ...first.projection(), reducerVersion: 1, ledger: { cards: [{ id: 'card-a', status: 'stale-reducer' }], annotations: [], relationships: [] },
+  }));
+  const restarted = createTaskEventStore(options);
+  assert.equal((restarted.projection().ledger.cards as Array<Record<string, unknown>>)[0].status, 'state-3');
+  assert.equal(restarted.projection().lastRevision, 3);
+  const before = restarted.snapshots().length;
+  restarted.maintain();
+  assert.equal(restarted.snapshots().length, before, 'equivalent maintenance does not create another checkpoint');
 });

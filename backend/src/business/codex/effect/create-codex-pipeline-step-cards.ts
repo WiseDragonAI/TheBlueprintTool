@@ -23,6 +23,7 @@ export function createCodexPipelineStepCards(input: {
     .replace(/[^a-zA-Z0-9._-]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'untitled';
   let previousCardId = input.run.sourceCardId;
+  const relationshipIds: string[] = [];
   const synchronizationRun = input.run.pipelineId === 'project-synchronization';
   for (const [index, step] of input.run.steps.entries()) {
     const firstSkill = step.skills[0];
@@ -67,6 +68,7 @@ export function createCodexPipelineStepCards(input: {
       to: step.outputCardId,
       label: synchronizationRun ? 'subtask' : step.name,
     };
+    relationshipIds.push(relationship.id);
     const relationMutation = applyLedgerMutation({
       decisionOsRoot: input.decisionOsRoot,
       ledgerPath: input.context.ledgerPath,
@@ -84,6 +86,17 @@ export function createCodexPipelineStepCards(input: {
   input.source.codexActiveRunId = firstSkill?.runId ?? '';
   input.source.codexActiveExecutionId = firstSkill?.executionId ?? '';
   stripHydratedThreadNotes(input.context.ledger);
-  persistLedgerProjection({ decisionOsRoot: input.decisionOsRoot, ledgerId: input.context.ledgerId, ledgerPath: input.context.ledgerPath, ledger: input.context.ledger, runtime: input.context.runtime });
+  persistLedgerProjection({
+    decisionOsRoot: input.decisionOsRoot,
+    ledgerId: input.context.ledgerId,
+    ledgerPath: input.context.ledgerPath,
+    ledger: input.context.ledger,
+    runtime: input.context.runtime,
+    command: {
+      kind: 'create-codex-pipeline-cards',
+      cardIds: [input.run.sourceCardId, ...input.run.steps.map((step) => step.outputCardId)],
+      relationshipIds,
+    },
+  });
   return null;
 }

@@ -85,6 +85,7 @@ test('exposes origin identity and fixed repository status while protecting feder
     assert.equal(duplicate.run.syncId, admission.run.syncId);
     const attached = await waitFor(async () => {
       const body = await fetch(`${base}/api/project-sync/${encodeURIComponent(admission.run.syncId)}`).then((response) => response.json()) as Record<string, any>;
+      if (body.run?.phase === 'failed') throw new Error(`Project synchronization failed during admission: ${JSON.stringify(body.run.error ?? {})}`);
       return body.run?.masterCardId && body.run?.pipelineRunId ? body.run : null;
     });
     assert.equal(attached.ledgerId, 'tasks');
@@ -93,7 +94,9 @@ test('exposes origin identity and fixed repository status while protecting feder
     const ledger = JSON.parse(readFileSync(join(project, '.decision-os', 'tasks.json'), 'utf8')) as Record<string, any>;
     const master = ledger.cards.find((card: Record<string, unknown>) => card.id === attached.masterCardId);
     assert.deepEqual(master.labels, ['master-task', 'synchronization']);
-    assert.equal(ledger.annotations.find((annotation: Record<string, unknown>) => annotation.id === `zone-project-sync-${attached.syncId}`).color, catalog.projects[0].color);
+    const synchronizationZone = ledger.annotations.find((annotation: Record<string, unknown>) => annotation.id === `zone-project-sync-${attached.syncId}`);
+    assert.ok(synchronizationZone, `missing synchronization zone: ${JSON.stringify(ledger.annotations)}`);
+    assert.equal(synchronizationZone.color, catalog.projects[0].color);
     assert.equal(ledger.relationships.length, 3);
     assert.ok(ledger.relationships.every((relationship: Record<string, unknown>) => relationship.from === attached.masterCardId && relationship.label === 'subtask'));
     assert.ok(ledger.cards.filter((card: Record<string, unknown>) => card.id !== attached.masterCardId).every((card: Record<string, any>) => card.labels.includes('subtask')));

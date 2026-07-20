@@ -141,24 +141,35 @@ export function resolvePipelineLedgerContext(input: {
   };
 }
 
-function persistLedger(context: PipelineLedgerContext): void {
-  persistLedgerProjection({ ledgerId: context.ledgerId, ledgerPath: context.ledgerPath, ledger: context.ledger, runtime: context.runtime });
+function persistLedger(context: PipelineLedgerContext, kind: string, cardIds: string[]): void {
+  persistLedgerProjection({
+    ledgerId: context.ledgerId,
+    ledgerPath: context.ledgerPath,
+    ledger: context.ledger,
+    runtime: context.runtime,
+    command: { kind, cardIds },
+  });
 }
 
 function reconcilePipelineExecution(context: PipelineLedgerContext, run: CodexPipelineRun): void {
   const skillExecutions = new Map(run.steps.flatMap((step) => step.skills.map((skill) => [skill.runId, skill] as const)));
   let changed = false;
+  const changedCardIds: string[] = [];
   for (const card of context.ledger.cards ?? []) {
     const ownsPipeline = String(card.codexQueuedPipelineRunId ?? '') === run.id
       || String(card.codexPipelineRunId ?? '') === run.id;
     if (!ownsPipeline) continue;
+    const cardId = String(card.id ?? '');
+    let cardChanged = false;
     if (String(card.executionRunId ?? '') === run.id && card.executionStatus !== undefined) {
       delete card.executionStatus;
       changed = true;
+      cardChanged = true;
     }
     if (String(card.executionRunId ?? '') === run.id) {
       delete card.executionRunId;
       changed = true;
+      cardChanged = true;
     }
     const activeSkill = skillExecutions.get(String(card.codexActiveRunId ?? ''));
     if (activeSkill && activeSkill.status !== 'pending' && activeSkill.status !== 'running'
@@ -166,9 +177,16 @@ function reconcilePipelineExecution(context: PipelineLedgerContext, run: CodexPi
       delete card.codexActiveRunId;
       delete card.codexActiveExecutionId;
       changed = true;
+      cardChanged = true;
     }
+    if (isTerminal(run.status) && card.executionIntent && typeof card.executionIntent === 'object' && ['waiting', 'queued', 'running'].includes(String((card.executionIntent as AnyRecord).state ?? ''))) {
+      card.executionIntent = { ...(card.executionIntent as AnyRecord), state: run.status === 'failed' ? 'failed' : 'terminal', updatedAt: new Date().toISOString() };
+      changed = true;
+      cardChanged = true;
+    }
+    if (cardChanged && cardId) changedCardIds.push(cardId);
   }
-  if (changed) persistLedger(context);
+  if (changed) persistLedger(context, 'reconcile-codex-pipeline', changedCardIds);
 }
 
 function cardContent(input: { context: PipelineLedgerContext; decisionOsRoot: string; cardId: string }): string {
@@ -214,7 +232,7 @@ function projectPipelineSkillRun(input: {
   };
   projectCardCodexRun({ ...projection, cardId: input.pipelineRun.sourceCardId });
   projectCardCodexRun({ ...projection, cardId: input.step.outputCardId });
-  persistLedger(input.context);
+  persistLedger(input.context, 'project-codex-pipeline-skill', [input.pipelineRun.sourceCardId, input.step.outputCardId]);
 }
 
 function terminalFromFiles(skill: CodexPipelineRunSkill): TerminalStatus | null {

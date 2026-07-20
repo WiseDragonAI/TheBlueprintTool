@@ -82,6 +82,10 @@ function runtimeStatus(input: {
     ? input.runtime.voiceCodexExecutionObservations as Record<string, AnyRecord>
     : {};
   const voiceObservation = voiceObservations[voiceKey];
+  const durableIntent = input.card.executionIntent && typeof input.card.executionIntent === 'object'
+    ? input.card.executionIntent as AnyRecord
+    : null;
+  const activeIntent = durableIntent && ['waiting', 'queued', 'running'].includes(text(durableIntent.state)) ? durableIntent : null;
   const queueIndex = input.queuedRuns.findIndex((entry) => {
     const payload = entry.payload && typeof entry.payload === 'object' ? entry.payload as AnyRecord : {};
     const pipelineOwnsExecution = text(entry.id) === queuedPipelineRunId
@@ -103,13 +107,17 @@ function runtimeStatus(input: {
       ? { kind: 'codex-queue', startedAt: text(input.queuedRuns[queueIndex]?.createdAt) }
       : processAttached
         ? { kind: 'codex-process', runId, executionId: text(live.executionId) }
-        : null;
+        : activeIntent
+          ? { kind: 'execution-intent', intentId: text(activeIntent.id), state: text(activeIntent.state), startedAt: text(activeIntent.updatedAt) }
+          : null;
   const status = observation?.kind === 'voice-transcription'
     ? 'transcribing-before-launch'
     : observation?.kind === 'codex-queue'
       ? 'pending'
       : observation?.kind === 'codex-process'
         ? 'running'
+        : observation?.kind === 'execution-intent'
+          ? text(observation.state)
         : 'unknown';
   const stderrFile = text(live.stderrFile);
   const stdoutFile = text(live.stdoutFile);
@@ -191,11 +199,13 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
     queuedRuns: input.queuedRuns,
   });
   const executionObservation = run.observation && typeof run.observation === 'object' ? run.observation as AnyRecord : null;
-  const processing = executionObservation?.kind === 'codex-process';
-  const queued = executionObservation?.kind === 'codex-queue';
+  const intentState = executionObservation?.kind === 'execution-intent' ? text(executionObservation.state) : '';
+  const processing = executionObservation?.kind === 'codex-process' || intentState === 'running';
+  const queued = executionObservation?.kind === 'codex-queue' || intentState === 'queued';
+  const waiting = intentState === 'waiting';
   const transcribingBeforeLaunch = executionObservation?.kind === 'voice-transcription';
   const cardStatus = text(input.card.status) || 'todo';
-  const status = processing || queued || transcribingBeforeLaunch ? 'task-execution' : cardStatus === 'backlog' ? 'task-backlog' : cardStatus === 'done' ? 'task-complete' : 'task-waiting';
+  const status = processing || queued || waiting || transcribingBeforeLaunch ? 'task-execution' : cardStatus === 'backlog' ? 'task-backlog' : cardStatus === 'done' ? 'task-complete' : 'task-waiting';
   const labels = [...new Set(jsonLabels.map((label) => label.trim()).filter((label) => label && label !== 'master-task' && label !== 'subtask'))];
   const subtasks: AnyRecord[] = [];
   for (const relationship of relationships) {
@@ -225,7 +235,7 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
     zoneId: zoneIdFor(input.card, input.ledger), status,
     codexRunId: run.runId, codexPipelineRunId: run.pipelineRunId, codexStatus: run.status,
     executionOwnerCardId: executionObservation ? run.ownerCardId : '', executionOwnerKind: executionObservation ? run.ownerKind : '',
-    executionStatus: processing ? 'running' : queued ? 'pending' : transcribingBeforeLaunch ? 'transcribing-before-launch' : '',
+    executionStatus: waiting ? 'waiting' : processing ? 'running' : queued ? 'queued' : transcribingBeforeLaunch ? 'transcribing-before-launch' : '',
     executionObservation,
     transcribingBeforeLaunch,
     codexProcessing: processing, codexQueued: queued, codexQueuePosition: queued ? run.queuePosition : null,
