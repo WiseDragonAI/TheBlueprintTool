@@ -2,9 +2,14 @@
  * WHAT: Renders Senior's operator questionnaire as a native, reusable card widget.
  * WHY: Pipeline analysis must stop at a durable human gate without sending unanswered questions downstream.
  */
-import type { CardQuestionnaire, CardQuestionnaires, CardQuestionResponseStatus } from '../../../../../shared/schemas/questionnaire-types.js';
+import type { CardQuestionnaire, CardQuestionnaires, CardQuestionResponseStatus, CardQuestionVoiceNote } from '../../../../../shared/schemas/questionnaire-types.js';
 import { state } from '../../state.js';
+import { cancelVoiceRecording } from '../../voice/controller/cancel-voice-recording.js';
+import { startVoiceRecording } from '../../voice/controller/start-voice-recording.js';
+import { stopVoiceRecording } from '../../voice/controller/stop-voice-recording.js';
+import { controlDock } from '../../voice/component/control-dock.js';
 import { commitActiveLedgerMutation } from '../effect/commit-active-ledger-mutation.js';
+import { transcribeQuestionnaireVoice } from '../effect/transcribe-questionnaire-voice.js';
 import { normalizeCardQuestionnaires } from '../helper/card-questionnaire-state.js';
 import type { LedgerMarkdownBlock } from '../helper/parse-ledger-card-markdown.js';
 
@@ -20,6 +25,7 @@ type QuestionRendererOptions = {
 };
 
 const choiceKeys = ['W', 'E', 'S', 'D'];
+const microphoneIcon = '<svg class="terminal-button__icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4M9 21h6"/></svg>';
 
 function cloneQuestionnaire(questionnaire: CardQuestionnaire): CardQuestionnaire {
   return JSON.parse(JSON.stringify(questionnaire)) as CardQuestionnaire;
@@ -101,6 +107,7 @@ export function renderLedgerCardQuestions(block: QuestionBlock, options: Questio
   let notice = '';
   let persistSequence = 0;
   let saving = false;
+  let voiceBusy = false;
 
   async function persist(next: CardQuestionnaire, failureMessage: string): Promise<void> {
     if (saving) return;
@@ -151,7 +158,7 @@ export function renderLedgerCardQuestions(block: QuestionBlock, options: Questio
   function render(): void {
     const question = questionnaire.questions.find((entry) => entry.id === activeQuestionId) ?? questionnaire.questions[0];
     root.replaceChildren();
-    root.dataset.state = saving ? 'saving' : 'ready';
+    root.dataset.state = saving ? 'saving' : voiceBusy ? 'transcribing' : 'ready';
     if (!question) {
       const empty = document.createElement('p');
       empty.className = 'questionnaire-empty';
@@ -235,6 +242,88 @@ export function renderLedgerCardQuestions(block: QuestionBlock, options: Questio
     textarea.rows = 4;
     textarea.disabled = saving;
     textarea.oninput = () => { drafts[question.id] = textarea.value; };
+
+    const voiceTools = document.createElement('div');
+    voiceTools.className = 'questionnaire-voice-tools';
+    const record = document.createElement('button');
+    record.type = 'button';
+    record.className = 'terminal-button terminal-button--send terminal-button--stack questionnaire-record';
+    record.setAttribute('aria-label', 'Record a voice answer');
+    record.innerHTML = `${microphoneIcon}<span class="terminal-button__label">VOICE ANSWER</span>`;
+    record.disabled = saving || voiceBusy;
+    const voice = document.createElement('section');
+    voice.className = 'questionnaire-voice-capture agent-chat';
+    voice.hidden = true;
+    voice.innerHTML = `<div class="voice-panel"><span class="voice-status" aria-live="polite"></span>${controlDock()}</div>`;
+    voice.querySelector('.voice-action--run')?.remove();
+    voice.querySelector('.voice-action--pipeline')?.remove();
+    record.onclick = async () => {
+      voice.hidden = false;
+      record.disabled = true;
+      await startVoiceRecording({ surfaceRoot: voice });
+      if (!state.voice.recording) record.disabled = false;
+    };
+    voice.querySelector('[data-action="voice-cancel"]')?.addEventListener('click', (event) => {
+      event.stopPropagation();
+      cancelVoiceRecording();
+      voice.hidden = true;
+      record.disabled = false;
+    });
+    voice.querySelector('[data-action="voice-stop"]')?.addEventListener('click', (event) => {
+      event.stopPropagation();
+      voiceBusy = true;
+      record.disabled = true;
+      void stopVoiceRecording({
+        onCaptured: async (audio) => {
+          const result = await transcribeQuestionnaireVoice(audio);
+          const timestamp = new Date().toISOString();
+          if (!result.voiceFileRef) {
+            voiceBusy = false;
+            notice = result.error ?? 'The voice answer could not be saved.';
+            render();
+            return false;
+          }
+          const voiceNote: CardQuestionVoiceNote = {
+            id: globalThis.crypto?.randomUUID?.() ?? `voice-${Date.now()}`,
+            voiceFileRef: result.voiceFileRef,
+            transcript: result.transcript,
+            status: result.ok ? 'transcribed' : 'failed',
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            ...(result.error ? { error: result.error } : {}),
+          };
+          const next = cloneQuestionnaire(questionnaire);
+          next.voiceNotes = {
+            ...(next.voiceNotes ?? {}),
+            [question.id]: [...(next.voiceNotes?.[question.id] ?? []), voiceNote],
+          };
+          if (result.transcript) {
+            const currentDraft = drafts[question.id] ?? currentResponse?.customAnswer ?? '';
+            drafts[question.id] = [currentDraft.trim(), result.transcript].filter(Boolean).join('\n\n');
+          }
+          voiceBusy = false;
+          notice = result.ok ? 'Voice answer transcribed and saved to this question.' : 'The audio was saved to this question, but transcription failed.';
+          await persist(next, 'The voice answer could not be attached to this question.');
+          return result.ok;
+        },
+      });
+    });
+    voiceTools.append(record, voice);
+
+    const voiceNotes = questionnaire.voiceNotes?.[question.id] ?? [];
+    const voiceHistory = document.createElement('div');
+    voiceHistory.className = 'questionnaire-voice-history';
+    voiceNotes.forEach((voiceNote, index) => {
+      const item = document.createElement('article');
+      item.className = 'questionnaire-voice-note';
+      item.dataset.status = voiceNote.status;
+      const label = document.createElement('strong');
+      label.textContent = `VOICE ${String(index + 1).padStart(2, '0')}`;
+      const transcript = document.createElement('p');
+      transcript.textContent = voiceNote.transcript || voiceNote.error || 'Transcription unavailable.';
+      item.append(label, transcript);
+      voiceHistory.append(item);
+    });
     const actions = document.createElement('div');
     actions.className = 'questionnaire-actions';
     const irrelevant = actionButton('IRRELEVANT', 'is-irrelevant', 'X');
@@ -262,7 +351,9 @@ export function renderLedgerCardQuestions(block: QuestionBlock, options: Questio
       notice = 'Question and answer copied.';
       render();
     };
-    main.append(card, choices, textarea, actions, copy);
+    main.append(card, choices, textarea, voiceTools);
+    if (voiceNotes.length) main.append(voiceHistory);
+    main.append(actions, copy);
 
     const queue = document.createElement('aside');
     queue.className = 'questionnaire-queue';
@@ -301,6 +392,7 @@ export function renderLedgerCardQuestions(block: QuestionBlock, options: Questio
 
   root.onkeydown = (event) => {
     if (saving) return;
+    if (state.voice.recording && state.voice.surfaceRoot instanceof HTMLElement && root.contains(state.voice.surfaceRoot)) return;
     const target = event.target as HTMLElement;
     const editing = target.matches('textarea, input, [contenteditable="true"]');
     if (editing) {

@@ -42,6 +42,33 @@ test('persists a valid card questionnaire through the ledger mutation contract',
   }
 });
 
+test('persists question-owned voice metadata without creating a thread note', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-questionnaire-'));
+  try {
+    const withVoice = JSON.parse(JSON.stringify(questionnaires));
+    withVoice.clarification.voiceNotes = { scope: [{
+      id: 'voice-a',
+      voiceFileRef: join(workspace, '.decision-os', 'voice-uploads', 'voice-a.wav'),
+      transcript: 'Keep this answer with the question.',
+      status: 'transcribed',
+      createdAt: '2026-07-20T00:00:00.000Z',
+      updatedAt: '2026-07-20T00:00:01.000Z',
+    }] };
+    const ledger: { cards: Array<Record<string, unknown>>; notes?: Record<string, Array<Record<string, unknown>>> } = { cards: [{ id: 'card-a' }] };
+    const result = applyLedgerMutation({
+      decisionOsRoot: join(workspace, '.decision-os'),
+      ledgerPath: join(workspace, '.decision-os', 'tasks.json'),
+      ledger,
+      mutation: { action: 'patch-card', cardPatch: { id: 'card-a', questionnaires: withVoice } },
+    });
+    assert.equal(result.error, undefined);
+    assert.equal(ledger.notes, undefined);
+    assert.deepEqual((ledger.cards[0].questionnaires as typeof withVoice).clarification.voiceNotes, withVoice.clarification.voiceNotes);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
 test('rejects questionnaire state that does not contain exactly four choices', () => {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-questionnaire-'));
   try {
@@ -77,6 +104,33 @@ test('rejects carrying prior answers into a changed context revision', () => {
     });
     assert.equal(result.error?.statusCode, 400);
     assert.equal((ledger.cards[0].questionnaires as typeof previous).clarification.contextRevision, 'sha256:context-a');
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('rejects carrying voice notes into a changed context revision', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-questionnaire-'));
+  try {
+    const previous = JSON.parse(JSON.stringify(questionnaires));
+    previous.clarification.voiceNotes = { scope: [{
+      id: 'voice-a',
+      voiceFileRef: '/workspace/.decision-os/voice-uploads/voice-a.wav',
+      transcript: 'Context-bound answer.',
+      status: 'transcribed',
+      createdAt: '2026-07-20T00:00:00.000Z',
+      updatedAt: '2026-07-20T00:00:01.000Z',
+    }] };
+    const ledger: { cards: Array<Record<string, unknown>> } = { cards: [{ id: 'card-a', questionnaires: previous }] };
+    const revised = JSON.parse(JSON.stringify(previous));
+    revised.clarification.contextRevision = 'sha256:context-b';
+    const result = applyLedgerMutation({
+      decisionOsRoot: join(workspace, '.decision-os'),
+      ledgerPath: join(workspace, '.decision-os', 'tasks.json'),
+      ledger,
+      mutation: { action: 'patch-card', cardPatch: { id: 'card-a', questionnaires: revised } },
+    });
+    assert.equal(result.error?.statusCode, 400);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }

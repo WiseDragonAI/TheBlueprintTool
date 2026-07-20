@@ -23,12 +23,23 @@ export type CardQuestionResponse = {
   updatedAt: string;
 };
 
+export type CardQuestionVoiceNote = {
+  id: string;
+  voiceFileRef: string;
+  transcript: string;
+  status: 'transcribed' | 'failed';
+  createdAt: string;
+  updatedAt: string;
+  error?: string;
+};
+
 export type CardQuestionnaire = {
   version: 1;
   contextRevision: string;
   questions: CardQuestion[];
   currentQuestionId?: string;
   responses: Record<string, CardQuestionResponse>;
+  voiceNotes?: Record<string, CardQuestionVoiceNote[]>;
 };
 
 export type CardQuestionnaires = Record<string, CardQuestionnaire>;
