@@ -12,6 +12,7 @@ test('transcribing voice status hides recorder and keeps text composer visible',
   const previousWindow = globalThis.window;
   const status = { textContent: '' };
   const meter = { style: { height: '' } };
+  const decoyMeter = { style: { height: 'unchanged' } };
   const timer = { textContent: '' };
   const recorder = { hidden: false };
   const composer = { style: { display: '' } };
@@ -23,8 +24,15 @@ test('transcribing voice status hides recorder and keeps text composer visible',
       }
     },
     querySelector(selector: string) {
+      if (selector === '.voice-status') return status;
+      if (selector === '.meter-fill' || selector === '.voice-meter-value') return meter;
+      if (selector === '.wave-timer') return timer;
+      if (selector === '.voice-recorder') return recorder;
       if (selector === '.wave-area-path' || selector === '.wave-core-path') return { setAttribute() {} };
       return null;
+    },
+    querySelectorAll(selector: string) {
+      return selector === '[data-action="voice-toggle"]' ? [voiceButton] : [];
     }
   };
   const voiceButton = {
@@ -34,7 +42,7 @@ test('transcribing voice status hides recorder and keeps text composer visible',
   (globalThis as unknown as { document: unknown }).document = {
     querySelector(selector: string) {
       if (selector === '.voice-status') return status;
-      if (selector === '.meter-fill' || selector === '.voice-meter-value') return meter;
+      if (selector === '.meter-fill' || selector === '.voice-meter-value') return decoyMeter;
       if (selector === '.wave-timer') return timer;
       if (selector === '.voice-panel') return panel;
       if (selector === '.voice-recorder') return recorder;
@@ -54,6 +62,7 @@ test('transcribing voice status hides recorder and keeps text composer visible',
     assert.equal(status.textContent, 'transcribing');
     assert.equal(panel.classList.values.get('busy'), true);
     assert.equal(voiceButton.disabled, false);
+    assert.equal(decoyMeter.style.height, 'unchanged');
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
     (globalThis as unknown as { window: unknown }).window = previousWindow;

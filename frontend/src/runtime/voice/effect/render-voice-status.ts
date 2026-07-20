@@ -14,11 +14,11 @@ export function renderVoiceStatus(): void {
   const surface = typeof HTMLElement !== 'undefined' && state.voice.surfaceRoot instanceof HTMLElement && state.voice.surfaceRoot.isConnected
     ? state.voice.surfaceRoot
     : document;
-  const status = surface.querySelector('.voice-status') as HTMLElement | null;
-  const meter = (surface.querySelector('.meter-fill') ?? surface.querySelector('.voice-meter-value')) as HTMLElement | null;
-  const timer = surface.querySelector('.wave-timer') as HTMLElement | null;
   const panel = surface.querySelector('.voice-panel') as HTMLElement | null;
-  const recorder = surface.querySelector('.voice-recorder') as HTMLElement | null;
+  const status = panel?.querySelector('.voice-status') as HTMLElement | null;
+  const meter = (panel?.querySelector('.meter-fill') ?? panel?.querySelector('.voice-meter-value')) as HTMLElement | null;
+  const timer = panel?.querySelector('.wave-timer') as HTMLElement | null;
+  const recorder = panel?.querySelector('.voice-recorder') as HTMLElement | null;
   if (!status || !meter || !panel) return;
   const level = Math.max(0, Math.min(1, Number(state.voice.level ?? 0)));
   const waveSamples = Array.isArray(state.voice.waveSamples) ? state.voice.waveSamples : [];

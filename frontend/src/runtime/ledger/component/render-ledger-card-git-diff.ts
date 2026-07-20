@@ -6,6 +6,7 @@ import { state } from '../../state.js';
 import { projectScopedRequestPath } from '../../project/helper/project-request-scope.js';
 import { voiceActionIcon } from '../../voice/component/control-dock.js';
 import { waveSvg } from '../../voice/component/wave-svg.js';
+import { paintVoiceWaveLevel } from '../../voice/effect/paint-voice-wave-level.js';
 import { commitActiveLedgerMutation } from '../effect/commit-active-ledger-mutation.js';
 import { startGitReviewVoiceCapture, type GitReviewVoiceCapture } from '../helper/git-review-voice-capture.js';
 import type { LedgerMarkdownBlock } from '../helper/parse-ledger-card-markdown.js';
@@ -255,6 +256,7 @@ export function renderLedgerCardGitDiff(block: Extract<LedgerMarkdownBlock, { ki
       voiceStatus.textContent = '';
       voiceTimer.textContent = '00:00';
       voiceMeter.style.height = '18%';
+      paintVoiceWaveLevel(voice, 0, false, [], 0);
       setReviewControlsDisabled(false);
     };
 
@@ -264,9 +266,10 @@ export function renderLedgerCardGitDiff(block: Extract<LedgerMarkdownBlock, { ki
       voiceStatus.textContent = 'Recording this Git review only';
       setReviewControlsDisabled(true);
       try {
-        voiceCapture = await startGitReviewVoiceCapture(voiceOwner, ({ durationMs, level }) => {
+        voiceCapture = await startGitReviewVoiceCapture(voiceOwner, ({ durationMs, level, samples }) => {
           voiceTimer.textContent = formatRecordingDuration(durationMs);
           voiceMeter.style.height = `${Math.round(18 + level * 74)}%`;
+          paintVoiceWaveLevel(voice, level, true, samples, level);
         });
       } catch (error) {
         voiceStatus.textContent = error instanceof Error ? error.message : String(error);

@@ -4,7 +4,7 @@ import { acquireVoiceCaptureOwnership, releaseVoiceCaptureOwnership, type VoiceC
  * WHAT: Captures audio for one Git review widget with instance-local browser state.
  * WHY: Git review recording must not read or mutate the singleton thread voice recorder.
  */
-export type GitReviewVoiceFrame = { durationMs: number; level: number };
+export type GitReviewVoiceFrame = { durationMs: number; level: number; samples: readonly number[] };
 
 export type GitReviewVoiceCapture = {
   stop(): Promise<Blob>;
@@ -41,11 +41,23 @@ export async function startGitReviewVoiceCapture(owner: VoiceCaptureOwner, onFra
   recorder.start();
   const startedAt = Date.now();
   const samples = new Uint8Array(new ArrayBuffer(analyser.fftSize));
+  const waveSamples: number[] = [];
   let animationFrameId = 0;
   let settled = false;
+  let pendingPeak = 0;
+  let lastSampleAt = 0;
 
   const frame = () => {
-    onFrame({ durationMs: Date.now() - startedAt, level: audioLevel(analyser, samples) });
+    const now = Date.now();
+    const level = audioLevel(analyser, samples);
+    pendingPeak = Math.max(pendingPeak, level);
+    if (!lastSampleAt || now - lastSampleAt >= 32) {
+      waveSamples.push(pendingPeak);
+      if (waveSamples.length > 340) waveSamples.splice(0, waveSamples.length - 340);
+      pendingPeak = 0;
+      lastSampleAt = now;
+    }
+    onFrame({ durationMs: now - startedAt, level, samples: waveSamples });
     animationFrameId = requestAnimationFrame(frame);
   };
   animationFrameId = requestAnimationFrame(frame);
