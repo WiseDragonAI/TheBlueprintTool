@@ -8,7 +8,7 @@ import { normalizeVoiceLevels } from '../helper/normalize-voice-levels.js';
 
 const maxVisibleSamples = 340;
 
-export function paintVoiceWaveLevel(root: ParentNode, level: number, active: boolean, recordingSamples: number[] = [], displayLevel?: number): void {
+export function paintVoiceWaveLevel(root: ParentNode, level: number, active: boolean, recordingSamples: readonly number[] = [], displayLevel?: number): void {
   if (typeof root.querySelectorAll !== 'function') return;
   const frameLevel = active ? Math.max(0, Math.min(1, level)) : 0;
   const normalized = normalizeVoiceLevels(recordingSamples.length ? recordingSamples : [frameLevel], frameLevel);

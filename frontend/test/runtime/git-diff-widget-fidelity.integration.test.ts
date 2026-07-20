@@ -13,12 +13,22 @@ test('Git diff card widget uses shared controls without entering the thread voic
   assert.match(widget, /terminal-button--send terminal-button--action/);
   assert.doesNotMatch(widget, /git-diff-button/);
   assert.match(widget, /startGitReviewVoiceCapture/);
+  assert.match(widget, /paintVoiceWaveLevel\(voice, level, true, samples, level\)/);
   assert.match(widget, /\/api\/git-review\/voice/);
   assert.doesNotMatch(widget, /startVoiceRecording|stopVoiceRecording|cancelVoiceRecording|state\.voice/);
   assert.doesNotMatch(widget, /class="voice-panel"|class="voice-status"/);
   assert.doesNotMatch(widget, /key:\s*'X'|key === 'x'|terminal-button__key">X/);
   assert.match(recording, /VoiceRecordingContext/);
   assert.match(recording, /surfaceRoot/);
+});
+
+test('thread voice rendering resolves every dynamic control from its selected voice panel', () => {
+  const renderer = source('src/runtime/voice/effect/render-voice-status.ts');
+
+  assert.match(renderer, /const panel = surface\.querySelector\('\.voice-panel'\)/);
+  assert.match(renderer, /panel\?\.querySelector\('\.meter-fill'\)/);
+  assert.match(renderer, /panel\?\.querySelector\('\.wave-timer'\)/);
+  assert.doesNotMatch(renderer, /surface\.querySelector\('\.meter-fill'\)/);
 });
 
 test('Git review microphone ownership blocks the global X command without opening the thread', () => {

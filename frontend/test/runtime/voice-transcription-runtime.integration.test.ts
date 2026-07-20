@@ -279,7 +279,15 @@ test('request-transcription signals durable persistence before delayed upload se
   const previousCustomEvent = globalThis.CustomEvent;
   const status = { textContent: '' };
   const meter = { style: { transform: '' } };
-  const panel = { classList: { toggle() {} } };
+  const panel = {
+    classList: { toggle() {} },
+    querySelector(selector: string) {
+      if (selector === '.voice-status') return status;
+      if (selector === '.voice-meter-value') return meter;
+      return null;
+    },
+    querySelectorAll() { return []; }
+  };
   const shell = { classList: { toggle() {} } };
   const threadTarget = { textContent: '' };
   const noteList = { className: '', replaceChildren() {}, append() {} };
@@ -461,7 +469,15 @@ test('request-transcription keeps optimistic upload status separate from provide
   const previousCustomEvent = globalThis.CustomEvent;
   const status = { textContent: '' };
   const meter = { style: { transform: '' } };
-  const panel = { classList: { toggle() {} } };
+  const panel = {
+    classList: { toggle() {} },
+    querySelector(selector: string) {
+      if (selector === '.voice-status') return status;
+      if (selector === '.voice-meter-value') return meter;
+      return null;
+    },
+    querySelectorAll() { return []; }
+  };
   const shell = { classList: { toggle() {} } };
   const threadTarget = { textContent: '' };
   const noteList = { className: '', replaceChildren() {}, append() {} };
@@ -532,7 +548,17 @@ test('request-transcription updates the captured thread after selection changes'
   const previousCustomEvent = globalThis.CustomEvent;
   const status = { textContent: '' };
   const meter = { style: { transform: '' } };
-  const panel = { hidden: false, classList: { toggle() {} }, style: { setProperty() {} } };
+  const panel = {
+    hidden: false,
+    classList: { toggle() {} },
+    style: { setProperty() {} },
+    querySelector(selector: string) {
+      if (selector === '.voice-status') return status;
+      if (selector === '.voice-meter-value') return meter;
+      return null;
+    },
+    querySelectorAll() { return []; }
+  };
   const shell = { classList: { toggle() {} } };
   const threadTarget = { textContent: '', replaceChildren() {}, append() {} };
   const noteList = { className: '', replaceChildren() {}, append() {} };

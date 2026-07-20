@@ -14,6 +14,7 @@ test('Git review capture leaves the singleton thread voice state untouched', asy
   };
   const threadVoiceState = { recording: false, transcriptionStatus: 'idle', marker: 'thread-owned' };
   state.voice = threadVoiceState;
+  let animationFrame: FrameRequestCallback | undefined;
 
   class FakeRecorder extends EventTarget {
     state = 'inactive';
@@ -30,7 +31,7 @@ test('Git review capture leaves the singleton thread voice state untouched', asy
   const track = { stop() {} };
   class FakeAudioContext {
     state = 'running';
-    createAnalyser() { return { fftSize: 128, getByteTimeDomainData(samples: Uint8Array) { samples.fill(128); } }; }
+    createAnalyser() { return { fftSize: 128, getByteTimeDomainData(samples: Uint8Array) { samples.fill(160); } }; }
     createMediaStreamSource() { return { connect() {} }; }
     async resume() {}
     async close() {}
@@ -40,14 +41,18 @@ test('Git review capture leaves the singleton thread voice state untouched', asy
     navigator: { configurable: true, value: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [track] }) } } },
     AudioContext: { configurable: true, value: FakeAudioContext },
     MediaRecorder: { configurable: true, value: FakeRecorder },
-    requestAnimationFrame: { configurable: true, value: () => 1 },
+    requestAnimationFrame: { configurable: true, value: (callback: FrameRequestCallback) => { animationFrame = callback; return 1; } },
     cancelAnimationFrame: { configurable: true, value: () => undefined },
   });
 
   try {
     const owner = 'git-review:card-a:file-a' as const;
-    const capture = await startGitReviewVoiceCapture(owner, () => undefined);
+    const frames: Array<{ level: number; samples: readonly number[] }> = [];
+    const capture = await startGitReviewVoiceCapture(owner, (frame) => frames.push(frame));
+    animationFrame?.(performance.now());
     assert.equal(state.voice, threadVoiceState);
+    assert.ok(frames[0]?.level > 0);
+    assert.ok((frames[0]?.samples.length ?? 0) > 0);
     assert.equal(currentVoiceCaptureOwner(), owner);
     assert.equal(acquireVoiceCaptureOwnership('thread'), false);
     const audio = await capture.stop();
