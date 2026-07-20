@@ -21,6 +21,7 @@ import { createProjectRequest, loadProjectDirectoryRequest } from './project-cre
 import { installProjectRequestScope, projectScopedRequestPath } from '/src/runtime/project/helper/project-request-scope.js';
 import { projectFilterChipPresentation, projectFilterGroups, projectFilterIncludes } from './project-filter-chip.js';
 import { acceptedRunOwnsRoute, captureRouteSnapshot, cardPresentationIdentity, federationEventOwnsCard, sameRouteSnapshot } from './navigation-ownership.js';
+import { completedTaskLabels, filterCompletedTasks } from './completed-tasks.js';
 
 installProjectRequestScope();
 
@@ -40,6 +41,9 @@ const state = {
   controlTab: 'queue',
   projectFilter: 'All',
   controlFilter: 'All',
+  doneQuery: '',
+  doneProjectFilter: 'All',
+  doneLabelFilter: 'All',
   masterTaskCompletionPipelineId: '',
   codexSettingsLoaded: false,
 };
@@ -52,6 +56,7 @@ const elements = Object.fromEntries([
   'zone-list', 'zone-view', 'zone-title', 'zone-summary', 'card-search', 'card-list',
   'no-results', 'card-view', 'card-title', 'card-body', 'control-room-view', 'control-project-filters', 'control-filters',
   'control-task-list', 'control-empty', 'codex-settings-limit', 'codex-settings-voice-pipeline', 'codex-settings-master-task-completion-pipeline', 'codex-settings-message',
+  'done-view', 'done-summary', 'done-search', 'done-project-filters', 'done-label-filters', 'done-task-list', 'done-empty',
   'federation-connection-status', 'federation-state-duration', 'federation-attempt-timeout', 'federation-last-connection',
   'federation-last-issue', 'federation-peer-list', 'federation-settings-message'
 ].map((id) => [id, document.getElementById(id)]));
@@ -222,7 +227,7 @@ function setResourceProject(projectId) {
 
 function setView(name) {
   if (name !== 'card-view' && name !== 'loading-view' && !closeCardDetail()) return false;
-  for (const id of ['loading-view', 'error-view', 'empty-view', 'projects-view', 'project-detail-view', 'settings-view', 'overview-view', 'control-room-view', 'ledger-view', 'zone-view', 'card-view']) {
+  for (const id of ['loading-view', 'error-view', 'empty-view', 'projects-view', 'project-detail-view', 'settings-view', 'overview-view', 'control-room-view', 'done-view', 'ledger-view', 'zone-view', 'card-view']) {
     elements[id].hidden = id !== name;
   }
   if (name !== 'card-view' && name !== 'loading-view') presentedCardIdentity = '';
@@ -334,6 +339,10 @@ function commitRouteView() {
   if (location.pathname === '/' && state.controlRoom) {
     state.controlTab = parseControlRoomRoute(location.href).tab;
     renderControlRoom();
+    return true;
+  }
+  if (location.pathname === '/done' && state.controlRoom) {
+    renderDone();
     return true;
   }
   if (isProjectCardPath(location.pathname)) {
@@ -735,6 +744,7 @@ function renderLedgerLinks() {
   const route = location.pathname === '/' ? 'control-room' : location.pathname.split('/').filter(Boolean)[0] ?? '';
   const icons = {
     dashboard: '<path d="M4 13h6V4H4v9Zm10 7h6V11h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z"/>',
+    check: '<path d="M5 12.5 9.5 17 19 7.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
     folder: '<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H10l2 2h7.5A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5v-11Z"/>',
     book: '<path d="M5 4h6a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Zm14 0h-2a3 3 0 0 0-3 3v13h2a3 3 0 0 0 3-3V4Z"/>',
     flow: '<path d="M5 5h4v4H5V5Zm10 10h4v4h-4v-4ZM7 9v3a5 5 0 0 0 5 5h3M9 7h6a2 2 0 0 1 2 2v6"/>',
@@ -762,6 +772,7 @@ function renderLedgerLinks() {
   };
   elements['ledger-links'].replaceChildren(
     destination('Control room', controlRoomPath(state.controlTab), 'dashboard', 'control-room'),
+    destination('Done', '/done', 'check', 'done'),
     destination('Projects', projectPath(), 'folder', 'projects'),
     destination('Ledgers', '/ledgers', 'book', 'ledgers'),
     destination('Pipelines', '/pipelines', 'flow', 'pipelines', 'nav-pipelines-button'),
@@ -1353,6 +1364,8 @@ function taskRow(task, tab, index) {
   }
   const age = task.status === 'task-backlog'
     ? 'backlog'
+    : task.status === 'task-complete'
+      ? 'done'
     : task.transcribingBeforeLaunch
       ? waitingAge(task.waitingSince).replace(/ waiting$/, ' transcribing')
       : task.status === 'task-execution'
@@ -1373,6 +1386,18 @@ function taskRow(task, tab, index) {
     replica.title = task.state?.message || '';
     if (taskState === 'synchronizing') replica.setAttribute('aria-live', 'polite');
     summary.querySelector('.task-copy').append(replica);
+  }
+  const labels = Array.isArray(task.labels) ? task.labels : [];
+  if (labels.length > 0) {
+    const labelList = document.createElement('span');
+    labelList.className = 'task-labels';
+    for (const value of labels) {
+      const label = document.createElement('span');
+      label.className = 'task-label';
+      label.textContent = value;
+      labelList.append(label);
+    }
+    summary.querySelector('.task-copy').append(labelList);
   }
   const nextSubtask = !executing ? summary.querySelector('.task-next') : null;
   if (nextSubtask) nextSubtask.textContent = `Next: ${task.nextSubtask.title}`;
@@ -1441,6 +1466,31 @@ function restoreControlRoomColumnScroll() {
   });
 }
 
+function projectFilterButton(project, selected, onSelect) {
+  const presentation = projectFilterChipPresentation(project);
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = `project-filter-chip${project.id === 'All' ? ' all-projects-filter' : ''}`;
+  button.textContent = presentation.label;
+  button.title = project.id === 'All'
+    ? project.name
+    : `${project.name} owned by ${project.projects.map(projectOwnerLabel).join(', ')}`;
+  button.disabled = project.online === false;
+  button.setAttribute('aria-pressed', String(project.id === selected));
+  button.style.setProperty('--project-color', project.color);
+  button.style.setProperty('--project-foreground', presentation.foreground);
+  if (presentation.showRemoteMarker) {
+    const remoteIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    remoteIcon.classList.add('project-filter-remote-icon');
+    remoteIcon.setAttribute('aria-hidden', 'true');
+    remoteIcon.setAttribute('viewBox', '0 0 16 16');
+    remoteIcon.innerHTML = '<path d="M5.5 3.5h-2v9h9v-2M8 3.5h4.5V8M12 4 7 9" />';
+    button.append(remoteIcon);
+  }
+  button.addEventListener('click', () => onSelect(project.id));
+  return button;
+}
+
 function renderControlRoom() {
   captureControlRoomColumnScroll();
   destroyQueueSortables();
@@ -1450,30 +1500,7 @@ function renderControlRoom() {
   const projectFilters = [{ id: 'All', name: 'All projects', color: '#20242b', projects: state.projects }, ...projectFilterGroups(state.projects)];
   if (!projectFilters.some((project) => project.id === state.projectFilter)) state.projectFilter = 'All';
   const showProjectFilters = state.projectFilter === 'All';
-  const projectButtons = projectFilters.map((project) => {
-    const presentation = projectFilterChipPresentation(project);
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = `project-filter-chip${project.id === 'All' ? ' all-projects-filter' : ''}`;
-    button.textContent = presentation.label;
-    button.title = project.id === 'All'
-      ? project.name
-      : `${project.name} owned by ${project.projects.map(projectOwnerLabel).join(', ')}`;
-    button.disabled = project.online === false;
-    button.setAttribute('aria-pressed', String(project.id === state.projectFilter));
-    button.style.setProperty('--project-color', project.color);
-    button.style.setProperty('--project-foreground', presentation.foreground);
-    if (presentation.showRemoteMarker) {
-      const remoteIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      remoteIcon.classList.add('project-filter-remote-icon');
-      remoteIcon.setAttribute('aria-hidden', 'true');
-      remoteIcon.setAttribute('viewBox', '0 0 16 16');
-      remoteIcon.innerHTML = '<path d="M5.5 3.5h-2v9h9v-2M8 3.5h4.5V8M12 4 7 9" />';
-      button.append(remoteIcon);
-    }
-    button.addEventListener('click', () => selectControlProject(project.id));
-    return button;
-  });
+  const projectButtons = projectFilters.map((project) => projectFilterButton(project, state.projectFilter, selectControlProject));
   elements['control-project-filters'].hidden = !showProjectFilters;
   elements['control-project-filters'].replaceChildren(...(showProjectFilters ? projectButtons : []));
   const scopedLedgers = projectFilters.find((project) => project.id === state.projectFilter)?.ledgers ?? [];
@@ -1548,6 +1575,65 @@ function renderControlRoom() {
   if (anchor && initializedControlRoomColumns.size === 0) window.requestAnimationFrame(() => document.getElementById(anchor)?.scrollIntoView({ block: 'start' }));
 }
 
+function renderDone() {
+  state.activeLedgerId = '';
+  state.activeZoneId = '';
+  renderLedgerLinks();
+  const tasks = state.controlRoom?.done ?? [];
+  const projectFilters = [{ id: 'All', name: 'All projects', color: '#20242b', projects: state.projects, projectIds: [] }, ...projectFilterGroups(state.projects)];
+  if (!projectFilters.some((project) => project.id === state.doneProjectFilter)) state.doneProjectFilter = 'All';
+  const selectedProject = projectFilters.find((project) => project.id === state.doneProjectFilter);
+  const projectScopedTasks = filterCompletedTasks(tasks, { projectIds: selectedProject?.projectIds ?? [] });
+  const labels = completedTaskLabels(projectScopedTasks);
+  if (state.doneLabelFilter !== 'All' && !labels.includes(state.doneLabelFilter)) state.doneLabelFilter = 'All';
+  const visibleTasks = filterCompletedTasks(tasks, {
+    query: state.doneQuery,
+    projectIds: selectedProject?.projectIds ?? [],
+    label: state.doneLabelFilter,
+  });
+  elements['done-project-filters'].replaceChildren(...projectFilters.map((project) => projectFilterButton(project, state.doneProjectFilter, (projectId) => {
+    state.doneProjectFilter = projectId;
+    state.doneLabelFilter = 'All';
+    renderDone();
+  })));
+  const labelFilters = ['All', ...labels].map((label) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'ledger-filter-chip';
+    button.textContent = label === 'All' ? 'All labels' : label;
+    button.setAttribute('aria-pressed', String(label === state.doneLabelFilter));
+    button.addEventListener('click', () => {
+      state.doneLabelFilter = label;
+      renderDone();
+    });
+    return button;
+  });
+  if (state.doneQuery || state.doneProjectFilter !== 'All' || state.doneLabelFilter !== 'All') {
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.className = 'filter-clear-button';
+    clear.textContent = 'Clear';
+    clear.addEventListener('click', () => {
+      state.doneQuery = '';
+      state.doneProjectFilter = 'All';
+      state.doneLabelFilter = 'All';
+      elements['done-search'].value = '';
+      renderDone();
+    });
+    labelFilters.push(clear);
+  }
+  elements['done-label-filters'].replaceChildren(...labelFilters);
+  elements['done-task-list'].replaceChildren(...visibleTasks.map((task, index) => taskRow(task, 'done', index)));
+  elements['done-summary'].textContent = `${visibleTasks.length} of ${tasks.length} completed ${tasks.length === 1 ? 'task' : 'tasks'}`;
+  elements['done-empty'].hidden = visibleTasks.length > 0;
+  elements['done-empty'].textContent = controlRoomHydrating
+    ? 'Synchronizing completed tasks…'
+    : tasks.length === 0 ? 'No completed tasks yet.' : 'No completed tasks match these filters.';
+  elements['done-view'].setAttribute('aria-busy', String(controlRoomHydrating));
+  setView('done-view');
+  document.title = 'Done · Decision OS';
+}
+
 function persistControlRoomScrollAnchor() {
   if (location.pathname !== '/' || elements['control-room-view'].hidden) return;
   window.cancelAnimationFrame(controlRoomScrollFrame);
@@ -1586,7 +1672,10 @@ async function refreshControlRoomFromEvent() {
     return;
   }
   try {
-    if (await loadControlRoom({ deferDuringQueueDrag: true })) renderControlRoom();
+    if (await loadControlRoom({ deferDuringQueueDrag: true })) {
+      if (location.pathname === '/done') renderDone();
+      else renderControlRoom();
+    }
   } catch (cause) {
     console.error('Control Room refresh failed.', cause);
   }
@@ -1604,7 +1693,7 @@ function subscribeControlRoomEvents() {
   const refresh = () => {
     clearTimeout(controlRoomRefreshTimer);
     controlRoomRefreshTimer = window.setTimeout(() => {
-      if (location.pathname !== '/') return;
+      if (location.pathname !== '/' && location.pathname !== '/done') return;
       void refreshControlRoomFromEvent();
     }, 80);
   };
@@ -2323,6 +2412,24 @@ async function loadRoute({ retainView = false } = {}) {
       return;
     }
     if (projectRoute?.view === 'invalid') throw new Error('Project route not found.');
+    if (owner.route.pathname === '/done') {
+      state.resourceProjectId = '';
+      setMobileCodexContext({ projectId: '', ledgerId: '', cardId: '' });
+      state.projectName = 'Decision OS';
+      elements['project-name'].textContent = 'Decision OS';
+      controlRoomHydrating = true;
+      controlRoomHydrationGeneration = owner.generation;
+      renderDone();
+      try {
+        await loadControlRoom({ owner });
+      } finally {
+        if (controlRoomHydrationGeneration === owner.generation) controlRoomHydrating = false;
+      }
+      requireRouteOwnership(owner);
+      renderDone();
+      subscribeControlRoomEvents();
+      return;
+    }
     if (!state.projects.length) {
       state.ledgers = [];
       renderLedgerLinks();
@@ -2456,8 +2563,8 @@ async function loadRoute({ retainView = false } = {}) {
         replicaRetryTimer = window.setTimeout(() => void loadRoute({ retainView: true }), 1500);
         return;
       }
-      if (location.pathname === '/' && state.controlRoom) {
-        console.error('Control Room refresh failed.', error);
+          if ((location.pathname === '/' || location.pathname === '/done') && state.controlRoom) {
+            console.error('Task projection refresh failed.', error);
         return;
       }
     }
@@ -2526,7 +2633,7 @@ document.querySelector('.federation-settings-disconnect').addEventListener('clic
 document.querySelector('.back-to-ledger-button').addEventListener('click', () => navigate(ledgerPath(state.activeLedgerId)));
 document.querySelector('.back-to-zone-button').addEventListener('click', (event) => {
   const controlRoomDestination = event.currentTarget.dataset.destination === 'control-room';
-  const destination = controlRoomDestination ? controlRoomPath(state.controlTab) : zonePath(state.activeLedgerId, state.activeZoneId);
+  const destination = controlRoomDestination ? completionReturnPath() : zonePath(state.activeLedgerId, state.activeZoneId);
   if (controlRoomDestination) {
     void navigateTaskBack(destination);
     return;
@@ -2571,6 +2678,10 @@ elements['card-search'].addEventListener('input', (event) => {
     const result = await response.json();
     renderCards(Array.isArray(result.matches) ? result.matches : []);
   }, 120);
+});
+elements['done-search'].addEventListener('input', (event) => {
+  state.doneQuery = event.target.value;
+  renderDone();
 });
 window.addEventListener('popstate', () => {
   if (closeCardDetail({ fromHistory: true })) {

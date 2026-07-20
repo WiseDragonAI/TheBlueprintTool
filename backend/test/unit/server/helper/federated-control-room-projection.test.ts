@@ -88,6 +88,27 @@ test('changes the projection fingerprint when retained remote replicas change pr
   assert.equal(offline.backlog[0].status, 'task-backlog', 'retained offline tasks preserve their persisted workflow status');
 });
 
+test('preserves completed-task labels through federation authority selection', () => {
+  const task = { cardId: 'card-done', projectId: 'project-1', ledgerId: 'tasks', title: 'Done', cardStatus: 'done', status: 'task-complete', labels: ['release'] };
+  const result = federatedControlRoomProjection({
+    localProjection: {
+      fingerprint: 'local', projects: [{ id: 'project-1', name: 'Project' }], queue: [], exec: [], backlog: [], done: [task], allTasks: [task], diagnostics: [], ledgers: ['Tasks'],
+    },
+    localOwner: { nodeId: 'workstation', nodeLabel: 'Workstation', remote: false },
+    remoteProjections: [{
+      owner: { nodeId: 'mobile', nodeLabel: 'Mobile', remote: true },
+      projection: {
+        fingerprint: 'remote', projects: [{ id: 'project-1', name: 'Project' }], queue: [], exec: [], backlog: [], done: [task], allTasks: [task], diagnostics: [], ledgers: ['Tasks'],
+      },
+    }],
+    diagnostics: [],
+  }) as Record<string, any>;
+
+  assert.equal(result.done.length, 1);
+  assert.deepEqual(result.done[0].labels, ['release']);
+  assert.equal(result.done[0].replicaCount, 2);
+});
+
 test('keeps the local workstation task authoritative when a mobile replica disagrees', () => {
   const localTask = { cardId: 'card-1', projectId: 'project-1', ledgerId: 'specs', title: 'Task', cardStatus: 'backlog', status: 'task-backlog' };
   const remoteTask = { ...localTask, cardStatus: 'todo', status: 'task-waiting' };

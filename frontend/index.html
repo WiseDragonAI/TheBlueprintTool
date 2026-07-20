@@ -413,6 +413,32 @@
               </div>
             </section>
 
+            <section id="done-view" class="done-view" hidden>
+              <div class="ledger-header done-header">
+                <div>
+                  <p class="eyebrow">Archive</p>
+                  <h1>Done</h1>
+                  <p id="done-summary" class="muted"></p>
+                </div>
+                <label class="search-field">
+                  <span aria-hidden="true">⌕</span>
+                  <input id="done-search" type="search" inputmode="search" placeholder="Search completed tasks" autocomplete="off" />
+                </label>
+              </div>
+              <div class="done-filter-groups">
+                <div>
+                  <p class="done-filter-label">Projects</p>
+                  <div id="done-project-filters" class="control-filters" aria-label="Filter completed tasks by project"></div>
+                </div>
+                <div>
+                  <p class="done-filter-label">Labels</p>
+                  <div id="done-label-filters" class="control-filters" aria-label="Filter completed tasks by label"></div>
+                </div>
+              </div>
+              <div id="done-task-list" class="done-task-list"></div>
+              <p id="done-empty" class="control-empty" hidden></p>
+            </section>
+
             <section id="ledger-view" hidden>
               <div class="ledger-header">
                 <div>

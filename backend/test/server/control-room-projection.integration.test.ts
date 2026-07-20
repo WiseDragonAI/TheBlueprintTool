@@ -15,15 +15,21 @@ test('serves one compact multi-project Control Room projection and refreshes one
   mkdirSync(join(decisionOsRoot, 'threads', 'tasks'), { recursive: true });
   writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }] }));
   writeFileSync(join(decisionOsRoot, 'cards', 'tasks', 'master.md'), '## A. Goal\n\n1. First title.\n\n## B. Subtasks\n\n1. [Child](card:child)\n');
+  writeFileSync(join(decisionOsRoot, 'cards', 'tasks', 'master-done.md'), '## A. Goal\n\n1. Completed title.\n');
   writeFileSync(join(decisionOsRoot, 'threads', 'tasks', 'thread-master.md'), '# OPERATOR\n<!-- decision-os:note {"id":"n1","timestamp":"2026-07-14T10:01:00.000Z"} -->\n\nStart.\n');
+  writeFileSync(join(decisionOsRoot, 'threads', 'tasks', 'thread-master-done.md'), '# AGENT\n<!-- decision-os:note {"id":"n2","timestamp":"2026-07-14T10:03:00.000Z"} -->\n\nFinished.\n');
   writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
     cards: [
-      { id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], x: 10, y: 10, w: 300, h: 200, comment: { contentFile: '.decision-os/cards/tasks/master.md' } },
+      { id: 'master', title: 'Master', status: 'todo', labels: ['master-task', 'delivery'], x: 10, y: 10, w: 300, h: 200, comment: { contentFile: '.decision-os/cards/tasks/master.md' } },
+      { id: 'master-done', title: 'Completed master', status: 'done', labels: ['master-task', 'release'], x: 10, y: 240, w: 300, h: 200, comment: { contentFile: '.decision-os/cards/tasks/master-done.md' } },
       { id: 'child', title: 'Child', status: 'done', labels: ['subtask'], x: 350, y: 10, w: 300, h: 200 },
       { id: 'worker', title: 'Worker', status: 'todo', codexActiveRunId: 'codex-skill-test', codexActiveExecutionId: 'execution-test', codexRunId: 'codex-skill-test' },
     ],
     annotations: [{ id: 'zone-a', x: 0, y: 0, width: 800, height: 600, color: '#123456' }],
-    relationships: [{ id: 'rel-a', from: 'master', to: 'child', label: 'subtask' }], notes: {}, threadFiles: { 'thread-master': '.decision-os/threads/tasks/thread-master.md' },
+    relationships: [{ id: 'rel-a', from: 'master', to: 'child', label: 'subtask' }], notes: {}, threadFiles: {
+      'thread-master': '.decision-os/threads/tasks/thread-master.md',
+      'thread-master-done': '.decision-os/threads/tasks/thread-master-done.md',
+    },
   }));
   const repositoryRoot = basename(process.cwd()) === 'backend' ? join(process.cwd(), '..') : process.cwd();
   const runtime: Record<string, unknown> = { codexSkillRuns: { 'codex-skill-test': { status: 'running', executionId: 'execution-test', startedAt: '2026-07-14T10:02:00.000Z', child: { pid: process.pid, exitCode: null, killed: false } } } };
@@ -36,7 +42,7 @@ test('serves one compact multi-project Control Room projection and refreshes one
     const firstText = await firstResponse.text();
     const first = JSON.parse(firstText) as Record<string, any>;
     assert.equal(firstResponse.ok, true, firstText);
-    assert.equal(first.projectorVersion, 'control-room-v12-subtask-execution-ownership');
+    assert.equal(first.projectorVersion, 'control-room-v13-task-labels');
     assert.ok(Buffer.byteLength(firstText) < 250_000);
     assert.equal(first.queue.length, 1);
     assert.equal(first.queue[0].zoneId, 'zone-a');
@@ -45,6 +51,10 @@ test('serves one compact multi-project Control Room projection and refreshes one
     assert.equal(first.queue[0].ledger, 'Tasks');
     assert.equal(first.queue[0].waitingSince, '2026-07-14T10:01:00.000Z');
     assert.equal(first.queue[0].valid, true);
+    assert.deepEqual(first.queue[0].labels, ['delivery']);
+    assert.equal(first.done.length, 1);
+    assert.deepEqual(first.done[0].labels, ['release']);
+    assert.deepEqual(first.allTasks.find((task: Record<string, unknown>) => task.cardId === 'master-done')?.labels, ['release']);
     assert.equal(first.queue[0].markdown, undefined);
     assert.equal(first.dependencies, undefined);
     assert.equal(first.projectSlices, undefined);
@@ -63,6 +73,10 @@ test('serves one compact multi-project Control Room projection and refreshes one
     assert.equal(compact.events, undefined);
     assert.equal(compact.diagnostics, undefined);
     assert.ok(Buffer.byteLength(compactText) < 2_000);
+    const doneRoute = await fetch(`${baseUrl}/done`);
+    const doneHtml = await doneRoute.text();
+    assert.equal(doneRoute.status, 200);
+    assert.match(doneHtml, /id="done-view"/);
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     rmSync(home, { recursive: true, force: true });

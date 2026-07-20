@@ -2118,7 +2118,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const isSharedModuleRoute = url.startsWith('/shared/');
     const isStaticModuleRoute = isFrontendModuleRoute || isSharedModuleRoute;
     const routeTabId = url.split('/').filter(Boolean)[0] ?? '';
-    if (!projectScope && request.method === 'GET' && routeTabId && !['projects', 'projects-canvas', 'ledgers', 'pipelines', 'skills', 'settings', 'control-room'].includes(routeTabId)) {
+    if (!projectScope && request.method === 'GET' && routeTabId && !['projects', 'projects-canvas', 'ledgers', 'pipelines', 'skills', 'settings', 'control-room', 'done'].includes(routeTabId)) {
       const matches = projects.filter((project) => project.ledgers.some((ledger) => ledger.id === routeTabId));
       if (matches.length === 1) {
         const fallbackProject = matches[0];
@@ -2143,6 +2143,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       || requestPath === '/projects-canvas'
       || /^\/projects\/[^/]+$/.test(requestPath)
       || requestPath === '/ledgers'
+      || requestPath === '/done'
       || requestPath === '/pipelines'
       || requestPath === '/skills'
       || requestPath === '/settings';
