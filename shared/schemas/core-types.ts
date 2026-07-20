@@ -4,6 +4,8 @@
  */
 
 export * from './codex-pipeline-types.js';
+export * from './questionnaire-types.js';
+import type { CardQuestionnaires } from './questionnaire-types.js';
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | readonly JsonValue[];
@@ -47,6 +49,7 @@ export type Card = {
   readonly codexActiveRunId?: string;
   readonly codexActiveExecutionId?: string;
   readonly codexRunId?: string;
+  readonly questionnaires?: CardQuestionnaires;
 };
 
 export type Zone = {

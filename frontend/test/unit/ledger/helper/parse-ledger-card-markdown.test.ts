@@ -140,3 +140,13 @@ test('parse-ledger-card-markdown parses a configurable repository and repository
 test('parse-ledger-card-markdown leaves incomplete git diff directives inert', () => {
   assert.equal(parseLedgerCardMarkdown('::git-diff[Unsafe](git-diff:?repo=.&missing=path)')[0]?.kind, 'paragraph');
 });
+
+test('parse-ledger-card-markdown parses a card questionnaire directive', () => {
+  assert.deepEqual(parseLedgerCardMarkdown('::questions[Implementation questions](questions:?id=implementation-context)'), [
+    { kind: 'questions', title: 'Implementation questions', questionnaireId: 'implementation-context' }
+  ]);
+});
+
+test('parse-ledger-card-markdown leaves unsafe questionnaire identifiers inert', () => {
+  assert.equal(parseLedgerCardMarkdown('::questions[Unsafe](questions:?id=../../outside)')[0]?.kind, 'paragraph');
+});
