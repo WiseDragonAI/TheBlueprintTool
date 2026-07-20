@@ -1,3 +1,7 @@
+/**
+ * WHAT: Binds the browser input surface and refreshes route-owned request scope.
+ * WHY: Interaction handlers and scoped network clients must target the same project replica.
+ */
 import { canvas } from '../../dom.js';
 import { state } from '../../state.js';
 import { finishPointer } from '../../gesture/effect/finish-pointer.js';
@@ -26,6 +30,7 @@ import { enterLedgersCanvasController } from '../../navigation/controller/enter-
 import { enterLedgerController } from '../../navigation/controller/enter-ledger-controller.js';
 import { routeCanvasMode } from '../../navigation/helper/route-canvas-mode.js';
 import { routeScope } from '../../navigation/helper/route-scope.js';
+import { replicaNodeIdFromLocation } from '../../project/helper/project-request-scope.js';
 import { enterProjectsCanvasController } from '../../navigation/controller/enter-projects-canvas-controller.js';
 import { routeTab } from '../../navigation/helper/route-tab.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
@@ -101,6 +106,7 @@ export function bindInputs(): void {
     state.canvasMode = routeCanvasMode(window.location.pathname);
     const scope = routeScope(window.location.pathname);
     state.projectId = scope.projectId;
+    state.replicaNodeId = replicaNodeIdFromLocation();
     if (state.canvasMode === 'projects') {
       void enterProjectsCanvasController({ replace: true });
     } else if (state.canvasMode === 'ledgers') {

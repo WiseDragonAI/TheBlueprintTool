@@ -2,7 +2,7 @@
  * WHAT: Renders the active thread as a two-row header above independent Thread and Codex Log panels.
  * WHY: Conversation controls, run diagnostics, focus, announcements, and scroll must keep separate ownership.
  */
-import { bindThreadCodexActiveRunLog, bindThreadCodexRunLog, unbindThreadCodexActiveRunLog } from '../../codex/effect/bind-thread-codex-run-log.js';
+import { bindThreadCodexActiveRunLog, bindThreadCodexRunLog, unbindThreadCodexActiveRunLog, unbindThreadCodexRunLog } from '../../codex/effect/bind-thread-codex-run-log.js';
 import { selectedCardCodexRunId } from '../../codex/helper/card-codex-run-id.js';
 import { codexEffortOptions, codexModelOptions } from '../../codex/helper/codex-run-options.js';
 import { cardCodexRunPreference, type CardCodexRunPreference } from '../../codex/helper/card-codex-run-preference.js';
@@ -277,6 +277,16 @@ function bindActiveThreadRun(threadId: string): void {
   }
 }
 
+function unbindActiveThreadRuns(threadId: string): void {
+  const { cardId } = activeThreadCard(threadId);
+  const ledgerId = String(state.activeTab ?? '').trim();
+  if (!ledgerId || !cardId || !threadId) return;
+  const selectedRunId = String(recordState('threadRunIdByThreadId')[threadId] ?? '');
+  const activeRunId = String(recordState('threadActiveRunIdByThreadId')[threadId] ?? '');
+  if (selectedRunId) unbindThreadCodexRunLog({ ledgerId, cardId, threadId, runId: selectedRunId });
+  if (activeRunId) unbindThreadCodexActiveRunLog({ ledgerId, cardId, threadId, runId: activeRunId });
+}
+
 export function renderThreadPanel(): void {
   const panel = document.querySelector('.thread-panel') as HTMLElement | null;
   const inspector = document.querySelector('.panel') as HTMLElement | null;
@@ -311,7 +321,8 @@ export function renderThreadPanel(): void {
   if (shouldOpenThread) suppressThreadScrollTrackingThroughNextFrame(activeTab);
   renderThreadNotes();
   void restorePendingVoiceUploads(activeThreadId);
-  bindActiveThreadRun(activeThreadId);
+  if (shouldOpenThread) bindActiveThreadRun(activeThreadId);
+  else unbindActiveThreadRuns(activeThreadId);
   renderThreadCodexLog();
   renderThreadJumpButton(Boolean(activeThreadId));
   state.renderedThreadId = activeThreadId;

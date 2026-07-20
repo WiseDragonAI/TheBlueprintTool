@@ -1,3 +1,7 @@
+/**
+ * WHAT: Covers durable Codex process recovery across server startup and recurring queue scans.
+ * WHY: Pending and live process identities must remain schedulable after runtime memory is lost.
+ */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
@@ -110,7 +114,7 @@ test('server queue scanner launches pending work added after startup', async () 
   const previousCodexBin = process.env.CODEX_BIN;
   const home = mkdtempSync(join(tmpdir(), 'decision-os-recurring-queue-scan-'));
   const decisionOsRoot = createProject(home, {
-    cards: [{ id: 'card-late', title: 'Late queued card', codexThreadRunId: 'run-late', comment: { what: 'Late body.' }, facts: [], fields: [] }],
+    cards: [{ id: 'card-late', title: 'Late queued card', codexThreadRunId: 'run-late', codexActiveRunId: 'run-late', codexActiveExecutionId: 'execution-late', comment: { what: 'Late body.' }, facts: [], fields: [] }],
     annotations: [],
     relationships: [],
     notes: {},
@@ -145,7 +149,7 @@ test('server queue scanner launches pending work added after startup', async () 
       decisionOsRoot,
       id: 'run-late',
       createdAt: new Date().toISOString(),
-      payload: { ledgerId: 'specs', threadId: 'thread-card-late', cardId: 'card-late' },
+      payload: { ledgerId: 'specs', threadId: 'thread-card-late', cardId: 'card-late', runId: 'run-late', executionId: 'execution-late' },
     });
     await waitForFile(invocationFile, decisionOsRoot);
     assert.equal(readFileSync(invocationFile, 'utf8'), 'started');

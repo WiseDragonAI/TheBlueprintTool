@@ -204,6 +204,8 @@ function normalizeRunSkill(input: AnyRecord, stepId: string, index: number): Cod
     codexEffort: text(input.codexEffort),
     stdoutFile: text(input.stdoutFile),
     stderrFile: text(input.stderrFile),
+    processId: Math.max(0, Math.floor(Number(input.processId ?? 0) || 0)),
+    processStartTime: text(input.processStartTime),
     startedAt: nullableText(input.startedAt),
     finishedAt: nullableText(input.finishedAt),
     error: text(input.error),

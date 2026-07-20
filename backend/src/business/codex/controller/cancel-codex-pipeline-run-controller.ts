@@ -12,6 +12,8 @@ import {
   scheduleCodexPipelineRuns,
 } from '../helper/codex-pipeline-runner.js';
 import { readCodexPipelineRunController } from './read-codex-pipeline-run-controller.js';
+import { signalCodexProcessTree } from '../helper/reconcile-terminal-codex-process.js';
+import { isSameCodexProcess } from '../helper/codex-process-queue.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -28,7 +30,7 @@ export async function cancelCodexPipelineRunController(
   const decisionOsRoot = resolve(String(runtime.decisionOsRoot ?? resolve(process.cwd(), '.decision-os')));
   const runId = text(payload.runId ?? payload.pipelineRunId);
   const executionId = text(payload.executionId);
-  if (!runId) return { ok: false, statusCode: 400, error: 'Missing pipeline run id.' };
+  if (!runId || !executionId) return { ok: false, statusCode: 400, error: 'Missing pipeline run id or execution id.' };
   const store = readCodexPipelineStore({ decisionOsRoot }).store;
   const run = store.runs.find((entry) => entry.id === runId);
   if (!run) return { ok: false, statusCode: 404, error: 'Pipeline run not found.', runId };
@@ -38,19 +40,16 @@ export async function cancelCodexPipelineRunController(
   const running = run.steps.flatMap((step) => step.skills).find((skill) => skill.status === 'running');
   const target = running ?? run.steps.flatMap((step) => step.skills).find((skill) => skill.status === 'pending');
   if (!target) return { ok: false, statusCode: 409, error: 'Pipeline run has no cancellable skill.', runId };
-  if (executionId && target.executionId !== executionId) return { ok: false, statusCode: 409, error: 'Pipeline execution is no longer active.', runId, executionId };
+  if (target.executionId !== executionId) return { ok: false, statusCode: 409, error: 'Pipeline execution is no longer active.', runId, executionId };
   const runtimeRun = pipelineRuntimeRun(runtime, target.runId);
   let childWasSignalled = false;
   if (runtimeRun) {
     runtimeRun.cancelRequestedAt = new Date().toISOString();
     const child = (runtimeRun as { child?: ChildProcess }).child;
-    if (child && typeof child.kill === 'function' && !child.killed) {
-      try {
-        childWasSignalled = child.kill('SIGTERM');
-      } catch {
-        // Persisted cancellation remains authoritative if the process already exited.
-      }
-    }
+    if (child && typeof child.kill === 'function' && !child.killed) childWasSignalled = signalCodexProcessTree({ child, signal: 'SIGTERM' });
+  }
+  if (!childWasSignalled && target.status === 'running' && isSameCodexProcess(Number(target.processId ?? 0), String(target.processStartTime ?? ''))) {
+    childWasSignalled = signalCodexProcessTree({ pid: Number(target.processId ?? 0), signal: 'SIGTERM' });
   }
   if (target.status === 'running' && childWasSignalled) {
     return { ok: true, statusCode: 202, status: 'running', cancellationRequested: true, runId, executionId: target.executionId };
@@ -83,6 +82,8 @@ export async function cancelCodexPipelineRunController(
       ledgerId: cancelled.ledgerId,
       pipelineRunId: cancelled.id,
       runId: target.runId,
+      executionId: target.executionId,
+      status: 'cancelled',
       cardId: cancelled.steps.find((step) => step.skills.some((skill) => skill.runId === target.runId))?.outputCardId ?? '',
     });
   }

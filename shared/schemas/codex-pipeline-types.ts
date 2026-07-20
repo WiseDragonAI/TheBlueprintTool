@@ -59,6 +59,8 @@ export type CodexPipelineRunSkill = {
   readonly codexEffort: CodexEffort | string;
   readonly stdoutFile: string;
   readonly stderrFile: string;
+  readonly processId?: number;
+  readonly processStartTime?: string;
   readonly startedAt: string | null;
   readonly finishedAt: string | null;
   readonly error: string;

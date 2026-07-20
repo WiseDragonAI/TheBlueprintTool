@@ -285,6 +285,8 @@ function installRuntimeDom(): void {
 }
 
 function resetRuntimeState(): void {
+  state.projectId = '';
+  state.replicaNodeId = '';
   state.canvasMode = 'ledger';
   state.activeTab = 'specs';
   state.activeLedgerId = 'specs';
@@ -326,13 +328,14 @@ class FakeEventSource {
   static latest: FakeEventSource | null = null;
   readonly listeners = new Map<string, Listener[]>();
   onerror: (() => void) | null = null;
+  closed = false;
   constructor(readonly url: string) { FakeEventSource.latest = this; }
   addEventListener(type: string, listener: Listener): void { this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]); }
   emit(type: string, payload: Record<string, unknown>): void {
     const event = { data: JSON.stringify(payload) } as MessageEvent;
     for (const listener of this.listeners.get(type) ?? []) listener(event as unknown as Event);
   }
-  close(): void {}
+  close(): void { this.closed = true; }
 }
 
 test('voice recording defers scoped thread and ledger refresh work in one queue', async () => {
@@ -451,6 +454,19 @@ test('inactive SSE scopes are no-ops and a lifecycle thread event updates notes 
   });
   await waitFor(() => fetchCount === 2 && !state.ledgerContentRefresh.inFlight);
   assert.equal(state.telemetry.some((trace: Record<string, any>) => trace.name === 'ledger-content-refresh' && trace.args.reasons.includes('codex-thread-settled')), true);
+
+  state.projectId = 'project-b';
+  state.replicaNodeId = 'phone';
+  subscribeLedgerContentEvents();
+  const scopedEvents = FakeEventSource.latest as FakeEventSource;
+  assert.equal(events.closed, true);
+  assert.notEqual(scopedEvents, events);
+  assert.equal(scopedEvents.url, '/p/project-b/api/ledger-content-events?replica=phone');
+  events.emit('ledger-content-change', { reason: 'stale-project-event', projectId: '', ledgerId: 'specs' });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(fetchCount, 2);
+  scopedEvents.emit('ledger-content-change', { reason: 'current-project-event', projectId: 'project-b', replicaNodeId: 'phone', ledgerId: 'specs' });
+  await waitFor(() => fetchCount === 3 && !state.ledgerContentRefresh.inFlight);
 });
 
 test('events received during an in-flight ledger load drain the latest state and every changed card file', async () => {

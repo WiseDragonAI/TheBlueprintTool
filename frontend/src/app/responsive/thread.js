@@ -461,6 +461,7 @@ export function initializeMobileThread() {
       ledgerId: currentLedgerId,
       cardId: button.dataset.codexCardId || String(currentCard?.id || ''),
       runId: button.dataset.codexRunId || '',
+      executionId: button.dataset.codexExecutionId || '',
     });
     else if (action === 'confirm-delete-note') {
       const modal = document.querySelector('.confirm-modal');

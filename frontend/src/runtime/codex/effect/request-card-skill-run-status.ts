@@ -2,7 +2,7 @@
  * WHAT: Requests and normalizes derived status for one card-scoped Codex run.
  * WHY: Widgets and thread logs need the same stable incremental JSONL and diagnostic contract.
  */
-import { projectScopedRequestPath } from '../../project/helper/project-request-scope.js';
+import { projectReplicaRequestPath } from '../../project/helper/project-request-scope.js';
 
 export type CardSkillRunStatus = 'pending' | 'running' | 'complete' | 'failed' | 'cancelled' | 'unknown';
 export type CardSkillRunEventSource = 'jsonl' | 'stderr';
@@ -191,12 +191,12 @@ function unavailableSummary(runId: string, since: number, error: string): CardSk
   };
 }
 
-export async function requestCardSkillRunStatus(input: { projectId?: string; ledgerId: string; cardId: string; runId: string; since?: number; traceId?: string }): Promise<CardSkillRunSummary> {
+export async function requestCardSkillRunStatus(input: { projectId?: string; replicaNodeId?: string; ledgerId: string; cardId: string; runId: string; since?: number; traceId?: string }): Promise<CardSkillRunSummary> {
   const since = Math.max(0, Number(input.since ?? 0) || 0);
   const params = new URLSearchParams({ ledgerId: input.ledgerId, cardId: input.cardId, since: String(since) });
   if (input.traceId) params.set('traceId', input.traceId);
   const requestPath = `/api/codex/skills/runs/${encodeURIComponent(input.runId)}?${params.toString()}`;
-  const response = await fetch(projectScopedRequestPath(requestPath, input.projectId)).catch(() => undefined);
+  const response = await fetch(projectReplicaRequestPath(requestPath, String(input.projectId ?? ''), String(input.replicaNodeId ?? ''))).catch(() => undefined);
   if (!response) return unavailableSummary(input.runId, since, 'Request failed.');
   const body = await response.json().catch(() => ({})) as Partial<CardSkillRunSummary>;
   const runId = String(body.runId ?? input.runId);

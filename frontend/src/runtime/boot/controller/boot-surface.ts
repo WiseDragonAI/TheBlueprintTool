@@ -1,3 +1,7 @@
+/**
+ * WHAT: Boots the browser surface from route, persisted, ledger, and input state.
+ * WHY: Request scoping and visible state must be established before subscriptions and rendering begin.
+ */
 import { state } from '../../state.js';
 import { SPEC_IMPLEMENTATION_SURFACE } from '../../spec-implementation-surface.js';
 import { bindInputs } from '../../input/effect/bind-inputs.js';
@@ -13,7 +17,7 @@ import { routeCanvasMode } from '../../navigation/helper/route-canvas-mode.js';
 import { routeTab } from '../../navigation/helper/route-tab.js';
 import { applyRailCollapsedState } from '../../toolbox/effect/apply-rail-collapsed-state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
-import { installProjectRequestScope } from '../../project/helper/project-request-scope.js';
+import { installProjectRequestScope, replicaNodeIdFromLocation } from '../../project/helper/project-request-scope.js';
 import { routeScope } from '../../navigation/helper/route-scope.js';
 import { selectThread } from '../../thread/effect/select-thread.js';
 import { openThreadPanel } from '../../thread/effect/open-thread-panel.js';
@@ -25,6 +29,7 @@ export function bootSurface(): void {
   hydrateThreadViewportState(persisted);
   const scope = routeScope(window.location.pathname);
   state.projectId = scope.projectId;
+  state.replicaNodeId = replicaNodeIdFromLocation();
   state.canvasMode = routeCanvasMode(window.location.pathname);
   state.activeTab = routeTab(window.location.pathname);
   state.activeLedgerId = state.activeTab;

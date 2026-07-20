@@ -34,6 +34,30 @@ function discoverLegacyRunDirectory(runRoot: string, runId: string): string {
   }
 }
 
+export function indexCodexRunArtifactDirectories(decisionOsRoot: string): ReadonlyMap<string, string> {
+  const runRoot = resolve(decisionOsRoot, 'runs', 'codex-skills');
+  const index = new Map<string, string>();
+  if (!existsSync(runRoot)) return index;
+  try {
+    const directories = readdirSync(runRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => resolve(runRoot, entry.name))
+      .sort();
+    for (const directory of directories) {
+      for (const file of readdirSync(directory, { withFileTypes: true })) {
+        if (!file.isFile()) continue;
+        const extension = extname(file.name);
+        if (extension !== '.md' && extension !== '.jsonl' && extension !== '.log') continue;
+        const runId = basename(file.name, extension);
+        if (runId && !index.has(runId)) index.set(runId, directory);
+      }
+    }
+  } catch {
+    return index;
+  }
+  return index;
+}
+
 export type CardSkillRunFiles = {
   runDirectory: string;
   outputFile: string;
@@ -47,6 +71,7 @@ export function resolveCardSkillRunFiles(input: {
   ledgerPath: string;
   cardId: string;
   runId: string;
+  artifactDirectoryByRunId?: ReadonlyMap<string, string>;
 }): CardSkillRunFiles {
   const runRoot = resolve(input.decisionOsRoot, 'runs', 'codex-skills');
   const cards = Array.isArray(input.ledger.cards) ? input.ledger.cards as AnyRecord[] : [];
@@ -66,7 +91,10 @@ export function resolveCardSkillRunFiles(input: {
   const persistedRunDirectory = persistedOutputFile && isInside(runRoot, persistedOutputFile)
     ? dirname(persistedOutputFile)
     : '';
-  const runDirectory = persistedRunDirectory || discoverLegacyRunDirectory(runRoot, input.runId) || resolve(runRoot, safeSegment(ledgerStem(input.ledgerPath)));
+  const runDirectory = persistedRunDirectory
+    || input.artifactDirectoryByRunId?.get(safeSegment(input.runId))
+    || discoverLegacyRunDirectory(runRoot, input.runId)
+    || resolve(runRoot, safeSegment(ledgerStem(input.ledgerPath)));
   const runFileStem = safeSegment(input.runId);
   return {
     runDirectory,

@@ -481,6 +481,63 @@ test('generated skill-result threads bind and render their durable card run id',
   }
 });
 
+test('closing the desktop thread panel releases selected and active run polling', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousSetTimeout = globalThis.setTimeout;
+  const previousClearTimeout = globalThis.clearTimeout;
+  installDom();
+  const { state } = await import('../../../../src/runtime/state.js');
+  const { renderThreadPanel } = await import('../../../../src/runtime/thread/effect/render-thread-panel.js');
+  const threadId = 'thread-card-close';
+  const runId = 'codex-skill-close';
+  const cleared = new Set<number>();
+  let nextTimer = 0;
+  try {
+    globalThis.setTimeout = (() => ++nextTimer as unknown as ReturnType<typeof setTimeout>) as unknown as typeof setTimeout;
+    globalThis.clearTimeout = ((timer: ReturnType<typeof setTimeout>) => { cleared.add(Number(timer)); }) as typeof clearTimeout;
+    globalThis.fetch = (async () => new Response('{}', { status: 500 })) as typeof fetch;
+    state.activeTab = 'specs';
+    state.activeLedger = {
+      cards: [{ id: 'card-close', title: 'Close polling', codexThreadRunId: runId, codexActiveRunId: runId, codexActiveExecutionId: 'execution-close' }],
+      annotations: [], relationships: [], notes: { [threadId]: [] },
+    };
+    state.threadId = threadId;
+    state.threadPanelOpen = true;
+    state.activeTool = 'select';
+    state.threadPinOnRender = false;
+    state.threadActiveTabByThreadId = { [threadId]: 'codex-log' };
+    state.threadRunIdByThreadId = {};
+    state.threadActiveRunIdByThreadId = {};
+    state.threadRunSummaryByThreadId = {};
+    state.threadActiveRunSummaryByThreadId = {};
+    state.threadRunEventsByThreadId = {};
+    state.threadCoalescedToolsByThreadId = {};
+    state.voice = { recording: false, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
+
+    renderThreadPanel();
+    assert.ok(nextTimer > 0);
+    const clearedBeforeClose = cleared.size;
+    state.threadPanelOpen = false;
+    renderThreadPanel();
+
+    assert.ok(cleared.size > clearedBeforeClose);
+    assert.equal(state.threadActiveRunIdByThreadId[threadId], undefined);
+  } finally {
+    globalThis.fetch = previousFetch;
+    globalThis.setTimeout = previousSetTimeout;
+    globalThis.clearTimeout = previousClearTimeout;
+    state.threadId = '';
+    state.activeLedger = null;
+    state.threadActiveTabByThreadId = {};
+    state.threadRunIdByThreadId = {};
+    state.threadActiveRunIdByThreadId = {};
+    state.threadRunSummaryByThreadId = {};
+    state.threadActiveRunSummaryByThreadId = {};
+    state.threadRunEventsByThreadId = {};
+    state.threadCoalescedToolsByThreadId = {};
+  }
+});
+
 test('Codex Log run arrows default to the newest retained run and select the previous run', async () => {
   const previousFetch = globalThis.fetch;
   const previousSetTimeout = globalThis.setTimeout;
@@ -776,6 +833,71 @@ test('persisted card execution fields cannot override a terminal run summary', a
     state.threadActiveTabByThreadId = {};
     state.threadRunIdByThreadId = {};
     state.threadRunSummaryByThreadId = {};
+    state.threadRunEventsByThreadId = {};
+    state.threadCoalescedToolsByThreadId = {};
+  }
+});
+
+test('an active card lease makes the production panel revalidate a cached terminal session without painting authority', async () => {
+  const previousFetch = globalThis.fetch;
+  const { heading } = installDom();
+  const { state } = await import('../../../../src/runtime/state.js');
+  const { renderThreadPanel } = await import('../../../../src/runtime/thread/effect/render-thread-panel.js');
+  const { bindCardSkillRunLogConsumer, unbindCardSkillRunLogConsumer, purgeCardSkillRunLog } = await import('../../../../src/runtime/codex/effect/poll-card-skill-run.js');
+  const runId = 'codex-skill-terminal-cache-revalidation';
+  const threadId = 'thread-card-cache-revalidation';
+  const identity = { ledgerId: 'specs', cardId: 'card-cache-revalidation', runId, consumerId: 'seed-terminal-cache' };
+  let requestCount = 0;
+  let resolveActiveStatus!: (response: Response) => void;
+  const summary = (status: 'complete' | 'pending', executionId: string) => ({
+    ok: true, active: status === 'pending', runId, runKind: 'thread', status, executionId,
+    queuePosition: status === 'pending' ? 2 : null, lineCount: 4, nextSince: 4, events: [], diagnostics: [], executions: [], metadata: {},
+  });
+  try {
+    globalThis.fetch = (async () => {
+      requestCount += 1;
+      if (requestCount === 1) return new Response(JSON.stringify(summary('complete', 'execution-old')), { status: 200, headers: { 'content-type': 'application/json' } });
+      return new Promise<Response>((resolve) => { resolveActiveStatus = resolve; });
+    }) as typeof fetch;
+    let seeded = false;
+    bindCardSkillRunLogConsumer({ ...identity, onSummary: () => { seeded = true; } });
+    await waitFor(() => seeded);
+    unbindCardSkillRunLogConsumer(identity);
+
+    state.activeTab = 'specs';
+    state.activeLedger = {
+      cards: [{ id: identity.cardId, title: 'Cached run', codexThreadRunId: runId, codexActiveRunId: runId, codexActiveExecutionId: 'execution-new' }],
+      annotations: [], relationships: [], notes: { [threadId]: [] },
+    };
+    state.threadId = threadId;
+    state.threadPanelOpen = true;
+    state.activeTool = 'select';
+    state.threadPinOnRender = false;
+    state.threadActiveTabByThreadId = { [threadId]: 'codex-log' };
+    state.threadRunIdByThreadId = {};
+    state.threadActiveRunIdByThreadId = {};
+    state.threadRunSummaryByThreadId = {};
+    state.threadActiveRunSummaryByThreadId = {};
+    state.threadRunEventsByThreadId = {};
+    state.threadCoalescedToolsByThreadId = {};
+    state.voice = { recording: false, durationMs: 0, level: 0, transcriptionStatus: 'idle' };
+
+    renderThreadPanel();
+    await waitFor(() => requestCount === 2);
+    assert.equal(heading.dataset.codexRunning, 'false');
+    resolveActiveStatus(new Response(JSON.stringify(summary('pending', 'execution-new')), { status: 200, headers: { 'content-type': 'application/json' } }));
+    await waitFor(() => heading.dataset.codexRunning === 'true');
+    assert.equal(heading.dataset.codexStatus, 'pending');
+  } finally {
+    purgeCardSkillRunLog(identity);
+    globalThis.fetch = previousFetch;
+    state.threadId = '';
+    state.activeLedger = null;
+    state.threadActiveTabByThreadId = {};
+    state.threadRunIdByThreadId = {};
+    state.threadActiveRunIdByThreadId = {};
+    state.threadRunSummaryByThreadId = {};
+    state.threadActiveRunSummaryByThreadId = {};
     state.threadRunEventsByThreadId = {};
     state.threadCoalescedToolsByThreadId = {};
   }

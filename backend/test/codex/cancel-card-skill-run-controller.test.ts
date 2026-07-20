@@ -10,6 +10,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cancelCardSkillRunController } from '@backend/business/codex/controller/cancel-card-skill-run-controller.js';
+import { cancelCodexPipelineRunController } from '@backend/business/codex/controller/cancel-codex-pipeline-run-controller.js';
 import { readCardSkillRunController } from '@backend/business/codex/controller/read-card-skill-run-controller.js';
 import {
   enqueueCodexThreadProcess,
@@ -93,6 +94,41 @@ test('cancels a live run through its PID and start identity when the runtime chi
   }
 });
 
+test('rejects a stale execution before signalling or removing its queued work', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-stale-cancel-'));
+  const decisionOsRoot = join(workspace, '.decision-os');
+  const runId = 'codex-skill-shared-session';
+  mkdirSync(decisionOsRoot, { recursive: true });
+  writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'specs', ledgerFile: '.decision-os/specs.json' }] }));
+  writeFileSync(join(decisionOsRoot, 'specs.json'), JSON.stringify({
+    cards: [{ id: 'card-a', codexActiveRunId: runId, codexActiveExecutionId: 'execution-new', codexThreadRunId: runId }],
+  }));
+  enqueueCodexThreadProcess({
+    decisionOsRoot,
+    id: 'queue-old',
+    createdAt: '2026-07-20T00:00:00.000Z',
+    payload: { ledgerId: 'specs', cardId: 'card-a', runId, executionId: 'execution-old' },
+  });
+  const runtime: Record<string, unknown> = {
+    decisionOsRoot,
+    codexSkillRuns: { [runId]: { id: runId, executionId: 'execution-old', ledgerId: 'specs', outputCardId: 'card-a', status: 'pending' } },
+  };
+  try {
+    assert.equal(JSON.parse(readFileSync(join(decisionOsRoot, 'specs.json'), 'utf8')).cards[0].codexActiveExecutionId, 'execution-new');
+    const result = await cancelCardSkillRunController({
+      action_payload: { ledgerId: 'specs', cardId: 'card-a', runId, executionId: 'execution-old' },
+      runtime_state: runtime,
+    });
+    assert.equal(result.error, 'Card execution is no longer active.');
+    assert.equal(result.ok, false);
+    assert.equal(result.statusCode, 409);
+    assert.equal(readCodexProcessQueue(decisionOsRoot).length, 1);
+    assert.equal((runtime.codexSkillRuns as Record<string, Record<string, unknown>>)[runId].status, 'pending');
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
 test('cancels a pending pipeline skill from its source-card projection with exact execution ownership', async () => {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-pipeline-source-cancel-'));
   const decisionOsRoot = join(workspace, '.decision-os');
@@ -129,6 +165,14 @@ test('cancels a pending pipeline skill from its source-card projection with exac
         }],
       },
     });
+
+    const stale = await cancelCodexPipelineRunController({
+      action_payload: { runId: 'pipeline-run', executionId: 'pipeline-execution-old' },
+      runtime_state: { decisionOsRoot },
+    });
+    assert.equal(stale.ok, false);
+    assert.equal(stale.statusCode, 409);
+    assert.equal(readCodexPipelineStore({ decisionOsRoot }).store.runs[0]?.status, 'pending');
 
     const result = await cancelCardSkillRunController({
       action_payload: { ledgerId: 'specs', cardId: 'source', runId, executionId },

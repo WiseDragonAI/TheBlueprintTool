@@ -8,6 +8,8 @@ export type ContentChangeEvent = {
   contentFile?: string;
   kind?: string;
   ledgerId?: string;
+  projectId?: string;
+  replicaNodeId?: string;
   outputCardId?: string;
   pipelineRunId?: string;
   pipelineStatus?: string;
@@ -30,6 +32,8 @@ export function contentEventPayload(event: Event): ContentChangeEvent {
       contentFile: typeof parsed.contentFile === 'string' ? parsed.contentFile : '',
       kind: typeof parsed.kind === 'string' ? parsed.kind : '',
       ledgerId: typeof parsed.ledgerId === 'string' ? parsed.ledgerId : '',
+      projectId: typeof parsed.projectId === 'string' ? parsed.projectId : '',
+      replicaNodeId: typeof parsed.replicaNodeId === 'string' ? parsed.replicaNodeId : '',
       outputCardId: typeof parsed.outputCardId === 'string' ? parsed.outputCardId : '',
       pipelineRunId: typeof parsed.pipelineRunId === 'string' ? parsed.pipelineRunId : '',
       pipelineStatus: typeof parsed.pipelineStatus === 'string' ? parsed.pipelineStatus : '',
