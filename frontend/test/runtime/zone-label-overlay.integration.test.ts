@@ -24,11 +24,8 @@ test('zone labels render through an overlay above cards instead of the zone stac
   assert.match(resizeZone, /renderZoneLabelOverlay\(\)/);
 });
 
-test('task cards and regular zones use flat solid surfaces in normal and selected states', () => {
+test('regular zones keep only their inner line shadow', () => {
   const css = source('frontend/assets/canvas/objects.css');
-  assert.match(css, /\.regular-zone\s*{[^}]*background-color:[^}]*background-image:\s*none;[^}]*box-shadow:\s*none;/s);
-  assert.doesNotMatch(css, /\.regular-zone\s*{[^}]*linear-gradient/s);
-  assert.match(css, /\.card\s*{[^}]*background-color:\s*var\(--panel-2\);[^}]*background-image:\s*none;[^}]*box-shadow:\s*none;/s);
-  assert.doesNotMatch(css, /\.card\s*{[^}]*linear-gradient/s);
-  assert.match(css, /\.regular-zone\.selected,\s*\.card\.selected\s*{[^}]*box-shadow:\s*none;/s);
+  assert.match(css, /\.regular-zone\s*{[^}]*box-shadow:\s*inset 0 0 0 1px/s);
+  assert.doesNotMatch(css, /\.regular-zone\s*{[^}]*0 18px 46px/s);
 });
