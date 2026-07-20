@@ -53,13 +53,18 @@ export function createFederationTaskStateReplicator(input: {
     if (!store) return;
     store.markPending('relay', event.eventId);
     publishBatch('relay', event.projectId, [event]);
+    for (const peer of input.peers().filter((entry) => entry.online)) {
+      store.markPending(peer.nodeId, event.eventId);
+      publishBatch(peer.nodeId, event.projectId, [event]);
+    }
   };
 
   const reconcileRelay = (): void => {
     for (const [projectId, store] of input.stores()) {
-      for (const peer of input.peers()) {
-        const legacyPending = store.pendingFor(peer.nodeId);
-        if (legacyPending.length > 0) store.acknowledge(peer.nodeId, legacyPending.map((event) => event.eventId));
+      for (const peer of input.peers().filter((entry) => entry.online)) {
+        const pending = store.pendingFor(peer.nodeId);
+        if (pending.length > 0) publishBatch(peer.nodeId, projectId, pending);
+        advertise(peer.nodeId, projectId, store);
       }
       const pending = store.pendingFor('relay');
       if (pending.length > 0) publishBatch('relay', projectId, pending);
@@ -67,7 +72,13 @@ export function createFederationTaskStateReplicator(input: {
     }
   };
 
-  const reconcilePeer = (_peerId: string): void => reconcileRelay();
+  const reconcilePeer = (peerId: string): void => {
+    for (const [projectId, store] of input.stores()) {
+      const pending = store.pendingFor(peerId);
+      if (pending.length > 0) publishBatch(peerId, projectId, pending);
+      advertise(peerId, projectId, store);
+    }
+  };
 
   const sendSnapshot = (peerId: string, projectId: string, snapshot: TaskStateSnapshot): void => {
     const bytes = Buffer.from(JSON.stringify(snapshot));

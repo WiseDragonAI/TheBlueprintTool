@@ -100,6 +100,47 @@ test('independent genesis event sets converge to one complete project projection
   assert.equal(relay.eventCount('project-a'), 2);
 });
 
+test('direct peer anti-entropy hydrates a remote-only project when relay durability is unavailable', async (context) => {
+  const sourceRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-direct-source-'));
+  const remoteRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-direct-remote-'));
+  context.after(() => { rmSync(sourceRoot, { recursive: true, force: true }); rmSync(remoteRoot, { recursive: true, force: true }); });
+  const source = taskStore(sourceRoot);
+  const remote = taskStore(remoteRoot);
+  const event = createTaskFieldEvent({ eventId: 'direct-event', projectId: 'project-a', writerId: 'node-a', emittedAt: '2026-07-20T02:00:00.000Z', entityType: 'card', entityId: 'direct-card', changes: [{ path: 'status', operation: 'set', value: 'todo' }] });
+  source.append(event);
+
+  let replicatorA: Replicator;
+  let replicatorB: Replicator;
+  const route = (from: string, to: string, frame: Omit<FederationStateFrame, 'from'>): boolean => {
+    if (to === 'relay') return true;
+    const target = to === 'node-a' ? replicatorA : to === 'node-b' ? replicatorB : null;
+    if (!target) return false;
+    queueMicrotask(() => void target.handleFrame({ ...frame, from }));
+    return true;
+  };
+  replicatorA = createFederationTaskStateReplicator({
+    nodeId: 'node-a',
+    stores: () => new Map([['project-a', source]]),
+    storeFor: () => source,
+    peers: () => [{ nodeId: 'node-b', online: true }],
+    publish: (to, frame) => route('node-a', to, frame),
+  });
+  replicatorB = createFederationTaskStateReplicator({
+    nodeId: 'node-b',
+    stores: () => new Map(),
+    storeFor: () => remote,
+    peers: () => [{ nodeId: 'node-a', online: true }],
+    publish: (to, frame) => route('node-b', to, frame),
+  });
+
+  replicatorA.reconcilePeer('node-b');
+  await new Promise((resolvePromise) => setTimeout(resolvePromise, 80));
+
+  assert.equal(remote.snapshots().length, 1, 'covered history is installed as a verified peer checkpoint');
+  assert.equal((remote.projection().ledger.cards as Array<Record<string, unknown>>)[0].id, 'direct-card');
+  assert.equal(source.pendingFor('node-b').length, 0);
+});
+
 test('fresh node installs a relay checkpoint before requesting the uncovered event tail', async (context) => {
   const sourceRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-checkpoint-source-'));
   const targetRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-checkpoint-target-'));
