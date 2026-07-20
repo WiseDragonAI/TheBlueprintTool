@@ -1586,6 +1586,10 @@
   margin: 0 0 5px;
 }
 
+.ledger-card-body li + li {
+  margin-top: 4px;
+}
+
 .ledger-card-body code {
   color: var(--card-code-color);
   font-family: inherit;
