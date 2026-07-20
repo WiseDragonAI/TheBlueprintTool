@@ -89,6 +89,7 @@ import { verifyProjectSyncPhase } from '../../project-sync/helper/verify-project
 import type { ProjectSyncRole } from '../../project-sync/helper/project-sync-types.js';
 import { projectSyncGitSshCommand } from '../../project-sync/helper/project-sync-git-ssh-command.js';
 import { applyGitReviewPatch, readGitReview } from '../../git-review/helper/git-review-patch.js';
+import { transcribeGitReviewVoiceController } from '../../git-review/controller/transcribe-git-review-voice-controller.js';
 
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
@@ -1827,6 +1828,24 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));
       response.end(JSON.stringify({ body: result }));
+      return;
+    }
+    if (url === '/api/git-review/voice' && request.method === 'POST' && activeProject) {
+      const bodyBuffer = await readRequestBuffer(request);
+      const contentType = String(request.headers['content-type'] ?? '');
+      const form = contentType.includes('multipart/form-data') ? parseMultipartFormData(bodyBuffer, contentType) : { fields: {}, files: {} };
+      const audio = form.files.audio ?? Object.values(form.files)[0];
+      const result = await transcribeGitReviewVoiceController({
+        action_payload: {
+          ...form.fields,
+          audioBuffer: audio?.buffer ?? bodyBuffer,
+          mimeType: audio?.mimeType ?? (contentType || 'audio/webm'),
+        },
+        runtime_state: requestRuntime,
+      });
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
+      response.end(JSON.stringify(result));
       return;
     }
     if (url === '/api/thread-image-upload' && request.method === 'POST') {

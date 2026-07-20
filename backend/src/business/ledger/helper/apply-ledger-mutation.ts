@@ -8,6 +8,7 @@ import { deleteCardMarkdownImage, duplicateCardContentFile, externalizeCardConte
 import { hydrateLedgerThreadNotesFor, writeThreadNotesFile } from './thread-content-file.js';
 import { codexEffortOptions, codexModelOptions, type CodexEffort, type CodexModel } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import type { CardQuestionnaires } from '../../../../../shared/schemas/questionnaire-types.js';
+import { normalizeGitReviewNotes, type GitReviewNote } from '../../../../../shared/schemas/git-review-types.js';
 
 export type LedgerMutation = {
   action?: string;
@@ -15,7 +16,7 @@ export type LedgerMutation = {
   cardId?: string;
   masterTaskId?: string;
   imageSrc?: string;
-  cardPatch?: { id?: string; status?: string; title?: string; description?: string; imageSizes?: Record<string, { width?: number; height?: number }>; questionnaires?: CardQuestionnaires; codexRunModel?: CodexModel; codexRunEffort?: CodexEffort };
+  cardPatch?: { id?: string; status?: string; title?: string; description?: string; imageSizes?: Record<string, { width?: number; height?: number }>; questionnaires?: CardQuestionnaires; gitReviewNotes?: GitReviewNote[]; codexRunModel?: CodexModel; codexRunEffort?: CodexEffort };
   annotation?: Record<string, unknown>;
   relationship?: Record<string, unknown>;
   zoneIds?: string[];
@@ -135,6 +136,7 @@ export function applyLedgerMutation(input: {
     const validStatus = mutation.cardPatch.status === 'todo' || mutation.cardPatch.status === 'done' || mutation.cardPatch.status === 'backlog';
     const includesCodexPreference = mutation.cardPatch.codexRunModel !== undefined || mutation.cardPatch.codexRunEffort !== undefined;
     const includesQuestionnaires = mutation.cardPatch.questionnaires !== undefined;
+    const includesGitReviewNotes = mutation.cardPatch.gitReviewNotes !== undefined;
     const validCodexPreference = typeof mutation.cardPatch.codexRunModel === 'string'
       && (codexModelOptions as readonly string[]).includes(mutation.cardPatch.codexRunModel)
       && typeof mutation.cardPatch.codexRunEffort === 'string'
@@ -149,6 +151,12 @@ export function applyLedgerMutation(input: {
       mutationError = {
         statusCode: 400,
         body: { ok: false, error: 'Card questionnaires must use the supported versioned question and response contract.' },
+      };
+    }
+    if (!mutationError && includesGitReviewNotes && (!Array.isArray(mutation.cardPatch.gitReviewNotes) || normalizeGitReviewNotes(mutation.cardPatch.gitReviewNotes).length !== mutation.cardPatch.gitReviewNotes.length)) {
+      mutationError = {
+        statusCode: 400,
+        body: { ok: false, error: 'Card Git review notes must use the supported review-note contract.' },
       };
     }
     if (!mutationError && includesQuestionnaires && revisedQuestionnairesCarryAnswers(card, mutation.cardPatch.questionnaires!)) {
@@ -171,6 +179,7 @@ export function applyLedgerMutation(input: {
       }
       if (card && mutation.cardPatch.imageSizes && typeof mutation.cardPatch.imageSizes === 'object') card.imageSizes = mutation.cardPatch.imageSizes;
       if (card && includesQuestionnaires) card.questionnaires = mutation.cardPatch.questionnaires;
+      if (card && includesGitReviewNotes) card.gitReviewNotes = mutation.cardPatch.gitReviewNotes;
       if (card && validCodexPreference) {
         card.codexRunModel = mutation.cardPatch.codexRunModel;
         card.codexRunEffort = mutation.cardPatch.codexRunEffort;

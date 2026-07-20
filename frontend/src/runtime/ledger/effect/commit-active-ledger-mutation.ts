@@ -15,6 +15,7 @@ import {
 } from './reconcile-active-ledger-state.js';
 import type { CodexEffort, CodexModel } from '../../codex/helper/codex-run-options.js';
 import type { CardQuestionnaires } from '../../../../../shared/schemas/questionnaire-types.js';
+import type { GitReviewNote } from '../../../../../shared/schemas/git-review-types.js';
 
 export type ActiveLedgerMutation = {
   action: 'create-card' | 'patch-card' | 'delete-card' | 'delete-card-image' | 'create-zone' | 'create-group' | 'create-relationship' | 'delete-zones' | 'delete-relationships' | 'patch-geometry' | 'patch-viewport' | 'patch-region' | 'append-note' | 'update-note' | 'delete-note' | 'paste-selection';
@@ -28,6 +29,7 @@ export type ActiveLedgerMutation = {
     description?: string;
     imageSizes?: Record<string, { width?: number; height?: number }>;
     questionnaires?: CardQuestionnaires;
+    gitReviewNotes?: GitReviewNote[];
     codexRunModel?: CodexModel;
     codexRunEffort?: CodexEffort;
   };

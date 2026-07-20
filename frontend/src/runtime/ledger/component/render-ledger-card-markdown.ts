@@ -8,7 +8,7 @@ import { renderLedgerCardCodeBlock } from './render-ledger-card-code-block.js';
 import { renderLedgerCardHtmlEmbeds } from './render-ledger-card-html-embeds.js';
 import { renderLedgerCardMedia, type LedgerCardImageSizes } from './render-ledger-card-media.js';
 import { renderLedgerCardTable } from './render-ledger-card-table.js';
-import { renderLedgerCardGitDiff } from './render-ledger-card-git-diff.js';
+import { renderLedgerCardGitDiff, type GitReviewNotesChangeHandler } from './render-ledger-card-git-diff.js';
 import { renderLedgerCardQuestions, type QuestionnairesChangeHandler } from './render-ledger-card-questions.js';
 
 type LedgerCardMarkdownOptions = {
@@ -20,6 +20,8 @@ type LedgerCardMarkdownOptions = {
   onImageResize?: (source: string, dimensions: { width: number; height: number }) => void;
   questionnaires?: unknown;
   onQuestionnairesChange?: QuestionnairesChangeHandler;
+  gitReviewNotes?: unknown;
+  onGitReviewNotesChange?: GitReviewNotesChangeHandler;
 };
 
 export function renderLedgerCardMarkdown(markdown: string, options: LedgerCardMarkdownOptions = {}): HTMLElement {
