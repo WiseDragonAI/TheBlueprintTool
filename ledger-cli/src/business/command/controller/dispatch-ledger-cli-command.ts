@@ -73,6 +73,7 @@ export async function dispatchLedgerCliCommandController(
       targetLedger: operation.targetLedger,
       write: operation.write,
     });
+    if (result.ok && operation.write) await commitTaskProjectionIfNeeded(operation.targetLedger, ports.fs);
     if (result.ok) {
       const output = operation.json ? JSON.stringify(result.value, null, 2) : [
         `Master-task migration ${operation.write ? 'written' : 'dry run'}.`,
