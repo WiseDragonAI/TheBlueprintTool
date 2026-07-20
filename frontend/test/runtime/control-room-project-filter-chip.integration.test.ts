@@ -23,7 +23,8 @@ test('Control Room keeps project chips compact and reserves shortcut controls fo
   assert.doesNotMatch(application, /button\.textContent[^\n]*(ownerNodeLabel|projectPresenceLabel|Online|Offline)/);
   assert.match(application, /project\.projects\.map\(projectOwnerLabel\)\.join\(', '\)/);
   assert.match(application, /button\.disabled = project\.online === false/);
-  assert.match(application, /button\.setAttribute\('aria-pressed', String\(project\.id === state\.projectFilter\)\)/);
+  assert.match(application, /button\.setAttribute\('aria-pressed', String\(project\.id === selected\)\)/);
+  assert.match(application, /projectFilterButton\(project, state\.projectFilter, selectControlProject\)/);
   assert.match(application, /button\.style\.setProperty\('--project-foreground', presentation\.foreground\)/);
   assert.match(application, /if \(presentation\.showRemoteMarker\) {[\s\S]*createElementNS\('http:\/\/www\.w3\.org\/2000\/svg', 'svg'\)[\s\S]*setAttribute\('aria-hidden', 'true'\)[\s\S]*button\.append\(remoteIcon\)/);
 

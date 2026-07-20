@@ -22,7 +22,7 @@ type Projection = AnyRecord & { schemaVersion: number; projectorVersion: string;
 type ProjectSlice = { projectId: string; project: AnyRecord; tasks: AnyRecord[]; dependencies: Dependency[]; fingerprint: string };
 
 const schemaVersion = 7;
-const projectorVersion = 'control-room-v12-subtask-execution-ownership';
+const projectorVersion = 'control-room-v13-task-labels';
 
 function records(value: unknown): AnyRecord[] {
   return Array.isArray(value) ? value.filter((entry): entry is AnyRecord => Boolean(entry && typeof entry === 'object')) : [];
@@ -194,6 +194,7 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   const transcribingBeforeLaunch = executionObservation?.kind === 'voice-transcription';
   const cardStatus = text(input.card.status) || 'todo';
   const status = processing || queued || transcribingBeforeLaunch ? 'task-execution' : cardStatus === 'backlog' ? 'task-backlog' : cardStatus === 'done' ? 'task-complete' : 'task-waiting';
+  const labels = [...new Set(jsonLabels.map((label) => label.trim()).filter((label) => label && label !== 'master-task' && label !== 'subtask'))];
   const subtasks: AnyRecord[] = [];
   for (const relationship of relationships) {
     const cardId = text(relationship.to);
@@ -215,7 +216,7 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   const executionSince = processing ? text(run.startedAt) : '';
   return {
     valid: diagnostics.length === 0, masterTask: true, diagnostics,
-    cardId: text(input.card.id), title: text(input.card.title) || `Card ${text(input.card.id)}`,
+    cardId: text(input.card.id), title: text(input.card.title) || `Card ${text(input.card.id)}`, labels,
     cardStatus,
     projectId: input.project.id, projectName: input.project.name, projectColor: input.project.color,
     ledgerId: input.ledgerEntry.id, ledgerTitle: input.ledgerEntry.title, ledger: ledgerName,
@@ -271,6 +272,7 @@ function projectSyncTask(run: ProjectSyncRun, canonical?: AnyRecord): AnyRecord 
     valid: !failed,
     masterTask: true,
     diagnostics,
+    labels: attached && Array.isArray(canonical?.labels) ? canonical.labels : [],
     cardId: attached ? text(canonical?.cardId) : `project-sync-${run.syncId}`,
     title: attached ? text(canonical?.title) : `Synchronize ${run.sourceProjectName}`,
     cardStatus: attached ? text(canonical?.cardStatus) || 'todo' : 'todo',

@@ -493,10 +493,10 @@ test('parses letter-prefixed card sections from the decision-os formatting contr
   assert.equal(parsed.nextSubtask.cardId, 'card-b');
 });
 
-test('routes master-task cards back to the control room and regular cards back to their zone', () => {
+test('routes master-task cards back to their task list and regular cards back to their zone', () => {
   assert.match(mobile, /backButton\.replaceChildren\(backIcon, backLabel\)/);
   assert.match(mobile, /backButton\.dataset\.destination = parsedTask\.masterTask \? 'control-room' : 'zone'/);
-  assert.match(mobile, /const controlRoomDestination = event\.currentTarget\.dataset\.destination === 'control-room';[\s\S]*const destination = controlRoomDestination \? controlRoomPath\(state\.controlTab\) : zonePath/);
+  assert.match(mobile, /const controlRoomDestination = event\.currentTarget\.dataset\.destination === 'control-room';[\s\S]*const destination = controlRoomDestination \? completionReturnPath\(\) : zonePath/);
 });
 
 test('commits retained Control Room and task-shell views before background route reads', () => {
@@ -559,6 +559,7 @@ test('deletes a master task from its detail after explicit confirmation', () => 
 
 test('keeps four mobile actions and scopes project and node shortcuts to the desktop task-creation modal', () => {
   assert.match(mobile, /destination\('Control room', controlRoomPath\(state\.controlTab\), 'dashboard', 'control-room'\)/);
+  assert.match(mobile, /destination\('Done', '\/done', 'check', 'done'\)/);
   assert.match(mobile, /destination\('Projects', projectPath\(\), 'folder', 'projects'\)/);
   assert.match(mobile, /destination\('Ledgers', '\/ledgers', 'book', 'ledgers'\)/);
   assert.match(mobile, /destination\('Pipelines', '\/pipelines', 'flow', 'pipelines', 'nav-pipelines-button'\)/);
@@ -581,4 +582,18 @@ test('keeps four mobile actions and scopes project and node shortcuts to the des
   assert.match(styles, /\.control-command \{[^}]*align-self: start;[^}]*align-content: start;[^}]*height: fit-content;/);
   assert.match(html, /class="nav-server-restart-button"/);
   assert.match(mobile, /fetch\('\/api\/server\/restart', \{ method: 'POST' \}\)/);
+});
+
+test('renders completed tasks in a dedicated navigation view with search, project, and label filters', () => {
+  assert.match(html, /id="done-view"/);
+  assert.match(html, /id="done-search"[^>]*placeholder="Search completed tasks"/);
+  assert.match(html, /id="done-project-filters"/);
+  assert.match(html, /id="done-label-filters"/);
+  assert.match(mobile, /owner\.route\.pathname === '\/done'/);
+  assert.match(mobile, /const tasks = state\.controlRoom\?\.done \?\? \[\]/);
+  assert.match(mobile, /filterCompletedTasks\(tasks/);
+  assert.match(mobile, /completedTaskLabels\(projectScopedTasks\)/);
+  assert.match(mobile, /task\.status === 'task-complete'[\s\S]*\? 'done'/);
+  assert.match(styles, /\.done-task-list \{ display: grid; gap: 12px;/);
+  assert.match(styles, /\.task-labels \{ display: flex; flex-wrap: wrap;/);
 });

@@ -9,6 +9,7 @@ import { routeCanvasMode } from '../../src/runtime/navigation/helper/route-canva
 
 test('parses global and project-scoped application routes', () => {
   assert.deepEqual(routeScope('/'), { view: 'control-room', projectId: '', ledgerId: '', zoneId: '', cardId: '' });
+  assert.deepEqual(routeScope('/done'), { view: 'done', projectId: '', ledgerId: '', zoneId: '', cardId: '' });
   assert.equal(routeScope('/projects').view, 'projects');
   assert.deepEqual(routeScope('/p/project%201/ledgers/specs'), {
     view: 'ledger', projectId: 'project 1', ledgerId: 'specs', zoneId: '', cardId: '',
