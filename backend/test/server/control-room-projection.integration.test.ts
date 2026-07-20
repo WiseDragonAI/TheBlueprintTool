@@ -15,7 +15,7 @@ test('serves one compact multi-project Control Room projection and refreshes one
   mkdirSync(join(decisionOsRoot, 'threads', 'tasks'), { recursive: true });
   writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }] }));
   writeFileSync(join(decisionOsRoot, 'cards', 'tasks', 'master.md'), '## A. Goal\n\n1. First title.\n\n## B. Subtasks\n\n1. [Child](card:child)\n');
-  writeFileSync(join(decisionOsRoot, 'cards', 'tasks', 'master-done.md'), '## A. Goal\n\n1. Completed title.\n');
+  writeFileSync(join(decisionOsRoot, 'cards', 'tasks', 'master-done.md'), 'Completed at: 2026-07-14T10:04:00.000Z\n\n## A. Goal\n\n1. Completed title.\n');
   writeFileSync(join(decisionOsRoot, 'threads', 'tasks', 'thread-master.md'), '# OPERATOR\n<!-- decision-os:note {"id":"n1","timestamp":"2026-07-14T10:01:00.000Z"} -->\n\nStart.\n');
   writeFileSync(join(decisionOsRoot, 'threads', 'tasks', 'thread-master-done.md'), '# AGENT\n<!-- decision-os:note {"id":"n2","timestamp":"2026-07-14T10:03:00.000Z"} -->\n\nFinished.\n');
   writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
@@ -42,7 +42,7 @@ test('serves one compact multi-project Control Room projection and refreshes one
     const firstText = await firstResponse.text();
     const first = JSON.parse(firstText) as Record<string, any>;
     assert.equal(firstResponse.ok, true, firstText);
-    assert.equal(first.projectorVersion, 'control-room-v13-task-labels');
+    assert.equal(first.projectorVersion, 'control-room-v14-completion-time');
     assert.ok(Buffer.byteLength(firstText) < 250_000);
     assert.equal(first.queue.length, 1);
     assert.equal(first.queue[0].zoneId, 'zone-a');
@@ -54,6 +54,8 @@ test('serves one compact multi-project Control Room projection and refreshes one
     assert.deepEqual(first.queue[0].labels, ['delivery']);
     assert.equal(first.done.length, 1);
     assert.deepEqual(first.done[0].labels, ['release']);
+    assert.equal(first.done[0].completedAt, '2026-07-14T10:04:00.000Z');
+    assert.equal(first.done[0].completedTime, Date.parse('2026-07-14T10:04:00.000Z'));
     assert.deepEqual(first.allTasks.find((task: Record<string, unknown>) => task.cardId === 'master-done')?.labels, ['release']);
     assert.equal(first.queue[0].markdown, undefined);
     assert.equal(first.dependencies, undefined);

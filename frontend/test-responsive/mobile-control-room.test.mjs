@@ -584,16 +584,25 @@ test('keeps four mobile actions and scopes project and node shortcuts to the des
   assert.match(mobile, /fetch\('\/api\/server\/restart', \{ method: 'POST' \}\)/);
 });
 
-test('renders completed tasks in a dedicated navigation view with search, project, and label filters', () => {
+test('renders completed tasks in one project-first, date-sorted navigation list', () => {
   assert.match(html, /id="done-view"/);
   assert.match(html, /id="done-search"[^>]*placeholder="Search completed tasks"/);
+  assert.match(html, /id="done-sort"[\s\S]*value="desc">Newest first[\s\S]*value="asc">Oldest first/);
+  assert.match(html, /id="done-project-filter-group"/);
+  assert.match(html, /id="done-label-filter-group" hidden/);
   assert.match(html, /id="done-project-filters"/);
   assert.match(html, /id="done-label-filters"/);
   assert.match(mobile, /owner\.route\.pathname === '\/done'/);
   assert.match(mobile, /const tasks = state\.controlRoom\?\.done \?\? \[\]/);
   assert.match(mobile, /filterCompletedTasks\(tasks/);
   assert.match(mobile, /completedTaskLabels\(projectScopedTasks\)/);
-  assert.match(mobile, /task\.status === 'task-complete'[\s\S]*\? 'done'/);
+  assert.match(mobile, /task\.status === 'task-complete'[\s\S]*\? completedLabel/);
+  assert.match(mobile, /const showProjectFilters = state\.doneProjectFilter === 'All'/);
+  assert.match(mobile, /elements\['done-project-filter-group'\]\.hidden = !showProjectFilters/);
+  assert.match(mobile, /elements\['done-label-filter-group'\]\.hidden = showProjectFilters/);
+  assert.match(mobile, /order: state\.doneSort/);
   assert.match(styles, /\.done-task-list \{ display: grid; gap: 12px;/);
+  assert.match(styles, /\.done-task-list \{ grid-template-columns: minmax\(0, 1fr\); gap: 16px; \}/);
+  assert.doesNotMatch(styles, /\.done-task-list \{ grid-template-columns: repeat\(2,/);
   assert.match(styles, /\.task-labels \{ display: flex; flex-wrap: wrap;/);
 });
