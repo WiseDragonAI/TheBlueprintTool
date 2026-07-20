@@ -4,18 +4,21 @@
  */
 import { state, type ThreadPanelTab } from '../../state.js';
 import { isThreadFollowingBottom } from '../helper/thread-follow-bottom.js';
-import { pinThreadSurfaceToBottom } from './pin-thread-feed-to-last-message.js';
 import { threadScrollElement } from './persist-thread-scroll.js';
+import { syncThreadJumpButtonVisibility } from './render-thread-jump-button.js';
 
 let resizeObserver: ResizeObserver | null = null;
 let observedContent: Element | null = null;
 let observedIdentity = '';
+let resizeFrame: number | null = null;
 
 export function disconnectThreadFollowBottomObserver(): void {
   resizeObserver?.disconnect();
+  if (resizeFrame !== null) globalThis.cancelAnimationFrame?.(resizeFrame);
   resizeObserver = null;
   observedContent = null;
   observedIdentity = '';
+  resizeFrame = null;
 }
 
 export function syncThreadFollowBottomObserver(input: { active: boolean; threadId: string; surface: ThreadPanelTab }): void {
@@ -37,14 +40,25 @@ export function syncThreadFollowBottomObserver(input: { active: boolean; threadI
   observedContent = content;
   observedIdentity = identity;
   resizeObserver = new ResizeObserver(() => {
-    const currentSurface = state.threadActiveTabByThreadId?.[input.threadId] === 'codex-log' ? 'codex-log' : 'thread';
-    // WHAT: Ignore resize delivery after ownership or follow state changes.
-    // WHY: A delayed callback must not move a paused reader or a different thread surface.
-    if (!state.threadPanelOpen
-      || String(state.threadId ?? '') !== input.threadId
-      || currentSurface !== input.surface
-      || !isThreadFollowingBottom(input.threadId, input.surface)) return;
-    pinThreadSurfaceToBottom(input.surface);
+    // WHAT: Coalesce resize deliveries into one post-layout scroll write.
+    // WHY: Calling the full entry pin helper inside ResizeObserver can create a layout-and-scroll feedback cycle.
+    if (resizeFrame !== null) return;
+    resizeFrame = globalThis.requestAnimationFrame?.(() => {
+      resizeFrame = null;
+      const currentSurface = state.threadActiveTabByThreadId?.[input.threadId] === 'codex-log' ? 'codex-log' : 'thread';
+      // WHAT: Ignore delayed work after ownership or follow state changes.
+      // WHY: A queued frame must not move a paused reader or a different thread surface.
+      if (!state.threadPanelOpen
+        || String(state.threadId ?? '') !== input.threadId
+        || currentSurface !== input.surface
+        || !isThreadFollowingBottom(input.threadId, input.surface)) return;
+      const currentViewport = threadScrollElement(input.surface);
+      // WHAT: Apply one direct bottom alignment to the active viewport.
+      // WHY: Delayed content growth needs no entry animation or descendant `scrollIntoView` side effects.
+      if (!currentViewport) return;
+      currentViewport.scrollTop = currentViewport.scrollHeight;
+      syncThreadJumpButtonVisibility();
+    }) ?? null;
   });
   resizeObserver.observe(content);
 }
