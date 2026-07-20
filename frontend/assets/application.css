@@ -325,22 +325,54 @@ h1 { margin: 0; font-size: clamp(28px, 8vw, 44px); line-height: 1.08; letter-spa
 .ledger-card-body code { color: color-mix(in srgb, var(--zone-color), white 52%); font-family: inherit; }
 .ledger-card-body ol { margin: 0; padding-left: 17px; }
 .ledger-card-body li::marker { color: color-mix(in srgb, var(--zone-color), white 52%); }
-.ledger-card-git-diff { min-width: 0; overflow: hidden; border: 1px solid rgba(255,255,255,.14); border-radius: 4px; background: #090c10; }
-.git-diff-heading, .git-diff-nav, .git-diff-actions { display: flex; align-items: center; gap: 10px; padding: 10px; }
-.git-diff-heading { justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,.12); }
-.git-diff-heading div, .git-diff-nav div { min-width: 0; display: grid; gap: 2px; }
-.git-diff-heading small, .git-diff-nav small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.git-diff-status { padding: 8px 10px; color: var(--muted); font-size: .78rem; border-bottom: 1px solid rgba(255,255,255,.08); }
-.git-diff-nav { display: grid; grid-template-columns: 32px minmax(0,1fr) 32px; }
-.git-diff-nav div { text-align: center; }
-.git-diff-button { min-height: 32px; border: 1px solid rgba(255,255,255,.18); border-radius: 2px; background: #11161c; color: #dce7eb; font: 700 .68rem/1 inherit; letter-spacing: .06em; }
-.git-diff-button.primary { margin-left: auto; color: #071114; border-color: var(--accent); background: var(--accent); }
-.git-diff-button.record { color: var(--accent); }
-.git-diff-button:disabled { opacity: .35; }
-.git-diff-viewport { max-height: 420px; overflow: auto; border-block: 1px solid rgba(255,255,255,.08); font-size: 11px; }
-.git-diff-viewport pre { margin: 0; padding: 10px; overflow: auto; white-space: pre; color: #dce7eb; }
-.git-diff-actions { justify-content: flex-end; }
-.git-diff-thread-reference { padding: 10px; color: var(--muted); }
+.ledger-card-git-diff {
+  --git-diff-surface: #0b0e12;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--zone-color), rgba(255,255,255,.2) 18%);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, #11151a 0%, var(--git-diff-surface) 100%);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.025), 0 12px 28px rgba(0,0,0,.25);
+}
+.git-diff-heading { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px; align-items: center; padding: 12px; border-bottom: 1px solid var(--line); }
+.git-diff-heading > div, .git-diff-nav > div { min-width: 0; display: grid; gap: 2px; }
+.git-diff-eyebrow { color: var(--accent); font: 700 9px/1.2 "Ubuntu Mono", monospace; letter-spacing: .08em; }
+.git-diff-heading strong { font-size: 14px; line-height: 1.25; }
+.git-diff-heading small, .git-diff-nav small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.git-diff-heading .terminal-button__label { display: none; }
+.git-diff-heading .terminal-button { width: 44px; height: 44px; padding: 0; }
+.git-diff-status { min-height: 30px; padding: 8px 12px; color: var(--muted); font: 10px/1.35 "Ubuntu Mono", monospace; border-bottom: 1px solid rgba(255,255,255,.08); }
+.git-diff-nav { display: grid; grid-template-columns: 74px minmax(0,1fr) 74px; gap: 8px; align-items: center; padding: 10px; text-align: center; }
+.git-diff-nav strong { overflow: hidden; color: var(--text); font-size: 12px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.git-diff-nav .terminal-button { width: 100%; padding-inline: 8px; }
+.git-diff-nav .terminal-button__icon { width: 17px; height: 17px; flex-basis: 17px; }
+.ledger-card-git-diff .terminal-button:disabled { opacity: .32; cursor: not-allowed; filter: none; }
+.git-diff-viewport { min-height: 220px; max-height: 430px; overflow: auto; border-block: 1px solid rgba(255,255,255,.09); background: #080b0e; scrollbar-color: rgba(255,255,255,.25) transparent; }
+.git-diff-pierre-container { display: block; width: 100%; min-width: 0; --diffs-font-size: 11px; --diffs-line-height: 19px; }
+.git-diff-viewport pre { margin: 0; padding: 12px; overflow: auto; white-space: pre; color: #dce7eb; font: 11px/1.6 "Ubuntu Mono", monospace; }
+.git-diff-selection-status { min-height: 29px; padding: 7px 12px; border-bottom: 1px solid rgba(255,255,255,.08); color: var(--muted); font: 10px/1.4 "Ubuntu Mono", monospace; }
+.git-diff-actions { display: grid; grid-template-columns: minmax(0,1fr) 76px; gap: 8px; align-items: stretch; padding: 10px; }
+.git-diff-actions .terminal-button { min-height: 54px; }
+.git-diff-actions .terminal-button--action { justify-content: flex-start; padding-inline: 16px; }
+.git-diff-record { color: #d96060; }
+.git-diff-record .terminal-button__icon, .git-diff-record .terminal-button__label { color: #d96060; }
+.git-diff-voice { padding: 0 10px 10px; }
+.git-diff-voice[hidden] { display: none; }
+.git-diff-voice .voice-panel { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.1); }
+.git-diff-voice .voice-status { min-height: 0; color: var(--muted); font: 10px/1.3 "Ubuntu Mono", monospace; }
+.git-diff-voice .control-dock { grid-template-columns: 66px minmax(0,1fr) 14px 66px; grid-template-rows: 66px; height: 66px; }
+.git-diff-voice .voice-cancel-control { grid-column: 1; grid-row: 1; }
+.git-diff-voice .wave-panel { grid-column: 2; grid-row: 1; }
+.git-diff-voice .meter-panel { grid-column: 3; grid-row: 1; }
+.git-diff-voice .voice-action--send { display: grid; grid-column: 4; grid-row: 1; }
+.git-diff-thread-reference { padding: 12px; color: var(--muted); }
+@media (max-width: 520px) {
+  .git-diff-heading { padding: 10px; }
+  .git-diff-heading small { max-width: 240px; }
+  .git-diff-nav { grid-template-columns: 48px minmax(0,1fr) 48px; }
+  .git-diff-nav .terminal-button__label { display: none; }
+  .git-diff-viewport { min-height: 300px; max-height: 470px; }
+}
 .ledger-card-code-block { max-width: 100%; margin: 0; padding: 14px; overflow: auto; border: 1px solid var(--line); background: #050607; white-space: pre; }
 .ledger-card-table-scroll { max-width: 100%; overflow-x: auto; }
 .ledger-card-table { width: 100%; border-collapse: collapse; }
