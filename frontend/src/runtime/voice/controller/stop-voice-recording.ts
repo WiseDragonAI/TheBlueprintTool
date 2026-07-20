@@ -12,8 +12,9 @@ import { flushPendingLedgerContentRefresh } from '../../refresh/effect/subscribe
 import { threadCodexCardId } from '../../codex/helper/thread-codex-card-id.js';
 import { releaseVoiceRecordingWakeLock } from '../effect/hold-voice-recording-wake-lock.js';
 import { voiceProjectId, voiceReplicaNodeId } from '../helper/voice-project-id.js';
+import type { VoiceLaunchMode } from '../helper/voice-launch-mode.js';
 
-export async function stopVoiceRecording(input: { launchMode?: 'send' | 'run' | 'pipeline'; queueCodex?: boolean; onPersisted?: () => void } = {}): Promise<boolean> {
+export async function stopVoiceRecording(input: { launchMode?: VoiceLaunchMode; onPersisted?: () => void } = {}): Promise<boolean> {
   if (state.voice.animationFrameId) cancelAnimationFrame(state.voice.animationFrameId);
   const threadId = String(state.voice.threadId || state.threadId || 'conversation-ledger');
   const recorder = state.voice.recorder as MediaRecorder | undefined;
@@ -51,7 +52,7 @@ export async function stopVoiceRecording(input: { launchMode?: 'send' | 'run' | 
     replicaNodeId: voiceReplicaNodeId(),
     threadId,
     cardId: threadCodexCardId(state.activeLedger, threadId),
-    launchMode: input.launchMode ?? (input.queueCodex ? 'run' : 'send'),
+    launchMode: input.launchMode ?? 'send',
     reviewContext: state.voice.reviewContext,
     onPersisted: input.onPersisted
   });

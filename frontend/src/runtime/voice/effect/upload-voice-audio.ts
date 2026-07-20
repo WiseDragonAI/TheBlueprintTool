@@ -7,6 +7,7 @@ import { state } from '../../state.js';
 import { routeTab } from '../../navigation/helper/route-tab.js';
 import { projectScopedRequestPath, replicaRequestInit } from '../../project/helper/project-request-scope.js';
 import { voiceProjectId, voiceReplicaNodeId } from '../helper/voice-project-id.js';
+import type { VoiceLaunchMode } from '../helper/voice-launch-mode.js';
 
 export type VoiceTranscriptionResult = {
   ok: boolean;
@@ -18,7 +19,7 @@ export type VoiceTranscriptionResult = {
   error?: string;
   status?: number;
   queueCodex?: boolean;
-  launchMode?: 'send' | 'run' | 'pipeline';
+  launchMode?: VoiceLaunchMode;
   reviewContext?: Record<string, string>;
   revision?: number;
   lifecycleStatus?: string;
@@ -35,8 +36,7 @@ export type VoiceUploadOptions = {
   threadId?: string;
   cardId?: string;
   noteId?: string;
-  queueCodex?: boolean;
-  launchMode?: 'send' | 'run' | 'pipeline';
+  launchMode?: VoiceLaunchMode;
   reviewContext?: Record<string, string>;
 };
 
@@ -75,7 +75,7 @@ export async function uploadVoiceAudio(audio: Blob, input: VoiceUploadOptions | 
   form.append('threadId', threadId);
   form.append('cardId', cardIdFromThread(threadId, options.cardId));
   form.append('noteId', options.noteId ?? '');
-  const launchMode = options.launchMode ?? (options.queueCodex ? 'run' : 'send');
+  const launchMode = options.launchMode ?? 'send';
   form.append('launchMode', launchMode);
   form.append('queueCodex', launchMode === 'run' ? 'true' : 'false');
   if (options.reviewContext) form.append('reviewContext', JSON.stringify(options.reviewContext));

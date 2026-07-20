@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { voiceActionIcon } from '../../src/runtime/voice/component/control-dock.js';
-import { updateDesktopVoiceActionPreview, voiceLaunchModeForModifiers } from '../../src/runtime/voice/effect/update-desktop-voice-action-preview.js';
+import { updateDesktopVoiceActionPreview } from '../../src/runtime/voice/effect/update-desktop-voice-action-preview.js';
+import { voiceLaunchModeForModifiers } from '../../src/runtime/voice/helper/voice-launch-mode.js';
 import { state } from '../../src/runtime/state.js';
 
 const source = (path: string): string => readFileSync(new URL(`../../../${path}`, import.meta.url), 'utf8');

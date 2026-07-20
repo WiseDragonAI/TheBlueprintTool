@@ -27,7 +27,7 @@ export async function submitPendingVoiceUpload(noteId: string): Promise<boolean>
     cardId: pending.cardId,
     noteId,
     reviewContext: pending.reviewContext,
-    launchMode: pending.launchMode ?? (pending.queueCodex ? 'run' : 'send')
+    launchMode: pending.launchMode
   });
   if (!upload.ok || !upload.voiceFileRef) {
     patchOptimisticThreadNote({

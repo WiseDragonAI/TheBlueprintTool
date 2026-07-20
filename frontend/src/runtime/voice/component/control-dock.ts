@@ -3,8 +3,7 @@
  * WHY: Voice recording actions should use the imported STOP/wave/meter/SEND layout exactly.
  */
 import { waveSvg } from './wave-svg.js';
-
-export type VoiceLaunchMode = 'send' | 'run' | 'pipeline';
+import type { VoiceLaunchMode } from '../helper/voice-launch-mode.js';
 
 export function voiceActionIcon(mode: VoiceLaunchMode): string {
   if (mode === 'run') return '<svg class="terminal-button__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
