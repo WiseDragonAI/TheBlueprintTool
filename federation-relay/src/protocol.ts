@@ -6,6 +6,7 @@ export const maximumStreamsPerNode = 32;
 
 export const priorityStateFrameTypes = new Set([
   'state-event-batch',
+  'state-relay-ack',
   'state-ack',
   'state-bucket-summary',
   'state-missing-request',

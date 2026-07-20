@@ -275,12 +275,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const taskStoreForProject = (projectId: string, ownerNodeId = ''): TaskEventStore | null => {
     const local = projectTaskStates.get(projectId)?.store;
     if (local) return local;
-    const key = `${ownerNodeId}\u0000${projectId}`;
-    const current = federatedTaskStores.get(key);
+    const current = federatedTaskStores.get(projectId);
     if (current) return current;
     if (!projectId || !ownerNodeId) return null;
-    const store = createTaskEventStore({ decisionOsRoot: resolve(masterDecisionOsRoot, 'cache', 'federation-task-state', ownerNodeId), projectId });
-    federatedTaskStores.set(key, store);
+    const store = createTaskEventStore({ decisionOsRoot: resolve(masterDecisionOsRoot, 'cache', 'federation-task-state'), projectId });
+    federatedTaskStores.set(projectId, store);
     return store;
   };
   let projectSyncCodexRunningProcessCount = 0;
@@ -550,7 +549,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     },
     onRemoteCatalogChange: () => {
       for (const project of projectCatalog().filter((entry) => entry.available)) taskStateForProject(project);
-      for (const peer of federation?.nodes().filter((entry) => entry.online) ?? []) federationTaskStateReplicator?.reconcilePeer(peer.nodeId);
+      federationTaskStateReplicator?.reconcileRelay();
       void synchronizeFederationContent();
       void synchronizeFederatedLibraries().catch(() => undefined);
       projectSyncController?.resume();
@@ -559,6 +558,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       await federationTaskStateReplicator?.handleFrame(frame);
       void federationContentScheduler?.drain();
     },
+    onStateConnected: () => federationTaskStateReplicator?.reconcileRelay(),
   });
   for (const project of projectCatalog().filter((entry) => entry.available)) taskStateForProject(project);
   federationTaskStateReplicator = createFederationTaskStateReplicator({
@@ -576,11 +576,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     store: federationContentStore,
     hasPriorityStateWork: () => {
       const diagnostics = federationTaskStateReplicator?.diagnostics();
-      const onlinePeers = new Set(federation?.nodes().filter((node) => node.online).map((node) => node.nodeId) ?? []);
       return Boolean(diagnostics && (
         diagnostics.activeSnapshotTransfers > 0
         || diagnostics.awaitingSnapshots > 0
-        || diagnostics.pendingAcknowledgements.some((entry) => entry.count > 0 && onlinePeers.has(entry.peerId))
+        || diagnostics.pendingAcknowledgements.some((entry) => entry.count > 0)
       ));
     },
     fetchContent: async ({ ownerNodeId, projectId, hash }) => {
@@ -946,10 +945,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     if (!projectScope && url === '/api/federation/replication-status' && request.method === 'GET') {
       const stores = [
         ...[...projectTaskStates].map(([projectId, state]) => ({ projectId, ownerNodeId: federation?.localOwner().ownerNodeId ?? 'local', store: state.store })),
-        ...[...federatedTaskStores].map(([key, store]) => {
-          const [ownerNodeId, projectId] = key.split('\u0000');
-          return { projectId, ownerNodeId, store };
-        }),
+        ...[...federatedTaskStores].map(([projectId, store]) => ({ projectId, ownerNodeId: 'relay', store })),
       ];
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
@@ -2114,7 +2110,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   }, 1_000);
   codexQueueScanTimer.unref?.();
   const federationAntiEntropyTimer = setInterval(() => {
-    for (const peer of federation.nodes().filter((entry) => entry.online)) federationTaskStateReplicator?.reconcilePeer(peer.nodeId);
+    federationTaskStateReplicator?.reconcileRelay();
     void synchronizeFederationContent();
   }, 30_000);
   federationAntiEntropyTimer.unref?.();
