@@ -145,6 +145,50 @@ test('The thread launcher exposes Codex model and effort controls.', async () =>
     assert.ok(Math.abs(bottomPositions.conversationBottom) <= 1);
     assert.ok(Math.abs(bottomPositions.logBottom) <= 1);
 
+    const upwardScrollSetup = await page.evaluate(async () => {
+      const state = window.__coreState;
+      const threadId = String(state.threadId);
+      state.threadActiveTabByThreadId[threadId] = 'thread';
+      state.activeLedger.notes[threadId] = Array.from({ length: 32 }, (_, index) => ({
+        id: `scroll-regression-${index}`,
+        role: index % 2 === 0 ? 'operator' : 'agent',
+        message: `Thread viewport regression line ${index}: enough content to keep the conversation surface scrollable.`,
+      }));
+      const { requestThreadViewportEntry } = await import('/src/runtime/thread/effect/request-thread-viewport-entry.js');
+      const { renderThreadPanel } = await import('/src/runtime/thread/effect/render-thread-panel.js');
+      requestThreadViewportEntry(threadId, 'thread', 'tab-activation');
+      renderThreadPanel();
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      const viewport = document.querySelector<HTMLElement>('.thread-conversation-scroll');
+      return viewport ? {
+        bottomDistance: viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop,
+        scrollHeight: viewport.scrollHeight,
+      } : null;
+    });
+    assert.ok(upwardScrollSetup);
+    assert.ok(upwardScrollSetup.scrollHeight > 0);
+    assert.ok(Math.abs(upwardScrollSetup.bottomDistance) <= 1);
+
+    const conversationViewport = page.locator('.thread-conversation-scroll');
+    assert.equal(await conversationViewport.count(), 1);
+    await conversationViewport.hover();
+    await page.mouse.wheel(0, -500);
+    await page.waitForFunction(() => {
+      const state = window.__coreState;
+      return state.threadFollowBottomByThreadId[String(state.threadId)] === false;
+    });
+    const upwardScrollBeforeResize = await conversationViewport.evaluate((viewport) => viewport.scrollTop);
+    await page.evaluate(() => {
+      const content = document.querySelector<HTMLElement>('.thread-note-list');
+      const delayedBlock = document.createElement('div');
+      delayedBlock.style.height = '320px';
+      delayedBlock.textContent = 'Delayed layout growth';
+      content?.append(delayedBlock);
+    });
+    await page.waitForTimeout(100);
+    const upwardScrollAfterResize = await conversationViewport.evaluate((viewport) => viewport.scrollTop);
+    assert.equal(upwardScrollAfterResize, upwardScrollBeforeResize);
+
     const tabMemory = await page.evaluate(async () => {
       const state = window.__coreState;
       const cards = state.activeLedger.cards;
