@@ -2,11 +2,12 @@
  * WHAT: Moves complete master-task zones from one Decision OS ledger to another.
  * WHY: Task identity belongs to the canonical tasks ledger without breaking card, thread, or run ownership.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, dirname, resolve } from 'node:path';
 import type { Result } from '../../../lib/types.js';
 
 type JsonRecord = Record<string, any>;
+type SidecarCopy = { from: string; to: string; content: string };
 type MigrationReport = {
   cards: number;
   zones: number;
@@ -99,6 +100,35 @@ function clone<T>(value: T): T {
   return structuredClone(value);
 }
 
+function recoverEmptyTargetSidecars(input: {
+  root: string;
+  target: JsonRecord;
+  targetId: string;
+  kind: 'cards' | 'threads';
+}): Result<SidecarCopy[]> {
+  const references = input.kind === 'cards'
+    ? records(input.target.cards).map((card) => String(card.comment?.contentFile ?? '')).filter(Boolean)
+    : Object.values(input.target.threadFiles && typeof input.target.threadFiles === 'object' ? input.target.threadFiles : {}).map(String).filter(Boolean);
+  const domainRoot = resolve(input.root, input.kind);
+  if (!existsSync(domainRoot)) return { ok: true, value: [] };
+  const sourceDomains = readdirSync(domainRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && entry.name !== input.targetId)
+    .map((entry) => resolve(domainRoot, entry.name));
+  const copies: SidecarCopy[] = [];
+  for (const reference of references) {
+    const to = referencedFile(input.root, reference);
+    if (existsSync(to) && readFileSync(to, 'utf8').length > 0) continue;
+    const candidates = sourceDomains.map((directory) => resolve(directory, basename(reference)))
+      .filter((file) => existsSync(file))
+      .map((file) => ({ file, content: readFileSync(file, 'utf8') }))
+      .filter((candidate) => candidate.content.length > 0);
+    const contents = new Set(candidates.map((candidate) => candidate.content));
+    if (contents.size > 1) return { ok: false, error: `Conflicting source sidecars for ${reference}.` };
+    if (candidates[0]) copies.push({ from: candidates[0].file, to, content: candidates[0].content });
+  }
+  return { ok: true, value: copies };
+}
+
 export function migrateMasterTasks(input: { sourceLedger: string; targetLedger: string; write: boolean }): Result<MigrationReport> {
   const sourceFile = resolve(input.sourceLedger);
   const targetFile = resolve(input.targetLedger);
@@ -113,17 +143,39 @@ export function migrateMasterTasks(input: { sourceLedger: string; targetLedger: 
   const targetOriginal = JSON.parse(readFileSync(targetFile, 'utf8')) as JsonRecord;
   const source = clone(sourceOriginal);
   const target = clone(targetOriginal);
+  const recoveredCards = recoverEmptyTargetSidecars({ root: sourceRoot, target, targetId, kind: 'cards' });
+  if (!recoveredCards.ok) return recoveredCards;
+  const recoveredThreads = recoverEmptyTargetSidecars({ root: sourceRoot, target, targetId, kind: 'threads' });
+  if (!recoveredThreads.ok) return recoveredThreads;
   const cards = records(source.cards);
   const relationships = records(source.relationships);
   const zones = records(source.annotations).filter((entry) => String(entry.variant ?? 'zone') === 'zone');
   const movedIds = new Set(cards.filter((card) => isMasterTaskCard(sourceRoot, card))
     .map((card) => String(card.id ?? '')));
-  if (movedIds.size === 0) return { ok: true, value: {
+  if (movedIds.size === 0) {
+    if (input.write) {
+      const recoveryCopies = [...recoveredCards.value, ...recoveredThreads.value];
+      const snapshots = new Map(recoveryCopies.map((copy) => [copy.to, existsSync(copy.to) ? readFileSync(copy.to, 'utf8') : null] as const));
+      try {
+        for (const copy of recoveryCopies) {
+          mkdirSync(dirname(copy.to), { recursive: true });
+          writeFileSync(copy.to, copy.content, 'utf8');
+        }
+      } catch (error) {
+        for (const [file, content] of snapshots) {
+          if (content === null) rmSync(file, { force: true });
+          else writeFileSync(file, content, 'utf8');
+        }
+        return { ok: false, error: error instanceof Error ? error.message : 'Master-task sidecar recovery failed.' };
+      }
+      if (recoveredCards.value.length > 0 || recoveredThreads.value.length > 0) rmSync(resolve(sourceRoot, 'cache'), { recursive: true, force: true });
+    }
+    return { ok: true, value: {
     cards: 0,
     zones: 0,
     relationships: 0,
-    cardFiles: 0,
-    threadFiles: 0,
+    cardFiles: recoveredCards.value.length,
+    threadFiles: recoveredThreads.value.length,
     missingCardFiles: [],
     missingThreadFiles: [],
     queueItems: 0,
@@ -132,6 +184,7 @@ export function migrateMasterTasks(input: { sourceLedger: string; targetLedger: 
     targetLedger: targetFile,
     write: input.write,
   } };
+  }
 
   let changed = true;
   while (changed) {
@@ -169,8 +222,8 @@ export function migrateMasterTasks(input: { sourceLedger: string; targetLedger: 
     if (collision) return { ok: false, error: `Target ${kind} id collision: ${String(collision.id ?? '')}` };
   }
 
-  const cardCopies: Array<{ from: string; to: string; content: string }> = [];
-  const threadCopies: Array<{ from: string; to: string; content: string }> = [];
+  const cardCopies: SidecarCopy[] = [];
+  const threadCopies: SidecarCopy[] = [];
   const missingCardFiles: string[] = [];
   const missingThreadFiles: string[] = [];
   for (const card of movedCards) {
@@ -256,8 +309,8 @@ export function migrateMasterTasks(input: { sourceLedger: string; targetLedger: 
     cards: movedCards.length,
     zones: movedZones.length,
     relationships: movedRelationships.length,
-    cardFiles: cardCopies.length,
-    threadFiles: threadCopies.length,
+    cardFiles: cardCopies.length + recoveredCards.value.length,
+    threadFiles: threadCopies.length + recoveredThreads.value.length,
     missingCardFiles,
     missingThreadFiles,
     queueItems,
@@ -269,11 +322,14 @@ export function migrateMasterTasks(input: { sourceLedger: string; targetLedger: 
   if (!input.write) return { ok: true, value: report };
 
   const createdFiles: string[] = [];
+  const recoveredSnapshots = new Map([...recoveredCards.value, ...recoveredThreads.value]
+    .map((copy) => [copy.to, existsSync(copy.to) ? readFileSync(copy.to, 'utf8') : null] as const));
   try {
-    for (const copy of [...cardCopies, ...threadCopies]) {
+    for (const copy of [...recoveredCards.value, ...recoveredThreads.value, ...cardCopies, ...threadCopies]) {
+      const existed = existsSync(copy.to);
       mkdirSync(dirname(copy.to), { recursive: true });
       writeFileSync(copy.to, copy.content, 'utf8');
-      createdFiles.push(copy.to);
+      if (!existed) createdFiles.push(copy.to);
     }
     atomicWrite(targetFile, target);
     atomicWrite(sourceFile, source);
@@ -287,6 +343,10 @@ export function migrateMasterTasks(input: { sourceLedger: string; targetLedger: 
     if (queueOriginal) atomicWrite(queueFile, queueOriginal);
     if (pipelineOriginal) atomicWrite(pipelineFile, pipelineOriginal);
     for (const file of createdFiles) rmSync(file, { force: true });
+    for (const [file, content] of recoveredSnapshots) {
+      if (content === null) rmSync(file, { force: true });
+      else writeFileSync(file, content, 'utf8');
+    }
     return { ok: false, error: error instanceof Error ? error.message : 'Master-task migration failed.' };
   }
   return { ok: true, value: report };

@@ -230,3 +230,40 @@ test('returns a zero-change result after all master tasks have already moved', (
   } });
   assert.deepEqual(JSON.parse(readFileSync(targetLedger, 'utf8')).cards, [{ id: 'existing-task' }]);
 });
+
+test('backfills empty canonical sidecars from the retained source-domain content', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-master-task-sidecar-backfill-'));
+  const root = join(workspace, '.decision-os');
+  mkdirSync(join(root, 'cards', 'specs'), { recursive: true });
+  mkdirSync(join(root, 'cards', 'tasks'), { recursive: true });
+  mkdirSync(join(root, 'threads', 'specs'), { recursive: true });
+  mkdirSync(join(root, 'threads', 'tasks'), { recursive: true });
+  const sourceLedger = join(root, 'specs.json');
+  const targetLedger = join(root, 'tasks.json');
+  writeFileSync(sourceLedger, JSON.stringify({ cards: [], annotations: [], relationships: [] }));
+  writeFileSync(targetLedger, JSON.stringify({
+    cards: [{ id: 'card-master', labels: ['master-task'], comment: { contentFile: '.decision-os/cards/tasks/card-master.md' } }],
+    annotations: [], relationships: [],
+    threadFiles: { 'thread-card-master': '.decision-os/threads/tasks/thread-card-master.md' },
+  }));
+  const cardContent = 'Ledger: Tasks\nWaiting since: 2026-07-18T06:00:00.000Z\n\nTask body.\n';
+  const threadContent = '# OPERATOR\n<!-- decision-os:note {"id":"note-1","timestamp":"2026-07-18T06:00:00.000Z"} -->\n\nRun it.\n';
+  writeFileSync(join(root, 'cards', 'specs', 'card-master.md'), cardContent);
+  writeFileSync(join(root, 'cards', 'tasks', 'card-master.md'), '');
+  writeFileSync(join(root, 'threads', 'specs', 'thread-card-master.md'), threadContent);
+  writeFileSync(join(root, 'threads', 'tasks', 'thread-card-master.md'), '');
+
+  const dryRun = migrateMasterTasks({ sourceLedger, targetLedger, write: false });
+  assert.equal(dryRun.ok, true);
+  if (!dryRun.ok) return;
+  assert.equal(dryRun.value.cardFiles, 1);
+  assert.equal(dryRun.value.threadFiles, 1);
+  assert.equal(readFileSync(join(root, 'cards', 'tasks', 'card-master.md'), 'utf8'), '');
+
+  const result = migrateMasterTasks({ sourceLedger, targetLedger, write: true });
+  assert.equal(result.ok, true);
+  assert.equal(readFileSync(join(root, 'cards', 'tasks', 'card-master.md'), 'utf8'), cardContent);
+  assert.equal(readFileSync(join(root, 'threads', 'tasks', 'thread-card-master.md'), 'utf8'), threadContent);
+  assert.equal(readFileSync(join(root, 'cards', 'specs', 'card-master.md'), 'utf8'), cardContent);
+  assert.equal(readFileSync(join(root, 'threads', 'specs', 'thread-card-master.md'), 'utf8'), threadContent);
+});
