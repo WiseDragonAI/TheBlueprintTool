@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { state } from '../../../../src/runtime/state.js';
 import { startGitReviewVoiceCapture } from '../../../../src/runtime/ledger/helper/git-review-voice-capture.js';
+import { acquireVoiceCaptureOwnership, currentVoiceCaptureOwner } from '../../../../src/runtime/voice/helper/voice-capture-ownership.js';
 
 test('Git review capture leaves the singleton thread voice state untouched', async () => {
   const originals = {
@@ -44,11 +45,15 @@ test('Git review capture leaves the singleton thread voice state untouched', asy
   });
 
   try {
-    const capture = await startGitReviewVoiceCapture(() => undefined);
+    const owner = 'git-review:card-a:file-a' as const;
+    const capture = await startGitReviewVoiceCapture(owner, () => undefined);
     assert.equal(state.voice, threadVoiceState);
+    assert.equal(currentVoiceCaptureOwner(), owner);
+    assert.equal(acquireVoiceCaptureOwnership('thread'), false);
     const audio = await capture.stop();
     assert.equal(audio.size, 5);
     assert.equal(state.voice, threadVoiceState);
+    assert.equal(currentVoiceCaptureOwner(), null);
   } finally {
     for (const [key, descriptor] of Object.entries(originals)) {
       if (descriptor) Object.defineProperty(globalThis, key, descriptor);

@@ -212,9 +212,12 @@ test('browser inputs route ledger commands through runtime controllers before se
   assert.match(openThreadPanel, /openThreadPanelController\(\)/);
   const threadEntry = source('frontend/src/runtime/thread/effect/request-thread-viewport-entry.ts');
   const threadLogRenderer = source('frontend/src/runtime/thread/effect/render-thread-codex-log.ts');
+  const threadLogBinding = source('frontend/src/runtime/codex/effect/bind-thread-codex-run-log.ts');
   assert.match(threadEntry, /threadId, surface, openGeneration, reason/);
   assert.match(threadEntry, /setThreadFollowBottom\(threadId, true, surface\)/);
   assert.doesNotMatch(threadLogRenderer, /scrollTop\s*=/);
+  assert.match(threadLogBinding, /renderThreadCodexLogUpdate/);
+  assert.doesNotMatch(threadLogBinding, /renderThreadPanel/);
 
   const renderThreadPanel = source('frontend/src/runtime/thread/effect/render-thread-panel.ts');
   const processThreadCodex = source('frontend/src/runtime/codex/controller/process-thread-codex-controller.ts');

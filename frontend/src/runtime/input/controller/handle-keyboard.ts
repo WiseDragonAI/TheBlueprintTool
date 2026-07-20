@@ -26,6 +26,7 @@ import { cancelVoiceRecording } from '../../voice/controller/cancel-voice-record
 import { voiceLaunchModeForModifiers } from '../../voice/helper/voice-launch-mode.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { isCardEditingKeyboardTarget } from '../helper/is-card-editing-keyboard-target.js';
+import { currentVoiceCaptureOwner } from '../../voice/helper/voice-capture-ownership.js';
 
 export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
   const target = event.target as HTMLElement | null;
@@ -74,6 +75,7 @@ export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
   }
   if (key === 'x') {
     event.preventDefault();
+    if (currentVoiceCaptureOwner()?.startsWith('git-review:')) return;
     if (!state.threadPanelOpen) openThreadPanel();
     if (state.voice.recording) await executeVoiceAction({ launchMode: voiceLaunchModeForModifiers(event) });
     else void startVoiceRecording();

@@ -11,11 +11,14 @@ import { paintVoiceWaveLevel } from './paint-voice-wave-level.js';
 import { updateDesktopVoiceActionPreview } from './update-desktop-voice-action-preview.js';
 
 export function renderVoiceStatus(): void {
-  const status = document.querySelector('.voice-status') as HTMLElement | null;
-  const meter = (document.querySelector('.meter-fill') ?? document.querySelector('.voice-meter-value')) as HTMLElement | null;
-  const timer = document.querySelector('.wave-timer') as HTMLElement | null;
-  const panel = document.querySelector('.voice-panel') as HTMLElement | null;
-  const recorder = document.querySelector('.voice-recorder') as HTMLElement | null;
+  const surface = typeof HTMLElement !== 'undefined' && state.voice.surfaceRoot instanceof HTMLElement && state.voice.surfaceRoot.isConnected
+    ? state.voice.surfaceRoot
+    : document;
+  const status = surface.querySelector('.voice-status') as HTMLElement | null;
+  const meter = (surface.querySelector('.meter-fill') ?? surface.querySelector('.voice-meter-value')) as HTMLElement | null;
+  const timer = surface.querySelector('.wave-timer') as HTMLElement | null;
+  const panel = surface.querySelector('.voice-panel') as HTMLElement | null;
+  const recorder = surface.querySelector('.voice-recorder') as HTMLElement | null;
   if (!status || !meter || !panel) return;
   const level = Math.max(0, Math.min(1, Number(state.voice.level ?? 0)));
   const waveSamples = Array.isArray(state.voice.waveSamples) ? state.voice.waveSamples : [];
@@ -39,11 +42,11 @@ export function renderVoiceStatus(): void {
   status.textContent = state.voice.recording
     ? ''
     : String(state.voice.transcriptionStatus ?? 'idle');
-  if (typeof document.querySelectorAll === 'function') {
-    document.querySelectorAll('[data-action="voice-cancel"]').forEach((button) => {
+  if (typeof surface.querySelectorAll === 'function') {
+    surface.querySelectorAll('[data-action="voice-cancel"]').forEach((button) => {
       (button as HTMLButtonElement).disabled = !state.voice.recording;
     });
-    document.querySelectorAll('[data-action="voice-toggle"]').forEach((button) => {
+    surface.querySelectorAll('[data-action="voice-toggle"]').forEach((button) => {
       const label = button.querySelector('.terminal-button__label');
       (button as HTMLButtonElement).disabled = false;
       if (label) label.textContent = state.voice.recording ? 'SEND' : 'REC';

@@ -62,10 +62,10 @@ function selectionLabel(selection: ReviewSelection | null): string {
 
 function reviewVoiceDock(): string {
   return `<div class="control-dock">
-    <button class="terminal-button terminal-button--stop terminal-button--stack git-review-voice-cancel" type="button" data-git-review-voice="cancel"><span class="terminal-button__key">Esc</span><svg class="terminal-button__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg><span class="terminal-button__label">CANCEL</span></button>
+    <button class="terminal-button terminal-button--stop terminal-button--stack git-review-voice-cancel" type="button" data-git-review-voice="cancel"><svg class="terminal-button__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg><span class="terminal-button__label">CANCEL</span></button>
     <section class="wave-panel"><div class="wave-timer">00:00</div>${waveSvg()}</section>
     <aside class="meter-panel"><div class="meter-track"><div class="meter-fill"></div></div></aside>
-    <button class="terminal-button terminal-button--send terminal-button--stack git-review-voice-send" type="button" data-git-review-voice="send"><span class="terminal-button__key">X</span>${voiceActionIcon('send')}<span class="terminal-button__label">SEND</span></button>
+    <button class="terminal-button terminal-button--send terminal-button--stack git-review-voice-send" type="button" data-git-review-voice="send">${voiceActionIcon('send')}<span class="terminal-button__label">SEND</span></button>
   </div>`;
 }
 
@@ -122,6 +122,7 @@ export function renderLedgerCardGitDiff(block: Extract<LedgerMarkdownBlock, { ki
   let renderer: { cleanUp(): void } | null = null;
   let notes = normalizeGitReviewNotes(options.gitReviewNotes);
   let voiceCapture: GitReviewVoiceCapture | null = null;
+  const voiceOwner = `git-review:${options.cardId ?? 'card'}:${block.repository}:${block.target}` as const;
 
   const endpoint = () => {
     const query = new URLSearchParams({ repo: block.repository, path: block.target });
@@ -204,7 +205,7 @@ export function renderLedgerCardGitDiff(block: Extract<LedgerMarkdownBlock, { ki
     const stageButton = terminalButton({ label: staged ? 'STAGED' : 'STAGE CHANGE', icon: icons.stage, variant: 'terminal-button--send terminal-button--action' });
     stageButton.disabled = staged;
     stageButton.onclick = () => void stage(hunk);
-    const record = terminalButton({ label: 'REC', icon: icons.record, key: 'X', variant: 'terminal-button--send terminal-button--stack git-diff-record' });
+    const record = terminalButton({ label: 'VOICE NOTE', icon: icons.record, variant: 'terminal-button--send terminal-button--stack git-diff-record' });
     actions.append(stageButton, record);
     content.append(actions);
 
@@ -263,7 +264,7 @@ export function renderLedgerCardGitDiff(block: Extract<LedgerMarkdownBlock, { ki
       voiceStatus.textContent = 'Recording this Git review only';
       setReviewControlsDisabled(true);
       try {
-        voiceCapture = await startGitReviewVoiceCapture(({ durationMs, level }) => {
+        voiceCapture = await startGitReviewVoiceCapture(voiceOwner, ({ durationMs, level }) => {
           voiceTimer.textContent = formatRecordingDuration(durationMs);
           voiceMeter.style.height = `${Math.round(18 + level * 74)}%`;
         });
@@ -318,20 +319,6 @@ export function renderLedgerCardGitDiff(block: Extract<LedgerMarkdownBlock, { ki
       renderNotes();
       resetVoice();
     });
-    root.onkeydown = (event) => {
-      const key = event.key.toLowerCase();
-      if (key === 'x') {
-        event.preventDefault();
-        event.stopPropagation();
-        if (voiceCapture) sendButton.click();
-        else record.click();
-      }
-      if (key === 'escape' && voiceCapture) {
-        event.preventDefault();
-        event.stopPropagation();
-        cancelButton.click();
-      }
-    };
   }
 
   async function load(): Promise<void> {

@@ -17,15 +17,12 @@ import { resolveThreadTargetTitle } from '../helper/resolve-thread-target-title.
 import { activeThreadPanelTab } from '../helper/active-thread-panel-tab.js';
 import { threadPanelTabState } from '../helper/thread-panel-tab-state.js';
 import { applyThreadAccent } from './apply-thread-accent.js';
-import { pinThreadSurfaceToBottom } from './pin-thread-feed-to-last-message.js';
-import { isThreadFollowingBottom } from '../helper/thread-follow-bottom.js';
 import { requestThreadViewportEntry } from './request-thread-viewport-entry.js';
-import { consumeThreadViewportEntry } from './consume-thread-viewport-entry.js';
-import { syncThreadFollowBottomObserver } from './sync-thread-follow-bottom-observer.js';
+import { applyThreadViewportState } from './apply-thread-viewport-state.js';
 import { restoreThreadDraft } from './persist-thread-draft.js';
-import { restoreThreadScrollPosition, saveThreadScrollPosition } from './persist-thread-scroll.js';
+import { saveThreadScrollPosition } from './persist-thread-scroll.js';
 import { renderThreadCodexLog } from './render-thread-codex-log.js';
-import { renderThreadJumpButton, suppressThreadScrollTrackingThroughNextFrame, syncThreadJumpButtonVisibility } from './render-thread-jump-button.js';
+import { renderThreadJumpButton, suppressThreadScrollTrackingThroughNextFrame } from './render-thread-jump-button.js';
 import { renderThreadNotes } from './render-thread-notes.js';
 import { syncThreadCodexRunControls } from './sync-thread-codex-run-controls.js';
 import { restorePendingVoiceUploads } from '../../voice/effect/restore-pending-voice-uploads.js';
@@ -291,9 +288,6 @@ export function renderThreadPanel(): void {
   const shouldOpenThread = Boolean(state.threadPanelOpen || state.activeTool === 'thread');
   const activeThreadId = String(state.threadId ?? '');
   const activeTab = activeThreadPanelTab(activeThreadId);
-  const viewportEntry = shouldOpenThread ? consumeThreadViewportEntry(activeThreadId, activeTab) : null;
-  const shouldPinThread = Boolean(viewportEntry);
-  const shouldFollowBottom = Boolean(shouldOpenThread && isThreadFollowingBottom(activeThreadId, activeTab));
 
   inspector.hidden = !shouldOpenThread;
   panel.hidden = !shouldOpenThread;
@@ -330,11 +324,5 @@ export function renderThreadPanel(): void {
   }
   renderTelemetry();
 
-  if (shouldPinThread || shouldFollowBottom) {
-    pinThreadSurfaceToBottom(activeTab);
-  } else if (shouldOpenThread) {
-    restoreThreadScrollPosition(activeThreadId, activeTab);
-  }
-  syncThreadFollowBottomObserver({ active: shouldOpenThread, threadId: activeThreadId, surface: activeTab });
-  syncThreadJumpButtonVisibility();
+  applyThreadViewportState({ active: shouldOpenThread, threadId: activeThreadId, surface: activeTab });
 }

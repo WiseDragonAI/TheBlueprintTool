@@ -6,6 +6,7 @@ import { state } from '../../state.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { renderVoiceStatus } from '../effect/render-voice-status.js';
 import { releaseVoiceRecordingWakeLock } from '../effect/hold-voice-recording-wake-lock.js';
+import { releaseVoiceCaptureOwnership } from '../helper/voice-capture-ownership.js';
 
 export function cancelVoiceRecording(): void {
   if (state.voice.animationFrameId) cancelAnimationFrame(state.voice.animationFrameId);
@@ -20,7 +21,9 @@ export function cancelVoiceRecording(): void {
   const audioContext = state.voice.audioContext as AudioContext | undefined;
   void audioContext?.close();
   releaseVoiceRecordingWakeLock();
-  state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'recording canceled' };
+  releaseVoiceCaptureOwnership('thread');
+  const surfaceRoot = state.voice.surfaceRoot;
+  state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'recording canceled', surfaceRoot };
   telemetry('cancel-voice-recording', { threadId: state.threadId });
   renderVoiceStatus();
 }

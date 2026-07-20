@@ -1,3 +1,5 @@
+import { acquireVoiceCaptureOwnership, releaseVoiceCaptureOwnership, type VoiceCaptureOwner } from '../../voice/helper/voice-capture-ownership.js';
+
 /**
  * WHAT: Captures audio for one Git review widget with instance-local browser state.
  * WHY: Git review recording must not read or mutate the singleton thread voice recorder.
@@ -19,8 +21,15 @@ function audioLevel(analyser: AnalyserNode, samples: Uint8Array<ArrayBuffer>): n
   return Math.min(1, Math.sqrt(sum / Math.max(1, samples.length)) * 4);
 }
 
-export async function startGitReviewVoiceCapture(onFrame: (frame: GitReviewVoiceFrame) => void): Promise<GitReviewVoiceCapture> {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+export async function startGitReviewVoiceCapture(owner: VoiceCaptureOwner, onFrame: (frame: GitReviewVoiceFrame) => void): Promise<GitReviewVoiceCapture> {
+  if (!acquireVoiceCaptureOwnership(owner)) throw new Error('Another voice recording is already active.');
+  let stream: MediaStream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+  } catch (error) {
+    releaseVoiceCaptureOwnership(owner);
+    throw error;
+  }
   const audioContext = new AudioContext();
   const analyser = audioContext.createAnalyser();
   analyser.fftSize = 128;
@@ -45,6 +54,7 @@ export async function startGitReviewVoiceCapture(onFrame: (frame: GitReviewVoice
     if (animationFrameId) cancelAnimationFrame(animationFrameId);
     stream.getTracks().forEach((track) => track.stop());
     void audioContext.close();
+    releaseVoiceCaptureOwnership(owner);
   };
 
   return {

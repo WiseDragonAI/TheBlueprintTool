@@ -8,6 +8,7 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { updateVoiceRecordingFrame } from '../effect/update-voice-recording-frame.js';
 import { calculateVoiceLevel } from '../helper/calculate-voice-level.js';
 import { holdVoiceRecordingWakeLock, releaseVoiceRecordingWakeLock } from '../effect/hold-voice-recording-wake-lock.js';
+import { acquireVoiceCaptureOwnership, releaseVoiceCaptureOwnership } from '../helper/voice-capture-ownership.js';
 
 export type VoiceRecordingContext = {
   threadId?: string;
@@ -17,6 +18,7 @@ export type VoiceRecordingContext = {
 
 export async function startVoiceRecording(input: VoiceRecordingContext = {}): Promise<void> {
   if (state.voice.recording) return;
+  if (!acquireVoiceCaptureOwnership('thread')) return;
   try {
     const threadId = input.threadId || state.threadId || 'conversation-ledger';
     if (!state.threadId) state.threadId = threadId;
@@ -61,6 +63,7 @@ export async function startVoiceRecording(input: VoiceRecordingContext = {}): Pr
     updateVoiceRecordingFrame();
   } catch (error) {
     releaseVoiceRecordingWakeLock();
+    releaseVoiceCaptureOwnership('thread');
     state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'permission denied', threadId: input.threadId, reviewContext: input.reviewContext, surfaceRoot: input.surfaceRoot, error: error instanceof Error ? error.message : String(error) };
     telemetry('voice-recording-failed', { error: state.voice.error });
     renderVoiceStatus();
