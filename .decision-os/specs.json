@@ -5500,7 +5500,7 @@
       "title": "Add a completed-tasks navigation view",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "master-task"
       ],
@@ -5624,7 +5624,7 @@
       "title": "Verify completed-task navigation and filtering",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "subtask"
       ],
@@ -5670,7 +5670,9 @@
       "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784553317894-cdd40639.md",
       "codexThreadRunOutputFiles": {
         "codex-skill-1784553317894-cdd40639": ".decision-os/runs/codex-skills/specs/codex-skill-1784553317894-cdd40639.md"
-      }
+      },
+      "codexActiveRunId": "codex-skill-1784553317894-cdd40639",
+      "codexActiveExecutionId": "codex-execution-1784569332044-c3b048eb"
     },
     {
       "id": "card-51612a1a-d9e5-4bb9-9beb-ed466dbf0628",
@@ -5929,14 +5931,16 @@
       "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784568719663-1a371624.md",
       "codexThreadRunOutputFiles": {
         "codex-skill-1784568719663-1a371624": ".decision-os/runs/codex-skills/specs/codex-skill-1784568719663-1a371624.md"
-      }
+      },
+      "codexActiveRunId": "codex-skill-1784568719663-1a371624",
+      "codexActiveExecutionId": "codex-execution-1784569236127-96ca3d62"
     },
     {
       "id": "card-4d540bf7-6947-4c51-84e8-b5af3266d38d",
       "title": "Replace task surface gradients and shadows with solid colors",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "frontend",
         "visual",
