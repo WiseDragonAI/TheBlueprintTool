@@ -39,6 +39,12 @@ test('card markdown inline code and bold styling follow card color specs', () =>
   assert.match(css, /\.ledger-card-body li::marker\s*{[^}]*color:\s*var\(--card-code-color\);/s);
 });
 
+test('responsive task detail body uses one solid fill without a surface shadow', () => {
+  const applicationCss = source('frontend/assets/application.css');
+  assert.match(applicationCss, /\.ledger-card-body\s*{[^}]*background-color:\s*var\(--panel\);[^}]*background-image:\s*none;[^}]*box-shadow:\s*none;/s);
+  assert.doesNotMatch(applicationCss, /\.ledger-card-body\s*{[^}]*linear-gradient/s);
+});
+
 test('low-detail mode switches card paint layers without threshold layout measurement', () => {
   const specs = source('documentation/specs.json');
   const css = source('frontend/assets/canvas/canvas-layer.css');

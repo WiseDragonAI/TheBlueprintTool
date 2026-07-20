@@ -331,7 +331,7 @@ h1 { margin: 0; font-size: clamp(28px, 8vw, 44px); line-height: 1.08; letter-spa
 @media (max-width: 759px) {
   .master-task-completion-actions { grid-template-columns: 1fr; }
 }
-.ledger-card-body { display: grid; gap: 14px; padding: 18px; border: 1px solid color-mix(in srgb, var(--zone-color), rgba(255,255,255,.18) 12%); border-radius: var(--radius); background: linear-gradient(180deg, rgb(16, 18, 23) 0%, rgb(9, 11, 15) 100%); box-shadow: 0 0 0 1px color-mix(in srgb, var(--zone-color), transparent 55%); line-height: 1.65; overflow-wrap: anywhere; }
+.ledger-card-body { display: grid; gap: 14px; padding: 18px; border: 1px solid color-mix(in srgb, var(--zone-color), rgba(255,255,255,.18) 12%); border-radius: var(--radius); background-color: var(--panel); background-image: none; box-shadow: none; line-height: 1.65; overflow-wrap: anywhere; }
 .ledger-card-body > * { margin: 0; }
 .ledger-card-body h1, .ledger-card-body h2, .ledger-card-body h3, .ledger-card-body h4, .ledger-card-body h5, .ledger-card-body h6 { color: color-mix(in srgb, var(--zone-color), white 52%); font-size: 1rem; letter-spacing: 0; }
 .ledger-card-body a { color: var(--accent); }
