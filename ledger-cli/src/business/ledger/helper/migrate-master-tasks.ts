@@ -160,6 +160,7 @@ export function migrateMasterTasks(input: { sourceLedger: string; targetLedger: 
   const cards = records(source.cards);
   const relationships = records(source.relationships);
   const zones = records(source.annotations).filter((entry) => String(entry.variant ?? 'zone') === 'zone');
+  const cardsById = new Map(cards.map((card) => [String(card.id ?? ''), card]));
   const movedIds = new Set(cards.filter((card) => isMasterTaskCard(sourceRoot, card))
     .map((card) => String(card.id ?? '')));
   const masterIds = new Set(movedIds);
@@ -206,6 +207,15 @@ export function migrateMasterTasks(input: { sourceLedger: string; targetLedger: 
       const to = String(relationship.to ?? '');
       if (relationship.label === 'subtask' && movedIds.has(from) && !movedIds.has(to)) {
         movedIds.add(to);
+        changed = true;
+        continue;
+      }
+      const fromMoved = movedIds.has(from);
+      const toMoved = movedIds.has(to);
+      if (fromMoved === toMoved) continue;
+      const executionCardId = fromMoved ? to : from;
+      if (String(cardsById.get(executionCardId)?.cardType ?? '') === 'codex-skill-run') {
+        movedIds.add(executionCardId);
         changed = true;
       }
     }
