@@ -89,6 +89,7 @@ import { verifyProjectSyncPhase } from '../../project-sync/helper/verify-project
 import type { ProjectSyncRole } from '../../project-sync/helper/project-sync-types.js';
 import { projectSyncGitSshCommand } from '../../project-sync/helper/project-sync-git-ssh-command.js';
 import { applyGitReviewPatch, readGitReview } from '../../git-review/helper/git-review-patch.js';
+import { transcribeGitReviewVoiceController } from '../../git-review/controller/transcribe-git-review-voice-controller.js';
 
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
@@ -275,12 +276,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const taskStoreForProject = (projectId: string, ownerNodeId = ''): TaskEventStore | null => {
     const local = projectTaskStates.get(projectId)?.store;
     if (local) return local;
-    const key = `${ownerNodeId}\u0000${projectId}`;
-    const current = federatedTaskStores.get(key);
+    const current = federatedTaskStores.get(projectId);
     if (current) return current;
     if (!projectId || !ownerNodeId) return null;
-    const store = createTaskEventStore({ decisionOsRoot: resolve(masterDecisionOsRoot, 'cache', 'federation-task-state', ownerNodeId), projectId });
-    federatedTaskStores.set(key, store);
+    const store = createTaskEventStore({ decisionOsRoot: resolve(masterDecisionOsRoot, 'cache', 'federation-task-state'), projectId });
+    federatedTaskStores.set(projectId, store);
     return store;
   };
   let projectSyncCodexRunningProcessCount = 0;
@@ -550,7 +550,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     },
     onRemoteCatalogChange: () => {
       for (const project of projectCatalog().filter((entry) => entry.available)) taskStateForProject(project);
-      for (const peer of federation?.nodes().filter((entry) => entry.online) ?? []) federationTaskStateReplicator?.reconcilePeer(peer.nodeId);
+      federationTaskStateReplicator?.reconcileRelay();
       void synchronizeFederationContent();
       void synchronizeFederatedLibraries().catch(() => undefined);
       projectSyncController?.resume();
@@ -559,6 +559,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       await federationTaskStateReplicator?.handleFrame(frame);
       void federationContentScheduler?.drain();
     },
+    onStateConnected: () => federationTaskStateReplicator?.reconcileRelay(),
   });
   for (const project of projectCatalog().filter((entry) => entry.available)) taskStateForProject(project);
   federationTaskStateReplicator = createFederationTaskStateReplicator({
@@ -576,11 +577,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     store: federationContentStore,
     hasPriorityStateWork: () => {
       const diagnostics = federationTaskStateReplicator?.diagnostics();
-      const onlinePeers = new Set(federation?.nodes().filter((node) => node.online).map((node) => node.nodeId) ?? []);
       return Boolean(diagnostics && (
         diagnostics.activeSnapshotTransfers > 0
         || diagnostics.awaitingSnapshots > 0
-        || diagnostics.pendingAcknowledgements.some((entry) => entry.count > 0 && onlinePeers.has(entry.peerId))
+        || diagnostics.pendingAcknowledgements.some((entry) => entry.count > 0)
       ));
     },
     fetchContent: async ({ ownerNodeId, projectId, hash }) => {
@@ -946,10 +946,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     if (!projectScope && url === '/api/federation/replication-status' && request.method === 'GET') {
       const stores = [
         ...[...projectTaskStates].map(([projectId, state]) => ({ projectId, ownerNodeId: federation?.localOwner().ownerNodeId ?? 'local', store: state.store })),
-        ...[...federatedTaskStores].map(([key, store]) => {
-          const [ownerNodeId, projectId] = key.split('\u0000');
-          return { projectId, ownerNodeId, store };
-        }),
+        ...[...federatedTaskStores].map(([projectId, store]) => ({ projectId, ownerNodeId: 'relay', store })),
       ];
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
@@ -1838,6 +1835,24 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.end(JSON.stringify({ body: result }));
       return;
     }
+    if (url === '/api/git-review/voice' && request.method === 'POST' && activeProject) {
+      const bodyBuffer = await readRequestBuffer(request);
+      const contentType = String(request.headers['content-type'] ?? '');
+      const form = contentType.includes('multipart/form-data') ? parseMultipartFormData(bodyBuffer, contentType) : { fields: {}, files: {} };
+      const audio = form.files.audio ?? Object.values(form.files)[0];
+      const result = await transcribeGitReviewVoiceController({
+        action_payload: {
+          ...form.fields,
+          audioBuffer: audio?.buffer ?? bodyBuffer,
+          mimeType: audio?.mimeType ?? (contentType || 'audio/webm'),
+        },
+        runtime_state: requestRuntime,
+      });
+      response.setHeader('content-type', 'application/json');
+      response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 200));
+      response.end(JSON.stringify(result));
+      return;
+    }
     if (url === '/api/thread-image-upload' && request.method === 'POST') {
       const imageBuffer = await readRequestBuffer(request);
       const mimeType = request.headers['content-type'] ?? 'image/png';
@@ -2119,7 +2134,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   }, 1_000);
   codexQueueScanTimer.unref?.();
   const federationAntiEntropyTimer = setInterval(() => {
-    for (const peer of federation.nodes().filter((entry) => entry.online)) federationTaskStateReplicator?.reconcilePeer(peer.nodeId);
+    federationTaskStateReplicator?.reconcileRelay();
     void synchronizeFederationContent();
   }, 30_000);
   federationAntiEntropyTimer.unref?.();

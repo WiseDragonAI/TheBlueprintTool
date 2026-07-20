@@ -3,17 +3,18 @@
  * WHY: Notes, voice, uploads, Codex logs, and session controls must work at every width.
  */
 import { state as canvasState } from '/src/runtime/state.js';
-import { selectThread } from '/src/runtime/thread/effect/select-thread.js';
 import { renderThreadPanel } from '/src/runtime/thread/effect/render-thread-panel.js';
+import { openThreadPanelController } from '/src/runtime/thread/controller/open-thread-panel-controller.js';
+import { disconnectThreadFollowBottomObserver } from '/src/runtime/thread/effect/sync-thread-follow-bottom-observer.js';
 import { pinThreadSurfaceToBottom } from '/src/runtime/thread/effect/pin-thread-feed-to-last-message.js';
 import { syncThreadJumpButtonVisibility } from '/src/runtime/thread/effect/render-thread-jump-button.js';
 import { submitThreadDraft } from '/src/runtime/thread/effect/submit-thread-draft.js';
 import { saveThreadDraft } from '/src/runtime/thread/effect/persist-thread-draft.js';
 import { focusThreadDraft } from '/src/runtime/thread/effect/focus-thread-draft.js';
 import { startVoiceRecording } from '/src/runtime/voice/controller/start-voice-recording.js';
-import { stopVoiceRecording } from '/src/runtime/voice/controller/stop-voice-recording.js';
-import { submitVoiceRecording } from '/src/runtime/voice/controller/submit-voice-recording.js';
+import { executeVoiceAction } from '/src/runtime/voice/controller/execute-voice-action.js';
 import { cancelVoiceRecording } from '/src/runtime/voice/controller/cancel-voice-recording.js';
+import { parseVoiceLaunchMode, voiceLaunchModeForModifiers } from '/src/runtime/voice/helper/voice-launch-mode.js';
 import { retryVoiceTranscription } from '/src/runtime/voice/effect/retry-voice-transcription.js';
 import { uploadThreadFileController } from '/src/runtime/thread/controller/upload-thread-file-controller.js';
 import { pasteThreadImageController } from '/src/runtime/thread/controller/paste-thread-image-controller.js';
@@ -131,8 +132,6 @@ export function openMobileThread(card, zoneColor) {
   cardView.dataset.threadId = threadId;
   cardView.dataset.cardId = String(card.id);
   cardView.style.setProperty('--card-zone-color', zoneColor || 'var(--accent)');
-  selectThread(threadId);
-  canvasState.threadPanelOpen = true;
   document.body.classList.add('card-thread-open');
   bumpThreadPresentationGeneration();
   if (window.matchMedia?.('(max-width: 760px)').matches === true && history.state?.responsiveThreadLayer?.threadId !== threadId) {
@@ -148,7 +147,7 @@ export function openMobileThread(card, zoneColor) {
     }, '', location.href);
   }
   subscribeEvents();
-  renderThreadPanel();
+  openThreadPanelController(threadId);
   updateLaunchReadiness();
   void refreshThreadLedger();
 }
@@ -178,6 +177,7 @@ export function closeMobileThread({ fromHistory = false, discardHistory = false 
     });
   }
   canvasState.threadPanelOpen = false;
+  disconnectThreadFollowBottomObserver();
   threadRefreshGeneration += 1;
   unsubscribeEvents();
   document.body.classList.remove('card-thread-open');
@@ -208,11 +208,10 @@ export async function handleResponsiveThreadShortcut(event) {
     event.preventDefault();
     if (!canvasState.threadPanelOpen && currentCard) openMobileThread(currentCard, getComputedStyle(document.querySelector('#card-view')).getPropertyValue('--zone-color').trim());
     if (canvasState.voice.recording) {
-      const launchMode = event.ctrlKey ? 'pipeline' : event.shiftKey ? 'run' : 'send';
-      if (launchMode === 'send') await stopVoiceRecording({ launchMode });
-      else void stopVoiceRecording({
+      const launchMode = voiceLaunchModeForModifiers(event);
+      await executeVoiceAction({
         launchMode,
-        onPersisted: () => void finishQueuedVoiceSubmission(true),
+        onDurableHandoff: () => void finishQueuedVoiceSubmission(true),
       });
     }
     else void startVoiceRecording();
@@ -268,10 +267,6 @@ function cancelQuickVoiceComment() {
   cancelVoiceRecording();
 }
 
-function voiceLaunchMode(event) {
-  return event.ctrlKey ? 'pipeline' : event.shiftKey ? 'run' : 'send';
-}
-
 async function stopQuickVoiceComment(launchMode = 'send') {
   const resetCapture = () => {
     quickVoiceCapture = false;
@@ -279,9 +274,8 @@ async function stopQuickVoiceComment(launchMode = 'send') {
     button.disabled = false;
     button.removeAttribute('aria-busy');
   };
-  await submitVoiceRecording({
-    launchMode,
-    stop: stopVoiceRecording,
+  await executeVoiceAction({
+    launchMode: parseVoiceLaunchMode(launchMode),
     onDurableHandoff: () => {
       resetCapture();
       void finishQueuedVoiceSubmission(true);
@@ -440,7 +434,7 @@ export function initializeMobileThread() {
     const action = button.dataset.action;
     if (await handleMobileThreadSessionDeletion({ action, button })) return;
     if (action === 'voice-toggle') {
-      if (canvasState.voice.recording) await stopQuickVoiceComment(voiceLaunchMode(event));
+      if (canvasState.voice.recording) await stopQuickVoiceComment(voiceLaunchModeForModifiers(event));
       else await startVoiceRecording();
     } else if (action === 'voice-cancel') cancelQuickVoiceComment();
     else if (action === 'voice-stop') await stopQuickVoiceComment(button.dataset.launchMode || 'send');

@@ -18,6 +18,78 @@ type Env = {
 
 type SocketIdentity = { nodeId: string };
 type Stream = { requester: string; owner: string; requestCredit: number; responseCredit: number };
+type StoredStateEvent = { sourceNodeId: string; event: Record<string, unknown> };
+type StateBucket = { bucket: string; count: number; checksum: string };
+type StoredStateSnapshot = {
+  projectId: string;
+  snapshotId: string;
+  manifest: Record<string, unknown>;
+  checksum: string;
+  total: number;
+};
+
+const stateEventBatchSize = 128;
+
+function stateEventPrefix(projectId: string, bucket = ''): string {
+  return `state:event:${encodeURIComponent(projectId)}:${bucket ? `${encodeURIComponent(bucket)}:` : ''}`;
+}
+
+function stateEventKey(projectId: string, bucket: string, eventId: string): string {
+  return `${stateEventPrefix(projectId, bucket)}${eventId}`;
+}
+
+function stateBucketPrefix(projectId: string): string {
+  return `state:bucket:${encodeURIComponent(projectId)}:`;
+}
+
+function stateBucketKey(projectId: string, bucket: string): string {
+  return `${stateBucketPrefix(projectId)}${encodeURIComponent(bucket)}`;
+}
+
+function stateSnapshotPointerKey(projectId: string): string {
+  return `state:snapshot:${encodeURIComponent(projectId)}:current`;
+}
+
+function stateSnapshotChunkKey(projectId: string, snapshotId: string, index: number): string {
+  return `state:snapshot:${encodeURIComponent(projectId)}:${encodeURIComponent(snapshotId)}:${index}`;
+}
+
+function stateSnapshotUploadPrefix(projectId: string, sender: string, transferId: string): string {
+  return `state:snapshot-upload:${encodeURIComponent(projectId)}:${encodeURIComponent(sender)}:${encodeURIComponent(transferId)}:`;
+}
+
+async function sha256(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
+}
+
+function xorChecksums(checksums: string[]): string {
+  const result = new Uint8Array(32);
+  for (const checksum of checksums) {
+    if (!/^[a-f0-9]{64}$/i.test(checksum)) continue;
+    for (let index = 0; index < result.length; index += 1) result[index] ^= Number.parseInt(checksum.slice(index * 2, index * 2 + 2), 16);
+  }
+  return [...result].map((value) => value.toString(16).padStart(2, '0')).join('');
+}
+
+function mismatchedBuckets(local: StateBucket[], remote: StateBucket[]): string[] {
+  const localByName = new Map(local.map((entry) => [entry.bucket, entry]));
+  return remote.filter((entry) => {
+    const value = localByName.get(entry.bucket);
+    return !value || value.count !== entry.count || value.checksum !== entry.checksum;
+  }).map((entry) => entry.bucket);
+}
+
+async function listAll<T>(storage: DurableObjectStorage, prefix: string): Promise<Map<string, T>> {
+  const result = new Map<string, T>();
+  let startAfter: string | undefined;
+  while (true) {
+    const page = await storage.list<T>({ prefix, startAfter, limit: 1_000 });
+    for (const [key, value] of page) result.set(key, value);
+    if (page.size < 1_000) return result;
+    startAfter = [...page.keys()].at(-1);
+  }
+}
 
 function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: { 'cache-control': 'no-store' } });
@@ -87,6 +159,21 @@ export class FederationRelay extends DurableObject<Env> {
     return this.activeSockets().find((candidate) => (candidate.deserializeAttachment() as SocketIdentity | null)?.nodeId === nodeId);
   }
 
+  private hasProject(nodeId: string, projectId: string): boolean {
+    return (this.manifests.get(nodeId) ?? []).some((project) => project.id === projectId);
+  }
+
+  private projectSockets(projectId: string): WebSocket[] {
+    return this.activeSockets().filter((socket) => {
+      const identity = socket.deserializeAttachment() as SocketIdentity | null;
+      return Boolean(identity?.nodeId && this.hasProject(identity.nodeId, projectId));
+    });
+  }
+
+  private assertProject(nodeId: string, projectId: string): void {
+    if (!projectId || !this.hasProject(nodeId, projectId)) throw new Error('unknown_state_project');
+  }
+
   private sendSocket(socket: WebSocket, frame: RelayFrame): void {
     if (socket.readyState !== WebSocket.OPEN) return;
     try {
@@ -99,6 +186,208 @@ export class FederationRelay extends DurableObject<Env> {
   private send(nodeId: string, frame: RelayFrame): void {
     const socket = this.socket(nodeId);
     if (socket) this.sendSocket(socket, frame);
+  }
+
+  private async stateEvents(projectId: string): Promise<StoredStateEvent[]> {
+    const entries = await listAll<StoredStateEvent>(this.ctx.storage, stateEventPrefix(projectId));
+    return [...entries.values()];
+  }
+
+  private async stateBuckets(projectId: string): Promise<StateBucket[]> {
+    const entries = await listAll<StateBucket>(this.ctx.storage, stateBucketPrefix(projectId));
+    return [...entries.values()].sort((left, right) => left.bucket.localeCompare(right.bucket));
+  }
+
+  private async sendStateSummary(socket: WebSocket, projectId: string): Promise<void> {
+    const buckets = await this.stateBuckets(projectId);
+    this.sendSocket(socket, { version: 1, type: 'state-bucket-summary', from: 'relay', projectId, stateVersion: 1, payload: { buckets } });
+  }
+
+  private async sendStateSnapshotManifest(socket: WebSocket, projectId: string): Promise<void> {
+    const snapshot = await this.ctx.storage.get<StoredStateSnapshot>(stateSnapshotPointerKey(projectId));
+    if (!snapshot) return;
+    this.sendSocket(socket, {
+      version: 1,
+      type: 'state-snapshot-manifest',
+      from: 'relay',
+      projectId,
+      stateVersion: 1,
+      payload: { manifests: [snapshot.manifest] },
+    });
+  }
+
+  private sendStateEvents(socket: WebSocket, projectId: string, entries: StoredStateEvent[]): void {
+    for (let index = 0; index < entries.length; index += stateEventBatchSize) {
+      this.sendSocket(socket, {
+        version: 1,
+        type: 'state-event-batch',
+        from: 'relay',
+        projectId,
+        stateVersion: 1,
+        payload: { events: entries.slice(index, index + stateEventBatchSize).map((entry) => entry.event) },
+      });
+    }
+  }
+
+  private async persistStateEvents(sender: string, socket: WebSocket, frame: RelayFrame): Promise<void> {
+    const projectId = String(frame.projectId ?? '');
+    const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload as Record<string, unknown> : {};
+    const events = Array.isArray(payload.events) ? payload.events.filter((event): event is Record<string, unknown> => Boolean(event && typeof event === 'object')) : [];
+    this.assertProject(sender, projectId);
+    if (events.length === 0 || events.length > stateEventBatchSize) throw new Error('invalid_state_event_batch');
+    const eventEntries = events.map((event) => {
+      const eventId = String(event.eventId ?? '');
+      if (!eventId || event.projectId !== projectId || typeof event.emittedAt !== 'string' || typeof event.checksum !== 'string') throw new Error('invalid_state_event');
+      const bucket = event.emittedAt.slice(0, 13);
+      return { key: stateEventKey(projectId, bucket, eventId), bucket, event };
+    });
+    await this.ctx.storage.transaction(async (transaction) => {
+      const existing = await transaction.get<StoredStateEvent>(eventEntries.map((entry) => entry.key));
+      const additions = eventEntries.filter((entry) => !existing.has(entry.key));
+      for (const entry of eventEntries) {
+        const previous = existing.get(entry.key);
+        if (previous && JSON.stringify(previous.event) !== JSON.stringify(entry.event)) throw new Error('state_event_identity_collision');
+      }
+      if (additions.length === 0) return;
+      const bucketNames = [...new Set(additions.map((entry) => entry.bucket))];
+      const existingBuckets = await transaction.get<StateBucket>(bucketNames.map((bucket) => stateBucketKey(projectId, bucket)));
+      await transaction.put(Object.fromEntries(additions.map((entry) => [entry.key, { sourceNodeId: sender, event: entry.event } satisfies StoredStateEvent])));
+      await transaction.put(Object.fromEntries(bucketNames.map((bucket) => {
+        const current = existingBuckets.get(stateBucketKey(projectId, bucket));
+        const added = additions.filter((entry) => entry.bucket === bucket);
+        const value: StateBucket = {
+          bucket,
+          count: (current?.count ?? 0) + added.length,
+          checksum: xorChecksums([current?.checksum ?? '', ...added.map((entry) => String(entry.event.checksum))]),
+        };
+        return [stateBucketKey(projectId, bucket), value];
+      })));
+    });
+    this.sendSocket(socket, { version: 1, type: 'state-relay-ack', from: 'relay', projectId, stateVersion: 1, payload: { eventIds: events.map((event) => event.eventId) } });
+    for (const target of this.projectSockets(projectId)) {
+      if (target !== socket) this.sendStateEvents(target, projectId, events.map((event) => ({ sourceNodeId: sender, event })));
+    }
+    for (const target of this.projectSockets(projectId)) await this.sendStateSummary(target, projectId);
+  }
+
+  private async reconcileStateSummary(sender: string, socket: WebSocket, frame: RelayFrame): Promise<void> {
+    const projectId = String(frame.projectId ?? '');
+    const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload as Record<string, unknown> : {};
+    const remote = Array.isArray(payload.buckets) ? payload.buckets as StateBucket[] : [];
+    this.assertProject(sender, projectId);
+    const local = await this.stateBuckets(projectId);
+    const missingFromRelay = mismatchedBuckets(local, remote);
+    if (missingFromRelay.length > 0) {
+      this.sendSocket(socket, { version: 1, type: 'state-missing-request', from: 'relay', projectId, stateVersion: 1, payload: { buckets: missingFromRelay } });
+    }
+    this.sendSocket(socket, { version: 1, type: 'state-bucket-summary', from: 'relay', projectId, stateVersion: 1, payload: { buckets: local } });
+    if (missingFromRelay.length === 0 && mismatchedBuckets(remote, local).length === 0) {
+      this.sendSocket(socket, { version: 1, type: 'state-converged', from: 'relay', projectId, stateVersion: 1, payload: { buckets: local, nodeId: sender } });
+    }
+  }
+
+  private async sendMissingStateEvents(sender: string, socket: WebSocket, frame: RelayFrame): Promise<void> {
+    const projectId = String(frame.projectId ?? '');
+    const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload as Record<string, unknown> : {};
+    const buckets = new Set(Array.isArray(payload.buckets) ? payload.buckets.map(String) : []);
+    this.assertProject(sender, projectId);
+    if (buckets.size === 0) throw new Error('invalid_state_missing_request');
+    const pages = await Promise.all([...buckets].map((bucket) => listAll<StoredStateEvent>(this.ctx.storage, stateEventPrefix(projectId, bucket))));
+    const events = pages.flatMap((page) => [...page.values()]);
+    this.sendStateEvents(socket, projectId, events);
+  }
+
+  private async storeStateSnapshotChunk(sender: string, frame: RelayFrame): Promise<void> {
+    const projectId = String(frame.projectId ?? '');
+    const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload as Record<string, unknown> : {};
+    const transferId = String(payload.transferId ?? '');
+    const index = Number(payload.index ?? -1);
+    const total = Number(payload.total ?? 0);
+    const checksum = String(payload.checksum ?? '');
+    const data = String(payload.data ?? '');
+    this.assertProject(sender, projectId);
+    if (!transferId || index < 0 || total < 1 || index >= total || !/^[a-f0-9]{64}$/i.test(checksum) || !data) {
+      throw new Error('invalid_state_snapshot_chunk');
+    }
+    await this.ctx.storage.put(`${stateSnapshotUploadPrefix(projectId, sender, transferId)}${index}`, { index, total, checksum, data });
+  }
+
+  private async finishStateSnapshotUpload(sender: string, socket: WebSocket, frame: RelayFrame): Promise<void> {
+    const projectId = String(frame.projectId ?? '');
+    const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload as Record<string, unknown> : {};
+    const transferId = String(payload.transferId ?? '');
+    const total = Number(payload.total ?? 0);
+    const checksum = String(payload.checksum ?? '');
+    this.assertProject(sender, projectId);
+    if (!transferId || total < 1 || !/^[a-f0-9]{64}$/i.test(checksum)) throw new Error('invalid_state_snapshot_end');
+    const prefix = stateSnapshotUploadPrefix(projectId, sender, transferId);
+    const uploads = await this.ctx.storage.list<{ index: number; total: number; checksum: string; data: string }>({ prefix });
+    const chunks = [...uploads.values()].sort((left, right) => left.index - right.index);
+    if (chunks.length !== total || chunks.some((chunk, index) => chunk.index !== index || chunk.total !== total || chunk.checksum !== checksum)) {
+      throw new Error('incomplete_state_snapshot');
+    }
+    const decodedChunks = chunks.map((chunk) => Uint8Array.from(atob(chunk.data), (value) => value.charCodeAt(0)));
+    const bytes = new Uint8Array(decodedChunks.reduce((size, chunk) => size + chunk.byteLength, 0));
+    let offset = 0;
+    for (const chunk of decodedChunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    if (await sha256(bytes) !== checksum) throw new Error('invalid_state_snapshot_transport_checksum');
+    const snapshot = JSON.parse(new TextDecoder().decode(bytes)) as { manifest?: Record<string, unknown>; projection?: { projectId?: string; appliedEventIds?: unknown[] } };
+    const snapshotId = String(snapshot.manifest?.snapshotId ?? '');
+    const appliedEventIds = Array.isArray(snapshot.projection?.appliedEventIds) ? snapshot.projection.appliedEventIds.map(String) : [];
+    if (!snapshotId || snapshot.manifest?.projectId !== projectId || snapshot.projection?.projectId !== projectId || Number(snapshot.manifest?.reducerVersion) !== 1) {
+      throw new Error('incompatible_state_snapshot');
+    }
+    if (new Set(appliedEventIds).size !== appliedEventIds.length) throw new Error('state_snapshot_contains_duplicate_events');
+    const knownEventIds = new Set((await this.stateEvents(projectId)).map((entry) => String(entry.event.eventId ?? '')));
+    if (appliedEventIds.some((eventId) => !knownEventIds.has(eventId))) throw new Error('state_snapshot_contains_unknown_events');
+    const current = await this.ctx.storage.get<StoredStateSnapshot>(stateSnapshotPointerKey(projectId));
+    if (!current || appliedEventIds.length >= Number((current.manifest as { eventCount?: number }).eventCount ?? 0)) {
+      for (let index = 0; index < chunks.length; index += 1) {
+        await this.ctx.storage.put(stateSnapshotChunkKey(projectId, snapshotId, index), chunks[index].data);
+      }
+      const manifest = { ...snapshot.manifest, eventCount: appliedEventIds.length };
+      await this.ctx.storage.put(stateSnapshotPointerKey(projectId), { projectId, snapshotId, manifest, checksum, total } satisfies StoredStateSnapshot);
+      if (current && current.snapshotId !== snapshotId) {
+        await this.ctx.storage.delete(Array.from({ length: current.total }, (_value, index) => stateSnapshotChunkKey(projectId, current.snapshotId, index)));
+      }
+      for (const target of this.projectSockets(projectId)) await this.sendStateSnapshotManifest(target, projectId);
+    }
+    await this.ctx.storage.delete([...uploads.keys()]);
+    this.sendSocket(socket, { version: 1, type: 'state-ack', from: 'relay', projectId, stateVersion: 1, payload: { snapshotId } });
+  }
+
+  private async sendStateSnapshot(socket: WebSocket, frame: RelayFrame): Promise<void> {
+    const projectId = String(frame.projectId ?? '');
+    const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload as Record<string, unknown> : {};
+    const requestedSnapshotId = String(payload.snapshotId ?? '');
+    const sender = (socket.deserializeAttachment() as SocketIdentity).nodeId;
+    this.assertProject(sender, projectId);
+    const snapshot = await this.ctx.storage.get<StoredStateSnapshot>(stateSnapshotPointerKey(projectId));
+    if (!snapshot || (requestedSnapshotId && requestedSnapshotId !== snapshot.snapshotId)) return;
+    const transferId = crypto.randomUUID();
+    for (let index = 0; index < snapshot.total; index += 1) {
+      const data = await this.ctx.storage.get<string>(stateSnapshotChunkKey(projectId, snapshot.snapshotId, index));
+      if (!data) throw new Error('missing_state_snapshot_chunk');
+      this.sendSocket(socket, {
+        version: 1,
+        type: 'state-snapshot-chunk',
+        from: 'relay',
+        projectId,
+        stateVersion: 1,
+        payload: { transferId, index, total: snapshot.total, checksum: snapshot.checksum, data },
+      });
+    }
+    this.sendSocket(socket, {
+      version: 1,
+      type: 'state-snapshot-end',
+      from: 'relay',
+      projectId,
+      stateVersion: 1,
+      payload: { transferId, total: snapshot.total, checksum: snapshot.checksum },
+    });
   }
 
   private async publishCatalog(): Promise<void> {
@@ -153,6 +442,11 @@ export class FederationRelay extends DurableObject<Env> {
         this.nodeLabels.set(sender, String(frame.nodeLabel || sender).slice(0, 120));
         await this.ctx.storage.put({ manifests: [...this.manifests], nodeLabels: [...this.nodeLabels] });
         await this.publishCatalog();
+        for (const project of frame.projects ?? []) {
+          const projectId = String(project.id ?? '');
+          await this.sendStateSnapshotManifest(socket, projectId);
+          await this.sendStateSummary(socket, projectId);
+        }
         return;
       }
       if (frame.type === 'content-change') {
@@ -162,6 +456,17 @@ export class FederationRelay extends DurableObject<Env> {
         return;
       }
       if (priorityStateFrameTypes.has(frame.type)) {
+        if (!frame.to) {
+          if (frame.type === 'state-event-batch') await this.persistStateEvents(sender, socket, frame);
+          else if (frame.type === 'state-bucket-summary') await this.reconcileStateSummary(sender, socket, frame);
+          else if (frame.type === 'state-missing-request') await this.sendMissingStateEvents(sender, socket, frame);
+          else if (frame.type === 'state-snapshot-chunk') await this.storeStateSnapshotChunk(sender, frame);
+          else if (frame.type === 'state-snapshot-end') await this.finishStateSnapshotUpload(sender, socket, frame);
+          else if (frame.type === 'state-snapshot-request') await this.sendStateSnapshot(socket, frame);
+          else if (frame.type === 'state-ack' || frame.type === 'state-relay-ack' || frame.type === 'state-converged') return;
+          else throw new Error('unsupported_relay_state_frame');
+          return;
+        }
         if (!frame.to || !this.socket(frame.to)) throw new Error('owner_offline');
         this.send(frame.to, { ...frame, from: sender, to: undefined, stateVersion: 1 });
         return;

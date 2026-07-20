@@ -8,14 +8,20 @@ import { renderLedgerCardCodeBlock } from './render-ledger-card-code-block.js';
 import { renderLedgerCardHtmlEmbeds } from './render-ledger-card-html-embeds.js';
 import { renderLedgerCardMedia, type LedgerCardImageSizes } from './render-ledger-card-media.js';
 import { renderLedgerCardTable } from './render-ledger-card-table.js';
-import { renderLedgerCardGitDiff } from './render-ledger-card-git-diff.js';
+import { renderLedgerCardGitDiff, type GitReviewNotesChangeHandler } from './render-ledger-card-git-diff.js';
+import { renderLedgerCardQuestions, type QuestionnairesChangeHandler } from './render-ledger-card-questions.js';
 
 type LedgerCardMarkdownOptions = {
   cardId?: string;
+  questionnaireCardId?: string;
   carouselDriver?: 'internal' | 'external';
   imageSizes?: LedgerCardImageSizes;
   mediaSurface?: 'card' | 'detail' | 'thread';
   onImageResize?: (source: string, dimensions: { width: number; height: number }) => void;
+  questionnaires?: unknown;
+  onQuestionnairesChange?: QuestionnairesChangeHandler;
+  gitReviewNotes?: unknown;
+  onGitReviewNotesChange?: GitReviewNotesChangeHandler;
 };
 
 export function renderLedgerCardMarkdown(markdown: string, options: LedgerCardMarkdownOptions = {}): HTMLElement {
@@ -55,6 +61,10 @@ export function renderLedgerCardMarkdown(markdown: string, options: LedgerCardMa
     }
     if (block.kind === 'gitDiff') {
       body.appendChild(renderLedgerCardGitDiff(block, options));
+      continue;
+    }
+    if (block.kind === 'questions') {
+      body.appendChild(renderLedgerCardQuestions(block, options));
       continue;
     }
     if (block.kind === 'code') {

@@ -34,7 +34,7 @@ type RelayFrame = {
 };
 
 export type FederationStateFrame = {
-  type: 'state-event-batch' | 'state-ack' | 'state-bucket-summary' | 'state-missing-request' | 'state-snapshot-manifest' | 'state-snapshot-request' | 'state-snapshot-chunk' | 'state-snapshot-end' | 'state-converged';
+  type: 'state-event-batch' | 'state-relay-ack' | 'state-ack' | 'state-bucket-summary' | 'state-missing-request' | 'state-snapshot-manifest' | 'state-snapshot-request' | 'state-snapshot-chunk' | 'state-snapshot-end' | 'state-converged';
   from: string;
   projectId: string;
   payload: unknown;
@@ -141,6 +141,7 @@ export function createFederationNodeConnector(input: {
   localServerUrl: () => string;
   onRemoteContentChange?: (nodeId: string) => void;
   onRemoteCatalogChange?: () => void;
+  onStateConnected?: () => void;
   onStateFrame?: (frame: FederationStateFrame) => void | Promise<void>;
   internalRequestTimeoutMs?: number;
 }) {
@@ -435,6 +436,7 @@ export function createFederationNodeConnector(input: {
       lastCloseReason = '';
       setPhase('connected');
       send({ version: 1, type: 'manifest', nodeLabel: settings?.nodeLabel, projects: manifest() });
+      input.onStateConnected?.();
     });
     active.addEventListener('message', (event) => {
       messageQueue = messageQueue.then(async () => {
@@ -547,7 +549,7 @@ export function createFederationNodeConnector(input: {
     },
     publishStateFrame(ownerNodeId: string, frame: Omit<FederationStateFrame, 'from'>): boolean {
       if (socket?.readyState !== WebSocket.OPEN) return false;
-      send({ version: 1, type: frame.type, stateVersion: 1, to: ownerNodeId, projectId: frame.projectId, payload: frame.payload });
+      send({ version: 1, type: frame.type, stateVersion: 1, ...(ownerNodeId === 'relay' ? {} : { to: ownerNodeId }), projectId: frame.projectId, payload: frame.payload });
       return true;
     },
     localOwner(): { ownerNodeId: string; ownerNodeLabel: string; online: true } {

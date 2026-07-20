@@ -230,7 +230,14 @@ test('keeps equal card ids separate when their stable project ids differ', () =>
 test('produces symmetric placement from either node orientation', () => {
   const project = { id: 'project-1', name: 'Project' };
   const workstationTask = { cardId: 'card-1', projectId: 'project-1', ledgerId: 'tasks', title: 'Task', cardStatus: 'backlog', status: 'task-backlog' };
-  const mobileTask = { ...workstationTask, cardStatus: 'todo', status: 'task-waiting', executionObservation: { kind: 'codex-process', runId: 'run-mobile' } };
+  const mobileTask = {
+    ...workstationTask,
+    cardStatus: 'todo',
+    status: 'task-waiting',
+    executionOwnerCardId: 'child-mobile',
+    executionOwnerKind: 'subtask',
+    executionObservation: { kind: 'codex-process', runId: 'run-mobile', cardId: 'child-mobile', ownerKind: 'subtask' },
+  };
   const projection = (task: Record<string, unknown>, fingerprint: string) => ({
     fingerprint, projects: [project],
     queue: task.status === 'task-waiting' ? [task] : [],
@@ -253,4 +260,6 @@ test('produces symmetric placement from either node orientation', () => {
 
   assert.deepEqual(placement(workstation), placement(mobile));
   assert.deepEqual(placement(workstation), { queue: [], exec: [['project-1', 'tasks', 'card-1']], backlog: [], done: [] });
+  assert.equal(workstation.exec[0].executionOwnerCardId, 'child-mobile');
+  assert.equal(workstation.exec[0].executionOwnerKind, 'subtask');
 });

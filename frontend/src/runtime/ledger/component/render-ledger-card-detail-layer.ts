@@ -86,7 +86,7 @@ export function renderLedgerCardDetailLayer(card: Record<string, unknown>, exist
     : {};
   const body = fields.length > 0
     ? renderLedgerCardTabFrame(card, fields, activeTab)
-    : renderLedgerCardMarkdown(ledgerCardBody(card), { cardId: id, imageSizes });
+    : renderLedgerCardMarkdown(ledgerCardBody(card), { cardId: id, imageSizes, questionnaires: card.questionnaires, gitReviewNotes: card.gitReviewNotes });
   const detailLayer = existing ?? document.createElement('div');
   const labelNodes = labels.length > 0 ? [renderLedgerCardLabels(labels)] : [];
   const tabs = fields.length > 0 ? [renderLedgerCardTabs(id, activeTab)] : [];

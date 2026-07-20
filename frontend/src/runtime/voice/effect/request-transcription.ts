@@ -11,6 +11,7 @@ import { currentLedgerStateId } from '../../ledger/helper/current-ledger-state-i
 import { persistPendingVoiceUpload } from './persist-pending-voice-upload.js';
 import { submitPendingVoiceUpload } from './submit-pending-voice-upload.js';
 import { voiceProjectId, voiceReplicaNodeId } from '../helper/voice-project-id.js';
+import type { VoiceLaunchMode } from '../helper/voice-launch-mode.js';
 
 export type VoiceTranscriptionRequest = {
   projectId?: string;
@@ -18,8 +19,7 @@ export type VoiceTranscriptionRequest = {
   ledgerId?: string;
   threadId?: string;
   cardId?: string;
-  launchMode?: 'send' | 'run' | 'pipeline';
-  queueCodex?: boolean;
+  launchMode?: VoiceLaunchMode;
   reviewContext?: Record<string, string>;
   onPersisted?: () => void;
 };
@@ -30,7 +30,7 @@ function requestOptions(input: VoiceTranscriptionRequest | string | undefined): 
 
 export async function requestTranscription(audio: Blob | null, input: VoiceTranscriptionRequest | string = {}): Promise<boolean> {
   const options = requestOptions(input);
-  const launchMode = options.launchMode ?? (options.queueCodex ? 'run' : 'send');
+  const launchMode = options.launchMode ?? 'send';
   const threadId = options.threadId || state.threadId || 'conversation-ledger';
   if (!state.threadId) state.threadId = threadId;
   if (!audio || audio.size <= 0) {

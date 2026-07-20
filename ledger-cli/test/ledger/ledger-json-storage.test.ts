@@ -31,8 +31,18 @@ test('ledger-cli JSON storage applies targeted card and relationship mutations',
   });
   const commentFile = join(file, '..', 'comment.md');
   const cardFile = join(file, '..', 'card.json');
+  const questionnairesFile = join(file, '..', 'questions.json');
   await writeFile(commentFile, 'new comment\n', 'utf8');
   await writeFile(cardFile, JSON.stringify({ id: 'card-added', title: 'Added' }), 'utf8');
+  await writeFile(questionnairesFile, JSON.stringify({ clarification: {
+    version: 1,
+    contextRevision: 'sha256:context-a',
+    questions: [{ id: 'scope', question: 'Which boundary?', placeholder: 'Add constraints…', choices: [
+      { emoji: '1', text: 'Existing flow' }, { emoji: '2', text: 'Dedicated flow' }, { emoji: '3', text: 'Combined flow' }, { emoji: '4', text: 'Prototype first' }
+    ] }],
+    currentQuestionId: 'scope',
+    responses: {},
+  } }), 'utf8');
 
   const result = await manageLedgerJsonController({
     ledgerCommand: 'mutate',
@@ -45,6 +55,7 @@ test('ledger-cli JSON storage applies targeted card and relationship mutations',
       cardId: 'note-a',
       cardComment: 'new inline comment\n',
       cardCommentFile: commentFile,
+      cardQuestionnairesFile: questionnairesFile,
       cardLabels: ['visual', 'validated'],
       cardTitle: 'Renamed note',
       cardX: 100,
@@ -58,7 +69,7 @@ test('ledger-cli JSON storage applies targeted card and relationship mutations',
 
   assert.equal(result.ok, true);
   const ledger = JSON.parse(await readFile(file, 'utf8')) as {
-    cards: Array<{ id: string; title?: string; labels?: string[]; comment?: { what?: string }; x?: number; y?: number; w?: number; h?: number }>;
+    cards: Array<{ id: string; title?: string; labels?: string[]; comment?: { what?: string }; questionnaires?: Record<string, unknown>; x?: number; y?: number; w?: number; h?: number }>;
     relationships: Array<{ id: string }>;
   };
   const noteA = ledger.cards.find((card) => card.id === 'note-a');
@@ -69,9 +80,37 @@ test('ledger-cli JSON storage applies targeted card and relationship mutations',
   assert.equal(noteA?.w, 300);
   assert.equal(noteA?.h, 400);
   assert.deepEqual((ledger.cards.find((card) => card.id === 'note-a') as { labels?: string[] } | undefined)?.labels, ['visual', 'validated']);
+  assert.equal(noteA?.questionnaires?.clarification !== undefined, true);
   assert.equal(ledger.cards.some((card) => card.id === 'card-added'), true);
   assert.equal(ledger.cards.some((card) => card.id === 'card-remove'), false);
   assert.deepEqual(ledger.relationships.map((relationship) => relationship.id), ['rel-keep', 'rel-added']);
+});
+
+test('ledger-cli rejects questionnaire answers copied to a new context revision', async () => {
+  const previous = { clarification: {
+    version: 1,
+    contextRevision: 'sha256:context-a',
+    questions: [{ id: 'scope', question: 'Which boundary?', placeholder: '', choices: [
+      { emoji: '1', text: 'A' }, { emoji: '2', text: 'B' }, { emoji: '3', text: 'C' }, { emoji: '4', text: 'D' }
+    ] }],
+    responses: { scope: { status: 'answered', choiceIndex: 0, updatedAt: '2026-07-20T00:00:00.000Z' } },
+  } };
+  const file = await createJsonFile({ cards: [{ id: 'note-a', questionnaires: previous }] });
+  const questionnairesFile = join(file, '..', 'revised-questions.json');
+  const revised = structuredClone(previous);
+  revised.clarification.contextRevision = 'sha256:context-b';
+  await writeFile(questionnairesFile, JSON.stringify(revised), 'utf8');
+
+  const result = await manageLedgerJsonController({
+    ledgerCommand: 'mutate',
+    ledgerJsonFile: file,
+    mutationOperation: { cardId: 'note-a', cardQuestionnairesFile: questionnairesFile },
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.ok ? '' : result.error, /clearing its prior answers/);
+  const ledger = JSON.parse(await readFile(file, 'utf8'));
+  assert.equal(ledger.cards[0].questionnaires.clarification.contextRevision, 'sha256:context-a');
 });
 
 test('ledger-cli overview prints cards and relationships without layout noise', async () => {

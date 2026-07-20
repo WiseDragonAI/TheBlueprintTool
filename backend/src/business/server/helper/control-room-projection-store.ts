@@ -22,7 +22,7 @@ type Projection = AnyRecord & { schemaVersion: number; projectorVersion: string;
 type ProjectSlice = { projectId: string; project: AnyRecord; tasks: AnyRecord[]; dependencies: Dependency[]; fingerprint: string };
 
 const schemaVersion = 7;
-const projectorVersion = 'control-room-v11-exact-execution-lease';
+const projectorVersion = 'control-room-v12-subtask-execution-ownership';
 
 function records(value: unknown): AnyRecord[] {
   return Array.isArray(value) ? value.filter((entry): entry is AnyRecord => Boolean(entry && typeof entry === 'object')) : [];
@@ -127,6 +127,38 @@ function runtimeStatus(input: {
   return { runId, pipelineRunId, status, startedAt, turnPending, queuePosition: queued ? queueIndex + 1 : null, observation };
 }
 
+function taskRuntimeStatus(input: {
+  masterCard: AnyRecord;
+  subtaskCards: AnyRecord[];
+  runtime: AnyRecord;
+  decisionOsRoot: string;
+  ledgerId: string;
+  pipelineRuns: AnyRecord[];
+  queuedRuns: AnyRecord[];
+}): AnyRecord {
+  const candidates = [input.masterCard, ...input.subtaskCards].map((card, index) => {
+    const run = runtimeStatus({
+      card,
+      runtime: input.runtime,
+      decisionOsRoot: input.decisionOsRoot,
+      ledgerId: input.ledgerId,
+      pipelineRuns: input.pipelineRuns,
+      queuedRuns: input.queuedRuns,
+    });
+    const observation = run.observation && typeof run.observation === 'object'
+      ? { ...(run.observation as AnyRecord), cardId: text(card.id), ownerKind: index === 0 ? 'master-task' : 'subtask' }
+      : null;
+    return { ...run, observation, ownerCardId: text(card.id), ownerKind: index === 0 ? 'master-task' : 'subtask' };
+  });
+  const priority = (candidate: AnyRecord): number => {
+    const kind = text((candidate.observation as AnyRecord | undefined)?.kind);
+    return kind === 'codex-process' ? 0 : kind === 'voice-transcription' ? 1 : kind === 'codex-queue' ? 2 : 3;
+  };
+  return candidates.reduce((selected, candidate) => (
+    priority(candidate) < priority(selected) ? candidate : selected
+  ));
+}
+
 function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsProject['ledgers'][number]; ledger: AnyRecord; card: AnyRecord; runtime: AnyRecord; pipelineRuns: AnyRecord[]; queuedRuns: AnyRecord[] }): AnyRecord | null {
   const markdown = readCardDescription({ decisionOsRoot: input.project.decisionOsRoot, card: input.card }).replace(/\r\n?/g, '\n');
   const jsonLabels = Array.isArray(input.card.labels) ? input.card.labels.map(String) : [];
@@ -144,16 +176,25 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   const notes = threadFile && existsSync(threadFile) ? parseThreadMarkdown(readFileSync(threadFile, 'utf8')) : [];
   const latestThreadTime = notes.reduce((latest, note) => Math.max(latest, Date.parse(text(note.timestamp)) || Number.NEGATIVE_INFINITY), Number.NEGATIVE_INFINITY);
   const waitingTime = Number.isFinite(latestThreadTime) ? latestThreadTime : Date.parse(waitingText);
-  const run = runtimeStatus({ card: input.card, runtime: input.runtime, decisionOsRoot: input.project.decisionOsRoot, ledgerId: input.ledgerEntry.id, pipelineRuns: input.pipelineRuns, queuedRuns: input.queuedRuns });
+  const cards = records(input.ledger.cards);
+  const relationships = records(input.ledger.relationships).filter((relationship) => text(relationship.from) === text(input.card.id) && text(relationship.label) === 'subtask');
+  const subtaskCards = relationships.map((relationship) => cards.find((card) => text(card.id) === text(relationship.to))).filter((card): card is AnyRecord => Boolean(card));
+  const run = taskRuntimeStatus({
+    masterCard: input.card,
+    subtaskCards,
+    runtime: input.runtime,
+    decisionOsRoot: input.project.decisionOsRoot,
+    ledgerId: input.ledgerEntry.id,
+    pipelineRuns: input.pipelineRuns,
+    queuedRuns: input.queuedRuns,
+  });
   const executionObservation = run.observation && typeof run.observation === 'object' ? run.observation as AnyRecord : null;
   const processing = executionObservation?.kind === 'codex-process';
   const queued = executionObservation?.kind === 'codex-queue';
   const transcribingBeforeLaunch = executionObservation?.kind === 'voice-transcription';
   const cardStatus = text(input.card.status) || 'todo';
   const status = processing || queued || transcribingBeforeLaunch ? 'task-execution' : cardStatus === 'backlog' ? 'task-backlog' : cardStatus === 'done' ? 'task-complete' : 'task-waiting';
-  const cards = records(input.ledger.cards);
   const subtasks: AnyRecord[] = [];
-  const relationships = records(input.ledger.relationships).filter((relationship) => text(relationship.from) === text(input.card.id) && text(relationship.label) === 'subtask');
   for (const relationship of relationships) {
     const cardId = text(relationship.to);
     const linked = cards.find((card) => text(card.id) === cardId);
@@ -180,6 +221,7 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
     ledgerId: input.ledgerEntry.id, ledgerTitle: input.ledgerEntry.title, ledger: ledgerName,
     zoneId: zoneIdFor(input.card, input.ledger), status,
     codexRunId: run.runId, codexPipelineRunId: run.pipelineRunId, codexStatus: run.status,
+    executionOwnerCardId: executionObservation ? run.ownerCardId : '', executionOwnerKind: executionObservation ? run.ownerKind : '',
     executionStatus: processing ? 'running' : queued ? 'pending' : transcribingBeforeLaunch ? 'transcribing-before-launch' : '',
     executionObservation,
     transcribingBeforeLaunch,

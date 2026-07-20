@@ -28,6 +28,7 @@ export type LedgerMarkdownBlock =
   | { kind: 'images'; images: Extract<LedgerMarkdownInline, { kind: 'image' }>[] }
   | { kind: 'htmlEmbeds'; embeds: { title: string; src: string }[] }
   | { kind: 'gitDiff'; title: string; repository: string; target: string }
+  | { kind: 'questions'; title: string; questionnaireId: string }
   | { kind: 'list'; ordered: boolean; start: number; items: LedgerMarkdownInline[][] }
   | { kind: 'table'; headers: LedgerMarkdownInline[][]; rows: LedgerMarkdownInline[][][] }
   | { kind: 'hr' }
@@ -67,6 +68,17 @@ function standaloneGitDiffFromLine(line: string): Extract<LedgerMarkdownBlock, {
   const target = String(query.get('path') ?? '').trim();
   if (!repository || !target) return null;
   return { kind: 'gitDiff', title: (match[1] || destination.title || 'Git review').trim(), repository, target };
+}
+
+function standaloneQuestionsFromLine(line: string): Extract<LedgerMarkdownBlock, { kind: 'questions' }> | null {
+  const match = line.match(/^::questions\[([^\]\n]*)\]\(([^)\n]+)\)$/);
+  if (!match) return null;
+  const destination = parseDestination(match[2] ?? '');
+  if (!destination || !destination.url.startsWith('questions:?')) return null;
+  const query = new URLSearchParams(destination.url.slice('questions:?'.length));
+  const questionnaireId = String(query.get('id') ?? '').trim();
+  if (!/^[A-Za-z0-9._-]+$/.test(questionnaireId)) return null;
+  return { kind: 'questions', title: (match[1] || destination.title || 'Questions').trim(), questionnaireId };
 }
 
 export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[] {
@@ -166,6 +178,14 @@ export function parseLedgerCardMarkdown(markdown: string): LedgerMarkdownBlock[]
       images = null;
       htmlEmbeds = null;
       blocks.push(gitDiff);
+      continue;
+    }
+    const questions = standaloneQuestionsFromLine(line);
+    if (questions) {
+      list = null;
+      images = null;
+      htmlEmbeds = null;
+      blocks.push(questions);
       continue;
     }
     const unorderedItem = line.match(/^[-*]\s+(.*)$/);

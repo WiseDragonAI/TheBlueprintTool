@@ -135,6 +135,7 @@ export function parseLedgerCliArgv(argv: string[]): LedgerCliCommand {
       cardId: flagValue(argv, '--card-id'),
       cardComment: flagValue(argv, '--card-comment'),
       cardCommentFile: flagValue(argv, '--card-comment-file'),
+      cardQuestionnairesFile: flagValue(argv, '--card-questionnaires-file'),
       cardH: flagNumber(argv, '--card-h'),
       cardTitle: flagValue(argv, '--card-title'),
       cardW: flagNumber(argv, '--card-w'),
