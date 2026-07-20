@@ -1,5 +1,5 @@
 /** Immutable structured mutations used to reconstruct the canonical task projection. */
-export const taskEventReducerVersion = 1;
+export const taskEventReducerVersion = 2;
 
 export type TaskEntityType = 'ledger' | 'card' | 'annotation' | 'relationship';
 export type TaskFieldOperation = 'set' | 'add' | 'remove' | 'tombstone';
@@ -15,6 +15,8 @@ export type TaskFieldEvent = {
   projectId: string;
   writerId: string;
   emittedAt: string;
+  /** Project-scoped Lamport revision. Wall-clock time is diagnostic only. */
+  revision?: number;
   entityType: TaskEntityType;
   entityId: string;
   changes: TaskFieldChange[];
@@ -38,10 +40,15 @@ export type TaskProjectionConflict = {
 
 export type TaskProjection = {
   version: 1;
+  reducerVersion?: number;
   projectId: string;
   ledger: Record<string, unknown>;
   conflicts: TaskProjectionConflict[];
   appliedEventIds: string[];
+  /** Highest causal revision materialized by this projection. */
+  lastRevision?: number;
+  /** Last causal revision applied to each entity field. */
+  fieldRevisions?: Record<string, number>;
 };
 
 export type TaskBucketManifestEntry = {
@@ -67,4 +74,3 @@ export type TaskStateSnapshot = {
   manifest: TaskStateSnapshotManifest;
   projection: TaskProjection;
 };
-

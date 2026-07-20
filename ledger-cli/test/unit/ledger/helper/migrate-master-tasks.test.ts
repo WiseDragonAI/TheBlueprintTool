@@ -43,10 +43,20 @@ test('moves a complete master-task zone and preserves unrelated source content',
   writeFileSync(join(root, 'codex-pipelines.json'), JSON.stringify({ runs: [{ ledgerId: 'specs', sourceCardId: 'card-master' }] }));
 
   const dryRun = migrateMasterTasks({ sourceLedger: join(root, 'specs.json'), targetLedger: join(root, 'tasks.json'), write: false });
-  assert.deepEqual(dryRun, { ok: true, value: {
-    cards: 2, zones: 1, relationships: 1, cardFiles: 2, threadFiles: 1, missingCardFiles: [], missingThreadFiles: [], queueItems: 1, pipelineRuns: 1,
-    sourceLedger: join(root, 'specs.json'), targetLedger: join(root, 'tasks.json'), write: false,
-  } });
+  assert.equal(dryRun.ok, true);
+  if (!dryRun.ok) return;
+  assert.deepEqual({
+    cards: dryRun.value.cards,
+    zones: dryRun.value.zones,
+    relationships: dryRun.value.relationships,
+    cardFiles: dryRun.value.cardFiles,
+    threadFiles: dryRun.value.threadFiles,
+    queueItems: dryRun.value.queueItems,
+    pipelineRuns: dryRun.value.pipelineRuns,
+  }, { cards: 2, zones: 1, relationships: 1, cardFiles: 2, threadFiles: 1, queueItems: 1, pipelineRuns: 1 });
+  assert.deepEqual(dryRun.value.manifest.cardIds, ['card-master', 'card-subtask']);
+  assert.deepEqual(dryRun.value.manifest.zoneIds, ['zone-task']);
+  assert.deepEqual(dryRun.value.manifest.relationshipIds, ['rel-subtask']);
   assert.equal(JSON.parse(readFileSync(join(root, 'specs.json'), 'utf8')).cards.length, 3);
 
   const written = migrateMasterTasks({ sourceLedger: join(root, 'specs.json'), targetLedger: join(root, 'tasks.json'), write: true });
@@ -227,8 +237,37 @@ test('returns a zero-change result after all master tasks have already moved', (
     sourceLedger,
     targetLedger,
     write: true,
+    manifest: { cardIds: [], zoneIds: [], retainedSourceZoneIds: [], relationshipIds: [], cardFiles: [], threadFiles: [], queueItemIds: [], pipelineRunIds: [] },
   } });
   assert.deepEqual(JSON.parse(readFileSync(targetLedger, 'utf8')).cards, [{ id: 'existing-task' }]);
+});
+
+test('never treats a specification sharing task geometry as a task member', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-master-task-shared-zone-'));
+  const root = join(workspace, '.decision-os');
+  mkdirSync(root, { recursive: true });
+  const sourceLedger = join(root, 'specs.json');
+  const targetLedger = join(root, 'tasks.json');
+  writeFileSync(sourceLedger, JSON.stringify({
+    cards: [
+      { id: 'master', labels: ['master-task'], domainId: 'specs', x: 10, y: 10, w: 100, h: 100 },
+      { id: 'subtask', labels: ['subtask'], domainId: 'specs', x: 150, y: 10, w: 100, h: 100 },
+      { id: 'specification', labels: ['architecture'], domainId: 'specs', x: 300, y: 10, w: 100, h: 100 },
+    ],
+    annotations: [{ id: 'shared-zone', x: 0, y: 0, width: 800, height: 600 }],
+    relationships: [{ id: 'subtask-edge', from: 'master', to: 'subtask', label: 'subtask' }],
+    threadFiles: {},
+  }));
+  writeFileSync(targetLedger, JSON.stringify({ cards: [], annotations: [], relationships: [], threadFiles: {} }));
+
+  const result = migrateMasterTasks({ sourceLedger, targetLedger, write: true });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.value.manifest.cardIds, ['master', 'subtask']);
+  assert.deepEqual(result.value.manifest.retainedSourceZoneIds, ['shared-zone']);
+  assert.deepEqual(JSON.parse(readFileSync(sourceLedger, 'utf8')).cards.map((card: any) => card.id), ['specification']);
+  assert.deepEqual(JSON.parse(readFileSync(sourceLedger, 'utf8')).annotations.map((zone: any) => zone.id), ['shared-zone']);
+  assert.deepEqual(JSON.parse(readFileSync(targetLedger, 'utf8')).cards.map((card: any) => card.id), ['master', 'subtask']);
 });
 
 test('backfills empty canonical sidecars from the retained source-domain content', () => {

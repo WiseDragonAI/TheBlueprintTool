@@ -17,6 +17,7 @@ export function clearCardCodexExecution(input: {
   decisionOsRoot?: string;
   ledgerId?: string;
   runtime?: AnyRecord;
+  terminalState?: 'terminal' | 'failed';
 }): boolean {
   try {
     const ledger = JSON.parse(readFileSync(input.ledgerPath, 'utf8')) as AnyRecord & { cards?: AnyRecord[] };
@@ -30,7 +31,17 @@ export function clearCardCodexExecution(input: {
       delete card.executionStatus;
       delete card.executionRunId;
     }
-    persistLedgerProjection({ decisionOsRoot: input.decisionOsRoot, ledgerId: input.ledgerId, ledgerPath: input.ledgerPath, ledger, runtime: input.runtime });
+    if (card.executionIntent && typeof card.executionIntent === 'object' && ['waiting', 'queued', 'running'].includes(String((card.executionIntent as AnyRecord).state ?? ''))) {
+      card.executionIntent = { ...(card.executionIntent as AnyRecord), state: input.terminalState ?? 'terminal', updatedAt: new Date().toISOString() };
+    }
+    persistLedgerProjection({
+      decisionOsRoot: input.decisionOsRoot,
+      ledgerId: input.ledgerId,
+      ledgerPath: input.ledgerPath,
+      ledger,
+      runtime: input.runtime,
+      command: { kind: 'clear-codex-execution', cardIds: [input.cardId] },
+    });
     return true;
   } catch {
     // The run is still settled in memory when its project was removed during shutdown.

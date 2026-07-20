@@ -96,7 +96,14 @@ export function persistCardSkillRunEvents(input: {
   // WHY: Existing ownership leaves status ingestion scoped to the thread file alone.
   if (String(currentThreadFiles[threadId] ?? '') !== previousThreadFile) {
     stripHydratedThreadNotes(ledger);
-    persistLedgerProjection({ decisionOsRoot: input.decisionOsRoot, ledgerId: input.ledgerId, ledgerPath: input.ledgerPath, ledger, runtime: input.runtime });
+    persistLedgerProjection({
+      decisionOsRoot: input.decisionOsRoot,
+      ledgerId: input.ledgerId,
+      ledgerPath: input.ledgerPath,
+      ledger,
+      runtime: input.runtime,
+      command: { kind: 'assign-thread-content', ledgerPaths: [`threadFiles/${threadId}`] },
+    });
   }
   return changed;
 }

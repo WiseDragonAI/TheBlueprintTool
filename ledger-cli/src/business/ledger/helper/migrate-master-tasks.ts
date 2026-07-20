@@ -21,6 +21,16 @@ type MigrationReport = {
   sourceLedger: string;
   targetLedger: string;
   write: boolean;
+  manifest: {
+    cardIds: string[];
+    zoneIds: string[];
+    retainedSourceZoneIds: string[];
+    relationshipIds: string[];
+    cardFiles: Array<{ from: string; to: string }>;
+    threadFiles: Array<{ from: string; to: string }>;
+    queueItemIds: string[];
+    pipelineRunIds: string[];
+  };
 };
 
 function records(value: unknown): JsonRecord[] {
@@ -152,6 +162,7 @@ export function migrateMasterTasks(input: { sourceLedger: string; targetLedger: 
   const zones = records(source.annotations).filter((entry) => String(entry.variant ?? 'zone') === 'zone');
   const movedIds = new Set(cards.filter((card) => isMasterTaskCard(sourceRoot, card))
     .map((card) => String(card.id ?? '')));
+  const masterIds = new Set(movedIds);
   if (movedIds.size === 0) {
     if (input.write) {
       const recoveryCopies = [...recoveredCards.value, ...recoveredThreads.value];
@@ -183,6 +194,7 @@ export function migrateMasterTasks(input: { sourceLedger: string; targetLedger: 
     sourceLedger: sourceFile,
     targetLedger: targetFile,
     write: input.write,
+    manifest: { cardIds: [], zoneIds: [], retainedSourceZoneIds: [], relationshipIds: [], cardFiles: [], threadFiles: [], queueItemIds: [], pipelineRunIds: [] },
   } };
   }
 
@@ -197,20 +209,14 @@ export function migrateMasterTasks(input: { sourceLedger: string; targetLedger: 
         changed = true;
       }
     }
-    const selectedZones = new Set(cards.filter((card) => movedIds.has(String(card.id ?? '')))
-      .map((card) => String(ownerZone(card, zones)?.id ?? '')).filter(Boolean));
-    for (const card of cards) {
-      const zoneId = String(ownerZone(card, zones)?.id ?? '');
-      const cardId = String(card.id ?? '');
-      if (selectedZones.has(zoneId) && !movedIds.has(cardId)) {
-        movedIds.add(cardId);
-        changed = true;
-      }
-    }
   }
 
   const movedCards = cards.filter((card) => movedIds.has(String(card.id ?? '')));
-  const movedZoneIds = new Set(movedCards.map((card) => String(ownerZone(card, zones)?.id ?? '')).filter(Boolean));
+  // Geometry locates the master task's visual container only; it never grants task membership to another card.
+  const movedZoneIds = new Set(cards.filter((card) => masterIds.has(String(card.id ?? '')))
+    .map((card) => String(ownerZone(card, zones)?.id ?? '')).filter(Boolean));
+  const retainedSourceZoneIds = new Set(cards.filter((card) => !movedIds.has(String(card.id ?? '')))
+    .map((card) => String(ownerZone(card, zones)?.id ?? '')).filter((id) => movedZoneIds.has(id)));
   const crossRelationships = relationships.filter((relationship) => movedIds.has(String(relationship.from ?? '')) !== movedIds.has(String(relationship.to ?? '')));
   if (crossRelationships.length > 0) return { ok: false, error: `Migration would break ${crossRelationships.length} cross-ledger relationships.` };
   const movedRelationships = relationships.filter((relationship) => movedIds.has(String(relationship.from ?? '')) && movedIds.has(String(relationship.to ?? '')));
@@ -261,7 +267,7 @@ export function migrateMasterTasks(input: { sourceLedger: string; targetLedger: 
   }
 
   source.cards = cards.filter((card) => !movedIds.has(String(card.id ?? '')));
-  source.annotations = records(source.annotations).filter((entry) => !movedZoneIds.has(String(entry.id ?? '')));
+  source.annotations = records(source.annotations).filter((entry) => !movedZoneIds.has(String(entry.id ?? '')) || retainedSourceZoneIds.has(String(entry.id ?? '')));
   source.relationships = relationships.filter((relationship) => !movedIds.has(String(relationship.from ?? '')) && !movedIds.has(String(relationship.to ?? '')));
   target.cards = records(target.cards).concat(movedCards);
   target.annotations = records(target.annotations).concat(movedZones);
@@ -291,18 +297,22 @@ export function migrateMasterTasks(input: { sourceLedger: string; targetLedger: 
   const queueOriginal = existsSync(queueFile) ? JSON.parse(readFileSync(queueFile, 'utf8')) as JsonRecord : null;
   const queue = queueOriginal ? clone(queueOriginal) : null;
   let queueItems = 0;
-  for (const item of records(queue?.items)) {
+  const queueItemIds: string[] = [];
+  for (const [index, item] of records(queue?.items).entries()) {
     if (!movedIds.has(String(item.payload?.cardId ?? ''))) continue;
     item.payload.ledgerId = targetId;
     queueItems += 1;
+    queueItemIds.push(String(item.id ?? item.payload?.runId ?? `queue:${index}`));
   }
   const pipelineOriginal = existsSync(pipelineFile) ? JSON.parse(readFileSync(pipelineFile, 'utf8')) as JsonRecord : null;
   const pipeline = pipelineOriginal ? clone(pipelineOriginal) : null;
   let pipelineRuns = 0;
-  for (const run of records(pipeline?.runs)) {
+  const pipelineRunIds: string[] = [];
+  for (const [index, run] of records(pipeline?.runs).entries()) {
     if (!movedIds.has(String(run.sourceCardId ?? ''))) continue;
     run.ledgerId = targetId;
     pipelineRuns += 1;
+    pipelineRunIds.push(String(run.id ?? run.runId ?? `pipeline:${index}`));
   }
 
   const report: MigrationReport = {
@@ -318,6 +328,16 @@ export function migrateMasterTasks(input: { sourceLedger: string; targetLedger: 
     sourceLedger: sourceFile,
     targetLedger: targetFile,
     write: input.write,
+    manifest: {
+      cardIds: [...movedIds].sort(),
+      zoneIds: [...movedZoneIds].sort(),
+      retainedSourceZoneIds: [...retainedSourceZoneIds].sort(),
+      relationshipIds: movedRelationships.map((relationship) => String(relationship.id ?? '')).sort(),
+      cardFiles: cardCopies.map((copy) => ({ from: copy.from, to: copy.to })),
+      threadFiles: threadCopies.map((copy) => ({ from: copy.from, to: copy.to })),
+      queueItemIds,
+      pipelineRunIds,
+    },
   };
   if (!input.write) return { ok: true, value: report };
 

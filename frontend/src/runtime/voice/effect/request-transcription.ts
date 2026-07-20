@@ -12,6 +12,7 @@ import { persistPendingVoiceUpload } from './persist-pending-voice-upload.js';
 import { submitPendingVoiceUpload } from './submit-pending-voice-upload.js';
 import { voiceProjectId, voiceReplicaNodeId } from '../helper/voice-project-id.js';
 import type { VoiceLaunchMode } from '../helper/voice-launch-mode.js';
+import { sendActiveLedgerMutation } from '../../ledger/effect/send-active-ledger-mutation.js';
 
 export type VoiceTranscriptionRequest = {
   projectId?: string;
@@ -66,6 +67,13 @@ export async function requestTranscription(audio: Blob | null, input: VoiceTrans
     return false;
   }
   patchOptimisticThreadNote({ threadId, noteId, localVoiceUploadId: noteId });
+  if (launchMode !== 'send' && options.cardId) {
+    void sendActiveLedgerMutation({
+      action: 'create-execution-intent',
+      cardId: options.cardId,
+      executionIntent: { id: noteId, state: 'waiting', launchMode },
+    });
+  }
   telemetry('voice-upload-persisted', { noteId, threadId, size: audio.size, type: audio.type });
   options.onPersisted?.();
   return submitPendingVoiceUpload(noteId);

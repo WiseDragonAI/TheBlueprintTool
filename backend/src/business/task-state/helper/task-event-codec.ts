@@ -48,6 +48,7 @@ export function assertTaskFieldEvent(event: TaskFieldEvent): void {
   if (typeof event.projectId !== 'string' || !event.projectId) throw new Error('invalid_task_event_project');
   if (typeof event.writerId !== 'string' || !event.writerId) throw new Error('invalid_task_event_writer');
   if (typeof event.emittedAt !== 'string' || !event.emittedAt || !Number.isFinite(Date.parse(event.emittedAt))) throw new Error('invalid_task_event_date');
+  if (event.revision !== undefined && (!Number.isSafeInteger(event.revision) || event.revision < 1)) throw new Error('invalid_task_event_revision');
   if (!allowedEntityTypes.has(event.entityType)) throw new Error('invalid_task_event_entity_type');
   if (typeof event.entityId !== 'string' || !event.entityId) throw new Error('invalid_task_event_entity_id');
   if (!Array.isArray(event.changes) || event.changes.length === 0) throw new Error('invalid_task_event_changes');

@@ -2,6 +2,7 @@ import { basename, dirname, resolve } from 'node:path';
 import { writeFileSync } from 'node:fs';
 import { stripHydratedThreadNotes } from '../../ledger/helper/thread-content-file.js';
 import { createProjectTaskState } from './project-task-state.js';
+import type { TaskProjectionCommand } from './task-mutation-command.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -12,6 +13,7 @@ export function persistLedgerProjection(input: {
   ledgerId?: string;
   decisionOsRoot?: string;
   runtime?: AnyRecord;
+  command?: TaskProjectionCommand;
 }): AnyRecord {
   stripHydratedThreadNotes(input.ledger);
   const isTaskLedger = input.ledgerId === 'tasks' || basename(input.ledgerPath) === 'tasks.json';
@@ -19,9 +21,10 @@ export function persistLedgerProjection(input: {
     writeFileSync(input.ledgerPath, `${JSON.stringify(input.ledger, null, 2)}\n`, 'utf8');
     return input.ledger;
   }
+  if (!input.command) throw new Error('Task projection persistence requires a scoped domain command.');
   const runtimeAuthority = input.runtime?.persistTaskLedgerProjection;
   if (typeof runtimeAuthority === 'function') {
-    const result = (runtimeAuthority as (ledger: AnyRecord) => AnyRecord)(input.ledger);
+    const result = (runtimeAuthority as (ledger: AnyRecord, command: TaskProjectionCommand) => AnyRecord)(input.ledger, input.command);
     return result.ledger && typeof result.ledger === 'object' && !Array.isArray(result.ledger)
       ? result.ledger as AnyRecord
       : input.ledger;
@@ -33,5 +36,5 @@ export function persistLedgerProjection(input: {
     decisionOsRoot,
     tasksLedgerFile: input.ledgerPath,
   });
-  return state.commitNow(input.ledger).ledger;
+  return state.executeProjectionCommandNow(input.command, input.ledger).ledger;
 }

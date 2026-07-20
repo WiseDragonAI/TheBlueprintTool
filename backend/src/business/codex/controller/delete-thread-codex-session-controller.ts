@@ -141,10 +141,10 @@ export async function deleteThreadCodexSessionController(input: { action_payload
       }
     }
     stripHydratedThreadNotes(ledger);
-    persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime });
+    persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime, command: { kind: 'delete-codex-session', cardIds: [cardId] } });
   } catch (error) {
     try {
-      persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger: JSON.parse(ledgerText) as AnyRecord, runtime });
+      persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger: JSON.parse(ledgerText) as AnyRecord, runtime, command: { kind: 'restore-codex-session', cardIds: [cardId] } });
       restoreArtifacts(snapshots);
     } catch {
       return { ok: false, statusCode: 500, error: 'Codex session deletion failed and rollback could not restore every artifact.', runId };

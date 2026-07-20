@@ -116,6 +116,7 @@ let presentedCardIdentity = '';
 let routeLoadGeneration = 0;
 let routeLoadController = null;
 let codexSettingsRequest = null;
+const optimisticExecutionIntents = new Map();
 
 function currentRouteSnapshot() {
   return captureRouteSnapshot(location, parseProjectScope);
@@ -383,6 +384,16 @@ function navigate(path, replace = false) {
 }
 
 async function navigateVoiceSubmission() {
+  const task = state.controlRoom?.allTasks?.find((candidate) => candidate.projectId === state.resourceProjectId
+    && candidate.ledgerId === state.activeLedgerId
+    && candidate.cardId === state.activeCardId);
+  if (task) {
+    const waiting = { ...task, status: 'task-execution', executionStatus: 'waiting', codexStatus: 'waiting', codexQueued: false, codexProcessing: false, transcribingBeforeLaunch: false };
+    optimisticExecutionIntents.set(taskIdentity(task), waiting);
+    for (const column of ['queue', 'exec', 'backlog']) state.controlRoom[column] = (state.controlRoom[column] ?? []).filter((candidate) => taskIdentity(candidate) !== taskIdentity(task));
+    state.controlRoom.exec = [waiting, ...(state.controlRoom.exec ?? [])];
+    state.controlRoom.allTasks = (state.controlRoom.allTasks ?? []).map((candidate) => taskIdentity(candidate) === taskIdentity(task) ? waiting : candidate);
+  }
   return navigate(controlRoomPath('exec'), true);
 }
 
@@ -1349,6 +1360,8 @@ function taskRow(task, tab, index) {
         : task.projectSyncPhase === 'requested'
           ? 'Starting'
           : task.projectSyncPhase.replaceAll('_', ' ');
+    } else if (task.executionStatus === 'waiting') {
+      runtimeStatus.textContent = 'Codex Log · waiting';
     } else if (task.transcribingBeforeLaunch) {
       runtimeStatus.textContent = 'Transcribing before launch';
     } else if (task.codexQueued) {
@@ -1665,6 +1678,17 @@ async function loadControlRoom({ force = false, deferDuringQueueDrag = false, ow
   if (response.status === 304 && state.controlRoom) return false;
   if (!response.ok) throw new Error(`Could not load the Control Room (${response.status}).`);
   const nextControlRoom = await response.json();
+  for (const [identity, intent] of optimisticExecutionIntents) {
+    const serverTask = (nextControlRoom.allTasks ?? []).find((task) => taskIdentity(task) === identity);
+    if (serverTask?.status === 'task-execution') {
+      optimisticExecutionIntents.delete(identity);
+      continue;
+    }
+    const task = serverTask ?? intent;
+    for (const column of ['queue', 'exec', 'backlog']) nextControlRoom[column] = (nextControlRoom[column] ?? []).filter((candidate) => taskIdentity(candidate) !== identity);
+    nextControlRoom.exec = [{ ...task, ...intent }, ...(nextControlRoom.exec ?? [])];
+    nextControlRoom.allTasks = (nextControlRoom.allTasks ?? []).filter((candidate) => taskIdentity(candidate) !== identity).concat({ ...task, ...intent });
+  }
   if (Array.isArray(nextControlRoom.queue)) nextControlRoom.queue.sort(compareControlRoomQueueTasks);
   if (owner) requireRouteOwnership(owner);
   const nextEtag = response.headers.get('etag') ?? '';
@@ -1770,33 +1794,43 @@ function parseMasterCandidate(card) {
 async function createTaskIntake(projectId, replicaNodeId) {
   setResourceProject(projectId);
   if (state.resourceProjectId !== projectId) throw new Error('The project is no longer available.');
-  const ledgerRef = state.ledgers.find((entry) => entry.title === state.controlFilter || entry.id === state.controlFilter) ?? state.ledgers[0];
-  if (!ledgerRef) throw new Error('Create a ledger before starting a task.');
-  const ledger = await projectFetch(`/api/ledgers/${encodeURIComponent(ledgerRef.id)}/canvas`, { cache: 'no-store' }, projectId, replicaNodeId).then((response) => response.json());
+  const ledgerRef = state.ledgers.find((entry) => entry.id === 'tasks');
+  if (!ledgerRef) throw new Error('The canonical Tasks ledger is unavailable for this project.');
+  const ledger = state.activeLedgerId === 'tasks' && state.ledger
+    ? structuredClone(state.ledger)
+    : { cards: [], annotations: [], relationships: [], threadFiles: {}, notes: {}, viewport: { x: 0, y: 0, scale: 1 } };
   state.ledger = ledger;
   state.activeLedgerId = ledgerRef.id;
   const rect = nextZoneRect();
   const projectColor = state.projects.find((project) => project.id === projectId)?.color || defaultAccent;
   const zone = { id: objectId('zone'), ...rect, color: projectColor, label: 'New task intake', comments: [] };
-  await ledgerMutation(ledgerRef.id, { action: 'create-zone', annotation: zone }, projectId, replicaNodeId);
   const cardId = objectId('card');
   const timestamp = new Date().toISOString();
   const markdown = `Ledger: ${ledgerRef.title}\nWaiting since: ${timestamp}\n\n## Intake\n\nDescribe the task in this thread, attach the required files, then launch Codex. Categorize the task, keep this mandatory new zone, rename this master task and zone, create actionable subtask cards in this zone, and write canonical relationship-backed card links under \`## Subtasks\`.\n\n## Subtasks\n`;
   const card = { id: cardId, title: 'New task intake', cardType: 'note', domainId: ledgerRef.id, status: 'todo', labels: ['master-task'], x: rect.x + 60, y: rect.y + 60, w: 360, h: 240, comment: { what: markdown }, facts: [], fields: [] };
-  const updated = await ledgerMutation(ledgerRef.id, { action: 'create-card', card }, projectId, replicaNodeId);
-  state.ledger = updated;
+  ledger.annotations = [...(ledger.annotations ?? []), zone];
+  ledger.cards = [...(ledger.cards ?? []), { ...card, replicationState: 'local-only' }];
+  ledger.threadFiles = { ...(ledger.threadFiles ?? {}), [`thread-${cardId}`]: `.decision-os/threads/tasks/thread-${cardId}.md` };
+  ledger.notes = { ...(ledger.notes ?? {}), [`thread-${cardId}`]: [] };
   state.activeZoneId = zone.id;
   state.activeZoneColor = zone.color;
+  state.activeCardId = cardId;
   syncMobileThreadContext({
     projectId,
     replicaNodeId,
     ledgerId: ledgerRef.id,
-    ledger: updated,
+    ledger,
     ledgers: state.ledgers,
     onCodexStarted: activateMasterTask,
     onQuickVoiceSubmitted: navigateVoiceSubmission
   });
-  await navigate(replicaAddress(cardPathForProject(projectId, ledgerRef.id, zone.id, cardId), replicaNodeId));
+  navigate(replicaAddress(cardPathForProject(projectId, ledgerRef.id, zone.id, cardId), replicaNodeId));
+  void ledgerMutation(ledgerRef.id, { action: 'create-task-intake', annotation: zone, card }, projectId, replicaNodeId).catch((cause) => {
+    const localCard = state.ledger?.cards?.find((entry) => String(entry.id) === cardId);
+    if (!localCard) return;
+    localCard.persistenceState = 'failed';
+    localCard.persistenceError = cause instanceof Error ? cause.message : 'Task creation failed.';
+  });
 }
 
 function openNewTaskProjectModal() {
@@ -2243,16 +2277,20 @@ function renderCard(card) {
     manualCompleteButton.disabled = card.status === 'done';
     manualCompleteButton.addEventListener('click', async () => {
       manualCompleteButton.disabled = true;
-      manualCompleteButton.textContent = 'Completing task…';
-      try {
-        state.ledger = await ledgerMutation(state.activeLedgerId, { action: 'complete-master-task', masterTaskId: card.id });
-        navigate(completionReturnPath(), true);
-      } catch (cause) {
-        manualCompleteButton.disabled = false;
-        manualCompleteButton.textContent = 'Complete manually';
-        elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Master task completion failed.';
-        setView('error-view');
+      manualCompleteButton.textContent = 'Master task complete';
+      const ledgerId = state.activeLedgerId;
+      const previous = structuredClone(state.ledger);
+      const childIds = new Set((state.ledger.relationships ?? [])
+        .filter((relationship) => String(relationship.from) === String(card.id) && relationship.label === 'subtask')
+        .map((relationship) => String(relationship.to)));
+      for (const candidate of state.ledger.cards ?? []) {
+        if (String(candidate.id) === String(card.id) || childIds.has(String(candidate.id))) candidate.status = 'done';
       }
+      navigate(completionReturnPath(), true);
+      void ledgerMutation(ledgerId, { action: 'complete-master-task', masterTaskId: card.id }).catch((cause) => {
+        state.ledger = previous;
+        console.error('Master task completion failed.', cause);
+      });
     });
     const pipelineCompleteButton = document.createElement('button');
     pipelineCompleteButton.type = 'button';

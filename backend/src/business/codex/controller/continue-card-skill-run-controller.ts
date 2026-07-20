@@ -212,7 +212,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     card.codexRunModel = command.model;
     card.codexRunEffort = command.effort;
     stripHydratedThreadNotes(ledger);
-    persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime });
+    persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime, command: { kind: 'queue-codex-continuation', cardIds: [cardId] } });
   }
   const prompt = buildCardSkillContinuePrompt({
     messages,
@@ -253,7 +253,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       card.codexRunEffort = command.effort;
       stripHydratedThreadNotes(ledger);
       try {
-        persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime });
+        persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime, command: { kind: 'admit-codex-continuation', cardIds: [cardId] } });
       } catch (error) {
         if (admitted.id === itemId) removeCodexProcessQueueItem(decisionOsRoot, itemId);
         throw error;
@@ -335,7 +335,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
         appendFileSync(stderrFile, codexRunExecutionFinishedMarker({ runId, executionId, finishedAt: settlement.finishedAt, status: 'failed' }), 'utf8');
         updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
         if (queueItemId) removeCodexProcessQueueItem(decisionOsRoot, queueItemId);
-        clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime });
+        clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime, terminalState: 'failed' });
         const schedule = runtime.scheduleCodexProcesses;
         if (typeof schedule === 'function') void schedule();
         notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, executionId, status: 'failed' });
@@ -353,7 +353,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       appendFileSync(stderrFile, codexRunExecutionFinishedMarker({ runId, executionId, finishedAt: settlement.finishedAt, status }), 'utf8');
       updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
       if (queueItemId) removeCodexProcessQueueItem(decisionOsRoot, queueItemId);
-      clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime });
+      clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime, terminalState: status === 'failed' ? 'failed' : 'terminal' });
       const schedule = runtime.scheduleCodexProcesses;
       if (typeof schedule === 'function') void schedule();
       notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, executionId, status, exitCode: settlement.exitCode });

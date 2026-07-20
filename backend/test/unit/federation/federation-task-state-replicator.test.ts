@@ -108,6 +108,7 @@ test('direct peer anti-entropy hydrates a remote-only project when relay durabil
   const remote = taskStore(remoteRoot);
   const event = createTaskFieldEvent({ eventId: 'direct-event', projectId: 'project-a', writerId: 'node-a', emittedAt: '2026-07-20T02:00:00.000Z', entityType: 'card', entityId: 'direct-card', changes: [{ path: 'status', operation: 'set', value: 'todo' }] });
   source.append(event);
+  source.createSnapshot();
 
   let replicatorA: Replicator;
   let replicatorB: Replicator;

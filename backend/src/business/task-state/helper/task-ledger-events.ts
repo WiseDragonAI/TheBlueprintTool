@@ -1,3 +1,7 @@
+/**
+ * WHAT: Imports a pre-event-log `tasks.json` document as one-time structural seed events.
+ * WHY: Existing projects need a bounded bootstrap path; accepted runtime commands never call this aggregate adapter.
+ */
 import { randomUUID } from 'node:crypto';
 import { canonicalJson, createTaskFieldEvent } from './task-event-codec.js';
 import type { TaskEntityType, TaskFieldChange, TaskFieldEvent } from './task-event-types.js';
@@ -48,7 +52,7 @@ function changesBetween(before: AnyRecord | null, after: AnyRecord | null, exclu
   });
 }
 
-export function taskLedgerEventsBetween(input: { projectId: string; writerId: string; emittedAt: string; before?: AnyRecord | null; after: AnyRecord }): TaskFieldEvent[] {
+export function taskEventsForLegacyProjectionSeed(input: { projectId: string; writerId: string; emittedAt: string; before?: AnyRecord | null; after: AnyRecord }): TaskFieldEvent[] {
   const events: TaskFieldEvent[] = [];
   const add = (entityType: TaskEntityType, entityId: string, changes: TaskFieldChange[]): void => {
     if (changes.length === 0) return;

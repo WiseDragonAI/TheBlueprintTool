@@ -19,7 +19,6 @@ import { readCardSkillRunController } from '../../codex/controller/read-card-ski
 import { startThreadCodexProcessController } from '../../codex/controller/start-thread-codex-process-controller.js';
 import { startCodexPipelineRunController } from '../../codex/controller/start-codex-pipeline-run-controller.js';
 import { telemetry } from '@backend/telemetry/harness.js';
-import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
 
 type AnyRecord = Record<string, unknown>;
 export const voiceTranscriptionDeadlineMs = 120_000;
@@ -82,8 +81,10 @@ function resolveLedgerContext(input: { runtime: AnyRecord; ledgerId: string }): 
   return { ok: true, decisionOsRoot, ledgerId: input.ledgerId, ledgerPath, ledger };
 }
 
-function writeLedger(context: LedgerContext, runtime: AnyRecord): void {
-  persistLedgerProjection({ decisionOsRoot: context.decisionOsRoot, ledgerId: context.ledgerId, ledgerPath: context.ledgerPath, ledger: context.ledger, runtime });
+function writeLedger(context: LedgerContext): void {
+  stripHydratedThreadNotes(context.ledger);
+  // Task thread Markdown was already durably written by the mutation. Its structural projection is a separate authority.
+  if (context.ledgerId !== 'tasks') writeFileSync(context.ledgerPath, JSON.stringify(context.ledger, null, 2));
 }
 
 function notify(callback: unknown, event: AnyRecord): void {
@@ -154,7 +155,7 @@ export function applyNotePatch(input: {
     mutation: { action: 'update-note', note: { ...input.note, threadId: input.threadId } }
   });
   if (mutationResult.error) return { ok: false, error: String(mutationResult.error.body.error ?? 'Ledger mutation failed.') };
-  writeLedger(context, input.runtime);
+  writeLedger(context);
   notifyThreadChange(context, input.threadId, input.onCardContentChange, input.reason, input.note as AnyRecord);
   return { ok: true };
 }
@@ -446,8 +447,15 @@ async function finishVoiceUploadOrchestration(input: {
     });
     lifecycleTelemetry({ noteId: input.noteId, phase: 'completed', at: completedAt, previousAt: providerSettledAt });
     if (input.launchMode !== 'send' && input.cardId) {
-      if (input.launchMode === 'pipeline') await runQueuedVoicePipeline(input);
-      else await runQueuedThreadCodex(input);
+      notify(input.payload.onExecutionIntentChange, { cardId: input.cardId, intentId: input.noteId, state: 'queued', launchMode: input.launchMode });
+      const result = input.launchMode === 'pipeline' ? await runQueuedVoicePipeline(input) : await runQueuedThreadCodex(input);
+      notify(input.payload.onExecutionIntentChange, {
+        cardId: input.cardId,
+        intentId: input.noteId,
+        state: result.ok === false ? 'failed' : result.queued ? 'queued' : 'running',
+        launchMode: input.launchMode,
+        error: result.ok === false ? String(result.error ?? 'Codex launch failed.') : '',
+      });
     }
     return;
   }
@@ -473,6 +481,7 @@ async function finishVoiceUploadOrchestration(input: {
     reason: 'voice-transcription-failed'
   });
   lifecycleTelemetry({ noteId: input.noteId, phase: 'failed', at: completedAt, previousAt: providerSettledAt || input.acceptedAt });
+  if (input.launchMode !== 'send' && input.cardId) notify(input.payload.onExecutionIntentChange, { cardId: input.cardId, intentId: input.noteId, state: 'failed', launchMode: input.launchMode, error });
 }
 
 export async function startVoiceUploadOrchestrationController(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): Promise<AnyRecord> {

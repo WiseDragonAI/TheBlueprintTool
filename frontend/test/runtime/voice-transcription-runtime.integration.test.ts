@@ -9,6 +9,7 @@ import { uploadVoiceAudio } from '../../src/runtime/voice/effect/upload-voice-au
 import { requestTranscription } from '../../src/runtime/voice/effect/request-transcription.js';
 import { appendVoiceNote } from '../../src/runtime/voice/effect/append-voice-note.js';
 import { createNoteController } from '../../src/runtime/thread/controller/create-note-controller.js';
+import { submitThreadDraft } from '../../src/runtime/thread/effect/submit-thread-draft.js';
 import { loadActiveLedgerState } from '../../src/runtime/ledger/effect/load-active-ledger-state.js';
 import { state } from '../../src/runtime/state.js';
 import { retryVoiceTranscription } from '../../src/runtime/voice/effect/retry-voice-transcription.js';
@@ -746,6 +747,45 @@ test('create-note-controller renders a text note before backend reconciliation',
     assert.equal(state.activeLedger.notes['thread-card-a'][0].status, 'commit failed');
   } finally {
     (globalThis as unknown as { fetch: unknown }).fetch = previousFetch;
+    (globalThis as unknown as { window: unknown }).window = previousWindow;
+    (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
+    state.threadId = '';
+    state.activeLedger = null;
+  }
+});
+
+test('thread submission clears the composer before backend reconciliation settles', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousDocument = globalThis.document;
+  const previousWindow = globalThis.window;
+  const previousCustomEvent = globalThis.CustomEvent;
+  const draft = { value: 'Persist me without blocking the input.' };
+  let settleFetch: () => void = () => undefined;
+  state.threadId = 'thread-card-a';
+  state.activeTab = 'tasks';
+  state.ledgerTabs = [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }];
+  state.activeLedger = { notes: { 'thread-card-a': [] } };
+  (globalThis as unknown as { document: unknown }).document = { querySelector: () => draft };
+  (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
+  (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class CustomEvent {
+    constructor(_name: string, public options: Record<string, unknown> = {}) {}
+  };
+  (globalThis as unknown as { fetch: unknown }).fetch = async () => {
+    await new Promise<void>((resolve) => { settleFetch = resolve; });
+    return { ok: true };
+  };
+
+  try {
+    await submitThreadDraft();
+    assert.equal(draft.value, '');
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].message, 'Persist me without blocking the input.');
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].status, 'committing');
+    settleFetch();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(state.activeLedger.notes['thread-card-a'][0].optimistic, false);
+  } finally {
+    (globalThis as unknown as { fetch: unknown }).fetch = previousFetch;
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
     (globalThis as unknown as { window: unknown }).window = previousWindow;
     (globalThis as unknown as { CustomEvent: unknown }).CustomEvent = previousCustomEvent;
     state.threadId = '';
