@@ -5413,7 +5413,7 @@
       "title": "Explain Stuck Failed Synchronizations in Exec",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "diagnosis",
         "project-sync",
@@ -5440,9 +5440,7 @@
       "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784552316076-7fa68d8c.md",
       "codexThreadRunOutputFiles": {
         "codex-skill-1784552316076-7fa68d8c": ".decision-os/runs/codex-skills/specs/codex-skill-1784552316076-7fa68d8c.md"
-      },
-      "codexActiveRunId": "codex-skill-1784552316076-7fa68d8c",
-      "codexActiveExecutionId": "codex-execution-1784568757718-9392c888"
+      }
     },
     {
       "id": "card-bd7a6e67-3fe4-4569-a0c5-a32efd347b9a",
@@ -5642,14 +5640,16 @@
     },
     {
       "id": "card-d26b10d5-d05a-42f5-841d-ac3e681fc986",
-      "title": "Make Federated Task Reads Local-First",
+      "title": "Refactor the Entire Decision OS Replication System",
       "cardType": "note",
       "domainId": "specs",
       "status": "todo",
       "labels": [
-        "analysis",
+        "architecture",
+        "replication",
+        "optimistic-local",
+        "task-lifecycle",
         "persistence",
-        "federation",
         "master-task"
       ],
       "x": -10402,
@@ -5670,19 +5670,19 @@
       "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784553317894-cdd40639.md",
       "codexThreadRunOutputFiles": {
         "codex-skill-1784553317894-cdd40639": ".decision-os/runs/codex-skills/specs/codex-skill-1784553317894-cdd40639.md"
-      },
-      "codexActiveRunId": "codex-skill-1784553317894-cdd40639",
-      "codexActiveExecutionId": "codex-execution-1784568115736-26d9926e"
+      }
     },
     {
       "id": "card-51612a1a-d9e5-4bb9-9beb-ed466dbf0628",
-      "title": "Establish the Complete Persistence Failure Model",
+      "title": "Establish the Complete Replication Failure Model",
       "cardType": "note",
       "domainId": "specs",
       "status": "done",
       "labels": [
         "analysis",
         "verified",
+        "replication",
+        "task-lifecycle",
         "subtask"
       ],
       "x": -10012,
@@ -5697,14 +5697,16 @@
     },
     {
       "id": "card-70107aab-0643-4069-8dae-5e07025970d8",
-      "title": "Separate Thread and Card Saves from Task State",
+      "title": "Restore the Optimistic Local Task Lifecycle",
       "cardType": "note",
       "domainId": "specs",
       "status": "todo",
       "labels": [
+        "frontend",
         "backend",
+        "optimistic-local",
+        "task-lifecycle",
         "persistence",
-        "performance",
         "subtask"
       ],
       "x": -9632,
@@ -5829,14 +5831,15 @@
     },
     {
       "id": "card-9225d91f-6439-4051-9dcd-a384603f22af",
-      "title": "Make Task Migration Explicit and Prove Convergence",
+      "title": "Move Every Task into Tasks and Prove End-to-End Replication",
       "cardType": "note",
       "domainId": "specs",
       "status": "todo",
       "labels": [
         "migration",
+        "task-ledger",
         "tests",
-        "federation",
+        "replication",
         "subtask"
       ],
       "x": -9632,
@@ -5899,11 +5902,13 @@
     },
     {
       "id": "card-916311a6-1b95-4d2d-9d8a-bea889ec8822",
-      "title": "New task intake",
+      "title": "Flatten task workspace surfaces",
       "cardType": "note",
       "domainId": "specs",
       "status": "todo",
       "labels": [
+        "frontend",
+        "visual",
         "master-task"
       ],
       "x": -10402,
@@ -5915,8 +5920,6 @@
       },
       "facts": [],
       "fields": [],
-      "codexActiveRunId": "codex-skill-1784568719663-1a371624",
-      "codexActiveExecutionId": "codex-execution-1784568719663-ca989b88",
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "medium",
       "codexThreadRunIds": [
@@ -5927,6 +5930,27 @@
       "codexThreadRunOutputFiles": {
         "codex-skill-1784568719663-1a371624": ".decision-os/runs/codex-skills/specs/codex-skill-1784568719663-1a371624.md"
       }
+    },
+    {
+      "id": "card-4d540bf7-6947-4c51-84e8-b5af3266d38d",
+      "title": "Replace task surface gradients and shadows with solid colors",
+      "cardType": "note",
+      "domainId": "specs",
+      "status": "todo",
+      "labels": [
+        "frontend",
+        "visual",
+        "subtask"
+      ],
+      "x": -10012,
+      "y": 151308,
+      "w": 340,
+      "h": 380,
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-4d540bf7-6947-4c51-84e8-b5af3266d38d.md"
+      },
+      "facts": [],
+      "fields": []
     }
   ],
   "relationships": [
@@ -6048,6 +6072,12 @@
       "id": "rel-b77cca32-d7bf-46cf-b9e6-c9b562cf9178",
       "from": "card-1171f0fc-dbb3-486a-892b-460384f361f3",
       "to": "card-87ef17bc-778c-47b9-bfd6-dd70fbfa9142",
+      "label": "subtask"
+    },
+    {
+      "id": "rel-6fe69701-00df-4ade-a14a-8ef61515347f",
+      "from": "card-916311a6-1b95-4d2d-9d8a-bea889ec8822",
+      "to": "card-4d540bf7-6947-4c51-84e8-b5af3266d38d",
       "label": "subtask"
     }
   ],
@@ -6464,7 +6494,7 @@
       "width": 1200,
       "height": 900,
       "color": "#a78bfa",
-      "label": "New task intake",
+      "label": "Flat task workspace surfaces",
       "comments": []
     }
   ],
