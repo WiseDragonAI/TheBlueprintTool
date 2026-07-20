@@ -192,11 +192,13 @@ function normalizeRunSkill(input: AnyRecord, stepId: string, index: number): Cod
         role: text(executorInput.role),
       }
     : undefined;
+  const runId = text(input.runId);
   return {
     id: text(input.id) || `${stepId}-run-skill-${index + 1}`,
     pipelineSkillId: text(input.pipelineSkillId),
     skillName: text(input.skillName),
-    runId: text(input.runId),
+    runId,
+    executionId: text(input.executionId) || `${runId}:execution:0`,
     status: status(input.status),
     codexModel: text(input.codexModel),
     codexEffort: text(input.codexEffort),

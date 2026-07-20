@@ -5,6 +5,7 @@ import {
   encodedByteLength,
   maximumStreamsPerNode,
   parseFrame,
+  priorityStateFrameTypes,
   protocolVersion,
   type ProjectManifest,
   type RelayFrame,
@@ -156,13 +157,13 @@ export class FederationRelay extends DurableObject<Env> {
       }
       if (frame.type === 'content-change') {
         for (const target of this.activeSockets()) {
-          if (target !== socket) this.sendSocket(target, { version: 1, type: 'content-change', from: sender, replicaVersion: 1 });
+          if (target !== socket) this.sendSocket(target, { version: 1, type: 'content-change', from: sender });
         }
         return;
       }
-      if (frame.type === 'replica-priority' || frame.type === 'replica-ack') {
+      if (priorityStateFrameTypes.has(frame.type)) {
         if (!frame.to || !this.socket(frame.to)) throw new Error('owner_offline');
-        this.send(frame.to, { ...frame, from: sender, to: undefined, replicaVersion: 1 });
+        this.send(frame.to, { ...frame, from: sender, to: undefined, stateVersion: 1 });
         return;
       }
       if (frame.type === 'request-open') {

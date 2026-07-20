@@ -20,11 +20,12 @@ import { threadMessagesAfterLastCodexEvent } from '../helper/thread-messages-aft
 import { readCardSkillRunController } from './read-card-skill-run-controller.js';
 import { decisionOsCodexEnvironment } from '../helper/decision-os-codex-runtime.js';
 import { randomUUID } from 'node:crypto';
-import { enqueueCodexContinuation, recordCodexProcessQueueItemProcess, removeCodexProcessQueueItem } from '../helper/codex-process-queue.js';
+import { enqueueCodexContinuation, findActiveLogicalQueueItem, recordCodexProcessQueueItemProcess, removeCodexProcessQueueItem } from '../helper/codex-process-queue.js';
 import { scheduleCodexProcesses, unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
 import { createTerminalCodexProcessReconciler, type TerminalCodexStatus } from '../helper/reconcile-terminal-codex-process.js';
 import { clearCardCodexExecution } from '../helper/clear-card-codex-execution.js';
 import { resolveCardSkillRunFiles } from '../helper/resolve-card-skill-run-files.js';
+import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
 
 type AnyRecord = Record<string, unknown>;
 type ProcessStatus = 'running' | 'complete' | 'failed' | 'cancelled';
@@ -159,14 +160,37 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   const queueDispatch = payload.queueDispatch === true;
   const queueItemId = optionalText(payload.queueItemId);
   const disallowSkills = payload.disallowSkills === true;
-  const executionId = optionalText(payload.executionId) || `codex-execution-${Date.now()}-${randomUUID().slice(0, 8)}`;
+  let executionId = optionalText(payload.executionId);
   const fail = (statusCode: number, error: string, extra: AnyRecord = {}): AnyRecord => {
     logCodexContinueDebug('continue-controller-fail', { traceId, ledgerId, cardId, runId, statusCode, error, ...extra });
     return { ok: false, statusCode, error, runId, ...extra };
   };
   logCodexContinueDebug('continue-controller-entry', { traceId, ledgerId, cardId, runId, decisionOsRoot, workspaceRoot, runtimeStatus: runtimeRunStatus(runtime, runId) });
   if (!ledgerId || !cardId || !runId) return fail(400, 'Missing ledgerId, cardId, or runId.');
-  if (runtimeRunStatus(runtime, runId) === 'running') return fail(409, 'Run is already active.');
+  const existingRuntime = runtimeRuns(runtime)[runId];
+  const existingQueue = findActiveLogicalQueueItem(decisionOsRoot, { ledgerId, cardId, runId });
+  if (!queueDispatch && (existingRuntime?.status === 'pending' || existingRuntime?.status === 'running' || existingQueue)) {
+    const admitted = existingRuntime ?? {
+      id: runId,
+      executionId: existingQueue?.payload.executionId,
+      ledgerId,
+      outputCardId: cardId,
+      status: existingQueue?.status === 'running' ? 'running' : 'pending',
+      queueItemId: existingQueue?.id,
+      createdAt: existingQueue?.createdAt,
+    };
+    const admittedItemId = String(admitted.queueItemId ?? existingQueue?.id ?? '');
+    return {
+      ok: true,
+      statusCode: 202,
+      run: publicRun(admitted),
+      queued: admitted.status === 'pending',
+      queuePosition: admitted.status === 'pending' && admittedItemId
+        ? unifiedCodexQueuePosition({ decisionOsRoot, id: admittedItemId, createdAt: String(admitted.createdAt ?? existingQueue?.createdAt ?? ''), runtime })
+        : null,
+    };
+  }
+  executionId ||= `codex-execution-${Date.now()}-${randomUUID().slice(0, 8)}`;
 
   const requestedCodexModel = optionalText(payload.codexModel);
   const requestedCodexEffort = optionalText(payload.codexEffort);
@@ -213,6 +237,9 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   if (!outputFile) return fail(500, 'Run output card content file was not found.', { cardId });
   if (newSession && !existsSync(outputFile)) return fail(500, 'Run output card content file was not found.', { cardId, outputFile });
   const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
+  if (queueDispatch && (!card || String(card.codexActiveRunId ?? '') !== runId || String(card.codexActiveExecutionId ?? '') !== executionId)) {
+    return fail(409, 'Queued execution no longer owns the card lease.', { executionId });
+  }
   const statusMetadata = status.metadata && typeof status.metadata === 'object' && !Array.isArray(status.metadata) ? status.metadata as AnyRecord : {};
   const codexModel = requestedCodexModel || optionalText(card?.codexRunModel) || optionalText(statusMetadata.codexModel);
   const codexEffort = requestedCodexEffort || optionalText(card?.codexRunEffort) || optionalText(statusMetadata.codexEffort);
@@ -220,12 +247,12 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   const command = newSession
     ? resolveCodexCommand({ workspaceRoot, runtime, codexModel, codexEffort })
     : resolveCodexResumeCommand({ workspaceRoot, runtime, sessionId, codexModel, codexEffort });
-  if (card) {
+  if (card && queueDispatch) {
     card.codexActiveRunId = runId;
     card.codexRunModel = command.model;
     card.codexRunEffort = command.effort;
     stripHydratedThreadNotes(ledger);
-    writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2), 'utf8');
+    persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime });
   }
   const prompt = buildCardSkillContinuePrompt({
     messages,
@@ -252,23 +279,38 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   if (!queueDispatch) {
     const createdAt = new Date().toISOString();
     const itemId = `codex-continuation-${Date.now()}-${randomUUID().slice(0, 8)}`;
-    enqueueCodexContinuation({
+    const admitted = enqueueCodexContinuation({
       decisionOsRoot,
       id: itemId,
       createdAt,
       payload: { ledgerId, cardId, runId, executionId, newSession, codexModel: command.model, codexEffort: command.effort, traceId, disallowSkills },
     });
+    executionId = String(admitted.payload.executionId ?? executionId);
+    if (card) {
+      card.codexActiveRunId = runId;
+      card.codexActiveExecutionId = executionId;
+      card.codexRunModel = command.model;
+      card.codexRunEffort = command.effort;
+      stripHydratedThreadNotes(ledger);
+      try {
+        persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime });
+      } catch (error) {
+        if (admitted.id === itemId) removeCodexProcessQueueItem(decisionOsRoot, itemId);
+        throw error;
+      }
+    }
     updateRuntimeRun(runtime, runId, {
       id: runId, ledgerId, outputCardId: cardId, codexModel: command.model, codexEffort: command.effort,
-      status: 'pending', executionId, queueItemId: itemId, createdAt,
+      status: admitted.status === 'running' ? 'running' : 'pending', executionId, queueItemId: admitted.id, createdAt: admitted.createdAt,
     });
+    notifyRuntimeCallback(runtime.onCodexRunAccepted, { ledgerId, cardId, outputCardId: cardId, threadId: `thread-${cardId}`, runId, executionId, status: admitted.status === 'running' ? 'running' : 'pending' });
     const schedule = runtime.scheduleCodexProcesses;
     if (typeof schedule === 'function') await schedule();
     else await scheduleCodexProcesses({ decisionOsRoot, runtime });
     const current = publicRun(runtimeRuns(runtime)[runId]);
     return {
       ok: true, statusCode: 202, run: current, queued: current.status === 'pending',
-      queuePosition: current.status === 'pending' ? unifiedCodexQueuePosition({ decisionOsRoot, id: itemId, createdAt, runtime }) : null,
+      queuePosition: current.status === 'pending' ? unifiedCodexQueuePosition({ decisionOsRoot, id: admitted.id, createdAt: admitted.createdAt, runtime }) : null,
     };
   }
   logCodexContinueDebug('spawn-prep', { traceId, ledgerId, cardId, runId, newSession, command: command.command, args: command.args, model: command.model, effort: command.effort, sessionId, promptChars: prompt.length, messageCount: messages.length, outputFile });
@@ -370,7 +412,7 @@ export async function continueCardSkillRunController(input: { action_payload?: A
     if (settled) return;
     settled = true;
     const finishedAt = new Date().toISOString();
-    const status: ProcessStatus = runtimeRunStatus(runtime, runId) === 'cancelled' ? 'cancelled' : terminalEventStatus ?? (exitCode === 0 ? 'complete' : 'failed');
+    const status: ProcessStatus = runtimeRuns(runtime)[runId]?.cancelRequestedAt || runtimeRunStatus(runtime, runId) === 'cancelled' ? 'cancelled' : terminalEventStatus ?? (exitCode === 0 ? 'complete' : 'failed');
     const detail = status === 'cancelled' ? 'terminated by operator' : `${newSession ? 'new session' : 'resume'} exit code ${exitCode ?? 'unknown'}`;
     logCodexContinueDebug('child-close', { traceId, ledgerId, cardId, runId, exitCode, status, detail, finishedAt });
     const ownsExecution = updateRuntimeExecution(runtime, runId, executionId, { status, exitCode, finishedAt });

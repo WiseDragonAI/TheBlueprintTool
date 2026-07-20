@@ -2,26 +2,27 @@
  * WHAT: Clears terminal execution ownership while preserving the resumable run identity.
  * WHY: A settled run must leave Exec, and an older callback must never clear a newer execution.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
+import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
 
 type AnyRecord = Record<string, unknown>;
 
-export function clearCardCodexExecution(input: { ledgerPath: string; cardId: string; runId: string; executionId?: string }): boolean {
+export function clearCardCodexExecution(input: { ledgerPath: string; cardId: string; runId: string; executionId: string }): boolean {
   try {
     const ledger = JSON.parse(readFileSync(input.ledgerPath, 'utf8')) as AnyRecord & { cards?: AnyRecord[] };
     const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
     if (!card || String(card.codexActiveRunId ?? '') !== input.runId) return false;
     const persistedExecutionId = String(card.codexActiveExecutionId ?? '');
-    if (input.executionId && persistedExecutionId && persistedExecutionId !== input.executionId) return false;
+    if (!persistedExecutionId || persistedExecutionId !== input.executionId) return false;
     delete card.codexActiveRunId;
     delete card.codexActiveExecutionId;
     if (String(card.executionRunId ?? '') === input.runId) {
       delete card.executionStatus;
       delete card.executionRunId;
     }
-    writeFileSync(input.ledgerPath, `${JSON.stringify(ledger, null, 2)}\n`, 'utf8');
+    persistLedgerProjection({ ledgerPath: input.ledgerPath, ledger });
     return true;
   } catch {
     // The run is still settled in memory when its project was removed during shutdown.
@@ -34,6 +35,7 @@ export function clearCardCodexExecutionForLedger(input: {
   ledgerId: string;
   cardId: string;
   runId: string;
+  executionId: string;
   runtime?: AnyRecord;
 }): boolean {
   const state = readCanonicalDecisionOsState({
@@ -44,5 +46,5 @@ export function clearCardCodexExecutionForLedger(input: {
   const ledgerPath = resolve(input.decisionOsRoot, ledgerFile);
   const inner = relative(input.decisionOsRoot, ledgerPath);
   if (!ledgerFile || !inner || inner.startsWith('..') || isAbsolute(inner)) return false;
-  return clearCardCodexExecution({ ledgerPath, cardId: input.cardId, runId: input.runId });
+  return clearCardCodexExecution({ ledgerPath, cardId: input.cardId, runId: input.runId, executionId: input.executionId });
 }

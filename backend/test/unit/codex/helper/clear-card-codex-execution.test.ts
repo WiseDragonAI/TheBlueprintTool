@@ -11,12 +11,12 @@ test('clears only the execution still owned by the settling run', () => {
   try {
     writeFileSync(ledgerPath, JSON.stringify({
       cards: [{
-        id: 'master', codexActiveRunId: 'direct-run',
+        id: 'master', codexActiveRunId: 'direct-run', codexActiveExecutionId: 'direct-execution',
         executionStatus: 'pending', executionRunId: 'newer-pipeline',
       }],
     }));
 
-    assert.equal(clearCardCodexExecution({ ledgerPath, cardId: 'master', runId: 'direct-run' }), true);
+    assert.equal(clearCardCodexExecution({ ledgerPath, cardId: 'master', runId: 'direct-run', executionId: 'direct-execution' }), true);
     const card = JSON.parse(readFileSync(ledgerPath, 'utf8')).cards[0] as Record<string, unknown>;
     assert.equal(card.codexActiveRunId, undefined);
     assert.equal(card.executionStatus, 'pending');
@@ -32,12 +32,12 @@ test('removes status and ownership when the settling run still owns execution', 
   try {
     writeFileSync(ledgerPath, JSON.stringify({
       cards: [{
-        id: 'master', codexActiveRunId: 'direct-run',
+        id: 'master', codexActiveRunId: 'direct-run', codexActiveExecutionId: 'direct-execution',
         executionStatus: 'running', executionRunId: 'direct-run',
       }],
     }));
 
-    assert.equal(clearCardCodexExecution({ ledgerPath, cardId: 'master', runId: 'direct-run' }), true);
+    assert.equal(clearCardCodexExecution({ ledgerPath, cardId: 'master', runId: 'direct-run', executionId: 'direct-execution' }), true);
     const card = JSON.parse(readFileSync(ledgerPath, 'utf8')).cards[0] as Record<string, unknown>;
     assert.equal(card.codexActiveRunId, undefined);
     assert.equal(card.executionStatus, undefined);

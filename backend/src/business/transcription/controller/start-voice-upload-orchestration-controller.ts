@@ -19,6 +19,7 @@ import { readCardSkillRunController } from '../../codex/controller/read-card-ski
 import { startThreadCodexProcessController } from '../../codex/controller/start-thread-codex-process-controller.js';
 import { startCodexPipelineRunController } from '../../codex/controller/start-codex-pipeline-run-controller.js';
 import { telemetry } from '@backend/telemetry/harness.js';
+import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
 
 type AnyRecord = Record<string, unknown>;
 export const voiceTranscriptionDeadlineMs = 120_000;
@@ -81,9 +82,8 @@ function resolveLedgerContext(input: { runtime: AnyRecord; ledgerId: string }): 
   return { ok: true, decisionOsRoot, ledgerId: input.ledgerId, ledgerPath, ledger };
 }
 
-function writeLedger(context: LedgerContext): void {
-  stripHydratedThreadNotes(context.ledger);
-  writeFileSync(context.ledgerPath, JSON.stringify(context.ledger, null, 2), 'utf8');
+function writeLedger(context: LedgerContext, runtime: AnyRecord): void {
+  persistLedgerProjection({ decisionOsRoot: context.decisionOsRoot, ledgerId: context.ledgerId, ledgerPath: context.ledgerPath, ledger: context.ledger, runtime });
 }
 
 function notify(callback: unknown, event: AnyRecord): void {
@@ -154,7 +154,7 @@ export function applyNotePatch(input: {
     mutation: { action: 'update-note', note: { ...input.note, threadId: input.threadId } }
   });
   if (mutationResult.error) return { ok: false, error: String(mutationResult.error.body.error ?? 'Ledger mutation failed.') };
-  writeLedger(context);
+  writeLedger(context, input.runtime);
   notifyThreadChange(context, input.threadId, input.onCardContentChange, input.reason, input.note as AnyRecord);
   return { ok: true };
 }
@@ -500,6 +500,12 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
   const launchMode = voiceLaunchMode(payload);
   const queueCodex = launchMode !== 'send';
   const acceptedAt = new Date().toISOString();
+  const reviewContext = (() => {
+    try {
+      const parsed = JSON.parse(String(payload.reviewContext ?? ''));
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, string> : undefined;
+    } catch { return undefined; }
+  })();
   const patch = applyNotePatch({
     runtime,
     ledgerId,
@@ -508,6 +514,7 @@ export async function startVoiceUploadOrchestrationController(input: { action_pa
       id,
       body: 'Voice uploaded.',
       voiceFileRef,
+      reviewContext,
       status: 'queued',
       uploadReceivedAt,
       audioPersistedAt,

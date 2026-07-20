@@ -34,6 +34,24 @@ type CodexSelection = {
   effort: string;
 };
 
+export type DecisionOsRuntimePlatform = 'linux' | 'termux';
+
+/**
+ * Maps Node's host identifier to the platform names exposed to Codex runs.
+ * Decision OS is deployed on Linux workstations and Android through Termux.
+ */
+export function decisionOsRuntimePlatform(nodePlatform: NodeJS.Platform = process.platform): DecisionOsRuntimePlatform {
+  if (nodePlatform === 'linux') return 'linux';
+  if (nodePlatform === 'android') return 'termux';
+  throw new RangeError(`Unsupported Decision OS runtime platform: ${nodePlatform}`);
+}
+
+function codexDeveloperInstructions(customInstructions?: string): string {
+  const platformInstruction = `platform: ${decisionOsRuntimePlatform()}`;
+  const custom = String(customInstructions ?? '').trim();
+  return custom ? `${platformInstruction}\n${custom}` : platformInstruction;
+}
+
 function settingsRecord(runtime: AnyRecord): AnyRecord {
   return runtime.decisionOsSettings && typeof runtime.decisionOsSettings === 'object'
     ? runtime.decisionOsSettings as AnyRecord
@@ -155,9 +173,7 @@ export function resolveSkillRunOptions(input: {
 
 export function resolveCodexCommand(input: { workspaceRoot: string; runtime: AnyRecord; codexModel?: unknown; codexEffort?: unknown; developerInstructions?: string }): CodexCommand {
   const selection = resolveCodexSelection(input);
-  const developerInstructionArgs = input.developerInstructions === undefined
-    ? []
-    : ['-c', `developer_instructions=${JSON.stringify(input.developerInstructions)}`];
+  const developerInstructionArgs = ['-c', `developer_instructions=${JSON.stringify(codexDeveloperInstructions(input.developerInstructions))}`];
   return {
     command: selection.command,
     args: [

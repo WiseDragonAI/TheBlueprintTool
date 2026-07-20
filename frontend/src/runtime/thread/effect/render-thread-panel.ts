@@ -2,7 +2,7 @@
  * WHAT: Renders the active thread as a two-row header above independent Thread and Codex Log panels.
  * WHY: Conversation controls, run diagnostics, focus, announcements, and scroll must keep separate ownership.
  */
-import { bindThreadCodexRunLog } from '../../codex/effect/bind-thread-codex-run-log.js';
+import { bindThreadCodexActiveRunLog, bindThreadCodexRunLog, unbindThreadCodexActiveRunLog } from '../../codex/effect/bind-thread-codex-run-log.js';
 import { selectedCardCodexRunId } from '../../codex/helper/card-codex-run-id.js';
 import { codexEffortOptions, codexModelOptions } from '../../codex/helper/codex-run-options.js';
 import { cardCodexRunPreference, type CardCodexRunPreference } from '../../codex/helper/card-codex-run-preference.js';
@@ -28,6 +28,11 @@ import { SVG_NS } from '../../dom.js';
 
 const threadTabOrder: ThreadPanelTab[] = ['thread', 'codex-log'];
 
+function recordState(name: string): Record<string, any> {
+  if (!state[name] || typeof state[name] !== 'object' || Array.isArray(state[name])) state[name] = {};
+  return state[name] as Record<string, any>;
+}
+
 function threadCodexPreference(threadId: string): CardCodexRunPreference {
   const cardId = threadCodexCardId(state.activeLedger, threadId);
   const card = cardId
@@ -37,7 +42,7 @@ function threadCodexPreference(threadId: string): CardCodexRunPreference {
 }
 
 function threadCodexHydration(threadId: string): { status: string; active: boolean; queuePosition?: number | null } {
-  const summary = state.threadRunSummaryByThreadId?.[threadId] as { ok?: boolean; active?: boolean; status?: string; executionId?: string; queuePosition?: number | null } | undefined;
+  const summary = (state.threadActiveRunSummaryByThreadId?.[threadId] ?? state.threadRunSummaryByThreadId?.[threadId]) as { ok?: boolean; active?: boolean; status?: string; executionId?: string; queuePosition?: number | null } | undefined;
   return {
     status: summary?.ok === true ? String(summary.status ?? '') : 'unknown',
     active: summary?.ok === true ? summary.active === true : false,
@@ -226,16 +231,50 @@ function activeThreadCard(threadId: string): { cardId: string; card: Record<stri
 
 function bindActiveThreadRun(threadId: string): void {
   const { cardId, card } = activeThreadCard(threadId);
-  const selectedRunIds = state.threadSelectedRunIdByThreadId as Record<string, string>;
+  const selectedRunIds = recordState('threadSelectedRunIdByThreadId') as Record<string, string>;
+  const ledgerId = String(state.activeTab ?? '').trim();
+  const activeRunId = String(card?.codexActiveRunId ?? '');
+  const activeExecutionId = String(card?.codexActiveExecutionId ?? '');
+  const admittedRunIds = recordState('threadLastAdmittedRunIdByThreadId') as Record<string, string>;
+  const boundActiveRunId = String(recordState('threadActiveRunIdByThreadId')[threadId] ?? '');
+  const admittedLeaseKey = activeRunId ? `${activeRunId}:${activeExecutionId}` : '';
+  if (activeRunId && admittedRunIds[threadId] !== admittedLeaseKey) {
+    selectedRunIds[threadId] = activeRunId;
+    recordState('threadSelectedExecutionIdByThreadId')[threadId] = activeExecutionId;
+    admittedRunIds[threadId] = admittedLeaseKey;
+  }
+  if (!activeRunId) {
+    delete admittedRunIds[threadId];
+    delete recordState('threadActiveLeaseKeyByThreadId')[threadId];
+    if (ledgerId && cardId && boundActiveRunId) unbindThreadCodexActiveRunLog({
+      ledgerId,
+      cardId,
+      threadId,
+      runId: boundActiveRunId,
+    });
+  }
   const runId = card ? selectedCardCodexRunId(card, selectedRunIds[threadId]) : '';
   if (runId) selectedRunIds[threadId] = runId;
-  const ledgerId = String(state.activeTab ?? '').trim();
   if (ledgerId && cardId && runId) bindThreadCodexRunLog({
     ledgerId,
     cardId,
     threadId,
     runId,
   });
+  if (ledgerId && cardId && activeRunId) {
+    const leaseKey = `${activeRunId}:${activeExecutionId}`;
+    const leaseKeys = recordState('threadActiveLeaseKeyByThreadId') as Record<string, string>;
+    const forceRevalidate = leaseKeys[threadId] !== leaseKey;
+    leaseKeys[threadId] = leaseKey;
+    bindThreadCodexActiveRunLog({
+      ledgerId,
+      cardId,
+      threadId,
+      runId: activeRunId,
+      expectedExecutionId: activeExecutionId || undefined,
+      forceRevalidate,
+    });
+  }
 }
 
 export function renderThreadPanel(): void {

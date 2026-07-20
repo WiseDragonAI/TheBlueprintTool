@@ -18,6 +18,7 @@ export type PendingVoiceUpload = {
   cardId: string;
   launchMode?: 'send' | 'run' | 'pipeline';
   queueCodex?: boolean;
+  reviewContext?: Record<string, string>;
   audio: Blob;
   createdAt: string;
 };

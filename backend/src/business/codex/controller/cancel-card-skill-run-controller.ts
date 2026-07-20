@@ -7,6 +7,7 @@ import { resolve } from 'node:path';
 import { cancelCodexPipelineRunController } from './cancel-codex-pipeline-run-controller.js';
 import { isSameCodexProcess, readCodexProcessQueue, removeCodexProcessQueueItem, type CodexProcessQueueItem } from '../helper/codex-process-queue.js';
 import { clearCardCodexExecutionForLedger } from '../helper/clear-card-codex-execution.js';
+import { readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -37,25 +38,35 @@ export async function cancelCardSkillRunController(input: { action_payload?: Any
   const ledgerId = String(payload.ledgerId ?? '').trim();
   const cardId = String(payload.cardId ?? '').trim();
   const runId = String(payload.runId ?? '').trim();
-  if (!ledgerId || !cardId || !runId) return { ok: false, statusCode: 400, error: 'Missing ledgerId, cardId, or runId.' };
+  const executionId = String(payload.executionId ?? '').trim();
+  if (!ledgerId || !cardId || !runId || !executionId) return { ok: false, statusCode: 400, error: 'Missing ledgerId, cardId, runId, or executionId.' };
+
+  const pipelineStore = readCodexPipelineStore({ decisionOsRoot }).store;
+  const pipeline = pipelineStore.runs.find((candidate) => candidate.ledgerId === ledgerId
+    && (candidate.sourceCardId === cardId || candidate.steps.some((step) => step.outputCardId === cardId))
+    && candidate.steps.some((step) => step.skills.some((skill) => skill.runId === runId && skill.executionId === executionId && (skill.status === 'pending' || skill.status === 'running'))));
+  if (pipeline) {
+    return cancelCodexPipelineRunController({ action_payload: { runId: pipeline.id, executionId }, runtime_state: runtime });
+  }
 
   const run = runtimeRuns(runtime)[runId];
-  if (!run || String(run.ledgerId ?? '') !== ledgerId || String(run.outputCardId ?? '') !== cardId) {
+  const queued = readCodexProcessQueue(decisionOsRoot).find((item) => String(item.payload.runId ?? item.id) === runId
+    && String(item.payload.executionId ?? '') === executionId
+    && String(item.payload.ledgerId ?? '') === ledgerId
+    && String(item.payload.cardId ?? '') === cardId);
+  if ((!run && !queued) || (run && (String(run.executionId ?? '') !== executionId || String(run.ledgerId ?? '') !== ledgerId || String(run.outputCardId ?? '') !== cardId))) {
     return { ok: false, statusCode: 404, error: 'Active run not found.', runId };
   }
-  const queued = readCodexProcessQueue(decisionOsRoot).find((item) => item.id === runId || String(item.payload.runId ?? '') === runId);
-  if (String(run.status ?? '') === 'pending') {
+  const status = String(run?.status ?? queued?.status ?? '');
+  if (status === 'pending') {
     if (queued) removeCodexProcessQueueItem(decisionOsRoot, queued.id);
-    Object.assign(run, { status: 'cancelled', finishedAt: new Date().toISOString() });
-    clearCardCodexExecutionForLedger({ decisionOsRoot, ledgerId, cardId, runId, runtime });
-    return { ok: true, statusCode: 202, status: 'cancelled', run: publicRun(run) };
+    const cancelled = run ?? { id: runId, executionId, ledgerId, outputCardId: cardId };
+    Object.assign(cancelled, { status: 'cancelled', finishedAt: new Date().toISOString() });
+    clearCardCodexExecutionForLedger({ decisionOsRoot, ledgerId, cardId, runId, executionId, runtime });
+    return { ok: true, statusCode: 202, status: 'cancelled', run: publicRun(cancelled) };
   }
-  if (String(run.status ?? '') !== 'running') {
-    return { ok: true, statusCode: 200, status: String(run.status ?? 'unknown'), run: publicRun(run) };
-  }
-  const pipelineRunId = String(run.pipelineRunId ?? '').trim();
-  if (pipelineRunId) {
-    return cancelCodexPipelineRunController({ action_payload: { runId: pipelineRunId }, runtime_state: runtime });
+  if (!run || status !== 'running') {
+    return { ok: true, statusCode: 200, status: status || 'unknown', run: run ? publicRun(run) : { id: runId, executionId, status } };
   }
 
   const child = (run as { child?: ChildProcess }).child;
@@ -75,10 +86,6 @@ export async function cancelCardSkillRunController(input: { action_payload?: Any
   }
   if (!killed) return { ok: false, statusCode: 409, error: 'Run could not be cancelled from its live process identity.', runId };
 
-  Object.assign(run, { status: 'cancelled', cancelRequestedAt: finishedAt, finishedAt });
-  if (persistedProcessWasSignalled && queued) {
-    removeCodexProcessQueueItem(decisionOsRoot, queued.id);
-    clearCardCodexExecutionForLedger({ decisionOsRoot, ledgerId, cardId, runId, runtime });
-  }
-  return { ok: true, statusCode: 202, status: 'cancelled', run: publicRun(run) };
+  Object.assign(run, { cancelRequestedAt: finishedAt });
+  return { ok: true, statusCode: 202, status: 'running', cancellationRequested: true, run: publicRun(run) };
 }

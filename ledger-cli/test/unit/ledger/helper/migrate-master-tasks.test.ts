@@ -92,6 +92,36 @@ test('moves ledger records and reports source sidecars that were already missing
   assert.equal(migratedTarget.threadFiles['thread-card-master'], '.decision-os/threads/tasks/thread-card-master.md');
 });
 
+test('moves relationship-owned subtasks that extend beyond the master-task zone', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-master-task-overflow-'));
+  const root = join(workspace, '.decision-os');
+  mkdirSync(root, { recursive: true });
+  writeFileSync(join(root, 'specs.json'), JSON.stringify({
+    cards: [
+      { id: 'card-master', labels: ['master-task'], domainId: 'specs', x: 10, y: 10, w: 100, h: 100 },
+      { id: 'card-overflow', labels: ['subtask'], domainId: 'specs', x: 1200, y: 10, w: 100, h: 100 },
+    ],
+    annotations: [{ id: 'zone-task', x: 0, y: 0, width: 500, height: 500 }],
+    relationships: [{ id: 'rel-subtask', from: 'card-master', to: 'card-overflow', label: 'subtask' }],
+    notes: {}, deletedNoteIds: {}, threadFiles: {},
+  }));
+  writeFileSync(join(root, 'tasks.json'), JSON.stringify({
+    cards: [], annotations: [], relationships: [], notes: {}, deletedNoteIds: {}, threadFiles: {},
+  }));
+
+  const result = migrateMasterTasks({
+    sourceLedger: join(root, 'specs.json'),
+    targetLedger: join(root, 'tasks.json'),
+    write: false,
+  });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.value.cards, 2);
+  assert.equal(result.value.zones, 1);
+  assert.equal(result.value.relationships, 1);
+});
+
 test('rejects a relationship that would cross ledger boundaries', () => {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-master-task-cross-edge-'));
   const root = join(workspace, '.decision-os');
@@ -111,4 +141,32 @@ test('rejects a relationship that would cross ledger boundaries', () => {
   assert.deepEqual(migrateMasterTasks({ sourceLedger: join(root, 'specs.json'), targetLedger: join(root, 'tasks.json'), write: false }), {
     ok: false, error: 'Migration would break 1 cross-ledger relationships.',
   });
+});
+
+test('returns a zero-change result after all master tasks have already moved', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-master-task-idempotent-'));
+  const root = join(workspace, '.decision-os');
+  mkdirSync(root, { recursive: true });
+  const sourceLedger = join(root, 'specs.json');
+  const targetLedger = join(root, 'tasks.json');
+  writeFileSync(sourceLedger, JSON.stringify({ cards: [], annotations: [], relationships: [] }));
+  writeFileSync(targetLedger, JSON.stringify({ cards: [{ id: 'existing-task' }], annotations: [], relationships: [] }));
+
+  const result = migrateMasterTasks({ sourceLedger, targetLedger, write: true });
+
+  assert.deepEqual(result, { ok: true, value: {
+    cards: 0,
+    zones: 0,
+    relationships: 0,
+    cardFiles: 0,
+    threadFiles: 0,
+    missingCardFiles: [],
+    missingThreadFiles: [],
+    queueItems: 0,
+    pipelineRuns: 0,
+    sourceLedger,
+    targetLedger,
+    write: true,
+  } });
+  assert.deepEqual(JSON.parse(readFileSync(targetLedger, 'utf8')).cards, [{ id: 'existing-task' }]);
 });

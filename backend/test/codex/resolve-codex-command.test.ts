@@ -3,7 +3,24 @@ import assert from 'node:assert/strict';
 import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { resolveCodexCommand, resolveCodexResumeCommand, resolveSkillRunOptions } from '@backend/business/codex/helper/resolve-codex-command.js';
+import {
+  decisionOsRuntimePlatform,
+  resolveCodexCommand,
+  resolveCodexResumeCommand,
+  resolveSkillRunOptions,
+} from '@backend/business/codex/helper/resolve-codex-command.js';
+
+function decodedDeveloperInstructions(args: string[]): string {
+  const encoded = args.find((argument) => argument.startsWith('developer_instructions='));
+  assert.ok(encoded);
+  return JSON.parse(encoded.slice('developer_instructions='.length));
+}
+
+test('decisionOsRuntimePlatform maps supported Node hosts to the injected platform contract', () => {
+  assert.equal(decisionOsRuntimePlatform('linux'), 'linux');
+  assert.equal(decisionOsRuntimePlatform('android'), 'termux');
+  assert.throws(() => decisionOsRuntimePlatform('darwin'), /Unsupported Decision OS runtime platform/);
+});
 
 test('resolveCodexCommand honors an explicit executable setting', () => {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-codex-command-'));
@@ -23,7 +40,8 @@ test('resolveCodexCommand honors an explicit executable setting', () => {
     assert.deepEqual(command.args.slice(0, 5), ['exec', '--dangerously-bypass-approvals-and-sandbox', '--json', '-C', workspace]);
     assert.equal(command.args.includes('gpt-5.4'), true);
     assert.equal(command.args.includes('model_reasoning_effort="low"'), true);
-    assert.equal(command.args.some((argument) => argument.startsWith('developer_instructions=')), false);
+    assert.equal(decodedDeveloperInstructions(command.args), 'platform: linux');
+    assert.equal(command.args.filter((argument) => argument.startsWith('developer_instructions=')).length, 1);
 
     const developerInstructions = 'Line one\n"quoted" and C:\\workspace\\card';
     const scopedCommand = resolveCodexCommand({
@@ -31,9 +49,8 @@ test('resolveCodexCommand honors an explicit executable setting', () => {
       runtime: { decisionOsSettings: { codexBin: bin, codexModel: 'gpt-5.4', codexReasoningEffort: 'low' } },
       developerInstructions,
     });
-    const encodedInstructions = scopedCommand.args.find((argument) => argument.startsWith('developer_instructions='));
-    assert.ok(encodedInstructions);
-    assert.equal(JSON.parse(encodedInstructions.slice('developer_instructions='.length)), developerInstructions);
+    assert.equal(decodedDeveloperInstructions(scopedCommand.args), `platform: linux\n${developerInstructions}`);
+    assert.equal(scopedCommand.args.filter((argument) => argument.startsWith('developer_instructions=')).length, 1);
     assert.equal(scopedCommand.args.filter((argument) => argument === '-c').length, 2);
   } finally {
     if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
@@ -97,6 +114,8 @@ test('resolveCodexCommand defaults to gpt-5.6-sol with medium effort when no sel
     assert.equal(command.effort, 'medium');
     assert.equal(command.args.includes('gpt-5.6-sol'), true);
     assert.equal(command.args.includes('model_reasoning_effort="medium"'), true);
+    assert.equal(decodedDeveloperInstructions(command.args), 'platform: linux');
+    assert.equal(command.args.filter((argument) => argument.startsWith('developer_instructions=')).length, 1);
   } finally {
     if (previousCodexModel === undefined) delete process.env.CODEX_MODEL;
     else process.env.CODEX_MODEL = previousCodexModel;
@@ -120,6 +139,7 @@ test('resolveCodexResumeCommand builds an exec resume invocation with stdin prom
     assert.equal(command.args.at(-1), '-');
     assert.equal(command.args.includes('gpt-5.4'), true);
     assert.equal(command.args.includes('model_reasoning_effort="medium"'), true);
+    assert.equal(command.args.some((argument) => argument.startsWith('developer_instructions=')), false);
   } finally {
     rmSync(workspace, { recursive: true, force: true });
   }

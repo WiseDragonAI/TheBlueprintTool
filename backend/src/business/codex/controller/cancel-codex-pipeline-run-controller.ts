@@ -27,6 +27,7 @@ export async function cancelCodexPipelineRunController(
   const runtime = (envelope.runtime_state ?? {}) as AnyRecord;
   const decisionOsRoot = resolve(String(runtime.decisionOsRoot ?? resolve(process.cwd(), '.decision-os')));
   const runId = text(payload.runId ?? payload.pipelineRunId);
+  const executionId = text(payload.executionId);
   if (!runId) return { ok: false, statusCode: 400, error: 'Missing pipeline run id.' };
   const store = readCodexPipelineStore({ decisionOsRoot }).store;
   const run = store.runs.find((entry) => entry.id === runId);
@@ -37,10 +38,10 @@ export async function cancelCodexPipelineRunController(
   const running = run.steps.flatMap((step) => step.skills).find((skill) => skill.status === 'running');
   const target = running ?? run.steps.flatMap((step) => step.skills).find((skill) => skill.status === 'pending');
   if (!target) return { ok: false, statusCode: 409, error: 'Pipeline run has no cancellable skill.', runId };
+  if (executionId && target.executionId !== executionId) return { ok: false, statusCode: 409, error: 'Pipeline execution is no longer active.', runId, executionId };
   const runtimeRun = pipelineRuntimeRun(runtime, target.runId);
   let childWasSignalled = false;
   if (runtimeRun) {
-    runtimeRun.status = 'cancelled';
     runtimeRun.cancelRequestedAt = new Date().toISOString();
     const child = (runtimeRun as { child?: ChildProcess }).child;
     if (child && typeof child.kill === 'function' && !child.killed) {
@@ -50,6 +51,12 @@ export async function cancelCodexPipelineRunController(
         // Persisted cancellation remains authoritative if the process already exited.
       }
     }
+  }
+  if (target.status === 'running' && childWasSignalled) {
+    return { ok: true, statusCode: 202, status: 'running', cancellationRequested: true, runId, executionId: target.executionId };
+  }
+  if (target.status === 'running' && !childWasSignalled) {
+    return { ok: false, statusCode: 409, error: 'Pipeline run could not be cancelled from its live process identity.', runId, executionId: target.executionId };
   }
   if (target.stderrFile) {
     try {
@@ -67,12 +74,6 @@ export async function cancelCodexPipelineRunController(
     finishedAt: new Date().toISOString(),
   });
   if (!cancelled) return { ok: false, statusCode: 500, error: 'Pipeline cancellation could not be persisted.', runId };
-  if (runtimeRun && childWasSignalled) {
-    const waitStarted = Date.now();
-    while (!runtimeRun.settledAt && Date.now() - waitStarted < 2000) {
-      await new Promise((resolveWait) => setTimeout(resolveWait, 10));
-    }
-  }
   const schedule = runtime.scheduleCodexProcesses;
   if (typeof schedule === 'function') void schedule();
   else scheduleCodexPipelineRuns({ decisionOsRoot, runtime });

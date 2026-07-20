@@ -29,12 +29,14 @@ test('refreshes catalog ledgers after a registered project state change', async 
     const initial = await fetch(`${baseUrl}/decision-os/projects`).then((response) => response.json()) as {
       projects: Array<{ id: string; ledgers: Array<{ id: string }> }>;
     };
-    assert.deepEqual(initial.projects.find((project) => project.id === projectId)?.ledgers, []);
+    assert.deepEqual(initial.projects.find((project) => project.id === projectId)?.ledgers, [
+      { id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' },
+    ]);
 
     const creation = await fetch(`${baseUrl}/p/${projectId}/decision-os/ledgers`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title: 'Tasks' }),
+      body: JSON.stringify({ title: 'Roadmap' }),
     });
     assert.equal(creation.status, 201);
 
@@ -45,13 +47,13 @@ test('refreshes catalog ledgers after a registered project state change', async 
           projects: Array<{ id: string; ledgers: Array<{ id: string }> }>;
         };
         const ledgers = snapshot.projects.find((project) => project.id === projectId)?.ledgers ?? [];
-        if (ledgers.length === 1) return ledgers;
+        if (ledgers.length === 2) return ledgers;
         await new Promise((resolve) => setTimeout(resolve, 25));
       }
       return [];
     })();
 
-    assert.deepEqual(refreshedLedgers.map((ledger) => ledger.id), ['tasks']);
+    assert.deepEqual(refreshedLedgers.map((ledger) => ledger.id), ['tasks', 'roadmap']);
   } finally {
     server.close();
     await once(server, 'close');

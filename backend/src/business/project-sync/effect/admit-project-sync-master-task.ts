@@ -1,8 +1,9 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { tasksLedgerForProject, type DecisionOsProject } from '../../server/helper/project-catalog.js';
 import { applyLedgerMutation } from '../../ledger/helper/apply-ledger-mutation.js';
 import { stripHydratedThreadNotes } from '../../ledger/helper/thread-content-file.js';
+import { persistLedgerProjection } from '../../task-state/helper/persist-ledger-projection.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -10,6 +11,7 @@ export function admitProjectSyncMasterTask(input: {
   project: DecisionOsProject;
   sourceProjectId: string;
   sourceProjectName: string;
+  sourceProjectColor: string;
   originFingerprint: string;
   syncId: string;
   waitingSince: string;
@@ -33,7 +35,7 @@ export function admitProjectSyncMasterTask(input: {
     const result = applyLedgerMutation({ decisionOsRoot: input.project.decisionOsRoot, ledgerPath, ledger: document, mutation });
     if (!result.ok) throw new Error(String(result.error?.body.error ?? 'Could not persist synchronization task.'));
   };
-  mutate({ action: 'create-zone', annotation: { id: zoneId, variant: 'zone', label: `Synchronization · ${input.sourceProjectName}`, color: '#895cfa', x, y: 80, width: 1120, height: 720 } });
+  mutate({ action: 'create-zone', annotation: { id: zoneId, variant: 'zone', label: `Synchronization · ${input.sourceProjectName}`, color: input.sourceProjectColor, x, y: 80, width: 1120, height: 720 } });
   mutate({
     action: 'create-card',
     card: {
@@ -67,6 +69,6 @@ export function admitProjectSyncMasterTask(input: {
     },
   });
   stripHydratedThreadNotes(document);
-  writeFileSync(ledgerPath, `${JSON.stringify(document, null, 2)}\n`, 'utf8');
+  persistLedgerProjection({ decisionOsRoot: input.project.decisionOsRoot, ledgerId: ledger.id, ledgerPath, ledger: document });
   return { ledgerId: ledger.id, masterCardId, zoneId };
 }

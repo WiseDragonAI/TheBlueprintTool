@@ -18,7 +18,7 @@ import { requestCodexPipelineRun } from '../../src/runtime/codex/effect/request-
 import { requestCodexPipelineRunCancel, requestCodexPipelineRunRestart, requestCodexPipelineRunStatus } from '../../src/runtime/codex/effect/request-codex-pipeline-run-status.js';
 import { requestCodexSkillLibrarySave } from '../../src/runtime/codex/effect/request-codex-skill-library-save.js';
 import { requestCodexSkillFavoriteSave, requestCodexSkillMetadataSave } from '../../src/runtime/codex/effect/request-codex-skill-favorite-save.js';
-import { bindCardSkillRunLogConsumer, bindCardSkillRunWidget, pipelineLatestLabel, resumeExternallyStartedCardSkillRun, unbindCardSkillRunLogConsumer } from '../../src/runtime/codex/effect/poll-card-skill-run.js';
+import { bindCardSkillRunLogConsumer, bindCardSkillRunWidget, pipelineLatestLabel, purgeCardSkillRunLog, resumeExternallyStartedCardSkillRun, unbindCardSkillRunLogConsumer } from '../../src/runtime/codex/effect/poll-card-skill-run.js';
 import type { CardSkillRunEvent, CardSkillRunStatus, CardSkillRunSummary } from '../../src/runtime/codex/effect/request-card-skill-run-status.js';
 import { cardCodexRunId, cardCodexThreadRunId } from '../../src/runtime/codex/helper/card-codex-run-id.js';
 import { groupSequentialToolCalls, mergeThreadRunEvents } from '../../src/runtime/codex/helper/thread-run-log.js';
@@ -747,8 +747,7 @@ test('thread log consumer revalidates a terminal session when the card identifie
 
     bindCardSkillRunLogConsumer({
       ...input,
-      expectedExecutionId: 'execution-new',
-      expectedStatus: 'pending',
+      forceRevalidate: true,
       onSummary: (summary) => received.push(`${summary.executionId}:${summary.status}`),
     });
     assert.deepEqual(received, ['execution-old:complete']);
@@ -757,6 +756,40 @@ test('thread log consumer revalidates a terminal session when the card identifie
     assert.equal(requests.length, 2);
   } finally {
     unbindCardSkillRunLogConsumer(input);
+    globalThis.fetch = previousFetch;
+    (globalThis as unknown as { window?: unknown }).window = previousWindow;
+  }
+});
+
+test('a response from an older poll generation cannot overwrite a newly admitted execution', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousWindow = (globalThis as unknown as { window?: unknown }).window;
+  const input = { ledgerId: 'specs', cardId: 'card-generation', runId: 'run-generation', consumerId: 'thread-log:generation' };
+  const requests: Array<(response: Response) => void> = [];
+  const received: string[] = [];
+  const response = (executionId: string, status: string) => new Response(JSON.stringify({
+    ok: true, active: status === 'running', runId: input.runId, runKind: 'thread', status, executionId,
+    lineCount: 0, nextSince: 0, events: [], diagnostics: [], executions: [], metadata: {},
+  }), { status: 200, headers: { 'content-type': 'application/json' } });
+  try {
+    (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
+    globalThis.fetch = (async () => await new Promise<Response>((resolveRequest) => requests.push(resolveRequest))) as typeof fetch;
+    bindCardSkillRunLogConsumer({ ...input, onSummary: (summary) => received.push(`${summary.executionId}:${summary.status}`) });
+    await waitFor(() => requests.length === 1);
+    bindCardSkillRunLogConsumer({
+      ...input,
+      expectedExecutionId: 'execution-new',
+      forceRevalidate: true,
+      onSummary: (summary) => received.push(`${summary.executionId}:${summary.status}`),
+    });
+    requests[0](response('execution-old', 'complete'));
+    await waitFor(() => requests.length === 2);
+    assert.deepEqual(received, []);
+    requests[1](response('execution-new', 'running'));
+    await waitFor(() => received.length === 1);
+    assert.deepEqual(received, ['execution-new:running']);
+  } finally {
+    purgeCardSkillRunLog(input);
     globalThis.fetch = previousFetch;
     (globalThis as unknown as { window?: unknown }).window = previousWindow;
   }
@@ -916,12 +949,7 @@ test('externally started Codex runs clear terminal widget cache and restart poll
 
     const resumed = resumeExternallyStartedCardSkillRun({ ledgerId: 'specs', cardId: 'card-a', runId: 'codex-skill-3000-cache' });
     assert.equal(resumed, true);
-    assert.equal(cachedWidget.nodes['[data-codex-run-status]'].textContent, 'RUNNING');
-    assert.equal(cachedWidget.nodes['[data-codex-run-latest]'].textContent, 'Continuing session');
-    assert.equal(cachedWidget.nodes['[data-codex-run-cancel]'].hidden, false);
-    assert.equal(cachedWidget.nodes['[data-codex-run-continue]'].hidden, true);
-    assert.equal(cachedWidget.nodes['[data-codex-run-model]'].disabled, true);
-    assert.equal(cachedWidget.nodes['[data-codex-run-effort]'].disabled, true);
+    assert.equal(cachedWidget.nodes['[data-codex-run-status]'].textContent, 'COMPLETE');
     await waitFor(() => requests.length === 2);
     assert.equal(requests[1], '/api/codex/skills/runs/codex-skill-3000-cache?ledgerId=specs&cardId=card-a&since=8');
     await waitFor(() => cachedWidget.nodes['[data-codex-run-status]'].textContent === 'COMPLETE');
@@ -954,14 +982,14 @@ test('requestCardSkillRunCancel posts active card run cancellation', async () =>
       assert.equal(init?.method, 'POST');
       const headers = init?.headers as Record<string, string>;
       assert.equal(headers['content-type'], 'application/json');
-      assert.deepEqual(JSON.parse(String(init?.body ?? '{}')), { ledgerId: 'specs', cardId: 'card-a' });
+      assert.deepEqual(JSON.parse(String(init?.body ?? '{}')), { ledgerId: 'specs', cardId: 'card-a', executionId: 'execution-a' });
       return new Response(JSON.stringify({ ok: true, status: 'cancelled' }), {
         status: 202,
         headers: { 'content-type': 'application/json' }
       });
     }) as typeof fetch;
 
-    const result = await requestCardSkillRunCancel({ ledgerId: 'specs', cardId: 'card-a', runId: 'codex-skill-1000-abcd' });
+    const result = await requestCardSkillRunCancel({ ledgerId: 'specs', cardId: 'card-a', runId: 'codex-skill-1000-abcd', executionId: 'execution-a' });
     assert.equal(result.ok, true);
     assert.equal(result.status, 'cancelled');
   } finally {

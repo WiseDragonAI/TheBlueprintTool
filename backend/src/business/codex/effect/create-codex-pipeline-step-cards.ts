@@ -2,11 +2,11 @@
  * WHAT: Writes the generated card and relationship chain for one pending Codex pipeline run.
  * WHY: Ledger mutations are the start controller's final output effect and must remain separate from manifest derivation.
  */
-import { writeFileSync } from 'node:fs';
 import type { CodexPipelineRun } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import { applyLedgerMutation } from '@backend/business/ledger/helper/apply-ledger-mutation.js';
 import { stripHydratedThreadNotes } from '@backend/business/ledger/helper/thread-content-file.js';
 import type { PipelineLedgerContext } from '../helper/codex-pipeline-runner.js';
+import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -43,6 +43,8 @@ export function createCodexPipelineStepCards(input: {
       codexPipelineStepName: step.name,
       codexPipelineName: input.run.pipelineName,
       codexRunId: firstSkill?.runId ?? '',
+      codexActiveRunId: firstSkill?.runId ?? '',
+      codexActiveExecutionId: firstSkill?.executionId ?? '',
       codexSkillName: firstSkill?.skillName ?? '',
       codexRunModel: firstSkill?.codexModel ?? '',
       codexRunEffort: firstSkill?.codexEffort ?? '',
@@ -79,7 +81,9 @@ export function createCodexPipelineStepCards(input: {
   const firstSkill = input.run.steps[0]?.skills[0];
   input.source.codexQueuedPipelineRunId = input.run.id;
   input.source.codexQueuedRunId = firstSkill?.runId ?? '';
+  input.source.codexActiveRunId = firstSkill?.runId ?? '';
+  input.source.codexActiveExecutionId = firstSkill?.executionId ?? '';
   stripHydratedThreadNotes(input.context.ledger);
-  writeFileSync(input.context.ledgerPath, JSON.stringify(input.context.ledger, null, 2), 'utf8');
+  persistLedgerProjection({ decisionOsRoot: input.decisionOsRoot, ledgerId: input.context.ledgerId, ledgerPath: input.context.ledgerPath, ledger: input.context.ledger, runtime: input.context.runtime });
   return null;
 }

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { findOrMaterializeInitiatorProject } from '../../../src/business/project-sync/controller/start-project-sync.js';
@@ -27,7 +27,7 @@ function project(id: string, name: string, root: string): DecisionOsProject {
   };
 }
 
-test('materializes a remote source project before selecting its workstation task owner', () => {
+test('materializes a remote source project before selecting its workstation task owner', async () => {
   const home = mkdtempSync(join(tmpdir(), 'decision-os-project-sync-owner-'));
   const origin = join(home, 'lys-origin.git');
   const sourceRoot = join(home, 'source-node-lys');
@@ -50,7 +50,7 @@ test('materializes a remote source project before selecting its workstation task
     const sourceSnapshot = readRepositorySyncStatus(sourceRoot);
     const admin = project('admin-project', 'Admin', adminRoot);
     let registeredPath = '';
-    const result = findOrMaterializeInitiatorProject({
+    const result = await findOrMaterializeInitiatorProject({
       masterRoot: workstationRoot,
       projects: () => [admin],
       catalog: {
@@ -61,6 +61,7 @@ test('materializes a remote source project before selecting its workstation task
       },
       source: { ...project('node-b:lys-project', 'lys', sourceRoot), ownerNodeId: 'node-b', localProjectId: 'lys-project', online: true },
       sourceSnapshot,
+      syncId: 'sync-1',
       gitSshCommand: "ssh -i '/keys/wise' -o IdentitiesOnly=yes",
     });
 
@@ -70,6 +71,22 @@ test('materializes a remote source project before selecting its workstation task
     assert.equal(execFileSync('git', ['-C', result.root, 'config', '--local', '--get', 'core.sshCommand'], { encoding: 'utf8' }).trim(), "ssh -i '/keys/wise' -o IdentitiesOnly=yes");
     assert.equal(readRepositorySyncStatus(result.root).originFingerprint, sourceSnapshot.originFingerprint);
     assert.notEqual(result.id, admin.id);
+    const resumed = await findOrMaterializeInitiatorProject({
+      masterRoot: workstationRoot,
+      projects: () => [admin],
+      catalog: {
+        register(path: string) {
+          registeredPath = path;
+          return project('lys-project', 'lys', join(workstationRoot, path));
+        },
+      },
+      source: { ...project('node-b:lys-project', 'lys', sourceRoot), ownerNodeId: 'node-b', localProjectId: 'lys-project', online: true },
+      sourceSnapshot,
+      syncId: 'sync-1',
+      gitSshCommand: "ssh -i '/keys/wise' -o IdentitiesOnly=yes",
+    });
+    assert.equal(resumed.root, result.root);
+    assert.equal(existsSync(join(workstationRoot, '.lys.decision-os-sync-sync-1')), false);
   } finally {
     rmSync(home, { recursive: true, force: true });
   }

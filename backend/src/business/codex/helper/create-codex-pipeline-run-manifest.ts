@@ -60,6 +60,7 @@ export function createCodexPipelineRunManifest(input: {
         const skillRunId = input.definition.temporary && stepIndex === 0 && skillIndex === 0
           ? runId
           : `codex-skill-${Date.now()}-${randomUUID().slice(0, 8)}`;
+        const executionId = `codex-execution-${Date.now()}-${randomUUID().slice(0, 8)}`;
         const defaults = defaultsBySkill.get(skill.skillName);
         const resolved = resolveSkillRunOptions({
           workspaceRoot: input.workspaceRoot,
@@ -74,6 +75,7 @@ export function createCodexPipelineRunManifest(input: {
           pipelineSkillId: skill.id,
           skillName: skill.skillName,
           runId: skillRunId,
+          executionId,
           status: 'pending',
           codexModel: resolved.codexModel,
           codexEffort: resolved.codexEffort,

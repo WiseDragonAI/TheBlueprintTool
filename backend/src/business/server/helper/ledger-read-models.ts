@@ -31,14 +31,20 @@ export function readLedgerSource(input: { decisionOsRoot: string; ledgerId: stri
   return { ledger: JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord, ledgerPath };
 }
 
-export function ledgerCanvasProjection(input: { decisionOsRoot: string; ledgerId: string }): AnyRecord | null {
-  const source = readLedgerSource(input);
-  if (!source) return null;
-  return hydrateLedgerCardContent(source.ledger, input.decisionOsRoot);
+function projectionSource(input: { decisionOsRoot: string; ledgerId: string; ledger?: AnyRecord }): { ledger: AnyRecord; ledgerPath: string } | null {
+  return input.ledger ? { ledger: structuredClone(input.ledger), ledgerPath: '' } : readLedgerSource(input);
 }
 
-export function ledgerNavigationProjection(input: { decisionOsRoot: string; ledgerId: string }): AnyRecord | null {
-  const source = readLedgerSource(input);
+export function ledgerCanvasProjection(input: { decisionOsRoot: string; ledgerId: string; ledger?: AnyRecord }): AnyRecord | null {
+  const source = projectionSource(input);
+  if (!source) return null;
+  const ledger = hydrateLedgerCardContent(source.ledger, input.decisionOsRoot);
+  if (!ledger.notes || typeof ledger.notes !== 'object') ledger.notes = {};
+  return ledger;
+}
+
+export function ledgerNavigationProjection(input: { decisionOsRoot: string; ledgerId: string; ledger?: AnyRecord }): AnyRecord | null {
+  const source = projectionSource(input);
   if (!source) return null;
   const cards = records(source.ledger.cards).map((card) => ({
     id: card.id,
@@ -50,8 +56,10 @@ export function ledgerNavigationProjection(input: { decisionOsRoot: string; ledg
     w: card.w,
     h: card.h,
     codexActiveRunId: card.codexActiveRunId ?? null,
+    codexActiveExecutionId: card.codexActiveExecutionId ?? null,
     codexThreadRunId: card.codexThreadRunId ?? null,
     codexThreadRunIds: card.codexThreadRunIds ?? null,
+    codexThreadRunOutputFiles: card.codexThreadRunOutputFiles ?? null,
     codexRunId: card.codexRunId ?? null,
     codexRunModel: card.codexRunModel ?? null,
     codexRunEffort: card.codexRunEffort ?? null,
@@ -59,16 +67,16 @@ export function ledgerNavigationProjection(input: { decisionOsRoot: string; ledg
   return { id: source.ledger.id ?? input.ledgerId, annotations: source.ledger.annotations ?? [], relationships: source.ledger.relationships ?? [], cards };
 }
 
-export function ledgerCardProjection(input: { decisionOsRoot: string; ledgerId: string; cardId: string }): AnyRecord | null {
-  const source = readLedgerSource(input);
+export function ledgerCardProjection(input: { decisionOsRoot: string; ledgerId: string; cardId: string; ledger?: AnyRecord }): AnyRecord | null {
+  const source = projectionSource(input);
   if (!source) return null;
   const card = records(source.ledger.cards).find((entry) => String(entry.id) === input.cardId);
   if (!card) return null;
   return { ...card, comment: { ...(card.comment && typeof card.comment === 'object' ? card.comment as AnyRecord : {}), what: readCardDescription({ decisionOsRoot: input.decisionOsRoot, card }) } };
 }
 
-export function ledgerThreadProjection(input: { decisionOsRoot: string; ledgerId: string; threadId: string }): AnyRecord | null {
-  const source = readLedgerSource(input);
+export function ledgerThreadProjection(input: { decisionOsRoot: string; ledgerId: string; threadId: string; ledger?: AnyRecord }): AnyRecord | null {
+  const source = projectionSource(input);
   if (!source) return null;
   const threadFiles = source.ledger.threadFiles && typeof source.ledger.threadFiles === 'object' ? source.ledger.threadFiles as AnyRecord : {};
   const contentFile = String(threadFiles[input.threadId] ?? '');
@@ -80,8 +88,8 @@ export function ledgerThreadProjection(input: { decisionOsRoot: string; ledgerId
   return { ledgerId: input.ledgerId, threadId: input.threadId, contentFile, threadFiles: { [input.threadId]: contentFile }, notes: { [input.threadId]: notes }, deletedNoteIds: { [input.threadId]: deletedIds } };
 }
 
-export function ledgerSearchProjection(input: { decisionOsRoot: string; ledgerId: string; zoneId: string; query: string }): AnyRecord | null {
-  const source = readLedgerSource(input);
+export function ledgerSearchProjection(input: { decisionOsRoot: string; ledgerId: string; zoneId: string; query: string; ledger?: AnyRecord }): AnyRecord | null {
+  const source = projectionSource(input);
   if (!source) return null;
   const query = input.query.trim().toLocaleLowerCase();
   const zone = records(source.ledger.annotations).find((entry) => String(entry.id ?? '') === input.zoneId);

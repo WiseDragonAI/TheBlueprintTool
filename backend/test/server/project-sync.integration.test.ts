@@ -13,6 +13,16 @@ function git(root: string, ...args: string[]): void {
   execFileSync('git', ['-C', root, ...args], { stdio: 'pipe' });
 }
 
+async function waitFor<T>(read: () => Promise<T | null>, timeoutMs = 5_000): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const value = await read();
+    if (value) return value;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error('Timed out waiting for project synchronization state.');
+}
+
 test('exposes origin identity and fixed repository status while protecting federation role execution', async () => {
   const home = mkdtempSync(join(tmpdir(), 'decision-os-project-sync-route-'));
   const remote = join(home, 'origin.git');
@@ -41,7 +51,7 @@ test('exposes origin identity and fixed repository status while protecting feder
   await once(server, 'listening');
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   try {
-    const catalog = await fetch(`${base}/decision-os/projects`).then((response) => response.json()) as { projects: Array<{ id: string; originFingerprint: string }> };
+    const catalog = await fetch(`${base}/decision-os/projects`).then((response) => response.json()) as { projects: Array<{ id: string; color: string; originFingerprint: string }> };
     assert.equal(catalog.projects.length, 1);
     assert.match(catalog.projects[0].originFingerprint, /^[0-9a-f]{64}$/);
     const statusResponse = await fetch(`${base}/api/project-sync/repository-status?projectId=${encodeURIComponent(catalog.projects[0].id)}`);
@@ -57,34 +67,39 @@ test('exposes origin identity and fixed repository status while protecting feder
     assert.match(JSON.stringify(await unauthorized.json()), /authentication failed/);
     const runs = await fetch(`${base}/api/project-sync`).then((response) => response.json()) as { runs: unknown[] };
     assert.deepEqual(runs.runs, []);
-    const admissionResponse = await fetch(`${base}/api/project-sync`, {
+    const request = () => fetch(`${base}/api/project-sync`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'idempotency-key': 'sync-request-1' },
       body: JSON.stringify({ sourceProjectId: catalog.projects[0].id, idempotencyKey: 'sync-request-1' }),
     });
-    const admission = await admissionResponse.json() as Record<string, any>;
+    const [firstResponse, secondResponse] = await Promise.all([request(), request()]);
+    const [first, second] = await Promise.all([firstResponse.json(), secondResponse.json()]) as Array<Record<string, any>>;
+    const admissionResponse = first.duplicate ? secondResponse : firstResponse;
+    const admission = first.duplicate ? second : first;
+    const duplicate = first.duplicate ? first : second;
     assert.equal(admissionResponse.status, 202);
     assert.equal(admission.duplicate, false);
-    assert.equal(admission.ledgerId, 'tasks');
-    assert.match(admission.masterCardId, /^card-project-sync-/);
-    assert.match(admission.pipelineRunId, /^codex-pipeline-/);
-    const duplicate = await fetch(`${base}/api/project-sync`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'idempotency-key': 'sync-request-1' },
-      body: JSON.stringify({ sourceProjectId: catalog.projects[0].id, idempotencyKey: 'sync-request-1' }),
-    }).then((response) => response.json()) as Record<string, any>;
+    assert.equal(admission.run.phase, 'requested');
+    assert.equal(admission.masterCardId, '');
     assert.equal(duplicate.duplicate, true);
-    assert.equal(duplicate.masterCardId, admission.masterCardId);
-    assert.equal(duplicate.pipelineRunId, admission.pipelineRunId);
+    assert.equal(duplicate.run.syncId, admission.run.syncId);
+    const attached = await waitFor(async () => {
+      const body = await fetch(`${base}/api/project-sync/${encodeURIComponent(admission.run.syncId)}`).then((response) => response.json()) as Record<string, any>;
+      return body.run?.masterCardId && body.run?.pipelineRunId ? body.run : null;
+    });
+    assert.equal(attached.ledgerId, 'tasks');
+    assert.match(attached.masterCardId, /^card-project-sync-/);
+    assert.match(attached.pipelineRunId, /^codex-pipeline-/);
     const ledger = JSON.parse(readFileSync(join(project, '.decision-os', 'tasks.json'), 'utf8')) as Record<string, any>;
-    const master = ledger.cards.find((card: Record<string, unknown>) => card.id === admission.masterCardId);
+    const master = ledger.cards.find((card: Record<string, unknown>) => card.id === attached.masterCardId);
     assert.deepEqual(master.labels, ['master-task', 'synchronization']);
+    assert.equal(ledger.annotations.find((annotation: Record<string, unknown>) => annotation.id === `zone-project-sync-${attached.syncId}`).color, catalog.projects[0].color);
     assert.equal(ledger.relationships.length, 3);
-    assert.ok(ledger.relationships.every((relationship: Record<string, unknown>) => relationship.from === admission.masterCardId && relationship.label === 'subtask'));
-    assert.ok(ledger.cards.filter((card: Record<string, unknown>) => card.id !== admission.masterCardId).every((card: Record<string, any>) => card.labels.includes('subtask')));
+    assert.ok(ledger.relationships.every((relationship: Record<string, unknown>) => relationship.from === attached.masterCardId && relationship.label === 'subtask'));
+    assert.ok(ledger.cards.filter((card: Record<string, unknown>) => card.id !== attached.masterCardId).every((card: Record<string, any>) => card.labels.includes('subtask')));
     const pipelineStore = JSON.parse(readFileSync(join(project, '.decision-os', 'codex-pipelines.json'), 'utf8')) as Record<string, any>;
     assert.equal(pipelineStore.runs.length, 1);
-    assert.equal(pipelineStore.runs[0].sourceCardId, admission.masterCardId);
+    assert.equal(pipelineStore.runs[0].sourceCardId, attached.masterCardId);
   } finally {
     server.close();
     await once(server, 'close');

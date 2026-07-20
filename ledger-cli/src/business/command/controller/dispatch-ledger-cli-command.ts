@@ -16,6 +16,14 @@ import { resolveCodexRunEvents } from '../../ledger/helper/resolve-codex-run-eve
 import { completeMasterTask } from '../../ledger/helper/complete-master-task.js';
 import { synchronizeServerSkillController } from '../../skills/controller/synchronize-server-skill.js';
 import { migrateMasterTasks } from '../../ledger/helper/migrate-master-tasks.js';
+import { readFile } from 'node:fs/promises';
+import { writeLedgerJson } from '../../ledger/effect/write-ledger-json.js';
+
+async function commitTaskProjectionIfNeeded(ledgerJsonFile: string, fs?: FileSystemPort): Promise<void> {
+  if (!ledgerJsonFile.endsWith('/tasks.json') && !ledgerJsonFile.endsWith('\\tasks.json')) return;
+  const ledger = JSON.parse(fs ? await fs.readFile(ledgerJsonFile) : await readFile(ledgerJsonFile, 'utf8')) as unknown;
+  await writeLedgerJson(ledgerJsonFile, ledger, fs);
+}
 
 export async function dispatchLedgerCliCommandController(
   argv: string[],
@@ -90,6 +98,7 @@ export async function dispatchLedgerCliCommandController(
     let planJson = '';
     for await (const chunk of process.stdin) planJson += String(chunk);
     const result = applyMasterTaskPlan({ ledgerJsonFile: command.ledgerJsonFile, planJson });
+    if (result.ok) await commitTaskProjectionIfNeeded(command.ledgerJsonFile, ports.fs);
     if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
     return result;
   }
@@ -99,6 +108,7 @@ export async function dispatchLedgerCliCommandController(
     let planJson = '';
     for await (const chunk of process.stdin) planJson += String(chunk);
     const result = applyMasterTaskProgress({ ledgerJsonFile: command.ledgerJsonFile, planJson });
+    if (result.ok) await commitTaskProjectionIfNeeded(command.ledgerJsonFile, ports.fs);
     if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
     return result;
   }

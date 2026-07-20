@@ -1,7 +1,7 @@
 import { SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 
-type Frame = { type: string; requestId?: string; direction?: string; from?: string; replicaVersion?: number; projectId?: string; resource?: string; revision?: string; nodes?: Array<{ nodeId: string; nodeLabel: string; online: boolean }> };
+type Frame = { type: string; requestId?: string; direction?: string; from?: string; stateVersion?: number; projectId?: string; payload?: unknown; nodes?: Array<{ nodeId: string; nodeLabel: string; online: boolean }> };
 
 async function createNode(federationId: string, nodeId: string): Promise<string> {
   const response = await SELF.fetch(`https://relay.test/admin/federations/${federationId}/nodes/${nodeId}`, {
@@ -71,12 +71,9 @@ describe('federation relay', () => {
     nodeA.send(JSON.stringify({ version: 1, type: 'content-change' }));
     await expect(remoteChange).resolves.toMatchObject({ type: 'content-change' });
 
-    const priority = nextFrame(nodeB, (frame) => frame.type === 'replica-priority');
-    nodeA.send(JSON.stringify({ version: 1, type: 'replica-priority', replicaVersion: 1, to: 'node-b', projectId: 'beta', resource: '/cards/card-beta' }));
-    await expect(priority).resolves.toMatchObject({ type: 'replica-priority', replicaVersion: 1, from: 'node-a', projectId: 'beta', resource: '/cards/card-beta' });
-    const acknowledgement = nextFrame(nodeA, (frame) => frame.type === 'replica-ack');
-    nodeB.send(JSON.stringify({ version: 1, type: 'replica-ack', replicaVersion: 1, to: 'node-a', projectId: 'beta', revision: 'revision-1' }));
-    await expect(acknowledgement).resolves.toMatchObject({ type: 'replica-ack', from: 'node-b', projectId: 'beta', revision: 'revision-1' });
+    const stateEvent = nextFrame(nodeB, (frame) => frame.type === 'state-event-batch');
+    nodeA.send(JSON.stringify({ version: 1, type: 'state-event-batch', stateVersion: 1, to: 'node-b', projectId: 'beta', payload: { events: [{ eventId: 'event-a' }] } }));
+    await expect(stateEvent).resolves.toMatchObject({ type: 'state-event-batch', stateVersion: 1, from: 'node-a', projectId: 'beta', payload: { events: [{ eventId: 'event-a' }] } });
 
     const requestId = crypto.randomUUID();
     const ownerOpen = nextFrame(nodeB, (frame) => frame.type === 'request-open' && frame.requestId === requestId);

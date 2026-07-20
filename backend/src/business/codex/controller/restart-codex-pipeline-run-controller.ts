@@ -13,6 +13,7 @@ import {
 } from '../helper/codex-pipeline-runner.js';
 import { scheduleCodexProcesses } from '../helper/codex-process-scheduler.js';
 import { readCodexPipelineRunController } from './read-codex-pipeline-run-controller.js';
+import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -89,7 +90,7 @@ export async function restartCodexPipelineRunController(
     }
   }
   stripHydratedThreadNotes(context.ledger);
-  writeFileSync(context.ledgerPath, JSON.stringify(context.ledger, null, 2), 'utf8');
+  persistLedgerProjection({ decisionOsRoot, ledgerId: context.ledgerId, ledgerPath: context.ledgerPath, ledger: context.ledger, runtime });
   const restarted = resetRun(run, new Date().toISOString());
   writeCodexPipelineStore({
     decisionOsRoot,

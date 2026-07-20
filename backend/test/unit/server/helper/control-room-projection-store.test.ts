@@ -13,7 +13,7 @@ test('direct executing master task uses the live run start for its stopwatch', (
   writeFileSync(join(decisionOsRoot, 'cards', 'tasks', 'master.md'), '## A. Work\n\n1. Running.\n');
   writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
     cards: [{
-      id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], codexActiveRunId: 'run-a',
+      id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], codexActiveRunId: 'run-a', codexActiveExecutionId: 'execution-a',
       comment: { contentFile: '.decision-os/cards/tasks/master.md' },
     }],
     annotations: [], relationships: [], threadFiles: {},
@@ -25,7 +25,7 @@ test('direct executing master task uses the live run start for its stopwatch', (
   };
   const store = createControlRoomProjectionStore({
     cacheFile: join(decisionOsRoot, 'cache', 'control-room.json'),
-    runtimeForRoot: () => ({ codexSkillRuns: { 'run-a': { status: 'running', startedAt: '2026-07-14T10:02:00.000Z', child: { pid: process.pid, exitCode: null, killed: false } } } }),
+    runtimeForRoot: () => ({ codexSkillRuns: { 'run-a': { status: 'running', executionId: 'execution-a', startedAt: '2026-07-14T10:02:00.000Z', child: { pid: process.pid, exitCode: null, killed: false } } } }),
   });
 
   try {
@@ -47,15 +47,15 @@ test('direct executing master task uses the latest persisted Codex turn after se
   mkdirSync(join(decisionOsRoot, 'runs', 'codex-skills', 'tasks'), { recursive: true });
   writeFileSync(join(decisionOsRoot, 'cards', 'tasks', 'master.md'), 'Active since: 2026-07-14T10:02:00.000Z\n\n## A. Work\n\n1. Running.\n');
   writeFileSync(stderrFile, [
-    'decision-os:codex-run-segment {"runId":"run-a","startedAt":"2026-07-14T10:02:00.000Z","segment":"start","startLine":0}',
-    'decision-os:codex-run-segment {"runId":"run-a","startedAt":"2026-07-14T10:12:00.000Z","segment":"continue","startLine":1}',
-    'decision-os:codex-turn-start {"runId":"run-a","startedAt":"2026-07-14T10:12:03.000Z","line":2}',
+    'decision-os:codex-run-segment {"runId":"run-a","executionId":"execution-old","startedAt":"2026-07-14T10:02:00.000Z","segment":"start","startLine":0}',
+    'decision-os:codex-run-segment {"runId":"run-a","executionId":"execution-a","startedAt":"2026-07-14T10:12:00.000Z","segment":"continue","startLine":1}',
+    'decision-os:codex-turn-start {"runId":"run-a","executionId":"execution-a","startedAt":"2026-07-14T10:12:03.000Z","line":2}',
     '',
   ].join('\n'));
   writeFileSync(stdoutFile, [JSON.stringify({ type: 'turn.completed' }), JSON.stringify({ type: 'turn.started' }), ''].join('\n'));
   writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
     cards: [{
-      id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], codexActiveRunId: 'run-a',
+      id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], codexActiveRunId: 'run-a', codexActiveExecutionId: 'execution-a',
       comment: { contentFile: '.decision-os/cards/tasks/master.md' },
     }],
     annotations: [], relationships: [], threadFiles: {},
@@ -67,7 +67,7 @@ test('direct executing master task uses the latest persisted Codex turn after se
   };
   const store = createControlRoomProjectionStore({
     cacheFile: join(decisionOsRoot, 'cache', 'control-room.json'),
-    runtimeForRoot: () => ({ codexSkillRuns: { 'run-a': { status: 'running', startedAt: '2026-07-14T10:12:00.000Z', stderrFile, stdoutFile, child: { pid: process.pid, exitCode: null, killed: false } } } }),
+    runtimeForRoot: () => ({ codexSkillRuns: { 'run-a': { status: 'running', executionId: 'execution-a', startedAt: '2026-07-14T10:12:00.000Z', stderrFile, stdoutFile, child: { pid: process.pid, exitCode: null, killed: false } } } }),
   });
 
   try {
@@ -98,7 +98,7 @@ test('continuation stopwatch waits for its active execution and changes the proj
   writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
     cards: [{
       id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], codexActiveRunId: 'run-a',
-      codexActiveExecutionId: 'execution-new', executionStatus: 'running',
+      codexActiveExecutionId: 'execution-new',
       comment: { contentFile: '.decision-os/cards/tasks/master.md' },
     }],
     annotations: [], relationships: [], threadFiles: {},
@@ -138,7 +138,7 @@ test('rebuilds a cached Exec projection when the process queue file appears', as
   writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
     cards: [{
       id: 'master', title: 'Master', status: 'todo', labels: ['master-task'],
-      codexActiveRunId: 'run-pending', executionStatus: 'pending',
+      codexActiveRunId: 'run-pending', codexActiveExecutionId: 'execution-pending',
       comment: { contentFile: '.decision-os/cards/tasks/master.md' },
     }],
     annotations: [], relationships: [], threadFiles: {},
@@ -163,7 +163,7 @@ test('rebuilds a cached Exec projection when the process queue file appears', as
       items: [{
         id: 'run-pending', kind: 'thread', status: 'pending', createdAt: '2026-07-14T10:02:00.000Z',
         startedAt: null, interruptedAt: null, interruptionReason: '', processId: 0,
-        processStartTime: '', stdoutFile: '', stderrFile: '', payload: { cardId: 'master' },
+        processStartTime: '', stdoutFile: '', stderrFile: '', payload: { ledgerId: 'tasks', cardId: 'master', runId: 'run-pending', executionId: 'execution-pending' },
       }],
     }));
     assert.equal(store.reconcile([project]), true);
