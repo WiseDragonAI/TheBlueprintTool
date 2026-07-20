@@ -48,8 +48,8 @@ export function projectCardCodexRun(input: {
       : {};
     card.codexThreadRunOutputFiles = { ...outputFiles, [input.runId]: input.outputFileRef };
   } else {
-    delete card.codexThreadRunId;
-    delete card.codexThreadRunOutputFile;
+    // A direct or pipeline execution temporarily owns the active lease without
+    // destroying the durable thread session that the next thread launch resumes.
     card.codexRunId = input.runId;
     card.codexRunOutputFile = input.outputFileRef;
   }

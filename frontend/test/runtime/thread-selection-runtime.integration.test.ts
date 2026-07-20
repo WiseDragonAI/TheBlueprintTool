@@ -13,7 +13,7 @@ import { pinThreadFeedToLastMessage, pinThreadSurfaceToBottom } from '../../src/
 import { isThreadFollowingBottom, setThreadFollowBottom } from '../../src/runtime/thread/helper/thread-follow-bottom.js';
 import { consumeThreadViewportEntry } from '../../src/runtime/thread/effect/consume-thread-viewport-entry.js';
 import { requestThreadViewportEntry } from '../../src/runtime/thread/effect/request-thread-viewport-entry.js';
-import { renderThreadJumpButton, suppressThreadScrollTrackingThroughNextFrame, syncThreadJumpButtonVisibility } from '../../src/runtime/thread/effect/render-thread-jump-button.js';
+import { renderThreadJumpButton, syncThreadJumpButtonVisibility } from '../../src/runtime/thread/effect/render-thread-jump-button.js';
 import { renderThreadNotes } from '../../src/runtime/thread/effect/render-thread-notes.js';
 import { state } from '../../src/runtime/state.js';
 
@@ -454,6 +454,38 @@ test('pin-thread-feed-to-last-message activates follow-bottom on the primary mob
   }
 });
 
+test('delayed entry pin yields after an upward scroll exits follow-bottom', () => {
+  const previousDocument = globalThis.document;
+  const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
+  const frameCallbacks: FrameRequestCallback[] = [];
+  const chat = { scrollTop: 0, scrollHeight: 720 };
+  (globalThis as unknown as { document: unknown }).document = {
+    querySelector(selector: string) {
+      if (selector === '.thread-panel .thread-conversation-scroll') return chat;
+      return null;
+    }
+  };
+  (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = (callback: FrameRequestCallback) => {
+    frameCallbacks.push(callback);
+    return frameCallbacks.length;
+  };
+  state.threadId = 'thread-entry-race';
+  state.threadFollowBottomByThreadId = { 'thread-entry-race': true };
+  try {
+    pinThreadFeedToLastMessage();
+    assert.equal(chat.scrollTop, 720);
+    chat.scrollTop = 420;
+    setThreadFollowBottom('thread-entry-race', false);
+    frameCallbacks.shift()?.(0);
+    assert.equal(chat.scrollTop, 420);
+  } finally {
+    (globalThis as unknown as { document: unknown }).document = previousDocument;
+    (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = previousRequestAnimationFrame;
+    state.threadId = '';
+    state.threadFollowBottomByThreadId = {};
+  }
+});
+
 test('render-thread-jump-button shows only when the thread viewport is away from the bottom', () => {
   const previousDocument = globalThis.document;
   const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
@@ -535,14 +567,13 @@ test('render-thread-jump-button shows only when the thread viewport is away from
   }
 });
 
-test('render scroll suppression preserves a paused viewport while notes are replaced', () => {
+test('render visibility sync cannot mask an immediate upward user scroll', () => {
   const previousDocument = globalThis.document;
   const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
-  const frameCallbacks: FrameRequestCallback[] = [];
   const button = createTestElement('', 'button');
   button.dataset.action = 'jump-thread-bottom';
   const chat = {
-    scrollTop: 724,
+    scrollTop: 884,
     scrollHeight: 1037,
     clientHeight: 153,
   };
@@ -553,25 +584,18 @@ test('render scroll suppression preserves a paused viewport while notes are repl
       return null;
     }
   };
-  (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = (callback: FrameRequestCallback) => {
-    frameCallbacks.push(callback);
-    return frameCallbacks.length;
-  };
+  (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = undefined;
   try {
     state.threadId = 'thread-reload';
-    state.threadScrollTopByThreadId = { 'thread-reload': 724 };
-    state.threadFollowBottomByThreadId = { 'thread-reload': false };
-    suppressThreadScrollTrackingThroughNextFrame('thread');
+    state.threadScrollTopByThreadId = { 'thread-reload': 884 };
+    state.threadFollowBottomByThreadId = { 'thread-reload': true };
 
-    chat.scrollTop = 0;
-    syncThreadJumpButtonVisibility({ persistScroll: true });
-    assert.equal(state.threadScrollTopByThreadId['thread-reload'], 724);
+    syncThreadJumpButtonVisibility();
+    chat.scrollTop = 700;
+    syncThreadJumpButtonVisibility({ trackScroll: true, persistScroll: true });
+
+    assert.equal(state.threadScrollTopByThreadId['thread-reload'], 700);
     assert.equal(isThreadFollowingBottom('thread-reload'), false);
-
-    while (frameCallbacks.length > 0) frameCallbacks.shift()?.(0);
-    chat.scrollTop = 500;
-    syncThreadJumpButtonVisibility({ persistScroll: true });
-    assert.equal(state.threadScrollTopByThreadId['thread-reload'], 500);
   } finally {
     (globalThis as unknown as { document: unknown }).document = previousDocument;
     (globalThis as unknown as { requestAnimationFrame: unknown }).requestAnimationFrame = previousRequestAnimationFrame;

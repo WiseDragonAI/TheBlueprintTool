@@ -3,31 +3,37 @@
  * WHY: The canvas widget needs a direct stop control for the server-owned child process.
  */
 import type { ChildProcess } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { cancelCodexPipelineRunController } from './cancel-codex-pipeline-run-controller.js';
 import { isSameCodexProcess, readCodexProcessQueue, removeCodexProcessQueueItem, type CodexProcessQueueItem } from '../helper/codex-process-queue.js';
 import { clearCardCodexExecutionForLedger } from '../helper/clear-card-codex-execution.js';
 import { readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
+import { signalCodexProcessTree } from '../helper/reconcile-terminal-codex-process.js';
+import { codexRuntimeRuns, notifyCodexLifecycle, publicCodexRuntimeRun } from '../helper/codex-runtime-run-store.js';
+import { readCanonicalDecisionOsState } from '../../ledger/helper/read-canonical-decision-os-state.js';
+import { cardCodexExecutionOwnership } from '../helper/card-codex-execution-ownership.js';
 
 type AnyRecord = Record<string, unknown>;
 
-function runtimeRuns(runtime: AnyRecord): Record<string, AnyRecord> {
-  return runtime.codexSkillRuns && typeof runtime.codexSkillRuns === 'object' ? runtime.codexSkillRuns as Record<string, AnyRecord> : {};
-}
-
-function publicRun(run: AnyRecord): AnyRecord {
-  const { child: _child, ...rest } = run;
-  return rest;
-}
-
 function signalPersistedProcess(item: CodexProcessQueueItem | undefined): boolean {
   if (!item || item.status !== 'running' || !isSameCodexProcess(item.processId, item.processStartTime)) return false;
-  try {
-    process.kill(process.platform === 'win32' ? item.processId : -item.processId, 'SIGTERM');
-    return true;
-  } catch {
-    return false;
-  }
+  return signalCodexProcessTree({ pid: item.processId, signal: 'SIGTERM' });
+}
+
+function cardOwnsExecution(input: { decisionOsRoot: string; ledgerId: string; cardId: string; runId: string; executionId: string; runtime: AnyRecord }): boolean {
+  const state = readCanonicalDecisionOsState({
+    action_payload: { decisionOsFile: resolve(input.decisionOsRoot, 'state.json') },
+    runtime_state: input.runtime,
+  });
+  const ledgerRef = String(state.ledgers.find((entry) => entry.id === input.ledgerId)?.ledgerFile ?? '').replace(/^\.decision-os\//, '');
+  const ledgerPath = resolve(input.decisionOsRoot, ledgerRef);
+  if (!ledgerRef || !existsSync(ledgerPath)) return false;
+  const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as { cards?: AnyRecord[] };
+  const ownership = cardCodexExecutionOwnership(ledger.cards?.find((card) => String(card.id ?? '') === input.cardId));
+  return ownership.state === 'active'
+    && ownership.lease.runId === input.runId
+    && ownership.lease.executionId === input.executionId;
 }
 
 export async function cancelCardSkillRunController(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): Promise<AnyRecord> {
@@ -48,8 +54,11 @@ export async function cancelCardSkillRunController(input: { action_payload?: Any
   if (pipeline) {
     return cancelCodexPipelineRunController({ action_payload: { runId: pipeline.id, executionId }, runtime_state: runtime });
   }
+  if (!cardOwnsExecution({ decisionOsRoot, ledgerId, cardId, runId, executionId, runtime })) {
+    return { ok: false, statusCode: 409, error: 'Card execution is no longer active.', runId, executionId };
+  }
 
-  const run = runtimeRuns(runtime)[runId];
+  const run = codexRuntimeRuns(runtime)[runId];
   const queued = readCodexProcessQueue(decisionOsRoot).find((item) => String(item.payload.runId ?? item.id) === runId
     && String(item.payload.executionId ?? '') === executionId
     && String(item.payload.ledgerId ?? '') === ledgerId
@@ -61,25 +70,21 @@ export async function cancelCardSkillRunController(input: { action_payload?: Any
   if (status === 'pending') {
     if (queued) removeCodexProcessQueueItem(decisionOsRoot, queued.id);
     const cancelled = run ?? { id: runId, executionId, ledgerId, outputCardId: cardId };
-    Object.assign(cancelled, { status: 'cancelled', finishedAt: new Date().toISOString() });
+    const finishedAt = new Date().toISOString();
+    Object.assign(cancelled, { status: 'cancelled', finishedAt, settledAt: finishedAt });
     clearCardCodexExecutionForLedger({ decisionOsRoot, ledgerId, cardId, runId, executionId, runtime });
-    return { ok: true, statusCode: 202, status: 'cancelled', run: publicRun(cancelled) };
+    notifyCodexLifecycle(runtime.onCodexRunSettled, { ledgerId, cardId, outputCardId: cardId, threadId: `thread-${cardId}`, runId, executionId, status: 'cancelled' });
+    return { ok: true, statusCode: 202, status: 'cancelled', run: publicCodexRuntimeRun(cancelled) };
   }
   if (!run || status !== 'running') {
-    return { ok: true, statusCode: 200, status: status || 'unknown', run: run ? publicRun(run) : { id: runId, executionId, status } };
+    return { ok: true, statusCode: 200, status: status || 'unknown', run: run ? publicCodexRuntimeRun(run) : { id: runId, executionId, status } };
   }
 
   const child = (run as { child?: ChildProcess }).child;
   const finishedAt = new Date().toISOString();
   let killed = false;
   let persistedProcessWasSignalled = false;
-  if (child && typeof child.kill === 'function' && !child.killed) {
-    try {
-      killed = child.kill('SIGTERM');
-    } catch {
-      killed = false;
-    }
-  }
+  if (child && typeof child.kill === 'function' && !child.killed) killed = signalCodexProcessTree({ child, signal: 'SIGTERM' });
   if (!killed) {
     persistedProcessWasSignalled = signalPersistedProcess(queued);
     killed = persistedProcessWasSignalled;
@@ -87,5 +92,5 @@ export async function cancelCardSkillRunController(input: { action_payload?: Any
   if (!killed) return { ok: false, statusCode: 409, error: 'Run could not be cancelled from its live process identity.', runId };
 
   Object.assign(run, { cancelRequestedAt: finishedAt });
-  return { ok: true, statusCode: 202, status: 'running', cancellationRequested: true, run: publicRun(run) };
+  return { ok: true, statusCode: 202, status: 'running', cancellationRequested: true, run: publicCodexRuntimeRun(run) };
 }

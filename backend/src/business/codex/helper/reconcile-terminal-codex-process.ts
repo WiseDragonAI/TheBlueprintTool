@@ -12,18 +12,23 @@ function positiveDelay(value: unknown, fallback: number): number {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-function signalProcessTree(child: ChildProcess, signal: NodeJS.Signals): boolean {
-  if (!child.pid) return false;
+export function signalCodexProcessTree(input: { child?: ChildProcess; pid?: number; signal: NodeJS.Signals }): boolean {
+  const pid = Number(input.pid ?? input.child?.pid ?? 0);
+  if (!pid) {
+    try { return input.child?.kill(input.signal) ?? false; } catch { return false; }
+  }
   if (process.platform !== 'win32') {
     try {
-      process.kill(-child.pid, signal);
+      process.kill(-pid, input.signal);
       return true;
     } catch {
       // Fall back to the direct child when the process group has already disappeared.
     }
   }
   try {
-    return child.kill(signal);
+    if (input.child) return input.child.kill(input.signal);
+    process.kill(pid, input.signal);
+    return true;
   } catch {
     return false;
   }
@@ -60,11 +65,11 @@ export function createTerminalCodexProcessReconciler(input: {
       terminalTimer = setTimeout(() => {
         terminalTimer = undefined;
         if (closed || input.child.exitCode !== null || input.child.signalCode !== null) return;
-        signalProcessTree(input.child, 'SIGTERM');
+        signalCodexProcessTree({ child: input.child, signal: 'SIGTERM' });
         forceKillTimer = setTimeout(() => {
           forceKillTimer = undefined;
           if (closed || input.child.exitCode !== null || input.child.signalCode !== null) return;
-          signalProcessTree(input.child, 'SIGKILL');
+          signalCodexProcessTree({ child: input.child, signal: 'SIGKILL' });
         }, forceKillGraceMs);
         forceKillTimer.unref?.();
       }, closeGraceMs);

@@ -25,6 +25,9 @@ import {
   type PipelineLedgerContext,
 } from '../helper/codex-pipeline-runner.js';
 import { scheduleCodexProcesses, unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
+import { withCardCodexAdmission } from '../helper/card-codex-admission-lock.js';
+import { cardCodexExecutionOwnership } from '../helper/card-codex-execution-ownership.js';
+import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -49,7 +52,15 @@ function rollbackPipelineCards(input: { decisionOsRoot: string; context: Pipelin
     const inner = relative(input.decisionOsRoot, contentFile);
     if (contentRef && inner && !inner.startsWith('..') && !isAbsolute(inner) && existsSync(contentFile)) rmSync(contentFile, { force: true });
   }
-  writeFileSync(input.context.ledgerPath, input.ledgerBefore, 'utf8');
+  const previousLedger = JSON.parse(input.ledgerBefore) as PipelineLedgerContext['ledger'];
+  input.context.ledger = previousLedger;
+  persistLedgerProjection({
+    decisionOsRoot: input.decisionOsRoot,
+    ledgerId: input.context.ledgerId,
+    ledgerPath: input.context.ledgerPath,
+    ledger: previousLedger,
+    runtime: input.context.runtime,
+  });
 }
 
 export async function startPipelineRun(input: {
@@ -59,7 +70,14 @@ export async function startPipelineRun(input: {
   sourceCardId: string;
   definition: PipelineDefinition;
   onLedgerChange?: unknown;
+  admissionLocked?: boolean;
 }): Promise<AnyRecord> {
+  if (!input.admissionLocked) {
+    return withCardCodexAdmission(
+      { decisionOsRoot: input.decisionOsRoot, ledgerId: input.ledgerId, cardId: input.sourceCardId },
+      () => startPipelineRun({ ...input, admissionLocked: true }),
+    );
+  }
   const workspaceRoot = dirname(input.decisionOsRoot);
   const availableSkills = scanCodexSkills({ workspaceRoot, serverRoot: runtimeServerRoot(input.runtime) });
   const availableSkillNames = availableSkills.map((skill) => skill.name);
@@ -88,9 +106,11 @@ export async function startPipelineRun(input: {
   if (!context) return { ok: false, statusCode: 404, error: 'Ledger not found.', ledgerId: input.ledgerId };
   const source = sourceCard(context, input.sourceCardId);
   if (!source) return { ok: false, statusCode: 404, error: 'Source card not found.', cardId: input.sourceCardId };
-  const activeRunId = text(source.codexActiveRunId);
-  const activeExecutionId = text(source.codexActiveExecutionId);
-  if (activeRunId || activeExecutionId) {
+  const ownership = cardCodexExecutionOwnership(source);
+  if (ownership.state === 'contradictory') return { ok: false, statusCode: 409, error: 'Source card has contradictory Codex execution ownership.', ...ownership };
+  const activeRunId = ownership.state === 'active' ? ownership.lease.runId : '';
+  const activeExecutionId = ownership.state === 'active' ? ownership.lease.executionId : '';
+  if (ownership.state === 'active') {
     const existing = normalized.store.runs.find((candidate) => candidate.ledgerId === input.ledgerId
       && candidate.sourceCardId === input.sourceCardId
       && (candidate.status === 'pending' || candidate.status === 'running')

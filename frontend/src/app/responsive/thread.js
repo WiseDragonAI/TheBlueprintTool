@@ -12,6 +12,7 @@ import { submitThreadDraft } from '/src/runtime/thread/effect/submit-thread-draf
 import { saveThreadDraft } from '/src/runtime/thread/effect/persist-thread-draft.js';
 import { focusThreadDraft } from '/src/runtime/thread/effect/focus-thread-draft.js';
 import { startVoiceRecording } from '/src/runtime/voice/controller/start-voice-recording.js';
+import { currentVoiceCaptureOwner } from '/src/runtime/voice/helper/voice-capture-ownership.js';
 import { executeVoiceAction } from '/src/runtime/voice/controller/execute-voice-action.js';
 import { cancelVoiceRecording } from '/src/runtime/voice/controller/cancel-voice-recording.js';
 import { parseVoiceLaunchMode, voiceLaunchModeForModifiers } from '/src/runtime/voice/helper/voice-launch-mode.js';
@@ -206,6 +207,7 @@ export async function handleResponsiveThreadShortcut(event) {
   }
   if (key === 'x') {
     event.preventDefault();
+    if (currentVoiceCaptureOwner()?.startsWith('git-review:')) return true;
     if (!canvasState.threadPanelOpen && currentCard) openMobileThread(currentCard, getComputedStyle(document.querySelector('#card-view')).getPropertyValue('--zone-color').trim());
     if (canvasState.voice.recording) {
       const launchMode = voiceLaunchModeForModifiers(event);
@@ -353,6 +355,8 @@ async function startCodex(button) {
   const existingRunId = String(button.dataset.codexRunId || cardCodexThreadRunId(currentCard)).trim();
   const result = existingRunId
     ? await requestCardSkillRunContinue({
+      projectId: currentProjectId,
+      replicaNodeId: currentReplicaNodeId,
       ledgerId: currentLedgerId,
       cardId: String(currentCard.id),
       runId: existingRunId,
@@ -379,7 +383,7 @@ async function startCodex(button) {
   }
   const status = String(result.run?.status || 'running');
   if (runId) {
-    const identity = { projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId, expectedExecutionId: executionId || undefined, expectedStatus: status, forceRevalidate: true };
+    const identity = { projectId: currentProjectId, replicaNodeId: currentReplicaNodeId, ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId, expectedExecutionId: executionId || undefined, expectedStatus: status, forceRevalidate: true };
     bindThreadCodexRunLog(identity);
     bindThreadCodexActiveRunLog(identity);
   }
@@ -390,7 +394,7 @@ async function startCodex(button) {
     startedAt
   });
   await refreshThreadLedger(runId);
-  if (runId) bindThreadCodexRunLog({ projectId: currentProjectId, ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId, expectedExecutionId: executionId || undefined, expectedStatus: status });
+  if (runId) bindThreadCodexRunLog({ projectId: currentProjectId, replicaNodeId: currentReplicaNodeId, ledgerId: currentLedgerId, cardId: String(currentCard.id), threadId: canvasState.threadId, runId, expectedExecutionId: executionId || undefined, expectedStatus: status });
 }
 
 function subscribeEvents() {
@@ -455,6 +459,7 @@ export function initializeMobileThread() {
       ledgerId: currentLedgerId,
       cardId: button.dataset.codexCardId || String(currentCard?.id || ''),
       runId: button.dataset.codexRunId || '',
+      executionId: button.dataset.codexExecutionId || '',
     });
     else if (action === 'confirm-delete-note') {
       const modal = document.querySelector('.confirm-modal');

@@ -8,6 +8,7 @@ import type {
   CodexPipelineRunSkill,
   CodexPipelineRunStep,
 } from '../../../../../shared/schemas/codex-pipeline-types.js';
+import { projectReplicaRequestPath } from '../../project/helper/project-request-scope.js';
 
 export type CodexPipelineRunSkillDetail = CodexPipelineRunSkill & {
   stdoutAvailable: boolean;
@@ -68,9 +69,9 @@ type PipelineRunRestartResponse = Partial<CodexPipelineRunRestartResult> & {
   skillRun?: Record<string, unknown> | null;
 };
 
-function runEndpoint(runId: string, action = ''): string {
+function runEndpoint(runId: string, action = '', projectId = '', replicaNodeId = ''): string {
   const suffix = action ? `/${action}` : '';
-  return `/api/codex/pipelines/runs/${encodeURIComponent(runId)}${suffix}`;
+  return projectReplicaRequestPath(`/api/codex/pipelines/runs/${encodeURIComponent(runId)}${suffix}`, projectId, replicaNodeId);
 }
 
 function unavailableStatus(error: string, statusCode = 0): CodexPipelineRunStatusResult {
@@ -103,8 +104,12 @@ function normalizeStatus(response: Response, body: PipelineRunStatusResponse): C
   };
 }
 
-async function requestPipelineRunStatus(input: { runId: string; action?: 'cancel' }): Promise<CodexPipelineRunStatusResult> {
-  const response = await fetch(runEndpoint(input.runId, input.action), input.action ? { method: 'POST' } : undefined)
+async function requestPipelineRunStatus(input: { projectId?: string; replicaNodeId?: string; runId: string; action?: 'cancel'; executionId?: string }): Promise<CodexPipelineRunStatusResult> {
+  const response = await fetch(runEndpoint(input.runId, input.action, input.projectId, input.replicaNodeId), input.action ? {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ executionId: input.executionId ?? '' }),
+  } : undefined)
     .catch(() => undefined);
   if (!response) return unavailableStatus('Request failed.');
   const body = await response.json().catch(() => null) as PipelineRunStatusResponse | null;
@@ -112,16 +117,16 @@ async function requestPipelineRunStatus(input: { runId: string; action?: 'cancel
   return normalizeStatus(response, body);
 }
 
-export function requestCodexPipelineRunStatus(input: { runId: string }): Promise<CodexPipelineRunStatusResult> {
+export function requestCodexPipelineRunStatus(input: { projectId?: string; replicaNodeId?: string; runId: string }): Promise<CodexPipelineRunStatusResult> {
   return requestPipelineRunStatus(input);
 }
 
-export function requestCodexPipelineRunCancel(input: { runId: string }): Promise<CodexPipelineRunStatusResult> {
+export function requestCodexPipelineRunCancel(input: { projectId?: string; replicaNodeId?: string; runId: string; executionId: string }): Promise<CodexPipelineRunStatusResult> {
   return requestPipelineRunStatus({ ...input, action: 'cancel' });
 }
 
-export async function requestCodexPipelineRunRestart(input: { runId: string }): Promise<CodexPipelineRunRestartResult> {
-  const response = await fetch(runEndpoint(input.runId, 'restart'), { method: 'POST' }).catch(() => undefined);
+export async function requestCodexPipelineRunRestart(input: { projectId?: string; replicaNodeId?: string; runId: string }): Promise<CodexPipelineRunRestartResult> {
+  const response = await fetch(runEndpoint(input.runId, 'restart', input.projectId, input.replicaNodeId), { method: 'POST' }).catch(() => undefined);
   if (!response) return { ok: false, statusCode: 0, error: 'Request failed.' };
   const body = await response.json().catch(() => null) as PipelineRunRestartResponse | null;
   if (!body) return { ok: false, statusCode: response.status, error: 'Invalid response.' };

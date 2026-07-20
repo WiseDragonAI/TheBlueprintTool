@@ -207,6 +207,7 @@ Ctrl+D  Resize selected cards to their content and selected zones to contained c
 
 - Never finish a feature with implementation changes left uncommitted.
 - After implementing and verifying a feature, create focused commits before reporting the feature complete.
+- After creating the final commit for completed work, always push the current branch to `origin` before reporting completion.
 - When work changes server files or launches tests, create an isolated worktree under `<repo>/.worktrees/` before editing or testing. Commit the completed change in that worktree, merge the feature branch into the primary checkout with a merge commit, then remove the worktree and delete the merged feature branch. Never leave test worktrees or their build artifacts behind.
 - When the operator asks to push committed work, push with the Wise SSH key:
 

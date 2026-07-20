@@ -1492,7 +1492,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     }
     if (url.startsWith('/api/codex/pipelines/runs/') && url.endsWith('/cancel') && request.method === 'POST') {
       const runId = decodeRouteSegment(url.slice('/api/codex/pipelines/runs/'.length, -'/cancel'.length));
-      const result = await cancelCodexPipelineRunController({ action_payload: { runId }, runtime_state: requestRuntime });
+      const bodyBuffer = await readRequestBuffer(request);
+      const cancelPayload = (() => {
+        try { return JSON.parse(bodyBuffer.toString('utf8') || '{}') as AnyRecord; }
+        catch { return {}; }
+      })();
+      const result = await cancelCodexPipelineRunController({ action_payload: { runId, executionId: cancelPayload.executionId }, runtime_state: requestRuntime });
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));
       response.end(JSON.stringify(result));

@@ -8,7 +8,7 @@ import { readCanonicalDecisionOsState } from '../../ledger/helper/read-canonical
 import { stripHydratedThreadNotes } from '../../ledger/helper/thread-content-file.js';
 import { readCodexPipelineStore } from './codex-pipeline-store.js';
 import { readCodexProcessQueue } from './codex-process-queue.js';
-import { resolveCardSkillRunFiles } from './resolve-card-skill-run-files.js';
+import { indexCodexRunArtifactDirectories, resolveCardSkillRunFiles } from './resolve-card-skill-run-files.js';
 import { persistLedgerProjection } from '../../task-state/helper/persist-ledger-projection.js';
 
 type AnyRecord = Record<string, unknown>;
@@ -40,6 +40,7 @@ export function reconcileCodexExecutionOwnership(input: { decisionOsRoot: string
     text(item.payload.ledgerId), text(item.payload.cardId), text(item.payload.runId || item.id), text(item.payload.executionId),
   ].join('\0')));
   const pipelineOwned = activePipelineExecutions(input.decisionOsRoot);
+  const artifactDirectoryByRunId = indexCodexRunArtifactDirectories(input.decisionOsRoot);
   const runtimeRuns = input.runtime?.codexSkillRuns && typeof input.runtime.codexSkillRuns === 'object'
     ? input.runtime.codexSkillRuns as Record<string, AnyRecord>
     : {};
@@ -77,7 +78,7 @@ export function reconcileCodexExecutionOwnership(input: { decisionOsRoot: string
         : {};
       for (const runId of new Set([...threadRunIds, currentThreadRunId].filter(Boolean))) {
         if (text(outputFiles[runId])) continue;
-        const files = resolveCardSkillRunFiles({ ledger, decisionOsRoot: input.decisionOsRoot, ledgerPath, cardId, runId });
+        const files = resolveCardSkillRunFiles({ ledger, decisionOsRoot: input.decisionOsRoot, ledgerPath, cardId, runId, artifactDirectoryByRunId });
         if (!existsSync(files.outputFile)) continue;
         outputFiles[runId] = relative(dirname(input.decisionOsRoot), files.outputFile);
         result.artifactMappingsAdded += 1;

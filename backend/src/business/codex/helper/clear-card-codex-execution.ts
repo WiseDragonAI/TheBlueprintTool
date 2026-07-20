@@ -9,7 +9,15 @@ import { persistLedgerProjection } from '@backend/business/task-state/helper/per
 
 type AnyRecord = Record<string, unknown>;
 
-export function clearCardCodexExecution(input: { ledgerPath: string; cardId: string; runId: string; executionId: string }): boolean {
+export function clearCardCodexExecution(input: {
+  ledgerPath: string;
+  cardId: string;
+  runId: string;
+  executionId: string;
+  decisionOsRoot?: string;
+  ledgerId?: string;
+  runtime?: AnyRecord;
+}): boolean {
   try {
     const ledger = JSON.parse(readFileSync(input.ledgerPath, 'utf8')) as AnyRecord & { cards?: AnyRecord[] };
     const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
@@ -22,7 +30,7 @@ export function clearCardCodexExecution(input: { ledgerPath: string; cardId: str
       delete card.executionStatus;
       delete card.executionRunId;
     }
-    persistLedgerProjection({ ledgerPath: input.ledgerPath, ledger });
+    persistLedgerProjection({ decisionOsRoot: input.decisionOsRoot, ledgerId: input.ledgerId, ledgerPath: input.ledgerPath, ledger, runtime: input.runtime });
     return true;
   } catch {
     // The run is still settled in memory when its project was removed during shutdown.
@@ -46,5 +54,13 @@ export function clearCardCodexExecutionForLedger(input: {
   const ledgerPath = resolve(input.decisionOsRoot, ledgerFile);
   const inner = relative(input.decisionOsRoot, ledgerPath);
   if (!ledgerFile || !inner || inner.startsWith('..') || isAbsolute(inner)) return false;
-  return clearCardCodexExecution({ ledgerPath, cardId: input.cardId, runId: input.runId, executionId: input.executionId });
+  return clearCardCodexExecution({
+    decisionOsRoot: input.decisionOsRoot,
+    ledgerId: input.ledgerId,
+    ledgerPath,
+    cardId: input.cardId,
+    runId: input.runId,
+    executionId: input.executionId,
+    runtime: input.runtime,
+  });
 }

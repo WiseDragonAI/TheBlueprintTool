@@ -28,10 +28,10 @@ test('Codex run STOP state preserves one guarded request and rejected-request re
   const poller = source('frontend/src/runtime/codex/effect/poll-card-skill-run.ts');
 
   assert.match(poller, /if \(!poller\.element \|\| poller\.terminal \|\| poller\.cancelInFlight\) return;/);
-  assert.match(poller, /poller\.cancelInFlight = true;[\s\S]*setCancelButtonState\(button, 'stopping'\);[\s\S]*requestCardSkillRunCancel/);
-  assert.match(poller, /label\.textContent = stopping \? 'STOPPING' : 'STOP'/);
+  assert.match(poller, /poller\.cancelInFlight = true;[\s\S]*setCancelButtonState\(button, 'stopping', poller\.element\.dataset\.runStatus\);[\s\S]*requestCardSkillRunCancel/);
+  assert.match(poller, /const text = pending \? \(stopping \? 'CANCELLING' : 'CANCEL'\) : \(stopping \? 'STOPPING' : 'STOP'\)/);
   assert.match(poller, /setText\(poller\.element, '\[data-codex-run-latest\]', 'Stopping run'\)/);
-  assert.match(poller, /if \(!result\.ok\) \{[\s\S]*setCancelButtonState\(button, 'ready'\);[\s\S]*result\.error \|\| 'Stop failed'/);
+  assert.match(poller, /if \(!result\.ok\) \{[\s\S]*setCancelButtonState\(button, 'ready', poller\.element\.dataset\.runStatus\);[\s\S]*result\.error \|\| 'Stop failed'/);
   assert.match(poller, /schedulePoll\(poller, 0\)/);
   assert.match(poller, /summary\.status === 'running'[\s\S]*setCancelButtonVisible\(element, true\)/);
   assert.match(poller, /setCancelButtonVisible\(element, false\)/);
