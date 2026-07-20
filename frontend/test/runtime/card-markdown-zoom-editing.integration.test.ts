@@ -12,6 +12,7 @@ function source(path: string): string {
 test('card markdown inline code and bold styling follow card color specs', () => {
   const specs = source('documentation/specs.json');
   const css = source('frontend/assets/canvas/objects.css');
+  const applicationCss = source('frontend/assets/application.css');
   const colorRuntime = source('frontend/src/runtime/card/effect/render-card-zone-colors.ts');
 
   assert.match(specs, /f1c7a9d4/);
@@ -34,6 +35,7 @@ test('card markdown inline code and bold styling follow card color specs', () =>
   assert.match(css, /\.ledger-card-body strong\s*{[^}]*color:\s*var\(--text\);[^}]*font-weight:\s*800;/s);
   assert.match(css, /\.ledger-card-body ol,\s*\.ledger-card-body ul\s*{[^}]*margin:\s*0;[^}]*padding-left:\s*17px;/s);
   assert.match(css, /\.ledger-card-body li \+ li\s*{[^}]*margin-top:\s*4px;/s);
+  assert.match(applicationCss, /\.ledger-card-body li \+ li\s*{[^}]*margin-top:\s*4px;/s);
   assert.match(css, /\.ledger-card-body li::marker\s*{[^}]*color:\s*var\(--card-code-color\);/s);
 });
 
