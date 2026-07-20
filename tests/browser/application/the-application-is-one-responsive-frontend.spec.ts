@@ -304,10 +304,16 @@ test('Master-task completion exposes manual and configured pipeline actions at d
 
     const mobile = await browser.newPage({ viewport: { width: 390, height: 844 } });
     let manualRequest: Record<string, unknown> | undefined;
+    let releaseManualRequest!: () => void;
+    let observeManualRequest!: () => void;
+    const manualRequestGate = new Promise<void>((resolveGate) => { releaseManualRequest = resolveGate; });
+    const manualRequestObserved = new Promise<void>((resolveObserved) => { observeManualRequest = resolveObserved; });
     await mobile.route('**/api/settings/codex-processes', (request) => request.fulfill({ status: 200, contentType: 'application/json', body: settingsPayload }));
     await mobile.route('**/decision-os/*', async (request) => {
       if (request.request().method() !== 'PATCH') return request.continue();
       manualRequest = request.request().postDataJSON() as Record<string, unknown>;
+      observeManualRequest();
+      await manualRequestGate;
       await request.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
     });
     await mobile.goto(`${server.url}${route}`, { waitUntil: 'domcontentloaded' });
@@ -317,8 +323,10 @@ test('Master-task completion exposes manual and configured pipeline actions at d
     const mobilePositions = await Promise.all([mobileManual.boundingBox(), mobilePipeline.boundingBox()]);
     assert.ok(Number(mobilePositions[1]?.y) > Number(mobilePositions[0]?.y));
     await mobileManual.click();
+    await manualRequestObserved;
     await mobile.waitForURL((url) => url.pathname === '/' && url.searchParams.get('tab') === 'queue');
     assert.deepEqual(manualRequest, { action: 'complete-master-task', masterTaskId: pipelineRequest?.sourceCardId });
+    releaseManualRequest();
   } finally {
     await browser?.close();
     await stopDecisionOsServer(server.process);

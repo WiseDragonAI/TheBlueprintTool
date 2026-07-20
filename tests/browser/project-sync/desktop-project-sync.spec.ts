@@ -58,7 +58,7 @@ test('desktop Projects opens node-aware settings while zoom-out retains the proj
     const modal = page.locator('.project-settings-modal[open]');
     await modal.waitFor({ state: 'visible' });
     assert.equal(await modal.getByRole('button', { name: 'Synchronize project' }).isVisible(), true);
-    assert.match(await modal.locator('.project-settings-owner').textContent() ?? '', /Online/);
+    assert.match(await modal.locator('.project-settings-owner').textContent() ?? '', /replicas online/i);
     await modal.getByRole('button', { name: 'Cancel' }).click();
 
     await page.goto(`${url}/projects-canvas`, { waitUntil: 'domcontentloaded' });

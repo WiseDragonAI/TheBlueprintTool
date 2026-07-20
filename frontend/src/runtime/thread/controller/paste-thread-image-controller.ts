@@ -44,13 +44,19 @@ export async function pasteThreadImageController(event: ClipboardEvent): Promise
   if (!state.threadId) state.threadId = 'conversation-ledger';
   const threadId = state.threadId;
   telemetry('thread-image-paste', { threadId, type: image.type, size: image.size });
-  const noteId = appendOptimisticThreadNote({ threadId, body: 'Uploading pasted image...', status: 'uploading image' });
+  const localPreview = typeof URL?.createObjectURL === 'function' ? URL.createObjectURL(image) : '';
+  const noteId = appendOptimisticThreadNote({
+    threadId,
+    body: localPreview ? `![Pasted image](${localPreview})` : 'Uploading pasted image...',
+    status: 'uploading image',
+  });
   const upload = await uploadThreadImage(threadId, image);
   const markdown = String(upload.markdown || (upload.imageFileRef ? `![Pasted image](${upload.imageFileRef})` : ''));
   if (upload.ok === false || !markdown) {
     patchOptimisticThreadNote({ threadId, noteId, status: 'image upload failed', error: upload.error || 'Image upload failed.', optimistic: true });
     return true;
   }
+  if (localPreview) URL.revokeObjectURL(localPreview);
   patchOptimisticThreadNote({ threadId, noteId, body: markdown, status: 'committing image' });
   const committed = await sendActiveLedgerMutation({
     action: 'append-note',
