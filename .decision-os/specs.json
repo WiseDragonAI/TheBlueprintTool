@@ -5664,15 +5664,15 @@
       "codexRunModel": "gpt-5.6-sol",
       "codexRunEffort": "xhigh",
       "codexThreadRunIds": [
-        "codex-skill-1784553317894-cdd40639"
+        "codex-skill-1784570903640-cbbdb432"
       ],
-      "codexThreadRunId": "codex-skill-1784553317894-cdd40639",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784553317894-cdd40639.md",
+      "codexThreadRunId": "codex-skill-1784570903640-cbbdb432",
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/specs/codex-skill-1784570903640-cbbdb432.md",
       "codexThreadRunOutputFiles": {
-        "codex-skill-1784553317894-cdd40639": ".decision-os/runs/codex-skills/specs/codex-skill-1784553317894-cdd40639.md"
+        "codex-skill-1784570903640-cbbdb432": ".decision-os/runs/codex-skills/specs/codex-skill-1784570903640-cbbdb432.md"
       },
-      "codexActiveRunId": "codex-skill-1784553317894-cdd40639",
-      "codexActiveExecutionId": "codex-execution-1784569332044-c3b048eb"
+      "codexActiveRunId": "codex-skill-1784570903640-cbbdb432",
+      "codexActiveExecutionId": "codex-execution-1784571288288-2761f880"
     },
     {
       "id": "card-51612a1a-d9e5-4bb9-9beb-ed466dbf0628",
@@ -5904,13 +5904,14 @@
     },
     {
       "id": "card-916311a6-1b95-4d2d-9d8a-bea889ec8822",
-      "title": "Flatten task workspace surfaces",
+      "title": "Flatten master task center surface",
       "cardType": "note",
       "domainId": "specs",
-      "status": "todo",
+      "status": "done",
       "labels": [
         "frontend",
         "visual",
+        "rca",
         "master-task"
       ],
       "x": -10402,
@@ -5932,18 +5933,26 @@
       "codexThreadRunOutputFiles": {
         "codex-skill-1784568719663-1a371624": ".decision-os/runs/codex-skills/specs/codex-skill-1784568719663-1a371624.md"
       },
-      "codexActiveRunId": "codex-skill-1784568719663-1a371624",
-      "codexActiveExecutionId": "codex-execution-1784569236127-96ca3d62"
+      "codexActiveRunId": "codex-skill-1784571985656-68a6bc6b",
+      "codexActiveExecutionId": "codex-execution-1784571985656-94e2391e",
+      "codexRunId": "codex-skill-1784571985656-68a6bc6b",
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-pipeline-1784571985655-e941c1fb-step-1.md",
+      "codexPipelineRunId": "codex-pipeline-1784571985655-e941c1fb",
+      "codexPipelineName": "PostMortem",
+      "codexPipelineStepId": "codex-step-76620a22-6ca8-4afd-8fe0-fee74d9b40b0",
+      "codexPipelineStepName": "Recap",
+      "codexSkillName": "retrospect-and-close-task"
     },
     {
       "id": "card-4d540bf7-6947-4c51-84e8-b5af3266d38d",
-      "title": "Replace task surface gradients and shadows with solid colors",
+      "title": "Remove thread shadow spill from the master task view",
       "cardType": "note",
       "domainId": "specs",
       "status": "done",
       "labels": [
         "frontend",
         "visual",
+        "rca",
         "subtask"
       ],
       "x": -10012,
@@ -5955,6 +5964,32 @@
       },
       "facts": [],
       "fields": []
+    },
+    {
+      "id": "card-codex-pipeline-1784571985655-e941c1fb-step-1",
+      "title": "PostMortem · Recap",
+      "cardType": "codex-skill-run",
+      "x": -9946,
+      "y": 151308,
+      "w": 700,
+      "h": 260,
+      "status": "todo",
+      "codexRunId": "codex-skill-1784571985656-68a6bc6b",
+      "codexActiveRunId": "codex-skill-1784571985656-68a6bc6b",
+      "codexActiveExecutionId": "codex-execution-1784571985656-94e2391e",
+      "codexRunModel": "gpt-5.6-sol",
+      "codexRunEffort": "medium",
+      "comment": {
+        "contentFile": ".decision-os/cards/specs/card-codex-pipeline-1784571985655-e941c1fb-step-1.md"
+      },
+      "facts": [],
+      "fields": [],
+      "codexRunOutputFile": ".decision-os/cards/specs/card-codex-pipeline-1784571985655-e941c1fb-step-1.md",
+      "codexPipelineRunId": "codex-pipeline-1784571985655-e941c1fb",
+      "codexPipelineName": "PostMortem",
+      "codexPipelineStepId": "codex-step-76620a22-6ca8-4afd-8fe0-fee74d9b40b0",
+      "codexPipelineStepName": "Recap",
+      "codexSkillName": "retrospect-and-close-task"
     }
   ],
   "relationships": [
@@ -6083,6 +6118,12 @@
       "from": "card-916311a6-1b95-4d2d-9d8a-bea889ec8822",
       "to": "card-4d540bf7-6947-4c51-84e8-b5af3266d38d",
       "label": "subtask"
+    },
+    {
+      "id": "rel-codex-pipeline-1784571985655-e941c1fb-1",
+      "from": "card-916311a6-1b95-4d2d-9d8a-bea889ec8822",
+      "to": "card-codex-pipeline-1784571985655-e941c1fb-step-1",
+      "label": "Recap"
     }
   ],
   "annotations": [
@@ -6526,7 +6567,8 @@
     "thread-card-5ade8aa2-fa9a-41f4-9bea-9d8f6966df17": ".decision-os/threads/specs/thread-card-5ade8aa2-fa9a-41f4-9bea-9d8f6966df17.md",
     "thread-card-d26b10d5-d05a-42f5-841d-ac3e681fc986": ".decision-os/threads/specs/thread-card-d26b10d5-d05a-42f5-841d-ac3e681fc986.md",
     "thread-card-1171f0fc-dbb3-486a-892b-460384f361f3": ".decision-os/threads/specs/thread-card-1171f0fc-dbb3-486a-892b-460384f361f3.md",
-    "thread-card-916311a6-1b95-4d2d-9d8a-bea889ec8822": ".decision-os/threads/specs/thread-card-916311a6-1b95-4d2d-9d8a-bea889ec8822.md"
+    "thread-card-916311a6-1b95-4d2d-9d8a-bea889ec8822": ".decision-os/threads/specs/thread-card-916311a6-1b95-4d2d-9d8a-bea889ec8822.md",
+    "thread-card-codex-pipeline-1784571985655-e941c1fb-step-1": ".decision-os/threads/specs/thread-card-codex-pipeline-1784571985655-e941c1fb-step-1.md"
   },
   "deletedNoteIds": {
     "thread-card-916311a6-1b95-4d2d-9d8a-bea889ec8822": [
