@@ -4,7 +4,7 @@
  */
 import { syncThreadJumpButtonVisibility } from './render-thread-jump-button.js';
 import { state, type ThreadPanelTab } from '../../state.js';
-import { setThreadFollowBottom } from '../helper/thread-follow-bottom.js';
+import { isThreadFollowingBottom, setThreadFollowBottom } from '../helper/thread-follow-bottom.js';
 import { threadScrollElement } from './persist-thread-scroll.js';
 
 export function pinThreadFeedToLastMessage(options: { behavior?: ScrollBehavior; follow?: boolean } = {}): void {
@@ -15,7 +15,8 @@ export function pinThreadSurfaceToBottom(surface: ThreadPanelTab, options: { beh
   const chat = threadScrollElement(surface);
   const list = document.querySelector('.thread-note-list') as HTMLElement | null;
   if (!chat) return;
-  if (options.follow) setThreadFollowBottom(String(state.threadId ?? ''), true, surface);
+  const threadId = String(state.threadId ?? '');
+  if (options.follow) setThreadFollowBottom(threadId, true, surface);
   const scrollOptions: ScrollIntoViewOptions = options.behavior === 'smooth'
     ? { block: 'end', inline: 'nearest', behavior: options.behavior }
     : { block: 'end', inline: 'nearest' };
@@ -30,5 +31,10 @@ export function pinThreadSurfaceToBottom(surface: ThreadPanelTab, options: { beh
     syncThreadJumpButtonVisibility();
   };
   pin();
-  globalThis.requestAnimationFrame?.(() => pin());
+  globalThis.requestAnimationFrame?.(() => {
+    // WHAT: Yield the delayed entry alignment when the reader has already scrolled away.
+    // WHY: A queued programmatic pin must not overwrite newer user ownership of the viewport.
+    if (String(state.threadId ?? '') !== threadId || (threadId && !isThreadFollowingBottom(threadId, surface))) return;
+    pin();
+  });
 }
