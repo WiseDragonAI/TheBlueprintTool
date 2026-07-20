@@ -66,7 +66,7 @@ test('upload-voice-audio posts captured audio to backend upload route', async ()
 
   try {
     state.activeTab = 'specs';
-    const result = await uploadVoiceAudio(new Blob(['abc'], { type: 'audio/webm' }), { projectId: 'project-a', replicaNodeId: 'workstation', ledgerId: 'specs', threadId: 'thread-card-a', cardId: 'card-a', noteId: 'note-voice-1', queueCodex: true });
+    const result = await uploadVoiceAudio(new Blob(['abc'], { type: 'audio/webm' }), { projectId: 'project-a', replicaNodeId: 'workstation', ledgerId: 'specs', threadId: 'thread-card-a', cardId: 'card-a', noteId: 'note-voice-1', launchMode: 'run' });
     assert.deepEqual(result, { ok: true, uploaded: true, configured: true, voiceFileRef: '/tmp/voice.webm', text: '', error: undefined, status: 202 });
     assert.equal(requested.url, '/p/project-a/api/voice-upload');
     assert.equal(requested.init?.method, 'POST');
@@ -406,7 +406,7 @@ test('pending voice upload restores the same retryable note after local state is
       threadId: 'thread-card-a',
       ledgerId: 'specs',
       cardId: 'card-a',
-      queueCodex: true,
+      launchMode: 'run',
       audio: new Blob(['saved audio'], { type: 'audio/webm' }),
       createdAt: '2026-07-13T15:49:00.000Z'
     });
@@ -438,6 +438,7 @@ test('pending voice restoration excludes the same thread identity from another p
     state.activeLedger = { notes: { 'thread-card-a': [] } };
     await persistPendingVoiceUpload({
       noteId: 'note-other-project', projectId: 'project-a', replicaNodeId: 'phone', threadId: 'thread-card-a', ledgerId: 'specs', cardId: 'card-a',
+      launchMode: 'send',
       audio: new Blob(['other audio'], { type: 'audio/webm' }), createdAt: '2026-07-13T15:49:00.000Z'
     });
     assert.equal(await restorePendingVoiceUploads('thread-card-a'), false);

@@ -3,15 +3,10 @@
  * WHY: Operators need to see what X will do before stopping an active recording.
  */
 import { state } from '../../state.js';
-import { voiceActionIcon, type VoiceLaunchMode } from '../component/control-dock.js';
+import { voiceActionIcon } from '../component/control-dock.js';
+import { voiceLaunchModeForModifiers } from '../helper/voice-launch-mode.js';
 
 let bound = false;
-
-export function voiceLaunchModeForModifiers(input: { ctrlKey?: boolean; shiftKey?: boolean }): VoiceLaunchMode {
-  if (input.ctrlKey) return 'pipeline';
-  if (input.shiftKey) return 'run';
-  return 'send';
-}
 
 export function updateDesktopVoiceActionPreview(input: { ctrlKey?: boolean; shiftKey?: boolean } = {}): void {
   const button = document.querySelector('.voice-action--send') as HTMLButtonElement | null;

@@ -29,8 +29,9 @@ import { openThreadPanel } from '../../thread/effect/open-thread-panel.js';
 import { closeThreadPanel } from '../../thread/effect/close-thread-panel.js';
 import { syncThreadCodexRunControls } from '../../thread/effect/sync-thread-codex-run-controls.js';
 import { startVoiceRecording } from '../../voice/controller/start-voice-recording.js';
-import { stopVoiceRecording } from '../../voice/controller/stop-voice-recording.js';
+import { executeVoiceAction } from '../../voice/controller/execute-voice-action.js';
 import { cancelVoiceRecording } from '../../voice/controller/cancel-voice-recording.js';
+import { parseVoiceLaunchMode, voiceLaunchModeForModifiers } from '../../voice/helper/voice-launch-mode.js';
 import { retryVoiceTranscription } from '../../voice/effect/retry-voice-transcription.js';
 import { enterLedgersCanvasController } from '../../navigation/controller/enter-ledgers-canvas-controller.js';
 import { enterProjectsCanvasController } from '../../navigation/controller/enter-projects-canvas-controller.js';
@@ -115,7 +116,7 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     openThreadPanel();
   }
   if (action === 'voice-toggle') {
-    if (state.voice.recording) await stopVoiceRecording({ launchMode: event.ctrlKey ? 'pipeline' : event.shiftKey ? 'run' : 'send' });
+    if (state.voice.recording) await executeVoiceAction({ launchMode: voiceLaunchModeForModifiers(event) });
     else void startVoiceRecording();
   }
   if (action === 'thread-file-picker') {
@@ -294,7 +295,7 @@ export async function handleActionClick(event: MouseEvent): Promise<void> {
     void startVoiceRecording();
   }
   if (action === 'voice-stop') {
-    await stopVoiceRecording({ launchMode: (actionTarget.dataset.launchMode as 'send' | 'run' | 'pipeline' | undefined) ?? 'send' });
+    await executeVoiceAction({ launchMode: parseVoiceLaunchMode(actionTarget.dataset.launchMode) });
   }
   if (action === 'confirm-delete') await deleteZoneController();
   if (action === 'cancel-delete') modal.close?.();

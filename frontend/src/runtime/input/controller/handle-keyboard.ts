@@ -21,8 +21,9 @@ import { closeThreadPanel } from '../../thread/effect/close-thread-panel.js';
 import { focusThreadDraft } from '../../thread/effect/focus-thread-draft.js';
 import { submitThreadDraft } from '../../thread/effect/submit-thread-draft.js';
 import { startVoiceRecording } from '../../voice/controller/start-voice-recording.js';
-import { stopVoiceRecording } from '../../voice/controller/stop-voice-recording.js';
+import { executeVoiceAction } from '../../voice/controller/execute-voice-action.js';
 import { cancelVoiceRecording } from '../../voice/controller/cancel-voice-recording.js';
+import { voiceLaunchModeForModifiers } from '../../voice/helper/voice-launch-mode.js';
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { isCardEditingKeyboardTarget } from '../helper/is-card-editing-keyboard-target.js';
 
@@ -74,7 +75,7 @@ export async function handleKeyboard(event: KeyboardEvent): Promise<void> {
   if (key === 'x') {
     event.preventDefault();
     if (!state.threadPanelOpen) openThreadPanel();
-    if (state.voice.recording) await stopVoiceRecording({ launchMode: event.ctrlKey ? 'pipeline' : event.shiftKey ? 'run' : 'send' });
+    if (state.voice.recording) await executeVoiceAction({ launchMode: voiceLaunchModeForModifiers(event) });
     else void startVoiceRecording();
     return;
   }

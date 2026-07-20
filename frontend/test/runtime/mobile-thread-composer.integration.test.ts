@@ -23,7 +23,7 @@ test('mobile thread composer defaults to a voice-first dock and expands text ent
   assert.match(controlDock, /data-action="voice-stop" data-launch-mode="run"[\s\S]*terminal-button__label">RUN/);
   assert.match(controlDock, /data-action="voice-stop" data-launch-mode="pipeline"[\s\S]*terminal-button__label">PIPELINE/);
   assert.match(responsiveThread, /action === 'voice-stop'\) await stopQuickVoiceComment\(button\.dataset\.launchMode \|\| 'send'\)/);
-  assert.match(responsiveThread, /submitVoiceRecording\(\{[\s\S]*launchMode,[\s\S]*stop: stopVoiceRecording/);
+  assert.match(responsiveThread, /executeVoiceAction\(\{[\s\S]*launchMode: parseVoiceLaunchMode\(launchMode\)/);
   assert.doesNotMatch(responsiveThread, /quickVoiceCapture \? 'run' : launchMode/);
   assert.match(responsiveThread, /onDurableHandoff: \(\) => \{[\s\S]*void finishQueuedVoiceSubmission\(true\)/);
   assert.match(controlsCss, /@media \(max-width: 760px\)[\s\S]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\) 14px/);
