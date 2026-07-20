@@ -14,7 +14,7 @@ import { releaseVoiceRecordingWakeLock } from '../effect/hold-voice-recording-wa
 import { voiceProjectId, voiceReplicaNodeId } from '../helper/voice-project-id.js';
 import type { VoiceLaunchMode } from '../helper/voice-launch-mode.js';
 
-export async function stopVoiceRecording(input: { launchMode?: VoiceLaunchMode; onPersisted?: () => void } = {}): Promise<boolean> {
+export async function stopVoiceRecording(input: { launchMode?: VoiceLaunchMode; onPersisted?: () => void; onCaptured?: (audio: Blob | null) => Promise<boolean> } = {}): Promise<boolean> {
   if (state.voice.animationFrameId) cancelAnimationFrame(state.voice.animationFrameId);
   const threadId = String(state.voice.threadId || state.threadId || 'conversation-ledger');
   const recorder = state.voice.recorder as MediaRecorder | undefined;
@@ -47,6 +47,7 @@ export async function stopVoiceRecording(input: { launchMode?: VoiceLaunchMode; 
   telemetry('render-voice-status', { status: state.voice.transcriptionStatus, durationMs: state.voice.durationMs });
   renderVoiceStatus();
   flushPendingLedgerContentRefresh();
+  if (input.onCaptured) return input.onCaptured(audio);
   return requestTranscription(audio, {
     projectId: voiceProjectId(),
     replicaNodeId: voiceReplicaNodeId(),

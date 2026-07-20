@@ -56,6 +56,18 @@ function validQuestionnaires(value: unknown): value is CardQuestionnaires {
       if (response.choiceIndex !== undefined && (!Number.isInteger(Number(response.choiceIndex)) || Number(response.choiceIndex) < 0 || Number(response.choiceIndex) > 3)) return false;
       if (response.customAnswer !== undefined && typeof response.customAnswer !== 'string') return false;
     }
+    if (questionnaireValue.voiceNotes !== undefined) {
+      if (!isRecord(questionnaireValue.voiceNotes)) return false;
+      for (const [questionId, voiceNotes] of Object.entries(questionnaireValue.voiceNotes)) {
+        if (!questionIds.has(questionId) || !Array.isArray(voiceNotes)) return false;
+        const voiceNoteIds = new Set<string>();
+        for (const voiceNote of voiceNotes) {
+          if (!isRecord(voiceNote) || typeof voiceNote.id !== 'string' || !voiceNote.id.trim() || voiceNoteIds.has(voiceNote.id) || typeof voiceNote.voiceFileRef !== 'string' || !voiceNote.voiceFileRef.trim() || typeof voiceNote.transcript !== 'string' || !['transcribed', 'failed'].includes(String(voiceNote.status)) || typeof voiceNote.createdAt !== 'string' || typeof voiceNote.updatedAt !== 'string') return false;
+          if (voiceNote.error !== undefined && typeof voiceNote.error !== 'string') return false;
+          voiceNoteIds.add(voiceNote.id);
+        }
+      }
+    }
   }
   return true;
 }
@@ -65,7 +77,7 @@ function revisedQuestionnairesCarryAnswers(card: Record<string, unknown> | undef
   for (const [questionnaireId, questionnaire] of Object.entries(next)) {
     const previous = card.questionnaires[questionnaireId];
     if (!isRecord(previous) || String(previous.contextRevision ?? '') === questionnaire.contextRevision) continue;
-    if (Object.values(questionnaire.responses).some((response) => response.status !== 'pending')) return true;
+    if (Object.values(questionnaire.responses).some((response) => response.status !== 'pending') || Object.values(questionnaire.voiceNotes ?? {}).some((voiceNotes) => voiceNotes.length > 0)) return true;
   }
   return false;
 }
@@ -154,7 +166,7 @@ export function applyLedgerMutation(input: {
     if (!mutationError && includesQuestionnaires && revisedQuestionnairesCarryAnswers(card, mutation.cardPatch.questionnaires!)) {
       mutationError = {
         statusCode: 400,
-        body: { ok: false, error: 'Changing a questionnaire context revision requires clearing its prior answers.' },
+        body: { ok: false, error: 'Changing a questionnaire context revision requires clearing its prior answers and voice notes.' },
       };
     }
     if (!mutationError && includesStatus && !validStatus) {

@@ -21,6 +21,24 @@ test('normalizes a versioned four-choice questionnaire and its durable response'
   assert.equal(value.clarification.responses.scope.choiceIndex, 1);
 });
 
+test('keeps question-owned voice notes inside the questionnaire state', () => {
+  const value = normalizeCardQuestionnaires({ clarification: {
+    version: 1,
+    contextRevision: 'sha256:context-a',
+    questions: [{ id: 'scope', question: 'Which boundary should own this behavior?', choices, placeholder: 'Add constraints…' }],
+    responses: {},
+    voiceNotes: { scope: [{
+      id: 'voice-a',
+      voiceFileRef: '/workspace/.decision-os/voice-uploads/voice-a.wav',
+      transcript: 'Keep the answer on the question.',
+      status: 'transcribed',
+      createdAt: '2026-07-20T00:00:00.000Z',
+      updatedAt: '2026-07-20T00:00:01.000Z',
+    }] },
+  } });
+  assert.equal(value.clarification.voiceNotes?.scope[0].transcript, 'Keep the answer on the question.');
+});
+
 test('drops malformed questionnaires instead of exposing partial interaction state', () => {
   const value = normalizeCardQuestionnaires({ clarification: {
     version: 1,

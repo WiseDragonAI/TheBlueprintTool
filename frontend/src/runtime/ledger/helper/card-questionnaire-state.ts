@@ -2,7 +2,7 @@
  * WHAT: Validates card-owned questionnaire data before it reaches the interactive renderer.
  * WHY: Cards and pipeline outputs are persisted JSON and must not create an invalid interaction state.
  */
-import type { CardQuestionnaire, CardQuestionnaires, CardQuestionResponse } from '../../../../../shared/schemas/questionnaire-types.js';
+import type { CardQuestionnaire, CardQuestionnaires, CardQuestionResponse, CardQuestionVoiceNote } from '../../../../../shared/schemas/questionnaire-types.js';
 
 const responseStatuses = new Set(['answered', 'rejected', 'skipped', 'pending']);
 
@@ -21,6 +21,21 @@ function response(value: unknown): CardQuestionResponse | null {
     ...(choiceIndex === undefined ? {} : { choiceIndex }),
     ...(typeof source.customAnswer === 'string' ? { customAnswer: source.customAnswer } : {}),
     updatedAt: source.updatedAt,
+  };
+}
+
+function voiceNote(value: unknown): CardQuestionVoiceNote | null {
+  const source = record(value);
+  if (!source || typeof source.id !== 'string' || !source.id.trim() || typeof source.voiceFileRef !== 'string' || !source.voiceFileRef.trim() || typeof source.transcript !== 'string' || !['transcribed', 'failed'].includes(String(source.status)) || typeof source.createdAt !== 'string' || typeof source.updatedAt !== 'string') return null;
+  if (source.error !== undefined && typeof source.error !== 'string') return null;
+  return {
+    id: source.id.trim(),
+    voiceFileRef: source.voiceFileRef,
+    transcript: source.transcript,
+    status: source.status as CardQuestionVoiceNote['status'],
+    createdAt: source.createdAt,
+    updatedAt: source.updatedAt,
+    ...(typeof source.error === 'string' ? { error: source.error } : {}),
   };
 }
 
@@ -54,7 +69,22 @@ export function normalizeCardQuestionnaires(value: unknown): CardQuestionnaires 
     const currentQuestionId = typeof questionnaireSource.currentQuestionId === 'string' && questions.some((question) => question.id === questionnaireSource.currentQuestionId)
       ? questionnaireSource.currentQuestionId
       : undefined;
-    result[questionnaireId] = { version: 1, contextRevision: questionnaireSource.contextRevision.trim(), questions, responses, ...(currentQuestionId ? { currentQuestionId } : {}) };
+    const voiceNoteSource = record(questionnaireSource.voiceNotes) ?? {};
+    const voiceNotes: NonNullable<CardQuestionnaire['voiceNotes']> = {};
+    for (const question of questions) {
+      const rawVoiceNotes = voiceNoteSource[question.id];
+      if (!Array.isArray(rawVoiceNotes)) continue;
+      const normalized = rawVoiceNotes.map(voiceNote).filter((entry): entry is CardQuestionVoiceNote => Boolean(entry));
+      if (normalized.length === rawVoiceNotes.length && new Set(normalized.map((entry) => entry.id)).size === normalized.length) voiceNotes[question.id] = normalized;
+    }
+    result[questionnaireId] = {
+      version: 1,
+      contextRevision: questionnaireSource.contextRevision.trim(),
+      questions,
+      responses,
+      ...(currentQuestionId ? { currentQuestionId } : {}),
+      ...(Object.keys(voiceNotes).length ? { voiceNotes } : {}),
+    };
   }
   return result;
 }
