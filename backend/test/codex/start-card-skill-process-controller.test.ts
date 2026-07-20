@@ -431,9 +431,11 @@ test('thread codex process route anchors the run widget on the source card and s
     assert.match(developerInstructions, /^platform: linux\nDecision OS card run:/);
     assert.match(developerInstructions, /`ledger-cli` writes only/);
     assert.match(developerInstructions, /master-task-progress --plan-stdin --json/);
+    assert.match(developerInstructions, /living strategic summary for a CTO/);
+    assert.match(developerInstructions, /very short numbered bullets with no heading or section/);
     assert.doesNotMatch(developerInstructions, /session-context/);
     assert.match(developerInstructions, /--message-stdin/);
-    assert.ok(developerInstructions.length < 800);
+    assert.ok(developerInstructions.length < 2_500);
     assert.doesNotMatch(developerInstructions, /Please update this exact card|Codex internal output|Existing card body/);
     assert.doesNotMatch(developerInstructions, /<(?:workspaceRoot|ledgerFile|cardId|cardTitle|cardMarkdownFile|threadId|threadMarkdownFile|runSummaryFile|operatorNoteTimestamp)>/);
 

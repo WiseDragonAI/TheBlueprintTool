@@ -22,7 +22,7 @@ import { applyThreadViewportState } from './apply-thread-viewport-state.js';
 import { restoreThreadDraft } from './persist-thread-draft.js';
 import { saveThreadScrollPosition } from './persist-thread-scroll.js';
 import { renderThreadCodexLog } from './render-thread-codex-log.js';
-import { renderThreadJumpButton, suppressThreadScrollTrackingThroughNextFrame } from './render-thread-jump-button.js';
+import { renderThreadJumpButton } from './render-thread-jump-button.js';
 import { renderThreadNotes } from './render-thread-notes.js';
 import { syncThreadCodexRunControls } from './sync-thread-codex-run-controls.js';
 import { restorePendingVoiceUploads } from '../../voice/effect/restore-pending-voice-uploads.js';
@@ -310,7 +310,6 @@ export function renderThreadPanel(): void {
   updateTabDom(activeThreadId);
   applyThreadAccent();
   telemetry('render-thread-panel', { threadId: activeThreadId, tab: activeTab });
-  if (shouldOpenThread) suppressThreadScrollTrackingThroughNextFrame(activeTab);
   renderThreadNotes();
   void restorePendingVoiceUploads(activeThreadId);
   if (shouldOpenThread) bindActiveThreadRun(activeThreadId);
