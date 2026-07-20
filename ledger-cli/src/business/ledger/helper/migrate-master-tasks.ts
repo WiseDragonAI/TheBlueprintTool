@@ -87,7 +87,10 @@ function isMasterTaskCard(root: string, card: JsonRecord): boolean {
 }
 
 function replaceDomainReference(reference: string, fromId: string, toId: string, kind: 'cards' | 'threads'): string {
-  return reference.replace(`.decision-os/${kind}/${fromId}/`, `.decision-os/${kind}/${toId}/`);
+  const sourcePrefix = `.decision-os/${kind}/${fromId}/`;
+  const targetPrefix = `.decision-os/${kind}/${toId}/`;
+  if (reference.startsWith(sourcePrefix)) return reference.replace(sourcePrefix, targetPrefix);
+  return reference.replace(new RegExp(`^\\.decision-os/${kind}/[^/]+/`), targetPrefix);
 }
 
 function clone<T>(value: T): T {
