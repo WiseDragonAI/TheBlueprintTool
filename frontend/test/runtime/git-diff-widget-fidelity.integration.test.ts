@@ -16,5 +16,15 @@ test('Git diff card widget uses shared controls without entering the thread voic
   assert.match(widget, /\/api\/git-review\/voice/);
   assert.doesNotMatch(widget, /startVoiceRecording|stopVoiceRecording|cancelVoiceRecording|state\.voice/);
   assert.doesNotMatch(widget, /class="voice-panel"|class="voice-status"/);
-  assert.doesNotMatch(recording, /reviewContext|surfaceRoot/);
+  assert.doesNotMatch(widget, /key:\s*'X'|key === 'x'|terminal-button__key">X/);
+  assert.match(recording, /VoiceRecordingContext/);
+  assert.match(recording, /surfaceRoot/);
+});
+
+test('Git review microphone ownership blocks the global X command without opening the thread', () => {
+  const desktopKeyboard = source('src/runtime/input/controller/handle-keyboard.ts');
+  const responsiveKeyboard = source('src/app/responsive/thread.js');
+
+  assert.match(desktopKeyboard, /currentVoiceCaptureOwner\(\)\?\.startsWith\('git-review:'\)/);
+  assert.match(responsiveKeyboard, /currentVoiceCaptureOwner\(\)\?\.startsWith\('git-review:'\)/);
 });
