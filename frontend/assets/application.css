@@ -797,6 +797,9 @@ html[data-task-back-handoff="true"]::view-transition-new(root) { animation: task
     border-left: 1px solid var(--line);
     box-shadow: -18px 0 42px rgba(0,0,0,.34);
   }
+  body.card-thread-open:has(#card-view[data-master-task="true"]:not([hidden])) .mobile-thread-inspector {
+    box-shadow: none;
+  }
   .mobile-thread-inspector .thread-panel.agent-chat.phone { width: 100%; height: 100dvh; }
   .topbar { padding-left: 24px; padding-right: 24px; }
   .menu-button, .close-menu-button, .nav-scrim { display: none; }

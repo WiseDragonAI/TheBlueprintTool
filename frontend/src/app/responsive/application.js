@@ -2110,6 +2110,7 @@ function renderCard(card) {
     cards: state.ledger?.cards ?? [],
     relationships: state.ledger?.relationships ?? []
   });
+  elements['card-view'].dataset.masterTask = String(parsedTask.masterTask);
   const backButton = document.querySelector('.back-to-zone-button');
   const backIcon = document.createElement('span');
   backIcon.className = 'back-button__icon';
