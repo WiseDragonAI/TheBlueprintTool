@@ -20,7 +20,8 @@ export function cancelVoiceRecording(): void {
   const audioContext = state.voice.audioContext as AudioContext | undefined;
   void audioContext?.close();
   releaseVoiceRecordingWakeLock();
-  state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'recording canceled' };
+  const surfaceRoot = state.voice.surfaceRoot;
+  state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'recording canceled', surfaceRoot };
   telemetry('cancel-voice-recording', { threadId: state.threadId });
   renderVoiceStatus();
 }
