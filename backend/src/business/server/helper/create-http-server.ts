@@ -66,6 +66,7 @@ import { createFederationContentReplicaStore } from '../../federation/helper/fed
 import { createFederationContentScheduler } from '../../federation/helper/federation-content-scheduler.js';
 import { createProjectTaskState, type ProjectTaskState } from '../../task-state/helper/project-task-state.js';
 import { createTaskEventStore, type TaskEventStore } from '../../task-state/helper/task-event-store.js';
+import type { TaskStateSnapshot } from '../../task-state/helper/task-event-types.js';
 import {
   exportFederatedPipelineSnapshot,
   exportFederatedSkillManifest,
@@ -273,15 +274,36 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     }
     await federationContentScheduler.drain();
   };
+  const federatedTaskStoreKey = (projectId: string, ownerNodeId: string): string => `${ownerNodeId}\u0000${projectId}`;
+  const federatedTaskStoreForProject = (projectId: string, ownerNodeId: string): TaskEventStore | null => {
+    if (!projectId || !ownerNodeId) return null;
+    const key = federatedTaskStoreKey(projectId, ownerNodeId);
+    const current = federatedTaskStores.get(key);
+    if (current) return current;
+    const store = createTaskEventStore({ decisionOsRoot: resolve(masterDecisionOsRoot, 'cache', 'federation-task-state', ownerNodeId), projectId });
+    federatedTaskStores.set(key, store);
+    return store;
+  };
   const taskStoreForProject = (projectId: string, ownerNodeId = ''): TaskEventStore | null => {
     const local = projectTaskStates.get(projectId)?.store;
     if (local) return local;
-    const current = federatedTaskStores.get(projectId);
-    if (current) return current;
-    if (!projectId || !ownerNodeId) return null;
-    const store = createTaskEventStore({ decisionOsRoot: resolve(masterDecisionOsRoot, 'cache', 'federation-task-state'), projectId });
-    federatedTaskStores.set(projectId, store);
-    return store;
+    return federatedTaskStoreForProject(projectId, ownerNodeId);
+  };
+  const synchronizeFederationTaskCheckpoints = async (nodeId = ''): Promise<void> => {
+    if (!federation) return;
+    for (const project of federation.remoteProjects().filter((entry) => entry.online && (!nodeId || entry.ownerNodeId === nodeId))) {
+      const result = await federation.request(project.ownerNodeId, `/api/federation/task-state-checkpoint?projectId=${encodeURIComponent(project.localProjectId)}`);
+      if (result.status !== 200) continue;
+      try {
+        const body = JSON.parse(result.body.toString('utf8')) as AnyRecord;
+        const store = federatedTaskStoreForProject(project.localProjectId, project.ownerNodeId);
+        if (!store || !body.snapshot || typeof body.snapshot !== 'object') continue;
+        store.installSnapshot(body.snapshot as TaskStateSnapshot);
+        controlRoomProjectionStore?.invalidate(project.localProjectId);
+      } catch {
+        // The next catalog or content signal retries interrupted or invalid checkpoints.
+      }
+    }
   };
   let projectSyncCodexRunningProcessCount = 0;
   let projectSyncSlotTail = Promise.resolve();
@@ -546,11 +568,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     localServerUrl: () => `http://127.0.0.1:${federationServerPort}`,
     onRemoteContentChange: (nodeId) => {
       void synchronizeFederationContent(nodeId);
+      void synchronizeFederationTaskCheckpoints(nodeId);
       for (const client of globalContentEventClients) client.write('event: ledger-content-change\ndata: {"remote":true}\n\n');
     },
     onRemoteCatalogChange: () => {
       for (const project of projectCatalog().filter((entry) => entry.available)) taskStateForProject(project);
       federationTaskStateReplicator?.reconcileRelay();
+      void synchronizeFederationTaskCheckpoints();
       void synchronizeFederationContent();
       void synchronizeFederatedLibraries().catch(() => undefined);
       projectSyncController?.resume();
@@ -661,7 +685,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         response.end(JSON.stringify({ ok: false, error: 'replica_unknown', projectId: localProjectId, nodeId: ownerNodeId }));
         return;
       }
-      const taskStore = taskStoreForProject(localProjectId, ownerNodeId);
+      const taskStore = federatedTaskStoreForProject(localProjectId, ownerNodeId);
       const projection = taskStore && (taskStore.events().length > 0 || taskStore.snapshots().length > 0) ? taskStore.projection() : null;
       const stateStatus = projection
         ? { status: remoteProject.online ? 'synchronized' : 'offline', updatedAt: '', message: '', resource: '' }
@@ -791,7 +815,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         project.originFingerprint,
       ]));
       const remoteProjections = requestUrl.searchParams.get('localOnly') === '1' ? [] : federation.remoteProjects().flatMap((project) => {
-        const store = taskStoreForProject(project.localProjectId, project.ownerNodeId);
+        const store = federatedTaskStoreForProject(project.localProjectId, project.ownerNodeId);
         if (!store || (store.events().length === 0 && store.snapshots().length === 0)) return [];
         return [{
           projection: controlRoomProjectionFromTaskLedger({
@@ -946,7 +970,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     if (!projectScope && url === '/api/federation/replication-status' && request.method === 'GET') {
       const stores = [
         ...[...projectTaskStates].map(([projectId, state]) => ({ projectId, ownerNodeId: federation?.localOwner().ownerNodeId ?? 'local', store: state.store })),
-        ...[...federatedTaskStores].map(([projectId, store]) => ({ projectId, ownerNodeId: 'relay', store })),
+        ...[...federatedTaskStores].map(([key, store]) => {
+          const [ownerNodeId, projectId] = key.split('\u0000');
+          return { projectId, ownerNodeId, store };
+        }),
       ];
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
@@ -964,6 +991,21 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         },
         contentLane: { ...federationContentStore.status(), running: federationContentScheduler?.running ?? false },
       }));
+      return;
+    }
+    if (!projectScope && url === '/api/federation/task-state-checkpoint' && request.method === 'GET') {
+      const requester = String(request.headers['x-decision-os-federation-node'] ?? '').trim();
+      const checkpointUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
+      const project = projects.find((entry) => entry.id === checkpointUrl.searchParams.get('projectId') && entry.available);
+      if (!requester || !project) {
+        response.statusCode = requester ? 404 : 403;
+        response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ ok: false, error: requester ? 'project_unknown' : 'federation_authentication_required' }));
+        return;
+      }
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ ok: true, projectId: project.id, ownerNodeId: federation?.localOwner().ownerNodeId ?? 'local', snapshot: taskStateForProject(project).store.createSnapshot() }));
       return;
     }
     if (!projectScope && url === '/api/federation/content-object' && request.method === 'GET') {
