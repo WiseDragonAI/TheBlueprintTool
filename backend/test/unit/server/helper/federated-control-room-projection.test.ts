@@ -142,6 +142,33 @@ test('uses stable project identity across repository transport changes', () => {
   assert.equal(result.diagnostics.filter((entry: Record<string, unknown>) => entry.type === 'federation_task_conflict').length, 0);
 });
 
+test('does not report task conflicts for replica-specific project and ledger presentation metadata', () => {
+  const localTask = {
+    cardId: 'card-1', projectId: 'project-1', ledgerId: 'tasks', title: 'Task', cardStatus: 'todo', status: 'task-waiting',
+    projectName: 'Local project', projectColor: '#111111', ledger: 'Local Tasks', ledgerTitle: 'Local Tasks',
+  };
+  const remoteTask = {
+    ...localTask, projectName: 'Remote project', projectColor: '#eeeeee', ledger: 'Remote Tasks', ledgerTitle: 'Remote Tasks',
+  };
+  const result = federatedControlRoomProjection({
+    localProjection: {
+      fingerprint: 'local', projects: [{ id: 'project-1', name: 'Local project' }], queue: [localTask], exec: [], backlog: [], done: [], allTasks: [localTask], diagnostics: [], ledgers: ['Local Tasks'],
+    },
+    localOwner: { nodeId: 'mobile', nodeLabel: 'Mobile', remote: false },
+    remoteProjections: [{
+      owner: { nodeId: 'workstation', nodeLabel: 'Workstation', remote: true },
+      projection: {
+        fingerprint: 'remote', projects: [{ id: 'project-1', name: 'Remote project' }], queue: [remoteTask], exec: [], backlog: [], done: [], allTasks: [remoteTask], diagnostics: [], ledgers: ['Remote Tasks'],
+      },
+    }],
+    diagnostics: [],
+  }) as Record<string, any>;
+
+  assert.equal(result.allTasks.length, 1);
+  assert.equal(result.allTasks[0].conflict, false);
+  assert.equal(result.diagnostics.filter((entry: Record<string, unknown>) => entry.type === 'federation_task_conflict').length, 0);
+});
+
 test('keeps equal card ids separate when their ledger ids differ', () => {
   const localTask = { cardId: 'card-1', projectId: 'project-1', ledgerId: 'tasks', title: 'Task', cardStatus: 'todo', status: 'task-waiting' };
   const remoteTask = {

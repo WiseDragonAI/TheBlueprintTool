@@ -122,6 +122,33 @@ test('moves relationship-owned subtasks that extend beyond the master-task zone'
   assert.equal(result.value.relationships, 1);
 });
 
+test('moves legacy Markdown-labeled master tasks into the canonical ledger', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-master-task-legacy-label-'));
+  const root = join(workspace, '.decision-os');
+  mkdirSync(join(root, 'cards', 'specs'), { recursive: true });
+  const sourceLedger = join(root, 'specs.json');
+  const targetLedger = join(root, 'tasks.json');
+  writeFileSync(sourceLedger, JSON.stringify({
+    cards: [{
+      id: 'card-legacy-master', labels: ['legacy'], domainId: 'specs', x: 10, y: 10, w: 100, h: 100,
+      comment: { contentFile: '.decision-os/cards/specs/card-legacy-master.md' },
+    }],
+    annotations: [{ id: 'zone-task', x: 0, y: 0, width: 500, height: 500 }],
+    relationships: [], notes: {}, deletedNoteIds: {}, threadFiles: {},
+  }));
+  writeFileSync(targetLedger, JSON.stringify({ cards: [], annotations: [], relationships: [], notes: {}, deletedNoteIds: {}, threadFiles: {} }));
+  writeFileSync(join(root, 'cards', 'specs', 'card-legacy-master.md'), '#master-task #ready\n\nLegacy task.');
+
+  const result = migrateMasterTasks({ sourceLedger, targetLedger, write: true });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.value.cards, 1);
+  assert.equal(JSON.parse(readFileSync(sourceLedger, 'utf8')).cards.length, 0);
+  assert.equal(JSON.parse(readFileSync(targetLedger, 'utf8')).cards[0].id, 'card-legacy-master');
+  assert.equal(readFileSync(join(root, 'cards', 'tasks', 'card-legacy-master.md'), 'utf8'), '#master-task #ready\n\nLegacy task.');
+});
+
 test('rejects a relationship that would cross ledger boundaries', () => {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-master-task-cross-edge-'));
   const root = join(workspace, '.decision-os');
