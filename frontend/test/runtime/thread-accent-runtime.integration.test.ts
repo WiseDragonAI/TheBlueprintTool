@@ -43,6 +43,7 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   const threadLogRenderer = readFileSync(new URL('frontend/src/runtime/thread/effect/render-thread-codex-log.ts', root), 'utf8');
   const indexHtml = readFileSync(new URL('frontend/index.html', root), 'utf8');
   const responsiveThread = readFileSync(new URL('frontend/src/app/responsive/thread.js', root), 'utf8');
+  const responsiveApplication = readFileSync(new URL('frontend/src/app/responsive/application.js', root), 'utf8');
   const applicationCss = readFileSync(new URL('frontend/assets/application.css', root), 'utf8');
   const mediaRenderer = readFileSync(new URL('frontend/src/runtime/ledger/component/render-ledger-card-media.ts', root), 'utf8');
   assert.match(shellCss, /-34px 0 68px rgba\(0, 0, 0, 0\.86\)/);
@@ -121,6 +122,8 @@ test('thread accent colors feed the voice widget graph and frame', () => {
   assert.match(applicationCss, /mobile-thread-inspector \.thread-toolbar\s*{[^}]*justify-content: flex-end;[^}]*gap: 8px;/);
   assert.match(applicationCss, /mobile-thread-inspector \.thread-actions\s*{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);[^}]*gap: 8px;[^}]*width: 100%;/);
   assert.match(applicationCss, /mobile-thread-inspector \.thread-codex-button\s*{[^}]*width: 100%;[^}]*min-width: 0;[^}]*height: 44px;[^}]*min-height: 44px;/);
+  assert.match(responsiveApplication, /elements\['card-view'\]\.dataset\.masterTask = String\(parsedTask\.masterTask\);/);
+  assert.match(applicationCss, /body\.card-thread-open:has\(#card-view\[data-master-task="true"\]:not\(\[hidden\]\)\) \.mobile-thread-inspector\s*{[^}]*box-shadow:\s*none;/s);
   assert.match(mediaRenderer, /mediaSurface !== 'thread'[\s\S]*watchContainedImageSizing\(shell\)/);
   assert.match(mediaRenderer, /renderThreadImageResizeHandle\(shell, options, sizeSource\)/);
 });
