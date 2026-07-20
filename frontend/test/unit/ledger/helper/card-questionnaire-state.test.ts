@@ -12,6 +12,7 @@ const choices = [
 test('normalizes a versioned four-choice questionnaire and its durable response', () => {
   const value = normalizeCardQuestionnaires({ clarification: {
     version: 1,
+    contextRevision: 'sha256:context-a',
     questions: [{ id: 'scope', question: 'Which boundary should own this behavior?', choices, placeholder: 'Add constraints…' }],
     currentQuestionId: 'scope',
     responses: { scope: { status: 'answered', choiceIndex: 1, updatedAt: '2026-07-20T00:00:00.000Z' } },
@@ -23,6 +24,7 @@ test('normalizes a versioned four-choice questionnaire and its durable response'
 test('drops malformed questionnaires instead of exposing partial interaction state', () => {
   const value = normalizeCardQuestionnaires({ clarification: {
     version: 1,
+    contextRevision: 'sha256:context-a',
     questions: [{ id: 'scope', question: 'Which boundary?', choices: choices.slice(0, 3), placeholder: '' }],
     responses: {},
   } });

@@ -25,6 +25,7 @@ export type CardQuestionResponse = {
 
 export type CardQuestionnaire = {
   version: 1;
+  contextRevision: string;
   questions: CardQuestion[];
   currentQuestionId?: string;
   responses: Record<string, CardQuestionResponse>;
