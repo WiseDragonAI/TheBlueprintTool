@@ -31,7 +31,7 @@ export function normalizeCardQuestionnaires(value: unknown): CardQuestionnaires 
   for (const [questionnaireId, questionnaireValue] of Object.entries(source)) {
     if (!/^[A-Za-z0-9._-]+$/.test(questionnaireId)) continue;
     const questionnaireSource = record(questionnaireValue);
-    if (!questionnaireSource || questionnaireSource.version !== 1 || !Array.isArray(questionnaireSource.questions)) continue;
+    if (!questionnaireSource || questionnaireSource.version !== 1 || typeof questionnaireSource.contextRevision !== 'string' || !questionnaireSource.contextRevision.trim() || !Array.isArray(questionnaireSource.questions)) continue;
     const questions = questionnaireSource.questions.flatMap((questionValue) => {
       const question = record(questionValue);
       if (!question || typeof question.id !== 'string' || !question.id.trim() || typeof question.question !== 'string' || typeof question.placeholder !== 'string' || !Array.isArray(question.choices) || question.choices.length !== 4) return [];
@@ -54,7 +54,7 @@ export function normalizeCardQuestionnaires(value: unknown): CardQuestionnaires 
     const currentQuestionId = typeof questionnaireSource.currentQuestionId === 'string' && questions.some((question) => question.id === questionnaireSource.currentQuestionId)
       ? questionnaireSource.currentQuestionId
       : undefined;
-    result[questionnaireId] = { version: 1, questions, responses, ...(currentQuestionId ? { currentQuestionId } : {}) };
+    result[questionnaireId] = { version: 1, contextRevision: questionnaireSource.contextRevision.trim(), questions, responses, ...(currentQuestionId ? { currentQuestionId } : {}) };
   }
   return result;
 }

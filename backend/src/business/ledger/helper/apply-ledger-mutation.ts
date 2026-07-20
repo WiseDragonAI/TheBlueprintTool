@@ -43,7 +43,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function validQuestionnaires(value: unknown): value is CardQuestionnaires {
   if (!isRecord(value)) return false;
   for (const [questionnaireId, questionnaireValue] of Object.entries(value)) {
-    if (!/^[A-Za-z0-9._-]+$/.test(questionnaireId) || !isRecord(questionnaireValue) || questionnaireValue.version !== 1 || !Array.isArray(questionnaireValue.questions) || !isRecord(questionnaireValue.responses)) return false;
+    if (!/^[A-Za-z0-9._-]+$/.test(questionnaireId) || !isRecord(questionnaireValue) || questionnaireValue.version !== 1 || typeof questionnaireValue.contextRevision !== 'string' || !questionnaireValue.contextRevision.trim() || !Array.isArray(questionnaireValue.questions) || !isRecord(questionnaireValue.responses)) return false;
     const questionIds = new Set<string>();
     for (const questionValue of questionnaireValue.questions) {
       if (!isRecord(questionValue) || typeof questionValue.id !== 'string' || !questionValue.id.trim() || questionIds.has(questionValue.id) || typeof questionValue.question !== 'string' || typeof questionValue.placeholder !== 'string' || !Array.isArray(questionValue.choices) || questionValue.choices.length !== 4) return false;
@@ -58,6 +58,16 @@ function validQuestionnaires(value: unknown): value is CardQuestionnaires {
     }
   }
   return true;
+}
+
+function revisedQuestionnairesCarryAnswers(card: Record<string, unknown> | undefined, next: CardQuestionnaires): boolean {
+  if (!card || !isRecord(card.questionnaires)) return false;
+  for (const [questionnaireId, questionnaire] of Object.entries(next)) {
+    const previous = card.questionnaires[questionnaireId];
+    if (!isRecord(previous) || String(previous.contextRevision ?? '') === questionnaire.contextRevision) continue;
+    if (Object.values(questionnaire.responses).some((response) => response.status !== 'pending')) return true;
+  }
+  return false;
 }
 
 export function applyLedgerMutation(input: {
@@ -139,6 +149,12 @@ export function applyLedgerMutation(input: {
       mutationError = {
         statusCode: 400,
         body: { ok: false, error: 'Card questionnaires must use the supported versioned question and response contract.' },
+      };
+    }
+    if (!mutationError && includesQuestionnaires && revisedQuestionnairesCarryAnswers(card, mutation.cardPatch.questionnaires!)) {
+      mutationError = {
+        statusCode: 400,
+        body: { ok: false, error: 'Changing a questionnaire context revision requires clearing its prior answers.' },
       };
     }
     if (!mutationError && includesStatus && !validStatus) {
