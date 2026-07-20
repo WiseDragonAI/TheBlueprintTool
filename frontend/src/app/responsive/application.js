@@ -2044,12 +2044,30 @@ function renderCard(card) {
       elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Carousel resize failed.';
     }
   };
+  const persistCardQuestionnaires = async (questionnaires) => {
+    const previousQuestionnaires = card.questionnaires;
+    card.questionnaires = questionnaires;
+    try {
+      state.ledger = await ledgerMutation(state.activeLedgerId, {
+        action: 'patch-card',
+        cardPatch: { id: card.id, questionnaires }
+      });
+      return true;
+    } catch (cause) {
+      card.questionnaires = previousQuestionnaires;
+      elements['error-message'].textContent = cause instanceof Error ? cause.message : 'Questionnaire update failed.';
+      return false;
+    }
+  };
   const content = renderLedgerCardMarkdown(parsedTask.masterTask ? visibleMasterTaskMarkdown(markdown) : markdown, {
     cardId: parsedTask.masterTask ? String(card.id) : undefined,
+    questionnaireCardId: String(card.id),
     imageSizes,
+    questionnaires: card.questionnaires,
     mediaSurface: parsedTask.masterTask ? 'detail' : 'thread',
     carouselDriver: 'external',
-    onImageResize: parsedTask.masterTask ? persistCardImageResize : undefined
+    onImageResize: parsedTask.masterTask ? persistCardImageResize : undefined,
+    onQuestionnairesChange: persistCardQuestionnaires
   });
   if (parsedTask.masterTask) {
     const overview = document.createElement('section');

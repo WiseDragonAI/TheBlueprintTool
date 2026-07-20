@@ -7,6 +7,7 @@ import { relationshipReferencesCard } from './relationship-references-card.js';
 import { deleteCardMarkdownImage, duplicateCardContentFile, externalizeCardContent, readCardDescription, sameMarkdownImageSource, writeCardDescriptionFile } from './card-content-file.js';
 import { hydrateLedgerThreadNotesFor, writeThreadNotesFile } from './thread-content-file.js';
 import { codexEffortOptions, codexModelOptions, type CodexEffort, type CodexModel } from '../../../../../shared/schemas/codex-pipeline-types.js';
+import type { CardQuestionnaires } from '../../../../../shared/schemas/questionnaire-types.js';
 
 export type LedgerMutation = {
   action?: string;
@@ -14,7 +15,7 @@ export type LedgerMutation = {
   cardId?: string;
   masterTaskId?: string;
   imageSrc?: string;
-  cardPatch?: { id?: string; status?: string; title?: string; description?: string; imageSizes?: Record<string, { width?: number; height?: number }>; codexRunModel?: CodexModel; codexRunEffort?: CodexEffort };
+  cardPatch?: { id?: string; status?: string; title?: string; description?: string; imageSizes?: Record<string, { width?: number; height?: number }>; questionnaires?: CardQuestionnaires; codexRunModel?: CodexModel; codexRunEffort?: CodexEffort };
   annotation?: Record<string, unknown>;
   relationship?: Record<string, unknown>;
   zoneIds?: string[];
@@ -33,6 +34,30 @@ type MutationError = { statusCode: number; body: Record<string, unknown> };
 function finiteNumber(value: unknown, fallback: number): number {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function validQuestionnaires(value: unknown): value is CardQuestionnaires {
+  if (!isRecord(value)) return false;
+  for (const [questionnaireId, questionnaireValue] of Object.entries(value)) {
+    if (!/^[A-Za-z0-9._-]+$/.test(questionnaireId) || !isRecord(questionnaireValue) || questionnaireValue.version !== 1 || !Array.isArray(questionnaireValue.questions) || !isRecord(questionnaireValue.responses)) return false;
+    const questionIds = new Set<string>();
+    for (const questionValue of questionnaireValue.questions) {
+      if (!isRecord(questionValue) || typeof questionValue.id !== 'string' || !questionValue.id.trim() || questionIds.has(questionValue.id) || typeof questionValue.question !== 'string' || typeof questionValue.placeholder !== 'string' || !Array.isArray(questionValue.choices) || questionValue.choices.length !== 4) return false;
+      questionIds.add(questionValue.id);
+      if (questionValue.choices.some((choice) => !isRecord(choice) || typeof choice.emoji !== 'string' || typeof choice.text !== 'string' || !choice.text.trim())) return false;
+    }
+    if (questionnaireValue.currentQuestionId !== undefined && (typeof questionnaireValue.currentQuestionId !== 'string' || !questionIds.has(questionnaireValue.currentQuestionId))) return false;
+    for (const [questionId, response] of Object.entries(questionnaireValue.responses)) {
+      if (!questionIds.has(questionId) || !isRecord(response) || !['answered', 'rejected', 'skipped', 'pending'].includes(String(response.status)) || typeof response.updatedAt !== 'string') return false;
+      if (response.choiceIndex !== undefined && (!Number.isInteger(Number(response.choiceIndex)) || Number(response.choiceIndex) < 0 || Number(response.choiceIndex) > 3)) return false;
+      if (response.customAnswer !== undefined && typeof response.customAnswer !== 'string') return false;
+    }
+  }
+  return true;
 }
 
 export function applyLedgerMutation(input: {
@@ -99,6 +124,7 @@ export function applyLedgerMutation(input: {
     const includesStatus = mutation.cardPatch.status !== undefined;
     const validStatus = mutation.cardPatch.status === 'todo' || mutation.cardPatch.status === 'done' || mutation.cardPatch.status === 'backlog';
     const includesCodexPreference = mutation.cardPatch.codexRunModel !== undefined || mutation.cardPatch.codexRunEffort !== undefined;
+    const includesQuestionnaires = mutation.cardPatch.questionnaires !== undefined;
     const validCodexPreference = typeof mutation.cardPatch.codexRunModel === 'string'
       && (codexModelOptions as readonly string[]).includes(mutation.cardPatch.codexRunModel)
       && typeof mutation.cardPatch.codexRunEffort === 'string'
@@ -107,6 +133,12 @@ export function applyLedgerMutation(input: {
       mutationError = {
         statusCode: 400,
         body: { ok: false, error: 'Codex model and effort must be submitted together with allowed values.' },
+      };
+    }
+    if (!mutationError && includesQuestionnaires && !validQuestionnaires(mutation.cardPatch.questionnaires)) {
+      mutationError = {
+        statusCode: 400,
+        body: { ok: false, error: 'Card questionnaires must use the supported versioned question and response contract.' },
       };
     }
     if (!mutationError && includesStatus && !validStatus) {
@@ -122,6 +154,7 @@ export function applyLedgerMutation(input: {
         writeCardDescriptionFile({ decisionOsRoot, card, description: mutation.cardPatch.description, ledgerPath });
       }
       if (card && mutation.cardPatch.imageSizes && typeof mutation.cardPatch.imageSizes === 'object') card.imageSizes = mutation.cardPatch.imageSizes;
+      if (card && includesQuestionnaires) card.questionnaires = mutation.cardPatch.questionnaires;
       if (card && validCodexPreference) {
         card.codexRunModel = mutation.cardPatch.codexRunModel;
         card.codexRunEffort = mutation.cardPatch.codexRunEffort;

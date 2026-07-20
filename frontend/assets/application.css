@@ -341,6 +341,69 @@ h1 { margin: 0; font-size: clamp(28px, 8vw, 44px); line-height: 1.08; letter-spa
 .git-diff-viewport pre { margin: 0; padding: 10px; overflow: auto; white-space: pre; color: #dce7eb; }
 .git-diff-actions { justify-content: flex-end; }
 .git-diff-thread-reference { padding: 10px; color: var(--muted); }
+.ledger-card-questionnaire { --question-blue: #3b82f6; --question-green: #22c55e; --question-red: #ef4444; --question-sky: #38bdf8; --question-purple: #a855f7; min-width: 0; overflow: hidden; border: 1px solid rgba(255,255,255,.14); border-radius: 8px; background: #0c0d11; box-shadow: 0 18px 44px rgba(0,0,0,.3); color: #e7e9ee; outline: none; }
+.ledger-card-questionnaire:focus-visible { box-shadow: 0 0 0 2px var(--question-blue), 0 18px 44px rgba(0,0,0,.3); }
+.questionnaire-header { display: flex; gap: 18px; align-items: flex-end; justify-content: space-between; padding: 16px 18px 12px; }
+.questionnaire-header > div { display: grid; gap: 2px; }
+.questionnaire-header div > span { color: #858b98; font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.questionnaire-header strong { color: #f4f5f7; font-size: 16px; }
+.questionnaire-progress-count { color: #9ca3af; font-size: 11px; font-variant-numeric: tabular-nums; }
+.questionnaire-progress-track { height: 3px; margin: 0 18px 16px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,.08); }
+.questionnaire-progress-track span { display: block; height: 100%; border-radius: inherit; background: var(--question-green); box-shadow: 0 0 10px color-mix(in srgb, var(--question-green), transparent 35%); transition: width 180ms ease; }
+.questionnaire-layout { display: grid; grid-template-columns: minmax(0, 1fr) 260px; border-top: 1px solid rgba(255,255,255,.09); }
+.questionnaire-main { display: grid; gap: 12px; min-width: 0; padding: 18px; }
+.questionnaire-question-card { display: grid; gap: 14px; padding: 18px; border: 1px solid rgba(255,255,255,.11); border-radius: 7px; background: linear-gradient(145deg, #17191f, #111217); box-shadow: inset 0 1px 0 rgba(255,255,255,.035); }
+.questionnaire-question-top { display: flex; align-items: center; justify-content: space-between; }
+.questionnaire-source { color: #747b89; font-size: 10px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.questionnaire-later { min-height: auto; padding: 4px 6px; border: 0; background: transparent; color: transparent; font-size: 9px; font-weight: 750; letter-spacing: .08em; transition: color 120ms ease; }
+.questionnaire-question-card:hover .questionnaire-later, .questionnaire-later:focus-visible { color: #8d94a2; }
+.questionnaire-question-card h3 { margin: 0; color: #f3f4f6; font-size: clamp(16px, 2vw, 21px); font-weight: 650; line-height: 1.35; }
+.questionnaire-choices { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+.questionnaire-choice { position: relative; display: grid; grid-template-columns: 30px minmax(0,1fr) auto; gap: 10px; align-items: center; min-height: 64px; padding: 12px; border: 1px solid rgba(255,255,255,.12); border-radius: 7px; background: #12141a; color: #d9dce3; text-align: left; transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease, box-shadow 120ms ease; }
+.questionnaire-choice:hover { border-color: rgba(255,255,255,.27); background: #171a21; transform: translateY(-1px); }
+.questionnaire-choice.is-selected { border-color: var(--question-blue); background: color-mix(in srgb, var(--question-blue), #101218 84%); box-shadow: inset 0 0 0 1px var(--question-blue), 0 0 16px color-mix(in srgb, var(--question-blue), transparent 55%); animation: question-choice-pulse 160ms ease-out; }
+.questionnaire-choice-emoji { font-size: 22px; line-height: 1; text-align: center; }
+.questionnaire-choice-text { overflow-wrap: anywhere; font-size: 13px; font-weight: 600; line-height: 1.35; }
+.questionnaire-choice kbd, .questionnaire-action kbd { min-width: 22px; padding: 4px 6px; border: 1px solid rgba(255,255,255,.16); border-radius: 4px; background: #090a0e; box-shadow: inset 0 -1px rgba(255,255,255,.04); color: #8e95a2; font: 700 9px/1.1 inherit; text-align: center; white-space: nowrap; }
+.questionnaire-notes { box-sizing: border-box; width: 100%; min-height: 96px; resize: vertical; padding: 13px 14px; border: 1px solid rgba(255,255,255,.12); border-radius: 7px; background: #0b0c10; color: #e6e8ec; font: 400 13px/1.5 inherit; outline: none; }
+.questionnaire-notes::placeholder { color: #606674; }
+.questionnaire-notes:focus { border-color: rgba(168,85,247,.65); box-shadow: 0 0 0 2px rgba(168,85,247,.12); }
+.questionnaire-actions { display: grid; grid-template-columns: auto auto minmax(140px,1fr); gap: 8px; }
+.questionnaire-action { display: flex; gap: 8px; align-items: center; justify-content: center; min-height: 40px; padding: 8px 10px; border: 1px solid currentColor; border-radius: 6px; background: transparent; font-size: 10px; font-weight: 800; letter-spacing: .05em; }
+.questionnaire-action.is-irrelevant { color: var(--question-red); }
+.questionnaire-action.is-next { color: var(--question-sky); }
+.questionnaire-action.is-custom { color: var(--question-purple); }
+.questionnaire-action:disabled { opacity: .35; }
+.questionnaire-copy { justify-self: end; min-height: auto; padding: 4px 0; border: 0; background: transparent; color: #737987; font-size: 9px; font-weight: 750; letter-spacing: .08em; }
+.questionnaire-copy:hover { color: #c4c8d0; }
+.questionnaire-queue { display: grid; align-content: start; gap: 6px; min-width: 0; padding: 18px 12px; border-left: 1px solid rgba(255,255,255,.09); background: #090a0e; }
+.questionnaire-queue > strong { padding: 0 8px 8px; color: #878e9b; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
+.questionnaire-queue-item { display: grid; grid-template-columns: 24px minmax(0,1fr); gap: 8px; align-items: start; min-height: 54px; padding: 10px 8px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: #7f8694; text-align: left; }
+.questionnaire-queue-item:hover { background: rgba(255,255,255,.035); }
+.questionnaire-queue-item.is-active { border-color: rgba(59,130,246,.45); background: rgba(59,130,246,.09); color: #dbe8ff; }
+.questionnaire-queue-item > span:first-child { color: #555c69; font-size: 9px; font-variant-numeric: tabular-nums; }
+.questionnaire-queue-item > span:last-child { display: grid; gap: 3px; min-width: 0; }
+.questionnaire-queue-item b { overflow: hidden; font-size: 11px; font-weight: 600; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+.questionnaire-queue-item small { overflow: hidden; color: #626976; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.questionnaire-queue-item[data-status="answered"] small { color: var(--question-green); }
+.questionnaire-queue-item[data-status="rejected"] small { color: var(--question-red); }
+.questionnaire-queue-item[data-status="skipped"] small { color: var(--question-sky); }
+.questionnaire-notice, .questionnaire-empty, .questionnaire-thread-reference { margin: 0; padding: 12px 18px; color: #969daa; font-size: 12px; }
+.questionnaire-notice { border-top: 1px solid rgba(255,255,255,.09); }
+@keyframes question-choice-pulse { 0% { transform: scale(.98); } 70% { transform: scale(1.012); } 100% { transform: scale(1); } }
+@media (max-width: 759px) {
+  .questionnaire-header { align-items: center; padding: 14px; }
+  .questionnaire-progress-track { margin: 0 14px 14px; }
+  .questionnaire-layout { grid-template-columns: 1fr; }
+  .questionnaire-main { padding: 14px; }
+  .questionnaire-question-card { padding: 15px; }
+  .questionnaire-choices { grid-template-columns: 1fr; }
+  .questionnaire-choice { min-height: 58px; }
+  .questionnaire-actions { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .questionnaire-action.is-custom { grid-column: 1 / -1; }
+  .questionnaire-queue { grid-template-columns: repeat(4, minmax(150px,1fr)); overflow-x: auto; border-top: 1px solid rgba(255,255,255,.09); border-left: 0; }
+  .questionnaire-queue > strong { grid-column: 1 / -1; }
+}
 .ledger-card-code-block { max-width: 100%; margin: 0; padding: 14px; overflow: auto; border: 1px solid var(--line); background: #050607; white-space: pre; }
 .ledger-card-table-scroll { max-width: 100%; overflow-x: auto; }
 .ledger-card-table { width: 100%; border-collapse: collapse; }
