@@ -47,6 +47,15 @@ export type LedgerContentRefreshState = {
 
 export type ThreadPanelTab = 'thread' | 'codex-log';
 
+export type ThreadViewportEntryReason = 'panel-open' | 'thread-switch' | 'tab-activation';
+
+export type ThreadViewportPinRequest = {
+  threadId: string;
+  surface: ThreadPanelTab;
+  openGeneration: number;
+  reason: ThreadViewportEntryReason;
+};
+
 export type ThreadRunDisclosureState = Record<string, boolean>;
 
 export const state: any = {
@@ -98,6 +107,8 @@ export const state: any = {
   threadLogScrollTopByThreadId: {},
   threadLogFollowBottomByThreadId: {} as Record<string, boolean>,
   threadActiveTabByThreadId: {} as Record<string, ThreadPanelTab>,
+  threadViewportOpenGeneration: 0,
+  threadViewportPinRequest: null as ThreadViewportPinRequest | null,
   threadSelectedRunIdByThreadId: {} as Record<string, string>,
   threadSelectedExecutionIdByThreadId: {} as Record<string, string>,
   threadRunIdByThreadId: {} as Record<string, string>,
