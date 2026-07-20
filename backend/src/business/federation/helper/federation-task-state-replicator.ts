@@ -32,6 +32,7 @@ export function createFederationTaskStateReplicator(input: {
 }) {
   const transfers = new Map<string, SnapshotTransfer>();
   const awaitingSnapshots = new Set<string>();
+  const publishedRelaySnapshotForBuckets = new Map<string, string>();
   const convergence = new Map<string, { projectId: string; converged: boolean; lastRepairAt: string; missingBuckets: string[] }>();
 
   const publishBatch = (peerId: string, projectId: string, events: TaskFieldEvent[]): boolean => {
@@ -50,20 +51,23 @@ export function createFederationTaskStateReplicator(input: {
   const publishEvent = (event: TaskFieldEvent): void => {
     const store = input.stores().get(event.projectId);
     if (!store) return;
-    for (const peer of input.peers()) {
-      if (peer.nodeId === input.nodeId) continue;
-      store.markPending(peer.nodeId, event.eventId);
-      if (peer.online) publishBatch(peer.nodeId, event.projectId, [event]);
+    store.markPending('relay', event.eventId);
+    publishBatch('relay', event.projectId, [event]);
+  };
+
+  const reconcileRelay = (): void => {
+    for (const [projectId, store] of input.stores()) {
+      for (const peer of input.peers()) {
+        const legacyPending = store.pendingFor(peer.nodeId);
+        if (legacyPending.length > 0) store.acknowledge(peer.nodeId, legacyPending.map((event) => event.eventId));
+      }
+      const pending = store.pendingFor('relay');
+      if (pending.length > 0) publishBatch('relay', projectId, pending);
+      input.publish('relay', { type: 'state-bucket-summary', projectId, payload: { buckets: store.bucketManifest() } });
     }
   };
 
-  const reconcilePeer = (peerId: string): void => {
-    for (const [projectId, store] of input.stores()) {
-      const pending = store.pendingFor(peerId);
-      if (pending.length > 0) publishBatch(peerId, projectId, pending);
-      advertise(peerId, projectId, store);
-    }
-  };
+  const reconcilePeer = (_peerId: string): void => reconcileRelay();
 
   const sendSnapshot = (peerId: string, projectId: string, snapshot: TaskStateSnapshot): void => {
     const bytes = Buffer.from(JSON.stringify(snapshot));
@@ -80,7 +84,8 @@ export function createFederationTaskStateReplicator(input: {
   };
 
   const handleFrame = async (frame: FederationStateFrame): Promise<void> => {
-    const targetsLocalState = frame.type === 'state-ack'
+    const targetsLocalState = frame.type === 'state-relay-ack'
+      || frame.type === 'state-ack'
       || frame.type === 'state-missing-request'
       || frame.type === 'state-snapshot-request';
     const store = targetsLocalState
@@ -88,6 +93,10 @@ export function createFederationTaskStateReplicator(input: {
       : input.storeFor?.(frame.projectId, frame.from) ?? input.stores().get(frame.projectId);
     if (!store || !frame.from) return;
     const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload as Record<string, unknown> : {};
+    if (frame.type === 'state-relay-ack') {
+      store.acknowledge('relay', Array.isArray(payload.eventIds) ? payload.eventIds.map(String) : []);
+      return;
+    }
     if (frame.type === 'state-event-batch') {
       const accepted: string[] = [];
       for (const raw of Array.isArray(payload.events) ? payload.events : []) {
@@ -169,20 +178,31 @@ export function createFederationTaskStateReplicator(input: {
       input.onProjectionChange?.({ projectId: frame.projectId, from: frame.from });
       transfers.delete(transferId);
       input.publish(frame.from, { type: 'state-ack', projectId: frame.projectId, payload: { eventIds: store.projection().appliedEventIds } });
-      input.publish(frame.from, { type: 'state-converged', projectId: frame.projectId, payload: { buckets: store.bucketManifest() } });
+      input.publish(frame.from, { type: 'state-bucket-summary', projectId: frame.projectId, payload: { buckets: store.bucketManifest() } });
       return;
     }
     if (frame.type === 'state-converged') {
       convergence.set(frame.from, { projectId: frame.projectId, converged: true, lastRepairAt: new Date().toISOString(), missingBuckets: [] });
+      if (frame.from === 'relay') {
+        const bucketSignature = JSON.stringify(store.bucketManifest());
+        if (publishedRelaySnapshotForBuckets.get(frame.projectId) !== bucketSignature) {
+          const snapshot = store.createSnapshot();
+          publishedRelaySnapshotForBuckets.set(frame.projectId, bucketSignature);
+          sendSnapshot('relay', frame.projectId, snapshot);
+        }
+      }
     }
   };
 
   return {
     publishEvent,
+    reconcileRelay,
     reconcilePeer,
     handleFrame,
     diagnostics: () => ({
-      pendingAcknowledgements: [...input.stores()].flatMap(([projectId, store]) => input.peers().map((peer) => ({ projectId, peerId: peer.nodeId, count: store.pendingFor(peer.nodeId).length }))),
+      pendingAcknowledgements: [...input.stores()].flatMap(([projectId, store]) => [
+        { projectId, peerId: 'relay', count: store.pendingFor('relay').length },
+      ]),
       convergence: [...convergence].map(([peerId, state]) => ({ peerId, ...state })),
       activeSnapshotTransfers: transfers.size,
       awaitingSnapshots: awaitingSnapshots.size,
