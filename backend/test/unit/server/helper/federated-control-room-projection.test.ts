@@ -88,8 +88,8 @@ test('changes the projection fingerprint when retained remote replicas change pr
   assert.equal(offline.backlog[0].status, 'task-backlog', 'retained offline tasks preserve their persisted workflow status');
 });
 
-test('preserves completed-task labels through federation authority selection', () => {
-  const task = { cardId: 'card-done', projectId: 'project-1', ledgerId: 'tasks', title: 'Done', cardStatus: 'done', status: 'task-complete', labels: ['release'] };
+test('preserves completed-task labels and completion time through federation authority selection', () => {
+  const task = { cardId: 'card-done', projectId: 'project-1', ledgerId: 'tasks', title: 'Done', cardStatus: 'done', status: 'task-complete', labels: ['release'], completedAt: '2026-07-20T09:00:00.000Z', completedTime: 1784538000000 };
   const result = federatedControlRoomProjection({
     localProjection: {
       fingerprint: 'local', projects: [{ id: 'project-1', name: 'Project' }], queue: [], exec: [], backlog: [], done: [task], allTasks: [task], diagnostics: [], ledgers: ['Tasks'],
@@ -106,6 +106,8 @@ test('preserves completed-task labels through federation authority selection', (
 
   assert.equal(result.done.length, 1);
   assert.deepEqual(result.done[0].labels, ['release']);
+  assert.equal(result.done[0].completedAt, '2026-07-20T09:00:00.000Z');
+  assert.equal(result.done[0].completedTime, 1784538000000);
   assert.equal(result.done[0].replicaCount, 2);
 });
 

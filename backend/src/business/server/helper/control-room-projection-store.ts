@@ -22,7 +22,7 @@ type Projection = AnyRecord & { schemaVersion: number; projectorVersion: string;
 type ProjectSlice = { projectId: string; project: AnyRecord; tasks: AnyRecord[]; dependencies: Dependency[]; fingerprint: string };
 
 const schemaVersion = 7;
-const projectorVersion = 'control-room-v13-task-labels';
+const projectorVersion = 'control-room-v14-completion-time';
 
 function records(value: unknown): AnyRecord[] {
   return Array.isArray(value) ? value.filter((entry): entry is AnyRecord => Boolean(entry && typeof entry === 'object')) : [];
@@ -170,6 +170,8 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   const ledgerName = jsonLabels.includes('master-task') ? input.ledgerEntry.title : legacyLedgerName;
   const waitingText = markdown.match(/^\s*(?:\*\*)?Waiting since(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
   const executionText = markdown.match(/^\s*(?:\*\*)?Active since(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
+  const completedText = markdown.match(/^\s*(?:\*\*)?Completed at(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
+  const completedTime = Date.parse(completedText);
   const threadId = `thread-${text(input.card.id)}`;
   const threadRef = input.ledger.threadFiles && typeof input.ledger.threadFiles === 'object' ? (input.ledger.threadFiles as AnyRecord)[threadId] : '';
   const threadFile = resolveThreadContentFile(input.project.decisionOsRoot, threadRef);
@@ -230,6 +232,8 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
     waitingSince: Number.isFinite(latestThreadTime) ? new Date(latestThreadTime).toISOString() : waitingText,
     waitingTime, executionSince,
     executionTime: Date.parse(executionSince),
+    completedAt: Number.isFinite(completedTime) ? new Date(completedTime).toISOString() : '',
+    completedTime: Number.isFinite(completedTime) ? completedTime : null,
     subtasks, complete, nextSubtask: subtasks.find((subtask) => subtask.status !== 'complete') ?? null,
   };
 }

@@ -420,17 +420,26 @@
                   <h1>Done</h1>
                   <p id="done-summary" class="muted"></p>
                 </div>
-                <label class="search-field">
-                  <span aria-hidden="true">⌕</span>
-                  <input id="done-search" type="search" inputmode="search" placeholder="Search completed tasks" autocomplete="off" />
-                </label>
+                <div class="done-header-actions">
+                  <label class="search-field">
+                    <span aria-hidden="true">⌕</span>
+                    <input id="done-search" type="search" inputmode="search" placeholder="Search completed tasks" autocomplete="off" />
+                  </label>
+                  <label class="done-sort-field">
+                    <span>Completion date</span>
+                    <select id="done-sort">
+                      <option value="desc">Newest first</option>
+                      <option value="asc">Oldest first</option>
+                    </select>
+                  </label>
+                </div>
               </div>
               <div class="done-filter-groups">
-                <div>
+                <div id="done-project-filter-group">
                   <p class="done-filter-label">Projects</p>
                   <div id="done-project-filters" class="control-filters" aria-label="Filter completed tasks by project"></div>
                 </div>
-                <div>
+                <div id="done-label-filter-group" hidden>
                   <p class="done-filter-label">Labels</p>
                   <div id="done-label-filters" class="control-filters" aria-label="Filter completed tasks by label"></div>
                 </div>

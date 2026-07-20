@@ -44,6 +44,7 @@ const state = {
   doneQuery: '',
   doneProjectFilter: 'All',
   doneLabelFilter: 'All',
+  doneSort: 'desc',
   masterTaskCompletionPipelineId: '',
   codexSettingsLoaded: false,
 };
@@ -56,7 +57,8 @@ const elements = Object.fromEntries([
   'zone-list', 'zone-view', 'zone-title', 'zone-summary', 'card-search', 'card-list',
   'no-results', 'card-view', 'card-title', 'card-body', 'control-room-view', 'control-project-filters', 'control-filters',
   'control-task-list', 'control-empty', 'codex-settings-limit', 'codex-settings-voice-pipeline', 'codex-settings-master-task-completion-pipeline', 'codex-settings-message',
-  'done-view', 'done-summary', 'done-search', 'done-project-filters', 'done-label-filters', 'done-task-list', 'done-empty',
+  'done-view', 'done-summary', 'done-search', 'done-sort', 'done-project-filter-group', 'done-project-filters',
+  'done-label-filter-group', 'done-label-filters', 'done-task-list', 'done-empty',
   'federation-connection-status', 'federation-state-duration', 'federation-attempt-timeout', 'federation-last-connection',
   'federation-last-issue', 'federation-peer-list', 'federation-settings-message'
 ].map((id) => [id, document.getElementById(id)]));
@@ -1362,10 +1364,14 @@ function taskRow(task, tab, index) {
       runtimeStatus.textContent = 'Running';
     }
   }
+  const completedTime = Date.parse(String(task.completedAt ?? ''));
+  const completedLabel = Number.isFinite(completedTime)
+    ? `Completed ${new Date(completedTime).toLocaleString()}`
+    : 'Completion date unavailable';
   const age = task.status === 'task-backlog'
     ? 'backlog'
     : task.status === 'task-complete'
-      ? 'done'
+      ? completedLabel
     : task.transcribingBeforeLaunch
       ? waitingAge(task.waitingSince).replace(/ waiting$/, ' transcribing')
       : task.status === 'task-execution'
@@ -1582,6 +1588,7 @@ function renderDone() {
   const tasks = state.controlRoom?.done ?? [];
   const projectFilters = [{ id: 'All', name: 'All projects', color: '#20242b', projects: state.projects, projectIds: [] }, ...projectFilterGroups(state.projects)];
   if (!projectFilters.some((project) => project.id === state.doneProjectFilter)) state.doneProjectFilter = 'All';
+  const showProjectFilters = state.doneProjectFilter === 'All';
   const selectedProject = projectFilters.find((project) => project.id === state.doneProjectFilter);
   const projectScopedTasks = filterCompletedTasks(tasks, { projectIds: selectedProject?.projectIds ?? [] });
   const labels = completedTaskLabels(projectScopedTasks);
@@ -1590,12 +1597,13 @@ function renderDone() {
     query: state.doneQuery,
     projectIds: selectedProject?.projectIds ?? [],
     label: state.doneLabelFilter,
+    order: state.doneSort,
   });
-  elements['done-project-filters'].replaceChildren(...projectFilters.map((project) => projectFilterButton(project, state.doneProjectFilter, (projectId) => {
+  const projectButtons = projectFilters.map((project) => projectFilterButton(project, state.doneProjectFilter, (projectId) => {
     state.doneProjectFilter = projectId;
     state.doneLabelFilter = 'All';
     renderDone();
-  })));
+  }));
   const labelFilters = ['All', ...labels].map((label) => {
     const button = document.createElement('button');
     button.type = 'button';
@@ -1608,7 +1616,7 @@ function renderDone() {
     });
     return button;
   });
-  if (state.doneQuery || state.doneProjectFilter !== 'All' || state.doneLabelFilter !== 'All') {
+  if (!showProjectFilters) {
     const clear = document.createElement('button');
     clear.type = 'button';
     clear.className = 'filter-clear-button';
@@ -1622,7 +1630,10 @@ function renderDone() {
     });
     labelFilters.push(clear);
   }
-  elements['done-label-filters'].replaceChildren(...labelFilters);
+  elements['done-project-filter-group'].hidden = !showProjectFilters;
+  elements['done-project-filters'].replaceChildren(...(showProjectFilters ? projectButtons : []));
+  elements['done-label-filter-group'].hidden = showProjectFilters;
+  elements['done-label-filters'].replaceChildren(...(showProjectFilters ? [] : labelFilters));
   elements['done-task-list'].replaceChildren(...visibleTasks.map((task, index) => taskRow(task, 'done', index)));
   elements['done-summary'].textContent = `${visibleTasks.length} of ${tasks.length} completed ${tasks.length === 1 ? 'task' : 'tasks'}`;
   elements['done-empty'].hidden = visibleTasks.length > 0;
@@ -2681,6 +2692,10 @@ elements['card-search'].addEventListener('input', (event) => {
 });
 elements['done-search'].addEventListener('input', (event) => {
   state.doneQuery = event.target.value;
+  renderDone();
+});
+elements['done-sort'].addEventListener('change', (event) => {
+  state.doneSort = event.target.value === 'asc' ? 'asc' : 'desc';
   renderDone();
 });
 window.addEventListener('popstate', () => {
