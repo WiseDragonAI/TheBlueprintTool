@@ -149,6 +149,39 @@ test('moves legacy Markdown-labeled master tasks into the canonical ledger', () 
   assert.equal(readFileSync(join(root, 'cards', 'tasks', 'card-legacy-master.md'), 'utf8'), '#master-task #ready\n\nLegacy task.');
 });
 
+test('moves sidecars when the ledger filename and stored content domain differ', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'decision-os-master-task-aliased-domain-'));
+  const root = join(workspace, '.decision-os');
+  mkdirSync(join(root, 'cards', 'a35'), { recursive: true });
+  mkdirSync(join(root, 'threads', 'a35'), { recursive: true });
+  const sourceLedger = join(root, 'article-35.json');
+  const targetLedger = join(root, 'tasks.json');
+  writeFileSync(sourceLedger, JSON.stringify({
+    cards: [{
+      id: 'card-aliased-master', labels: ['master-task'], domainId: 'a35', x: 10, y: 10, w: 100, h: 100,
+      comment: { contentFile: '.decision-os/cards/a35/card-aliased-master.md' },
+    }],
+    annotations: [{ id: 'zone-task', x: 0, y: 0, width: 500, height: 500 }],
+    relationships: [], notes: {}, deletedNoteIds: {},
+    threadFiles: { 'thread-card-aliased-master': '.decision-os/threads/a35/thread-card-aliased-master.md' },
+  }));
+  writeFileSync(targetLedger, JSON.stringify({ cards: [], annotations: [], relationships: [], notes: {}, deletedNoteIds: {}, threadFiles: {} }));
+  writeFileSync(join(root, 'cards', 'a35', 'card-aliased-master.md'), 'Aliased card.');
+  writeFileSync(join(root, 'threads', 'a35', 'thread-card-aliased-master.md'), 'Aliased thread.');
+
+  const result = migrateMasterTasks({ sourceLedger, targetLedger, write: true });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.value.cardFiles, 1);
+  assert.equal(result.value.threadFiles, 1);
+  const migratedTarget = JSON.parse(readFileSync(targetLedger, 'utf8'));
+  assert.equal(migratedTarget.cards[0].comment.contentFile, '.decision-os/cards/tasks/card-aliased-master.md');
+  assert.equal(migratedTarget.threadFiles['thread-card-aliased-master'], '.decision-os/threads/tasks/thread-card-aliased-master.md');
+  assert.equal(readFileSync(join(root, 'cards', 'tasks', 'card-aliased-master.md'), 'utf8'), 'Aliased card.');
+  assert.equal(readFileSync(join(root, 'threads', 'tasks', 'thread-card-aliased-master.md'), 'utf8'), 'Aliased thread.');
+});
+
 test('rejects a relationship that would cross ledger boundaries', () => {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-master-task-cross-edge-'));
   const root = join(workspace, '.decision-os');
