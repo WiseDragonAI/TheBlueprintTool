@@ -25,6 +25,8 @@ test('parse-ledger-cli-argv parses targeted ledger mutations', () => {
     'inline comment',
     '--card-comment-file',
     'tmp/comment.md',
+    '--card-questionnaires-file',
+    'tmp/questions.json',
     '--card-title',
     'TABLE: character',
     '--card-x',
@@ -54,6 +56,7 @@ test('parse-ledger-cli-argv parses targeted ledger mutations', () => {
   assert.equal(command.mutationOperation.cardId, 'note_spawnable_vs_inventory_item');
   assert.equal(command.mutationOperation.cardComment, 'inline comment');
   assert.equal(command.mutationOperation.cardCommentFile, 'tmp/comment.md');
+  assert.equal(command.mutationOperation.cardQuestionnairesFile, 'tmp/questions.json');
   assert.equal(command.mutationOperation.cardTitle, 'TABLE: character');
   assert.equal(command.mutationOperation.cardX, 120);
   assert.equal(command.mutationOperation.cardY, -45);

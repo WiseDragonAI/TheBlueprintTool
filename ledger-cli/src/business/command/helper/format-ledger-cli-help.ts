@@ -59,6 +59,7 @@ export function formatLedgerCliHelp(): string {
     '',
     '  mutate --ledger <file> [--mutation <file>] [--card-id <id>] [card options]',
     '      Persist targeted ledger edits.',
+    '      Use --card-questionnaires-file <file> to replace one card\'s versioned questionnaire map.',
     '',
     '  export --ledger <file> --output <file.md>',
     '      Export a ledger to Markdown.',
