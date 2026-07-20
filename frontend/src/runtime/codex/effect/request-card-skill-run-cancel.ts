@@ -2,8 +2,11 @@
  * WHAT: Requests cancellation for one active card-scoped Codex skill run.
  * WHY: The widget stop button must delegate process ownership to the backend.
  */
-export async function requestCardSkillRunCancel(input: { ledgerId: string; cardId: string; runId: string; executionId: string }): Promise<{ ok: boolean; status: string; error?: string }> {
-  const response = await fetch(`/api/codex/skills/runs/${encodeURIComponent(input.runId)}/cancel`, {
+import { projectReplicaRequestPath } from '../../project/helper/project-request-scope.js';
+
+export async function requestCardSkillRunCancel(input: { projectId?: string; replicaNodeId?: string; ledgerId: string; cardId: string; runId: string; executionId: string }): Promise<{ ok: boolean; status: string; error?: string }> {
+  const path = projectReplicaRequestPath(`/api/codex/skills/runs/${encodeURIComponent(input.runId)}/cancel`, String(input.projectId ?? ''), String(input.replicaNodeId ?? ''));
+  const response = await fetch(path, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ ledgerId: input.ledgerId, cardId: input.cardId, executionId: input.executionId }),

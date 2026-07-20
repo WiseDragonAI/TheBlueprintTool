@@ -16,6 +16,7 @@ type AnyRecord = Record<string, unknown>;
 
 export function createCardSkillRunEventIngestor(input: {
   decisionOsRoot: string;
+  ledgerId?: string;
   ledgerPath: string;
   cardId: string;
   runId: string;
@@ -23,6 +24,7 @@ export function createCardSkillRunEventIngestor(input: {
   batchDelayMs?: number;
   telemetryFile?: string;
   projectId?: string;
+  runtime?: AnyRecord;
   onTerminalEvent?: (event: NormalizedRunEvent) => void;
   onTurnStarted?: (event: NormalizedRunEvent, observedAt: string) => void;
 }): CardSkillRunEventIngestor {
@@ -115,10 +117,12 @@ export function createCardSkillRunEventIngestor(input: {
     const events = [...pendingEvents.values()].sort((left, right) => left.line - right.line);
     const changed = persistCardSkillRunEvents({
       decisionOsRoot: input.decisionOsRoot,
+      ledgerId: input.ledgerId,
       ledgerPath: input.ledgerPath,
       cardId: input.cardId,
       runId: input.runId,
       events,
+      runtime: input.runtime,
     });
     pendingEvents.clear();
     return changed;

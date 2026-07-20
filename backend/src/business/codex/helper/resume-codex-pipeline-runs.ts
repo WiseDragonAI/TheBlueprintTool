@@ -11,9 +11,54 @@ import {
   runNextPipelineSkill,
 } from './codex-pipeline-runner.js';
 import { scheduleCodexProcesses } from './codex-process-scheduler.js';
-import { readCodexProcessQueue } from './codex-process-queue.js';
+import { isSameCodexProcess, readCodexProcessQueue } from './codex-process-queue.js';
+import { updateCodexRuntimeRun } from './codex-runtime-run-store.js';
 
 type AnyRecord = Record<string, unknown>;
+
+function monitorAdoptedPipelineSkill(input: {
+  decisionOsRoot: string;
+  runtime: AnyRecord;
+  pipelineRunId: string;
+  skill: { runId: string; executionId: string; processId?: number; processStartTime?: string };
+}): void {
+  const processId = Number(input.skill.processId ?? 0);
+  const processStartTime = String(input.skill.processStartTime ?? '');
+  const check = (): void => {
+    const runtimeRun = pipelineRuntimeRun(input.runtime, input.skill.runId);
+    if (!runtimeRun || String(runtimeRun.executionId ?? '') !== input.skill.executionId || String(runtimeRun.status ?? '') !== 'running') return;
+    if (isSameCodexProcess(processId, processStartTime)) {
+      const timer = setTimeout(check, 250);
+      timer.unref?.();
+      return;
+    }
+    const current = readCodexPipelineStore({ decisionOsRoot: input.decisionOsRoot }).store.runs.find((run) => run.id === input.pipelineRunId);
+    const skill = current?.steps.flatMap((step) => step.skills).find((candidate) => candidate.runId === input.skill.runId);
+    if (!skill || skill.executionId !== input.skill.executionId) return;
+    const derived = derivePipelineSkillStatus({ skill, runtime: input.runtime });
+    const status = runtimeRun.cancelRequestedAt
+      ? 'cancelled'
+      : derived === 'complete' || derived === 'failed' || derived === 'cancelled' ? derived : 'failed';
+    const finishedAt = new Date().toISOString();
+    const reassessed = reassessPipelineAfterSkill({
+      decisionOsRoot: input.decisionOsRoot,
+      runtime: input.runtime,
+      pipelineRunId: input.pipelineRunId,
+      skillRunId: input.skill.runId,
+      settledStatus: status,
+      error: status === 'failed' ? 'Adopted Codex process exited without a terminal event.' : '',
+      finishedAt,
+    });
+    updateCodexRuntimeRun(input.runtime, input.skill.runId, { status, finishedAt, settledAt: finishedAt });
+    if (status === 'complete' && reassessed && reassessed.status === 'running') {
+      runNextPipelineSkill({ decisionOsRoot: input.decisionOsRoot, runtime: input.runtime, pipelineRunId: input.pipelineRunId });
+    }
+    const schedule = input.runtime.scheduleCodexProcesses;
+    if (typeof schedule === 'function') void schedule();
+  };
+  const timer = setTimeout(check, 0);
+  timer.unref?.();
+}
 
 export async function resumeCodexPipelineRuns(input: {
   decisionOsRoot?: string;
@@ -32,6 +77,27 @@ export async function resumeCodexPipelineRuns(input: {
         if (pipelineRuntimeRun(input.runtime, skill.runId)?.status === 'running') {
           ownedByRuntime = true;
           resumed.push({ pipelineRunId: run.id, runId: skill.runId, alreadyRunning: true });
+          continue;
+        }
+        if (isSameCodexProcess(Number(skill.processId ?? 0), String(skill.processStartTime ?? ''))) {
+          updateCodexRuntimeRun(input.runtime, skill.runId, {
+            id: skill.runId,
+            executionId: skill.executionId,
+            pipelineRunId: run.id,
+            ledgerId: run.ledgerId,
+            sourceCardId: run.sourceCardId,
+            outputCardId: step.outputCardId,
+            stdoutFile: skill.stdoutFile,
+            stderrFile: skill.stderrFile,
+            pid: skill.processId,
+            processStartTime: skill.processStartTime,
+            status: 'running',
+            adopted: true,
+            startedAt: skill.startedAt,
+          });
+          monitorAdoptedPipelineSkill({ decisionOsRoot, runtime: input.runtime, pipelineRunId: run.id, skill });
+          ownedByRuntime = true;
+          resumed.push({ pipelineRunId: run.id, runId: skill.runId, executionId: skill.executionId, adopted: true });
           continue;
         }
         const derived = derivePipelineSkillStatus({ skill });

@@ -15,12 +15,16 @@ import { applyRailCollapsedState } from '../../toolbox/effect/apply-rail-collaps
 import { telemetry } from '../../telemetry/effect/telemetry.js';
 import { routeScope } from '../../navigation/helper/route-scope.js';
 import { hydrateThreadViewportState } from '../../thread/effect/persist-thread-scroll.js';
+import { replicaNodeIdFromLocation } from '../../project/helper/project-request-scope.js';
+import { subscribeLedgerContentEvents } from '../effect/subscribe-ledger-content-events.js';
 
 export async function refreshRuntimeState(): Promise<void> {
   telemetry('subscribe-server-refresh', { specId: '50000006', source: 'refresh-button' });
   const nextCanvasMode = routeCanvasMode(window.location.pathname);
   const nextScope = routeScope(window.location.pathname);
   state.projectId = nextScope.projectId;
+  state.replicaNodeId = replicaNodeIdFromLocation();
+  if (nextCanvasMode !== 'projects') subscribeLedgerContentEvents();
   const nextActiveTab = nextCanvasMode === 'ledger' ? routeTab(window.location.pathname) : state.activeTab;
   const nextLedgerStateId = nextCanvasMode === 'projects' ? 'projects-canvas' : nextCanvasMode === 'ledgers' ? 'ledgers-canvas' : nextActiveTab;
   const localViewport = state.activeLedger && state.activeLedgerId === nextLedgerStateId ? { ...state.viewport } : null;

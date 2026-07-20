@@ -44,6 +44,7 @@ function fixture(): Fixture {
       facts: [],
       fields: [],
       codexActiveRunId: staleRunId,
+      codexActiveExecutionId: 'execution-stale',
       codexThreadRunId: staleRunId,
     }],
     annotations: [],
@@ -71,12 +72,12 @@ async function waitForCondition(predicate: () => boolean, label: string): Promis
   assert.fail(`Timed out waiting for ${label}.`);
 }
 
-test('operator Run supersedes stale card ownership and a pending queue item', async () => {
+test('repeated operator Run returns the already admitted pending execution', async () => {
   const context = fixture();
   const runtime: Record<string, unknown> = {
     decisionOsRoot: context.decisionOsRoot,
     codexSkillRuns: {
-      [context.staleRunId]: { id: context.staleRunId, status: 'pending', pid: 0 },
+      [context.staleRunId]: { id: context.staleRunId, executionId: 'execution-stale', status: 'pending', pid: 0 },
     },
     scheduleCodexProcesses: async () => ({ ok: true, launched: [] }),
   };
@@ -84,7 +85,7 @@ test('operator Run supersedes stale card ownership and a pending queue item', as
     decisionOsRoot: context.decisionOsRoot,
     id: context.staleRunId,
     createdAt: '2026-07-15T08:00:00.000Z',
-    payload: { ledgerId: 'specs', threadId: context.threadId, cardId: context.cardId },
+    payload: { ledgerId: 'specs', threadId: context.threadId, cardId: context.cardId, runId: context.staleRunId, executionId: 'execution-stale' },
   });
 
   try {
@@ -95,15 +96,14 @@ test('operator Run supersedes stale card ownership and a pending queue item', as
 
     assert.equal(result.ok, true);
     assert.equal(result.statusCode, 202);
-    const newRunId = String((result.run as Record<string, unknown>).id ?? '');
-    assert.notEqual(newRunId, context.staleRunId);
-    assert.deepEqual(readCodexProcessQueue(context.decisionOsRoot).map((item) => item.id), [newRunId]);
-    const oldRuntimeRun = (runtime.codexSkillRuns as Record<string, Record<string, unknown>>)[context.staleRunId];
-    assert.equal(oldRuntimeRun.status, 'cancelled');
-    assert.equal(oldRuntimeRun.error, 'Superseded by an operator-triggered run.');
+    const admittedRun = result.run as Record<string, unknown>;
+    assert.equal(admittedRun.id, context.staleRunId);
+    assert.equal(admittedRun.executionId, 'execution-stale');
+    assert.deepEqual(readCodexProcessQueue(context.decisionOsRoot).map((item) => item.id), [context.staleRunId]);
     const ledger = JSON.parse(readFileSync(context.ledgerPath, 'utf8')) as { cards: Array<Record<string, unknown>> };
-    assert.equal(ledger.cards[0].codexActiveRunId, newRunId);
-    assert.equal(ledger.cards[0].codexThreadRunId, newRunId);
+    assert.equal(ledger.cards[0].codexActiveRunId, context.staleRunId);
+    assert.equal(ledger.cards[0].codexActiveExecutionId, 'execution-stale');
+    assert.equal(ledger.cards[0].codexThreadRunId, context.staleRunId);
     assert.equal(ledger.cards[0].executionStatus, undefined);
     assert.equal(ledger.cards[0].executionRunId, undefined);
   } finally {
@@ -111,13 +111,13 @@ test('operator Run supersedes stale card ownership and a pending queue item', as
   }
 });
 
-test('operator Run is rejected while the card owns a live child process', async () => {
+test('repeated operator Run returns the already admitted live execution', async () => {
   const context = fixture();
   const liveChild = { pid: 4242, exitCode: null, killed: false };
   const runtime: Record<string, unknown> = {
     decisionOsRoot: context.decisionOsRoot,
     codexSkillRuns: {
-      [context.staleRunId]: { id: context.staleRunId, status: 'running', pid: liveChild.pid, child: liveChild },
+      [context.staleRunId]: { id: context.staleRunId, executionId: 'execution-stale', status: 'running', pid: liveChild.pid, child: liveChild },
     },
   };
 
@@ -127,9 +127,10 @@ test('operator Run is rejected while the card owns a live child process', async 
       runtime_state: runtime,
     });
 
-    assert.equal(result.ok, false);
-    assert.equal(result.statusCode, 409);
-    assert.equal(result.error, 'Card already owns a live Codex process.');
+    assert.equal(result.ok, true);
+    assert.equal(result.statusCode, 202);
+    assert.equal((result.run as Record<string, unknown>).id, context.staleRunId);
+    assert.equal((result.run as Record<string, unknown>).executionId, 'execution-stale');
     assert.deepEqual(readCodexProcessQueue(context.decisionOsRoot), []);
     const ledger = JSON.parse(readFileSync(context.ledgerPath, 'utf8')) as { cards: Array<Record<string, unknown>> };
     assert.equal(ledger.cards[0].codexActiveRunId, context.staleRunId);
@@ -159,7 +160,7 @@ test('turn lifecycle updates preserve the live child handle for cancellation', a
     decisionOsRoot: context.decisionOsRoot,
     id: context.staleRunId,
     createdAt: '2026-07-15T08:00:00.000Z',
-    payload: { ledgerId: 'specs', threadId: context.threadId, cardId: context.cardId },
+    payload: { ledgerId: 'specs', threadId: context.threadId, cardId: context.cardId, runId: context.staleRunId, executionId: 'execution-stale' },
   });
   markCodexProcessQueueItemRunning(context.decisionOsRoot, context.staleRunId);
 

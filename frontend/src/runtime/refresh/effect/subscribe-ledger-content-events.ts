@@ -34,14 +34,22 @@ export {
   contentEventPayload
 };
 
-let subscribed = false;
+let subscriptionScope = '';
 
-function maybeResumeCodexRunWidget(payload: ContentChangeEvent): void {
+function currentSubscriptionScope(): { key: string; projectId: string; replicaNodeId: string } {
+  const projectId = String(state.projectId ?? '').trim();
+  const replicaNodeId = String(state.replicaNodeId ?? '').trim();
+  return { key: `${projectId}\u0000${replicaNodeId}`, projectId, replicaNodeId };
+}
+
+function maybeResumeCodexRunWidget(payload: ContentChangeEvent, scope: { projectId: string; replicaNodeId: string }): void {
   const reason = String(payload.reason ?? '');
   const ledgerId = String(payload.ledgerId ?? '').trim();
   const pipelineRunId = String(payload.pipelineRunId ?? '').trim();
   if (reason.startsWith('pipeline-') && ledgerId && pipelineRunId) {
     resumeExternallyStartedPipelineRun({
+      projectId: scope.projectId,
+      replicaNodeId: scope.replicaNodeId,
       ledgerId,
       pipelineRunId,
       cardId: String(payload.outputCardId || payload.cardId || '').trim(),
@@ -58,50 +66,62 @@ function maybeResumeCodexRunWidget(payload: ContentChangeEvent): void {
   // WHAT: Require the complete run identity before starting polling.
   // WHY: Partial SSE payloads cannot safely target a widget.
   if (!ledgerId || !cardId || !runId) return;
-  resumeExternallyStartedCardSkillRun({ ledgerId, cardId, runId, executionId: String(payload.executionId ?? ''), status: payload.status as 'pending' | 'running' });
+  resumeExternallyStartedCardSkillRun({ projectId: scope.projectId, replicaNodeId: scope.replicaNodeId, ledgerId, cardId, runId, executionId: String(payload.executionId ?? ''), status: payload.status as 'pending' | 'running' });
 }
 
-function eventBelongsToActiveLedger(payload: ContentChangeEvent): boolean {
+function eventBelongsToActiveLedger(payload: ContentChangeEvent, scope: { key: string; projectId: string; replicaNodeId: string }): boolean {
   const ledgerId = String(payload.ledgerId ?? '').trim();
-  return Boolean(ledgerId && ledgerId === currentLedgerStateId());
+  const payloadProjectId = String(payload.projectId ?? '').trim();
+  const payloadReplicaNodeId = String(payload.replicaNodeId ?? '').trim();
+  const active = currentSubscriptionScope();
+  return Boolean(scope.key === active.key
+    && ledgerId
+    && ledgerId === currentLedgerStateId()
+    && (!payloadProjectId || payloadProjectId === scope.projectId)
+    && (!payloadReplicaNodeId || payloadReplicaNodeId === scope.replicaNodeId));
 }
 
 export function subscribeLedgerContentEvents(): void {
   // WHAT: Install at most one browser EventSource subscription.
   // WHY: Repeated boot paths must not multiply refresh work for each backend event.
-  if (subscribed || typeof EventSource === 'undefined') return;
-  subscribed = true;
+  if (typeof EventSource === 'undefined') return;
+  const scope = currentSubscriptionScope();
+  if (subscriptionScope === scope.key && state.ledgerContentEventSource) return;
+  state.ledgerContentEventSource?.close?.();
+  subscriptionScope = scope.key;
   installVoiceTranscriptionRecoveryListeners();
-  const events = new EventSource(projectReplicaRequestPath('/api/ledger-content-events', String(state.projectId ?? ''), String(state.replicaNodeId ?? '')));
-  events.addEventListener('open', () => reconcilePendingVoiceTranscriptions('event-source-open'));
+  const events = new EventSource(projectReplicaRequestPath('/api/ledger-content-events', scope.projectId, scope.replicaNodeId));
+  events.addEventListener('open', () => {
+    if (currentSubscriptionScope().key === scope.key) reconcilePendingVoiceTranscriptions('event-source-open');
+  });
   events.addEventListener('card-content-change', (event) => {
     const payload = contentEventPayload(event);
     // WHAT: Route thread content directly to the scoped slice refresh path.
     // WHY: Thread writes must not replace or rerender the active canvas ledger.
     if (payload.kind === 'thread-content') {
-      const scope: ThreadContentRefreshScope = {
-        projectId: String(state.projectId ?? ''),
-        replicaNodeId: String(state.replicaNodeId ?? ''),
+      const threadScope: ThreadContentRefreshScope = {
+        projectId: scope.projectId,
+        replicaNodeId: scope.replicaNodeId,
         ledgerId: String(payload.ledgerId ?? '').trim(),
         threadId: String(payload.threadId ?? '').trim(),
         contentFile: normalizeContentFileReference(payload.contentFile)
       };
       // WHAT: Reject thread events that no longer own the visible thread.
       // WHY: Route or thread changes can occur before a queued SSE callback runs.
-      if (!isActiveThreadContentScope(scope)) {
-        telemetry('thread-content-event-ignored', { reason: 'inactive-scope', ...scope });
+      if (!isActiveThreadContentScope(threadScope)) {
+        telemetry('thread-content-event-ignored', { reason: 'inactive-scope', ...threadScope });
         return;
       }
       if (payload.noteId && String(payload.reason ?? '').startsWith('voice-')) {
-        void reconcileVoiceTranscription({ projectId: scope.projectId, replicaNodeId: scope.replicaNodeId, ledgerId: scope.ledgerId, threadId: scope.threadId, noteId: payload.noteId });
+        void reconcileVoiceTranscription({ projectId: threadScope.projectId, replicaNodeId: threadScope.replicaNodeId, ledgerId: threadScope.ledgerId, threadId: threadScope.threadId, noteId: payload.noteId });
         return;
       }
-      requestThreadContentRefresh('thread-content-change', scope);
+      requestThreadContentRefresh('thread-content-change', threadScope);
       return;
     }
     // WHAT: Reject card events for inactive ledgers.
     // WHY: The active canvas must not fetch or resize from background-ledger changes.
-    if (!eventBelongsToActiveLedger(payload)) {
+    if (!eventBelongsToActiveLedger(payload, scope)) {
       telemetry('card-content-event-ignored', { reason: 'inactive-ledger', ledgerId: payload.ledgerId ?? '' });
       return;
     }
@@ -111,11 +131,11 @@ export function subscribeLedgerContentEvents(): void {
     const payload = contentEventPayload(event);
     // WHAT: Reject lifecycle and mutation events for inactive ledgers.
     // WHY: Background ledger activity must not alter the visible route or polling widgets.
-    if (!eventBelongsToActiveLedger(payload)) {
+    if (!eventBelongsToActiveLedger(payload, scope)) {
       telemetry('ledger-content-event-ignored', { reason: 'inactive-ledger', ledgerId: payload.ledgerId ?? '' });
       return;
     }
-    maybeResumeCodexRunWidget(payload);
+    maybeResumeCodexRunWidget(payload, scope);
     const reason = payload.reason || 'ledger-content-change';
     const resizeCardIds = reason === 'pipeline-completed'
       ? (payload.cardIds?.length ? payload.cardIds : [String(payload.cardId ?? '').trim()].filter(Boolean))

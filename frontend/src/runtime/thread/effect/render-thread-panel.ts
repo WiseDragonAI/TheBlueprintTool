@@ -2,7 +2,7 @@
  * WHAT: Renders the active thread as a two-row header above independent Thread and Codex Log panels.
  * WHY: Conversation controls, run diagnostics, focus, announcements, and scroll must keep separate ownership.
  */
-import { bindThreadCodexActiveRunLog, bindThreadCodexRunLog, unbindThreadCodexActiveRunLog } from '../../codex/effect/bind-thread-codex-run-log.js';
+import { bindThreadCodexActiveRunLog, bindThreadCodexRunLog, unbindThreadCodexActiveRunLog, unbindThreadCodexRunLog } from '../../codex/effect/bind-thread-codex-run-log.js';
 import { selectedCardCodexRunId } from '../../codex/helper/card-codex-run-id.js';
 import { codexEffortOptions, codexModelOptions } from '../../codex/helper/codex-run-options.js';
 import { cardCodexRunPreference, type CardCodexRunPreference } from '../../codex/helper/card-codex-run-preference.js';
@@ -222,6 +222,7 @@ function bindActiveThreadRun(threadId: string): void {
   const { cardId, card } = activeThreadCard(threadId);
   const selectedRunIds = recordState('threadSelectedRunIdByThreadId') as Record<string, string>;
   const ledgerId = String(state.activeTab ?? '').trim();
+  const requestScope = { projectId: String(state.projectId ?? ''), replicaNodeId: String(state.replicaNodeId ?? '') };
   const activeRunId = String(card?.codexActiveRunId ?? '');
   const activeExecutionId = String(card?.codexActiveExecutionId ?? '');
   const admittedRunIds = recordState('threadLastAdmittedRunIdByThreadId') as Record<string, string>;
@@ -236,6 +237,7 @@ function bindActiveThreadRun(threadId: string): void {
     delete admittedRunIds[threadId];
     delete recordState('threadActiveLeaseKeyByThreadId')[threadId];
     if (ledgerId && cardId && boundActiveRunId) unbindThreadCodexActiveRunLog({
+      ...requestScope,
       ledgerId,
       cardId,
       threadId,
@@ -245,6 +247,7 @@ function bindActiveThreadRun(threadId: string): void {
   const runId = card ? selectedCardCodexRunId(card, selectedRunIds[threadId]) : '';
   if (runId) selectedRunIds[threadId] = runId;
   if (ledgerId && cardId && runId) bindThreadCodexRunLog({
+    ...requestScope,
     ledgerId,
     cardId,
     threadId,
@@ -256,6 +259,7 @@ function bindActiveThreadRun(threadId: string): void {
     const forceRevalidate = leaseKeys[threadId] !== leaseKey;
     leaseKeys[threadId] = leaseKey;
     bindThreadCodexActiveRunLog({
+      ...requestScope,
       ledgerId,
       cardId,
       threadId,
@@ -264,6 +268,17 @@ function bindActiveThreadRun(threadId: string): void {
       forceRevalidate,
     });
   }
+}
+
+function unbindActiveThreadRuns(threadId: string): void {
+  const { cardId } = activeThreadCard(threadId);
+  const ledgerId = String(state.activeTab ?? '').trim();
+  const requestScope = { projectId: String(state.projectId ?? ''), replicaNodeId: String(state.replicaNodeId ?? '') };
+  if (!ledgerId || !cardId || !threadId) return;
+  const selectedRunId = String(recordState('threadRunIdByThreadId')[threadId] ?? '');
+  const activeRunId = String(recordState('threadActiveRunIdByThreadId')[threadId] ?? '');
+  if (selectedRunId) unbindThreadCodexRunLog({ ...requestScope, ledgerId, cardId, threadId, runId: selectedRunId });
+  if (activeRunId) unbindThreadCodexActiveRunLog({ ...requestScope, ledgerId, cardId, threadId, runId: activeRunId });
 }
 
 export function renderThreadPanel(): void {
@@ -297,7 +312,8 @@ export function renderThreadPanel(): void {
   telemetry('render-thread-panel', { threadId: activeThreadId, tab: activeTab });
   renderThreadNotes();
   void restorePendingVoiceUploads(activeThreadId);
-  bindActiveThreadRun(activeThreadId);
+  if (shouldOpenThread) bindActiveThreadRun(activeThreadId);
+  else unbindActiveThreadRuns(activeThreadId);
   renderThreadCodexLog();
   renderThreadJumpButton(Boolean(activeThreadId));
   state.renderedThreadId = activeThreadId;

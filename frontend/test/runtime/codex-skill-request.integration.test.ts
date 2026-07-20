@@ -18,7 +18,7 @@ import { requestCodexPipelineRun } from '../../src/runtime/codex/effect/request-
 import { requestCodexPipelineRunCancel, requestCodexPipelineRunRestart, requestCodexPipelineRunStatus } from '../../src/runtime/codex/effect/request-codex-pipeline-run-status.js';
 import { requestCodexSkillLibrarySave } from '../../src/runtime/codex/effect/request-codex-skill-library-save.js';
 import { requestCodexSkillFavoriteSave, requestCodexSkillMetadataSave } from '../../src/runtime/codex/effect/request-codex-skill-favorite-save.js';
-import { bindCardSkillRunLogConsumer, bindCardSkillRunWidget, pipelineLatestLabel, purgeCardSkillRunLog, resumeExternallyStartedCardSkillRun, unbindCardSkillRunLogConsumer } from '../../src/runtime/codex/effect/poll-card-skill-run.js';
+import { bindCardSkillRunLogConsumer, bindCardSkillRunWidget, bindPipelineStepRunWidget, pipelineLatestLabel, purgeCardSkillRunLog, resumeExternallyStartedCardSkillRun, unbindCardSkillRunLogConsumer } from '../../src/runtime/codex/effect/poll-card-skill-run.js';
 import type { CardSkillRunEvent, CardSkillRunStatus, CardSkillRunSummary } from '../../src/runtime/codex/effect/request-card-skill-run-status.js';
 import { cardCodexRunId, cardCodexThreadRunId } from '../../src/runtime/codex/helper/card-codex-run-id.js';
 import { groupSequentialToolCalls, mergeThreadRunEvents } from '../../src/runtime/codex/helper/thread-run-log.js';
@@ -57,6 +57,9 @@ function fakeCodexRunWidget(): HTMLElement & { nodes: Record<string, FakeNode> }
     '[data-codex-run-metadata]',
     '[data-codex-run-model]',
     '[data-codex-run-new-session]',
+    '[data-codex-run-context]',
+    '[data-codex-run-restart]',
+    '[data-codex-run-retry]',
     '[data-codex-run-source]',
     '[data-codex-run-status]',
     '[data-codex-run-timer]',
@@ -199,6 +202,7 @@ test('pipeline clients preserve ordered reusable definitions and lifecycle reque
       if (requestIndex === 6) {
         assert.equal(url, '/api/codex/pipelines/runs/run%2Fa/cancel');
         assert.equal(init?.method, 'POST');
+        assert.deepEqual(JSON.parse(String(init?.body)), { executionId: 'execution-a' });
         return new Response(JSON.stringify({ ok: true, status: 'cancelled', canCancel: false, canRestart: true, canContinue: false }), { status: 200 });
       }
       assert.equal(url, '/api/codex/pipelines/runs/run%2Fa/restart');
@@ -220,7 +224,7 @@ test('pipeline clients preserve ordered reusable definitions and lifecycle reque
     assert.equal(queued.statusCode, 202);
     assert.equal(queued.queuePosition, 3);
     assert.equal((await requestCodexPipelineRunStatus({ runId: 'run/a' })).canCancel, true);
-    assert.equal((await requestCodexPipelineRunCancel({ runId: 'run/a' })).status, 'cancelled');
+    assert.equal((await requestCodexPipelineRunCancel({ runId: 'run/a', executionId: 'execution-a' })).status, 'cancelled');
     assert.equal((await requestCodexPipelineRunRestart({ runId: 'run/a' })).ok, true);
     assert.equal(requestIndex, 7);
   } finally {
@@ -233,6 +237,91 @@ test('queued pipeline labels expose the one-based FIFO position', () => {
   const step = { name: 'Analysis' } as any;
   const skill = { skillName: 'analyze' } as any;
   assert.equal(pipelineLatestLabel(result, step, skill, 'pending'), 'Queued · position 2');
+});
+
+test('pipeline-card continuation preserves pending status and cancels the accepted execution', async () => {
+  const previousDocument = (globalThis as unknown as { document?: unknown }).document;
+  const previousFetch = globalThis.fetch;
+  const previousWindow = (globalThis as unknown as { window?: unknown }).window;
+  const widget = fakeCodexRunWidget();
+  const pipelineRunId = 'pipeline-widget-continuation';
+  const skillRunId = 'skill-widget-continuation';
+  let continuationStatusRequests = 0;
+  let cancellationBody: Record<string, unknown> | null = null;
+  const run = {
+    id: pipelineRunId,
+    pipelineId: 'pipeline-a',
+    pipelineName: 'Pipeline A',
+    temporary: false,
+    executionMode: 'local',
+    ledgerId: 'specs',
+    sourceCardId: 'source',
+    sourceCardTitle: 'Source',
+    status: 'complete',
+    createdAt: '2026-07-20T00:00:00.000Z',
+    updatedAt: '2026-07-20T00:01:00.000Z',
+    startedAt: '2026-07-20T00:00:00.000Z',
+    finishedAt: '2026-07-20T00:01:00.000Z',
+    resumedAt: null,
+    error: '',
+    steps: [{
+      id: 'pipeline-run-step',
+      stepId: 'step-a',
+      name: 'Analyze',
+      purpose: 'Analyze the source.',
+      outputCardId: 'output',
+      outputCard: { id: 'output', title: 'Output', contentAvailable: true, contentBytes: 20 },
+      status: 'complete',
+      startedAt: '2026-07-20T00:00:00.000Z',
+      finishedAt: '2026-07-20T00:01:00.000Z',
+      error: '',
+      skills: [{
+        id: 'pipeline-run-skill', pipelineSkillId: 'skill-a', skillName: 'analysis', runId: skillRunId,
+        executionId: 'execution-old', status: 'complete', codexModel: 'gpt-5.6-sol', codexEffort: 'medium',
+        stdoutFile: 'run.jsonl', stderrFile: 'run.log', startedAt: '2026-07-20T00:00:00.000Z',
+        finishedAt: '2026-07-20T00:01:00.000Z', error: '', stdoutAvailable: true, stderrAvailable: true,
+        logAvailable: true, lastLogWriteAt: '2026-07-20T00:01:00.000Z',
+      }],
+    }],
+  };
+  try {
+    (globalThis as unknown as { document: unknown }).document = { contains: () => true };
+    (globalThis as unknown as { window: unknown }).window = { __coreTelemetry: [], dispatchEvent() {} };
+    state.activeLedger = { cards: [{ id: 'output' }], annotations: [], relationships: [], notes: {} };
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      if (url === `/api/codex/pipelines/runs/${pipelineRunId}`) {
+        return new Response(JSON.stringify({ ok: true, run, activeStep: run.steps[0], activeSkill: run.steps[0].skills[0], canCancel: false, canRestart: true, canContinue: true }), { status: 200 });
+      }
+      if (url.endsWith(`/api/codex/skills/runs/${skillRunId}/continue`)) {
+        return new Response(JSON.stringify({ ok: true, status: 'pending', queuePosition: 2, run: { id: skillRunId, executionId: 'execution-new', status: 'pending' } }), { status: 202 });
+      }
+      if (url.includes(`/api/codex/skills/runs/${skillRunId}?`)) {
+        continuationStatusRequests += 1;
+        const status = cancellationBody ? 'cancelled' : 'pending';
+        return new Response(JSON.stringify({ ok: true, runId: skillRunId, status, executionId: 'execution-new', queuePosition: status === 'pending' ? 2 : null, lineCount: 0, nextSince: 0, events: [], diagnostics: [], executions: [], metadata: {} }), { status: 200 });
+      }
+      if (url.endsWith(`/api/codex/skills/runs/${skillRunId}/cancel`)) {
+        cancellationBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+        return new Response(JSON.stringify({ ok: true, status: 'cancelled' }), { status: 202 });
+      }
+      return new Response(JSON.stringify({ ok: false, error: `Unexpected request: ${url}` }), { status: 500 });
+    }) as typeof fetch;
+
+    bindPipelineStepRunWidget({ ledgerId: 'specs', cardId: 'output', runId: skillRunId, pipelineRunId, pipelineStepId: 'step-a', element: widget });
+    await waitFor(() => widget.nodes['[data-codex-run-latest]'].textContent === 'Pipeline complete');
+    widget.nodes['[data-codex-run-continue]'].onclick?.(new Event('click'));
+    await waitFor(() => continuationStatusRequests === 1 && widget.dataset.runStatus === 'pending');
+    assert.equal(widget.nodes['[data-codex-run-status]'].textContent, 'PENDING');
+    assert.equal(widget.nodes['[data-codex-run-cancel]'].textContent, 'CANCEL');
+    widget.nodes['[data-codex-run-cancel]'].onclick?.(new Event('click'));
+    await waitFor(() => cancellationBody !== null);
+    assert.deepEqual(cancellationBody, { ledgerId: 'specs', cardId: 'output', executionId: 'execution-new' });
+    await waitFor(() => widget.dataset.runStatus === 'cancelled');
+  } finally {
+    (globalThis as unknown as { document?: unknown }).document = previousDocument;
+    (globalThis as unknown as { window?: unknown }).window = previousWindow;
+    globalThis.fetch = previousFetch;
+  }
 });
 
 test('skill-library clients encode identity, exclude paths, and surface revision conflicts', async () => {
@@ -640,6 +729,7 @@ test('thread log consumer keeps captured project scope and unregisters before a 
   const requests: string[] = [];
   const input = {
     projectId: 'project-a',
+    replicaNodeId: 'phone',
     ledgerId: 'specs',
     cardId: 'card-project-scope',
     runId: 'codex-skill-6100-project-scope',
@@ -686,7 +776,7 @@ test('thread log consumer keeps captured project scope and unregisters before a 
 
     bindCardSkillRunLogConsumer({ ...input, onSummary() {} });
     await runNextTimer(0);
-    assert.equal(requests[0], `/p/project-a/api/codex/skills/runs/${input.runId}?ledgerId=specs&cardId=card-project-scope&since=0`);
+    assert.equal(requests[0], `/p/project-a/api/codex/skills/runs/${input.runId}?ledgerId=specs&cardId=card-project-scope&since=0&replica=phone`);
     assert.deepEqual([...timers.values()].map((timer) => timer.delay), [1000]);
 
     unbindCardSkillRunLogConsumer(input);
@@ -694,7 +784,7 @@ test('thread log consumer keeps captured project scope and unregisters before a 
 
     bindCardSkillRunLogConsumer({ ...input, onSummary() {} });
     await runNextTimer(0);
-    assert.equal(requests[1], `/p/project-a/api/codex/skills/runs/${input.runId}?ledgerId=specs&cardId=card-project-scope&since=0`);
+    assert.equal(requests[1], `/p/project-a/api/codex/skills/runs/${input.runId}?ledgerId=specs&cardId=card-project-scope&since=0&replica=phone`);
     unbindCardSkillRunLogConsumer(input);
     assert.equal(timers.size, 0);
   } finally {
@@ -912,9 +1002,11 @@ test('externally started Codex runs clear terminal widget cache and restart poll
       }
       if (init?.method === 'POST') return new Response('', { status: 204 });
       requests.push(url);
+      const continuedExecution = requests.length >= 3;
       return new Response(JSON.stringify({
         ok: true,
-        status: 'complete',
+        status: continuedExecution ? 'running' : 'complete',
+        executionId: continuedExecution ? 'execution-new' : 'execution-old',
         startedAt: '2026-07-08T00:00:00.000Z',
         elapsedMs: 1000,
         lineCount: requests.length === 1 ? 8 : 12,
@@ -925,7 +1017,7 @@ test('externally started Codex runs clear terminal widget cache and restart poll
         thinkingCount: 0,
         persistedEventCount: 1,
         metadata: { sourceCardTitle: 'Source Card', sourceThreadId: '', codexModel: 'gpt-5.5', codexEffort: 'xhigh' },
-        latestEvent: { title: 'Turn completed' },
+        latestEvent: { title: continuedExecution ? 'Turn started' : 'Turn completed' },
         events: []
       }), {
         status: 200,
@@ -957,16 +1049,20 @@ test('externally started Codex runs clear terminal widget cache and restart poll
     cachedWidget.nodes['[data-codex-run-messages]'].textContent = '2';
     cachedWidget.nodes['[data-codex-run-files]'].textContent = '1';
     cachedWidget.nodes['[data-codex-run-continue]'].onclick?.(new Event('click'));
-    assert.equal(cachedWidget.nodes['[data-codex-run-status]'].textContent, 'RUNNING');
-    assert.equal(cachedWidget.nodes['[data-codex-run-latest]'].textContent, 'Continuing session');
+    assert.equal(cachedWidget.nodes['[data-codex-run-status]'].textContent, 'PENDING');
+    assert.equal(cachedWidget.nodes['[data-codex-run-latest]'].textContent, 'Submitting continuation');
     assert.equal(cachedWidget.nodes['[data-codex-run-tools]'].textContent, '0');
     assert.equal(cachedWidget.nodes['[data-codex-run-messages]'].textContent, '0');
     assert.equal(cachedWidget.nodes['[data-codex-run-files]'].textContent, '0');
     await waitFor(() => continuationBodies.length === 1);
+    await waitFor(() => cachedWidget.nodes['[data-codex-run-status]'].textContent === 'RUNNING');
+    await waitFor(() => cachedWidget.nodes['[data-codex-run-latest]'].textContent === 'Turn started');
+    assert.equal(cachedWidget.nodes['[data-codex-run-latest]'].textContent, 'Turn started');
     assert.equal('newSession' in continuationBodies[0], false);
     assert.equal(continuationBodies[0].codexModel, 'gpt-5.6-sol');
     assert.equal(continuationBodies[0].codexEffort, 'medium');
   } finally {
+    purgeCardSkillRunLog({ ledgerId: 'specs', cardId: 'card-a', runId: 'codex-skill-3000-cache' });
     (globalThis as unknown as { document?: unknown }).document = previousDocument;
     (globalThis as unknown as { window?: unknown }).window = previousWindow;
     (globalThis as unknown as { CustomEvent?: unknown }).CustomEvent = previousCustomEvent;

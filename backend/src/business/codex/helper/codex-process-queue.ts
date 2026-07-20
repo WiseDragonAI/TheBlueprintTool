@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import type { CodexProcessQueuePayload } from '../../../../../shared/schemas/codex-execution-types.js';
 import { clearCardCodexExecutionForLedger } from './clear-card-codex-execution.js';
 
 type AnyRecord = Record<string, unknown>;
@@ -20,7 +21,7 @@ export type CodexProcessQueueItem = {
   processStartTime: string;
   stdoutFile: string;
   stderrFile: string;
-  payload: AnyRecord;
+  payload: CodexProcessQueuePayload;
 };
 
 export const codexProcessRestartInterruptionReason = 'Decision OS server restarted while this Codex process was running.';
@@ -46,7 +47,7 @@ function normalizeItem(value: unknown): CodexProcessQueueItem | null {
     processStartTime: String(item.processStartTime ?? ''),
     stdoutFile: String(item.stdoutFile ?? ''),
     stderrFile: String(item.stderrFile ?? ''),
-    payload: item.payload && typeof item.payload === 'object' ? item.payload as AnyRecord : {},
+    payload: item.payload && typeof item.payload === 'object' ? item.payload as CodexProcessQueuePayload : { ledgerId: '', cardId: '', runId: id, executionId: '' },
   };
 }
 
@@ -71,7 +72,7 @@ export function writeCodexProcessQueue(decisionOsRoot: string, items: readonly C
   }
 }
 
-export function enqueueCodexThreadProcess(input: { decisionOsRoot: string; id: string; createdAt: string; payload: AnyRecord }): CodexProcessQueueItem {
+export function enqueueCodexThreadProcess(input: { decisionOsRoot: string; id: string; createdAt: string; payload: CodexProcessQueuePayload }): CodexProcessQueueItem {
   const existing = findActiveLogicalQueueItem(input.decisionOsRoot, input.payload);
   if (existing) return existing;
   const item: CodexProcessQueueItem = { id: input.id, kind: 'thread', status: 'pending', createdAt: input.createdAt, startedAt: null, interruptedAt: null, interruptionReason: '', processId: 0, processStartTime: '', stdoutFile: '', stderrFile: '', payload: input.payload };
@@ -79,7 +80,7 @@ export function enqueueCodexThreadProcess(input: { decisionOsRoot: string; id: s
   return item;
 }
 
-export function enqueueCodexContinuation(input: { decisionOsRoot: string; id: string; createdAt: string; payload: AnyRecord }): CodexProcessQueueItem {
+export function enqueueCodexContinuation(input: { decisionOsRoot: string; id: string; createdAt: string; payload: CodexProcessQueuePayload }): CodexProcessQueueItem {
   const existing = findActiveLogicalQueueItem(input.decisionOsRoot, input.payload);
   if (existing) return existing;
   const item: CodexProcessQueueItem = { id: input.id, kind: 'continuation', status: 'pending', createdAt: input.createdAt, startedAt: null, interruptedAt: null, interruptionReason: '', processId: 0, processStartTime: '', stdoutFile: '', stderrFile: '', payload: input.payload };

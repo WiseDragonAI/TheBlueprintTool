@@ -9,6 +9,7 @@ import { stripHydratedThreadNotes } from '@backend/business/ledger/helper/thread
 import { cancelCardSkillRunController } from './cancel-card-skill-run-controller.js';
 import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
 import { resolveCardSkillRunFiles } from '../helper/resolve-card-skill-run-files.js';
+import { readCodexProcessQueue } from '../helper/codex-process-queue.js';
 
 type AnyRecord = Record<string, unknown>;
 type ArtifactSnapshot = { file: string; content: Buffer };
@@ -75,8 +76,15 @@ export async function deleteThreadCodexSessionController(input: { action_payload
   }
 
   const run = runtimeRuns(runtime)[runId];
-  if (run && String(run.status ?? '') === 'running') {
-    const cancelled = await cancelCardSkillRunController({ action_payload: { ledgerId, cardId, runId, executionId: String(run.executionId ?? card.codexActiveExecutionId ?? '') }, runtime_state: runtime });
+  const activeExecutionId = String(card.codexActiveRunId ?? '') === runId ? String(card.codexActiveExecutionId ?? '').trim() : '';
+  const queued = activeExecutionId ? readCodexProcessQueue(decisionOsRoot).find((item) => (
+    String(item.payload.ledgerId ?? '') === ledgerId
+    && String(item.payload.cardId ?? '') === cardId
+    && String(item.payload.runId ?? item.id) === runId
+    && String(item.payload.executionId ?? '') === activeExecutionId
+  )) : undefined;
+  if (activeExecutionId && (run?.status === 'pending' || run?.status === 'running' || queued)) {
+    const cancelled = await cancelCardSkillRunController({ action_payload: { ledgerId, cardId, runId, executionId: activeExecutionId }, runtime_state: runtime });
     if (cancelled.ok === false) return cancelled;
   }
   if (run && !String(run.settledAt ?? '').trim() && !await waitForSettlement(runtime, runId)) {

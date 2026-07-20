@@ -22,10 +22,12 @@ function noteCodexLine(note: AnyRecord): number {
 
 export function persistCardSkillRunEvents(input: {
   decisionOsRoot: string;
+  ledgerId?: string;
   ledgerPath: string;
   cardId: string;
   runId: string;
   events: NormalizedRunEvent[];
+  runtime?: AnyRecord;
 }): number {
   // WHAT: Reject persistence when the declared owning ledger no longer exists.
   // WHY: Falling back to a different ledger could leak lifecycle notes across scopes.
@@ -94,7 +96,7 @@ export function persistCardSkillRunEvents(input: {
   // WHY: Existing ownership leaves status ingestion scoped to the thread file alone.
   if (String(currentThreadFiles[threadId] ?? '') !== previousThreadFile) {
     stripHydratedThreadNotes(ledger);
-    persistLedgerProjection({ decisionOsRoot: input.decisionOsRoot, ledgerPath: input.ledgerPath, ledger });
+    persistLedgerProjection({ decisionOsRoot: input.decisionOsRoot, ledgerId: input.ledgerId, ledgerPath: input.ledgerPath, ledger, runtime: input.runtime });
   }
   return changed;
 }

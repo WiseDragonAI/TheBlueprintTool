@@ -1,3 +1,7 @@
+/**
+ * WHAT: Covers pipeline cancellation, restart, and server-recovery behavior through the HTTP lifecycle.
+ * WHY: Durable pipeline state must resume without duplicate work and cancel only its exact active execution.
+ */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
@@ -101,9 +105,12 @@ test('cancellation stops downstream work and restart clears generated card and t
     const started = await startResponse.json() as Record<string, any>;
     const runId = started.run.id as string;
     const outputCardId = started.run.steps[0].outputCardId as string;
+    const executionId = started.run.steps[0].skills[0].executionId as string;
     await waitFor(() => existsSync(invocations) && readFileSync(invocations, 'utf8').includes('slow:1') ? true : null, 'first slow invocation');
 
-    const cancelResponse = await fetch(`${baseUrl}/api/codex/pipelines/runs/${runId}/cancel`, { method: 'POST' });
+    const cancelResponse = await fetch(`${baseUrl}/api/codex/pipelines/runs/${runId}/cancel`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ executionId }),
+    });
     assert.equal(cancelResponse.status, 202);
     const cancelRequested = await cancelResponse.json() as { status: string; cancellationRequested: boolean };
     assert.equal(cancelRequested.status, 'running');

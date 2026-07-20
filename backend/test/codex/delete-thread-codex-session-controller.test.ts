@@ -13,6 +13,7 @@ import type { Server } from 'node:http';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
 import { deleteThreadCodexSessionController } from '@backend/business/codex/controller/delete-thread-codex-session-controller.js';
 import { readCardSkillRunController } from '@backend/business/codex/controller/read-card-skill-run-controller.js';
+import { enqueueCodexThreadProcess, readCodexProcessQueue } from '@backend/business/codex/helper/codex-process-queue.js';
 
 function fixture(): { workspace: string; decisionOsRoot: string; ledgerPath: string; runId: string; cardId: string; artifacts: string[] } {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-delete-thread-session-'));
@@ -119,6 +120,36 @@ test('active session deletion waits for settlement before removing owned artifac
     const result = await deleteThreadCodexSessionController({ action_payload: { ledgerId: 'specs', cardId: context.cardId, runId: context.runId }, runtime_state: runtime });
     assert.equal(result.ok, true);
     assert.equal(settledBeforeReturn, true);
+    assert.equal(context.artifacts.some(existsSync), false);
+    assert.equal(runtime.codexSkillRuns[context.runId], undefined);
+  } finally {
+    rmSync(context.workspace, { recursive: true, force: true });
+  }
+});
+
+test('pending session deletion cancels the queue lease without waiting for a child settlement', async () => {
+  const context = fixture();
+  const executionId = 'execution-delete-pending';
+  const ledger = JSON.parse(readFileSync(context.ledgerPath, 'utf8')) as { cards: Array<Record<string, unknown>> };
+  ledger.cards[0].codexActiveRunId = context.runId;
+  ledger.cards[0].codexActiveExecutionId = executionId;
+  writeFileSync(context.ledgerPath, JSON.stringify(ledger, null, 2));
+  enqueueCodexThreadProcess({
+    decisionOsRoot: context.decisionOsRoot,
+    id: context.runId,
+    createdAt: '2026-07-20T00:00:00.000Z',
+    payload: { ledgerId: 'specs', cardId: context.cardId, threadId: `thread-${context.cardId}`, runId: context.runId, executionId },
+  });
+  const runtime: Record<string, any> = {
+    decisionOsRoot: context.decisionOsRoot,
+    codexSkillRuns: { [context.runId]: { id: context.runId, executionId, ledgerId: 'specs', outputCardId: context.cardId, status: 'pending' } },
+  };
+  try {
+    const startedAt = Date.now();
+    const result = await deleteThreadCodexSessionController({ action_payload: { ledgerId: 'specs', cardId: context.cardId, runId: context.runId }, runtime_state: runtime });
+    assert.equal(result.ok, true);
+    assert.ok(Date.now() - startedAt < 1_000);
+    assert.deepEqual(readCodexProcessQueue(context.decisionOsRoot), []);
     assert.equal(context.artifacts.some(existsSync), false);
     assert.equal(runtime.codexSkillRuns[context.runId], undefined);
   } finally {
