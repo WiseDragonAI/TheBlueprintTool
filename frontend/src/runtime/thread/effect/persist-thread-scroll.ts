@@ -29,7 +29,7 @@ export function hydrateThreadViewportState(persisted: Record<string, unknown>): 
 }
 
 export function persistThreadViewportState(): void {
-  if (typeof localStorage === 'undefined') return;
+  if (typeof localStorage === 'undefined' || typeof localStorage.getItem !== 'function' || typeof localStorage.setItem !== 'function') return;
   const persisted = readPersistedState();
   localStorage.setItem('decision-os.canvas.state', JSON.stringify({
     ...persisted,
