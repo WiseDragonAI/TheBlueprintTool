@@ -65,7 +65,7 @@ export function federatedControlRoomProjection(input: {
       return { ...qualified, logicalProjectKey: logicalProjectKey(qualified) };
     });
     const projectByLocalId = new Map(projects.map((project) => [text(project.localProjectId), project]));
-    const qualifyTask = (value: unknown, fallbackStatus = ''): AnyRecord => {
+    const qualifyTask = (value: unknown): AnyRecord => {
       const task = value && typeof value === 'object' ? value as AnyRecord : {};
       const localProjectId = text(task.projectId);
       const project = projectByLocalId.get(localProjectId);
@@ -74,9 +74,6 @@ export function federatedControlRoomProjection(input: {
         : null;
       return {
         ...task,
-        status: task.status === 'task-active' ? 'task-execution' : task.status ?? fallbackStatus,
-        executionSince: task.executionSince ?? task.activeSince,
-        executionTime: task.executionTime ?? task.activeTime,
         projectId: localProjectId,
         localProjectId,
         logicalProjectKey: project?.logicalProjectKey ?? `node:${owner.nodeId}:${localProjectId}`,
@@ -87,16 +84,11 @@ export function federatedControlRoomProjection(input: {
         executionObservation,
       };
     };
-    const list = (key: string, legacyKey = ''): AnyRecord[] => {
-      const values = records(projection[key]);
-      const legacyValues = legacyKey ? records(projection[legacyKey]) : [];
-      const fallbackStatus = ({ queue: 'task-waiting', exec: 'task-execution', active: 'task-execution', backlog: 'task-backlog', done: 'task-complete' } as Record<string, string>)[key] ?? '';
-      return (values.length ? values : legacyValues).map((value) => qualifyTask(value, fallbackStatus));
-    };
+    const list = (key: string): AnyRecord[] => records(projection[key]).map((value) => qualifyTask(value));
     return {
       ...projection,
       queue: list('queue'),
-      exec: list('exec', 'active'),
+      exec: list('exec'),
       backlog: list('backlog'),
       done: list('done'),
       allTasks: list('allTasks'),
