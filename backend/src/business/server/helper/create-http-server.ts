@@ -67,7 +67,6 @@ import { createFederationContentScheduler } from '../../federation/helper/federa
 import { createProjectTaskState, type ProjectTaskState } from '../../task-state/helper/project-task-state.js';
 import { createTaskCurrentStateStore, type TaskCurrentStateStore } from '../../task-state/helper/task-current-state-store.js';
 import type { TaskProjectionCommand } from '../../task-state/helper/task-mutation-command.js';
-import { taskProjectionImportCommand } from '../../task-state/helper/task-projection-import-command.js';
 import {
   exportFederatedPipelineSnapshot,
   exportFederatedSkillManifest,
@@ -900,28 +899,28 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const publishLedgerContentChange = context.publishLedger;
     const localProject = activeProject ?? projectCatalog().find((project) => project.decisionOsRoot === decisionOsRoot);
     const persistLedgerAndRespond = async (ledgerId: string, ledgerPath: string, ledger: AnyRecord, activeResponse: ServerResponse, activeDecisionOsRoot = decisionOsRoot): Promise<void> => {
-      controlRoomProjectionStore?.invalidate(activeProject?.id ?? '');
+      // WHAT: Reject any task projection that reaches the generic document writer.
+      // WHY: Task state accepts declared entity commands only.
+      if (ledgerId === 'tasks') throw new Error('aggregate_task_state_commit_removed');
       stripHydratedThreadNotes(ledger);
       context.watcher.ignoreNext(ledgerPath);
-      const persistedLedger = ledgerId === 'tasks' && localProject
-        ? (await taskStateForProject(localProject).executeProjectionCommand(
-          taskProjectionImportCommand(taskStateForProject(localProject).projection().ledger, ledger),
-          ledger,
-        )).ledger
-        : (writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2)), ledger);
+      writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2));
+      const persistedLedger = ledger;
       context.watcher.refreshOwnership();
+      controlRoomProjectionStore?.invalidate(activeProject?.id ?? '');
       if (ledgerId !== 'tasks') federation?.publishContentChange();
       activeResponse.setHeader(ledgerRevisionHeader, String(ledgerRevisions.advance(ledgerId)));
       activeResponse.end(JSON.stringify(hydrateLedgerCardContent(persistedLedger, activeDecisionOsRoot)));
     };
     const persistLedgerMutationAndRespond = async (ledgerId: string, ledgerPath: string, beforeLedger: AnyRecord, ledger: AnyRecord, mutation: LedgerMutation, activeResponse: ServerResponse): Promise<void> => {
-      controlRoomProjectionStore?.invalidate(activeProject?.id ?? '');
       stripHydratedThreadNotes(ledger);
       context.watcher.ignoreNext(ledgerPath);
-      const persistedLedger = ledgerId === 'tasks' && localProject
-        ? (await taskStateForProject(localProject).executeMutation(mutation, beforeLedger, ledger)).ledger
-        : (writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2)), ledger);
+      const taskCommit = ledgerId === 'tasks' && localProject
+        ? await taskStateForProject(localProject).executeMutation(mutation, beforeLedger, ledger)
+        : null;
+      const persistedLedger = taskCommit?.ledger ?? (writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2)), ledger);
       context.watcher.refreshOwnership();
+      if (!taskCommit || taskCommit.changed) controlRoomProjectionStore?.invalidate(activeProject?.id ?? '');
       if (ledgerId !== 'tasks') federation?.publishContentChange();
       const revision = ledgerRevisions.advance(ledgerId);
       const cardId = String(mutation.cardPatch?.id ?? mutation.card?.id ?? mutation.cardId ?? mutation.masterTaskId ?? '');
@@ -1011,21 +1010,43 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.end(JSON.stringify({ ok: true, projectId, ledger: taskStateForProject(project).projection().ledger }));
       return;
     }
-    if (!projectScope && url === '/api/task-state/commit' && request.method === 'POST') {
+    if (!projectScope && url === '/api/task-state/transition-card-lifecycle' && request.method === 'POST') {
+      // WHAT: Accept one CLI lifecycle transition against the current local projection.
+      // WHY: The CLI must never round-trip the aggregate Tasks document.
       const body = JSON.parse((await readRequestBuffer(request)).toString('utf8') || '{}') as AnyRecord;
       const project = projects.find((entry) => entry.id === String(body.projectId ?? '') && entry.available);
-      if (!project || !body.ledger || typeof body.ledger !== 'object' || Array.isArray(body.ledger)) {
+      const cardId = String(body.cardId ?? '');
+      const lifecycleStatus = String(body.lifecycleStatus ?? '');
+      if (!project || !cardId || (lifecycleStatus !== 'todo' && lifecycleStatus !== 'done')) {
         response.statusCode = 400;
         response.setHeader('content-type', 'application/json');
-        response.end(JSON.stringify({ ok: false, error: 'A local project and task projection are required.' }));
+        response.end(JSON.stringify({ ok: false, error: 'A local project, card, and todo or done lifecycle are required.' }));
         return;
       }
       const state = taskStateForProject(project);
-      const importedLedger = body.ledger as AnyRecord;
-      const committed = await state.executeProjectionCommand(taskProjectionImportCommand(state.projection().ledger, importedLedger), importedLedger);
-      controlRoomProjectionStore?.invalidate(project.id);
+      let committed: Awaited<ReturnType<typeof state.transitionCardLifecycle>>;
+      try {
+        committed = await state.transitionCardLifecycle(cardId, lifecycleStatus);
+      } catch (error) {
+        if (error instanceof Error && error.message === `task_card_not_found:${cardId}`) {
+          response.statusCode = 404;
+          response.setHeader('content-type', 'application/json');
+          response.end(JSON.stringify({ ok: false, error: 'Card not found.', cardId }));
+          return;
+        }
+        throw error;
+      }
+      if (committed.changed) controlRoomProjectionStore?.invalidate(project.id);
       response.setHeader('content-type', 'application/json');
-      response.end(JSON.stringify({ ok: true, changedBatchCount: committed.deltas.length }));
+      response.end(JSON.stringify({ ok: true, cardId, lifecycleStatus, changedBatchCount: Number(committed.changed) }));
+      return;
+    }
+    if (!projectScope && url === '/api/task-state/commit' && request.method === 'POST') {
+      // WHAT: Fail legacy aggregate task writers explicitly.
+      // WHY: A stripped projection can otherwise convert omitted sidecar notes into tombstones.
+      response.statusCode = 410;
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ ok: false, error: 'aggregate_task_state_commit_removed' }));
       return;
     }
     if (!projectScope && url === '/api/federation/replication-status' && request.method === 'GET') {
@@ -2125,14 +2146,16 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           return;
         }
         const beforeLedger = structuredClone(ledger);
-        if (mutation.action === 'patch-card' && mutation.cardPatch?.status === 'backlog' && mutation.cardPatch.id) {
-          const card = Array.isArray(ledger.cards) ? ledger.cards.find((entry) => String(entry.id ?? '') === String(mutation.cardPatch?.id)) : null;
+        if (mutation.action === 'transition-card-lifecycle' && mutation.lifecycleStatus === 'backlog' && mutation.cardId) {
+          // WHAT: Preserve the existing active-run admission gate for the scoped lifecycle command.
+          // WHY: A queued or running task cannot be parked without reconciling its execution intent.
+          const card = Array.isArray(ledger.cards) ? ledger.cards.find((entry) => String(entry.id ?? '') === String(mutation.cardId)) : null;
           const pipelineRunId = String(card?.codexQueuedPipelineRunId ?? '');
           const skillRunId = String(card?.codexActiveRunId ?? card?.codexThreadRunId ?? card?.codexRunId ?? '');
           const lifecycle = pipelineRunId
             ? readCompactPipelineRunStatusController({ runId: pipelineRunId, runtime: requestRuntime })
             : skillRunId
-              ? readCompactSkillRunStatusController({ runId: skillRunId, ledgerId: tabId, cardId: String(mutation.cardPatch.id), runtime: requestRuntime })
+              ? readCompactSkillRunStatusController({ runId: skillRunId, ledgerId: tabId, cardId: String(mutation.cardId), runtime: requestRuntime })
               : null;
           if (lifecycle && (lifecycle.status === 'pending' || lifecycle.status === 'processing' || lifecycle.status === 'running' || lifecycle.status === 'in_progress')) {
             response.statusCode = 409;

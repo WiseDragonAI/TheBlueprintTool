@@ -243,7 +243,7 @@ test('parks and restores master tasks through the shared card status mutation', 
   assert.match(mobile, /delayButton\.textContent = backlog \? 'Restore to queue' : 'Move to backlog'/);
   assert.doesNotMatch(mobile, /Park task|Parking task/);
   assert.match(mobile, /const nextStatus = backlog \? 'todo' : 'backlog'/);
-  assert.match(mobile, /ledgerMutation\(state\.activeLedgerId, \{ action: 'patch-card', cardPatch: \{ id: card\.id, status: nextStatus \} \}\)/);
+  assert.match(mobile, /ledgerMutation\(state\.activeLedgerId, \{ action: 'transition-card-lifecycle', cardId: card\.id, lifecycleStatus: nextStatus \}\)/);
   assert.match(mobile, /controlRoomPath\(nextStatus === 'backlog' \? 'backlog' : 'queue'\)/);
   assert.match(mobile, /backlog: 'No backlog tasks'/);
 });
@@ -323,7 +323,7 @@ test('persists optimistic Queue and Backlog placement and reconciles rejected ch
   const persistence = mobile.slice(mobile.indexOf('async function persistControlTaskPlacement'), mobile.indexOf('async function activateMasterTask'));
   assert.match(persistence, /state\.controlRoom\[sourceTab\] = source\.filter/);
   assert.match(persistence, /target\.splice\(insertionIndex, 0, task\)/);
-  assert.match(persistence, /cardPatch: \{ id: task\.cardId, status: targetTab === 'backlog' \? 'backlog' : 'todo' \}/);
+  assert.match(persistence, /cardId: task\.cardId,[\s\S]*lifecycleStatus: targetTab === 'backlog' \? 'backlog' : 'todo'/);
   assert.match(persistence, /if \(targetTab === 'queue'\) target\.sort\(compareControlRoomQueueTasks\)/);
   assert.match(persistence, /catch \(error\)[\s\S]*await loadControlRoom\(\{ force: true \}\)[\s\S]*renderControlRoom\(\)/);
   assert.match(mobile, /dataset\.controlColumnList !== 'exec'/);

@@ -52,3 +52,30 @@ test('projection commands modify only declared entity lanes', async (context) =>
   assert.equal(cards.find((card) => card.id === 'a')?.status, 'done');
   assert.equal(cards.find((card) => card.id === 'b')?.status, 'todo');
 });
+
+test('lifecycle command changes one atomic card lane without note tombstones', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-lifecycle-'));
+  context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
+  const ledgerPath = resolve(root, 'tasks.json');
+  writeFileSync(ledgerPath, JSON.stringify({
+    cards: [{ id: 'a', title: 'A', status: 'todo' }, { id: 'b', title: 'B', status: 'todo' }],
+    annotations: [], relationships: [], notes: { 'thread-a': [{ id: 'note-a', message: 'Keep me' }] },
+  }));
+  const state = createProjectTaskState({ projectId: 'project-a', writerId: 'desktop', decisionOsRoot: root, tasksLedgerFile: ledgerPath, initialize: true });
+  const beforeA = state.store.entity('card', 'a');
+  const beforeB = state.store.entity('card', 'b');
+  const beforeNote = state.store.entity('thread-note', 'thread-a/note-a');
+
+  const result = await state.transitionCardLifecycle('a', 'done');
+
+  assert.equal(result.deltas.length, 1);
+  assert.deepEqual(result.deltas[0].entities.map((entity) => [entity.entityType, entity.entityId]), [['card', 'a']]);
+  assert.notEqual(state.store.entity('card', 'a')?.stateHash, beforeA?.stateHash);
+  assert.equal(state.store.entity('card', 'b')?.stateHash, beforeB?.stateHash);
+  assert.equal(state.store.entity('thread-note', 'thread-a/note-a')?.stateHash, beforeNote?.stateHash);
+  const lifecycle = state.store.entity('card', 'a')?.fields.lifecycle?.candidates[0]?.value as Record<string, unknown>;
+  assert.equal(lifecycle.status, 'done');
+  assert.equal(lifecycle.waitingAt, null);
+  assert.equal(lifecycle.closedAt, lifecycle.changedAt);
+  assert.match(String(lifecycle.changedAt), /^\d{4}-\d{2}-\d{2}T/);
+});

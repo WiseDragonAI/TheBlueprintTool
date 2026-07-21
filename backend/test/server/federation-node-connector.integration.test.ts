@@ -311,9 +311,13 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     const eventReader = events.body!.getReader();
     await eventReader.read();
     const directMutation = await fetch(`${baseB}/p/${encodeURIComponent(catalogB.projects.find((project) => project.name === 'beta')!.id)}/decision-os/tasks`, {
-      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'beta-card', title: 'changed on owner', status: 'backlog' } }),
+      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'beta-card', title: 'changed on owner' } }),
     });
     assert.equal(directMutation.status, 200);
+    const lifecycleMutation = await fetch(`${baseB}/p/${encodeURIComponent(catalogB.projects.find((project) => project.name === 'beta')!.id)}/decision-os/tasks`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'transition-card-lifecycle', cardId: 'beta-card', lifecycleStatus: 'backlog' }),
+    });
+    assert.equal(lifecycleMutation.status, 200);
     const localBetaId = catalogB.projects.find((project) => project.name === 'beta')!.id;
     const locallyAuthoritative = await fetch(`${baseB}/p/${encodeURIComponent(localBetaId)}/decision-os/state?replica=node-a`, {
       headers: { 'x-decision-os-replica-node': 'node-a' },

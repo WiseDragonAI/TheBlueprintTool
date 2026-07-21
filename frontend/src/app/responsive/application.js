@@ -1767,8 +1767,9 @@ async function persistControlTaskPlacement({ taskId, sourceTab, targetTab, newIn
   renderControlRoom();
   try {
     await ledgerMutation(task.ledgerId, {
-      action: 'patch-card',
-      cardPatch: { id: task.cardId, status: targetTab === 'backlog' ? 'backlog' : 'todo' }
+      action: 'transition-card-lifecycle',
+      cardId: task.cardId,
+      lifecycleStatus: targetTab === 'backlog' ? 'backlog' : 'todo'
     }, task.projectId, task.ownerNodeId);
   } catch (error) {
     await loadControlRoom({ force: true });
@@ -2259,7 +2260,7 @@ function renderCard(card) {
       delayButton.disabled = true;
       delayButton.textContent = backlog ? 'Restoring task…' : 'Moving to backlog…';
       try {
-        state.ledger = await ledgerMutation(state.activeLedgerId, { action: 'patch-card', cardPatch: { id: card.id, status: nextStatus } });
+        state.ledger = await ledgerMutation(state.activeLedgerId, { action: 'transition-card-lifecycle', cardId: card.id, lifecycleStatus: nextStatus });
         navigate(controlRoomPath(nextStatus === 'backlog' ? 'backlog' : 'queue'), true);
       } catch (cause) {
         delayButton.disabled = false;

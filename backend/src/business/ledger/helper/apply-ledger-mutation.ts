@@ -15,6 +15,7 @@ export type LedgerMutation = {
   card?: Record<string, unknown>;
   cards?: Array<Record<string, unknown>>;
   cardId?: string;
+  lifecycleStatus?: 'todo' | 'backlog' | 'done';
   masterTaskId?: string;
   imageSrc?: string;
   cardPatch?: { id?: string; status?: string; title?: string; description?: string; imageSizes?: Record<string, { width?: number; height?: number }>; questionnaires?: CardQuestionnaires; gitReviewNotes?: GitReviewNote[]; codexRunModel?: CodexModel; codexRunEffort?: CodexEffort };
@@ -160,10 +161,23 @@ export function applyLedgerMutation(input: {
     const id = String(mutation.relationship.id);
     ledger.relationships = (ledger.relationships ?? []).filter((entry) => String(entry.id ?? '') !== id).concat(mutation.relationship);
   }
+  if (mutation.action === 'transition-card-lifecycle') {
+    // WHAT: Apply the compatibility status for the one declared card.
+    // WHY: The task-state authority converts this command into one atomic lifecycle register.
+    const cardId = String(mutation.cardId ?? '');
+    const status = mutation.lifecycleStatus;
+    const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
+    if (!cardId || !['todo', 'backlog', 'done'].includes(String(status ?? ''))) {
+      mutationError = { statusCode: 400, body: { ok: false, error: 'Card lifecycle transition requires a card and todo, backlog, or done.' } };
+    } else if (!card) {
+      mutationError = { statusCode: 404, body: { ok: false, error: 'Card not found.', cardId } };
+    } else {
+      card.status = status;
+    }
+  }
   if (mutation.action === 'patch-card' && mutation.cardPatch?.id) {
     const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === mutation.cardPatch?.id);
     const includesStatus = mutation.cardPatch.status !== undefined;
-    const validStatus = mutation.cardPatch.status === 'todo' || mutation.cardPatch.status === 'done' || mutation.cardPatch.status === 'backlog';
     const includesCodexPreference = mutation.cardPatch.codexRunModel !== undefined || mutation.cardPatch.codexRunEffort !== undefined;
     const includesQuestionnaires = mutation.cardPatch.questionnaires !== undefined;
     const includesGitReviewNotes = mutation.cardPatch.gitReviewNotes !== undefined;
@@ -195,14 +209,15 @@ export function applyLedgerMutation(input: {
         body: { ok: false, error: 'Changing a questionnaire context revision requires clearing its prior answers and voice notes.' },
       };
     }
-    if (!mutationError && includesStatus && !validStatus) {
+    if (!mutationError && includesStatus) {
+      // WHAT: Reject lifecycle data hidden inside a generic card patch.
+      // WHY: Every lifecycle caller must pass through the conflict-safe scoped command.
       mutationError = {
         statusCode: 400,
-        body: { ok: false, error: 'Card status must be todo, backlog, or done.' },
+        body: { ok: false, error: 'Card lifecycle must use transition-card-lifecycle.' },
       };
     }
     if (!mutationError) {
-      if (card && validStatus) card.status = mutation.cardPatch.status;
       if (card && typeof mutation.cardPatch.title === 'string') card.title = mutation.cardPatch.title;
       if (card && typeof mutation.cardPatch.description === 'string') {
         writeCardDescriptionFile({ decisionOsRoot, card, description: mutation.cardPatch.description, ledgerPath });

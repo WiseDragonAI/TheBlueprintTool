@@ -172,6 +172,10 @@ export function taskCommandForMutation(input: { mutation: LedgerMutation; before
   } else if (action === 'create-relationship' && mutation.relationship?.id) {
     const id = String(mutation.relationship.id);
     changes.push(...entity('relationship', id, null, recordById(after, 'relationships', id)));
+  } else if (action === 'transition-card-lifecycle' && mutation.cardId) {
+    const id = String(mutation.cardId);
+    activationTaskId = id;
+    changes.push(...entity('card', id, recordById(before, 'cards', id), recordById(after, 'cards', id)));
   } else if (action === 'patch-card' && mutation.cardPatch?.id) {
     const id = String(mutation.cardPatch.id);
     activationTaskId = id;

@@ -141,7 +141,11 @@ test('specs and data ledger tabs commit canvas mutations through the server ledg
       }
       if (body.action === 'patch-card') {
         const card = serverLedger.cards.find((entry: Record<string, unknown>) => entry.id === body.cardPatch.id) as Record<string, unknown>;
-        if (body.cardPatch.status) card.status = body.cardPatch.status;
+        if (body.cardPatch.title) card.title = body.cardPatch.title;
+      }
+      if (body.action === 'transition-card-lifecycle') {
+        const card = serverLedger.cards.find((entry: Record<string, unknown>) => entry.id === body.cardId) as Record<string, unknown>;
+        card.status = body.lifecycleStatus;
       }
       if (body.action === 'append-note') {
         const deletedIds = serverLedger.deletedNoteIds?.[body.note.threadId] ?? [];
@@ -218,7 +222,7 @@ test('specs and data ledger tabs commit canvas mutations through the server ledg
     assert.equal(state.activeLedger.annotations[0].label, 'Renamed');
     assert.equal(state.activeLedger.annotations[0].color, '#ffcc00');
 
-    await commitActiveLedgerMutation({ action: 'patch-card', cardPatch: { id: `${activeTab}-card`, status: 'done' } });
+    await commitActiveLedgerMutation({ action: 'transition-card-lifecycle', cardId: `${activeTab}-card`, lifecycleStatus: 'done' });
     assert.equal((state.activeLedger.cards[0] as Record<string, unknown>).status, 'done');
 
     await commitActiveLedgerMutation({ action: 'append-note', note: { threadId: `thread-${activeTab}-card`, body: 'Server note' } });
@@ -545,7 +549,7 @@ test('non-geometry mutation responses keep newer local canvas geometry', async (
 
   (globalThis as any).fetch = async (_url: string, init: RequestInit) => {
     const body = JSON.parse(String(init.body ?? '{}'));
-    assert.equal(body.action, 'patch-card');
+    assert.equal(body.action, 'transition-card-lifecycle');
     return {
       ok: true,
       async json() {
@@ -558,7 +562,7 @@ test('non-geometry mutation responses keep newer local canvas geometry', async (
     };
   };
 
-  const committed = await commitActiveLedgerMutation({ action: 'patch-card', cardPatch: { id: 'card-a', status: 'done' } });
+  const committed = await commitActiveLedgerMutation({ action: 'transition-card-lifecycle', cardId: 'card-a', lifecycleStatus: 'done' });
 
   assert.equal(committed, true);
   assert.deepEqual(state.activeLedger.cards[0], { id: 'card-a', title: 'Server', status: 'done', x: 700, y: 800, w: 360, h: 210 });

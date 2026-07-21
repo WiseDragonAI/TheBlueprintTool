@@ -51,6 +51,13 @@ export function createProjectTaskState(input: {
     return result.delta;
   };
 
+  const entityHash = (change: TaskEntityChange): string => {
+    // WHAT: Read the state hash for exactly the lanes owned by one command change.
+    // WHY: Held local entities change authority state without appearing in a replication delta.
+    if (change.entityType !== 'ledger') return store.entity(change.entityType, change.entityId)?.stateHash ?? '';
+    return change.changes.map((field) => store.entity('ledger', `${change.entityId}:${field.path}`)?.stateHash ?? '').join('\u0000');
+  };
+
   const activateTask = async (taskId: string): Promise<TaskStateDelta> => {
     if (!taskId) return { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
     const card = Array.isArray(store.projection().ledger.cards)
@@ -74,9 +81,11 @@ export function createProjectTaskState(input: {
     return mergeDeltas(input.projectId, [contentDelta, await activateTask(taskId)]);
   };
 
-  const executeMutationNow = async (mutation: LedgerMutation, before: AnyRecord, after: AnyRecord): Promise<{ deltas: TaskStateDelta[]; ledger: AnyRecord }> => {
+  const executeMutationNow = async (mutation: LedgerMutation, before: AnyRecord, after: AnyRecord): Promise<{ changed: boolean; deltas: TaskStateDelta[]; ledger: AnyRecord }> => {
     const command = taskCommandForMutation({ mutation, before, after });
+    const priorHashes = command.changes.map(entityHash);
     const delta = await persistChanges(command.changes, { activationTaskId: command.activationTaskId, replication: command.replication });
+    const changed = command.changes.some((change, index) => entityHash(change) !== priorHashes[index]);
     const deltas = delta.entities.length > 0 ? [delta] : [];
     if (['append-note', 'update-note', 'delete-note', 'delete-card-image'].includes(command.kind)) {
       const body = String(mutation.note?.body ?? '');
@@ -87,22 +96,40 @@ export function createProjectTaskState(input: {
         : [String(mutation.note?.voiceFileRef ?? ''), ...taskContentReferences(body)];
       deltas.push(await recordContentContribution(command.activationTaskId, resourceIds));
     }
-    return { deltas, ledger: store.projection().ledger };
+    return { changed, deltas, ledger: store.projection().ledger };
   };
 
-  const executeMutation = (mutation: LedgerMutation, before: AnyRecord, after: AnyRecord): Promise<{ deltas: TaskStateDelta[]; ledger: AnyRecord }> => {
+  const executeMutation = (mutation: LedgerMutation, before: AnyRecord, after: AnyRecord): Promise<{ changed: boolean; deltas: TaskStateDelta[]; ledger: AnyRecord }> => {
     const operation = commandQueue.then(() => executeMutationNow(mutation, before, after));
     commandQueue = operation.then(() => undefined, () => undefined);
     return operation;
   };
 
-  const executeProjectionCommandNow = async (command: TaskProjectionCommand, ledger: AnyRecord, emittedAt = new Date().toISOString()): Promise<{ deltas: TaskStateDelta[]; ledger: AnyRecord }> => {
-    const changes = taskCommandForProjection({ command, before: store.projection().ledger, after: ledger });
-    const delta = await persistChanges(changes, { emittedAt });
-    return { deltas: delta.entities.length > 0 ? [delta] : [], ledger: store.projection().ledger };
+  const transitionCardLifecycle = (taskId: string, status: 'todo' | 'backlog' | 'done'): Promise<{ changed: boolean; deltas: TaskStateDelta[]; ledger: AnyRecord }> => {
+    // WHAT: Serialize one lifecycle transition against the latest authoritative projection.
+    // WHY: CLI callers do not carry a trusted whole-ledger before/after document.
+    const operation = commandQueue.then(async () => {
+      const before = structuredClone(store.projection().ledger);
+      const after = structuredClone(before);
+      const card = Array.isArray(after.cards)
+        ? (after.cards as AnyRecord[]).find((entry) => String(entry.id ?? '') === taskId)
+        : null;
+      if (!card) throw new Error(`task_card_not_found:${taskId}`);
+      card.status = status;
+      return executeMutationNow({ action: 'transition-card-lifecycle', cardId: taskId, lifecycleStatus: status }, before, after);
+    });
+    commandQueue = operation.then(() => undefined, () => undefined);
+    return operation;
   };
 
-  const executeProjectionCommand = (command: TaskProjectionCommand, ledger: AnyRecord, emittedAt = new Date().toISOString()): Promise<{ deltas: TaskStateDelta[]; ledger: AnyRecord }> => {
+  const executeProjectionCommandNow = async (command: TaskProjectionCommand, ledger: AnyRecord, emittedAt = new Date().toISOString()): Promise<{ changed: boolean; deltas: TaskStateDelta[]; ledger: AnyRecord }> => {
+    const changes = taskCommandForProjection({ command, before: store.projection().ledger, after: ledger });
+    const priorHashes = changes.map(entityHash);
+    const delta = await persistChanges(changes, { emittedAt });
+    return { changed: changes.some((change, index) => entityHash(change) !== priorHashes[index]), deltas: delta.entities.length > 0 ? [delta] : [], ledger: store.projection().ledger };
+  };
+
+  const executeProjectionCommand = (command: TaskProjectionCommand, ledger: AnyRecord, emittedAt = new Date().toISOString()): Promise<{ changed: boolean; deltas: TaskStateDelta[]; ledger: AnyRecord }> => {
     const operation = commandQueue.then(() => executeProjectionCommandNow(command, ledger, emittedAt));
     commandQueue = operation.then(() => undefined, () => undefined);
     return operation;
@@ -131,6 +158,7 @@ export function createProjectTaskState(input: {
     store,
     executeMutation,
     executeMutationNow,
+    transitionCardLifecycle,
     executeProjectionCommand,
     executeProjectionCommandNow,
     activateTask,
