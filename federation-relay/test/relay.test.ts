@@ -99,6 +99,39 @@ function largeCurrentEntity(projectId: string, entityId: string, marker: string)
 }
 
 describe('federation relay', () => {
+  it('resets one offline project state without deleting federation credentials', async () => {
+    const federationId = `reset-${crypto.randomUUID()}`;
+    const credential = await createNode(federationId, 'workstation');
+    const writer = await connect(federationId, 'workstation', credential);
+    writer.send(JSON.stringify(manifest('Workstation')));
+    const entity = currentEntity('shared', 'card-before-reset', 'todo');
+    const acknowledged = nextFrame(writer, (frame) => frame.type === 'state-relay-ack');
+    writer.send(JSON.stringify(stateBatch('shared', entity)));
+    await acknowledged;
+
+    const onlineReset = await SELF.fetch(`https://relay.test/admin/federations/${federationId}/projects/shared/reset-state`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer test-admin-secret' },
+    });
+    expect(onlineReset.status).toBe(409);
+    await expect(onlineReset.json()).resolves.toMatchObject({ ok: false, error: 'project_nodes_online', nodes: ['workstation'] });
+
+    writer.close(1000, 'cutover');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const reset = await SELF.fetch(`https://relay.test/admin/federations/${federationId}/projects/shared/reset-state`, {
+      method: 'POST',
+      headers: { authorization: 'Bearer test-admin-secret' },
+    });
+    expect(reset.status).toBe(200);
+    await expect(reset.json()).resolves.toMatchObject({ ok: true, projectId: 'shared', entitiesDeleted: 1, bucketsDeleted: 1 });
+
+    const reconnected = await connect(federationId, 'workstation', credential);
+    const empty = nextFrame(reconnected, (frame) => frame.type === 'state-bucket-summary' && frame.projectId === 'shared');
+    reconnected.send(JSON.stringify(manifest('Workstation')));
+    await expect(empty).resolves.toMatchObject({ payload: { buckets: [] } });
+    reconnected.close(1000, 'test_complete');
+  });
+
   it('replaces a same-node socket without failing the new handshake', async () => {
     const federationId = `replacement-${crypto.randomUUID()}`;
     const credential = await createNode(federationId, 'workstation');

@@ -73,11 +73,13 @@ async function sameSecret(left: string, right: string): Promise<boolean> {
   return different === 0;
 }
 
-function routeParts(url: URL): { federationId: string; nodeId?: string } | null {
+function routeParts(url: URL): { federationId: string; nodeId?: string; projectId?: string; action?: 'reset-state' } | null {
   const connect = url.pathname.match(/^\/connect\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)$/);
   if (connect) return { federationId: connect[1], nodeId: connect[2] };
   const admin = url.pathname.match(/^\/admin\/federations\/([a-zA-Z0-9_-]+)\/nodes\/([a-zA-Z0-9_-]+)$/);
-  return admin ? { federationId: admin[1], nodeId: admin[2] } : null;
+  if (admin) return { federationId: admin[1], nodeId: admin[2] };
+  const reset = url.pathname.match(/^\/admin\/federations\/([a-zA-Z0-9_-]+)\/projects\/([a-zA-Z0-9_-]+)\/reset-state$/);
+  return reset ? { federationId: reset[1], projectId: reset[2], action: 'reset-state' } : null;
 }
 
 export default {
@@ -92,8 +94,10 @@ export default {
       if (!env.ADMIN_SECRET) return json({ ok: false, error: 'relay_not_configured' }, 503);
       const supplied = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ?? '';
       if (!(await sameSecret(supplied, env.ADMIN_SECRET))) return json({ ok: false, error: 'federation_authentication' }, 401);
-      if (request.method !== 'POST' || !route.nodeId) return json({ ok: false, error: 'method_not_allowed' }, 405);
-      return stub.fetch(new Request(`https://relay.internal/admin/nodes/${route.nodeId}`, request));
+      if (request.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405);
+      if (route.action === 'reset-state' && route.projectId) return stub.fetch(new Request(`https://relay.internal/admin/projects/${route.projectId}/reset-state`, request));
+      if (route.nodeId) return stub.fetch(new Request(`https://relay.internal/admin/nodes/${route.nodeId}`, request));
+      return json({ ok: false, error: 'not_found' }, 404);
     }
 
     if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket' || !route.nodeId) {
@@ -158,6 +162,17 @@ export class FederationRelay extends DurableObject<Env> {
 
   private async stateRoot(projectId: string): Promise<string> {
     return hashTaskCurrentRoot(await this.stateBuckets(projectId));
+  }
+
+  private async deleteStatePrefix(prefix: string): Promise<number> {
+    let deleted = 0;
+    while (true) {
+      const page = await this.ctx.storage.list({ prefix, limit: 128 });
+      const keys = [...page.keys()];
+      if (keys.length === 0) return deleted;
+      await this.ctx.storage.delete(keys);
+      deleted += keys.length;
+    }
   }
 
   private async sendStateSummary(socket: WebSocket, projectId: string): Promise<void> {
@@ -247,6 +262,20 @@ export class FederationRelay extends DurableObject<Env> {
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    const reset = url.pathname.match(/^\/admin\/projects\/([a-zA-Z0-9_-]+)\/reset-state$/);
+    if (reset && request.method === 'POST') {
+      const projectId = reset[1];
+      const connected = this.activeSockets().flatMap((socket) => {
+        const nodeId = (socket.deserializeAttachment() as SocketIdentity | null)?.nodeId ?? '';
+        return nodeId && this.participatesInProject(nodeId, projectId) ? [nodeId] : [];
+      });
+      if (connected.length > 0) return json({ ok: false, error: 'project_nodes_online', nodes: connected.sort() }, 409);
+      const entitiesDeleted = await this.deleteStatePrefix(stateEntityPrefix(projectId));
+      const bucketsDeleted = await this.deleteStatePrefix(stateBucketPrefix(projectId));
+      const resetAt = new Date().toISOString();
+      await this.ctx.storage.put(`state:v3:reset:${encodeURIComponent(projectId)}:${resetAt}`, { projectId, resetAt, entitiesDeleted, bucketsDeleted });
+      return json({ ok: true, projectId, entitiesDeleted, bucketsDeleted, root: hashTaskCurrentRoot([]), resetAt });
+    }
     const admin = url.pathname.match(/^\/admin\/nodes\/([a-zA-Z0-9_-]+)$/);
     if (admin && request.method === 'POST') {
       const credential = crypto.randomUUID().replaceAll('-', '') + crypto.randomUUID().replaceAll('-', '');
