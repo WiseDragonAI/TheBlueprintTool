@@ -10,7 +10,7 @@
 
 ## B. Current Population
 
-1. No loose analysis file has been promoted as a canonical postmortem in this initial KB pass.
+1. [Epoch-3 workstation and phone production cutover](./epoch-3-production-cutover-2026-07-21.md) records the offline migration, restart failures, recovery, convergence evidence, and remaining deployment evidence from `2026-07-21`.
 2. Existing root-cause and reassessment files remain migration sources until their claims are reconciled with current code and Specs.
 
 ---

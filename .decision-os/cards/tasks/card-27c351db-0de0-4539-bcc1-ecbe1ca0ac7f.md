@@ -1,9 +1,6 @@
-#master-task #task-complete
+#master-task
 
 Ledger: Specs
-Waiting since: 2026-07-13T18:32:46.691Z
-Active since: 2026-07-13T18:58:42.340Z
-Completed at: 2026-07-14T07:39:48.577Z
 
 ## A. Scope
 
@@ -54,8 +51,3 @@ Completed at: 2026-07-14T07:39:48.577Z
 3. **Live gate:** The merged server code is not active until the operator authorizes the Termux service restart.
 
 ---
-
-## F. Subtasks
-
-1. [Diagnose Pink catalog disappearance](card:card-9f93844a-47c7-4892-9208-638fef4a5ed2) — Status: complete
-2. [Decouple server catalog scope and restore Pink](card:card-18496a6d-ffac-47d7-a92d-ac3c58592662) — Status: complete

@@ -41,15 +41,3 @@
 3. Retire the hydrated task-snapshot endpoint, cache, invalidation poller, and replica store; use `.decision-os/tasks.json` for task state and migrate misplaced `task graphs` once while preserving the independent `specification ledger`.
 
 ---
-
-## F. Subtasks
-
-1. [Define chronological field-event semantics](card:card-5ceeedcd-3f65-482e-8901-31ce664a7d9d)
-2. [Build the event log, snapshots, and projection](card:card-d0edb909-0b5a-4327-b9d0-fd68e3e04d90)
-3. [Route task mutations through event authority](card:card-9c74f4da-db2a-4988-adc8-bc3166b0b0d1)
-4. [Extend the Cloudflare relay for event replication](card:card-33342b59-aa84-4a59-a7f1-af439ac994a1)
-5. [Replace hydrated replicas with an asynchronous content lane](card:card-d387d03e-f829-445c-b144-abb7659bcd6e)
-6. [Decouple event durability from Git](card:card-6efae974-597c-4deb-a97b-89017f85df80)
-7. [Migrate misplaced task graphs once](card:card-3ce4451c-256e-4380-8d61-aab4d4294e74)
-8. [Verify convergence and failure recovery](card:card-d9b41fe5-6d3f-446e-a482-5881f1d480f5)
-9. [Complete report: real-time field-event replication](card:card-a66f17b1-3cb2-468a-8f15-88a1bc7e0f2d)

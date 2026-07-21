@@ -1,5 +1,3 @@
-Completed at: 2026-07-18T06:08:20.106Z
-
 ## A. Corrected result
 
 1. Accepted responsive Process card launches now enter the existing `navigateVoiceSubmission()` → `navigate()` lifecycle.
@@ -26,8 +24,3 @@ Completed at: 2026-07-18T06:08:20.106Z
 5. A passing test for a different runtime surface is not evidence for the operator-facing control.
 
 ---
-
-## D. Subtasks
-
-1. [Trace direct skill and Shift+X navigation flows](card:card-67f41d8b-0da9-4b8b-9ab1-dc22b8f9362e)
-2. [Navigate successful direct skill launches to Exec](card:card-a4cbb933-2fd2-4907-ae67-4ae603a69fe7)

@@ -1,5 +1,3 @@
-Completed at: 2026-07-17T15:14:11.788Z
-
 ## A. Contradicted-success root cause
 
 1. **The sorter was not the failure.** The served global endpoint `GET /api/codex/server-skills` returned zero favorites, while the project endpoint used by Process Card returned `implementation-orchestrator`, `retrospect-and-close-task`, and `task-dependency` as favorites.
@@ -26,9 +24,3 @@ Completed at: 2026-07-17T15:14:11.788Z
 4. **State:** implemented; automated checks pass; target-surface hard-reload interaction not yet verified. The master task remains open.
 
 ---
-
-## D. Subtasks
-
-1. [Expose safe skill reference documents](card:card-1b671e37-0181-4ecd-a77e-6bbc96d50291)
-2. [Render skill Markdown and related reference cards](card:card-7ad9d723-2e29-4006-9018-1cb24b20eb7c)
-3. [Verify Skills Library ordering and detail behavior](card:card-c3123d02-6d2e-4cbb-8de3-7dc697ebb81e)

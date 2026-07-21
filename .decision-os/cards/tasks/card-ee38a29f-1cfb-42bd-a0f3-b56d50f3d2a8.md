@@ -1,10 +1,7 @@
-#master-task #task-complete
+#master-task
 
 Ledger: Specs
-Waiting since: 2026-07-12T12:43:37.442Z
 Queue rank: 1
-Active since: 2026-07-13T05:45:59.156Z
-Completed at: 2026-07-13T06:00:34.970Z
 
 ## A. Specs Summary
 
@@ -45,14 +42,3 @@ Completed at: 2026-07-13T06:00:34.970Z
 6. **Project naming.** Each project displays the basename of its project directory while retaining its nested CWD path for project resolution.
 
 ---
-
-## D. Subtasks
-
-1. [Map current workspace and server resolution](card:card-ba280bee) — Status: complete
-2. [Specify project discovery and identity](card:card-a4db686f) — Status: complete
-3. [Specify project registry and color settings](card:card-3144fd86) — Status: complete
-4. [Implement multi-project server access](card:card-8ac5b051) — Status: complete
-5. [Add the project hierarchy to Control Room](card:card-ad51d385) — Status: complete
-6. [Implement project and ledger task filters](card:card-bebbeee1) — Status: complete
-7. [Add project configuration to the burger menu](card:card-3f3f5d05) — Status: complete
-8. [Verify and document the Termux master workflow](card:card-ba20da2c) — Status: complete
