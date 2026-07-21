@@ -54,6 +54,9 @@ export function encodeTaskDomainLanes(input: { entityType: TaskEntityType; recor
     const intent = executionIntent(input.record.executionIntent);
     if (intent) lanes.set('executionIntent', intent);
   }
-  if (input.entityType === 'relationship' && input.record.label === 'subtask' && !lanes.has('position')) lanes.set('position', input.relationshipPosition ?? 0);
+  if (input.entityType === 'relationship' && input.record.label === 'subtask' && !lanes.has('position')) {
+    if (input.relationshipPosition === undefined) throw new Error('missing_subtask_position');
+    lanes.set('position', input.relationshipPosition);
+  }
   return lanes;
 }

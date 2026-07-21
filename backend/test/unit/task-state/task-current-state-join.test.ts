@@ -44,6 +44,7 @@ test('concurrent same-field values remain bounded until an observed edit resolve
   await Promise.all([a.value.merge(right.delta), b.value.merge(left.delta)]);
   assert.equal(a.value.projection().conflicts.length, 1);
   assert.equal(b.value.projection().conflicts.length, 1);
+  assert.equal(a.value.projection().conflicts[0].kind, 'task-conflict');
   const resolution = await a.value.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'shared', changes: [{ path: 'lifecycle', operation: 'set', value: lifecycle('backlog', '2026-07-21T01:00:00.000Z') }] }] });
   await b.value.merge(resolution.delta);
   assert.equal(a.value.projection().conflicts.length, 0);

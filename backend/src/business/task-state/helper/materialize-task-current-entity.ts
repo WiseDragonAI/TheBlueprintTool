@@ -80,6 +80,7 @@ export function materializeTaskCurrentEntity(projection: TaskCurrentProjection, 
     if (path !== '$entity' && candidate) applyCandidate(materialized, path, candidate);
     if (candidates.length > 1) {
       projection.conflicts.push({
+        kind: entity.entityType === 'card' && path === 'lifecycle' ? 'task-conflict' : 'state-conflict',
         emittedAt: '',
         entityType: entity.entityType,
         entityId: entity.entityId,
@@ -124,7 +125,11 @@ export function materializeTaskCurrentEntity(projection: TaskCurrentProjection, 
     const collection = Array.isArray(projection.ledger[collectionName]) ? projection.ledger[collectionName] as AnyRecord[] : [];
     const retained = collection.filter((entry) => String(entry.id ?? '') !== entity.entityId);
     if (entityTombstone?.operation !== 'tombstone') retained.push(materialized);
-    projection.ledger[collectionName] = retained;
+    projection.ledger[collectionName] = retained.sort((left, right) => (
+      entity.entityType === 'relationship'
+        ? Number(left.position ?? Number.MAX_SAFE_INTEGER) - Number(right.position ?? Number.MAX_SAFE_INTEGER)
+        : 0
+    ) || String(left.id ?? '').localeCompare(String(right.id ?? '')));
   }
   projection.conflicts.sort((left, right) => `${left.entityType}\u0000${left.entityId}\u0000${left.path}`.localeCompare(`${right.entityType}\u0000${right.entityId}\u0000${right.path}`));
 }

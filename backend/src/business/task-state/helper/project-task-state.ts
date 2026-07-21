@@ -58,6 +58,15 @@ export function createProjectTaskState(input: {
     return change.changes.map((field) => store.entity('ledger', `${change.entityId}:${field.path}`)?.stateHash ?? '').join('\u0000');
   };
 
+  const lifecycleConflict = (taskId: string): boolean => store.projection().conflicts.some((conflict) => (
+    conflict.kind === 'task-conflict' && conflict.entityType === 'card' && conflict.entityId === taskId && conflict.path === 'lifecycle'
+  ));
+
+  const assertLifecycleConflictFree = (taskIds: string[]): void => {
+    const conflicted = [...new Set(taskIds)].filter(lifecycleConflict).sort();
+    if (conflicted.length > 0) throw new Error(`task_lifecycle_conflict:${conflicted.join(',')}`);
+  };
+
   const activateTask = async (taskId: string): Promise<TaskStateDelta> => {
     if (!taskId) return { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
     const card = Array.isArray(store.projection().ledger.cards)
@@ -82,6 +91,14 @@ export function createProjectTaskState(input: {
   };
 
   const executeMutationNow = async (mutation: LedgerMutation, before: AnyRecord, after: AnyRecord): Promise<{ changed: boolean; deltas: TaskStateDelta[]; ledger: AnyRecord }> => {
+    if (mutation.action === 'complete-master-task' && mutation.masterTaskId) {
+      const masterTaskId = String(mutation.masterTaskId);
+      const subtaskIds = Array.isArray(before.relationships) ? (before.relationships as AnyRecord[])
+        .filter((relationship) => String(relationship.from ?? '') === masterTaskId && relationship.label === 'subtask')
+        .map((relationship) => String(relationship.to ?? '')) : [];
+      assertLifecycleConflictFree([masterTaskId, ...subtaskIds]);
+    }
+    if (mutation.action === 'create-execution-intent' && mutation.cardId) assertLifecycleConflictFree([String(mutation.cardId)]);
     const command = taskCommandForMutation({ mutation, before, after });
     const priorHashes = command.changes.map(entityHash);
     const delta = await persistChanges(command.changes, { activationTaskId: command.activationTaskId, replication: command.replication });
@@ -135,23 +152,28 @@ export function createProjectTaskState(input: {
     return operation;
   };
 
-  const transitionExecutionIntent = async (taskId: string, patch: { id?: string; state: 'waiting' | 'queued' | 'running' | 'terminal' | 'failed'; launchMode?: 'run' | 'pipeline'; error?: string }): Promise<TaskStateDelta> => {
-    const card = Array.isArray(store.projection().ledger.cards)
-      ? (store.projection().ledger.cards as AnyRecord[]).find((entry) => String(entry.id ?? '') === taskId)
-      : null;
-    if (!card) return { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
-    const current = card.executionIntent && typeof card.executionIntent === 'object' ? card.executionIntent as AnyRecord : {};
-    if (patch.id && current.id && String(current.id) !== patch.id && ['waiting', 'queued', 'running'].includes(String(current.state ?? ''))) return { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
-    const changedAt = new Date().toISOString();
-    const state = patch.state;
-    return persistChanges([{ entityType: 'card', entityId: taskId, changes: [{ path: 'executionIntent', operation: 'set', value: {
-      id: patch.id ?? current.id ?? null,
-      state,
-      changedAt,
-      startedAt: state === 'running' ? current.startedAt ?? changedAt : current.startedAt ?? null,
-      settledAt: state === 'terminal' || state === 'failed' ? changedAt : null,
-      error: patch.error ?? null,
-    } }] }]);
+  const transitionExecutionIntent = (taskId: string, patch: { id?: string; state: 'waiting' | 'queued' | 'running' | 'terminal' | 'failed'; launchMode?: 'run' | 'pipeline'; error?: string }): Promise<TaskStateDelta> => {
+    const operation = commandQueue.then(async () => {
+      assertLifecycleConflictFree([taskId]);
+      const card = Array.isArray(store.projection().ledger.cards)
+        ? (store.projection().ledger.cards as AnyRecord[]).find((entry) => String(entry.id ?? '') === taskId)
+        : null;
+      if (!card) return { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
+      const current = card.executionIntent && typeof card.executionIntent === 'object' ? card.executionIntent as AnyRecord : {};
+      if (patch.id && current.id && String(current.id) !== patch.id && ['waiting', 'queued', 'running'].includes(String(current.state ?? ''))) return { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
+      const changedAt = new Date().toISOString();
+      const state = patch.state;
+      return persistChanges([{ entityType: 'card', entityId: taskId, changes: [{ path: 'executionIntent', operation: 'set', value: {
+        id: patch.id ?? current.id ?? null,
+        state,
+        changedAt,
+        startedAt: state === 'running' ? current.startedAt ?? changedAt : current.startedAt ?? null,
+        settledAt: state === 'terminal' || state === 'failed' ? changedAt : null,
+        error: patch.error ?? null,
+      } }] }]);
+    });
+    commandQueue = operation.then(() => undefined, () => undefined);
+    return operation;
   };
 
   return {

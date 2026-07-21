@@ -54,6 +54,7 @@ export type TaskStateDelta = {
 };
 
 export type TaskProjectionConflict = {
+  kind: 'state-conflict' | 'task-conflict';
   emittedAt: string;
   entityType: TaskEntityType;
   entityId: string;

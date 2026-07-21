@@ -38,7 +38,7 @@ test('master-task creation persists the complete graph and returns absolute Mark
       annotation: { id: 'zone-master', x: 0, y: 0, width: 1200, height: 900, color: '#123456', label: 'Context metrics', comments: [] },
       card: master,
       cards: [subtask],
-      relationships: [{ id: 'rel-subtask', from: 'card-master', to: 'card-subtask', label: 'subtask' }],
+      relationships: [{ id: 'rel-subtask', from: 'card-master', to: 'card-subtask', label: 'subtask', position: 0 }],
     }),
   });
   assert.equal(response.status, 200);

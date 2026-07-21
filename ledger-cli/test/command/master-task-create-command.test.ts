@@ -56,12 +56,17 @@ test('master-task-create sends one Tasks mutation and prints every Markdown path
     assert.deepEqual(mutation.annotation, { id: (mutation.annotation as { id: string }).id, x: 10, y: 1040, width: 1200, height: 900, color: '#123456', label: 'Context metrics', comments: [] });
     assert.deepEqual((mutation.card as { labels: string[] }).labels, ['master-task']);
     assert.deepEqual((mutation.cards as Array<{ title: string; labels: string[] }>).map((card) => [card.title, card.labels]), [
-      ['Collect metrics', ['subtask']],
-      ['Render metrics', ['subtask']],
+      ['Collect metrics', []],
+      ['Render metrics', []],
     ]);
     assert.equal((mutation.relationships as unknown[]).length, 2);
-    assert.match((mutation.card as { comment: { what: string } }).comment.what, /Ledger: Tasks/);
-    assert.match((mutation.card as { comment: { what: string } }).comment.what, /\[Collect metrics\]\(card:card-/);
+    assert.deepEqual((mutation.relationships as Array<{ position: number }>).map((relationship) => relationship.position), [0, 1]);
+    assert.equal((mutation.card as { comment: { what: string } }).comment.what, '');
+    assert.equal(typeof (mutation.card as { createdAt: string }).createdAt, 'string');
+    assert.deepEqual((mutation.cards as Array<{ createdAt: string }>).map((card) => card.createdAt), [
+      (mutation.card as { createdAt: string }).createdAt,
+      (mutation.card as { createdAt: string }).createdAt,
+    ]);
     assert.equal(messages.join('\n').split('\n').length, 3);
     assert.match(messages[0], /^master-task\tcard-.*\t\/workspace\/\.decision-os\/cards\/tasks\/card-.*\.md/);
   } finally {

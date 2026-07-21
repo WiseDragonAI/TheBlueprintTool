@@ -42,7 +42,8 @@ test('admits one deterministic synchronization-labeled master task', async () =>
     assert.equal(ledger.cards.length, 1);
     assert.deepEqual(ledger.cards[0].labels, ['master-task', 'synchronization']);
     assert.equal(ledger.cards[0].status, 'todo');
-    assert.match(readFileSync(join(decisionOsRoot, 'cards', 'tasks', `${first.masterCardId}.md`), 'utf8'), /Waiting since: 2026-07-18T06:00:00.000Z/);
+    assert.equal(ledger.cards[0].createdAt, input.waitingSince);
+    assert.doesNotMatch(readFileSync(join(decisionOsRoot, 'cards', 'tasks', `${first.masterCardId}.md`), 'utf8'), /Waiting since:/);
     assert.equal(ledger.annotations.length, 1);
     assert.equal(ledger.annotations[0].color, '#d94f70');
     assert.equal(first.ledgerId, 'tasks');

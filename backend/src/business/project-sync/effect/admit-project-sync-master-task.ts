@@ -44,6 +44,7 @@ export async function admitProjectSyncMasterTask(input: {
       id: masterCardId,
       title: `Synchronize ${input.sourceProjectName}`,
       status: 'todo',
+      createdAt: input.waitingSince,
       cardType: 'note',
       labels: ['master-task', 'synchronization'],
       x: x + 60,
@@ -52,8 +53,6 @@ export async function admitProjectSyncMasterTask(input: {
       h: 300,
       comment: {
         what: [
-          `Waiting since: ${input.waitingSince}`,
-          '',
           '## A. Synchronization',
           '',
           `1. **Sync ID:** \`${input.syncId}\`.`,

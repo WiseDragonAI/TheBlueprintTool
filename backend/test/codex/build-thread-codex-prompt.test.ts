@@ -24,7 +24,7 @@ test('thread Codex prompt uses a direct scoped contract without triggering open-
   assert.doesNotMatch(prompt.developerInstructions, /session-context/);
   assert.match(prompt.developerInstructions, /master-task-apply/);
   assert.match(prompt.developerInstructions, /master-task-progress --plan-stdin --json/);
-  assert.match(prompt.developerInstructions, /JSON status and `subtask` relationships are authoritative/);
+  assert.match(prompt.developerInstructions, /replicated lifecycle and positioned `subtask` relationships are authoritative/);
   assert.match(prompt.developerInstructions, /living strategic summary for a CTO/);
   assert.match(prompt.developerInstructions, /never as a run log, implementation inventory, or verification report/);
   assert.match(prompt.developerInstructions, /replace the complete body with the current strategic state/);
@@ -36,10 +36,9 @@ test('thread Codex prompt uses a direct scoped contract without triggering open-
   assert.match(prompt.developerInstructions, /Wrap every exact supporting mechanism, system state, dependency, route, command, field, or literal in `backticks`/);
   assert.match(prompt.developerInstructions, /`Exec`, `failed`, `task-execution`, and `project-sync`/);
   assert.match(prompt.developerInstructions, /never expose raw UUIDs, run IDs, card IDs, thread IDs, relationship IDs, hashes, encoded project IDs, or timestamps/);
-  assert.match(prompt.developerInstructions, /only exception is the hidden target inside canonical links/);
   assert.match(prompt.developerInstructions, /Omit test counts, routine verification results, file inventories, commits, pushes, process narration, and implementation chronology/);
   assert.match(prompt.developerInstructions, /global context and objective; verified current state; strategic constraints and choices; current decision or blocker/);
-  assert.match(prompt.developerInstructions, /canonical relationship-backed links under the final letter-prefixed `Subtasks` section/);
+  assert.match(prompt.developerInstructions, /Keep relationship membership and lifecycle state out of Markdown/);
   assert.match(prompt.developerInstructions, /Master-task rendered-output gate/);
   assert.match(prompt.developerInstructions, /inspect the complete rendered summary/);
   assert.match(prompt.developerInstructions, /Do not submit a partially compliant summary/);

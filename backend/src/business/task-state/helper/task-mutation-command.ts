@@ -47,6 +47,7 @@ function cardChangesBetween(before: AnyRecord | null, after: AnyRecord | null, t
   if (!after) return [{ path: '$entity', operation: 'tombstone' }];
   const left = before ? encodeTaskDomainLanes({ entityType: 'card', record: before, before, transitionAt }) : new Map<string, unknown>();
   const right = encodeTaskDomainLanes({ entityType: 'card', record: after, before, transitionAt });
+  if (before && canonicalJson(left.get('createdAt')) !== canonicalJson(right.get('createdAt'))) throw new Error('immutable_card_created_at');
   return [...new Set([...left.keys(), ...right.keys()])].sort().flatMap((path): TaskFieldChange[] => {
     if (!right.has(path)) return [{ path, operation: 'remove' }];
     if (!left.has(path) || canonicalJson(left.get(path)) !== canonicalJson(right.get(path))) return [{ path, operation: 'set', value: right.get(path) }];
@@ -185,6 +186,7 @@ export function taskCommandForMutation(input: { mutation: LedgerMutation; before
     activationTaskId = rootId;
     const childIds = records(before.relationships)
       .filter((relationship) => String(relationship.from ?? '') === rootId && String(relationship.label ?? '') === 'subtask')
+      .sort((left, right) => Number(left.position) - Number(right.position) || String(left.id ?? '').localeCompare(String(right.id ?? '')))
       .map((relationship) => String(relationship.to ?? ''));
     for (const id of [rootId, ...childIds]) changes.push(...entity('card', id, recordById(before, 'cards', id), recordById(after, 'cards', id)));
   } else if (action === 'delete-card' && mutation.cardId) {

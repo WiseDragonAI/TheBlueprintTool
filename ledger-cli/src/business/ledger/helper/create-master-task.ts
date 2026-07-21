@@ -43,29 +43,29 @@ export async function createMasterTask(input: { projectId?: string; title?: stri
 
     const zone = { id: id('zone'), ...nextZone(projection.ledger), color: String(project.color ?? '#38d9e8'), label: title, comments: [] };
     const masterId = id('card');
+    const timestamp = new Date().toISOString();
     const createdSubtasks = subtasks.map((subtaskTitle, index) => {
       const cardId = id('card');
       const column = index % 2;
       const row = Math.floor(index / 2);
       return {
-        card: { id: cardId, title: subtaskTitle, cardType: 'note', domainId: 'tasks', status: 'todo', labels: ['subtask'], x: zone.x + 450 + column * 350, y: zone.y + 60 + row * 220, w: 310, h: 180, comment: { what: '', contentFile: cardFile(cardId) }, facts: [], fields: [] },
-        relationship: { id: id('rel'), from: masterId, to: cardId, label: 'subtask' },
+        card: { id: cardId, title: subtaskTitle, cardType: 'note', domainId: 'tasks', status: 'todo', createdAt: timestamp, labels: [], x: zone.x + 450 + column * 350, y: zone.y + 60 + row * 220, w: 310, h: 180, comment: { what: '', contentFile: cardFile(cardId) }, facts: [], fields: [] },
+        relationship: { id: id('rel'), from: masterId, to: cardId, label: 'subtask', position: index },
       };
     });
-    const links = createdSubtasks.map((entry, index) => `${index + 1}. [${entry.card.title}](card:${entry.card.id})`).join('\n');
-    const timestamp = new Date().toISOString();
     const master = {
       id: masterId,
       title,
       cardType: 'note',
       domainId: 'tasks',
       status: 'todo',
+      createdAt: timestamp,
       labels: ['master-task'],
       x: zone.x + 60,
       y: zone.y + 60,
       w: 360,
       h: 240,
-      comment: { what: `Ledger: Tasks\nWaiting since: ${timestamp}\n\n## Subtasks\n\n${links}${links ? '\n' : ''}`, contentFile: cardFile(masterId) },
+      comment: { what: '', contentFile: cardFile(masterId) },
       facts: [],
       fields: [],
     };

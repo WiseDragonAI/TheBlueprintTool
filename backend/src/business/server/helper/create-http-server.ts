@@ -635,8 +635,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   Object.defineProperty(runtime, 'federationNodeConnector', { value: federation, configurable: true, enumerable: false });
   controlRoomProjectionStore = createControlRoomProjectionStore({
     cacheFile: resolve(masterDecisionOsRoot, 'cache', 'control-room-v3.json'),
-    runtimeForRoot: (root) => projectContexts.get(root)?.runtime ?? {},
-    taskProjectionForProject: (project) => taskStateForProject(project).projection().ledger,
+    taskProjectionForProject: (project) => taskStateForProject(project).projection(),
   });
   // WHAT: Build the first projection during startup, then let project watchers maintain it.
   // WHY: Control Room requests must read a ready snapshot instead of traversing every registered project.
@@ -851,6 +850,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           projection: controlRoomProjectionFromTaskLedger({
             project: { ...project, id: project.localProjectId, originFingerprint: remoteProjectIdentity.get(`${project.ownerNodeId}\0${project.localProjectId}`) ?? project.originFingerprint },
             ledger: store.projection().ledger,
+            conflicts: store.projection().conflicts,
           }),
           owner: { nodeId: project.ownerNodeId, nodeLabel: project.ownerNodeLabel, remote: true, online: project.online },
         }];
@@ -915,9 +915,19 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const persistLedgerMutationAndRespond = async (ledgerId: string, ledgerPath: string, beforeLedger: AnyRecord, ledger: AnyRecord, mutation: LedgerMutation, activeResponse: ServerResponse): Promise<void> => {
       stripHydratedThreadNotes(ledger);
       context.watcher.ignoreNext(ledgerPath);
-      const taskCommit = ledgerId === 'tasks' && localProject
-        ? await taskStateForProject(localProject).executeMutation(mutation, beforeLedger, ledger)
-        : null;
+      let taskCommit: Awaited<ReturnType<ProjectTaskState['executeMutation']>> | null = null;
+      try {
+        taskCommit = ledgerId === 'tasks' && localProject
+          ? await taskStateForProject(localProject).executeMutation(mutation, beforeLedger, ledger)
+          : null;
+      } catch (error) {
+        if (error instanceof Error && error.message.startsWith('task_lifecycle_conflict:')) {
+          activeResponse.statusCode = 409;
+          activeResponse.end(JSON.stringify({ ok: false, error: 'task-conflict', cardIds: error.message.slice('task_lifecycle_conflict:'.length).split(',').filter(Boolean) }));
+          return;
+        }
+        throw error;
+      }
       const persistedLedger = taskCommit?.ledger ?? (writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2)), ledger);
       context.watcher.refreshOwnership();
       if (!taskCommit || taskCommit.changed) controlRoomProjectionStore?.invalidate(activeProject?.id ?? '');

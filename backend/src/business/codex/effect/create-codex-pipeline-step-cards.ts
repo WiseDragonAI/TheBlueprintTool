@@ -38,7 +38,8 @@ export async function createCodexPipelineStepCards(input: {
       w: 700,
       h: 260,
       status: 'todo',
-      ...(synchronizationRun ? { labels: ['subtask', 'synchronization'] } : {}),
+      createdAt: input.run.createdAt,
+      ...(synchronizationRun ? { labels: ['synchronization'] } : {}),
       codexPipelineRunId: input.run.id,
       codexPipelineStepId: step.stepId,
       codexPipelineStepName: step.name,
@@ -67,6 +68,7 @@ export async function createCodexPipelineStepCards(input: {
       from: synchronizationRun ? input.run.sourceCardId : previousCardId,
       to: step.outputCardId,
       label: synchronizationRun ? 'subtask' : step.name,
+      ...(synchronizationRun ? { position: index } : {}),
     };
     relationshipIds.push(relationship.id);
     const relationMutation = applyLedgerMutation({
