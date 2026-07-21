@@ -492,8 +492,8 @@ export function initializeMobileThread() {
   document.addEventListener('paste', (event) => void pasteThreadImageController(event));
 }
 
-export function setMobileThreadCard(card) {
+export function setMobileThreadCard(card, { subtask = false } = {}) {
   currentCard = card;
   const labels = Array.isArray(card?.labels) ? card.labels.map(String) : [];
-  document.querySelector('.quick-voice-comment-button').hidden = !labels.some((label) => label === 'master-task' || label === 'subtask');
+  document.querySelector('.quick-voice-comment-button').hidden = !labels.includes('master-task') && !subtask;
 }

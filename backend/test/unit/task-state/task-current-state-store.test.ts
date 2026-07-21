@@ -37,6 +37,27 @@ test('restart reconstructs projection, clock, and buckets from current shards on
   assert.deepEqual(restarted.bucketManifest(), first.bucketManifest());
 });
 
+test('a state-lost writer advances beyond its joined replica clock before writing', async (context) => {
+  const sourceRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-current-counter-source-'));
+  const recoveredRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-current-counter-recovered-'));
+  context.after(() => {
+    rmSync(sourceRoot, { recursive: true, force: true });
+    rmSync(recoveredRoot, { recursive: true, force: true });
+  });
+  const source = createTaskCurrentStateStore({ decisionOsRoot: sourceRoot, projectId: 'project-a', initializeLedger: {} });
+  for (let counter = 1; counter <= 4; counter += 1) {
+    await source.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'card-a', changes: [{ path: 'title', operation: 'set', value: `Revision ${counter}` }] }] });
+  }
+  const recovered = createTaskCurrentStateStore({ decisionOsRoot: recoveredRoot, projectId: 'project-a', initializeLedger: {} });
+  await recovered.merge(source.activeDelta());
+  const mutation = await recovered.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'card-a', changes: [{ path: 'title', operation: 'set', value: 'Recovered writer' }] }] });
+
+  assert.equal(mutation.batch.dot.counter, 5);
+  assert.equal(mutation.batch.context.desktop, 4);
+  assert.equal(recovered.projection().conflicts.some((conflict) => conflict.entityId === 'card-a' && conflict.path === 'title'), false);
+  await Promise.all([source.flush(), recovered.flush()]);
+});
+
 test('materialized collections use identity indexes and generation-cached sorted arrays', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-index-'));
   context.after(() => rmSync(root, { recursive: true, force: true }));
@@ -165,4 +186,18 @@ test('thread-note tombstones retain the deleted-note projection', async (context
   assert.deepEqual((store.projection().ledger.notes as Record<string, unknown[]>)['thread-card-a'], []);
   assert.deepEqual((store.projection().ledger.deletedNoteIds as Record<string, string[]>)['thread-card-a'], ['note-a']);
   await store.flush();
+});
+
+test('thread-note tombstones recover their thread identity from the stable entity id', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-note-delete-identity-'));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const store = createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a', initializeLedger: {} });
+
+  await store.mutate({
+    replicaId: 'desktop',
+    changes: [{ entityType: 'thread-note', entityId: 'thread-card-a/note-a', changes: [{ path: '$entity', operation: 'tombstone' }] }],
+  });
+
+  assert.deepEqual((store.projection().ledger.deletedNoteIds as Record<string, string[]>)['thread-card-a'], ['note-a']);
+  assert.equal(Object.hasOwn(store.projection().ledger.deletedNoteIds as Record<string, string[]>, ''), false);
 });

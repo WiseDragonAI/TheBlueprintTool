@@ -12,6 +12,7 @@ const unsafePathSegments = new Set(['__proto__', 'prototype', 'constructor']);
 const lifecycleStatuses = new Set(['todo', 'backlog', 'done']);
 const lifecycleKeys = new Set(['status', 'changedAt', 'waitingAt', 'closedAt']);
 const executionIntentKeys = new Set(['id', 'state', 'changedAt', 'startedAt', 'settledAt', 'error']);
+const localCardPaths = new Set(['replicationState', 'persistenceState']);
 const narrativeThreadNotePaths = new Set(['message', 'body', 'content', 'contentBytes', 'markdown']);
 const encoder = new TextEncoder();
 
@@ -27,7 +28,9 @@ function assertAtomicObject(candidate: TaskRegisterCandidate, keys: Set<string>,
 }
 
 function assertCardDomain(path: string, candidate: TaskRegisterCandidate): void {
-  if (path === 'status' || path.startsWith('lifecycle/') || path.startsWith('executionIntent/')) throw new Error('invalid_task_current_card_lane');
+  // WHAT: Reject derived descendants and node-local publication fields at wire admission.
+  // WHY: A participant cannot make local activation metadata causal by bypassing the domain encoder.
+  if (path === 'status' || localCardPaths.has(path) || path.startsWith('lifecycle/') || path.startsWith('executionIntent/')) throw new Error('invalid_task_current_card_lane');
   if (path === 'lifecycle') {
     assertAtomicObject(candidate, lifecycleKeys, 'invalid_task_current_lifecycle');
     const lifecycle = candidate.value as Record<string, unknown>;

@@ -51,7 +51,8 @@ test('task intake publishes no state until its first durable content contributio
   assert.deepEqual(content, []);
   assert.equal(((state.projection().ledger.notes as Record<string, Array<Record<string, unknown>>>)['thread-card-a'][0]).message, undefined);
   assert.match(readFileSync(resolve(root, 'threads', 'tasks', 'thread-card-a.md'), 'utf8'), /Activate it\./);
-  assert.equal((state.projection().ledger.cards as Array<Record<string, unknown>>)[0].replicationState, 'activated');
+  assert.equal((state.projection().ledger.cards as Array<Record<string, unknown>>)[0].replicationState, undefined);
+  assert.equal(state.store.entity('card', 'card-a')?.fields.replicationState, undefined);
 });
 
 test('projection commands modify only declared entity lanes', async (context) => {

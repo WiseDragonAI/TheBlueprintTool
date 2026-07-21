@@ -276,7 +276,10 @@ function closeCardDetail(options) {
 function openCardDetail(card) {
   const nextIdentity = cardPresentationIdentity(currentRouteSnapshot());
   const routeEntry = nextIdentity !== presentedCardIdentity;
-  setMobileThreadCard(card);
+  const subtask = (state.ledger.relationships ?? []).some((relationship) => (
+    String(relationship.to) === String(card.id) && relationship.label === 'subtask'
+  ));
+  setMobileThreadCard(card, { subtask });
   setMobileCodexContext({ projectId: state.resourceProjectId, ledgerId: state.activeLedgerId, cardId: state.activeCardId });
   setView('card-view');
   if (routeEntry) {
