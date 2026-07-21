@@ -28,7 +28,7 @@ export type LedgerMutation = {
   geometry?: Record<string, Record<string, { x: number; y: number; width: number; height: number }>>;
   viewport?: { x?: number; y?: number; scale?: number };
   region?: { id?: string; kind?: string; label?: string; color?: string };
-  note?: { id?: string; threadId?: string; body?: string; voiceFileRef?: string; reviewContext?: Record<string, string>; status?: string; transcriptionStartedAt?: string; uploadReceivedAt?: string; audioPersistedAt?: string; acceptedAt?: string; providerStartedAt?: string; providerSettledAt?: string; completedAt?: string; revision?: number; source?: string; error?: string; codexQueueStatus?: string; codexQueueRequestedAt?: string; codexQueueRunId?: string; codexQueueError?: string; imageSizes?: Record<string, { width?: number; height?: number }> };
+  note?: { id?: string; threadId?: string; body?: string; role?: 'operator' | 'agent'; voiceFileRef?: string; reviewContext?: Record<string, string>; status?: string; transcriptionStartedAt?: string; uploadReceivedAt?: string; audioPersistedAt?: string; acceptedAt?: string; providerStartedAt?: string; providerSettledAt?: string; completedAt?: string; revision?: number; source?: string; error?: string; codexQueueStatus?: string; codexQueueRequestedAt?: string; codexQueueRunId?: string; codexQueueError?: string; imageSizes?: Record<string, { width?: number; height?: number }> };
   selection?: { cardIds?: string[]; zoneIds?: string[]; groupIds?: string[] };
   pasteSuffix?: string;
   executionIntent?: { id?: string; state?: 'waiting' | 'queued' | 'running' | 'terminal' | 'failed'; launchMode?: 'run' | 'pipeline'; error?: string; updatedAt?: string };
@@ -363,7 +363,7 @@ export function applyLedgerMutation(input: {
       return { ok: true, ledger };
     }
     const existing = notes.find((entry) => String(entry.id ?? '') === noteId);
-    const nextNote: Record<string, unknown> = { id: noteId, role: 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), ...voiceMetadata(mutation.note) };
+    const nextNote: Record<string, unknown> = { id: noteId, role: mutation.note.role === 'agent' ? 'agent' : 'operator', message: mutation.note.body ?? '', timestamp: new Date().toISOString(), ...voiceMetadata(mutation.note) };
     if (mutation.note.imageSizes && typeof mutation.note.imageSizes === 'object') nextNote.imageSizes = mutation.note.imageSizes;
     if (existing) {
       if (!existing.message && nextNote.message) existing.message = nextNote.message;
