@@ -10,12 +10,16 @@ function argument(name: string): string {
   return index >= 0 ? String(process.argv[index + 1] ?? '') : '';
 }
 
+function argumentsFor(name: string): string[] {
+  return process.argv.flatMap((value, index) => value === name && process.argv[index + 1] ? [String(process.argv[index + 1])] : []);
+}
+
 const decisionOsRoot = resolve(argument('--decision-os-root'));
 const projectId = argument('--project-id');
 const tasksLedgerFile = resolve(argument('--tasks-ledger'));
 if (!argument('--decision-os-root') || !projectId || !argument('--tasks-ledger')) {
-  throw new Error('Usage: migrate-task-current-state --decision-os-root <path> --project-id <id> --tasks-ledger <path>');
+  throw new Error('Usage: migrate-task-current-state --decision-os-root <path> --project-id <id> --tasks-ledger <path> [--source-state-root <path> ...]');
 }
 
-const result = await migrateTaskCurrentState({ decisionOsRoot, projectId, tasksLedgerFile });
+const result = await migrateTaskCurrentState({ decisionOsRoot, projectId, tasksLedgerFile, sourceStateRoots: argumentsFor('--source-state-root') });
 process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);

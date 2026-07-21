@@ -5,7 +5,7 @@
 import type { TaskEntityType } from './task-current-state-types.js';
 
 type AnyRecord = Record<string, unknown>;
-const narrativeFields = new Set(['description', 'what', 'notes', 'deletedNoteIds', 'content', 'contentBytes', 'markdown']);
+const narrativeFields = new Set(['description', 'what', 'message', 'body', 'notes', 'deletedNoteIds', 'content', 'contentBytes', 'markdown']);
 const derivedLifecycleFields = new Set(['status', 'lifecycle', 'changedAt', 'waitingAt', 'closedAt', 'completedAt']);
 
 function structural(value: unknown): unknown {

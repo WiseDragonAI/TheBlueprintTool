@@ -3,7 +3,7 @@
  * WHY: The application command boundary must remain intact while persistence stays lane-scoped.
  */
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import test from 'node:test';
@@ -36,7 +36,8 @@ test('task intake publishes no state until its first durable content contributio
   assert.ok(published.flatMap((delta) => delta.entities).some((entity) => entity.entityType === 'card' && entity.entityId === 'card-a'));
   assert.ok(published.flatMap((delta) => delta.entities).some((entity) => entity.entityType === 'thread-note' && entity.entityId === 'thread-card-a/note-a'));
   assert.deepEqual(content, []);
-  assert.equal(((state.projection().ledger.notes as Record<string, Array<Record<string, unknown>>>)['thread-card-a'][0]).message, 'Activate it.');
+  assert.equal(((state.projection().ledger.notes as Record<string, Array<Record<string, unknown>>>)['thread-card-a'][0]).message, undefined);
+  assert.match(readFileSync(resolve(root, 'threads', 'tasks', 'thread-card-a.md'), 'utf8'), /Activate it\./);
   assert.equal((state.projection().ledger.cards as Array<Record<string, unknown>>)[0].replicationState, 'activated');
 });
 

@@ -99,15 +99,33 @@ test('concurrent thread notes converge as independent entities', async (context)
   const initial = { notes: {}, threadFiles: { 'thread-card-a': '.decision-os/threads/tasks/thread-card-a.md' } };
   const desktop = createTaskCurrentStateStore({ decisionOsRoot: desktopRoot, projectId: 'project-a', initializeLedger: initial });
   const mobile = createTaskCurrentStateStore({ decisionOsRoot: mobileRoot, projectId: 'project-a', initializeLedger: initial });
-  const left = await desktop.mutate({ replicaId: 'desktop', changes: [{ entityType: 'thread-note', entityId: 'thread-card-a/note-left', changes: [{ path: 'threadId', operation: 'set', value: 'thread-card-a' }, { path: 'message', operation: 'set', value: 'Desktop' }] }] });
-  const right = await mobile.mutate({ replicaId: 'mobile', changes: [{ entityType: 'thread-note', entityId: 'thread-card-a/note-right', changes: [{ path: 'threadId', operation: 'set', value: 'thread-card-a' }, { path: 'message', operation: 'set', value: 'Mobile' }] }] });
+  const left = await desktop.mutate({ replicaId: 'desktop', changes: [{ entityType: 'thread-note', entityId: 'thread-card-a/note-left', changes: [{ path: 'threadId', operation: 'set', value: 'thread-card-a' }, { path: 'role', operation: 'set', value: 'operator' }] }] });
+  const right = await mobile.mutate({ replicaId: 'mobile', changes: [{ entityType: 'thread-note', entityId: 'thread-card-a/note-right', changes: [{ path: 'threadId', operation: 'set', value: 'thread-card-a' }, { path: 'role', operation: 'set', value: 'agent' }] }] });
   await desktop.merge(right.delta);
   await mobile.merge(left.delta);
   const desktopNotes = (desktop.projection().ledger.notes as Record<string, Array<Record<string, unknown>>>)['thread-card-a'];
   const mobileNotes = (mobile.projection().ledger.notes as Record<string, Array<Record<string, unknown>>>)['thread-card-a'];
   assert.deepEqual(desktopNotes, mobileNotes);
-  assert.deepEqual(desktopNotes.map((note) => note.message), ['Desktop', 'Mobile']);
+  assert.deepEqual(desktopNotes.map((note) => note.role), ['operator', 'agent']);
   await Promise.all([desktop.flush(), mobile.flush()]);
+});
+
+test('concurrent card update and deletion retain an explicit presence conflict', async (context) => {
+  const desktopRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-presence-desktop-'));
+  const mobileRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-presence-mobile-'));
+  context.after(() => { rmSync(desktopRoot, { recursive: true, force: true }); rmSync(mobileRoot, { recursive: true, force: true }); });
+  const initial = { cards: [{ id: 'card-a', title: 'Initial', status: 'todo' }], annotations: [], relationships: [] };
+  const desktop = createTaskCurrentStateStore({ decisionOsRoot: desktopRoot, projectId: 'project-a', initializeLedger: initial });
+  const mobile = createTaskCurrentStateStore({ decisionOsRoot: mobileRoot, projectId: 'project-a', initializeLedger: initial });
+  const update = await desktop.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'card-a', changes: [{ path: 'title', operation: 'set', value: 'Updated' }] }] });
+  const deletion = await mobile.mutate({ replicaId: 'mobile', changes: [{ entityType: 'card', entityId: 'card-a', changes: [{ path: '$entity', operation: 'tombstone' }] }] });
+
+  await desktop.merge(deletion.delta);
+  await mobile.merge(update.delta);
+
+  assert.equal(desktop.rootHash(), mobile.rootHash());
+  assert.equal(desktop.projection().conflicts.some((conflict) => conflict.entityId === 'card-a' && conflict.path === '$entity'), true);
+  assert.deepEqual(desktop.projection(), mobile.projection());
 });
 
 test('thread-note tombstones retain the deleted-note projection', async (context) => {
@@ -116,7 +134,7 @@ test('thread-note tombstones retain the deleted-note projection', async (context
   const store = createTaskCurrentStateStore({
     decisionOsRoot: root,
     projectId: 'project-a',
-    initializeLedger: { notes: { 'thread-card-a': [{ id: 'note-a', message: 'Remove me.' }] } },
+    initializeLedger: { notes: { 'thread-card-a': [{ id: 'note-a', role: 'operator', timestamp: '2026-07-21T00:00:00.000Z', message: 'Remove me.' }] } },
   });
   await store.mutate({
     replicaId: 'desktop',

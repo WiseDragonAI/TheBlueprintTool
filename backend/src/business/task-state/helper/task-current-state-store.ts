@@ -34,7 +34,7 @@ import {
 } from './task-current-state-types.js';
 
 type JournalDocument = { version: 3; mutation?: TaskMutationBatch; delta?: TaskStateDelta; activateTaskId?: string };
-type StoreOptions = { decisionOsRoot: string; projectId: string; initializeLedger?: Record<string, unknown> };
+type StoreOptions = { decisionOsRoot: string; projectId: string; initializeLedger?: Record<string, unknown>; deferFormat?: boolean };
 
 function emptyProjection(projectId: string): TaskCurrentProjection {
   return { version: taskCurrentStateVersion, projectId, ledger: { cards: [], annotations: [], relationships: [] }, conflicts: [], clock: {} };
@@ -42,12 +42,15 @@ function emptyProjection(projectId: string): TaskCurrentProjection {
 
 function registerEntity(batch: TaskMutationBatch, change: TaskEntityChange): TaskCurrentEntity {
   const clock = joinTaskClocks(batch.context, { [batch.dot.replicaId]: batch.dot.counter });
+  const changes = change.changes.some((field) => field.path === '$entity')
+    ? change.changes
+    : [{ path: '$entity', operation: 'set' as const, value: true }, ...change.changes];
   return finalizeTaskCurrentEntity({
     version: taskCurrentStateVersion,
     projectId: batch.projectId,
     entityType: change.entityType,
     entityId: change.entityId,
-    fields: Object.fromEntries(change.changes.map((field) => [field.path, {
+    fields: Object.fromEntries(changes.map((field) => [field.path, {
       clock,
       candidates: [{ dot: batch.dot, operation: field.operation, ...(Object.hasOwn(field, 'value') ? { value: structuredClone(field.value) } : {}) }],
     }])),
@@ -159,13 +162,14 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
       replication: 'active',
     };
     for (const entity of applyMutation(batch)) persistence.atomicWriteSync(persistence.entityPath(entity), `${JSON.stringify(entity)}\n`);
-    persistence.atomicWriteSync(formatFile, `${JSON.stringify(formatDocument())}\n`);
+    if (!options.deferFormat) persistence.atomicWriteSync(formatFile, `${JSON.stringify(formatDocument())}\n`);
   };
 
   const validateFormat = (): void => {
     if (!existsSync(formatFile)) {
       if (options.initializeLedger === undefined) throw new Error('task_state_offline_migration_required');
       initialize();
+      if (options.deferFormat) return;
     }
     const format = JSON.parse(readFileSync(formatFile, 'utf8')) as TaskCurrentFormat;
     if (format.stateProtocol !== taskStateProtocol || format.stateSchema !== taskCurrentStateVersion || format.baselineEpoch !== taskCurrentBaselineEpoch || format.projectId !== options.projectId) throw new Error('unsupported_task_current_state_format');

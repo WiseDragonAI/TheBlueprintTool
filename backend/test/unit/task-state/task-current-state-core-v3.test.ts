@@ -68,6 +68,7 @@ test('epoch-3 admission rejects legacy, overlapping, invalid atomic, and oversiz
   }), /overlapping_task_current_lanes|invalid_task_current_card_lane/);
   assert.throws(() => entity('desktop', { 'executionIntent/state': register('desktop', 1, 'running') }), /invalid_task_current_card_lane/);
   assert.throws(() => entity('desktop', { executionIntent: register('desktop', 1, { id: 'run-a', state: 'running', updatedAt: 'legacy' }) }), /invalid_task_current_execution_intent/);
+  assert.throws(() => finalizeTaskCurrentEntity({ version: taskCurrentStateVersion, projectId: 'project-a', entityType: 'thread-note', entityId: 'thread-a/note-a', fields: { message: register('desktop', 1, 'large body') } }), /invalid_task_current_thread_note_narrative_lane/);
   assert.throws(() => entity('desktop', { title: register('desktop', 1, 'x'.repeat(taskCurrentEntityByteLimit)) }), /task_current_entity_too_large/);
 });
 

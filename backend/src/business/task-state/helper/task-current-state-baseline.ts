@@ -25,7 +25,8 @@ export function taskCurrentBaselineChanges(ledger: Record<string, unknown>): Tas
     for (const note of Array.isArray(rawNotes) ? rawNotes as AnyRecord[] : []) {
       const noteId = String(note.id ?? '');
       if (!noteId) continue;
-      const fields = Object.entries({ ...note, threadId }).filter(([path]) => path !== 'id').map(([path, value]) => ({ path, operation: 'set' as const, value }));
+      const fields = [...encodeTaskDomainLanes({ entityType: 'thread-note', record: { ...note, threadId }, transitionAt: epoch })]
+        .map(([path, value]) => ({ path, operation: 'set' as const, value }));
       changes.push({ entityType: 'thread-note', entityId: `${threadId}/${noteId}`, changes: fields });
     }
   }

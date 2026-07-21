@@ -12,6 +12,7 @@ const unsafePathSegments = new Set(['__proto__', 'prototype', 'constructor']);
 const lifecycleStatuses = new Set(['todo', 'backlog', 'done']);
 const lifecycleKeys = new Set(['status', 'changedAt', 'waitingAt', 'closedAt']);
 const executionIntentKeys = new Set(['id', 'state', 'changedAt', 'startedAt', 'settledAt', 'error']);
+const narrativeThreadNotePaths = new Set(['message', 'body', 'content', 'contentBytes', 'markdown']);
 const encoder = new TextEncoder();
 
 function entityBody(entity: Omit<TaskCurrentEntity, 'stateHash'> | TaskCurrentEntity): Omit<TaskCurrentEntity, 'stateHash'> {
@@ -51,6 +52,7 @@ function assertRegister(entity: TaskCurrentEntity, path: string, register: TaskC
     if (dots.has(key)) throw new Error('duplicate_task_current_dot');
     dots.add(key);
     if (entity.entityType === 'card') assertCardDomain(path, candidate);
+    if (entity.entityType === 'thread-note' && narrativeThreadNotePaths.has(path)) throw new Error('invalid_task_current_thread_note_narrative_lane');
   }
 }
 

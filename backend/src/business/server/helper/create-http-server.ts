@@ -20,7 +20,7 @@ import { parseMultipartFormData } from './parse-multipart-form-data.js';
 import { contentTypeFor } from './content-type-for.js';
 import { normalizeLedgerNotes } from './normalize-ledger-notes.js';
 import { hydrateLedgerCardContent, resolveCardContentFile } from '../../ledger/helper/card-content-file.js';
-import { parseThreadMarkdown, stripHydratedThreadNotes, writeThreadNotesFile } from '../../ledger/helper/thread-content-file.js';
+import { parseThreadMarkdown, stripHydratedThreadNotes } from '../../ledger/helper/thread-content-file.js';
 import { migrateBacklogStatus } from '../../ledger/helper/migrate-backlog-status.js';
 import { resolveCardContentChange, type CardContentChange } from '../../refresh/helper/watch-card-content-files.js';
 import { watchProjectFiles } from '../../refresh/helper/watch-project-files.js';
@@ -582,14 +582,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     publish: (nodeId, frame) => federation!.publishStateFrame(nodeId, frame),
     onProjectionChange: ({ projectId, from, delta }) => {
       const store = taskStoreForProject(projectId, from);
-      const project = projectCatalog().find((entry) => entry.id === projectId && entry.available);
-      const touchedThreads = new Set(delta.entities.filter((entity) => entity.entityType === 'thread-note').map((entity) => entity.entityId.split('/')[0]).filter(Boolean));
-      if (store && project && touchedThreads.size > 0) {
-        const ledger = store.projection().ledger;
-        const notesByThread = ledger.notes && typeof ledger.notes === 'object' && !Array.isArray(ledger.notes) ? ledger.notes as Record<string, AnyRecord[]> : {};
-        const ledgerPath = resolve(project.decisionOsRoot, tasksLedgerForProject(project).ledgerFile.replace(/^\.decision-os\//, ''));
-        for (const threadId of touchedThreads) writeThreadNotesFile({ decisionOsRoot: project.decisionOsRoot, ledger, ledgerPath, threadId, notes: notesByThread[threadId] ?? [] });
-      }
       const keys = delta.entities.filter((entity) => entity.entityType === 'resource').map((entity) => entity.entityId);
       const heads = keys.flatMap((key) => store?.contentHeads(key) ?? []);
       for (const sourceReplicaId of new Set(heads.map((head) => head.sourceReplicaId))) {
