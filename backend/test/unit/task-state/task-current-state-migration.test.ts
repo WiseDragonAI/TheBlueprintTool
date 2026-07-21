@@ -11,6 +11,13 @@ import test from 'node:test';
 import { createTaskCurrentStateStore } from '../../../src/business/task-state/helper/task-current-state-store.js';
 import { migrateTaskCurrentState } from '../../../src/business/task-state/helper/task-current-state-migration.js';
 
+test('offline migration rejects a project identifier that can escape task-state storage', async () => {
+  await assert.rejects(
+    migrateTaskCurrentState({ decisionOsRoot: '/unused', projectId: '../outside', nodeId: 'workstation', tasksLedgerFile: '/unused/tasks.json' }),
+    /invalid_task_migration_project_id/,
+  );
+});
+
 test('offline migration installs current shards, immutable content, and a final format marker', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-migration-'));
   context.after(() => rmSync(root, { recursive: true, force: true }));

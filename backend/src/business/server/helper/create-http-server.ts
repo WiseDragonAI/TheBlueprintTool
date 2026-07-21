@@ -63,6 +63,7 @@ import { createFederationTaskStateReplicator } from '../../federation/helper/fed
 import type { FederationContentManifest } from '../../federation/helper/federation-content-manifest.js';
 import { createFederationContentReplicaStore } from '../../federation/helper/federation-content-replica-store.js';
 import { createFederationContentScheduler } from '../../federation/helper/federation-content-scheduler.js';
+import { readTaskContentOnDemand } from '../../federation/helper/read-task-content-on-demand.js';
 import { createProjectTaskState, type ProjectTaskState } from '../../task-state/helper/project-task-state.js';
 import { createTaskCurrentStateStore, type TaskCurrentStateStore } from '../../task-state/helper/task-current-state-store.js';
 import type { TaskProjectionCommand } from '../../task-state/helper/task-mutation-command.js';
@@ -617,27 +618,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       throw new Error(`content_object_sources_failed:${failures.join(',') || 'none-online'}`);
     },
   });
-  const readTaskContentOnDemand = async (projectId: string, store: TaskCurrentStateStore, key: string): Promise<{ body: string; conflict: boolean; candidates: Array<{ ownerNodeId: string; hash: string; type: string }> }> => {
-    const heads = store.contentHeads(key).sort((left, right) => left.sourceReplicaId.localeCompare(right.sourceReplicaId) || left.hash.localeCompare(right.hash));
-    const candidates = heads.map((head) => ({ ownerNodeId: head.sourceReplicaId, hash: head.hash, type: head.type }));
-    const identities = new Set(heads.map((head) => `${head.type}\u0000${head.hash}`));
-    if (!key || heads.length === 0 || identities.size !== 1) return { body: '', conflict: identities.size > 1, candidates };
-    const head = heads[0];
-    const localObject = resolve(store.root, 'objects', head.hash.slice(0, 2), head.hash);
-    if (existsSync(localObject)) return { body: await readFileAsync(localObject, 'utf8'), conflict: false, candidates };
-    for (const source of heads) federationContentStore.applyManifest(source.sourceReplicaId, {
-      version: 1,
-      projectId,
-      generatedAt: new Date().toISOString(),
-      complete: false,
-      resources: [{ type: source.type, key: source.key, hash: source.hash, bytes: source.bytes, changedAt: source.changedAt }],
-    });
-    const source = heads[0].sourceReplicaId;
-    federationContentStore.prioritize(source, projectId, key);
-    await federationContentScheduler?.drain();
-    const content = federationContentStore.resource(source, projectId, key);
-    return { body: content.file ? await readFileAsync(content.file, 'utf8') : '', conflict: content.conflict, candidates: content.candidates };
-  };
   const projectSyncStore = createProjectSyncStore({ decisionOsRoot: masterDecisionOsRoot });
   projectSyncController = createProjectSyncController({
     masterRoot,
@@ -1032,9 +1012,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         const key = String(comment.contentFile ?? '');
         const localFile = resolveCardContentFile(decisionOsRoot, key);
         if (key && (!localFile || !existsSync(localFile))) {
-          const content = await readTaskContentOnDemand(localProject.id, taskStateForProject(localProject).store, key);
+          const content = await readTaskContentOnDemand({ projectId: localProject.id, store: taskStateForProject(localProject).store, key, contentStore: federationContentStore, drain: federationContentScheduler?.drain ?? null });
           projection.comment = { ...comment, what: content.body };
-          projection.state = { ...(projection.state as AnyRecord ?? {}), content: { status: content.body ? 'available' : content.conflict ? 'conflict' : 'synchronizing', resource: key, conflict: content.conflict, candidates: content.candidates } };
+          projection.state = { ...(projection.state as AnyRecord ?? {}), content: { status: content.available ? 'available' : content.conflict ? 'conflict' : 'synchronizing', resource: key, conflict: content.conflict, candidates: content.candidates } };
         }
       }
       if (projection && localProject && ledgerId === 'tasks' && scopedThreadRead) {
@@ -1043,9 +1023,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         const key = String(refs[threadId] ?? '');
         const localFile = resolveThreadContentFile(decisionOsRoot, key);
         if (key && (!localFile || !existsSync(localFile))) {
-          const content = await readTaskContentOnDemand(localProject.id, taskStateForProject(localProject).store, key);
+          const content = await readTaskContentOnDemand({ projectId: localProject.id, store: taskStateForProject(localProject).store, key, contentStore: federationContentStore, drain: federationContentScheduler?.drain ?? null });
           projection.notes = { [threadId]: content.body ? parseThreadMarkdown(content.body) : [] };
-          projection.state = { ...(projection.state as AnyRecord ?? {}), content: { status: content.body ? 'available' : content.conflict ? 'conflict' : 'synchronizing', resource: key, conflict: content.conflict, candidates: content.candidates } };
+          projection.state = { ...(projection.state as AnyRecord ?? {}), content: { status: content.available ? 'available' : content.conflict ? 'conflict' : 'synchronizing', resource: key, conflict: content.conflict, candidates: content.candidates } };
         }
       }
       response.setHeader('cache-control', 'no-store');

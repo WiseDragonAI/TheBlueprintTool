@@ -6,7 +6,7 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { cp, mkdir, writeFile } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import { readProjectRegistry } from '../../server/helper/project-registry.js';
-import { migrateTaskCurrentState } from './task-current-state-migration.js';
+import { migrateTaskCurrentState } from '../helper/task-current-state-migration.js';
 
 export type NodeTaskMigrationResult = {
   version: 1;
@@ -22,6 +22,9 @@ function cutoverId(): string {
 
 function registeredProjects(catalogRoot: string, registry: NonNullable<ReturnType<typeof readProjectRegistry>>): Array<{ projectId: string; relativePath: string; decisionOsRoot: string; tasksLedgerFile: string }> {
   return Object.values(registry.projects).map((entry) => {
+    // WHAT: Validate every registry identifier before any project migration begins.
+    // WHY: Node-wide orchestration must reject path-capable identifiers before partial cutover is possible.
+    if (!/^[a-zA-Z0-9_-]+$/.test(entry.id)) throw new Error(`invalid_task_migration_project_id:${entry.id}`);
     const projectRoot = realpathSync(resolve(catalogRoot, entry.relativePath));
     const projectRelative = relative(catalogRoot, projectRoot);
     if (projectRelative === '..' || projectRelative.startsWith('../') || isAbsolute(projectRelative)) throw new Error(`node_task_migration_project_outside_catalog:${entry.id}`);
