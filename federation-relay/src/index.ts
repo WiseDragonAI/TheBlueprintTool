@@ -45,6 +45,10 @@ type Env = {
 
 type SocketIdentity = { nodeId: string };
 type Stream = { requester: string; owner: string; requestCredit: number; responseCredit: number };
+type RelayRoute =
+  | { kind: 'connect'; federationId: string; nodeId: string }
+  | { kind: 'provision-node'; federationId: string; nodeId: string }
+  | { kind: 'reset-project-state'; federationId: string; projectId: string };
 async function listAll<T>(storage: DurableObjectStorage, prefix: string): Promise<Map<string, T>> {
   const result = new Map<string, T>();
   let startAfter: string | undefined;
@@ -73,13 +77,13 @@ async function sameSecret(left: string, right: string): Promise<boolean> {
   return different === 0;
 }
 
-function routeParts(url: URL): { federationId: string; nodeId?: string; projectId?: string; action?: 'reset-state' } | null {
+function routeParts(url: URL): RelayRoute | null {
   const connect = url.pathname.match(/^\/connect\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)$/);
-  if (connect) return { federationId: connect[1], nodeId: connect[2] };
+  if (connect) return { kind: 'connect', federationId: connect[1], nodeId: connect[2] };
   const admin = url.pathname.match(/^\/admin\/federations\/([a-zA-Z0-9_-]+)\/nodes\/([a-zA-Z0-9_-]+)$/);
-  if (admin) return { federationId: admin[1], nodeId: admin[2] };
+  if (admin) return { kind: 'provision-node', federationId: admin[1], nodeId: admin[2] };
   const reset = url.pathname.match(/^\/admin\/federations\/([a-zA-Z0-9_-]+)\/projects\/([a-zA-Z0-9_-]+)\/reset-state$/);
-  return reset ? { federationId: reset[1], projectId: reset[2], action: 'reset-state' } : null;
+  return reset ? { kind: 'reset-project-state', federationId: reset[1], projectId: reset[2] } : null;
 }
 
 export default {
@@ -90,17 +94,18 @@ export default {
     if (!route) return json({ ok: false, error: 'not_found' }, 404);
     const stub = env.FEDERATIONS.getByName(route.federationId, { locationHint: 'apac' });
 
-    if (url.pathname.startsWith('/admin/')) {
+    if (route.kind !== 'connect') {
       if (!env.ADMIN_SECRET) return json({ ok: false, error: 'relay_not_configured' }, 503);
       const supplied = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ?? '';
       if (!(await sameSecret(supplied, env.ADMIN_SECRET))) return json({ ok: false, error: 'federation_authentication' }, 401);
       if (request.method !== 'POST') return json({ ok: false, error: 'method_not_allowed' }, 405);
-      if (route.action === 'reset-state' && route.projectId) return stub.fetch(new Request(`https://relay.internal/admin/projects/${route.projectId}/reset-state`, request));
-      if (route.nodeId) return stub.fetch(new Request(`https://relay.internal/admin/nodes/${route.nodeId}`, request));
-      return json({ ok: false, error: 'not_found' }, 404);
+      const path = route.kind === 'reset-project-state'
+        ? `/admin/projects/${route.projectId}/reset-state`
+        : `/admin/nodes/${route.nodeId}`;
+      return stub.fetch(new Request(`https://relay.internal${path}`, request));
     }
 
-    if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket' || !route.nodeId) {
+    if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket') {
       return json({ ok: false, error: 'websocket_required' }, 426);
     }
     return stub.fetch(new Request(`https://relay.internal/connect/${route.nodeId}`, request));
@@ -173,6 +178,23 @@ export class FederationRelay extends DurableObject<Env> {
       await this.ctx.storage.delete(keys);
       deleted += keys.length;
     }
+  }
+
+  private async resetProjectState(projectId: string): Promise<Response> {
+    const connected = [...new Set(this.activeSockets().flatMap((socket) => {
+      const nodeId = (socket.deserializeAttachment() as SocketIdentity | null)?.nodeId ?? '';
+      return nodeId && this.participatesInProject(nodeId, projectId) ? [nodeId] : [];
+    }))].sort();
+    // WHAT: Reject reset while any participating node can publish state.
+    // WHY: Deletion and concurrent replication must not race into a partial epoch reset.
+    if (connected.length > 0) {
+      return json({ ok: false, error: 'project_nodes_online', nodes: connected }, 409);
+    }
+    const entitiesDeleted = await this.deleteStatePrefix(stateEntityPrefix(projectId));
+    const bucketsDeleted = await this.deleteStatePrefix(stateBucketPrefix(projectId));
+    const resetAt = new Date().toISOString();
+    await this.ctx.storage.put(`state:v3:reset:${encodeURIComponent(projectId)}:${resetAt}`, { projectId, resetAt, entitiesDeleted, bucketsDeleted });
+    return json({ ok: true, projectId, entitiesDeleted, bucketsDeleted, root: hashTaskCurrentRoot([]), resetAt });
   }
 
   private async sendStateSummary(socket: WebSocket, projectId: string): Promise<void> {
@@ -264,17 +286,7 @@ export class FederationRelay extends DurableObject<Env> {
     const url = new URL(request.url);
     const reset = url.pathname.match(/^\/admin\/projects\/([a-zA-Z0-9_-]+)\/reset-state$/);
     if (reset && request.method === 'POST') {
-      const projectId = reset[1];
-      const connected = this.activeSockets().flatMap((socket) => {
-        const nodeId = (socket.deserializeAttachment() as SocketIdentity | null)?.nodeId ?? '';
-        return nodeId && this.participatesInProject(nodeId, projectId) ? [nodeId] : [];
-      });
-      if (connected.length > 0) return json({ ok: false, error: 'project_nodes_online', nodes: connected.sort() }, 409);
-      const entitiesDeleted = await this.deleteStatePrefix(stateEntityPrefix(projectId));
-      const bucketsDeleted = await this.deleteStatePrefix(stateBucketPrefix(projectId));
-      const resetAt = new Date().toISOString();
-      await this.ctx.storage.put(`state:v3:reset:${encodeURIComponent(projectId)}:${resetAt}`, { projectId, resetAt, entitiesDeleted, bucketsDeleted });
-      return json({ ok: true, projectId, entitiesDeleted, bucketsDeleted, root: hashTaskCurrentRoot([]), resetAt });
+      return this.resetProjectState(reset[1]);
     }
     const admin = url.pathname.match(/^\/admin\/nodes\/([a-zA-Z0-9_-]+)$/);
     if (admin && request.method === 'POST') {

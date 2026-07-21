@@ -171,6 +171,9 @@ async function atomicWrite(file: string, value: string | Buffer): Promise<void> 
 
 export async function migrateTaskCurrentState(input: { decisionOsRoot: string; projectId: string; nodeId: string; tasksLedgerFile: string; backupRoot?: string; sourceStateRoots?: string[] }): Promise<{ backup: string; root: string; baselineRoot: string; report: string }> {
   if (!/^[a-zA-Z0-9_-]+$/.test(input.nodeId)) throw new Error('invalid_task_migration_node_id');
+  // WHAT: Reject project identifiers that can escape project-owned storage paths.
+  // WHY: Migration derives active-state and rollback paths from this operator-supplied value.
+  if (!/^[a-zA-Z0-9_-]+$/.test(input.projectId)) throw new Error('invalid_task_migration_project_id');
   const activeRoot = resolve(input.decisionOsRoot, 'task-state', input.projectId);
   const activeFormatFile = resolve(activeRoot, 'format.json');
   if (existsSync(activeFormatFile)) {

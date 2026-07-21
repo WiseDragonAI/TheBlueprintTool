@@ -1,9 +1,13 @@
+/**
+ * WHAT: Verifies node-wide offline migration orchestration and identity admission.
+ * WHY: Every registered project must convert under the configured federation node identity.
+ */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { migrateNodeTaskCurrentState } from '../../../src/business/task-state/helper/migrate-node-task-current-state.js';
+import { migrateNodeTaskCurrentState } from '../../../src/business/task-state/controller/migrate-node-task-current-state.js';
 import { createTaskCurrentStateStore } from '../../../src/business/task-state/helper/task-current-state-store.js';
 
 test('node migrator converts every registered project and writes one offline report', async (context) => {

@@ -3,7 +3,7 @@
  * WHY: Operators need the same filesystem-only cutover on Linux and Termux.
  */
 import { resolve } from 'node:path';
-import { migrateNodeTaskCurrentState } from '../business/task-state/helper/migrate-node-task-current-state.js';
+import { migrateNodeTaskCurrentState } from '../business/task-state/controller/migrate-node-task-current-state.js';
 
 function argument(name: string): string {
   const index = process.argv.indexOf(name);

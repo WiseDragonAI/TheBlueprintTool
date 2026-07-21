@@ -1,3 +1,7 @@
+/**
+ * WHAT: Proves a hosted local route retrieves migrated task content from its causal owner.
+ * WHY: State convergence can precede content materialization, including valid zero-byte Markdown objects.
+ */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -12,7 +16,7 @@ import { createHttpServer } from '../../src/business/server/helper/create-http-s
 import { migrateTaskCurrentState } from '../../src/business/task-state/helper/task-current-state-migration.js';
 import { createTaskCurrentStateStore } from '../../src/business/task-state/helper/task-current-state-store.js';
 
-test('hosted project card read demands a phone-owned migrated object by exact hash', async (context) => {
+test('hosted project card read demands an empty phone-owned migrated object by exact hash', async (context) => {
   const catalogRoot = mkdtempSync(join(tmpdir(), 'decision-os-hosted-content-catalog-'));
   const phoneRoot = mkdtempSync(join(tmpdir(), 'decision-os-hosted-content-phone-'));
   const workstationProject = join(catalogRoot, 'shared');
@@ -20,7 +24,7 @@ test('hosted project card read demands a phone-owned migrated object by exact ha
   const phoneDos = join(phoneRoot, '.decision-os');
   const projectId = 'shared-project';
   const phoneRef = '.decision-os/cards/tasks/phone-only.md';
-  const phoneBody = Buffer.from('Phone-owned migrated body.\n');
+  const phoneBody = Buffer.from('');
   mkdirSync(workstationDos, { recursive: true });
   mkdirSync(join(phoneDos, 'cards', 'tasks'), { recursive: true });
   for (const decisionOsRoot of [workstationDos, phoneDos]) {
