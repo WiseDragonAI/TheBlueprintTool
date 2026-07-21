@@ -12,9 +12,10 @@ import { canonicalJson } from './task-current-state-codec.js';
 import { finalizeTaskCurrentEntity } from './task-current-state-join.js';
 import { materializeTaskCurrentEntity } from './materialize-task-current-entity.js';
 import { createTaskCurrentStateStore } from './task-current-state-store.js';
-import { createTaskContentObjectStore } from './task-content-object-store.js';
+import { createTaskContentObjectStore, type TaskContentHead } from './task-content-object-store.js';
 import { prepareTaskCurrentStateMigration } from './prepare-task-current-state-migration.js';
 import { restoreTaskContentObjects } from './restore-task-content-objects.js';
+import { mergeProjectionSourceLedger, prepareProjectionSources, type PreparedProjectionSource } from './task-current-state-projection-sources.js';
 import { joinTaskClocks, joinTaskRegisters } from '../../../../../shared/task-current-state-core.js';
 import { taskCurrentStateVersion, taskEntityTypes, type TaskCurrentEntity, type TaskCurrentProjection, type TaskCurrentRegister, type TaskProjectionConflict } from './task-current-state-types.js';
 
@@ -52,16 +53,14 @@ function legacyCurrentProjection(stateRoots: string[], projectId: string): Migra
   return { ...projection, legacyEntities: [...joined.values()] };
 }
 
-function projectionSource(stateRoots: string[], tasksLedgerFile: string, projectId: string): MigrationSource {
+function projectionSource(stateRoots: string[], tasksLedgerFile: string, projectId: string, decisionOsRoot: string, projectionSources: PreparedProjectionSource[]): MigrationSource {
   const current = legacyCurrentProjection(stateRoots, projectId);
-  if (current) return current;
-  const stateRoot = stateRoots[0];
-  const projectionFile = resolve(stateRoot, 'projection.json');
-  if (existsSync(projectionFile)) {
-    const projection = JSON.parse(readFileSync(projectionFile, 'utf8')) as MigrationProjection;
-    if (projection.ledger && typeof projection.ledger === 'object') return { ...projection, legacyEntities: [] };
-  }
-  return { ledger: JSON.parse(readFileSync(tasksLedgerFile, 'utf8')) as Record<string, unknown>, conflicts: [], legacyEntities: [] };
+  const activeProjectionFile = resolve(stateRoots[0], 'projection.json');
+  const activeProjection = !current && existsSync(activeProjectionFile) ? JSON.parse(readFileSync(activeProjectionFile, 'utf8')) as MigrationProjection : null;
+  const baseLedger = current?.ledger ?? activeProjection?.ledger ?? JSON.parse(readFileSync(tasksLedgerFile, 'utf8')) as Record<string, unknown>;
+  const ledger = hydrateLedgerThreadNotes(structuredClone(baseLedger), decisionOsRoot);
+  for (const source of projectionSources) mergeProjectionSourceLedger(ledger, source.ledger);
+  return { ledger, conflicts: [...(current?.conflicts ?? activeProjection?.conflicts ?? []), ...projectionSources.flatMap((source) => source.conflicts)], legacyEntities: current?.legacyEntities ?? [] };
 }
 
 function epochResourceEntities(entities: LegacyEntity[]): TaskCurrentEntity[] {
@@ -71,6 +70,17 @@ function epochResourceEntities(entities: LegacyEntity[]): TaskCurrentEntity[] {
     entityType: entity.entityType,
     entityId: entity.entityId,
     fields: structuredClone(entity.fields),
+  }));
+}
+
+function baselineResourceEntities(projectId: string, heads: TaskContentHead[]): TaskCurrentEntity[] {
+  const replicaId = 'baseline-content';
+  return heads.map((head) => finalizeTaskCurrentEntity({
+    version: taskCurrentStateVersion,
+    projectId,
+    entityType: 'resource',
+    entityId: head.key,
+    fields: { head: { clock: { [replicaId]: 1 }, candidates: [{ dot: { replicaId, counter: 1 }, operation: 'set', value: head }] } },
   }));
 }
 
@@ -145,7 +155,7 @@ function inside(parent: string, child: string): boolean {
   return Boolean(inner) && !inner.startsWith('..') && !isAbsolute(inner);
 }
 
-async function atomicWrite(file: string, value: string): Promise<void> {
+async function atomicWrite(file: string, value: string | Buffer): Promise<void> {
   await mkdir(dirname(file), { recursive: true });
   const temporary = `${file}.migration-${process.pid}`;
   await writeFile(temporary, value);
@@ -161,8 +171,9 @@ export async function migrateTaskCurrentState(input: { decisionOsRoot: string; p
     if (activeFormat.version !== 2) throw new Error('unsupported_legacy_task_current_state_format');
   }
   const sourceStateRoots = [...new Set([activeRoot, ...(input.sourceStateRoots ?? []).map((root) => resolve(root))])];
-  const source = projectionSource(sourceStateRoots, input.tasksLedgerFile, input.projectId);
-  const hydrated = hydrateLedgerThreadNotes(structuredClone(source.ledger ?? {}), input.decisionOsRoot);
+  const projectionSources = prepareProjectionSources({ stateRoots: sourceStateRoots.slice(1), projectId: input.projectId, decisionOsRoot: input.decisionOsRoot });
+  const source = projectionSource(sourceStateRoots, input.tasksLedgerFile, input.projectId, input.decisionOsRoot, projectionSources);
+  const hydrated = structuredClone(source.ledger ?? {});
   // WHAT: Complete every semantic and relationship check before mutating project files.
   // WHY: A failed preflight must leave the legacy store and sidecars byte-identical.
   const prepared = prepareTaskCurrentStateMigration({ decisionOsRoot: input.decisionOsRoot, ledger: hydrated });
@@ -178,27 +189,47 @@ export async function migrateTaskCurrentState(input: { decisionOsRoot: string; p
     ? resolve(backup, 'decision-os', 'task-state', input.projectId)
     : resolve(backup, 'source-state-roots', String(index)));
   await rm(activeRoot, { recursive: true, force: true });
+  for (const content of projectionSources.flatMap((source) => source.content)) {
+    const file = resolve(input.decisionOsRoot, content.key.replace(/^\/?\.decision-os\//, ''));
+    if (!existsSync(file)) await atomicWrite(file, content.bytes);
+  }
   for (const rewrite of prepared.bodyRewrites.filter((entry) => entry.removedGeneratedContent)) await atomicWrite(rewrite.file, rewrite.after);
   const ledger = prepared.ledger;
   await atomicWrite(input.tasksLedgerFile, `${JSON.stringify(stripHydratedThreadNotes(structuredClone(ledger)), null, 2)}\n`);
 
   const store = createTaskCurrentStateStore({ decisionOsRoot: input.decisionOsRoot, projectId: input.projectId, initializeLedger: ledger, deferFormat: true });
-  const objectInventory = await restoreTaskContentObjects(backedUpSourceRoots, store.root);
-  await mergeEntityBatches(store, input.projectId, epochResourceEntities(source.legacyEntities));
+  const restoredObjects = await restoreTaskContentObjects(backedUpSourceRoots, store.root);
+  const projectionObjects = new Map<string, Buffer>();
+  for (const content of projectionSources.flatMap((source) => source.content)) projectionObjects.set(createHash('sha256').update(content.bytes).digest('hex'), content.bytes);
+  let installedProjectionObjects = 0;
+  let installedProjectionBytes = 0;
+  for (const [hash, bytes] of projectionObjects) {
+    const file = resolve(store.root, 'objects', hash.slice(0, 2), hash);
+    if (existsSync(file)) continue;
+    await atomicWrite(file, bytes);
+    installedProjectionObjects += 1;
+    installedProjectionBytes += bytes.byteLength;
+  }
+  const objectInventory = {
+    sourceObjects: restoredObjects.sourceObjects + projectionObjects.size,
+    installedObjects: restoredObjects.installedObjects + installedProjectionObjects,
+    installedBytes: restoredObjects.installedBytes + installedProjectionBytes,
+  };
+  await mergeEntityBatches(store, input.projectId, projectionSources.flatMap((source) => source.entities));
   await mergeEntityBatches(store, input.projectId, recoveredPresenceEntities(input.projectId, source.legacyEntities, store));
   const conflicts = conflictEntities(input.projectId, source.conflicts ?? []);
   await mergeEntityBatches(store, input.projectId, conflicts);
 
   const objects = createTaskContentObjectStore({ decisionOsRoot: input.decisionOsRoot, projectId: input.projectId });
+  const manifest = buildFederationContentManifest({ projectId: input.projectId, decisionOsRoot: input.decisionOsRoot, ledger });
+  const heads = (await Promise.all(manifest.resources.map((resource) => objects.capture(resource.key)))).filter((head) => head !== null);
+  await mergeEntityBatches(store, input.projectId, [...baselineResourceEntities(input.projectId, heads), ...epochResourceEntities(source.legacyEntities), ...projectionSources.flatMap((source) => source.resourceEntities)]);
+  await store.flush();
   for (const head of store.contentHeads()) {
     // WHAT: Fail cutover when a retained source head lacks its immutable bytes.
     // WHY: Publishing the format marker with an unreadable remote-only head would claim semantic preservation falsely.
     if (!existsSync(objects.objectFile(head.hash))) throw new Error(`missing_migrated_task_content_object:${head.hash}:${head.key}`);
   }
-  const manifest = buildFederationContentManifest({ projectId: input.projectId, decisionOsRoot: input.decisionOsRoot, ledger });
-  const heads = (await Promise.all(manifest.resources.map((resource) => objects.capture(resource.key)))).filter((head) => head !== null);
-  if (heads.length > 0) await store.mutate({ replicaId: 'baseline-content', changes: heads.map((head) => ({ entityType: 'resource', entityId: head.key, changes: [{ path: 'head', operation: 'set', value: head }] })) });
-  await store.flush();
   const projection = store.projection();
   const currentEntities = store.activeDelta().entities;
   const inventoryEntities = (entities: Array<Pick<TaskCurrentEntity, 'entityType'>>): Record<string, number> => Object.fromEntries(taskEntityTypes.map((entityType) => [entityType, entities.filter((entity) => entity.entityType === entityType).length]));
@@ -223,7 +254,8 @@ export async function migrateTaskCurrentState(input: { decisionOsRoot: string; p
     relationshipRepairReport: prepared.relationshipRepairs,
     recoveredNoteDeletions: prepared.recoveredNoteDeletions,
     objectInventory,
-    sourceEntityInventory: inventoryEntities(source.legacyEntities),
+    sourceEntityInventory: inventoryEntities([...source.legacyEntities, ...projectionSources.flatMap((source) => [...source.entities, ...source.resourceEntities])]),
+    projectionSources: projectionSources.map((source) => ({ sourceNodeId: source.sourceNodeId, entityCount: source.sourceEntityCount, resourceCount: source.resourceEntities.length })),
     currentEntityInventory: inventoryEntities(currentEntities),
     semanticInventory,
     canonicalProjectionChecksum: createHash('sha256').update(canonicalJson({ ledger: projection.ledger, conflicts: projection.conflicts })).digest('hex'),

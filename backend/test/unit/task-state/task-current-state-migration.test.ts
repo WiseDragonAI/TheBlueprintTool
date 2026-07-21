@@ -203,3 +203,80 @@ test('migration joins legacy current entities from every writable node before en
   assert.equal(report.currentEntityInventory.resource, 2);
   assert.equal(report.semanticInventory.entityDeletions, 1);
 });
+
+test('migration preserves projection-only node entities, conflicts, notes, and content heads beside current shards', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-migration-projection-union-'));
+  const phoneRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-current-migration-phone-'));
+  const rollbackRoot = `${root}-rollback`;
+  context.after(() => [root, phoneRoot, rollbackRoot].forEach((entry) => rmSync(entry, { recursive: true, force: true })));
+  const projectId = 'project-a';
+  const activeRoot = resolve(root, 'task-state', projectId);
+  const phoneStateRoot = resolve(phoneRoot, 'task-state', projectId);
+  const tasksFile = resolve(root, 'tasks.json');
+  const sharedCardRef = '.decision-os/cards/tasks/shared-card.md';
+  const phoneCardRef = '.decision-os/cards/tasks/phone-only.md';
+  const phoneThreadRef = '.decision-os/threads/tasks/thread-phone-only.md';
+  const localSharedBody = Buffer.from('Workstation body.\n');
+  const phoneSharedBody = Buffer.from('Phone body.\n');
+  const phoneCardBody = Buffer.from('#task-active\n\nWaiting since: 2026-07-20T10:00:00.000Z\n\nPhone-only body.\n');
+  const phoneThreadBody = Buffer.from('# OPERATOR\n<!-- decision-os:note {"id":"phone-note","timestamp":"2026-07-21T01:00:00.000Z"} -->\n\nPhone-only note.\n');
+  const resource = (key: string, bytes: Buffer, type: 'card-markdown' | 'thread-markdown') => ({ type, key, hash: createHash('sha256').update(bytes).digest('hex'), bytes: bytes.byteLength, changedAt: '2026-07-21T01:00:00.000Z' });
+  const resources = [resource(sharedCardRef, phoneSharedBody, 'card-markdown'), resource(phoneCardRef, phoneCardBody, 'card-markdown'), resource(phoneThreadRef, phoneThreadBody, 'thread-markdown')];
+  const currentEntity = {
+    version: 2, projectId, entityType: 'card', entityId: 'shared-card', replication: 'active', stateHash: 'legacy',
+    fields: {
+      title: { clock: { workstation: 1 }, candidates: [{ dot: { replicaId: 'workstation', counter: 1 }, operation: 'set', value: 'Workstation title' }] },
+      comment: { clock: { workstation: 1 }, candidates: [{ dot: { replicaId: 'workstation', counter: 1 }, operation: 'set', value: { contentFile: sharedCardRef } }] },
+    },
+  };
+  mkdirSync(resolve(root, 'cards', 'tasks'), { recursive: true });
+  writeFileSync(resolve(root, 'cards', 'tasks', 'shared-card.md'), localSharedBody);
+  mkdirSync(resolve(activeRoot, 'current', 'card'), { recursive: true });
+  writeFileSync(resolve(activeRoot, 'format.json'), JSON.stringify({ version: 2, projectId, baselineRoot: 'legacy' }));
+  writeFileSync(resolve(activeRoot, 'current', 'card', 'shared-card.json'), JSON.stringify(currentEntity));
+  writeFileSync(tasksFile, JSON.stringify({ cards: [{ id: 'shared-card', title: 'Stale title' }], annotations: [], relationships: [] }));
+  mkdirSync(phoneStateRoot, { recursive: true });
+  writeFileSync(resolve(phoneStateRoot, 'projection.json'), JSON.stringify({
+    version: 1,
+    projectId,
+    sourceNodeId: 'phone',
+    ledger: {
+      cards: [
+        { id: 'shared-card', title: 'Phone title', comment: { contentFile: sharedCardRef } },
+        { id: 'phone-only', title: 'Phone only', comment: { contentFile: phoneCardRef } },
+      ],
+      annotations: [{ id: 'phone-zone', label: 'Phone zone', x: 0, y: 0, width: 100, height: 100 }],
+      relationships: [{ id: 'phone-relationship', from: 'shared-card', to: 'phone-only', label: 'subtask' }],
+      threadFiles: { 'thread-phone-only': phoneThreadRef },
+    },
+    conflicts: [],
+  }));
+  writeFileSync(resolve(phoneStateRoot, 'content-manifest.json'), JSON.stringify({ version: 1, projectId, generatedAt: '2026-07-21T01:00:00.000Z', complete: true, resources }));
+  for (const [entry, bytes] of [[resources[0], phoneSharedBody], [resources[1], phoneCardBody], [resources[2], phoneThreadBody]] as const) {
+    mkdirSync(resolve(phoneStateRoot, 'objects', entry.hash.slice(0, 2)), { recursive: true });
+    writeFileSync(resolve(phoneStateRoot, 'objects', entry.hash.slice(0, 2), entry.hash), bytes);
+  }
+
+  const result = await migrateTaskCurrentState({ decisionOsRoot: root, projectId, tasksLedgerFile: tasksFile, backupRoot: rollbackRoot, sourceStateRoots: [phoneStateRoot] });
+  const store = createTaskCurrentStateStore({ decisionOsRoot: root, projectId });
+  const projection = store.projection();
+  assert.equal((projection.ledger.cards as Array<Record<string, unknown>>).some((card) => card.id === 'phone-only'), true);
+  assert.equal((projection.ledger.annotations as Array<Record<string, unknown>>).some((zone) => zone.id === 'phone-zone'), true);
+  assert.equal((projection.ledger.relationships as Array<Record<string, unknown>>).find((relationship) => relationship.id === 'phone-relationship')?.position, 0);
+  assert.equal((projection.ledger.threadFiles as Record<string, string>)['thread-phone-only'], phoneThreadRef);
+  assert.equal(((projection.ledger.notes as Record<string, Array<Record<string, unknown>>>)['thread-phone-only'][0]).id, 'phone-note');
+  const titleConflict = projection.conflicts.find((conflict) => conflict.entityType === 'card' && conflict.entityId === 'shared-card' && conflict.path === 'title');
+  assert.deepEqual(new Set(titleConflict?.candidates.map((candidate) => candidate.value)), new Set(['Workstation title', 'Phone title']));
+  const phoneHead = store.contentHeads(phoneCardRef).find((head) => readFileSync(resolve(result.root, 'objects', head.hash.slice(0, 2), head.hash), 'utf8').includes('Phone-only body.'));
+  assert.ok(phoneHead);
+  assert.doesNotMatch(readFileSync(resolve(result.root, 'objects', phoneHead.hash.slice(0, 2), phoneHead.hash), 'utf8'), /Waiting since:|#task-active/);
+  assert.match(readFileSync(resolve(root, 'cards', 'tasks', 'phone-only.md'), 'utf8'), /Phone-only body/);
+  const sharedHeads = store.contentHeads(sharedCardRef);
+  assert.deepEqual(new Set(sharedHeads.map((head) => head.hash)), new Set([
+    createHash('sha256').update(localSharedBody).digest('hex'),
+    createHash('sha256').update(phoneSharedBody).digest('hex'),
+  ]));
+  for (const head of sharedHeads) assert.equal(existsSync(resolve(result.root, 'objects', head.hash.slice(0, 2), head.hash)), true);
+  const report = JSON.parse(readFileSync(result.report, 'utf8')) as Record<string, any>;
+  assert.deepEqual(report.projectionSources, [{ sourceNodeId: 'phone', entityCount: 6, resourceCount: 3 }]);
+});
