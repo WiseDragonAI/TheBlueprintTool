@@ -566,6 +566,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       for (const project of projectCatalog().filter((entry) => entry.available)) taskStateForProject(project);
       controlRoomProjectionStore?.invalidate();
       federationTaskStateReplicator?.reconcileRelay();
+      for (const projectId of new Set(federation?.remoteProjects().map((project) => project.localProjectId) ?? [])) federationTaskStateReplicator?.reconcileProject('relay', projectId);
       void synchronizeFederatedLibraries().catch(() => undefined);
       projectSyncController?.resume();
     },
@@ -573,7 +574,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       await federationTaskStateReplicator?.handleFrame(frame);
       void federationContentScheduler?.drain();
     },
-    onStateConnected: () => federationTaskStateReplicator?.reconcileRelay(),
+    onStateConnected: () => {
+      federationTaskStateReplicator?.reconcileRelay();
+      for (const projectId of new Set(federation?.remoteProjects().map((project) => project.localProjectId) ?? [])) federationTaskStateReplicator?.reconcileProject('relay', projectId);
+    },
   });
   for (const project of projectCatalog().filter((entry) => entry.available)) taskStateForProject(project);
   federationTaskStateReplicator = createFederationTaskStateReplicator({
@@ -689,16 +693,19 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       }
       const taskStore = federatedTaskStoreForProject(localProjectId, ownerNodeId);
       const projection = taskStore && taskStore.diagnostics().entityCount > 0 ? taskStore.projection() : null;
-      const taskStateStatus = projection
-        ? { status: remoteProject.online ? 'synchronized' : 'offline', updatedAt: '', message: '', resource: '' }
-        : { status: 'synchronizing', updatedAt: '', message: 'Synchronizing current task state.', resource: projectScope.scopedPath };
+      const relayConvergence = federationTaskStateReplicator?.diagnostics().convergence.find((entry) => entry.peerId === 'relay' && entry.projectId === localProjectId);
+      const taskRootReady = Boolean(projection && relayConvergence?.converged && relayConvergence.root === taskStore?.rootHash());
+      if (!taskRootReady) federationTaskStateReplicator?.reconcileProject('relay', localProjectId);
+      const taskStateStatus = taskRootReady
+        ? { status: remoteProject.online ? 'synchronized' : 'offline', updatedAt: relayConvergence?.lastRepairAt ?? '', message: '', resource: '', root: relayConvergence?.root ?? '' }
+        : { status: 'synchronizing', updatedAt: relayConvergence?.lastRepairAt ?? '', message: 'Synchronizing current task state to the relay root.', resource: projectScope.scopedPath, root: relayConvergence?.root ?? '' };
       const ledgerRead = projectScope.scopedPath.match(/^\/api\/ledgers\/([^/]+)\/navigation$/);
       const cardRead = projectScope.scopedPath.match(/^\/api\/ledgers\/([^/]+)\/cards\/([^/]+)$/);
       const threadRead = projectScope.scopedPath.match(/^\/api\/ledgers\/([^/]+)\/threads\/([^/]+)$/);
       let replicaBody: unknown = null;
       let resourceReady = true;
       let contentStatus: AnyRecord = { status: 'not-required', resource: '', error: '' };
-      if (request.method === 'GET' && projection) {
+      if (request.method === 'GET' && projection && taskRootReady) {
         const ledger = projection.ledger;
         if (projectScope.scopedPath === '/decision-os/state') replicaBody = { projectId: localProjectId, projectName: remoteProject.name, projectColor: remoteProject.color, ledgers: remoteProject.ledgers };
         if (ledgerRead) replicaBody = { ...ledger, cards: (Array.isArray(ledger.cards) ? ledger.cards : []).map((card) => {
@@ -751,13 +758,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         }
       }
       const stateStatus = {
-        status: !projection || !resourceReady ? 'synchronizing' : remoteProject.online ? 'synchronized' : 'offline',
+        status: !taskRootReady || !resourceReady ? 'synchronizing' : remoteProject.online ? 'synchronized' : 'offline',
         resource: String(contentStatus.resource || projectScope.scopedPath),
         task: taskStateStatus,
         content: contentStatus,
       };
       const replicaRead = request.method === 'GET' && (projectScope.scopedPath === '/decision-os/state' || ledgerRead || cardRead || threadRead);
-      if (replicaRead && replicaBody && resourceReady) {
+      if (replicaRead && replicaBody && taskRootReady && resourceReady) {
         response.setHeader('cache-control', 'no-store');
         response.setHeader('content-type', 'application/json');
         response.setHeader('x-decision-os-state-status', stateStatus.status);
@@ -765,7 +772,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         return;
       }
       if (replicaRead) {
-        if (!projection) federationTaskStateReplicator?.reconcileProject(ownerNodeId, localProjectId);
+        if (!taskRootReady) federationTaskStateReplicator?.reconcileProject('relay', localProjectId);
         response.statusCode = 202;
         response.setHeader('cache-control', 'no-store');
         response.setHeader('content-type', 'application/json');

@@ -208,6 +208,11 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
         }
         return;
       }
+      if (frame.type === 'state-bucket-summary' && !frame.to) {
+        webSocket.send(JSON.stringify({ ...frame, from: 'relay' }));
+        return;
+      }
+      if (frame.type === 'state-subscribe') return;
       if (frame.type.startsWith('state-') && frame.to) {
         sockets.get(frame.to)?.send(JSON.stringify({ ...frame, from: nodeId }));
         return;

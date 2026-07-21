@@ -78,6 +78,15 @@ function relayHarness(relayStore: TaskCurrentStateStore) {
           deliver(from, { type: 'state-entity-batch', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, deliveryId: crypto.randomUUID(), entries: entities.map((entity) => ({ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash, entity })) } });
           deliver(from, { type: 'state-missing-request', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, buckets } });
         }
+        deliver(from, { type: 'state-bucket-summary', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, root: relayStore.rootHash(), buckets: relayStore.bucketManifest() } });
+      }
+      if (frame.type === 'state-subscribe') {
+        deliver(from, { type: 'state-bucket-summary', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, root: relayStore.rootHash(), buckets: relayStore.bucketManifest() } });
+      }
+      if (frame.type === 'state-missing-request') {
+        const buckets = Array.isArray(payload.buckets) ? payload.buckets.map(String) : [];
+        const entities = relayStore.entitiesForBuckets(buckets);
+        deliver(from, { type: 'state-entity-batch', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, deliveryId: crypto.randomUUID(), entries: entities.map((entity) => ({ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash, entity })) } });
       }
     },
   };
@@ -153,6 +162,35 @@ test('remote project state is discovered on demand through an owner summary', as
 
   await waitFor(() => requester.store.rootHash() === owner.store.rootHash());
   assert.equal((requester.store.projection().ledger.cards as Array<Record<string, unknown>>)[0].title, 'Remote card');
+});
+
+test('blank remote-only node reaches the durable relay root while every owner is offline', async (context) => {
+  const owner = fixture('decision-os-offline-owner-state-');
+  const requester = fixture('decision-os-blank-requester-state-');
+  const relay = fixture('decision-os-offline-owner-relay-');
+  const mutation = await owner.store.mutate({
+    replicaId: 'desktop',
+    changes: [{ entityType: 'card', entityId: 'card-a', changes: [{ path: 'title', operation: 'set', value: 'Durable relay card' }] }],
+  });
+  await relay.store.merge(mutation.delta);
+  const harness = relayHarness(relay.store);
+  context.after(async () => {
+    await harness.settle();
+    await Promise.all([owner.store.flush(), requester.store.flush(), relay.store.flush()]);
+    [owner, requester, relay].forEach((entry) => rmSync(entry.root, { recursive: true, force: true }));
+  });
+  const requesterReplica = createFederationTaskStateReplicator({
+    stores: () => new Map<string, TaskCurrentStateStore>(),
+    storeFor: () => requester.store,
+    publish: (target, frame) => { void harness.publish('blank', target, frame); return true; },
+  });
+  harness.register('blank', requesterReplica);
+
+  requesterReplica.reconcileProject('relay', 'project-a');
+
+  await waitFor(() => requester.store.rootHash() === relay.store.rootHash());
+  await waitFor(() => requesterReplica.diagnostics().convergence.some((entry) => entry.peerId === 'relay' && entry.projectId === 'project-a' && entry.converged));
+  assert.equal((requester.store.projection().ledger.cards as Array<Record<string, unknown>>)[0].title, 'Durable relay card');
 });
 
 test('relay acknowledgements clear only matching entity hashes from the project dirty map', async (context) => {
