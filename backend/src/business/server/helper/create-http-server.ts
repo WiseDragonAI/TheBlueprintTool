@@ -608,7 +608,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     store: federationContentStore,
     hasPriorityStateWork: () => {
       const diagnostics = federationTaskStateReplicator?.diagnostics();
-      return Boolean(diagnostics?.runtimeRetryProjects.length);
+      return Boolean(diagnostics && (diagnostics.runtimeDirty.length > 0 || diagnostics.pendingDeliveryIds.length > 0));
     },
     fetchContent: async ({ ownerNodeId, projectId, hash }) => {
       const result = await federation!.requestToFile(ownerNodeId, `/api/federation/content-object?projectId=${encodeURIComponent(projectId)}&hash=${encodeURIComponent(hash)}`, federationContentStore.objectFile(hash), hash);

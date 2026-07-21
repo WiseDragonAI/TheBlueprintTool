@@ -10,7 +10,7 @@ import { hydrateLedgerThreadNotes } from '../../ledger/helper/thread-content-fil
 import { finalizeTaskCurrentEntity } from './task-current-state-join.js';
 import { createTaskCurrentStateStore } from './task-current-state-store.js';
 import { createTaskContentObjectStore } from './task-content-object-store.js';
-import type { TaskCurrentEntity, TaskProjectionConflict } from './task-current-state-types.js';
+import { taskCurrentStateVersion, type TaskCurrentEntity, type TaskProjectionConflict } from './task-current-state-types.js';
 
 type MigrationProjection = { projectId?: string; ledger?: Record<string, unknown>; conflicts?: TaskProjectionConflict[] };
 
@@ -35,11 +35,10 @@ function conflictEntities(projectId: string, conflicts: TaskProjectionConflict[]
     const first = values[0];
     const clock = Object.fromEntries(['baseline', ...values.flatMap((conflict, conflictIndex) => conflict.candidates.map((_candidate, candidateIndex) => `migration-${conflictIndex}-${candidateIndex}`))].map((replicaId) => [replicaId, 1]));
     return finalizeTaskCurrentEntity({
-      version: 2,
+      version: taskCurrentStateVersion,
       projectId,
       entityType: first.entityType,
       entityId: first.entityId,
-      replication: 'active',
       fields: Object.fromEntries(values.map((conflict, conflictIndex) => [conflict.path, {
         clock,
         candidates: conflict.candidates.map((candidate, candidateIndex) => ({
@@ -64,7 +63,7 @@ export async function migrateTaskCurrentState(input: { decisionOsRoot: string; p
   const store = createTaskCurrentStateStore({ decisionOsRoot: input.decisionOsRoot, projectId: input.projectId, initializeLedger: ledger });
   await rm(store.formatFile, { force: true });
   const conflicts = conflictEntities(input.projectId, source.conflicts ?? []);
-  if (conflicts.length > 0) await store.merge({ version: 2, projectId: input.projectId, entities: conflicts });
+  if (conflicts.length > 0) await store.merge({ version: taskCurrentStateVersion, projectId: input.projectId, entities: conflicts });
 
   const objects = createTaskContentObjectStore({ decisionOsRoot: input.decisionOsRoot, projectId: input.projectId });
   const manifest = buildFederationContentManifest({ projectId: input.projectId, decisionOsRoot: input.decisionOsRoot, ledger });

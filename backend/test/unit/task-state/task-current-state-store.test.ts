@@ -3,17 +3,19 @@
  * WHY: A card mutation must never rewrite a project projection or retain permanent mutation files.
  */
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import test from 'node:test';
 import { createTaskCurrentStateStore } from '../../../src/business/task-state/helper/task-current-state-store.js';
 
+const todoLifecycle = { status: 'todo', changedAt: '2026-07-21T00:00:00.000Z', waitingAt: '2026-07-21T00:00:00.000Z', closedAt: null };
+
 test('one card mutation leaves one shard and removes its short-lived journal after materialization', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-store-'));
   context.after(() => rmSync(root, { recursive: true, force: true }));
   const store = createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a', initializeLedger: {} });
-  await store.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'card-a', changes: [{ path: 'status', operation: 'set', value: 'todo' }] }] });
+  await store.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'card-a', changes: [{ path: 'lifecycle', operation: 'set', value: todoLifecycle }] }] });
   await store.flush();
   const stateRoot = resolve(root, 'task-state', 'project-a');
   assert.equal(readdirSync(resolve(stateRoot, 'current', 'card')).length, 1);
@@ -27,7 +29,7 @@ test('restart reconstructs projection, clock, and buckets from current shards on
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-restart-'));
   context.after(() => rmSync(root, { recursive: true, force: true }));
   const first = createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a', initializeLedger: {} });
-  await first.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'card-a', changes: [{ path: 'status', operation: 'set', value: 'todo' }] }] });
+  await first.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'card-a', changes: [{ path: 'lifecycle', operation: 'set', value: todoLifecycle }] }] });
   await first.flush();
   const restarted = createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a' });
   assert.equal((restarted.projection().ledger.cards as Array<Record<string, unknown>>)[0].status, 'todo');
@@ -39,6 +41,55 @@ test('missing format marker requires the offline migration entrypoint', (context
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-format-'));
   context.after(() => rmSync(root, { recursive: true, force: true }));
   assert.throws(() => createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a' }), /offline_migration_required/);
+});
+
+test('held publication metadata stays local and activation does not change entity hashes', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-held-'));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const store = createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a', initializeLedger: {} });
+  await store.mutate({ replicaId: 'desktop', activationTaskId: 'card-a', replication: 'held', changes: [{ entityType: 'card', entityId: 'card-a', changes: [{ path: 'title', operation: 'set', value: 'Local' }] }] });
+  await store.flush();
+  const entity = store.entity('card', 'card-a')!;
+  const stateRoot = resolve(root, 'task-state', 'project-a');
+  assert.equal(Object.hasOwn(entity, 'replication'), false);
+  assert.equal(Object.hasOwn(entity, 'activationTaskId'), false);
+  assert.equal(store.activeDelta().entities.length, 0);
+  assert.equal(readdirSync(resolve(stateRoot, 'local', 'held')).length, 1);
+  const beforeHash = entity.stateHash;
+  const activated = await store.activate('card-a');
+  assert.equal(activated.entities[0].stateHash, beforeHash);
+  await store.flush();
+  assert.equal(store.activeDelta().entities.length, 1);
+  assert.equal(readdirSync(resolve(stateRoot, 'local', 'held')).length, 0);
+});
+
+test('duplicate incoming state creates no journal and no shard rewrite', async (context) => {
+  const sourceRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-current-duplicate-source-'));
+  const targetRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-current-duplicate-target-'));
+  context.after(() => { rmSync(sourceRoot, { recursive: true, force: true }); rmSync(targetRoot, { recursive: true, force: true }); });
+  const source = createTaskCurrentStateStore({ decisionOsRoot: sourceRoot, projectId: 'project-a', initializeLedger: {} });
+  const target = createTaskCurrentStateStore({ decisionOsRoot: targetRoot, projectId: 'project-a', initializeLedger: {} });
+  const mutation = await source.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'card-a', changes: [{ path: 'title', operation: 'set', value: 'Once' }] }] });
+  await target.merge(mutation.delta);
+  await target.flush();
+  const shard = resolve(targetRoot, 'task-state', 'project-a', 'current', 'card', 'card-a.json');
+  const beforeBytes = readFileSync(shard, 'utf8');
+  const duplicate = await target.merge(mutation.delta);
+  assert.equal(duplicate.changed, false);
+  assert.equal(target.diagnostics().journalCount, 0);
+  await target.flush();
+  assert.equal(readFileSync(shard, 'utf8'), beforeBytes);
+  await source.flush();
+});
+
+test('runtime rejects a v2 format marker without automatic migration', (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-v2-reject-'));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const stateRoot = resolve(root, 'task-state', 'project-a');
+  const formatFile = resolve(stateRoot, 'format.json');
+  mkdirSync(stateRoot, { recursive: true });
+  writeFileSync(formatFile, JSON.stringify({ version: 2, projectId: 'project-a', baselineRoot: '' }), { flag: 'wx' });
+  assert.throws(() => createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a' }), /unsupported_task_current_state_format/);
 });
 
 test('concurrent thread notes converge as independent entities', async (context) => {

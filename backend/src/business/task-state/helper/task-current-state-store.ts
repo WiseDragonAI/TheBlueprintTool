@@ -1,36 +1,43 @@
 /**
- * WHAT: Persists sharded causal task state through short-lived crash journals.
- * WHY: Local durability and replica repair must touch changed entities without rewriting project-wide projections.
+ * WHAT: Persists epoch-3 causal state through journals, independent shards, and local publication markers.
+ * WHY: Local success must follow journal durability while replicated hashes contain only joinable domain state.
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
-import { rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { sha256 } from './task-current-state-codec.js';
-import { assertTaskCurrentEntity, finalizeTaskCurrentEntity, hashTaskCurrentEntity, joinTaskClocks, joinTaskEntities } from './task-current-state-join.js';
+import {
+  hashTaskCurrentBucket,
+  hashTaskCurrentRoot,
+  taskCurrentBucketForEntityKey,
+  taskCurrentEntityKey,
+} from '../../../../../shared/task-current-state-core.js';
+import { assertTaskCurrentEntity, finalizeTaskCurrentEntity, joinTaskClocks, joinTaskEntities } from './task-current-state-join.js';
 import { materializeTaskCurrentEntity } from './materialize-task-current-entity.js';
+import { runBoundedTaskMaterialization } from './run-bounded-task-materialization.js';
+import { createTaskLocalPublicationState } from './task-local-publication-state.js';
 import { taskCurrentBaselineChanges } from './task-current-state-baseline.js';
 import { taskCurrentStateDiagnostics } from './task-current-state-diagnostics.js';
 import { createTaskCurrentStatePersistence } from './task-current-state-persistence.js';
-import { taskCurrentStateVersion, taskEntityTypes, type TaskCausalClock, type TaskCurrentBucket, type TaskCurrentEntity, type TaskCurrentFormat, type TaskCurrentProjection, type TaskEntityChange, type TaskMutationBatch, type TaskStateDelta } from './task-current-state-types.js';
+import {
+  taskCurrentBaselineEpoch,
+  taskCurrentStateVersion,
+  taskEntityTypes,
+  taskStateProtocol,
+  type TaskCausalClock,
+  type TaskCurrentBucket,
+  type TaskCurrentEntity,
+  type TaskCurrentFormat,
+  type TaskCurrentProjection,
+  type TaskEntityChange,
+  type TaskMutationBatch,
+  type TaskStateDelta,
+} from './task-current-state-types.js';
 
-type JournalDocument = { version: 2; mutation?: TaskMutationBatch; delta?: TaskStateDelta };
+type JournalDocument = { version: 3; mutation?: TaskMutationBatch; delta?: TaskStateDelta; activateTaskId?: string };
 type StoreOptions = { decisionOsRoot: string; projectId: string; initializeLedger?: Record<string, unknown> };
-
-function entityKey(entity: Pick<TaskCurrentEntity, 'entityType' | 'entityId'>): string {
-  return `${entity.entityType}\u0000${entity.entityId}`;
-}
 
 function emptyProjection(projectId: string): TaskCurrentProjection {
   return { version: taskCurrentStateVersion, projectId, ledger: { cards: [], annotations: [], relationships: [] }, conflicts: [], clock: {} };
-}
-
-function bucketFor(key: string): string {
-  return sha256(key).slice(0, 2);
-}
-
-function bucketChecksum(entries: Array<[string, TaskCurrentEntity]>): string {
-  return sha256(entries.sort(([left], [right]) => left.localeCompare(right)).map(([key, entity]) => `${key}\u0000${entity.stateHash}`).join('\n'));
 }
 
 function registerEntity(batch: TaskMutationBatch, change: TaskEntityChange): TaskCurrentEntity {
@@ -44,8 +51,6 @@ function registerEntity(batch: TaskMutationBatch, change: TaskEntityChange): Tas
       clock,
       candidates: [{ dot: batch.dot, operation: field.operation, ...(Object.hasOwn(field, 'value') ? { value: structuredClone(field.value) } : {}) }],
     }])),
-    ...(batch.activationTaskId ? { activationTaskId: batch.activationTaskId } : {}),
-    replication: batch.replication,
   });
 }
 
@@ -53,7 +58,9 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
   const root = resolve(options.decisionOsRoot, 'task-state', options.projectId);
   const formatFile = resolve(root, 'format.json');
   const journalDirectory = resolve(root, 'journal');
+  const heldDirectory = resolve(root, 'local', 'held');
   const entities = new Map<string, TaskCurrentEntity>();
+  const publication = createTaskLocalPublicationState(heldDirectory);
   const bucketEntries = new Map<string, Map<string, TaskCurrentEntity>>();
   const bucketSummaries = new Map<string, TaskCurrentBucket>();
   const projection = emptyProjection(options.projectId);
@@ -65,23 +72,23 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
   let materializerError: Error | null = null;
 
   const updateBucket = (key: string, entity: TaskCurrentEntity): void => {
-    const bucket = bucketFor(key);
+    const bucket = taskCurrentBucketForEntityKey(key);
     const entries = bucketEntries.get(bucket) ?? new Map<string, TaskCurrentEntity>();
-    if (entity.replication === 'active') entries.set(key, entity);
-    else entries.delete(key);
+    if (publication.isHeld(key)) entries.delete(key);
+    else entries.set(key, entity);
     if (entries.size === 0) {
       bucketEntries.delete(bucket);
       bucketSummaries.delete(bucket);
       return;
     }
     bucketEntries.set(bucket, entries);
-    bucketSummaries.set(bucket, { bucket, count: entries.size, checksum: bucketChecksum([...entries]) });
+    bucketSummaries.set(bucket, { bucket, count: entries.size, checksum: hashTaskCurrentBucket(entries) });
   };
 
   const applyEntity = (incoming: TaskCurrentEntity): boolean => {
     assertTaskCurrentEntity(incoming);
     if (incoming.projectId !== options.projectId) throw new Error('task_current_project_mismatch');
-    const key = entityKey(incoming);
+    const key = taskCurrentEntityKey(incoming);
     const joined = joinTaskEntities(entities.get(key), incoming);
     if (entities.get(key)?.stateHash === joined.stateHash) return false;
     entities.set(key, joined);
@@ -91,28 +98,51 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
     return true;
   };
 
-  const applyMutation = (batch: TaskMutationBatch): TaskCurrentEntity[] => batch.changes.flatMap((change) => {
-    // WHAT: Give each ledger field its own entity lane.
-    // WHY: Holding one new task reference must not hide or republish the complete shared ledger entity.
-    const lanes = change.entityType === 'ledger'
-      ? change.changes.map((field) => ({ ...change, entityId: `${change.entityId}:${field.path}`, changes: [field] }))
-      : [change];
-    return lanes.flatMap((lane) => {
-      const incoming = registerEntity(batch, lane);
-      return applyEntity(incoming) ? [entities.get(entityKey(incoming))!] : [];
-    });
-  });
+  const mutationLanes = (change: TaskEntityChange): TaskEntityChange[] => change.entityType === 'ledger'
+    ? change.changes.map((field) => ({ ...change, entityId: `${change.entityId}:${field.path}`, changes: [field] }))
+    : [change];
+
+  const applyMutation = (batch: TaskMutationBatch): TaskCurrentEntity[] => batch.changes.flatMap((change) => mutationLanes(change).flatMap((lane) => {
+    const incoming = registerEntity(batch, lane);
+    const key = taskCurrentEntityKey(incoming);
+    if (batch.replication === 'held') publication.hold(batch.activationTaskId, key);
+    return applyEntity(incoming) ? [entities.get(key)!] : [];
+  }));
+
+  const applyActivation = (taskId: string): string[] => {
+    const keys = publication.activate(taskId);
+    for (const key of keys) {
+      const entity = entities.get(key);
+      if (entity) updateBucket(key, entity);
+    }
+    return keys;
+  };
 
   const loadEntityFiles = (): void => {
     for (const entityType of taskEntityTypes) {
       const directory = resolve(root, 'current', entityType);
       if (!existsSync(directory)) continue;
       for (const name of readdirSync(directory).filter((value) => value.endsWith('.json')).sort()) {
-        const entity = JSON.parse(readFileSync(resolve(directory, name), 'utf8')) as TaskCurrentEntity;
-        applyEntity(entity);
+        applyEntity(JSON.parse(readFileSync(resolve(directory, name), 'utf8')) as TaskCurrentEntity);
       }
     }
   };
+
+  function rootHash(): string {
+    return hashTaskCurrentRoot(bucketManifest());
+  }
+
+  function bucketManifest(): TaskCurrentBucket[] {
+    return [...bucketSummaries.values()].sort((left, right) => left.bucket.localeCompare(right.bucket)).map((entry) => ({ ...entry }));
+  }
+
+  const formatDocument = (): TaskCurrentFormat => ({
+    stateProtocol: taskStateProtocol,
+    stateSchema: taskCurrentStateVersion,
+    baselineEpoch: taskCurrentBaselineEpoch,
+    projectId: options.projectId,
+    baselineRoot: rootHash(),
+  });
 
   const initialize = (): void => {
     mkdirSync(journalDirectory, { recursive: true });
@@ -129,8 +159,7 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
       replication: 'active',
     };
     for (const entity of applyMutation(batch)) persistence.atomicWriteSync(persistence.entityPath(entity), `${JSON.stringify(entity)}\n`);
-    const format: TaskCurrentFormat = { version: taskCurrentStateVersion, projectId: options.projectId, baselineRoot: rootHash() };
-    persistence.atomicWriteSync(formatFile, `${JSON.stringify(format)}\n`);
+    persistence.atomicWriteSync(formatFile, `${JSON.stringify(formatDocument())}\n`);
   };
 
   const validateFormat = (): void => {
@@ -139,7 +168,7 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
       initialize();
     }
     const format = JSON.parse(readFileSync(formatFile, 'utf8')) as TaskCurrentFormat;
-    if (format.version !== taskCurrentStateVersion || format.projectId !== options.projectId) throw new Error('unsupported_task_current_state_format');
+    if (format.stateProtocol !== taskStateProtocol || format.stateSchema !== taskCurrentStateVersion || format.baselineEpoch !== taskCurrentBaselineEpoch || format.projectId !== options.projectId) throw new Error('unsupported_task_current_state_format');
   };
 
   const recoverJournals = (): void => {
@@ -147,23 +176,30 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
     for (const name of readdirSync(journalDirectory).filter((value) => value.endsWith('.json')).sort()) {
       const file = resolve(journalDirectory, name);
       const document = JSON.parse(readFileSync(file, 'utf8')) as JournalDocument;
-      const changed = document.mutation ? applyMutation(document.mutation) : (document.delta?.entities ?? []).filter(applyEntity).map((entity) => entities.get(entityKey(entity))!);
-      for (const entity of changed) pendingEntities.set(entityKey(entity), entity);
+      if (document.version !== taskCurrentStateVersion) throw new Error('unsupported_task_current_state_journal');
+      const changed = document.mutation
+        ? applyMutation(document.mutation)
+        : (document.delta?.entities ?? []).filter(applyEntity).map((entity) => entities.get(taskCurrentEntityKey(entity))!);
+      if (document.activateTaskId) applyActivation(document.activateTaskId);
+      for (const entity of changed) pendingEntities.set(taskCurrentEntityKey(entity), entity);
       pendingJournals.add(file);
     }
   };
 
   const runMaterializer = async (): Promise<void> => {
-    while (pendingEntities.size > 0 || pendingJournals.size > 0) {
+    while (pendingEntities.size > 0 || publication.hasPending() || pendingJournals.size > 0) {
       const currentEntities = [...pendingEntities.values()];
+      const held = publication.drain();
       const currentJournals = [...pendingJournals];
-      pendingEntities.clear();
-      pendingJournals.clear();
+      pendingEntities.clear(); pendingJournals.clear();
       try {
-        await Promise.all(currentEntities.map((entity) => persistence.atomicWrite(persistence.entityPath(entity), `${JSON.stringify(entity)}\n`)));
-        await Promise.all(currentJournals.map((file) => rm(file, { force: true })));
+        await runBoundedTaskMaterialization(currentEntities, async (entity) => persistence.atomicWrite(persistence.entityPath(entity), `${JSON.stringify(entity)}\n`));
+        await runBoundedTaskMaterialization(held.writes, async (taskId) => persistence.atomicWrite(publication.markerFile(taskId), `${JSON.stringify(publication.marker(taskId))}\n`));
+        await runBoundedTaskMaterialization(held.deletes, async (taskId) => persistence.durableRemove(publication.markerFile(taskId)));
+        await runBoundedTaskMaterialization(currentJournals, persistence.durableRemove);
       } catch (error) {
-        for (const entity of currentEntities) pendingEntities.set(entityKey(entity), entity);
+        for (const entity of currentEntities) pendingEntities.set(taskCurrentEntityKey(entity), entity);
+        publication.restore(held);
         for (const file of currentJournals) pendingJournals.add(file);
         throw error;
       }
@@ -175,9 +211,7 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
     materializerError = null;
     materializer = runMaterializer().catch((error: unknown) => {
       materializerError = error instanceof Error ? error : new Error(String(error));
-    }).finally(() => {
-      materializer = null;
-    });
+    }).finally(() => { materializer = null; });
   };
 
   const journal = async (document: JournalDocument, id: string): Promise<string> => {
@@ -186,14 +220,7 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
     return file;
   };
 
-  function rootHash(): string {
-    return sha256(bucketManifest().map((bucket) => `${bucket.bucket}\u0000${bucket.count}\u0000${bucket.checksum}`).join('\n'));
-  }
-
-  function bucketManifest(): TaskCurrentBucket[] {
-    return [...bucketSummaries.values()].sort((left, right) => left.bucket.localeCompare(right.bucket)).map((entry) => ({ ...entry }));
-  }
-
+  publication.load();
   validateFormat();
   loadEntityFiles();
   recoverJournals();
@@ -208,27 +235,24 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
     bucketManifest,
     entitiesForBuckets(buckets: string[]): TaskCurrentEntity[] {
       const requested = new Set(buckets);
-      return [...entities.entries()].filter(([key, entity]) => entity.replication === 'active' && requested.has(bucketFor(key))).map(([, entity]) => structuredClone(entity));
+      return [...entities.entries()].filter(([key]) => !publication.isHeld(key) && requested.has(taskCurrentBucketForEntityKey(key))).map(([, entity]) => structuredClone(entity));
     },
     activeDelta(entityKeys?: string[]): TaskStateDelta {
       const requested = entityKeys ? new Set(entityKeys) : null;
-      return { version: taskCurrentStateVersion, projectId: options.projectId, entities: [...entities].filter(([key, entity]) => entity.replication === 'active' && (!requested || requested.has(key))).map(([, entity]) => structuredClone(entity)) };
+      return { version: taskCurrentStateVersion, projectId: options.projectId, entities: [...entities].filter(([key]) => !publication.isHeld(key) && (!requested || requested.has(key))).map(([, entity]) => structuredClone(entity)) };
     },
     entity(entityType: TaskCurrentEntity['entityType'], entityId: string): TaskCurrentEntity | null {
       const value = entities.get(`${entityType}\u0000${entityId}`);
       return value ? structuredClone(value) : null;
     },
     async commitFormat(): Promise<void> {
-      const format: TaskCurrentFormat = { version: taskCurrentStateVersion, projectId: options.projectId, baselineRoot: rootHash() };
-      await persistence.atomicWrite(formatFile, `${JSON.stringify(format)}\n`);
+      await persistence.atomicWrite(formatFile, `${JSON.stringify(formatDocument())}\n`);
     },
     contentHeads(key = ''): Array<{ type: 'card-markdown' | 'thread-markdown' | 'managed-asset'; key: string; hash: string; bytes: number; changedAt: string; sourceReplicaId: string }> {
       const candidates = key ? [entities.get(`resource\u0000${key}`)] : [...entities.values()];
       return candidates.flatMap((entity) => {
-        if (!entity) return [];
-        if (entity.entityType !== 'resource' || (key && entity.entityId !== key)) return [];
-        const candidates = entity.fields.head?.candidates ?? [];
-        return candidates.flatMap((candidate) => {
+        if (!entity || entity.entityType !== 'resource' || (key && entity.entityId !== key)) return [];
+        return (entity.fields.head?.candidates ?? []).flatMap((candidate) => {
           if (candidate.operation !== 'set' || !candidate.value || typeof candidate.value !== 'object') return [];
           const value = candidate.value as Record<string, unknown>;
           const type = String(value.type ?? 'managed-asset');
@@ -253,37 +277,37 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
       };
       const journalFile = await journal({ version: taskCurrentStateVersion, mutation: batch }, batch.batchId);
       const changed = applyMutation(batch);
-      for (const entity of changed) pendingEntities.set(entityKey(entity), entity);
+      for (const entity of changed) pendingEntities.set(taskCurrentEntityKey(entity), entity);
       pendingJournals.add(journalFile);
       scheduleMaterializer();
-      return { batch, delta: { version: taskCurrentStateVersion, projectId: options.projectId, entities: changed.filter((entity) => entity.replication === 'active').map((entity) => structuredClone(entity)) } };
+      return { batch, delta: { version: taskCurrentStateVersion, projectId: options.projectId, entities: changed.filter((entity) => !publication.isHeld(taskCurrentEntityKey(entity))).map((entity) => structuredClone(entity)) } };
     },
     async activate(taskId: string): Promise<TaskStateDelta> {
-      const changed = [...entities.values()].filter((entity) => entity.replication === 'held' && entity.activationTaskId === taskId).map((entity) => finalizeTaskCurrentEntity({ ...entity, replication: 'active' as const }));
-      if (changed.length === 0) return { version: taskCurrentStateVersion, projectId: options.projectId, entities: [] };
-      const delta = { version: taskCurrentStateVersion, projectId: options.projectId, entities: changed };
-      const journalFile = await journal({ version: taskCurrentStateVersion, delta }, `activate-${taskId}-${randomUUID()}`);
-      for (const entity of changed) {
-        applyEntity(entity);
-        const current = entities.get(entityKey(entity))!;
-        pendingEntities.set(entityKey(current), current);
-      }
+      const keys = publication.keysForTask(taskId);
+      if (keys.length === 0) return { version: taskCurrentStateVersion, projectId: options.projectId, entities: [] };
+      const journalFile = await journal({ version: taskCurrentStateVersion, activateTaskId: taskId }, `activate-${taskId}-${randomUUID()}`);
+      applyActivation(taskId);
       pendingJournals.add(journalFile);
       scheduleMaterializer();
-      return this.activeDelta(changed.map(entityKey));
+      return this.activeDelta(keys);
     },
     async merge(delta: TaskStateDelta): Promise<{ changed: boolean; delta: TaskStateDelta }> {
       if (delta.version !== taskCurrentStateVersion || delta.projectId !== options.projectId) throw new Error('invalid_task_state_delta');
-      for (const entity of delta.entities) assertTaskCurrentEntity(entity);
+      const joined = delta.entities.map((entity) => {
+        assertTaskCurrentEntity(entity);
+        return joinTaskEntities(entities.get(taskCurrentEntityKey(entity)), entity);
+      });
+      const changedPreview = joined.filter((entity) => entities.get(taskCurrentEntityKey(entity))?.stateHash !== entity.stateHash);
+      if (changedPreview.length === 0) return { changed: false, delta: { version: taskCurrentStateVersion, projectId: options.projectId, entities: [] } };
       const journalFile = await journal({ version: taskCurrentStateVersion, delta }, `remote-${randomUUID()}`);
-      const changed = delta.entities.filter(applyEntity).map((entity) => entities.get(entityKey(entity))!);
-      for (const entity of changed) pendingEntities.set(entityKey(entity), entity);
+      const changed = delta.entities.filter(applyEntity).map((entity) => entities.get(taskCurrentEntityKey(entity))!);
+      for (const entity of changed) pendingEntities.set(taskCurrentEntityKey(entity), entity);
       pendingJournals.add(journalFile);
       scheduleMaterializer();
-      return { changed: changed.length > 0, delta: { version: taskCurrentStateVersion, projectId: options.projectId, entities: changed.map((entity) => structuredClone(entity)) } };
+      return { changed: true, delta: { version: taskCurrentStateVersion, projectId: options.projectId, entities: changed.map((entity) => structuredClone(entity)) } };
     },
     async flush(): Promise<void> {
-      while (materializer || pendingEntities.size > 0 || pendingJournals.size > 0) {
+      while (materializer || pendingEntities.size > 0 || publication.hasPending() || pendingJournals.size > 0) {
         if (!materializer) scheduleMaterializer();
         await materializer;
         if (materializerError) throw materializerError;

@@ -10,6 +10,7 @@ import { dirname } from 'node:path';
 import WebSocket from 'ws';
 import type { DecisionOsProject } from '../../server/helper/project-catalog.js';
 import { readRepositoryOriginIdentity } from '../../project-sync/helper/repository-sync-status.js';
+import { taskCurrentBaselineEpoch, taskCurrentStateVersion, taskStateProtocol } from '../../task-state/helper/task-current-state-types.js';
 
 type ProjectManifest = Pick<DecisionOsProject, 'id' | 'name' | 'description' | 'color' | 'ledgers' | 'originFingerprint'>;
 type RelayFrame = {
@@ -31,12 +32,15 @@ type RelayFrame = {
   code?: string;
   message?: string;
   projectId?: string;
-  stateVersion?: 2;
+  stateVersion?: 3;
+  stateProtocol?: typeof taskStateProtocol;
+  stateSchema?: typeof taskCurrentStateVersion;
+  baselineEpoch?: typeof taskCurrentBaselineEpoch;
   payload?: unknown;
 };
 
 export type FederationStateFrame = {
-  type: 'state-entity-batch' | 'state-relay-ack' | 'state-ack' | 'state-summary-request' | 'state-bucket-summary' | 'state-missing-request' | 'state-converged';
+  type: 'state-entity-batch' | 'state-relay-ack' | 'state-ack' | 'state-summary-request' | 'state-bucket-summary' | 'state-missing-request' | 'state-converged' | 'state-subscribe';
   from: string;
   projectId: string;
   payload: unknown;
@@ -453,7 +457,7 @@ export function createFederationNodeConnector(input: {
       lastCloseCode = null;
       lastCloseReason = '';
       setPhase('connected');
-      send({ version: 1, type: 'manifest', nodeLabel: settings?.nodeLabel, projects: manifest() });
+      send({ version: 1, type: 'manifest', nodeLabel: settings?.nodeLabel, stateProtocol: taskStateProtocol, stateSchema: taskCurrentStateVersion, baselineEpoch: taskCurrentBaselineEpoch, projects: manifest() });
       input.onStateConnected?.();
     });
     active.addEventListener('message', (event) => {
@@ -560,14 +564,14 @@ export function createFederationNodeConnector(input: {
       connect();
     },
     publishManifest(): void {
-      if (socket?.readyState === WebSocket.OPEN) send({ version: 1, type: 'manifest', nodeLabel: settings?.nodeLabel, projects: manifest() });
+      if (socket?.readyState === WebSocket.OPEN) send({ version: 1, type: 'manifest', nodeLabel: settings?.nodeLabel, stateProtocol: taskStateProtocol, stateSchema: taskCurrentStateVersion, baselineEpoch: taskCurrentBaselineEpoch, projects: manifest() });
     },
     publishContentChange(): void {
       if (socket?.readyState === WebSocket.OPEN) send({ version: 1, type: 'content-change' });
     },
     publishStateFrame(ownerNodeId: string, frame: Omit<FederationStateFrame, 'from'>): boolean {
       if (socket?.readyState !== WebSocket.OPEN) return false;
-      send({ version: 1, type: frame.type, stateVersion: 2, ...(ownerNodeId === 'relay' ? {} : { to: ownerNodeId }), projectId: frame.projectId, payload: frame.payload });
+      send({ version: 1, type: frame.type, stateVersion: taskCurrentStateVersion, ...(ownerNodeId === 'relay' ? {} : { to: ownerNodeId }), projectId: frame.projectId, payload: frame.payload });
       return true;
     },
     localOwner(): { ownerNodeId: string; ownerNodeLabel: string; online: true } {

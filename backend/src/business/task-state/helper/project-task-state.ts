@@ -5,7 +5,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import type { LedgerMutation } from '../../ledger/helper/apply-ledger-mutation.js';
 import { createTaskCurrentStateStore } from './task-current-state-store.js';
-import type { TaskEntityChange, TaskStateDelta } from './task-current-state-types.js';
+import { taskCurrentStateVersion, type TaskEntityChange, type TaskStateDelta } from './task-current-state-types.js';
 import { createTaskContentObjectStore } from './task-content-object-store.js';
 import { taskContentReferences } from './task-content-resources.js';
 import { taskCommandForMutation, taskCommandForProjection, type TaskProjectionCommand } from './task-mutation-command.js';
@@ -20,7 +20,7 @@ function readableLedger(file: string): AnyRecord {
 function mergeDeltas(projectId: string, deltas: TaskStateDelta[]): TaskStateDelta {
   const entities = new Map<string, TaskStateDelta['entities'][number]>();
   for (const delta of deltas) for (const entity of delta.entities) entities.set(`${entity.entityType}\u0000${entity.entityId}`, entity);
-  return { version: 2, projectId, entities: [...entities.values()] };
+  return { version: taskCurrentStateVersion, projectId, entities: [...entities.values()] };
 }
 
 export function createProjectTaskState(input: {
@@ -45,18 +45,18 @@ export function createProjectTaskState(input: {
   };
 
   const persistChanges = async (changes: TaskEntityChange[], options: { activationTaskId?: string; replication?: 'active' | 'held'; emittedAt?: string } = {}): Promise<TaskStateDelta> => {
-    if (changes.length === 0) return { version: 2, projectId: input.projectId, entities: [] };
+    if (changes.length === 0) return { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
     const result = await store.mutate({ replicaId: input.writerId, changes, ...options });
     await publish(result.delta);
     return result.delta;
   };
 
   const activateTask = async (taskId: string): Promise<TaskStateDelta> => {
-    if (!taskId) return { version: 2, projectId: input.projectId, entities: [] };
+    if (!taskId) return { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
     const card = Array.isArray(store.projection().ledger.cards)
       ? (store.projection().ledger.cards as AnyRecord[]).find((entry) => String(entry.id ?? '') === taskId)
       : null;
-    if (!card || card.replicationState !== 'local-only') return { version: 2, projectId: input.projectId, entities: [] };
+    if (!card || card.replicationState !== 'local-only') return { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
     const released = await store.activate(taskId);
     const activation = await persistChanges([{ entityType: 'card', entityId: taskId, changes: [{ path: 'replicationState', operation: 'set', value: 'activated' }] }], { activationTaskId: taskId });
     const delta = mergeDeltas(input.projectId, [released, activation]);
@@ -69,7 +69,7 @@ export function createProjectTaskState(input: {
     const heads = (await Promise.all(resources.map((resourceId) => contentObjects.capture(resourceId)))).filter((head) => head !== null);
     const contentDelta = heads.length > 0
       ? await persistChanges(heads.map((head) => ({ entityType: 'resource', entityId: head.key, changes: [{ path: 'head', operation: 'set', value: head }] })), { activationTaskId: taskId })
-      : { version: 2 as const, projectId: input.projectId, entities: [] };
+      : { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
     for (const head of heads) await input.publishContent?.(head.key);
     return mergeDeltas(input.projectId, [contentDelta, await activateTask(taskId)]);
   };
@@ -112,10 +112,19 @@ export function createProjectTaskState(input: {
     const card = Array.isArray(store.projection().ledger.cards)
       ? (store.projection().ledger.cards as AnyRecord[]).find((entry) => String(entry.id ?? '') === taskId)
       : null;
-    if (!card) return { version: 2, projectId: input.projectId, entities: [] };
+    if (!card) return { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
     const current = card.executionIntent && typeof card.executionIntent === 'object' ? card.executionIntent as AnyRecord : {};
-    if (patch.id && current.id && String(current.id) !== patch.id && ['waiting', 'queued', 'running'].includes(String(current.state ?? ''))) return { version: 2, projectId: input.projectId, entities: [] };
-    return persistChanges([{ entityType: 'card', entityId: taskId, changes: [{ path: 'executionIntent', operation: 'set', value: { ...current, ...patch, id: patch.id || current.id, updatedAt: new Date().toISOString() } }] }]);
+    if (patch.id && current.id && String(current.id) !== patch.id && ['waiting', 'queued', 'running'].includes(String(current.state ?? ''))) return { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
+    const changedAt = new Date().toISOString();
+    const state = patch.state;
+    return persistChanges([{ entityType: 'card', entityId: taskId, changes: [{ path: 'executionIntent', operation: 'set', value: {
+      id: patch.id ?? current.id ?? null,
+      state,
+      changedAt,
+      startedAt: state === 'running' ? current.startedAt ?? changedAt : current.startedAt ?? null,
+      settledAt: state === 'terminal' || state === 'failed' ? changedAt : null,
+      error: patch.error ?? null,
+    } }] }]);
   };
 
   return {

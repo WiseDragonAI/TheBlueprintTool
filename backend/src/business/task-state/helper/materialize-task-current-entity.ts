@@ -52,7 +52,7 @@ function selectedCandidate(candidates: TaskRegisterCandidate[]): TaskRegisterCan
 function distinctCandidates(candidates: TaskRegisterCandidate[]): TaskRegisterCandidate[] {
   const effects = new Map<string, TaskRegisterCandidate>();
   for (const candidate of candidates.slice().sort((left, right) => dotKey(left.dot).localeCompare(dotKey(right.dot)))) {
-    const effect = `${candidate.operation}\u0000${canonicalJson(candidate.value)}`;
+    const effect = `${candidate.operation}\u0000${Object.hasOwn(candidate, 'value') ? canonicalJson(candidate.value) : ''}`;
     if (!effects.has(effect)) effects.set(effect, candidate);
   }
   return [...effects.values()];
@@ -87,6 +87,15 @@ export function materializeTaskCurrentEntity(projection: TaskCurrentProjection, 
         candidates: candidates.map(candidateRecord),
       });
     }
+  }
+
+  if (entity.entityType === 'card' && materialized.lifecycle && typeof materialized.lifecycle === 'object' && !Array.isArray(materialized.lifecycle)) {
+    // WHAT: Derive the compatibility card fields from the atomic lifecycle register.
+    // WHY: Application readers keep their stable shape without making scalar fields independent CRDT authority.
+    const lifecycle = materialized.lifecycle as AnyRecord;
+    materialized.status = lifecycle.status;
+    materialized.waitingAt = lifecycle.waitingAt;
+    materialized.closedAt = lifecycle.closedAt;
   }
 
   if (entity.entityType === 'thread-note') {
