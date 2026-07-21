@@ -9,6 +9,7 @@ import { waveSvg } from '../../voice/component/wave-svg.js';
 import { paintVoiceWaveLevel } from '../../voice/effect/paint-voice-wave-level.js';
 import { commitActiveLedgerMutation } from '../effect/commit-active-ledger-mutation.js';
 import { startGitReviewVoiceCapture, type GitReviewVoiceCapture } from '../helper/git-review-voice-capture.js';
+import { createGitReviewWidgetRoot, registerGitReviewWidgetDisposal } from '../helper/git-review-widget-lifecycle.js';
 import type { LedgerMarkdownBlock } from '../helper/parse-ledger-card-markdown.js';
 import { normalizeGitReviewNotes, type GitReviewNote } from '../../../../../shared/schemas/git-review-types.js';
 
@@ -85,7 +86,7 @@ async function defaultPersistNotes(cardId: string, notes: GitReviewNote[]): Prom
 }
 
 export function renderLedgerCardGitDiff(block: Extract<LedgerMarkdownBlock, { kind: 'gitDiff' }>, options: GitDiffRendererOptions = {}): HTMLElement {
-  const root = document.createElement('section');
+  const root = createGitReviewWidgetRoot();
   root.className = 'ledger-card-git-diff';
   root.dataset.repository = block.repository;
   root.dataset.target = block.target;
@@ -123,7 +124,19 @@ export function renderLedgerCardGitDiff(block: Extract<LedgerMarkdownBlock, { ki
   let renderer: { cleanUp(): void } | null = null;
   let notes = normalizeGitReviewNotes(options.gitReviewNotes);
   let voiceCapture: GitReviewVoiceCapture | null = null;
+  let disposed = false;
+  const requestController = new AbortController();
   const voiceOwner = `git-review:${options.cardId ?? 'card'}:${block.repository}:${block.target}` as const;
+
+  registerGitReviewWidgetDisposal(root, () => {
+    if (disposed) return;
+    disposed = true;
+    requestController.abort();
+    voiceCapture?.cancel();
+    voiceCapture = null;
+    renderer?.cleanUp();
+    renderer = null;
+  });
 
   const endpoint = () => {
     const query = new URLSearchParams({ repo: block.repository, path: block.target });
@@ -135,9 +148,13 @@ export function renderLedgerCardGitDiff(block: Extract<LedgerMarkdownBlock, { ki
     status.textContent = 'Staging selected change…';
     const request = await fetch(projectScopedRequestPath('/api/git-review/stage', String(state.projectId ?? '')), {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ repository: block.repository, target: block.target, expectedPatchHash: response.patchHash, patch: hunk.patch, operation: 'stage' })
-    });
+      body: JSON.stringify({ repository: block.repository, target: block.target, expectedPatchHash: response.patchHash, patch: hunk.patch, operation: 'stage' }),
+      signal: requestController.signal,
+    }).catch(() => undefined);
+    if (disposed) return;
+    if (!request) { status.textContent = 'The selected change could not be staged.'; root.dataset.state = 'error'; return; }
     const payload = await request.json() as ReviewResponse;
+    if (disposed) return;
     if (!request.ok) { status.textContent = payload.error || 'The selected change could not be staged.'; root.dataset.state = 'error'; return; }
     response = payload;
     hunkIndex = 0;
@@ -145,6 +162,9 @@ export function renderLedgerCardGitDiff(block: Extract<LedgerMarkdownBlock, { ki
   }
 
   async function renderCurrent(): Promise<void> {
+    if (disposed) return;
+    voiceCapture?.cancel();
+    voiceCapture = null;
     renderer?.cleanUp();
     renderer = null;
     selection = null;
@@ -179,6 +199,7 @@ export function renderLedgerCardGitDiff(block: Extract<LedgerMarkdownBlock, { ki
     content.append(nav, viewport, selectionStatus);
     try {
       const pierre = await loadPierre();
+      if (disposed) return;
       const parsed = pierre.parsePatchFiles(hunk.patch, response.patchHash, true)[0]?.files[0];
       if (!parsed) throw new Error('The selected change did not produce a renderable diff.');
       const diffContainer = createPierreDiffContainer(pierre);
@@ -266,12 +287,16 @@ export function renderLedgerCardGitDiff(block: Extract<LedgerMarkdownBlock, { ki
       voiceStatus.textContent = 'Recording this Git review only';
       setReviewControlsDisabled(true);
       try {
-        voiceCapture = await startGitReviewVoiceCapture(voiceOwner, ({ durationMs, level, samples }) => {
+        const capture = await startGitReviewVoiceCapture(voiceOwner, ({ durationMs, level, samples }) => {
+          if (disposed) return;
           voiceTimer.textContent = formatRecordingDuration(durationMs);
           voiceMeter.style.height = `${Math.round(18 + level * 74)}%`;
           paintVoiceWaveLevel(voice, level, true, samples, level);
-        });
+        }, requestController.signal);
+        if (disposed) { capture.cancel(); return; }
+        voiceCapture = capture;
       } catch (error) {
+        if (disposed) return;
         voiceStatus.textContent = error instanceof Error ? error.message : String(error);
         setReviewControlsDisabled(false);
       }
@@ -298,8 +323,10 @@ export function renderLedgerCardGitDiff(block: Extract<LedgerMarkdownBlock, { ki
       form.append('hunk', hunk.header);
       form.append('patchHash', response!.patchHash);
       if (selection) form.append('selection', JSON.stringify(selection));
-      const request = await fetch(projectScopedRequestPath('/api/git-review/voice', String(state.projectId ?? '')), { method: 'POST', body: form }).catch(() => undefined);
+      const request = await fetch(projectScopedRequestPath('/api/git-review/voice', String(state.projectId ?? '')), { method: 'POST', body: form, signal: requestController.signal }).catch(() => undefined);
+      if (disposed) return;
       const payload = await request?.json().catch(() => null) as { ok?: boolean; error?: string; note?: GitReviewNote } | null;
+      if (disposed) return;
       if (!request?.ok || !payload?.ok || !payload.note) {
         voiceStatus.textContent = payload?.error || 'Git review transcription failed.';
         sendButton.disabled = false;
@@ -325,9 +352,13 @@ export function renderLedgerCardGitDiff(block: Extract<LedgerMarkdownBlock, { ki
   }
 
   async function load(): Promise<void> {
+    if (disposed) return;
     root.dataset.state = 'loading'; status.textContent = 'Loading repository changes…'; content.replaceChildren();
-    const request = await fetch(endpoint(), { cache: 'no-store' });
+    const request = await fetch(endpoint(), { cache: 'no-store', signal: requestController.signal }).catch(() => undefined);
+    if (disposed) return;
+    if (!request) { root.dataset.state = 'error'; status.textContent = 'Git review could not be loaded.'; return; }
     response = await request.json() as ReviewResponse;
+    if (disposed) return;
     if (!request.ok || !response.ok) { root.dataset.state = 'error'; status.textContent = response.error || 'Git review could not be loaded.'; return; }
     fileIndex = 0; hunkIndex = 0; await renderCurrent();
   }

@@ -21,14 +21,21 @@ function audioLevel(analyser: AnalyserNode, samples: Uint8Array<ArrayBuffer>): n
   return Math.min(1, Math.sqrt(sum / Math.max(1, samples.length)) * 4);
 }
 
-export async function startGitReviewVoiceCapture(owner: VoiceCaptureOwner, onFrame: (frame: GitReviewVoiceFrame) => void): Promise<GitReviewVoiceCapture> {
-  if (!acquireVoiceCaptureOwnership(owner)) throw new Error('Another voice recording is already active.');
+export async function startGitReviewVoiceCapture(owner: VoiceCaptureOwner, onFrame: (frame: GitReviewVoiceFrame) => void, signal?: AbortSignal): Promise<GitReviewVoiceCapture> {
+  if (signal?.aborted) throw new DOMException('Git review recording was canceled.', 'AbortError');
+  const captureLease = acquireVoiceCaptureOwnership(owner);
+  if (!captureLease) throw new Error('Another voice recording is already active.');
   let stream: MediaStream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
   } catch (error) {
-    releaseVoiceCaptureOwnership(owner);
+    releaseVoiceCaptureOwnership(captureLease);
     throw error;
+  }
+  if (signal?.aborted) {
+    stream.getTracks().forEach((track) => track.stop());
+    releaseVoiceCaptureOwnership(captureLease);
+    throw new DOMException('Git review recording was canceled.', 'AbortError');
   }
   const audioContext = new AudioContext();
   const analyser = audioContext.createAnalyser();
@@ -66,7 +73,7 @@ export async function startGitReviewVoiceCapture(owner: VoiceCaptureOwner, onFra
     if (animationFrameId) cancelAnimationFrame(animationFrameId);
     stream.getTracks().forEach((track) => track.stop());
     void audioContext.close();
-    releaseVoiceCaptureOwnership(owner);
+    releaseVoiceCaptureOwnership(captureLease);
   };
 
   return {

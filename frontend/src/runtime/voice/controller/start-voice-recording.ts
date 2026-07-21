@@ -18,7 +18,8 @@ export type VoiceRecordingContext = {
 
 export async function startVoiceRecording(input: VoiceRecordingContext = {}): Promise<void> {
   if (state.voice.recording) return;
-  if (!acquireVoiceCaptureOwnership('thread')) return;
+  const captureLease = acquireVoiceCaptureOwnership('thread');
+  if (!captureLease) return;
   try {
     const threadId = input.threadId || state.threadId || 'conversation-ledger';
     if (!state.threadId) state.threadId = threadId;
@@ -56,14 +57,14 @@ export async function startVoiceRecording(input: VoiceRecordingContext = {}): Pr
       if (event.data?.size) chunks.push(event.data);
     });
     recorder.start();
-    state.voice = { recording: true, startedAt: Date.now(), durationMs: 0, level: 0, pendingVoicePeak: 0, waveSamples: [], transcriptionStatus: 'recording', threadId, reviewContext: input.reviewContext, surfaceRoot: input.surfaceRoot, stream, audioContext, analyser, recorder, chunks, mimeType: 'audio/wav', recorderMimeType: recorder.mimeType || 'audio/webm', pcmChunks, sampleRate: audioContext.sampleRate, processor, silentGain, error: '' };
+    state.voice = { recording: true, startedAt: Date.now(), durationMs: 0, level: 0, pendingVoicePeak: 0, waveSamples: [], transcriptionStatus: 'recording', threadId, reviewContext: input.reviewContext, surfaceRoot: input.surfaceRoot, stream, audioContext, analyser, recorder, chunks, mimeType: 'audio/wav', recorderMimeType: recorder.mimeType || 'audio/webm', pcmChunks, sampleRate: audioContext.sampleRate, processor, silentGain, captureLease, error: '' };
     await holdVoiceRecordingWakeLock();
     telemetry('resolve-voice-session', { threadId });
     telemetry('capture-voice-audio', { status: 'recording', source: 'microphone' });
     updateVoiceRecordingFrame();
   } catch (error) {
     releaseVoiceRecordingWakeLock();
-    releaseVoiceCaptureOwnership('thread');
+    releaseVoiceCaptureOwnership(captureLease);
     state.voice = { recording: false, startedAt: 0, durationMs: 0, level: 0, transcriptionStatus: 'permission denied', threadId: input.threadId, reviewContext: input.reviewContext, surfaceRoot: input.surfaceRoot, error: error instanceof Error ? error.message : String(error) };
     telemetry('voice-recording-failed', { error: state.voice.error });
     renderVoiceStatus();
