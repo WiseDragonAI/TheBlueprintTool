@@ -14,6 +14,23 @@ test('parse-ledger-cli-argv parses help requests', () => {
   assert.equal(parseLedgerCliArgv(['unanswered', '--help']).mode, 'help');
 });
 
+test('parse-ledger-cli-argv parses project and master-task creation commands', () => {
+  assert.equal(parseLedgerCliArgv(['projects']).mode, 'projects');
+  const command = parseLedgerCliArgv([
+    'master-task-create',
+    '--project', 'project-a',
+    '--title', 'Context metrics',
+    '--subtask', 'Collect metrics',
+    '--subtask', 'Render metrics',
+  ]);
+  assert.equal(command.mode, 'master-task-create');
+  assert.deepEqual(command.masterTaskCreateOperation, {
+    projectId: 'project-a',
+    title: 'Context metrics',
+    subtasks: ['Collect metrics', 'Render metrics'],
+  });
+});
+
 test('parse-ledger-cli-argv parses targeted ledger mutations', () => {
   const command = parseLedgerCliArgv([
     'mutate',

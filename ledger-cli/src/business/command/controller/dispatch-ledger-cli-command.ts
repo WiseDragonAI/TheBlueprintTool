@@ -19,6 +19,8 @@ import { migrateMasterTasks } from '../../ledger/helper/migrate-master-tasks.js'
 import { readFile } from 'node:fs/promises';
 import { writeLedgerJson } from '../../ledger/effect/write-ledger-json.js';
 import { readLedgerJson } from '../../ledger/helper/read-ledger-json.js';
+import { queryProjects } from '../../ledger/helper/query-projects.js';
+import { createMasterTask } from '../../ledger/helper/create-master-task.js';
 
 async function commitTaskProjectionIfNeeded(ledgerJsonFile: string, fs?: FileSystemPort): Promise<void> {
   if (!ledgerJsonFile.endsWith('/tasks.json') && !ledgerJsonFile.endsWith('\\tasks.json')) return;
@@ -38,6 +40,18 @@ export async function dispatchLedgerCliCommandController(
     const helpText = formatLedgerCliHelp();
     ports.emit ? ports.emit(helpText) : console.log(helpText);
     return { ok: true, value: helpText };
+  }
+
+  if (command.mode === 'projects') {
+    const result = await queryProjects();
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
+  }
+
+  if (command.mode === 'master-task-create') {
+    const result = await createMasterTask(command.masterTaskCreateOperation ?? { subtasks: [] });
+    if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
+    return result;
   }
 
   if (command.mode === 'assets') {
