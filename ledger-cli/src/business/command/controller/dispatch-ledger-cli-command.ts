@@ -16,17 +16,11 @@ import { resolveCodexRunEvents } from '../../ledger/helper/resolve-codex-run-eve
 import { completeMasterTask } from '../../ledger/helper/complete-master-task.js';
 import { synchronizeServerSkillController } from '../../skills/controller/synchronize-server-skill.js';
 import { migrateMasterTasks } from '../../ledger/helper/migrate-master-tasks.js';
-import { readFile } from 'node:fs/promises';
 import { writeLedgerJson } from '../../ledger/effect/write-ledger-json.js';
+import { isWorkerOwnedTaskLedger } from '../../ledger/helper/is-worker-owned-task-ledger.js';
 import { readLedgerJson } from '../../ledger/helper/read-ledger-json.js';
 import { queryProjects } from '../../ledger/helper/query-projects.js';
 import { createMasterTask } from '../../ledger/helper/create-master-task.js';
-
-async function commitTaskProjectionIfNeeded(ledgerJsonFile: string, fs?: FileSystemPort): Promise<void> {
-  if (!ledgerJsonFile.endsWith('/tasks.json') && !ledgerJsonFile.endsWith('\\tasks.json')) return;
-  const ledger = JSON.parse(fs ? await fs.readFile(ledgerJsonFile) : await readFile(ledgerJsonFile, 'utf8')) as unknown;
-  await writeLedgerJson(ledgerJsonFile, ledger, fs);
-}
 
 export async function dispatchLedgerCliCommandController(
   argv: string[],
@@ -83,12 +77,16 @@ export async function dispatchLedgerCliCommandController(
     if (!operation?.sourceLedger || !operation.targetLedger) {
       return { ok: false, error: 'migrate-master-tasks requires --source-ledger and --target-ledger.' };
     }
+    if (operation.write && isWorkerOwnedTaskLedger(operation.targetLedger, ports.fs)) {
+      // WHAT: Stop the retired ledger-to-ledger task migration before it writes sidecars.
+      // WHY: Epoch-3 task state has one explicit offline migration entrypoint.
+      return { ok: false, error: 'scoped_task_command_required:migrate-master-tasks' };
+    }
     const result = migrateMasterTasks({
       sourceLedger: operation.sourceLedger,
       targetLedger: operation.targetLedger,
       write: operation.write,
     });
-    if (result.ok && operation.write) await commitTaskProjectionIfNeeded(operation.targetLedger, ports.fs);
     if (result.ok) {
       const output = operation.json ? JSON.stringify(result.value, null, 2) : [
         `Master-task migration ${operation.write ? 'written' : 'dry run'}.`,
@@ -111,6 +109,11 @@ export async function dispatchLedgerCliCommandController(
 
   if (command.mode === 'master-task-apply') {
     if (!command.masterTaskOperation?.planStdin) return { ok: false, error: 'master-task-apply requires --plan-stdin.' };
+    if (isWorkerOwnedTaskLedger(command.ledgerJsonFile, ports.fs)) {
+      // WHAT: Reject the complete-plan task projection before consuming stdin.
+      // WHY: This legacy helper owns no scoped epoch-3 command contract.
+      return { ok: false, error: 'scoped_task_command_required:master-task-apply' };
+    }
     let planJson = '';
     for await (const chunk of process.stdin) planJson += String(chunk);
     const current = await readLedgerJson(command.ledgerJsonFile, ports.fs);
@@ -125,6 +128,11 @@ export async function dispatchLedgerCliCommandController(
 
   if (command.mode === 'master-task-progress') {
     if (!command.masterTaskOperation?.planStdin) return { ok: false, error: 'master-task-progress requires --plan-stdin.' };
+    if (isWorkerOwnedTaskLedger(command.ledgerJsonFile, ports.fs)) {
+      // WHAT: Reject the complete-progress task projection before consuming stdin.
+      // WHY: This legacy helper owns no scoped epoch-3 command contract.
+      return { ok: false, error: 'scoped_task_command_required:master-task-progress' };
+    }
     let planJson = '';
     for await (const chunk of process.stdin) planJson += String(chunk);
     const current = await readLedgerJson(command.ledgerJsonFile, ports.fs);

@@ -5,10 +5,10 @@
 import type { FileSystemPort } from '../../../lib/types.js';
 import { stringifyJson } from '../../../lib/json/json.js';
 import { nodeFileSystem } from '../../../lib/fs/node-file-system.js';
-import { basename } from 'node:path';
+import { isWorkerOwnedTaskLedger } from '../helper/is-worker-owned-task-ledger.js';
 
 export async function writeLedgerJson(path: string, ledger: unknown, fs: FileSystemPort = nodeFileSystem): Promise<void> {
-  if (fs === nodeFileSystem && basename(path) === 'tasks.json') {
+  if (isWorkerOwnedTaskLedger(path, fs)) {
     throw new Error('aggregate_task_state_commit_removed');
   }
   await fs.writeFile(path, stringifyJson(ledger));

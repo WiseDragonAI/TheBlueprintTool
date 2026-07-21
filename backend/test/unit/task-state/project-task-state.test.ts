@@ -45,11 +45,12 @@ test('task intake publishes no state until its first durable content contributio
   };
   await execute({ action: 'create-task-intake', annotation: { id: 'zone-a', x: 0, y: 0, width: 800, height: 600, color: '#123456' }, card: { id: 'card-a', title: 'Local task', status: 'todo', labels: ['master-task'], domainId: 'tasks', comment: { what: 'Task' } } });
   assert.equal(published.length, 0);
-  await execute({ action: 'append-note', note: { id: 'note-a', threadId: 'thread-card-a', body: 'Activate it.' } });
+  await execute({ action: 'append-note', note: { id: 'note-a', threadId: 'thread-card-a', body: 'Activate it.', role: 'agent' } });
   assert.ok(published.flatMap((delta) => delta.entities).some((entity) => entity.entityType === 'card' && entity.entityId === 'card-a'));
   assert.ok(published.flatMap((delta) => delta.entities).some((entity) => entity.entityType === 'thread-note' && entity.entityId === 'thread-card-a/note-a'));
   assert.deepEqual(content, []);
   assert.equal(((state.projection().ledger.notes as Record<string, Array<Record<string, unknown>>>)['thread-card-a'][0]).message, undefined);
+  assert.equal(((state.projection().ledger.notes as Record<string, Array<Record<string, unknown>>>)['thread-card-a'][0]).role, 'agent');
   assert.match(readFileSync(resolve(root, 'threads', 'tasks', 'thread-card-a.md'), 'utf8'), /Activate it\./);
   assert.equal((state.projection().ledger.cards as Array<Record<string, unknown>>)[0].replicationState, undefined);
   assert.equal(state.store.entity('card', 'card-a')?.fields.replicationState, undefined);

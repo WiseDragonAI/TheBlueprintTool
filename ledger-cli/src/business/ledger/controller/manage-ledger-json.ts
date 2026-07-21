@@ -10,6 +10,8 @@ import { telemetry } from '../../../lib/telemetry/telemetry.js';
 import { readLedgerJson } from '../helper/read-ledger-json.js';
 import { writeLedgerJson } from '../effect/write-ledger-json.js';
 import { transitionCardLifecycle } from '../effect/transition-card-lifecycle.js';
+import { appendTaskThreadAnswer } from '../effect/append-task-thread-answer.js';
+import { isWorkerOwnedTaskLedger } from '../helper/is-worker-owned-task-ledger.js';
 import { formatLedgerOverview } from '../helper/format-ledger-overview.js';
 import { formatLedgerMarkdownExport } from '../helper/format-ledger-markdown-export.js';
 import { appendThreadAnswer } from '../helper/append-thread-answer.js';
@@ -278,6 +280,17 @@ export async function manageLedgerJsonController(
   if (!ledger.ok) {
     telemetry('manage-ledger-json-rejected', { error: ledger.error });
     return ledger;
+  }
+
+  if (isWorkerOwnedTaskLedger(actionPayload.ledgerJsonFile, fs) && actionPayload.ledgerCommand === 'answer') {
+    // WHAT: Route the one note through the current task worker.
+    // WHY: Task Markdown must remain untouched until the scoped causal mutation commits.
+    return appendTaskThreadAnswer(actionPayload.answerOperation, fs);
+  }
+  if (isWorkerOwnedTaskLedger(actionPayload.ledgerJsonFile, fs) && actionPayload.ledgerCommand === 'mutate') {
+    // WHAT: Reject an undeclared aggregate task mutation before helper-side file effects.
+    // WHY: Only typed task commands may select current-state lanes.
+    return { ok: false, error: 'scoped_task_command_required:mutate' };
   }
 
   if (actionPayload.ledgerCommand === 'session-context') {
