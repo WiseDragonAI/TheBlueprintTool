@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import test from 'node:test';
 import { dispatchLedgerCliCommandController } from '../../src/business/command/controller/dispatch-ledger-cli-command.js';
 import { writeLedgerJson } from '../../src/business/ledger/effect/write-ledger-json.js';
+import { readLedgerJson } from '../../src/business/ledger/helper/read-ledger-json.js';
 
 test('tasks.json mutations are submitted to the running task-state worker', async () => {
   const previousServerUrl = process.env.DECISION_OS_SERVER_URL;
@@ -22,6 +23,30 @@ test('tasks.json mutations are submitted to the running task-state worker', asyn
     assert.equal(requests[0]?.url, 'http://127.0.0.1:50150/api/task-state/commit');
     assert.equal(requests[0]?.init?.method, 'POST');
     assert.deepEqual(JSON.parse(String(requests[0]?.init?.body)), { projectId: 'project-a', ledger: { cards: [{ id: 'card-a', status: 'done' }] } });
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousServerUrl === undefined) delete process.env.DECISION_OS_SERVER_URL;
+    else process.env.DECISION_OS_SERVER_URL = previousServerUrl;
+    if (previousProjectId === undefined) delete process.env.DECISION_OS_PROJECT_ID;
+    else process.env.DECISION_OS_PROJECT_ID = previousProjectId;
+  }
+});
+
+test('tasks.json reads use the current task-state projection instead of the migration source file', async () => {
+  const previousServerUrl = process.env.DECISION_OS_SERVER_URL;
+  const previousProjectId = process.env.DECISION_OS_PROJECT_ID;
+  const previousFetch = globalThis.fetch;
+  process.env.DECISION_OS_SERVER_URL = 'http://127.0.0.1:50150';
+  process.env.DECISION_OS_PROJECT_ID = 'project-a';
+  let requestedUrl = '';
+  globalThis.fetch = (async (url: string | URL | Request) => {
+    requestedUrl = String(url);
+    return new Response(JSON.stringify({ ok: true, projectId: 'project-a', ledger: { cards: [{ id: 'current-card' }] } }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const result = await readLedgerJson('/workspace/.decision-os/tasks.json');
+    assert.deepEqual(result, { ok: true, value: { cards: [{ id: 'current-card' }] } });
+    assert.equal(requestedUrl, 'http://127.0.0.1:50150/api/task-state/projection?projectId=project-a');
   } finally {
     globalThis.fetch = previousFetch;
     if (previousServerUrl === undefined) delete process.env.DECISION_OS_SERVER_URL;

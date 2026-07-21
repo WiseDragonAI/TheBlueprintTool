@@ -8,6 +8,7 @@ import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/re
 import { stripHydratedThreadNotes } from '@backend/business/ledger/helper/thread-content-file.js';
 import { cancelCardSkillRunController } from './cancel-card-skill-run-controller.js';
 import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
+import { readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
 import { resolveCardSkillRunFiles } from '../helper/resolve-card-skill-run-files.js';
 import { readCodexProcessQueue } from '../helper/codex-process-queue.js';
 
@@ -66,8 +67,8 @@ export async function deleteThreadCodexSessionController(input: { action_payload
   const ledgerPath = resolve(decisionOsRoot, ledgerFile);
   if (!isInside(decisionOsRoot, ledgerPath) || !existsSync(ledgerPath)) return { ok: false, statusCode: 404, error: 'Ledger file not found.', ledgerId };
 
-  const ledgerText = readFileSync(ledgerPath, 'utf8');
-  const ledger = JSON.parse(ledgerText) as AnyRecord & { cards?: AnyRecord[] };
+  const ledger = readLedgerProjection({ ledgerId, ledgerPath, runtime }) as AnyRecord & { cards?: AnyRecord[] };
+  const ledgerText = JSON.stringify(ledger);
   const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
   if (!card) return { ok: false, statusCode: 404, error: 'Card not found.', cardId };
   const ownedRunIds = retainedThreadRunIds(card);
@@ -141,10 +142,10 @@ export async function deleteThreadCodexSessionController(input: { action_payload
       }
     }
     stripHydratedThreadNotes(ledger);
-    persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime, command: { kind: 'delete-codex-session', cardIds: [cardId] } });
+    await persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime, command: { kind: 'delete-codex-session', cardIds: [cardId] } });
   } catch (error) {
     try {
-      persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger: JSON.parse(ledgerText) as AnyRecord, runtime, command: { kind: 'restore-codex-session', cardIds: [cardId] } });
+      await persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger: JSON.parse(ledgerText) as AnyRecord, runtime, command: { kind: 'restore-codex-session', cardIds: [cardId] } });
       restoreArtifacts(snapshots);
     } catch {
       return { ok: false, statusCode: 500, error: 'Codex session deletion failed and rollback could not restore every artifact.', runId };

@@ -9,6 +9,7 @@ import type { Server } from 'node:http';
 import { transcribeGitReviewVoiceController } from '../../src/business/git-review/controller/transcribe-git-review-voice-controller.js';
 import { applyLedgerMutation } from '../../src/business/ledger/helper/apply-ledger-mutation.js';
 import { createHttpServer } from '../../src/business/server/helper/create-http-server.js';
+import { migrateTaskCurrentState } from '../../src/business/task-state/helper/task-current-state-migration.js';
 
 test('transcribes Git review audio without creating a thread note', async () => {
   const workspace = mkdtempSync(join(tmpdir(), 'decision-os-git-review-voice-'));
@@ -67,6 +68,12 @@ test('serves Git review transcription on its dedicated endpoint without touching
   mkdirSync(join(workspace, '.decision-os'));
   writeFileSync(join(workspace, '.decision-os', 'state.json'), JSON.stringify({ tabs: [{ id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' }] }));
   writeFileSync(join(workspace, '.decision-os', 'tasks.json'), JSON.stringify({ cards: [{ id: 'card-a' }], annotations: [], relationships: [], notes: {} }));
+  writeFileSync(join(workspace, '.decision-os', 'project.json'), JSON.stringify({ id: 'git-review-project' }));
+  await migrateTaskCurrentState({
+    decisionOsRoot: join(workspace, '.decision-os'),
+    projectId: 'git-review-project',
+    tasksLedgerFile: join(workspace, '.decision-os', 'tasks.json'),
+  });
   process.chdir(workspace);
   const runtime: Record<string, unknown> = {};
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1' }, runtime_state: runtime });

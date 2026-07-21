@@ -8,6 +8,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import type { Result } from '../../../lib/types.js';
 import { canonicalSubtaskRelationships, isMasterCard, record, stripLegacyTaskProjection, withCanonicalTaskLabel } from './master-task-model.js';
 import { validateMasterTasks } from './validate-master-tasks.js';
+import { parseThreadMarkdown } from './thread-content-file.js';
 
 type JsonObject = Record<string, unknown>;
 type Section = { title: string; markdown: string };
@@ -71,7 +72,7 @@ function contentPath(ledgerFile: string, card: JsonObject): string | null {
   return inner && !inner.startsWith('..') && !isAbsolute(inner) ? file : null;
 }
 
-export function applyMasterTaskProgress(input: { ledgerJsonFile: string; planJson: string }): Result<string> {
+export function applyMasterTaskProgress(input: { ledgerJsonFile: string; planJson: string; ledger?: JsonObject }): Result<string> {
   const parsed = parsePlan(input.planJson);
   if (!parsed.ok) return parsed;
   const plan = parsed.value;
@@ -80,8 +81,8 @@ export function applyMasterTaskProgress(input: { ledgerJsonFile: string; planJso
     const inner = relative(resolve(scopedRoot), resolve(input.ledgerJsonFile));
     if (!inner || inner.startsWith('..') || isAbsolute(inner)) return { ok: false, error: JSON.stringify({ version: 1, code: 'scope_mismatch' }) };
   }
-  const ledgerText = readFileSync(input.ledgerJsonFile, 'utf8');
-  const ledger = JSON.parse(ledgerText) as JsonObject;
+  const ledgerText = input.ledger ? JSON.stringify(input.ledger) : readFileSync(input.ledgerJsonFile, 'utf8');
+  const ledger = input.ledger ?? JSON.parse(ledgerText) as JsonObject;
   const cards = Array.isArray(ledger.cards) ? ledger.cards.filter(record).map((card) => ({ ...card })) : [];
   const masterIndex = cards.findIndex((card) => String(card.id ?? '') === plan.masterCardId);
   if (masterIndex < 0) return { ok: false, error: `Card not found: ${plan.masterCardId}` };
@@ -133,7 +134,9 @@ export function applyMasterTaskProgress(input: { ledgerJsonFile: string; planJso
   const invalidThreadHeadings = `${threadText}\n${plan.reply}`.split('\n').filter((line) => /^#\s+/.test(line) && !/^#\s+(?:OPERATOR|AGENT)\s*$/i.test(line));
   if (invalidThreadHeadings.length > 0) return { ok: false, error: 'Thread content contains an invalid top-level role heading.' };
   const nextThread = `${threadText.trimEnd()}\n\n# AGENT\n<!-- decision-os:note ${JSON.stringify({ id: `note-agent-${Date.now()}-${randomUUID().slice(0, 12)}`, timestamp: new Date().toISOString() })} -->\n\n${plan.reply}\n`;
-  const nextLedger = { ...ledger, cards };
+  const notes = record(ledger.notes) ? { ...ledger.notes } : {};
+  notes[threadId] = parseThreadMarkdown(nextThread);
+  const nextLedger = { ...ledger, cards, notes };
   const hydrated = { ...nextLedger, cards: cards.map((card) => {
     const file = contentPath(input.ledgerJsonFile, card);
     const markdown = file ? files.get(file) ?? (existsSync(file) ? readFileSync(file, 'utf8') : '') : '';
@@ -142,11 +145,18 @@ export function applyMasterTaskProgress(input: { ledgerJsonFile: string; planJso
   const validation = validateMasterTasks(hydrated, plan.masterCardId);
   if (validation.errors.length > 0) return { ok: false, error: JSON.stringify({ version: 1, code: 'invalid_master_task', validation }) };
 
-  const snapshots = new Map<string, string | null>([[input.ledgerJsonFile, ledgerText], [threadFile, threadText], ...[...files.keys()].map((file) => [file, existsSync(file) ? readFileSync(file, 'utf8') : null] as const)]);
+  const snapshots = new Map<string, string | null>([
+    ...(!input.ledger ? [[input.ledgerJsonFile, ledgerText] as const] : []),
+    [threadFile, threadText],
+    ...[...files.keys()].map((file) => [file, existsSync(file) ? readFileSync(file, 'utf8') : null] as const),
+  ]);
   try {
     for (const [file, content] of files) writeFileSync(file, content, 'utf8');
     writeFileSync(threadFile, nextThread, 'utf8');
-    writeFileSync(input.ledgerJsonFile, JSON.stringify(nextLedger, null, 2), 'utf8');
+    if (input.ledger) {
+      for (const key of Object.keys(input.ledger)) delete input.ledger[key];
+      Object.assign(input.ledger, nextLedger);
+    } else writeFileSync(input.ledgerJsonFile, JSON.stringify(nextLedger, null, 2), 'utf8');
   } catch (error) {
     for (const [file, content] of snapshots) { if (content === null) rmSync(file, { force: true }); else writeFileSync(file, content, 'utf8'); }
     return { ok: false, error: error instanceof Error ? error.message : 'Master-task progress transaction failed.' };

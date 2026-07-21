@@ -3,14 +3,18 @@
  * WHY: Agents need one card-id command without constructing project-scoped HTTP requests.
  */
 import { basename } from 'node:path';
-import { readFileSync } from 'node:fs';
 import type { Result } from '../../../lib/types.js';
 import { resolveMasterTaskGate } from './resolve-session-context.js';
+import { readLedgerJson } from './read-ledger-json.js';
 
 type Request = (input: string, init: RequestInit) => Promise<Pick<Response, 'headers' | 'ok' | 'status' | 'text'>>;
 type Gate = (input: { ledgerJsonFile: string; cardId: string }) => Promise<Result<string>>;
 
-const resolvePostCompletionGate: Gate = async (input) => resolveMasterTaskGate({ ...input, ledger: JSON.parse(readFileSync(input.ledgerJsonFile, 'utf8')) });
+const resolvePostCompletionGate: Gate = async (input) => {
+  const current = await readLedgerJson(input.ledgerJsonFile);
+  if (!current.ok) return current;
+  return resolveMasterTaskGate({ ...input, ledger: current.value });
+};
 
 export async function completeMasterTask(input: {
   cardId?: string;

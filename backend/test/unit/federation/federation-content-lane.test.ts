@@ -1,6 +1,10 @@
+/**
+ * WHAT: Verifies exact resource heads, runtime demand, and content scheduling.
+ * WHY: Content synchronization must avoid full-workspace scans and durable retry queues.
+ */
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import test from 'node:test';
@@ -77,7 +81,11 @@ test('content scheduler guarantees a bounded content share during priority state
   store.applyManifest('node-a', { version: 1, projectId: 'project-a', generatedAt: new Date().toISOString(), resources: [{ type: 'card-markdown', key: '.decision-os/cards/tasks/card-a.md', hash, bytes: bytes.byteLength, changedAt: new Date().toISOString() }] });
   let priority = true;
   let requests = 0;
-  const scheduler = createFederationContentScheduler({ store, hasPriorityStateWork: () => priority, fetchContent: async () => { requests += 1; return bytes; } });
+  const scheduler = createFederationContentScheduler({ store, hasPriorityStateWork: () => priority, fetchContent: async (entry) => {
+    requests += 1;
+    mkdirSync(resolve(store.objectFile(entry.hash), '..'), { recursive: true });
+    writeFileSync(store.objectFile(entry.hash), bytes);
+  } });
   await scheduler.drain();
   assert.equal(requests, 1);
   assert.equal(store.resource('node-a', 'project-a', '.decision-os/cards/tasks/card-a.md').state, 'available');
@@ -95,14 +103,16 @@ test('corrupt content retains stale verified bytes and retries independently', (
   const firstHash = createHash('sha256').update(first).digest('hex');
   const key = '.decision-os/cards/tasks/card-a.md';
   store.applyManifest('node-a', { version: 1, projectId: 'project-a', generatedAt: '', resources: [{ type: 'card-markdown', key, hash: firstHash, bytes: first.length, changedAt: '' }] });
-  store.install(store.due(1)[0], first);
+  mkdirSync(resolve(store.objectFile(firstHash), '..'), { recursive: true });
+  writeFileSync(store.objectFile(firstHash), first);
+  store.complete(store.due(1)[0]);
   const second = Buffer.from('second');
   const secondHash = createHash('sha256').update(second).digest('hex');
   store.applyManifest('node-a', { version: 1, projectId: 'project-a', generatedAt: '', resources: [{ type: 'card-markdown', key, hash: secondHash, bytes: second.length, changedAt: '' }] });
   const queued = store.due(1)[0];
-  assert.throws(() => store.install(queued, Buffer.from('corrupt')), /hash/);
   store.fail(queued, 'invalid hash');
   const retained = store.resource('node-a', 'project-a', key);
   assert.equal(retained.state, 'stale');
-  assert.deepEqual(retained.bytes, first);
+  assert.ok(retained.file);
+  assert.deepEqual(readFileSync(retained.file), first);
 });

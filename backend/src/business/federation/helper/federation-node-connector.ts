@@ -2,9 +2,11 @@
  * WHAT: Connects one Decision OS server to a federation relay and proxies owner-scoped HTTP streams.
  * WHY: Every node must expose remote projects without copying project state or moving Codex execution.
  */
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID, type Hash } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { once } from 'node:events';
+import { mkdir, open, rename, rm, type FileHandle } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import WebSocket from 'ws';
 import type { DecisionOsProject } from '../../server/helper/project-catalog.js';
 import { readRepositoryOriginIdentity } from '../../project-sync/helper/repository-sync-status.js';
@@ -29,12 +31,12 @@ type RelayFrame = {
   code?: string;
   message?: string;
   projectId?: string;
-  stateVersion?: 1;
+  stateVersion?: 2;
   payload?: unknown;
 };
 
 export type FederationStateFrame = {
-  type: 'state-event-batch' | 'state-relay-ack' | 'state-ack' | 'state-bucket-summary' | 'state-missing-request' | 'state-snapshot-manifest' | 'state-snapshot-request' | 'state-snapshot-chunk' | 'state-snapshot-end' | 'state-converged';
+  type: 'state-entity-batch' | 'state-relay-ack' | 'state-ack' | 'state-summary-request' | 'state-bucket-summary' | 'state-missing-request' | 'state-converged';
   from: string;
   projectId: string;
   payload: unknown;
@@ -60,6 +62,7 @@ const protocolVersion = 1;
 const chunkBytes = 64 * 1024;
 const creditWindowBytes = 1024 * 1024;
 const maximumBodyBytes = 25 * 1024 * 1024;
+const maximumContentBodyBytes = 1024 * 1024 * 1024;
 const connectTimeoutMs = 10_000;
 const defaultInternalRequestTimeoutMs = 15_000;
 
@@ -124,6 +127,7 @@ type RequesterStream = {
   bytes: number;
   resolve?: (response: InternalResponse) => void;
   timeout?: NodeJS.Timeout;
+  file?: { descriptor: FileHandle; temporary: string; target: string; expectedHash: string; hash: Hash; resolve: (result: { status: number; bytes: number }) => void };
 };
 type OwnerStream = {
   method: string;
@@ -200,7 +204,9 @@ export function createFederationNodeConnector(input: {
     stream.settled = true;
     if (stream.timeout) clearTimeout(stream.timeout);
     const body = Buffer.from(JSON.stringify({ ok: false, error: code, message }));
-    if (stream.response) {
+    if (stream.file) {
+      void stream.file.descriptor.close().catch(() => undefined).then(() => rm(stream.file!.temporary, { force: true })).finally(() => stream.file!.resolve({ status, bytes: stream.bytes }));
+    } else if (stream.response) {
       stream.response.statusCode = status;
       stream.response.setHeader('content-type', 'application/json');
       stream.response.end(body);
@@ -333,11 +339,14 @@ export function createFederationNodeConnector(input: {
     if (frame.type === 'response-chunk') {
       const chunk = Buffer.from(String(frame.data ?? ''), 'base64');
       requester.bytes += chunk.byteLength;
-      if (requester.bytes > maximumBodyBytes) {
-        failRequester(requestId, 413, 'federation_body_limit', 'Remote response exceeds 25 MiB.');
+      if (requester.bytes > (requester.file ? maximumContentBodyBytes : maximumBodyBytes)) {
+        failRequester(requestId, 413, 'federation_body_limit', requester.file ? 'Remote content exceeds 1 GiB.' : 'Remote response exceeds 25 MiB.');
         return;
       }
-      if (requester.response) {
+      if (requester.file) {
+        requester.file.hash.update(chunk);
+        await requester.file.descriptor.write(chunk);
+      } else if (requester.response) {
         if (!requester.response.write(chunk)) await once(requester.response, 'drain');
       } else requester.chunks.push(chunk);
       send({ version: 1, type: 'credit', requestId, direction: 'response', bytes: chunk.byteLength });
@@ -346,7 +355,16 @@ export function createFederationNodeConnector(input: {
     if (frame.type === 'response-end') {
       requester.settled = true;
       if (requester.timeout) clearTimeout(requester.timeout);
-      if (requester.response) requester.response.end();
+      if (requester.file) {
+        await requester.file.descriptor.sync();
+        await requester.file.descriptor.close();
+        if (requester.status === 200 && requester.file.hash.digest('hex') === requester.file.expectedHash) {
+          await rename(requester.file.temporary, requester.file.target);
+        } else {
+          await rm(requester.file.temporary, { force: true });
+        }
+        requester.file.resolve({ status: requester.status, bytes: requester.bytes });
+      } else if (requester.response) requester.response.end();
       else settleInternal(requester, requester.status, requester.headers, Buffer.concat(requester.chunks));
       requesterStreams.delete(requestId);
       return;
@@ -549,7 +567,7 @@ export function createFederationNodeConnector(input: {
     },
     publishStateFrame(ownerNodeId: string, frame: Omit<FederationStateFrame, 'from'>): boolean {
       if (socket?.readyState !== WebSocket.OPEN) return false;
-      send({ version: 1, type: frame.type, stateVersion: 1, ...(ownerNodeId === 'relay' ? {} : { to: ownerNodeId }), projectId: frame.projectId, payload: frame.payload });
+      send({ version: 1, type: frame.type, stateVersion: 2, ...(ownerNodeId === 'relay' ? {} : { to: ownerNodeId }), projectId: frame.projectId, payload: frame.payload });
       return true;
     },
     localOwner(): { ownerNodeId: string; ownerNodeLabel: string; online: true } {
@@ -609,6 +627,28 @@ export function createFederationNodeConnector(input: {
     },
     async request(ownerNodeId: string, path: string, options?: { method?: string; body?: Buffer; headers?: Record<string, string> }): Promise<InternalResponse> {
       return openRequest(ownerNodeId, path, options).response;
+    },
+    async requestToFile(ownerNodeId: string, path: string, target: string, expectedHash: string): Promise<{ status: number; bytes: number }> {
+      if (!settings || !remoteNodes.get(ownerNodeId)?.online || socket?.readyState !== WebSocket.OPEN) return { status: 503, bytes: 0 };
+      await mkdir(dirname(target), { recursive: true });
+      const temporary = `${target}.tmp-${process.pid}-${randomUUID()}`;
+      const descriptor = await open(temporary, 'wx');
+      const requestId = randomUUID();
+      let resolveResult: (result: { status: number; bytes: number }) => void = () => undefined;
+      const result = new Promise<{ status: number; bytes: number }>((resolveResultPromise) => { resolveResult = resolveResultPromise; });
+      const stream: RequesterStream = {
+        requestCredit: new CreditGate(), settled: false, status: 502, headers: {}, chunks: [], bytes: 0,
+        file: { descriptor, temporary, target, expectedHash, hash: createHash('sha256'), resolve: resolveResult },
+      };
+      stream.timeout = setTimeout(() => {
+        try { send({ version: 1, type: 'cancel', requestId }); } catch { /* Connection cleanup owns final settlement. */ }
+        failRequester(requestId, 504, 'federation_request_timeout', 'Federation content request timed out.');
+      }, Math.max(internalRequestTimeoutMs, 120_000));
+      stream.timeout.unref?.();
+      requesterStreams.set(requestId, stream);
+      send({ version: 1, type: 'request-open', requestId, to: ownerNodeId, method: 'GET', path, headers: { 'x-decision-os-federation-node': settings.nodeId } });
+      send({ version: 1, type: 'request-end', requestId });
+      return result;
     },
   };
 }

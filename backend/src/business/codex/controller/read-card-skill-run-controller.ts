@@ -5,6 +5,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
+import { readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
 import { type NormalizedRunEvent } from '../helper/card-skill-run-event-types.js';
 import { normalizeCardSkillRunDiagnostic, normalizeCardSkillRunEvent } from '../helper/normalize-card-skill-run-event.js';
 import { readCardSkillRunEventLines } from '../helper/read-card-skill-run-event-lines.js';
@@ -254,7 +255,7 @@ export async function readCardSkillRunController(input: { action_payload?: AnyRe
   const ledgerPath = resolve(decisionOsRoot, ledgerFile);
   if (!isInside(decisionOsRoot, ledgerPath) || !existsSync(ledgerPath)) return { ok: false, statusCode: 404, error: 'Ledger file not found.', ledgerId };
 
-  const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord & { cards?: AnyRecord[] };
+  const ledger = readLedgerProjection({ ledgerId, ledgerPath, runtime }) as AnyRecord & { cards?: AnyRecord[] };
   const runReference = resolveCardSkillRunOwnership({ ledger, decisionOsRoot, cardId, runId });
   if (!runReference.found) return { ok: false, statusCode: 404, error: 'Run not found on card.', cardId, runId };
   const card = ledger.cards?.find((entry) => String(entry.id ?? '') === cardId) ?? {};

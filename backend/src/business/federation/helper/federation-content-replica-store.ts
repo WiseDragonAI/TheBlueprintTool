@@ -1,115 +1,90 @@
-import { createHash } from 'node:crypto';
-import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync, writeSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+/**
+ * WHAT: Tracks current remote resource heads and runtime-only exact-object demand.
+ * WHY: Retry demand is derivable from causal heads and object existence, so no durable manifest queue is required.
+ */
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import type { FederationContentManifest, FederationContentManifestEntry } from './federation-content-manifest.js';
 
 export type FederationContentState = 'missing' | 'synchronizing' | 'available' | 'stale';
-type ResourceState = FederationContentManifestEntry & { ownerNodeId: string; projectId: string; state: FederationContentState; verifiedHash: string; lastVerifiedAt: string; error: string };
-type QueueEntry = { ownerNodeId: string; projectId: string; key: string; hash: string; attempts: number; nextAttemptAt: string; priority?: number };
-type ContentDocument = { version: 1; resources: Record<string, ResourceState>; queue: QueueEntry[] };
-
-function atomicWrite(file: string, bytes: string | Buffer): void {
-  mkdirSync(dirname(file), { recursive: true });
-  const temporary = `${file}.tmp-${process.pid}-${Date.now()}`;
-  const descriptor = openSync(temporary, 'wx');
-  try {
-    if (typeof bytes === 'string') writeSync(descriptor, bytes);
-    else writeSync(descriptor, bytes);
-    fsyncSync(descriptor);
-  } finally { closeSync(descriptor); }
-  renameSync(temporary, file);
-}
+type ResourceState = FederationContentManifestEntry & { ownerNodeId: string; projectId: string; state: FederationContentState; verifiedHash: string; error: string };
+export type FederationContentDemand = { ownerNodeId: string; projectId: string; key: string; hash: string; attempts: number; nextAttemptAt: number; priority: number };
 
 function resourceId(ownerNodeId: string, projectId: string, key: string): string {
   return `${ownerNodeId}\u0000${projectId}\u0000${key}`;
 }
 
+function demandId(entry: Pick<FederationContentDemand, 'ownerNodeId' | 'projectId' | 'key' | 'hash'>): string {
+  return `${resourceId(entry.ownerNodeId, entry.projectId, entry.key)}\u0000${entry.hash}`;
+}
+
 export function createFederationContentReplicaStore(input: { decisionOsRoot: string; now?: () => Date }) {
   const now = input.now ?? (() => new Date());
-  const root = resolve(input.decisionOsRoot, 'cache', 'federation-content-v1');
-  const documentFile = resolve(root, 'index.json');
-  const objectsDirectory = resolve(root, 'objects');
-  let document: ContentDocument;
-  try {
-    const parsed = JSON.parse(readFileSync(documentFile, 'utf8')) as ContentDocument;
-    document = parsed.version === 1 ? parsed : { version: 1, resources: {}, queue: [] };
-  } catch { document = { version: 1, resources: {}, queue: [] }; }
-  const persist = (): void => atomicWrite(documentFile, `${JSON.stringify(document)}\n`);
-  const objectFile = (hash: string): string => resolve(objectsDirectory, hash.slice(0, 2), hash);
+  const root = resolve(input.decisionOsRoot, 'cache', 'federation-content-current');
+  const resources = new Map<string, ResourceState>();
+  const demands = new Map<string, FederationContentDemand>();
+  const objectFile = (hash: string): string => resolve(root, 'objects', hash.slice(0, 2), hash);
+
+  const queue = (resource: ResourceState): void => {
+    const demand: FederationContentDemand = { ownerNodeId: resource.ownerNodeId, projectId: resource.projectId, key: resource.key, hash: resource.hash, attempts: 0, nextAttemptAt: now().getTime(), priority: 0 };
+    if (!demands.has(demandId(demand))) demands.set(demandId(demand), demand);
+    resource.state = 'synchronizing';
+  };
 
   return {
     root,
+    objectFile,
     applyManifest(ownerNodeId: string, manifest: FederationContentManifest): void {
-      const manifestKeys = new Set(manifest.resources.map((entry) => resourceId(ownerNodeId, manifest.projectId, entry.key)));
       for (const entry of manifest.resources) {
         const id = resourceId(ownerNodeId, manifest.projectId, entry.key);
-        const current = document.resources[id];
+        const current = resources.get(id);
         const available = existsSync(objectFile(entry.hash));
-        document.resources[id] = { ...entry, ownerNodeId, projectId: manifest.projectId, state: available ? 'available' : current?.verifiedHash ? 'stale' : 'missing', verifiedHash: available ? entry.hash : current?.verifiedHash ?? '', lastVerifiedAt: available ? now().toISOString() : current?.lastVerifiedAt ?? '', error: '' };
-        document.queue = document.queue.filter((queued) => queued.ownerNodeId !== ownerNodeId
-          || queued.projectId !== manifest.projectId
-          || queued.key !== entry.key
-          || queued.hash === entry.hash);
-        if (!available && !document.queue.some((queued) => queued.ownerNodeId === ownerNodeId && queued.projectId === manifest.projectId && queued.key === entry.key && queued.hash === entry.hash)) {
-          document.queue.push({ ownerNodeId, projectId: manifest.projectId, key: entry.key, hash: entry.hash, attempts: 0, nextAttemptAt: now().toISOString() });
-          document.resources[id].state = 'synchronizing';
-        }
+        const resource: ResourceState = { ...entry, ownerNodeId, projectId: manifest.projectId, state: available ? 'available' : current?.verifiedHash ? 'stale' : 'missing', verifiedHash: available ? entry.hash : current?.verifiedHash ?? '', error: '' };
+        resources.set(id, resource);
+        for (const [key, demand] of demands) if (demand.ownerNodeId === ownerNodeId && demand.projectId === manifest.projectId && demand.key === entry.key && demand.hash !== entry.hash) demands.delete(key);
+        if (!available) queue(resource);
       }
-      if (manifest.complete !== false) {
-        for (const id of Object.keys(document.resources)) {
-          const resource = document.resources[id];
-          if (resource.ownerNodeId === ownerNodeId && resource.projectId === manifest.projectId && !manifestKeys.has(id)) delete document.resources[id];
-        }
-        document.queue = document.queue.filter((entry) => entry.ownerNodeId !== ownerNodeId
-          || entry.projectId !== manifest.projectId
-          || manifestKeys.has(resourceId(entry.ownerNodeId, entry.projectId, entry.key)));
-      }
-      persist();
     },
-    due(limit = 2): QueueEntry[] {
+    due(limit = 2): FederationContentDemand[] {
       const timestamp = now().getTime();
-      return document.queue
-        .filter((entry) => Date.parse(entry.nextAttemptAt) <= timestamp)
-        .sort((left, right) => Number(right.priority ?? 0) - Number(left.priority ?? 0) || left.nextAttemptAt.localeCompare(right.nextAttemptAt))
-        .slice(0, limit);
+      return [...demands.values()].filter((entry) => entry.nextAttemptAt <= timestamp).sort((left, right) => right.priority - left.priority || left.nextAttemptAt - right.nextAttemptAt).slice(0, limit);
     },
     prioritize(ownerNodeId: string, projectId: string, key: string): boolean {
-      const entry = document.queue.find((candidate) => candidate.ownerNodeId === ownerNodeId && candidate.projectId === projectId && candidate.key === key);
-      if (!entry) return false;
-      entry.priority = 1;
-      entry.nextAttemptAt = now().toISOString();
-      persist();
+      const resource = resources.get(resourceId(ownerNodeId, projectId, key));
+      if (!resource) return false;
+      queue(resource);
+      const demand = demands.get(demandId({ ownerNodeId, projectId, key, hash: resource.hash }));
+      if (!demand) return false;
+      demand.priority = 1;
+      demand.nextAttemptAt = now().getTime();
       return true;
     },
-    install(entry: QueueEntry, bytes: Buffer): void {
-      if (createHash('sha256').update(bytes).digest('hex') !== entry.hash) throw new Error('invalid_federation_content_hash');
-      atomicWrite(objectFile(entry.hash), bytes);
-      const id = resourceId(entry.ownerNodeId, entry.projectId, entry.key);
-      const resource = document.resources[id];
-      if (resource && resource.hash === entry.hash) {
+    complete(entry: FederationContentDemand): void {
+      if (!existsSync(objectFile(entry.hash))) throw new Error('missing_federation_content_object');
+      const resource = resources.get(resourceId(entry.ownerNodeId, entry.projectId, entry.key));
+      if (resource?.hash === entry.hash) {
         resource.state = 'available';
         resource.verifiedHash = entry.hash;
-        resource.lastVerifiedAt = now().toISOString();
         resource.error = '';
       }
-      document.queue = document.queue.filter((queued) => queued !== entry);
-      persist();
+      demands.delete(demandId(entry));
     },
-    fail(entry: QueueEntry, error: string): void {
+    fail(entry: FederationContentDemand, error: string): void {
       entry.attempts += 1;
-      entry.nextAttemptAt = new Date(now().getTime() + Math.min(300_000, 1_000 * 2 ** Math.min(entry.attempts, 8))).toISOString();
-      const resource = document.resources[resourceId(entry.ownerNodeId, entry.projectId, entry.key)];
-      if (resource) { resource.state = resource.lastVerifiedAt ? 'stale' : 'synchronizing'; resource.error = error; }
-      persist();
+      entry.nextAttemptAt = now().getTime() + Math.min(300_000, 1_000 * 2 ** Math.min(entry.attempts, 8));
+      const resource = resources.get(resourceId(entry.ownerNodeId, entry.projectId, entry.key));
+      if (resource) {
+        resource.state = resource.verifiedHash ? 'stale' : 'synchronizing';
+        resource.error = error;
+      }
     },
-    resource(ownerNodeId: string, projectId: string, key: string): { state: FederationContentState; bytes: Buffer | null; error: string } {
-      const resource = document.resources[resourceId(ownerNodeId, projectId, key)];
-      if (!resource) return { state: 'missing', bytes: null, error: '' };
+    resource(ownerNodeId: string, projectId: string, key: string): { state: FederationContentState; file: string | null; error: string } {
+      const resource = resources.get(resourceId(ownerNodeId, projectId, key));
+      if (!resource) return { state: 'missing', file: null, error: '' };
       const file = objectFile(resource.verifiedHash || resource.hash);
-      const bytes = existsSync(file) ? readFileSync(file) : null;
-      return { state: bytes ? resource.state : resource.state === 'stale' ? 'stale' : resource.state, bytes, error: resource.error };
+      return { state: resource.state, file: existsSync(file) ? file : null, error: resource.error };
     },
-    status: () => ({ queueDepth: document.queue.length, resources: Object.values(document.resources).map(({ ownerNodeId, projectId, key, hash, state, error }) => ({ ownerNodeId, projectId, key, hash, state, error })) }),
+    status: () => ({ queueDepth: demands.size, resources: [...resources.values()].map(({ ownerNodeId, projectId, key, hash, state, error }) => ({ ownerNodeId, projectId, key, hash, state, error })) }),
   };
 }
 

@@ -15,6 +15,7 @@ import { parseThreadMarkdown } from '@backend/business/ledger/helper/thread-cont
 import { persistCardSkillRunEvents } from '@backend/business/codex/effect/persist-card-skill-run-events.js';
 import { normalizeCardSkillRunEvent } from '@backend/business/codex/helper/normalize-card-skill-run-event.js';
 import { readCodexProcessQueue } from '@backend/business/codex/helper/codex-process-queue.js';
+import { migrateTaskCurrentState } from '@backend/business/task-state/helper/task-current-state-migration.js';
 
 type ContentChangeEvent = {
   contentFile?: string;
@@ -940,6 +941,13 @@ test('card skill run continue route resumes the captured session after its card 
     '});',
   ].join('\n'));
   chmodSync(fakeCodex, 0o755);
+
+  writeFileSync(join(workspace, '.decision-os', 'project.json'), JSON.stringify({ id: 'card-skill-continue-project' }));
+  await migrateTaskCurrentState({
+    decisionOsRoot: join(workspace, '.decision-os'),
+    projectId: 'card-skill-continue-project',
+    tasksLedgerFile: join(workspace, '.decision-os', 'tasks.json'),
+  });
 
   process.chdir(workspace);
   process.env.CODEX_BIN = fakeCodex;

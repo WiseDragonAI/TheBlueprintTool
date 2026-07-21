@@ -196,7 +196,7 @@ export function createProjectSyncController(input: {
       syncId: run.syncId,
       gitSshCommand: input.gitSshCommand(),
     });
-    const task = admitProjectSyncMasterTask({
+    const task = await admitProjectSyncMasterTask({
       project: taskProject,
       runtime: input.runtimeForProject(taskProject),
       sourceProjectId: run.sourceProjectId,

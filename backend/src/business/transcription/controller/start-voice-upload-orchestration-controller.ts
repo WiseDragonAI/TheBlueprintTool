@@ -19,6 +19,7 @@ import { readCardSkillRunController } from '../../codex/controller/read-card-ski
 import { startThreadCodexProcessController } from '../../codex/controller/start-thread-codex-process-controller.js';
 import { startCodexPipelineRunController } from '../../codex/controller/start-codex-pipeline-run-controller.js';
 import { telemetry } from '@backend/telemetry/harness.js';
+import { readLedgerProjection } from '../../task-state/helper/read-ledger-projection.js';
 
 type AnyRecord = Record<string, unknown>;
 export const voiceTranscriptionDeadlineMs = 120_000;
@@ -77,7 +78,7 @@ function resolveLedgerContext(input: { runtime: AnyRecord; ledgerId: string }): 
   const ledgerFile = String(tab.ledgerFile ?? '').replace(/^\.decision-os\//, '');
   const ledgerPath = resolve(decisionOsRoot, ledgerFile);
   if (!isInside(decisionOsRoot, ledgerPath) || !existsSync(ledgerPath)) return { ok: false, statusCode: 404, error: 'Ledger file not found.', decisionOsRoot, ledgerId: input.ledgerId, ledgerPath, ledger: {} };
-  const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as LedgerContext['ledger'];
+  const ledger = readLedgerProjection({ ledgerId: input.ledgerId, ledgerPath, runtime: input.runtime }) as LedgerContext['ledger'];
   return { ok: true, decisionOsRoot, ledgerId: input.ledgerId, ledgerPath, ledger };
 }
 

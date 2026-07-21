@@ -21,7 +21,8 @@ import { resolveCodexCommand } from './resolve-codex-command.js';
 import { decisionOsCodexEnvironment } from './decision-os-codex-runtime.js';
 import { resolveServerSkillContext } from './server-skill-context.js';
 import { projectCardCodexRun } from './project-card-codex-run.js';
-import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
+import { queueLedgerProjectionPersistence } from '@backend/business/task-state/helper/persist-ledger-projection.js';
+import { readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
 import { codexProcessIdentity } from './codex-process-queue.js';
 import { launchCodexExecutionProcess } from './launch-codex-execution-process.js';
 import {
@@ -136,13 +137,13 @@ export function resolvePipelineLedgerContext(input: {
   return {
     ledgerId: input.ledgerId,
     ledgerPath,
-    ledger: JSON.parse(readFileSync(ledgerPath, 'utf8')) as PipelineLedgerContext['ledger'],
+    ledger: readLedgerProjection({ ledgerId: input.ledgerId, ledgerPath, runtime: input.runtime }) as PipelineLedgerContext['ledger'],
     runtime: input.runtime,
   };
 }
 
 function persistLedger(context: PipelineLedgerContext, kind: string, cardIds: string[]): void {
-  persistLedgerProjection({
+  queueLedgerProjectionPersistence({
     ledgerId: context.ledgerId,
     ledgerPath: context.ledgerPath,
     ledger: context.ledger,

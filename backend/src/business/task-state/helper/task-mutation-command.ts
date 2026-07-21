@@ -1,24 +1,25 @@
 /**
- * WHAT: Converts accepted domain operations into granular structural task events.
- * WHY: The task event log must receive declared resource changes instead of whole-ledger diffs.
+ * WHAT: Converts accepted domain operations into granular structural task changes.
+ * WHY: Current-state persistence must receive declared entity lanes instead of whole-ledger diffs.
  */
 import type { LedgerMutation } from '../../ledger/helper/apply-ledger-mutation.js';
-import { canonicalJson } from './task-event-codec.js';
-import type { TaskEntityType, TaskFieldChange } from './task-event-types.js';
+import { canonicalJson } from './task-current-state-codec.js';
+import type { TaskEntityType, TaskFieldChange } from './task-current-state-types.js';
 
 type AnyRecord = Record<string, unknown>;
-export type TaskCommandEvent = { entityType: TaskEntityType; entityId: string; changes: TaskFieldChange[] };
+export type TaskCommandChange = { entityType: TaskEntityType; entityId: string; changes: TaskFieldChange[] };
 export type TaskMutationCommand = {
   kind: string;
   activationTaskId: string;
-  replication: 'held' | 'pending';
-  events: TaskCommandEvent[];
+  replication: 'held' | 'active';
+  changes: TaskCommandChange[];
 };
 export type TaskProjectionCommand = {
   kind: string;
   cardIds?: string[];
   annotationIds?: string[];
   relationshipIds?: string[];
+  threadIds?: string[];
   ledgerPaths?: string[];
 };
 
@@ -67,12 +68,12 @@ function changesBetween(before: AnyRecord | null, after: AnyRecord | null): Task
   });
 }
 
-function entity(entityType: TaskEntityType, entityId: string, before: AnyRecord | null, after: AnyRecord | null): TaskCommandEvent[] {
+function entity(entityType: TaskEntityType, entityId: string, before: AnyRecord | null, after: AnyRecord | null): TaskCommandChange[] {
   const changes = changesBetween(before, after);
   return changes.length > 0 ? [{ entityType, entityId, changes }] : [];
 }
 
-function ledgerField(path: string, before: unknown, after: unknown): TaskCommandEvent[] {
+function ledgerField(path: string, before: unknown, after: unknown): TaskCommandChange[] {
   if (canonicalJson(before) === canonicalJson(after)) return [];
   return [{ entityType: 'ledger', entityId: 'tasks', changes: after === undefined ? [{ path, operation: 'remove' }] : [{ path, operation: 'set', value: structuredClone(after) }] }];
 }
@@ -84,112 +85,133 @@ function valueAtPath(document: AnyRecord, path: string): unknown {
   }, document);
 }
 
-/** Converts an internal domain command into events for its declared resource boundary only. */
-export function taskCommandForProjection(input: { command: TaskProjectionCommand; before: AnyRecord; after: AnyRecord }): TaskCommandEvent[] {
-  const events: TaskCommandEvent[] = [];
+/** Converts an internal domain command into changes for its declared resource boundary only. */
+export function taskCommandForProjection(input: { command: TaskProjectionCommand; before: AnyRecord; after: AnyRecord }): TaskCommandChange[] {
+  const changes: TaskCommandChange[] = [];
   for (const id of new Set(input.command.cardIds ?? [])) {
-    events.push(...entity('card', id, recordById(input.before, 'cards', id), recordById(input.after, 'cards', id)));
+    changes.push(...entity('card', id, recordById(input.before, 'cards', id), recordById(input.after, 'cards', id)));
   }
   for (const id of new Set(input.command.annotationIds ?? [])) {
-    events.push(...entity('annotation', id, recordById(input.before, 'annotations', id), recordById(input.after, 'annotations', id)));
+    changes.push(...entity('annotation', id, recordById(input.before, 'annotations', id), recordById(input.after, 'annotations', id)));
   }
   for (const id of new Set(input.command.relationshipIds ?? [])) {
-    events.push(...entity('relationship', id, recordById(input.before, 'relationships', id), recordById(input.after, 'relationships', id)));
+    changes.push(...entity('relationship', id, recordById(input.before, 'relationships', id), recordById(input.after, 'relationships', id)));
+  }
+  for (const threadId of new Set(input.command.threadIds ?? [])) {
+    changes.push(...threadNoteChanges(input.before, input.after, threadId));
   }
   for (const path of new Set(input.command.ledgerPaths ?? [])) {
-    events.push(...ledgerField(path, valueAtPath(input.before, path), valueAtPath(input.after, path)));
+    changes.push(...ledgerField(path, valueAtPath(input.before, path), valueAtPath(input.after, path)));
   }
-  return events;
+  return changes;
 }
 
 function taskIdFromThread(threadId: string): string {
   return threadId.startsWith('thread-') ? threadId.slice('thread-'.length) : '';
 }
 
-/** Converts one accepted UI operation into events for only the entities that operation owns. */
+function threadNoteChanges(before: AnyRecord, after: AnyRecord, threadId: string): TaskCommandChange[] {
+  const notes = (ledger: AnyRecord): AnyRecord[] => {
+    const values = ledger.notes && typeof ledger.notes === 'object' && !Array.isArray(ledger.notes)
+      ? (ledger.notes as Record<string, unknown>)[threadId]
+      : [];
+    return records(values);
+  };
+  const left = new Map(notes(before).map((note) => [String(note.id ?? ''), note]));
+  const right = new Map(notes(after).map((note) => [String(note.id ?? ''), note]));
+  return [...new Set([...left.keys(), ...right.keys()])].filter(Boolean).flatMap((noteId) => entity(
+    'thread-note',
+    `${threadId}/${noteId}`,
+    left.has(noteId) ? { ...left.get(noteId), threadId } : null,
+    right.has(noteId) ? { ...right.get(noteId), threadId } : null,
+  ));
+}
+
+/** Converts one accepted UI operation into changes for only the entities that operation owns. */
 export function taskCommandForMutation(input: { mutation: LedgerMutation; before: AnyRecord; after: AnyRecord }): TaskMutationCommand {
   const { mutation, before, after } = input;
   const action = String(mutation.action ?? '');
-  const events: TaskCommandEvent[] = [];
+  const changes: TaskCommandChange[] = [];
   let activationTaskId = '';
-  let replication: 'held' | 'pending' = 'pending';
+  let replication: 'held' | 'active' = 'active';
 
   if (action === 'create-task-intake' && mutation.card?.id && mutation.annotation?.id) {
     const cardId = String(mutation.card.id);
     const annotationId = String(mutation.annotation.id);
     activationTaskId = cardId;
     replication = 'held';
-    events.push(...entity('annotation', annotationId, null, recordById(after, 'annotations', annotationId)));
-    events.push(...entity('card', cardId, null, recordById(after, 'cards', cardId)));
-    const cardEvent = events.find((event) => event.entityType === 'card' && event.entityId === cardId);
-    cardEvent?.changes.push({ path: 'replicationState', operation: 'set', value: 'local-only' });
+    changes.push(...entity('annotation', annotationId, null, recordById(after, 'annotations', annotationId)));
+    changes.push(...entity('card', cardId, null, recordById(after, 'cards', cardId)));
+    const cardChange = changes.find((change) => change.entityType === 'card' && change.entityId === cardId);
+    cardChange?.changes.push({ path: 'replicationState', operation: 'set', value: 'local-only' });
     const threadId = `thread-${cardId}`;
     const beforeRefs = before.threadFiles && typeof before.threadFiles === 'object' ? before.threadFiles as AnyRecord : {};
     const afterRefs = after.threadFiles && typeof after.threadFiles === 'object' ? after.threadFiles as AnyRecord : {};
-    events.push(...ledgerField(`threadFiles/${threadId}`, beforeRefs[threadId], afterRefs[threadId]));
+    changes.push(...ledgerField(`threadFiles/${threadId}`, beforeRefs[threadId], afterRefs[threadId]));
   } else if ((action === 'create-zone' || action === 'create-group') && mutation.annotation?.id) {
     const id = String(mutation.annotation.id);
-    events.push(...entity('annotation', id, null, recordById(after, 'annotations', id)));
+    changes.push(...entity('annotation', id, null, recordById(after, 'annotations', id)));
   } else if (action === 'create-card' && mutation.card?.id) {
     const id = String(mutation.card.id);
     activationTaskId = id;
     replication = 'held';
-    events.push(...entity('card', id, null, recordById(after, 'cards', id)));
-    const cardEvent = events.find((event) => event.entityType === 'card' && event.entityId === id);
-    cardEvent?.changes.push({ path: 'replicationState', operation: 'set', value: 'local-only' });
+    changes.push(...entity('card', id, null, recordById(after, 'cards', id)));
+    const cardChange = changes.find((change) => change.entityType === 'card' && change.entityId === id);
+    cardChange?.changes.push({ path: 'replicationState', operation: 'set', value: 'local-only' });
     const threadId = `thread-${id}`;
     const beforeRefs = before.threadFiles && typeof before.threadFiles === 'object' ? before.threadFiles as AnyRecord : {};
     const afterRefs = after.threadFiles && typeof after.threadFiles === 'object' ? after.threadFiles as AnyRecord : {};
-    events.push(...ledgerField(`threadFiles/${threadId}`, beforeRefs[threadId], afterRefs[threadId]));
+    changes.push(...ledgerField(`threadFiles/${threadId}`, beforeRefs[threadId], afterRefs[threadId]));
   } else if (action === 'create-relationship' && mutation.relationship?.id) {
     const id = String(mutation.relationship.id);
-    events.push(...entity('relationship', id, null, recordById(after, 'relationships', id)));
+    changes.push(...entity('relationship', id, null, recordById(after, 'relationships', id)));
   } else if (action === 'patch-card' && mutation.cardPatch?.id) {
     const id = String(mutation.cardPatch.id);
     activationTaskId = id;
-    events.push(...entity('card', id, recordById(before, 'cards', id), recordById(after, 'cards', id)));
+    changes.push(...entity('card', id, recordById(before, 'cards', id), recordById(after, 'cards', id)));
   } else if (action === 'complete-master-task' && mutation.masterTaskId) {
     const rootId = String(mutation.masterTaskId);
     activationTaskId = rootId;
     const childIds = records(before.relationships)
       .filter((relationship) => String(relationship.from ?? '') === rootId && String(relationship.label ?? '') === 'subtask')
       .map((relationship) => String(relationship.to ?? ''));
-    for (const id of [rootId, ...childIds]) events.push(...entity('card', id, recordById(before, 'cards', id), recordById(after, 'cards', id)));
+    for (const id of [rootId, ...childIds]) changes.push(...entity('card', id, recordById(before, 'cards', id), recordById(after, 'cards', id)));
   } else if (action === 'delete-card' && mutation.cardId) {
     const id = String(mutation.cardId);
     activationTaskId = id;
-    events.push(...entity('card', id, recordById(before, 'cards', id), null));
+    changes.push(...entity('card', id, recordById(before, 'cards', id), null));
     for (const relationship of records(before.relationships).filter((entry) => String(entry.from ?? '') === id || String(entry.to ?? '') === id)) {
-      events.push(...entity('relationship', String(relationship.id ?? ''), relationship, null));
+      changes.push(...entity('relationship', String(relationship.id ?? ''), relationship, null));
     }
     const refs = before.threadFiles && typeof before.threadFiles === 'object' ? before.threadFiles as AnyRecord : {};
-    events.push(...ledgerField(`threadFiles/thread-${id}`, refs[`thread-${id}`], undefined));
+    changes.push(...ledgerField(`threadFiles/thread-${id}`, refs[`thread-${id}`], undefined));
   } else if (action === 'delete-zones') {
-    for (const id of [...(mutation.zoneIds ?? []), ...(mutation.groupIds ?? [])]) events.push(...entity('annotation', id, recordById(before, 'annotations', id), null));
+    for (const id of [...(mutation.zoneIds ?? []), ...(mutation.groupIds ?? [])]) changes.push(...entity('annotation', id, recordById(before, 'annotations', id), null));
   } else if (action === 'delete-relationships') {
-    for (const id of mutation.relationshipIds ?? []) events.push(...entity('relationship', id, recordById(before, 'relationships', id), null));
+    for (const id of mutation.relationshipIds ?? []) changes.push(...entity('relationship', id, recordById(before, 'relationships', id), null));
   } else if (action === 'patch-geometry') {
-    for (const [id] of Object.entries(mutation.geometry?.cards ?? {})) events.push(...entity('card', id, recordById(before, 'cards', id), recordById(after, 'cards', id)));
-    for (const [id] of Object.entries({ ...(mutation.geometry?.zones ?? {}), ...(mutation.geometry?.groups ?? {}) })) events.push(...entity('annotation', id, recordById(before, 'annotations', id), recordById(after, 'annotations', id)));
+    for (const [id] of Object.entries(mutation.geometry?.cards ?? {})) changes.push(...entity('card', id, recordById(before, 'cards', id), recordById(after, 'cards', id)));
+    for (const [id] of Object.entries({ ...(mutation.geometry?.zones ?? {}), ...(mutation.geometry?.groups ?? {}) })) changes.push(...entity('annotation', id, recordById(before, 'annotations', id), recordById(after, 'annotations', id)));
   } else if (action === 'patch-viewport') {
-    events.push(...ledgerField('viewport', before.viewport, after.viewport));
+    changes.push(...ledgerField('viewport', before.viewport, after.viewport));
   } else if (action === 'patch-region' && mutation.region?.id) {
     const id = String(mutation.region.id);
-    events.push(...entity('annotation', id, recordById(before, 'annotations', id), recordById(after, 'annotations', id)));
+    changes.push(...entity('annotation', id, recordById(before, 'annotations', id), recordById(after, 'annotations', id)));
   } else if (action === 'create-execution-intent' && mutation.cardId) {
     const id = String(mutation.cardId);
     activationTaskId = id;
-    events.push(...entity('card', id, recordById(before, 'cards', id), recordById(after, 'cards', id)));
+    changes.push(...entity('card', id, recordById(before, 'cards', id), recordById(after, 'cards', id)));
   } else if (action === 'paste-selection') {
     const previousCardIds = new Set(records(before.cards).map((entry) => String(entry.id ?? '')));
     const previousAnnotationIds = new Set(records(before.annotations).map((entry) => String(entry.id ?? '')));
-    for (const card of records(after.cards).filter((entry) => !previousCardIds.has(String(entry.id ?? '')))) events.push(...entity('card', String(card.id ?? ''), null, card));
-    for (const annotation of records(after.annotations).filter((entry) => !previousAnnotationIds.has(String(entry.id ?? '')))) events.push(...entity('annotation', String(annotation.id ?? ''), null, annotation));
+    for (const card of records(after.cards).filter((entry) => !previousCardIds.has(String(entry.id ?? '')))) changes.push(...entity('card', String(card.id ?? ''), null, card));
+    for (const annotation of records(after.annotations).filter((entry) => !previousAnnotationIds.has(String(entry.id ?? '')))) changes.push(...entity('annotation', String(annotation.id ?? ''), null, annotation));
   } else if (['append-note', 'update-note', 'delete-note', 'delete-card-image'].includes(action)) {
     activationTaskId = taskIdFromThread(String(mutation.note?.threadId ?? '')) || String(mutation.cardId ?? '');
+    if (mutation.note?.threadId) changes.push(...threadNoteChanges(before, after, mutation.note.threadId));
   } else {
     throw new Error(`unsupported_task_command:${action || 'missing'}`);
   }
 
-  return { kind: action, activationTaskId, replication, events };
+  return { kind: action, activationTaskId, replication, changes };
 }

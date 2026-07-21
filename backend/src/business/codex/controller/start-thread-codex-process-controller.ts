@@ -25,6 +25,7 @@ import { runtimeCodexRunOwnsLiveProcess } from '../helper/runtime-codex-run-owns
 import { readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import { cancelCodexPipelineRunController } from './cancel-codex-pipeline-run-controller.js';
 import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
+import { readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
 import { withCardCodexAdmission } from '../helper/card-codex-admission-lock.js';
 import { cardCodexExecutionOwnership } from '../helper/card-codex-execution-ownership.js';
 import { launchCodexExecutionProcess } from '../helper/launch-codex-execution-process.js';
@@ -162,7 +163,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
   const ledgerPath = resolve(decisionOsRoot, ledgerFile);
   if (!isInside(decisionOsRoot, ledgerPath) || !existsSync(ledgerPath)) return { ok: false, statusCode: 404, error: 'Ledger file not found.', ledgerId };
 
-  const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord & { cards?: AnyRecord[] };
+  const ledger = readLedgerProjection({ ledgerId, ledgerPath, runtime }) as AnyRecord & { cards?: AnyRecord[] };
   const source = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
   if (!source) return { ok: false, statusCode: 404, error: 'Thread target card not found.', cardId, threadId };
   const ownership = cardCodexExecutionOwnership(source);
@@ -301,7 +302,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
         payload: { ledgerId, threadId, cardId, runId, executionId, codexModel: command.model, codexEffort: command.effort },
       });
       stripHydratedThreadNotes(ledger);
-      persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime, command: { kind: 'queue-codex-execution', cardIds: [cardId] } });
+      await persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime, command: { kind: 'queue-codex-execution', cardIds: [cardId] } });
     } catch (error) {
       removeCodexProcessQueueItem(decisionOsRoot, runId);
       delete runtimeRuns(runtime)[runId];
@@ -324,7 +325,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
   }
 
   stripHydratedThreadNotes(ledger);
-  persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime, command: { kind: 'start-codex-execution', cardIds: [cardId] } });
+  await persistLedgerProjection({ decisionOsRoot, ledgerId, ledgerPath, ledger, runtime, command: { kind: 'start-codex-execution', cardIds: [cardId] } });
   notifyRuntimeCallback(runtime.onCodexRunAccepted, { ledgerId, cardId, threadId, runId, executionId, status: 'running' });
 
   const launch = (attemptCommand: CodexCommand, taskInput: string, segment: 'start' | 'continue'): void => {
@@ -363,7 +364,7 @@ export async function startThreadCodexProcessController(input: { action_payload?
           notifyRuntimeCallback(runtime.onCodexTurnStarted, { ledgerId, cardId, threadId, runId, executionId, status: 'running', startedAt: observedAt });
         }
       },
-      onSettled: (settlement) => {
+      onSettled: async (settlement) => {
         if (settlement.kind === 'error') {
           const ownsExecution = updateRuntimeExecution(runtime, runId, executionId, { status: 'failed', error: settlement.error.message, finishedAt: settlement.finishedAt });
           if (!ownsExecution) return;
@@ -371,7 +372,8 @@ export async function startThreadCodexProcessController(input: { action_payload?
           appendFileSync(stderrFile, codexRunExecutionFinishedMarker({ runId, executionId, finishedAt: settlement.finishedAt, status: 'failed' }), 'utf8');
           updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
           removeCodexProcessQueueItem(decisionOsRoot, runId);
-          clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime, terminalState: 'failed' });
+          try { await clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime, terminalState: 'failed' }); }
+          catch (error) { runtime.taskStatePersistenceError = error instanceof Error ? error.message : String(error); }
           const schedule = runtime.scheduleCodexProcesses;
           if (typeof schedule === 'function') void schedule();
           notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId, runId, executionId, status: 'failed' });
@@ -397,7 +399,8 @@ export async function startThreadCodexProcessController(input: { action_payload?
         if (!updateRuntimeExecution(runtime, runId, executionId, { status, exitCode: settlement.exitCode, finishedAt: settlement.finishedAt, settledAt: new Date().toISOString() })) return;
         appendFileSync(stderrFile, codexRunExecutionFinishedMarker({ runId, executionId, finishedAt: settlement.finishedAt, status }), 'utf8');
         removeCodexProcessQueueItem(decisionOsRoot, runId);
-        clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime, terminalState: status === 'failed' ? 'failed' : 'terminal' });
+        try { await clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime, terminalState: status === 'failed' ? 'failed' : 'terminal' }); }
+        catch (error) { runtime.taskStatePersistenceError = error instanceof Error ? error.message : String(error); }
         const schedule = runtime.scheduleCodexProcesses;
         if (typeof schedule === 'function') void schedule();
         if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');

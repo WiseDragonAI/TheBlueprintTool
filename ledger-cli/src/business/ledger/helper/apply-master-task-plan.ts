@@ -39,7 +39,7 @@ function parsePlan(value: string): Result<Plan> {
   } catch (error) { return { ok: false, error: error instanceof Error ? error.message : 'Invalid plan JSON.' }; }
 }
 
-export function applyMasterTaskPlan(input: { ledgerJsonFile: string; planJson: string }): Result<string> {
+export function applyMasterTaskPlan(input: { ledgerJsonFile: string; planJson: string; ledger?: JsonObject }): Result<string> {
   const scopedRoot = process.env.DECISION_OS_LEDGER_ROOT?.trim();
   if (scopedRoot) {
     const inner = relative(resolve(scopedRoot), resolve(input.ledgerJsonFile));
@@ -48,8 +48,8 @@ export function applyMasterTaskPlan(input: { ledgerJsonFile: string; planJson: s
   const parsed = parsePlan(input.planJson);
   if (!parsed.ok) return parsed;
   const plan = parsed.value;
-  const ledgerText = readFileSync(input.ledgerJsonFile, 'utf8');
-  const ledger = JSON.parse(ledgerText) as JsonObject;
+  const ledgerText = input.ledger ? JSON.stringify(input.ledger) : readFileSync(input.ledgerJsonFile, 'utf8');
+  const ledger = input.ledger ?? JSON.parse(ledgerText) as JsonObject;
   const cards = Array.isArray(ledger.cards) ? ledger.cards.filter(record).map((card) => ({ ...card })) : [];
   const relationships = Array.isArray(ledger.relationships) ? ledger.relationships.filter(record).map((entry) => ({ ...entry })) : [];
   const annotations = Array.isArray(ledger.annotations) ? ledger.annotations.filter(record).map((entry) => ({ ...entry })) : [];
@@ -101,10 +101,16 @@ export function applyMasterTaskPlan(input: { ledgerJsonFile: string; planJson: s
   }) };
   const validation = validateMasterTasks(validationLedger, plan.masterCardId);
   if (validation.errors.length > 0) return { ok: false, error: JSON.stringify({ version: 1, code: 'invalid_master_task', validation }) };
-  const snapshots = new Map<string, string | null>([[input.ledgerJsonFile, ledgerText], ...[...files.keys()].map((file) => [file, existsSync(file) ? readFileSync(file, 'utf8') : null] as const)]);
+  const snapshots = new Map<string, string | null>([
+    ...(!input.ledger ? [[input.ledgerJsonFile, ledgerText] as const] : []),
+    ...[...files.keys()].map((file) => [file, existsSync(file) ? readFileSync(file, 'utf8') : null] as const),
+  ]);
   try {
     for (const [file, content] of files) { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, content, 'utf8'); }
-    writeFileSync(input.ledgerJsonFile, JSON.stringify(nextLedger, null, 2), 'utf8');
+    if (input.ledger) {
+      for (const key of Object.keys(input.ledger)) delete input.ledger[key];
+      Object.assign(input.ledger, nextLedger);
+    } else writeFileSync(input.ledgerJsonFile, JSON.stringify(nextLedger, null, 2), 'utf8');
   } catch (error) {
     for (const [file, content] of snapshots) { if (content === null) rmSync(file, { force: true }); else writeFileSync(file, content, 'utf8'); }
     return { ok: false, error: error instanceof Error ? error.message : 'Master-task transaction failed.' };

@@ -90,7 +90,7 @@ export async function restartCodexPipelineRunController(
     }
   }
   stripHydratedThreadNotes(context.ledger);
-  persistLedgerProjection({
+  await persistLedgerProjection({
     decisionOsRoot,
     ledgerId: context.ledgerId,
     ledgerPath: context.ledgerPath,

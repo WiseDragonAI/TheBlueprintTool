@@ -18,7 +18,7 @@ export async function commitLedgerEditController(input: { action_payload?: AnyRe
   const request = parseHttpRequest({ action_payload: payload, runtime_state: runtime, data_model: data });
   const validation = validateLedgerEditPayload({ action_payload: { ...payload, request }, runtime_state: runtime, data_model: data });
   if (validation.ok !== false) {
-    writeLedgerJsonFile({ action_payload: { ...payload, document: validation.document }, runtime_state: runtime, data_model: data });
+    await writeLedgerJsonFile({ action_payload: { ...payload, document: validation.document }, runtime_state: runtime, data_model: data });
     writeDecisionOsState({ action_payload: { ...payload, state: { lastEdit: validation.document } }, runtime_state: runtime, data_model: data });
   }
   sendJsonResponse({ action_payload: { ...payload, status: validation.ok === false ? 400 : 200, body: validation }, runtime_state: runtime, data_model: data });

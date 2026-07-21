@@ -4,10 +4,7 @@ import { describe, expect, it } from 'vitest';
 type FramePayload = {
   buckets?: Array<{ bucket?: string; count?: number; checksum?: string }>;
   data?: string;
-  snapshotId?: string;
-  total?: number;
-  checksum?: string;
-  events?: unknown[];
+  entities?: unknown[];
 };
 type Frame = { type: string; requestId?: string; direction?: string; from?: string; stateVersion?: number; projectId?: string; payload?: FramePayload; nodes?: Array<{ nodeId: string; nodeLabel: string; online: boolean }> };
 
@@ -49,6 +46,27 @@ async function sha256(value: string): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
+function canonical(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+  return `{${Object.entries(value as Record<string, unknown>).sort(([left], [right]) => left.localeCompare(right)).map(([key, child]) => `${JSON.stringify(key)}:${canonical(child)}`).join(',')}}`;
+}
+
+async function currentEntity(projectId: string, entityId: string, value: string) {
+  const entity = {
+    version: 2 as const,
+    projectId,
+    entityType: 'card',
+    entityId,
+    fields: { status: { clock: { 'node-a': 1 }, candidates: [{ dot: { replicaId: 'node-a', counter: 1 }, operation: 'set', value }] } },
+    replication: 'active' as const,
+    stateHash: '',
+  };
+  const { stateHash: _stateHash, ...body } = entity;
+  entity.stateHash = await sha256(canonical(body));
+  return entity;
+}
+
 describe('federation relay', () => {
   it('replaces a same-node socket without failing the new handshake', async () => {
     const federationId = `replacement-${crypto.randomUUID()}`;
@@ -73,8 +91,8 @@ describe('federation relay', () => {
     const nodeB = await connect(federationId, 'node-b', credentialB);
 
     const catalogReady = nextFrame(nodeA, (frame) => frame.type === 'catalog' && frame.nodes?.length === 2);
-    nodeA.send(JSON.stringify({ version: 1, type: 'manifest', nodeLabel: 'Workstation', projects: [{ id: 'alpha', name: 'Alpha', description: '', color: '#38d9e8', ledgers: [] }] }));
-    nodeB.send(JSON.stringify({ version: 1, type: 'manifest', nodeLabel: 'Phone', projects: [{ id: 'beta', name: 'Beta', description: '', color: '#a78bfa', ledgers: [] }] }));
+    nodeA.send(JSON.stringify({ version: 1, type: 'manifest', nodeLabel: 'Workstation', projects: [{ id: 'shared', name: 'Shared', description: '', color: '#38d9e8', ledgers: [] }] }));
+    nodeB.send(JSON.stringify({ version: 1, type: 'manifest', nodeLabel: 'Phone', projects: [{ id: 'shared', name: 'Shared', description: '', color: '#a78bfa', ledgers: [] }] }));
     const catalog = await catalogReady;
     expect(catalog.nodes?.map((node) => node.nodeId).sort()).toEqual(['node-a', 'node-b']);
     expect(catalog.nodes?.every((node) => node.online)).toBe(true);
@@ -84,9 +102,10 @@ describe('federation relay', () => {
     nodeA.send(JSON.stringify({ version: 1, type: 'content-change' }));
     await expect(remoteChange).resolves.toMatchObject({ type: 'content-change' });
 
-    const stateEvent = nextFrame(nodeB, (frame) => frame.type === 'state-event-batch');
-    nodeA.send(JSON.stringify({ version: 1, type: 'state-event-batch', stateVersion: 1, to: 'node-b', projectId: 'beta', payload: { events: [{ eventId: 'event-a' }] } }));
-    await expect(stateEvent).resolves.toMatchObject({ type: 'state-event-batch', stateVersion: 1, from: 'node-a', projectId: 'beta', payload: { events: [{ eventId: 'event-a' }] } });
+    const entity = await currentEntity('shared', 'card-live', 'todo');
+    const stateEntity = nextFrame(nodeB, (frame) => frame.type === 'state-entity-batch');
+    nodeA.send(JSON.stringify({ version: 1, type: 'state-entity-batch', stateVersion: 2, projectId: 'shared', payload: { stateVersion: 2, entities: [entity] } }));
+    await expect(stateEntity).resolves.toMatchObject({ type: 'state-entity-batch', stateVersion: 2, from: 'relay', projectId: 'shared', payload: { entities: [entity] } });
 
     const requestId = crypto.randomUUID();
     const ownerOpen = nextFrame(nodeB, (frame) => frame.type === 'request-open' && frame.requestId === requestId);
@@ -114,7 +133,7 @@ describe('federation relay', () => {
     nodeB.close(1000, 'test_complete');
   });
 
-  it('durably reconciles task events when writer and reader never overlap online', async () => {
+  it('durably reconciles current entities when writer and reader never overlap online', async () => {
     const federationId = `durable-state-${crypto.randomUUID()}`;
     const [credentialA, credentialB] = await Promise.all([
       createNode(federationId, 'node-a'),
@@ -122,65 +141,22 @@ describe('federation relay', () => {
     ]);
     const nodeA = await connect(federationId, 'node-a', credentialA);
     nodeA.send(JSON.stringify({ version: 1, type: 'manifest', nodeLabel: 'Writer', projects: [{ id: 'shared', name: 'Shared', description: '', color: '#38d9e8', ledgers: [] }] }));
-    const missing = nextFrame(nodeA, (frame) => frame.type === 'state-missing-request' && frame.projectId === 'shared');
-    nodeA.send(JSON.stringify({
-      version: 1,
-      type: 'state-bucket-summary',
-      stateVersion: 1,
-      projectId: 'shared',
-      payload: { buckets: [{ bucket: '2026-07-20T09', count: 1, checksum: 'a'.repeat(64) }] },
-    }));
-    await expect(missing).resolves.toMatchObject({ from: 'relay', payload: { buckets: ['2026-07-20T09'] } });
-
-    const event = {
-      eventId: 'event-a',
-      projectId: 'shared',
-      writerId: 'node-a',
-      emittedAt: '2026-07-20T09:00:00.000Z',
-      entityType: 'card',
-      entityId: 'card-a',
-      changes: [{ path: 'status', operation: 'set', value: 'todo' }],
-      checksum: 'a'.repeat(64),
-    };
+    const entity = await currentEntity('shared', 'card-a', 'todo');
+    const bucket = (await sha256('card\u0000card-a')).slice(0, 2);
+    const checksum = await sha256(`card\u0000card-a\u0000${entity.stateHash}`);
     const acknowledged = nextFrame(nodeA, (frame) => frame.type === 'state-relay-ack');
-    nodeA.send(JSON.stringify({ version: 1, type: 'state-event-batch', stateVersion: 1, projectId: 'shared', payload: { events: [event] } }));
-    await expect(acknowledged).resolves.toMatchObject({ from: 'relay', payload: { eventIds: ['event-a'] } });
-
-    const snapshot = {
-      manifest: { version: 1, snapshotId: 'snapshot-a', projectId: 'shared', reducerVersion: 1, createdAt: '2026-07-20T09:01:00.000Z' },
-      projection: { version: 1, projectId: 'shared', ledger: { cards: [{ id: 'card-a', status: 'todo' }] }, conflicts: [], appliedEventIds: ['event-a'] },
-    };
-    const snapshotBody = JSON.stringify(snapshot);
-    const snapshotChecksum = await sha256(snapshotBody);
-    const snapshotStored = nextFrame(nodeA, (frame) => frame.type === 'state-ack' && frame.payload?.snapshotId === 'snapshot-a');
-    nodeA.send(JSON.stringify({
-      version: 1,
-      type: 'state-snapshot-chunk',
-      stateVersion: 1,
-      projectId: 'shared',
-      payload: { transferId: 'upload-a', index: 0, total: 1, checksum: snapshotChecksum, data: btoa(snapshotBody) },
-    }));
-    nodeA.send(JSON.stringify({ version: 1, type: 'state-snapshot-end', stateVersion: 1, projectId: 'shared', payload: { transferId: 'upload-a', total: 1, checksum: snapshotChecksum } }));
-    await expect(snapshotStored).resolves.toMatchObject({ from: 'relay', payload: { snapshotId: 'snapshot-a' } });
+    nodeA.send(JSON.stringify({ version: 1, type: 'state-entity-batch', stateVersion: 2, projectId: 'shared', payload: { stateVersion: 2, entities: [entity] } }));
+    await expect(acknowledged).resolves.toMatchObject({ from: 'relay', stateVersion: 2 });
     nodeA.close(1000, 'writer_offline');
 
     const nodeB = await connect(federationId, 'node-b', credentialB);
-    const snapshotManifest = nextFrame(nodeB, (frame) => frame.type === 'state-snapshot-manifest' && frame.projectId === 'shared');
     const storedSummary = nextFrame(nodeB, (frame) => frame.type === 'state-bucket-summary' && frame.projectId === 'shared' && frame.payload?.buckets?.[0]?.count === 1);
     nodeB.send(JSON.stringify({ version: 1, type: 'manifest', nodeLabel: 'Reader', projects: [{ id: 'shared', name: 'Shared', description: '', color: '#38d9e8', ledgers: [] }] }));
-    await expect(snapshotManifest).resolves.toMatchObject({ from: 'relay', payload: { manifests: [{ snapshotId: 'snapshot-a', eventCount: 1 }] } });
-    await expect(storedSummary).resolves.toMatchObject({ from: 'relay', payload: { buckets: [{ bucket: '2026-07-20T09', count: 1, checksum: 'a'.repeat(64) }] } });
+    await expect(storedSummary).resolves.toMatchObject({ from: 'relay', payload: { buckets: [{ bucket, count: 1, checksum }] } });
 
-    const snapshotChunk = nextFrame(nodeB, (frame) => frame.type === 'state-snapshot-chunk' && frame.projectId === 'shared');
-    const snapshotEnd = nextFrame(nodeB, (frame) => frame.type === 'state-snapshot-end' && frame.projectId === 'shared');
-    nodeB.send(JSON.stringify({ version: 1, type: 'state-snapshot-request', stateVersion: 1, projectId: 'shared', payload: { snapshotId: 'snapshot-a' } }));
-    const transferred = await snapshotChunk;
-    await expect(snapshotEnd).resolves.toMatchObject({ from: 'relay', payload: { total: 1, checksum: snapshotChecksum } });
-    expect(atob(String(transferred.payload?.data ?? ''))).toBe(snapshotBody);
-
-    const replay = nextFrame(nodeB, (frame) => frame.type === 'state-event-batch' && frame.projectId === 'shared');
-    nodeB.send(JSON.stringify({ version: 1, type: 'state-missing-request', stateVersion: 1, projectId: 'shared', payload: { buckets: ['2026-07-20T09'] } }));
-    await expect(replay).resolves.toMatchObject({ from: 'relay', payload: { events: [event] } });
+    const replay = nextFrame(nodeB, (frame) => frame.type === 'state-entity-batch' && frame.projectId === 'shared');
+    nodeB.send(JSON.stringify({ version: 1, type: 'state-missing-request', stateVersion: 2, projectId: 'shared', payload: { stateVersion: 2, buckets: [bucket] } }));
+    await expect(replay).resolves.toMatchObject({ from: 'relay', payload: { entities: [entity] } });
     nodeB.close(1000, 'test_complete');
   });
 });
