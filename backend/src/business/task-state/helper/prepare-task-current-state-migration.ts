@@ -69,7 +69,7 @@ function legacyStatus(card: AnyRecord, markdown: string): { value: 'todo' | 'bac
   return { value: 'backlog', source: 'migration-default' };
 }
 
-export function prepareTaskCurrentStateMigration(input: { decisionOsRoot: string; ledger: AnyRecord }): {
+export function prepareTaskCurrentStateMigration(input: { decisionOsRoot: string; ledger: AnyRecord; readContent?: (ref: string) => string | null; deferRelationshipValidation?: boolean }): {
   ledger: AnyRecord;
   bodyRewrites: BodyRewrite[];
   lifecycleAudit: LifecycleAudit[];
@@ -82,7 +82,8 @@ export function prepareTaskCurrentStateMigration(input: { decisionOsRoot: string
   const lifecycleAudit: LifecycleAudit[] = [];
   for (const card of cards) {
     const content = contentFile(input.decisionOsRoot, card);
-    const markdown = content && existsSync(content.file) ? readFileSync(content.file, 'utf8') : '';
+    const supplied = content ? input.readContent?.(content.ref) : null;
+    const markdown = typeof supplied === 'string' ? supplied : content && existsSync(content.file) ? readFileSync(content.file, 'utf8') : '';
     const currentLifecycle = card.lifecycle && typeof card.lifecycle === 'object' && !Array.isArray(card.lifecycle) ? card.lifecycle as AnyRecord : {};
     const status = legacyStatus(card, markdown);
     const legacyCreatedAt = validTimestamp(card.createdAt);
@@ -117,7 +118,7 @@ export function prepareTaskCurrentStateMigration(input: { decisionOsRoot: string
   const cardIds = new Set(cards.map((card) => String(card.id ?? '')).filter(Boolean));
   const relationships = records(ledger.relationships);
   const invalid = relationships.filter((relationship) => relationship.label === 'subtask' && (!cardIds.has(String(relationship.from ?? '')) || !cardIds.has(String(relationship.to ?? ''))));
-  if (invalid.length > 0) throw new Error(`invalid_subtask_relationships:${invalid.map((relationship) => String(relationship.id ?? '')).sort().join(',')}`);
+  if (!input.deferRelationshipValidation && invalid.length > 0) throw new Error(`invalid_subtask_relationships:${invalid.map((relationship) => String(relationship.id ?? '')).sort().join(',')}`);
   const relationshipRepairs: RelationshipRepair[] = [];
   const byParent = new Map<string, AnyRecord[]>();
   for (const relationship of relationships.filter((entry) => entry.label === 'subtask')) byParent.set(String(relationship.from ?? ''), [...(byParent.get(String(relationship.from ?? '')) ?? []), relationship]);
