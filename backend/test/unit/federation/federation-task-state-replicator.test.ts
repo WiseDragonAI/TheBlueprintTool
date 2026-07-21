@@ -140,6 +140,96 @@ test('offline replica repairs current mismatched buckets without an outbox or sn
   assert.equal((b.store.projection().ledger.cards as Array<Record<string, unknown>>)[0].status, 'done');
 });
 
+test('a dropped live batch is repaired from current shards through root anti-entropy', async (context) => {
+  const node = fixture('decision-os-dropped-live-node-');
+  const relay = fixture('decision-os-dropped-live-relay-');
+  const harness = relayHarness(relay.store);
+  context.after(async () => {
+    await harness.settle();
+    await Promise.all([node.store.flush(), relay.store.flush()]);
+    [node, relay].forEach((entry) => rmSync(entry.root, { recursive: true, force: true }));
+  });
+  let dropped = false;
+  const replicator = createFederationTaskStateReplicator({
+    stores: () => new Map([['project-a', node.store]]),
+    storeFor: () => node.store,
+    publish: (target, frame) => {
+      // WHAT: Drop the first live entity frame while allowing its root advertisement through.
+      // WHY: The repair loop must recover from transport loss without a durable event outbox.
+      if (!dropped && target === 'relay' && frame.type === 'state-entity-batch') { dropped = true; return false; }
+      void harness.publish('desktop', target, frame);
+      return true;
+    },
+  });
+  harness.register('desktop', replicator);
+  const mutation = await node.store.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'card-a', changes: [{ path: 'title', operation: 'set', value: 'Recovered after loss' }] }] });
+
+  replicator.publishDelta(mutation.delta);
+
+  await waitFor(() => relay.store.rootHash() === node.store.rootHash());
+  await waitFor(() => replicator.diagnostics().runtimeDirty.length === 0);
+  assert.equal(dropped, true);
+  assert.equal((relay.store.projection().ledger.cards as Array<Record<string, unknown>>)[0].title, 'Recovered after loss');
+});
+
+test('reordered live batches converge to one root and canonical projection', async (context) => {
+  const left = fixture('decision-os-reordered-left-');
+  const right = fixture('decision-os-reordered-right-');
+  const forward = fixture('decision-os-reordered-forward-');
+  const reverse = fixture('decision-os-reordered-reverse-');
+  context.after(async () => {
+    await Promise.all([left.store.flush(), right.store.flush(), forward.store.flush(), reverse.store.flush()]);
+    [left, right, forward, reverse].forEach((entry) => rmSync(entry.root, { recursive: true, force: true }));
+  });
+  const title = await left.store.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'card-a', changes: [{ path: 'title', operation: 'set', value: 'Independent title' }] }] });
+  const status = await right.store.mutate({ replicaId: 'mobile', changes: [{ entityType: 'card', entityId: 'card-a', changes: [{ path: 'lifecycle', operation: 'set', value: lifecycle('done') }] }] });
+  const frame = (deliveryId: string, entity: TaskCurrentEntity): FederationStateFrame => ({
+    type: 'state-entity-batch',
+    from: 'relay',
+    projectId: 'project-a',
+    payload: { stateVersion: taskCurrentStateVersion, deliveryId, entries: [{ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash, entity }] },
+  });
+  const forwardReplicator = createFederationTaskStateReplicator({ stores: () => new Map([['project-a', forward.store]]), publish: () => true });
+  const reverseReplicator = createFederationTaskStateReplicator({ stores: () => new Map([['project-a', reverse.store]]), publish: () => true });
+
+  await forwardReplicator.handleFrame(frame('title-forward', title.delta.entities[0]));
+  await forwardReplicator.handleFrame(frame('status-forward', status.delta.entities[0]));
+  await reverseReplicator.handleFrame(frame('status-reverse', status.delta.entities[0]));
+  await reverseReplicator.handleFrame(frame('title-reverse', title.delta.entities[0]));
+
+  assert.equal(forward.store.rootHash(), reverse.store.rootHash());
+  assert.deepEqual(forward.store.projection(), reverse.store.projection());
+});
+
+test('a rejected entity envelope changes no state and emits no projection invalidation', async (context) => {
+  const target = fixture('decision-os-rejected-envelope-');
+  const source = fixture('decision-os-rejected-envelope-source-');
+  context.after(async () => {
+    await Promise.all([target.store.flush(), source.store.flush()]);
+    [target, source].forEach((entry) => rmSync(entry.root, { recursive: true, force: true }));
+  });
+  const mutation = await source.store.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'card-a', changes: [{ path: 'title', operation: 'set', value: 'Must be rejected' }] }] });
+  const entity = mutation.delta.entities[0];
+  const beforeRoot = target.store.rootHash();
+  let invalidations = 0;
+  const replicator = createFederationTaskStateReplicator({
+    stores: () => new Map([['project-a', target.store]]),
+    publish: () => true,
+    onProjectionChange: () => { invalidations += 1; },
+  });
+
+  await assert.rejects(replicator.handleFrame({
+    type: 'state-entity-batch',
+    from: 'relay',
+    projectId: 'project-a',
+    payload: { stateVersion: taskCurrentStateVersion, deliveryId: 'rejected', entries: [{ key: 'card\u0000wrong', stateHash: entity.stateHash, entity }] },
+  }), /invalid_state_entity_envelope/);
+
+  assert.equal(target.store.rootHash(), beforeRoot);
+  assert.equal(target.store.diagnostics().entityCount, 0);
+  assert.equal(invalidations, 0);
+});
+
 test('remote project state is discovered on demand through an owner summary', async (context) => {
   const owner = fixture('decision-os-owner-state-');
   const requester = fixture('decision-os-requester-state-');

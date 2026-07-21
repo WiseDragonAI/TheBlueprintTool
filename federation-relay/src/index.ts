@@ -20,6 +20,7 @@ import {
   type RelayFrame,
 } from './protocol';
 import { joinRelayEntity, type RelayEntity } from './current-state';
+import { stateEntityFrames } from './state-entity-frames';
 import {
   hashTaskCurrentRoot,
   taskCurrentEntityKey,
@@ -165,17 +166,7 @@ export class FederationRelay extends DurableObject<Env> {
   }
 
   private sendStateEntities(socket: WebSocket, projectId: string, entities: RelayEntity[]): void {
-    for (let index = 0; index < entities.length; index += stateEntityBatchSize) {
-      const entries = entities.slice(index, index + stateEntityBatchSize).map((entity): StateEntry => ({ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash, entity }));
-      this.sendSocket(socket, {
-        version: 1,
-        type: 'state-entity-batch',
-        from: 'relay',
-        projectId,
-        stateVersion: taskCurrentStateVersion,
-        payload: { stateVersion: taskCurrentStateVersion, deliveryId: crypto.randomUUID(), entries },
-      });
-    }
+    for (const frame of stateEntityFrames(projectId, entities)) this.sendSocket(socket, frame);
   }
 
   private async persistStateEntities(sender: string, socket: WebSocket, frame: RelayFrame): Promise<void> {

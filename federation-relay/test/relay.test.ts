@@ -21,6 +21,7 @@ type FramePayload = {
   root?: string;
 };
 type Frame = { type: string; requestId?: string; direction?: string; from?: string; stateVersion?: number; projectId?: string; payload?: FramePayload; nodes?: Array<{ nodeId: string; nodeLabel: string; online: boolean }> };
+const maximumStateFrameBytes = 512 * 1024;
 
 async function createNode(federationId: string, nodeId: string): Promise<string> {
   const response = await SELF.fetch(`https://relay.test/admin/federations/${federationId}/nodes/${nodeId}`, {
@@ -85,6 +86,16 @@ function stateBatch(projectId: string, entity: ReturnType<typeof currentEntity>,
     projectId,
     payload: { stateVersion: 3, deliveryId, entries: [{ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash, entity }] },
   };
+}
+
+function largeCurrentEntity(projectId: string, entityId: string, marker: string) {
+  return finalizeTaskCurrentEntity({
+    version: taskCurrentStateVersion,
+    projectId,
+    entityType: 'card',
+    entityId,
+    fields: { title: { clock: { 'node-a': 1 }, candidates: [{ dot: { replicaId: 'node-a', counter: 1 }, operation: 'set', value: `${marker}${'x'.repeat(59_000)}` }] } },
+  });
 }
 
 describe('federation relay', () => {
@@ -181,6 +192,73 @@ describe('federation relay', () => {
     nodeB.send(JSON.stringify({ version: 1, type: 'state-missing-request', stateVersion: 3, projectId: 'shared', payload: { stateVersion: 3, buckets: [bucket] } }));
     await expect(replay).resolves.toMatchObject({ from: 'relay', payload: { entries: [{ key: entityKey, stateHash: entity.stateHash, entity }] } });
     nodeB.close(1000, 'test_complete');
+  });
+
+  it('byte-bounds relay replay frames as well as node publication frames', async () => {
+    const federationId = `relay-byte-bound-${crypto.randomUUID()}`;
+    const [writerCredential, readerCredential] = await Promise.all([
+      createNode(federationId, 'writer'),
+      createNode(federationId, 'reader'),
+    ]);
+    const writer = await connect(federationId, 'writer', writerCredential);
+    writer.send(JSON.stringify(manifest('Writer')));
+    const entities = Array.from({ length: 10 }, (_value, index) => largeCurrentEntity('shared', `large-${index}`, String(index)));
+    for (const entity of entities) {
+      const acknowledged = nextFrame(writer, (frame) => frame.type === 'state-relay-ack');
+      writer.send(JSON.stringify(stateBatch('shared', entity)));
+      await acknowledged;
+    }
+    writer.close(1000, 'writer_offline');
+
+    const reader = await connect(federationId, 'reader', readerCredential);
+    const summaryPromise = nextFrame(reader, (frame) => frame.type === 'state-bucket-summary' && frame.projectId === 'shared' && frame.payload?.buckets?.reduce((count, bucket) => count + Number(bucket.count ?? 0), 0) === entities.length);
+    reader.send(JSON.stringify(manifest('Reader', [])));
+    reader.send(JSON.stringify({ version: 1, type: 'state-subscribe', stateVersion: 3, projectId: 'shared', payload: { stateVersion: 3 } }));
+    const summary = await summaryPromise;
+    const received: string[] = [];
+    const frameSizes: number[] = [];
+    const complete = new Promise<void>((resolve) => reader.addEventListener('message', (event) => {
+      const text = String(event.data);
+      const frame = JSON.parse(text) as Frame;
+      if (frame.type !== 'state-entity-batch') return;
+      frameSizes.push(new TextEncoder().encode(text).byteLength);
+      received.push(...(frame.payload?.entries ?? []).map((entry) => entry.key));
+      if (received.length === entities.length) resolve();
+    }));
+    reader.send(JSON.stringify({ version: 1, type: 'state-missing-request', stateVersion: 3, projectId: 'shared', payload: { stateVersion: 3, buckets: summary.payload?.buckets?.map((bucket) => bucket.bucket) } }));
+    await complete;
+
+    expect(frameSizes.length).toBeGreaterThan(1);
+    expect(frameSizes.every((bytes) => bytes <= maximumStateFrameBytes)).toBe(true);
+    expect(received.sort()).toEqual(entities.map(taskCurrentEntityKey).sort());
+    reader.close(1000, 'test_complete');
+  });
+
+  it('rejects interrupted, oversized, and mixed-invalid batches without partial durable state', async () => {
+    const federationId = `relay-atomic-reject-${crypto.randomUUID()}`;
+    const credential = await createNode(federationId, 'writer');
+    const writer = await connect(federationId, 'writer', credential);
+    writer.send(JSON.stringify(manifest('Writer')));
+    const valid = currentEntity('shared', 'valid-card', 'todo');
+    const invalid = currentEntity('shared', 'invalid-card', 'done');
+    const interruptedResponse = nextFrame(writer, (frame) => frame.type === 'response-error');
+    writer.send(JSON.stringify(stateBatch('shared', valid)).slice(0, -12));
+    await expect(interruptedResponse).resolves.toMatchObject({ type: 'response-error' });
+
+    const invalidBatch = stateBatch('shared', valid) as ReturnType<typeof stateBatch>;
+    invalidBatch.payload.entries.push({ key: 'card\u0000wrong-id', stateHash: invalid.stateHash, entity: invalid });
+    const invalidResponse = nextFrame(writer, (frame) => frame.type === 'response-error');
+    writer.send(JSON.stringify(invalidBatch));
+    await expect(invalidResponse).resolves.toMatchObject({ type: 'response-error' });
+
+    const oversizedResponse = nextFrame(writer, (frame) => frame.type === 'response-error');
+    writer.send(JSON.stringify({ ...stateBatch('shared', valid), message: 'x'.repeat(maximumStateFrameBytes) }));
+    await expect(oversizedResponse).resolves.toMatchObject({ type: 'response-error' });
+
+    const emptySummary = nextFrame(writer, (frame) => frame.type === 'state-bucket-summary' && frame.projectId === 'shared');
+    writer.send(JSON.stringify({ version: 1, type: 'state-subscribe', stateVersion: 3, projectId: 'shared', payload: { stateVersion: 3 } }));
+    await expect(emptySummary).resolves.toMatchObject({ payload: { buckets: [] } });
+    writer.close(1000, 'test_complete');
   });
 
   it('rejects incompatible manifests before state participation', async () => {
