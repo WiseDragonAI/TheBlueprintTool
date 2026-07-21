@@ -396,7 +396,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       if (String(scopedEvent.ledgerId) === 'tasks') {
         const taskId = String(scopedEvent.cardId ?? (String(scopedEvent.threadId ?? '').startsWith('thread-') ? String(scopedEvent.threadId).slice('thread-'.length) : ''));
         const project = projectCatalogStore.projects().find((entry) => entry.id === projectId && entry.available);
-        if (project && taskId) void taskStateForProject(project).recordContentContribution(taskId, String(scopedEvent.contentFile ?? '')).catch(() => undefined);
+        if (project && taskId) void taskStateForProject(project).recordContentContribution(taskId, String(scopedEvent.contentFile ?? ''))
+          .then((delta) => controlRoomProjectionStore?.invalidate(projectId, delta.entities))
+          .catch(() => undefined);
       }
       revisions.advance(String(scopedEvent.ledgerId));
       broadcast(`event: card-content-change\ndata: ${JSON.stringify({ ...scopedEvent, projectId })}\n\n`);
@@ -593,7 +595,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       for (const sourceReplicaId of new Set(heads.map((head) => head.sourceReplicaId))) {
         federationContentStore.applyManifest(sourceReplicaId, { version: 1, projectId, generatedAt: new Date().toISOString(), complete: false, resources: heads.filter((head) => head.sourceReplicaId === sourceReplicaId).map(({ sourceReplicaId: _sourceReplicaId, ...head }) => head) });
       }
-      controlRoomProjectionStore?.invalidate(projectId);
+      controlRoomProjectionStore?.invalidate(projectId, delta.entities);
       for (const client of globalContentEventClients) client.write(`event: ledger-content-change\ndata: ${JSON.stringify({ remote: true, projectId, nodeId: from })}\n\n`);
     },
   });
@@ -941,7 +943,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       }
       const persistedLedger = taskCommit?.ledger ?? (writeFileSync(ledgerPath, JSON.stringify(ledger, null, 2)), ledger);
       context.watcher.refreshOwnership();
-      if (!taskCommit || taskCommit.changed) controlRoomProjectionStore?.invalidate(activeProject?.id ?? '');
+      if (!taskCommit) controlRoomProjectionStore?.invalidate(activeProject?.id ?? '');
+      else if (taskCommit.changed) controlRoomProjectionStore?.invalidate(activeProject?.id ?? '', taskCommit.deltas.flatMap((delta) => delta.entities));
       if (ledgerId !== 'tasks') federation?.publishContentChange();
       const revision = ledgerRevisions.advance(ledgerId);
       const cardId = String(mutation.cardPatch?.id ?? mutation.card?.id ?? mutation.cardId ?? mutation.masterTaskId ?? '');
@@ -1057,7 +1060,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         }
         throw error;
       }
-      if (committed.changed) controlRoomProjectionStore?.invalidate(project.id);
+      if (committed.changed) controlRoomProjectionStore?.invalidate(project.id, committed.deltas.flatMap((delta) => delta.entities));
       response.setHeader('content-type', 'application/json');
       response.end(JSON.stringify({ ok: true, cardId, lifecycleStatus, changedBatchCount: Number(committed.changed) }));
       return;
@@ -1974,8 +1977,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
               state: ['waiting', 'queued', 'running', 'terminal', 'failed'].includes(String(event.state ?? '')) ? event.state as 'waiting' | 'queued' | 'running' | 'terminal' | 'failed' : 'failed',
               launchMode: event.launchMode === 'pipeline' ? 'pipeline' : 'run',
               error: String(event.error ?? ''),
-            });
-            controlRoomProjectionStore?.invalidate(localProject.id);
+            }).then((delta) => controlRoomProjectionStore?.invalidate(localProject.id, delta.entities)).catch(() => undefined);
           }
         },
         runtime_state: requestRuntime
@@ -1986,15 +1988,15 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       if (result.ok !== false && result.uploaded && ledgerId === 'tasks' && localProject && cardId) {
         const projection = taskStateForProject(localProject).projection().ledger;
         const refs = projection.threadFiles && typeof projection.threadFiles === 'object' ? projection.threadFiles as AnyRecord : {};
-        await taskStateForProject(localProject).recordContentContribution(cardId, [String(refs[threadId] ?? ''), String(result.voiceFileRef ?? '')]);
+        const deltas = [await taskStateForProject(localProject).recordContentContribution(cardId, [String(refs[threadId] ?? ''), String(result.voiceFileRef ?? '')])];
         if (String(result.launchMode ?? '') === 'run' || String(result.launchMode ?? '') === 'pipeline') {
-          await taskStateForProject(localProject).transitionExecutionIntent(cardId, {
+          deltas.push(await taskStateForProject(localProject).transitionExecutionIntent(cardId, {
             id: String(result.noteId ?? ''),
             state: 'waiting',
             launchMode: result.launchMode === 'pipeline' ? 'pipeline' : 'run',
-          });
+          }));
         }
-        controlRoomProjectionStore?.invalidate(localProject.id);
+        controlRoomProjectionStore?.invalidate(localProject.id, deltas.flatMap((delta) => delta.entities));
       }
       response.setHeader('content-type', 'application/json');
       response.statusCode = Number(result.statusCode ?? (result.ok === false ? 400 : 202));

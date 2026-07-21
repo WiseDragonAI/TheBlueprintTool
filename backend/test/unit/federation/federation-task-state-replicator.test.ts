@@ -173,6 +173,41 @@ test('relay acknowledgements clear only matching entity hashes from the project 
   assert.equal(replicator.diagnostics().runtimeDirty[0].entityKey, payload.entries[0].key);
 });
 
+test('duplicate entity delivery performs no second projection callback', async (context) => {
+  const source = fixture('decision-os-duplicate-source-');
+  const target = fixture('decision-os-duplicate-target-');
+  context.after(async () => {
+    await Promise.all([source.store.flush(), target.store.flush()]);
+    [source, target].forEach((entry) => rmSync(entry.root, { recursive: true, force: true }));
+  });
+  const mutation = await source.store.mutate({
+    replicaId: 'desktop',
+    changes: [{ entityType: 'card', entityId: 'card-a', changes: [{ path: 'lifecycle', operation: 'set', value: lifecycle('todo') }] }],
+  });
+  let projectionChanges = 0;
+  const replicator = createFederationTaskStateReplicator({
+    stores: () => new Map([['project-a', target.store]]),
+    storeFor: () => target.store,
+    publish: () => true,
+    onProjectionChange: () => { projectionChanges += 1; },
+  });
+  const frame: FederationStateFrame = {
+    type: 'state-entity-batch',
+    from: 'relay',
+    projectId: 'project-a',
+    payload: {
+      stateVersion: taskCurrentStateVersion,
+      deliveryId: 'delivery-a',
+      entries: mutation.delta.entities.map((entity) => ({ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash, entity })),
+    },
+  };
+
+  await replicator.handleFrame(frame);
+  await replicator.handleFrame(frame);
+
+  assert.equal(projectionChanges, 1);
+});
+
 test('large current-state publication is split by encoded bytes as well as entity count', async (context) => {
   const node = fixture('decision-os-byte-bounded-');
   context.after(async () => { await node.store.flush(); rmSync(node.root, { recursive: true, force: true }); });

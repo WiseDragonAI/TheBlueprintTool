@@ -141,10 +141,17 @@ test('lifecycle conflicts remain visible and invalidate the affected task graph'
   assert.equal(projection.diagnostics.length, 1);
 });
 
-test('post-join invalidation rebuilds one structural project slice', async (context) => {
+test('post-join invalidation materializes only the changed child and its relationship-owned master', async (context) => {
   const { decisionOsRoot, project } = fixture(context);
   let taskProjection: Record<string, unknown> = {
-    ledger: { cards: [{ id: 'master', title: 'Master', labels: ['master-task'], lifecycle: lifecycle('todo', '2026-07-14T10:00:00.000Z') }], annotations: [], relationships: [] },
+    ledger: {
+      cards: [
+        { id: 'master', title: 'Master', labels: ['master-task'], lifecycle: lifecycle('todo', '2026-07-14T10:00:00.000Z') },
+        { id: 'child', title: 'Child', labels: [], lifecycle: lifecycle('todo', '2026-07-14T10:00:00.000Z') },
+        { id: 'unrelated', title: 'Unrelated', labels: ['master-task'], lifecycle: lifecycle('backlog', '2026-07-14T10:00:00.000Z') },
+      ],
+      annotations: [], relationships: [{ id: 'rel-child', from: 'master', to: 'child', label: 'subtask', position: 0 }],
+    },
     conflicts: [],
   };
   const store = createControlRoomProjectionStore({
@@ -152,16 +159,72 @@ test('post-join invalidation rebuilds one structural project slice', async (cont
     taskProjectionForProject: () => taskProjection,
   });
   const before = store.get([project]) as Record<string, any>;
+  const initialWork = store.diagnostics();
   taskProjection = {
-    ledger: { cards: [{ id: 'master', title: 'Master', labels: ['master-task'], lifecycle: lifecycle('done', '2026-07-14T11:00:00.000Z') }], annotations: [], relationships: [] },
+    ledger: {
+      cards: [
+        { id: 'master', title: 'Master', labels: ['master-task'], lifecycle: lifecycle('todo', '2026-07-14T10:00:00.000Z') },
+        { id: 'child', title: 'Child', labels: [], lifecycle: lifecycle('done', '2026-07-14T11:00:00.000Z') },
+        { id: 'unrelated', title: 'Unrelated', labels: ['master-task'], lifecycle: lifecycle('backlog', '2026-07-14T10:00:00.000Z') },
+      ],
+      annotations: [], relationships: [{ id: 'rel-child', from: 'master', to: 'child', label: 'subtask', position: 0 }],
+    },
     conflicts: [],
   };
 
   assert.equal(store.get([project]).revision, before.revision);
-  store.invalidate(project.id);
+  store.invalidate(project.id, [{ entityType: 'card', entityId: 'child' }]);
   await new Promise((resolveWait) => setImmediate(resolveWait));
   const after = store.get([project]) as Record<string, any>;
 
-  assert.equal(after.done.length, 1);
+  assert.equal(after.allTasks.find((task: Record<string, unknown>) => task.cardId === 'master').complete, 1);
+  assert.equal(after.backlog.find((task: Record<string, unknown>) => task.cardId === 'unrelated').title, 'Unrelated');
   assert.ok(after.revision > before.revision);
+  assert.deepEqual(store.diagnostics(), {
+    projectBuilds: initialWork.projectBuilds + 1,
+    taskMaterializations: initialWork.taskMaterializations + 2,
+    largestIncrementalBatch: 2,
+  });
+
+  const beforeContentHead = store.diagnostics();
+  const revisionBeforeContentHead = after.revision;
+  store.invalidate(project.id, [{ entityType: 'resource', entityId: '.decision-os/cards/tasks/child.md' }]);
+  await new Promise((resolveWait) => setImmediate(resolveWait));
+  assert.deepEqual(store.diagnostics(), beforeContentHead);
+  assert.equal(store.get([project]).revision, revisionBeforeContentHead);
+});
+
+test('high fan-out relationship updates remain bounded to 64 task materializations per background batch', async (context) => {
+  const { decisionOsRoot, project } = fixture(context);
+  const masters = Array.from({ length: 70 }, (_entry, index) => ({
+    id: `master-${String(index).padStart(2, '0')}`,
+    title: `Master ${index}`,
+    labels: ['master-task'],
+    lifecycle: lifecycle('todo', '2026-07-14T10:00:00.000Z'),
+  }));
+  let taskProjection: Record<string, unknown> = {
+    ledger: {
+      cards: [...masters, { id: 'shared-child', title: 'Child', labels: [], lifecycle: lifecycle('todo', '2026-07-14T10:00:00.000Z') }],
+      annotations: [],
+      relationships: masters.map((master, index) => ({ id: `rel-${index}`, from: master.id, to: 'shared-child', label: 'subtask', position: 0 })),
+    },
+    conflicts: [],
+  };
+  const store = createControlRoomProjectionStore({
+    cacheFile: join(decisionOsRoot, 'cache', 'control-room-bounded.json'),
+    taskProjectionForProject: () => taskProjection,
+  });
+  store.get([project]);
+  const before = store.diagnostics();
+  const changedLedger = structuredClone(taskProjection.ledger as Record<string, any>);
+  changedLedger.cards.find((card: Record<string, unknown>) => card.id === 'shared-child').lifecycle = lifecycle('done', '2026-07-14T11:00:00.000Z');
+  taskProjection = { ledger: changedLedger, conflicts: [] };
+
+  store.invalidate(project.id, [{ entityType: 'card', entityId: 'shared-child' }]);
+  await new Promise((resolveWait) => setImmediate(resolveWait));
+
+  const after = store.get([project]) as Record<string, any>;
+  assert.equal(after.allTasks.every((task: Record<string, any>) => task.complete === 1), true);
+  assert.equal(store.diagnostics().taskMaterializations - before.taskMaterializations, 71);
+  assert.equal(store.diagnostics().largestIncrementalBatch, 64);
 });

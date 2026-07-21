@@ -14,9 +14,11 @@ type AnyRecord = Record<string, unknown>;
 type Dependency = { path: string; size: number; mtimeMs: number; sha256: string };
 type Projection = AnyRecord & { schemaVersion: number; projectorVersion: string; revision: number; generatedAt: string; fingerprint: string };
 type ProjectSlice = { projectId: string; project: AnyRecord; tasks: AnyRecord[]; dependencies: Dependency[]; fingerprint: string };
+type ProjectionEntityChange = { entityType: string; entityId: string };
 
 const schemaVersion = 8;
 const projectorVersion = 'control-room-v15-structural-task-state';
+const taskMaterializationBatchSize = 64;
 
 function records(value: unknown): AnyRecord[] {
   return Array.isArray(value) ? value.filter((entry): entry is AnyRecord => Boolean(entry && typeof entry === 'object')) : [];
@@ -208,7 +210,18 @@ export function withProjectSyncRuns(projection: AnyRecord, runs: ProjectSyncRun[
   };
 }
 
-function buildProjectSlice(input: { project: DecisionOsProject; taskProjection: AnyRecord }): ProjectSlice {
+function sliceFingerprint(slice: Pick<ProjectSlice, 'projectId' | 'project' | 'dependencies' | 'tasks'>): string {
+  return createHash('sha256').update(JSON.stringify({
+    projectId: slice.projectId,
+    originFingerprint: text(slice.project.originFingerprint),
+    schemaVersion,
+    projectorVersion,
+    dependencies: slice.dependencies.map(({ path, sha256 }) => ({ path, sha256 })),
+    tasks: slice.tasks,
+  })).digest('hex');
+}
+
+function buildProjectSlice(input: { project: DecisionOsProject; taskProjection: AnyRecord; onTaskMaterialized?: () => void }): ProjectSlice {
   const tasks: AnyRecord[] = [];
   const dependencies: Dependency[] = [];
   const project = input.project;
@@ -224,27 +237,66 @@ function buildProjectSlice(input: { project: DecisionOsProject; taskProjection: 
       const ledger = structuredClone(projectedLedger);
       for (const card of records(ledger.cards)) {
         const task = taskFrom({ project, ledgerEntry, ledger, card, conflicts: records(input.taskProjection?.conflicts) });
+        input.onTaskMaterialized?.();
         if (task) tasks.push(task);
       }
   }
   dependencies.sort((left, right) => left.path.localeCompare(right.path));
   let originFingerprint = '';
   try { originFingerprint = readRepositoryOriginIdentity(project.root).originFingerprint; } catch { /* Non-Git projects retain node-local identity. */ }
-  const fingerprint = createHash('sha256').update(JSON.stringify({
-    projectId: project.id,
-    originFingerprint,
-    schemaVersion,
-    projectorVersion,
-    dependencies: dependencies.map(({ path, sha256 }) => ({ path, sha256 })),
-    tasks,
-  })).digest('hex');
-  return {
+  const slice = {
     projectId: project.id,
     project: { id: project.id, name: project.name, color: project.color, ledgers: project.ledgers, originFingerprint },
     tasks,
     dependencies,
-    fingerprint,
   };
+  return { ...slice, fingerprint: sliceFingerprint(slice) };
+}
+
+function affectedTaskIds(slice: ProjectSlice, ledger: AnyRecord, entities: ProjectionEntityChange[]): Set<string> | null {
+  const taskIds = new Set<string>();
+  const relationships = records(ledger.relationships);
+  for (const entity of entities) {
+    // WHAT: Content entities never participate in the structural Control Room projection.
+    // WHY: Body and thread delivery must not trigger task materialization.
+    if (entity.entityType === 'resource' || entity.entityType === 'thread-note') continue;
+    if (entity.entityType === 'card') {
+      taskIds.add(entity.entityId);
+      for (const relationship of relationships.filter((entry) => text(entry.label) === 'subtask' && text(entry.to) === entity.entityId)) taskIds.add(text(relationship.from));
+      for (const task of slice.tasks.filter((entry) => records(entry.subtasks).some((subtask) => text(subtask.cardId) === entity.entityId))) taskIds.add(text(task.cardId));
+      continue;
+    }
+    if (entity.entityType === 'relationship') {
+      const current = relationships.find((entry) => text(entry.id) === entity.entityId && text(entry.label) === 'subtask');
+      if (current) taskIds.add(text(current.from));
+      for (const task of slice.tasks.filter((entry) => records(entry.subtasks).some((subtask) => text(subtask.relationshipId) === entity.entityId))) taskIds.add(text(task.cardId));
+      continue;
+    }
+    return null;
+  }
+  return taskIds;
+}
+
+function rebuildAffectedTasks(input: { slice: ProjectSlice; project: DecisionOsProject; taskProjection: AnyRecord; taskIds: string[]; onTaskMaterialized?: () => void }): ProjectSlice {
+  const ledger = input.taskProjection?.ledger && typeof input.taskProjection.ledger === 'object' && !Array.isArray(input.taskProjection.ledger)
+    ? input.taskProjection.ledger as AnyRecord
+    : input.taskProjection;
+  if (!ledger) throw new Error(`Task projection unavailable for project ${input.project.id}.`);
+  if (input.taskIds.length === 0) return input.slice;
+  const ledgerEntry = input.project.ledgers.find((entry) => entry.id === 'tasks') ?? { id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' };
+  const cards = records(ledger.cards);
+  const nextTasks = [...input.slice.tasks];
+  for (const taskId of input.taskIds) {
+    const existingIndex = nextTasks.findIndex((task) => text(task.cardId) === taskId);
+    const card = cards.find((entry) => text(entry.id) === taskId);
+    const task = card ? taskFrom({ project: input.project, ledgerEntry, ledger, card, conflicts: records(input.taskProjection?.conflicts) }) : null;
+    input.onTaskMaterialized?.();
+    if (task && existingIndex >= 0) nextTasks[existingIndex] = task;
+    else if (task) nextTasks.push(task);
+    else if (existingIndex >= 0) nextTasks.splice(existingIndex, 1);
+  }
+  const next = { ...input.slice, tasks: nextTasks };
+  return { ...next, fingerprint: sliceFingerprint(next) };
 }
 
 function aggregateProjection(input: { slices: ProjectSlice[]; revision: number; stale?: boolean; error?: string }): Projection {
@@ -268,17 +320,23 @@ function aggregateProjection(input: { slices: ProjectSlice[]; revision: number; 
 
 export function createControlRoomProjectionStore(input: { cacheFile: string; taskProjectionForProject: (project: DecisionOsProject) => AnyRecord }): {
   get(projects: DecisionOsProject[]): Projection;
-  invalidate(projectId?: string): void;
+  invalidate(projectId?: string, entities?: ProjectionEntityChange[]): void;
   reconcile(projects: DecisionOsProject[]): boolean;
+  diagnostics(): { projectBuilds: number; taskMaterializations: number; largestIncrementalBatch: number };
 } {
   let current: Projection | null = null;
   const slices = new Map<string, ProjectSlice>();
   const dirtyProjects = new Set<string>();
+  const dirtyEntities = new Map<string, Map<string, ProjectionEntityChange>>();
+  const dirtyTaskIds = new Map<string, Set<string>>();
   let dirtyAll = true;
   let revision = 0;
   let lastReconcileAt = 0;
   let latestProjects: DecisionOsProject[] = [];
   let rebuildScheduled = false;
+  let projectBuilds = 0;
+  let taskMaterializations = 0;
+  let largestIncrementalBatch = 0;
   try {
     const persisted = JSON.parse(readFileSync(input.cacheFile, 'utf8')) as Projection;
     if (persisted.schemaVersion === schemaVersion && persisted.projectorVersion === projectorVersion) {
@@ -305,9 +363,34 @@ export function createControlRoomProjectionStore(input: { cacheFile: string; tas
   const publish = (projects: DecisionOsProject[]): Projection => {
     const projectIds = new Set(projects.map((project) => project.id));
     for (const projectId of slices.keys()) if (!projectIds.has(projectId)) slices.delete(projectId);
+    const remainingDirtyProjects = new Set<string>();
     for (const project of projects) {
       if (!dirtyAll && !dirtyProjects.has(project.id) && slices.has(project.id)) continue;
-      slices.set(project.id, buildProjectSlice({ project, taskProjection: input.taskProjectionForProject(project) }));
+      const taskProjection = input.taskProjectionForProject(project);
+      const entities = dirtyEntities.get(project.id);
+      const currentSlice = slices.get(project.id);
+      projectBuilds += 1;
+      let taskIds = dirtyTaskIds.get(project.id);
+      if (!dirtyAll && currentSlice && entities && !taskIds) {
+        const ledger = taskProjection?.ledger && typeof taskProjection.ledger === 'object' && !Array.isArray(taskProjection.ledger)
+          ? taskProjection.ledger as AnyRecord
+          : taskProjection;
+        const affected = ledger ? affectedTaskIds(currentSlice, ledger, [...entities.values()]) : null;
+        if (affected) taskIds = affected;
+      }
+      if (!dirtyAll && currentSlice && taskIds) {
+        const batch = [...taskIds].sort().slice(0, taskMaterializationBatchSize);
+        largestIncrementalBatch = Math.max(largestIncrementalBatch, batch.length);
+        slices.set(project.id, rebuildAffectedTasks({ slice: currentSlice, project, taskProjection, taskIds: batch, onTaskMaterialized: () => { taskMaterializations += 1; } }));
+        for (const taskId of batch) taskIds.delete(taskId);
+        if (taskIds.size > 0) {
+          dirtyTaskIds.set(project.id, taskIds);
+          remainingDirtyProjects.add(project.id);
+        } else dirtyTaskIds.delete(project.id);
+      } else {
+        slices.set(project.id, buildProjectSlice({ project, taskProjection, onTaskMaterialized: () => { taskMaterializations += 1; } }));
+        dirtyTaskIds.delete(project.id);
+      }
     }
     const orderedSlices = projects.map((project) => slices.get(project.id)).filter((slice): slice is ProjectSlice => Boolean(slice));
     const next = aggregateProjection({ slices: orderedSlices, revision: revision + 1 });
@@ -316,7 +399,10 @@ export function createControlRoomProjectionStore(input: { cacheFile: string; tas
     revision = next.revision;
     dirtyAll = false;
     dirtyProjects.clear();
+    for (const projectId of remainingDirtyProjects) dirtyProjects.add(projectId);
+    dirtyEntities.clear();
     lastReconcileAt = Date.now();
+    if (dirtyProjects.size > 0) schedulePublish();
     return next;
   };
   const schedulePublish = (): void => {
@@ -355,9 +441,24 @@ export function createControlRoomProjectionStore(input: { cacheFile: string; tas
         return aggregateProjection({ slices: projects.map((project) => slices.get(project.id)).filter((slice): slice is ProjectSlice => Boolean(slice)), revision, stale: true, error: cause instanceof Error ? cause.message : String(cause) });
       }
     },
-    invalidate(projectId) {
-      if (projectId) dirtyProjects.add(projectId);
-      else dirtyAll = true;
+    invalidate(projectId, entities) {
+      if (projectId) {
+        if (entities) {
+          if (entities.length === 0) return;
+          if (entities.every((entity) => entity.entityType === 'resource' || entity.entityType === 'thread-note')) return;
+          const pending = dirtyEntities.get(projectId) ?? new Map<string, ProjectionEntityChange>();
+          for (const entity of entities) pending.set(`${entity.entityType}\u0000${entity.entityId}`, entity);
+          dirtyEntities.set(projectId, pending);
+        } else {
+          dirtyEntities.delete(projectId);
+          dirtyTaskIds.delete(projectId);
+        }
+        dirtyProjects.add(projectId);
+      } else {
+        dirtyAll = true;
+        dirtyEntities.clear();
+        dirtyTaskIds.clear();
+      }
       schedulePublish();
     },
     reconcile(projects) {
@@ -383,5 +484,6 @@ export function createControlRoomProjectionStore(input: { cacheFile: string; tas
       if (changed || catalogChanged) schedulePublish();
       return changed || catalogChanged;
     },
+    diagnostics: () => ({ projectBuilds, taskMaterializations, largestIncrementalBatch }),
   };
 }
