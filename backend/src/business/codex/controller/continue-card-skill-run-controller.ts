@@ -128,6 +128,9 @@ export async function continueCardSkillRunController(input: { action_payload?: A
   }
   const existingRuntime = runtimeRuns(runtime)[runId];
   const existingQueue = findActiveLogicalQueueItem(decisionOsRoot, { ledgerId, cardId, runId });
+  if (!queueDispatch && existingRuntime && ['complete', 'failed', 'cancelled'].includes(String(existingRuntime.status ?? '')) && !existingRuntime.settledAt) {
+    return fail(409, 'Run settlement is still in progress.', { executionId: existingRuntime.executionId });
+  }
   if (!queueDispatch && (existingRuntime?.status === 'pending' || existingRuntime?.status === 'running' || existingQueue)) {
     const admitted = existingRuntime ?? {
       id: runId,
@@ -334,10 +337,10 @@ export async function continueCardSkillRunController(input: { action_payload?: A
         if (!ownsExecution) return;
         appendRunStatus(outputFile, 'failed', `${newSession ? 'new session' : 'resume'} failed: ${settlement.error.message}`);
         appendFileSync(stderrFile, codexRunExecutionFinishedMarker({ runId, executionId, finishedAt: settlement.finishedAt, status: 'failed' }), 'utf8');
-        updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
-        if (queueItemId) removeCodexProcessQueueItem(decisionOsRoot, queueItemId);
         try { await clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime, terminalState: 'failed' }); }
         catch (error) { runtime.taskStatePersistenceError = error instanceof Error ? error.message : String(error); }
+        if (queueItemId) removeCodexProcessQueueItem(decisionOsRoot, queueItemId);
+        updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
         const schedule = runtime.scheduleCodexProcesses;
         if (typeof schedule === 'function') void schedule();
         notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, executionId, status: 'failed' });
@@ -353,10 +356,10 @@ export async function continueCardSkillRunController(input: { action_payload?: A
       appendRunStatus(outputFile, status, detail);
       if (status === 'cancelled') appendFileSync(stderrFile, `Codex run cancelled: ${detail}\n`, 'utf8');
       appendFileSync(stderrFile, codexRunExecutionFinishedMarker({ runId, executionId, finishedAt: settlement.finishedAt, status }), 'utf8');
-      updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
-      if (queueItemId) removeCodexProcessQueueItem(decisionOsRoot, queueItemId);
       try { await clearCardCodexExecution({ decisionOsRoot, ledgerId, ledgerPath, cardId, runId, executionId, runtime, terminalState: status === 'failed' ? 'failed' : 'terminal' }); }
       catch (error) { runtime.taskStatePersistenceError = error instanceof Error ? error.message : String(error); }
+      if (queueItemId) removeCodexProcessQueueItem(decisionOsRoot, queueItemId);
+      updateRuntimeExecution(runtime, runId, executionId, { settledAt: new Date().toISOString() });
       const schedule = runtime.scheduleCodexProcesses;
       if (typeof schedule === 'function') void schedule();
       notifyRuntimeCallback(runtime.onCodexRunSettled, { ledgerId, cardId, threadId: `thread-${cardId}`, runId, executionId, status, exitCode: settlement.exitCode });
