@@ -1,73 +1,49 @@
-## RCA
+## A. Operator conclusion
 
-The agent crashed because its stdout consumer disappeared, and the Termux Codex binary treats that ordinary broken-pipe condition as a fatal panic.
+1. **The recurring production failure is a closed Codex stdout pipe.** During this audit Android recorded three native Codex aborts at `23:27:22`, `23:27:25`, and `23:27:46` with `failed printing to stdout: Broken pipe (os error 32)`. The affected processes were this RCA run, the Pink run, and the related lifecycle implementation run.
+2. **Decision OS recovered work after the damage instead of preserving execution through server loss.** The replacement backend started at `16:27:54` UTC and spawned resume processes for all three runs at `16:27:58` UTC. Every original Codex process had already terminated with `SIGABRT`.
+3. **The durable correction is one host-owned runner for every Codex run.** Codex standard input, JSONL output, and error output must bind directly to files; lifecycle and cancellation must use a durable manifest plus validated process identity; the HTTP server must not own Codex transport.
 
-This was **not an OOM kill**.
+---
 
-### Failure chain
+## B. Verified failure chains
 
-1. At **19:25:37**, the agent launched the entire backend suite:
+1. **Execution chain:** `runsv` owns `decision-os-server.mjs`; the launcher owns the backend child; the backend spawns a Node Codex wrapper; the wrapper spawns the Termux native binary. `start-thread-codex-process-controller.ts` still uses `stdio: ['pipe','pipe','pipe']`, ingests stdout in Node, pipes both outputs to files, sends the prompt through Node, and settles state from child callbacks.
+2. **Crash transition:** the backend-side stdout reader disappears; the native process reaches its next JSON write; the Termux binary treats `EPIPE` as a fatal print failure; Android records `SIGABRT` in `codex-main`. Three fresh crash records prove the same transition across two projects and three independent runs.
+3. **Restart transition:** the supervisor created a replacement backend, which read the run files and session IDs and launched continuations. The replacement PIDs prove recovery; the original processes did not survive.
+4. **Unresolved initiating event:** available service logs begin with replacement startup and Android logs contain no low-memory kill record for the old backend. The reason the backend exited is not verified. This report does not assign that exit to tests, OOM, a signal sender, or a source change.
 
-   `npm test --prefix backend`
+---
 
-2. That suite includes server lifecycle and Codex subprocess integration tests. It left a large test tree running even after the tool reported completion.
+## C. Queue and concurrent-agent findings
 
-3. The agent then started another verification while the full suite still owned the verification lease.
+1. **Related implementation is active but not ready:** [Analyze Codex run lifecycle and status consistency](card:card-f6904e45-8e15-4691-9619-b17165567797) has an uncommitted `codex-run-lifecycle` worktree with a new manifest, host launcher, reconciler, cancellation changes, frontend hydration changes, and `292` added plus `503` removed lines. Its focused frontend run still reported a missing `terminal-button.css` fixture, and the production server disappeared during the run.
+2. **Queue restart recovery solved a different defect:** [Recover queued Codex runs after server restart](card:card-b85c6294-593d-4870-8c6e-ec559386df3c) corrected a lost scheduler wake-up for durable pending items. It does not remove server-owned pipes from running Codex processes.
+3. **Verification admission remains incomplete:** [Make worktree verification one-command and environment-safe](card:card-1adba778-1e57-4160-858e-e9ebfec1999a) remains open. The live lifecycle agent invoked `node bin/decision-os-verify.mjs -- npm run test:front-back`, then `npm test --prefix frontend`. The wrapper sees `npm`, so its concurrency rewrite does not apply; observed workers ran with `--test-concurrency=0` while production Codex runs were active.
+4. **The suite overlap is a proven safety defect, not a proven crash cause.** The lease serializes verification commands only; it does not exclude production Codex work, cap test workers hidden behind npm scripts, or protect the serving backend.
 
-4. It removed the first test worktree while that suite was still executing. Runtime inspection subsequently showed:
+---
 
-   `cwd=.worktrees/json-master-projection/backend (deleted)`
+## D. Selected correction
 
-5. At **19:27:52**, the supervised Decision OS server began restarting. A stale server process still owned `127.0.0.1:50150`, so every replacement crashed with:
+1. **Complete the unified host-owned runner before merging the active lifecycle branch.** Open the prompt, JSONL, and error files before spawn; start Codex in its own process session with those file descriptors; persist PID, Linux start identity, process-group ID, run kind, queue order, lifecycle revision, retry timestamp, terminal status, and exit code in one manifest.
+2. **Replace child-handle lifecycle authority.** Reconcile from validated OS identity and terminal JSONL; cancel through the validated process group; make queue release, retry admission, card projection, pipeline advancement, and notification idempotent manifest transitions.
+3. **Harden the supervised server boundary.** Keep `runsv` as the single owner, make readiness follow successful `listen`, record backend exit code and signal, and refuse replacement startup while another verified port owner remains.
+4. **Make mobile verification admission enforceable.** Expand repository scripts to direct bounded test commands, reject repo-wide suites while durable Codex manifests are running, and require an operator-authorized maintenance window for the single full-suite run. The lease must terminate the complete verification process group on interruption.
+5. **Track the Termux binary defect independently.** Report the reproducible stdout `EPIPE` abort, pin the corrected build once available, and retain the direct-file runner so server survival never depends on that upstream fix.
 
-   `EADDRINUSE: address already in use 127.0.0.1:50150`
+---
 
-   This happened continuously, roughly every six seconds.
+## E. Acceptance gate
 
-6. The server that owned the active Codex run disappeared without terminating or adopting its Codex child correctly. The child became orphaned:
+1. **Server independence:** one thread run and one pipeline run continue with the same PID/start identity and growing JSONL while the backend is absent; restart creates no duplicate.
+2. **Lifecycle authority:** completion, failure, cancellation, retry, capacity release, card status, and pipeline advancement each persist exactly once and survive reload.
+3. **Mobile safety:** repo-wide verification is rejected while a production Codex manifest is running; direct tests never exceed three workers; interruption leaves no verification descendants.
+4. **Crash evidence:** Android logs show no new `failed printing to stdout: Broken pipe` entry during controlled server loss.
+5. **Merge gate:** do not merge the active lifecycle worktree until focused checks, bounded package checks, both typechecks, the maintenance-window full suite, and served mobile status consistency pass.
 
-   - Codex PID: `21194`
-   - Parent PID: `1`
-   - Runtime: about 15 minutes
+---
 
-7. At **19:36:08**, that orphaned Codex process tried to emit another JSON event. Its stdout pipe had no reader.
+## F. Subtasks
 
-8. The Codex binary panicked instead of handling `EPIPE`:
-
-   `Abort message: 'failed printing to stdout: Broken pipe (os error 32)'`
-
-9. Android recorded the resulting native termination:
-
-   `Fatal signal 6 (SIGABRT)` in thread `codex-main`
-
-### Root cause
-
-The immediate root cause is an unhandled broken stdout pipe in the Termux Codex binary. Writing to a closed pipe invokes a Rust panic path that calls `abort()`, producing `SIGABRT`.
-
-The system-level root cause is broken process ownership:
-
-- The Decision OS server can die without settling its Codex children.
-- The launcher forwards signals only while it remains alive.
-- Orphaned server and Codex descendants survive independently.
-- The supervisor starts replacements without first proving the previous process tree and port owner are gone.
-- A resumed Codex process can therefore keep running with a dead stdout consumer.
-
-### Agent-caused trigger
-
-The agent created the conditions by running the full backend suite on the live phone while Decision OS and a real card agent were active. It then removed a worktree before that suite actually terminated and continued launching verification commands.
-
-That violated the repository’s own verification hygiene: focused tests first, one leased verification at a time, and no removal of an active test worktree.
-
-### Contributing defects
-
-- `decision-os-server.mjs` does not supervise a process group; it only signals its immediate child.
-- Codex aborts on `EPIPE` instead of exiting cleanly.
-- The service restart path does not kill or adopt descendants before relaunching.
-- The server emits “ok” before the listen failure is settled, creating misleading startup logs.
-- The verification wrapper’s signal forwarding does not guarantee destruction of the complete descendant tree.
-- The tool reported the full test command as completed while test processes remained alive.
-- Memory pressure—about 200 MiB free and 2.5 GiB swap used—made the phone unhealthy, but it was a consequence/amplifier, **not the recorded crash cause**.
-
-The exact recorded crash is therefore:
-
-> Parent/server disappearance → closed stdout pipe → Codex writes JSON → `EPIPE` panic → `SIGABRT`.
+1. [Preserve the Original Broken-Pipe RCA](card:card-531f36de-d6cd-44e1-8cba-cf5473e47714)

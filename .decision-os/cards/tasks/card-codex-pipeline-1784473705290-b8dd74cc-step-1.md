@@ -21,3 +21,6 @@
 1. **Canonical subtasks:** All four linked subtasks are `done`.
 2. **Lifecycle gate:** `ledger-cli master-task-gate` returned `ready: true`, no discrepancies, valid thread roles, and no lifecycle validation errors.
 3. **Authorized action:** This intentional `$retrospect-and-close-task` run authorizes canonical completion of master card `card-ac917c89-2671-4798-9d03-26a8f16d479d`.
+---
+
+Codex run completed: exit code 0
