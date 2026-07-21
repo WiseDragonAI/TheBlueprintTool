@@ -3,6 +3,7 @@
  * WHY: Current candidates must converge independent of delivery order and duplication.
  */
 import type { TaskCausalClock, TaskCurrentRegister, TaskDot, TaskRegisterCandidate } from './model.js';
+import { canonicalJson } from './canonical-json.js';
 
 export function dotKey(dot: TaskDot): string {
   return `${dot.replicaId}\u0000${String(dot.counter).padStart(16, '0')}`;
@@ -21,6 +22,10 @@ export function joinTaskClocks(left: TaskCausalClock, right: TaskCausalClock): T
 export function joinTaskRegisters(left: TaskCurrentRegister, right: TaskCurrentRegister): TaskCurrentRegister {
   const leftCandidates = new Map(left.candidates.map((candidate) => [dotKey(candidate.dot), candidate]));
   const rightCandidates = new Map(right.candidates.map((candidate) => [dotKey(candidate.dot), candidate]));
+  for (const [key, candidate] of leftCandidates) {
+    const matching = rightCandidates.get(key);
+    if (matching && canonicalJson(candidate) !== canonicalJson(matching)) throw new Error('task_current_dot_collision');
+  }
   const retained = new Map<string, TaskRegisterCandidate>();
   for (const [key, candidate] of leftCandidates) {
     if (rightCandidates.has(key) || !clockCovers(right.clock, candidate.dot)) retained.set(key, structuredClone(candidate));

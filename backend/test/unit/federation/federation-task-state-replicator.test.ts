@@ -3,7 +3,7 @@
  * WHY: Offline replicas must converge without durable outboxes, snapshots, and historical event replay.
  */
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import test from 'node:test';
@@ -12,6 +12,7 @@ import type { FederationStateFrame } from '../../../src/business/federation/help
 import { createTaskCurrentStateStore, type TaskCurrentStateStore } from '../../../src/business/task-state/helper/task-current-state-store.js';
 import { taskCurrentStateVersion, type TaskCurrentBucket, type TaskCurrentEntity } from '../../../src/business/task-state/helper/task-current-state-types.js';
 import { taskCurrentEntityKey } from '../../../../shared/task-current-state-core.js';
+import { migrateTaskCurrentState } from '../../../src/business/task-state/helper/task-current-state-migration.js';
 
 type Replicator = ReturnType<typeof createFederationTaskStateReplicator>;
 const lifecycle = (status: 'todo' | 'done') => ({ status, changedAt: '2026-07-21T00:00:00.000Z', waitingAt: status === 'todo' ? '2026-07-21T00:00:00.000Z' : null, closedAt: status === 'done' ? '2026-07-21T00:00:00.000Z' : null });
@@ -61,7 +62,7 @@ function relayHarness(relayStore: TaskCurrentStateStore) {
       const buckets = mismatched(relayStore.bucketManifest(), remote);
       if (buckets.length > 0) {
         const entities = relayStore.entitiesForBuckets(buckets);
-        deliver(from, { type: 'state-entity-batch', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, deliveryId: crypto.randomUUID(), entries: entities.map((entity) => ({ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash, entity })) } });
+        if (entities.length > 0) deliver(from, { type: 'state-entity-batch', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, deliveryId: crypto.randomUUID(), entries: entities.map((entity) => ({ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash, entity })) } });
         deliver(from, { type: 'state-missing-request', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, buckets } });
       }
       deliver(from, { type: 'state-bucket-summary', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, root: relayStore.rootHash(), buckets: relayStore.bucketManifest() } });
@@ -70,7 +71,7 @@ function relayHarness(relayStore: TaskCurrentStateStore) {
     if (frame.type === 'state-missing-request') {
       const buckets = Array.isArray(payload.buckets) ? payload.buckets.map(String) : [];
       const entities = relayStore.entitiesForBuckets(buckets);
-      deliver(from, { type: 'state-entity-batch', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, deliveryId: crypto.randomUUID(), entries: entities.map((entity) => ({ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash, entity })) } });
+      if (entities.length > 0) deliver(from, { type: 'state-entity-batch', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, deliveryId: crypto.randomUUID(), entries: entities.map((entity) => ({ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash, entity })) } });
     }
   };
   return {
@@ -138,6 +139,55 @@ test('offline replica repairs current mismatched buckets without an outbox or sn
   await waitFor(() => Boolean((b.store.projection().ledger.cards as Array<Record<string, unknown>>)[0]));
   assert.equal(b.store.rootHash(), relay.store.rootHash());
   assert.equal((b.store.projection().ledger.cards as Array<Record<string, unknown>>)[0].status, 'done');
+});
+
+test('independently migrated nodes automatically join through an empty relay at startup', async (context) => {
+  const rootA = mkdtempSync(resolve(tmpdir(), 'decision-os-migrated-repl-a-'));
+  const rootB = mkdtempSync(resolve(tmpdir(), 'decision-os-migrated-repl-b-'));
+  const relay = fixture('decision-os-migrated-repl-relay-');
+  const backupA = `${rootA}-rollback`;
+  const backupB = `${rootB}-rollback`;
+  const projectId = 'project-a';
+  const tasksA = resolve(rootA, 'tasks.json');
+  const tasksB = resolve(rootB, 'tasks.json');
+  writeFileSync(tasksA, JSON.stringify({ cards: [{ id: 'shared', title: 'Desktop title' }, { id: 'desktop-only', title: 'Desktop only' }], annotations: [], relationships: [] }));
+  writeFileSync(tasksB, JSON.stringify({ cards: [{ id: 'shared', title: 'Mobile title' }, { id: 'mobile-only', title: 'Mobile only' }], annotations: [], relationships: [] }));
+  await migrateTaskCurrentState({ decisionOsRoot: rootA, projectId, nodeId: 'desktop', tasksLedgerFile: tasksA, backupRoot: backupA });
+  await migrateTaskCurrentState({ decisionOsRoot: rootB, projectId, nodeId: 'mobile', tasksLedgerFile: tasksB, backupRoot: backupB });
+  const a = createTaskCurrentStateStore({ decisionOsRoot: rootA, projectId });
+  const b = createTaskCurrentStateStore({ decisionOsRoot: rootB, projectId });
+  const harness = relayHarness(relay.store);
+  context.after(async () => {
+    await Promise.all([a.flush(), b.flush(), relay.store.flush()]);
+    [rootA, rootB, relay.root, backupA, backupB].forEach((entry) => rmSync(entry, { recursive: true, force: true }));
+  });
+  const create = (nodeId: string, store: TaskCurrentStateStore) => createFederationTaskStateReplicator({
+    stores: () => new Map([[projectId, store]]),
+    storeFor: () => store,
+    publish: (target, frame) => { void harness.publish(nodeId, target, frame); return true; },
+  });
+  const replicaA = create('desktop', a);
+  const replicaB = create('mobile', b);
+  harness.register('desktop', replicaA);
+  harness.register('mobile', replicaB);
+
+  replicaA.reconcileRelay();
+  await waitFor(() => a.rootHash() === relay.store.rootHash(), 2_000);
+  replicaB.reconcileRelay();
+
+  await waitFor(() => a.rootHash() === relay.store.rootHash() && b.rootHash() === relay.store.rootHash(), 2_000);
+  assert.deepEqual(new Set((a.projection().ledger.cards as Array<Record<string, unknown>>).map((card) => card.id)), new Set(['shared', 'desktop-only', 'mobile-only']));
+  assert.deepEqual(a.projection(), b.projection());
+  assert.equal(a.projection().conflicts.some((conflict) => conflict.entityId === 'shared' && conflict.path === 'title'), true);
+
+  const postCutover = await a.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'desktop-only', changes: [{ path: 'title', operation: 'set', value: 'Writable after convergence' }] }] });
+  replicaA.publishDelta(postCutover.delta);
+  await waitFor(() => relay.store.rootHash() === a.rootHash() && b.rootHash() === a.rootHash(), 2_000);
+  await Promise.all([a.flush(), b.flush()]);
+  const restartedA = createTaskCurrentStateStore({ decisionOsRoot: rootA, projectId });
+  const restartedB = createTaskCurrentStateStore({ decisionOsRoot: rootB, projectId });
+  assert.equal(restartedA.rootHash(), restartedB.rootHash());
+  assert.deepEqual(restartedA.projection(), restartedB.projection());
 });
 
 test('a dropped live batch is repaired from current shards through root anti-entropy', async (context) => {

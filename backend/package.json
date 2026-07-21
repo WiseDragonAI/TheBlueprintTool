@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "migrate:task-current-state": "tsx src/cli/migrate-task-current-state.ts",
+    "migrate:node-task-current-state": "tsx src/cli/migrate-node-task-current-state.ts",
     "start": "node --import tsx src/server.ts",
     "test": "node --test --import tsx \"test/**/*.test.ts\"",
     "test:integration": "find test -path \"*/unit/*\" -prune -o -name \"*.test.ts\" -print | xargs node --test --import tsx",

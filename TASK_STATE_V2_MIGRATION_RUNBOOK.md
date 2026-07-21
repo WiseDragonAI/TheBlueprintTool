@@ -1,222 +1,160 @@
-# Task Current-State Epoch 3 Recovery Runbook
+# Node-Local Task Current-State Epoch 3 Cutover
 
-## A. Release gate
+## A. Release Gate
 
-1. Deploy one reviewed Decision OS commit to every writable node.
-2. Record that commit and the registered federation node inventory.
-3. Commit each project’s tracked `.decision-os` sidecars before quiescence. Do not stage over an existing index.
-4. Keep every server stopped until all migrated project roots and the epoch-3 relay deployment pass validation.
+1. Install one reviewed Decision OS commit on the workstation and phone.
+2. Verify each node's `.decision-os/.settings.json` contains its unique `federationNodeId`.
+3. Verify the configured node IDs are `workstation` and `phone`.
+4. Commit tracked ledger sidecars on each node without modifying an existing Git index.
+5. Keep both Decision OS servers stopped until their local migrations and the relay reset pass validation.
 
-```bash
-export DECISION_OS_REPO=/absolute/path/to/decision-os
-export CATALOG_ROOT=/absolute/catalog/root
-export MASTER_DOS="$CATALOG_ROOT/.decision-os"
-export CUTOVER_ID="$(date -u +%Y-%m-%dT%H-%M-%S.%3NZ)"
-export CUTOVER_RECORD="$MASTER_DOS/migrations/task-current-state-epoch3-$CUTOVER_ID"
-mkdir -p "$CUTOVER_RECORD"
-git -C "$DECISION_OS_REPO" rev-parse HEAD > "$CUTOVER_RECORD/decision-os-commit.txt"
-jq -er '.federationNodeId' "$MASTER_DOS/.settings.json" > "$CUTOVER_RECORD/federation-node-id.txt"
-cp "$MASTER_DOS/projects.json" "$CUTOVER_RECORD/projects.json"
+---
+
+## B. Node Quiescence
+
+1. Disable automatic server restart on the node.
+2. Stop the exact Decision OS process.
+3. Verify its configured port is closed.
+4. Make no ledger, card, thread, or managed-asset edit until startup convergence completes.
+
+---
+
+## C. Local Source Inventory
+
+Run this gate separately on each node.
+
+1. Read the authoritative `.decision-os/projects.json` registry from the catalog root.
+2. Require registry version `2`.
+3. Require every registered project path and `.decision-os/project.json` identity to resolve.
+4. Require each project to expose its `tasks` ledger and referenced local content files.
+5. Retain each project's local legacy task-state directory when present.
+6. Do not copy state between nodes before migration.
+7. Do not use relay state as migration input.
+
+---
+
+## D. Durable Sidecar Checkpoint
+
+Run this gate in every registered project repository.
+
+1. Stop when the Git index already contains operator-approved staged work.
+2. Commit the task ledger, card Markdown, thread Markdown, project metadata, and managed assets.
+3. Exclude settings, caches, runtime files, voice uploads, migration outputs, and task-state shards.
+4. Record the checkpoint commit in the cutover record.
+
+---
+
+## E. Relay State Reset
+
+Run this once while every participating node is offline:
+
+```http
+POST /admin/federations/<federation-id>/projects/<project-id>/reset-state
+Authorization: Bearer <admin-secret>
 ```
 
+1. Reset every registered project separately.
+2. Require HTTP `200`.
+3. Require `ok: true`, the requested project ID, deleted entity and bucket counts, an empty root, and `resetAt`.
+4. Preserve node credentials, node manifests, and federation configuration.
+5. Save each response in the cutover record.
+6. Treat HTTP `409 project_nodes_online` as a failed quiescence gate.
+
 ---
 
-## B. Cluster quiescence
+## F. Workstation Offline Migration
 
-1. Disable automatic restart for each registered Linux server process.
-2. Stop the exact Decision OS process on each node.
-3. Verify the configured port is closed.
-4. Confirm every node passed this gate before collecting state.
+Run from the installed Decision OS repository:
 
 ```bash
-/home/jbb/dev/multiterm/bin/multiwezterm-process disable \
-  --cwd "$CATALOG_ROOT" \
-  --port 50150
-ps -ef | rg 'decision-os-server|server\.ts' | rg -v rg || true
-if ss -ltn 2>/dev/null | rg -q ':50150[[:space:]]'; then
-  echo 'BLOCKED: Decision OS still listens on port 50150' >&2
-  exit 1
-fi
+node bin/decision-os-migrate-node.mjs \
+  --catalog-root /home/jbb/dev/EditorBP/decision-os \
+  --node-id workstation
 ```
+
+1. The command must match `--node-id` against the configured `federationNodeId`.
+2. The command reads only local registries, ledgers, content files, and legacy task-state.
+3. The command writes an external complete catalog backup before conversion.
+4. It converts every registered project and writes one `node-migration-report.json`.
+5. It performs no network operation.
+6. Keep the returned backup root until production verification completes.
 
 ---
 
-## C. Authoritative project inventory
+## G. Phone Offline Migration
 
-1. Use the persisted registry; do not recursively discover projects.
-2. Resolve every registered project and verify `.decision-os/project.json` carries the registered identity.
-3. Record the tasks ledger and active v2 state root for each project.
+Run the same installed command in Termux with the phone catalog root:
 
 ```bash
-jq -e '.version == 2 and (.projects | type == "object")' "$MASTER_DOS/projects.json"
-jq -r '.projects | to_entries[] | [.key, .value.relativePath, .value.name] | @tsv' \
-  "$MASTER_DOS/projects.json" | sort > "$CUTOVER_RECORD/project-inventory.tsv"
+node bin/decision-os-migrate-node.mjs \
+  --catalog-root <termux-catalog-root> \
+  --node-id phone
 ```
 
+1. Apply the same validation gates as the workstation migration.
+2. Keep the phone's returned backup root until production verification completes.
+3. Do not start the phone server before its complete node report exists.
+
 ---
 
-## D. Durable sidecar checkpoint
+## H. Per-Node Migration Validation
 
-1. Run this gate in every project repository.
-2. Stop when the Git index already contains operator-approved staged work.
-3. Commit the task ledger, card Markdown, thread Markdown, project metadata, and managed assets.
-4. Record the resulting commit in `ledger-checkpoints.tsv`.
+For every project result on each node:
 
-```bash
-git -C "$PROJECT_ROOT" diff --cached --quiet || {
-  echo 'BLOCKED: project index already contains staged changes' >&2
-  exit 1
-}
-git -C "$PROJECT_ROOT" add -A -- \
-  .decision-os \
-  ':(exclude).decision-os/.settings.json' \
-  ':(exclude).decision-os/cache/**' \
-  ':(exclude).decision-os/migrations/**' \
-  ':(exclude).decision-os/runtime/**' \
-  ':(exclude).decision-os/task-state/**' \
-  ':(exclude).decision-os/voice-uploads/**'
-if ! git -C "$PROJECT_ROOT" diff --cached --quiet; then
-  git -C "$PROJECT_ROOT" commit -m 'Checkpoint Decision OS before epoch 3 migration'
-fi
-printf '%s\t%s\t%s\n' "$PROJECT_ID" "$PROJECT_ROOT" "$(git -C "$PROJECT_ROOT" rev-parse HEAD)" \
-  >> "$CUTOVER_RECORD/ledger-checkpoints.tsv"
+1. Require `stateProtocol` equal to `decision-os-task-state/3`.
+2. Require `stateSchema` equal to `3`.
+3. Require `baselineEpoch` equal to `3`.
+4. Require a 64-character local `baselineRoot`.
+5. Require the migration report's `nodeId` to equal the configured federation node ID.
+6. Require every resource head's causal replica to name that node.
+7. Require every retained resource hash to resolve to an immutable object under the local project task-state root.
+8. Review lifecycle audits, body rewrites, relationship repairs, semantic inventory, and canonical projection checksum.
+9. Do not require the workstation and phone baseline roots to match before relay synchronization.
+
+---
+
+## I. Startup and Automatic Convergence
+
+1. Start the workstation server.
+2. Wait until its local project roots equal the empty relay's joined roots.
+3. Start the phone server.
+4. Let bucket anti-entropy exchange and join both independently migrated states.
+5. Keep writes rejected with `task_state_bootstrap_incomplete` until each local root equals its relay root.
+6. Require, for every project:
+
+```text
+workstation root = phone root = relay root
 ```
 
----
-
-## E. Collect every writable source state
-
-1. Copy each node’s complete `<project>/.decision-os/task-state/<project-id>` directory to coordinator storage without modifying it.
-2. For a writable node that has no v2 current shards, create a projection source at `<capture>/.decision-os/task-state/<project-id>` containing `projection.json`, `content-manifest.json`, and exact immutable objects under `objects/<hash-prefix>/<hash>`.
-3. Set `projection.json.projectId` to the project ID, set `projection.json.sourceNodeId` to the registered node ID, and place the complete captured task projection under `projection.json.ledger`.
-4. Require `content-manifest.json` version `1`, the same project ID, `complete: true`, one unique entry for every referenced card, thread, and managed asset, and the exact SHA-256 object bytes for every entry.
-5. Record the source node, project, source path, source format marker hash when present, manifest hash when present, and tree hash.
-6. Include nodes that were offline when the failure was discovered.
-7. Reject a projection source with a missing object, hash mismatch, incomplete manifest, duplicate resource key, duplicate source node ID, mismatched project ID, or a path outside the required `task-state/<project-id>` layout.
-8. Do not use the relay cache as the sole migration source.
-
-```bash
-export COLLECTED_TASK_STATE="$CUTOVER_RECORD/source-state/$FEDERATION_NODE_ID/.decision-os/task-state"
-export COLLECTED_ROOT="$COLLECTED_TASK_STATE/$PROJECT_ID"
-export SOURCE_AUDIT="$CUTOVER_RECORD/source-state-audit/$PROJECT_ID/$FEDERATION_NODE_ID"
-mkdir -p "$COLLECTED_TASK_STATE" "$SOURCE_AUDIT"
-cp -a "$REMOTE_ACTIVE_STATE" "$COLLECTED_ROOT"
-if test -f "$COLLECTED_ROOT/format.json"; then
-  sha256sum "$COLLECTED_ROOT/format.json" \
-    > "$SOURCE_AUDIT/format.sha256"
-fi
-if test -f "$COLLECTED_ROOT/content-manifest.json"; then
-  sha256sum "$COLLECTED_ROOT/content-manifest.json" \
-    > "$SOURCE_AUDIT/content-manifest.sha256"
-fi
-find "$COLLECTED_ROOT" -type f -print0 | sort -z | xargs -0 sha256sum \
-  > "$SOURCE_AUDIT/tree.sha256"
-printf '%s\n' "$COLLECTED_ROOT" >> "$CUTOVER_RECORD/source-state-roots-$PROJECT_ID.txt"
-```
+7. Require both canonical projections to match byte-for-byte.
+8. Require node-only entities from both migrations to exist on both nodes.
+9. Require divergent shared values to remain explicit task conflicts.
+10. Restart each node once and require the same roots and projections after reconnection.
 
 ---
 
-## F. Offline migration
+## J. Content Verification
 
-1. Supply every collected v2 state root and projection-only source for the project with a repeated `--source-state-root` argument.
-2. The migration joins current v2 registers, imports projection-only node facts without treating omissions as deletions, hydrates sidecar-backed notes, validates relationships, assigns lifecycle metadata and positions, removes generated body state, verifies and unions every collected immutable object store, preserves remote resource heads, captures current sidecars, writes `migration-report.json`, then writes `format.json` last.
-3. Preflight failure writes nothing. Failure after backup leaves no epoch-3 marker, so runtime admission remains closed.
-4. Keep the returned rollback snapshot until production proof completes.
-
-```bash
-source_args=()
-while IFS= read -r source_root; do
-  source_args+=(--source-state-root "$source_root")
-done < <(sort -u "$CUTOVER_RECORD/source-state-roots-$PROJECT_ID.txt")
-
-cd "$DECISION_OS_REPO/backend"
-./node_modules/.bin/tsx src/cli/migrate-task-current-state.ts \
-  --decision-os-root "$PROJECT_DOS" \
-  --project-id "$PROJECT_ID" \
-  --tasks-ledger "$PROJECT_DOS/tasks.json" \
-  "${source_args[@]}" \
-  | tee "$CUTOVER_RECORD/migration-$PROJECT_ID.json"
-```
+1. Confirm connection and catalog synchronization transfer no card, thread, image, voice, or managed-asset bytes.
+2. Open one phone-owned card from the workstation.
+3. Require one exact-hash request to the `phone` node through `/api/federation/content-object`.
+4. Require the fetched bytes to match the advertised SHA-256 hash.
+5. Open one workstation-owned resource from the phone and apply the same verification.
+6. Require content conflicts to expose every current hash candidate without choosing a migration winner.
 
 ---
 
-## G. Per-project validation
+## K. Rollback
 
-1. Require epoch `3`, protocol `decision-os-task-state/3`, baseline epoch `3`, and a 64-character baseline root.
-2. Review the complete source-value audit, body rewrite report, relationship repair report, projection-source inventory, semantic inventory, and canonical projection checksum.
-3. Confirm every collected source root exists below the returned backup.
-4. Compare `baselineRoot` across every node receiving the same migrated project state.
-
-```bash
-result="$CUTOVER_RECORD/migration-$PROJECT_ID.json"
-format="$(jq -r '.root' "$result")/format.json"
-report="$(jq -r '.report' "$result")"
-jq -e '
-  .stateProtocol == "decision-os-task-state/3" and
-  .stateSchema == 3 and
-  .baselineEpoch == 3 and
-  (.baselineRoot | length == 64)
-' "$format"
-jq -e '
-  .version == 1 and
-  (.canonicalProjectionChecksum | length == 64) and
-  (.objectInventory.sourceObjects >= .objectInventory.installedObjects) and
-  (.objectInventory.installedObjects >= 0) and
-  (.objectInventory.installedBytes >= 0) and
-  (.semanticInventory.cards >= 0) and
-  (.semanticInventory.relationships >= 0) and
-  (.semanticInventory.entityDeletions >= 0) and
-  (.sourceEntityInventory.resource >= 0) and
-  (.currentEntityInventory.resource >= .sourceEntityInventory.resource) and
-  (.semanticInventory.resourceHeads >= 0) and
-  ([.projectionSources[] | .sourceNodeId] | length == (unique | length)) and
-  ([.projectionSources[] | .entityCount, .resourceCount] | all(. >= 0))
-' "$report"
-```
+1. Stop both epoch-3 servers.
+2. Reset relay project state again while both nodes remain offline.
+3. Restore each node exclusively from its own returned backup root.
+4. Restore the recorded pre-cutover Decision OS commit.
+5. Do not combine writes created after rollback with epoch-3 state.
 
 ---
 
-## H. Relay deployment
+## L. Retention Gate
 
-1. Deploy the exact recorded Decision OS commit after every project validates.
-2. Epoch-3 relay state uses the `state:v3:` Durable Object key namespace; v2 keys are not read.
-3. Verify the health response before starting any node.
-
-```bash
-test "$(git -C "$DECISION_OS_REPO" rev-parse HEAD)" = "$(cat "$CUTOVER_RECORD/decision-os-commit.txt")"
-cd "$DECISION_OS_REPO/federation-relay"
-npm run deploy | tee "$CUTOVER_RECORD/relay-deploy.txt"
-curl -fsS "$RELAY_URL/health" | tee "$CUTOVER_RECORD/relay-health.json" | jq -e '
-  .ok == true and
-  .stateProtocol == "decision-os-task-state/3" and
-  .stateSchema == 3 and
-  .baselineEpoch == 3
-'
-```
-
----
-
-## I. Bootstrap and write gate
-
-1. Start one authoritative host per project first.
-2. Require exact relay-root convergence for every hosted project.
-3. Start remaining hosts, then the phone, then a blank remote-only node.
-4. Keep writers disabled until every node reports the exact project root and the blank node reconstructs the same canonical projection.
-5. Verify that connecting transfers zero body objects and opening one remote card fetches only its demanded current hash.
-
----
-
-## J. Rollback
-
-1. Stop every epoch-3 writer.
-2. Restore the project’s complete `.decision-os` snapshot from the migration result’s `backup/decision-os` directory.
-3. Restore the recorded pre-cutover repository commit.
-4. Redeploy the pre-cutover relay commit.
-5. Do not merge v2 writes produced after rollback with epoch-3 state.
-
----
-
-## K. Retention gate
-
-1. Retain source-state collections, migration backups, reports, deployment output, and checkpoint commits until workstation, phone, and blank-node production proof passes.
+1. Retain node backups, node migration reports, relay reset responses, checkpoint commits, and convergence evidence until workstation, phone, and restart verification pass.
 2. Remove rollback data only through a separately reviewed retention operation.

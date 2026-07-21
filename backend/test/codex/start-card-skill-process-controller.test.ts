@@ -946,6 +946,7 @@ test('card skill run continue route resumes the captured session after its card 
   await migrateTaskCurrentState({
     decisionOsRoot: join(workspace, '.decision-os'),
     projectId: 'card-skill-continue-project',
+    nodeId: 'workstation',
     tasksLedgerFile: join(workspace, '.decision-os', 'tasks.json'),
   });
 

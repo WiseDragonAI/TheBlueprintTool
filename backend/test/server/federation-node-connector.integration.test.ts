@@ -21,7 +21,7 @@ async function projectHome(name: string): Promise<string> {
   writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'tasks', title: `${name} Tasks`, ledgerFile: '.decision-os/tasks.json' }] }));
   writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({ cards: [{ id: `${name}-card`, title: `${name} card`, labels: ['master-task'], status: 'todo' }], annotations: [], relationships: [] }));
   writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: `${name}-project` }));
-  await migrateTaskCurrentState({ decisionOsRoot, projectId: `${name}-project`, tasksLedgerFile: join(decisionOsRoot, 'tasks.json') });
+  await migrateTaskCurrentState({ decisionOsRoot, projectId: `${name}-project`, nodeId: name, tasksLedgerFile: join(decisionOsRoot, 'tasks.json') });
   return home;
 }
 

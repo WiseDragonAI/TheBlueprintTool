@@ -16,10 +16,11 @@ function argumentsFor(name: string): string[] {
 
 const decisionOsRoot = resolve(argument('--decision-os-root'));
 const projectId = argument('--project-id');
+const nodeId = argument('--node-id');
 const tasksLedgerFile = resolve(argument('--tasks-ledger'));
-if (!argument('--decision-os-root') || !projectId || !argument('--tasks-ledger')) {
-  throw new Error('Usage: migrate-task-current-state --decision-os-root <path> --project-id <id> --tasks-ledger <path> [--source-state-root <path> ...]');
+if (!argument('--decision-os-root') || !projectId || !nodeId || !argument('--tasks-ledger')) {
+  throw new Error('Usage: migrate-task-current-state --decision-os-root <path> --project-id <id> --node-id <id> --tasks-ledger <path> [--source-state-root <path> ...]');
 }
 
-const result = await migrateTaskCurrentState({ decisionOsRoot, projectId, tasksLedgerFile, sourceStateRoots: argumentsFor('--source-state-root') });
+const result = await migrateTaskCurrentState({ decisionOsRoot, projectId, nodeId, tasksLedgerFile, sourceStateRoots: argumentsFor('--source-state-root') });
 process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);

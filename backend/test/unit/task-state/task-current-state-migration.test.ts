@@ -40,7 +40,7 @@ test('offline migration installs current shards, immutable content, and a final 
   writeFileSync(tasksFile, JSON.stringify(ledger));
   writeFileSync(resolve(stateRoot, 'projection.json'), JSON.stringify({ version: 2, projectId, ledger, conflicts: [] }));
   writeFileSync(resolve(stateRoot, 'old-event-segment.jsonl'), '{}\n');
-  const result = await migrateTaskCurrentState({ decisionOsRoot: root, projectId, tasksLedgerFile: tasksFile });
+  const result = await migrateTaskCurrentState({ decisionOsRoot: root, projectId, nodeId: 'workstation', tasksLedgerFile: tasksFile });
   context.after(() => rmSync(resolve(root, '..', `${basename(root)}-task-state-rollback`), { recursive: true, force: true }));
   assert.equal(existsSync(resolve(result.backup, 'decision-os', 'task-state', projectId, 'old-event-segment.jsonl')), true);
   assert.equal(existsSync(resolve(result.backup, 'decision-os', 'tasks.json')), true);
@@ -97,7 +97,7 @@ test('migration preflight rejects broken subtask ownership before writing or bac
   const beforeLedger = readFileSync(tasksFile, 'utf8');
   const beforeProjection = readFileSync(resolve(stateRoot, 'projection.json'), 'utf8');
 
-  await assert.rejects(migrateTaskCurrentState({ decisionOsRoot: root, projectId, tasksLedgerFile: tasksFile, backupRoot: rollbackRoot }), /invalid_subtask_relationships:broken/);
+  await assert.rejects(migrateTaskCurrentState({ decisionOsRoot: root, projectId, nodeId: 'workstation', tasksLedgerFile: tasksFile, backupRoot: rollbackRoot }), /invalid_subtask_relationships:broken/);
 
   assert.equal(readFileSync(tasksFile, 'utf8'), beforeLedger);
   assert.equal(readFileSync(resolve(stateRoot, 'projection.json'), 'utf8'), beforeProjection);
@@ -123,7 +123,7 @@ test('migration refuses to publish epoch 3 when a retained resource head has no 
   }));
   writeFileSync(tasksFile, JSON.stringify({ cards: [], annotations: [], relationships: [] }));
 
-  await assert.rejects(migrateTaskCurrentState({ decisionOsRoot: root, projectId, tasksLedgerFile: tasksFile, backupRoot: rollbackRoot }), /missing_migrated_task_content_object/);
+  await assert.rejects(migrateTaskCurrentState({ decisionOsRoot: root, projectId, nodeId: 'workstation', tasksLedgerFile: tasksFile, backupRoot: rollbackRoot }), /missing_migrated_task_content_object/);
 
   assert.equal(existsSync(resolve(stateRoot, 'format.json')), false);
   assert.equal(existsSync(rollbackRoot), true);
@@ -182,7 +182,7 @@ test('migration joins legacy current entities from every writable node before en
     threadFiles: { [threadId]: `.decision-os/threads/tasks/${threadId}.md` },
   }));
 
-  const result = await migrateTaskCurrentState({ decisionOsRoot: root, projectId, tasksLedgerFile: tasksFile, backupRoot: rollbackRoot, sourceStateRoots: [remoteRoot] });
+  const result = await migrateTaskCurrentState({ decisionOsRoot: root, projectId, nodeId: 'workstation', tasksLedgerFile: tasksFile, backupRoot: rollbackRoot, sourceStateRoots: [remoteRoot] });
   const report = JSON.parse(readFileSync(result.report, 'utf8')) as Record<string, any>;
 
   const store = createTaskCurrentStateStore({ decisionOsRoot: root, projectId });
@@ -195,11 +195,12 @@ test('migration joins legacy current entities from every writable node before en
   assert.equal(store.contentHeads(remoteKey)[0].hash, remoteHash);
   assert.equal(readFileSync(resolve(result.root, 'objects', remoteHash.slice(0, 2), remoteHash), 'utf8'), remoteObject.toString());
   const recoveredPresence = store.entity('thread-note', `${threadId}/${noteId}`)?.fields.$entity;
-  assert.equal(recoveredPresence?.clock.workstation, 17);
+  assert.equal(recoveredPresence?.clock.workstation, 18);
   assert.equal(recoveredPresence?.candidates[0].operation, 'set');
   assert.deepEqual((store.projection().ledger.deletedNoteIds as Record<string, string[]>)[threadId], []);
   assert.equal(report.sourceEntityInventory.resource, 1);
   assert.equal(report.sourceEntityInventory.card, 2);
+  assert.equal(report.baselineCounter, 18);
   assert.equal(report.currentEntityInventory.resource, 2);
   assert.equal(report.semanticInventory.entityDeletions, 1);
 });
@@ -257,7 +258,7 @@ test('migration preserves projection-only node entities, conflicts, notes, and c
     writeFileSync(resolve(phoneStateRoot, 'objects', entry.hash.slice(0, 2), entry.hash), bytes);
   }
 
-  const result = await migrateTaskCurrentState({ decisionOsRoot: root, projectId, tasksLedgerFile: tasksFile, backupRoot: rollbackRoot, sourceStateRoots: [phoneStateRoot] });
+  const result = await migrateTaskCurrentState({ decisionOsRoot: root, projectId, nodeId: 'workstation', tasksLedgerFile: tasksFile, backupRoot: rollbackRoot, sourceStateRoots: [phoneStateRoot] });
   const store = createTaskCurrentStateStore({ decisionOsRoot: root, projectId });
   const projection = store.projection();
   assert.equal((projection.ledger.cards as Array<Record<string, unknown>>).some((card) => card.id === 'phone-only'), true);
@@ -276,7 +277,52 @@ test('migration preserves projection-only node entities, conflicts, notes, and c
     createHash('sha256').update(localSharedBody).digest('hex'),
     createHash('sha256').update(phoneSharedBody).digest('hex'),
   ]));
+  assert.deepEqual(new Set(sharedHeads.map((head) => head.sourceReplicaId)), new Set(['workstation', 'phone']));
   for (const head of sharedHeads) assert.equal(existsSync(resolve(result.root, 'objects', head.hash.slice(0, 2), head.hash)), true);
   const report = JSON.parse(readFileSync(result.report, 'utf8')) as Record<string, any>;
   assert.deepEqual(report.projectionSources, [{ sourceNodeId: 'phone', entityCount: 6, resourceCount: 3 }]);
+});
+
+test('independent node migrations converge and retain routable content sources', async (context) => {
+  const workstationRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-independent-workstation-'));
+  const phoneRoot = mkdtempSync(resolve(tmpdir(), 'decision-os-independent-phone-'));
+  context.after(() => [workstationRoot, phoneRoot, `${workstationRoot}-rollback`, `${phoneRoot}-rollback`].forEach((entry) => rmSync(entry, { recursive: true, force: true })));
+  const projectId = 'shared-project';
+  const sharedRef = '.decision-os/cards/tasks/shared.md';
+  const workstationOnlyRef = '.decision-os/cards/tasks/workstation-only.md';
+  const phoneOnlyRef = '.decision-os/cards/tasks/phone-only.md';
+  const prepareNode = (root: string, sharedTitle: string, uniqueId: string, uniqueRef: string): string => {
+    mkdirSync(resolve(root, 'cards', 'tasks'), { recursive: true });
+    writeFileSync(resolve(root, sharedRef.replace(/^\.decision-os\//, '')), `${sharedTitle} body.\n`);
+    writeFileSync(resolve(root, uniqueRef.replace(/^\.decision-os\//, '')), `${uniqueId} body.\n`);
+    const tasksFile = resolve(root, 'tasks.json');
+    writeFileSync(tasksFile, JSON.stringify({
+      cards: [
+        { id: 'shared', title: sharedTitle, comment: { contentFile: sharedRef } },
+        { id: uniqueId, title: uniqueId, comment: { contentFile: uniqueRef } },
+      ],
+      annotations: [], relationships: [],
+    }));
+    return tasksFile;
+  };
+  const workstationTasks = prepareNode(workstationRoot, 'Workstation title', 'workstation-only', workstationOnlyRef);
+  const phoneTasks = prepareNode(phoneRoot, 'Phone title', 'phone-only', phoneOnlyRef);
+  const workstationResult = await migrateTaskCurrentState({ decisionOsRoot: workstationRoot, projectId, nodeId: 'workstation', tasksLedgerFile: workstationTasks, backupRoot: `${workstationRoot}-rollback` });
+  const phoneResult = await migrateTaskCurrentState({ decisionOsRoot: phoneRoot, projectId, nodeId: 'phone', tasksLedgerFile: phoneTasks, backupRoot: `${phoneRoot}-rollback` });
+  const workstation = createTaskCurrentStateStore({ decisionOsRoot: workstationRoot, projectId });
+  const phone = createTaskCurrentStateStore({ decisionOsRoot: phoneRoot, projectId });
+
+  await workstation.merge(phone.activeDelta());
+  await phone.merge(workstation.activeDelta());
+  await Promise.all([workstation.flush(), phone.flush()]);
+
+  assert.equal(workstation.rootHash(), phone.rootHash());
+  assert.deepEqual(new Set((workstation.projection().ledger.cards as Array<Record<string, unknown>>).map((card) => card.id)), new Set(['shared', 'workstation-only', 'phone-only']));
+  const titleConflict = workstation.projection().conflicts.find((conflict) => conflict.entityType === 'card' && conflict.entityId === 'shared' && conflict.path === 'title');
+  assert.deepEqual(new Set(titleConflict?.candidates.map((candidate) => candidate.value)), new Set(['Workstation title', 'Phone title']));
+  assert.deepEqual(new Set(workstation.contentHeads(sharedRef).map((head) => head.sourceReplicaId)), new Set(['workstation', 'phone']));
+  const phoneOnlyHead = workstation.contentHeads(phoneOnlyRef)[0];
+  assert.equal(phoneOnlyHead.sourceReplicaId, 'phone');
+  assert.equal(readFileSync(resolve(phoneResult.root, 'objects', phoneOnlyHead.hash.slice(0, 2), phoneOnlyHead.hash), 'utf8'), 'phone-only body.\n');
+  assert.equal(existsSync(resolve(workstationResult.root, 'objects', phoneOnlyHead.hash.slice(0, 2), phoneOnlyHead.hash)), false);
 });

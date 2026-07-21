@@ -76,7 +76,7 @@ function resourceBytes(stateRoot: string, decisionOsRoot: string, resource: Fede
 }
 
 function sourceEntity(input: { projectId: string; sourceNodeId: string; entityType: TaskCurrentEntity['entityType']; entityId: string; changes: Array<{ path: string; operation: 'set' | 'remove' | 'add' | 'tombstone'; value?: unknown }> }): TaskCurrentEntity {
-  const replicaId = `migration-source:${input.sourceNodeId}`;
+  const replicaId = input.sourceNodeId;
   const clock = { [replicaId]: 1 };
   const changes = input.changes.some((change) => change.path === '$entity')
     ? input.changes
