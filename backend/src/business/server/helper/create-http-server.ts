@@ -21,7 +21,6 @@ import { contentTypeFor } from './content-type-for.js';
 import { normalizeLedgerNotes } from './normalize-ledger-notes.js';
 import { hydrateLedgerCardContent, resolveCardContentFile } from '../../ledger/helper/card-content-file.js';
 import { parseThreadMarkdown, stripHydratedThreadNotes } from '../../ledger/helper/thread-content-file.js';
-import { migrateBacklogStatus } from '../../ledger/helper/migrate-backlog-status.js';
 import { resolveCardContentChange, type CardContentChange } from '../../refresh/helper/watch-card-content-files.js';
 import { watchProjectFiles } from '../../refresh/helper/watch-project-files.js';
 import { applyLedgerMutation, type LedgerMutation } from '../../ledger/helper/apply-ledger-mutation.js';
@@ -264,6 +263,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       decisionOsRoot: project.decisionOsRoot,
       tasksLedgerFile,
       publish: (delta) => federationTaskStateReplicator?.publishDelta(delta),
+      canWrite: () => {
+        if (!federation?.status().configured) return true;
+        const state = projectTaskStates.get(project.id);
+        const convergence = federationTaskStateReplicator?.diagnostics().convergence.find((entry) => entry.peerId === 'relay' && entry.projectId === project.id);
+        return Boolean(state && convergence?.converged && convergence.root === state.store.rootHash());
+      },
       initialize,
     });
     projectTaskStates.set(project.id, value);
@@ -333,7 +338,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   const projectContext = (activeDecisionOsRoot: string, projectId: string): ProjectContext => {
     const existing = projectContexts.get(activeDecisionOsRoot);
     if (existing) return existing;
-    migrateBacklogStatus(activeDecisionOsRoot);
     const clients = new Set<ServerResponse>();
     const revisions = createLedgerRevisionTracker();
     const projectRuntime = activeDecisionOsRoot === masterDecisionOsRoot
@@ -723,7 +727,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             const contentOwner = heads.find((head) => head.sourceReplicaId === ownerNodeId)?.sourceReplicaId ?? heads[0]?.sourceReplicaId ?? ownerNodeId;
             const content = federationContentStore.resource(contentOwner, localProjectId, key);
             resourceReady = !key || Boolean(content.file);
-            contentStatus = { status: content.state, resource: key, error: content.error };
+            contentStatus = { status: content.state, resource: key, error: content.error, conflict: content.conflict, candidates: content.candidates };
             if (!resourceReady) {
               federationContentStore.prioritize(contentOwner, localProjectId, key);
               void federationContentScheduler?.drain();
@@ -741,7 +745,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           const contentOwner = heads.find((head) => head.sourceReplicaId === ownerNodeId)?.sourceReplicaId ?? heads[0]?.sourceReplicaId ?? ownerNodeId;
           const content = federationContentStore.resource(contentOwner, localProjectId, key);
           resourceReady = !key || Boolean(content.file);
-          contentStatus = { status: content.state, resource: key, error: content.error };
+          contentStatus = { status: content.state, resource: key, error: content.error, conflict: content.conflict, candidates: content.candidates };
           // WHAT: Queue only the thread file requested by this route.
           // WHY: Catalog and head synchronization must transfer zero body bytes.
           if (!resourceReady) {
@@ -933,6 +937,11 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           ? await taskStateForProject(localProject).executeMutation(mutation, beforeLedger, ledger)
           : null;
       } catch (error) {
+        if (error instanceof Error && error.message === 'task_state_bootstrap_incomplete') {
+          activeResponse.statusCode = 503;
+          activeResponse.end(JSON.stringify({ ok: false, error: 'task-state-bootstrap-incomplete' }));
+          return;
+        }
         if (error instanceof Error && error.message.startsWith('task_lifecycle_conflict:')) {
           activeResponse.statusCode = 409;
           activeResponse.end(JSON.stringify({ ok: false, error: 'task-conflict', cardIds: error.message.slice('task_lifecycle_conflict:'.length).split(',').filter(Boolean) }));
@@ -1051,6 +1060,12 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       try {
         committed = await state.transitionCardLifecycle(cardId, lifecycleStatus);
       } catch (error) {
+        if (error instanceof Error && error.message === 'task_state_bootstrap_incomplete') {
+          response.statusCode = 503;
+          response.setHeader('content-type', 'application/json');
+          response.end(JSON.stringify({ ok: false, error: 'task-state-bootstrap-incomplete' }));
+          return;
+        }
         if (error instanceof Error && error.message === `task_card_not_found:${cardId}`) {
           response.statusCode = 404;
           response.setHeader('content-type', 'application/json');

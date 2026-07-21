@@ -3,7 +3,7 @@
  * WHY: The browser must not download hydrated ledgers and run histories to reconstruct task state.
  */
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { readRepositoryOriginIdentity } from '../../project-sync/helper/repository-sync-status.js';
 import type { DecisionOsProject } from './project-catalog.js';
@@ -361,6 +361,7 @@ export function createControlRoomProjectionStore(input: { cacheFile: string; tas
     renameSync(temporary, input.cacheFile);
   };
   const publish = (projects: DecisionOsProject[]): Projection => {
+    const incrementalPublish = !dirtyAll && [...dirtyProjects].every((projectId) => dirtyEntities.has(projectId) || dirtyTaskIds.has(projectId));
     const projectIds = new Set(projects.map((project) => project.id));
     for (const projectId of slices.keys()) if (!projectIds.has(projectId)) slices.delete(projectId);
     const remainingDirtyProjects = new Set<string>();
@@ -394,7 +395,10 @@ export function createControlRoomProjectionStore(input: { cacheFile: string; tas
     }
     const orderedSlices = projects.map((project) => slices.get(project.id)).filter((slice): slice is ProjectSlice => Boolean(slice));
     const next = aggregateProjection({ slices: orderedSlices, revision: revision + 1 });
-    persist(next);
+    // WHAT: Invalidate the disk snapshot instead of serializing every task after a scoped entity change.
+    // WHY: Normal mutations must not stringify and rewrite the complete Control Room workspace cache.
+    if (incrementalPublish) rmSync(input.cacheFile, { force: true });
+    else persist(next);
     current = next;
     revision = next.revision;
     dirtyAll = false;
@@ -408,7 +412,7 @@ export function createControlRoomProjectionStore(input: { cacheFile: string; tas
   const schedulePublish = (): void => {
     if (rebuildScheduled || latestProjects.length === 0) return;
     rebuildScheduled = true;
-    queueMicrotask(() => {
+    setImmediate(() => {
       rebuildScheduled = false;
       try {
         publish(latestProjects);

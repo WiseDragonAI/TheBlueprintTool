@@ -117,6 +117,9 @@ test('content sources include only replicas advertising the exact current head',
   store.applyManifest('node-a', manifest(firstHash));
   store.applyManifest('node-c', manifest(secondHash));
   assert.deepEqual(store.sources('project-a', key, firstHash), ['node-a', 'node-b']);
+  const conflicted = store.resource('node-a', 'project-a', key);
+  assert.equal(conflicted.conflict, true);
+  assert.deepEqual(conflicted.candidates.map((candidate) => [candidate.ownerNodeId, candidate.hash]), [['node-a', firstHash], ['node-b', firstHash], ['node-c', secondHash]]);
 });
 
 test('corrupt content retains stale verified bytes and retries independently', (context) => {

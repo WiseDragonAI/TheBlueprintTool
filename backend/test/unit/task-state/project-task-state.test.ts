@@ -13,6 +13,19 @@ import { createTaskCurrentStateStore } from '../../../src/business/task-state/he
 import { taskCommandForMutation } from '../../../src/business/task-state/helper/task-mutation-command.js';
 import type { TaskStateDelta } from '../../../src/business/task-state/helper/task-current-state-types.js';
 
+test('configured writer remains read-only until project bootstrap converges', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-write-gate-'));
+  context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });
+  const ledgerPath = resolve(root, 'tasks.json');
+  writeFileSync(ledgerPath, JSON.stringify({ cards: [{ id: 'card-a', title: 'Task', status: 'todo' }], annotations: [], relationships: [] }));
+  let writable = false;
+  const state = createProjectTaskState({ projectId: 'project-a', writerId: 'desktop', decisionOsRoot: root, tasksLedgerFile: ledgerPath, initialize: true, canWrite: () => writable });
+
+  assert.throws(() => state.transitionCardLifecycle('card-a', 'done'), /task_state_bootstrap_incomplete/);
+  writable = true;
+  assert.equal((await state.transitionCardLifecycle('card-a', 'done')).changed, true);
+});
+
 test('task intake publishes no state until its first durable content contribution activates its shards', async (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-project-current-'));
   context.after(async () => { await state.flush(); rmSync(root, { recursive: true, force: true }); });

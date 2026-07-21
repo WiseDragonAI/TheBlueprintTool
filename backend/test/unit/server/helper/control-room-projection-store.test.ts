@@ -4,7 +4,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { controlRoomProjectionFromTaskLedger, createControlRoomProjectionStore } from '@backend/business/server/helper/control-room-projection-store.js';
@@ -221,10 +221,37 @@ test('high fan-out relationship updates remain bounded to 64 task materializatio
   taskProjection = { ledger: changedLedger, conflicts: [] };
 
   store.invalidate(project.id, [{ entityType: 'card', entityId: 'shared-child' }]);
-  await new Promise((resolveWait) => setImmediate(resolveWait));
+  await new Promise((resolveWait) => setImmediate(() => setImmediate(resolveWait)));
 
   const after = store.get([project]) as Record<string, any>;
   assert.equal(after.allTasks.every((task: Record<string, any>) => task.complete === 1), true);
   assert.equal(store.diagnostics().taskMaterializations - before.taskMaterializations, 71);
   assert.equal(store.diagnostics().largestIncrementalBatch, 64);
+});
+
+test('a 10,000-task incremental update yields the event loop before projection work', async (context) => {
+  const { decisionOsRoot, project } = fixture(context);
+  const cards = Array.from({ length: 10_000 }, (_entry, index) => ({
+    id: `master-${String(index).padStart(5, '0')}`,
+    title: `Master ${index}`,
+    labels: ['master-task'],
+    lifecycle: lifecycle('todo', '2026-07-14T10:00:00.000Z'),
+  }));
+  const taskProjection: Record<string, any> = { ledger: { cards, annotations: [], relationships: [] }, conflicts: [] };
+  const store = createControlRoomProjectionStore({
+    cacheFile: join(decisionOsRoot, 'cache', 'control-room-10000.json'),
+    taskProjectionForProject: () => taskProjection,
+  });
+  const before = store.get([project]);
+  cards[5_000] = { ...cards[5_000], lifecycle: lifecycle('done', '2026-07-14T11:00:00.000Z') };
+
+  store.invalidate(project.id, [{ entityType: 'card', entityId: cards[5_000].id }]);
+  const revisionObservedBeforeNextTurn = await Promise.resolve().then(() => store.get([project]).revision);
+  assert.equal(revisionObservedBeforeNextTurn, before.revision);
+  await new Promise((resolveWait) => setImmediate(resolveWait));
+
+  const after = store.get([project]) as Record<string, any>;
+  assert.equal(after.done.some((task: Record<string, unknown>) => task.cardId === cards[5_000].id), true);
+  assert.equal(store.diagnostics().largestIncrementalBatch, 1);
+  assert.equal(existsSync(join(decisionOsRoot, 'cache', 'control-room-10000.json')), false);
 });

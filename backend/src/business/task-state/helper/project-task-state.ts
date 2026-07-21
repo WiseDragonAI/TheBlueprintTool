@@ -31,6 +31,7 @@ export function createProjectTaskState(input: {
   publish?: (delta: TaskStateDelta) => void | Promise<void>;
   publishContent?: (resourceId: string) => void | Promise<void>;
   initialize?: boolean;
+  canWrite?: () => boolean;
 }) {
   const store = createTaskCurrentStateStore({
     decisionOsRoot: input.decisionOsRoot,
@@ -39,6 +40,9 @@ export function createProjectTaskState(input: {
   });
   const contentObjects = createTaskContentObjectStore({ decisionOsRoot: input.decisionOsRoot, projectId: input.projectId });
   let commandQueue = Promise.resolve();
+  const assertWritable = (): void => {
+    if (input.canWrite && !input.canWrite()) throw new Error('task_state_bootstrap_incomplete');
+  };
 
   const publish = async (delta: TaskStateDelta): Promise<void> => {
     if (delta.entities.length > 0) await input.publish?.(delta);
@@ -117,12 +121,14 @@ export function createProjectTaskState(input: {
   };
 
   const executeMutation = (mutation: LedgerMutation, before: AnyRecord, after: AnyRecord): Promise<{ changed: boolean; deltas: TaskStateDelta[]; ledger: AnyRecord }> => {
+    assertWritable();
     const operation = commandQueue.then(() => executeMutationNow(mutation, before, after));
     commandQueue = operation.then(() => undefined, () => undefined);
     return operation;
   };
 
   const transitionCardLifecycle = (taskId: string, status: 'todo' | 'backlog' | 'done'): Promise<{ changed: boolean; deltas: TaskStateDelta[]; ledger: AnyRecord }> => {
+    assertWritable();
     // WHAT: Serialize one lifecycle transition against the latest authoritative projection.
     // WHY: CLI callers do not carry a trusted whole-ledger before/after document.
     const operation = commandQueue.then(async () => {
@@ -147,12 +153,14 @@ export function createProjectTaskState(input: {
   };
 
   const executeProjectionCommand = (command: TaskProjectionCommand, ledger: AnyRecord, emittedAt = new Date().toISOString()): Promise<{ changed: boolean; deltas: TaskStateDelta[]; ledger: AnyRecord }> => {
+    assertWritable();
     const operation = commandQueue.then(() => executeProjectionCommandNow(command, ledger, emittedAt));
     commandQueue = operation.then(() => undefined, () => undefined);
     return operation;
   };
 
   const transitionExecutionIntent = (taskId: string, patch: { id?: string; state: 'waiting' | 'queued' | 'running' | 'terminal' | 'failed'; launchMode?: 'run' | 'pipeline'; error?: string }): Promise<TaskStateDelta> => {
+    assertWritable();
     const operation = commandQueue.then(async () => {
       assertLifecycleConflictFree([taskId]);
       const card = Array.isArray(store.projection().ledger.cards)
@@ -183,8 +191,8 @@ export function createProjectTaskState(input: {
     transitionCardLifecycle,
     executeProjectionCommand,
     executeProjectionCommandNow,
-    activateTask,
-    recordContentContribution,
+    activateTask: (taskId: string) => { assertWritable(); return activateTask(taskId); },
+    recordContentContribution: (taskId: string, resourceIds: string | string[]) => { assertWritable(); return recordContentContribution(taskId, resourceIds); },
     transitionExecutionIntent,
     flush: store.flush,
     projection: store.projection,

@@ -77,11 +77,16 @@ export function createFederationContentReplicaStore(input: { decisionOsRoot: str
         resource.error = error;
       }
     },
-    resource(ownerNodeId: string, projectId: string, key: string): { state: FederationContentState; file: string | null; error: string } {
+    resource(ownerNodeId: string, projectId: string, key: string): { state: FederationContentState; file: string | null; error: string; conflict: boolean; candidates: Array<{ ownerNodeId: string; hash: string; type: string }> } {
       const resource = resources.get(resourceId(ownerNodeId, projectId, key));
-      if (!resource) return { state: 'missing', file: null, error: '' };
+      const candidates = [...resources.values()]
+        .filter((entry) => entry.projectId === projectId && entry.key === key)
+        .map((entry) => ({ ownerNodeId: entry.ownerNodeId, hash: entry.hash, type: entry.type }))
+        .sort((left, right) => left.ownerNodeId.localeCompare(right.ownerNodeId) || left.hash.localeCompare(right.hash));
+      const conflict = new Set(candidates.map((candidate) => `${candidate.type}\u0000${candidate.hash}`)).size > 1;
+      if (!resource) return { state: 'missing', file: null, error: '', conflict, candidates };
       const file = objectFile(resource.hash);
-      return { state: resource.state, file: existsSync(file) ? file : null, error: resource.error };
+      return { state: resource.state, file: existsSync(file) ? file : null, error: resource.error, conflict, candidates };
     },
     sources(projectId: string, key: string, hash: string): string[] {
       return [...resources.values()]

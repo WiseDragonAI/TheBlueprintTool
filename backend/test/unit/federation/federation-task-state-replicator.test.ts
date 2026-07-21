@@ -38,6 +38,7 @@ async function waitFor(predicate: () => boolean, timeoutMs = 1_000): Promise<voi
 function relayHarness(relayStore: TaskCurrentStateStore) {
   const nodes = new Map<string, { online: boolean; replicator: Replicator }>();
   const pending = new Set<Promise<void>>();
+  let relaySequence = Promise.resolve();
   const deliver = (nodeId: string, frame: Omit<FederationStateFrame, 'from'>): void => {
     const node = nodes.get(nodeId);
     if (node?.online) queueMicrotask(() => {
@@ -46,13 +47,41 @@ function relayHarness(relayStore: TaskCurrentStateStore) {
       void operation.finally(() => pending.delete(operation));
     });
   };
+  const processRelayFrame = async (from: string, frame: Omit<FederationStateFrame, 'from'>): Promise<void> => {
+    const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload as Record<string, unknown> : {};
+    if (frame.type === 'state-entity-batch') {
+      const entries = Array.isArray(payload.entries) ? payload.entries as Array<{ key: string; stateHash: string; entity: TaskCurrentEntity }> : [];
+      const entities = entries.map((entry) => entry.entity);
+      const result = await relayStore.merge({ version: taskCurrentStateVersion, projectId: frame.projectId, entities });
+      deliver(from, { type: 'state-relay-ack', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, deliveryId: payload.deliveryId, accepted: entries.map((entry) => ({ key: entry.key, stateHash: relayStore.entity(entry.entity.entityType, entry.entity.entityId)?.stateHash })), root: relayStore.rootHash() } });
+      if (result.changed) for (const nodeId of nodes.keys()) if (nodeId !== from) deliver(nodeId, { type: 'state-entity-batch', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, deliveryId: crypto.randomUUID(), entries: result.delta.entities.map((entity) => ({ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash, entity })) } });
+    }
+    if (frame.type === 'state-bucket-summary') {
+      const remote = Array.isArray(payload.buckets) ? payload.buckets as TaskCurrentBucket[] : [];
+      const buckets = mismatched(relayStore.bucketManifest(), remote);
+      if (buckets.length > 0) {
+        const entities = relayStore.entitiesForBuckets(buckets);
+        deliver(from, { type: 'state-entity-batch', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, deliveryId: crypto.randomUUID(), entries: entities.map((entity) => ({ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash, entity })) } });
+        deliver(from, { type: 'state-missing-request', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, buckets } });
+      }
+      deliver(from, { type: 'state-bucket-summary', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, root: relayStore.rootHash(), buckets: relayStore.bucketManifest() } });
+    }
+    if (frame.type === 'state-subscribe') deliver(from, { type: 'state-bucket-summary', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, root: relayStore.rootHash(), buckets: relayStore.bucketManifest() } });
+    if (frame.type === 'state-missing-request') {
+      const buckets = Array.isArray(payload.buckets) ? payload.buckets.map(String) : [];
+      const entities = relayStore.entitiesForBuckets(buckets);
+      deliver(from, { type: 'state-entity-batch', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, deliveryId: crypto.randomUUID(), entries: entities.map((entity) => ({ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash, entity })) } });
+    }
+  };
   return {
     register(nodeId: string, replicator: Replicator): void { nodes.set(nodeId, { online: true, replicator }); },
     online(nodeId: string, value: boolean): void { nodes.get(nodeId)!.online = value; },
     async settle(): Promise<void> {
+      await relaySequence;
       await Promise.resolve();
       while (pending.size > 0) {
         await Promise.all([...pending]);
+        await relaySequence;
         await Promise.resolve();
       }
     },
@@ -62,32 +91,9 @@ function relayHarness(relayStore: TaskCurrentStateStore) {
         if (node?.online) await node.replicator.handleFrame({ ...frame, from });
         return;
       }
-      const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload as Record<string, unknown> : {};
-      if (frame.type === 'state-entity-batch') {
-        const entries = Array.isArray(payload.entries) ? payload.entries as Array<{ key: string; stateHash: string; entity: TaskCurrentEntity }> : [];
-        const entities = entries.map((entry) => entry.entity);
-        const result = await relayStore.merge({ version: taskCurrentStateVersion, projectId: frame.projectId, entities });
-        deliver(from, { type: 'state-relay-ack', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, deliveryId: payload.deliveryId, accepted: entries.map((entry) => ({ key: entry.key, stateHash: relayStore.entity(entry.entity.entityType, entry.entity.entityId)?.stateHash })), root: relayStore.rootHash() } });
-        if (result.changed) for (const nodeId of nodes.keys()) if (nodeId !== from) deliver(nodeId, { type: 'state-entity-batch', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, deliveryId: crypto.randomUUID(), entries: result.delta.entities.map((entity) => ({ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash, entity })) } });
-      }
-      if (frame.type === 'state-bucket-summary') {
-        const remote = Array.isArray(payload.buckets) ? payload.buckets as TaskCurrentBucket[] : [];
-        const buckets = mismatched(relayStore.bucketManifest(), remote);
-        if (buckets.length > 0) {
-          const entities = relayStore.entitiesForBuckets(buckets);
-          deliver(from, { type: 'state-entity-batch', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, deliveryId: crypto.randomUUID(), entries: entities.map((entity) => ({ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash, entity })) } });
-          deliver(from, { type: 'state-missing-request', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, buckets } });
-        }
-        deliver(from, { type: 'state-bucket-summary', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, root: relayStore.rootHash(), buckets: relayStore.bucketManifest() } });
-      }
-      if (frame.type === 'state-subscribe') {
-        deliver(from, { type: 'state-bucket-summary', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, root: relayStore.rootHash(), buckets: relayStore.bucketManifest() } });
-      }
-      if (frame.type === 'state-missing-request') {
-        const buckets = Array.isArray(payload.buckets) ? payload.buckets.map(String) : [];
-        const entities = relayStore.entitiesForBuckets(buckets);
-        deliver(from, { type: 'state-entity-batch', projectId: frame.projectId, payload: { stateVersion: taskCurrentStateVersion, deliveryId: crypto.randomUUID(), entries: entities.map((entity) => ({ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash, entity })) } });
-      }
+      const operation = relaySequence.then(() => processRelayFrame(from, frame));
+      relaySequence = operation.catch(() => undefined);
+      await operation;
     },
   };
 }

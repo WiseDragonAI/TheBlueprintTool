@@ -90,6 +90,8 @@ export function createFederationTaskStateReplicator(input: {
     const dirty = dirtyFor(delta.projectId);
     for (const entity of delta.entities) dirty.set(taskCurrentEntityKey(entity), entity);
     publishEntities('relay', delta.projectId, [...dirty.values()]);
+    const store = input.stores().get(delta.projectId);
+    if (store) advertise('relay', delta.projectId, store);
   };
 
   const reconcileRelay = (): void => {
@@ -158,6 +160,11 @@ export function createFederationTaskStateReplicator(input: {
       }
       pendingDeliveries.delete(deliveryId);
       if (dirty?.size === 0) runtimeDirty.delete(frame.projectId);
+      const relayRoot = String(payload.root ?? '');
+      const localRoot = store.rootHash();
+      const converged = Boolean(relayRoot && relayRoot === localRoot);
+      convergence.set(`relay\u0000${frame.projectId}`, { projectId: frame.projectId, converged, lastRepairAt: new Date().toISOString(), missingBuckets: [], root: localRoot });
+      if (!converged) advertise('relay', frame.projectId, store);
     }
   };
 
