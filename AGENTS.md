@@ -99,6 +99,12 @@
   stop, replace, or launch the Decision OS server while preparing a browser test
   unless the operator explicitly requests a server restart.
 
+## Operator Browser Ownership
+
+- **Never open, control, navigate, or interact with the operator's browser.** This includes invoking a CLI flow that automatically opens a browser, such as `wrangler login` with its default browser behavior.
+- Use existing non-interactive credentials for authenticated operations.
+- When operator authentication is unavoidable, run the provider's no-browser flow, give the operator the URL, and wait for the operator to complete the browser interaction.
+
 ## decision-os Server Procedure
 
 ### Server Restart Ownership
