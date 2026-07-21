@@ -404,6 +404,8 @@ test('requires an explicit project choice before creating a new task intake', ()
   assert.match(mobile, /document\.querySelectorAll\('\.new-task-button'\)\.forEach\(\(button\) => button\.addEventListener\('click', openNewTaskProjectModal\)\)/);
   assert.match(mobile, /await createTaskIntake\(project\.id, project\.selectedReplicaNodeId\)/);
   assert.match(mobile, /async function createTaskIntake\(projectId, replicaNodeId\) \{\s*setResourceProject\(projectId\)/);
+  assert.match(mobile, /replicationState: 'local-only', persistenceState: 'creating'/);
+  assert.match(mobile, /const locallyOwned = localCard\?\.persistenceState === 'creating' \|\| localCard\?\.persistenceState === 'failed';[\s\S]*let card = locallyOwned \? localCard : null;[\s\S]*if \(!card\) \{[\s\S]*projectFetch\(`\/api\/ledgers\/\$\{encodeURIComponent\(ledgerId\)\}\/cards/);
   const projectPicker = mobile.slice(mobile.indexOf('function openNewTaskProjectModal()'), mobile.indexOf('function cardOverlapArea'));
   assert.match(html, /class="new-task-node-tabs" role="tablist" aria-label="Choose a node"/);
   assert.match(html, /id="new-task-project-panel" class="new-task-project-list" role="tabpanel"/);

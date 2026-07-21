@@ -1809,7 +1809,7 @@ async function createTaskIntake(projectId, replicaNodeId) {
   const markdown = `Ledger: ${ledgerRef.title}\nWaiting since: ${timestamp}\n\n## Intake\n\nDescribe the task in this thread, attach the required files, then launch Codex. Categorize the task, keep this mandatory new zone, rename this master task and zone, create actionable subtask cards in this zone, and write canonical relationship-backed card links under \`## Subtasks\`.\n\n## Subtasks\n`;
   const card = { id: cardId, title: 'New task intake', cardType: 'note', domainId: ledgerRef.id, status: 'todo', labels: ['master-task'], x: rect.x + 60, y: rect.y + 60, w: 360, h: 240, comment: { what: markdown }, facts: [], fields: [] };
   ledger.annotations = [...(ledger.annotations ?? []), zone];
-  ledger.cards = [...(ledger.cards ?? []), { ...card, replicationState: 'local-only' }];
+  ledger.cards = [...(ledger.cards ?? []), { ...card, replicationState: 'local-only', persistenceState: 'creating' }];
   ledger.threadFiles = { ...(ledger.threadFiles ?? {}), [`thread-${cardId}`]: `.decision-os/threads/tasks/thread-${cardId}.md` };
   ledger.notes = { ...(ledger.notes ?? {}), [`thread-${cardId}`]: [] };
   state.activeZoneId = zone.id;
@@ -2569,17 +2569,22 @@ async function loadRoute({ retainView = false } = {}) {
     const zones = ledgerZones();
     const zone = zoneMarker === 'zones' ? zones.find((entry) => String(entry.id) === requestedZone) : null;
     if (zone && cardMarker === 'cards' && requestedCard) {
-      const detailResponse = await projectFetch(`/api/ledgers/${encodeURIComponent(ledgerId)}/cards/${encodeURIComponent(requestedCard)}`, { cache: 'no-store', signal: owner.signal }, owner.route.projectId);
-      requireRouteOwnership(owner);
-      if (detailResponse.status === 202) {
-        const pending = await detailResponse.json();
+      const localCard = state.ledger.cards?.find((entry) => String(entry.id) === requestedCard);
+      const locallyOwned = localCard?.persistenceState === 'creating' || localCard?.persistenceState === 'failed';
+      let card = locallyOwned ? localCard : null;
+      if (!card) {
+        const detailResponse = await projectFetch(`/api/ledgers/${encodeURIComponent(ledgerId)}/cards/${encodeURIComponent(requestedCard)}`, { cache: 'no-store', signal: owner.signal }, owner.route.projectId);
         requireRouteOwnership(owner);
-        renderTaskReplicaShell(taskForCurrentRoute(), pending.replica);
-        replicaRetryTimer = window.setTimeout(() => void loadRoute({ retainView: true }), 500);
-        return;
+        if (detailResponse.status === 202) {
+          const pending = await detailResponse.json();
+          requireRouteOwnership(owner);
+          renderTaskReplicaShell(taskForCurrentRoute(), pending.replica);
+          replicaRetryTimer = window.setTimeout(() => void loadRoute({ retainView: true }), 500);
+          return;
+        }
+        card = detailResponse.ok ? await detailResponse.json() : null;
+        requireRouteOwnership(owner);
       }
-      const card = detailResponse.ok ? await detailResponse.json() : null;
-      requireRouteOwnership(owner);
       if (card) {
         state.ledger.cards = state.ledger.cards.map((entry) => String(entry.id) === requestedCard ? card : entry);
         state.activeZoneId = asText(zone.id);
