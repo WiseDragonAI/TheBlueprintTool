@@ -5,6 +5,22 @@
   "runs": [],
   "skillLibrary": [
     {
+      "skillName": "task-dependency",
+      "favorite": true,
+      "tags": [],
+      "defaultCodexModel": null,
+      "defaultCodexEffort": null,
+      "updatedAt": "2026-07-17T04:51:46.105Z"
+    },
+    {
+      "skillName": "implementation-orchestrator",
+      "favorite": true,
+      "tags": [],
+      "defaultCodexModel": null,
+      "defaultCodexEffort": null,
+      "updatedAt": "2026-07-17T04:51:58.636Z"
+    },
+    {
       "skillName": "retrospect-and-close-task",
       "favorite": true,
       "tags": [
@@ -12,7 +28,7 @@
       ],
       "defaultCodexModel": null,
       "defaultCodexEffort": null,
-      "updatedAt": "2026-07-15T07:09:58.955Z"
+      "updatedAt": "2026-07-17T12:46:01.150Z"
     }
   ],
   "activeWorkspaceRun": null

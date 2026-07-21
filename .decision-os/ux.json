@@ -24,7 +24,10 @@
         "contentFile": ".decision-os/cards/ux/card-c1cc1c4e-8d7f-4ae5-a17f-fbf58e2400a0.md"
       },
       "codexThreadRunId": "codex-skill-1783657339422-ac1bcf95",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/ux/codex-skill-1783657339422-ac1bcf95.md"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/ux/codex-skill-1783657339422-ac1bcf95.md",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783657339422-ac1bcf95": ".decision-os/runs/codex-skills/ux/codex-skill-1783657339422-ac1bcf95.md"
+      }
     },
     {
       "id": "card-codex-skill-1783658255872-5630c522",
@@ -85,7 +88,10 @@
         "contentFile": ".decision-os/cards/ux/card-abac2167-dab1-4bfc-ae6d-f04d076349cc.md"
       },
       "codexThreadRunId": "codex-skill-1783675125974-3a559810",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/ux/codex-skill-1783675125974-3a559810.md"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/ux/codex-skill-1783675125974-3a559810.md",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783675125974-3a559810": ".decision-os/runs/codex-skills/ux/codex-skill-1783675125974-3a559810.md"
+      }
     },
     {
       "id": "card-codex-skill-1783675746962-60884f4b",
@@ -110,7 +116,10 @@
         }
       },
       "codexRunModel": "gpt-5.6-sol",
-      "codexRunEffort": "xhigh"
+      "codexRunEffort": "xhigh",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783685269400-40d079f1": ".decision-os/runs/codex-skills/ux/codex-skill-1783685269400-40d079f1.md"
+      }
     },
     {
       "id": "card-codex-pipeline-1783688836866-ad0fcd4b-step-1",

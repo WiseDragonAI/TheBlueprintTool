@@ -53,7 +53,10 @@
         "contentFile": ".decision-os/cards/skills/card-1ed7edae-2bff-4f0e-a922-1bb57a0b6e93.md"
       },
       "codexThreadRunId": "codex-skill-1783484948226-1a5d65cd",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783484948226-1a5d65cd.md"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783484948226-1a5d65cd.md",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783484948226-1a5d65cd": ".decision-os/runs/codex-skills/skills/codex-skill-1783484948226-1a5d65cd.md"
+      }
     },
     {
       "id": "card-codex-skill-1783485668635-1989a1e2",
@@ -84,7 +87,10 @@
         "contentFile": ".decision-os/cards/skills/card-4b63370d-41b1-44e7-be0a-3f3980744bee.md"
       },
       "codexThreadRunId": "codex-skill-1783493766495-deea83eb",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783493766495-deea83eb.md"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783493766495-deea83eb.md",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783493766495-deea83eb": ".decision-os/runs/codex-skills/skills/codex-skill-1783493766495-deea83eb.md"
+      }
     },
     {
       "id": "card-c48369dc-1d97-4c6c-ab36-fd01d819d03a",
@@ -100,7 +106,10 @@
         "contentFile": ".decision-os/cards/skills/card-c48369dc-1d97-4c6c-ab36-fd01d819d03a.md"
       },
       "codexThreadRunId": "codex-skill-1783500587763-e734fec7",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783500587763-e734fec7.md"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783500587763-e734fec7.md",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783500587763-e734fec7": ".decision-os/runs/codex-skills/skills/codex-skill-1783500587763-e734fec7.md"
+      }
     },
     {
       "id": "card-skill-ticket-solver",
@@ -116,7 +125,10 @@
         "contentFile": ".decision-os/cards/skills/card-skill-ticket-solver.md"
       },
       "codexThreadRunId": "codex-skill-1783503287807-7f582d60",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783503287807-7f582d60.md"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783503287807-7f582d60.md",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783503287807-7f582d60": ".decision-os/runs/codex-skills/skills/codex-skill-1783503287807-7f582d60.md"
+      }
     },
     {
       "id": "card-skill-executor-spec",
@@ -132,7 +144,10 @@
         "contentFile": ".decision-os/cards/skills/card-skill-executor-spec.md"
       },
       "codexThreadRunId": "codex-skill-1783504256943-c9bea42a",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783504256943-c9bea42a.md"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783504256943-c9bea42a.md",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783504256943-c9bea42a": ".decision-os/runs/codex-skills/skills/codex-skill-1783504256943-c9bea42a.md"
+      }
     },
     {
       "id": "card-skill-executor-implement",
@@ -148,7 +163,10 @@
         "contentFile": ".decision-os/cards/skills/card-skill-executor-implement.md"
       },
       "codexThreadRunId": "codex-skill-1783504259043-dfa18c30",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783504259043-dfa18c30.md"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783504259043-dfa18c30.md",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783504259043-dfa18c30": ".decision-os/runs/codex-skills/skills/codex-skill-1783504259043-dfa18c30.md"
+      }
     },
     {
       "id": "card-skill-feature-analyzer",
@@ -164,7 +182,10 @@
         "contentFile": ".decision-os/cards/skills/card-skill-feature-analyzer.md"
       },
       "codexThreadRunId": "codex-skill-1783503513198-b5b9a85e",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783503513198-b5b9a85e.md"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783503513198-b5b9a85e.md",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783503513198-b5b9a85e": ".decision-os/runs/codex-skills/skills/codex-skill-1783503513198-b5b9a85e.md"
+      }
     },
     {
       "id": "card-skill-feature-planner",
@@ -180,7 +201,10 @@
         "contentFile": ".decision-os/cards/skills/card-skill-feature-planner.md"
       },
       "codexThreadRunId": "codex-skill-1783503301885-0800fad0",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.md"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.md",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783503301885-0800fad0": ".decision-os/runs/codex-skills/skills/codex-skill-1783503301885-0800fad0.md"
+      }
     },
     {
       "id": "card-b1ccfc6f-dbda-409c-949d-b6f5a1caf4c9",
@@ -196,7 +220,10 @@
         "contentFile": ".decision-os/cards/skills/card-b1ccfc6f-dbda-409c-949d-b6f5a1caf4c9.md"
       },
       "codexThreadRunId": "codex-skill-1783502442976-6a35722a",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783502442976-6a35722a.md"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783502442976-6a35722a.md",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783502442976-6a35722a": ".decision-os/runs/codex-skills/skills/codex-skill-1783502442976-6a35722a.md"
+      }
     },
     {
       "id": "card-skill-task-list",
@@ -212,7 +239,10 @@
         "contentFile": ".decision-os/cards/skills/card-skill-task-list.md"
       },
       "codexThreadRunId": "codex-skill-1783575881639-ff6eb75e",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783575881639-ff6eb75e.md"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783575881639-ff6eb75e.md",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783575881639-ff6eb75e": ".decision-os/runs/codex-skills/skills/codex-skill-1783575881639-ff6eb75e.md"
+      }
     },
     {
       "id": "card-skill-task-dependency",
@@ -228,7 +258,10 @@
         "contentFile": ".decision-os/cards/skills/card-skill-task-dependency.md"
       },
       "codexThreadRunId": "codex-skill-1783591962144-75235572",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783591962144-75235572.md"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783591962144-75235572.md",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783591962144-75235572": ".decision-os/runs/codex-skills/skills/codex-skill-1783591962144-75235572.md"
+      }
     },
     {
       "id": "card-skill-task-group-completeness",
@@ -244,7 +277,10 @@
         "contentFile": ".decision-os/cards/skills/card-skill-task-group-completeness.md"
       },
       "codexThreadRunId": "codex-skill-1783595986671-340f42bc",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783595986671-340f42bc.md"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783595986671-340f42bc.md",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783595986671-340f42bc": ".decision-os/runs/codex-skills/skills/codex-skill-1783595986671-340f42bc.md"
+      }
     },
     {
       "id": "card-skill-implementation-orchestrator",
@@ -260,7 +296,10 @@
         "contentFile": ".decision-os/cards/skills/card-skill-implementation-orchestrator.md"
       },
       "codexThreadRunId": "codex-skill-1783596089570-85eceea5",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783596089570-85eceea5": ".decision-os/runs/codex-skills/skills/codex-skill-1783596089570-85eceea5.md"
+      }
     },
     {
       "id": "card-skill-test-failure-attribution",
@@ -276,7 +315,10 @@
         "contentFile": ".decision-os/cards/skills/card-skill-test-failure-attribution.md"
       },
       "codexThreadRunId": "codex-skill-1783596100402-f1141ac6",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783596100402-f1141ac6.md"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783596100402-f1141ac6.md",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783596100402-f1141ac6": ".decision-os/runs/codex-skills/skills/codex-skill-1783596100402-f1141ac6.md"
+      }
     },
     {
       "id": "card-skill-root-cause-analysis",
@@ -292,7 +334,10 @@
         "contentFile": ".decision-os/cards/skills/card-skill-root-cause-analysis.md"
       },
       "codexThreadRunId": "codex-skill-1783596105902-590900c8",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783596105902-590900c8.md"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783596105902-590900c8.md",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783596105902-590900c8": ".decision-os/runs/codex-skills/skills/codex-skill-1783596105902-590900c8.md"
+      }
     },
     {
       "id": "card-skill-quality-improvement-orchestrator",
@@ -308,7 +353,10 @@
         "contentFile": ".decision-os/cards/skills/card-skill-quality-improvement-orchestrator.md"
       },
       "codexThreadRunId": "codex-skill-1783616081067-24f9c553",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783616081067-24f9c553.md"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783616081067-24f9c553.md",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783616081067-24f9c553": ".decision-os/runs/codex-skills/skills/codex-skill-1783616081067-24f9c553.md"
+      }
     },
     {
       "id": "card-5f44b483-86f4-4144-a497-b5e88bea52b8",
@@ -324,7 +372,10 @@
         "contentFile": ".decision-os/cards/skills/card-5f44b483-86f4-4144-a497-b5e88bea52b8.md"
       },
       "codexThreadRunId": "codex-skill-1783589922957-864e7bb8",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783589922957-864e7bb8.md"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783589922957-864e7bb8.md",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783589922957-864e7bb8": ".decision-os/runs/codex-skills/skills/codex-skill-1783589922957-864e7bb8.md"
+      }
     },
     {
       "id": "card-ca4f17e2-75b4-4487-a48e-6ef87f08367d",
@@ -342,7 +393,10 @@
       "codexThreadRunId": "codex-skill-1783696332640-09940894",
       "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783696332640-09940894.md",
       "codexRunModel": "gpt-5.6-sol",
-      "codexRunEffort": "high"
+      "codexRunEffort": "high",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783696332640-09940894": ".decision-os/runs/codex-skills/skills/codex-skill-1783696332640-09940894.md"
+      }
     },
     {
       "id": "card-93221cb2-549d-4549-aacc-4831a1f78441",
@@ -360,7 +414,10 @@
       "codexThreadRunId": "codex-skill-1783667143605-e77acc97",
       "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783667143605-e77acc97.md",
       "codexRunModel": "gpt-5.6-sol",
-      "codexRunEffort": "high"
+      "codexRunEffort": "high",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783667143605-e77acc97": ".decision-os/runs/codex-skills/skills/codex-skill-1783667143605-e77acc97.md"
+      }
     },
     {
       "id": "card-30d002e7-b3c9-460b-94e7-1824470ed4c9",
@@ -379,7 +436,10 @@
         "contentFile": ".decision-os/cards/skills/card-30d002e7-b3c9-460b-94e7-1824470ed4c9.md"
       },
       "codexThreadRunId": "codex-skill-1783670036717-bd2186ca",
-      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783670036717-bd2186ca.md"
+      "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783670036717-bd2186ca.md",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783670036717-bd2186ca": ".decision-os/runs/codex-skills/skills/codex-skill-1783670036717-bd2186ca.md"
+      }
     },
     {
       "id": "card-71f7c07c-4f27-4026-b2af-239b8e2c1005",
@@ -397,7 +457,10 @@
       "codexThreadRunId": "codex-skill-1783694490329-39f15ef5",
       "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783694490329-39f15ef5.md",
       "codexRunModel": "gpt-5.6-sol",
-      "codexRunEffort": "high"
+      "codexRunEffort": "high",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783694490329-39f15ef5": ".decision-os/runs/codex-skills/skills/codex-skill-1783694490329-39f15ef5.md"
+      }
     },
     {
       "id": "card-44811f32-2b0b-4fa8-89bf-394730ba4fe6",
@@ -415,7 +478,10 @@
       "codexThreadRunId": "codex-skill-1783695160258-f3579dfa",
       "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/skills/codex-skill-1783695160258-f3579dfa.md",
       "codexRunModel": "gpt-5.6-sol",
-      "codexRunEffort": "high"
+      "codexRunEffort": "high",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783695160258-f3579dfa": ".decision-os/runs/codex-skills/skills/codex-skill-1783695160258-f3579dfa.md"
+      }
     },
     {
       "id": "card-codex-skill-1783695871406-24cf389e",

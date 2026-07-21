@@ -26,7 +26,10 @@
       "codexThreadRunId": "codex-skill-1783696545661-dd36fee2",
       "codexThreadRunOutputFile": ".decision-os/runs/codex-skills/next-features/codex-skill-1783696545661-dd36fee2.md",
       "codexRunModel": "gpt-5.6-sol",
-      "codexRunEffort": "xhigh"
+      "codexRunEffort": "xhigh",
+      "codexThreadRunOutputFiles": {
+        "codex-skill-1783696545661-dd36fee2": ".decision-os/runs/codex-skills/next-features/codex-skill-1783696545661-dd36fee2.md"
+      }
     }
   ],
   "annotations": [
