@@ -73,15 +73,22 @@ function epochResourceEntities(entities: LegacyEntity[]): TaskCurrentEntity[] {
   }));
 }
 
-function baselineResourceEntities(projectId: string, heads: TaskContentHead[]): TaskCurrentEntity[] {
-  const replicaId = 'baseline-content';
+function baselineResourceEntities(projectId: string, heads: TaskContentHead[], replicaId: string, counter: number): TaskCurrentEntity[] {
   return heads.map((head) => finalizeTaskCurrentEntity({
     version: taskCurrentStateVersion,
     projectId,
     entityType: 'resource',
     entityId: head.key,
-    fields: { head: { clock: { [replicaId]: 1 }, candidates: [{ dot: { replicaId, counter: 1 }, operation: 'set', value: head }] } },
+    fields: { head: { clock: { [replicaId]: counter }, candidates: [{ dot: { replicaId, counter }, operation: 'set', value: head }] } },
   }));
+}
+
+function migrationCounter(entities: LegacyEntity[], nodeId: string): number {
+  let maximum = 0;
+  for (const entity of entities) {
+    for (const register of Object.values(entity.fields)) maximum = Math.max(maximum, register.clock[nodeId] ?? 0);
+  }
+  return maximum + 1;
 }
 
 function recoveredPresenceEntities(projectId: string, entities: LegacyEntity[], store: ReturnType<typeof createTaskCurrentStateStore>): TaskCurrentEntity[] {
@@ -162,7 +169,8 @@ async function atomicWrite(file: string, value: string | Buffer): Promise<void> 
   await rename(temporary, file);
 }
 
-export async function migrateTaskCurrentState(input: { decisionOsRoot: string; projectId: string; tasksLedgerFile: string; backupRoot?: string; sourceStateRoots?: string[] }): Promise<{ backup: string; root: string; baselineRoot: string; report: string }> {
+export async function migrateTaskCurrentState(input: { decisionOsRoot: string; projectId: string; nodeId: string; tasksLedgerFile: string; backupRoot?: string; sourceStateRoots?: string[] }): Promise<{ backup: string; root: string; baselineRoot: string; report: string }> {
+  if (!/^[a-zA-Z0-9_-]+$/.test(input.nodeId)) throw new Error('invalid_task_migration_node_id');
   const activeRoot = resolve(input.decisionOsRoot, 'task-state', input.projectId);
   const activeFormatFile = resolve(activeRoot, 'format.json');
   if (existsSync(activeFormatFile)) {
@@ -173,6 +181,7 @@ export async function migrateTaskCurrentState(input: { decisionOsRoot: string; p
   const sourceStateRoots = [...new Set([activeRoot, ...(input.sourceStateRoots ?? []).map((root) => resolve(root))])];
   const projectionSources = prepareProjectionSources({ stateRoots: sourceStateRoots.slice(1), projectId: input.projectId, decisionOsRoot: input.decisionOsRoot });
   const source = projectionSource(sourceStateRoots, input.tasksLedgerFile, input.projectId, input.decisionOsRoot, projectionSources);
+  const baselineCounter = migrationCounter(source.legacyEntities, input.nodeId);
   const hydrated = structuredClone(source.ledger ?? {});
   // WHAT: Complete every semantic and relationship check before mutating project files.
   // WHY: A failed preflight must leave the legacy store and sidecars byte-identical.
@@ -197,7 +206,13 @@ export async function migrateTaskCurrentState(input: { decisionOsRoot: string; p
   const ledger = prepared.ledger;
   await atomicWrite(input.tasksLedgerFile, `${JSON.stringify(stripHydratedThreadNotes(structuredClone(ledger)), null, 2)}\n`);
 
-  const store = createTaskCurrentStateStore({ decisionOsRoot: input.decisionOsRoot, projectId: input.projectId, initializeLedger: ledger, deferFormat: true });
+  const store = createTaskCurrentStateStore({
+    decisionOsRoot: input.decisionOsRoot,
+    projectId: input.projectId,
+    initializeLedger: ledger,
+    initializeReplica: { replicaId: input.nodeId, counter: baselineCounter },
+    deferFormat: true,
+  });
   const restoredObjects = await restoreTaskContentObjects(backedUpSourceRoots, store.root);
   const projectionObjects = new Map<string, Buffer>();
   for (const content of projectionSources.flatMap((source) => source.content)) projectionObjects.set(createHash('sha256').update(content.bytes).digest('hex'), content.bytes);
@@ -223,7 +238,7 @@ export async function migrateTaskCurrentState(input: { decisionOsRoot: string; p
   const objects = createTaskContentObjectStore({ decisionOsRoot: input.decisionOsRoot, projectId: input.projectId });
   const manifest = buildFederationContentManifest({ projectId: input.projectId, decisionOsRoot: input.decisionOsRoot, ledger });
   const heads = (await Promise.all(manifest.resources.map((resource) => objects.capture(resource.key)))).filter((head) => head !== null);
-  await mergeEntityBatches(store, input.projectId, [...baselineResourceEntities(input.projectId, heads), ...epochResourceEntities(source.legacyEntities), ...projectionSources.flatMap((source) => source.resourceEntities)]);
+  await mergeEntityBatches(store, input.projectId, [...baselineResourceEntities(input.projectId, heads, input.nodeId, baselineCounter), ...epochResourceEntities(source.legacyEntities), ...projectionSources.flatMap((source) => source.resourceEntities)]);
   await store.flush();
   for (const head of store.contentHeads()) {
     // WHAT: Fail cutover when a retained source head lacks its immutable bytes.
@@ -248,6 +263,8 @@ export async function migrateTaskCurrentState(input: { decisionOsRoot: string; p
   await atomicWrite(report, `${JSON.stringify({
     version: 1,
     projectId: input.projectId,
+    nodeId: input.nodeId,
+    baselineCounter,
     backup,
     sourceValueAudit: prepared.lifecycleAudit,
     bodyRewriteReport: prepared.bodyRewrites.map(({ before, after, ...entry }) => ({ ...entry, beforeHash: createHash('sha256').update(before).digest('hex'), afterHash: createHash('sha256').update(after).digest('hex') })),

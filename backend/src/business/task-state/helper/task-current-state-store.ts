@@ -34,7 +34,13 @@ import {
 } from './task-current-state-types.js';
 
 type JournalDocument = { version: 3; mutation?: TaskMutationBatch; delta?: TaskStateDelta; activateTaskId?: string };
-type StoreOptions = { decisionOsRoot: string; projectId: string; initializeLedger?: Record<string, unknown>; deferFormat?: boolean };
+type StoreOptions = {
+  decisionOsRoot: string;
+  projectId: string;
+  initializeLedger?: Record<string, unknown>;
+  initializeReplica?: { replicaId: string; counter: number };
+  deferFormat?: boolean;
+};
 
 function emptyProjection(projectId: string): TaskCurrentProjection {
   return { version: taskCurrentStateVersion, projectId, ledger: { cards: [], annotations: [], relationships: [] }, conflicts: [], clock: {} };
@@ -149,14 +155,16 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
 
   const initialize = (): void => {
     mkdirSync(journalDirectory, { recursive: true });
+    const replicaId = options.initializeReplica?.replicaId ?? 'baseline';
+    const counter = options.initializeReplica?.counter ?? 1;
     const batch: TaskMutationBatch = {
       version: taskCurrentStateVersion,
       batchId: 'baseline',
       projectId: options.projectId,
-      replicaId: 'baseline',
+      replicaId,
       emittedAt: new Date(0).toISOString(),
-      dot: { replicaId: 'baseline', counter: 1 },
-      context: {},
+      dot: { replicaId, counter },
+      context: counter > 1 ? { [replicaId]: counter - 1 } : {},
       changes: taskCurrentBaselineChanges(options.initializeLedger ?? {}),
       activationTaskId: '',
       replication: 'active',

@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import test from 'node:test';
 import { createTaskCurrentStateStore } from '../../../src/business/task-state/helper/task-current-state-store.js';
+import { finalizeTaskCurrentEntity, joinTaskEntities } from '../../../src/business/task-state/helper/task-current-state-join.js';
 
 function store(prefix: string, projectId = 'project-a') {
   const root = mkdtempSync(resolve(tmpdir(), prefix));
@@ -64,4 +65,15 @@ test('identical concurrent writes retain both causal origins for a later one-sid
   await a.value.merge(oneSided.delta);
   assert.equal(a.value.projection().conflicts.length, 1);
   assert.deepEqual(a.value.projection().conflicts[0].candidates.map((candidate) => (candidate.value as Record<string, unknown>).status).sort(), ['done', 'todo']);
+});
+
+test('rejects different values that reuse one causal dot', () => {
+  const entity = (value: string) => finalizeTaskCurrentEntity({
+    version: 3,
+    projectId: 'project-a',
+    entityType: 'card',
+    entityId: 'card-a',
+    fields: { title: { clock: { workstation: 1 }, candidates: [{ dot: { replicaId: 'workstation', counter: 1 }, operation: 'set' as const, value }] } },
+  });
+  assert.throws(() => joinTaskEntities(entity('Left'), entity('Right')), /task_current_dot_collision/);
 });

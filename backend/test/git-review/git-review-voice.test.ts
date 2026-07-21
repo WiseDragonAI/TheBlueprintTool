@@ -72,6 +72,7 @@ test('serves Git review transcription on its dedicated endpoint without touching
   await migrateTaskCurrentState({
     decisionOsRoot: join(workspace, '.decision-os'),
     projectId: 'git-review-project',
+    nodeId: 'workstation',
     tasksLedgerFile: join(workspace, '.decision-os', 'tasks.json'),
   });
   process.chdir(workspace);

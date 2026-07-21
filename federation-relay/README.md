@@ -35,8 +35,17 @@
 
 ---
 
-## D. Verification
+## D. Epoch-3 Project Reset
 
-1. `npm test` runs two authenticated sockets against the Worker and Durable Object runtime, publishes both manifests, routes a request, and verifies credit in both directions.
+1. Stop every node participating in the project.
+2. Send `POST /admin/federations/<federationId>/projects/<projectId>/reset-state` with `Authorization: Bearer <ADMIN_SECRET>`.
+3. HTTP `409 project_nodes_online` identifies connected nodes that still participate in the project.
+4. HTTP `200` deletes only the project's epoch-3 entity and bucket keys, preserves credentials and manifests, records the reset, and returns the empty root.
+
+---
+
+## E. Verification
+
+1. `npm test` runs authenticated sockets against the Worker and Durable Object runtime, verifies the offline-only project reset, publishes manifests, routes a request, and verifies credit in both directions.
 2. The backend federation integration test runs two complete local Decision OS servers, reads and mutates a remote ledger, and proves both local project registries remain unchanged.
 3. Deployment verification must include the public `/health` probe and an authenticated two-node WSS exchange.
