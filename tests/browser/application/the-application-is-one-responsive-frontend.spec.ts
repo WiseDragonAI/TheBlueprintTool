@@ -232,6 +232,68 @@ test('The responsive application preserves the mobile Control Room and expands t
   }
 });
 
+test('A new desktop task remains in its task view while its optimistic creation is pending.', { timeout: 60_000 }, async () => {
+  const server = await startDecisionOsServer();
+  let browser: Browser | undefined;
+  let releaseCreation: (() => void) | undefined;
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      executablePath: existsSync(chromiumExecutablePath) ? chromiumExecutablePath : undefined,
+      args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    });
+    const project = await resolveCurrentProject(server.url);
+    const desktop = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    const pageErrors = collectPageErrors(desktop);
+    let creationObserved!: () => void;
+    const creationRequest = new Promise<void>((resolveObserved) => { creationObserved = resolveObserved; });
+    const creationGate = new Promise<void>((resolveCreation) => { releaseCreation = resolveCreation; });
+    let cardDetailReads = 0;
+    await desktop.route('**/decision-os/tasks**', async (route) => {
+      if (route.request().method() !== 'PATCH') return route.continue();
+      const mutation = route.request().postDataJSON() as {
+        action?: string;
+        card?: Record<string, unknown>;
+        annotation?: Record<string, unknown>;
+      };
+      if (mutation.action !== 'create-task-intake') return route.continue();
+      creationObserved();
+      await creationGate;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          ledgerId: 'tasks',
+          changedCard: mutation.card,
+          changedAnnotation: mutation.annotation,
+        }),
+      });
+    });
+    await desktop.route('**/api/ledgers/tasks/cards/**', async (route) => {
+      cardDetailReads += 1;
+      await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'Card is not persisted yet.' }) });
+    });
+
+    await desktop.goto(server.url, { waitUntil: 'domcontentloaded' });
+    await desktop.locator('#control-room-view:not([hidden])').waitFor({ state: 'visible' });
+    await desktop.locator('.desktop-new-task-button').click();
+    await desktop.locator('.new-task-project-modal[open]').waitFor({ state: 'visible' });
+    await desktop.locator('.new-task-project-option').filter({ hasText: project.name }).click();
+    await creationRequest;
+    await desktop.locator('#card-view:not([hidden])').waitFor({ state: 'visible' });
+
+    assert.match(new URL(desktop.url()).pathname, /\/ledgers\/tasks\/zones\/[^/]+\/cards\/[^/]+$/);
+    assert.equal(await desktop.locator('.canvas').count(), 0);
+    assert.equal(cardDetailReads, 0, 'route hydration must not read a card that is still locally owned');
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    releaseCreation?.();
+    await browser?.close();
+    await stopDecisionOsServer(server.process);
+  }
+});
+
 test('Master-task completion exposes manual and configured pipeline actions at desktop and mobile widths.', { timeout: 60_000 }, async () => {
   const server = await startDecisionOsServer();
   let browser: Browser | undefined;
@@ -352,6 +414,15 @@ async function resolveResponsiveCardRoute(serverUrl: string): Promise<string> {
     }
   }
   assert.fail('The test workspace must expose one card and one zone for responsive card routing.');
+}
+
+async function resolveCurrentProject(serverUrl: string): Promise<{ id: string; name: string }> {
+  const catalog = await fetch(`${serverUrl}/decision-os/projects`).then((response) => response.json()) as {
+    projects?: Array<{ id: string; name: string; root: string }>;
+  };
+  const project = catalog.projects?.find((candidate) => candidate.root === repoRoot);
+  assert.ok(project, 'The test workspace must be registered in its project catalog.');
+  return project;
 }
 
 async function resolveMasterTaskRoute(serverUrl: string): Promise<string> {
