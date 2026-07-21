@@ -20,7 +20,7 @@ import { parseMultipartFormData } from './parse-multipart-form-data.js';
 import { contentTypeFor } from './content-type-for.js';
 import { normalizeLedgerNotes } from './normalize-ledger-notes.js';
 import { hydrateLedgerCardContent, resolveCardContentFile } from '../../ledger/helper/card-content-file.js';
-import { parseThreadMarkdown, stripHydratedThreadNotes } from '../../ledger/helper/thread-content-file.js';
+import { parseThreadMarkdown, resolveThreadContentFile, stripHydratedThreadNotes } from '../../ledger/helper/thread-content-file.js';
 import { resolveCardContentChange, type CardContentChange } from '../../refresh/helper/watch-card-content-files.js';
 import { watchProjectFiles } from '../../refresh/helper/watch-project-files.js';
 import { applyLedgerMutation, type LedgerMutation } from '../../ledger/helper/apply-ledger-mutation.js';
@@ -617,6 +617,27 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       throw new Error(`content_object_sources_failed:${failures.join(',') || 'none-online'}`);
     },
   });
+  const readTaskContentOnDemand = async (projectId: string, store: TaskCurrentStateStore, key: string): Promise<{ body: string; conflict: boolean; candidates: Array<{ ownerNodeId: string; hash: string; type: string }> }> => {
+    const heads = store.contentHeads(key).sort((left, right) => left.sourceReplicaId.localeCompare(right.sourceReplicaId) || left.hash.localeCompare(right.hash));
+    const candidates = heads.map((head) => ({ ownerNodeId: head.sourceReplicaId, hash: head.hash, type: head.type }));
+    const identities = new Set(heads.map((head) => `${head.type}\u0000${head.hash}`));
+    if (!key || heads.length === 0 || identities.size !== 1) return { body: '', conflict: identities.size > 1, candidates };
+    const head = heads[0];
+    const localObject = resolve(store.root, 'objects', head.hash.slice(0, 2), head.hash);
+    if (existsSync(localObject)) return { body: await readFileAsync(localObject, 'utf8'), conflict: false, candidates };
+    for (const source of heads) federationContentStore.applyManifest(source.sourceReplicaId, {
+      version: 1,
+      projectId,
+      generatedAt: new Date().toISOString(),
+      complete: false,
+      resources: [{ type: source.type, key: source.key, hash: source.hash, bytes: source.bytes, changedAt: source.changedAt }],
+    });
+    const source = heads[0].sourceReplicaId;
+    federationContentStore.prioritize(source, projectId, key);
+    await federationContentScheduler?.drain();
+    const content = federationContentStore.resource(source, projectId, key);
+    return { body: content.file ? await readFileAsync(content.file, 'utf8') : '', conflict: content.conflict, candidates: content.candidates };
+  };
   const projectSyncStore = createProjectSyncStore({ decisionOsRoot: masterDecisionOsRoot });
   projectSyncController = createProjectSyncController({
     masterRoot,
@@ -1006,6 +1027,27 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
             : scopedCardRead
               ? ledgerCardProjection({ decisionOsRoot, ledgerId, ledger: taskLedger, cardId: decodeRouteSegment(scopedCardRead[2]) })
               : ledgerThreadProjection({ decisionOsRoot, ledgerId, ledger: taskLedger, threadId: decodeRouteSegment(scopedThreadRead?.[2] ?? '') });
+      if (projection && localProject && ledgerId === 'tasks' && scopedCardRead) {
+        const comment = projection.comment && typeof projection.comment === 'object' ? projection.comment as AnyRecord : {};
+        const key = String(comment.contentFile ?? '');
+        const localFile = resolveCardContentFile(decisionOsRoot, key);
+        if (key && (!localFile || !existsSync(localFile))) {
+          const content = await readTaskContentOnDemand(localProject.id, taskStateForProject(localProject).store, key);
+          projection.comment = { ...comment, what: content.body };
+          projection.state = { ...(projection.state as AnyRecord ?? {}), content: { status: content.body ? 'available' : content.conflict ? 'conflict' : 'synchronizing', resource: key, conflict: content.conflict, candidates: content.candidates } };
+        }
+      }
+      if (projection && localProject && ledgerId === 'tasks' && scopedThreadRead) {
+        const threadId = decodeRouteSegment(scopedThreadRead[2]);
+        const refs = taskLedger?.threadFiles && typeof taskLedger.threadFiles === 'object' ? taskLedger.threadFiles as AnyRecord : {};
+        const key = String(refs[threadId] ?? '');
+        const localFile = resolveThreadContentFile(decisionOsRoot, key);
+        if (key && (!localFile || !existsSync(localFile))) {
+          const content = await readTaskContentOnDemand(localProject.id, taskStateForProject(localProject).store, key);
+          projection.notes = { [threadId]: content.body ? parseThreadMarkdown(content.body) : [] };
+          projection.state = { ...(projection.state as AnyRecord ?? {}), content: { status: content.body ? 'available' : content.conflict ? 'conflict' : 'synchronizing', resource: key, conflict: content.conflict, candidates: content.candidates } };
+        }
+      }
       response.setHeader('cache-control', 'no-store');
       response.setHeader('content-type', 'application/json');
       response.setHeader(ledgerRevisionHeader, String(ledgerRevisions.current(ledgerId)));
