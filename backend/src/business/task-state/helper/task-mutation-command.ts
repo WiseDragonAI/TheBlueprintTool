@@ -135,7 +135,27 @@ export function taskCommandForMutation(input: { mutation: LedgerMutation; before
   let activationTaskId = '';
   let replication: 'held' | 'active' = 'active';
 
-  if (action === 'create-task-intake' && mutation.card?.id && mutation.annotation?.id) {
+  if (action === 'create-master-task' && mutation.card?.id && mutation.annotation?.id) {
+    const cards = [mutation.card, ...records(mutation.cards)];
+    const relationships = records(mutation.relationships);
+    activationTaskId = String(mutation.card.id);
+    replication = 'held';
+    changes.push(...entity('annotation', String(mutation.annotation.id), null, recordById(after, 'annotations', String(mutation.annotation.id))));
+    for (const card of cards) {
+      const cardId = String(card.id ?? '');
+      changes.push(...entity('card', cardId, null, recordById(after, 'cards', cardId)));
+      const cardChange = changes.find((change) => change.entityType === 'card' && change.entityId === cardId);
+      cardChange?.changes.push({ path: 'replicationState', operation: 'set', value: 'local-only' });
+      const threadId = `thread-${cardId}`;
+      const beforeRefs = before.threadFiles && typeof before.threadFiles === 'object' ? before.threadFiles as AnyRecord : {};
+      const afterRefs = after.threadFiles && typeof after.threadFiles === 'object' ? after.threadFiles as AnyRecord : {};
+      changes.push(...ledgerField(`threadFiles/${threadId}`, beforeRefs[threadId], afterRefs[threadId]));
+    }
+    for (const relationship of relationships) {
+      const relationshipId = String(relationship.id ?? '');
+      changes.push(...entity('relationship', relationshipId, null, recordById(after, 'relationships', relationshipId)));
+    }
+  } else if (action === 'create-task-intake' && mutation.card?.id && mutation.annotation?.id) {
     const cardId = String(mutation.card.id);
     const annotationId = String(mutation.annotation.id);
     activationTaskId = cardId;

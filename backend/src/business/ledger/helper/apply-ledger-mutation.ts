@@ -13,12 +13,14 @@ import { normalizeGitReviewNotes, type GitReviewNote } from '../../../../../shar
 export type LedgerMutation = {
   action?: string;
   card?: Record<string, unknown>;
+  cards?: Array<Record<string, unknown>>;
   cardId?: string;
   masterTaskId?: string;
   imageSrc?: string;
   cardPatch?: { id?: string; status?: string; title?: string; description?: string; imageSizes?: Record<string, { width?: number; height?: number }>; questionnaires?: CardQuestionnaires; gitReviewNotes?: GitReviewNote[]; codexRunModel?: CodexModel; codexRunEffort?: CodexEffort };
   annotation?: Record<string, unknown>;
   relationship?: Record<string, unknown>;
+  relationships?: Array<Record<string, unknown>>;
   zoneIds?: string[];
   groupIds?: string[];
   relationshipIds?: string[];
@@ -129,7 +131,7 @@ export function applyLedgerMutation(input: {
     if (Number.isFinite(Number(note?.revision)) && (options.overwrite || !target.revision)) target.revision = Number(note?.revision);
   };
 
-  if ((mutation.action === 'create-zone' || mutation.action === 'create-group' || mutation.action === 'create-task-intake') && mutation.annotation?.id) {
+  if ((mutation.action === 'create-zone' || mutation.action === 'create-group' || mutation.action === 'create-task-intake' || mutation.action === 'create-master-task') && mutation.annotation?.id) {
     const id = String(mutation.annotation.id);
     ledger.annotations = (ledger.annotations ?? []).filter((entry) => String(entry.id ?? '') !== id).concat(mutation.annotation);
   }
@@ -138,6 +140,21 @@ export function applyLedgerMutation(input: {
     externalizeCardContent({ decisionOsRoot, card: mutation.card, ledgerPath });
     writeThreadNotesFile({ decisionOsRoot, ledger, ledgerPath, threadId: `thread-${id}`, notes: [] });
     ledger.cards = (ledger.cards ?? []).filter((entry) => String(entry.id ?? '') !== id).concat(mutation.card);
+  }
+  if (mutation.action === 'create-master-task' && mutation.card?.id) {
+    const cards = [mutation.card, ...(mutation.cards ?? [])];
+    const ids = new Set(cards.map((card) => String(card.id ?? '')).filter(Boolean));
+    if (ids.size !== cards.length || !Array.isArray(mutation.relationships)) {
+      mutationError = { statusCode: 400, body: { ok: false, error: 'Invalid master-task creation payload.' } };
+    } else {
+      for (const card of cards) {
+        externalizeCardContent({ decisionOsRoot, card, ledgerPath });
+        writeThreadNotesFile({ decisionOsRoot, ledger, ledgerPath, threadId: `thread-${String(card.id)}`, notes: [] });
+      }
+      ledger.cards = (ledger.cards ?? []).filter((entry) => !ids.has(String(entry.id ?? ''))).concat(cards);
+      const relationshipIds = new Set(mutation.relationships.map((relationship) => String(relationship.id ?? '')).filter(Boolean));
+      ledger.relationships = (ledger.relationships ?? []).filter((entry) => !relationshipIds.has(String(entry.id ?? ''))).concat(mutation.relationships);
+    }
   }
   if (mutation.action === 'create-relationship' && mutation.relationship?.id) {
     const id = String(mutation.relationship.id);

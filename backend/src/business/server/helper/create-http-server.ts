@@ -19,7 +19,7 @@ import { readRequestBuffer } from './read-request-buffer.js';
 import { parseMultipartFormData } from './parse-multipart-form-data.js';
 import { contentTypeFor } from './content-type-for.js';
 import { normalizeLedgerNotes } from './normalize-ledger-notes.js';
-import { hydrateLedgerCardContent } from '../../ledger/helper/card-content-file.js';
+import { hydrateLedgerCardContent, resolveCardContentFile } from '../../ledger/helper/card-content-file.js';
 import { stripHydratedThreadNotes, writeThreadNotesFile } from '../../ledger/helper/thread-content-file.js';
 import { migrateBacklogStatus } from '../../ledger/helper/migrate-backlog-status.js';
 import { resolveCardContentChange, type CardContentChange } from '../../refresh/helper/watch-card-content-files.js';
@@ -932,6 +932,14 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const changedThread = threadId ? ledgerThreadProjection({ decisionOsRoot, ledgerId, ledger: ledgerId === 'tasks' ? persistedLedger : undefined, threadId }) : null;
       const annotationId = String(mutation.annotation?.id ?? mutation.region?.id ?? '');
       const relationshipId = String(mutation.relationship?.id ?? '');
+      const createdCards = mutation.action === 'create-master-task'
+        ? [mutation.card, ...(mutation.cards ?? [])].filter((card): card is AnyRecord => Boolean(card?.id))
+        : [];
+      const createdFiles = createdCards.map((card, index) => ({
+        kind: index === 0 ? 'master-task' : 'subtask',
+        cardId: String(card.id ?? ''),
+        path: resolveCardContentFile(decisionOsRoot, (card.comment as AnyRecord | undefined)?.contentFile) ?? '',
+      }));
       const body = {
         ok: true,
         ledgerId,
@@ -940,6 +948,7 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
         changedThread,
         changedAnnotation: annotationId && Array.isArray(persistedLedger.annotations) ? persistedLedger.annotations.find((entry) => String((entry as AnyRecord).id ?? '') === annotationId) ?? null : null,
         changedRelationship: relationshipId && Array.isArray(persistedLedger.relationships) ? persistedLedger.relationships.find((entry) => String((entry as AnyRecord).id ?? '') === relationshipId) ?? null : null,
+        createdFiles,
         removedCardIds: mutation.action === 'delete-card' && cardId ? [cardId] : [],
         removedZoneIds: mutation.action === 'delete-zones' ? (mutation.zoneIds ?? []) : [],
         removedGroupIds: mutation.action === 'delete-zones' ? (mutation.groupIds ?? []) : [],
