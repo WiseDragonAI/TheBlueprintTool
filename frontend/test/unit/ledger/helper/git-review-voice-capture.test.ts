@@ -28,7 +28,8 @@ test('Git review capture leaves the singleton thread voice state untouched', asy
       this.dispatchEvent(new Event('stop'));
     }
   }
-  const track = { stop() {} };
+  let trackStops = 0;
+  const track = { stop() { trackStops += 1; } };
   class FakeAudioContext {
     state = 'running';
     createAnalyser() { return { fftSize: 128, getByteTimeDomainData(samples: Uint8Array) { samples.fill(160); } }; }
@@ -54,15 +55,44 @@ test('Git review capture leaves the singleton thread voice state untouched', asy
     assert.ok(frames[0]?.level > 0);
     assert.ok((frames[0]?.samples.length ?? 0) > 0);
     assert.equal(currentVoiceCaptureOwner(), owner);
-    assert.equal(acquireVoiceCaptureOwnership('thread'), false);
+    assert.equal(acquireVoiceCaptureOwnership('thread'), null);
     const audio = await capture.stop();
     assert.equal(audio.size, 5);
+    assert.equal(trackStops, 1);
     assert.equal(state.voice, threadVoiceState);
+    assert.equal(currentVoiceCaptureOwner(), null);
+    const disconnectedCapture = await startGitReviewVoiceCapture(owner, () => undefined);
+    disconnectedCapture.cancel();
+    assert.equal(trackStops, 2);
     assert.equal(currentVoiceCaptureOwner(), null);
   } finally {
     for (const [key, descriptor] of Object.entries(originals)) {
       if (descriptor) Object.defineProperty(globalThis, key, descriptor);
       else delete (globalThis as Record<string, unknown>)[key];
     }
+  }
+});
+
+test('disconnect cancellation releases a pending Git microphone lease', async () => {
+  const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  let resolveStream!: (stream: { getTracks(): Array<{ stop(): void }> }) => void;
+  const pendingStream = new Promise<{ getTracks(): Array<{ stop(): void }> }>((resolve) => { resolveStream = resolve; });
+  let trackStops = 0;
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: { mediaDevices: { getUserMedia: () => pendingStream } },
+  });
+
+  try {
+    const abortController = new AbortController();
+    const capture = startGitReviewVoiceCapture('git-review:card-a:file-a', () => undefined, abortController.signal);
+    abortController.abort();
+    resolveStream({ getTracks: () => [{ stop() { trackStops += 1; } }] });
+    await assert.rejects(capture, { name: 'AbortError' });
+    assert.equal(trackStops, 1);
+    assert.equal(currentVoiceCaptureOwner(), null);
+  } finally {
+    if (originalNavigator) Object.defineProperty(globalThis, 'navigator', originalNavigator);
+    else delete (globalThis as Record<string, unknown>).navigator;
   }
 });

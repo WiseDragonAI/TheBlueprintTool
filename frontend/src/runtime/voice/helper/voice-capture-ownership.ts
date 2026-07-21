@@ -3,19 +3,22 @@
  * WHY: Thread and embedded-widget recorders must never capture concurrently.
  */
 export type VoiceCaptureOwner = 'thread' | `git-review:${string}`;
+export type VoiceCaptureLease = Readonly<{ owner: VoiceCaptureOwner; token: symbol }>;
 
-let activeOwner: VoiceCaptureOwner | null = null;
+let activeLease: VoiceCaptureLease | null = null;
 
-export function acquireVoiceCaptureOwnership(owner: VoiceCaptureOwner): boolean {
-  if (activeOwner && activeOwner !== owner) return false;
-  activeOwner = owner;
+export function acquireVoiceCaptureOwnership(owner: VoiceCaptureOwner): VoiceCaptureLease | null {
+  if (activeLease) return null;
+  activeLease = Object.freeze({ owner, token: Symbol(owner) });
+  return activeLease;
+}
+
+export function releaseVoiceCaptureOwnership(lease: VoiceCaptureLease | null | undefined): boolean {
+  if (!lease || activeLease !== lease) return false;
+  activeLease = null;
   return true;
 }
 
-export function releaseVoiceCaptureOwnership(owner: VoiceCaptureOwner): void {
-  if (activeOwner === owner) activeOwner = null;
-}
-
 export function currentVoiceCaptureOwner(): VoiceCaptureOwner | null {
-  return activeOwner;
+  return activeLease?.owner ?? null;
 }

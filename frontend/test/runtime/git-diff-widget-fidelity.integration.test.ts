@@ -14,12 +14,26 @@ test('Git diff card widget uses shared controls without entering the thread voic
   assert.doesNotMatch(widget, /git-diff-button/);
   assert.match(widget, /startGitReviewVoiceCapture/);
   assert.match(widget, /paintVoiceWaveLevel\(voice, level, true, samples, level\)/);
+  assert.match(widget, /registerGitReviewWidgetDisposal/);
+  assert.match(widget, /voiceCapture\?\.cancel\(\)/);
+  assert.match(widget, /requestController\.abort\(\)/);
   assert.match(widget, /\/api\/git-review\/voice/);
   assert.doesNotMatch(widget, /startVoiceRecording|stopVoiceRecording|cancelVoiceRecording|state\.voice/);
   assert.doesNotMatch(widget, /class="voice-panel"|class="voice-status"/);
   assert.doesNotMatch(widget, /key:\s*'X'|key === 'x'|terminal-button__key">X/);
   assert.match(recording, /VoiceRecordingContext/);
   assert.match(recording, /surfaceRoot/);
+});
+
+test('Git review waveform and capture identities are instance-owned', () => {
+  const waveform = source('src/runtime/voice/component/wave-svg.ts');
+  const ownership = source('src/runtime/voice/helper/voice-capture-ownership.ts');
+
+  assert.match(waveform, /voice-wave-/);
+  assert.doesNotMatch(waveform, /id="waveAreaGradient"|id="waveCoreGradient"/);
+  assert.match(ownership, /VoiceCaptureLease/);
+  assert.match(ownership, /if \(activeLease\) return null/);
+  assert.match(ownership, /activeLease !== lease/);
 });
 
 test('thread voice rendering resolves every dynamic control from its selected voice panel', () => {
