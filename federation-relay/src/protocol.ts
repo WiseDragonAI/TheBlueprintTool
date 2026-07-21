@@ -1,4 +1,12 @@
+/**
+ * WHAT: Defines and validates the federation transport and epoch-3 state admission contract.
+ * WHY: Incompatible nodes must be rejected before they participate in replicated state.
+ */
 export const protocolVersion = 1;
+export const stateProtocol = 'decision-os-task-state/3' as const;
+export const stateSchema = 3 as const;
+export const stateBaselineEpoch = 3 as const;
+export const maximumStateFrameBytes = 512 * 1024;
 export const chunkBytes = 64 * 1024;
 export const creditWindowBytes = 1024 * 1024;
 export const maximumBodyBytes = 25 * 1024 * 1024;
@@ -12,6 +20,7 @@ export const priorityStateFrameTypes = new Set([
   'state-bucket-summary',
   'state-missing-request',
   'state-converged',
+  'state-subscribe',
 ]);
 
 export type ProjectManifest = {
@@ -41,7 +50,10 @@ export type RelayFrame = {
   code?: string;
   message?: string;
   projectId?: string;
-  stateVersion?: 2;
+  stateVersion?: 3;
+  stateProtocol?: typeof stateProtocol;
+  stateSchema?: typeof stateSchema;
+  baselineEpoch?: typeof stateBaselineEpoch;
   payload?: unknown;
 };
 
@@ -49,6 +61,10 @@ export function parseFrame(value: string): RelayFrame {
   const frame = JSON.parse(value) as RelayFrame;
   if (frame.version !== protocolVersion || typeof frame.type !== 'string') throw new Error('invalid_frame');
   return frame;
+}
+
+export function assertStateManifest(frame: RelayFrame): void {
+  if (frame.stateProtocol !== stateProtocol || frame.stateSchema !== stateSchema || frame.baselineEpoch !== stateBaselineEpoch) throw new Error('incompatible_state_protocol');
 }
 
 export function encodedByteLength(value: string): number {
