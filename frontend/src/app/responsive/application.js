@@ -8,7 +8,7 @@ import { saveLedgerCardMediaCarouselSlide } from '/src/runtime/ledger/helper/per
 import { requestCodexPipelineRun } from '/src/runtime/codex/effect/request-codex-pipeline-run.js';
 import { closeMobileThread, handleResponsiveThreadShortcut, initializeMobileThread, openMobileThread, setMobileThreadCard, syncMobileThreadContext } from './thread.js';
 import { initializeMobileCodex, openMobileCodexLibrary, setMobileCodexContext } from './codex.js';
-import { compareControlRoomQueueTasks, executionAge, executionStopwatch, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge } from './control-room.js';
+import { compareControlRoomQueueTasks, executionAge, executionStopwatch, projectMasterTask, waitingAge } from './control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from './control-room-route.js';
 import { cardPathForProject, isProjectCardPath, ledgerPathForProject, parseProjectRoute, parseProjectScope, projectPath, zonePathForProject } from './project-route.js';
 import { projectSettingsValues, saveProjectSettingsRequest, startProjectSyncRequest } from './project-settings.js';
@@ -1767,8 +1767,9 @@ async function persistControlTaskPlacement({ taskId, sourceTab, targetTab, newIn
   renderControlRoom();
   try {
     await ledgerMutation(task.ledgerId, {
-      action: 'patch-card',
-      cardPatch: { id: task.cardId, status: targetTab === 'backlog' ? 'backlog' : 'todo' }
+      action: 'transition-card-lifecycle',
+      cardId: task.cardId,
+      lifecycleStatus: targetTab === 'backlog' ? 'backlog' : 'todo'
     }, task.projectId, task.ownerNodeId);
   } catch (error) {
     await loadControlRoom({ force: true });
@@ -1788,7 +1789,7 @@ async function activateMasterTask({ ledgerId, cardId }) {
 
 function parseMasterCandidate(card) {
   const labels = Array.isArray(card?.labels) ? card.labels.map(String) : [];
-  return labels.includes('master-task') || (!labels.some((label) => label === 'master-task' || label === 'subtask') && /^\s*(?:#[a-z][a-z0-9-]*\s*)*#master-task\b(?:\s*#[a-z][a-z0-9-]*)*\s*$/im.test(ledgerCardBody(card)));
+  return labels.includes('master-task');
 }
 
 async function createTaskIntake(projectId, replicaNodeId) {
@@ -1806,8 +1807,8 @@ async function createTaskIntake(projectId, replicaNodeId) {
   const zone = { id: objectId('zone'), ...rect, color: projectColor, label: 'New task intake', comments: [] };
   const cardId = objectId('card');
   const timestamp = new Date().toISOString();
-  const markdown = `Ledger: ${ledgerRef.title}\nWaiting since: ${timestamp}\n\n## Intake\n\nDescribe the task in this thread, attach the required files, then launch Codex. Categorize the task, keep this mandatory new zone, rename this master task and zone, create actionable subtask cards in this zone, and write canonical relationship-backed card links under \`## Subtasks\`.\n\n## Subtasks\n`;
-  const card = { id: cardId, title: 'New task intake', cardType: 'note', domainId: ledgerRef.id, status: 'todo', labels: ['master-task'], x: rect.x + 60, y: rect.y + 60, w: 360, h: 240, comment: { what: markdown }, facts: [], fields: [] };
+  const markdown = '## A. Intake\n\nDescribe the task in this thread, attach the required files, then launch Codex. Categorize the task, keep this mandatory new zone, rename this master task and zone, and create actionable subtask cards in this zone.\n';
+  const card = { id: cardId, title: 'New task intake', cardType: 'note', domainId: ledgerRef.id, status: 'todo', createdAt: timestamp, labels: ['master-task'], x: rect.x + 60, y: rect.y + 60, w: 360, h: 240, comment: { what: markdown }, facts: [], fields: [] };
   ledger.annotations = [...(ledger.annotations ?? []), zone];
   ledger.cards = [...(ledger.cards ?? []), { ...card, replicationState: 'local-only', persistenceState: 'creating' }];
   ledger.threadFiles = { ...(ledger.threadFiles ?? {}), [`thread-${cardId}`]: `.decision-os/threads/tasks/thread-${cardId}.md` };
@@ -2133,14 +2134,9 @@ function renderCard(card) {
   elements['card-title'].textContent = asText(card.title).trim() || `Card ${card.id}`;
   const imageSizes = card.imageSizes && typeof card.imageSizes === 'object' ? card.imageSizes : {};
   const markdown = ledgerCardBody(card);
-  const parsedTask = parseMasterTaskMarkdown({
-    cardId: card.id,
-    title: card.title,
-    ledgerId: state.activeLedgerId,
+  const parsedTask = projectMasterTask({
+    card,
     ledgerTitle: state.ledgers.find((entry) => entry.id === state.activeLedgerId)?.title ?? state.activeLedgerId,
-    markdown,
-    cardStatus: card.status,
-    labels: card.labels ?? [],
     cards: state.ledger?.cards ?? [],
     relationships: state.ledger?.relationships ?? []
   });
@@ -2209,7 +2205,7 @@ function renderCard(card) {
       return false;
     }
   };
-  const content = renderLedgerCardMarkdown(parsedTask.masterTask ? visibleMasterTaskMarkdown(markdown) : markdown, {
+  const content = renderLedgerCardMarkdown(markdown, {
     cardId: parsedTask.masterTask ? String(card.id) : undefined,
     questionnaireCardId: String(card.id),
     imageSizes,
@@ -2259,7 +2255,7 @@ function renderCard(card) {
       delayButton.disabled = true;
       delayButton.textContent = backlog ? 'Restoring task…' : 'Moving to backlog…';
       try {
-        state.ledger = await ledgerMutation(state.activeLedgerId, { action: 'patch-card', cardPatch: { id: card.id, status: nextStatus } });
+        state.ledger = await ledgerMutation(state.activeLedgerId, { action: 'transition-card-lifecycle', cardId: card.id, lifecycleStatus: nextStatus });
         navigate(controlRoomPath(nextStatus === 'backlog' ? 'backlog' : 'queue'), true);
       } catch (cause) {
         delayButton.disabled = false;

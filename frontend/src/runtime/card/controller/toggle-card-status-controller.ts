@@ -8,5 +8,5 @@ import { telemetry } from '../../telemetry/effect/telemetry.js';
 export async function toggleCardStatusController(input: { cardId: string; status: 'todo' | 'done' }): Promise<void> {
   if (!input.cardId) return;
   telemetry('toggle-card-status-controller', { cardId: input.cardId, status: input.status });
-  await commitActiveLedgerMutation({ action: 'patch-card', cardPatch: { id: input.cardId, status: input.status } }, { render: true });
+  await commitActiveLedgerMutation({ action: 'transition-card-lifecycle', cardId: input.cardId, lifecycleStatus: input.status }, { render: true });
 }

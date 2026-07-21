@@ -84,7 +84,7 @@ export function buildCardLaunchContext(input: {
           sections: [{ title: 'string', markdown: 'string' }],
           subtasks: [{ title: 'string', sections: [{ title: 'string', markdown: 'string' }] }],
         },
-        generated: ['cardIds', 'relationshipIds', 'canonicalTaskLabels', 'subtaskLinks'],
+        generated: ['cardIds', 'relationshipIds', 'positionedSubtaskRelationships'],
       },
       masterTaskProgress: {
         command: 'ledger-cli master-task-progress --ledger "$DECISION_OS_LEDGER_FILE" --plan-stdin --json',
@@ -94,7 +94,7 @@ export function buildCardLaunchContext(input: {
           verifiedSubtaskIds: ['card-id'],
           reply: 'agent markdown',
         },
-        generated: ['canonicalTaskLabels', 'verifiedStatuses', 'threadNote', 'gate'],
+        generated: ['narrativeCardContent', 'threadNote', 'gate'],
       },
     },
   };

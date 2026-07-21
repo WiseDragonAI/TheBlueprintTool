@@ -2,7 +2,7 @@
 
 This runbook migrates an existing workspace from the former storage and command namespace to `decision-os`.
 
-For the one-time federation-wide task storage cutover from snapshot/event stores to causal current-state v2, use [TASK_STATE_V2_MIGRATION_RUNBOOK.md](TASK_STATE_V2_MIGRATION_RUNBOOK.md).
+For the one-time federation-wide repair cutover from v2 current state to epoch 3, use [TASK_STATE_V2_MIGRATION_RUNBOOK.md](TASK_STATE_V2_MIGRATION_RUNBOOK.md).
 
 ## 1. Prepare
 

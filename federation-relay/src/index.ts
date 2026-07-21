@@ -1,16 +1,41 @@
+/**
+ * WHAT: Authenticates federation nodes and coordinates catalog, state, and content-stream relay work.
+ * WHY: One Durable Object must serialize durable project-state joins and route bounded live traffic.
+ */
 import { DurableObject } from 'cloudflare:workers';
 import {
   chunkBytes,
   creditWindowBytes,
   encodedByteLength,
+  assertStateManifest,
+  maximumStateFrameBytes,
   maximumStreamsPerNode,
   parseFrame,
   priorityStateFrameTypes,
   protocolVersion,
+  stateBaselineEpoch,
+  stateProtocol,
+  stateSchema,
   type ProjectManifest,
   type RelayFrame,
 } from './protocol';
-import { assertRelayEntity, digest, joinRelayEntity, type RelayEntity } from './current-state';
+import { joinRelayEntity, type RelayEntity } from './current-state';
+import {
+  hashTaskCurrentRoot,
+  taskCurrentEntityKey,
+  taskCurrentStateVersion,
+} from '../../shared/task-current-state-core';
+import {
+  admitStateEntries,
+  mismatchedBuckets,
+  stateBucketKey,
+  stateBucketPrefix,
+  stateEntityBatchSize,
+  stateEntityPrefix,
+  summarizeBucket,
+  type StateBucket,
+  type StateEntry,
+} from './state-storage';
 
 type Env = {
   FEDERATIONS: DurableObjectNamespace<FederationRelay>;
@@ -19,40 +44,6 @@ type Env = {
 
 type SocketIdentity = { nodeId: string };
 type Stream = { requester: string; owner: string; requestCredit: number; responseCredit: number };
-type StateBucket = { bucket: string; count: number; checksum: string; entries?: Record<string, string> };
-
-const stateEntityBatchSize = 128;
-
-function stateEntityPrefix(projectId: string, bucket = ''): string {
-  return `state:entity:${encodeURIComponent(projectId)}:${bucket ? `${encodeURIComponent(bucket)}:` : ''}`;
-}
-
-function stateEntityKey(projectId: string, bucket: string, entity: RelayEntity): string {
-  return `${stateEntityPrefix(projectId, bucket)}${encodeURIComponent(`${entity.entityType}\u0000${entity.entityId}`)}`;
-}
-
-function stateBucketPrefix(projectId: string): string {
-  return `state:bucket:${encodeURIComponent(projectId)}:`;
-}
-
-function stateBucketKey(projectId: string, bucket: string): string {
-  return `${stateBucketPrefix(projectId)}${encodeURIComponent(bucket)}`;
-}
-
-async function summarizeBucket(bucket: string, entries: Record<string, string>): Promise<StateBucket> {
-  const checksum = await digest(Object.entries(entries)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, stateHash]) => `${key}\u0000${stateHash}`)
-    .join('\n'));
-  return { bucket, count: Object.keys(entries).length, checksum, entries };
-}
-
-function mismatchedBuckets(local: StateBucket[], remote: StateBucket[]): string[] {
-  const left = new Map(local.map((entry) => [entry.bucket, entry]));
-  const right = new Map(remote.map((entry) => [entry.bucket, entry]));
-  return [...new Set([...left.keys(), ...right.keys()])].filter((bucket) => left.get(bucket)?.count !== right.get(bucket)?.count || left.get(bucket)?.checksum !== right.get(bucket)?.checksum).sort();
-}
-
 async function listAll<T>(storage: DurableObjectStorage, prefix: string): Promise<Map<string, T>> {
   const result = new Map<string, T>();
   let startAfter: string | undefined;
@@ -91,7 +82,7 @@ function routeParts(url: URL): { federationId: string; nodeId?: string } | null 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    if (url.pathname === '/health') return json({ ok: true, service: 'decision-os-federation-relay', protocolVersion });
+    if (url.pathname === '/health') return json({ ok: true, service: 'decision-os-federation-relay', protocolVersion, stateProtocol, stateSchema, baselineEpoch: stateBaselineEpoch });
     const route = routeParts(url);
     if (!route) return json({ ok: false, error: 'not_found' }, 404);
     const stub = env.FEDERATIONS.getByName(route.federationId, { locationHint: 'apac' });
@@ -113,6 +104,7 @@ export default {
 
 export class FederationRelay extends DurableObject<Env> {
   private readonly streams = new Map<string, Stream>();
+  private readonly subscriptions = new Map<string, Set<string>>();
   private manifests = new Map<string, ProjectManifest[]>();
   private nodeLabels = new Map<string, string>();
 
@@ -136,8 +128,12 @@ export class FederationRelay extends DurableObject<Env> {
     return (this.manifests.get(nodeId) ?? []).some((project) => project.id === projectId);
   }
 
-  private assertProject(nodeId: string, projectId: string): void {
-    if (!projectId || !this.hasProject(nodeId, projectId)) throw new Error('unknown_state_project');
+  private participatesInProject(nodeId: string, projectId: string): boolean {
+    return this.hasProject(nodeId, projectId) || (this.subscriptions.get(nodeId)?.has(projectId) ?? false);
+  }
+
+  private assertProjectParticipation(nodeId: string, projectId: string): void {
+    if (!projectId || !this.participatesInProject(nodeId, projectId)) throw new Error('unknown_state_project');
   }
 
   private sendSocket(socket: WebSocket, frame: RelayFrame): void {
@@ -159,20 +155,25 @@ export class FederationRelay extends DurableObject<Env> {
     return [...entries.values()].sort((left, right) => left.bucket.localeCompare(right.bucket)).map(({ entries: _entries, ...summary }) => summary);
   }
 
+  private async stateRoot(projectId: string): Promise<string> {
+    return hashTaskCurrentRoot(await this.stateBuckets(projectId));
+  }
+
   private async sendStateSummary(socket: WebSocket, projectId: string): Promise<void> {
     const buckets = await this.stateBuckets(projectId);
-    this.sendSocket(socket, { version: 1, type: 'state-bucket-summary', from: 'relay', projectId, stateVersion: 2, payload: { stateVersion: 2, buckets } });
+    this.sendSocket(socket, { version: 1, type: 'state-bucket-summary', from: 'relay', projectId, stateVersion: taskCurrentStateVersion, payload: { stateVersion: taskCurrentStateVersion, root: hashTaskCurrentRoot(buckets), buckets } });
   }
 
   private sendStateEntities(socket: WebSocket, projectId: string, entities: RelayEntity[]): void {
     for (let index = 0; index < entities.length; index += stateEntityBatchSize) {
+      const entries = entities.slice(index, index + stateEntityBatchSize).map((entity): StateEntry => ({ key: taskCurrentEntityKey(entity), stateHash: entity.stateHash, entity }));
       this.sendSocket(socket, {
         version: 1,
         type: 'state-entity-batch',
         from: 'relay',
         projectId,
-        stateVersion: 2,
-        payload: { stateVersion: 2, entities: entities.slice(index, index + stateEntityBatchSize) },
+        stateVersion: taskCurrentStateVersion,
+        payload: { stateVersion: taskCurrentStateVersion, deliveryId: crypto.randomUUID(), entries },
       });
     }
   }
@@ -180,51 +181,55 @@ export class FederationRelay extends DurableObject<Env> {
   private async persistStateEntities(sender: string, socket: WebSocket, frame: RelayFrame): Promise<void> {
     const projectId = String(frame.projectId ?? '');
     const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload as Record<string, unknown> : {};
-    const entities = Array.isArray(payload.entities) ? payload.entities as RelayEntity[] : [];
-    this.assertProject(sender, projectId);
-    if (entities.length === 0 || entities.length > stateEntityBatchSize) throw new Error('invalid_state_entity_batch');
-    await Promise.all(entities.map((entity) => assertRelayEntity(entity, projectId)));
-    const entries = await Promise.all(entities.map(async (entity) => {
-      const bucket = (await digest(`${entity.entityType}\u0000${entity.entityId}`)).slice(0, 2);
-      return { key: stateEntityKey(projectId, bucket, entity), bucket, entity };
-    }));
+    const deliveryId = String(payload.deliveryId ?? '');
+    const wireEntries = Array.isArray(payload.entries) ? payload.entries as StateEntry[] : [];
+    this.assertProjectParticipation(sender, projectId);
+    if (!deliveryId || wireEntries.length === 0 || wireEntries.length > stateEntityBatchSize) throw new Error('invalid_state_entity_batch');
+    const entries = admitStateEntries(projectId, wireEntries);
     const changed: RelayEntity[] = [];
+    const accepted: Array<{ key: string; stateHash: string }> = [];
     await this.ctx.storage.transaction(async (transaction) => {
       const existing = await transaction.get<RelayEntity>(entries.map((entry) => entry.key));
-      const joined = await Promise.all(entries.map(async (entry) => ({ ...entry, value: await joinRelayEntity(existing.get(entry.key), entry.entity) })));
+      const joined = entries.map((entry) => ({ ...entry, value: joinRelayEntity(existing.get(entry.key), entry.entity) }));
+      accepted.push(...joined.map((entry) => ({ key: entry.entityKey, stateHash: entry.value.stateHash })));
       const additions = joined.filter((entry) => existing.get(entry.key)?.stateHash !== entry.value.stateHash);
       if (additions.length === 0) return;
       changed.push(...additions.map((entry) => entry.value));
       const bucketNames = [...new Set(additions.map((entry) => entry.bucket))];
       const existingBuckets = await transaction.get<StateBucket>(bucketNames.map((bucket) => stateBucketKey(projectId, bucket)));
       await transaction.put(Object.fromEntries(additions.map((entry) => [entry.key, entry.value])));
-      await transaction.put(Object.fromEntries(await Promise.all(bucketNames.map(async (bucket) => {
+      await transaction.put(Object.fromEntries(bucketNames.map((bucket) => {
         const current = existingBuckets.get(stateBucketKey(projectId, bucket));
         const bucketEntries = { ...(current?.entries ?? {}) };
         for (const entry of additions.filter((candidate) => candidate.bucket === bucket)) {
-          bucketEntries[`${entry.value.entityType}\u0000${entry.value.entityId}`] = entry.value.stateHash;
+          bucketEntries[entry.entityKey] = entry.value.stateHash;
         }
-        const value = await summarizeBucket(bucket, bucketEntries);
+        const value = summarizeBucket(bucket, bucketEntries);
         return [stateBucketKey(projectId, bucket), value];
-      }))));
+      })));
     });
-    this.sendSocket(socket, { version: 1, type: 'state-relay-ack', from: 'relay', projectId, stateVersion: 2, payload: { stateVersion: 2 } });
-    for (const target of this.activeSockets()) if (target !== socket && changed.length > 0) this.sendStateEntities(target, projectId, changed);
+    const root = await this.stateRoot(projectId);
+    this.sendSocket(socket, { version: 1, type: 'state-relay-ack', from: 'relay', projectId, stateVersion: taskCurrentStateVersion, payload: { stateVersion: taskCurrentStateVersion, deliveryId, accepted, root } });
+    for (const target of this.activeSockets()) {
+      const targetNodeId = (target.deserializeAttachment() as SocketIdentity | null)?.nodeId ?? '';
+      if (target !== socket && changed.length > 0 && this.participatesInProject(targetNodeId, projectId)) this.sendStateEntities(target, projectId, changed);
+    }
   }
 
   private async reconcileStateSummary(sender: string, socket: WebSocket, frame: RelayFrame): Promise<void> {
     const projectId = String(frame.projectId ?? '');
     const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload as Record<string, unknown> : {};
     const remote = Array.isArray(payload.buckets) ? payload.buckets as StateBucket[] : [];
-    this.assertProject(sender, projectId);
+    this.assertProjectParticipation(sender, projectId);
     const local = await this.stateBuckets(projectId);
     const missingFromRelay = mismatchedBuckets(local, remote);
     if (missingFromRelay.length > 0) {
-      this.sendSocket(socket, { version: 1, type: 'state-missing-request', from: 'relay', projectId, stateVersion: 2, payload: { stateVersion: 2, buckets: missingFromRelay } });
+      this.sendSocket(socket, { version: 1, type: 'state-missing-request', from: 'relay', projectId, stateVersion: taskCurrentStateVersion, payload: { stateVersion: taskCurrentStateVersion, buckets: missingFromRelay } });
     }
-    this.sendSocket(socket, { version: 1, type: 'state-bucket-summary', from: 'relay', projectId, stateVersion: 2, payload: { stateVersion: 2, buckets: local } });
-    if (missingFromRelay.length === 0) {
-      this.sendSocket(socket, { version: 1, type: 'state-converged', from: 'relay', projectId, stateVersion: 2, payload: { stateVersion: 2, nodeId: sender } });
+    const localRoot = hashTaskCurrentRoot(local);
+    this.sendSocket(socket, { version: 1, type: 'state-bucket-summary', from: 'relay', projectId, stateVersion: taskCurrentStateVersion, payload: { stateVersion: taskCurrentStateVersion, root: localRoot, buckets: local } });
+    if (missingFromRelay.length === 0 && payload.root === localRoot) {
+      this.sendSocket(socket, { version: 1, type: 'state-converged', from: 'relay', projectId, stateVersion: taskCurrentStateVersion, payload: { stateVersion: taskCurrentStateVersion, nodeId: sender, root: localRoot } });
     }
   }
 
@@ -232,7 +237,7 @@ export class FederationRelay extends DurableObject<Env> {
     const projectId = String(frame.projectId ?? '');
     const payload = frame.payload && typeof frame.payload === 'object' ? frame.payload as Record<string, unknown> : {};
     const buckets = new Set(Array.isArray(payload.buckets) ? payload.buckets.map(String) : []);
-    this.assertProject(sender, projectId);
+    this.assertProjectParticipation(sender, projectId);
     if (buckets.size === 0) throw new Error('invalid_state_missing_request');
     const pages = await Promise.all([...buckets].map((bucket) => listAll<RelayEntity>(this.ctx.storage, stateEntityPrefix(projectId, bucket))));
     this.sendStateEntities(socket, projectId, pages.flatMap((page) => [...page.values()]));
@@ -283,9 +288,11 @@ export class FederationRelay extends DurableObject<Env> {
     let frame: RelayFrame | undefined;
     try {
       const text = typeof message === 'string' ? message : new TextDecoder().decode(message);
-      if (new TextEncoder().encode(text).byteLength > creditWindowBytes) throw new Error('federation_body_limit');
+      const frameBytes = new TextEncoder().encode(text).byteLength;
+      if (frameBytes > creditWindowBytes) throw new Error('federation_body_limit');
       frame = parseFrame(text);
       if (frame.type === 'manifest') {
+        assertStateManifest(frame);
         this.manifests.set(sender, Array.isArray(frame.projects) ? frame.projects : []);
         this.nodeLabels.set(sender, String(frame.nodeLabel || sender).slice(0, 120));
         await this.ctx.storage.put({ manifests: [...this.manifests], nodeLabels: [...this.nodeLabels] });
@@ -296,6 +303,16 @@ export class FederationRelay extends DurableObject<Env> {
         }
         return;
       }
+      if (frame.type === 'state-subscribe') {
+        if (frame.stateVersion !== taskCurrentStateVersion) throw new Error('incompatible_state_protocol');
+        const projectId = String(frame.projectId ?? '');
+        if (!projectId) throw new Error('unknown_state_project');
+        const subscriptions = this.subscriptions.get(sender) ?? new Set<string>();
+        subscriptions.add(projectId);
+        this.subscriptions.set(sender, subscriptions);
+        await this.sendStateSummary(socket, projectId);
+        return;
+      }
       if (frame.type === 'content-change') {
         for (const target of this.activeSockets()) {
           if (target !== socket) this.sendSocket(target, { version: 1, type: 'content-change', from: sender });
@@ -303,6 +320,8 @@ export class FederationRelay extends DurableObject<Env> {
         return;
       }
       if (priorityStateFrameTypes.has(frame.type)) {
+        if (frameBytes > maximumStateFrameBytes) throw new Error('state_frame_too_large');
+        if (frame.stateVersion !== taskCurrentStateVersion) throw new Error('incompatible_state_protocol');
         if (!frame.to) {
           if (frame.type === 'state-entity-batch') await this.persistStateEntities(sender, socket, frame);
           else if (frame.type === 'state-bucket-summary') await this.reconcileStateSummary(sender, socket, frame);
@@ -313,7 +332,7 @@ export class FederationRelay extends DurableObject<Env> {
           return;
         }
         if (!frame.to || !this.socket(frame.to)) throw new Error('owner_offline');
-        this.send(frame.to, { ...frame, from: sender, to: undefined, stateVersion: 2 });
+        this.send(frame.to, { ...frame, from: sender, to: undefined, stateVersion: taskCurrentStateVersion });
         return;
       }
       if (frame.type === 'request-open') {
@@ -369,6 +388,7 @@ export class FederationRelay extends DurableObject<Env> {
 
   async webSocketClose(socket: WebSocket): Promise<void> {
     const nodeId = (socket.deserializeAttachment() as SocketIdentity).nodeId;
+    this.subscriptions.delete(nodeId);
     for (const [requestId, stream] of this.streams) {
       if (stream.owner === nodeId) this.send(stream.requester, { version: 1, type: 'response-error', requestId, code: 'owner_offline', message: 'Owner offline.' });
       if (stream.requester === nodeId) this.send(stream.owner, { version: 1, type: 'cancel', requestId });

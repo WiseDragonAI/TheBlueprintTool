@@ -4,7 +4,7 @@
  */
 import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-ledger-notes.js';
 import { relationshipReferencesCard } from './relationship-references-card.js';
-import { deleteCardMarkdownImage, duplicateCardContentFile, externalizeCardContent, readCardDescription, sameMarkdownImageSource, writeCardDescriptionFile } from './card-content-file.js';
+import { deleteCardMarkdownImage, duplicateCardContentFile, externalizeCardContent, sameMarkdownImageSource, writeCardDescriptionFile } from './card-content-file.js';
 import { hydrateLedgerThreadNotesFor, writeThreadNotesFile } from './thread-content-file.js';
 import { codexEffortOptions, codexModelOptions, type CodexEffort, type CodexModel } from '../../../../../shared/schemas/codex-pipeline-types.js';
 import type { CardQuestionnaires } from '../../../../../shared/schemas/questionnaire-types.js';
@@ -15,6 +15,7 @@ export type LedgerMutation = {
   card?: Record<string, unknown>;
   cards?: Array<Record<string, unknown>>;
   cardId?: string;
+  lifecycleStatus?: 'todo' | 'backlog' | 'done';
   masterTaskId?: string;
   imageSrc?: string;
   cardPatch?: { id?: string; status?: string; title?: string; description?: string; imageSizes?: Record<string, { width?: number; height?: number }>; questionnaires?: CardQuestionnaires; gitReviewNotes?: GitReviewNote[]; codexRunModel?: CodexModel; codexRunEffort?: CodexEffort };
@@ -144,7 +145,12 @@ export function applyLedgerMutation(input: {
   if (mutation.action === 'create-master-task' && mutation.card?.id) {
     const cards = [mutation.card, ...(mutation.cards ?? [])];
     const ids = new Set(cards.map((card) => String(card.id ?? '')).filter(Boolean));
-    if (ids.size !== cards.length || !Array.isArray(mutation.relationships)) {
+    const invalidSubtaskRelationship = !Array.isArray(mutation.relationships) || mutation.relationships.some((relationship) => (
+      relationship.label !== 'subtask'
+      || !Number.isInteger(Number(relationship.position))
+      || Number(relationship.position) < 0
+    ));
+    if (ids.size !== cards.length || invalidSubtaskRelationship) {
       mutationError = { statusCode: 400, body: { ok: false, error: 'Invalid master-task creation payload.' } };
     } else {
       for (const card of cards) {
@@ -158,12 +164,29 @@ export function applyLedgerMutation(input: {
   }
   if (mutation.action === 'create-relationship' && mutation.relationship?.id) {
     const id = String(mutation.relationship.id);
-    ledger.relationships = (ledger.relationships ?? []).filter((entry) => String(entry.id ?? '') !== id).concat(mutation.relationship);
+    if (mutation.relationship.label === 'subtask' && (!Number.isInteger(Number(mutation.relationship.position)) || Number(mutation.relationship.position) < 0)) {
+      mutationError = { statusCode: 400, body: { ok: false, error: 'Subtask relationships require a non-negative integer position.' } };
+    } else {
+      ledger.relationships = (ledger.relationships ?? []).filter((entry) => String(entry.id ?? '') !== id).concat(mutation.relationship);
+    }
+  }
+  if (mutation.action === 'transition-card-lifecycle') {
+    // WHAT: Apply the compatibility status for the one declared card.
+    // WHY: The task-state authority converts this command into one atomic lifecycle register.
+    const cardId = String(mutation.cardId ?? '');
+    const status = mutation.lifecycleStatus;
+    const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === cardId);
+    if (!cardId || !['todo', 'backlog', 'done'].includes(String(status ?? ''))) {
+      mutationError = { statusCode: 400, body: { ok: false, error: 'Card lifecycle transition requires a card and todo, backlog, or done.' } };
+    } else if (!card) {
+      mutationError = { statusCode: 404, body: { ok: false, error: 'Card not found.', cardId } };
+    } else {
+      card.status = status;
+    }
   }
   if (mutation.action === 'patch-card' && mutation.cardPatch?.id) {
     const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === mutation.cardPatch?.id);
     const includesStatus = mutation.cardPatch.status !== undefined;
-    const validStatus = mutation.cardPatch.status === 'todo' || mutation.cardPatch.status === 'done' || mutation.cardPatch.status === 'backlog';
     const includesCodexPreference = mutation.cardPatch.codexRunModel !== undefined || mutation.cardPatch.codexRunEffort !== undefined;
     const includesQuestionnaires = mutation.cardPatch.questionnaires !== undefined;
     const includesGitReviewNotes = mutation.cardPatch.gitReviewNotes !== undefined;
@@ -195,14 +218,15 @@ export function applyLedgerMutation(input: {
         body: { ok: false, error: 'Changing a questionnaire context revision requires clearing its prior answers and voice notes.' },
       };
     }
-    if (!mutationError && includesStatus && !validStatus) {
+    if (!mutationError && includesStatus) {
+      // WHAT: Reject lifecycle data hidden inside a generic card patch.
+      // WHY: Every lifecycle caller must pass through the conflict-safe scoped command.
       mutationError = {
         statusCode: 400,
-        body: { ok: false, error: 'Card status must be todo, backlog, or done.' },
+        body: { ok: false, error: 'Card lifecycle must use transition-card-lifecycle.' },
       };
     }
     if (!mutationError) {
-      if (card && validStatus) card.status = mutation.cardPatch.status;
       if (card && typeof mutation.cardPatch.title === 'string') card.title = mutation.cardPatch.title;
       if (card && typeof mutation.cardPatch.description === 'string') {
         writeCardDescriptionFile({ decisionOsRoot, card, description: mutation.cardPatch.description, ledgerPath });
@@ -222,46 +246,19 @@ export function applyLedgerMutation(input: {
     if (!masterTask) {
       mutationError = { statusCode: 404, body: { ok: false, error: 'Master task not found.' } };
     } else {
-      const markdown = readCardDescription({ decisionOsRoot, card: masterTask });
       const taskLabels = (card: Record<string, unknown>): string[] => Array.isArray(card.labels) ? card.labels.map(String) : [];
-      const hasTaskLabel = (card: Record<string, unknown>): boolean => taskLabels(card).some((label) => label === 'master-task' || label === 'subtask');
       const subtaskIds = (ledger.relationships ?? [])
         .filter((relationship) => String(relationship.from ?? '') === masterTaskId && String(relationship.label ?? '') === 'subtask')
+        .sort((left, right) => Number(left.position) - Number(right.position) || String(left.id ?? '').localeCompare(String(right.id ?? '')))
         .map((relationship) => String(relationship.to ?? ''));
       const linkedSubtasks = subtaskIds.map((id) => (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === id));
-      const legacyMaster = /^\s*(?:#[a-z][a-z0-9-]*\s*)*#master-task\b/im.test(markdown);
-      if (taskLabels(masterTask).includes('subtask') || (!taskLabels(masterTask).includes('master-task') && (hasTaskLabel(masterTask) || !legacyMaster))) {
+      if (!taskLabels(masterTask).includes('master-task')) {
         mutationError = { statusCode: 400, body: { ok: false, error: 'The requested card is not a canonical master task.' } };
       } else if (linkedSubtasks.some((card) => !card)) {
         mutationError = { statusCode: 400, body: { ok: false, error: 'Every canonical subtask relationship must resolve to a ledger card.' } };
-      } else if (linkedSubtasks.some((card) => card && hasTaskLabel(card) && (!taskLabels(card).includes('subtask') || taskLabels(card).includes('master-task')))) {
-        mutationError = { statusCode: 400, body: { ok: false, error: 'Every canonical subtask relationship must target a subtask-labeled card.' } };
       } else {
-        masterTask.labels = [...new Set(taskLabels(masterTask).filter((label) => label !== 'subtask').concat('master-task'))];
-        for (const subtask of linkedSubtasks) {
-          subtask!.labels = [...new Set(taskLabels(subtask!).filter((label) => label !== 'master-task').concat('subtask'))];
-          subtask!.status = 'done';
-        }
+        for (const subtask of linkedSubtasks) subtask!.status = 'done';
         masterTask.status = 'done';
-        const completedAt = new Date().toISOString();
-        let completedMarkdown = markdown.replace(/(\(card:[^)]+\))\s+[—-]\s+Status:\s*[^\n]+/gi, '$1');
-        completedMarkdown = completedMarkdown.split('\n').map((line) => /^\s*(?:#[a-z][a-z0-9-]*\s*)+$/i.test(line)
-          ? line.replace(/(?:^|\s+)#(?:master-task|task-(?:waiting|active|execution|complete))\b/gi, '').replace(/\s+/g, ' ').trim()
-          : line).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
-        if (/^\s*(?:\*\*)?Completed at(?:\*\*)?\s*:/im.test(completedMarkdown)) {
-          completedMarkdown = completedMarkdown.replace(/^\s*(?:\*\*)?Completed at(?:\*\*)?\s*:.*$/im, `Completed at: ${completedAt}`);
-        } else {
-          const activeLine = /^\s*(?:\*\*)?Active since(?:\*\*)?\s*:.*$/im;
-          completedMarkdown = activeLine.test(completedMarkdown)
-            ? completedMarkdown.replace(activeLine, (line) => `${line}\nCompleted at: ${completedAt}`)
-            : `Completed at: ${completedAt}\n\n${completedMarkdown}`;
-        }
-        writeCardDescriptionFile({
-          decisionOsRoot,
-          card: masterTask,
-          description: completedMarkdown,
-          ledgerPath,
-        });
       }
     }
   }

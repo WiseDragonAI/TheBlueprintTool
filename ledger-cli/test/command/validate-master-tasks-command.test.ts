@@ -10,15 +10,15 @@ test('validates canonical task labels and relationship endpoints while ignoring 
     relationships: [],
   });
   const invalidFile = await createJsonFile({
-    cards: [{ id: 'stale', status: 'todo', labels: ['master-task'] }, { id: 'child', status: 'todo' }],
-    relationships: [{ id: 'rel-a', from: 'stale', to: 'child', label: 'subtask' }],
+    cards: [{ id: 'stale', status: 'todo', labels: ['master-task'] }],
+    relationships: [{ id: 'rel-a', from: 'stale', to: 'missing-child', label: 'subtask', position: 0 }],
   });
 
   const valid = await dispatchLedgerCliCommandController(['validate-master-tasks', '--ledger', validFile]);
   const invalid = await dispatchLedgerCliCommandController(['validate-master-tasks', '--ledger', invalidFile]);
   assert.deepEqual(valid, { ok: true, value: 'Validated 1 master task.' });
   assert.equal(invalid.ok, false);
-  if (!invalid.ok) assert.match(invalid.error, /stale: invalid_subtask_label:child/);
+  if (!invalid.ok) assert.match(invalid.error, /stale: missing_subtask:missing-child/);
 });
 
 test('scopes master-task validation to one card', async () => {

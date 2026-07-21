@@ -9,6 +9,7 @@ import { execFileSync } from 'node:child_process';
 import { telemetry } from '../../../lib/telemetry/telemetry.js';
 import { readLedgerJson } from '../helper/read-ledger-json.js';
 import { writeLedgerJson } from '../effect/write-ledger-json.js';
+import { transitionCardLifecycle } from '../effect/transition-card-lifecycle.js';
 import { formatLedgerOverview } from '../helper/format-ledger-overview.js';
 import { formatLedgerMarkdownExport } from '../helper/format-ledger-markdown-export.js';
 import { appendThreadAnswer } from '../helper/append-thread-answer.js';
@@ -425,7 +426,9 @@ export async function manageLedgerJsonController(
       telemetry('manage-ledger-json-rejected', { error: statusResult.error });
       return statusResult;
     }
-    await writeLedgerJson(actionPayload.ledgerJsonFile, stripHydratedThreadNotes(statusResult.value), fs);
+    const statusOperation = actionPayload.statusOperation!;
+    const remotelyCommitted = await transitionCardLifecycle(actionPayload.ledgerJsonFile, statusOperation.cardId!, statusOperation.status, fs);
+    if (!remotelyCommitted) await writeLedgerJson(actionPayload.ledgerJsonFile, stripHydratedThreadNotes(statusResult.value), fs);
     telemetry('write-ledger-json', { path: actionPayload.ledgerJsonFile });
     telemetry('manage-ledger-json-completed');
     return statusResult;

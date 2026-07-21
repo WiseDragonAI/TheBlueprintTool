@@ -191,7 +191,7 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
     const backlogStatusResponse = await fetch(endpoint, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'card-a', status: 'backlog' } })
+      body: JSON.stringify({ action: 'transition-card-lifecycle', cardId: 'card-a', lifecycleStatus: 'backlog' })
     });
     assert.equal(backlogStatusResponse.ok, true, await backlogStatusResponse.clone().text());
     const backlogStatusLedger = await backlogStatusResponse.json() as { changedCard: Record<string, unknown> };
@@ -200,7 +200,7 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
     const restoredStatusResponse = await fetch(endpoint, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'card-a', status: 'todo' } })
+      body: JSON.stringify({ action: 'transition-card-lifecycle', cardId: 'card-a', lifecycleStatus: 'todo' })
     });
     assert.equal(restoredStatusResponse.ok, true);
     const restoredStatusLedger = await restoredStatusResponse.json() as { changedCard: Record<string, unknown> };
@@ -216,7 +216,7 @@ test('decision-os canvas mutations are applied by the authoritative server ledge
     const cardStatusResponse = await fetch(endpoint, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'card-a', status: 'done' } })
+      body: JSON.stringify({ action: 'transition-card-lifecycle', cardId: 'card-a', lifecycleStatus: 'done' })
     });
     assert.equal(cardStatusResponse.ok, true);
     const cardStatusLedger = await cardStatusResponse.json() as { changedCard: Record<string, unknown> };

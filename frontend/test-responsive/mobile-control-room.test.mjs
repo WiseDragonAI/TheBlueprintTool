@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { executionStopwatch, cardCodexRunId, deriveControlRoom, parseMasterTaskMarkdown, visibleMasterTaskMarkdown, waitingAge } from '../src/app/responsive/control-room.js';
+import { executionStopwatch, cardCodexRunId, projectMasterTask, waitingAge } from '../src/app/responsive/control-room.js';
 import { controlRoomPath, parseControlRoomRoute } from '../src/app/responsive/control-room-route.js';
 
 const [mobile, html, styles, bootApplication, embla, panzoom, mediaRenderer] = await Promise.all([
@@ -16,89 +16,32 @@ const [mobile, html, styles, bootApplication, embla, panzoom, mediaRenderer] = a
 ]);
 
 const task = (overrides = {}) => ({
-  cardId: 'card-a',
-  title: 'Master A',
-  ledgerId: 'tasks',
+  card: { id: 'card-a', title: 'Master A', labels: ['master-task'], lifecycle: { status: 'todo', waitingAt: '2026-07-10T10:00:00.000Z', changedAt: '2026-07-10T10:00:00.000Z', closedAt: null } },
+  cards: [
+    { id: 'card-r', title: 'Research', labels: [], lifecycle: { status: 'done' } },
+    { id: 'card-b', title: 'Build', labels: ['subtask'], lifecycle: { status: 'todo' } },
+  ],
+  relationships: [
+    { id: 'rel-b', from: 'card-a', to: 'card-b', label: 'subtask', position: 1 },
+    { id: 'rel-r', from: 'card-a', to: 'card-r', label: 'subtask', position: 0 },
+  ],
   ledgerTitle: 'Tasks',
-  cardStatus: 'todo',
-  cards: [{ id: 'card-r', status: 'done' }, { id: 'card-b', status: 'todo' }],
-  markdown: '#master-task #task-waiting\n\nLedger: Tasks\nWaiting since: 2026-07-10T10:00:00.000Z\n\n## Subtasks\n\n1. [Research](card:card-r) — Status: complete\n2. [Build](card:card-b) — Status: active',
   ...overrides
 });
 
-test('parses the canonical master-task markdown without another data model', () => {
-  const parsed = parseMasterTaskMarkdown(task());
+test('projects master-task lifecycle and positioned relationships without Markdown authority', () => {
+  const parsed = projectMasterTask(task());
   assert.equal(parsed.valid, true);
   assert.equal(parsed.status, 'task-waiting');
   assert.equal(parsed.complete, 1);
   assert.equal(parsed.nextSubtask.cardId, 'card-b');
-});
-
-test('uses JSON labels, status, and relationships when legacy Markdown is stale', () => {
-  const parsed = parseMasterTaskMarkdown(task({
-    labels: ['master-task'],
-    relationships: [
-      { id: 'rel-r', from: 'card-a', to: 'card-r', label: 'subtask' },
-      { id: 'rel-b', from: 'card-a', to: 'card-b', label: 'subtask' },
-    ],
-    cards: [
-      { id: 'card-r', title: 'Research', status: 'done', labels: ['subtask'] },
-      { id: 'card-b', title: 'Build', status: 'todo', labels: ['subtask'] },
-    ],
-    markdown: '#master-task #task-complete\n\nLedger: Tasks\nWaiting since: 2026-07-10T10:00:00.000Z\n\n## Subtasks\n\n1. [Research](card:card-r) — Status: pending',
-  }));
-  assert.equal(parsed.valid, true);
-  assert.equal(parsed.status, 'task-waiting');
-  assert.equal(parsed.complete, 1);
   assert.deepEqual(parsed.subtasks.map((entry) => entry.cardId), ['card-r', 'card-b']);
 });
 
-test('uses canonical ledger context and thread time when JSON master Markdown has no lifecycle header', () => {
-  const parsed = parseMasterTaskMarkdown(task({
-    labels: ['master-task'],
-    relationships: [],
-    cards: [],
-    threadNotes: [{ role: 'operator', timestamp: '2026-07-10T11:15:00.000Z' }],
-    markdown: '## A. Result\n\n1. Complete.'
-  }));
-  assert.equal(parsed.valid, true);
-  assert.equal(parsed.ledger, 'Tasks');
-  assert.equal(parsed.waitingSince, '2026-07-10T11:15:00.000Z');
-});
-
-test('restarts waiting age from the latest timestamped thread message', () => {
-  const parsed = parseMasterTaskMarkdown(task({
-    threadNotes: [
-      { role: 'operator', timestamp: '2026-07-10T10:05:00.000Z' },
-      { role: 'agent', timestamp: '2026-07-10T11:15:00.000Z' }
-    ]
-  }));
-  assert.equal(parsed.waitingSince, '2026-07-10T11:15:00.000Z');
-  assert.equal(parsed.waitingTime, Date.parse('2026-07-10T11:15:00.000Z'));
-  assert.equal(waitingAge(parsed.waitingSince, Date.parse('2026-07-10T11:45:00.000Z')), '30m waiting');
-});
-
-test('ignores malformed thread timestamps and retains the card waiting timestamp', () => {
-  const parsed = parseMasterTaskMarkdown(task({ threadNotes: [{ role: 'agent', timestamp: 'not-a-date' }] }));
-  assert.equal(parsed.waitingSince, '2026-07-10T10:00:00.000Z');
-  assert.equal(parsed.waitingTime, Date.parse('2026-07-10T10:00:00.000Z'));
-});
-
-test('derives the Queue only by newest waiting time and ignores legacy ranks', () => {
-  const result = deriveControlRoom([
-    task({ cardId: 'newer', markdown: task().markdown.replace('10T10', '11T10') }),
-    task({ cardId: 'oldest' }),
-    task({ cardId: 'stale-ranked', markdown: `${task().markdown.replace('10T10', '09T10')}\nQueue rank: 1` }),
-    task({ cardId: 'active', codexRunId: 'run-active', codexStatus: 'processing', markdown: task().markdown.replace('#task-waiting', '#task-execution').replace('Waiting since:', 'Active since: 2026-07-10T10:30:00.000Z\nWaiting since:') }),
-    task({ cardId: 'backlog', cardStatus: 'backlog' }),
-    task({ cardId: 'done', cardStatus: 'done', markdown: task().markdown.replace('#task-waiting', '#task-complete') })
-  ]);
-  assert.deepEqual(result.queue.map((entry) => entry.cardId), ['newer', 'oldest', 'stale-ranked']);
-  assert.equal('queueRank' in result.queue[2], false);
-  assert.deepEqual(result.exec.map((entry) => entry.cardId), ['active']);
-  assert.deepEqual(result.backlog.map((entry) => entry.cardId), ['backlog']);
-  assert.equal(result.queue.some((entry) => entry.cardId === 'done'), false);
-  assert.deepEqual(result.ledgers, ['Tasks']);
+test('replicated execution intent is the only local task execution authority', () => {
+  const projected = projectMasterTask(task({ card: { ...task().card, executionStatus: 'running', executionIntent: { id: 'intent-a', state: 'running', startedAt: '2026-07-10T10:30:00.000Z' } } }));
+  assert.equal(projected.status, 'task-execution');
+  assert.equal(projected.executionStatus, 'running');
 });
 
 test('renders dynamic task totals in every Control Room status tab', () => {
@@ -131,70 +74,19 @@ test('persists Control Room tab navigation and the nearest task anchor in browse
   assert.match(mobile, /document\.getElementById\(anchor\)\?\.scrollIntoView\(\{ block: 'start' \}\)/);
 });
 
-test('shows task-execution only while its Codex process is running', () => {
-  const markdown = task().markdown.replace('#task-waiting', '#task-execution').replace('Waiting since:', 'Active since: 2026-07-10T10:30:00.000Z\nWaiting since:');
-  const result = deriveControlRoom([
-    task({ cardId: 'running', markdown, codexRunId: 'run-123', codexStatus: 'processing' }),
-    task({ cardId: 'stopped', markdown, codexRunId: 'run-456', codexStatus: 'complete' })
-  ]);
-  assert.deepEqual(result.exec.map((entry) => entry.cardId), ['running']);
-  assert.deepEqual(result.queue.map((entry) => entry.cardId), ['stopped']);
-  assert.equal(result.exec[0].codexRunId, 'run-123');
-  assert.match(mobile, /Codex \$\{task\.codexRunId\}/);
-});
-
-test('anchors an executing pipeline task to its logical launch instead of a recovered process segment', () => {
-  const firstActivation = '2026-07-10T10:30:00.000Z';
-  const currentRunStartedAt = '2026-07-10T10:35:07.000Z';
-  const markdown = task().markdown.replace('#task-waiting', '#task-execution').replace('Waiting since:', `Active since: ${firstActivation}\nWaiting since:`);
-  const parsed = parseMasterTaskMarkdown(task({
-    markdown,
-    codexRunId: 'run-current',
-    codexStatus: 'running',
-    codexStartedAt: currentRunStartedAt
-  }));
-  assert.equal(parsed.executionSince, currentRunStartedAt);
-  assert.equal(parsed.executionTime, Date.parse(currentRunStartedAt));
-  assert.equal(executionStopwatch(parsed.executionSince, Date.parse('2026-07-10T10:37:12.000Z')), '02:05');
+test('reads task execution timing from replicated execution intent', () => {
+  const startedAt = '2026-07-10T10:35:07.000Z';
+  const parsed = projectMasterTask(task({ card: { ...task().card, executionIntent: { id: 'intent-a', state: 'running', startedAt } } }));
+  assert.equal(parsed.executionStatus, 'running');
+  assert.equal(executionStopwatch(startedAt, Date.parse('2026-07-10T10:37:12.000Z')), '02:05');
   assert.match(mobile, /fetch\('\/api\/control-room', \{ cache: 'no-store', signal: owner\?\.signal, headers:/);
   assert.doesNotMatch(mobile, /api\/codex\/pipelines\/runs\/\$\{encodeURIComponent\(pipelineRunId\)\}/);
   assert.doesNotMatch(mobile, /api\/codex\/skills\/runs\/\$\{encodeURIComponent\(runId\)\}/);
 });
 
-test('does not use persisted task metadata as the Codex execution timer', () => {
-  const logicalLaunch = '2026-07-10T10:30:00.000Z';
-  const markdown = task().markdown.replace('#task-waiting', '#task-execution').replace('Waiting since:', `Active since: ${logicalLaunch}\nWaiting since:`);
-  const parsed = parseMasterTaskMarkdown(task({
-    markdown,
-    codexRunId: 'run-current',
-    codexStatus: 'running'
-  }));
-  assert.equal(parsed.executionSince, '');
-  assert.equal(Number.isNaN(parsed.executionTime), true);
-  assert.doesNotMatch(mobile, /codexStartedAt = String\(payload\.startedAt/);
-});
-
-test('shows queued Codex pipelines in Exec with their one-based position', () => {
-  const result = deriveControlRoom([task({
-    codexPipelineRunId: 'pipeline-queued',
-    codexStatus: 'pending',
-    codexQueuePosition: 2
-  })]);
-  assert.equal(result.queue.length, 0);
-  assert.equal(result.exec[0].codexQueued, true);
-  assert.equal(result.exec[0].codexQueuePosition, 2);
+test('renders replicated queued execution supplied by the server projection', () => {
   assert.match(mobile, /Queued · position \$\{task\.codexQueuePosition\}/);
   assert.match(styles, /\.task-queue-position \{[^}]*white-space: nowrap/);
-});
-
-test('ignores persisted pending execution without a queue observation', () => {
-  const result = deriveControlRoom([task({
-    executionStatus: 'pending',
-    codexStatus: 'unknown',
-    codexQueuePosition: null,
-  })]);
-  assert.equal(result.queue.length, 1);
-  assert.equal(result.exec.length, 0);
 });
 
 test('Control Room resolves Process Card runs through the shared current-run pointer', () => {
@@ -206,44 +98,21 @@ test('Control Room resolves Process Card runs through the shared current-run poi
   assert.equal(processCardRunId, 'codex-skill-pipeline');
   assert.equal(cardCodexRunId({ codexThreadRunId: 'codex-skill-thread' }), 'codex-skill-thread');
   assert.equal(cardCodexRunId({ codexRunId: 'codex-skill-card' }), 'codex-skill-card');
-  const markdown = task().markdown.replace('#task-waiting', '#task-execution').replace('Waiting since:', 'Active since: 2026-07-10T10:30:00.000Z\nWaiting since:');
-  const result = deriveControlRoom([task({ markdown, codexRunId: processCardRunId, codexStatus: 'running' })]);
-  assert.deepEqual(result.exec.map((entry) => entry.cardId), ['card-a']);
-  assert.equal(result.queue.length, 0);
   assert.match(mobile, /const nextControlRoom = await response\.json\(\)[\s\S]*state\.controlRoom = nextControlRoom/);
   assert.doesNotMatch(mobile, /const runId = cardCodexRunId\(card\)/);
 });
 
-test('ignores task tag examples in ordinary Markdown prose', () => {
-  const parsed = parseMasterTaskMarkdown(task({ markdown: 'This specification documents `#master-task`, `#task-waiting`, and `#task-execution`.' }));
+test('ordinary Markdown task tags cannot create a master task', () => {
+  const parsed = projectMasterTask(task({ card: { ...task().card, labels: [], comment: { what: '#master-task #task-waiting' } } }));
+  assert.equal(parsed.masterTask, false);
   assert.equal(parsed.valid, false);
-  assert.equal(parsed.diagnostics.includes('missing master-task label'), true);
-  assert.equal(deriveControlRoom([{ ...task(), markdown: parsed.markdown }]).diagnostics.length, 0);
-});
-
-test('reports invalid canonical markdown and hides legacy queue ranks', () => {
-  const invalid = parseMasterTaskMarkdown(task({ markdown: '#master-task #task-waiting\nLedger: Tasks' }));
-  assert.equal(invalid.valid, false);
-  assert.match(invalid.diagnostics.join(','), /Waiting since/);
-  assert.doesNotMatch(visibleMasterTaskMarkdown(`Queue rank: 3\n\n${task().markdown}`), /Queue rank/);
-});
-
-test('keeps malformed master tasks visible in the control room with diagnostics', () => {
-  const malformed = task({
-    cardId: 'malformed',
-    cardStatus: 'backlog',
-    markdown: '#master-task #task-waiting #task-execution\n\nLedger: Tasks\n\n## Subtasks\n'
-  });
-  const result = deriveControlRoom([malformed]);
-  assert.deepEqual(result.backlog.map((entry) => entry.cardId), ['malformed']);
-  assert.deepEqual(result.diagnostics.map((entry) => entry.cardId), ['malformed']);
 });
 
 test('parks and restores master tasks through the shared card status mutation', () => {
   assert.match(mobile, /delayButton\.textContent = backlog \? 'Restore to queue' : 'Move to backlog'/);
   assert.doesNotMatch(mobile, /Park task|Parking task/);
   assert.match(mobile, /const nextStatus = backlog \? 'todo' : 'backlog'/);
-  assert.match(mobile, /ledgerMutation\(state\.activeLedgerId, \{ action: 'patch-card', cardPatch: \{ id: card\.id, status: nextStatus \} \}\)/);
+  assert.match(mobile, /ledgerMutation\(state\.activeLedgerId, \{ action: 'transition-card-lifecycle', cardId: card\.id, lifecycleStatus: nextStatus \}\)/);
   assert.match(mobile, /controlRoomPath\(nextStatus === 'backlog' \? 'backlog' : 'queue'\)/);
   assert.match(mobile, /backlog: 'No backlog tasks'/);
 });
@@ -323,7 +192,7 @@ test('persists optimistic Queue and Backlog placement and reconciles rejected ch
   const persistence = mobile.slice(mobile.indexOf('async function persistControlTaskPlacement'), mobile.indexOf('async function activateMasterTask'));
   assert.match(persistence, /state\.controlRoom\[sourceTab\] = source\.filter/);
   assert.match(persistence, /target\.splice\(insertionIndex, 0, task\)/);
-  assert.match(persistence, /cardPatch: \{ id: task\.cardId, status: targetTab === 'backlog' \? 'backlog' : 'todo' \}/);
+  assert.match(persistence, /cardId: task\.cardId,[\s\S]*lifecycleStatus: targetTab === 'backlog' \? 'backlog' : 'todo'/);
   assert.match(persistence, /if \(targetTab === 'queue'\) target\.sort\(compareControlRoomQueueTasks\)/);
   assert.match(persistence, /catch \(error\)[\s\S]*await loadControlRoom\(\{ force: true \}\)[\s\S]*renderControlRoom\(\)/);
   assert.match(mobile, /dataset\.controlColumnList !== 'exec'/);
@@ -405,6 +274,9 @@ test('requires an explicit project choice before creating a new task intake', ()
   assert.match(mobile, /await createTaskIntake\(project\.id, project\.selectedReplicaNodeId\)/);
   assert.match(mobile, /async function createTaskIntake\(projectId, replicaNodeId\) \{\s*setResourceProject\(projectId\)/);
   assert.match(mobile, /replicationState: 'local-only', persistenceState: 'creating'/);
+  const intake = mobile.slice(mobile.indexOf('async function createTaskIntake'), mobile.indexOf('function openNewTaskProjectModal'));
+  assert.match(intake, /createdAt: timestamp/);
+  assert.doesNotMatch(intake, /Waiting since:|## Subtasks|relationship-backed card links/);
   assert.match(mobile, /const locallyOwned = localCard\?\.persistenceState === 'creating' \|\| localCard\?\.persistenceState === 'failed';[\s\S]*let card = locallyOwned \? localCard : null;[\s\S]*if \(!card\) \{[\s\S]*projectFetch\(`\/api\/ledgers\/\$\{encodeURIComponent\(ledgerId\)\}\/cards/);
   const projectPicker = mobile.slice(mobile.indexOf('function openNewTaskProjectModal()'), mobile.indexOf('function cardOverlapArea'));
   assert.match(html, /class="new-task-node-tabs" role="tablist" aria-label="Choose a node"/);
@@ -436,10 +308,9 @@ test('drills from one compact full-color project row into one ledger row with a 
   assert.match(styles, /\.filter-clear-button \{ margin-left: 8px;/);
 });
 
-test('keeps task metadata in Markdown but removes it from the visible card body', () => {
-  const visible = visibleMasterTaskMarkdown(task().markdown);
-  assert.doesNotMatch(visible, /#master-task|Ledger:|Waiting since:|Status:/);
-  assert.doesNotMatch(visible, /\[Research\]\(card:card-r\)/);
+test('renders card Markdown as narrative without a runtime projection filter', () => {
+  assert.match(mobile, /const markdown = ledgerCardBody\(card\);[\s\S]*renderLedgerCardMarkdown\(markdown,/);
+  assert.doesNotMatch(mobile, /visibleMasterTaskMarkdown|parseMasterTaskMarkdown/);
 });
 
 test('lays mobile carousel controls over the image with touch-safe navigation', () => {
@@ -485,14 +356,6 @@ test('shows the settled image title for one second and then fades it out', () =>
   assert.match(mobile, /if \(instance\?\.titleTimer\) clearTimeout\(instance\.titleTimer\)/);
   assert.match(styles, /\.ledger-card-media-title \{[^}]*opacity: 0;[^}]*transition: opacity 260ms ease;/);
   assert.match(styles, /\.ledger-card-media-title\.is-visible \{ opacity: 1; \}/);
-});
-
-test('parses letter-prefixed card sections from the decision-os formatting contract', () => {
-  const markdown = task().markdown.replace('## Subtasks', '## B. Subtasks');
-  const parsed = parseMasterTaskMarkdown(task({ markdown }));
-  assert.equal(parsed.subtasks.length, 2);
-  assert.equal(parsed.complete, 1);
-  assert.equal(parsed.nextSubtask.cardId, 'card-b');
 });
 
 test('routes master-task cards back to their task list and regular cards back to their zone', () => {

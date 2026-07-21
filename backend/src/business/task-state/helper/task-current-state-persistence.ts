@@ -42,5 +42,12 @@ export function createTaskCurrentStatePersistence(root: string) {
     try { await directory.sync(); }
     finally { await directory.close(); }
   };
-  return { entityPath, atomicWrite, atomicWriteSync };
+  const durableRemove = async (file: string): Promise<void> => {
+    await mkdir(dirname(file), { recursive: true });
+    await rm(file, { force: true });
+    const directory = await open(dirname(file), 'r');
+    try { await directory.sync(); }
+    finally { await directory.close(); }
+  };
+  return { entityPath, atomicWrite, atomicWriteSync, durableRemove };
 }

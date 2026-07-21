@@ -21,13 +21,13 @@ test('serves one compact multi-project Control Room projection and refreshes one
   writeFileSync(join(decisionOsRoot, 'threads', 'tasks', 'thread-master-done.md'), '# AGENT\n<!-- decision-os:note {"id":"n2","timestamp":"2026-07-14T10:03:00.000Z"} -->\n\nFinished.\n');
   writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({
     cards: [
-      { id: 'master', title: 'Master', status: 'todo', labels: ['master-task', 'delivery'], x: 10, y: 10, w: 300, h: 200, comment: { contentFile: '.decision-os/cards/tasks/master.md' } },
-      { id: 'master-done', title: 'Completed master', status: 'done', labels: ['master-task', 'release'], x: 10, y: 240, w: 300, h: 200, comment: { contentFile: '.decision-os/cards/tasks/master-done.md' } },
-      { id: 'child', title: 'Child', status: 'done', labels: ['subtask'], x: 350, y: 10, w: 300, h: 200 },
+      { id: 'master', title: 'Master', status: 'todo', createdAt: '2026-07-14T10:00:00.000Z', lifecycle: { status: 'todo', changedAt: '2026-07-14T10:01:00.000Z', waitingAt: '2026-07-14T10:01:00.000Z', closedAt: null }, labels: ['master-task', 'delivery'], x: 10, y: 10, w: 300, h: 200, comment: { contentFile: '.decision-os/cards/tasks/master.md' } },
+      { id: 'master-done', title: 'Completed master', status: 'done', createdAt: '2026-07-14T10:00:00.000Z', lifecycle: { status: 'done', changedAt: '2026-07-14T10:04:00.000Z', waitingAt: null, closedAt: '2026-07-14T10:04:00.000Z' }, labels: ['master-task', 'release'], x: 10, y: 240, w: 300, h: 200, comment: { contentFile: '.decision-os/cards/tasks/master-done.md' } },
+      { id: 'child', title: 'Child', status: 'done', createdAt: '2026-07-14T10:00:00.000Z', lifecycle: { status: 'done', changedAt: '2026-07-14T10:04:00.000Z', waitingAt: null, closedAt: '2026-07-14T10:04:00.000Z' }, labels: [], x: 350, y: 10, w: 300, h: 200 },
       { id: 'worker', title: 'Worker', status: 'todo', codexActiveRunId: 'codex-skill-test', codexActiveExecutionId: 'execution-test', codexRunId: 'codex-skill-test' },
     ],
     annotations: [{ id: 'zone-a', x: 0, y: 0, width: 800, height: 600, color: '#123456' }],
-    relationships: [{ id: 'rel-a', from: 'master', to: 'child', label: 'subtask' }], notes: {}, threadFiles: {
+    relationships: [{ id: 'rel-a', from: 'master', to: 'child', label: 'subtask', position: 0 }], notes: {}, threadFiles: {
       'thread-master': '.decision-os/threads/tasks/thread-master.md',
       'thread-master-done': '.decision-os/threads/tasks/thread-master-done.md',
     },
@@ -45,7 +45,7 @@ test('serves one compact multi-project Control Room projection and refreshes one
     const firstText = await firstResponse.text();
     const first = JSON.parse(firstText) as Record<string, any>;
     assert.equal(firstResponse.ok, true, firstText);
-    assert.equal(first.projectorVersion, 'control-room-v14-completion-time');
+    assert.equal(first.projectorVersion, 'control-room-v15-structural-task-state');
     assert.ok(Buffer.byteLength(firstText) < 250_000);
     assert.equal(first.queue.length, 1);
     assert.equal(first.queue[0].zoneId, 'zone-a');

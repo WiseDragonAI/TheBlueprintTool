@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import type { Result } from '../../../lib/types.js';
-import { canonicalSubtaskRelationships, isMasterCard, record, stripLegacyTaskProjection, withCanonicalTaskLabel } from './master-task-model.js';
+import { canonicalSubtaskRelationships, isMasterCard, record, stripLegacyTaskProjection } from './master-task-model.js';
 import { validateMasterTasks } from './validate-master-tasks.js';
 import { parseThreadMarkdown } from './thread-content-file.js';
 
@@ -21,22 +21,6 @@ function sections(value: unknown): Section[] {
 
 function renderSections(value: Section[]): string {
   return value.map((section, index) => `## ${String.fromCharCode(65 + index)}. ${section.title}\n\n${section.markdown}`).join('\n\n---\n\n');
-}
-
-function projectSubtaskLinks(markdown: string, links: string): string {
-  const source = stripLegacyTaskProjection(markdown).trimEnd();
-  const lines = source.split('\n');
-  const headingIndex = lines.findIndex((line) => /^##\s+(?:[A-Z]\.\s+)?Subtasks\s*$/i.test(line));
-  if (headingIndex < 0) {
-    const sectionCount = lines.filter((line) => /^##\s+/.test(line)).length;
-    const letter = String.fromCharCode(65 + Math.min(sectionCount, 25));
-    return `${source}\n\n---\n\n## ${letter}. Subtasks\n\n${links}\n`;
-  }
-  const nextHeading = lines.findIndex((line, index) => index > headingIndex && /^##\s+/.test(line));
-  const before = lines.slice(0, headingIndex + 1).join('\n').trimEnd();
-  if (nextHeading < 0) return `${before}\n\n${links}\n`;
-  const after = lines.slice(nextHeading).join('\n').replace(/^\n+/, '');
-  return `${before}\n\n${links}\n\n---\n\n${after.trimEnd()}\n`;
 }
 
 function parsePlan(value: string): Result<Plan> {
@@ -88,7 +72,7 @@ export function applyMasterTaskProgress(input: { ledgerJsonFile: string; planJso
   if (masterIndex < 0) return { ok: false, error: `Card not found: ${plan.masterCardId}` };
   const masterFile = contentPath(input.ledgerJsonFile, cards[masterIndex]);
   const masterMarkdown = masterFile && existsSync(masterFile) ? readFileSync(masterFile, 'utf8') : '';
-  if (!isMasterCard(cards[masterIndex], masterMarkdown)) return { ok: false, error: `Card is not a master task: ${plan.masterCardId}` };
+  if (!isMasterCard(cards[masterIndex])) return { ok: false, error: `Card is not a master task: ${plan.masterCardId}` };
 
   const relationships = canonicalSubtaskRelationships(ledger, plan.masterCardId);
   const subtaskIds = new Set(relationships.map((entry) => String(entry.to ?? '')));
@@ -98,12 +82,8 @@ export function applyMasterTaskProgress(input: { ledgerJsonFile: string; planJso
   if (plan.verifiedSubtaskIds.some((id) => !subtaskIds.has(id))) return { ok: false, error: 'Every verified subtask id must belong to the master.' };
   if (relationships.some((relationship) => !cards.some((card) => String(card.id ?? '') === String(relationship.to ?? '')))) return { ok: false, error: 'Every canonical subtask relationship must resolve to a card.' };
 
-  cards[masterIndex] = withCanonicalTaskLabel(cards[masterIndex], 'master-task');
-  for (const id of subtaskIds) {
-    const index = cards.findIndex((card) => String(card.id ?? '') === id);
-    cards[index] = withCanonicalTaskLabel(cards[index], 'subtask');
-  }
-  for (const id of plan.verifiedSubtaskIds) cards[cards.findIndex((card) => String(card.id ?? '') === id)].status = 'done';
+  const incompleteVerifiedIds = plan.verifiedSubtaskIds.filter((id) => String(cards.find((card) => String(card.id ?? '') === id)?.status ?? '') !== 'done');
+  if (incompleteVerifiedIds.length > 0) return { ok: false, error: `Verified subtasks require scoped lifecycle completion first: ${incompleteVerifiedIds.join(',')}` };
 
   const files = new Map<string, string>();
   for (const update of plan.updates) {
@@ -111,17 +91,10 @@ export function applyMasterTaskProgress(input: { ledgerJsonFile: string; planJso
     const file = contentPath(input.ledgerJsonFile, cards[index]);
     if (!file) return { ok: false, error: `Card has no canonical content file: ${update.cardId}` };
     if (update.title) cards[index].title = update.title;
-    if (update.labels) cards[index].labels = [...new Set(update.labels.filter((label) => label !== 'master-task' && label !== 'subtask').concat(update.cardId === plan.masterCardId ? 'master-task' : 'subtask'))];
+    if (update.labels) cards[index].labels = [...new Set(update.labels.filter((label) => label !== 'master-task' && label !== 'subtask').concat(update.cardId === plan.masterCardId ? ['master-task'] : []))];
     files.set(file, `${stripLegacyTaskProjection(update.markdown ?? renderSections(update.sections ?? [])).trimEnd()}\n`);
   }
-  const canonicalLinks = relationships.map((relationship, index) => {
-    const childId = String(relationship.to ?? '');
-    const child = cards.find((card) => String(card.id ?? '') === childId)!;
-    return `${index + 1}. [${String(child.title ?? childId)}](card:${childId})`;
-  }).join('\n');
   if (!masterFile) return { ok: false, error: `Card has no canonical content file: ${plan.masterCardId}` };
-  const pendingMasterMarkdown = files.get(masterFile) ?? masterMarkdown;
-  files.set(masterFile, projectSubtaskLinks(pendingMasterMarkdown, canonicalLinks));
 
   const threadId = `thread-${plan.masterCardId}`;
   const threadFiles = record(ledger.threadFiles) ? ledger.threadFiles : {};

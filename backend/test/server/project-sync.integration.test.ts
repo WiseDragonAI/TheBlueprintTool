@@ -101,7 +101,8 @@ test('exposes origin identity and fixed repository status while protecting feder
     assert.equal(synchronizationZone.color, catalog.projects[0].color);
     assert.equal(ledger.relationships.length, 3);
     assert.ok(ledger.relationships.every((relationship: Record<string, unknown>) => relationship.from === attached.masterCardId && relationship.label === 'subtask'));
-    assert.ok(ledger.cards.filter((card: Record<string, unknown>) => card.id !== attached.masterCardId).every((card: Record<string, any>) => card.labels.includes('subtask')));
+    assert.deepEqual(ledger.relationships.map((relationship: Record<string, unknown>) => relationship.position), [0, 1, 2]);
+    assert.ok(ledger.cards.filter((card: Record<string, unknown>) => card.id !== attached.masterCardId).every((card: Record<string, any>) => !card.labels.includes('subtask')));
     const pipelineStore = JSON.parse(readFileSync(join(project, '.decision-os', 'codex-pipelines.json'), 'utf8')) as Record<string, any>;
     assert.equal(pipelineStore.runs.length, 1);
     assert.equal(pipelineStore.runs[0].sourceCardId, attached.masterCardId);

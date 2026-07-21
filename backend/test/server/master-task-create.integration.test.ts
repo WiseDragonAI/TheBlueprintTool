@@ -38,7 +38,7 @@ test('master-task creation persists the complete graph and returns absolute Mark
       annotation: { id: 'zone-master', x: 0, y: 0, width: 1200, height: 900, color: '#123456', label: 'Context metrics', comments: [] },
       card: master,
       cards: [subtask],
-      relationships: [{ id: 'rel-subtask', from: 'card-master', to: 'card-subtask', label: 'subtask' }],
+      relationships: [{ id: 'rel-subtask', from: 'card-master', to: 'card-subtask', label: 'subtask', position: 0 }],
     }),
   });
   assert.equal(response.status, 200);
@@ -47,8 +47,19 @@ test('master-task creation persists the complete graph and returns absolute Mark
   assert.ok(body.createdFiles.every((entry) => entry.path.startsWith(workspace)));
   assert.ok(body.createdFiles.every((entry) => existsSync(entry.path)));
   assert.match(readFileSync(body.createdFiles[0].path, 'utf8'), /Ledger: Tasks/);
-  const projection = await fetch(`${baseUrl}/api/task-state/projection?projectId=${encodeURIComponent(projectId)}`).then((result) => result.json()) as { ledger: { cards: Array<{ id: string }>; relationships: Array<{ id: string }>; annotations: Array<{ id: string }> } };
+  const lifecycleResponse = await fetch(`${baseUrl}/api/task-state/transition-card-lifecycle`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectId, cardId: 'card-master', lifecycleStatus: 'done' }),
+  });
+  assert.equal(lifecycleResponse.status, 200);
+  assert.deepEqual(await lifecycleResponse.json(), { ok: true, cardId: 'card-master', lifecycleStatus: 'done', changedBatchCount: 1 });
+  const aggregateResponse = await fetch(`${baseUrl}/api/task-state/commit`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectId, ledger: { cards: [] } }),
+  });
+  assert.equal(aggregateResponse.status, 410);
+  assert.deepEqual(await aggregateResponse.json(), { ok: false, error: 'aggregate_task_state_commit_removed' });
+  const projection = await fetch(`${baseUrl}/api/task-state/projection?projectId=${encodeURIComponent(projectId)}`).then((result) => result.json()) as { ledger: { cards: Array<{ id: string; status: string }>; relationships: Array<{ id: string }>; annotations: Array<{ id: string }> } };
   assert.deepEqual(projection.ledger.cards.map((card) => card.id).sort(), ['card-master', 'card-subtask']);
+  assert.equal(projection.ledger.cards.find((card) => card.id === 'card-master')?.status, 'done');
   assert.deepEqual(projection.ledger.relationships.map((relationship) => relationship.id), ['rel-subtask']);
   assert.deepEqual(projection.ledger.annotations.map((annotation) => annotation.id), ['zone-master']);
 });

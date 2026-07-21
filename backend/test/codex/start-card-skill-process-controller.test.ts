@@ -970,6 +970,16 @@ test('card skill run continue route resumes the captured session after its card 
         exitCode: 0,
       },
     };
+    delete ((runtime.codexSkillRuns as Record<string, { settledAt?: string }>)[runId]).settledAt;
+    const settlingResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}/continue`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ledgerId: 'tasks', cardId: outputCardId })
+    });
+    assert.equal(settlingResponse.status, 409);
+    const settlingBody = await settlingResponse.json() as { error: string };
+    assert.equal(settlingBody.error, 'Run settlement is still in progress.');
+    ((runtime.codexSkillRuns as Record<string, { settledAt?: string }>)[runId]).settledAt = '2026-07-07T17:01:00.001Z';
     const threadBeforeResume = readFileSync(threadFile, 'utf8');
     const response = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}/continue`, {
       method: 'POST',
@@ -1000,8 +1010,8 @@ test('card skill run continue route resumes the captured session after its card 
     assert.equal(argv.at(-1), '-');
     await waitForText(jsonlFile, 'resumed response');
     await waitForCondition(() => {
-      const runs = runtime.codexSkillRuns as Record<string, { status?: string }> | undefined;
-      return runs?.[runId]?.status === 'complete';
+      const runs = runtime.codexSkillRuns as Record<string, { status?: string; settledAt?: string }> | undefined;
+      return runs?.[runId]?.status === 'complete' && Boolean(runs[runId]?.settledAt);
     }, 'the resumed card-skill run to complete');
     const resumedStatusResponse = await fetch(`http://127.0.0.1:${address.port}/api/codex/skills/runs/${runId}?ledgerId=tasks&cardId=${outputCardId}&since=0`);
     assert.equal(resumedStatusResponse.status, 200);
@@ -1028,8 +1038,8 @@ test('card skill run continue route resumes the captured session after its card 
     assert.equal(overrideArgs.includes(sessionId), true);
     await waitForText(jsonlFile, 'resumed response');
     await waitForCondition(() => {
-      const runs = runtime.codexSkillRuns as Record<string, { status?: string }> | undefined;
-      return runs?.[runId]?.status === 'complete';
+      const runs = runtime.codexSkillRuns as Record<string, { status?: string; settledAt?: string }> | undefined;
+      return runs?.[runId]?.status === 'complete' && Boolean(runs[runId]?.settledAt);
     }, 'the forced resume request to complete');
     assert.equal(readFileSync(threadFile, 'utf8'), threadBeforeOverride);
 
@@ -1052,8 +1062,8 @@ test('card skill run continue route resumes the captured session after its card 
     assert.equal(fallbackArgs.includes('resume'), false);
     await waitForText(jsonlFile, 'fresh response');
     await waitForCondition(() => {
-      const runs = runtime.codexSkillRuns as Record<string, { status?: string }> | undefined;
-      return runs?.[runId]?.status === 'complete';
+      const runs = runtime.codexSkillRuns as Record<string, { status?: string; settledAt?: string }> | undefined;
+      return runs?.[runId]?.status === 'complete' && Boolean(runs[runId]?.settledAt);
     }, 'the missing-session fallback to complete');
 
     const interruptedThread = `${threadBeforeFallback.trimEnd()}\n\n# AGENT\n<!-- decision-os:note {"id":"codex-${runId}-line-13","timestamp":"2026-07-07T17:18:00.000Z","status":"running","codexRunId":"${runId}","codexLine":"13","codexKind":"run_status","codexEventType":"turn.started"} -->\n\nCodex turn started.\n`;

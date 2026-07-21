@@ -13,6 +13,7 @@ export type CardContentChange = {
   file: string;
   kind: 'card-content' | 'thread-content';
   ledgerId: string;
+  cardId?: string;
   threadId?: string;
 };
 
@@ -74,10 +75,9 @@ export function resolveCardContentChange(input: {
     // WHY: Card and thread ownership use different ledger structures.
     if (input.change.kind === 'card-content') {
       const cards = Array.isArray(ledger.cards) ? ledger.cards : [];
-      const contentFile = cards
-        .map((card) => isRecord(card) && isRecord(card.comment) ? card.comment.contentFile : undefined)
-        .find((candidate) => resolvedContentFile(input.decisionOsRoot, candidate) === targetFile);
-      if (typeof contentFile === 'string') owners.push({ ...input.change, contentFile, ledgerId });
+      const card = cards.find((candidate) => isRecord(candidate) && isRecord(candidate.comment) && resolvedContentFile(input.decisionOsRoot, candidate.comment.contentFile) === targetFile);
+      const contentFile = isRecord(card) && isRecord(card.comment) ? card.comment.contentFile : undefined;
+      if (typeof contentFile === 'string') owners.push({ ...input.change, contentFile, ledgerId, cardId: String(card.id ?? '') });
       continue;
     }
     const threadFiles = isRecord(ledger.threadFiles) ? ledger.threadFiles : {};
@@ -101,7 +101,7 @@ export function buildContentOwnershipIndex(decisionOsRoot: string): Map<string, 
     for (const card of Array.isArray(ledger.cards) ? ledger.cards : []) {
       if (!isRecord(card) || !isRecord(card.comment) || typeof card.comment.contentFile !== 'string') continue;
       const file = resolvedContentFile(decisionOsRoot, card.comment.contentFile);
-      if (file) add(file, { contentFile: card.comment.contentFile, file, kind: 'card-content', ledgerId });
+      if (file) add(file, { contentFile: card.comment.contentFile, file, kind: 'card-content', ledgerId, cardId: String(card.id ?? '') });
     }
     const threadFiles = isRecord(ledger.threadFiles) ? ledger.threadFiles : {};
     for (const [threadId, contentFile] of Object.entries(threadFiles)) {

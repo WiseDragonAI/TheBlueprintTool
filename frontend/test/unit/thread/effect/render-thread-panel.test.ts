@@ -855,7 +855,8 @@ test('an active card lease makes the production panel revalidate a cached termin
     queuePosition: status === 'pending' ? 2 : null, lineCount: 4, nextSince: 4, events: [], diagnostics: [], executions: [], metadata: {},
   });
   try {
-    globalThis.fetch = (async () => {
+    globalThis.fetch = (async (input) => {
+      if (!String(input).includes(runId)) return new Response(JSON.stringify(summary('complete', 'unrelated-execution')), { status: 200, headers: { 'content-type': 'application/json' } });
       requestCount += 1;
       if (requestCount === 1) return new Response(JSON.stringify(summary('complete', 'execution-old')), { status: 200, headers: { 'content-type': 'application/json' } });
       return new Promise<Response>((resolve) => { resolveActiveStatus = resolve; });

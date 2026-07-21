@@ -4,6 +4,7 @@
  */
 import type { LedgerMutation } from '../../ledger/helper/apply-ledger-mutation.js';
 import { canonicalJson } from './task-current-state-codec.js';
+import { encodeTaskDomainLanes } from './task-domain-lane-encoder.js';
 import type { TaskEntityType, TaskFieldChange } from './task-current-state-types.js';
 
 type AnyRecord = Record<string, unknown>;
@@ -23,8 +24,6 @@ export type TaskProjectionCommand = {
   ledgerPaths?: string[];
 };
 
-const contentFields = new Set(['description', 'what', 'notes', 'deletedNoteIds', 'content', 'contentBytes', 'markdown']);
-
 function records(value: unknown): AnyRecord[] {
   return Array.isArray(value) ? value.filter((entry): entry is AnyRecord => Boolean(entry && typeof entry === 'object')) : [];
 }
@@ -33,34 +32,10 @@ function recordById(ledger: AnyRecord, collection: string, id: string): AnyRecor
   return records(ledger[collection]).find((entry) => String(entry.id ?? '') === id) ?? null;
 }
 
-function structural(value: unknown): unknown {
-  if (Array.isArray(value)) return structuredClone(value);
-  if (!value || typeof value !== 'object') return value;
-  const result: AnyRecord = {};
-  for (const [key, child] of Object.entries(value as AnyRecord)) {
-    if (contentFields.has(key)) continue;
-    result[key] = structural(child);
-  }
-  return result;
-}
-
-function flatten(value: AnyRecord, prefix: string[] = []): Map<string, unknown> {
-  const result = new Map<string, unknown>();
-  for (const [key, raw] of Object.entries(value)) {
-    if (key === 'id' || contentFields.has(key)) continue;
-    const path = [...prefix, key];
-    const next = structural(raw);
-    if (next && typeof next === 'object' && !Array.isArray(next) && key !== 'comment') {
-      for (const [nestedPath, nestedValue] of flatten(next as AnyRecord, path)) result.set(nestedPath, nestedValue);
-    } else result.set(path.join('/'), next);
-  }
-  return result;
-}
-
-function changesBetween(before: AnyRecord | null, after: AnyRecord | null): TaskFieldChange[] {
+function changesBetween(entityType: TaskEntityType, before: AnyRecord | null, after: AnyRecord | null, transitionAt: string): TaskFieldChange[] {
   if (!after) return [{ path: '$entity', operation: 'tombstone' }];
-  const left = before ? flatten(before) : new Map<string, unknown>();
-  const right = flatten(after);
+  const left = before ? encodeTaskDomainLanes({ entityType, record: before, transitionAt }) : new Map<string, unknown>();
+  const right = encodeTaskDomainLanes({ entityType, record: after, transitionAt });
   return [...new Set([...left.keys(), ...right.keys()])].sort().flatMap((path): TaskFieldChange[] => {
     if (!right.has(path)) return [{ path, operation: 'remove' }];
     if (!left.has(path) || canonicalJson(left.get(path)) !== canonicalJson(right.get(path))) return [{ path, operation: 'set', value: right.get(path) }];
@@ -68,13 +43,26 @@ function changesBetween(before: AnyRecord | null, after: AnyRecord | null): Task
   });
 }
 
-function entity(entityType: TaskEntityType, entityId: string, before: AnyRecord | null, after: AnyRecord | null): TaskCommandChange[] {
-  const changes = changesBetween(before, after);
+function cardChangesBetween(before: AnyRecord | null, after: AnyRecord | null, transitionAt: string): TaskFieldChange[] {
+  if (!after) return [{ path: '$entity', operation: 'tombstone' }];
+  const left = before ? encodeTaskDomainLanes({ entityType: 'card', record: before, before, transitionAt }) : new Map<string, unknown>();
+  const right = encodeTaskDomainLanes({ entityType: 'card', record: after, before, transitionAt });
+  if (before && canonicalJson(left.get('createdAt')) !== canonicalJson(right.get('createdAt'))) throw new Error('immutable_card_created_at');
+  return [...new Set([...left.keys(), ...right.keys()])].sort().flatMap((path): TaskFieldChange[] => {
+    if (!right.has(path)) return [{ path, operation: 'remove' }];
+    if (!left.has(path) || canonicalJson(left.get(path)) !== canonicalJson(right.get(path))) return [{ path, operation: 'set', value: right.get(path) }];
+    return [];
+  });
+}
+
+function entity(entityType: TaskEntityType, entityId: string, before: AnyRecord | null, after: AnyRecord | null, transitionAt = new Date().toISOString()): TaskCommandChange[] {
+  const changes = entityType === 'card' ? cardChangesBetween(before, after, transitionAt) : changesBetween(entityType, before, after, transitionAt);
   return changes.length > 0 ? [{ entityType, entityId, changes }] : [];
 }
 
 function ledgerField(path: string, before: unknown, after: unknown): TaskCommandChange[] {
-  if (canonicalJson(before) === canonicalJson(after)) return [];
+  if (before === undefined && after === undefined) return [];
+  if (before !== undefined && after !== undefined && canonicalJson(before) === canonicalJson(after)) return [];
   return [{ entityType: 'ledger', entityId: 'tasks', changes: after === undefined ? [{ path, operation: 'remove' }] : [{ path, operation: 'set', value: structuredClone(after) }] }];
 }
 
@@ -185,6 +173,10 @@ export function taskCommandForMutation(input: { mutation: LedgerMutation; before
   } else if (action === 'create-relationship' && mutation.relationship?.id) {
     const id = String(mutation.relationship.id);
     changes.push(...entity('relationship', id, null, recordById(after, 'relationships', id)));
+  } else if (action === 'transition-card-lifecycle' && mutation.cardId) {
+    const id = String(mutation.cardId);
+    activationTaskId = id;
+    changes.push(...entity('card', id, recordById(before, 'cards', id), recordById(after, 'cards', id)));
   } else if (action === 'patch-card' && mutation.cardPatch?.id) {
     const id = String(mutation.cardPatch.id);
     activationTaskId = id;
@@ -194,6 +186,7 @@ export function taskCommandForMutation(input: { mutation: LedgerMutation; before
     activationTaskId = rootId;
     const childIds = records(before.relationships)
       .filter((relationship) => String(relationship.from ?? '') === rootId && String(relationship.label ?? '') === 'subtask')
+      .sort((left, right) => Number(left.position) - Number(right.position) || String(left.id ?? '').localeCompare(String(right.id ?? '')))
       .map((relationship) => String(relationship.to ?? ''));
     for (const id of [rootId, ...childIds]) changes.push(...entity('card', id, recordById(before, 'cards', id), recordById(after, 'cards', id)));
   } else if (action === 'delete-card' && mutation.cardId) {

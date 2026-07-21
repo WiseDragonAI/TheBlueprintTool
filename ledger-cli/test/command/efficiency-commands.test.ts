@@ -18,7 +18,7 @@ function fixture(): { root: string; decisionOs: string; ledger: string } {
   writeFileSync(join(decisionOs, 'cards', 'specs', 'master.md'), '#master-task #task-active\n\nLedger: Specs\nWaiting since: 2026-01-01T00:00:00.000Z\nActive since: 2026-01-01T00:00:00.000Z\n\n## A. Current Finding\n\n1. **State:** Ready for the operator.\n\n---\n\n## B. Subtasks\n');
   writeFileSync(join(decisionOs, 'threads', 'specs', 'thread-master.md'), '# OPERATOR\n<!-- decision-os:note {"id":"n","timestamp":"2026-01-01T00:00:00.000Z"} -->\n\nDo it.\n');
   writeFileSync(ledger, JSON.stringify({
-    cards: [{ id: 'master', title: 'Master', status: 'todo', domainId: 'specs', x: 10, y: 10, w: 100, h: 100, comment: { contentFile: '.decision-os/cards/specs/master.md' } }],
+    cards: [{ id: 'master', title: 'Master', status: 'todo', labels: ['master-task'], domainId: 'specs', x: 10, y: 10, w: 100, h: 100, comment: { contentFile: '.decision-os/cards/specs/master.md' } }],
     annotations: [{ id: 'zone-a', variant: 'zone', label: 'Zone', x: 0, y: 0, width: 800, height: 800 }],
     relationships: [], notes: {}, threadFiles: { 'thread-master': '.decision-os/threads/specs/thread-master.md' },
   }, null, 2));
@@ -54,7 +54,7 @@ test('session context and gate return one bounded project-scoped response', asyn
   }
 });
 
-test('master-task apply preserves lifecycle metadata, generates ids, and persists structured sections', () => {
+test('master-task apply writes narrative content and positioned structural subtasks', () => {
   const { decisionOs, ledger } = fixture();
   const previousRoot = process.env.DECISION_OS_LEDGER_ROOT;
   process.env.DECISION_OS_LEDGER_ROOT = decisionOs;
@@ -65,16 +65,18 @@ test('master-task apply preserves lifecycle metadata, generates ids, and persist
       subtasks: [{ title: 'Child', sections: [{ title: 'A. Implementation Detail', markdown: '1. **Objective:** Implement it.' }] }],
     }) });
     assert.equal(result.ok, true, result.ok ? undefined : result.error);
-    const persisted = JSON.parse(readFileSync(ledger, 'utf8')) as { cards: Array<{ id: string; title: string; labels: string[] }>; relationships: unknown[] };
+    const persisted = JSON.parse(readFileSync(ledger, 'utf8')) as { cards: Array<{ id: string; title: string; labels: string[]; createdAt?: string }>; relationships: Array<{ position?: number }> };
     assert.equal(persisted.cards.length, 2);
     assert.match(persisted.cards[1].id, /^card-[0-9a-f-]{36}$/);
     assert.equal(persisted.relationships.length, 1);
-    assert.deepEqual(persisted.cards.map((card) => card.labels), [['master-task'], ['subtask']]);
+    assert.deepEqual(persisted.cards.map((card) => card.labels), [['master-task'], []]);
+    assert.equal(typeof persisted.cards[0].createdAt, 'string');
+    assert.equal(typeof persisted.cards[1].createdAt, 'string');
+    assert.equal(persisted.relationships[0].position, 0);
     const masterMarkdown = readFileSync(join(decisionOs, 'cards', 'specs', 'master.md'), 'utf8');
-    assert.match(masterMarkdown, /Waiting since: 2026-01-01T00:00:00.000Z/);
     assert.match(masterMarkdown, /## A\. Decision/);
     assert.doesNotMatch(masterMarkdown, /## A\. H\./);
-    assert.doesNotMatch(masterMarkdown, /#master-task|#task-active|Status:/);
+    assert.doesNotMatch(masterMarkdown, /#master-task|#task-active|Status:|Waiting since:|Subtasks/);
     const subtaskMarkdown = readFileSync(join(ledger, '../..', `.decision-os/cards/specs/${persisted.cards[1].id}.md`), 'utf8');
     assert.match(subtaskMarkdown, /## A\. Implementation Detail/);
     assert.doesNotMatch(subtaskMarkdown, /## A\. A\./);
@@ -83,7 +85,7 @@ test('master-task apply preserves lifecycle metadata, generates ids, and persist
   }
 });
 
-test('master-task progress writes content, labels, verified status, reply, and gate atomically', () => {
+test('master-task progress writes narrative content after scoped lifecycle completion', () => {
   const { decisionOs, ledger } = fixture();
   const previousRoot = process.env.DECISION_OS_LEDGER_ROOT;
   process.env.DECISION_OS_LEDGER_ROOT = decisionOs;
@@ -95,6 +97,9 @@ test('master-task progress writes content, labels, verified status, reply, and g
   assert.equal(applied.ok, true);
   if (!applied.ok) return;
   const childId = JSON.parse(applied.value).subtasks[0].cardId as string;
+  const lifecycleLedger = JSON.parse(readFileSync(ledger, 'utf8')) as { cards: Array<{ id: string; status: string }> };
+  lifecycleLedger.cards.find((card) => card.id === childId)!.status = 'done';
+  writeFileSync(ledger, JSON.stringify(lifecycleLedger, null, 2));
   const progress = applyMasterTaskProgress({ ledgerJsonFile: ledger, planJson: JSON.stringify({
     masterCardId: 'master',
     updates: [
@@ -111,10 +116,10 @@ test('master-task progress writes content, labels, verified status, reply, and g
   const persisted = JSON.parse(readFileSync(ledger, 'utf8')) as { cards: Array<{ id: string; status: string; labels: string[] }> };
   assert.equal(persisted.cards.find((card) => card.id === 'master')?.status, 'todo');
   assert.equal(persisted.cards.find((card) => card.id === childId)?.status, 'done');
-  assert.deepEqual(persisted.cards.find((card) => card.id === childId)?.labels, ['subtask']);
+  assert.deepEqual(persisted.cards.find((card) => card.id === childId)?.labels, []);
   const masterMarkdown = readFileSync(join(decisionOs, 'cards', 'specs', 'master.md'), 'utf8');
   assert.doesNotMatch(masterMarkdown, /#master-task|#task-active|Status:|Stale title/);
-  assert.match(masterMarkdown, new RegExp(`1\\. \\[Child\\]\\(card:${childId}\\)`));
+  assert.doesNotMatch(masterMarkdown, /Subtasks|card:/);
   const childMarkdown = readFileSync(join(ledger, '../..', `.decision-os/cards/specs/${childId}.md`), 'utf8');
   assert.match(childMarkdown, /## A\. Result/);
   assert.doesNotMatch(childMarkdown, /## A\. B\./);

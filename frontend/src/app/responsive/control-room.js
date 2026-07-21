@@ -1,6 +1,6 @@
 /**
- * WHAT: Derives Control Room task state from canonical card Markdown and run state.
- * WHY: Responsive presentation must consume the same durable task model at every width.
+ * WHAT: Projects responsive task presentation from structural card and relationship state.
+ * WHY: Narrative Markdown and node-local observations cannot classify tasks or override replicated lifecycle state.
  */
 export function cardCodexRunId(card) {
   return String(card?.codexActiveRunId ?? '').trim()
@@ -8,112 +8,40 @@ export function cardCodexRunId(card) {
     || String(card?.codexRunId ?? '').trim();
 }
 
-export function parseMasterTaskMarkdown({ cardId, title, labels: cardLabels = [], relationships = [], projectId = '', projectName = '', projectColor = '', ledgerId, ledgerTitle, markdown, cardStatus = 'todo', cards = [], threadNotes = [], codexRunId = '', codexPipelineRunId = '', codexStatus = '', codexStartedAt = '', codexQueuePosition = null }) {
-  const source = String(markdown ?? '').replace(/\r\n?/g, '\n');
-  const jsonLabels = Array.isArray(cardLabels) ? cardLabels.map(String) : [];
-  const hasJsonTaskLabel = jsonLabels.some((label) => label === 'master-task' || label === 'subtask');
-  const labelLines = source.split('\n').filter((line) => /^\s*(?:#[a-z][a-z0-9-]*\s*)+$/i.test(line));
-  const labels = new Set(Array.from(labelLines.join('\n').matchAll(/#([a-z][a-z0-9-]*)\b/gi), (match) => match[1].toLowerCase()));
-  const masterTask = jsonLabels.includes('master-task') || (!hasJsonTaskLabel && labels.has('master-task'));
-  const legacyLedger = source.match(/^\s*(?:\*\*)?Ledger(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
-  const ledger = jsonLabels.includes('master-task') ? String(ledgerTitle ?? '').trim() : legacyLedger;
-  const waitingText = source.match(/^\s*(?:\*\*)?Waiting since(?:\*\*)?\s*:\s*(.+?)\s*$/im)?.[1]?.replace(/`/g, '').trim() ?? '';
-  const latestThreadTime = threadNotes.reduce((latest, note) => {
-    const timestamp = Date.parse(String(note?.timestamp ?? ''));
-    return Number.isFinite(timestamp) ? Math.max(latest, timestamp) : latest;
-  }, Number.NEGATIVE_INFINITY);
-  // A waiting period restarts whenever either participant adds a thread message.
-  // The card field remains the durable fallback for tasks without a timestamped thread.
-  const waitingTime = Number.isFinite(latestThreadTime) ? latestThreadTime : Date.parse(waitingText);
-  const diagnostics = [];
-  if (!masterTask) diagnostics.push('missing master-task label');
-  if (jsonLabels.includes('master-task') && jsonLabels.includes('subtask')) diagnostics.push('invalid_master_label');
-  if (!ledger) diagnostics.push('missing Ledger');
-  if (!Number.isFinite(waitingTime)) diagnostics.push('invalid Waiting since');
-
-  const subtasks = [];
-  if (jsonLabels.includes('master-task')) {
-    for (const relationship of relationships.filter((entry) => String(entry?.from) === String(cardId) && String(entry?.label) === 'subtask')) {
-      const linked = cards.find((card) => String(card.id) === String(relationship.to));
-      subtasks.push({ title: String(linked?.title || `Card ${relationship.to}`), cardId: String(relationship.to), status: linked?.status === 'done' ? 'complete' : 'waiting' });
-      if (!linked) diagnostics.push(`missing_subtask:${relationship.to}`);
-      else if (!Array.isArray(linked.labels) || !linked.labels.map(String).includes('subtask') || linked.labels.map(String).includes('master-task')) diagnostics.push(`invalid_subtask_label:${relationship.to}`);
-    }
-  } else {
-    const subtaskHeading = /^##\s+(?:[A-Z]\.\s+)?Subtasks\s*$/im;
-    const sectionStart = source.search(subtaskHeading);
-    const afterHeading = sectionStart < 0 ? '' : source.slice(sectionStart).replace(subtaskHeading, '').replace(/^\n/, '');
-    const section = afterHeading.split(/^##\s+/m, 1)[0];
-    for (const line of section.split('\n')) {
-      const link = line.match(/^\s*\d+[.)]\s+\[([^\]]+)]\(card:([^)]+)\)(?:\s+[—-]\s+Status:\s*.+?)?\s*$/i);
-      if (!link) continue;
-      const linked = cards.find((card) => String(card.id) === link[2].trim());
-      subtasks.push({ title: link[1].trim(), cardId: link[2].trim(), status: linked?.status === 'done' ? 'complete' : 'waiting' });
-    }
-  }
-  const complete = subtasks.filter((task) => /^(?:complete|completed|done)$/i.test(task.status)).length;
-  const normalizedCodexStatus = String(codexStatus).toLowerCase();
-  const normalizedExecutionStatus = normalizedCodexStatus === 'transcribing-before-launch'
-    ? 'transcribing-before-launch'
-    : normalizedCodexStatus === 'pending'
-      ? 'pending'
-      : ['processing', 'running', 'in_progress'].includes(normalizedCodexStatus)
-        ? 'running'
-        : '';
-  const codexProcessing = normalizedExecutionStatus === 'running';
-  const codexQueued = normalizedExecutionStatus === 'pending';
-  const transcribingBeforeLaunch = normalizedExecutionStatus === 'transcribing-before-launch';
-  const currentRunStartedAt = String(codexStartedAt || '').trim();
-  const currentRunStartedTime = Date.parse(currentRunStartedAt);
-  const displayedExecutionSince = codexProcessing && Number.isFinite(currentRunStartedTime) ? currentRunStartedAt : '';
-  const displayedExecutionTime = codexProcessing && Number.isFinite(currentRunStartedTime) ? currentRunStartedTime : Number.NaN;
+export function projectMasterTask({ card, cards = [], relationships = [], ledgerTitle = '' }) {
+  const labels = Array.isArray(card?.labels) ? card.labels.map(String) : [];
+  const masterTask = labels.includes('master-task');
+  const lifecycle = card?.lifecycle && typeof card.lifecycle === 'object' ? card.lifecycle : {};
+  const executionIntent = card?.executionIntent && typeof card.executionIntent === 'object' ? card.executionIntent : {};
+  const executionActive = ['waiting', 'queued', 'running'].includes(String(executionIntent.state ?? ''));
+  const orderedRelationships = relationships
+    .filter((entry) => String(entry?.from) === String(card?.id) && entry?.label === 'subtask')
+    .sort((left, right) => Number(left.position) - Number(right.position) || String(left.id).localeCompare(String(right.id)));
+  const subtasks = orderedRelationships.map((relationship) => {
+    const linked = cards.find((candidate) => String(candidate?.id) === String(relationship.to));
+    return {
+      title: String(linked?.title || `Card ${relationship.to}`),
+      cardId: String(relationship.to),
+      relationshipId: String(relationship.id),
+      position: Number(relationship.position),
+      status: linked?.lifecycle?.status === 'done' ? 'complete' : 'waiting'
+    };
+  });
+  const complete = subtasks.filter((task) => task.status === 'complete').length;
+  const lifecycleStatus = String(lifecycle.status ?? '');
   return {
-    valid: diagnostics.length === 0,
+    valid: masterTask && ['todo', 'backlog', 'done'].includes(lifecycleStatus),
     masterTask,
-    diagnostics,
-    cardId: String(cardId),
-    title: String(title || `Card ${cardId}`),
-    projectId: String(projectId),
-    projectName: String(projectName),
-    projectColor: String(projectColor),
-    ledgerId: String(ledgerId),
-    ledgerTitle: String(ledgerTitle),
-    ledger,
-    status: cardStatus === 'backlog' ? 'task-backlog' : cardStatus === 'done' ? 'task-complete' : ((transcribingBeforeLaunch || codexQueued || codexProcessing) ? 'task-execution' : 'task-waiting'),
-    codexRunId: String(codexRunId),
-    codexPipelineRunId: String(codexPipelineRunId),
-    codexStatus: normalizedCodexStatus,
-    executionStatus: normalizedExecutionStatus,
-    codexProcessing,
-    codexQueued,
-    transcribingBeforeLaunch,
-    codexQueuePosition: codexQueued ? codexQueuePosition : null,
-    waitingSince: Number.isFinite(latestThreadTime) ? new Date(latestThreadTime).toISOString() : waitingText,
-    waitingTime,
-    executionSince: displayedExecutionSince,
-    executionTime: displayedExecutionTime,
+    cardId: String(card?.id ?? ''),
+    title: String(card?.title || `Card ${card?.id ?? ''}`),
+    ledger: String(ledgerTitle),
+    status: executionActive ? 'task-execution' : lifecycleStatus === 'backlog' ? 'task-backlog' : lifecycleStatus === 'done' ? 'task-complete' : 'task-waiting',
+    executionStatus: executionActive ? String(executionIntent.state) : '',
+    waitingSince: String(lifecycle.waitingAt ?? ''),
+    completedAt: String(lifecycle.closedAt ?? ''),
     subtasks,
     complete,
-    nextSubtask: subtasks.find((task) => !/^(?:complete|completed|done)$/i.test(task.status)) ?? null,
-    markdown: source
-  };
-}
-
-export function deriveControlRoom(cards) {
-  const parsed = cards.map(parseMasterTaskMarkdown);
-  // Keep every master task visible, including completed and malformed cards.
-  const eligible = parsed.filter((task) => task.masterTask);
-  const compare = (left, right) => {
-    const leftTime = Number.isFinite(left.waitingTime) ? left.waitingTime : Number.POSITIVE_INFINITY;
-    const rightTime = Number.isFinite(right.waitingTime) ? right.waitingTime : Number.POSITIVE_INFINITY;
-    return leftTime - rightTime || left.cardId.localeCompare(right.cardId);
-  };
-  return {
-    queue: eligible.filter((task) => task.status === 'task-waiting').sort(compareControlRoomQueueTasks),
-    exec: eligible.filter((task) => task.status === 'task-execution').sort(compare),
-    backlog: eligible.filter((task) => task.status === 'task-backlog').sort(compare),
-    ledgers: Array.from(new Set(eligible.map((task) => task.ledger))).sort((a, b) => a.localeCompare(b)),
-    diagnostics: parsed.filter((task) => !task.valid && task.masterTask)
+    nextSubtask: subtasks.find((task) => task.status !== 'complete') ?? null
   };
 }
 
@@ -124,25 +52,6 @@ export function compareControlRoomQueueTasks(left, right) {
     || String(left.projectId ?? '').localeCompare(String(right.projectId ?? ''))
     || String(left.ledgerId ?? '').localeCompare(String(right.ledgerId ?? ''))
     || String(left.cardId ?? '').localeCompare(String(right.cardId ?? ''));
-}
-
-export function visibleMasterTaskMarkdown(markdown) {
-  const source = String(markdown ?? '').replace(/\r\n?/g, '\n');
-  const lines = source.split('\n');
-  while (lines.length && !lines[0].trim()) lines.shift();
-  if (/^\s*(?:#[a-z][a-z0-9-]*\s*)+$/i.test(lines[0] ?? '') && /#master-task\b/i.test(lines[0])) lines.shift();
-  while (lines.length && (!lines[0].trim() || /^\s*(?:Ledger|Waiting since|Active since|Queue rank)\s*:/i.test(lines[0]))) lines.shift();
-  const subtaskIndex = lines.findIndex((line) => /^##\s+(?:[A-Z]\.\s+)?Subtasks\s*$/i.test(line));
-  if (subtaskIndex >= 0) {
-    let start = subtaskIndex;
-    while (start > 0 && !lines[start - 1].trim()) start -= 1;
-    if (start > 0 && /^---\s*$/.test(lines[start - 1])) start -= 1;
-    let end = lines.findIndex((line, index) => index > subtaskIndex && /^##\s+/.test(line));
-    if (end < 0) end = lines.length;
-    while (end > start && (!lines[end - 1].trim() || /^---\s*$/.test(lines[end - 1]))) end -= 1;
-    lines.splice(start, end - start);
-  }
-  return lines.join('\n').trim();
 }
 
 export function waitingAge(timestamp, now = Date.now()) {

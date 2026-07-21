@@ -42,7 +42,6 @@ export function createFederationContentReplicaStore(input: { decisionOsRoot: str
         const resource: ResourceState = { ...entry, ownerNodeId, projectId: manifest.projectId, state: available ? 'available' : current?.verifiedHash ? 'stale' : 'missing', verifiedHash: available ? entry.hash : current?.verifiedHash ?? '', error: '' };
         resources.set(id, resource);
         for (const [key, demand] of demands) if (demand.ownerNodeId === ownerNodeId && demand.projectId === manifest.projectId && demand.key === entry.key && demand.hash !== entry.hash) demands.delete(key);
-        if (!available) queue(resource);
       }
     },
     due(limit = 2): FederationContentDemand[] {
@@ -78,11 +77,22 @@ export function createFederationContentReplicaStore(input: { decisionOsRoot: str
         resource.error = error;
       }
     },
-    resource(ownerNodeId: string, projectId: string, key: string): { state: FederationContentState; file: string | null; error: string } {
+    resource(ownerNodeId: string, projectId: string, key: string): { state: FederationContentState; file: string | null; error: string; conflict: boolean; candidates: Array<{ ownerNodeId: string; hash: string; type: string }> } {
       const resource = resources.get(resourceId(ownerNodeId, projectId, key));
-      if (!resource) return { state: 'missing', file: null, error: '' };
-      const file = objectFile(resource.verifiedHash || resource.hash);
-      return { state: resource.state, file: existsSync(file) ? file : null, error: resource.error };
+      const candidates = [...resources.values()]
+        .filter((entry) => entry.projectId === projectId && entry.key === key)
+        .map((entry) => ({ ownerNodeId: entry.ownerNodeId, hash: entry.hash, type: entry.type }))
+        .sort((left, right) => left.ownerNodeId.localeCompare(right.ownerNodeId) || left.hash.localeCompare(right.hash));
+      const conflict = new Set(candidates.map((candidate) => `${candidate.type}\u0000${candidate.hash}`)).size > 1;
+      if (!resource) return { state: 'missing', file: null, error: '', conflict, candidates };
+      const file = objectFile(resource.hash);
+      return { state: resource.state, file: existsSync(file) ? file : null, error: resource.error, conflict, candidates };
+    },
+    sources(projectId: string, key: string, hash: string): string[] {
+      return [...resources.values()]
+        .filter((resource) => resource.projectId === projectId && resource.key === key && resource.hash === hash)
+        .map((resource) => resource.ownerNodeId)
+        .sort();
     },
     status: () => ({ queueDepth: demands.size, resources: [...resources.values()].map(({ ownerNodeId, projectId, key, hash, state, error }) => ({ ownerNodeId, projectId, key, hash, state, error })) }),
   };

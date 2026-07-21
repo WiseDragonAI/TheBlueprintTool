@@ -2,7 +2,7 @@
  * WHAT: Validates JSON task labels and relationship-owned master-task membership.
  * WHY: Agents need a deterministic gate whose result does not depend on Markdown projections.
  */
-import { canonicalSubtaskRelationships, hasTaskLabel, isMasterCard, labelsOf, record as isRecord } from './master-task-model.js';
+import { canonicalSubtaskRelationships, isMasterCard, labelsOf, record as isRecord } from './master-task-model.js';
 
 type JsonObject = Record<string, unknown>;
 
@@ -13,16 +13,8 @@ export function validateMasterTasks(ledger: unknown, cardId?: string): { checked
   let checked = 0;
 
   for (const card of cards) {
-    const comment = isRecord(card.comment) ? card.comment : {};
-    const markdown = String(comment.what ?? '').replace(/\r\n?/g, '\n');
     const outgoing = canonicalSubtaskRelationships(isRecord(ledger) ? ledger : {}, String(card.id ?? ''));
-    if (!isMasterCard(card, markdown)) {
-      if (outgoing.length > 0 && hasTaskLabel(card)) {
-        checked += 1;
-        errors.push({ cardId: String(card.id ?? '(missing id)'), diagnostics: ['invalid_master_label'] });
-      }
-      continue;
-    }
+    if (!isMasterCard(card)) continue;
     checked += 1;
 
     const diagnostics: string[] = [];
@@ -33,7 +25,9 @@ export function validateMasterTasks(ledger: unknown, cardId?: string): { checked
       const childId = String(relationship.to ?? '');
       const child = allCards.find((entry) => String(entry.id ?? '') === childId);
       if (!child) diagnostics.push(`missing_subtask:${childId}`);
-      else if (canonicalMaster && (!hasTaskLabel(child) || !labelsOf(child).includes('subtask') || labelsOf(child).includes('master-task'))) diagnostics.push(`invalid_subtask_label:${childId}`);
+      else if (labelsOf(child).includes('master-task')) diagnostics.push(`invalid_subtask_target:${childId}`);
+      const position = Number(relationship.position);
+      if (!Number.isInteger(position) || position < 0) diagnostics.push(`invalid_subtask_position:${String(relationship.id ?? '')}`);
     }
     if (diagnostics.length > 0) errors.push({ cardId: String(card.id ?? '(missing id)'), diagnostics });
   }
