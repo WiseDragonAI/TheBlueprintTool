@@ -84,29 +84,42 @@ printf '%s\t%s\t%s\n' "$PROJECT_ID" "$PROJECT_ROOT" "$(git -C "$PROJECT_ROOT" re
 
 ---
 
-## E. Collect every writable v2 state set
+## E. Collect every writable source state
 
 1. Copy each node’s complete `<project>/.decision-os/task-state/<project-id>` directory to coordinator storage without modifying it.
-2. Record the source node, project, source path, source format marker hash, and tree hash.
-3. Include nodes that were offline when the failure was discovered.
-4. Do not use the relay cache as the sole migration source.
+2. For a writable node that has no v2 current shards, create a projection source at `<capture>/.decision-os/task-state/<project-id>` containing `projection.json`, `content-manifest.json`, and exact immutable objects under `objects/<hash-prefix>/<hash>`.
+3. Set `projection.json.projectId` to the project ID, set `projection.json.sourceNodeId` to the registered node ID, and place the complete captured task projection under `projection.json.ledger`.
+4. Require `content-manifest.json` version `1`, the same project ID, `complete: true`, one unique entry for every referenced card, thread, and managed asset, and the exact SHA-256 object bytes for every entry.
+5. Record the source node, project, source path, source format marker hash when present, manifest hash when present, and tree hash.
+6. Include nodes that were offline when the failure was discovered.
+7. Reject a projection source with a missing object, hash mismatch, incomplete manifest, duplicate resource key, duplicate source node ID, mismatched project ID, or a path outside the required `task-state/<project-id>` layout.
+8. Do not use the relay cache as the sole migration source.
 
 ```bash
-export SOURCE_SET="$CUTOVER_RECORD/source-state/$PROJECT_ID"
-mkdir -p "$SOURCE_SET"
-cp -a "$REMOTE_ACTIVE_STATE" "$SOURCE_SET/$FEDERATION_NODE_ID"
-sha256sum "$SOURCE_SET/$FEDERATION_NODE_ID/format.json" \
-  > "$SOURCE_SET/$FEDERATION_NODE_ID-format.sha256"
-find "$SOURCE_SET/$FEDERATION_NODE_ID" -type f -print0 | sort -z | xargs -0 sha256sum \
-  > "$SOURCE_SET/$FEDERATION_NODE_ID-tree.sha256"
+export COLLECTED_TASK_STATE="$CUTOVER_RECORD/source-state/$FEDERATION_NODE_ID/.decision-os/task-state"
+export COLLECTED_ROOT="$COLLECTED_TASK_STATE/$PROJECT_ID"
+export SOURCE_AUDIT="$CUTOVER_RECORD/source-state-audit/$PROJECT_ID/$FEDERATION_NODE_ID"
+mkdir -p "$COLLECTED_TASK_STATE" "$SOURCE_AUDIT"
+cp -a "$REMOTE_ACTIVE_STATE" "$COLLECTED_ROOT"
+if test -f "$COLLECTED_ROOT/format.json"; then
+  sha256sum "$COLLECTED_ROOT/format.json" \
+    > "$SOURCE_AUDIT/format.sha256"
+fi
+if test -f "$COLLECTED_ROOT/content-manifest.json"; then
+  sha256sum "$COLLECTED_ROOT/content-manifest.json" \
+    > "$SOURCE_AUDIT/content-manifest.sha256"
+fi
+find "$COLLECTED_ROOT" -type f -print0 | sort -z | xargs -0 sha256sum \
+  > "$SOURCE_AUDIT/tree.sha256"
+printf '%s\n' "$COLLECTED_ROOT" >> "$CUTOVER_RECORD/source-state-roots-$PROJECT_ID.txt"
 ```
 
 ---
 
 ## F. Offline migration
 
-1. Supply every collected v2 state root for the project with a repeated `--source-state-root` argument.
-2. The migration joins current v2 registers, hydrates sidecar-backed notes, validates relationships, assigns lifecycle metadata and positions, removes generated body state, verifies and unions every collected immutable object store, preserves remote resource heads, captures current sidecars, writes `migration-report.json`, then writes `format.json` last.
+1. Supply every collected v2 state root and projection-only source for the project with a repeated `--source-state-root` argument.
+2. The migration joins current v2 registers, imports projection-only node facts without treating omissions as deletions, hydrates sidecar-backed notes, validates relationships, assigns lifecycle metadata and positions, removes generated body state, verifies and unions every collected immutable object store, preserves remote resource heads, captures current sidecars, writes `migration-report.json`, then writes `format.json` last.
 3. Preflight failure writes nothing. Failure after backup leaves no epoch-3 marker, so runtime admission remains closed.
 4. Keep the returned rollback snapshot until production proof completes.
 
@@ -114,7 +127,7 @@ find "$SOURCE_SET/$FEDERATION_NODE_ID" -type f -print0 | sort -z | xargs -0 sha2
 source_args=()
 while IFS= read -r source_root; do
   source_args+=(--source-state-root "$source_root")
-done < <(find "$SOURCE_SET" -mindepth 1 -maxdepth 1 -type d | sort)
+done < <(sort -u "$CUTOVER_RECORD/source-state-roots-$PROJECT_ID.txt")
 
 cd "$DECISION_OS_REPO/backend"
 ./node_modules/.bin/tsx src/cli/migrate-task-current-state.ts \
@@ -130,7 +143,7 @@ cd "$DECISION_OS_REPO/backend"
 ## G. Per-project validation
 
 1. Require epoch `3`, protocol `decision-os-task-state/3`, baseline epoch `3`, and a 64-character baseline root.
-2. Review the complete source-value audit, body rewrite report, relationship repair report, semantic inventory, and canonical projection checksum.
+2. Review the complete source-value audit, body rewrite report, relationship repair report, projection-source inventory, semantic inventory, and canonical projection checksum.
 3. Confirm every collected source root exists below the returned backup.
 4. Compare `baselineRoot` across every node receiving the same migrated project state.
 
@@ -155,7 +168,9 @@ jq -e '
   (.semanticInventory.entityDeletions >= 0) and
   (.sourceEntityInventory.resource >= 0) and
   (.currentEntityInventory.resource >= .sourceEntityInventory.resource) and
-  (.semanticInventory.resourceHeads >= 0)
+  (.semanticInventory.resourceHeads >= 0) and
+  ([.projectionSources[] | .sourceNodeId] | length == (unique | length)) and
+  ([.projectionSources[] | .entityCount, .resourceCount] | all(. >= 0))
 ' "$report"
 ```
 

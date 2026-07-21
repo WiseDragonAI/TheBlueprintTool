@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { federatedControlRoomProjection } from '@backend/business/server/helper/federated-control-room-projection.js';
 
-test('merges Exec tasks and upgrades an older remote Active projection', () => {
+test('merges Exec tasks from current structural projections', () => {
   const result = federatedControlRoomProjection({
     localProjection: {
       fingerprint: 'local', projects: [], queue: [], exec: [{ cardId: 'local', projectId: 'a', cardStatus: 'todo', status: 'task-execution', executionObservation: { kind: 'codex-process' } }],
@@ -13,7 +13,7 @@ test('merges Exec tasks and upgrades an older remote Active projection', () => {
       owner: { nodeId: 'remote-node', nodeLabel: 'Remote', remote: true },
       projection: {
         fingerprint: 'remote', projects: [], queue: [],
-        active: [{ cardId: 'remote', projectId: 'b', cardStatus: 'todo', status: 'task-active', activeSince: '2026-07-17T05:00:00.000Z', executionObservation: { kind: 'codex-process' } }],
+        exec: [{ cardId: 'remote', projectId: 'b', cardStatus: 'todo', status: 'task-execution', executionSince: '2026-07-17T05:00:00.000Z', executionObservation: { kind: 'codex-process' } }],
         backlog: [], done: [], allTasks: [], diagnostics: [], ledgers: [],
       },
     }],
@@ -24,6 +24,26 @@ test('merges Exec tasks and upgrades an older remote Active projection', () => {
   assert.equal(result.exec[1].projectId, 'b');
   assert.equal(result.exec[1].status, 'task-execution');
   assert.equal(result.exec[1].executionSince, '2026-07-17T05:00:00.000Z');
+  assert.equal(result.active, undefined);
+});
+
+test('does not admit removed Active projections into the current runtime', () => {
+  const result = federatedControlRoomProjection({
+    localProjection: { fingerprint: 'local', projects: [], queue: [], exec: [], backlog: [], done: [], allTasks: [], diagnostics: [], ledgers: [] },
+    localOwner: { nodeId: 'local-node', nodeLabel: 'Local', remote: false },
+    remoteProjections: [{
+      owner: { nodeId: 'remote-node', nodeLabel: 'Remote', remote: true },
+      projection: {
+        fingerprint: 'removed-schema', projects: [], queue: [],
+        active: [{ cardId: 'legacy', projectId: 'b', cardStatus: 'todo', status: 'task-active' }],
+        backlog: [], done: [], allTasks: [], diagnostics: [], ledgers: [],
+      },
+    }],
+    diagnostics: [],
+  }) as Record<string, any>;
+
+  assert.deepEqual(result.exec, []);
+  assert.deepEqual(result.allTasks, []);
   assert.equal(result.active, undefined);
 });
 
