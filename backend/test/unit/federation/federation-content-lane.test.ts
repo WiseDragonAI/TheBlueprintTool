@@ -66,6 +66,8 @@ test('resource-scoped manifests preserve unrelated cache entries and prioritize 
   const first = resource('.decision-os/files/a.bin', 'a');
   const second = resource('.decision-os/files/b.bin', 'b');
   store.applyManifest('node-a', { version: 1, projectId: 'project-a', generatedAt: '', complete: true, resources: [first, second] });
+  assert.equal(store.status().queueDepth, 0);
+  assert.deepEqual(store.due(), []);
   store.applyManifest('node-a', { version: 1, projectId: 'project-a', generatedAt: '', complete: false, resources: [first] });
   assert.equal(store.status().resources.length, 2);
   assert.equal(store.prioritize('node-a', 'project-a', second.key), true);
@@ -78,7 +80,14 @@ test('content scheduler guarantees a bounded content share during priority state
   const store = createFederationContentReplicaStore({ decisionOsRoot: root });
   const bytes = Buffer.from('verified markdown');
   const hash = createHash('sha256').update(bytes).digest('hex');
-  store.applyManifest('node-a', { version: 1, projectId: 'project-a', generatedAt: new Date().toISOString(), resources: [{ type: 'card-markdown', key: '.decision-os/cards/tasks/card-a.md', hash, bytes: bytes.byteLength, changedAt: new Date().toISOString() }] });
+  const untouchedBytes = Buffer.from('not requested');
+  const untouchedHash = createHash('sha256').update(untouchedBytes).digest('hex');
+  store.applyManifest('node-a', { version: 1, projectId: 'project-a', generatedAt: new Date().toISOString(), resources: [
+    { type: 'card-markdown', key: '.decision-os/cards/tasks/card-a.md', hash, bytes: bytes.byteLength, changedAt: new Date().toISOString() },
+    { type: 'card-markdown', key: '.decision-os/cards/tasks/card-b.md', hash: untouchedHash, bytes: untouchedBytes.byteLength, changedAt: new Date().toISOString() },
+  ] });
+  assert.equal(store.status().queueDepth, 0);
+  store.prioritize('node-a', 'project-a', '.decision-os/cards/tasks/card-a.md');
   let priority = true;
   let requests = 0;
   const scheduler = createFederationContentScheduler({ store, hasPriorityStateWork: () => priority, fetchContent: async (entry) => {
@@ -89,10 +98,25 @@ test('content scheduler guarantees a bounded content share during priority state
   await scheduler.drain();
   assert.equal(requests, 1);
   assert.equal(store.resource('node-a', 'project-a', '.decision-os/cards/tasks/card-a.md').state, 'available');
+  assert.equal(store.resource('node-a', 'project-a', '.decision-os/cards/tasks/card-b.md').state, 'missing');
   priority = false;
   await scheduler.drain();
   assert.equal(requests, 1);
   assert.equal(store.resource('node-a', 'project-a', '.decision-os/cards/tasks/card-a.md').state, 'available');
+});
+
+test('content sources include only replicas advertising the exact current head', (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-content-sources-'));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const store = createFederationContentReplicaStore({ decisionOsRoot: root });
+  const key = '.decision-os/cards/tasks/card-a.md';
+  const firstHash = createHash('sha256').update('first').digest('hex');
+  const secondHash = createHash('sha256').update('second').digest('hex');
+  const manifest = (hash: string) => ({ version: 1 as const, projectId: 'project-a', generatedAt: '', resources: [{ type: 'card-markdown' as const, key, hash, bytes: 5, changedAt: '' }] });
+  store.applyManifest('node-b', manifest(firstHash));
+  store.applyManifest('node-a', manifest(firstHash));
+  store.applyManifest('node-c', manifest(secondHash));
+  assert.deepEqual(store.sources('project-a', key, firstHash), ['node-a', 'node-b']);
 });
 
 test('corrupt content retains stale verified bytes and retries independently', (context) => {
@@ -103,16 +127,18 @@ test('corrupt content retains stale verified bytes and retries independently', (
   const firstHash = createHash('sha256').update(first).digest('hex');
   const key = '.decision-os/cards/tasks/card-a.md';
   store.applyManifest('node-a', { version: 1, projectId: 'project-a', generatedAt: '', resources: [{ type: 'card-markdown', key, hash: firstHash, bytes: first.length, changedAt: '' }] });
+  store.prioritize('node-a', 'project-a', key);
   mkdirSync(resolve(store.objectFile(firstHash), '..'), { recursive: true });
   writeFileSync(store.objectFile(firstHash), first);
   store.complete(store.due(1)[0]);
   const second = Buffer.from('second');
   const secondHash = createHash('sha256').update(second).digest('hex');
   store.applyManifest('node-a', { version: 1, projectId: 'project-a', generatedAt: '', resources: [{ type: 'card-markdown', key, hash: secondHash, bytes: second.length, changedAt: '' }] });
+  assert.equal(store.resource('node-a', 'project-a', key).file, null);
+  store.prioritize('node-a', 'project-a', key);
   const queued = store.due(1)[0];
   store.fail(queued, 'invalid hash');
   const retained = store.resource('node-a', 'project-a', key);
   assert.equal(retained.state, 'stale');
-  assert.ok(retained.file);
-  assert.deepEqual(readFileSync(retained.file), first);
+  assert.equal(retained.file, null);
 });

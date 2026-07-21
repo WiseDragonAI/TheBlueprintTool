@@ -20,7 +20,7 @@ import { parseMultipartFormData } from './parse-multipart-form-data.js';
 import { contentTypeFor } from './content-type-for.js';
 import { normalizeLedgerNotes } from './normalize-ledger-notes.js';
 import { hydrateLedgerCardContent, resolveCardContentFile } from '../../ledger/helper/card-content-file.js';
-import { stripHydratedThreadNotes, writeThreadNotesFile } from '../../ledger/helper/thread-content-file.js';
+import { parseThreadMarkdown, stripHydratedThreadNotes, writeThreadNotesFile } from '../../ledger/helper/thread-content-file.js';
 import { migrateBacklogStatus } from '../../ledger/helper/migrate-backlog-status.js';
 import { resolveCardContentChange, type CardContentChange } from '../../refresh/helper/watch-card-content-files.js';
 import { watchProjectFiles } from '../../refresh/helper/watch-project-files.js';
@@ -270,16 +270,6 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     return value;
   };
 
-  const synchronizeFederationContent = async (nodeId = '', projectId = '', resourceKey = ''): Promise<void> => {
-    if (!federation || !federationContentScheduler) return;
-    for (const project of federation.remoteProjects().filter((entry) => entry.online && (!nodeId || entry.ownerNodeId === nodeId) && (!projectId || entry.localProjectId === projectId))) {
-      const result = await federation.request(project.ownerNodeId, `/api/federation/content-manifest?projectId=${encodeURIComponent(project.localProjectId)}${resourceKey ? `&key=${encodeURIComponent(resourceKey)}` : ''}`);
-      if (result.status !== 200) continue;
-      try { federationContentStore.applyManifest(project.ownerNodeId, JSON.parse(result.body.toString('utf8')) as FederationContentManifest); }
-      catch { /* Anti-entropy will retry an invalid or interrupted manifest. */ }
-    }
-    await federationContentScheduler.drain();
-  };
   const federatedTaskStoreForProject = (projectId: string, _ownerNodeId: string): TaskCurrentStateStore | null => {
     if (!projectId) return null;
     const current = federatedTaskStores.get(projectId);
@@ -401,7 +391,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       });
       const scopedEvent = hasCompleteScope ? event : resolvedEvent ? { ...event, ...resolvedEvent } : null;
       if (!scopedEvent) return;
-      controlRoomProjectionStore?.invalidate(projectId);
+      // WHAT: Capture the changed task resource directly from its watcher ownership record.
+      // WHY: Exact heads must replicate without rebuilding a complete content manifest.
+      if (String(scopedEvent.ledgerId) === 'tasks') {
+        const taskId = String(scopedEvent.cardId ?? (String(scopedEvent.threadId ?? '').startsWith('thread-') ? String(scopedEvent.threadId).slice('thread-'.length) : ''));
+        const project = projectCatalogStore.projects().find((entry) => entry.id === projectId && entry.available);
+        if (project && taskId) void taskStateForProject(project).recordContentContribution(taskId, String(scopedEvent.contentFile ?? '')).catch(() => undefined);
+      }
       revisions.advance(String(scopedEvent.ledgerId));
       broadcast(`event: card-content-change\ndata: ${JSON.stringify({ ...scopedEvent, projectId })}\n\n`);
       federation?.publishContentChange();
@@ -561,15 +557,13 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     settings: runtime.decisionOsSettings,
     localProjects: projectCatalog,
     localServerUrl: () => `http://127.0.0.1:${federationServerPort}`,
-    onRemoteContentChange: (nodeId) => {
-      void synchronizeFederationContent(nodeId);
+    onRemoteContentChange: () => {
       for (const client of globalContentEventClients) client.write('event: ledger-content-change\ndata: {"remote":true}\n\n');
     },
     onRemoteCatalogChange: () => {
       for (const project of projectCatalog().filter((entry) => entry.available)) taskStateForProject(project);
       controlRoomProjectionStore?.invalidate();
       federationTaskStateReplicator?.reconcileRelay();
-      void synchronizeFederationContent();
       void synchronizeFederatedLibraries().catch(() => undefined);
       projectSyncController?.resume();
     },
@@ -609,9 +603,16 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       const diagnostics = federationTaskStateReplicator?.diagnostics();
       return Boolean(diagnostics && (diagnostics.runtimeDirty.length > 0 || diagnostics.pendingDeliveryIds.length > 0));
     },
-    fetchContent: async ({ ownerNodeId, projectId, hash }) => {
-      const result = await federation!.requestToFile(ownerNodeId, `/api/federation/content-object?projectId=${encodeURIComponent(projectId)}&hash=${encodeURIComponent(hash)}`, federationContentStore.objectFile(hash), hash);
-      if (result.status !== 200) throw new Error(`content_object_http_${result.status}`);
+    fetchContent: async ({ ownerNodeId, projectId, key, hash }) => {
+      const online = new Set(federation!.remoteProjects().filter((project) => project.online && project.localProjectId === projectId).map((project) => project.ownerNodeId));
+      const sources = [...new Set([ownerNodeId, ...federationContentStore.sources(projectId, key, hash)])].filter((source) => online.has(source));
+      const failures: string[] = [];
+      for (const source of sources) {
+        const result = await federation!.requestToFile(source, `/api/federation/content-object?projectId=${encodeURIComponent(projectId)}&hash=${encodeURIComponent(hash)}`, federationContentStore.objectFile(hash), hash);
+        if (result.status === 200) return;
+        failures.push(`${source}:${result.status}`);
+      }
+      throw new Error(`content_object_sources_failed:${failures.join(',') || 'none-online'}`);
     },
   });
   const projectSyncStore = createProjectSyncStore({ decisionOsRoot: masterDecisionOsRoot });
@@ -734,14 +735,24 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           const threadId = decodeRouteSegment(threadRead[2]);
           const refs = ledger.threadFiles && typeof ledger.threadFiles === 'object' ? ledger.threadFiles as AnyRecord : {};
           const key = String(refs[threadId] ?? '');
-          const notesByThread = ledger.notes && typeof ledger.notes === 'object' && !Array.isArray(ledger.notes)
-            ? ledger.notes as Record<string, AnyRecord[]>
-            : {};
+          const heads = taskStore?.contentHeads(key) ?? [];
+          for (const head of heads) federationContentStore.applyManifest(head.sourceReplicaId, { version: 1, projectId: localProjectId, generatedAt: new Date().toISOString(), complete: false, resources: [{ type: head.type, key: head.key, hash: head.hash, bytes: head.bytes, changedAt: head.changedAt }] });
+          const contentOwner = heads.find((head) => head.sourceReplicaId === ownerNodeId)?.sourceReplicaId ?? heads[0]?.sourceReplicaId ?? ownerNodeId;
+          const content = federationContentStore.resource(contentOwner, localProjectId, key);
+          resourceReady = !key || Boolean(content.file);
+          contentStatus = { status: content.state, resource: key, error: content.error };
+          // WHAT: Queue only the thread file requested by this route.
+          // WHY: Catalog and head synchronization must transfer zero body bytes.
+          if (!resourceReady) {
+            federationContentStore.prioritize(contentOwner, localProjectId, key);
+            void federationContentScheduler?.drain();
+          }
+          const notes = content.file ? parseThreadMarkdown(await readFileAsync(content.file, 'utf8')) : [];
           replicaBody = {
             ledgerId: decodeRouteSegment(threadRead[1]),
             threadId,
             threadFiles: key ? { [threadId]: key } : {},
-            notes: { [threadId]: notesByThread[threadId] ?? [] },
+            notes: { [threadId]: notes },
           };
         }
       }
@@ -1085,14 +1096,24 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     }
     if (!projectScope && url === '/api/federation/content-object' && request.method === 'GET') {
       const contentUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
-      const project = projects.find((entry) => entry.id === contentUrl.searchParams.get('projectId') && entry.available);
-      if (!project) {
+      const projectId = contentUrl.searchParams.get('projectId') ?? '';
+      const project = projects.find((entry) => entry.id === projectId && entry.available);
+      const knownRemoteProject = federation.remoteProjects().some((entry) => entry.localProjectId === projectId);
+      // WHAT: Serve objects only within a locally known project namespace.
+      // WHY: The hash endpoint must not become an unscoped cache reader.
+      if (!project && !knownRemoteProject) {
         response.statusCode = 404;
         response.end();
         return;
       }
       const hash = contentUrl.searchParams.get('hash') ?? '';
-      const file = /^[a-f0-9]{64}$/i.test(hash) ? resolve(taskStateForProject(project).store.root, 'objects', hash.slice(0, 2), hash) : '';
+      const localFile = project && /^[a-f0-9]{64}$/i.test(hash)
+        ? resolve(taskStateForProject(project).store.root, 'objects', hash.slice(0, 2), hash)
+        : '';
+      const cachedFile = /^[a-f0-9]{64}$/i.test(hash) ? federationContentStore.objectFile(hash) : '';
+      const file = localFile && existsSync(localFile) ? localFile : cachedFile;
+      // WHAT: Prefer locally authoritative bytes, then an already verified replica object.
+      // WHY: Any verified replica can keep exact content available when the owner is offline.
       if (!file || !existsSync(file)) {
         response.statusCode = 404;
         response.end();

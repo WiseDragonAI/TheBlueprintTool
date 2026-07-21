@@ -3,7 +3,7 @@ import type { FederationContentReplicaStore } from './federation-content-replica
 export function createFederationContentScheduler(input: {
   store: FederationContentReplicaStore;
   hasPriorityStateWork: () => boolean;
-  fetchContent: (entry: { ownerNodeId: string; projectId: string; hash: string }) => Promise<void>;
+  fetchContent: (entry: { ownerNodeId: string; projectId: string; key: string; hash: string }) => Promise<void>;
   concurrency?: number;
   minimumContentShare?: number;
 }) {
