@@ -5,6 +5,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { readCanonicalDecisionOsState } from '../../ledger/helper/read-canonical-decision-os-state.js';
+import { readLedgerProjection } from '../../task-state/helper/read-ledger-projection.js';
 import { readCodexPipelineStore } from '../helper/codex-pipeline-store.js';
 import { readCodexProcessQueue } from '../helper/codex-process-queue.js';
 import { unifiedCodexQueuePosition } from '../helper/codex-process-scheduler.js';
@@ -44,7 +45,7 @@ export function readCompactSkillRunStatusController(input: { runId: string; ledg
   if (!ledgerEntry) return { ok: false, statusCode: 404, error: 'Ledger not found.' };
   const ledgerPath = resolve(decisionOsRoot, String(ledgerEntry.ledgerFile ?? '').replace(/^\.decision-os\//, ''));
   if (!existsSync(ledgerPath)) return { ok: false, statusCode: 404, error: 'Ledger file not found.' };
-  const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord;
+  const ledger = readLedgerProjection({ ledgerId, ledgerPath, runtime });
   const ownership = resolveCardSkillRunOwnership({ ledger, decisionOsRoot, cardId, runId });
   if (!ownership.found) return { ok: false, statusCode: 404, error: 'Run not found on card.' };
   const live = runtimeRun(runtime, runId);

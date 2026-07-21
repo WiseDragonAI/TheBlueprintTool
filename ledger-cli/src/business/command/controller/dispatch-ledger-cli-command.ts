@@ -18,6 +18,7 @@ import { synchronizeServerSkillController } from '../../skills/controller/synchr
 import { migrateMasterTasks } from '../../ledger/helper/migrate-master-tasks.js';
 import { readFile } from 'node:fs/promises';
 import { writeLedgerJson } from '../../ledger/effect/write-ledger-json.js';
+import { readLedgerJson } from '../../ledger/helper/read-ledger-json.js';
 
 async function commitTaskProjectionIfNeeded(ledgerJsonFile: string, fs?: FileSystemPort): Promise<void> {
   if (!ledgerJsonFile.endsWith('/tasks.json') && !ledgerJsonFile.endsWith('\\tasks.json')) return;
@@ -98,8 +99,12 @@ export async function dispatchLedgerCliCommandController(
     if (!command.masterTaskOperation?.planStdin) return { ok: false, error: 'master-task-apply requires --plan-stdin.' };
     let planJson = '';
     for await (const chunk of process.stdin) planJson += String(chunk);
-    const result = applyMasterTaskPlan({ ledgerJsonFile: command.ledgerJsonFile, planJson });
-    if (result.ok) await commitTaskProjectionIfNeeded(command.ledgerJsonFile, ports.fs);
+    const current = await readLedgerJson(command.ledgerJsonFile, ports.fs);
+    if (!current.ok) return current;
+    if (!current.value || typeof current.value !== 'object' || Array.isArray(current.value)) return { ok: false, error: 'Master-task apply requires an object ledger.' };
+    const ledger = current.value as Record<string, unknown>;
+    const result = applyMasterTaskPlan({ ledgerJsonFile: command.ledgerJsonFile, planJson, ledger });
+    if (result.ok) await writeLedgerJson(command.ledgerJsonFile, ledger, ports.fs);
     if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
     return result;
   }
@@ -108,8 +113,12 @@ export async function dispatchLedgerCliCommandController(
     if (!command.masterTaskOperation?.planStdin) return { ok: false, error: 'master-task-progress requires --plan-stdin.' };
     let planJson = '';
     for await (const chunk of process.stdin) planJson += String(chunk);
-    const result = applyMasterTaskProgress({ ledgerJsonFile: command.ledgerJsonFile, planJson });
-    if (result.ok) await commitTaskProjectionIfNeeded(command.ledgerJsonFile, ports.fs);
+    const current = await readLedgerJson(command.ledgerJsonFile, ports.fs);
+    if (!current.ok) return current;
+    if (!current.value || typeof current.value !== 'object' || Array.isArray(current.value)) return { ok: false, error: 'Master-task progress requires an object ledger.' };
+    const ledger = current.value as Record<string, unknown>;
+    const result = applyMasterTaskProgress({ ledgerJsonFile: command.ledgerJsonFile, planJson, ledger });
+    if (result.ok) await writeLedgerJson(command.ledgerJsonFile, ledger, ports.fs);
     if (result.ok) ports.emit ? ports.emit(result.value) : console.log(result.value);
     return result;
   }

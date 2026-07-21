@@ -296,7 +296,7 @@ function monitorAdoptedProcess(decisionOsRoot: string, runtime: AnyRecord, item:
   }
   if (monitors.has(item.id)) return;
   const runId = String(item.payload.runId ?? item.id);
-  const timer = setInterval(() => {
+  const timer = setInterval(async () => {
     const current = readCodexProcessQueue(decisionOsRoot).find((entry) => entry.id === item.id && entry.status === 'running');
     if (!current) {
       stopAdoptedMonitor(runtime, item.id);
@@ -310,7 +310,7 @@ function monitorAdoptedProcess(decisionOsRoot: string, runtime: AnyRecord, item:
     const settled = terminalStatus(current.stdoutFile);
     if (settled) {
       runs[runId] = { ...(runs[runId] ?? {}), status: settled, adopted: false, finishedAt: new Date().toISOString() };
-      clearCardCodexExecutionForLedger({
+      await clearCardCodexExecutionForLedger({
         decisionOsRoot,
         ledgerId: String(current.payload.ledgerId ?? ''),
         cardId: String(current.payload.cardId ?? ''),
@@ -389,14 +389,14 @@ export function recoverCodexProcessQueue(decisionOsRoot: string, runtime?: AnyRe
     const settled = terminalStatus(files.stdoutFile);
     if (settled) {
       runs[runId] = { ...(runs[runId] ?? {}), id: runId, executionId: item.payload.executionId, status: settled, pid: item.processId, adopted: false, finishedAt: new Date().toISOString() };
-      clearCardCodexExecutionForLedger({
+      void clearCardCodexExecutionForLedger({
         decisionOsRoot,
         ledgerId: String(item.payload.ledgerId ?? ''),
         cardId: String(item.payload.cardId ?? ''),
         runId,
         executionId: String(item.payload.executionId ?? ''),
         runtime,
-      });
+      }).catch(() => undefined);
       return [];
     }
     return interruptedItemStillOwned(decisionOsRoot, item) ? [recoveredContinuation(item)] : [];

@@ -39,7 +39,8 @@ export function ledgerCanvasProjection(input: { decisionOsRoot: string; ledgerId
   const source = projectionSource(input);
   if (!source) return null;
   const ledger = hydrateLedgerCardContent(source.ledger, input.decisionOsRoot);
-  if (!ledger.notes || typeof ledger.notes !== 'object') ledger.notes = {};
+  ledger.notes = {};
+  ledger.deletedNoteIds = {};
   return ledger;
 }
 

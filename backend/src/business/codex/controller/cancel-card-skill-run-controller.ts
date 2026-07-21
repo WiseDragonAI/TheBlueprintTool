@@ -13,6 +13,7 @@ import { signalCodexProcessTree } from '../helper/reconcile-terminal-codex-proce
 import { codexRuntimeRuns, notifyCodexLifecycle, publicCodexRuntimeRun } from '../helper/codex-runtime-run-store.js';
 import { readCanonicalDecisionOsState } from '../../ledger/helper/read-canonical-decision-os-state.js';
 import { cardCodexExecutionOwnership } from '../helper/card-codex-execution-ownership.js';
+import { readLedgerProjection } from '../../task-state/helper/read-ledger-projection.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -29,7 +30,7 @@ function cardOwnsExecution(input: { decisionOsRoot: string; ledgerId: string; ca
   const ledgerRef = String(state.ledgers.find((entry) => entry.id === input.ledgerId)?.ledgerFile ?? '').replace(/^\.decision-os\//, '');
   const ledgerPath = resolve(input.decisionOsRoot, ledgerRef);
   if (!ledgerRef || !existsSync(ledgerPath)) return false;
-  const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as { cards?: AnyRecord[] };
+  const ledger = readLedgerProjection({ ledgerId: input.ledgerId, ledgerPath, runtime: input.runtime }) as { cards?: AnyRecord[] };
   const ownership = cardCodexExecutionOwnership(ledger.cards?.find((card) => String(card.id ?? '') === input.cardId));
   return ownership.state === 'active'
     && ownership.lease.runId === input.runId
@@ -72,7 +73,7 @@ export async function cancelCardSkillRunController(input: { action_payload?: Any
     const cancelled = run ?? { id: runId, executionId, ledgerId, outputCardId: cardId };
     const finishedAt = new Date().toISOString();
     Object.assign(cancelled, { status: 'cancelled', finishedAt, settledAt: finishedAt });
-    clearCardCodexExecutionForLedger({ decisionOsRoot, ledgerId, cardId, runId, executionId, runtime });
+    await clearCardCodexExecutionForLedger({ decisionOsRoot, ledgerId, cardId, runId, executionId, runtime });
     notifyCodexLifecycle(runtime.onCodexRunSettled, { ledgerId, cardId, outputCardId: cardId, threadId: `thread-${cardId}`, runId, executionId, status: 'cancelled' });
     return { ok: true, statusCode: 202, status: 'cancelled', run: publicCodexRuntimeRun(cancelled) };
   }

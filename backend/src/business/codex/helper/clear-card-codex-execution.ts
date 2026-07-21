@@ -3,13 +3,14 @@
  * WHY: A settled run must leave Exec, and an older callback must never clear a newer execution.
  */
 import { readFileSync } from 'node:fs';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { basename, isAbsolute, relative, resolve } from 'node:path';
 import { readCanonicalDecisionOsState } from '@backend/business/ledger/helper/read-canonical-decision-os-state.js';
 import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
+import { readLedgerProjection } from '@backend/business/task-state/helper/read-ledger-projection.js';
 
 type AnyRecord = Record<string, unknown>;
 
-export function clearCardCodexExecution(input: {
+export async function clearCardCodexExecution(input: {
   ledgerPath: string;
   cardId: string;
   runId: string;
@@ -18,9 +19,10 @@ export function clearCardCodexExecution(input: {
   ledgerId?: string;
   runtime?: AnyRecord;
   terminalState?: 'terminal' | 'failed';
-}): boolean {
+}): Promise<boolean> {
   try {
-    const ledger = JSON.parse(readFileSync(input.ledgerPath, 'utf8')) as AnyRecord & { cards?: AnyRecord[] };
+    const ledgerId = input.ledgerId ?? (basename(input.ledgerPath) === 'tasks.json' ? 'tasks' : '');
+    const ledger = readLedgerProjection({ ledgerId, ledgerPath: input.ledgerPath, runtime: input.runtime }) as AnyRecord & { cards?: AnyRecord[] };
     const card = (ledger.cards ?? []).find((entry) => String(entry.id ?? '') === input.cardId);
     if (!card || String(card.codexActiveRunId ?? '') !== input.runId) return false;
     const persistedExecutionId = String(card.codexActiveExecutionId ?? '');
@@ -34,7 +36,7 @@ export function clearCardCodexExecution(input: {
     if (card.executionIntent && typeof card.executionIntent === 'object' && ['waiting', 'queued', 'running'].includes(String((card.executionIntent as AnyRecord).state ?? ''))) {
       card.executionIntent = { ...(card.executionIntent as AnyRecord), state: input.terminalState ?? 'terminal', updatedAt: new Date().toISOString() };
     }
-    persistLedgerProjection({
+    await persistLedgerProjection({
       decisionOsRoot: input.decisionOsRoot,
       ledgerId: input.ledgerId,
       ledgerPath: input.ledgerPath,
@@ -49,14 +51,14 @@ export function clearCardCodexExecution(input: {
   }
 }
 
-export function clearCardCodexExecutionForLedger(input: {
+export async function clearCardCodexExecutionForLedger(input: {
   decisionOsRoot: string;
   ledgerId: string;
   cardId: string;
   runId: string;
   executionId: string;
   runtime?: AnyRecord;
-}): boolean {
+}): Promise<boolean> {
   const state = readCanonicalDecisionOsState({
     action_payload: { decisionOsFile: resolve(input.decisionOsRoot, 'state.json') },
     runtime_state: input.runtime ?? {},

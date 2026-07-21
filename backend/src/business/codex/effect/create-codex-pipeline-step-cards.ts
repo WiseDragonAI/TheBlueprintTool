@@ -10,12 +10,12 @@ import { persistLedgerProjection } from '@backend/business/task-state/helper/per
 
 type AnyRecord = Record<string, unknown>;
 
-export function createCodexPipelineStepCards(input: {
+export async function createCodexPipelineStepCards(input: {
   decisionOsRoot: string;
   context: PipelineLedgerContext;
   source: AnyRecord;
   run: CodexPipelineRun;
-}): AnyRecord | null {
+}): Promise<AnyRecord | null> {
   const sourceX = Number(input.source.x ?? 0);
   const sourceY = Number(input.source.y ?? 0);
   const sourceWidth = Math.max(220, Number(input.source.w ?? 360));
@@ -86,7 +86,7 @@ export function createCodexPipelineStepCards(input: {
   input.source.codexActiveRunId = firstSkill?.runId ?? '';
   input.source.codexActiveExecutionId = firstSkill?.executionId ?? '';
   stripHydratedThreadNotes(input.context.ledger);
-  persistLedgerProjection({
+  await persistLedgerProjection({
     decisionOsRoot: input.decisionOsRoot,
     ledgerId: input.context.ledgerId,
     ledgerPath: input.context.ledgerPath,

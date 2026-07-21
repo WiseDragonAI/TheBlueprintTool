@@ -10,7 +10,7 @@ import type { TaskProjectionCommand } from '../../task-state/helper/task-mutatio
 
 type AnyRecord = Record<string, unknown>;
 
-export function writeLedgerJsonFile(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): void {
+export async function writeLedgerJsonFile(input: { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord } | AnyRecord = {}): Promise<void> {
   telemetry('write-ledger-json-file', { role: 'effect', action: 'write-ledger-json-file' });
   const envelope = input as { action_payload?: AnyRecord; runtime_state?: AnyRecord; data_model?: AnyRecord };
   const payload = (envelope.action_payload ?? input) as AnyRecord;
@@ -21,7 +21,7 @@ export function writeLedgerJsonFile(input: { action_payload?: AnyRecord; runtime
     const file = resolve(String(payload.ledgerFile));
     mkdirSync(dirname(file), { recursive: true });
     if (file.endsWith('/tasks.json') && document && typeof document === 'object' && !Array.isArray(document)) {
-      persistLedgerProjection({
+      await persistLedgerProjection({
         decisionOsRoot: dirname(file),
         ledgerId: 'tasks',
         ledgerPath: file,

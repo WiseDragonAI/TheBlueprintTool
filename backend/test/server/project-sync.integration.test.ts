@@ -91,7 +91,9 @@ test('exposes origin identity and fixed repository status while protecting feder
     assert.equal(attached.ledgerId, 'tasks');
     assert.match(attached.masterCardId, /^card-project-sync-/);
     assert.match(attached.pipelineRunId, /^codex-pipeline-/);
-    const ledger = JSON.parse(readFileSync(join(project, '.decision-os', 'tasks.json'), 'utf8')) as Record<string, any>;
+    const ledgerResponse = await fetch(`${base}/p/${encodeURIComponent(catalog.projects[0].id)}/decision-os/tasks`);
+    assert.equal(ledgerResponse.status, 200);
+    const ledger = await ledgerResponse.json() as Record<string, any>;
     const master = ledger.cards.find((card: Record<string, unknown>) => card.id === attached.masterCardId);
     assert.deepEqual(master.labels, ['master-task', 'synchronization']);
     const synchronizationZone = ledger.annotations.find((annotation: Record<string, unknown>) => annotation.id === `zone-project-sync-${attached.syncId}`);

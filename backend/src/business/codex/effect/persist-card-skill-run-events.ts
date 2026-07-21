@@ -7,7 +7,7 @@ import { hydrateLedgerThreadNotesFor, stripHydratedThreadNotes, writeThreadNotes
 import { normalizeLedgerNotes } from '@backend/business/server/helper/normalize-ledger-notes.js';
 import { type NormalizedRunEvent } from '../helper/card-skill-run-event-types.js';
 import { resolveCardSkillRunOwnership } from '../helper/resolve-card-skill-run-ownership.js';
-import { persistLedgerProjection } from '@backend/business/task-state/helper/persist-ledger-projection.js';
+import { queueLedgerProjectionPersistence } from '@backend/business/task-state/helper/persist-ledger-projection.js';
 
 type AnyRecord = Record<string, unknown>;
 
@@ -92,18 +92,19 @@ export function persistCardSkillRunEvents(input: {
   const currentThreadFiles = ledger.threadFiles && typeof ledger.threadFiles === 'object' && !Array.isArray(ledger.threadFiles)
     ? ledger.threadFiles as Record<string, unknown>
     : {};
-  // WHAT: Persist the ledger only when the write assigned a new thread content file.
-  // WHY: Existing ownership leaves status ingestion scoped to the thread file alone.
-  if (String(currentThreadFiles[threadId] ?? '') !== previousThreadFile) {
-    stripHydratedThreadNotes(ledger);
-    persistLedgerProjection({
-      decisionOsRoot: input.decisionOsRoot,
-      ledgerId: input.ledgerId,
-      ledgerPath: input.ledgerPath,
-      ledger,
-      runtime: input.runtime,
-      command: { kind: 'assign-thread-content', ledgerPaths: [`threadFiles/${threadId}`] },
-    });
-  }
+  const assignedThreadFile = String(currentThreadFiles[threadId] ?? '') !== previousThreadFile;
+  queueLedgerProjectionPersistence({
+    decisionOsRoot: input.decisionOsRoot,
+    ledgerId: input.ledgerId,
+    ledgerPath: input.ledgerPath,
+    ledger,
+    runtime: input.runtime,
+    command: {
+      kind: 'persist-skill-run-notes',
+      threadIds: [threadId],
+      ...(assignedThreadFile ? { ledgerPaths: [`threadFiles/${threadId}`] } : {}),
+    },
+  });
+  stripHydratedThreadNotes(ledger);
   return changed;
 }

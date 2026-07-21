@@ -10,6 +10,7 @@ import { readCodexPipelineStore } from './codex-pipeline-store.js';
 import { readCodexProcessQueue } from './codex-process-queue.js';
 import { indexCodexRunArtifactDirectories, resolveCardSkillRunFiles } from './resolve-card-skill-run-files.js';
 import { persistLedgerProjection } from '../../task-state/helper/persist-ledger-projection.js';
+import { readLedgerProjection } from '../../task-state/helper/read-ledger-projection.js';
 
 type AnyRecord = Record<string, unknown>;
 export type CodexOwnershipReconciliation = { ledgersChanged: number; leasesCleared: number; artifactMappingsAdded: number };
@@ -30,7 +31,7 @@ function activePipelineExecutions(decisionOsRoot: string): Set<string> {
   return owned;
 }
 
-export function reconcileCodexExecutionOwnership(input: { decisionOsRoot: string; runtime?: AnyRecord }): CodexOwnershipReconciliation {
+export async function reconcileCodexExecutionOwnership(input: { decisionOsRoot: string; runtime?: AnyRecord }): Promise<CodexOwnershipReconciliation> {
   const result: CodexOwnershipReconciliation = { ledgersChanged: 0, leasesCleared: 0, artifactMappingsAdded: 0 };
   const state = readCanonicalDecisionOsState({
     action_payload: { decisionOsFile: resolve(input.decisionOsRoot, 'state.json') },
@@ -49,7 +50,7 @@ export function reconcileCodexExecutionOwnership(input: { decisionOsRoot: string
     const ledgerRef = text(entry.ledgerFile).replace(/^\.decision-os\//, '');
     const ledgerPath = resolve(input.decisionOsRoot, ledgerRef);
     if (!ledgerRef || !existsSync(ledgerPath)) continue;
-    const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord & { cards?: AnyRecord[] };
+    const ledger = readLedgerProjection({ ledgerId: entry.id, ledgerPath, runtime: input.runtime }) as AnyRecord & { cards?: AnyRecord[] };
     let changed = false;
     const changedCardIds = new Set<string>();
     for (const card of ledger.cards ?? []) {
@@ -93,7 +94,7 @@ export function reconcileCodexExecutionOwnership(input: { decisionOsRoot: string
     }
     if (!changed) continue;
     stripHydratedThreadNotes(ledger);
-    persistLedgerProjection({
+    await persistLedgerProjection({
       decisionOsRoot: input.decisionOsRoot,
       ledgerId: entry.id,
       ledgerPath,

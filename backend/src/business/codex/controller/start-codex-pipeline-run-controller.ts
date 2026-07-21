@@ -43,7 +43,7 @@ function sourceCard(context: PipelineLedgerContext, sourceCardId: string): AnyRe
   return (context.ledger.cards ?? []).find((entry) => String(entry.id ?? '') === sourceCardId) ?? null;
 }
 
-function rollbackPipelineCards(input: { decisionOsRoot: string; context: PipelineLedgerContext; ledgerBefore: string; sourceCardId: string; outputCardIds: string[] }): void {
+async function rollbackPipelineCards(input: { decisionOsRoot: string; context: PipelineLedgerContext; ledgerBefore: string; sourceCardId: string; outputCardIds: string[] }): Promise<void> {
   const currentRelationshipIds = (input.context.ledger.relationships ?? [])
     .filter((relationship) => input.outputCardIds.includes(String(relationship.to ?? '')))
     .map((relationship) => String(relationship.id ?? ''))
@@ -58,7 +58,7 @@ function rollbackPipelineCards(input: { decisionOsRoot: string; context: Pipelin
   }
   const previousLedger = JSON.parse(input.ledgerBefore) as PipelineLedgerContext['ledger'];
   input.context.ledger = previousLedger;
-  persistLedgerProjection({
+  await persistLedgerProjection({
     decisionOsRoot: input.decisionOsRoot,
     ledgerId: input.context.ledgerId,
     ledgerPath: input.context.ledgerPath,
@@ -161,12 +161,12 @@ export async function startPipelineRun(input: {
     // WHY: Invalid model and effort inputs are operator-correctable, not server faults.
     return { ok: false, statusCode: 400, error: error instanceof Error ? error.message : String(error) };
   }
-  const ledgerBefore = readFileSync(context.ledgerPath, 'utf8');
-  const cardError = createCodexPipelineStepCards({ decisionOsRoot: input.decisionOsRoot, context, source, run });
+  const ledgerBefore = JSON.stringify(context.ledger);
+  const cardError = await createCodexPipelineStepCards({ decisionOsRoot: input.decisionOsRoot, context, source, run });
   // WHAT: Stop when the ledger rejects a generated card or relationship.
   // WHY: The manifest must not start unless its complete visual chain exists.
   if (cardError) {
-    rollbackPipelineCards({ decisionOsRoot: input.decisionOsRoot, context, ledgerBefore, sourceCardId: input.sourceCardId, outputCardIds: run.steps.map((step) => step.outputCardId) });
+    await rollbackPipelineCards({ decisionOsRoot: input.decisionOsRoot, context, ledgerBefore, sourceCardId: input.sourceCardId, outputCardIds: run.steps.map((step) => step.outputCardId) });
     return { ok: false, statusCode: 400, error: String(cardError.error ?? 'Could not create pipeline step cards.') };
   }
   try {
@@ -176,7 +176,7 @@ export async function startPipelineRun(input: {
       store: { ...normalized.store, runs: [...normalized.store.runs, run] },
     });
   } catch {
-    rollbackPipelineCards({ decisionOsRoot: input.decisionOsRoot, context, ledgerBefore, sourceCardId: input.sourceCardId, outputCardIds: run.steps.map((step) => step.outputCardId) });
+    await rollbackPipelineCards({ decisionOsRoot: input.decisionOsRoot, context, ledgerBefore, sourceCardId: input.sourceCardId, outputCardIds: run.steps.map((step) => step.outputCardId) });
     // WHAT: Report manifest persistence failure before launching Codex.
     // WHY: An untracked child process could not be resumed or cancelled safely.
     return { ok: false, statusCode: 500, error: 'Could not persist the pipeline run manifest.' };

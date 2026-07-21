@@ -68,7 +68,7 @@ async function runCodexProcessSchedule(input: { decisionOsRoot: string; runtime:
           : {};
         input.runtime.codexSkillRuns = runs;
         runs[runId] = { ...(runs[runId] ?? {}), id: runId, executionId, status: 'failed', error: String(result.error ?? 'Dispatch failed.'), finishedAt: new Date().toISOString() };
-        clearCardCodexExecutionForLedger({
+        await clearCardCodexExecutionForLedger({
           decisionOsRoot: input.decisionOsRoot,
           ledgerId: String(claimed.payload.ledgerId ?? ''),
           cardId: String(claimed.payload.cardId ?? ''),

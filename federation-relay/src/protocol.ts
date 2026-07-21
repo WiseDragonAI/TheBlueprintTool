@@ -5,15 +5,12 @@ export const maximumBodyBytes = 25 * 1024 * 1024;
 export const maximumStreamsPerNode = 32;
 
 export const priorityStateFrameTypes = new Set([
-  'state-event-batch',
+  'state-entity-batch',
   'state-relay-ack',
   'state-ack',
+  'state-summary-request',
   'state-bucket-summary',
   'state-missing-request',
-  'state-snapshot-manifest',
-  'state-snapshot-request',
-  'state-snapshot-chunk',
-  'state-snapshot-end',
   'state-converged',
 ]);
 
@@ -44,7 +41,7 @@ export type RelayFrame = {
   code?: string;
   message?: string;
   projectId?: string;
-  stateVersion?: 1;
+  stateVersion?: 2;
   payload?: unknown;
 };
 

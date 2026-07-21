@@ -4,10 +4,11 @@ import { tasksLedgerForProject, type DecisionOsProject } from '../../server/help
 import { applyLedgerMutation } from '../../ledger/helper/apply-ledger-mutation.js';
 import { stripHydratedThreadNotes } from '../../ledger/helper/thread-content-file.js';
 import { persistLedgerProjection } from '../../task-state/helper/persist-ledger-projection.js';
+import { readLedgerProjection } from '../../task-state/helper/read-ledger-projection.js';
 
 type AnyRecord = Record<string, unknown>;
 
-export function admitProjectSyncMasterTask(input: {
+export async function admitProjectSyncMasterTask(input: {
   project: DecisionOsProject;
   runtime: AnyRecord;
   sourceProjectId: string;
@@ -16,10 +17,10 @@ export function admitProjectSyncMasterTask(input: {
   originFingerprint: string;
   syncId: string;
   waitingSince: string;
-}): { ledgerId: string; masterCardId: string; zoneId: string } {
+}): Promise<{ ledgerId: string; masterCardId: string; zoneId: string }> {
   const ledger = tasksLedgerForProject(input.project);
   const ledgerPath = resolve(input.project.decisionOsRoot, ledger.ledgerFile.replace(/^\.decision-os\//, ''));
-  const document = JSON.parse(readFileSync(ledgerPath, 'utf8')) as AnyRecord & {
+  const document = readLedgerProjection({ ledgerId: ledger.id, ledgerPath, runtime: input.runtime }) as AnyRecord & {
     cards?: AnyRecord[];
     annotations?: AnyRecord[];
     relationships?: AnyRecord[];
@@ -70,7 +71,7 @@ export function admitProjectSyncMasterTask(input: {
     },
   });
   stripHydratedThreadNotes(document);
-  persistLedgerProjection({
+  await persistLedgerProjection({
     decisionOsRoot: input.project.decisionOsRoot,
     ledgerId: ledger.id,
     ledgerPath,

@@ -3,7 +3,7 @@ import type { FederationContentReplicaStore } from './federation-content-replica
 export function createFederationContentScheduler(input: {
   store: FederationContentReplicaStore;
   hasPriorityStateWork: () => boolean;
-  fetchContent: (entry: { ownerNodeId: string; projectId: string; hash: string }) => Promise<Buffer>;
+  fetchContent: (entry: { ownerNodeId: string; projectId: string; hash: string }) => Promise<void>;
   concurrency?: number;
   minimumContentShare?: number;
 }) {
@@ -19,7 +19,7 @@ export function createFederationContentScheduler(input: {
         const entries = input.store.due(stateBusy ? Math.min(minimumContentShare, concurrency) : concurrency);
         if (entries.length === 0) break;
         await Promise.all(entries.map(async (entry) => {
-          try { input.store.install(entry, await input.fetchContent(entry)); }
+          try { await input.fetchContent(entry); input.store.complete(entry); }
           catch (error) { input.store.fail(entry, error instanceof Error ? error.message : 'content_transfer_failed'); }
         }));
         if (stateBusy) break;

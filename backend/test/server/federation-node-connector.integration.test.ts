@@ -10,15 +10,18 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { createHttpServer } from '@backend/business/server/helper/create-http-server.js';
 import { createFederationNodeConnector } from '@backend/business/federation/helper/federation-node-connector.js';
 import { writeCodexPipelineStore } from '@backend/business/codex/helper/codex-pipeline-store.js';
+import { migrateTaskCurrentState } from '@backend/business/task-state/helper/task-current-state-migration.js';
 
 type Frame = { type: string; requestId?: string; to?: string; projects?: unknown[] };
 
-function projectHome(name: string): string {
+async function projectHome(name: string): Promise<string> {
   const home = mkdtempSync(join(tmpdir(), `decision-os-federation-${name}-`));
   const decisionOsRoot = join(home, name, '.decision-os');
   mkdirSync(decisionOsRoot, { recursive: true });
   writeFileSync(join(decisionOsRoot, 'state.json'), JSON.stringify({ ledgers: [{ id: 'tasks', title: `${name} Tasks`, ledgerFile: '.decision-os/tasks.json' }] }));
   writeFileSync(join(decisionOsRoot, 'tasks.json'), JSON.stringify({ cards: [{ id: `${name}-card`, title: `${name} card`, labels: ['master-task'], status: 'todo' }], annotations: [], relationships: [] }));
+  writeFileSync(join(decisionOsRoot, 'project.json'), JSON.stringify({ id: `${name}-project` }));
+  await migrateTaskCurrentState({ decisionOsRoot, projectId: `${name}-project`, tasksLedgerFile: join(decisionOsRoot, 'tasks.json') });
   return home;
 }
 
@@ -199,6 +202,12 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
         for (const [targetId, target] of sockets) if (targetId !== nodeId) target.send(JSON.stringify({ version: 1, type: 'content-change' }));
         return;
       }
+      if (frame.type === 'state-entity-batch' && !frame.to) {
+        for (const [targetId, target] of sockets) {
+          if (targetId !== nodeId) target.send(JSON.stringify({ ...frame, from: 'relay' }));
+        }
+        return;
+      }
       if (frame.type.startsWith('state-') && frame.to) {
         sockets.get(frame.to)?.send(JSON.stringify({ ...frame, from: nodeId }));
         return;
@@ -224,8 +233,8 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
   await once(relayHttp, 'listening');
   const relayUrl = `http://127.0.0.1:${(relayHttp.address() as AddressInfo).port}`;
 
-  const homeA = projectHome('alpha');
-  const homeB = projectHome('beta');
+  const homeA = await projectHome('alpha');
+  const homeB = await projectHome('beta');
   federatedLibraryFixture(homeA, 'alpha');
   federatedLibraryFixture(homeB, 'beta');
   const runtimeA: Record<string, unknown> = { decisionOsSettings: { federationRelayUrl: relayUrl, federationId: 'proof', federationNodeId: 'node-a', federationNodeCredential: 'credential-a' } };
@@ -329,10 +338,10 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     const retiredReplicaBody = await retiredReplica.text();
     assert.equal(retiredReplica.status, 404, `the hydrated task replica endpoint is retired: ${retiredReplicaBody.slice(0, 200)}`);
     const replicationStatus = await fetch(`${baseA}/api/federation/replication-status`).then((response) => response.json()) as {
-      stateLane: { projects: Array<{ projectId: string; eventCount: number; snapshotCount: number }> };
+      stateLane: { projects: Array<{ projectId: string; entityCount: number; currentBytes: number }> };
       contentLane: { queueDepth: number; running: boolean };
     };
-    assert.ok(replicationStatus.stateLane.projects.some((project) => project.projectId === remoteBeta.id && project.eventCount + project.snapshotCount > 0));
+    assert.ok(replicationStatus.stateLane.projects.some((project) => project.projectId === remoteBeta.id && project.entityCount > 0 && project.currentBytes >= 0));
     assert.equal(typeof replicationStatus.contentLane.queueDepth, 'number');
     assert.equal(typeof replicationStatus.contentLane.running, 'boolean');
 
@@ -352,7 +361,7 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
       body: JSON.stringify({ action: 'patch-card', cardPatch: { id: 'beta-card', title: 'mutated by node-a' } }),
     });
     assert.equal(mutation.status, 200);
-    assert.match(readFileSync(join(homeB, 'beta', '.decision-os', 'tasks.json'), 'utf8'), /mutated by node-a/);
+    assert.doesNotMatch(readFileSync(join(homeB, 'beta', '.decision-os', 'tasks.json'), 'utf8'), /mutated by node-a/);
     assert.doesNotMatch(readFileSync(join(homeA, 'alpha', '.decision-os', 'tasks.json'), 'utf8'), /mutated by node-a/);
     assert.equal(readFileSync(registryAPath, 'utf8'), registryA);
     assert.equal(readFileSync(registryBPath, 'utf8'), registryB);
