@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import test from 'node:test';
 import { createTaskCurrentStateStore } from '../../../src/business/task-state/helper/task-current-state-store.js';
+import { finalizeTaskCurrentEntity, taskCurrentEntityByteLimit, type TaskCurrentEntity } from '../../../../shared/task-current-state-core.js';
 
 const todoLifecycle = { status: 'todo', changedAt: '2026-07-21T00:00:00.000Z', waitingAt: '2026-07-21T00:00:00.000Z', closedAt: null };
 
@@ -56,6 +57,60 @@ test('a state-lost writer advances beyond its joined replica clock before writin
   assert.equal(mutation.batch.context.desktop, 4);
   assert.equal(recovered.projection().conflicts.some((conflict) => conflict.entityId === 'card-a' && conflict.path === 'title'), false);
   await Promise.all([source.flush(), recovered.flush()]);
+});
+
+test('local mutations keep migration-sized project clocks out of entity registers and retained journal replay', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-sparse-context-'));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const store = createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a', initializeLedger: {} });
+  const entities: TaskCurrentEntity[] = Array.from({ length: 800 }, (_, index) => {
+    const replicaId = `migration:project-a:card:card-${String(index).padStart(4, '0')}:${'source'.repeat(12)}`;
+    return finalizeTaskCurrentEntity({
+      version: 3,
+      projectId: 'project-a',
+      entityType: 'card',
+      entityId: `card-${String(index).padStart(4, '0')}`,
+      fields: {
+        '$entity': { clock: { [replicaId]: 1 }, candidates: [{ dot: { replicaId, counter: 1 }, operation: 'set', value: true }] },
+        title: { clock: { [replicaId]: 1 }, candidates: [{ dot: { replicaId, counter: 1 }, operation: 'set', value: `Card ${index}` }] },
+      },
+    });
+  });
+  await store.merge({ version: 3, projectId: 'project-a', entities });
+  await store.flush();
+  assert.ok(Buffer.byteLength(JSON.stringify(store.clock())) > taskCurrentEntityByteLimit);
+
+  const mutation = await store.mutate({
+    replicaId: 'workstation',
+    changes: [{ entityType: 'card', entityId: 'new-card', changes: [{ path: 'title', operation: 'set', value: 'New card' }] }],
+  });
+  assert.deepEqual(mutation.batch.context, {});
+  assert.ok(Buffer.byteLength(JSON.stringify(mutation.delta.entities[0])) < taskCurrentEntityByteLimit);
+  await store.flush();
+
+  const journalDirectory = resolve(root, 'task-state', 'project-a', 'journal');
+  writeFileSync(resolve(journalDirectory, 'retained-global-context.json'), JSON.stringify({
+    version: 3,
+    mutation: {
+      version: 3,
+      batchId: 'retained-global-context',
+      projectId: 'project-a',
+      replicaId: 'workstation',
+      emittedAt: '2026-07-21T21:25:07.027Z',
+      dot: { replicaId: 'workstation', counter: 2 },
+      context: store.clock(),
+      changes: [{ entityType: 'card', entityId: 'new-card', changes: [{ path: 'title', operation: 'set', value: 'Recovered card' }] }],
+      activationTaskId: 'new-card',
+      replication: 'active',
+    },
+  }));
+  assert.ok(readFileSync(resolve(journalDirectory, 'retained-global-context.json')).byteLength > taskCurrentEntityByteLimit);
+
+  const restarted = createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a' });
+  assert.equal(restarted.projectedEntity('card', 'new-card')?.title, 'Recovered card');
+  assert.ok(Buffer.byteLength(JSON.stringify(restarted.entity('card', 'new-card'))) < taskCurrentEntityByteLimit);
+  await restarted.flush();
+  assert.equal(readdirSync(journalDirectory).length, 0);
 });
 
 test('materialized collections use identity indexes and generation-cached sorted arrays', async (context) => {
