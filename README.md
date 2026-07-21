@@ -145,6 +145,28 @@ npm run cli -- answer --ledger ../.decision-os/specs.json --thread-id thread-600
 
 Codex child processes receive `DECISION_OS_LEDGER_ROOT` as the filesystem boundary for `ledger-cli`. This variable does not select the server workspace or project catalog. Decision OS server scope always comes from the launcher cwd.
 
+## Federation Node Messages
+
+Agents can discover connected nodes and ask Codex to inspect one project on the selected node:
+
+```bash
+node bin/decision-os-node.mjs nodes --server http://127.0.0.1:50150
+node bin/decision-os-node.mjs ask \
+  --server http://127.0.0.1:50150 \
+  --node phone \
+  --project decision-os \
+  --message "Inspect the federation status and explain the first failing transition."
+```
+
+The target node launches `codex exec` with that project as its working directory, so the target project and node `AGENTS.md` instructions apply. Use `--json` to receive execution identity, timing, model, effort, and artifact paths. Each target execution persists its manifest, Codex JSONL, and stderr under `.decision-os/runs/node-messages/` in the target project.
+
+For multiline requests, pass `--message-file FILE` or standard input:
+
+```bash
+printf '%s\n' 'Inspect the current relay connection and report evidence.' | \
+  node bin/decision-os-node.mjs ask --node workstation --project decision-os --json
+```
+
 ## Termux Home Master Server
 
 Before upgrading an existing federated node to causal task current-state v2, complete [TASK_STATE_V2_MIGRATION_RUNBOOK.md](TASK_STATE_V2_MIGRATION_RUNBOOK.md).

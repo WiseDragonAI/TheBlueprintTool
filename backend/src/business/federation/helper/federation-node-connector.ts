@@ -69,6 +69,7 @@ const maximumBodyBytes = 25 * 1024 * 1024;
 const maximumContentBodyBytes = 1024 * 1024 * 1024;
 const connectTimeoutMs = 10_000;
 const defaultInternalRequestTimeoutMs = 15_000;
+const maximumInternalRequestTimeoutMs = 30 * 60_000;
 
 type FederationConnectionPhase = 'not_configured' | 'connecting' | 'retrying' | 'connected' | 'disconnected';
 
@@ -131,6 +132,8 @@ type RequesterStream = {
   bytes: number;
   resolve?: (response: InternalResponse) => void;
   timeout?: NodeJS.Timeout;
+  abortSignal?: AbortSignal;
+  abortListener?: () => void;
   file?: { descriptor: FileHandle; temporary: string; target: string; expectedHash: string; hash: Hash; resolve: (result: { status: number; bytes: number }) => void };
 };
 type OwnerStream = {
@@ -202,11 +205,16 @@ export function createFederationNodeConnector(input: {
     stream.resolve?.({ status, headers, body });
   };
 
+  const cleanupRequester = (stream: RequesterStream): void => {
+    if (stream.timeout) clearTimeout(stream.timeout);
+    if (stream.abortSignal && stream.abortListener) stream.abortSignal.removeEventListener('abort', stream.abortListener);
+  };
+
   const failRequester = (requestId: string, status: number, code: string, message: string): void => {
     const stream = requesterStreams.get(requestId);
     if (!stream || stream.settled) return;
     stream.settled = true;
-    if (stream.timeout) clearTimeout(stream.timeout);
+    cleanupRequester(stream);
     const body = Buffer.from(JSON.stringify({ ok: false, error: code, message }));
     if (stream.file) {
       void stream.file.descriptor.close().catch(() => undefined).then(() => rm(stream.file!.temporary, { force: true })).finally(() => stream.file!.resolve({ status, bytes: stream.bytes }));
@@ -358,7 +366,7 @@ export function createFederationNodeConnector(input: {
     }
     if (frame.type === 'response-end') {
       requester.settled = true;
-      if (requester.timeout) clearTimeout(requester.timeout);
+      cleanupRequester(requester);
       if (requester.file) {
         await requester.file.descriptor.sync();
         await requester.file.descriptor.close();
@@ -379,7 +387,10 @@ export function createFederationNodeConnector(input: {
     }
   };
 
-  const openRequest = (ownerNodeId: string, path: string, options: { method?: string; body?: Buffer; headers?: Record<string, string> } = {}): { requestId: string; response: Promise<InternalResponse> } => {
+  const openRequest = (ownerNodeId: string, path: string, options: { method?: string; body?: Buffer; headers?: Record<string, string>; timeoutMs?: number; signal?: AbortSignal } = {}): { requestId: string; response: Promise<InternalResponse> } => {
+    if (options.signal?.aborted) {
+      return { requestId: '', response: Promise.resolve({ status: 499, headers: { 'content-type': 'application/json' }, body: Buffer.from('{"ok":false,"error":"client_cancelled"}') }) };
+    }
     if (!settings || !remoteNodes.get(ownerNodeId)?.online || socket?.readyState !== WebSocket.OPEN) {
       return { requestId: '', response: Promise.resolve({ status: 503, headers: { 'content-type': 'application/json' }, body: Buffer.from('{"ok":false,"error":"owner_offline"}') }) };
     }
@@ -393,13 +404,30 @@ export function createFederationNodeConnector(input: {
       requestCredit: new CreditGate(), settled: false, status: 502, headers: {}, chunks: [], bytes: 0,
       resolve: resolveResponse,
     };
+    const requestedTimeoutMs = Number(options.timeoutMs ?? internalRequestTimeoutMs);
+    const requestTimeoutMs = Number.isFinite(requestedTimeoutMs)
+      ? Math.min(maximumInternalRequestTimeoutMs, Math.max(1, Math.floor(requestedTimeoutMs)))
+      : internalRequestTimeoutMs;
     stream.timeout = setTimeout(() => {
       if (!requesterStreams.has(requestId)) return;
       try { send({ version: 1, type: 'cancel', requestId }); } catch { /* Connection settlement owns relay cleanup. */ }
-      failRequester(requestId, 504, 'federation_request_timeout', `Federation request exceeded ${internalRequestTimeoutMs}ms.`);
-    }, internalRequestTimeoutMs);
+      failRequester(requestId, 504, 'federation_request_timeout', `Federation request exceeded ${requestTimeoutMs}ms.`);
+    }, requestTimeoutMs);
     stream.timeout.unref?.();
     requesterStreams.set(requestId, stream);
+    if (options.signal) {
+      stream.abortSignal = options.signal;
+      stream.abortListener = () => {
+        if (!requesterStreams.has(requestId)) return;
+        try { send({ version: 1, type: 'cancel', requestId }); } catch { /* Connection settlement owns relay cleanup. */ }
+        failRequester(requestId, 499, 'client_cancelled', 'Federation request was cancelled by the caller.');
+      };
+      options.signal.addEventListener('abort', stream.abortListener, { once: true });
+      if (options.signal.aborted) {
+        stream.abortListener();
+        return { requestId, response };
+      }
+    }
     send({
       version: 1,
       type: 'request-open',
@@ -629,7 +657,7 @@ export function createFederationNodeConnector(input: {
       }
       send({ version: 1, type: 'request-end', requestId });
     },
-    async request(ownerNodeId: string, path: string, options?: { method?: string; body?: Buffer; headers?: Record<string, string> }): Promise<InternalResponse> {
+    async request(ownerNodeId: string, path: string, options?: { method?: string; body?: Buffer; headers?: Record<string, string>; timeoutMs?: number; signal?: AbortSignal }): Promise<InternalResponse> {
       return openRequest(ownerNodeId, path, options).response;
     },
     async requestToFile(ownerNodeId: string, path: string, target: string, expectedHash: string): Promise<{ status: number; bytes: number }> {

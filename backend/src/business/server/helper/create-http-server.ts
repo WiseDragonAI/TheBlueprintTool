@@ -59,6 +59,7 @@ import { controlRoomProjectionFromTaskLedger, createControlRoomProjectionStore, 
 import { ledgerCanvasProjection, ledgerCardProjection, ledgerNavigationProjection, ledgerSearchProjection, ledgerThreadProjection } from './ledger-read-models.js';
 import { ensureProjectsCanvasDocument } from './ensure-projects-canvas-document.js';
 import { createFederationNodeConnector } from '../../federation/helper/federation-node-connector.js';
+import { executeNodeMessage } from '../../federation/helper/execute-node-message.js';
 import { createFederationTaskStateReplicator } from '../../federation/helper/federation-task-state-replicator.js';
 import type { FederationContentManifest } from '../../federation/helper/federation-content-manifest.js';
 import { createFederationContentReplicaStore } from '../../federation/helper/federation-content-replica-store.js';
@@ -94,6 +95,8 @@ import { transcribeGitReviewVoiceController } from '../../git-review/controller/
 
 type AnyRecord = Record<string, unknown>;
 type MutationError = { statusCode: number; body: AnyRecord };
+
+const federationNodeMessageTimeoutMs = 30 * 60_000;
 
 const decisionOsAssetPrefix = '/.decision-os/';
 const ledgerRevisionHeader = 'x-decision-os-ledger-revision';
@@ -806,6 +809,126 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       response.statusCode = 503;
       response.setHeader('content-type', 'application/json');
       response.end(JSON.stringify({ ok: false, error: activeProject.diagnostic, projectId: activeProject.id }));
+      return;
+    }
+    if (!projectScope && url === '/api/federation/nodes' && request.method === 'GET') {
+      const localOwner = federation.localOwner();
+      const remoteProjects = federation.remoteProjects();
+      const nodes = [
+        {
+          nodeId: localOwner.ownerNodeId,
+          nodeLabel: localOwner.ownerNodeLabel,
+          online: true,
+          local: true,
+          projects: projects.map((project) => ({ projectId: project.id, name: project.name, available: project.available })),
+        },
+        ...federation.nodes().map((node) => ({
+          nodeId: node.nodeId,
+          nodeLabel: node.nodeLabel,
+          online: node.online,
+          local: false,
+          projects: remoteProjects
+            .filter((project) => project.ownerNodeId === node.nodeId)
+            .map((project) => ({ projectId: project.localProjectId, name: project.name, available: project.online })),
+        })),
+      ];
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ ok: true, nodes }));
+      return;
+    }
+    if (!projectScope && url === '/api/federation/node-message-executions' && request.method === 'POST') {
+      response.setHeader('content-type', 'application/json');
+      const requesterNodeId = String(request.headers['x-decision-os-federation-node'] ?? '').trim();
+      const peer = federation.nodes().find((node) => node.nodeId === requesterNodeId && node.online);
+      if (!requesterNodeId || !peer) {
+        response.statusCode = 403;
+        response.end(JSON.stringify({ ok: false, error: 'Federation node authentication failed.' }));
+        return;
+      }
+      const abort = new AbortController();
+      request.once('aborted', () => abort.abort());
+      try {
+        const body = JSON.parse((await readRequestBuffer(request)).toString('utf8') || '{}') as AnyRecord;
+        const projectId = String(body.projectId ?? '').trim();
+        const project = projects.find((entry) => entry.id === projectId && entry.available);
+        if (!project) {
+          response.statusCode = 404;
+          response.end(JSON.stringify({ ok: false, error: 'Target project is unavailable.', projectId }));
+          return;
+        }
+        const owner = federation.localOwner();
+        const result = await executeNodeMessage({
+          project,
+          runtime: projectContext(project.decisionOsRoot, project.id).runtime,
+          requesterNodeId,
+          executorNodeId: owner.ownerNodeId,
+          executorNodeLabel: owner.ownerNodeLabel,
+          message: String(body.message ?? ''),
+          codexModel: body.codexModel,
+          codexEffort: body.codexEffort,
+          signal: abort.signal,
+        });
+        response.end(JSON.stringify(result));
+      } catch (error) {
+        response.statusCode = abort.signal.aborted ? 499 : error instanceof RangeError ? 400 : 502;
+        response.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : 'Node message execution failed.' }));
+      }
+      return;
+    }
+    const nodeMessageDispatch = !projectScope && request.method === 'POST'
+      ? url.match(/^\/api\/federation\/nodes\/([^/]+)\/messages$/)
+      : null;
+    if (nodeMessageDispatch) {
+      response.setHeader('content-type', 'application/json');
+      const targetNodeId = decodeRouteSegment(nodeMessageDispatch[1]);
+      const abort = new AbortController();
+      request.once('aborted', () => abort.abort());
+      try {
+        const body = JSON.parse((await readRequestBuffer(request)).toString('utf8') || '{}') as AnyRecord;
+        const projectId = String(body.projectId ?? '').trim();
+        const owner = federation.localOwner();
+        if (targetNodeId === owner.ownerNodeId) {
+          const project = projects.find((entry) => entry.id === projectId && entry.available);
+          if (!project) {
+            response.statusCode = 404;
+            response.end(JSON.stringify({ ok: false, error: 'Target project is unavailable.', projectId, nodeId: targetNodeId }));
+            return;
+          }
+          const result = await executeNodeMessage({
+            project,
+            runtime: projectContext(project.decisionOsRoot, project.id).runtime,
+            requesterNodeId: owner.ownerNodeId,
+            executorNodeId: owner.ownerNodeId,
+            executorNodeLabel: owner.ownerNodeLabel,
+            message: String(body.message ?? ''),
+            codexModel: body.codexModel,
+            codexEffort: body.codexEffort,
+            signal: abort.signal,
+          });
+          response.end(JSON.stringify(result));
+          return;
+        }
+        const remoteProject = federation.remoteProjects().find((project) => project.ownerNodeId === targetNodeId
+          && project.localProjectId === projectId && project.online);
+        if (!remoteProject) {
+          response.statusCode = 404;
+          response.end(JSON.stringify({ ok: false, error: 'Target federation node project is unavailable.', projectId, nodeId: targetNodeId }));
+          return;
+        }
+        const remote = await federation.request(targetNodeId, '/api/federation/node-message-executions', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: Buffer.from(JSON.stringify({ projectId, message: body.message, codexModel: body.codexModel, codexEffort: body.codexEffort })),
+          timeoutMs: federationNodeMessageTimeoutMs,
+          signal: abort.signal,
+        });
+        response.statusCode = remote.status;
+        response.end(remote.body);
+      } catch (error) {
+        response.statusCode = abort.signal.aborted ? 499 : error instanceof RangeError || error instanceof SyntaxError ? 400 : 502;
+        response.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : 'Node message dispatch failed.' }));
+      }
       return;
     }
     if (url === '/api/git-review' && request.method === 'GET' && activeProject) {

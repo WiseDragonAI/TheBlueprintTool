@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
@@ -158,17 +158,17 @@ test('bounds internal federation requests and cancels a missing owner response',
     },
     localProjects: () => [],
     localServerUrl: () => 'http://127.0.0.1:1',
-    internalRequestTimeoutMs: 25,
+    internalRequestTimeoutMs: 1_000,
   });
   connector.start();
   try {
     await waitFor(async () => connector.status().peers.some((peer) => peer.nodeId === 'owner') ? true : null);
-    const response = await connector.request('owner', '/held');
+    const response = await connector.request('owner', '/held', { timeoutMs: 25 });
     assert.equal(response.status, 504);
     assert.equal(JSON.parse(response.body.toString('utf8')).error, 'federation_request_timeout');
     await waitFor(async () => cancelledRequestId ? true : null);
     assert.ok(cancelledRequestId);
-    assert.equal(connector.status().internalRequestTimeoutMs, 25);
+    assert.equal(connector.status().internalRequestTimeoutMs, 1_000);
   } finally {
     connector.stop();
     relay.close();
@@ -179,6 +179,7 @@ test('bounds internal federation requests and cancels a missing owner response',
 
 test('two Decision OS nodes materialize complete libraries locally and retain them after an owner disconnects', async () => {
   const previousCodexHome = process.env.CODEX_HOME;
+  const previousCodexBin = process.env.CODEX_BIN;
   const codexHome = mkdtempSync(join(tmpdir(), 'decision-os-federation-codex-home-'));
   process.env.CODEX_HOME = codexHome;
   const relayHttp = createServer();
@@ -242,8 +243,22 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
   const homeB = await projectHome('beta');
   federatedLibraryFixture(homeA, 'alpha');
   federatedLibraryFixture(homeB, 'beta');
+  const fakeCodex = join(homeB, 'fake-codex.mjs');
+  writeFileSync(fakeCodex, [
+    '#!/usr/bin/env node',
+    'import { writeFileSync } from "node:fs";',
+    'import { join } from "node:path";',
+    'let prompt = "";',
+    'for await (const chunk of process.stdin) prompt += chunk;',
+    'writeFileSync(join(process.cwd(), "node-message-prompt.txt"), prompt);',
+    'console.log(JSON.stringify({ type: "thread.started", thread_id: "node-message-thread" }));',
+    'console.log(JSON.stringify({ type: "item.completed", item: { id: "answer", type: "agent_message", text: `Inspected beta on ${process.cwd()}.` } }));',
+    'console.log(JSON.stringify({ type: "turn.completed" }));',
+  ].join('\n'));
+  chmodSync(fakeCodex, 0o755);
+  process.env.CODEX_BIN = fakeCodex;
   const runtimeA: Record<string, unknown> = { decisionOsSettings: { federationRelayUrl: relayUrl, federationId: 'proof', federationNodeId: 'node-a', federationNodeCredential: 'credential-a' } };
-  const runtimeB: Record<string, unknown> = { decisionOsSettings: { federationRelayUrl: relayUrl, federationId: 'proof', federationNodeId: 'node-b', federationNodeCredential: 'credential-b' } };
+  const runtimeB: Record<string, unknown> = { decisionOsSettings: { federationRelayUrl: relayUrl, federationId: 'proof', federationNodeId: 'node-b', federationNodeCredential: 'credential-b', codexBin: fakeCodex } };
   const repositoryRoot = join(process.cwd(), '..');
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: homeA, decisionOsFrontendRoot: join(repositoryRoot, 'frontend') }, runtime_state: runtimeA });
   createHttpServer({ action_payload: { port: 0, host: '127.0.0.1', cwd: homeB, decisionOsFrontendRoot: join(repositoryRoot, 'frontend') }, runtime_state: runtimeB });
@@ -288,6 +303,47 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     const remoteBeta = catalogA.find((project) => project.name === 'beta')!;
     assert.equal(remoteBeta.id.includes(':'), false);
     assert.ok(catalogB.projects.some((project) => project.name === 'alpha' && project.replicas.some((replica) => replica.nodeId === 'node-a')));
+    const betaProjectId = catalogB.projects.find((project) => project.name === 'beta')!.id;
+    const nodeCatalog = await fetch(`${baseA}/api/federation/nodes`).then((response) => response.json()) as {
+      ok: boolean;
+      nodes: Array<{ nodeId: string; local: boolean; projects: Array<{ projectId: string }> }>;
+    };
+    assert.equal(nodeCatalog.ok, true);
+    assert.ok(nodeCatalog.nodes.some((node) => node.nodeId === 'node-a' && node.local));
+    assert.ok(nodeCatalog.nodes.some((node) => node.nodeId === 'node-b' && !node.local && node.projects.some((project) => project.projectId === betaProjectId)));
+    const unauthenticatedExecution = await fetch(`${baseB}/api/federation/node-message-executions`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectId: betaProjectId, message: 'bypass' }),
+    });
+    assert.equal(unauthenticatedExecution.status, 403);
+    const nodeMessageResponse = await fetch(`${baseA}/api/federation/nodes/node-b/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId: betaProjectId, message: 'Inspect the remote federation state.', codexModel: 'gpt-5.4', codexEffort: 'high' }),
+    });
+    const nodeMessage = await nodeMessageResponse.json() as {
+      ok: boolean;
+      runId: string;
+      answer: string;
+      executorNodeId: string;
+      projectId: string;
+      model: string;
+      effort: string;
+      artifacts: { manifest: string; stdout: string; stderr: string };
+    };
+    assert.equal(nodeMessageResponse.status, 200, JSON.stringify(nodeMessage));
+    assert.equal(nodeMessage.ok, true);
+    assert.equal(nodeMessage.executorNodeId, 'node-b');
+    assert.equal(nodeMessage.projectId, betaProjectId);
+    assert.equal(nodeMessage.model, 'gpt-5.4');
+    assert.equal(nodeMessage.effort, 'high');
+    assert.match(nodeMessage.answer, /Inspected beta/);
+    const capturedNodeMessage = readFileSync(join(homeB, 'beta', 'node-message-prompt.txt'), 'utf8');
+    assert.match(capturedNodeMessage, /Follow every instruction loaded from this target workspace/);
+    assert.match(capturedNodeMessage, /Inspect the remote federation state/);
+    for (const artifact of Object.values(nodeMessage.artifacts)) assert.ok(existsSync(join(homeB, 'beta', artifact)), artifact);
+    const nodeMessageManifest = JSON.parse(readFileSync(join(homeB, 'beta', nodeMessage.artifacts.manifest), 'utf8')) as Record<string, unknown>;
+    assert.equal(nodeMessageManifest.status, 'complete');
+    assert.equal(nodeMessageManifest.requesterNodeId, 'node-a');
     let lastControlRoomA: unknown = null;
     const controlRoomA = await waitFor(async () => {
       const body = await fetch(`${baseA}/api/control-room`).then((response) => response.json()) as {
@@ -433,5 +489,7 @@ test('two Decision OS nodes materialize complete libraries locally and retain th
     rmSync(codexHome, { recursive: true, force: true });
     if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
     else process.env.CODEX_HOME = previousCodexHome;
+    if (previousCodexBin === undefined) delete process.env.CODEX_BIN;
+    else process.env.CODEX_BIN = previousCodexBin;
   }
 });
