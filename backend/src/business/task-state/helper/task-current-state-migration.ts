@@ -64,13 +64,25 @@ function projectionSource(stateRoots: string[], tasksLedgerFile: string, project
 }
 
 function epochResourceEntities(entities: LegacyEntity[]): TaskCurrentEntity[] {
-  return entities.filter((entity) => entity.entityType === 'resource').map((entity) => finalizeTaskCurrentEntity({
-    version: taskCurrentStateVersion,
-    projectId: entity.projectId,
-    entityType: entity.entityType,
-    entityId: entity.entityId,
-    fields: structuredClone(entity.fields),
-  }));
+  const placeholders = new Set(['baseline', 'baseline-content']);
+  return entities.filter((entity) => entity.entityType === 'resource').flatMap((entity): TaskCurrentEntity[] => {
+    const fields = Object.fromEntries(Object.entries(entity.fields).flatMap(([path, register]) => {
+      const candidates = register.candidates.filter((candidate) => !placeholders.has(candidate.dot.replicaId));
+      // WHAT: Drop legacy placeholder heads once current local files have been captured under the real node identity.
+      // WHY: Placeholder replicas are not federation destinations and stale local heads must not become content conflicts.
+      if (candidates.length === 0) return [];
+      const clock = Object.fromEntries(Object.entries(register.clock).filter(([replicaId]) => !placeholders.has(replicaId)));
+      return [[path, { clock, candidates: structuredClone(candidates) }]];
+    }));
+    if (Object.keys(fields).length === 0) return [];
+    return [finalizeTaskCurrentEntity({
+      version: taskCurrentStateVersion,
+      projectId: entity.projectId,
+      entityType: entity.entityType,
+      entityId: entity.entityId,
+      fields,
+    })];
+  });
 }
 
 function baselineResourceEntities(projectId: string, heads: TaskContentHead[], replicaId: string, counter: number): TaskCurrentEntity[] {
