@@ -1,9 +1,6 @@
-#master-task #task-complete
+#master-task
 
 Ledger: Specs
-Waiting since: 2026-07-13T11:19:29.682Z
-Active since: 2026-07-13T11:20:08.229Z
-Completed at: 2026-07-13T11:30:11.760Z
 
 ## A. Scope
 
@@ -28,7 +25,3 @@ Completed at: 2026-07-13T11:30:11.760Z
 3. **Verification:** The focused frontend integration test, frontend typecheck, and `git diff --check` pass.
 
 ---
-
-## D. Subtasks
-
-1. [Restore the base font for card inline code](card:card-3c79ae06-ef5f-4f63-a08a-2bb7acf3c24c) — Status: complete

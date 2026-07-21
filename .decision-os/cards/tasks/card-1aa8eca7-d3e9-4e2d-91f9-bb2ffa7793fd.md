@@ -1,9 +1,6 @@
-#master-task #task-complete
+#master-task
 
 Ledger: Specs
-Waiting since: 2026-07-12T11:09:14.281Z
-Active since: 2026-07-12T12:02:19.817Z
-Completed at: 2026-07-12T12:20:30.683Z
 
 ## A. Scope
 
@@ -33,8 +30,3 @@ Completed at: 2026-07-12T12:20:30.683Z
 5. **Verification:** Mobile tests and the frontend TypeScript check pass.
 
 ---
-
-## D. Subtasks
-
-1. [Implement mobile Control Room URL state](card:card-d76e46df-e71c-4503-84a2-48cd571a9e23) — Status: complete
-2. [Verify mobile route restoration](card:card-c75c1246-9595-4633-ad19-b8942b4648af) — Status: complete

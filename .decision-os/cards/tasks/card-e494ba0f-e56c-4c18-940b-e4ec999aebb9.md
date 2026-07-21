@@ -1,7 +1,4 @@
-Completed at: 2026-07-17T11:42:40.123Z
-
 Ledger: Specs
-Waiting since: 2026-07-17T11:01:01.366Z
 
 ## A. Requested behavior
 
@@ -18,7 +15,3 @@ Waiting since: 2026-07-17T11:01:01.366Z
 3. The required correction is to persist the pending execution marker at queued upload acceptance only when `queueCodex` is true, then preserve existing post-transcription launch and failure reconciliation.
 
 ---
-
-## C. Subtasks
-
-1. [Persist Shift+X pending execution before transcription](card:card-6124005d-0d8a-4191-b6e4-84bfc94b72c8)

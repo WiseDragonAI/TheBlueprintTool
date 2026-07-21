@@ -1,10 +1,7 @@
-#master-task #task-complete
+#master-task
 
 Ledger: Specs
-Waiting since: 2026-07-12T10:44:55.508Z
 Queue rank: 1
-Active since: 2026-07-12T12:20:16.715Z
-Completed at: 2026-07-12T12:43:31.917Z
 
 ## A. Scope
 
@@ -44,5 +41,3 @@ Completed at: 2026-07-12T12:43:31.917Z
 9. **Regression gate:** All mobile tests and frontend and backend TypeScript checks pass.
 
 ---
-
-## D. Subtasks
