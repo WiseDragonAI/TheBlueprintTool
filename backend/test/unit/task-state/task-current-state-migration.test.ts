@@ -154,13 +154,25 @@ test('migration joins legacy current entities from every writable node before en
     stateHash: 'legacy',
   });
   mkdirSync(resolve(activeRoot, 'current', 'card'), { recursive: true });
+  mkdirSync(resolve(activeRoot, 'current', 'resource'), { recursive: true });
   mkdirSync(resolve(remoteRoot, 'current', 'card'), { recursive: true });
   mkdirSync(resolve(remoteRoot, 'current', 'ledger'), { recursive: true });
   mkdirSync(resolve(remoteRoot, 'current', 'resource'), { recursive: true });
   mkdirSync(resolve(remoteRoot, 'current', 'thread-note'), { recursive: true });
+  mkdirSync(resolve(root, 'cards', 'tasks'), { recursive: true });
   mkdirSync(resolve(root, 'threads', 'tasks'), { recursive: true });
+  const localKey = '.decision-os/cards/tasks/card-a.md';
+  const localBody = Buffer.from('Current workstation body.\n');
+  const staleLocalBody = Buffer.from('Stale baseline body.\n');
+  const staleLocalHash = createHash('sha256').update(staleLocalBody).digest('hex');
+  mkdirSync(resolve(activeRoot, 'objects', staleLocalHash.slice(0, 2)), { recursive: true });
+  writeFileSync(resolve(activeRoot, 'objects', staleLocalHash.slice(0, 2), staleLocalHash), staleLocalBody);
+  writeFileSync(resolve(root, 'cards', 'tasks', 'card-a.md'), localBody);
   writeFileSync(resolve(activeRoot, 'format.json'), JSON.stringify({ version: 2, projectId, baselineRoot: 'legacy-a' }));
-  writeFileSync(resolve(activeRoot, 'current', 'card', 'card-a.json'), JSON.stringify(entity('desktop', { title: 'Joined title', labels: ['master-task'] })));
+  writeFileSync(resolve(activeRoot, 'current', 'card', 'card-a.json'), JSON.stringify(entity('desktop', { title: 'Joined title', labels: ['master-task'], comment: { contentFile: localKey } })));
+  writeFileSync(resolve(activeRoot, 'current', 'resource', 'stale-local.json'), JSON.stringify(entity('baseline-content', {
+    head: { type: 'card-markdown', key: localKey, hash: staleLocalHash, bytes: staleLocalBody.byteLength, changedAt: '2026-07-20T00:00:00.000Z' },
+  }, 'resource', localKey)));
   writeFileSync(resolve(remoteRoot, 'current', 'card', 'card-a.json'), JSON.stringify(entity('mobile', { status: 'done' })));
   writeFileSync(resolve(remoteRoot, 'current', 'card', 'deleted-card.json'), JSON.stringify({
     version: 2, projectId, entityType: 'card', entityId: 'deleted-card',
@@ -199,16 +211,17 @@ test('migration joins legacy current entities from every writable node before en
   assert.equal(existsSync(resolve(result.backup, 'source-state-roots', '1', 'current', 'card', 'card-a.json')), true);
   assert.equal(store.entity('card', 'deleted-card')?.fields.$entity.candidates[0].operation, 'tombstone');
   assert.equal(store.entity('card', 'deleted-card')?.fields.$entity.clock.mobile, 1);
+  assert.deepEqual(store.contentHeads(localKey).map((head) => ({ sourceReplicaId: head.sourceReplicaId, hash: head.hash })), [{ sourceReplicaId: 'workstation', hash: createHash('sha256').update(localBody).digest('hex') }]);
   assert.equal(store.contentHeads(remoteKey)[0].hash, remoteHash);
   assert.equal(readFileSync(resolve(result.root, 'objects', remoteHash.slice(0, 2), remoteHash), 'utf8'), remoteObject.toString());
   const recoveredPresence = store.entity('thread-note', `${threadId}/${noteId}`)?.fields.$entity;
   assert.equal(recoveredPresence?.clock.workstation, 18);
   assert.equal(recoveredPresence?.candidates[0].operation, 'set');
   assert.deepEqual((store.projection().ledger.deletedNoteIds as Record<string, string[]>)[threadId], []);
-  assert.equal(report.sourceEntityInventory.resource, 1);
+  assert.equal(report.sourceEntityInventory.resource, 2);
   assert.equal(report.sourceEntityInventory.card, 2);
   assert.equal(report.baselineCounter, 18);
-  assert.equal(report.currentEntityInventory.resource, 2);
+  assert.equal(report.currentEntityInventory.resource, 3);
   assert.equal(report.semanticInventory.entityDeletions, 1);
 });
 
