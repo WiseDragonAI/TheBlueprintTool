@@ -36,9 +36,16 @@ function validTimestamp(value: unknown): string {
 }
 
 function rewriteNarrative(markdown: string): string {
+  const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
+  const containsGeneratedState = lines.some((line) => (
+    /^##\s+(?:[A-Z]\.\s*)?Subtasks\s*$/i.test(line.trim())
+    || /^(Waiting since|Completed at|Active since|Task status):/i.test(line.trim())
+    || /(^|\s)#task-(?:active|complete|waiting|backlog|execution)\b/i.test(line)
+  ));
+  if (!containsGeneratedState) return markdown;
   const output: string[] = [];
   let generatedSubtasks = false;
-  for (const line of markdown.replace(/\r\n?/g, '\n').split('\n')) {
+  for (const line of lines) {
     const heading = /^##\s+(?:[A-Z]\.\s*)?Subtasks\s*$/i.test(line.trim());
     // WHAT: Remove the complete generated subtask section until the next peer heading.
     // WHY: Relationship entities are the sole child-membership authority after cutover.
