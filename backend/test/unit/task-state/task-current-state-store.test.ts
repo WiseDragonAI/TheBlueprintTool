@@ -37,6 +37,28 @@ test('restart reconstructs projection, clock, and buckets from current shards on
   assert.deepEqual(restarted.bucketManifest(), first.bucketManifest());
 });
 
+test('materialized collections use identity indexes and generation-cached sorted arrays', async (context) => {
+  const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-index-'));
+  context.after(() => rmSync(root, { recursive: true, force: true }));
+  const store = createTaskCurrentStateStore({ decisionOsRoot: root, projectId: 'project-a', initializeLedger: {} });
+  await store.mutate({ replicaId: 'desktop', changes: [
+    { entityType: 'card', entityId: 'card-b', changes: [{ path: 'title', operation: 'set', value: 'B' }] },
+    { entityType: 'card', entityId: 'card-a', changes: [{ path: 'title', operation: 'set', value: 'A' }] },
+  ] });
+  const firstCards = store.projection().ledger.cards as Array<Record<string, unknown>>;
+  assert.deepEqual(firstCards.map((card) => card.id), ['card-a', 'card-b']);
+  assert.equal(store.projection().ledger.cards, firstCards);
+  assert.equal(store.projectedEntity('card', 'card-b')?.title, 'B');
+
+  await store.mutate({ replicaId: 'desktop', changes: [{ entityType: 'annotation', entityId: 'zone-a', changes: [{ path: 'title', operation: 'set', value: 'Zone' }] }] });
+  assert.equal(store.projection().ledger.cards, firstCards, 'an unrelated collection keeps its cached read array');
+  await store.mutate({ replicaId: 'desktop', changes: [{ entityType: 'card', entityId: 'card-b', changes: [{ path: 'title', operation: 'set', value: 'Changed' }] }] });
+  const changedCards = store.projection().ledger.cards as Array<Record<string, unknown>>;
+  assert.notEqual(changedCards, firstCards);
+  assert.equal(changedCards[1].title, 'Changed');
+  await store.flush();
+});
+
 test('missing format marker requires the offline migration entrypoint', (context) => {
   const root = mkdtempSync(resolve(tmpdir(), 'decision-os-current-format-'));
   context.after(() => rmSync(root, { recursive: true, force: true }));

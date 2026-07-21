@@ -12,7 +12,7 @@ import {
   taskCurrentEntityKey,
 } from '../../../../../shared/task-current-state-core.js';
 import { assertTaskCurrentEntity, finalizeTaskCurrentEntity, joinTaskClocks, joinTaskEntities } from './task-current-state-join.js';
-import { materializeTaskCurrentEntity } from './materialize-task-current-entity.js';
+import { materializeTaskCurrentEntity, projectedTaskCurrentEntity } from './materialize-task-current-entity.js';
 import { runBoundedTaskMaterialization } from './run-bounded-task-materialization.js';
 import { createTaskLocalPublicationState } from './task-local-publication-state.js';
 import { taskCurrentBaselineChanges } from './task-current-state-baseline.js';
@@ -248,6 +248,9 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
     entity(entityType: TaskCurrentEntity['entityType'], entityId: string): TaskCurrentEntity | null {
       const value = entities.get(`${entityType}\u0000${entityId}`);
       return value ? structuredClone(value) : null;
+    },
+    projectedEntity(entityType: 'card' | 'annotation' | 'relationship', entityId: string): Record<string, unknown> | null {
+      return projectedTaskCurrentEntity(projection, entityType, entityId);
     },
     async commitFormat(): Promise<void> {
       await persistence.atomicWrite(formatFile, `${JSON.stringify(formatDocument())}\n`);

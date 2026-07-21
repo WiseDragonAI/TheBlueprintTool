@@ -73,9 +73,7 @@ export function createProjectTaskState(input: {
 
   const activateTask = async (taskId: string): Promise<TaskStateDelta> => {
     if (!taskId) return { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
-    const card = Array.isArray(store.projection().ledger.cards)
-      ? (store.projection().ledger.cards as AnyRecord[]).find((entry) => String(entry.id ?? '') === taskId)
-      : null;
+    const card = store.projectedEntity('card', taskId);
     if (!card || card.replicationState !== 'local-only') return { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
     const released = await store.activate(taskId);
     const activation = await persistChanges([{ entityType: 'card', entityId: taskId, changes: [{ path: 'replicationState', operation: 'set', value: 'activated' }] }], { activationTaskId: taskId });
@@ -163,9 +161,7 @@ export function createProjectTaskState(input: {
     assertWritable();
     const operation = commandQueue.then(async () => {
       assertLifecycleConflictFree([taskId]);
-      const card = Array.isArray(store.projection().ledger.cards)
-        ? (store.projection().ledger.cards as AnyRecord[]).find((entry) => String(entry.id ?? '') === taskId)
-        : null;
+      const card = store.projectedEntity('card', taskId);
       if (!card) return { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
       const current = card.executionIntent && typeof card.executionIntent === 'object' ? card.executionIntent as AnyRecord : {};
       if (patch.id && current.id && String(current.id) !== patch.id && ['waiting', 'queued', 'running'].includes(String(current.state ?? ''))) return { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
