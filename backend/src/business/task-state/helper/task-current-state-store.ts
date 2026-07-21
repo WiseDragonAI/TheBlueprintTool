@@ -46,8 +46,16 @@ function emptyProjection(projectId: string): TaskCurrentProjection {
   return { version: taskCurrentStateVersion, projectId, ledger: { cards: [], annotations: [], relationships: [] }, conflicts: [], clock: {} };
 }
 
-function registerEntity(batch: TaskMutationBatch, change: TaskEntityChange): TaskCurrentEntity {
-  const clock = joinTaskClocks(batch.context, { [batch.dot.replicaId]: batch.dot.counter });
+function registerContext(batch: TaskMutationBatch, current: TaskCurrentEntity | undefined, path: string): TaskCausalClock {
+  const observed = current?.fields[path]?.clock ?? {};
+  const relevant = Object.fromEntries(Object.entries(observed).flatMap(([replicaId, counter]) => {
+    const observedCounter = batch.context[replicaId];
+    return observedCounter === undefined ? [] : [[replicaId, Math.min(counter, observedCounter)]];
+  }));
+  return joinTaskClocks(relevant, { [batch.dot.replicaId]: batch.dot.counter });
+}
+
+function registerEntity(batch: TaskMutationBatch, change: TaskEntityChange, current?: TaskCurrentEntity): TaskCurrentEntity {
   const changes = change.changes.some((field) => field.path === '$entity')
     ? change.changes
     : [{ path: '$entity', operation: 'set' as const, value: true }, ...change.changes];
@@ -57,7 +65,7 @@ function registerEntity(batch: TaskMutationBatch, change: TaskEntityChange): Tas
     entityType: change.entityType,
     entityId: change.entityId,
     fields: Object.fromEntries(changes.map((field) => [field.path, {
-      clock,
+      clock: registerContext(batch, current, field.path),
       candidates: [{ dot: batch.dot, operation: field.operation, ...(Object.hasOwn(field, 'value') ? { value: structuredClone(field.value) } : {}) }],
     }])),
   });
@@ -111,9 +119,19 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
     ? change.changes.map((field) => ({ ...change, entityId: `${change.entityId}:${field.path}`, changes: [field] }))
     : [change];
 
+  const mutationContext = (changes: TaskEntityChange[]): TaskCausalClock => changes
+    .flatMap(mutationLanes)
+    .reduce((context, lane) => {
+      const current = entities.get(`${lane.entityType}\u0000${lane.entityId}`);
+      const paths = lane.changes.some((field) => field.path === '$entity')
+        ? lane.changes.map((field) => field.path)
+        : ['$entity', ...lane.changes.map((field) => field.path)];
+      return paths.reduce((joined, path) => joinTaskClocks(joined, current?.fields[path]?.clock ?? {}), context);
+    }, {} as TaskCausalClock);
+
   const applyMutation = (batch: TaskMutationBatch): TaskCurrentEntity[] => batch.changes.flatMap((change) => mutationLanes(change).flatMap((lane) => {
-    const incoming = registerEntity(batch, lane);
-    const key = taskCurrentEntityKey(incoming);
+    const key = `${lane.entityType}\u0000${lane.entityId}`;
+    const incoming = registerEntity(batch, lane, entities.get(key));
     if (batch.replication === 'held') publication.hold(batch.activationTaskId, key);
     return applyEntity(incoming) ? [entities.get(key)!] : [];
   }));
@@ -285,7 +303,7 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
         replicaId: input.replicaId,
         emittedAt: input.emittedAt ?? new Date().toISOString(),
         dot: { replicaId: input.replicaId, counter },
-        context: { ...clock },
+        context: mutationContext(input.changes),
         changes: structuredClone(input.changes),
         activationTaskId: input.activationTaskId ?? '',
         replication: input.replication ?? 'active',
