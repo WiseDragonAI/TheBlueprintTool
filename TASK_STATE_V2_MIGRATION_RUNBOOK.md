@@ -106,7 +106,7 @@ find "$SOURCE_SET/$FEDERATION_NODE_ID" -type f -print0 | sort -z | xargs -0 sha2
 ## F. Offline migration
 
 1. Supply every collected v2 state root for the project with a repeated `--source-state-root` argument.
-2. The migration joins current v2 registers, hydrates sidecar-backed notes, validates relationships, assigns lifecycle metadata and positions, removes generated body state, captures immutable objects, writes `migration-report.json`, then writes `format.json` last.
+2. The migration joins current v2 registers, hydrates sidecar-backed notes, validates relationships, assigns lifecycle metadata and positions, removes generated body state, verifies and unions every collected immutable object store, preserves remote resource heads, captures current sidecars, writes `migration-report.json`, then writes `format.json` last.
 3. Preflight failure writes nothing. Failure after backup leaves no epoch-3 marker, so runtime admission remains closed.
 4. Keep the returned rollback snapshot until production proof completes.
 
@@ -147,8 +147,14 @@ jq -e '
 jq -e '
   .version == 1 and
   (.canonicalProjectionChecksum | length == 64) and
+  (.objectInventory.sourceObjects >= .objectInventory.installedObjects) and
+  (.objectInventory.installedObjects >= 0) and
+  (.objectInventory.installedBytes >= 0) and
   (.semanticInventory.cards >= 0) and
   (.semanticInventory.relationships >= 0) and
+  (.semanticInventory.entityDeletions >= 0) and
+  (.sourceEntityInventory.resource >= 0) and
+  (.currentEntityInventory.resource >= .sourceEntityInventory.resource) and
   (.semanticInventory.resourceHeads >= 0)
 ' "$report"
 ```

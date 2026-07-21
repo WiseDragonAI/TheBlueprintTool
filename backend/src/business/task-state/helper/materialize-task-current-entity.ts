@@ -171,7 +171,10 @@ export function materializeTaskCurrentEntity(projection: TaskCurrentProjection, 
   }
 
   if (entity.entityType === 'thread-note') {
-    const threadId = String(materialized.threadId ?? '');
+    const separator = entity.entityId.lastIndexOf('/');
+    // WHAT: Recover thread identity from the stable compound identity when a tombstone has no live field lanes.
+    // WHY: A presence-only deletion must project under its original thread instead of an empty synthetic thread.
+    const threadId = String(materialized.threadId ?? (separator > 0 ? entity.entityId.slice(0, separator) : ''));
     const noteId = entity.entityId.startsWith(`${threadId}/`) ? entity.entityId.slice(threadId.length + 1) : entity.entityId;
     materialized.id = noteId;
     delete materialized.threadId;

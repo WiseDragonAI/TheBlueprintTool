@@ -132,8 +132,6 @@ export function taskCommandForMutation(input: { mutation: LedgerMutation; before
     for (const card of cards) {
       const cardId = String(card.id ?? '');
       changes.push(...entity('card', cardId, null, recordById(after, 'cards', cardId)));
-      const cardChange = changes.find((change) => change.entityType === 'card' && change.entityId === cardId);
-      cardChange?.changes.push({ path: 'replicationState', operation: 'set', value: 'local-only' });
       const threadId = `thread-${cardId}`;
       const beforeRefs = before.threadFiles && typeof before.threadFiles === 'object' ? before.threadFiles as AnyRecord : {};
       const afterRefs = after.threadFiles && typeof after.threadFiles === 'object' ? after.threadFiles as AnyRecord : {};
@@ -150,8 +148,6 @@ export function taskCommandForMutation(input: { mutation: LedgerMutation; before
     replication = 'held';
     changes.push(...entity('annotation', annotationId, null, recordById(after, 'annotations', annotationId)));
     changes.push(...entity('card', cardId, null, recordById(after, 'cards', cardId)));
-    const cardChange = changes.find((change) => change.entityType === 'card' && change.entityId === cardId);
-    cardChange?.changes.push({ path: 'replicationState', operation: 'set', value: 'local-only' });
     const threadId = `thread-${cardId}`;
     const beforeRefs = before.threadFiles && typeof before.threadFiles === 'object' ? before.threadFiles as AnyRecord : {};
     const afterRefs = after.threadFiles && typeof after.threadFiles === 'object' ? after.threadFiles as AnyRecord : {};
@@ -164,8 +160,6 @@ export function taskCommandForMutation(input: { mutation: LedgerMutation; before
     activationTaskId = id;
     replication = 'held';
     changes.push(...entity('card', id, null, recordById(after, 'cards', id)));
-    const cardChange = changes.find((change) => change.entityType === 'card' && change.entityId === id);
-    cardChange?.changes.push({ path: 'replicationState', operation: 'set', value: 'local-only' });
     const threadId = `thread-${id}`;
     const beforeRefs = before.threadFiles && typeof before.threadFiles === 'object' ? before.threadFiles as AnyRecord : {};
     const afterRefs = after.threadFiles && typeof after.threadFiles === 'object' ? after.threadFiles as AnyRecord : {};

@@ -73,13 +73,9 @@ export function createProjectTaskState(input: {
 
   const activateTask = async (taskId: string): Promise<TaskStateDelta> => {
     if (!taskId) return { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
-    const card = store.projectedEntity('card', taskId);
-    if (!card || card.replicationState !== 'local-only') return { version: taskCurrentStateVersion, projectId: input.projectId, entities: [] };
     const released = await store.activate(taskId);
-    const activation = await persistChanges([{ entityType: 'card', entityId: taskId, changes: [{ path: 'replicationState', operation: 'set', value: 'activated' }] }], { activationTaskId: taskId });
-    const delta = mergeDeltas(input.projectId, [released, activation]);
     await publish(released);
-    return delta;
+    return released;
   };
 
   const recordContentContribution = async (taskId: string, resourceIds: string | string[]): Promise<TaskStateDelta> => {

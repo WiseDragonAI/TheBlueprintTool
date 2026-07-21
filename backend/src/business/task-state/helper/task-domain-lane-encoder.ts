@@ -7,6 +7,7 @@ import type { TaskEntityType } from './task-current-state-types.js';
 type AnyRecord = Record<string, unknown>;
 const narrativeFields = new Set(['description', 'what', 'message', 'body', 'notes', 'deletedNoteIds', 'content', 'contentBytes', 'markdown']);
 const derivedLifecycleFields = new Set(['status', 'lifecycle', 'changedAt', 'waitingAt', 'closedAt', 'completedAt']);
+const nodeLocalCardFields = new Set(['replicationState', 'persistenceState']);
 
 function structural(value: unknown): unknown {
   if (Array.isArray(value)) return value.map((child) => structural(child) ?? null);
@@ -44,7 +45,9 @@ export function encodeTaskDomainLanes(input: { entityType: TaskEntityType; recor
   const lanes = new Map<string, unknown>();
   for (const [path, raw] of Object.entries(input.record)) {
     if (path === 'id' || narrativeFields.has(path) || raw === undefined) continue;
-    if (input.entityType === 'card' && (derivedLifecycleFields.has(path) || path === 'executionIntent')) continue;
+    // WHAT: Exclude derived, atomic, and node-local card fields from generic structural lanes.
+    // WHY: Atomic registers are encoded below while UI publication state must never enter causal hashes.
+    if (input.entityType === 'card' && (derivedLifecycleFields.has(path) || nodeLocalCardFields.has(path) || path === 'executionIntent')) continue;
     const value = structural(raw);
     if (value !== undefined) lanes.set(path, value);
   }

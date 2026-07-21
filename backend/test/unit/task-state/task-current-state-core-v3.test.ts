@@ -6,6 +6,7 @@ import {
   canonicalJson,
   finalizeTaskCurrentEntity,
   hashTaskCurrentBucket,
+  hashTaskCurrentRoot,
   hashTaskCurrentEntity,
   joinTaskEntities,
   sha256,
@@ -15,6 +16,8 @@ import {
   type TaskCurrentEntity,
   type TaskCurrentRegister,
 } from '../../../../shared/task-current-state-core.js';
+import { materializeTaskCurrentEntity } from '../../../src/business/task-state/helper/materialize-task-current-entity.js';
+import type { TaskCurrentProjection } from '../../../src/business/task-state/helper/task-current-state-types.js';
 
 function register(replicaId: string, counter: number, value: unknown): TaskCurrentRegister {
   return { clock: { [replicaId]: counter }, candidates: [{ dot: { replicaId, counter }, operation: 'set', value }] };
@@ -47,6 +50,14 @@ test('every entity delivery permutation has one byte-identical joined entity and
   assert.equal(new Set(results.map(hashTaskCurrentEntity)).size, 1);
   const key = 'card\u0000card-a';
   assert.equal(new Set(results.map((result) => hashTaskCurrentBucket([[key, result]]))).size, 1);
+  const roots = results.map((result) => hashTaskCurrentRoot([{ bucket: taskCurrentBucketForEntityKey(key), count: 1, checksum: hashTaskCurrentBucket([[key, result]]) }]));
+  const projectionChecksums = results.map((result) => {
+    const projection: TaskCurrentProjection = { version: taskCurrentStateVersion, projectId: 'project-a', ledger: { cards: [], annotations: [], relationships: [] }, conflicts: [], clock: {} };
+    materializeTaskCurrentEntity(projection, result);
+    return sha256(canonicalJson({ ledger: projection.ledger, conflicts: projection.conflicts }));
+  });
+  assert.equal(new Set(roots).size, 1);
+  assert.equal(new Set(projectionChecksums).size, 1);
   assert.equal(taskCurrentBucketForEntityKey(key).length, 2);
 });
 
@@ -59,8 +70,27 @@ test('join is associative, commutative, and idempotent', () => {
   assert.deepEqual(joinTaskEntities(a, a), a);
 });
 
+test('generated concurrent registers satisfy the entity algebra', () => {
+  let seed = 0x6d2b79f5;
+  const next = (): number => {
+    seed = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    seed ^= seed + Math.imul(seed ^ seed >>> 7, 61 | seed);
+    return (seed ^ seed >>> 14) >>> 0;
+  };
+  for (let sample = 0; sample < 128; sample += 1) {
+    const a = entity(`desktop-${sample}`, { title: register(`desktop-${sample}`, 1 + next() % 1000, `A-${next()}`) });
+    const b = entity(`mobile-${sample}`, { title: register(`mobile-${sample}`, 1 + next() % 1000, `B-${next()}`) });
+    const c = entity(`tablet-${sample}`, { createdAt: register(`tablet-${sample}`, 1 + next() % 1000, new Date(next() * 1000).toISOString()) });
+    assert.deepEqual(joinTaskEntities(joinTaskEntities(a, b), c), joinTaskEntities(a, joinTaskEntities(b, c)));
+    assert.deepEqual(joinTaskEntities(a, b), joinTaskEntities(b, a));
+    assert.deepEqual(joinTaskEntities(a, a), a);
+  }
+});
+
 test('epoch-3 admission rejects legacy, overlapping, invalid atomic, and oversized structural lanes', () => {
   assert.throws(() => entity('desktop', { status: register('desktop', 1, 'todo') }), /invalid_task_current_card_lane/);
+  assert.throws(() => entity('desktop', { replicationState: register('desktop', 1, 'local-only') }), /invalid_task_current_card_lane/);
+  assert.throws(() => entity('desktop', { persistenceState: register('desktop', 1, 'creating') }), /invalid_task_current_card_lane/);
   assert.throws(() => entity('desktop', { lifecycle: register('desktop', 1, { status: 'blocked', changedAt: 'x', waitingAt: null, closedAt: null }) }), /invalid_task_current_lifecycle/);
   assert.throws(() => entity('desktop', {
     lifecycle: register('desktop', 1, { status: 'todo', changedAt: 'x', waitingAt: 'x', closedAt: null }),
