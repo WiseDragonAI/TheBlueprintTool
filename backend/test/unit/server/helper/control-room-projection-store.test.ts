@@ -237,13 +237,26 @@ test('a 10,000-task incremental update yields the event loop before projection w
     labels: ['master-task'],
     lifecycle: lifecycle('todo', '2026-07-14T10:00:00.000Z'),
   }));
+  const cardsById = new Map(cards.map((card) => [card.id, card]));
+  let taskRoot = 'root-before';
   const taskProjection: Record<string, any> = { ledger: { cards, annotations: [], relationships: [] }, conflicts: [] };
   const store = createControlRoomProjectionStore({
     cacheFile: join(decisionOsRoot, 'cache', 'control-room-10000.json'),
     taskProjectionForProject: () => taskProjection,
+    taskEntityForProject: (_project, entityType, entityId) => entityType === 'card' ? cardsById.get(entityId) ?? null : null,
+    taskRootForProject: () => taskRoot,
   });
   const before = store.get([project]);
+  let completeCardCollectionReads = 0;
+  taskProjection.ledger.cards = new Proxy(cards, {
+    get(target, property, receiver) {
+      if (property === Symbol.iterator) completeCardCollectionReads += 1;
+      return Reflect.get(target, property, receiver);
+    },
+  });
   cards[5_000] = { ...cards[5_000], lifecycle: lifecycle('done', '2026-07-14T11:00:00.000Z') };
+  cardsById.set(cards[5_000].id, cards[5_000]);
+  taskRoot = 'root-after';
 
   store.invalidate(project.id, [{ entityType: 'card', entityId: cards[5_000].id }]);
   const revisionObservedBeforeNextTurn = await Promise.resolve().then(() => store.get([project]).revision);
@@ -252,6 +265,7 @@ test('a 10,000-task incremental update yields the event loop before projection w
 
   const after = store.get([project]) as Record<string, any>;
   assert.equal(after.done.some((task: Record<string, unknown>) => task.cardId === cards[5_000].id), true);
+  assert.equal(completeCardCollectionReads, 0);
   assert.equal(store.diagnostics().largestIncrementalBatch, 1);
   assert.equal(existsSync(join(decisionOsRoot, 'cache', 'control-room-10000.json')), false);
 });

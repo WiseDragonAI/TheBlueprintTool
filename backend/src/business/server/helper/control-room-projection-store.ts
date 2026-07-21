@@ -9,11 +9,21 @@ import { readRepositoryOriginIdentity } from '../../project-sync/helper/reposito
 import type { DecisionOsProject } from './project-catalog.js';
 import { compareControlRoomQueueTasks } from './control-room-queue-order.js';
 import type { ProjectSyncRun } from '../../project-sync/helper/project-sync-types.js';
+import {
+  addRelationshipToIndex,
+  cachedAggregateTasks,
+  createAggregateTaskIndex,
+  indexTaskLedger,
+  removeRelationshipFromIndex,
+  taskKey,
+  type AggregateTaskIndex,
+  type TaskLedgerIndex,
+} from './control-room-projection-index.js';
 
 type AnyRecord = Record<string, unknown>;
 type Dependency = { path: string; size: number; mtimeMs: number; sha256: string };
 type Projection = AnyRecord & { schemaVersion: number; projectorVersion: string; revision: number; generatedAt: string; fingerprint: string };
-type ProjectSlice = { projectId: string; project: AnyRecord; tasks: AnyRecord[]; dependencies: Dependency[]; fingerprint: string };
+type ProjectSlice = { projectId: string; project: AnyRecord; tasks: AnyRecord[]; dependencies: Dependency[]; fingerprint: string; taskRoot: string };
 type ProjectionEntityChange = { entityType: string; entityId: string };
 
 const schemaVersion = 8;
@@ -57,7 +67,7 @@ function zoneIdFor(card: AnyRecord, ledger: AnyRecord): string {
   return selected;
 }
 
-function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsProject['ledgers'][number]; ledger: AnyRecord; card: AnyRecord; conflicts?: AnyRecord[] }): AnyRecord | null {
+function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsProject['ledgers'][number]; ledger: AnyRecord; card: AnyRecord; conflicts?: AnyRecord[]; index?: TaskLedgerIndex }): AnyRecord | null {
   const jsonLabels = Array.isArray(input.card.labels) ? input.card.labels.map(String) : [];
   if (!jsonLabels.includes('master-task')) return null;
   const lifecycle = input.card.lifecycle && typeof input.card.lifecycle === 'object' && !Array.isArray(input.card.lifecycle) ? input.card.lifecycle as AnyRecord : {};
@@ -69,8 +79,8 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   const completedAt = text(lifecycle.closedAt);
   const waitingTime = Date.parse(waitingSince);
   const completedTime = Date.parse(completedAt);
-  const cards = records(input.ledger.cards);
-  const relationships = records(input.ledger.relationships)
+  const cards = input.index?.cards ?? new Map(records(input.ledger.cards).map((card) => [text(card.id), card]));
+  const relationships = input.index?.relationshipsByMaster.get(text(input.card.id)) ?? records(input.ledger.relationships)
     .filter((relationship) => text(relationship.from) === text(input.card.id) && text(relationship.label) === 'subtask')
     .sort((left, right) => Number(left.position) - Number(right.position) || text(left.id).localeCompare(text(right.id)));
   const status = executionActive ? 'task-execution' : lifecycleStatus === 'backlog' ? 'task-backlog' : lifecycleStatus === 'done' ? 'task-complete' : 'task-waiting';
@@ -78,7 +88,7 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   const subtasks: AnyRecord[] = [];
   for (const relationship of relationships) {
     const cardId = text(relationship.to);
-    const linked = cards.find((card) => text(card.id) === cardId);
+    const linked = cards.get(cardId);
     const childLifecycle = linked?.lifecycle && typeof linked.lifecycle === 'object' && !Array.isArray(linked.lifecycle) ? linked.lifecycle as AnyRecord : {};
     subtasks.push({ title: text(linked?.title) || `Card ${cardId}`, cardId, relationshipId: text(relationship.id), position: Number(relationship.position), status: childLifecycle.status === 'done' ? 'complete' : 'waiting', zoneId: linked ? zoneIdFor(linked, input.ledger) : 'ungrouped' });
   }
@@ -86,7 +96,7 @@ function taskFrom(input: { project: DecisionOsProject; ledgerEntry: DecisionOsPr
   if (!['todo', 'backlog', 'done'].includes(lifecycleStatus)) diagnostics.push('invalid_lifecycle');
   for (const relationship of relationships) {
     if (!Number.isInteger(Number(relationship.position)) || Number(relationship.position) < 0) diagnostics.push(`invalid_subtask_position:${text(relationship.id)}`);
-    if (!cards.some((card) => text(card.id) === text(relationship.to))) diagnostics.push(`missing_subtask:${text(relationship.to)}`);
+    if (!cards.has(text(relationship.to))) diagnostics.push(`missing_subtask:${text(relationship.to)}`);
   }
   const taskIds = new Set([text(input.card.id), ...relationships.map((relationship) => text(relationship.to))]);
   const taskConflicts = records(input.conflicts).filter((conflict) => conflict.kind === 'task-conflict' && conflict.path === 'lifecycle' && taskIds.has(text(conflict.entityId)));
@@ -123,8 +133,9 @@ function compareTasks(left: AnyRecord, right: AnyRecord): number {
 /** Builds the Control Room slice directly from a worker-owned task projection. */
 export function controlRoomProjectionFromTaskLedger(input: { project: DecisionOsProject; ledger: AnyRecord; conflicts?: AnyRecord[]; runtime?: AnyRecord }): AnyRecord {
   const ledgerEntry = input.project.ledgers.find((entry) => entry.id === 'tasks') ?? { id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' };
+  const index = indexTaskLedger(input.ledger);
   const tasks = records(input.ledger.cards).flatMap((card) => {
-    const task = taskFrom({ project: input.project, ledgerEntry, ledger: input.ledger, card, conflicts: input.conflicts });
+    const task = taskFrom({ project: input.project, ledgerEntry, ledger: input.ledger, card, conflicts: input.conflicts, index });
     return task ? [task] : [];
   });
   return {
@@ -210,18 +221,18 @@ export function withProjectSyncRuns(projection: AnyRecord, runs: ProjectSyncRun[
   };
 }
 
-function sliceFingerprint(slice: Pick<ProjectSlice, 'projectId' | 'project' | 'dependencies' | 'tasks'>): string {
+function sliceFingerprint(slice: Pick<ProjectSlice, 'projectId' | 'project' | 'dependencies' | 'tasks' | 'taskRoot'>): string {
   return createHash('sha256').update(JSON.stringify({
     projectId: slice.projectId,
     originFingerprint: text(slice.project.originFingerprint),
     schemaVersion,
     projectorVersion,
     dependencies: slice.dependencies.map(({ path, sha256 }) => ({ path, sha256 })),
-    tasks: slice.tasks,
+    taskState: slice.taskRoot || slice.tasks,
   })).digest('hex');
 }
 
-function buildProjectSlice(input: { project: DecisionOsProject; taskProjection: AnyRecord; onTaskMaterialized?: () => void }): ProjectSlice {
+function buildProjectSlice(input: { project: DecisionOsProject; taskProjection: AnyRecord; taskRoot?: string; onTaskMaterialized?: () => void }): { slice: ProjectSlice; index: TaskLedgerIndex } {
   const tasks: AnyRecord[] = [];
   const dependencies: Dependency[] = [];
   const project = input.project;
@@ -229,14 +240,16 @@ function buildProjectSlice(input: { project: DecisionOsProject; taskProjection: 
     const metadataDependency = dependency(metadataFile);
     if (metadataDependency) dependencies.push(metadataDependency);
   }
+  let index: TaskLedgerIndex = indexTaskLedger({});
   for (const ledgerEntry of project.ledgers.filter((entry) => entry.id === 'tasks')) {
       const projectedLedger = input.taskProjection?.ledger && typeof input.taskProjection.ledger === 'object' && !Array.isArray(input.taskProjection.ledger)
         ? input.taskProjection.ledger as AnyRecord
         : input.taskProjection;
       if (!projectedLedger) throw new Error(`Task projection unavailable for project ${project.id}.`);
       const ledger = structuredClone(projectedLedger);
+      index = indexTaskLedger(ledger);
       for (const card of records(ledger.cards)) {
-        const task = taskFrom({ project, ledgerEntry, ledger, card, conflicts: records(input.taskProjection?.conflicts) });
+        const task = taskFrom({ project, ledgerEntry, ledger, card, conflicts: records(input.taskProjection?.conflicts), index });
         input.onTaskMaterialized?.();
         if (task) tasks.push(task);
       }
@@ -249,27 +262,37 @@ function buildProjectSlice(input: { project: DecisionOsProject; taskProjection: 
     project: { id: project.id, name: project.name, color: project.color, ledgers: project.ledgers, originFingerprint },
     tasks,
     dependencies,
+    taskRoot: input.taskRoot ?? '',
   };
-  return { ...slice, fingerprint: sliceFingerprint(slice) };
+  return { slice: { ...slice, fingerprint: sliceFingerprint(slice) }, index };
 }
 
-function affectedTaskIds(slice: ProjectSlice, ledger: AnyRecord, entities: ProjectionEntityChange[]): Set<string> | null {
+function affectedTaskIds(index: TaskLedgerIndex, entities: ProjectionEntityChange[], entityFor: (entityType: 'card' | 'relationship', entityId: string) => AnyRecord | null): Set<string> | null {
   const taskIds = new Set<string>();
-  const relationships = records(ledger.relationships);
   for (const entity of entities) {
     // WHAT: Content entities never participate in the structural Control Room projection.
     // WHY: Body and thread delivery must not trigger task materialization.
     if (entity.entityType === 'resource' || entity.entityType === 'thread-note') continue;
     if (entity.entityType === 'card') {
       taskIds.add(entity.entityId);
-      for (const relationship of relationships.filter((entry) => text(entry.label) === 'subtask' && text(entry.to) === entity.entityId)) taskIds.add(text(relationship.from));
-      for (const task of slice.tasks.filter((entry) => records(entry.subtasks).some((subtask) => text(subtask.cardId) === entity.entityId))) taskIds.add(text(task.cardId));
+      for (const masterId of index.mastersByChild.get(entity.entityId) ?? []) taskIds.add(masterId);
+      const current = entityFor('card', entity.entityId);
+      if (current) index.cards.set(entity.entityId, current);
+      else index.cards.delete(entity.entityId);
       continue;
     }
     if (entity.entityType === 'relationship') {
-      const current = relationships.find((entry) => text(entry.id) === entity.entityId && text(entry.label) === 'subtask');
-      if (current) taskIds.add(text(current.from));
-      for (const task of slice.tasks.filter((entry) => records(entry.subtasks).some((subtask) => text(subtask.relationshipId) === entity.entityId))) taskIds.add(text(task.cardId));
+      const previous = index.relationships.get(entity.entityId);
+      if (previous) {
+        taskIds.add(text(previous.from));
+        removeRelationshipFromIndex(index, previous);
+      }
+      const current = entityFor('relationship', entity.entityId);
+      if (current) {
+        index.relationships.set(entity.entityId, current);
+        addRelationshipToIndex(index, current);
+        taskIds.add(text(current.from));
+      } else index.relationships.delete(entity.entityId);
       continue;
     }
     return null;
@@ -277,48 +300,71 @@ function affectedTaskIds(slice: ProjectSlice, ledger: AnyRecord, entities: Proje
   return taskIds;
 }
 
-function rebuildAffectedTasks(input: { slice: ProjectSlice; project: DecisionOsProject; taskProjection: AnyRecord; taskIds: string[]; onTaskMaterialized?: () => void }): ProjectSlice {
+function rebuildAffectedTasks(input: { slice: ProjectSlice; index: TaskLedgerIndex; taskPositions: Map<string, number>; project: DecisionOsProject; taskProjection: AnyRecord; taskRoot?: string; taskIds: string[]; onTaskMaterialized?: () => void }): ProjectSlice {
   const ledger = input.taskProjection?.ledger && typeof input.taskProjection.ledger === 'object' && !Array.isArray(input.taskProjection.ledger)
     ? input.taskProjection.ledger as AnyRecord
     : input.taskProjection;
   if (!ledger) throw new Error(`Task projection unavailable for project ${input.project.id}.`);
   if (input.taskIds.length === 0) return input.slice;
   const ledgerEntry = input.project.ledgers.find((entry) => entry.id === 'tasks') ?? { id: 'tasks', title: 'Tasks', ledgerFile: '.decision-os/tasks.json' };
-  const cards = records(ledger.cards);
   const nextTasks = [...input.slice.tasks];
   for (const taskId of input.taskIds) {
-    const existingIndex = nextTasks.findIndex((task) => text(task.cardId) === taskId);
-    const card = cards.find((entry) => text(entry.id) === taskId);
-    const task = card ? taskFrom({ project: input.project, ledgerEntry, ledger, card, conflicts: records(input.taskProjection?.conflicts) }) : null;
+    const existingIndex = input.taskPositions.get(taskId) ?? -1;
+    const card = input.index.cards.get(taskId);
+    const task = card ? taskFrom({ project: input.project, ledgerEntry, ledger, card, conflicts: records(input.taskProjection?.conflicts), index: input.index }) : null;
     input.onTaskMaterialized?.();
     if (task && existingIndex >= 0) nextTasks[existingIndex] = task;
-    else if (task) nextTasks.push(task);
-    else if (existingIndex >= 0) nextTasks.splice(existingIndex, 1);
+    else if (task) {
+      input.taskPositions.set(taskId, nextTasks.length);
+      nextTasks.push(task);
+    } else if (existingIndex >= 0) {
+      nextTasks.splice(existingIndex, 1);
+      input.taskPositions.delete(taskId);
+      for (let index = existingIndex; index < nextTasks.length; index += 1) input.taskPositions.set(text(nextTasks[index].cardId), index);
+    }
   }
-  const next = { ...input.slice, tasks: nextTasks };
+  const next = { ...input.slice, tasks: nextTasks, taskRoot: input.taskRoot ?? '' };
   return { ...next, fingerprint: sliceFingerprint(next) };
 }
 
-function aggregateProjection(input: { slices: ProjectSlice[]; revision: number; stale?: boolean; error?: string }): Projection {
-  const tasks = input.slices.flatMap((slice) => slice.tasks);
+function aggregateProjection(input: { slices: ProjectSlice[]; revision: number; taskIndex?: AggregateTaskIndex; stale?: boolean; error?: string }): Projection {
+  const taskIndex = input.taskIndex ?? createAggregateTaskIndex(input.slices.flatMap((slice) => slice.tasks));
   const dependencies = input.slices.flatMap((slice) => slice.dependencies);
   const fingerprint = createHash('sha256').update(JSON.stringify({ schemaVersion, projectorVersion, slices: input.slices.map((slice) => [slice.projectId, slice.fingerprint]) })).digest('hex');
-  return {
+  const projection = {
     schemaVersion, projectorVersion, revision: input.revision, generatedAt: new Date().toISOString(), fingerprint, stale: input.stale === true,
-    queue: tasks.filter((task) => task.status === 'task-waiting').sort(compareControlRoomQueueTasks),
-    exec: tasks.filter((task) => task.status === 'task-execution').sort(compareTasks),
-    backlog: tasks.filter((task) => task.status === 'task-backlog').sort(compareTasks),
-    done: tasks.filter((task) => task.status === 'task-complete').sort(compareTasks),
-    allTasks: tasks,
-    ledgers: Array.from(new Set(tasks.map((task) => text(task.ledger)))).sort(),
-    diagnostics: [...tasks.filter((task) => task.valid === false), ...(input.error ? [{ valid: false, message: input.error }] : [])],
     projects: input.slices.map((slice) => slice.project),
     dependencies,
     projectSlices: input.slices,
-  };
+  } as Projection;
+  const columns: Array<[string, ((task: AnyRecord) => boolean) | undefined, ((left: AnyRecord, right: AnyRecord) => number) | undefined]> = [
+    ['queue', (task) => task.status === 'task-waiting', compareControlRoomQueueTasks],
+    ['exec', (task) => task.status === 'task-execution', compareTasks],
+    ['backlog', (task) => task.status === 'task-backlog', compareTasks],
+    ['done', (task) => task.status === 'task-complete', compareTasks],
+    ['allTasks', undefined, undefined],
+    ['diagnostics', (task) => task.valid === false, undefined],
+  ];
+  for (const [name, predicate, compare] of columns) Object.defineProperty(projection, name, {
+    enumerable: true,
+    get: () => {
+      const tasks = cachedAggregateTasks(taskIndex, name, predicate, compare);
+      return name === 'diagnostics' && input.error ? [...tasks, { valid: false, message: input.error }] : tasks;
+    },
+  });
+  Object.defineProperty(projection, 'ledgers', {
+    enumerable: true,
+    get: () => Array.from(new Set(cachedAggregateTasks(taskIndex, 'allTasks').map((task) => text(task.ledger)))).sort(),
+  });
+  return projection;
 }
 
-export function createControlRoomProjectionStore(input: { cacheFile: string; taskProjectionForProject: (project: DecisionOsProject) => AnyRecord }): {
+export function createControlRoomProjectionStore(input: {
+  cacheFile: string;
+  taskProjectionForProject: (project: DecisionOsProject) => AnyRecord;
+  taskEntityForProject?: (project: DecisionOsProject, entityType: 'card' | 'relationship', entityId: string) => AnyRecord | null;
+  taskRootForProject?: (project: DecisionOsProject) => string;
+}): {
   get(projects: DecisionOsProject[]): Projection;
   invalidate(projectId?: string, entities?: ProjectionEntityChange[]): void;
   reconcile(projects: DecisionOsProject[]): boolean;
@@ -326,6 +372,9 @@ export function createControlRoomProjectionStore(input: { cacheFile: string; tas
 } {
   let current: Projection | null = null;
   const slices = new Map<string, ProjectSlice>();
+  const ledgerIndexes = new Map<string, TaskLedgerIndex>();
+  const taskPositions = new Map<string, Map<string, number>>();
+  let aggregateTaskIndex: AggregateTaskIndex | null = null;
   const dirtyProjects = new Set<string>();
   const dirtyEntities = new Map<string, Map<string, ProjectionEntityChange>>();
   const dirtyTaskIds = new Map<string, Set<string>>();
@@ -345,8 +394,13 @@ export function createControlRoomProjectionStore(input: { cacheFile: string; tas
         entry.size < 0 ? !existsSync(entry.path) : dependency(entry.path)?.sha256 === entry.sha256
       )));
       if (valid) {
-        for (const slice of persistedSlices) slices.set(slice.projectId, slice);
-        current = persisted;
+        for (const slice of persistedSlices) {
+          slice.taskRoot ??= '';
+          slices.set(slice.projectId, slice);
+          taskPositions.set(slice.projectId, new Map(slice.tasks.map((task, index) => [text(task.cardId), index])));
+        }
+        aggregateTaskIndex = createAggregateTaskIndex(persistedSlices.flatMap((slice) => slice.tasks));
+        current = aggregateProjection({ slices: persistedSlices, revision: persisted.revision, taskIndex: aggregateTaskIndex, stale: persisted.stale === true });
         revision = persisted.revision;
         dirtyAll = false;
       }
@@ -363,11 +417,18 @@ export function createControlRoomProjectionStore(input: { cacheFile: string; tas
   const publish = (projects: DecisionOsProject[]): Projection => {
     const incrementalPublish = !dirtyAll && [...dirtyProjects].every((projectId) => dirtyEntities.has(projectId) || dirtyTaskIds.has(projectId));
     const projectIds = new Set(projects.map((project) => project.id));
-    for (const projectId of slices.keys()) if (!projectIds.has(projectId)) slices.delete(projectId);
+    let removedProject = false;
+    for (const projectId of slices.keys()) if (!projectIds.has(projectId)) {
+      slices.delete(projectId);
+      ledgerIndexes.delete(projectId);
+      taskPositions.delete(projectId);
+      removedProject = true;
+    }
     const remainingDirtyProjects = new Set<string>();
     for (const project of projects) {
       if (!dirtyAll && !dirtyProjects.has(project.id) && slices.has(project.id)) continue;
       const taskProjection = input.taskProjectionForProject(project);
+      const taskRoot = input.taskRootForProject?.(project) ?? '';
       const entities = dirtyEntities.get(project.id);
       const currentSlice = slices.get(project.id);
       projectBuilds += 1;
@@ -376,25 +437,51 @@ export function createControlRoomProjectionStore(input: { cacheFile: string; tas
         const ledger = taskProjection?.ledger && typeof taskProjection.ledger === 'object' && !Array.isArray(taskProjection.ledger)
           ? taskProjection.ledger as AnyRecord
           : taskProjection;
-        const affected = ledger ? affectedTaskIds(currentSlice, ledger, [...entities.values()]) : null;
+        let ledgerIndex = ledgerIndexes.get(project.id);
+        if (!ledgerIndex && ledger) {
+          ledgerIndex = indexTaskLedger(ledger);
+          ledgerIndexes.set(project.id, ledgerIndex);
+        }
+        const affected = ledger && ledgerIndex ? affectedTaskIds(ledgerIndex, [...entities.values()], (entityType, entityId) => (
+          input.taskEntityForProject?.(project, entityType, entityId)
+          ?? records(entityType === 'card' ? ledger.cards : ledger.relationships).find((entry) => text(entry.id) === entityId)
+          ?? null
+        )) : null;
         if (affected) taskIds = affected;
       }
       if (!dirtyAll && currentSlice && taskIds) {
         const batch = [...taskIds].sort().slice(0, taskMaterializationBatchSize);
         largestIncrementalBatch = Math.max(largestIncrementalBatch, batch.length);
-        slices.set(project.id, rebuildAffectedTasks({ slice: currentSlice, project, taskProjection, taskIds: batch, onTaskMaterialized: () => { taskMaterializations += 1; } }));
+        const ledgerIndex = ledgerIndexes.get(project.id)!;
+        const positions = taskPositions.get(project.id) ?? new Map(currentSlice.tasks.map((task, index) => [text(task.cardId), index]));
+        taskPositions.set(project.id, positions);
+        const updatedSlice = rebuildAffectedTasks({ slice: currentSlice, index: ledgerIndex, taskPositions: positions, project, taskProjection, taskRoot, taskIds: batch, onTaskMaterialized: () => { taskMaterializations += 1; } });
+        slices.set(project.id, updatedSlice);
+        if (aggregateTaskIndex) {
+          for (const taskId of batch) {
+            aggregateTaskIndex.tasks.delete(`${project.id}\u0000${taskId}`);
+            const position = positions.get(taskId);
+            const task = position === undefined ? null : updatedSlice.tasks[position];
+            if (task) aggregateTaskIndex.tasks.set(taskKey(task), task);
+          }
+          aggregateTaskIndex.generation += 1;
+        }
         for (const taskId of batch) taskIds.delete(taskId);
         if (taskIds.size > 0) {
           dirtyTaskIds.set(project.id, taskIds);
           remainingDirtyProjects.add(project.id);
         } else dirtyTaskIds.delete(project.id);
       } else {
-        slices.set(project.id, buildProjectSlice({ project, taskProjection, onTaskMaterialized: () => { taskMaterializations += 1; } }));
+        const built = buildProjectSlice({ project, taskProjection, taskRoot, onTaskMaterialized: () => { taskMaterializations += 1; } });
+        slices.set(project.id, built.slice);
+        ledgerIndexes.set(project.id, built.index);
+        taskPositions.set(project.id, new Map(built.slice.tasks.map((task, index) => [text(task.cardId), index])));
         dirtyTaskIds.delete(project.id);
       }
     }
     const orderedSlices = projects.map((project) => slices.get(project.id)).filter((slice): slice is ProjectSlice => Boolean(slice));
-    const next = aggregateProjection({ slices: orderedSlices, revision: revision + 1 });
+    if (!incrementalPublish || removedProject || !aggregateTaskIndex) aggregateTaskIndex = createAggregateTaskIndex(orderedSlices.flatMap((slice) => slice.tasks));
+    const next = aggregateProjection({ slices: orderedSlices, revision: revision + 1, taskIndex: aggregateTaskIndex });
     // WHAT: Invalidate the disk snapshot instead of serializing every task after a scoped entity change.
     // WHY: Normal mutations must not stringify and rewrite the complete Control Room workspace cache.
     if (incrementalPublish) rmSync(input.cacheFile, { force: true });
@@ -427,9 +514,20 @@ export function createControlRoomProjectionStore(input: { cacheFile: string; tas
       }
     });
   };
+  const ensureLedgerIndexes = (projects: DecisionOsProject[]): void => {
+    for (const project of projects) {
+      if (ledgerIndexes.has(project.id)) continue;
+      const taskProjection = input.taskProjectionForProject(project);
+      const ledger = taskProjection?.ledger && typeof taskProjection.ledger === 'object' && !Array.isArray(taskProjection.ledger)
+        ? taskProjection.ledger as AnyRecord
+        : taskProjection;
+      if (ledger) ledgerIndexes.set(project.id, indexTaskLedger(ledger));
+    }
+  };
   return {
     get(projects) {
       latestProjects = projects;
+      ensureLedgerIndexes(projects);
       if (Date.now() - lastReconcileAt >= 30_000) this.reconcile(projects);
       if (!dirtyAll && dirtyProjects.size === 0 && current) return current;
       // WHAT: Build synchronously only when no usable projection exists yet.

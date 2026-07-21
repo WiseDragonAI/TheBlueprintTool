@@ -639,6 +639,8 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
   controlRoomProjectionStore = createControlRoomProjectionStore({
     cacheFile: resolve(masterDecisionOsRoot, 'cache', 'control-room-v3.json'),
     taskProjectionForProject: (project) => taskStateForProject(project).projection(),
+    taskEntityForProject: (project, entityType, entityId) => taskStateForProject(project).store.projectedEntity(entityType, entityId),
+    taskRootForProject: (project) => taskStateForProject(project).store.rootHash(),
   });
   // WHAT: Build the first projection during startup, then let project watchers maintain it.
   // WHY: Control Room requests must read a ready snapshot instead of traversing every registered project.
