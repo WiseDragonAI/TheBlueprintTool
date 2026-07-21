@@ -1,0 +1,51 @@
+## A. Repository Intent
+
+1. **A card owns a deterministic thread identity.** Card `cardId` maps to `thread-${cardId}`. `ledger.threadFiles[threadId]` resolves the durable Markdown sidecar, while `ledger.notes[threadId]` is the hydrated/current-state representation rendered by the thread UI.
+2. **Task-state v2 is authoritative for task structure and replicated thread-note state.** Migration must preserve cards, thread references, note identity, note order, intentional deletions, and the ability to reconstruct the same projection after restart and after federation merges.
+3. **Thread Markdown remains durable content.** A state migration must never interpret omission caused by stripping hydrated sidecar content as a user deletion.
+
+---
+
+## B. Current Iteration Intent
+
+1. **Reported regression.** After the task-state migration and synchronization, cards appear to have lost their threads and conversations no longer render.
+2. **Analysis boundary.** Trace current files, task-state-v2 entities, reconstruction order, scoped thread reads, federation projection behavior, frontend reconciliation, the destructive operation, and the missing acceptance coverage.
+3. **Required distinction.** Determine whether the content was deleted, whether card-to-thread references were lost, and whether local sidecar hydration is masking authoritative-state corruption.
+
+---
+
+## C. Findings
+
+1. **The thread content files were not destroyed.** `.decision-os/threads/tasks` contains `222` Markdown files; `161` are non-empty and contain approximately `5,075,417` bytes. The persisted Tasks ledger contains `215` thread references, and every one of those references resolves to an existing file. Recovery source material therefore remains available.
+2. **Critical data-state corruption — one operation tombstoned every migrated note.** The v2 store contains `1,472` `thread-note` entities across `157` threads. Every entity has an `$entity: tombstone` candidate from the same causal dot, `workstation:17`; none remains live in the current-state projection. The API projection consequently exposes `1,472` deleted-note IDs and empty note arrays.
+3. **The destructive chain is deterministic.** `ledger-cli/src/business/ledger/helper/read-ledger-json.ts` reads the complete authoritative v2 projection, including hydrated notes. `manage-ledger-json.ts:416`, `:428`, and `:450` call `stripHydratedThreadNotes()` before every Tasks write. `write-ledger-json.ts:10` posts that stripped aggregate to `/api/task-state/commit`. The endpoint at `backend/src/business/server/helper/create-http-server.ts:1014` computes `taskProjectionImportCommand(currentProjection, importedLedger)`. Because the current projection has all notes and the submitted document omits every sidecar-backed note, `threadNoteChanges()` interprets every omission as deletion and emits all `1,472` tombstones in one batch. A normal CLI status, answer, or mutate write can therefore erase every projected conversation.
+4. **Critical schema drift — migrated and new thread references use overlapping causal lanes.** `taskCurrentBaselineChanges()` in `backend/src/business/task-state/helper/task-current-state-baseline.ts:46` stores the complete map at path `threadFiles`, producing entity `ledger/tasks:threadFiles`. New task commands in `task-mutation-command.ts:149`, `:167`, `:181`, and `:206` store individual mappings at `threadFiles/<threadId>`, producing different entities. These independent entities mutate the same projection subtree and have no defined parent/child merge algebra.
+5. **Restart and synchronization make the reference result order-dependent.** `loadEntityFiles()` in `task-current-state-store.ts:106` sorts encoded filenames. A granular `tasks%3AthreadFiles%2F...` entity is materialized before `tasks%3AthreadFiles.json`; the later whole-map baseline assignment overwrites the granular change. Federation delivery can produce the opposite order, so two replicas can temporarily project different thread links from the same entity set.
+6. **A current post-migration thread proves the broken association.** `thread-card-context-metrics-20260721.md` exists. Its granular v2 entity records `workstation:14`, operation `set`, and the correct sidecar path. A fresh store reconstruction nevertheless returns no value for `threadFiles[thread-card-context-metrics-20260721]`. The live scoped endpoint returns HTTP `404` for this thread even though the file exists.
+7. **The frontend converts the missing reference into an apparently unlinked card.** `frontend/src/app/responsive/thread.js:290` derives `thread-${card.id}` and requests `/api/ledgers/tasks/threads/<threadId>`. `ledgerThreadProjection()` in `backend/src/business/server/helper/ledger-read-models.ts:79` returns `null` when the projected reference is absent; the server returns `404`. `refreshThreadLedger()` silently returns on the non-2xx response, leaving the compact navigation ledger with no notes to render. No operator-facing synchronization error identifies that the sidecar still exists.
+8. **Local sidecar reads mask part of the corruption.** A live read of migrated `thread-card-016ae17d-4342-44f2-981d-04de1a1e2dfc` returns HTTP `200` and five notes because the local scoped endpoint reparses the surviving Markdown file. That does not repair the v2 note entities. Replicated projections and any thread whose reference was overwritten still return empty or `404`.
+9. **The migration acceptance suite did not test semantic reconstruction.** The migration test verifies migrated notes but not the matching `threadFiles` reference. Restart coverage mutates a card rather than a thread mapping. Federation tests do not permute parent-map and child-path arrival. The runbook checks format, hashes, conflicts, and journals but never compares source thread mappings and notes with a freshly reconstructed projection or probes the scoped thread endpoint.
+10. **The two regressions compound but are distinct.** The `workstation:17` aggregate import erased note liveness. The overlapping `threadFiles` lanes erase post-baseline associations during reconstruction. Fixing only note resurrection leaves new cards returning `404`; fixing only references leaves replicated conversations empty.
+
+---
+
+## D. Remediation Paths
+
+1. **Stop aggregate Tasks commits from representing scoped commands.** Remove the full-ledger `/api/task-state/commit` write path from normal `ledger-cli` operations. Route each CLI operation as an explicit task command carrying only its owned card, relationship, thread-note, or ledger-field lanes. Absence from a stripped projection must never mean deletion.
+2. **Use one canonical entity lane per thread reference.** Baseline creation, imports, creation, and deletion must all encode `threadFiles/<threadId>` as the same per-thread ledger entity. No whole `threadFiles` register may coexist with child registers.
+3. **Run an offline compatibility migration for existing v2 stores.** Quiesce the federation; expand `ledger/tasks:threadFiles` into per-thread entities; causally join every existing granular `set` and `remove`; remove the obsolete parent entity; recompute the bucket manifest and baseline root; then validate the reconstructed projection before restart. Changing file sort order is not a correction because network arrival order would remain unsafe.
+4. **Recover notes from the surviving canonical sidecars after the write path is fixed.** Parse every referenced thread Markdown file, match notes by `threadId/noteId`, and emit an authoritative resurrection change for only notes present in the sidecar. The recovery mutation must causally cover `workstation:17`, replacing the accidental tombstone without reviving notes that were intentionally absent from the sidecar. Rebuild `deletedNoteIds` from the resulting live entities.
+5. **Repair missing post-migration references before validating note recovery.** Merge valid granular references with the baseline map, verify that each resulting path stays within `.decision-os`, and require the referenced file to exist. Report cards with missing files separately; do not fabricate empty threads over missing content.
+6. **Make failure visible.** When a card-derived thread ID has a surviving sidecar or current-state note entity but the scoped projection lacks its reference, return an explicit integrity error rather than a generic `404`, and surface it in the thread panel.
+7. **Add boundary regressions.** Prove: a CLI card-status write cannot change any unrelated thread-note hash; a CLI thread answer changes only that thread; create-reference plus flush plus restart remains readable; delete-reference plus restart remains absent; offline migration source references equal fresh reconstruction; federation merge permutations converge; and the scoped API returns the same notes before restart, after restart, and after federation reconciliation.
+8. **Add a destructive-write guard.** Reject any aggregate import that would tombstone notes from more than its explicitly declared thread scope. Record the attempted count and affected thread IDs so a stripped-document regression fails closed before state mutation.
+9. **Recovery order.** First disable the destructive aggregate commit path. Second migrate thread-reference lanes. Third resurrect sidecar-backed notes. Fourth reset and reseed federation state from the repaired owners. Fifth run semantic inventory and scoped API checks on every node before restoring writes.
+
+---
+
+## E. Operator Decision Summary
+
+1. **The conversations remain recoverable.** Their Markdown files are still present; the v2 authority incorrectly marks the notes deleted and loses some post-migration reference mappings.
+2. **The first destructive write was an aggregate CLI commit.** A stripped sidecar projection was diffed as authoritative absence, producing one batch that tombstoned all `1,472` migrated notes.
+3. **The first reference failure was introduced by the v2 lane model.** Baseline whole-map state and later per-thread state overlap, so restart and federation arrival order can overwrite valid links.
+4. **Do not restart or resynchronize as a recovery action.** Those operations can reproduce the reference overwrite and propagate the accidental tombstones. Repair the command boundary and entity schema before restoring state from the sidecars.
