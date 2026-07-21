@@ -11,6 +11,7 @@
 
 1. [Analysis](./analysis/README.md) contains reusable evidence, research, architecture, solution-selection, and Master Ledger workflows.
 2. [Testing](./testing/README.md) contains the repository verification contract.
+3. [Deployment](./deployment/README.md) contains offline migration, production admission, relay convergence, restart, and rollback procedures.
 
 ---
 

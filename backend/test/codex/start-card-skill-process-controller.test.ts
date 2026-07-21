@@ -429,7 +429,14 @@ test('thread codex process route anchors the run widget on the source card and s
     const developerArgument = args.find((argument) => argument.startsWith('developer_instructions='));
     assert.ok(developerArgument);
     const developerInstructions = JSON.parse(developerArgument.slice('developer_instructions='.length)) as string;
-    assert.match(developerInstructions, /^platform: linux\nDecision OS card run:/);
+    assert.match(developerInstructions, /^platform: linux\nGit commits you create, including merges/);
+    assert.match(developerInstructions, /WHAT: changed boundary/);
+    assert.match(developerInstructions, /WHY: reason and decision evidence/);
+    assert.equal(
+      developerInstructions.indexOf('Git commits you create'),
+      developerInstructions.indexOf('platform: linux') + 'platform: linux\n'.length,
+    );
+    assert.ok(developerInstructions.indexOf('Git commits you create') < developerInstructions.indexOf('Decision OS card run:'));
     assert.match(developerInstructions, /`ledger-cli` writes only/);
     assert.match(developerInstructions, /master-task-progress --plan-stdin --json/);
     assert.match(developerInstructions, /living strategic summary for a CTO/);
