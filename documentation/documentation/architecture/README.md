@@ -52,3 +52,9 @@
 5. `backend/src/business/server/helper/create-http-server.ts`
 6. `frontend/src/business/` and `frontend/src/runtime/`
 7. `package.json`, `frontend/package.json`, `backend/package.json`, and `ledger-cli/package.json`
+
+---
+
+## F. Detailed Architecture
+
+1. [Epoch-3 task state and federation](./epoch-3-task-state-and-federation.md) defines offline migration, structural entities, immutable content, durability, relay anti-entropy, derived remote stores, lazy content routing, and production diagnostics.

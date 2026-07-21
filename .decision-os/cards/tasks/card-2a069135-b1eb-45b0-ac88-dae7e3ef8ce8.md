@@ -1,10 +1,7 @@
-#master-task #task-complete
+#master-task
 
 Ledger: Specs
-Waiting since: 2026-07-14T08:23:11.208Z
 Queue rank: 9
-Active since: 2026-07-14T08:34:35.199Z
-Completed at: 2026-07-14T11:25:53.632Z
 
 ## A. Implemented Result
 
@@ -24,7 +21,3 @@ Completed at: 2026-07-14T11:25:53.632Z
 4. **Affected ledger cases:** all `3` focused cases passed across the initial run and failed-case rerun.
 
 ---
-
-## C. Subtasks
-
-1. [Implement flexible card-authoring policy](card:card-dfa1eb1a-a139-4d85-b34e-aae811b5e1dd) — Status: complete

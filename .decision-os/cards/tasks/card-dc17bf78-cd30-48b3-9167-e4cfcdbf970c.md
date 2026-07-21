@@ -1,10 +1,7 @@
-#master-task #task-complete
+#master-task
 
 Ledger: Specs
-Waiting since: 2026-07-12T08:48:25.797Z
 Queue rank: 3
-Active since: 2026-07-12T08:49:48.706Z
-Completed at: 2026-07-12T11:21:01.110Z
 
 ## A. Scope
 
@@ -38,7 +35,3 @@ Completed at: 2026-07-12T11:21:01.110Z
 4. **Verification:** Focused backend tests and backend TypeScript checks pass.
 
 ---
-
-## E. Subtasks
-
-1. **Direct treatment:** No subtask cards are required for this two-file diagnostic-classification fix.

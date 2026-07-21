@@ -16,6 +16,13 @@ function decodedDeveloperInstructions(args: string[]): string {
   return JSON.parse(encoded.slice('developer_instructions='.length));
 }
 
+const commitTraceabilityInstructions = [
+  'platform: linux',
+  'Git commits you create, including merges, require a concise subject and body:',
+  '- WHAT: changed boundary.',
+  '- WHY: reason and decision evidence.',
+].join('\n');
+
 test('decisionOsRuntimePlatform maps supported Node hosts to the injected platform contract', () => {
   assert.equal(decisionOsRuntimePlatform('linux'), 'linux');
   assert.equal(decisionOsRuntimePlatform('android'), 'termux');
@@ -40,7 +47,7 @@ test('resolveCodexCommand honors an explicit executable setting', () => {
     assert.deepEqual(command.args.slice(0, 5), ['exec', '--dangerously-bypass-approvals-and-sandbox', '--json', '-C', workspace]);
     assert.equal(command.args.includes('gpt-5.4'), true);
     assert.equal(command.args.includes('model_reasoning_effort="low"'), true);
-    assert.equal(decodedDeveloperInstructions(command.args), 'platform: linux');
+    assert.equal(decodedDeveloperInstructions(command.args), commitTraceabilityInstructions);
     assert.equal(command.args.filter((argument) => argument.startsWith('developer_instructions=')).length, 1);
 
     const developerInstructions = 'Line one\n"quoted" and C:\\workspace\\card';
@@ -49,7 +56,7 @@ test('resolveCodexCommand honors an explicit executable setting', () => {
       runtime: { decisionOsSettings: { codexBin: bin, codexModel: 'gpt-5.4', codexReasoningEffort: 'low' } },
       developerInstructions,
     });
-    assert.equal(decodedDeveloperInstructions(scopedCommand.args), `platform: linux\n${developerInstructions}`);
+    assert.equal(decodedDeveloperInstructions(scopedCommand.args), `${commitTraceabilityInstructions}\n${developerInstructions}`);
     assert.equal(scopedCommand.args.filter((argument) => argument.startsWith('developer_instructions=')).length, 1);
     assert.equal(scopedCommand.args.filter((argument) => argument === '-c').length, 2);
   } finally {
@@ -114,7 +121,7 @@ test('resolveCodexCommand defaults to gpt-5.6-sol with medium effort when no sel
     assert.equal(command.effort, 'medium');
     assert.equal(command.args.includes('gpt-5.6-sol'), true);
     assert.equal(command.args.includes('model_reasoning_effort="medium"'), true);
-    assert.equal(decodedDeveloperInstructions(command.args), 'platform: linux');
+    assert.equal(decodedDeveloperInstructions(command.args), commitTraceabilityInstructions);
     assert.equal(command.args.filter((argument) => argument.startsWith('developer_instructions=')).length, 1);
   } finally {
     if (previousCodexModel === undefined) delete process.env.CODEX_MODEL;

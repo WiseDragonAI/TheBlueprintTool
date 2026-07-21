@@ -1,9 +1,6 @@
-#master-task #task-complete
+#master-task
 
 Ledger: Specs
-Waiting since: 2026-07-13T11:30:14.799Z
-Active since: 2026-07-13T11:30:51.428Z
-Completed at: 2026-07-13T11:38:35.804Z
 
 ## A. Scope
 
@@ -31,7 +28,3 @@ Completed at: 2026-07-13T11:38:35.804Z
 4. **Operator gate:** The operator confirms the corrected alignment and marker color on the Brave mobile surface.
 
 ---
-
-## D. Subtasks
-
-1. [Align and verify card numbered lists](card:card-7877c056-66a9-47f1-ba2d-8b00cb83c43e) — Status: complete

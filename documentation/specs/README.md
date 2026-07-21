@@ -11,6 +11,7 @@
 ## B. Domains
 
 1. [Knowledge Base](./knowledge-base/README.md) defines canonical KB ownership and maintenance invariants.
+2. [Commit traceability](./commit-traceability.md) requires agent-authored commit bodies to record exact `WHAT:` and `WHY:` evidence.
 
 ---
 

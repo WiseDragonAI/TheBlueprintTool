@@ -22,6 +22,10 @@ The structure follows the proven workstation model used by `Senior`, `DroidFleet
 3. [Document research and solution selection prompt](./procedure/analysis/Document-Research-Solution-Selection-Prompt.md)
 4. [Verification procedure](./procedure/testing/README.md)
 5. [Knowledge-base contract](./specs/knowledge-base/README.md)
+6. [Epoch-3 task state and federation](./documentation/architecture/epoch-3-task-state-and-federation.md)
+7. [Epoch-3 node cutover procedure](./procedure/deployment/epoch-3-node-cutover.md)
+8. [Epoch-3 production cutover postmortem](./postmortem/epoch-3-production-cutover-2026-07-21.md)
+9. [Commit traceability contract](./specs/commit-traceability.md)
 
 ---
 

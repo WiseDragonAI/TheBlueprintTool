@@ -1,5 +1,3 @@
-Completed at: 2026-07-17T13:03:18.122Z
-
 ## A. Corrected Outcome
 
 1. **A second queue reorder can start after Sortable's `180ms` settlement animation even while the first rank batch is still pending.** Optimistic rank snapshots persist through one ordered promise tail, so repeated gestures do not overlap server writes.
@@ -34,9 +32,3 @@ Completed at: 2026-07-17T13:03:18.122Z
 4. **Repository suite:** the frontend phase reported `429` passing and `7` failing static-contract assertions outside the corrected queue contracts; backend and aggregate browser phases did not run after that stop.
 
 ---
-
-## E. Subtasks
-
-1. [Reproduce and trace the queue drag corruption](card:card-faeb4dca-6582-47d3-b1f4-5389a089c719)
-2. [Make queue reorder teardown and persistence atomic](card:card-9cc50475-421b-4af0-9a83-bcecb1874a63)
-3. [Add served-surface queue drag regression coverage](card:card-9cebc924-d3c5-4eff-b37c-60736f27f86a)

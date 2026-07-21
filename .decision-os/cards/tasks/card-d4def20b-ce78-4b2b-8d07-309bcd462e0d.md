@@ -1,9 +1,6 @@
-#master-task #task-complete
+#master-task
 
 Ledger: Specs
-Waiting since: 2026-07-12T10:39:10.278Z
-Active since: 2026-07-12T11:14:20.657Z
-Completed at: 2026-07-12T11:15:23.635Z
 
 ## A. Scope
 
@@ -31,7 +28,3 @@ Completed at: 2026-07-12T11:15:23.635Z
 5. **Verification:** Mobile control-room tests, focused backend mutation tests, and backend TypeScript checking pass.
 
 ---
-
-## D. Subtasks
-
-1. [Implement Aggregate Master Completion](card:card-9ed2f4d1-1f30-4d68-b81c-3ec94629d9be) — Status: complete

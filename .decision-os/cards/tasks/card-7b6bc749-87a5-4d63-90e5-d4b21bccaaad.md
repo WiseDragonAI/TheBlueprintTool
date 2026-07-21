@@ -1,9 +1,6 @@
-#master-task #task-complete
+#master-task
 
 Ledger: Specs
-Waiting since: 2026-07-14T16:20:49.686Z
-Active since: 2026-07-14T19:17:18.540Z
-Completed at: 2026-07-15T08:02:06.720Z
 
 ## A. Operator outcome
 
@@ -59,8 +56,3 @@ Completed at: 2026-07-15T08:02:06.720Z
 2. Merge commit: `0e89ece`.
 
 ---
-
-## G. Subtasks
-
-1. [Implement project color initialization and hydration](card:card-dd161067-6460-49ec-898b-ada6bb508853) — Status: complete
-2. [Verify mobile settings behavior and record lessons](card:card-4f386e8a-6930-4197-80e7-b6d74b1c442f) — Status: complete

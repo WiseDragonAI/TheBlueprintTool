@@ -1,9 +1,6 @@
-#master-task #task-complete
+#master-task
 
 Ledger: Specs
-Waiting since: 2026-07-14T08:35:23.880Z
-Active since: 2026-07-14T08:36:51.956Z
-Completed at: 2026-07-14T09:49:09.595Z
 
 ## A. Scope
 
@@ -33,9 +30,3 @@ Completed at: 2026-07-14T09:49:09.595Z
 6. **Verification:** focused automated tests pass, the served routes return `200`, and mobile Chromium verifies the target surface.
 
 ---
-
-## D. Subtasks
-
-1. [Build flattened mobile skill and pipeline catalogs](card:card-d750d73c-be58-473b-bab4-318a37f34bfa) — Status: complete
-2. [Add reusable library filters and improve Card Processing](card:card-0951c0d8-8635-4239-9275-dd325ffc73f2) — Status: complete
-3. [Verify served mobile library behavior](card:card-fab32649-2d73-4525-af38-aa3055ad47da) — Status: complete

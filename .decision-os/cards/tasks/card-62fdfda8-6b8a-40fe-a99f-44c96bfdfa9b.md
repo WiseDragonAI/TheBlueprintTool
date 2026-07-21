@@ -1,9 +1,6 @@
-#master-task #task-complete
+#master-task
 
 Ledger: Specs
-Waiting since: 2026-07-13T09:38:43.307Z
-Active since: 2026-07-13T10:10:06.152Z
-Completed at: 2026-07-13T10:15:13.646Z
 
 ## A. Scope
 
@@ -22,11 +19,6 @@ Completed at: 2026-07-13T10:15:13.646Z
 4. **Code blocks:** Fenced code blocks retain monospace syntax-highlighted presentation.
 5. **Regression coverage:** Parser, renderer, and mobile style contracts have focused automated coverage.
 
----
-
-## C. Subtasks
-
-1. [Implement shared thread Markdown styling](card:card-1bc22bdf-1008-421a-aeba-0e783bf4206f) — Status: complete
 ---
 
 ## D. Implementation Evidence

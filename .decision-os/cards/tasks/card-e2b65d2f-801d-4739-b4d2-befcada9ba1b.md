@@ -1,9 +1,6 @@
-#master-task #task-complete
+#master-task
 
 Ledger: Specs
-Waiting since: 2026-07-15T08:14:05.668Z
-Active since: 2026-07-15T08:14:24.648Z
-Completed at: 2026-07-15T09:01:55.467Z
 
 ## A. Diagnostic Result
 
@@ -29,9 +26,3 @@ Completed at: 2026-07-15T09:01:55.467Z
 4. **Implementation status:** Not authorized by this diagnostic request.
 
 ---
-
-## D. Subtasks
-
-1. [Inspect Persisted Card and Run State](card:card-6e715737-b6f8-4b77-9665-10e7337f36e6) — Status: complete
-2. [Trace the Run Action End to End](card:card-2ecf1b4b-5bd3-43ef-8027-68c609ff6b24) — Status: complete
-3. [Report Root Cause and Corrective Action](card:card-22c4332a-e937-45b9-b05c-51b49615ace7) — Status: complete
