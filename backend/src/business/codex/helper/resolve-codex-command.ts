@@ -47,9 +47,14 @@ export function decisionOsRuntimePlatform(nodePlatform: NodeJS.Platform = proces
 }
 
 function codexDeveloperInstructions(customInstructions?: string): string {
-  const platformInstruction = `platform: ${decisionOsRuntimePlatform()}`;
+  const baseInstructions = [
+    `platform: ${decisionOsRuntimePlatform()}`,
+    'Git commits you create, including merges, require a concise subject and body:',
+    '- WHAT: changed boundary.',
+    '- WHY: reason and decision evidence.',
+  ].join('\n');
   const custom = String(customInstructions ?? '').trim();
-  return custom ? `${platformInstruction}\n${custom}` : platformInstruction;
+  return custom ? `${baseInstructions}\n${custom}` : baseInstructions;
 }
 
 function settingsRecord(runtime: AnyRecord): AnyRecord {
