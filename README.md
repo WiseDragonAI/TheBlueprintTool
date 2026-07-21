@@ -147,6 +147,8 @@ Codex child processes receive `DECISION_OS_LEDGER_ROOT` as the filesystem bounda
 
 ## Termux Home Master Server
 
+Before upgrading an existing federated node to causal task current-state v2, complete [TASK_STATE_V2_MIGRATION_RUNBOOK.md](TASK_STATE_V2_MIGRATION_RUNBOOK.md).
+
 Launch Decision OS from the Termux home to serve the projects registered in its `.decision-os/projects.json` catalog:
 
 ```bash
