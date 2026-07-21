@@ -6,6 +6,8 @@
 - The operator may speak or write in French; do not mirror the operator's language.
 - decision-os `# AGENT` thread replies must be in English, even when the corresponding `# OPERATOR` note is French.
 - Do not write French acknowledgements such as `Traité`; use English equivalents such as `Treated`.
+- Never write `you are right`.
+- Never add any kind of over-explanation unless explicitly ordered by the operator.
 
 ## KNOWLEDGE
 
