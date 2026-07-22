@@ -688,7 +688,10 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     const reconcileCodexStartup = async (recordBootstrapGate = true): Promise<void> => {
       try {
         const ownershipReconciliation = await reconcileCodexExecutionOwnership({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime });
-        if (ownershipReconciliation.ledgersChanged > 0) console.log(JSON.stringify({ codexOwnershipReconciliation: ownershipReconciliation, projectId }));
+        if (ownershipReconciliation.ledgersChanged > 0) {
+          controlRoomProjectionStore?.invalidate(projectId);
+          console.log(JSON.stringify({ codexOwnershipReconciliation: ownershipReconciliation, projectId }));
+        }
         await resumeCodexPipelineRuns({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime });
         delete projectRuntime.taskStatePersistenceError;
       } catch (error) {
