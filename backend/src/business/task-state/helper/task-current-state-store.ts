@@ -89,6 +89,7 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
   let materializer: Promise<void> | null = null;
   let materializerError: Error | null = null;
   let localMutationTail = Promise.resolve();
+  let deferBucketSummaries = false;
 
   const serializeLocalMutation = <Result>(operation: () => Promise<Result>): Promise<Result> => {
     const result = localMutationTail.then(operation);
@@ -107,18 +108,35 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
       return;
     }
     bucketEntries.set(bucket, entries);
+    if (deferBucketSummaries) return;
     bucketSummaries.set(bucket, { bucket, count: entries.size, checksum: hashTaskCurrentBucket(entries) });
   };
 
-  const applyEntity = (incoming: TaskCurrentEntity): boolean => {
-    assertTaskCurrentEntity(incoming);
+  const rebuildBucketSummaries = (): void => {
+    bucketSummaries.clear();
+    for (const [bucket, entries] of bucketEntries) {
+      bucketSummaries.set(bucket, { bucket, count: entries.size, checksum: hashTaskCurrentBucket(entries) });
+    }
+  };
+
+  const applyEntity = (incoming: TaskCurrentEntity, takeOwnership = false): boolean => {
     if (incoming.projectId !== options.projectId) throw new Error('task_current_project_mismatch');
     const key = taskCurrentEntityKey(incoming);
-    const joined = joinTaskEntities(entities.get(key), incoming);
+    const current = entities.get(key);
+    let joined: TaskCurrentEntity;
+    if (current) joined = joinTaskEntities(current, incoming);
+    else if (takeOwnership) {
+      assertTaskCurrentEntity(incoming);
+      joined = incoming;
+    } else joined = joinTaskEntities(undefined, incoming);
     if (entities.get(key)?.stateHash === joined.stateHash) return false;
     entities.set(key, joined);
     updateBucket(key, joined);
-    for (const register of Object.values(joined.fields)) clock = joinTaskClocks(clock, register.clock);
+    for (const register of Object.values(joined.fields)) {
+      for (const [replicaId, counter] of Object.entries(register.clock)) {
+        clock[replicaId] = Math.max(clock[replicaId] ?? 0, counter);
+      }
+    }
     materializeTaskCurrentEntity(projection, joined);
     return true;
   };
@@ -154,13 +172,16 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
   };
 
   const loadEntityFiles = (): void => {
+    deferBucketSummaries = true;
     for (const entityType of taskEntityTypes) {
       const directory = resolve(root, 'current', entityType);
       if (!existsSync(directory)) continue;
       for (const name of readdirSync(directory).filter((value) => value.endsWith('.json')).sort()) {
-        applyEntity(JSON.parse(readFileSync(resolve(directory, name), 'utf8')) as TaskCurrentEntity);
+        applyEntity(JSON.parse(readFileSync(resolve(directory, name), 'utf8')) as TaskCurrentEntity, true);
       }
     }
+    deferBucketSummaries = false;
+    rebuildBucketSummaries();
   };
 
   function rootHash(): string {
@@ -217,7 +238,7 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
       if (document.version !== taskCurrentStateVersion) throw new Error('unsupported_task_current_state_journal');
       const changed = document.mutation
         ? applyMutation(document.mutation)
-        : (document.delta?.entities ?? []).filter(applyEntity).map((entity) => entities.get(taskCurrentEntityKey(entity))!);
+        : (document.delta?.entities ?? []).filter((entity) => applyEntity(entity)).map((entity) => entities.get(taskCurrentEntityKey(entity))!);
       if (document.activateTaskId) applyActivation(document.activateTaskId);
       for (const entity of changed) pendingEntities.set(taskCurrentEntityKey(entity), entity);
       pendingJournals.add(file);
@@ -345,7 +366,7 @@ export function createTaskCurrentStateStore(options: StoreOptions) {
       const changedPreview = joined.filter((entity) => entities.get(taskCurrentEntityKey(entity))?.stateHash !== entity.stateHash);
       if (changedPreview.length === 0) return { changed: false, delta: { version: taskCurrentStateVersion, projectId: options.projectId, entities: [] } };
       const journalFile = await journal({ version: taskCurrentStateVersion, delta }, `remote-${randomUUID()}`);
-      const changed = delta.entities.filter(applyEntity).map((entity) => entities.get(taskCurrentEntityKey(entity))!);
+      const changed = delta.entities.filter((entity) => applyEntity(entity)).map((entity) => entities.get(taskCurrentEntityKey(entity))!);
       for (const entity of changed) pendingEntities.set(taskCurrentEntityKey(entity), entity);
       pendingJournals.add(journalFile);
       scheduleMaterializer();
