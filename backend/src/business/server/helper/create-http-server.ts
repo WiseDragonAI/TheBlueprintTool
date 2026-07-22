@@ -51,7 +51,7 @@ import { recoverCodexProcessQueue, stopAdoptedCodexProcessMonitors } from '../..
 import { reconcileCodexExecutionOwnership } from '../../codex/helper/reconcile-codex-execution-ownership.js';
 import { nextPendingCodexProcessCreatedAt, pendingCodexProcessEntries, runningCodexProcessCount, scheduleCodexProcesses } from '../../codex/helper/codex-process-scheduler.js';
 import { createCodexCapacitySlots, type CodexSlotAcquireOptions } from '../../codex/helper/codex-capacity-slots.js';
-import { stopCodexRuntimeTimers } from '../../codex/helper/codex-runtime-run-store.js';
+import { scheduleCodexRuntimeTimer, stopCodexRuntimeTimers } from '../../codex/helper/codex-runtime-run-store.js';
 import { resolveCatalogProject, tasksLedgerForProject, type DecisionOsProject } from './project-catalog.js';
 import { createProjectCatalogStore } from './project-catalog-store.js';
 import { listProjectDirectories } from './project-directory-browser.js';
@@ -274,7 +274,9 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
     // WHAT: Reclassify diagnostics written before bootstrap gates became non-pausing.
     // WHY: A restart after upgrading must restore ready health once state convergence is complete.
     if (isTaskStateBootstrapGate(incident.code)
-      && (incident.scope.startsWith('http-request:') || incident.scope.startsWith('project-task-write:'))) {
+      && (incident.scope.startsWith('http-request:')
+        || incident.scope.startsWith('project-task-write:')
+        || incident.scope.startsWith('background:codex-startup-'))) {
       incidentLedger.resolveScope(incident.scope, 'Transient task-state bootstrap gates do not pause runtime scopes.');
       continue;
     }
@@ -681,13 +683,40 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
       });
     }
     const startupComponent = `codex-startup-${projectId}`;
-    const startupTask = pausedTaskProjects.has(projectId) || pausedBackgroundComponents.has(startupComponent) || projectRuntime.codexRuntimePaused === true ? Promise.resolve() : reconcileCodexExecutionOwnership({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime }).then(async (ownershipReconciliation) => {
-      if (ownershipReconciliation.ledgersChanged > 0) console.log(JSON.stringify({ codexOwnershipReconciliation: ownershipReconciliation, projectId }));
-      await resumeCodexPipelineRuns({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime });
-    }).catch((error: unknown) => {
-      projectRuntime.taskStatePersistenceError = error instanceof Error ? error.message : String(error);
-      recordBackgroundFailure(startupComponent, 'reconcile-codex-startup-state', error, { projectId, decisionOsRoot: activeDecisionOsRoot });
-    });
+    const reconcileCodexStartup = async (recordBootstrapGate = true): Promise<void> => {
+      try {
+        const ownershipReconciliation = await reconcileCodexExecutionOwnership({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime });
+        if (ownershipReconciliation.ledgersChanged > 0) console.log(JSON.stringify({ codexOwnershipReconciliation: ownershipReconciliation, projectId }));
+        await resumeCodexPipelineRuns({ decisionOsRoot: activeDecisionOsRoot, runtime: projectRuntime });
+        delete projectRuntime.taskStatePersistenceError;
+      } catch (error) {
+        projectRuntime.taskStatePersistenceError = error instanceof Error ? error.message : String(error);
+        // WHAT: Defer write-required Codex recovery until the local task root matches the relay.
+        // WHY: Federation starts only after the HTTP listener opens, so this startup gate is expected and retryable.
+        if (isTaskStateBootstrapGate(error)) {
+          if (recordBootstrapGate) recordStoppedOperation({
+            scope: `project-task-write:${projectId}`,
+            component: startupComponent,
+            operation: 'reconcile-codex-startup-state',
+            error,
+            context: { projectId, decisionOsRoot: activeDecisionOsRoot },
+          });
+          scheduleCodexRuntimeTimer(
+            projectRuntime,
+            'task-state-bootstrap-recovery',
+            1_000,
+            'retry-codex-startup-state',
+            () => reconcileCodexStartup(false),
+            { projectId, decisionOsRoot: activeDecisionOsRoot },
+          );
+          return;
+        }
+        recordBackgroundFailure(startupComponent, 'reconcile-codex-startup-state', error, { projectId, decisionOsRoot: activeDecisionOsRoot });
+      }
+    };
+    const startupTask = pausedTaskProjects.has(projectId) || pausedBackgroundComponents.has(startupComponent) || projectRuntime.codexRuntimePaused === true
+      ? Promise.resolve()
+      : reconcileCodexStartup();
     startupProjectTasks.push(startupTask);
     return context;
   };
