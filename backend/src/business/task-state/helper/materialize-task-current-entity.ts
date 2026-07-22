@@ -3,7 +3,7 @@
  * WHY: A changed card must update only its projection lane instead of rebuilding the workspace.
  */
 import { canonicalJson } from './task-current-state-codec.js';
-import { dotKey, joinTaskClocks } from './task-current-state-join.js';
+import { dotKey } from './task-current-state-join.js';
 import type { TaskCurrentEntity, TaskCurrentProjection, TaskFieldOperation, TaskProjectionConflict, TaskRegisterCandidate } from './task-current-state-types.js';
 
 type AnyRecord = Record<string, unknown>;
@@ -138,7 +138,11 @@ export function materializeTaskCurrentEntity(projection: TaskCurrentProjection, 
   const index = indexFor(projection);
   const entityKey = `${entity.entityType}\u0000${entity.entityId}`;
   const entityConflicts: TaskProjectionConflict[] = [];
-  for (const register of Object.values(entity.fields)) projection.clock = joinTaskClocks(projection.clock, register.clock);
+  for (const register of Object.values(entity.fields)) {
+    for (const [replicaId, counter] of Object.entries(register.clock)) {
+      projection.clock[replicaId] = Math.max(projection.clock[replicaId] ?? 0, counter);
+    }
+  }
 
   const materialized: AnyRecord = entity.entityType === 'ledger' ? projection.ledger : { id: entity.entityId };
   const entityTombstone = selectedCandidate(entity.fields.$entity?.candidates ?? []);
