@@ -25,6 +25,7 @@ test('decision-os-node lists targets and prints the answer returned by a node me
       request.setEncoding('utf8');
       for await (const chunk of request) body += chunk;
       received = JSON.parse(body) as Record<string, unknown>;
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 75));
       response.end(JSON.stringify({ ok: true, answer: 'Remote evidence.', runId: 'node-message-1' }));
       return;
     }
@@ -41,9 +42,11 @@ test('decision-os-node lists targets and prints the answer returned by a node me
     assert.equal(catalog.nodes[0].nodeId, 'node-b');
     assert.equal(catalog.nodes[0].projects[0].projectId, 'beta');
 
+    const startedAt = Date.now();
     const asked = await execFileAsync(process.execPath, [
       cli, 'ask', '--server', base, '--node', 'node-b', '--project', 'beta', '--message', 'Inspect federation.', '--model', 'gpt-5.4', '--effort', 'high',
     ]);
+    assert.ok(Date.now() - startedAt >= 50);
     assert.equal(asked.stdout, 'Remote evidence.\n');
     assert.deepEqual(received, { projectId: 'beta', message: 'Inspect federation.', codexModel: 'gpt-5.4', codexEffort: 'high' });
   } finally {
