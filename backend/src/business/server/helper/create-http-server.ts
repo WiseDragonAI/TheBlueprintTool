@@ -910,12 +910,14 @@ export function createHttpServer(input: { action_payload?: AnyRecord; runtime_st
           pausedTaskProjects.delete(projectId);
           projectTaskStates.delete(projectId);
           resumed = Boolean(tryTaskStateForProject(project));
+          if (resumed) federationTaskStateReplicator?.reconcileProject('relay', projectId);
         }
       } else if (scope.startsWith('federated-task-state:')) {
         const projectId = scope.slice('federated-task-state:'.length);
         pausedFederatedTaskProjects.delete(projectId);
         federatedTaskStores.delete(projectId);
         resumed = Boolean(federatedTaskStoreForProject(projectId, 'operator-resume'));
+        if (resumed) federationTaskStateReplicator?.reconcileProject('relay', projectId);
       } else if (scope.startsWith('background:')) {
         const component = scope.slice('background:'.length);
         pausedBackgroundComponents.delete(component);
