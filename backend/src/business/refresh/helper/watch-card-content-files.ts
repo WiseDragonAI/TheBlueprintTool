@@ -12,7 +12,11 @@ import {
 export { resolveCardContentChange } from './resolve-card-content-change.js';
 export type { CardContentChange } from './resolve-card-content-change.js';
 
-export function watchCardContentFiles(input: { decisionOsRoot: string; onChange: (event: CardContentChange) => void }): { close(): void; refreshOwnership(): void; watchedDirectories: number } {
+export function watchCardContentFiles(input: {
+  decisionOsRoot: string;
+  onChange: (event: CardContentChange) => unknown;
+  onError?: (error: unknown, context: { operation: string; file: string }) => void;
+}): { close(): void; refreshOwnership(): void; watchedDirectories: number } {
   const roots = [
     { directory: resolve(input.decisionOsRoot, 'cards'), kind: 'card-content' as const },
     { directory: resolve(input.decisionOsRoot, 'threads'), kind: 'thread-content' as const },
@@ -20,6 +24,18 @@ export function watchCardContentFiles(input: { decisionOsRoot: string; onChange:
   const watchers = new Map<string, FSWatcher>();
   const pendingEvents = new Map<string, NodeJS.Timeout>();
   let ownership = buildContentOwnershipIndex(input.decisionOsRoot);
+
+  const reportError = (error: unknown, operation: string, file: string): void => {
+    try { input.onError?.(error, { operation, file }); } catch { /* Error reporting must not escape a watcher callback. */ }
+  };
+
+  const publish = (change: CardContentChange, file: string): void => {
+    try {
+      Promise.resolve(input.onChange(change)).catch((error: unknown) => reportError(error, 'publish-card-content-change', file));
+    } catch (error) {
+      reportError(error, 'publish-card-content-change', file);
+    }
+  };
 
   function emitFile(file: string, kind: CardContentChange['kind']): void {
     // WHAT: Ignore non-Markdown watcher events at the transport boundary.
@@ -34,7 +50,7 @@ export function watchCardContentFiles(input: { decisionOsRoot: string; onChange:
       const change = ownership.get(resolve(file));
       // WHAT: Publish only an exactly owned content-file change.
       // WHY: Missing or ambiguous ownership must not refresh a guessed ledger.
-      if (change) input.onChange(change);
+      if (change) publish(change, file);
     }, 50));
   }
 
@@ -48,18 +64,23 @@ export function watchCardContentFiles(input: { decisionOsRoot: string; onChange:
       if (entry.isDirectory()) watchDirectory(join(directory, entry.name), kind);
     }
     const watcher = watch(directory, { persistent: false }, (_eventType, filename) => {
-      // WHAT: Ignore watcher events that do not identify a changed entry.
-      // WHY: Ownership resolution requires an exact filesystem path.
-      if (!filename) return;
-      const changed = resolve(directory, String(filename));
-      // WHAT: Attach a watcher when a new content subdirectory appears.
-      // WHY: Future files below it would otherwise be invisible to the non-recursive watcher.
-      if (existsSync(changed) && statSync(changed).isDirectory()) {
-        watchDirectory(changed, kind);
-        return;
+      try {
+        // WHAT: Ignore watcher events that do not identify a changed entry.
+        // WHY: Ownership resolution requires an exact filesystem path.
+        if (!filename) return;
+        const changed = resolve(directory, String(filename));
+        // WHAT: Attach a watcher when a new content subdirectory appears.
+        // WHY: Future files below it would otherwise be invisible to the non-recursive watcher.
+        if (existsSync(changed) && statSync(changed).isDirectory()) {
+          watchDirectory(changed, kind);
+          return;
+        }
+        emitFile(changed, kind);
+      } catch (error) {
+        reportError(error, 'process-card-content-watch-event', directory);
       }
-      emitFile(changed, kind);
     });
+    watcher.on('error', (error) => reportError(error, 'card-content-watcher-error', directory));
     watchers.set(directory, watcher);
   }
 

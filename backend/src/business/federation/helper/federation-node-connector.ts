@@ -154,6 +154,7 @@ export function createFederationNodeConnector(input: {
   onRemoteCatalogChange?: () => void;
   onStateConnected?: () => void;
   onStateFrame?: (frame: FederationStateFrame) => void | Promise<void>;
+  onError?: (error: unknown, context: { operation: string; frameType?: string }) => void;
   internalRequestTimeoutMs?: number;
 }) {
   const internalRequestTimeoutMs = input.internalRequestTimeoutMs ?? defaultInternalRequestTimeoutMs;
@@ -177,6 +178,10 @@ export function createFederationNodeConnector(input: {
   let lastError = '';
   let lastCloseCode: number | null = null;
   let lastCloseReason = '';
+
+  const reportError = (error: unknown, operation: string, frameType = ''): void => {
+    try { input.onError?.(error, { operation, ...(frameType ? { frameType } : {}) }); } catch { /* Error reporting cannot fail the connector. */ }
+  };
 
   const setPhase = (value: FederationConnectionPhase): void => {
     if (phase !== value) phaseSince = Date.now();
@@ -217,7 +222,11 @@ export function createFederationNodeConnector(input: {
     cleanupRequester(stream);
     const body = Buffer.from(JSON.stringify({ ok: false, error: code, message }));
     if (stream.file) {
-      void stream.file.descriptor.close().catch(() => undefined).then(() => rm(stream.file!.temporary, { force: true })).finally(() => stream.file!.resolve({ status, bytes: stream.bytes }));
+      void stream.file.descriptor.close()
+        .catch((error: unknown) => reportError(error, 'close-failed-request-file'))
+        .then(() => rm(stream.file!.temporary, { force: true }))
+        .catch((error: unknown) => reportError(error, 'remove-failed-request-file'))
+        .finally(() => stream.file!.resolve({ status, bytes: stream.bytes }));
     } else if (stream.response) {
       stream.response.statusCode = status;
       stream.response.setHeader('content-type', 'application/json');
@@ -486,7 +495,8 @@ export function createFederationNodeConnector(input: {
       lastCloseReason = '';
       setPhase('connected');
       send({ version: 1, type: 'manifest', nodeLabel: settings?.nodeLabel, stateProtocol: taskStateProtocol, stateSchema: taskCurrentStateVersion, baselineEpoch: taskCurrentBaselineEpoch, projects: manifest() });
-      input.onStateConnected?.();
+      try { input.onStateConnected?.(); }
+      catch (error) { reportError(error, 'state-connected-callback'); }
     });
     active.addEventListener('message', (event) => {
       messageQueue = messageQueue.then(async () => {
@@ -495,8 +505,10 @@ export function createFederationNodeConnector(input: {
           : Buffer.isBuffer(event.data)
             ? event.data.toString('utf8')
             : Buffer.from(event.data as ArrayBuffer).toString('utf8');
-        await handleFrame(JSON.parse(text) as RelayFrame);
-      }).catch(() => undefined);
+        const frame = JSON.parse(text) as RelayFrame;
+        try { await handleFrame(frame); }
+        catch (error) { reportError(error, 'handle-relay-frame', frame.type); }
+      }).catch((error: unknown) => reportError(error, 'decode-relay-frame'));
     });
     active.on('error', (error) => {
       const authentication = error.message.match(/^Unexpected server response: (401|403)$/);
