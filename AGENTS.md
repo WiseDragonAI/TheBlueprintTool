@@ -242,6 +242,15 @@ Ctrl+D  Resize selected cards to their content and selected zones to contained c
 GIT_SSH_COMMAND='ssh -i ~/.ssh/id_jb_wise -o IdentitiesOnly=yes' git push
 ```
 
+## CLI Task Creation
+
+- Follow [`documentation/procedure/tasks/create-and-publish-tasks-from-cli.md`](documentation/procedure/tasks/create-and-publish-tasks-from-cli.md) for every CLI-created task or master-task graph.
+- Create Tasks through the project-scoped `PATCH /p/:projectId/decision-os/tasks` command API. Never edit `.decision-os/tasks.json`, `.decision-os/task-state/**`, or task-state object files directly.
+- Treat creation and publication as two separate required steps. `create-card`, `create-task-intake`, and `create-master-task` are locally held until an `append-note` content contribution activates the task identity.
+- After creation, append one truthful `agent` note to the new task thread, verify that `.decision-os/task-state/<projectId>/local/held/<taskId>.json` is absent, and inspect federation replication status before reporting the task synchronized.
+- Commit only the intended versioned task card/thread Markdown and related source changes. Do not stage runtime task-state, voice uploads, run artifacts, caches, settings, or unrelated operator changes.
+- Use a focused commit with the required `WHAT:` and `WHY:` body, verify the complete message, and push the current branch to `origin` with the Wise SSH key.
+
 ## Debugging
 
 - Solve one problem at a time instead of trying to fix everything.

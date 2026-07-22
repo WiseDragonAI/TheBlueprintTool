@@ -26,6 +26,7 @@ The structure follows the proven workstation model used by `Senior`, `DroidFleet
 7. [Epoch-3 node cutover procedure](./procedure/deployment/epoch-3-node-cutover.md)
 8. [Epoch-3 production cutover postmortem](./postmortem/epoch-3-production-cutover-2026-07-21.md)
 9. [Commit traceability contract](./specs/commit-traceability.md)
+10. [Create and publish tasks from the CLI](./procedure/tasks/create-and-publish-tasks-from-cli.md)
 
 ---
 

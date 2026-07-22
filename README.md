@@ -145,6 +145,19 @@ npm run cli -- answer --ledger ../.decision-os/specs.json --thread-id thread-600
 
 Codex child processes receive `DECISION_OS_LEDGER_ROOT` as the filesystem boundary for `ledger-cli`. This variable does not select the server workspace or project catalog. Decision OS server scope always comes from the launcher cwd.
 
+## Create And Publish Tasks From The CLI
+
+Epoch-3 Tasks are created through the running server's scoped command API. Do not create them by editing `.decision-os/tasks.json` or `.decision-os/task-state/**`.
+
+The required workflow is:
+
+1. Submit `create-card`, `create-task-intake`, or `create-master-task` to `PATCH /p/:projectId/decision-os/tasks`.
+2. Append one truthful `agent` note to the new task thread. This activates the locally held graph and releases it to federation.
+3. Verify the card projection, absence of its `local/held` marker, and federation convergence.
+4. Stage the intended card/thread Markdown explicitly, create a commit with `WHAT:` and `WHY:` paragraphs, then push the current branch to `origin`.
+
+Use the complete copyable procedure: [Create and publish tasks from the CLI](documentation/procedure/tasks/create-and-publish-tasks-from-cli.md).
+
 ## Federation Node Messages
 
 Agents can discover connected nodes and ask Codex to inspect one project on the selected node:
